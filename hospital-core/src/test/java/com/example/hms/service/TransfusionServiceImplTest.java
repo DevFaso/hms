@@ -49,6 +49,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
@@ -58,6 +59,7 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -78,7 +80,7 @@ import static org.mockito.Mockito.when;
  * closed — a compatibility table nothing calls is the defect class this whole
  * tier exists to fix.
  */
-@ExtendWith(MockitoExtension.class)
+@ExtendWith({MockitoExtension.class, com.example.hms.i18n.EnglishMessageBundles.class})
 @MockitoSettings(strictness = Strictness.LENIENT)
 class TransfusionServiceImplTest {
 
@@ -700,6 +702,192 @@ class TransfusionServiceImplTest {
             .isInstanceOf(BusinessException.class);
     }
 
+    // ── QA round 14: D858, D883, D884, D885 ─────────────────────────────
+
+    /** QA D858: NURSE_A, POST /transfusions/administrations/{id}/reaction, onsetAt = now + 24h. */
+    @Test
+    void aReactionWithAnOnsetTomorrowIsRefused_D858() {
+        TransfusionAdministration admin = inProgress();
+        UUID administrationId = admin.getId();
+        TransfusionReactionRequestDTO tomorrow = TransfusionReactionRequestDTO.builder()
+            .reactionType(TransfusionReactionType.FEBRILE_NON_HEMOLYTIC)
+            .severity(TransfusionReactionSeverity.MILD)
+            .onsetAt(LocalDateTime.now().plusHours(24))
+            .signsSymptoms("Fièvre 38,6 °C")
+            .build();
+
+        assertThatThrownBy(() -> service.recordReaction(administrationId, tomorrow))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("onset time cannot be in the future");
+        verify(reactionRepository, never()).save(any());
+        // Nothing was stopped or quarantined on the strength of a refused report.
+        assertThat(admin.getStatus()).isEqualTo(TransfusionAdministrationStatus.IN_PROGRESS);
+        assertThat(admin.getBloodUnit().getStatus()).isEqualTo(BloodUnitStatus.ISSUED);
+    }
+
+    /** D858 must not refuse the ordinary case: an onset a moment ago, or a minute of clock skew. */
+    @Test
+    void aReactionNowOrWithinTheClockSkewIsAccepted_D858() {
+        TransfusionAdministration admin = inProgress();
+
+        service.recordReaction(admin.getId(), TransfusionReactionRequestDTO.builder()
+            .reactionType(TransfusionReactionType.FEBRILE_NON_HEMOLYTIC)
+            .severity(TransfusionReactionSeverity.MILD)
+            .onsetAt(LocalDateTime.now().plusMinutes(1))
+            .signsSymptoms("Frissons")
+            .build());
+
+        verify(reactionRepository).save(any(TransfusionReaction.class));
+    }
+
+    /** D858 sibling: a type-and-screen specimen cannot have been collected tomorrow. */
+    @Test
+    void aBloodGroupSpecimenCollectedInTheFutureIsRefused_D858() {
+        PatientBloodGroupRequestDTO future = PatientBloodGroupRequestDTO.builder()
+            .patientId(patientId).aboGroup(AboGroup.O).rhFactor(RhFactor.POSITIVE)
+            .antibodyScreen(AntibodyScreenResult.NEGATIVE)
+            .specimenCollectedAt(LocalDateTime.now().plusDays(1))
+            .build();
+
+        assertThatThrownBy(() -> service.recordBloodGroup(future))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("collection time cannot be in the future");
+        verify(bloodGroupRepository, never()).save(any());
+    }
+
+    /** QA D883: LAB_TECH_A received a unit with collectedOn 2027-01-01. */
+    @Test
+    void aUnitCollectedInTheFutureIsRefused_D883() {
+        BloodUnitRequestDTO future = incomingUnit("CNTS-FUT-1", LocalDate.now().plusDays(20));
+        future.setCollectedOn(LocalDate.now().plusYears(1));
+
+        assertThatThrownBy(() -> service.receiveUnit(future))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("collection date cannot be in the future");
+        verify(unitRepository, never()).save(any());
+    }
+
+    @Test
+    void aUnitCollectedAfterItsOwnExpiryIsRefused_D883() {
+        BloodUnitRequestDTO backwards = incomingUnit("CNTS-REV-1", LocalDate.now().plusDays(5));
+        backwards.setCollectedOn(LocalDate.now().plusDays(6));
+
+        assertThatThrownBy(() -> service.receiveUnit(backwards))
+            .isInstanceOf(BusinessException.class);
+        verify(unitRepository, never()).save(any());
+    }
+
+    /** The QA's own good unit (collected today, 300 mL) is still received. */
+    @Test
+    void aUnitCollectedTodayIsReceived_D883() {
+        BloodUnitRequestDTO today = incomingUnit("CNTS-OUA-1", LocalDate.now().plusDays(20));
+        today.setCollectedOn(LocalDate.now());
+        today.setVolumeMl(300);
+        when(unitRepository.save(any(BloodUnit.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.receiveUnit(today);
+
+        verify(unitRepository).save(any(BloodUnit.class));
+    }
+
+    /** D883 sibling: the volume recorded at completion cannot exceed a bag. */
+    @Test
+    void completingWithAnAbsurdVolumeIsRefused_D883() {
+        TransfusionAdministration admin = inProgress();
+        UUID administrationId = admin.getId();
+
+        assertThatThrownBy(() -> service.completeAdministration(administrationId, 999_999))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("between 0 and 1000 mL");
+        assertThat(admin.getStatus()).isEqualTo(TransfusionAdministrationStatus.IN_PROGRESS);
+    }
+
+    /** QA D883 (volume 999999 mL) and D884 (unitsRequested 500): refused at the request boundary. */
+    @Test
+    void theRequestBoundaryRefusesAbsurdVolumesAndUnitCounts_D883_D884() {
+        jakarta.validation.Validator validator = frenchValidator();
+        BloodUnitRequestDTO bag = incomingUnit("CNTS-VOL-1", LocalDate.now().plusDays(20));
+        bag.setVolumeMl(999_999);
+        TransfusionRequestRequestDTO fiveHundred = TransfusionRequestRequestDTO.builder()
+            .patientId(patientId).productType(BloodProductType.PACKED_RED_CELLS)
+            .unitsRequested(500).indication("x").build();
+        TransfusionRequestRequestDTO two = TransfusionRequestRequestDTO.builder()
+            .patientId(patientId).productType(BloodProductType.PACKED_RED_CELLS)
+            .unitsRequested(2).indication("Anémie sévère").build();
+        BloodUnitRequestDTO normal = incomingUnit("CNTS-OUA-2", LocalDate.now().plusDays(20));
+        normal.setVolumeMl(300);
+
+        assertThat(validator.validate(bag)).singleElement()
+            .satisfies(v -> {
+                assertThat(v.getPropertyPath()).hasToString("volumeMl");
+                assertThat(v.getMessage()).isEqualTo("Une poche de sang contient au plus 1000 mL.");
+            });
+        assertThat(validator.validate(fiveHundred)).singleElement()
+            .satisfies(v -> {
+                assertThat(v.getPropertyPath()).hasToString("unitsRequested");
+                assertThat(v.getMessage()).isEqualTo("Une demande ne peut porter que sur 20 poches au plus.");
+            });
+        assertThat(validator.validate(two)).isEmpty();
+        assertThat(validator.validate(normal)).isEmpty();
+    }
+
+    /**
+     * QA D885: the duplicate-unit, expired-unit and two-person-check refusals
+     * reached a French user in English. Asserted on the exact paths the QA hit.
+     */
+    @Test
+    void bloodBankRefusalsSpeakTheCallersLanguage_D885() {
+        BloodUnit existing = unit(AboGroup.O, RhFactor.POSITIVE, BloodProductType.PACKED_RED_CELLS,
+            BloodUnitStatus.AVAILABLE);
+        when(unitRepository.findByHospital_IdAndUnitNumber(hospitalId, "CNTS-OUA-7"))
+            .thenReturn(Optional.of(existing));
+        BloodUnitRequestDTO duplicate = incomingUnit("CNTS-OUA-7", LocalDate.now().plusDays(20));
+        BloodUnitRequestDTO expired = incomingUnit("CNTS-EXP-7", LocalDate.of(2025, 1, 1));
+        TransfusionRequest req = request(group(AboGroup.O, RhFactor.NEGATIVE, AntibodyScreenResult.NEGATIVE),
+            TransfusionUrgency.ROUTINE);
+        BloodUnit issued = unit(AboGroup.O, RhFactor.NEGATIVE, BloodProductType.PACKED_RED_CELLS,
+            BloodUnitStatus.ISSUED);
+        TransfusionAdministrationRequestDTO selfVerified = hangRequest(req, issued, caller);
+        when(staffRepository.findById(caller.getId())).thenReturn(Optional.of(caller));
+
+        LocaleContextHolder.setLocale(Locale.FRENCH);
+
+        assertThatThrownBy(() -> service.receiveUnit(duplicate))
+            .hasMessage("La poche CNTS-OUA-7 est déjà enregistrée ici. Deux poches portant le même "
+                + "numéro exposent à une erreur de poche.");
+        assertThatThrownBy(() -> service.receiveUnit(expired))
+            .hasMessage("La poche CNTS-EXP-7 est déjà périmée et ne peut pas entrer en stock.");
+        assertThatThrownBy(() -> service.startAdministration(selfVerified))
+            .hasMessageStartingWith("Le contrôle au lit du patient exige deux personnes.");
+    }
+
+    /** D885: the product names inside a mismatch are the caller's words, not enum codes. */
+    @Test
+    void aProductMismatchNamesTheProductsInTheCallersLanguage_D885() {
+        TransfusionRequest req = request(group(AboGroup.O, RhFactor.NEGATIVE, AntibodyScreenResult.NEGATIVE),
+            TransfusionUrgency.ROUTINE);
+        BloodUnit platelets = unit(AboGroup.O, RhFactor.NEGATIVE, BloodProductType.PLATELETS,
+            BloodUnitStatus.AVAILABLE);
+        UUID requestId = req.getId();
+        CrossmatchRequestDTO verdict = compatibleCrossmatch(platelets);
+
+        LocaleContextHolder.setLocale(Locale.forLanguageTag("es"));
+
+        assertThatThrownBy(() -> service.recordCrossmatch(requestId, verdict))
+            .hasMessageContaining("«plaquetas»")
+            .hasMessageContaining("«concentrado de hematíes»")
+            .hasMessageNotContaining("PLATELETS");
+    }
+
+    private static jakarta.validation.Validator frenchValidator() {
+        org.springframework.validation.beanvalidation.LocalValidatorFactoryBean factory =
+            new org.springframework.validation.beanvalidation.LocalValidatorFactoryBean();
+        factory.setValidationMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        factory.afterPropertiesSet();
+        LocaleContextHolder.setLocale(Locale.FRENCH);
+        return factory.getValidator();
+    }
+
     // ── Units and tenancy ───────────────────────────────────────────────
 
     @Test
@@ -938,10 +1126,10 @@ class TransfusionServiceImplTest {
 
         assertThatThrownBy(() -> service.cancelRequest(requestId, "Too late"))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("already COMPLETED");
+            .hasMessageContaining("request is closed");
         assertThatThrownBy(() -> service.recordCrossmatch(requestId, verdict))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("cannot be crossmatched against");
+            .hasMessageContaining("request is closed");
         assertThatThrownBy(() -> service.issueUnit(requestId, unitId))
             .isInstanceOf(BusinessException.class);
     }
@@ -1011,10 +1199,10 @@ class TransfusionServiceImplTest {
 
         assertThatThrownBy(() -> service.issueUnit(requestId, staleId))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("cannot be issued");
+            .hasMessageContaining("must not be used");
         assertThatThrownBy(() -> service.startAdministration(hangStale))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("must not be transfused");
+            .hasMessageContaining("must not be used");
     }
 
     @Test
@@ -1059,10 +1247,10 @@ class TransfusionServiceImplTest {
 
         assertThatThrownBy(() -> service.completeAdministration(administrationId, 200))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("already COMPLETED");
+            .hasMessageContaining("already finished");
         assertThatThrownBy(() -> service.stopAdministration(administrationId, "Too late"))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("already COMPLETED");
+            .hasMessageContaining("already finished");
     }
 
     @Test

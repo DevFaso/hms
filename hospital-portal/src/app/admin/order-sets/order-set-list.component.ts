@@ -10,6 +10,7 @@ import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
 import { AuthService } from '../../auth/auth.service';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 
 /**
  * Admin list view for CPOE order-set templates. Hospital-scoped via
@@ -19,7 +20,7 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 @Component({
   selector: 'app-order-set-list',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, RouterLink, TranslateModule],
+  imports: [ServerTimePipe, CommonModule, FormsModule, RouterLink, TranslateModule, EnumLabelPipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="order-set-admin" data-testid="order-set-admin">
@@ -69,7 +70,8 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
                 <td>{{ os.name }}</td>
                 <td>v{{ os.version }}</td>
                 <td>{{ os.orderCount }}</td>
-                <td>{{ os.admissionType }}</td>
+                <!-- QA D859: ELECTIVE was shown raw in FR and ES -->
+                <td>{{ os.admissionType | enumLabel: 'admissionType' }}</td>
                 <td>{{ os.updatedAt | serverTime | date: 'short' }}</td>
                 <td class="actions">
                   <a

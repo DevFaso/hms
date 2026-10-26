@@ -29,13 +29,24 @@ const ADMISSION_TYPES = [
   'PSYCHIATRIC',
 ];
 
-const ORDER_ITEM_TYPES: OrderItemType[] = [
-  'MEDICATION',
-  'LAB',
-  'IMAGING',
-  'DIET',
-  'ACTIVITY',
-  'MONITORING',
+/**
+ * A wire value and the key of what the user reads for it. QA D859: the item
+ * types, units, routes and frequencies were shown as their wire codes
+ * (MEDICATION, tablet, TOPICAL, QID) in French and Spanish.
+ */
+interface Choice<V extends string = string> {
+  value: V;
+  /** Absent for a symbol every language writes the same way (mg, g, mL). */
+  labelKey?: string;
+}
+
+const ORDER_ITEM_TYPES: Choice<OrderItemType>[] = [
+  { value: 'MEDICATION', labelKey: 'ORDER_SETS.ITEM_TYPE.MEDICATION' },
+  { value: 'LAB', labelKey: 'ORDER_SETS.ITEM_TYPE.LAB' },
+  { value: 'IMAGING', labelKey: 'ORDER_SETS.ITEM_TYPE.IMAGING' },
+  { value: 'DIET', labelKey: 'ORDER_SETS.ITEM_TYPE.DIET' },
+  { value: 'ACTIVITY', labelKey: 'ORDER_SETS.ITEM_TYPE.ACTIVITY' },
+  { value: 'MONITORING', labelKey: 'ORDER_SETS.ITEM_TYPE.MONITORING' },
 ];
 
 /** Maps an item type to the JSONB key the backend dispatcher reads as the item name. */
@@ -48,9 +59,37 @@ const NAME_KEY_BY_TYPE: Record<string, keyof OrderSetItem> = {
   MONITORING: 'monitoringType',
 };
 
-const DOSE_UNITS = ['mg', 'g', 'mcg', 'mL', 'IU', 'tablet', 'puff', 'drop', 'unit'];
-const FREQUENCY_PRESETS = ['QD', 'BID', 'TID', 'QID', 'Q4H', 'Q6H', 'Q8H', 'PRN'];
-const ROUTES = ['PO', 'IV', 'IM', 'SC', 'PR', 'INH', 'TOPICAL', 'NASAL'];
+const DOSE_UNITS: Choice[] = [
+  { value: 'mg' },
+  { value: 'g' },
+  { value: 'mcg', labelKey: 'ORDER_SETS.DOSE_UNIT.MCG' },
+  { value: 'mL' },
+  { value: 'IU', labelKey: 'ORDER_SETS.DOSE_UNIT.IU' },
+  { value: 'tablet', labelKey: 'ORDER_SETS.DOSE_UNIT.TABLET' },
+  { value: 'puff', labelKey: 'ORDER_SETS.DOSE_UNIT.PUFF' },
+  { value: 'drop', labelKey: 'ORDER_SETS.DOSE_UNIT.DROP' },
+  { value: 'unit', labelKey: 'ORDER_SETS.DOSE_UNIT.UNIT' },
+];
+const FREQUENCY_PRESETS: Choice[] = [
+  { value: 'QD', labelKey: 'ORDER_SETS.FREQUENCY.QD' },
+  { value: 'BID', labelKey: 'ORDER_SETS.FREQUENCY.BID' },
+  { value: 'TID', labelKey: 'ORDER_SETS.FREQUENCY.TID' },
+  { value: 'QID', labelKey: 'ORDER_SETS.FREQUENCY.QID' },
+  { value: 'Q4H', labelKey: 'ORDER_SETS.FREQUENCY.Q4H' },
+  { value: 'Q6H', labelKey: 'ORDER_SETS.FREQUENCY.Q6H' },
+  { value: 'Q8H', labelKey: 'ORDER_SETS.FREQUENCY.Q8H' },
+  { value: 'PRN', labelKey: 'ORDER_SETS.FREQUENCY.PRN' },
+];
+const ROUTES: Choice[] = [
+  { value: 'PO', labelKey: 'ORDER_SETS.ROUTE.PO' },
+  { value: 'IV', labelKey: 'ORDER_SETS.ROUTE.IV' },
+  { value: 'IM', labelKey: 'ORDER_SETS.ROUTE.IM' },
+  { value: 'SC', labelKey: 'ORDER_SETS.ROUTE.SC' },
+  { value: 'PR', labelKey: 'ORDER_SETS.ROUTE.PR' },
+  { value: 'INH', labelKey: 'ORDER_SETS.ROUTE.INH' },
+  { value: 'TOPICAL', labelKey: 'ORDER_SETS.ROUTE.TOPICAL' },
+  { value: 'NASAL', labelKey: 'ORDER_SETS.ROUTE.NASAL' },
+];
 
 interface EditableItem extends OrderSetItem {
   _synonymsText: string;
@@ -88,6 +127,12 @@ export class OrderSetEditComponent implements OnInit {
   protected readonly loadError = signal(false);
   protected readonly versionHistory = signal<OrderSetSummary[]>([]);
   protected readonly items = signal<EditableItem[]>([]);
+  /**
+   * QA D859: an empty save said nothing on the page (the toast sits outside
+   * the form). The fields that block a save are now marked where they are.
+   */
+  protected readonly nameMissing = signal(false);
+  protected readonly itemsMissingName = signal<number[]>([]);
 
   protected form: {
     name: string;
@@ -141,6 +186,16 @@ export class OrderSetEditComponent implements OnInit {
 
   protected removeItem(index: number): void {
     this.items.update((rows) => rows.filter((_, i) => i !== index));
+    this.itemsMissingName.set([]);
+  }
+
+  protected itemMissingName(index: number): boolean {
+    return this.itemsMissingName().includes(index);
+  }
+
+  /** What an option reads as: its translation, or the symbol itself. */
+  protected choiceLabel(choice: Choice): string {
+    return choice.labelKey ? this.translate.instant(choice.labelKey) : choice.value;
   }
 
   protected trackByIndex(index: number): number {
@@ -149,14 +204,23 @@ export class OrderSetEditComponent implements OnInit {
 
   protected save(): void {
     const itemsOut = this.items().map((it) => this.toPersisted(it));
+    const nameMissing = !this.form.name?.trim();
+    const unnamed = itemsOut
+      .map((it, i) => (this.itemDisplayName(it).trim() ? -1 : i))
+      .filter((i) => i !== -1);
+    this.nameMissing.set(nameMissing);
+    this.itemsMissingName.set(unnamed);
+    if (nameMissing) {
+      this.toast.error(this.translate.instant('ORDER_SETS.NAME_REQUIRED'));
+      return;
+    }
     if (itemsOut.length === 0) {
       this.toast.error(this.translate.instant('ORDER_SETS.ITEM_REQUIRED'));
       return;
     }
-    const missing = itemsOut.findIndex((it) => !this.itemDisplayName(it));
-    if (missing !== -1) {
+    if (unnamed.length > 0) {
       this.toast.error(
-        this.translate.instant('ORDER_SETS.ITEM_NAME_MISSING', { position: missing + 1 }),
+        this.translate.instant('ORDER_SETS.ITEM_NAME_MISSING', { position: unnamed[0] + 1 }),
       );
       return;
     }

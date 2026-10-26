@@ -15,6 +15,8 @@ import { PharmacyService, MtmReviewRequest, MtmReviewResponse } from '../service
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { RoleContextService } from '../core/role-context.service';
 import { finalize } from 'rxjs';
+import { localDateString } from '../shared/date-utils';
+import { refusalReason } from '../shared/refusal-reason';
 
 /**
  * P-09: MTM (Medication Therapy Management) review screen — pharmacist-led
@@ -44,7 +46,11 @@ export class MtmReviewComponent implements OnInit {
   // Form state
   showForm = signal(false);
   selectedReviewId: string | null = null;
+  /** QA D886: the status of the review being edited, to offer only the moves the server allows. */
+  editingStatus: string | null = null;
   form: MtmReviewRequest = this.emptyForm();
+  /** QA D886: a follow-up is in the future; the picker stops before today. */
+  minFollowUp = localDateString();
 
   ngOnInit(): void {
     this.loadReviews();
@@ -80,13 +86,34 @@ export class MtmReviewComponent implements OnInit {
 
   openCreate(): void {
     this.selectedReviewId = null;
+    this.editingStatus = null;
+    this.minFollowUp = localDateString();
     this.form = this.emptyForm();
     this.form.hospitalId = this.roleContext.effectiveHospitalIdForRequest() ?? '';
     this.showForm.set(true);
   }
 
+  /**
+   * QA D886: a COMPLETED review is closed (the server refuses any change), so
+   * it is not offered for editing; a REFERRED one may only stay referred or be
+   * completed.
+   */
+  canEdit(review: MtmReviewResponse): boolean {
+    return review.status !== 'COMPLETED';
+  }
+
+  canChooseDraft(): boolean {
+    return this.editingStatus !== 'REFERRED';
+  }
+
   openEdit(review: MtmReviewResponse): void {
+    if (!this.canEdit(review)) return;
     this.selectedReviewId = review.id;
+    this.editingStatus = review.status;
+    // A kept follow-up date that has since passed stays valid (the server does not re-judge it).
+    const today = localDateString();
+    this.minFollowUp =
+      review.followUpDate && review.followUpDate < today ? review.followUpDate : today;
     this.form = {
       patientId: review.patientId,
       hospitalId: review.hospitalId,
@@ -123,7 +150,7 @@ export class MtmReviewComponent implements OnInit {
       },
       error: (err) => {
         this.saving.set(false);
-        this.toast.error(err?.error?.message ?? this.translate.instant('PHARMACY.MTM_SAVE_FAILED'));
+        this.toast.error(refusalReason(err) ?? this.translate.instant('PHARMACY.MTM_SAVE_FAILED'));
       },
     });
   }

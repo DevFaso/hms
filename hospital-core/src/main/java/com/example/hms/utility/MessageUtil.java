@@ -67,6 +67,18 @@ public class MessageUtil {
     }
 
     /**
+     * The message for {@code key} in {@code locale}, or null when there is no
+     * source or no bundle carries the key (QA D887: a stored text is
+     * translated only when a bundle actually knows it).
+     */
+    public static String resolveOrNull(java.util.Locale locale, String key) {
+        if (messageSource == null || key == null) {
+            return null;
+        }
+        return messageSource.getMessage(key, null, null, locale != null ? locale : LocaleContextHolder.getLocale());
+    }
+
+    /**
      * Resolves {@code text} as a message key in the caller's locale (the
      * request's {@code Accept-Language}, via {@link LocaleContextHolder}) when
      * it is one, and returns it unchanged otherwise.

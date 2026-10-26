@@ -3,6 +3,7 @@ package com.example.hms.payload.dto.transfusion;
 import com.example.hms.enums.AboGroup;
 import com.example.hms.enums.BloodProductType;
 import com.example.hms.enums.RhFactor;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -35,7 +36,9 @@ public class BloodUnitRequestDTO {
     @NotNull
     private RhFactor rhFactor;
 
+    /** QA D883: 999999 mL was accepted; no bag holds more than a litre. */
     @Min(1)
+    @Max(value = 1000, message = "{transfusion.unit.volumeMax}")
     private Integer volumeMl;
 
     private LocalDate collectedOn;

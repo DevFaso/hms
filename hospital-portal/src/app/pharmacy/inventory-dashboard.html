@@ -80,16 +80,37 @@
                 <td>{{ item.reorderThreshold }}</td>
                 <td>{{ item.reorderQuantity }}</td>
                 <td>{{ item.unit ?? '—' }}</td>
-                <td>
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    class="price-input"
-                    [attr.aria-label]="'PHARMACY.UNIT_PRICE' | translate"
-                    [value]="item.unitPrice ?? ''"
-                    (change)="savePrice(item, $any($event.target).value)"
-                  />
+                <!-- QA D835: the price is READ as text (an input's value is not
+                     part of the row's text, so the column read as empty); the
+                     pencil opens the box that changes it. -->
+                <td class="price-cell">
+                  @if (editingPriceId() === item.id) {
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      class="price-input"
+                      [attr.aria-label]="'PHARMACY.UNIT_PRICE' | translate"
+                      [attr.data-testid]="'price-input-' + item.id"
+                      [value]="item.unitPrice ?? ''"
+                      (change)="savePrice(item, $any($event.target).value)"
+                      (keydown.escape)="editingPriceId.set(null)"
+                    />
+                  } @else {
+                    <span class="price-text" [attr.data-testid]="'price-' + item.id">{{
+                      (item.unitPrice ?? null) !== null ? (item.unitPrice | cfa: 'XOF') : '—'
+                    }}</span>
+                    <button
+                      type="button"
+                      class="btn-icon price-edit"
+                      [attr.aria-label]="'PHARMACY.EDIT_PRICE' | translate"
+                      [title]="'PHARMACY.EDIT_PRICE' | translate"
+                      [attr.data-testid]="'price-edit-' + item.id"
+                      (click)="editingPriceId.set(item.id)"
+                    >
+                      <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+                    </button>
+                  }
                 </td>
                 <td>
                   <span class="stock-badge" [class]="getStockStatusClass(item)">

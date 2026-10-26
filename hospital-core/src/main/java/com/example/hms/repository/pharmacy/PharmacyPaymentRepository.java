@@ -22,6 +22,15 @@ public interface PharmacyPaymentRepository extends JpaRepository<PharmacyPayment
     /** QA D204: the payment already recorded for a dispense, if any (a dispense is paid once). */
     java.util.Optional<PharmacyPayment> findFirstByDispense_IdOrderByCreatedAtAsc(UUID dispenseId);
 
+    /** QA D843: which of these dispenses already carry a POSTED payment. */
+    @org.springframework.data.jpa.repository.Query("SELECT DISTINCT p.dispense.id FROM PharmacyPayment p "
+         + "WHERE p.dispense.id IN :dispenseIds AND p.status = com.example.hms.enums.PharmacyPaymentStatus.POSTED")
+    java.util.List<UUID> findPaidDispenseIds(
+            @org.springframework.data.repository.query.Param("dispenseIds") java.util.Collection<UUID> dispenseIds);
+
+    /** QA D843: whether a dispense already carries a POSTED payment. */
+    boolean existsByDispense_IdAndStatus(UUID dispenseId, com.example.hms.enums.PharmacyPaymentStatus status);
+
     /** QA D404: the payments still counted on a dispense. */
     java.util.List<PharmacyPayment> findByDispense_IdAndStatus(UUID dispenseId,
             com.example.hms.enums.PharmacyPaymentStatus status);

@@ -29,6 +29,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Set;
 import java.util.UUID;
@@ -79,7 +80,7 @@ public class MtmReviewServiceImpl implements MtmReviewService {
     public MtmReviewResponseDTO startReview(MtmReviewRequestDTO dto) {
         UUID activeHospitalId = requireHospital();
         if (!activeHospitalId.equals(dto.getHospitalId())) {
-            throw new BusinessException("Review hospital does not match the active hospital context");
+            throw new BusinessException("mtm.review.hospitalMismatch");
         }
 
         Patient patient = patientRepository.findById(dto.getPatientId())
@@ -89,6 +90,8 @@ public class MtmReviewServiceImpl implements MtmReviewService {
         // QA D401: the patient must be registered at the hospital the row is written in.
         patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
         User pharmacist = resolveCurrentUser();
+        // QA D886: a follow-up dated 2020-01-01 was accepted.
+        requireFollowUpNotInPast(dto.getFollowUpDate(), null, hospital);
 
         boolean polypharmacy = computePolypharmacyAlert(patient.getId(), hospital.getId());
 
@@ -133,6 +136,8 @@ public class MtmReviewServiceImpl implements MtmReviewService {
         if (existing.getHospital() == null || !activeHospitalId.equals(existing.getHospital().getId())) {
             throw new ResourceNotFoundException(NOT_FOUND);
         }
+
+        requireLegalUpdate(existing, dto);
 
         boolean newInterventionRecorded =
                 (existing.getInterventionSummary() == null || existing.getInterventionSummary().isBlank())
@@ -190,8 +195,7 @@ public class MtmReviewServiceImpl implements MtmReviewService {
     private UUID requireHospital() {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId == null) {
-            throw new BusinessException(
-                "An active hospital is required: MTM reviews belong to a facility. Select a hospital first.");
+            throw new BusinessException("mtm.review.hospitalRequired");
         }
         return hospitalId;
     }
@@ -201,7 +205,7 @@ public class MtmReviewServiceImpl implements MtmReviewService {
     public Page<MtmReviewResponseDTO> listByHospital(UUID hospitalId, Pageable pageable) {
         UUID active = requireHospital();
         if (!active.equals(hospitalId)) {
-            throw new BusinessException("Hospital ID does not match the active hospital context");
+            throw new BusinessException("mtm.review.hospitalMismatch");
         }
         return reviewRepository.findByHospital_Id(active, pageable).map(mapper::toResponseDTO);
     }
@@ -212,6 +216,52 @@ public class MtmReviewServiceImpl implements MtmReviewService {
         UUID active = requireHospital();
         return reviewRepository.findByPatient_IdAndHospital_Id(patientId, active, pageable)
                 .map(mapper::toResponseDTO);
+    }
+
+    /**
+     * QA D886: a COMPLETED review went back to DRAFT. The lifecycle only moves
+     * forward: DRAFT may become anything, REFERRED (handed to the prescriber)
+     * may stay REFERRED or be COMPLETED, and a COMPLETED review is closed. A
+     * re-sent copy of the completing request (a retry) changes nothing and is
+     * answered rather than refused. A follow-up date that is changed must not
+     * be in the past; one that is kept is not re-judged by today's date.
+     */
+    private void requireLegalUpdate(MtmReview existing, MtmReviewRequestDTO dto) {
+        MtmReviewStatus current = existing.getStatus();
+        MtmReviewStatus next = dto.getStatus() != null ? dto.getStatus() : current;
+        if (current == MtmReviewStatus.COMPLETED && !isNoOp(existing, dto, next)) {
+            throw new BusinessException("mtm.review.completedIsClosed");
+        }
+        if (current == MtmReviewStatus.REFERRED && next == MtmReviewStatus.DRAFT) {
+            throw new BusinessException("mtm.review.referredCannotReturnToDraft");
+        }
+        requireFollowUpNotInPast(dto.getFollowUpDate(), existing.getFollowUpDate(), existing.getHospital());
+    }
+
+    /** True when the request would leave a review exactly as it is. */
+    private static boolean isNoOp(MtmReview existing, MtmReviewRequestDTO dto, MtmReviewStatus next) {
+        return next == existing.getStatus()
+                && keeps(dto.getChronicConditionFocus(), existing.getChronicConditionFocus())
+                && (dto.getAdherenceConcern() == null || dto.getAdherenceConcern() == existing.isAdherenceConcern())
+                && keeps(dto.getInterventionSummary(), existing.getInterventionSummary())
+                && keeps(dto.getRecommendedActions(), existing.getRecommendedActions())
+                && (dto.getFollowUpDate() == null || dto.getFollowUpDate().equals(existing.getFollowUpDate()));
+    }
+
+    /** An omitted field keeps its value; a blank one keeps an absent value. */
+    private static boolean keeps(String sent, String stored) {
+        if (sent == null) {
+            return true;
+        }
+        String storedOrEmpty = stored == null ? "" : stored;
+        return sent.equals(storedOrEmpty);
+    }
+
+    private static void requireFollowUpNotInPast(LocalDate followUp, LocalDate stored, Hospital hospital) {
+        if (followUp != null && !followUp.equals(stored)
+                && followUp.isBefore(com.example.hms.utility.HospitalCalendar.today(hospital))) {
+            throw new BusinessException("mtm.review.followUpInPast");
+        }
     }
 
     /** Counts active prescriptions; flags polypharmacy at ≥ 5 concurrent meds. */
@@ -228,7 +278,7 @@ public class MtmReviewServiceImpl implements MtmReviewService {
     private User resolveCurrentUser() {
         UUID userId = roleValidator.getCurrentUserId();
         if (userId == null) {
-            throw new BusinessException("Unable to determine current user");
+            throw new BusinessException("pharmacy.currentUserUnknown");
         }
         return userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("user.current.notfound"));

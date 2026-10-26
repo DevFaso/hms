@@ -249,3 +249,16 @@ tr.expiring-soon td {
   width: 6.5rem;
   padding: 4px 6px;
 }
+
+.price-cell {
+  white-space: nowrap;
+}
+
+.price-text {
+  font-variant-numeric: tabular-nums;
+}
+
+.price-edit {
+  margin-left: 4px;
+  vertical-align: middle;
+}

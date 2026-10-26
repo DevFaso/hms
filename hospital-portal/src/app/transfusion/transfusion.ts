@@ -34,7 +34,8 @@ import { finalize } from 'rxjs';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
-import { toServerDateTime } from '../shared/date-utils';
+import { localDateString, nowLocalDatetime, toServerDateTime } from '../shared/date-utils';
+import { refusalReason } from '../shared/refusal-reason';
 
 type Tab = 'requests' | 'units';
 
@@ -285,8 +286,11 @@ export class TransfusionComponent implements OnInit {
           this.selectedRequest.set(created);
           this.loadRequests();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('TRANSFUSION.REQUEST_ERROR'));
+        error: (err: unknown) => {
+          // QA D885: the server's reason, in the caller's language.
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('TRANSFUSION.REQUEST_ERROR'),
+          );
           this.requestSubmitting.set(false);
         },
       });
@@ -301,7 +305,8 @@ export class TransfusionComponent implements OnInit {
         this.selectedRequest.set(updated);
         this.loadRequests();
       },
-      error: () => this.toast.error(this.translate.instant('TRANSFUSION.CANCEL_ERROR')),
+      error: (err: unknown) =>
+        this.toast.error(refusalReason(err) ?? this.translate.instant('TRANSFUSION.CANCEL_ERROR')),
     });
   }
 
@@ -338,11 +343,11 @@ export class TransfusionComponent implements OnInit {
           this.showGroupModal.set(false);
           this.patientGroup.set(group);
         },
-        error: () => {
+        error: (err: unknown) => {
           // The backend refuses a silent group change without a correction
-          // reason; the message is the useful part, so surface a generic
-          // failure and let the operator re-read the form hint.
-          this.toast.error(this.translate.instant('TRANSFUSION.GROUP_ERROR'));
+          // reason; the message is the useful part (QA D885: now in the
+          // caller's language), so it is shown, with a generic fallback.
+          this.toast.error(refusalReason(err) ?? this.translate.instant('TRANSFUSION.GROUP_ERROR'));
           this.groupSubmitting.set(false);
         },
       });
@@ -377,7 +382,18 @@ export class TransfusionComponent implements OnInit {
     this.loadUnits();
   }
 
+  /**
+   * QA D858/D883/D884: the pickers stop at today / now and the counts at what
+   * the server accepts, so the common slip is caught before it is sent. The
+   * server still refuses it on its own (these are hints, not the rule).
+   */
+  readonly maxUnitsPerRequest = 20;
+  readonly maxUnitVolumeMl = 1000;
+  maxCollectedOn = localDateString();
+  maxOnsetAt = nowLocalDatetime();
+
   openUnitModal(): void {
+    this.maxCollectedOn = localDateString();
     this.unitForm = this.emptyUnitForm();
     this.showUnitModal.set(true);
   }
@@ -406,8 +422,9 @@ export class TransfusionComponent implements OnInit {
           this.showUnitModal.set(false);
           this.loadUnits();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('TRANSFUSION.UNIT_ERROR'));
+        error: (err: unknown) => {
+          // QA D885: the server's reason, in the caller's language.
+          this.toast.error(refusalReason(err) ?? this.translate.instant('TRANSFUSION.UNIT_ERROR'));
           this.unitSubmitting.set(false);
         },
       });
@@ -421,7 +438,8 @@ export class TransfusionComponent implements OnInit {
         this.toast.success(this.translate.instant('TRANSFUSION.UNIT_DISCARDED'));
         this.loadUnits();
       },
-      error: () => this.toast.error(this.translate.instant('TRANSFUSION.DISCARD_ERROR')),
+      error: (err: unknown) =>
+        this.toast.error(refusalReason(err) ?? this.translate.instant('TRANSFUSION.DISCARD_ERROR')),
     });
   }
 
@@ -463,10 +481,12 @@ export class TransfusionComponent implements OnInit {
           this.showCrossmatchModal.set(false);
           this.refreshSelected();
         },
-        error: () => {
+        error: (err: unknown) => {
           // The most important failure here is the ABO/Rh refusal. It carries
           // the groups involved, so the operator is told what to look at.
-          this.toast.error(this.translate.instant('TRANSFUSION.CROSSMATCH_ERROR'));
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('TRANSFUSION.CROSSMATCH_ERROR'),
+          );
           this.crossmatchSubmitting.set(false);
         },
       });
@@ -480,7 +500,8 @@ export class TransfusionComponent implements OnInit {
         this.toast.success(this.translate.instant('TRANSFUSION.UNIT_ISSUED'));
         this.refreshSelected();
       },
-      error: () => this.toast.error(this.translate.instant('TRANSFUSION.ISSUE_ERROR')),
+      error: (err: unknown) =>
+        this.toast.error(refusalReason(err) ?? this.translate.instant('TRANSFUSION.ISSUE_ERROR')),
     });
   }
 
@@ -517,14 +538,16 @@ export class TransfusionComponent implements OnInit {
           this.showHangModal.set(false);
           this.refreshSelected();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('TRANSFUSION.HANG_ERROR'));
+        error: (err: unknown) => {
+          // QA D885: the server's reason, in the caller's language.
+          this.toast.error(refusalReason(err) ?? this.translate.instant('TRANSFUSION.HANG_ERROR'));
           this.hangSubmitting.set(false);
         },
       });
   }
 
   openReaction(administrationId: string): void {
+    this.maxOnsetAt = nowLocalDatetime();
     this.reactionForm = this.emptyReactionForm();
     this.reactionTarget.set(administrationId);
     this.showReactionModal.set(true);
@@ -555,8 +578,11 @@ export class TransfusionComponent implements OnInit {
           this.closeReaction();
           this.refreshSelected();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('TRANSFUSION.REACTION_ERROR'));
+        error: (err: unknown) => {
+          // QA D885: the server's reason, in the caller's language.
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('TRANSFUSION.REACTION_ERROR'),
+          );
           this.reactionSubmitting.set(false);
         },
       });

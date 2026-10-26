@@ -1092,7 +1092,45 @@
     "SEARCH_PLACEHOLDER": "Buscar conjuntos…",
     "SYNONYMS_PLACEHOLDER": "Separados por comas (ej. Tylenol, paracetamol)",
     "VERSION_HISTORY": "Historial de versiones",
-    "VERSION_RETIRED": "retirada"
+    "VERSION_RETIRED": "retirada",
+    "NAME_REQUIRED": "Asigne un nombre al conjunto de órdenes.",
+    "ITEM_NAME_REQUIRED": "Este elemento necesita un nombre.",
+    "ITEM_TYPE": {
+      "MEDICATION": "Medicamento",
+      "LAB": "Análisis de laboratorio",
+      "IMAGING": "Imagenología",
+      "DIET": "Dieta",
+      "ACTIVITY": "Actividad",
+      "MONITORING": "Monitorización"
+    },
+    "DOSE_UNIT": {
+      "MCG": "µg",
+      "IU": "UI",
+      "TABLET": "comprimido",
+      "PUFF": "inhalación",
+      "DROP": "gota",
+      "UNIT": "unidad"
+    },
+    "FREQUENCY": {
+      "QD": "Una vez al día (QD)",
+      "BID": "Dos veces al día (BID)",
+      "TID": "Tres veces al día (TID)",
+      "QID": "Cuatro veces al día (QID)",
+      "Q4H": "Cada 4 horas (Q4H)",
+      "Q6H": "Cada 6 horas (Q6H)",
+      "Q8H": "Cada 8 horas (Q8H)",
+      "PRN": "Si es necesario (PRN)"
+    },
+    "ROUTE": {
+      "PO": "Vía oral (PO)",
+      "IV": "Vía intravenosa (IV)",
+      "IM": "Vía intramuscular (IM)",
+      "SC": "Vía subcutánea (SC)",
+      "PR": "Vía rectal (PR)",
+      "INH": "Vía inhalatoria (INH)",
+      "TOPICAL": "Vía tópica",
+      "NASAL": "Vía nasal"
+    }
   },
   "REFILLS": {
     "QUEUE_TITLE": "Solicitudes de recarga",
@@ -4838,7 +4876,9 @@
       "QUICK_LINKS": "Enlaces rápidos",
       "UPCOMING_APPOINTMENTS": "Próximas citas",
       "MEDICAL_HISTORY": "Antecedentes médicos y familiares",
-      "CARE_TEAM": "Mi equipo de atención"
+      "CARE_TEAM": "Mi equipo de atención",
+      "RECORD_NUMBERS": "Mis números de historia clínica",
+      "UNKNOWN_HOSPITAL": "Hospital sin nombre"
     },
     "SHARING": {
       "TITLE": "Quién consultó mi historial",
@@ -8647,6 +8687,16 @@
     "PRICE_INVALID": "El precio debe ser un número entero de francos, cero o más.",
     "PRICE_SAVE_FAILED": "No se pudo guardar el precio.",
     "UNIT_COST_NEGATIVE": "El costo unitario no puede ser negativo.",
+    "EDIT_PRICE": "Cambiar el precio unitario",
+    "MTM_CLOSED": "Cerrada",
+    "ROUTING_RX_SEARCH": "Buscar la receta",
+    "ROUTING_RX_SEARCH_PLACEHOLDER": "Nombre del paciente o medicamento…",
+    "ROUTING_RX_QUEUE_FAILED": "No se pudieron cargar las recetas pendientes en la dispensación.",
+    "ROUTING_RX_NO_MATCH": "Ninguna receta pendiente coincide con esta búsqueda.",
+    "ROUTING_RX_NO_MATCH_PARTIAL": "Ninguna coincidencia entre las {{loaded}} recetas pendientes más recientes.",
+    "ROUTING_RX_PARTIAL": "Buscando en las {{loaded}} más recientes de {{total}} recetas pendientes.",
+    "ROUTING_RX_LOAD_OLDER": "Buscar también las recetas más antiguas",
+    "ROUTING_RX_SELECTED": "Receta:",
     "ATC_PLACEHOLDER": "ej. J01CA04 (amoxicilina)",
     "STRENGTH_PLACEHOLDER": "ej. 500",
     "CATEGORY_PLACEHOLDER": "ej. Antibiótico"
@@ -11261,7 +11311,8 @@
     "DISPENSE_PICK": "Dispensación a cobrar",
     "DISPENSE_PICK_PLACEHOLDER": "Elija una dispensación",
     "NO_DISPENSES": "No hay ninguna dispensación que cobrar en esta farmacia.",
-    "DISPENSES_LOAD_FAILED": "No se pudieron cargar las dispensaciones de la farmacia."
+    "DISPENSES_LOAD_FAILED": "No se pudieron cargar las dispensaciones de la farmacia.",
+    "ALREADY_PAID": "Esta dispensación ya está pagada. No se cobra un segundo pago."
   },
   "MY_PHARMACY_INVOICES": {
     "TITLE": "Mis facturas de farmacia",
