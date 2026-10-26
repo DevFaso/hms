@@ -45,7 +45,7 @@ class AppointmentBookingRolesGuardTest {
 
         admitted.remove("ROLE_PATIENT");
 
-        assertThat(AppointmentServiceImpl.STAFF_BOOKING_ROLES).containsAll(admitted);
+        assertThat(admitted).isSubsetOf(AppointmentServiceImpl.STAFF_BOOKING_ROLES);
     }
 
     @Test
