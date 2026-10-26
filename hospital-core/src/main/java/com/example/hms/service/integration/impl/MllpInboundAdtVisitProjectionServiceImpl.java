@@ -502,6 +502,16 @@ public class MllpInboundAdtVisitProjectionServiceImpl
                 hospitalId);
             return Optional.empty();
         }
+        // QA D852: a config saved before the write rule existed may name a
+        // non-physician; it must not admit anyone under that name.
+        UUID providerUserId = provider.getUser() != null ? provider.getUser().getId() : null;
+        if (providerUserId == null || !assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+                providerUserId, hospitalId,
+                com.example.hms.service.platform.AdtIntakeProviderConfigService.ADMITTING_ROLE_CODES)) {
+            log.warn("ADT auto-create skipped — admittingProviderId {} in intake config for hospital {} holds no doctor, physician or surgeon role there",
+                provider.getId(), hospitalId);
+            return Optional.empty();
+        }
         return Optional.of(provider);
     }
 

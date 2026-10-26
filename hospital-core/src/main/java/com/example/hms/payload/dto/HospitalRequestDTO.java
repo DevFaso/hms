@@ -43,7 +43,9 @@ public class HospitalRequestDTO {
     private String poBox; // For B.P. style addresses
 
     @NotBlank(message = "{hospital.phoneNumber.required}")
-    @Size(min = 10, max = 15, message = "{hospital.phoneNumber.size}")
+    // QA D833: the limit is on what is typed, spaces included; the service
+    // stores the number without them (PhoneNumbers.normalizeFacilityPhone).
+    @Size(max = 30, message = "{hospital.phoneNumber.size}")
     private String phoneNumber;
 
     @Email(message = "{hospital.email.invalid}")

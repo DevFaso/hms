@@ -34,6 +34,11 @@ public class StaffMapper {
 
         try {
             UserRoleHospitalAssignment assignment = staff.getAssignment();
+            if (assignment != null && assignment.getId() != null) {
+                // QA D872: the ADT intake form picks a default assignment
+                // from the hospital's physicians instead of a typed UUID.
+                dto.setAssignmentId(assignment.getId().toString());
+            }
             if (assignment != null && assignment.getRole() != null) {
                 dto.setRoleCode(assignment.getRole().getCode());
                 dto.setRoleName(assignment.getRole().getName());

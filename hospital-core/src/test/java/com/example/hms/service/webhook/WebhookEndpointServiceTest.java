@@ -144,7 +144,7 @@ class WebhookEndpointServiceTest {
 
         assertThatThrownBy(() -> service.register(dto))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("PING");
+            .hasMessageContaining("webhook.event.pingNotSubscribable");
         verify(endpointRepository, never()).save(any());
     }
 
@@ -259,6 +259,6 @@ class WebhookEndpointServiceTest {
 
         assertThatThrownBy(() -> service.ping(id))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("ACTIVE");
+            .hasFieldOrPropertyWithValue("messageKey", "webhook.endpoint.pingInactive");
     }
 }

@@ -68,13 +68,13 @@ public class ReportController {
         UUID hospitalId = requireHospital();
         Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
-        validateRecipients(request.getRecipients());
+        String recipients = ScheduledReportService.requireDeliverableRecipients(request.getRecipients());
         ReportDefinition definition = definitionRepository.save(ReportDefinition.builder()
                 .hospital(hospital)
                 .name(request.getName().trim())
                 .reportType(request.getReportType())
                 .period(request.getPeriod())
-                .recipients(request.getRecipients().trim())
+                .recipients(recipients)
                 .createdBy(principal != null ? principal.getUsername() : "system")
                 .build());
         return ResponseEntity.status(HttpStatus.CREATED).body(toDto(definition));
@@ -143,8 +143,7 @@ public class ReportController {
         UUID hospitalId = Optional.ofNullable(ActingScopeResolver.pinnedHospitalIdOrNull())
                 .orElse(null);
         if (hospitalId == null) {
-            throw new BusinessException(
-                "An active hospital is required to manage scheduled reports.");
+            throw new BusinessException("reportDefinition.hospitalRequired");
         }
         return hospitalId;
     }

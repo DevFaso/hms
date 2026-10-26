@@ -2,12 +2,14 @@ package com.example.hms.service.reporting;
 
 import com.example.hms.enums.ReportRunStatus;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.model.platform.ReportDefinition;
 import com.example.hms.model.platform.ReportRun;
 import com.example.hms.repository.ReportDefinitionRepository;
 import com.example.hms.repository.ReportRunRepository;
 import com.example.hms.service.EmailService;
 import com.example.hms.service.reporting.ReportGenerationService.GeneratedReport;
+import com.example.hms.utility.EmailAddresses;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -15,6 +17,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -43,6 +46,33 @@ public class ScheduledReportService {
     private final ReportRunRepository runRepository;
     private final ReportGenerationService generationService;
     private final EmailService emailService;
+
+    private static final String RECIPIENTS_FIELD = "recipients";
+
+    /**
+     * QA D855: the recipients of a scheduled report, checked by the same rule
+     * the mail service applies when it sends ({@link EmailAddresses#isDeliverable}),
+     * and returned as the comma-separated list to store. The create endpoint
+     * used to check only for an "@", so "name@@example" was saved and every run
+     * then failed in the mail service with an English message.
+     */
+    public static String requireDeliverableRecipients(String recipients) {
+        List<String> addresses = new ArrayList<>();
+        for (String raw : (recipients == null ? "" : recipients).split(",")) {
+            String address = raw.trim();
+            if (address.isEmpty()) {
+                continue;
+            }
+            if (!EmailAddresses.isDeliverable(address)) {
+                throw new FieldBusinessException(RECIPIENTS_FIELD, "reportDefinition.recipients.invalid", address);
+            }
+            addresses.add(address);
+        }
+        if (addresses.isEmpty()) {
+            throw new FieldBusinessException(RECIPIENTS_FIELD, "reportDefinition.recipients.required");
+        }
+        return String.join(",", addresses);
+    }
 
     /** @return number of reports actually emitted on this pass */
     public int sweep() {
@@ -82,6 +112,11 @@ public class ScheduledReportService {
             return null;
         }
         try {
+            // A definition saved before the create rule existed may hold an
+            // address the mail service refuses: fail the run with the same
+            // translated reason the create endpoint gives, not the mail
+            // service's English one.
+            requireDeliverableRecipients(definition.getRecipients());
             GeneratedReport report = generationService.generate(definition, periodToken);
             emailService.sendWithAttachment(
                 definition.recipientList(), List.of(), List.of(),
@@ -127,10 +162,7 @@ public class ScheduledReportService {
                 return runRepository.saveAndFlush(retry);
             }
             if (manual) {
-                throw new BusinessException("Report for period " + periodToken
-                    + " was already generated"
-                    + existing.map(r -> " (" + r.getStatus() + ")").orElse("")
-                    + ". Duplicate sends need a new period.");
+                throw new BusinessException("reportRun.alreadyGenerated", periodToken);
             }
             return null; // another instance claimed it — fine
         }

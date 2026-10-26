@@ -109,4 +109,24 @@ class PhoneNumbersTest {
         assertThat(PhoneNumbers.callingCodeForCountry(null)).isEqualTo("226");
         assertThat(PhoneNumbers.callingCodeForCountry("Atlantis")).isEqualTo("226");
     }
+
+    @Test
+    @DisplayName("QA D833: a facility number keeps its last digit and loses its spaces")
+    void facilityPhoneIsNormalised() {
+        assertThat(PhoneNumbers.normalizeFacilityPhone("+226 25 36 12 40", "Burkina Faso")).isEqualTo("+22625361240");
+        assertThat(PhoneNumbers.normalizeFacilityPhone("25 36 12 40", "Burkina Faso")).isEqualTo("+22625361240");
+        assertThat(PhoneNumbers.normalizeFacilityPhone("+33 1 23 45 67 89", "France")).isEqualTo("+33123456789");
+        // A country whose numbering plan this class does not know keeps its digits.
+        assertThat(PhoneNumbers.normalizeFacilityPhone("(123) 456-7890", "US")).isEqualTo("1234567890");
+    }
+
+    @Test
+    @DisplayName("QA D833: a number one digit short, or not a number, is refused rather than stored")
+    void facilityPhoneIsRefused() {
+        assertThat(PhoneNumbers.normalizeFacilityPhone("+226 25 36 12 4", "Burkina Faso")).isNull();
+        assertThat(PhoneNumbers.normalizeFacilityPhone("25 36 12 4", "Burkina Faso")).isNull();
+        assertThat(PhoneNumbers.normalizeFacilityPhone("+226 25 36 12 4", "US")).isNull();
+        assertThat(PhoneNumbers.normalizeFacilityPhone("appelez-nous", "US")).isNull();
+        assertThat(PhoneNumbers.normalizeFacilityPhone("   ", "Burkina Faso")).isNull();
+    }
 }

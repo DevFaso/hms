@@ -66,11 +66,16 @@ class ChatMessageServiceImplTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
+        // QA D877: refusals are bundle keys now; resolve them as a request would.
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
     }
 
     @AfterEach
     void tearDown() {
         SecurityContextHolder.clearContext();
+        com.example.hms.utility.MessageUtil.setMessageSource(null);
+        org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
     }
 
     private void setSecurityContext(String role) {
@@ -557,7 +562,7 @@ class ChatMessageServiceImplTest {
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
             () -> service.sendMessage(dto, Locale.ENGLISH));
-        assertEquals("Attachment kind is required", ex.getMessage());
+        assertEquals("The attachment type is missing.", ex.getMessage());
         verify(chatAttachmentRepository, never()).saveAndFlush(any(ChatAttachment.class));
     }
 
@@ -583,7 +588,28 @@ class ChatMessageServiceImplTest {
 
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
             () -> service.sendMessage(dto, Locale.ENGLISH));
-        assertTrue(ex.getMessage().contains("content or at least one attachment"));
+        assertTrue(ex.getMessage().contains("add an attachment"));
+    }
+
+    @Test
+    void qaD877_sendErrorsAreInTheSendersLanguage() {
+        UUID senderId = UUID.randomUUID();
+        User sender = userWithRole(senderId, "ROLE_DOCTOR");
+        when(userRepository.findById(senderId)).thenReturn(Optional.of(sender));
+        setSecurityContext("ROLE_DOCTOR");
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(Locale.FRENCH);
+        ChatMessageServiceImpl service = spy(chatMessageService);
+        doReturn(senderId).when(service).getCurrentUserId();
+
+        ChatMessageRequestDTO toSelf = ChatMessageRequestDTO.builder().recipientId(senderId).content("moi").build();
+        IllegalArgumentException self = assertThrows(IllegalArgumentException.class,
+            () -> service.sendMessage(toSelf, Locale.FRENCH));
+        assertEquals("Vous ne pouvez pas vous envoyer un message à vous-même.", self.getMessage());
+
+        ChatMessageRequestDTO empty = ChatMessageRequestDTO.builder().recipientId(UUID.randomUUID()).content("").build();
+        IllegalArgumentException blank = assertThrows(IllegalArgumentException.class,
+            () -> service.sendMessage(empty, Locale.FRENCH));
+        assertEquals("Écrivez un message ou ajoutez une pièce jointe avant d'envoyer.", blank.getMessage());
     }
 
     @Test

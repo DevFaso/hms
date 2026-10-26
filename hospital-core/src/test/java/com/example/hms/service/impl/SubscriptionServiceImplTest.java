@@ -1,5 +1,8 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.ConflictException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.SubscriptionMapper;
 import com.example.hms.model.Organization;
@@ -221,6 +224,91 @@ class SubscriptionServiceImplTest {
     }
 
     @Test
+    @DisplayName("QA D850: a plan an organization is subscribed to cannot be deactivated (409), nothing saved")
+    void deactivatePlanInUseIsRefused() {
+        SubscriptionPlan p = plan("ESS81562", true);
+        when(planRepository.findById(p.getId())).thenReturn(Optional.of(p));
+        when(subscriptionRepository.countByPlanIdAndStatus(p.getId(), OrganizationSubscription.Status.ACTIVE))
+            .thenReturn(1L);
+        UUID planId = p.getId();
+
+        assertThatThrownBy(() -> service.deactivatePlan(planId))
+            .isInstanceOf(ConflictException.class)
+            .hasMessageStartingWith("planId:");
+        assertThat(p.isActive()).isTrue();
+        verify(planRepository, never()).save(any(SubscriptionPlan.class));
+    }
+
+    @Test
+    @DisplayName("QA D850: deactivating through an edit (active=false) is held to the same rule")
+    void updatePlanDeactivateInUseIsRefused() {
+        SubscriptionPlan p = plan("ESS81562", true);
+        when(planRepository.findById(p.getId())).thenReturn(Optional.of(p));
+        when(subscriptionRepository.countByPlanIdAndStatus(p.getId(), OrganizationSubscription.Status.ACTIVE))
+            .thenReturn(2L);
+        SubscriptionPlanRequestDTO req = SubscriptionPlanRequestDTO.builder()
+            .name("Essentiel").tierCode("ESS81562").monthlyPriceCents(1000L).includedSeats(5)
+            .active(false).build();
+        UUID planId = p.getId();
+
+        assertThatThrownBy(() -> service.updatePlan(planId, req))
+            .isInstanceOf(ConflictException.class);
+        assertThat(p.isActive()).isTrue();
+        verify(planRepository, never()).save(any(SubscriptionPlan.class));
+    }
+
+    @Test
+    @DisplayName("QA D850: an edit that keeps the plan active is not blocked by its subscriptions")
+    void updatePlanKeepingActiveIsAllowedWhileInUse() {
+        SubscriptionPlan p = plan("PRO", true);
+        when(planRepository.findById(p.getId())).thenReturn(Optional.of(p));
+        SubscriptionPlanRequestDTO req = SubscriptionPlanRequestDTO.builder()
+            .name("Pro v3").tierCode("PRO").monthlyPriceCents(1000L).includedSeats(5).active(true).build();
+
+        assertThat(service.updatePlan(p.getId(), req).getName()).isEqualTo("Pro v3");
+        verify(subscriptionRepository, never()).countByPlanIdAndStatus(any(), any());
+    }
+
+    @Test
+    @DisplayName("QA D865: currency 'ZZZZ' is refused on the currency field")
+    void unknownCurrencyIsRefused() {
+        for (String bad : new String[]{"ZZZZ", "ZZZ", "F CFA", "12"}) {
+            SubscriptionPlanRequestDTO req = SubscriptionPlanRequestDTO.builder()
+                .name("Devise bizarre").tierCode("CUR").monthlyPriceCents(100L).currency(bad).build();
+            assertThatThrownBy(() -> service.createPlan(req))
+                .as(bad)
+                .isInstanceOf(FieldBusinessException.class)
+                .extracting(ex -> ((FieldBusinessException) ex).getField())
+                .isEqualTo("currency");
+        }
+        verify(planRepository, never()).save(any(SubscriptionPlan.class));
+    }
+
+    @Test
+    @DisplayName("QA D865: a lower-case ISO code is stored upper-case")
+    void currencyIsNormalised() {
+        SubscriptionPlanRequestDTO req = SubscriptionPlanRequestDTO.builder()
+            .name("Essentiel").tierCode("ESS").monthlyPriceCents(2_500_000L).currency(" xof ").build();
+
+        assertThat(service.createPlan(req).getCurrency()).isEqualTo("XOF");
+    }
+
+    @Test
+    @DisplayName("QA D865: F CFA has no centimes, so a fractional franc price is refused")
+    void xofPriceMustBeWholeFrancs() {
+        SubscriptionPlanRequestDTO req = SubscriptionPlanRequestDTO.builder()
+            .name("Essentiel").tierCode("ESS").monthlyPriceCents(2_500_050L).currency("XOF").build();
+
+        assertThatThrownBy(() -> service.createPlan(req))
+            .isInstanceOf(FieldBusinessException.class)
+            .extracting(ex -> ((FieldBusinessException) ex).getField())
+            .isEqualTo("monthlyPriceCents");
+        SubscriptionPlanRequestDTO euro = SubscriptionPlanRequestDTO.builder()
+            .name("Euro").tierCode("EUR1").monthlyPriceCents(4_999L).currency("EUR").build();
+        assertThat(service.createPlan(euro).getMonthlyPriceCents()).isEqualTo(4_999L);
+    }
+
+    @Test
     @DisplayName("deactivatePlan throws ResourceNotFound for unknown id")
     void deactivatePlanMissing() {
         UUID id = UUID.randomUUID();
@@ -245,8 +333,9 @@ class SubscriptionServiceImplTest {
         UUID orgId = o.getId();
 
         assertThatThrownBy(() -> service.assignPlan(orgId, req))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("deactivated subscription plan");
+            .isInstanceOf(BusinessException.class)
+            .extracting(ex -> ((BusinessException) ex).getMessageKey())
+            .isEqualTo("subscription.plan.inactive");
     }
 
     @Test
@@ -396,8 +485,9 @@ class SubscriptionServiceImplTest {
         UUID subId = sub.getId();
 
         assertThatThrownBy(() -> service.cancel(strangerOrgId, subId))
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("does not belong");
+            .isInstanceOf(BusinessException.class)
+            .extracting(ex -> ((BusinessException) ex).getMessageKey())
+            .isEqualTo("subscription.notInOrganization");
     }
 
     @Test

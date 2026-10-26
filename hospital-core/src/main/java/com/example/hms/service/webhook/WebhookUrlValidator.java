@@ -1,6 +1,6 @@
 package com.example.hms.service.webhook;
 
-import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 
 import java.net.InetAddress;
 import java.net.URI;
@@ -18,10 +18,19 @@ import java.net.UnknownHostException;
  * between registration and delivery — that needs resolution pinning in
  * the HTTP client and is out of scope for v1; the registrant is an
  * authenticated hospital admin, not an anonymous user.
+ *
+ * <p>QA D873: each refusal is a bundle key about the {@code url} field, so
+ * the admin reads it in their language, under the URL box.
  */
 public final class WebhookUrlValidator {
 
+    private static final String FIELD = "url";
+
     private WebhookUrlValidator() {
+    }
+
+    private static FieldBusinessException refusal(String key) {
+        return new FieldBusinessException(FIELD, key);
     }
 
     public static void requireDeliverable(String url) {
@@ -29,21 +38,21 @@ public final class WebhookUrlValidator {
         try {
             uri = URI.create(url.strip());
         } catch (IllegalArgumentException e) {
-            throw new BusinessException("The webhook URL is not a valid URL.");
+            throw refusal("webhook.url.invalid");
         }
         if (!"https".equalsIgnoreCase(uri.getScheme())) {
-            throw new BusinessException("Webhook URLs must use https.");
+            throw refusal("webhook.url.httpsRequired");
         }
         if (uri.getUserInfo() != null) {
-            throw new BusinessException("Webhook URLs must not carry credentials.");
+            throw refusal("webhook.url.credentials");
         }
         String host = uri.getHost();
         if (host == null || host.isBlank()) {
-            throw new BusinessException("The webhook URL needs a host.");
+            throw refusal("webhook.url.hostRequired");
         }
         String lower = host.toLowerCase();
         if (lower.equals("localhost") || lower.endsWith(".local") || lower.endsWith(".internal")) {
-            throw new BusinessException("Webhook URLs must point at a public host.");
+            throw refusal("webhook.url.publicHostRequired");
         }
         try {
             // EVERY A/AAAA answer must be public: a name whose first
@@ -51,12 +60,11 @@ public final class WebhookUrlValidator {
             // otherwise pass registration and deliver internally.
             for (InetAddress address : InetAddress.getAllByName(host)) {
                 if (isNonPublic(address)) {
-                    throw new BusinessException("Webhook URLs must point at a public host.");
+                    throw refusal("webhook.url.publicHostRequired");
                 }
             }
         } catch (UnknownHostException e) {
-            throw new BusinessException(
-                "The webhook host could not be resolved - check the URL.");
+            throw refusal("webhook.url.unresolvable");
         }
     }
 

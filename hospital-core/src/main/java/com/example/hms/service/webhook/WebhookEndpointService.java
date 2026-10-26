@@ -154,7 +154,7 @@ public class WebhookEndpointService {
         UUID hospitalId = requireHospital();
         WebhookEndpoint endpoint = requireInTenant(endpointId, hospitalId);
         if (endpoint.getStatus() != WebhookEndpointStatus.ACTIVE) {
-            throw new BusinessException("Only an ACTIVE endpoint can be pinged.");
+            throw new BusinessException("webhook.endpoint.pingInactive");
         }
         WebhookDelivery delivery = deliveryRepository.save(WebhookDelivery.builder()
             .endpoint(endpoint)
@@ -202,7 +202,7 @@ public class WebhookEndpointService {
     private UUID requireHospital() {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId == null) {
-            throw new BusinessException("An active hospital context is required.");
+            throw new BusinessException("webhook.hospitalRequired");
         }
         return hospitalId;
     }
@@ -220,14 +220,13 @@ public class WebhookEndpointService {
      */
     private static void requireSubscribable(WebhookEndpointRequestDTO request) {
         if (request.getEvents().contains(WebhookEventType.PING)) {
-            throw new BusinessException(
-                "PING is the test delivery, not a subscribable event - use the ping action.");
+            throw new BusinessException("webhook.event.pingNotSubscribable");
         }
     }
 
     private static void requireNotRevoked(WebhookEndpoint endpoint) {
         if (endpoint.getStatus() == WebhookEndpointStatus.REVOKED) {
-            throw new BusinessException("The endpoint is revoked.");
+            throw new BusinessException("webhook.endpoint.revoked");
         }
     }
 
@@ -237,8 +236,7 @@ public class WebhookEndpointService {
             // surface as a clean retryable refusal, not a silent overwrite.
             endpointRepository.saveAndFlush(endpoint);
         } catch (OptimisticLockingFailureException e) {
-            throw new BusinessException(
-                "The endpoint was changed at the same time by someone else - reload and retry.");
+            throw new BusinessException("webhook.endpoint.concurrentEdit");
         }
     }
 

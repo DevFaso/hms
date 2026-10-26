@@ -5,6 +5,7 @@ import com.example.hms.payload.dto.platform.AdtIntakeProviderConfigResponseDTO;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -19,6 +20,15 @@ import java.util.UUID;
  * the page.
  */
 public interface AdtIntakeProviderConfigService {
+
+    /**
+     * QA D852: the roles that may admit a patient, in both spellings the role
+     * table holds. The same set gates the config write and the A01/A04
+     * auto-create that reads the config, so a config saved before the rule
+     * existed cannot admit under a non-physician either.
+     */
+    Set<String> ADMITTING_ROLE_CODES = Set.of(
+        "ROLE_DOCTOR", "DOCTOR", "ROLE_PHYSICIAN", "PHYSICIAN", "ROLE_SURGEON", "SURGEON");
 
     AdtIntakeProviderConfigResponseDTO upsert(
         AdtIntakeProviderConfigRequestDTO request, Locale locale);

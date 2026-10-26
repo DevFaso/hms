@@ -1,5 +1,8 @@
 package com.example.hms.service.impl;
 
+import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.ConflictException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.SubscriptionMapper;
 import com.example.hms.model.Organization;
@@ -13,12 +16,15 @@ import com.example.hms.repository.OrganizationRepository;
 import com.example.hms.repository.OrganizationSubscriptionRepository;
 import com.example.hms.repository.SubscriptionPlanRepository;
 import com.example.hms.service.SubscriptionService;
+import com.example.hms.utility.MessageUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.Currency;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 @Service
@@ -28,6 +34,9 @@ public class SubscriptionServiceImpl implements SubscriptionService {
 
 
     private static final String DEFAULT_CURRENCY = "USD";
+
+    /** Prices are stored in hundredths of the currency unit, whatever its minor unit. */
+    private static final long HUNDREDTHS_PER_UNIT = 100L;
 
     private final SubscriptionPlanRepository planRepository;
     private final OrganizationSubscriptionRepository subscriptionRepository;
@@ -46,12 +55,14 @@ public class SubscriptionServiceImpl implements SubscriptionService {
     @Override
     @Transactional
     public SubscriptionPlanResponseDTO createPlan(SubscriptionPlanRequestDTO request) {
+        String currency = normalizeCurrency(request.getCurrency());
+        requirePriceFitsCurrency(request.getMonthlyPriceCents(), currency);
         SubscriptionPlan plan = SubscriptionPlan.builder()
             .name(request.getName())
             .tierCode(request.getTierCode())
             .description(request.getDescription())
             .monthlyPriceCents(request.getMonthlyPriceCents())
-            .currency(request.getCurrency() == null ? DEFAULT_CURRENCY : request.getCurrency())
+            .currency(currency)
             .includedSeats(request.getIncludedSeats())
             .featureKeys(request.getFeatureKeys() == null ? "" : request.getFeatureKeys())
             .active(request.getActive() == null || request.getActive())
@@ -64,13 +75,19 @@ public class SubscriptionServiceImpl implements SubscriptionService {
     public SubscriptionPlanResponseDTO updatePlan(UUID planId, SubscriptionPlanRequestDTO request) {
         SubscriptionPlan plan = planRepository.findById(planId)
             .orElseThrow(() -> new ResourceNotFoundException(SUBSCRIPTION_PLAN_NOT_FOUND_KEY, planId));
+        String currency = request.getCurrency() != null
+            ? normalizeCurrency(request.getCurrency())
+            : plan.getCurrency();
+        requirePriceFitsCurrency(request.getMonthlyPriceCents(), currency);
+        // QA D850: deactivating through an edit is the same act as DELETE.
+        if (Boolean.FALSE.equals(request.getActive()) && plan.isActive()) {
+            requireNotInUse(plan);
+        }
         plan.setName(request.getName());
         plan.setTierCode(request.getTierCode());
         plan.setDescription(request.getDescription());
         plan.setMonthlyPriceCents(request.getMonthlyPriceCents());
-        if (request.getCurrency() != null) {
-            plan.setCurrency(request.getCurrency());
-        }
+        plan.setCurrency(currency);
         plan.setIncludedSeats(request.getIncludedSeats());
         if (request.getFeatureKeys() != null) {
             plan.setFeatureKeys(request.getFeatureKeys());
@@ -86,8 +103,67 @@ public class SubscriptionServiceImpl implements SubscriptionService {
     public void deactivatePlan(UUID planId) {
         SubscriptionPlan plan = planRepository.findById(planId)
             .orElseThrow(() -> new ResourceNotFoundException(SUBSCRIPTION_PLAN_NOT_FOUND_KEY, planId));
+        if (!plan.isActive()) {
+            return;
+        }
+        requireNotInUse(plan);
         plan.setActive(false);
         planRepository.save(plan);
+    }
+
+    /**
+     * QA D850: a plan an organization is subscribed to cannot be deactivated —
+     * the subscription would stay ACTIVE on a plan the catalogue no longer
+     * offers. The operator moves or cancels those subscriptions first.
+     */
+    private void requireNotInUse(SubscriptionPlan plan) {
+        long inUse = subscriptionRepository.countByPlanIdAndStatus(
+            plan.getId(), OrganizationSubscription.Status.ACTIVE);
+        if (inUse > 0) {
+            // "planId:" names the field for the conflict body; the localized
+            // text after it may itself contain a colon.
+            throw new ConflictException("planId:"
+                + MessageUtil.resolveOrRaw("subscription.plan.inUse", inUse));
+        }
+    }
+
+    /**
+     * QA D865: an ISO 4217 code ("XOF", "EUR"), upper-cased; anything else is
+     * refused rather than stored and later shown as an unknown currency.
+     */
+    private static String normalizeCurrency(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return DEFAULT_CURRENCY;
+        }
+        String code = raw.trim().toUpperCase(Locale.ROOT);
+        if (isoCurrency(code) == null) {
+            throw new FieldBusinessException("currency", "subscription.plan.currency.invalid", raw.trim());
+        }
+        return code;
+    }
+
+    /** The ISO 4217 currency for {@code code}, or null when there is none. */
+    private static Currency isoCurrency(String code) {
+        if (code == null || code.length() != 3) {
+            return null;
+        }
+        return Currency.getAvailableCurrencies().stream()
+            .filter(c -> c.getCurrencyCode().equals(code))
+            .findFirst()
+            .orElse(null);
+    }
+
+    /**
+     * QA D865: a currency with no minor unit (the CFA franc) has no centimes,
+     * so its price is a whole number of units.
+     */
+    private static void requirePriceFitsCurrency(long priceHundredths, String currency) {
+        Currency iso = isoCurrency(currency);
+        if (iso != null && iso.getDefaultFractionDigits() == 0
+                && priceHundredths % HUNDREDTHS_PER_UNIT != 0) {
+            throw new FieldBusinessException("monthlyPriceCents",
+                "subscription.plan.price.wholeUnits", currency);
+        }
     }
 
     @Override
@@ -104,8 +180,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         // controller summary advertises that deactivated plans "reject new
         // assignments", which only holds if we enforce it here.
         if (!plan.isActive()) {
-            throw new IllegalArgumentException(
-                "Cannot assign deactivated subscription plan: " + plan.getTierCode());
+            throw new BusinessException("subscription.plan.inactive", plan.getTierCode());
         }
 
         // Cancel any existing ACTIVE subscription so the partial unique index
@@ -146,8 +221,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
         // subscription id could cancel it via any org's cancel route.
         if (sub.getOrganization() == null
                 || !organizationId.equals(sub.getOrganization().getId())) {
-            throw new IllegalArgumentException(
-                "Subscription " + subscriptionId + " does not belong to organization " + organizationId);
+            throw new BusinessException("subscription.notInOrganization");
         }
         sub.setStatus(OrganizationSubscription.Status.CANCELLED);
         sub.setEndsAt(Instant.now());

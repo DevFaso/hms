@@ -14,6 +14,7 @@ import com.example.hms.enums.ReportPeriod;
 import com.example.hms.enums.ReportRunStatus;
 import com.example.hms.enums.ReportType;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.platform.ReportDefinition;
 import com.example.hms.model.platform.ReportRun;
@@ -159,7 +160,39 @@ class ScheduledReportServiceTest {
 
         assertThatThrownBy(() -> service.execute(definition, "202607", true))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("already generated");
+            .hasFieldOrPropertyWithValue("messageKey", "reportRun.alreadyGenerated");
+        verify(emailService, never()).sendWithAttachment(
+            anyList(), anyList(), anyList(), anyString(), anyString(),
+            any(byte[].class), anyString(), anyString());
+    }
+
+    @Test
+    void qaD855MalformedRecipientIsRefusedOnTheRecipientsField() {
+        assertThatThrownBy(() -> ScheduledReportService.requireDeliverableRecipients("accueil.clinique@@example"))
+            .isInstanceOf(FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "recipients")
+            .hasFieldOrPropertyWithValue("messageKey", "reportDefinition.recipients.invalid");
+        // The rule is the mail service's: no top-level domain is refused too.
+        assertThatThrownBy(() -> ScheduledReportService.requireDeliverableRecipients("a@b.org, x@example"))
+            .isInstanceOf(FieldBusinessException.class);
+        assertThatThrownBy(() -> ScheduledReportService.requireDeliverableRecipients(" , ,"))
+            .isInstanceOf(FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "reportDefinition.recipients.required");
+    }
+
+    @Test
+    void qaD855RecipientsAreTrimmedAndStoredAsOneList() {
+        assertThat(ScheduledReportService.requireDeliverableRecipients(" a@example.org , ,b@example.org "))
+            .isEqualTo("a@example.org,b@example.org");
+    }
+
+    @Test
+    void qaD855ARunOfALegacyMalformedDefinitionFailsWithTheTranslatedReasonAndSendsNothing() {
+        definition.setRecipients("accueil.clinique@@example");
+
+        assertThatThrownBy(() -> service.execute(definition, "202607", true))
+            .isInstanceOf(FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "reportDefinition.recipients.invalid");
         verify(emailService, never()).sendWithAttachment(
             anyList(), anyList(), anyList(), anyString(), anyString(),
             any(byte[].class), anyString(), anyString());

@@ -169,6 +169,12 @@ class ExceptionProseRatchetTest {
         assertTranslated("# QA round 8 (D528)", 1);
     }
 
+    @Test
+    @DisplayName("QA round 14 (D833-D877): the platform and integration refusals are really translated")
+    void roundFourteenKeysAreTranslated() throws IOException {
+        assertTranslated("# QA round 14 (D833-D877)", 40);
+    }
+
     /**
      * QA D424: the check-in answer ("Patient X successfully checked in") and the
      * generic "Operation successful" reached French screens through a response
