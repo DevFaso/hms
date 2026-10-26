@@ -1,11 +1,18 @@
 package com.example.hms.service.platform.impl;
 
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
+import com.example.hms.model.Department;
 import com.example.hms.model.Hospital;
+import com.example.hms.model.Staff;
+import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.model.platform.AdtIntakeProviderConfig;
 import com.example.hms.payload.dto.platform.AdtIntakeProviderConfigRequestDTO;
 import com.example.hms.payload.dto.platform.AdtIntakeProviderConfigResponseDTO;
+import com.example.hms.repository.DepartmentRepository;
 import com.example.hms.repository.HospitalRepository;
+import com.example.hms.repository.StaffRepository;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.platform.AdtIntakeProviderConfigRepository;
 import com.example.hms.service.platform.AdtIntakeProviderConfigService;
 import java.util.List;
@@ -14,6 +21,7 @@ import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,10 +33,16 @@ public class AdtIntakeProviderConfigServiceImpl
 
     private static final String CONFIG_NOT_FOUND = "adt.intakeconfig.notfound";
     private static final String HOSPITAL_NOT_FOUND = "hospital.notfound";
-    private static final String DEFAULT_CHIEF_COMPLAINT = "Auto-created from ADT^A01";
+    /** QA D872: the default reason, written in the language of the admin who saved the config. */
+    private static final String DEFAULT_CHIEF_COMPLAINT_KEY = "adtIntakeProviderConfig.defaultChiefComplaint.default";
+    private static final String DEFAULT_CHIEF_COMPLAINT = "Admitted automatically from an ADT message";
 
     private final AdtIntakeProviderConfigRepository repository;
     private final HospitalRepository hospitalRepository;
+    private final StaffRepository staffRepository;
+    private final DepartmentRepository departmentRepository;
+    private final UserRoleHospitalAssignmentRepository assignmentRepository;
+    private final MessageSource messageSource;
 
     @Override
     @Transactional
@@ -36,11 +50,12 @@ public class AdtIntakeProviderConfigServiceImpl
         AdtIntakeProviderConfigRequestDTO request, Locale locale
     ) {
         Hospital hospital = loadHospital(request.hospitalId());
+        requireReferencesAt(request, hospital.getId());
         AdtIntakeProviderConfig entity = repository
             .findByHospital_Id(request.hospitalId())
             .orElseGet(AdtIntakeProviderConfig::new);
         entity.setHospital(hospital);
-        applyRequestToEntity(request, entity);
+        applyRequestToEntity(request, entity, locale);
         AdtIntakeProviderConfig saved = repository.save(entity);
         log.info("ADT intake-provider config upserted id={} hospital={} enabled={} A04Assignment={}",
             saved.getId(), hospital.getId(), saved.isEnabled(), saved.getDefaultAssignmentId());
@@ -84,8 +99,55 @@ public class AdtIntakeProviderConfigServiceImpl
             .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND, hospitalId));
     }
 
+    /**
+     * QA D852: every id the config carries is checked against the hospital it
+     * is for. The admitting provider must be an active staff member there
+     * holding a doctor, physician or surgeon role; the department and the
+     * default assignment must belong there too, and be the provider's own
+     * doctor, physician or surgeon assignment. Before, any staff id was
+     * saved, and the auto-create path only discovered a foreign or
+     * non-physician id when an ADT message arrived.
+     */
+    private void requireReferencesAt(AdtIntakeProviderConfigRequestDTO request, UUID hospitalId) {
+        Staff provider = staffRepository.findById(request.admittingProviderId())
+            .filter(s -> s.isActive() && s.getHospital() != null
+                && hospitalId.equals(s.getHospital().getId()))
+            .orElseThrow(() -> new FieldBusinessException("admittingProviderId",
+                "adtIntakeProviderConfig.admittingProvider.notAtHospital"));
+        UUID userId = provider.getUser() != null ? provider.getUser().getId() : null;
+        if (userId == null || !assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+                userId, hospitalId, ADMITTING_ROLE_CODES)) {
+            throw new FieldBusinessException("admittingProviderId",
+                "adtIntakeProviderConfig.admittingProvider.notPhysician");
+        }
+        if (request.departmentId() != null) {
+            Department department = departmentRepository.findById(request.departmentId()).orElse(null);
+            if (department == null || department.getHospital() == null
+                    || !hospitalId.equals(department.getHospital().getId())) {
+                throw new FieldBusinessException("departmentId",
+                    "adtIntakeProviderConfig.department.notAtHospital");
+            }
+        }
+        if (request.defaultAssignmentId() != null) {
+            UserRoleHospitalAssignment assignment =
+                assignmentRepository.findById(request.defaultAssignmentId()).orElse(null);
+            if (assignment == null || !Boolean.TRUE.equals(assignment.getActive())
+                    || assignment.getHospital() == null
+                    || !hospitalId.equals(assignment.getHospital().getId())) {
+                throw new FieldBusinessException("defaultAssignmentId",
+                    "adtIntakeProviderConfig.assignment.notAtHospital");
+            }
+            // QA D852/D872: the encounter is recorded under the provider AND
+            // this assignment, so it must be the provider's own physician role.
+            if (!AdtIntakeProviderConfigService.isAdmittingAssignmentOf(assignment, userId)) {
+                throw new FieldBusinessException("defaultAssignmentId",
+                    "adtIntakeProviderConfig.assignment.notProvider");
+            }
+        }
+    }
+
     private void applyRequestToEntity(
-        AdtIntakeProviderConfigRequestDTO request, AdtIntakeProviderConfig entity
+        AdtIntakeProviderConfigRequestDTO request, AdtIntakeProviderConfig entity, Locale locale
     ) {
         entity.setAdmittingProviderId(request.admittingProviderId());
         entity.setDepartmentId(request.departmentId());
@@ -94,10 +156,12 @@ public class AdtIntakeProviderConfigServiceImpl
         entity.setDefaultAcuityLevel(request.defaultAcuityLevel());
         entity.setDefaultEncounterType(request.defaultEncounterType());
         String chiefComplaint = request.defaultChiefComplaint();
+        Locale effectiveLocale = locale != null
+            ? locale : org.springframework.context.i18n.LocaleContextHolder.getLocale();
         entity.setDefaultChiefComplaint(
             chiefComplaint == null || chiefComplaint.isBlank()
-                ? DEFAULT_CHIEF_COMPLAINT
-                : chiefComplaint);
+                ? messageSource.getMessage(DEFAULT_CHIEF_COMPLAINT_KEY, null, DEFAULT_CHIEF_COMPLAINT, effectiveLocale)
+                : chiefComplaint.trim());
         // Default to disabled when the field is absent; admin must opt
         // in explicitly so we never flip auto-create on by accident on
         // first-touch.

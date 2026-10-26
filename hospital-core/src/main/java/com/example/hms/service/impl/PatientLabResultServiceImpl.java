@@ -374,7 +374,7 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
         return response
             .value(result.getResultValue())
             .unit(unit)
-            .referenceRange(formatReferenceRange(labResultMapper.gradedReferenceRange(result)))
+            .referenceRange(referenceTextOf(result, testDefinition))
             .unitMismatch(mapped != null && mapped.isUnitMismatch())
             .performedBy(resolveAssignmentUser(result.getAssignment()))
             .notes(result.getNotes())
@@ -572,6 +572,22 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
             return user.getUsername();
         }
         return null;
+    }
+
+    /**
+     * QA D834: what the patient reads after "Normal:". The graded numeric
+     * range; for a qualitative test, which has none, its expected answer
+     * ("Négatif"). The fake 0-0 range a qualitative test once needed read
+     * "Normal: 0 - 0" beside "Résultat: 1".
+     */
+    private String referenceTextOf(LabResult result, LabTestDefinition testDefinition) {
+        String range = formatReferenceRange(labResultMapper.gradedReferenceRange(result));
+        if (range != null) {
+            return range;
+        }
+        return testDefinition != null && testDefinition.hasExpectedResult()
+            ? testDefinition.getExpectedResult().trim()
+            : null;
     }
 
     /**

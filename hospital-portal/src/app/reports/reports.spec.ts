@@ -129,15 +129,46 @@ describe('ReportsComponent', () => {
 
   it('surfaces the backend refusal verbatim on create failure', () => {
     mockService.create.and.returnValue(
-      throwError(() => ({ error: { message: "'nope' is not a valid email address." } })),
+      throwError(() => ({ status: 400, error: { message: 'Choisissez un hôpital.' } })),
     );
     component.openCreate();
     component.name.set('X');
-    component.recipients.set('nope');
+    component.recipients.set('a@example.org');
 
     component.submitCreate();
 
-    expect(mockToast.error).toHaveBeenCalledWith("'nope' is not a valid email address.");
+    expect(mockToast.error).toHaveBeenCalledWith('Choisissez un hôpital.');
+    expect(component.saving()).toBeFalse();
+  });
+
+  it('QA D855: a malformed recipient is refused on the field before any call', () => {
+    component.openCreate();
+    component.name.set('Activité');
+    component.recipients.set('a@example.org, accueil.clinique@@example');
+
+    component.submitCreate();
+
+    expect(mockService.create).not.toHaveBeenCalled();
+    expect(component.recipientsError()).toBe('REPORTS.RECIPIENT_INVALID');
+  });
+
+  it('QA D855: the server refusal on the recipients field is shown under it', () => {
+    mockService.create.and.returnValue(
+      throwError(() => ({
+        status: 400,
+        error: {
+          message: 'Validation Failed',
+          fieldErrors: { recipients: "« x@exemple » n'est pas une adresse e-mail valide." },
+        },
+      })),
+    );
+    component.openCreate();
+    component.name.set('Activité');
+    component.recipients.set('a@example.org');
+
+    component.submitCreate();
+
+    expect(component.recipientsError()).toBe("« x@exemple » n'est pas une adresse e-mail valide.");
     expect(component.saving()).toBeFalse();
   });
 

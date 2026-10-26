@@ -3107,4 +3107,15 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- V238 (round 14): one encounter note row per entry, the per-encounter
+         unique key dropped where a generated schema had it (QA D831); the
+         expected result of a qualitative lab test (QA D834). Plain
+         statements, no DO block. Idempotent. -->
+    <changeSet id="V238-note-entries-and-qualitative-lab-tests" author="hms-team" runOnChange="false">
+        <sqlFile path="V238__note_entries_and_qualitative_lab_tests.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

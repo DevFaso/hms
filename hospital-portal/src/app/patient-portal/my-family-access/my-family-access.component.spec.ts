@@ -1,3 +1,4 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
@@ -175,6 +176,46 @@ describe('MyFamilyAccessComponent — proxy scopes and drill-in', () => {
     ) as HTMLAnchorElement;
     expect(link).not.toBeNull();
     expect(link.getAttribute('href')).toBe('/my-family-access/p-77');
+  });
+
+  it('QA D893: an unknown username says so, in the server message, not a generic failure', () => {
+    fixture.detectChanges();
+    const message = "Aucun compte ne porte l'identifiant inconnu.xyz.";
+    portal.grantProxy.and.returnValue(
+      throwError(() => new HttpErrorResponse({ status: 404, error: { message } })),
+    );
+    component.form = {
+      proxyUsername: 'inconnu.xyz',
+      relationship: 'CAREGIVER',
+      permissions: 'ALL',
+    };
+    component.grantAccess();
+    expect(toast.error).toHaveBeenCalledWith(message);
+    expect(component.granting()).toBeFalse();
+  });
+
+  it('QA D893: a 404 without a message still names the unknown user', () => {
+    fixture.detectChanges();
+    portal.grantProxy.and.returnValue(throwError(() => new HttpErrorResponse({ status: 404 })));
+    component.form = {
+      proxyUsername: 'inconnu.xyz',
+      relationship: 'CAREGIVER',
+      permissions: 'ALL',
+    };
+    component.grantAccess();
+    expect(toast.error).toHaveBeenCalledWith('PORTAL.FAMILY.USER_NOT_FOUND');
+  });
+
+  it('QA D893: a server error keeps the generic failure (no technical text)', () => {
+    fixture.detectChanges();
+    portal.grantProxy.and.returnValue(
+      throwError(
+        () => new HttpErrorResponse({ status: 500, error: { message: 'NullPointerException' } }),
+      ),
+    );
+    component.form = { proxyUsername: 'sam', relationship: 'CAREGIVER', permissions: 'ALL' };
+    component.grantAccess();
+    expect(toast.error).toHaveBeenCalledWith('PORTAL.FAMILY.GRANT_FAILED');
   });
 
   it('surfaces a toast when revoking fails', () => {

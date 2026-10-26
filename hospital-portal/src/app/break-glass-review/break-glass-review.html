@@ -71,9 +71,27 @@
                   {{ s.expiresAt | serverTime | date: 'short' }}
                 </div>
               </td>
-              <td>{{ s.userName }}</td>
-              <td>
-                <a [routerLink]="['/patients', s.patientId]">{{ s.patientId | slice: 0 : 8 }}…</a>
+              <!-- QA D839: the declarer's name and the patient's name with this
+                   hospital's MRN; the username and a short id only as a fallback. -->
+              <td data-testid="declarer">
+                {{ s.userDisplayName || s.userName }}
+                @if (s.userDisplayName && s.userName) {
+                  <div class="muted">{{ s.userName }}</div>
+                }
+              </td>
+              <td data-testid="patient">
+                <a [routerLink]="['/patients', s.patientId]">
+                  @if (s.patientName) {
+                    {{ s.patientName }}
+                  } @else {
+                    {{ s.patientId | slice: 0 : 8 }}…
+                  }
+                </a>
+                @if (s.patientMrn) {
+                  <div class="muted">
+                    {{ 'BREAK_GLASS_REVIEW.MRN' | translate }} {{ s.patientMrn }}
+                  </div>
+                }
               </td>
               <td class="reason">{{ s.reason }}</td>
               <td>

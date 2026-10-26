@@ -69,6 +69,30 @@ describe('DrugInteractionsComponent', () => {
     expect(fixture.nativeElement.querySelector('[data-testid="ddi-row-i-2"]')).not.toBeNull();
   });
 
+  it('shows the advice in the reader language when the server sends it (QA D887)', () => {
+    setup(
+      ['ROLE_PHARMACIST'],
+      [
+        entry({
+          id: 'i-1',
+          recommendation: 'Avoid unless the indication is documented.',
+          displayRecommendation: "À éviter sauf indication documentée ; surveiller l'INR.",
+        }),
+        entry({ id: 'i-2', recommendation: 'Texte saisi par la pharmacie.' }),
+      ],
+    );
+    const cell = (id: string): string =>
+      (
+        fixture.nativeElement.querySelector(
+          `[data-testid="ddi-recommendation-${id}"]`,
+        ) as HTMLElement
+      ).textContent!.trim();
+
+    expect(cell('i-1')).toBe("À éviter sauf indication documentée ; surveiller l'INR.");
+    // A row with no translation (edited by a person) shows what they typed.
+    expect(cell('i-2')).toBe('Texte saisi par la pharmacie.');
+  });
+
   it('hides write controls from read-only roles the backend would refuse', () => {
     // READ spans PHARMACIST/DOCTOR/NURSE/MIDWIFE/admins; WRITE is
     // PHARMACIST/HOSPITAL_ADMIN/SUPER_ADMIN only.

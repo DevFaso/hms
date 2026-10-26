@@ -11,7 +11,16 @@ import java.util.UUID;
 
 @Repository
 public interface EncounterNoteRepository extends JpaRepository<EncounterNote, UUID> {
-    Optional<EncounterNote> findByEncounter_Id(UUID encounterId);
+    /**
+     * QA D831: an encounter holds one row per note entry (an inpatient stay one
+     * per progress note), so "the" note is the current entry: the one created
+     * last. A single-result finder would fail on the second entry.
+     */
+    Optional<EncounterNote> findFirstByEncounter_IdOrderByCreatedAtDescIdDesc(UUID encounterId);
+
+    /** QA D831: every entry of the encounter, oldest first. */
+    List<EncounterNote> findByEncounter_IdOrderByCreatedAtAscIdAsc(UUID encounterId);
+
     boolean existsByEncounter_Id(UUID encounterId);
 
     /**

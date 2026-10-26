@@ -23,7 +23,19 @@
     <form class="order-set-edit__form" (ngSubmit)="save()" data-testid="order-set-edit-form">
       <label>
         {{ 'ORDER_SETS.FIELD_NAME' | translate }}
-        <input type="text" [(ngModel)]="form.name" name="name" required />
+        <input
+          type="text"
+          [(ngModel)]="form.name"
+          name="name"
+          required
+          data-testid="order-set-name"
+          [attr.aria-invalid]="nameMissing() ? 'true' : null"
+        />
+        @if (nameMissing()) {
+          <span class="field-error" role="alert" data-testid="order-set-name-error">{{
+            'ORDER_SETS.NAME_REQUIRED' | translate
+          }}</span>
+        }
       </label>
       <label>
         {{ 'ORDER_SETS.FIELD_DESCRIPTION' | translate }}
@@ -53,8 +65,8 @@
                   [name]="'orderType-' + i"
                   [attr.data-testid]="'order-set-item-type-' + i"
                 >
-                  @for (t of orderItemTypes; track t) {
-                    <option [value]="t">{{ t }}</option>
+                  @for (t of orderItemTypes; track t.value) {
+                    <option [value]="t.value">{{ choiceLabel(t) }}</option>
                   }
                 </select>
               </label>
@@ -67,7 +79,16 @@
                   [name]="'itemName-' + i"
                   required
                   [attr.data-testid]="'order-set-item-name-' + i"
+                  [attr.aria-invalid]="itemMissingName(i) ? 'true' : null"
                 />
+                @if (itemMissingName(i)) {
+                  <span
+                    class="field-error"
+                    role="alert"
+                    [attr.data-testid]="'order-set-item-name-error-' + i"
+                    >{{ 'ORDER_SETS.ITEM_NAME_REQUIRED' | translate }}</span
+                  >
+                }
               </label>
               <button
                 type="button"
@@ -121,8 +142,8 @@
                     [attr.data-testid]="'order-set-item-dose-unit-' + i"
                   >
                     <option value=""></option>
-                    @for (u of doseUnits; track u) {
-                      <option [value]="u">{{ u }}</option>
+                    @for (u of doseUnits; track u.value) {
+                      <option [value]="u.value">{{ choiceLabel(u) }}</option>
                     }
                   </select>
                 </label>
@@ -134,8 +155,8 @@
                     [attr.data-testid]="'order-set-item-route-' + i"
                   >
                     <option value=""></option>
-                    @for (r of routes; track r) {
-                      <option [value]="r">{{ r }}</option>
+                    @for (r of routes; track r.value) {
+                      <option [value]="r.value">{{ choiceLabel(r) }}</option>
                     }
                   </select>
                 </label>
@@ -147,8 +168,8 @@
                     [attr.data-testid]="'order-set-item-frequency-' + i"
                   >
                     <option value=""></option>
-                    @for (f of frequencyPresets; track f) {
-                      <option [value]="f">{{ f }}</option>
+                    @for (f of frequencyPresets; track f.value) {
+                      <option [value]="f.value">{{ choiceLabel(f) }}</option>
                     }
                   </select>
                 </label>

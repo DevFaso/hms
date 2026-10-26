@@ -46,6 +46,13 @@ public class EncounterResponseDTO {
     private String hospitalName;
 
     private UUID appointmentId;
+
+    /**
+     * QA D831: the admission this encounter is the stay of, null for a visit.
+     * On a stay each note POST is a new progress entry, so the note form stays
+     * offered after the current entry is signed.
+     */
+    private UUID admissionId;
     private String appointmentReason;
     private String appointmentNotes;
     private String appointmentStatus;
@@ -101,6 +108,13 @@ public class EncounterResponseDTO {
         private java.util.Map<String, Object> extraFields;
 
         private EncounterNoteResponseDTO note;
+
+        /**
+         * QA D831: every note entry of the encounter, oldest first, when it has
+         * more than one (an inpatient stay's progress notes). {@code note} is the
+         * last of them.
+         */
+        private java.util.List<EncounterNoteResponseDTO> noteEntries;
 
     /** Optional derived full name so clients don't concatenate */
     @JsonProperty("patientFullName")

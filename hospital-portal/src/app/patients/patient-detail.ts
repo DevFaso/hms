@@ -47,6 +47,7 @@ import { BreakGlassBannerComponent } from './break-glass-banner/break-glass-bann
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { serverDateOrInstant } from '../shared/date-utils';
+import { ClockTimePipe } from '../shared/pipes/clock-time.pipe';
 
 type TabKey =
   | 'overview'
@@ -68,6 +69,7 @@ type TabKey =
   selector: 'app-patient-detail',
   standalone: true,
   imports: [
+    ClockTimePipe,
     ServerTimePipe,
     CommonModule,
     FormsModule,

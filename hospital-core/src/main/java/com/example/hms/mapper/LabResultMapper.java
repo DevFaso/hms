@@ -42,6 +42,7 @@ public class LabResultMapper {
         null,
         null,
         Collections.emptyList(),
+        null,
         null
     );
 
@@ -52,7 +53,7 @@ public class LabResultMapper {
         OrderContext context = extractOrderContext(result.getLabOrder());
         List<LabResultReferenceRangeDTO> referenceRanges = toReferenceRangeDtos(context.referenceRanges());
         Grading grading = gradingOf(result.getResultUnit(), context.testUnit(), context.referenceRanges());
-        String severityFlag = effectiveSeverityFlag(result, grading.range());
+        String severityFlag = effectiveSeverityFlag(result, grading.range(), context.expectedResult());
 
         return LabResultResponseDTO.builder()
             .id(result.getId() != null ? result.getId().toString() : null)
@@ -79,6 +80,7 @@ public class LabResultMapper {
             .resultDate(result.getResultDate())
             .notes(result.getNotes())
             .referenceRanges(referenceRanges)
+            .expectedResult(context.expectedResult())
             .severityFlag(severityFlag)
             .unitMismatch(grading.unitMismatch())
             .acknowledged(result.isAcknowledged())
@@ -131,7 +133,7 @@ public class LabResultMapper {
 
         OrderContext context = extractOrderContext(result.getLabOrder());
         Grading grading = gradingOf(result.getResultUnit(), context.testUnit(), context.referenceRanges());
-        String severityFlag = effectiveSeverityFlag(result, grading.range());
+        String severityFlag = effectiveSeverityFlag(result, grading.range(), context.expectedResult());
 
         return LabResultTrendPointDTO.builder()
             .labResultId(result.getId() != null ? result.getId().toString() : null)
@@ -168,7 +170,7 @@ public class LabResultMapper {
         }
         OrderContext context = extractOrderContext(result.getLabOrder());
         LabTestReferenceRange graded = gradingOf(result.getResultUnit(), context.testUnit(), context.referenceRanges()).range();
-        return effectiveSeverityFlag(result, graded);
+        return effectiveSeverityFlag(result, graded, context.expectedResult());
     }
 
     /**
@@ -179,7 +181,8 @@ public class LabResultMapper {
      * Before this, K 7.9 on such a range was paged as a critical value and
      * shown as "Eleve" with a critical tile of 0.
      */
-    private static String effectiveSeverityFlag(LabResult result, LabTestReferenceRange graded) {
+    private static String effectiveSeverityFlag(LabResult result, LabTestReferenceRange graded,
+                                                String expectedResult) {
         String flag = determineSeverityFlag(result.getResultValue(), graded);
         if (FLAG_CRITICAL.equals(flag)) {
             return flag;
@@ -198,6 +201,15 @@ public class LabResultMapper {
         if (definitionMissing(result.getLabOrder()) && result.getCriticalNotifiedAt() != null) {
             return FLAG_CRITICAL;
         }
+        // QA D834: a qualitative test states the answer it expects
+        // ("Négatif"); a result that reads the same is normal. Anything else
+        // falls through to the rules below, so a "Positif" stays abnormal and
+        // an unexpected wording stays not evaluated rather than guessed.
+        if (FLAG_UNSPECIFIED.equals(flag) && !isAbnormalRecorded(result.getAbnormalFlag())
+                && result.getAbnormalFlag() != com.example.hms.enums.AbnormalFlag.CRITICAL
+                && matchesExpectedResult(result.getResultValue(), expectedResult)) {
+            return "NORMAL";
+        }
         // QA D313: a value outside a range that declares no critical limits
         // stays HIGH or LOW (abnormal). It used to be promoted to CRITICAL here.
         // QA D286: no range grades a qualitative answer, so the range says
@@ -210,6 +222,41 @@ public class LabResultMapper {
             return FLAG_ABNORMAL;
         }
         return flag;
+    }
+
+    /**
+     * QA D834: whether a qualitative answer is the test's expected one,
+     * ignoring case, accents, surrounding spaces and a trailing sign or
+     * punctuation ("négatif", "NEGATIF", "Négatif (-)"). A numeric value is
+     * never a qualitative answer.
+     */
+    static boolean matchesExpectedResult(String value, String expectedResult) {
+        if (value == null || value.isBlank() || expectedResult == null || expectedResult.isBlank()) {
+            return false;
+        }
+        String folded = foldAnswer(value);
+        if (folded.isEmpty() || NUMERIC_ANSWER.matcher(folded).matches()) {
+            return false;
+        }
+        return folded.equals(foldAnswer(expectedResult));
+    }
+
+    private static final java.util.regex.Pattern NUMERIC_ANSWER =
+        java.util.regex.Pattern.compile("[+-]?\\d+([.,]\\d+)?");
+    private static final java.util.regex.Pattern COMBINING_MARKS = java.util.regex.Pattern.compile("\\p{M}");
+    /** Trailing notation that is not the answer: a sign, bare or in brackets, and end punctuation. */
+    private static final String TRAILING_NOTATION = "()+-.;:! \t";
+
+    private static String foldAnswer(String text) {
+        String folded = COMBINING_MARKS.matcher(
+                java.text.Normalizer.normalize(text.trim(), java.text.Normalizer.Form.NFD))
+            .replaceAll("")
+            .toUpperCase(java.util.Locale.ROOT);
+        int end = folded.length();
+        while (end > 0 && TRAILING_NOTATION.indexOf(folded.charAt(end - 1)) >= 0) {
+            end--;
+        }
+        return String.join(" ", folded.substring(0, end).trim().split("\\s+"));
     }
 
     private static boolean isAbnormalRecorded(com.example.hms.enums.AbnormalFlag recorded) {
@@ -403,7 +450,8 @@ public class LabResultMapper {
             labOrderCode,
             orderedByName,
             labTestMetadata.referenceRanges(),
-            labTestMetadata.unit()
+            labTestMetadata.unit(),
+            labTestMetadata.expectedResult()
         );
     }
 
@@ -418,13 +466,15 @@ public class LabResultMapper {
             String orderedByName,
             List<LabTestReferenceRange> referenceRanges,
             /** The test definition's own unit: what a range with no unit of its own is stated in. */
-            String testUnit
+            String testUnit,
+            /** QA D834: the expected answer of a qualitative test. */
+            String expectedResult
     ) {}
 
     private record PatientInfo(String fullName) {}
 
     private record LabTestMetadata(String name, String testCode, List<LabTestReferenceRange> referenceRanges,
-                                   String unit) {}
+                                   String unit, String expectedResult) {}
 
     private PatientInfo resolvePatientInfo(LabOrder order) {
         Patient patient = order.getPatient();
@@ -501,14 +551,14 @@ public class LabResultMapper {
 
     private LabTestMetadata resolveLabTestMetadata(LabOrder order) {
         if (order.getLabTestDefinition() == null || !Hibernate.isInitialized(order.getLabTestDefinition())) {
-            return new LabTestMetadata(null, null, Collections.emptyList(), null);
+            return new LabTestMetadata(null, null, Collections.emptyList(), null, null);
         }
         LabTestDefinition definition = order.getLabTestDefinition();
         List<LabTestReferenceRange> referenceRanges = definition.getReferenceRanges() != null
             ? definition.getReferenceRanges()
             : Collections.emptyList();
         return new LabTestMetadata(definition.getName(), definition.getTestCode(), referenceRanges,
-            definition.getUnit());
+            definition.getUnit(), definition.getExpectedResult());
     }
 
     private String nullToEmpty(String value) {

@@ -315,3 +315,9 @@
     cursor: default;
   }
 }
+
+// QA D868: no permission catalogue to edit.
+.perm-empty {
+  margin: 0;
+  color: var(--text-secondary, inherit);
+}

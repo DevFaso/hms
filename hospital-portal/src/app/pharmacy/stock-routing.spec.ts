@@ -70,6 +70,7 @@ describe('StockRoutingComponent', () => {
       'backOrder',
       'partnerRespond',
       'confirmPartnerDispense',
+      'getDispenseWorkQueue',
     ]);
     toastSvc = jasmine.createSpyObj('ToastService', ['success', 'error']);
 
@@ -80,6 +81,27 @@ describe('StockRoutingComponent', () => {
     pharmacySvc.backOrder.and.returnValue(of({ data: { id: 'dec-3' } } as any));
     pharmacySvc.partnerRespond.and.returnValue(of({ data: { id: 'dec-1' } } as any));
     pharmacySvc.confirmPartnerDispense.and.returnValue(of({ data: { id: 'dec-1' } } as any));
+    pharmacySvc.getDispenseWorkQueue.and.returnValue(
+      of({
+        data: {
+          content: [
+            {
+              id: 'rx-amox',
+              medicationName: 'Amoxicilline',
+              dosage: '500 mg',
+              status: 'SIGNED',
+              patient: { id: 'p-1', firstName: 'Seydou', lastName: 'Traoré' },
+            },
+            {
+              id: 'rx-para',
+              medicationName: 'Paracétamol',
+              status: 'SIGNED',
+              patient: { id: 'p-2', firstName: 'Awa', lastName: 'Ouédraogo' },
+            },
+          ],
+        },
+      } as any),
+    );
 
     await TestBed.configureTestingModule({
       imports: [StockRoutingComponent, TranslateModule.forRoot()],
@@ -129,6 +151,204 @@ describe('StockRoutingComponent', () => {
 
     expect(c.prescriptionId).toBe('rx-deep-1');
     expect(pharmacySvc.checkStock).toHaveBeenCalledWith('rx-deep-1');
+    // QA D888: the deep link still works alongside the search.
+    expect(pharmacySvc.getDispenseWorkQueue).toHaveBeenCalled();
+  });
+
+  it('QA D888: offers no raw prescription-id box, only a search over the queue', () => {
+    expect(fixture.nativeElement.querySelector('#prescriptionIdInput')).toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-testid="routing-rx-search"]')).not.toBeNull();
+    // #963 review: newest first, or a busy dispensary's newest orders are out of reach.
+    expect(pharmacySvc.getDispenseWorkQueue).toHaveBeenCalledWith(0, 100, 'ALL', [
+      'createdAt,desc',
+      'id,desc',
+    ]);
+  });
+
+  it('#963 review: says the search covers only the newest orders, and searches older ones on request', () => {
+    const rx = (id: string, firstName: string, medicationName: string) => ({
+      id,
+      medicationName,
+      status: 'SIGNED',
+      patient: { id: `p-${id}`, firstName, lastName: 'Kaboré' },
+    });
+    const first = Array.from({ length: 100 }, (_, i) => rx(`rx-new-${i}`, 'Issa', 'Ibuprofène'));
+    pharmacySvc.getDispenseWorkQueue.and.returnValue(
+      of({ data: { content: first, totalElements: 101, totalPages: 2 } } as any),
+    );
+    component.loadQueue();
+    component.rxSearch.set('mariam');
+    fixture.detectChanges();
+
+    // The QA scenario: the order is the 101st, not on the page searched.
+    expect(component.matches()).toEqual([]);
+    expect(component.queuePartial()).toBeTrue();
+    const noMatch = fixture.nativeElement.querySelector('[data-testid="routing-rx-no-match"]');
+    expect(noMatch.textContent).toContain('PHARMACY.ROUTING_RX_NO_MATCH_PARTIAL');
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="routing-rx-partial"]'),
+    ).not.toBeNull();
+
+    // "Load older" re-reads the newest 200 from the start in one request.
+    pharmacySvc.getDispenseWorkQueue.and.returnValue(
+      of({
+        data: {
+          content: [...first, rx('rx-old', 'Mariam', 'Fer')],
+          totalElements: 101,
+          totalPages: 1,
+        },
+      } as any),
+    );
+    (
+      fixture.nativeElement.querySelector('[data-testid="routing-rx-load-older"]') as HTMLElement
+    ).click();
+    fixture.detectChanges();
+
+    expect(pharmacySvc.getDispenseWorkQueue).toHaveBeenCalledWith(0, 200, 'ALL', [
+      'createdAt,desc',
+      'id,desc',
+    ]);
+    expect(component.queue().length).toBe(101);
+    expect(component.matches().map((r) => r.id)).toEqual(['rx-old']);
+    expect(component.queuePartial()).toBeFalse();
+    expect(fixture.nativeElement.querySelector('[data-testid="routing-rx-partial"]')).toBeNull();
+  });
+
+  it('#963 review round 2: an order leaving the queue between reads cannot hide the 101st', () => {
+    const rx = (id: string, firstName: string, medicationName: string) => ({
+      id,
+      medicationName,
+      status: 'SIGNED',
+      patient: { id: `p-${id}`, firstName, lastName: 'Sawadogo' },
+    });
+    // 150 orders waiting, newest first: R1..R100 on the first read.
+    const all = Array.from({ length: 150 }, (_, i) =>
+      i === 100 ? rx('rx-101', 'Mariam', 'Fer') : rx(`rx-${i + 1}`, 'Issa', 'Ibuprofène'),
+    );
+    pharmacySvc.getDispenseWorkQueue.and.returnValue(
+      of({ data: { content: all.slice(0, 100), totalElements: 150, totalPages: 2 } } as any),
+    );
+    component.loadQueue();
+    fixture.detectChanges();
+    expect(component.queuePartial()).toBeTrue();
+
+    // R50 is dispensed meanwhile: 149 remain and R101 is now the 100th row.
+    const remaining = all.filter((r) => r.id !== 'rx-50');
+    pharmacySvc.getDispenseWorkQueue.and.callFake(((page: number, size: number) =>
+      of({
+        data: {
+          content: remaining.slice(page * size, page * size + size),
+          totalElements: 149,
+          totalPages: Math.ceil(149 / size),
+        },
+      } as any)) as any);
+    component.loadOlderQueue();
+    component.rxSearch.set('mariam');
+    fixture.detectChanges();
+
+    // An offset read of page 1 would start at R102 and never see R101.
+    expect(pharmacySvc.getDispenseWorkQueue).toHaveBeenCalledWith(0, 200, 'ALL', [
+      'createdAt,desc',
+      'id,desc',
+    ]);
+    expect(component.queue().length).toBe(149);
+    expect(component.queueTotal()).toBe(149);
+    expect(component.queuePartial()).toBeFalse();
+    expect(component.matches().map((r) => r.id)).toEqual(['rx-101']);
+    expect(fixture.nativeElement.querySelector('[data-testid="routing-rx-no-match"]')).toBeNull();
+  });
+
+  it('#963 review round 2: at the server ceiling the note stays and the button goes', () => {
+    const rows = Array.from({ length: 100 }, (_, i) => ({
+      id: `rx-${i}`,
+      medicationName: 'Ibuprofène',
+      status: 'SIGNED',
+      patient: { id: `p-${i}`, firstName: 'Issa', lastName: 'Zongo' },
+    }));
+    pharmacySvc.getDispenseWorkQueue.and.returnValue(
+      of({ data: { content: rows, totalElements: 2500, totalPages: 25 } } as any),
+    );
+    pharmacySvc.getDispenseWorkQueue.calls.reset();
+    component.loadQueue();
+    for (let i = 0; i < 25; i++) {
+      component.loadOlderQueue();
+    }
+    component.rxSearch.set('mariam');
+    fixture.detectChanges();
+
+    // 100 → 2000 in 19 steps; the 20th and later calls ask for nothing.
+    expect(pharmacySvc.getDispenseWorkQueue).toHaveBeenCalledWith(0, 2000, 'ALL', [
+      'createdAt,desc',
+      'id,desc',
+    ]);
+    expect(pharmacySvc.getDispenseWorkQueue.calls.count()).toBe(20);
+    expect(pharmacySvc.getDispenseWorkQueue.calls.mostRecent().args[1]).toBe(2000);
+    expect(component.queueAtLimit()).toBeTrue();
+    expect(component.queuePartial()).toBeTrue();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="routing-rx-partial"]'),
+    ).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-testid="routing-rx-load-older"]')).toBeNull();
+  });
+
+  it('#963 review: a whole queue says plainly that nothing matches, and a failed older page keeps the rows', () => {
+    component.rxSearch.set('zzz');
+    fixture.detectChanges();
+    expect(component.queuePartial()).toBeFalse();
+    const plain = fixture.nativeElement.querySelector('[data-testid="routing-rx-no-match"]');
+    expect(plain.textContent.trim()).toBe('PHARMACY.ROUTING_RX_NO_MATCH');
+    expect(fixture.nativeElement.querySelector('[data-testid="routing-rx-partial"]')).toBeNull();
+
+    component.queueTotal.set(5);
+    pharmacySvc.getDispenseWorkQueue.and.returnValue(throwError(() => ({ status: 500 })));
+    component.loadOlderQueue();
+    fixture.detectChanges();
+    expect(component.queue().length).toBe(2);
+    expect(component.queueMoreError()).toBeTrue();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="routing-rx-older-error"]'),
+    ).not.toBeNull();
+  });
+
+  it('QA D888: finds an order by patient name and checks stock for the one picked', () => {
+    component.rxSearch.set('traoré');
+    fixture.detectChanges();
+    expect(component.matches().map((rx) => rx.id)).toEqual(['rx-amox']);
+
+    (
+      fixture.nativeElement.querySelector('[data-testid="routing-rx-rx-amox"]') as HTMLElement
+    ).click();
+    fixture.detectChanges();
+
+    expect(pharmacySvc.checkStock).toHaveBeenCalledWith('rx-amox');
+    expect(component.prescriptionId).toBe('rx-amox');
+    const chosen = fixture.nativeElement.querySelector(
+      '[data-testid="routing-rx-selected"]',
+    ) as HTMLElement;
+    expect(chosen.textContent).toContain('Seydou Traoré');
+    expect(chosen.textContent).toContain('Amoxicilline');
+  });
+
+  it('QA D888: finds an order by medication, and Enter takes the first match', () => {
+    component.rxSearch.set('parac');
+    component.pickFirstMatch();
+    expect(pharmacySvc.checkStock).toHaveBeenCalledWith('rx-para');
+  });
+
+  it('QA D888: says so when nothing matches, and when the queue cannot be read', () => {
+    component.rxSearch.set('zzz');
+    fixture.detectChanges();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="routing-rx-no-match"]'),
+    ).not.toBeNull();
+
+    pharmacySvc.getDispenseWorkQueue.and.returnValue(throwError(() => ({ status: 403 })));
+    component.loadQueue();
+    fixture.detectChanges();
+    expect(component.queueError()).toBeTrue();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="routing-rx-queue-error"]'),
+    ).not.toBeNull();
   });
 
   it('should create', () => {

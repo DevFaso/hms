@@ -2,8 +2,8 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { ActivatedRoute } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
-import { of } from 'rxjs';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { of, throwError } from 'rxjs';
 
 import { ConsultationsComponent } from './consultations';
 import {
@@ -245,14 +245,79 @@ describe('ConsultationsComponent', () => {
     ]);
   });
 
+  function fillForm(): void {
+    component.form.patientId = 'p1';
+    component.form.hospitalId = 'h1';
+    component.form.specialtyRequested = 'Cardiologie';
+    component.form.reasonForConsult = 'Douleur thoracique';
+  }
+
   it('submitForm creates the consultation and reloads', () => {
     component.ngOnInit();
     consultSpy.create.and.returnValue(of(mockConsult()));
     component.openCreate();
+    fillForm();
     component.submitForm();
     expect(consultSpy.create).toHaveBeenCalled();
     expect(component.showModal()).toBeFalse();
     expect(toastSpy.success).toHaveBeenCalled();
+  });
+
+  it('QA D890: an empty form is not posted; the toast names the missing fields', () => {
+    component.ngOnInit();
+    component.openCreate();
+    component.form.hospitalId = 'h1';
+
+    component.submitForm();
+
+    expect(consultSpy.create).not.toHaveBeenCalled();
+    const message = toastSpy.error.calls.mostRecent().args[0] as string;
+    expect(message).toContain('COMMON.MISSING_REQUIRED_FIELDS');
+    expect(component.showModal()).toBeTrue();
+  });
+
+  it("QA D890: the server's field reason is shown under the field's label, not a generic toast", () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', {
+      FIELD_LIMITS: { FIELD_REASON: '{{field}} : {{reason}}' },
+      CONSULTATIONS: { SPECIALTY_REQUESTED: 'Spécialité demandée' },
+    });
+    translate.use('fr');
+    component.ngOnInit();
+    consultSpy.create.and.returnValue(
+      throwError(() => ({
+        status: 400,
+        error: {
+          error: 'Validation Failed',
+          message: 'La requête contient des erreurs de validation.',
+          fieldErrors: { specialtyRequested: 'ne doit pas dépasser 100 caractères' },
+        },
+      })),
+    );
+    component.openCreate();
+    fillForm();
+
+    component.submitForm();
+
+    const message = toastSpy.error.calls.mostRecent().args[0] as string;
+    expect(message).not.toBe('CONSULTATIONS.CREATE_FAILED');
+    expect(message).toBe('Spécialité demandée : ne doit pas dépasser 100 caractères');
+  });
+
+  it('QA D891: the stat cards are fetched again after a create and after a cancel', () => {
+    component.ngOnInit();
+    expect(consultSpy.getStats).toHaveBeenCalledTimes(1);
+    consultSpy.create.and.returnValue(of(mockConsult()));
+    component.openCreate();
+    fillForm();
+    component.submitForm();
+    expect(consultSpy.getStats).toHaveBeenCalledTimes(2);
+
+    consultSpy.cancel.and.returnValue(of(mockConsult({ status: 'CANCELLED' })));
+    component.confirmCancel(component.consultations()[0]);
+    component.cancelReason.set('doublon');
+    component.executeCancel();
+    expect(consultSpy.getStats).toHaveBeenCalledTimes(3);
   });
 
   it('executeCancel requires a reason', () => {

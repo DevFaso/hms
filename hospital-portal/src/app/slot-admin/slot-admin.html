@@ -174,7 +174,7 @@
               @for (tpl of templates(); track tpl.id) {
                 <tr [attr.data-testid]="'tpl-row-' + tpl.id" [class.row-inactive]="!tpl.active">
                   <td>{{ dayLabel(tpl.dayOfWeek) }}</td>
-                  <td>{{ tpl.startTime }}–{{ tpl.endTime }}</td>
+                  <td>{{ tpl.startTime | clockTime }}–{{ tpl.endTime | clockTime }}</td>
                   <td class="numeric">
                     {{ 'SLOT_ADMIN.MINUTES' | translate: { count: tpl.slotMinutes } }}
                   </td>

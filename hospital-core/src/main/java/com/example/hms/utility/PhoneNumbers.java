@@ -62,6 +62,49 @@ public final class PhoneNumbers {
     private PhoneNumbers() {
     }
 
+    /** A national number typed without a prefix: digits only, 6 to 15 of them. */
+    private static final Pattern NATIONAL_DIGITS = Pattern.compile("\\d{6,15}");
+
+    /** Whether {@code country} is one whose calling code this class knows. */
+    public static boolean isKnownCountry(String country) {
+        if (country == null || country.isBlank()) {
+            return false;
+        }
+        return CALLING_CODES.containsKey(
+                country.trim().toLowerCase(java.util.Locale.ROOT).replace('\u2019', '\''));
+    }
+
+    /**
+     * QA D833: a facility's phone number as it is stored, or {@code null} when
+     * it is not a phone number. Typed as {@code "+226 25 36 12 40"} it becomes
+     * {@code "+22625361240"}: the separators a desk types are not part of the
+     * number, and counting them against a length limit cut the last digit off.
+     * A number for a country this class knows, or one written with an
+     * international prefix, must be a valid E.164 number; a national number
+     * for any other country is kept as its digits. The Burkina Faso calling
+     * code is assumed only when no country is given: an eight-digit number for
+     * a country this class does not know ({@code "Tchad"}) is not a Burkina
+     * number, and prefixing it with {@code +226} stored a wrong subscriber.
+     */
+    public static String normalizeFacilityPhone(String raw, String country) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        String compact = FORMATTING.matcher(raw.trim()).replaceAll("");
+        boolean international = compact.startsWith("+") || compact.startsWith("00");
+        boolean unlistedCountry = country != null && !country.isBlank() && !isKnownCountry(country);
+        if (international || !unlistedCountry) {
+            String e164 = toE164(raw, callingCodeForCountry(country));
+            if (e164 != null) {
+                return e164;
+            }
+        }
+        if (international || isKnownCountry(country) || !NATIONAL_DIGITS.matcher(compact).matches()) {
+            return null;
+        }
+        return compact;
+    }
+
     /** The calling code (digits, no plus) for a hospital country; Burkina Faso when unknown. */
     public static String callingCodeForCountry(String country) {
         if (country == null || country.isBlank()) {

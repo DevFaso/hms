@@ -27,6 +27,7 @@ import { Observable, catchError, forkJoin, of } from 'rxjs';
 import { currentLocale } from '../shared/i18n/app-locale';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 import { serverInstant } from '../shared/date-utils';
+import { refusalReason } from '../shared/refusal-reason';
 /** Maps each role to the set of roles it is allowed to message. */
 const ALLOWED_MESSAGE_TARGETS: Record<string, Set<string>> = {
   ROLE_SUPER_ADMIN: new Set([
@@ -338,8 +339,10 @@ export class ChatComponent implements OnInit, OnDestroy {
           ),
         );
       },
-      error: () => {
-        this.toast.error(this.translate.instant('CHAT.SEND_FAILED'));
+      error: (err) => {
+        // QA D877: the server's reason (a message to oneself, an empty
+        // message), now in the sender's language, rather than a generic failure.
+        this.toast.error(refusalReason(err) ?? this.translate.instant('CHAT.SEND_FAILED'));
         this.sendingMessage.set(false);
       },
     });

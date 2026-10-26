@@ -60,8 +60,15 @@
     </section>
   }
 
+  <!-- QA D843: a paid dispense says so instead of offering a second payment -->
+  @if (dispense() && isPaid() && !receipt()) {
+    <section class="card no-print" data-testid="checkout-already-paid">
+      <p class="field-hint" role="status">{{ 'PHARMACY_CHECKOUT.ALREADY_PAID' | translate }}</p>
+    </section>
+  }
+
   <!-- Payment form -->
-  @if (dispense() && !receipt()) {
+  @if (dispense() && !isPaid() && !receipt()) {
     <section class="card no-print">
       <h3>{{ 'PHARMACY_CHECKOUT.STEP_PAYMENT' | translate }}</h3>
       <div class="form-row">
@@ -74,6 +81,10 @@
           [(ngModel)]="amount"
           [readonly]="hasCharge()"
         />
+        <!-- QA D843: the server's price, as text as well as in the read-only box -->
+        @if (hasCharge()) {
+          <p class="field-hint" data-testid="checkout-charge">{{ amount | cfa: 'XOF' }}</p>
+        }
         @if (!hasCharge()) {
           <p class="field-hint" role="alert">{{ 'PHARMACY_CHECKOUT.NO_PRICE' | translate }}</p>
         }

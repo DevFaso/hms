@@ -167,3 +167,11 @@
   color: var(--text, #222);
   border: 1px solid var(--border, #d0d4d9);
 }
+
+// QA D859: what blocks a save, said next to the field.
+.field-error {
+  display: block;
+  margin-top: 4px;
+  color: var(--danger);
+  font-size: 0.85rem;
+}

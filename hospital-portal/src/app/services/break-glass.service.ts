@@ -6,8 +6,13 @@ import { catchError, map } from 'rxjs/operators';
 export interface BreakGlassSession {
   id: string;
   patientId: string;
+  /** QA D839: the patient's name and their MRN at the session's hospital. */
+  patientName?: string | null;
+  patientMrn?: string | null;
   userId: string;
   userName: string;
+  /** QA D839: the declarer's name, not their username. */
+  userDisplayName?: string | null;
   hospitalId: string;
   hospitalName: string;
   reason: string;

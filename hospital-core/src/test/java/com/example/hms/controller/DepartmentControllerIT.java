@@ -74,14 +74,29 @@ class DepartmentControllerIT extends BaseIT {
 		ActingScopeTestSupport.globalSuperAdmin(UUID.randomUUID());
 	}
 
+	/**
+	 * Wipes after the class as well as before it: a department pins its
+	 * assignment through fk_department_assignment, and the next class in the
+	 * same JVM whose own wipe does not know departments (its assignments
+	 * deleteAll) failed every test on that FK when the fork order put it here.
+	 */
 	@AfterEach
-	void clearScope() {
-		ActingScopeTestSupport.clear();
+	void clearRowsAndScope() {
+		try {
+			globalSuperAdmin();
+			deleteRows();
+		} finally {
+			ActingScopeTestSupport.clear();
+		}
 	}
 
 	@BeforeEach
 	void cleanDatabase() {
 		globalSuperAdmin();
+		deleteRows();
+	}
+
+	private void deleteRows() {
 		departmentRepository.deleteAll();
 		assignmentRepository.deleteAll();
 		hospitalRepository.deleteAll();

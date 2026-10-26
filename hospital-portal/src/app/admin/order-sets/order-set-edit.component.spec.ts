@@ -145,4 +145,51 @@ describe('OrderSetEditComponent', () => {
     expect(svc.create).not.toHaveBeenCalled();
     expect(toast.error).toHaveBeenCalled();
   });
+
+  /** QA D859: HOSPITAL_ADMIN_A opened /admin/order-sets/new in FR and ES. */
+  it('QA D859: an empty save marks the name and the unnamed item on the page', async () => {
+    await configure('new');
+    fixture = TestBed.createComponent(OrderSetEditComponent);
+    fixture.detectChanges();
+
+    (fixture.componentInstance as unknown as { save(): void }).save();
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement as HTMLElement;
+    expect(svc.create).not.toHaveBeenCalled();
+    expect(host.querySelector('[data-testid="order-set-name-error"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="order-set-name"]')!.getAttribute('aria-invalid')).toBe(
+      'true',
+    );
+    expect(host.querySelector('[data-testid="order-set-item-name-error-0"]')).not.toBeNull();
+    expect(toast.error).toHaveBeenCalledWith('ORDER_SETS.NAME_REQUIRED');
+  });
+
+  it('QA D859: item types, units, routes and frequencies are read, not shown as codes', async () => {
+    await configure('new');
+    fixture = TestBed.createComponent(OrderSetEditComponent);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const labels = (testId: string) =>
+      Array.from(host.querySelectorAll(`[data-testid="${testId}"] option`)).map((o) =>
+        (o.textContent ?? '').trim(),
+      );
+    const values = (testId: string) =>
+      Array.from(host.querySelectorAll(`[data-testid="${testId}"] option`)).map(
+        (o) => (o as HTMLOptionElement).value,
+      );
+
+    // TranslateModule.forRoot() with no translations answers the key itself,
+    // so a translated option shows its key here and a raw one its code.
+    expect(labels('order-set-item-type-0')).toContain('ORDER_SETS.ITEM_TYPE.MEDICATION');
+    expect(labels('order-set-item-type-0')).not.toContain('MEDICATION');
+    expect(labels('order-set-item-dose-unit-0')).toContain('ORDER_SETS.DOSE_UNIT.TABLET');
+    expect(labels('order-set-item-dose-unit-0')).toContain('mg');
+    expect(labels('order-set-item-route-0')).toContain('ORDER_SETS.ROUTE.TOPICAL');
+    expect(labels('order-set-item-frequency-0')).toContain('ORDER_SETS.FREQUENCY.QID');
+    // The wire values are unchanged.
+    expect(values('order-set-item-type-0')).toContain('MEDICATION');
+    expect(values('order-set-item-dose-unit-0')).toContain('tablet');
+    expect(values('order-set-item-route-0')).toContain('TOPICAL');
+  });
 });

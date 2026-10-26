@@ -60,7 +60,8 @@ export interface AdtIntakeConfigRequest {
   defaultAdmissionType: AdmissionType;
   defaultAcuityLevel: AcuityLevel;
   defaultEncounterType: EncounterType;
-  defaultChiefComplaint: string;
+  /** Null: the server writes its default reason in the admin's language (QA D872). */
+  defaultChiefComplaint: string | null;
   enabled: boolean;
 }
 

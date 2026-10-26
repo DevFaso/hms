@@ -1334,7 +1334,36 @@ public class UserServiceImpl implements UserService {
                 .filter(accountAccess::canView)
                 .orElseThrow(() -> userNotFound(id));
         Set<UserRoleHospitalAssignment> assignments = assignmentRepository.findByUser(user);
-        return userMapper.toResponseDTO(user, assignments);
+        UserResponseDTO dto = userMapper.toResponseDTO(user, assignments);
+        withStaffDetails(dto, user, user.getStaffProfile());
+        return dto;
+    }
+
+    /**
+     * QA D838: the user edit dialog showed the hospital, job title and
+     * employment type empty, because this read never carried them. They live on
+     * the staff profile; the dialog shows them read-only (PUT /users does not
+     * change them).
+     *
+     * <p>Only when the caller may see that profile's hospital: being allowed to
+     * read the ACCOUNT (an assignment at the caller's hospital) says nothing
+     * about a staff profile held at another hospital.
+     */
+    private void withStaffDetails(UserResponseDTO dto, User user, com.example.hms.model.Staff staff) {
+        if (dto == null || staff == null) {
+            return;
+        }
+        UUID staffHospitalId = staff.getHospital() != null ? staff.getHospital().getId() : null;
+        if (!accountAccess.canViewStaffDetailsAt(user, staffHospitalId)) {
+            return;
+        }
+        if (staff.getHospital() != null) {
+            dto.setStaffHospitalId(staff.getHospital().getId());
+            dto.setStaffHospitalName(staff.getHospital().getName());
+        }
+        dto.setJobTitle(staff.getJobTitle() != null ? staff.getJobTitle().name() : null);
+        dto.setEmploymentType(staff.getEmploymentType() != null ? staff.getEmploymentType().name() : null);
+        dto.setSpecialization(staff.getSpecialization());
     }
 
     @Override

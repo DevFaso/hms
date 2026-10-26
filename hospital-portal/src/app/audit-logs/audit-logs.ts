@@ -40,11 +40,18 @@ interface DescriptionPattern {
   readonly params?: (m: RegExpExecArray) => Record<string, string>;
   /** Params that are codes to read in the reader's language; every other param is verbatim. */
   readonly localise?: Readonly<
-    Record<string, 'role' | 'labDefinitionAction' | 'labApprovalStatus'>
+    Record<string, 'role' | 'labDefinitionAction' | 'labApprovalStatus' | 'scopeRefusal'>
   >;
 }
 const DESCRIPTION_PATTERNS: readonly DescriptionPattern[] = [
   { re: /^Patient record viewed$/, key: 'AUDIT.DESC.PATIENT_RECORD_VIEWED' },
+  {
+    // QA D869: CrossTenantReadAudit writes "Hospital scope refused (NOT_PERMITTED)".
+    re: /^Hospital scope refused \(([A-Z_]+)\)$/,
+    key: 'AUDIT.DESC.HOSPITAL_SCOPE_REFUSED',
+    params: (m) => ({ reason: m[1] }),
+    localise: { reason: 'scopeRefusal' },
+  },
   { re: /^User profile updated$/, key: 'AUDIT.DESC.USER_PROFILE_UPDATED' },
   { re: /^New user account created$/, key: 'AUDIT.DESC.USER_CREATED' },
   { re: /^User account soft-deleted$/, key: 'AUDIT.DESC.USER_DELETED' },
@@ -135,12 +142,20 @@ export class AuditLogsComponent implements OnInit {
         for (const [k, v] of Object.entries(params)) {
           const domain = p.localise?.[k];
           if (domain === 'labApprovalStatus') localised[k] = this.approvalStatus(v);
+          else if (domain === 'scopeRefusal') localised[k] = this.scopeRefusal(v);
           else localised[k] = domain ? this.label(v, domain) : v;
         }
         return this.translate.instant(p.key, localised);
       }
     }
     return description.replaceAll(RAW_TOKEN, (token) => this.label(token));
+  }
+
+  /** QA D869: a hospital-scope refusal reason through AUDIT.SCOPE_REFUSAL; an unknown code stays verbatim. */
+  private scopeRefusal(value: string): string {
+    const key = `AUDIT.SCOPE_REFUSAL.${value}`;
+    const label: unknown = this.translate.instant(key);
+    return typeof label === 'string' && label !== key ? label : value;
   }
 
   /** QA D774: a lab-definition status through LAB.APPROVAL_STATUS; an unknown code stays verbatim. */

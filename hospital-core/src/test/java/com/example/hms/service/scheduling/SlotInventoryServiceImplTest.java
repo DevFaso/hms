@@ -156,14 +156,14 @@ class SlotInventoryServiceImplTest {
         // lock the table doing it.
         assertThatThrownBy(() -> service.generate(MONDAY, MONDAY.plusYears(2)))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("at most");
+            .hasFieldOrPropertyWithValue("messageKey", "slot.generation.tooLong");
     }
 
     @Test
     void generateRefusesABackwardsWindow() {
         assertThatThrownBy(() -> service.generate(MONDAY, MONDAY.minusDays(1)))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("ends before it starts");
+            .hasFieldOrPropertyWithValue("messageKey", "slot.generation.windowInverted");
     }
 
     @Test
@@ -223,7 +223,7 @@ class SlotInventoryServiceImplTest {
         UUID id = slot.getId();
         assertThatThrownBy(() -> service.hold(id, 10))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("no longer available");
+            .hasFieldOrPropertyWithValue("messageKey", "slot.unavailable");
     }
 
     @Test
@@ -234,7 +234,7 @@ class SlotInventoryServiceImplTest {
         UUID id = slot.getId();
         assertThatThrownBy(() -> service.hold(id, 10))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("in the past");
+            .hasFieldOrPropertyWithValue("messageKey", "slot.inPast");
     }
 
     @Test
@@ -246,7 +246,7 @@ class SlotInventoryServiceImplTest {
         UUID id = slot.getId();
         assertThatThrownBy(() -> service.release(id))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Cancel the appointment");
+            .hasFieldOrPropertyWithValue("messageKey", "slot.booked.release");
     }
 
     @Test
@@ -257,7 +257,7 @@ class SlotInventoryServiceImplTest {
         UUID id = slot.getId();
         assertThatThrownBy(() -> service.block(id, "Leave"))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Cancel the appointment");
+            .hasFieldOrPropertyWithValue("messageKey", "slot.booked.block");
     }
 
     @Test
@@ -281,7 +281,7 @@ class SlotInventoryServiceImplTest {
         UUID id = slot.getId();
         assertThatThrownBy(() -> service.hold(id, 10))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("no longer available");
+            .hasFieldOrPropertyWithValue("messageKey", "slot.unavailable");
 
         slot.setHeldUntil(NOW.minusNanos(1));
         service.hold(id, 10);
@@ -310,7 +310,7 @@ class SlotInventoryServiceImplTest {
 
         assertThatThrownBy(() -> service.generate(MONDAY, MONDAY))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("active hospital");
+            .hasFieldOrPropertyWithValue("messageKey", "slot.hospitalRequired");
     }
 
     /* ── booking (P3 #22): the appointment owns the time ── */
@@ -393,7 +393,7 @@ class SlotInventoryServiceImplTest {
         UUID bookFor = patientId;
         assertThatThrownBy(() -> service.book(slotId, bookFor, null))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("no longer available");
+            .hasFieldOrPropertyWithValue("messageKey", "slot.unavailable");
         verify(appointmentRepository, never()).save(any());
     }
 
@@ -406,7 +406,7 @@ class SlotInventoryServiceImplTest {
         UUID bookFor = patientId;
         assertThatThrownBy(() -> service.book(slotId, bookFor, null))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("in the past");
+            .hasFieldOrPropertyWithValue("messageKey", "slot.inPast");
     }
 
     @Test
@@ -418,7 +418,7 @@ class SlotInventoryServiceImplTest {
         UUID bookFor = patientId;
         assertThatThrownBy(() -> service.book(slotId, bookFor, null))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("not registered");
+            .hasFieldOrPropertyWithValue("messageKey", "slot.patient.notRegistered");
         verify(appointmentRepository, never()).save(any());
     }
 
@@ -435,7 +435,7 @@ class SlotInventoryServiceImplTest {
         UUID bookFor = patientId;
         assertThatThrownBy(() -> service.book(slotId, bookFor, null))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("no role assignment");
+            .hasFieldOrPropertyWithValue("messageKey", "slot.clinician.noAssignment");
     }
 
     @Test
@@ -450,7 +450,7 @@ class SlotInventoryServiceImplTest {
         UUID bookFor = patientId;
         assertThatThrownBy(() -> service.book(slotId, bookFor, null))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("just taken");
+            .hasFieldOrPropertyWithValue("messageKey", "slot.justTaken");
     }
 
     @Test

@@ -11,6 +11,13 @@ import {
 } from './reports.service';
 import { ToastService } from '../core/toast.service';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { refusalReason } from '../shared/refusal-reason';
+
+/**
+ * QA D855: the address shape the server accepts (EmailAddresses.isDeliverable),
+ * so a typo is caught on the field before the round trip.
+ */
+const DELIVERABLE_EMAIL = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
 
 /**
  * Scheduled reports (P3 #25a): the admin page for aggregate-only CSV
@@ -48,6 +55,8 @@ export class ReportsComponent implements OnInit {
   reportType = signal<ReportType>('ENCOUNTER_ACTIVITY');
   period = signal<ReportPeriod>('MONTHLY');
   recipients = signal('');
+  /** QA D855: why the recipients were refused, shown under the field. */
+  recipientsError = signal<string | null>(null);
 
   readonly reportTypes: ReportType[] = [
     'ENCOUNTER_ACTIVITY',
@@ -79,6 +88,7 @@ export class ReportsComponent implements OnInit {
     this.reportType.set('ENCOUNTER_ACTIVITY');
     this.period.set('MONTHLY');
     this.recipients.set('');
+    this.recipientsError.set(null);
     this.showCreate.set(true);
   }
 
@@ -87,6 +97,17 @@ export class ReportsComponent implements OnInit {
       this.toast.error(this.translate.instant('REPORTS.FIELDS_REQUIRED'));
       return;
     }
+    const invalid = this.recipients()
+      .split(',')
+      .map((a) => a.trim())
+      .find((a) => a !== '' && !DELIVERABLE_EMAIL.test(a));
+    if (invalid !== undefined) {
+      this.recipientsError.set(
+        this.translate.instant('REPORTS.RECIPIENT_INVALID', { address: invalid }),
+      );
+      return;
+    }
+    this.recipientsError.set(null);
     if (this.saving()) return;
     this.saving.set(true);
     this.reportsService
@@ -104,7 +125,12 @@ export class ReportsComponent implements OnInit {
           this.load();
         },
         error: (err) => {
-          this.toast.error(err?.error?.message ?? this.translate.instant('REPORTS.CREATE_FAILED'));
+          const recipientsReason = err?.error?.fieldErrors?.recipients;
+          if (typeof recipientsReason === 'string') {
+            this.recipientsError.set(recipientsReason);
+          } else {
+            this.toast.error(refusalReason(err) ?? this.translate.instant('REPORTS.CREATE_FAILED'));
+          }
           this.saving.set(false);
         },
       });

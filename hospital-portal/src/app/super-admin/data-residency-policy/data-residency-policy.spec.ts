@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 
 import { DataResidencyPolicyComponent } from './data-residency-policy';
@@ -57,6 +57,38 @@ describe('DataResidencyPolicyComponent (MVP-9c)', () => {
     // about the MVP-c3 capability fetch. Specs that exercise the stub
     // path override this in their own arrangement block.
     service.capabilities.and.returnValue(of({ remoteProvisioningCapable: true }));
+  });
+
+  it('QA D867: the table shows the export format and the actor in words, and a local date', () => {
+    service.list.and.returnValue(of(fakePolicies()));
+    TestBed.configureTestingModule({
+      imports: [DataResidencyPolicyComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        { provide: RegionPolicyService, useValue: service },
+      ],
+    });
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', {
+      REGION_POLICY: {
+        SYSTEM_ACTOR: 'Plateforme',
+        EXPORT_FORMAT: { GDPR_PORTABILITY: 'Portabilité RGPD', STANDARD: 'Standard' },
+      },
+    });
+    translate.use('fr');
+    const fixture = TestBed.createComponent(DataResidencyPolicyComponent);
+    fixture.detectChanges();
+    const text = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-test="policy-table"]',
+    )!.textContent!;
+
+    expect(text).toContain('Portabilité RGPD');
+    expect(text).not.toContain('GDPR_PORTABILITY');
+    expect(text).toContain('Plateforme');
+    expect(text.split(/\s+/)).not.toContain('system');
+    expect(text).not.toContain('2026-05-02T08:30:00Z');
   });
 
   it('loads the policy table on init', () => {

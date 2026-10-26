@@ -19,6 +19,7 @@ import {
   BUILT_DATE_TIME_EXEMPT,
   convertsBeforeSending,
   datetimeLocalFields,
+  datetimeLocalLimitFields,
   DATETIME_LOCAL_EXEMPT,
   LOCAL_INPUT_EXEMPT,
   LOCAL_PARSES,
@@ -349,12 +350,39 @@ test('a local-input allowance covers only its own file', () => {
   assert.deepEqual(offInputs(source, [], 'other/other.ts'), ['return in toLocalInput']);
 });
 
+test('the [min]/[max] limit of a datetime-local input is a local-input target (#963 review)', () => {
+  // transfusion.html: the reaction onset may not be in the future.
+  const template = `<input id="rx-onset" type="datetime-local"
+       [max]="maxOnsetAt"
+       [(ngModel)]="reactionForm.onsetAt" />
+     <input type="datetime-local" [attr.min]="form().earliest()" min="{{ floor }}" />
+     <input type="date" [max]="todayIso" />`;
+  assert.deepEqual(
+    datetimeLocalLimitFields(template).map((f) => f.field),
+    ['maxOnsetAt', 'earliest', 'floor'],
+  );
+  // The limit is not a value sent to the API: the conversion gate never sees it.
+  assert.deepEqual(
+    datetimeLocalFields(template).map((f) => f.field),
+    ['onsetAt', null],
+  );
+  // A class-field default and a later refresh of the limit both pass…
+  const source = `class C {
+    maxOnsetAt = nowLocalDatetime();
+    open() { this.maxOnsetAt = nowLocalDatetime(); }
+  }`;
+  assert.deepEqual(offInputs(source, ['maxOnsetAt']), []);
+  // …and are still caught when no input binds the field.
+  assert.deepEqual(offInputs(source, []), ['maxOnsetAt', 'maxOnsetAt']);
+});
+
 test('wall-clock helper values only fill datetime-local inputs', () => {
   const fieldsOf = new Map();
   for (const { file, text } of templatesIn(appDir)) {
     const component = file.endsWith('.html') ? `${file.slice(0, -'.html'.length)}.ts` : file;
     const fields = fieldsOf.get(component) ?? new Set();
     for (const { field } of datetimeLocalFields(text)) if (field) fields.add(field);
+    for (const { field } of datetimeLocalLimitFields(text)) fields.add(field);
     fieldsOf.set(component, fields);
   }
   const offenders = [];

@@ -83,7 +83,11 @@ export class PharmacyCheckoutComponent implements OnInit {
     this.loadDispenses();
   }
 
-  /** QA D416: the pharmacy's recent fills that can still be paid (a cancelled one cannot). */
+  /**
+   * QA D416: the pharmacy's recent fills that can still be paid. A cancelled
+   * one cannot be, and (QA D843) a paid one is not offered again: the server
+   * already refuses a second charge, the cashier must not be shown one.
+   */
   loadDispenses(): void {
     const pharmacyId = this.selectedPharmacyId();
     if (!pharmacyId) {
@@ -94,7 +98,7 @@ export class PharmacyCheckoutComponent implements OnInit {
     this.svc.listDispensesByPharmacy(pharmacyId, 0, 50).subscribe({
       next: (res) => {
         const rows = res?.data?.content ?? [];
-        this.dispenses.set(rows.filter((d) => d.status !== 'CANCELLED'));
+        this.dispenses.set(rows.filter((d) => d.status !== 'CANCELLED' && d.paid !== true));
         this.dispensesLoading.set(false);
       },
       error: () => {
@@ -114,6 +118,11 @@ export class PharmacyCheckoutComponent implements OnInit {
       return;
     }
     this.loadDispense();
+  }
+
+  /** QA D843: this dispense already carries a payment; nothing is taken twice. */
+  isPaid(): boolean {
+    return this.dispense()?.paid === true;
   }
 
   /** QA D264: the server priced this dispense, so the amount is fixed. */
@@ -150,6 +159,10 @@ export class PharmacyCheckoutComponent implements OnInit {
     const d = this.dispense();
     if (!d) {
       this.toast.error(this.translate.instant('PHARMACY.CHECKOUT_LOAD_DISPENSE_FIRST'));
+      return;
+    }
+    if (d.paid === true) {
+      this.toast.error(this.translate.instant('PHARMACY_CHECKOUT.ALREADY_PAID'));
       return;
     }
     if (!this.amount || this.amount <= 0) {

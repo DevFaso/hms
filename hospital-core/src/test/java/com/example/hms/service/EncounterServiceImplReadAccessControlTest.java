@@ -1078,7 +1078,7 @@ class EncounterServiceImplReadAccessControlTest {
         when(encounterRepository.findByPatient_Id(patientId)).thenReturn(java.util.List.of(visit, anchor));
 
         assertThat(service.getEncountersForPortalPatient(patientId)).hasSize(1);
-        verify(encounterMapper).toEncounterResponseDTO(visit);
-        verify(encounterMapper, never()).toEncounterResponseDTO(anchor);
+        verify(encounterMapper).toPatientPortalEncounterResponseDTO(visit);
+        verify(encounterMapper, never()).toPatientPortalEncounterResponseDTO(anchor);
     }
 }

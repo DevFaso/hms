@@ -11,6 +11,10 @@ import com.example.hms.payload.dto.superadmin.IntegrationHealthSummaryDTO;
 import com.example.hms.repository.IntegrationHealthSnapshotRepository;
 import com.example.hms.service.integration.eligibility.EligibilityProvider;
 import com.example.hms.service.integration.eligibility.StubEligibilityProvider;
+import com.example.hms.i18n.TestMessageSources;
+import com.example.hms.repository.integration.IntegrationHealthEventRepository;
+import com.example.hms.service.integration.health.IntegrationHealthActionService;
+import com.example.hms.service.integration.health.IntegrationHealthRecorder;
 import com.example.hms.service.platform.discovery.IntegrationDescriptor;
 import com.example.hms.service.platform.discovery.PlatformIntegrationAdapter;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,6 +38,7 @@ class SuperAdminIntegrationHealthServiceImplTest {
     private IntegrationHealthSnapshotRepository repository;
     private IntegrationHealthSnapshotMapper mapper;
     private SuperAdminIntegrationHealthServiceImpl service;
+    private IntegrationHealthActionService actionService;
     private FakeAdapter ehrAdapter;
     private Organization organizationA;
     private Organization organizationB;
@@ -53,8 +58,11 @@ class SuperAdminIntegrationHealthServiceImplTest {
         mapper = new IntegrationHealthSnapshotMapper();
         ehrAdapter = new FakeAdapter("ehr", PlatformServiceType.EHR, "EHR Sandbox");
         EligibilityProvider eligibility = new StubEligibilityProvider();
+        actionService = new IntegrationHealthActionService(List.of(), List.of(),
+            mock(IntegrationHealthRecorder.class), mock(IntegrationHealthEventRepository.class));
         service = new SuperAdminIntegrationHealthServiceImpl(
-            List.of(ehrAdapter), List.of(eligibility), repository, mapper);
+            List.of(ehrAdapter), List.of(eligibility), repository, mapper,
+            actionService, TestMessageSources.bundles());
         organizationA = new Organization();
         organizationA.setId(UUID.randomUUID());
         organizationA.setName("Korle Bu Polyclinic Group");
@@ -112,6 +120,41 @@ class SuperAdminIntegrationHealthServiceImplTest {
 
         assertThatThrownBy(() -> service.getIntegration("does-not-exist"))
             .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("QA D874: the eligibility row is described in the caller's language, with no class name")
+    void eligibilityRowIsLocalized() {
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(Locale.FRENCH);
+        try {
+            IntegrationHealthRowDTO row = service.getIntegration("eligibility");
+            assertThat(row.getDisplayName()).isEqualTo("Éligibilité à l'assurance et accord préalable");
+            assertThat(row.getProvider()).isEqualTo("Connecteur assureur")
+                .doesNotContain("Stub").doesNotContain("Provider");
+            assertThat(row.getCapabilities())
+                .containsExactly("Vérification de la couverture", "Demande d'accord préalable");
+        } finally {
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        }
+    }
+
+    @Test
+    @DisplayName("QA D851: every listed integration is known to isListed; an unlisted id is not")
+    void isListedCoversEveryInventoryRow() {
+        for (IntegrationHealthRowDTO row : service.getInventory().getIntegrations()) {
+            assertThat(service.isListed(row.getIntegrationId())).as(row.getIntegrationId()).isTrue();
+        }
+        assertThat(service.isListed("does-not-exist")).isFalse();
+        assertThat(service.isListed(null)).isFalse();
+    }
+
+    @Test
+    @DisplayName("QA D851: rows say whether a probe or a re-sync exists, so the console can hide the buttons")
+    void rowsCarryActionSupport() {
+        for (IntegrationHealthRowDTO row : service.getInventory().getIntegrations()) {
+            assertThat(row.isProbeSupported()).as(row.getIntegrationId()).isFalse();
+            assertThat(row.isResyncSupported()).as(row.getIntegrationId()).isFalse();
+        }
     }
 
     private IntegrationHealthSnapshot snapshot(String integrationId,

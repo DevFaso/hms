@@ -277,6 +277,77 @@ class ProcedureOrderServiceImplTest {
         assertThat(r.getStatus()).isEqualTo(ProcedureOrderStatus.SCHEDULED);
     }
 
+    /**
+     * QA D857: DOCTOR_A rescheduled a consented order to 01/01/2020 09:00; the
+     * PUT answered 200, the order read "Planifié" for 2020 and offered
+     * "Débuter la procédure". A past date is refused and nothing changes.
+     */
+    @Test void d857_aRescheduleToAPastDateIsRefusedAndChangesNothing() {
+        ProcedureOrder consented = buildOrder(ProcedureOrderStatus.SCHEDULED);
+        consented.setConsentObtained(true);
+        LocalDateTime planned = LocalDateTime.now().plusDays(2);
+        consented.setScheduledDatetime(planned);
+        when(procedureOrderRepository.findById(orderId)).thenReturn(Optional.of(consented));
+        ProcedureOrderUpdateDTO u = new ProcedureOrderUpdateDTO();
+        u.setScheduledDatetime(LocalDateTime.of(2020, 1, 1, 9, 0));
+
+        assertThatThrownBy(() -> service.updateProcedureOrder(orderId, u))
+            .isInstanceOfSatisfying(BusinessException.class,
+                e -> assertThat(e.getMessage()).isEqualTo(new BusinessException("procedureOrder.scheduledInPast").getMessage()));
+        assertThat(consented.getScheduledDatetime()).isEqualTo(planned);
+        assertThat(consented.getStatus()).isEqualTo(ProcedureOrderStatus.SCHEDULED);
+        verify(procedureOrderRepository, never()).save(any());
+    }
+
+    /** QA D857: the same date re-sent with a consent update is not a reschedule, and passes. */
+    @Test void d857_anUnchangedPastDateDoesNotBlockAConsentUpdate() {
+        ProcedureOrder order = buildOrder(ProcedureOrderStatus.SCHEDULED);
+        LocalDateTime earlier = LocalDateTime.now().minusHours(3);
+        order.setScheduledDatetime(earlier);
+        when(procedureOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(procedureOrderRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        ProcedureOrderUpdateDTO u = new ProcedureOrderUpdateDTO();
+        u.setScheduledDatetime(earlier);
+        u.setSiteMarked(true);
+
+        ProcedureOrderResponseDTO r = service.updateProcedureOrder(orderId, u);
+
+        assertThat(r.getSiteMarked()).isTrue();
+    }
+
+    /** QA D857: an order placed with a past planned date is refused too. */
+    @Test void d857_anOrderPlacedForAPastDateIsRefused() {
+        ProcedureOrderRequestDTO r = new ProcedureOrderRequestDTO();
+        r.setPatientId(patientId); r.setHospitalId(hospitalId);
+        r.setProcedureName("Appendectomy");
+        r.setScheduledDatetime(LocalDateTime.of(2020, 1, 1, 9, 0));
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+
+        assertThatThrownBy(() -> service.createProcedureOrder(r, staffId)).isInstanceOf(BusinessException.class);
+        verify(procedureOrderRepository, never()).save(any());
+    }
+
+    /**
+     * QA D880: a planned date given at creation left the order "Prescrit"
+     * (ORDERED); the same date set later by a reschedule makes it "Planifié".
+     */
+    @Test void d880_aPlannedDateAtCreationMakesTheOrderScheduled() {
+        ProcedureOrderRequestDTO r = new ProcedureOrderRequestDTO();
+        r.setPatientId(patientId); r.setHospitalId(hospitalId);
+        r.setProcedureName("Appendectomy");
+        r.setScheduledDatetime(LocalDateTime.now().plusDays(1).withHour(9).withMinute(0));
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(procedureOrderRepository.save(any())).thenAnswer(i -> { ProcedureOrder o = i.getArgument(0); o.setId(orderId); return o; });
+
+        ProcedureOrderResponseDTO result = service.createProcedureOrder(r, staffId);
+
+        assertThat(result.getStatus()).isEqualTo(ProcedureOrderStatus.SCHEDULED);
+    }
+
     @Test void cancelProcedureOrder_success() {
         when(procedureOrderRepository.findById(orderId)).thenReturn(Optional.of(buildOrder(ProcedureOrderStatus.ORDERED)));
         when(procedureOrderRepository.save(any())).thenAnswer(i -> i.getArgument(0));

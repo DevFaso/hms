@@ -1199,6 +1199,67 @@ class LabTestDefinitionServiceImplTest {
         }
     }
 
+    /** The round-13 malaria rapid test: no numeric range, a qualitative answer. */
+    private void tdrPalu(String expectedResult) {
+        definition.setTestCode("TDR-PALU");
+        definition.setName("TDR paludisme");
+        definition.setCategory("Parasitologie");
+        definition.setSampleType("Sang capillaire");
+        definition.setUnit(null);
+        definition.getReferenceRanges().clear();
+        definition.setExpectedResult(expectedResult);
+    }
+
+    /**
+     * QA D834: POST /lab-test-definitions/{TDR-PALU}/approval SUBMIT_FOR_QA by
+     * the lab director answered 400 "doit avoir au moins une valeur de
+     * référence"; the only way through was a fake 0-0 range. A qualitative
+     * test with its expected answer goes into review, and goes live.
+     */
+    @Test
+    void d834_aQualitativeTestWithItsExpectedResultIsSubmittedAndActivated() {
+        tdrPalu("Négatif");
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.DRAFT);
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+        holdsRolesAtHospital(director);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            when(repository.save(definition)).thenReturn(definition);
+            when(mapper.toDto(definition)).thenReturn(responseDTO);
+
+            service.processApprovalAction(defId, approvalReq("SUBMIT_FOR_QA"));
+            assertThat(definition.getApprovalStatus()).isEqualTo(LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW);
+
+            definition.setApprovalStatus(LabTestDefinitionApprovalStatus.APPROVED);
+            service.processApprovalAction(defId, approvalReq("ACTIVATE"));
+            assertThat(definition.getApprovalStatus()).isEqualTo(LabTestDefinitionApprovalStatus.ACTIVE);
+            assertThat(definition.getReferenceRanges()).isEmpty();
+        }
+    }
+
+    /** QA D834: without a range AND without an expected answer it is still refused (D417 kept). */
+    @Test
+    void d834_aTestWithNeitherRangeNorExpectedResultIsStillRefused() {
+        tdrPalu("   ");
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.DRAFT);
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+        holdsRolesAtHospital(director);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+
+            var req = approvalReq("SUBMIT_FOR_QA");
+            assertThatThrownBy(() -> service.processApprovalAction(defId, req))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            assertThat(definition.getApprovalStatus()).isEqualTo(LabTestDefinitionApprovalStatus.DRAFT);
+        }
+    }
+
     /**
      * QA D314 / D417 / D523: the sole director of the hospital who did the QA
      * review approves, and the audit row records the combined review.

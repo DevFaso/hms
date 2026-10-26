@@ -16,6 +16,8 @@ export interface StaffResponse {
   departmentName?: string;
   departmentEmail?: string;
   departmentPhoneNumber?: string;
+  /** The staff member's role assignment at this hospital (QA D872). */
+  assignmentId?: string;
   roleCode?: string;
   roleName?: string;
   jobTitle?: string;

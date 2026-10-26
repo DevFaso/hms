@@ -41,6 +41,14 @@ export class SchedulingComponent implements OnInit {
     'Manage Staff Schedules',
   );
 
+  /**
+   * QA D878: bulk planning is offered only when the server says this caller's
+   * writes succeed (an administrator of the acting hospital, or a department
+   * head). False until it answers, and on any failure: never a button whose
+   * POST is refused.
+   */
+  readonly canManageSchedules = signal(false);
+
   activeView = signal<'shifts' | 'leaves'>('shifts');
 
   // Shifts
@@ -161,6 +169,7 @@ export class SchedulingComponent implements OnInit {
   ];
 
   openBulkModal(): void {
+    if (!this.canManageSchedules()) return;
     this.bulkResult.set(null);
     this.clearStaff();
     this.bulkModalOpen.set(true);
@@ -261,6 +270,10 @@ export class SchedulingComponent implements OnInit {
     this.loadShifts();
     if (this.isSchedulingAdmin) {
       this.loadLeaves();
+      this.schedulingService.capabilities().subscribe({
+        next: (caps) => this.canManageSchedules.set(caps?.canManageSchedules === true),
+        error: () => this.canManageSchedules.set(false),
+      });
     }
   }
 

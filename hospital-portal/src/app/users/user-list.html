@@ -443,6 +443,7 @@
                   type="text"
                   [(ngModel)]="createForm.licenseNumber"
                   name="licenseNumber"
+                  [disabled]="!!editing()"
                   [placeholder]="'USERS.LICENSE_PLACEHOLDER' | translate"
                   [class.input-error]="fieldErrors()['licenseNumber']"
                   (ngModelChange)="clearFieldError('licenseNumber')"
@@ -457,7 +458,14 @@
             <!-- Hospital -->
             <div class="field">
               <label for="hospitalId">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</label>
-              @if (hospitalLocked) {
+              @if (editing()) {
+                <div class="locked-field" data-testid="edit-staff-hospital">
+                  <span class="material-symbols-outlined locked-icon" aria-hidden="true"
+                    >local_hospital</span
+                  >
+                  {{ editStaffHospitalName() ?? '—' }}
+                </div>
+              } @else if (hospitalLocked) {
                 <div class="locked-field">
                   <span class="material-symbols-outlined locked-icon" aria-hidden="true"
                     >local_hospital</span
@@ -478,7 +486,12 @@
             <div class="field-row">
               <div class="field">
                 <label for="jobTitle">{{ 'USERS.JOB_TITLE' | translate }}</label>
-                <select id="jobTitle" [(ngModel)]="createForm.jobTitle" name="jobTitle">
+                <select
+                  id="jobTitle"
+                  [(ngModel)]="createForm.jobTitle"
+                  name="jobTitle"
+                  [disabled]="!!editing()"
+                >
                   <option value="">— {{ 'COMMON.SELECT' | translate }} —</option>
                   @for (jt of jobTitles; track jt) {
                     <option [value]="jt">{{ jt | enumLabel: 'jobTitle' }}</option>
@@ -491,6 +504,7 @@
                   id="employmentType"
                   [(ngModel)]="createForm.employmentType"
                   name="employmentType"
+                  [disabled]="!!editing()"
                 >
                   <option value="">— {{ 'COMMON.SELECT' | translate }} —</option>
                   @for (et of employmentTypes; track et) {
@@ -500,6 +514,12 @@
               </div>
             </div>
 
+            @if (editing()) {
+              <span class="hint-text" data-testid="staff-fields-hint">{{
+                'USERS.STAFF_FIELDS_EDIT_HINT' | translate
+              }}</span>
+            }
+
             <!-- Specialization: physicians only (QA D195) -->
             @if (specializationApplicable) {
               <div class="field">
@@ -508,6 +528,7 @@
                   id="specialization"
                   [(ngModel)]="createForm.specialization"
                   name="specialization"
+                  [disabled]="!!editing()"
                 >
                   <option value="">— {{ 'COMMON.SELECT' | translate }} —</option>
                   @for (sp of specializations; track sp) {

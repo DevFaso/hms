@@ -525,7 +525,8 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
                 assertHasAnyRoleAt(currentUser, definition, Set.of(ROLE_LAB_DIRECTOR, ROLE_LAB_MANAGER, ROLE_SUPER_ADMIN));
                 assertInStatus(definition, EnumSet.of(LabTestDefinitionApprovalStatus.APPROVED));
                 // QA D213: a live test with no reference range grades nothing.
-                if (definition.getReferenceRanges() == null || definition.getReferenceRanges().isEmpty()) {
+                // QA D834: a qualitative test grades against its expected answer.
+                if (!definition.hasGradingBasis()) {
                     throw new BusinessException("lab.definition.rangesRequired");
                 }
                 definition.setApprovalStatus(LabTestDefinitionApprovalStatus.ACTIVE);
@@ -593,9 +594,14 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
         }
     }
 
-    /** QA D417: no definition enters review without a reference range. */
+    /**
+     * QA D417: no definition enters review without a reference range.
+     * QA D834: or, for a qualitative test, its expected answer ("Négatif"):
+     * a malaria rapid test has no numeric range, and the fake 0-0 range it
+     * needed was shown to patients as "Normal: 0 - 0".
+     */
     private static void requireRangesBeforeReview(LabTestDefinition definition) {
-        if (definition.getReferenceRanges() == null || definition.getReferenceRanges().isEmpty()) {
+        if (!definition.hasGradingBasis()) {
             throw new BusinessException("lab.definition.rangesRequiredForReview");
         }
     }
@@ -737,7 +743,9 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
         boolean changed = (dto.getTestCode() != null && !sameText(definition.getTestCode(), dto.getTestCode()))
             || !sameText(definition.getUnit(), dto.getUnit())
             || !sameText(definition.getSampleType(), dto.getSampleType())
-            || !sameText(definition.getLoincCode(), dto.getLoincCode());
+            || !sameText(definition.getLoincCode(), dto.getLoincCode())
+            // QA D834: the expected answer grades a qualitative test, like a range.
+            || !sameText(definition.getExpectedResult(), dto.getExpectedResult());
         if (changed) {
             throw new IllegalStateException(com.example.hms.utility.MessageUtil.resolveOrRaw(
                 "lab.definition.clinicalFieldsLocked", statusLabel(definition.getApprovalStatus())));

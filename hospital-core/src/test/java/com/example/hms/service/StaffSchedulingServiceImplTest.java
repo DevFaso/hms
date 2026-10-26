@@ -550,4 +550,74 @@ class StaffSchedulingServiceImplTest {
 
         assertThat(service.scheduleShift(night, Locale.ENGLISH)).isNotNull();
     }
+
+    // ── QA D878: the planning page offers bulk planning only to a caller whose writes succeed ──
+
+    @Test
+    void canManageSchedules_isFalseForADoctorWhoHeadsNoDepartment() {
+        // The QA scenario: DOCTOR_A, pinned to their hospital, no admin role, no department headed.
+        UUID doctorUserId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Staff doctorStaff = buildStaff(UUID.randomUUID(), hospitalId);
+        pinTo(hospitalId);
+        try {
+            when(roleValidator.getCurrentUserId()).thenReturn(doctorUserId);
+            when(roleValidator.isSuperAdminFromAuth()).thenReturn(false);
+            when(roleValidator.isHospitalAdmin(doctorUserId, hospitalId)).thenReturn(false);
+            when(staffRepository.findFirstByUserIdOrderByCreatedAtAsc(doctorUserId)).thenReturn(Optional.of(doctorStaff));
+            when(departmentRepository.existsByHeadOfDepartmentId(doctorStaff.getId())).thenReturn(false);
+
+            assertThat(service.canManageSchedules()).isFalse();
+        } finally {
+            com.example.hms.security.context.HospitalContextHolder.clear();
+        }
+    }
+
+    @Test
+    void canManageSchedules_isTrueForADepartmentHead() {
+        UUID headUserId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Staff head = buildStaff(UUID.randomUUID(), hospitalId);
+        pinTo(hospitalId);
+        try {
+            when(roleValidator.getCurrentUserId()).thenReturn(headUserId);
+            when(roleValidator.isHospitalAdmin(headUserId, hospitalId)).thenReturn(false);
+            when(staffRepository.findFirstByUserIdOrderByCreatedAtAsc(headUserId)).thenReturn(Optional.of(head));
+            when(departmentRepository.existsByHeadOfDepartmentId(head.getId())).thenReturn(true);
+
+            assertThat(service.canManageSchedules()).isTrue();
+        } finally {
+            com.example.hms.security.context.HospitalContextHolder.clear();
+        }
+    }
+
+    @Test
+    void canManageSchedules_isTrueForTheAdministratorOfTheActingHospital() {
+        UUID adminUserId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        pinTo(hospitalId);
+        try {
+            when(roleValidator.getCurrentUserId()).thenReturn(adminUserId);
+            when(roleValidator.isHospitalAdmin(adminUserId, hospitalId)).thenReturn(true);
+
+            assertThat(service.canManageSchedules()).isTrue();
+            verify(departmentRepository, never()).existsByHeadOfDepartmentId(any());
+        } finally {
+            com.example.hms.security.context.HospitalContextHolder.clear();
+        }
+    }
+
+    @Test
+    void canManageSchedules_isFalseWithoutAUser() {
+        when(roleValidator.getCurrentUserId()).thenReturn(null);
+        assertThat(service.canManageSchedules()).isFalse();
+    }
+
+    private static void pinTo(UUID hospitalId) {
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder()
+                .activeHospitalId(hospitalId)
+                .permittedHospitalIds(java.util.Set.of(hospitalId))
+                .build());
+    }
 }

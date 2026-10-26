@@ -45,6 +45,7 @@ public class StaffServiceImpl implements StaffService {
     // i18n key for "staff not found" appears 3x in this file.
     // Naming follows the existing *_NOT_FOUND_KEY siblings above.
     private static final String STAFF_NOT_FOUND_KEY = "staff.notFound";
+    private static final String ROLE_LAB_DIRECTOR = "ROLE_LAB_DIRECTOR";
 
     // Find staff by user email
     @Transactional(readOnly = true)
@@ -143,6 +144,7 @@ public class StaffServiceImpl implements StaffService {
     private final UserRepository userRepository;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final RoleRepository roleRepository;
+    private final com.example.hms.security.tenant.ActingScopeResolver actingScopeResolver;
 
 
     @Override
@@ -410,7 +412,7 @@ public class StaffServiceImpl implements StaffService {
 
     private void requireHospitalScope(UUID hospitalId, Locale locale) {
         if (!hasHospitalAccess(hospitalId)) {
-            throw new AccessDeniedException(messageSource.getMessage("access.denied", null, "Access denied", locale));
+            throw accessDenied(locale);
         }
     }
 
@@ -425,7 +427,7 @@ public class StaffServiceImpl implements StaffService {
 
     private void assertStaffAccessible(Staff staff, Locale locale) {
         if (!isStaffVisible(staff)) {
-            throw new AccessDeniedException(messageSource.getMessage("access.denied", null, "Access denied", locale));
+            throw accessDenied(locale);
         }
     }
 
@@ -533,7 +535,7 @@ public class StaffServiceImpl implements StaffService {
     // ── MVP 3: Lab staff management ─────────────────────────────
 
     private static final Set<String> LAB_ROLE_CODES = Set.of(
-        "ROLE_LAB_TECHNICIAN", "ROLE_LAB_SCIENTIST", "ROLE_LAB_MANAGER", "ROLE_LAB_DIRECTOR"
+        "ROLE_LAB_TECHNICIAN", "ROLE_LAB_SCIENTIST", "ROLE_LAB_MANAGER", ROLE_LAB_DIRECTOR
     );
 
     private static final Set<String> ASSIGNABLE_LAB_ROLES = Set.of(
@@ -548,6 +550,35 @@ public class StaffServiceImpl implements StaffService {
             .map(staffMapper::toStaffDTO);
     }
 
+    /** The roles that may change a lab role, held at the staff member's own hospital. */
+    private static final Set<String> LAB_ROLE_ADMINISTERING_CODES = Set.of(
+        "ROLE_HOSPITAL_ADMIN", "HOSPITAL_ADMIN", ROLE_LAB_DIRECTOR, "LAB_DIRECTOR"
+    );
+
+    /**
+     * QA D846: a lab director at hospital A who is a doctor or technician at
+     * hospital B passes {@link #requireHospitalScope} for B (any assignment
+     * there puts B in scope) and holds ROLE_LAB_DIRECTOR (from A). Only a
+     * verified super-admin, or an ACTIVE hospital-admin / lab-director
+     * assignment at the staff member's hospital, may change a lab role there.
+     */
+    private AccessDeniedException accessDenied(Locale locale) {
+        String message = messageSource.getMessage("access.denied", null, "Access denied", locale);
+        return new AccessDeniedException(message != null ? message : "Access denied");
+    }
+
+    private void requireLabRoleAuthorityAt(UUID hospitalId, Locale locale) {
+        if (actingScopeResolver.isVerifiedSuperAdmin()) {
+            return;
+        }
+        UUID callerId = HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
+        if (callerId == null || hospitalId == null
+            || !assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+                callerId, hospitalId, LAB_ROLE_ADMINISTERING_CODES)) {
+            throw accessDenied(locale);
+        }
+    }
+
     @Override
     @Transactional
     public StaffResponseDTO updateStaffLabRole(UUID staffId, String newRoleCode, Locale locale) {
@@ -560,8 +591,12 @@ public class StaffServiceImpl implements StaffService {
         Staff staff = staffRepository.findById(staffId)
             .orElseThrow(() -> new ResourceNotFoundException(STAFF_NOT_FOUND_KEY, staffId));
 
-        // Verify the staff belongs to the caller's hospital scope
+        // Verify the staff belongs to the caller's hospital scope, and that the
+        // caller holds an administering role AT THAT hospital: the scope covers
+        // every hospital with any assignment of the caller's, while the
+        // ROLE_LAB_DIRECTOR / ROLE_HOSPITAL_ADMIN authority is global (QA D846).
         requireHospitalScope(staff.getHospital().getId());
+        requireLabRoleAuthorityAt(staff.getHospital().getId(), locale);
 
         // Verify current role is a lab role (cannot change non-lab staff)
         UserRoleHospitalAssignment assignment = staff.getAssignment();
@@ -573,7 +608,7 @@ public class StaffServiceImpl implements StaffService {
         }
 
         // Don't allow changing LAB_DIRECTOR role via this endpoint
-        if ("ROLE_LAB_DIRECTOR".equals(currentCode)) {
+        if (ROLE_LAB_DIRECTOR.equals(currentCode)) {
             throw new BusinessRuleException(
                 getLocalizedMessage("staff.lab.role.directorProtected", null, locale));
         }

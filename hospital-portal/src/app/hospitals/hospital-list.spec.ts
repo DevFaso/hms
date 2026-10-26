@@ -198,6 +198,17 @@ describe('HospitalListComponent (QA D36)', () => {
 
     afterEach(() => TestBed.resetTestingModule());
 
+    it('QA D833: the phone box takes a number typed with spaces whole', async () => {
+      const { fixture, cmp } = setup();
+      cmp.openCreate();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      const phone = input(fixture.nativeElement as HTMLElement, 'hPhone');
+
+      // maxlength=15 cut '+226 25 36 12 40' to '+226 25 36 12 4' with no warning.
+      expect(phone.maxLength).toBeGreaterThanOrEqual('+226 25 36 12 40'.length);
+    });
+
     it('create: the toast names the street, never a P.O. box, and the five fields are marked', async () => {
       const { fixture, cmp, hospitalService, toastError } = setup();
       cmp.openCreate();

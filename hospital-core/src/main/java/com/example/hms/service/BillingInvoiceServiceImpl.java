@@ -163,7 +163,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         }
         // QA D307: a typed total is whole francs, like the payments that settle it.
         requireWholeAmount(dto.getTotalAmount());
-        requireCoherentDates(dto.getInvoiceDate(), dto.getDueDate(), null);
+        requireCoherentDates(dto.getInvoiceDate(), dto.getDueDate(), null, hospital);
         Patient patient = resolvePatient(dto, hospitalId);
         Encounter encounter = resolveEncounter(dto, hospitalId);
         // QA D403: the visit billed must be this patient's visit.
@@ -547,7 +547,8 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         // QA D403: checked after both moves, so a new patient with the kept
         // visit, or a new visit with the kept patient, is refused alike.
         rejectEncounterOfOtherPatient(invoice.getEncounter(), invoice.getPatient());
-        requireCoherentDates(dto.getInvoiceDate(), dto.getDueDate(), invoice.getInvoiceDate());
+        requireCoherentDates(dto.getInvoiceDate(), dto.getDueDate(), invoice.getInvoiceDate(),
+            invoice.getHospital());
         invoice.setInvoiceDate(dto.getInvoiceDate());
         invoice.setDueDate(dto.getDueDate());
         // QA D72: with lines the total is their sum; without, the typed amount.
@@ -635,15 +636,19 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     /**
      * QA D612: a due date before the invoice date reached the database CHECK
      * and came back as a 500. QA D632: an invoice cannot be dated in the
-     * future (one day of grace for a clerk ahead of the server's clock). An
-     * update that keeps the stored date is not re-judged by today's clock.
+     * future. QA D842: the D632 check allowed one day of grace for a clerk
+     * ahead of the server's clock, so tomorrow's date was accepted; "today"
+     * is now the HOSPITAL's day (its organisation's time zone), with no
+     * grace. An update that keeps the stored date is not re-judged by
+     * today's clock.
      */
-    private static void requireCoherentDates(LocalDate invoiceDate, LocalDate dueDate, LocalDate storedInvoiceDate) {
+    private static void requireCoherentDates(LocalDate invoiceDate, LocalDate dueDate, LocalDate storedInvoiceDate,
+                                             Hospital hospital) {
         if (invoiceDate != null && dueDate != null && dueDate.isBefore(invoiceDate)) {
             throw new BusinessException("billing.invoice.dueBeforeInvoiceDate");
         }
         if (invoiceDate != null && !invoiceDate.equals(storedInvoiceDate)
-                && invoiceDate.isAfter(LocalDate.now(java.time.ZoneId.systemDefault()).plusDays(1))) {
+                && invoiceDate.isAfter(com.example.hms.utility.HospitalCalendar.today(hospital))) {
             throw new BusinessException("billing.invoice.dateInFuture");
         }
     }

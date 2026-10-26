@@ -84,7 +84,7 @@
                 @for (a of appointments(); track a.id) {
                   <tr>
                     <td>{{ a.date | serverTime | date: 'mediumDate' }}</td>
-                    <td>{{ a.startTime }}</td>
+                    <td>{{ a.startTime | clockTime }}</td>
                     <td>{{ a.providerName || '—' }}</td>
                     <td>{{ a.department || '—' }}</td>
                     <td>

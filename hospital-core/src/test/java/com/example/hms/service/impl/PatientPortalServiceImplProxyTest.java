@@ -226,6 +226,42 @@ class PatientPortalServiceImplProxyTest {
     }
 
     @Nested
+    @DisplayName("QA D893: a refused grant tells the patient what to fix, in their language")
+    class GrantProxyRefusals {
+
+        @org.junit.jupiter.api.AfterEach
+        void resetMessages() {
+            com.example.hms.utility.MessageUtil.setMessageSource(null);
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        }
+
+        @Test
+        @DisplayName("an unknown username names the username, not a user id, in French")
+        void unknownUsernameIsNamed() {
+            com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+            User grantorUser = new User();
+            grantorUser.setId(UUID.randomUUID());
+            grantor.setUser(grantorUser);
+            when(authUtils.resolveUserId(auth)).thenReturn(Optional.of(grantorUser.getId()));
+            when(patientRepository.findByUserId(grantorUser.getId())).thenReturn(Optional.of(grantor));
+            when(userRepository.findByUsername("inconnu.xyz")).thenReturn(Optional.empty());
+
+            ProxyGrantRequestDTO dto = ProxyGrantRequestDTO.builder()
+                    .proxyUsername(" inconnu.xyz ")
+                    .relationship(ProxyRelationship.CAREGIVER)
+                    .permissions("VIEW_APPOINTMENTS")
+                    .build();
+
+            assertThatThrownBy(() -> service.grantProxy(auth, dto))
+                    .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class)
+                    .hasMessage("Aucun compte ne porte l'identifiant inconnu.xyz. Vérifiez l'orthographe "
+                        + "auprès de la personne à qui vous voulez donner accès.");
+            verify(patientProxyRepository, never()).save(any());
+        }
+    }
+
+    @Nested
     @DisplayName("grantProxy canonical storage")
     class GrantProxyCanonical {
 

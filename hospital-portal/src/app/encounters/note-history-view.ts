@@ -1,4 +1,4 @@
-import { EncounterNoteHistoryEntry } from '../services/encounter.service';
+import { EncounterNoteHistoryEntry, EncounterNoteResponse } from '../services/encounter.service';
 
 /** A note-history row as the encounter panel renders it. */
 export interface NoteHistoryView {
@@ -73,4 +73,22 @@ export function toNoteHistoryView(entry: EncounterNoteHistoryEntry): NoteHistory
     authorName: signer ?? text(metadata['authorName']),
     sections,
   };
+}
+
+/**
+ * The sections of a note entry, labelled as the note form labels them, so a
+ * clinician reads the entry before signing or co-signing it (#965 review: an
+ * earlier entry of a stay was signable without its text on screen).
+ */
+export function noteEntrySections(
+  note: EncounterNoteResponse | null | undefined,
+): { labelKey: string; text: string }[] {
+  if (!note) return [];
+  const fields = note as unknown as Record<string, unknown>;
+  const sections: { labelKey: string; text: string }[] = [];
+  for (const [field, labelKey] of SECTION_LABELS) {
+    const value = text(fields[field]);
+    if (value) sections.push({ labelKey, text: value });
+  }
+  return sections;
 }

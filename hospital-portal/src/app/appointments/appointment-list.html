@@ -305,7 +305,9 @@
               <td>{{ appt.staffName }}</td>
               <td class="date-cell">
                 <span class="date-primary">{{ appt.appointmentDate }}</span>
-                <span class="date-time">{{ appt.startTime }} – {{ appt.endTime }}</span>
+                <span class="date-time"
+                  >{{ appt.startTime | clockTime }} – {{ appt.endTime | clockTime }}</span
+                >
               </td>
               <td class="reason-cell" [title]="appt.reason">{{ appt.reason }}</td>
               <td>{{ appt.hospitalName }}</td>

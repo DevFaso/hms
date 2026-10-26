@@ -394,6 +394,7 @@ export class UserListComponent implements OnInit, OnDestroy {
     // account holds, read-only: roles are granted per hospital from the role
     // assignments page, and PUT /users/{id} never changes them.
     this.editRoles.set(user.roleName ? [user.roleName] : []);
+    this.editStaffHospitalName.set(null);
     this.fieldErrors.set({});
     this.showCreate.set(true);
 
@@ -409,9 +410,22 @@ export class UserListComponent implements OnInit, OnDestroy {
           this.editRoles.set(codes);
           this.selectedRoles = codes;
         }
+        // QA D838: the staff profile's hospital, job title and employment
+        // type (and specialization, licence) are shown as registered, so an
+        // admin editing only the phone does not read them as lost. They are
+        // read-only here: PUT /users does not change them.
+        this.createForm.hospitalId = detail.staffHospitalId ?? '';
+        this.createForm.jobTitle = detail.jobTitle ?? '';
+        this.createForm.employmentType = detail.employmentType ?? '';
+        this.createForm.specialization = detail.specialization ?? undefined;
+        this.createForm.licenseNumber = detail.licenseNumber ?? undefined;
+        this.editStaffHospitalName.set(detail.staffHospitalName ?? null);
       },
     });
   }
+
+  /** QA D838: the edited account's staff hospital, shown read-only. */
+  readonly editStaffHospitalName = signal<string | null>(null);
 
   dismissCredentials(): void {
     this.issuedCredentials.set(null);
@@ -489,6 +503,15 @@ export class UserListComponent implements OnInit, OnDestroy {
     if (!payload.email?.trim()) delete payload.email;
     // QA D765: an edit never sends roles; the server refuses a role change here.
     if (existing) delete payload.roleNames;
+    // QA D838: nor the staff profile fields it shows read-only.
+    if (existing) {
+      delete payload.hospitalId;
+      delete payload.jobTitle;
+      delete payload.employmentType;
+      delete payload.specialization;
+      delete payload.licenseNumber;
+      delete payload.departmentId;
+    }
     if (!existing) {
       delete payload.username;
       delete payload.password;

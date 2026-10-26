@@ -35,6 +35,20 @@
             >
           }
         </div>
+        <!-- QA D841: the record number each hospital gave the patient -->
+        @if (hospitalRecords().length > 0) {
+          <div class="record-numbers" data-testid="my-record-numbers">
+            <h2 class="record-numbers-title">{{ 'PORTAL.RECORDS.RECORD_NUMBERS' | translate }}</h2>
+            <ul>
+              @for (r of hospitalRecords(); track r.hospitalId) {
+                <li class="profile-stat" [attr.data-testid]="'my-record-number-' + r.hospitalId">
+                  {{ r.hospitalName || ('PORTAL.RECORDS.UNKNOWN_HOSPITAL' | translate) }} :
+                  <strong>{{ r.mrn }}</strong>
+                </li>
+              }
+            </ul>
+          </div>
+        }
       </div>
     }
 

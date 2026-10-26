@@ -948,6 +948,58 @@ class BillingInvoiceServiceImplTest {
         verify(invoiceRepository).saveAndFlush(any());
     }
 
+    /**
+     * QA D842: BILLING_A posted invoiceDate = tomorrow (2026-10-27 on 2026-10-26)
+     * and got 201: the D632 check allowed a day of grace past the server's date.
+     */
+    @Test
+    void createInvoice_tomorrowIsRefused_D842() {
+        pinnedHospital();
+        Patient patient = registeredPatient();
+        LocalDate tomorrow = LocalDate.now().plusDays(1);
+        BillingInvoiceRequestDTO request = requestFor(patient)
+            .invoiceDate(tomorrow).dueDate(tomorrow.plusDays(30)).build();
+
+        com.example.hms.exception.BusinessException refused = assertThrows(
+            com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.createInvoice(request, Locale.FRENCH));
+
+        assertEquals("billing.invoice.dateInFuture", refused.getMessageKey());
+        verify(invoiceRepository, never()).saveAndFlush(any());
+    }
+
+    /** QA D842, the PUT half: moving a draft's date to tomorrow is refused too. */
+    @Test
+    void updateInvoice_movingTheDateToTomorrowIsRefused_D842() {
+        BillingInvoice invoice = existingInvoice(InvoiceStatus.DRAFT, "0");
+        UUID id = invoice.getId();
+        LocalDate tomorrow = LocalDate.now().plusDays(1);
+        BillingInvoiceRequestDTO request = editOf().invoiceDate(tomorrow).dueDate(tomorrow.plusDays(30)).build();
+
+        com.example.hms.exception.BusinessException refused = assertThrows(
+            com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.updateInvoice(id, request, Locale.FRENCH));
+
+        assertEquals("billing.invoice.dateInFuture", refused.getMessageKey());
+        assertEquals(LocalDate.of(2026, 10, 1), invoice.getInvoiceDate());
+    }
+
+    /** QA D842: a hospital whose organisation runs on another zone is judged on ITS day. */
+    @Test
+    void createInvoice_todayIsTheHospitalsOwnDay_D842() {
+        Hospital hospital = pinnedHospital();
+        com.example.hms.model.Organization org = new com.example.hms.model.Organization();
+        org.setDefaultTimezone("Pacific/Kiritimati"); // UTC+14: always the latest calendar day on earth
+        hospital.setOrganization(org);
+        Patient patient = registeredPatient();
+        LocalDate hospitalToday = LocalDate.now(java.time.ZoneId.of("Pacific/Kiritimati"));
+
+        billingInvoiceService.createInvoice(requestFor(patient)
+            .invoiceDate(hospitalToday).dueDate(hospitalToday).build(), Locale.ENGLISH);
+
+        verify(invoiceRepository).saveAndFlush(any());
+    }
+
     @Test
     void updateInvoice_aStoredDateIsNotReJudged_D632() {
         BillingInvoice invoice = existingInvoice(InvoiceStatus.DRAFT, "0");

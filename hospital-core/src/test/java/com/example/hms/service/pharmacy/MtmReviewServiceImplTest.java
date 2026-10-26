@@ -49,7 +49,7 @@ import static org.mockito.Mockito.when;
  * polypharmacy auto-detection, MTM_REVIEW_STARTED audit emission, and the
  * intervention-recorded transition that fires on first non-blank intervention summary.
  */
-@ExtendWith(MockitoExtension.class)
+@ExtendWith({MockitoExtension.class, com.example.hms.i18n.EnglishMessageBundles.class})
 @DisplayName("MtmReviewServiceImpl")
 class MtmReviewServiceImplTest {
 
@@ -108,7 +108,7 @@ class MtmReviewServiceImplTest {
 
         assertThatThrownBy(() -> service.startReview(request()))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("active hospital context");
+                .hasMessageContaining("does not match the active hospital");
     }
 
     @Test
@@ -269,6 +269,154 @@ class MtmReviewServiceImplTest {
         service.updateReview(reviewId, update);
 
         verify(auditEventLogService, never()).logEvent(any(AuditEventRequestDTO.class));
+    }
+
+    // -------------------------------------------------------------------------
+    // QA D886: PHARMACIST_A, POST /mtm-reviews with followUpDate 2020-01-01 got
+    // 201; PUT /mtm-reviews/{id} moved a COMPLETED review back to DRAFT.
+    // -------------------------------------------------------------------------
+
+    /** The QA's create body (mtm.js), with the follow-up date it sent. */
+    private MtmReviewRequestDTO qaBody(MtmReviewStatus status, java.time.LocalDate followUp) {
+        return MtmReviewRequestDTO.builder()
+                .patientId(patientId).hospitalId(hospitalId)
+                .chronicConditionFocus("Hypertension artérielle + diabète type 2")
+                .adherenceConcern(true)
+                .interventionSummary("Oublis fréquents de la metformine le soir")
+                .recommendedActions("Pilulier hebdomadaire, rappel SMS")
+                .status(status).followUpDate(followUp)
+                .build();
+    }
+
+    private MtmReview stored(MtmReviewStatus status, java.time.LocalDate followUp) {
+        MtmReview existing = MtmReview.builder()
+                .patient(patient).hospital(hospital).pharmacistUser(user)
+                .chronicConditionFocus("Hypertension artérielle + diabète type 2")
+                .adherenceConcern(true)
+                .interventionSummary("Oublis fréquents de la metformine le soir")
+                .recommendedActions("Pilulier hebdomadaire, rappel SMS")
+                .status(status).followUpDate(followUp)
+                .build();
+        existing.setId(reviewId);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(reviewRepository.findById(reviewId)).thenReturn(Optional.of(existing));
+        return existing;
+    }
+
+    private void savesAndMaps() {
+        when(reviewRepository.save(any(MtmReview.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(mapper.toResponseDTO(any(MtmReview.class))).thenReturn(MtmReviewResponseDTO.builder().build());
+    }
+
+    @Test
+    void startReview_aFollowUpInThePastIsRefused_D886() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(userId);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        MtmReviewRequestDTO body = qaBody(MtmReviewStatus.DRAFT, java.time.LocalDate.of(2020, 1, 1));
+
+        assertThatThrownBy(() -> service.startReview(body))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("The follow-up date cannot be in the past.");
+        verify(reviewRepository, never()).save(any());
+    }
+
+    @Test
+    void startReview_aFollowUpTodayOrLaterIsAccepted_D886() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(userId);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId)).thenReturn(new ArrayList<>());
+        when(reviewRepository.save(any(MtmReview.class))).thenAnswer(inv -> {
+            MtmReview r = inv.getArgument(0);
+            r.setId(reviewId);
+            return r;
+        });
+        when(mapper.toResponseDTO(any(MtmReview.class))).thenReturn(MtmReviewResponseDTO.builder().build());
+
+        service.startReview(qaBody(MtmReviewStatus.DRAFT, java.time.LocalDate.now()));
+
+        verify(reviewRepository).save(any(MtmReview.class));
+    }
+
+    @Test
+    void updateReview_movingTheFollowUpIntoThePastIsRefused_D886() {
+        MtmReview existing = stored(MtmReviewStatus.DRAFT, java.time.LocalDate.now().plusDays(14));
+        MtmReviewRequestDTO body = qaBody(MtmReviewStatus.DRAFT, java.time.LocalDate.of(2020, 1, 1));
+
+        assertThatThrownBy(() -> service.updateReview(reviewId, body))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("cannot be in the past");
+        assertThat(existing.getFollowUpDate()).isAfter(java.time.LocalDate.now());
+        verify(reviewRepository, never()).save(any());
+    }
+
+    /** A review whose follow-up has since passed can still be completed: the kept date is not re-judged. */
+    @Test
+    void updateReview_aStoredFollowUpThatHasPassedIsNotReJudged_D886() {
+        java.time.LocalDate lastMonth = java.time.LocalDate.now().minusMonths(1);
+        MtmReview existing = stored(MtmReviewStatus.DRAFT, lastMonth);
+        savesAndMaps();
+
+        service.updateReview(reviewId, qaBody(MtmReviewStatus.COMPLETED, lastMonth));
+
+        assertThat(existing.getStatus()).isEqualTo(MtmReviewStatus.COMPLETED);
+    }
+
+    @Test
+    void updateReview_aCompletedReviewCannotGoBackToDraft_D886() {
+        java.time.LocalDate followUp = java.time.LocalDate.now().plusDays(14);
+        MtmReview existing = stored(MtmReviewStatus.COMPLETED, followUp);
+        MtmReviewRequestDTO reopen = qaBody(MtmReviewStatus.DRAFT, followUp);
+
+        assertThatThrownBy(() -> service.updateReview(reviewId, reopen))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("This review is completed and closed; it can no longer be changed.");
+        assertThat(existing.getStatus()).isEqualTo(MtmReviewStatus.COMPLETED);
+        verify(reviewRepository, never()).save(any());
+    }
+
+    @Test
+    void updateReview_aCompletedReviewsTextCannotBeRewritten_D886() {
+        java.time.LocalDate followUp = java.time.LocalDate.now().plusDays(14);
+        stored(MtmReviewStatus.COMPLETED, followUp);
+        MtmReviewRequestDTO rewrite = qaBody(MtmReviewStatus.COMPLETED, followUp);
+        rewrite.setInterventionSummary("piraté");
+
+        assertThatThrownBy(() -> service.updateReview(reviewId, rewrite))
+                .isInstanceOf(BusinessException.class);
+        verify(reviewRepository, never()).save(any());
+    }
+
+    /** The completing PUT sent twice (a retry) is answered, not refused. */
+    @Test
+    void updateReview_aRetriedCompletionIsANoOp_D886() {
+        java.time.LocalDate followUp = java.time.LocalDate.now().plusDays(14);
+        stored(MtmReviewStatus.COMPLETED, followUp);
+        savesAndMaps();
+
+        service.updateReview(reviewId, qaBody(MtmReviewStatus.COMPLETED, followUp));
+
+        verify(reviewRepository).save(any(MtmReview.class));
+    }
+
+    @Test
+    void updateReview_aReferredReviewCanBeCompletedButNotReturnedToDraft_D886() {
+        java.time.LocalDate followUp = java.time.LocalDate.now().plusDays(14);
+        MtmReview existing = stored(MtmReviewStatus.REFERRED, followUp);
+        MtmReviewRequestDTO toDraft = qaBody(MtmReviewStatus.DRAFT, followUp);
+
+        assertThatThrownBy(() -> service.updateReview(reviewId, toDraft))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("cannot go back to draft");
+
+        savesAndMaps();
+        service.updateReview(reviewId, qaBody(MtmReviewStatus.COMPLETED, followUp));
+        assertThat(existing.getStatus()).isEqualTo(MtmReviewStatus.COMPLETED);
     }
 
     @Test

@@ -21,6 +21,12 @@
     </button>
   </div>
 
+  @if (deactivateError()) {
+    <p class="form-error" role="alert" data-test="deactivate-error">
+      {{ deactivateError()! | translate }}
+    </p>
+  }
+
   @if (loading()) {
     <div class="state-panel">
       <span class="material-symbols-outlined spin">progress_activity</span>
@@ -104,20 +110,28 @@
           ></textarea>
         </label>
         <label>
-          <span>{{ 'SUBSCRIPTIONS.FORM.PRICE_CENTS' | translate }}</span>
+          <span>{{ 'SUBSCRIPTIONS.FORM.CURRENCY' | translate }}</span>
+          <select
+            data-test="plan-currency"
+            [ngModel]="form().currency"
+            (ngModelChange)="updateForm('currency', $event)"
+          >
+            @for (code of currencyOptions(); track code) {
+              <option [value]="code">{{ currencyLabel(code) }}</option>
+            }
+          </select>
+        </label>
+        <label>
+          <span>{{
+            'SUBSCRIPTIONS.FORM.PRICE' | translate: { currency: currencyUnit(form().currency) }
+          }}</span>
           <input
             type="number"
             min="0"
-            [ngModel]="form().monthlyPriceCents"
-            (ngModelChange)="updateForm('monthlyPriceCents', +$event)"
-          />
-        </label>
-        <label>
-          <span>{{ 'SUBSCRIPTIONS.FORM.CURRENCY' | translate }}</span>
-          <input
-            type="text"
-            [ngModel]="form().currency"
-            (ngModelChange)="updateForm('currency', $event)"
+            data-test="plan-price"
+            [step]="priceStep()"
+            [ngModel]="priceAmount()"
+            (ngModelChange)="updatePrice($event)"
           />
         </label>
         <label>

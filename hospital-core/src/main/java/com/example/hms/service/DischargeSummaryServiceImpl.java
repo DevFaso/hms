@@ -565,7 +565,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
                 String diagText = buildDiagnosisTextFromEncounter(enc);
                 summary.setDischargeDiagnosis(diagText);
                 summary.setFollowUpInstructions(com.example.hms.mapper.CheckOutMapper.followUpWithSignedNote(
-                        enc.getFollowUpInstructions(), enc.getEncounterNote()));
+                        enc.getFollowUpInstructions(), enc.getLatestSignedEncounterNote()));
 
                 // Encounter notes → hospitalCourse (visit summary)
                 if (enc.getNotes() != null && !enc.getNotes().isBlank()) {
@@ -635,7 +635,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
             // signed note (encounter 81b42d8d in the round-10 re-test) gains
             // the note's instructions and plan; the join adds only what is missing.
             String followUp = com.example.hms.mapper.CheckOutMapper.followUpWithSignedNote(
-                    summary.getFollowUpInstructions(), enc.getEncounterNote());
+                    summary.getFollowUpInstructions(), enc.getLatestSignedEncounterNote());
             if (followUp != null && !followUp.equals(summary.getFollowUpInstructions())) {
                 summary.setFollowUpInstructions(followUp);
                 changed = true;

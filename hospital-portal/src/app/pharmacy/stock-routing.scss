@@ -292,3 +292,43 @@ textarea.form-control {
   background: #fef2f2;
   color: #991b1b;
 }
+
+// QA D888: the orders matching the search, picked instead of typed.
+.rx-matches {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  max-width: 560px;
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 8px;
+  overflow: hidden;
+
+  li + li {
+    border-top: 1px solid var(--border, #e2e8f0);
+  }
+}
+
+.rx-match {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  width: 100%;
+  padding: 8px 12px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    background: var(--primary-soft);
+  }
+}
+
+.rx-patient {
+  font-weight: 600;
+}
+
+.rx-selected {
+  margin: 10px 0 0;
+}

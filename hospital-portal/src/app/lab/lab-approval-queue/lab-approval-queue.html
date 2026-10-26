@@ -96,7 +96,11 @@
                 }
               </td>
               <td>{{ def.category || '—' }}</td>
-              <td>{{ def.sampleType ? (def.sampleType | enumLabel: 'specimenType') : '—' }}</td>
+              <td>
+                {{
+                  def.sampleType ? (def.sampleType | enumLabel: 'specimenType' : 'asTyped') : '—'
+                }}
+              </td>
               <td>
                 <span class="status-badge" [class]="getApprovalStatusClass(def.approvalStatus)">
                   {{ 'LAB.APPROVAL_STATUS.' + def.approvalStatus | translate }}
@@ -264,7 +268,7 @@
           <div class="detail-field">
             <span class="field-label">{{ 'LAB_APPROVAL.FIELD.SAMPLE_TYPE' | translate }}</span>
             <span class="field-value">{{
-              def.sampleType ? (def.sampleType | enumLabel: 'specimenType') : '—'
+              def.sampleType ? (def.sampleType | enumLabel: 'specimenType' : 'asTyped') : '—'
             }}</span>
           </div>
           <div class="detail-field">

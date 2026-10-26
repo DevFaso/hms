@@ -22,4 +22,11 @@ public interface SuperAdminIntegrationHealthService {
      * {@link com.example.hms.exception.ResourceNotFoundException} when the id is unknown.
      */
     IntegrationHealthRowDTO getIntegration(String integrationId);
+
+    /**
+     * QA D851: whether the inventory lists {@code integrationId}, so the
+     * history and re-sync endpoints know every integration the list shows,
+     * not only the ones with a probe or a re-sync bean.
+     */
+    boolean isListed(String integrationId);
 }

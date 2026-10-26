@@ -53,8 +53,12 @@ import com.example.hms.service.i18n.NotificationLocales;
  * "acknowledged: true" proves a button was clicked. See
  * {@code recordReadBack}.
  * <p>
- * "Critical" matches the existing critical worklist endpoints: a persisted
- * HL7 {@link AbnormalFlag#CRITICAL}, or a computed severity of CRITICAL/HIGH.
+ * "Critical" is the D107/D313 rule of {@link LabResultMapper#raisesCriticalAlert}:
+ * a CRITICAL grade only, that is a value beyond the range's {@code criticalLow}
+ * or {@code criticalHigh}, or an analyzer's persisted HL7
+ * {@link AbnormalFlag#CRITICAL} flag. A HIGH or LOW grade (outside the normal
+ * range, inside the critical limits, or on a range that declares none) is
+ * abnormal and never pages.
  */
 @Slf4j
 @Service

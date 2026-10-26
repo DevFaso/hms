@@ -17,7 +17,7 @@
         }
       </p>
     </div>
-    @if (isSchedulingAdmin) {
+    @if (isSchedulingAdmin && canManageSchedules()) {
       <div class="page-actions">
         <button class="btn-primary" (click)="openBulkModal()">
           <span class="material-symbols-outlined">date_range</span>
@@ -293,7 +293,7 @@
 </div>
 
 <!-- ═══ BULK SCHEDULE MODAL ═══ -->
-@if (bulkModalOpen() && isSchedulingAdmin) {
+@if (bulkModalOpen() && isSchedulingAdmin && canManageSchedules()) {
   <dialog class="modal-panel" open aria-labelledby="bulk-modal-title">
     <!-- Header -->
     <div class="modal-header">

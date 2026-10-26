@@ -67,13 +67,27 @@ public interface EncounterService {
                                                               boolean isSuperAdmin,
                                                               UUID callerHospitalId);
 
+    /** QA D831: files the addendum under the named note entry; a null id means the current (latest) entry. */
+    EncounterNoteAddendumResponseDTO addEncounterNoteAddendum(UUID encounterId,
+                                                              UUID noteId,
+                                                              EncounterNoteAddendumRequestDTO request,
+                                                              Locale locale,
+                                                              boolean isSuperAdmin,
+                                                              UUID callerHospitalId);
+
     java.util.List<EncounterNoteHistoryResponseDTO> getEncounterNoteHistory(UUID encounterId, Locale locale);
 
     /** Server-side note signing ceremony (P3 #20): author-only, digest-backed, locks the note. */
     EncounterNoteResponseDTO signEncounterNote(UUID encounterId, Locale locale);
 
+    /** QA D831: signs the named note entry; a null id means the current (latest) entry only. */
+    EncounterNoteResponseDTO signEncounterNote(UUID encounterId, UUID noteId, Locale locale);
+
     /** Attending co-signature (P3 #20): requires a signed note that declared requiresCosign. */
     EncounterNoteResponseDTO cosignEncounterNote(UUID encounterId, Locale locale);
+
+    /** QA D831: co-signs the named note entry; a null id means the current (latest) entry only. */
+    EncounterNoteResponseDTO cosignEncounterNote(UUID encounterId, UUID noteId, Locale locale);
 
     /**
      * MVP 2 — Atomic triage submission: records vitals, chief complaint, acuity,

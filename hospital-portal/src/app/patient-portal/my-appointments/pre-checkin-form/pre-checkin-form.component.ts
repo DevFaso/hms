@@ -21,11 +21,12 @@ import {
   QuestionnaireSubmission,
 } from '../../../services/patient-portal.service';
 import { ServerTimePipe } from '../../../shared/pipes/server-time.pipe';
+import { ClockTimePipe } from '../../../shared/pipes/clock-time.pipe';
 
 @Component({
   selector: 'app-pre-checkin-form',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule],
+  imports: [ClockTimePipe, ServerTimePipe, CommonModule, FormsModule, TranslateModule],
   templateUrl: './pre-checkin-form.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './pre-checkin-form.component.scss',

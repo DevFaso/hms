@@ -111,7 +111,7 @@ class SessionTemplateServiceImplTest {
 
         assertThatThrownBy(() -> service.create(request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("end after it starts");
+            .hasFieldOrPropertyWithValue("messageKey", "sessionTemplate.window.inverted");
     }
 
     @Test
@@ -125,7 +125,7 @@ class SessionTemplateServiceImplTest {
 
         assertThatThrownBy(() -> service.create(request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("shorter than one slot");
+            .hasFieldOrPropertyWithValue("messageKey", "sessionTemplate.window.shorterThanSlot");
     }
 
     @Test
@@ -135,7 +135,7 @@ class SessionTemplateServiceImplTest {
 
         assertThatThrownBy(() -> service.create(request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("cannot end before");
+            .hasFieldOrPropertyWithValue("messageKey", "sessionTemplate.effective.inverted");
     }
 
     @Test
@@ -161,7 +161,7 @@ class SessionTemplateServiceImplTest {
 
         assertThatThrownBy(() -> service.create(request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("retired");
+            .hasFieldOrPropertyWithValue("messageKey", "sessionTemplate.visitType.retired");
     }
 
     @Test
