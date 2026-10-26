@@ -1236,6 +1236,66 @@ class LaborServiceImplTest {
     }
 
     /**
+     * Review of #958: her previous delivered record is G3 P1 A2, and an
+     * unbooked labour is admitted typed G1 P0. The abortions are carried
+     * forward with her past history, so the new current version would read
+     * G1 P0 A2 (P + A above G) and refuse every later edit on a field the
+     * midwife never typed. The admission is refused instead, and nothing is
+     * saved.
+     */
+    @Test
+    void aCarriedAbortionCountAboveTheTypedGravidityIsRefused_D809() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        MaternalHistory previous = new MaternalHistory();
+        previous.setRecordedDate(LocalDateTime.now().minusYears(2));
+        previous.setGravida(3);
+        previous.setPara(1);
+        previous.setAbortions(2);
+        previous.setHospital(hospital);
+        historiesOnRecord(previous);
+        when(maternalHistoryRepository.findMaxVersionByPatientId(patientId)).thenReturn(1);
+        when(deliveryRecordRepository.existsByPatient_IdAndBirthDateTimeGreaterThanEqual(
+            org.mockito.ArgumentMatchers.eq(patientId), any(LocalDateTime.class)))
+            .thenAnswer(inv -> inv.<LocalDateTime>getArgument(1).isBefore(LocalDateTime.now().minusYears(1)));
+        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId)
+            .laborOnsetAt(LocalDateTime.now().minusHours(1)).gestationalAgeWeeks(38).gravida(1).para(0).build();
+
+        assertThatThrownBy(() -> service.startEpisode(patientId, recorderUserId, request))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "maternity.obstetric.outcomesAboveGravida");
+        verify(maternalHistoryRepository, never()).save(any(MaternalHistory.class));
+        verify(episodeRepository, never()).save(any(LaborEpisode.class));
+    }
+
+    /** Review of #958: typed counts that leave room for the carried abortions open the record. */
+    @Test
+    void aTypedGravidityCoveringTheCarriedAbortionsOpensTheRecord_D809() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        MaternalHistory previous = new MaternalHistory();
+        previous.setRecordedDate(LocalDateTime.now().minusYears(2));
+        previous.setGravida(3);
+        previous.setPara(1);
+        previous.setAbortions(2);
+        previous.setHospital(hospital);
+        historiesOnRecord(previous);
+        when(maternalHistoryRepository.findMaxVersionByPatientId(patientId)).thenReturn(1);
+        when(deliveryRecordRepository.existsByPatient_IdAndBirthDateTimeGreaterThanEqual(
+            org.mockito.ArgumentMatchers.eq(patientId), any(LocalDateTime.class)))
+            .thenAnswer(inv -> inv.<LocalDateTime>getArgument(1).isBefore(LocalDateTime.now().minusYears(1)));
+
+        service.startEpisode(patientId, recorderUserId, LaborEpisodeRequestDTO.builder().hospitalId(hospitalId)
+            .laborOnsetAt(LocalDateTime.now().minusHours(1)).gestationalAgeWeeks(38).gravida(4).para(2).build());
+
+        org.mockito.ArgumentCaptor<MaternalHistory> captor = org.mockito.ArgumentCaptor.forClass(MaternalHistory.class);
+        verify(maternalHistoryRepository).save(captor.capture());
+        assertThat(captor.getValue().getGravida()).isEqualTo(4);
+        assertThat(captor.getValue().getPara()).isEqualTo(2);
+        assertThat(captor.getValue().getAbortions()).isEqualTo(2);
+    }
+
+    /**
      * Review of #954 (round 2): her latest record belongs to another hospital
      * that the caller may not read (cross-hospital reads off). The repository
      * answers like the real query, by the hospital set it is given, so the

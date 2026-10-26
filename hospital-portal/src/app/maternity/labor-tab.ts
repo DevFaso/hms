@@ -63,7 +63,8 @@ export const DELIVERY_LIMITS: readonly FieldLimit[] = [
 /** QA D809: the bounds LaborEpisodeRequestDTO puts on the admission's numbers. */
 export const EPISODE_LIMITS: readonly FieldLimit[] = [
   { field: 'gestationalAgeWeeks', labelKey: 'MATERNITY.GESTATIONAL_AGE', min: 20, max: 45 },
-  { field: 'gravida', labelKey: 'MATERNITY.GRAVIDA', min: 0 },
+  // A woman admitted in labour is pregnant: G >= 1.
+  { field: 'gravida', labelKey: 'MATERNITY.GRAVIDA', min: 1 },
   { field: 'para', labelKey: 'MATERNITY.PARA', min: 0 },
 ];
 

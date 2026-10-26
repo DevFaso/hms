@@ -333,6 +333,13 @@ public class LaborServiceImpl implements LaborService {
         pregnancy.setEstimatedDueDate(today.plusWeeks((long) TERM_WEEKS - weeks));
         pregnancy.setGravida(request.getGravida());
         pregnancy.setPara(request.getPara());
+        // Review of #958: her abortions are past history and were carried
+        // forward with it, while G and P are the typed counts. The record
+        // saved here must still describe one possible history (P + A <= G),
+        // or a G1 P0 typed over a carried A2 would become a current version
+        // that no later edit could save.
+        com.example.hms.utility.ObstetricCounts.requireConsistent(
+            pregnancy.getGravida(), pregnancy.getPara(), pregnancy.getAbortions(), "");
         pregnancy.setUpdateReason(messageSource.getMessage("maternity.labor.unbookedPregnancyNote",
             new Object[]{weeks}, NotificationLocales.STAFF));
         return maternalHistoryRepository.save(pregnancy);

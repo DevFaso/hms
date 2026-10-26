@@ -101,6 +101,18 @@ class MaternityFieldErrorsControllerTest {
     }
 
     @Test
+    @DisplayName("Review of #958: G0 on a labour admission is refused on fieldErrors.gravida (she is pregnant)")
+    void aGravidityOfZeroOnALabourAdmissionIsRefused() throws Exception {
+        mvc.perform(post("/patients/{p}/labor/episodes", patientId)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"laborOnsetAt\":\"" + ISO.format(LocalDateTime.now().minusHours(2))
+                    + "\",\"gravida\":0,\"para\":0}"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.fieldErrors.gravida").isNotEmpty());
+        verifyNoInteractions(laborService);
+    }
+
+    @Test
     @DisplayName("D809: G1 P3 on the maternal history answers 400 on fieldErrors['obstetricHistory.para']")
     void aParityAboveGravidityNamesTheParaField() throws Exception {
         when(historyService.createMaternalHistory(any(), any()))

@@ -311,7 +311,11 @@ describe('LaborTabComponent', () => {
         ACTIVE_EPISODE: 'Travail en cours',
         STATUS_ACTIVE: 'En travail',
       },
-      MATERNITY: { PARA: 'Parité (P)', PARA_ABOVE_GRAVIDA: 'P ne peut pas dépasser G.' },
+      MATERNITY: {
+        GRAVIDA: 'Gestité',
+        PARA: 'Parité (P)',
+        PARA_ABOVE_GRAVIDA: 'P ne peut pas dépasser G.',
+      },
     });
     translate.use('fr');
   }
@@ -475,6 +479,22 @@ describe('LaborTabComponent', () => {
     expect(laborSpy.startEpisode).not.toHaveBeenCalled();
     expect(toastSpy.error).toHaveBeenCalledWith(
       'Parité (P) : la valeur doit être supérieure ou égale à 0.',
+    );
+  });
+
+  it('Review of #958: an admission typed G0 is refused before sending (a woman in labour is pregnant)', () => {
+    useFrench();
+    component.patient.set({ id: 'p1' } as PatientResponse);
+    component.openStartForm();
+    component.startForm.laborOnsetAt = '2026-10-19T06:00';
+    component.startForm.gravida = 0;
+    component.startForm.para = 0;
+
+    component.submitStart();
+
+    expect(laborSpy.startEpisode).not.toHaveBeenCalled();
+    expect(toastSpy.error).toHaveBeenCalledWith(
+      'Gestité : la valeur doit être supérieure ou égale à 1.',
     );
   });
 
