@@ -128,7 +128,12 @@
                       [attr.data-testid]="'med-not-refillable-' + med.id"
                     >
                       <span class="material-symbols-outlined">block</span>
-                      {{ 'PORTAL.MEDICATIONS.NOT_REFILLABLE' | translate }}
+                      {{
+                        (med.refillBlockedReason === 'CONTROLLED'
+                          ? 'PORTAL.MEDICATIONS.NOT_REFILLABLE_CONTROLLED'
+                          : 'PORTAL.MEDICATIONS.NOT_REFILLABLE'
+                        ) | translate
+                      }}
                     </span>
                   } @else if (med.refillRequestOpen) {
                     <span
@@ -268,15 +273,23 @@
                 <span class="pli-meta">
                   {{ 'PORTAL.MEDICATIONS.REQUESTED' | translate }}
                   {{ r.requestedAt | serverTime | date: 'mediumDate' }}
-                  @if (r.updatedAt && r.status !== 'PENDING' && r.status !== 'REQUESTED') {
+                  @if (r.updatedAt && r.status !== 'REQUESTED' && r.status !== 'PAUSED') {
                     · {{ 'PORTAL.MEDICATIONS.COMPLETED' | translate }}
                     {{ r.updatedAt | serverTime | date: 'mediumDate' }}
                   }
                 </span>
               </div>
-              <span class="portal-status-chip" [attr.data-status]="r.status">{{
-                r.status | enumLabel: 'status'
-              }}</span>
+              <!--
+                QA D816: the same labels as the medication row's chip. The
+                generic status enum read "Demandée" here while the row read
+                "En attente" for the same request.
+              -->
+              <span
+                class="portal-status-chip"
+                [attr.data-status]="r.status"
+                [attr.data-testid]="'refill-history-status-' + r.id"
+                >{{ 'REFILLS.STATUS_' + r.status | translate }}</span
+              >
             </div>
           }
         </div>

@@ -169,6 +169,17 @@
                       <span class="material-symbols-outlined">labs</span>
                     </button>
                   }
+                  @if (canVoidOrder() && isVoidable(order)) {
+                    <button
+                      class="action-link void-link"
+                      [attr.data-testid]="'lab-void-' + order.id"
+                      [title]="'LAB.VOID.ACTION' | translate"
+                      [attr.aria-label]="'LAB.VOID.ACTION' | translate"
+                      (click)="openVoid(order)"
+                    >
+                      <span class="material-symbols-outlined" aria-hidden="true">block</span>
+                    </button>
+                  }
                   @if (canDeleteOrder() && !isIncomingExternal(order) && !hasResultsStage(order)) {
                     <button
                       class="action-link delete-link"
@@ -259,6 +270,16 @@
             <div class="notes-section">
               <span class="field-label">{{ 'COMMON.NOTES' | translate }}</span>
               <p>{{ o.notes }}</p>
+            </div>
+          }
+          @if (o.cancellationReason) {
+            <!-- QA D820: why it was cancelled, or voided as entered in error. -->
+            <div class="notes-section" data-testid="lab-order-reason">
+              <span class="field-label">{{
+                (o.status === 'ENTERED_IN_ERROR' ? 'LAB.VOID.REASON' : 'LAB.CANCELLATION_REASON')
+                  | translate
+              }}</span>
+              <p>{{ o.cancellationReason }}</p>
             </div>
           }
         </div>
@@ -530,6 +551,63 @@
                 ? ('COMMON.UPDATE' | translate)
                 : ('COMMON.CREATE' | translate)
           }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ═══ VOID (ENTERED IN ERROR), QA D820 ═══ -->
+@if (voidingOrder(); as vo) {
+  <div class="modal-backdrop" tabindex="-1" (click)="closeVoid()" (keydown.escape)="closeVoid()">
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="lab-void-title"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2 id="lab-void-title">{{ 'LAB.VOID.TITLE' | translate }}</h2>
+        <button
+          class="modal-close"
+          (click)="closeVoid()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="delete-warning">
+          {{ 'LAB.VOID.EXPLAIN' | translate }}
+          <strong>{{ shortOrderCode(vo.labOrderCode) }}</strong>
+        </p>
+        <div class="field">
+          <label for="lab-void-reason">{{ 'LAB.VOID.REASON' | translate }} *</label>
+          <textarea
+            id="lab-void-reason"
+            data-testid="lab-void-reason"
+            rows="3"
+            maxlength="1000"
+            [value]="voidReason()"
+            (input)="onVoidReasonInput($event)"
+            [placeholder]="'LAB.VOID.REASON_PLACEHOLDER' | translate"
+          ></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeVoid()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          class="btn-danger"
+          data-testid="lab-void-confirm"
+          (click)="executeVoid()"
+          [disabled]="voiding() || !voidReason().trim()"
+        >
+          {{ 'LAB.VOID.CONFIRM' | translate }}
         </button>
       </div>
     </div>

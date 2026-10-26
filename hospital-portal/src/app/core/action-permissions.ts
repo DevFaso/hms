@@ -29,6 +29,10 @@ export const ACTION_PERMISSIONS = {
     endpoint: 'LabOrderController#deleteLabOrder',
     roles: ['ROLE_ADMIN', 'ROLE_SUPER_ADMIN'],
   },
+  labOrderVoid: {
+    endpoint: 'LabOrderController#voidLabOrder',
+    roles: ['ROLE_LAB_MANAGER', 'ROLE_LAB_DIRECTOR', 'ROLE_SUPER_ADMIN'],
+  },
   labResultDelete: {
     endpoint: 'LabResultController#deleteLabResult',
     roles: ['ROLE_HOSPITAL_ADMIN', 'ROLE_LAB_MANAGER', 'ROLE_LAB_SCIENTIST'],

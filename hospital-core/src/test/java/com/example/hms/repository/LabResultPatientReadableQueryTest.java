@@ -59,6 +59,7 @@ class LabResultPatientReadableQueryTest {
     @Autowired private RoleRepository roleRepository;
     @Autowired private UserRoleHospitalAssignmentRepository assignmentRepository;
     @Autowired private StaffRepository staffRepository;
+    @Autowired private jakarta.persistence.EntityManager entityManager;
 
     private final AtomicInteger sequence = new AtomicInteger();
 
@@ -343,6 +344,71 @@ class LabResultPatientReadableQueryTest {
             .extracting(LabResult::getId).contains(orderedAtB.getId());
         assertThat(labResultRepository.countUnacknowledgedCriticalForOrderingStaff(
             orderedAtB.getLabOrder().getOrderingStaff().getId(), LocalDateTime.now().minusDays(7))).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("QA D820: a result whose order was voided as entered in error loads nowhere, and is kept")
+    void voidedOrdersResultsLoadNowhere() {
+        HospitalContextHolder.setContext(HospitalContext.builder().superAdmin(true).build());
+        orderedAtB.setReleased(true);
+        orderedAtB.setCriticalNotifiedAt(LocalDateTime.now());
+        labResultRepository.saveAndFlush(orderedAtB);
+        LabOrder voided = orderedAtB.getLabOrder();
+        voided.setStatus(com.example.hms.enums.LabOrderStatus.ENTERED_IN_ERROR);
+        voided.setCancellationReason("Wrong patient");
+        labOrderRepository.saveAndFlush(voided);
+        HospitalContextHolder.clear();
+        // Nothing served from the first-level cache: every read below is SQL.
+        entityManager.clear();
+        UUID sentinel = new UUID(0L, 0L);
+        UUID voidedId = orderedAtB.getId();
+
+        assertThat(labResultRepository.findById(voidedId)).isEmpty();
+        assertThat(labResultRepository.findByLabOrder_Id(voided.getId())).isEmpty();
+        assertThat(labResultRepository.existsByLabOrder_Id(voided.getId())).isFalse();
+        // The patient portal's and the chart's reads.
+        assertThat(labResultRepository.findPatientResultsReadableAt(patient.getId(),
+            Set.of(hospitalB.getId()), hospitalB.getId(), false, Pageable.unpaged()))
+            .extracting(LabResult::getId)
+            .containsExactlyInAnyOrder(performedAtBForA.getId(), otherTestAtB.getId());
+        assertThat(labResultRepository.findAllPatientResults(patient.getId(), PageRequest.of(0, 20, NEWEST_FIRST)))
+            .extracting(LabResult::getId).doesNotContain(voidedId).hasSize(4);
+        // The staff lists, the hospital-wide read and the critical tile.
+        assertThat(labResultRepository.findHandledByHospitalForReader(hospitalB.getId(), false, true, sentinel,
+            true, sentinel, Pageable.unpaged()).getContent()).extracting(LabResult::getId).doesNotContain(voidedId);
+        assertThat(labResultRepository.findAllForReader(false, true, sentinel, false, voided.getId(),
+            Pageable.unpaged()).getContent()).isEmpty();
+        // The released-only read a non-laboratory reader gets: the voided row was
+        // the patient's only released result.
+        assertThat(labResultRepository.findAllForReader(true, false, patient.getId(), true, sentinel,
+            Pageable.unpaged()).getContent()).isEmpty();
+        assertThat(labResultRepository.findHandledByHospitals(List.of(hospitalB.getId())))
+            .extracting(LabResult::getId).doesNotContain(voidedId);
+        assertThat(labResultRepository.countUnacknowledgedCriticalForOrderingStaff(
+            voided.getOrderingStaff().getId(), LocalDateTime.now().minusDays(7))).isZero();
+        // The order itself still loads, with its status and reason.
+        LabOrder reloaded = labOrderRepository.findById(voided.getId()).orElseThrow();
+        assertThat(reloaded.getStatus()).isEqualTo(com.example.hms.enums.LabOrderStatus.ENTERED_IN_ERROR);
+        assertThat(reloaded.getCancellationReason()).isEqualTo("Wrong patient");
+        // And the row is kept: voiding is never a delete.
+        Number kept = (Number) entityManager.createNativeQuery(
+                "SELECT COUNT(*) FROM lab.lab_results WHERE id = :id")
+            .setParameter("id", voidedId).getSingleResult();
+        assertThat(kept.longValue()).isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("QA D820: a cancelled order's results still load, as before; only a void hides them")
+    void cancelledOrdersResultsStillLoad() {
+        HospitalContextHolder.setContext(HospitalContext.builder().superAdmin(true).build());
+        LabOrder cancelled = orderedAtB.getLabOrder();
+        cancelled.setStatus(com.example.hms.enums.LabOrderStatus.CANCELLED);
+        labOrderRepository.saveAndFlush(cancelled);
+        HospitalContextHolder.clear();
+        entityManager.clear();
+
+        assertThat(labResultRepository.findById(orderedAtB.getId())).isPresent();
+        assertThat(labResultRepository.findByLabOrder_Id(cancelled.getId())).hasSize(1);
     }
 
     @Test

@@ -205,6 +205,16 @@ class MicroCultureServiceImplTest {
             .hasMessageContaining("cancelled");
     }
 
+    @Test
+    void createRefusesAnOrderVoidedAsEnteredInError() {
+        // QA D820.
+        order.setStatus(LabOrderStatus.ENTERED_IN_ERROR);
+        MicroCultureRequestDTO request = MicroCultureRequestDTO.builder().labOrderId(orderId).build();
+
+        assertThatThrownBy(() -> service.createCulture(hospitalId, null, request))
+            .isInstanceOf(BusinessException.class);
+    }
+
     /* ── lifecycle ─────────────────────────────────────────────────────── */
 
     @Test

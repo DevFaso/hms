@@ -91,6 +91,10 @@ public class MicroCultureServiceImpl implements MicroCultureService {
         if (order.getStatus() == LabOrderStatus.CANCELLED) {
             throw new BusinessException("A cancelled lab order cannot receive a culture report.");
         }
+        // QA D820: nor can one voided as entered in error.
+        if (order.getStatus() == LabOrderStatus.ENTERED_IN_ERROR) {
+            throw new BusinessException("lab.order.enteredInError");
+        }
         Patient patient = order.getPatient();
         if (patient == null) {
             throw new BusinessException("The lab order has no patient attached.");

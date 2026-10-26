@@ -204,6 +204,11 @@ public class LabResultServiceImpl implements LabResultService {
         LabOrder labOrder = labOrderRepository.findById(request.getLabOrderId())
                 .orElseThrow(() -> new ResourceNotFoundException(LAB_ORDER_NOT_FOUND));
         boolean unscopedIngest = requireOrderReachable(labOrder, ingested, senderHospitalId);
+        // QA D820: an order voided as entered in error takes no result: it
+        // would be saved and then never load (LabResult's restriction).
+        if (labOrder.getStatus() == LabOrderStatus.ENTERED_IN_ERROR) {
+            throw new BusinessException("lab.order.enteredInError");
+        }
 
         Hospital hospital = extractHospitalFromLabOrder(labOrder);
         // requireActiveHospitalId THROWS when nothing resolves, which is an
@@ -496,8 +501,8 @@ public class LabResultServiceImpl implements LabResultService {
         // stale value and stranded with every result released and nothing
         // left to move it.
         LabOrderStatus committedStatus = labOrderRepository.findStatusById(orderId);
-        if (committedStatus == LabOrderStatus.CANCELLED) {
-            LOG.debug("Lab order {} was cancelled while its result was being released; not completing",
+        if (committedStatus == LabOrderStatus.CANCELLED || committedStatus == LabOrderStatus.ENTERED_IN_ERROR) {
+            LOG.debug("Lab order {} was cancelled or voided while its result was being released; not completing",
                 orderId);
             return;
         }

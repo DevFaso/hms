@@ -60,11 +60,15 @@ class RefillControlledResolverGuardTest {
             assertThat(in).isNotNull();
             p.load(new InputStreamReader(in, StandardCharsets.UTF_8));
         }
-        for (String k : List.of("notRefillable", "onHold", "alreadyPending", "approveNotRefillable")) {
+        for (String k : List.of("notRefillable", "controlled", "onHold", "alreadyPending",
+                "approveNotRefillable")) {
             assertThat(p.getProperty("patient.refill." + k)).as(bundle + " " + k).isNotBlank();
         }
         if (bundle.contains("_fr")) {
             assertThat(p.getProperty("patient.refill.alreadyPending")).contains("renouvellement");
+            // QA D813: the controlled refusal names the reason, not "no renewals left".
+            assertThat(p.getProperty("patient.refill.controlled")).contains("contrôlé")
+                .doesNotContain("plus être renouvelée");
         }
     }
 

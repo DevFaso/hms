@@ -48,7 +48,9 @@
               <span class="badge badge-danger">{{ 'ADMIN_GOV.STRICT' | translate }}</span>
             }
           </div>
-          <div class="policy-org">{{ policy.organizationName || policy.organizationId }}</div>
+          <div class="policy-org">
+            {{ (policy.organizationName | orgText) || policy.organizationId }}
+          </div>
           <div class="actions-cell">
             <button
               type="button"
@@ -208,7 +210,7 @@
             <select [ngModel]="pOrganizationId()" (ngModelChange)="pOrganizationId.set($event)">
               <option value="">—</option>
               @for (org of organizations(); track org.id) {
-                <option [value]="org.id">{{ org.name }}</option>
+                <option [value]="org.id">{{ org.name | orgText: org.code }}</option>
               }
             </select>
           </label>

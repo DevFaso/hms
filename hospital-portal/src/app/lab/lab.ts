@@ -73,6 +73,13 @@ export class LabComponent implements OnInit {
   readonly canDeleteOrder = computed(() =>
     this.roleContext.hasAnyActiveRole(actionRoles('labOrderDelete')),
   );
+  /**
+   * QA D820: a COMPLETED order had no way out but an admin DELETE. The lab
+   * manager or director (or a super-admin) voids it as entered in error.
+   */
+  readonly canVoidOrder = computed(() =>
+    this.roleContext.hasAnyActiveRole(actionRoles('labOrderVoid')),
+  );
 
   /**
    * Everything the laboratory still owes: from the order being placed,
@@ -121,6 +128,11 @@ export class LabComponent implements OnInit {
   saving = signal(false);
   editingId = signal<string | null>(null);
   form: LabOrderRequest = this.emptyForm();
+
+  // QA D820: void (entered in error)
+  voidingOrder = signal<LabOrderResponse | null>(null);
+  voidReason = signal('');
+  voiding = signal(false);
 
   showDeleteConfirm = signal(false);
   deletingOrder = signal<LabOrderResponse | null>(null);
@@ -448,6 +460,45 @@ export class LabComponent implements OnInit {
     });
   }
 
+  /** QA D820: offered on this hospital's own orders, until one is voided. */
+  isVoidable(o: LabOrderResponse): boolean {
+    return !this.isIncomingExternal(o) && o.status !== 'ENTERED_IN_ERROR';
+  }
+
+  openVoid(o: LabOrderResponse): void {
+    this.voidReason.set('');
+    this.voidingOrder.set(o);
+  }
+
+  closeVoid(): void {
+    this.voidingOrder.set(null);
+    this.voidReason.set('');
+  }
+
+  onVoidReasonInput(event: Event): void {
+    this.voidReason.set((event.target as HTMLTextAreaElement).value);
+  }
+
+  executeVoid(): void {
+    const order = this.voidingOrder();
+    const reason = this.voidReason().trim();
+    if (!order || !reason) return;
+    this.voiding.set(true);
+    this.labService.voidOrder(order.id, reason).subscribe({
+      next: () => {
+        this.toast.success(this.translate.instant('LAB.VOID.DONE'));
+        this.voiding.set(false);
+        this.closeVoid();
+        this.loadOrders();
+      },
+      error: (err: { error?: { message?: string } }) => {
+        // The server's refusal is written for the reader (localised).
+        this.toast.error(err?.error?.message ?? this.translate.instant('LAB.VOID.FAILED'));
+        this.voiding.set(false);
+      },
+    });
+  }
+
   confirmDelete(o: LabOrderResponse): void {
     this.deletingOrder.set(o);
     this.showDeleteConfirm.set(true);
@@ -554,6 +605,7 @@ export class LabComponent implements OnInit {
       case 'ORDERED':
         return 'status-badge status-pending';
       case 'CANCELLED':
+      case 'ENTERED_IN_ERROR':
         return 'status-badge status-cancelled';
       default:
         return 'status-badge';

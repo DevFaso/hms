@@ -269,8 +269,23 @@ class PatientMedicationServiceImplTest {
         when(controlledResolver.isControlled(p)).thenReturn(true);
         stubMedicationsFor(p);
 
-        assertThat(service.getMedicationsForPatient(patientId, hospitalId, 10).get(0).isRefillable())
-                .isFalse();
+        PatientMedicationResponseDTO dto = service.getMedicationsForPatient(patientId, hospitalId, 10).get(0);
+        assertThat(dto.isRefillable()).isFalse();
+        // QA D813: the row names the same reason the refill request is refused with.
+        assertThat(dto.getRefillBlockedReason()).isEqualTo("CONTROLLED");
+    }
+
+    @Test
+    void qaD813_rowSaysWhyARefillIsBlocked() {
+        Prescription refillable = refillablePrescription();
+        stubMedicationsFor(refillable);
+        assertThat(service.getMedicationsForPatient(patientId, hospitalId, 10).get(0).getRefillBlockedReason())
+                .isNull();
+
+        refillable.setStatus(com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
+        PatientMedicationResponseDTO dto = service.getMedicationsForPatient(patientId, hospitalId, 10).get(0);
+        assertThat(dto.isRefillable()).isFalse();
+        assertThat(dto.getRefillBlockedReason()).isEqualTo("NOT_REFILLABLE");
     }
 
     @Test

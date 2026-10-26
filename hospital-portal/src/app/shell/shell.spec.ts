@@ -1057,7 +1057,12 @@ describe('ShellComponent — onNavKeydown (row 11 keyboard reorder)', () => {
  * with a live badge AND a redundant nav row that carried no count.
  */
 describe('ShellComponent — inbox surfaces live in the topbar', () => {
-  function build(roles: string[], activeRole: string, providerUser = false) {
+  function build(
+    roles: string[],
+    activeRole: string,
+    providerUser = false,
+    profile: { firstName: string; lastName: string; roles: string[] } | null = null,
+  ) {
     // Same shape as the harness above: ngOnInit calls getUserProfile, so a
     // partial stub blows up on the first detectChanges.
     const authStub = jasmine.createSpyObj<AuthService>('AuthService', [
@@ -1070,7 +1075,7 @@ describe('ShellComponent — inbox surfaces live in the topbar', () => {
     authStub.hasAnyRole.and.callFake((rs: string[]) => rs.some((r) => roles.includes(r)));
     // null subject skips the websocket branch in ngOnInit.
     authStub.getSubject.and.returnValue(null);
-    Object.defineProperty(authStub, 'currentProfile', { value: () => null });
+    Object.defineProperty(authStub, 'currentProfile', { value: () => profile });
 
     // Unlike the harness above, these tests DO run ngOnInit (they assert on
     // rendered DOM), so the stub also needs what ngOnInit calls.
@@ -1078,6 +1083,7 @@ describe('ShellComponent — inbox surfaces live in the topbar', () => {
       hasPermission: () => true,
       hasAnyPermission: () => true,
       loadFromBackend: () => undefined,
+      clear: () => undefined,
     };
     const notifStub = jasmine.createSpyObj<NotificationService>('NotificationService', [
       'connectWebSocket',
@@ -1256,6 +1262,112 @@ describe('ShellComponent — inbox surfaces live in the topbar', () => {
       b.textContent?.trim(),
     );
     expect(badges).toContain('99+');
+  });
+
+  /**
+   * D812: at 375px the topbar was 736px wide, so the profile button (and
+   * with it the only sign-out) sat off-screen while the PAGE did not
+   * overflow, which is why a page-width check missed it. These measure the
+   * topbar itself. The topbar compacts by its own width (container queries),
+   * so constraining the shell to a phone's width here exercises the same CSS
+   * a phone does; the phone's drawer is fixed and out of flow (a viewport
+   * media query a desktop test browser does not match), so it is taken out
+   * of flow the same way.
+   */
+  // The test browser has no Material Symbols font, so every icon would
+  // render as its ligature text ("notifications" is ~90px wide). The real
+  // font draws each one as a 1em square; mimic that so widths are real.
+  let iconFont: HTMLStyleElement | null = null;
+  beforeEach(() => {
+    iconFont = document.createElement('style');
+    iconFont.textContent =
+      '.material-symbols-outlined{display:inline-block;width:1em;overflow:hidden;' +
+      'white-space:nowrap;font-size:24px;line-height:1}';
+    document.head.appendChild(iconFont);
+  });
+  afterEach(() => iconFont?.remove());
+
+  function renderAtWidth(width: number, roles: string[], activeRole: string): HTMLElement {
+    const fixture = build(roles, activeRole, false, {
+      firstName: 'Habibou',
+      lastName: 'Nana-Ouedraogo',
+      roles,
+    });
+    fixture.detectChanges();
+    // The drawer open, as when a phone user taps the hamburger.
+    fixture.componentInstance.sidebarCollapsed.set(false);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    host.style.display = 'block';
+    host.style.width = `${width}px`;
+    (host.querySelector('.sidebar') as HTMLElement).style.position = 'fixed';
+    return host;
+  }
+
+  function expectTopbarFits(host: HTMLElement, width: number): void {
+    const topbar = host.querySelector('header.topbar') as HTMLElement;
+    const bar = topbar.getBoundingClientRect();
+    expect(Math.round(bar.width)).withContext('topbar width').toBe(width);
+    expect(topbar.scrollWidth)
+      .withContext('topbar scrollWidth')
+      .toBeLessThanOrEqual(topbar.clientWidth);
+    for (const selector of ['.mobile-toggle', '.icon-btn', '.profile-btn']) {
+      for (const el of Array.from(topbar.querySelectorAll(selector))) {
+        const box = el.getBoundingClientRect();
+        if (box.width === 0) continue; // display:none at this width
+        expect(box.left).withContext(`${selector} left`).toBeGreaterThanOrEqual(bar.left);
+        expect(box.right).withContext(`${selector} right`).toBeLessThanOrEqual(bar.right);
+      }
+    }
+    const profile = topbar.querySelector('.profile-btn')!.getBoundingClientRect();
+    expect(profile.width).withContext('profile button rendered').toBeGreaterThan(0);
+  }
+
+  for (const [role, label] of [
+    ['ROLE_PATIENT', 'a patient'],
+    ['ROLE_DOCTOR', 'a doctor'],
+  ] as const) {
+    it(`keeps the profile menu on screen at 375px for ${label}, with a language picker (D812)`, () => {
+      const host = renderAtWidth(375, [role], role);
+      expectTopbarFits(host, 375);
+      const select = host.querySelector('.lang-select') as HTMLSelectElement;
+      expect(getComputedStyle(select).display).not.toBe('none');
+      expect(getComputedStyle(host.querySelector('.lang-switcher')!).display).toBe('none');
+    });
+  }
+
+  it('fits at 320px too, the narrowest phone still in use (D812)', () => {
+    expectTopbarFits(renderAtWidth(320, ['ROLE_PATIENT'], 'ROLE_PATIENT'), 320);
+  });
+
+  it('keeps the wide topbar (button group, name) on a desktop (D812)', () => {
+    const host = renderAtWidth(1280, ['ROLE_DOCTOR'], 'ROLE_DOCTOR');
+    expectTopbarFits(host, 1280);
+    expect(getComputedStyle(host.querySelector('.lang-select')!).display).toBe('none');
+    expect(getComputedStyle(host.querySelector('.lang-switcher')!).display).not.toBe('none');
+    expect(getComputedStyle(host.querySelector('.profile-name')!).display).not.toBe('none');
+  });
+
+  it('switches the language from the narrow picker (D812)', () => {
+    const fixture = build(['ROLE_PATIENT'], 'ROLE_PATIENT');
+    fixture.detectChanges();
+    const switchLang = spyOn(fixture.componentInstance, 'switchLang');
+    const select = (fixture.nativeElement as HTMLElement).querySelector(
+      '.lang-select',
+    ) as HTMLSelectElement;
+    select.value = 'es';
+    select.dispatchEvent(new Event('change'));
+    expect(switchLang).toHaveBeenCalledOnceWith('es');
+  });
+
+  it('offers sign-out in the drawer, the only menu on a phone (D812)', () => {
+    const host = renderAtWidth(375, ['ROLE_PATIENT'], 'ROLE_PATIENT');
+    const logout = host.querySelector(
+      '.sidebar [data-testid="sidebar-logout"]',
+    ) as HTMLButtonElement;
+    expect(logout).withContext('drawer sign-out').not.toBeNull();
+    logout.click();
+    expect((TestBed.inject(AuthService) as jasmine.SpyObj<AuthService>).logout).toHaveBeenCalled();
   });
 
   it('hides the badge at zero rather than rendering a 0', () => {

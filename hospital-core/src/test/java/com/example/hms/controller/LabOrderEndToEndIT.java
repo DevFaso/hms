@@ -612,6 +612,81 @@ class LabOrderEndToEndIT extends BaseIT {
     }
 
     @Test
+    @DisplayName("QA D820: a COMPLETED order is voided as entered in error, audited, its result hidden and kept")
+    void aCompletedOrderIsVoidedNotDeleted() throws Exception {
+        // The QA order LAB-000035: resulted, released, COMPLETED.
+        UUID orderId = placeOrder(LocalDateTime.now().minusHours(2));
+        collectSpecimen(orderId);
+        UUID resultId = postResult(scientist, orderId, NORMAL_VALUE).andExpect(status().isCreated())
+            .andReturn().getResponse().getContentAsString().transform(this::idOf);
+        releaseAs(director, resultId);
+        assertThat(orderStatus(orderId)).isEqualTo(LabOrderStatus.COMPLETED);
+
+        // The QA attempt: a cancel of a COMPLETED order is still refused.
+        mockMvc.perform(post(LAB_ORDERS + "/{id}/transition", orderId).contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"status\":\"CANCELLED\",\"reason\":\"Mauvais patient\"}")
+                .with(signedInAs(director)).with(csrf()))
+            .andExpect(status().isBadRequest());
+
+        // The ordering doctor does not void (the annotation), and nobody voids without a reason.
+        mockMvc.perform(post(LAB_ORDERS + "/{id}/void", orderId).contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"reason\":\"Mauvais patient\"}")
+                .with(signedInAs(doctor)).with(csrf()))
+            .andExpect(status().isForbidden());
+        mockMvc.perform(post(LAB_ORDERS + "/{id}/void", orderId).contextPath(API)
+                .header("Accept-Language", "fr")
+                .contentType(MediaType.APPLICATION_JSON).content("{}")
+                .with(signedInAs(director)).with(csrf()))
+            .andExpect(status().isBadRequest())
+            .andExpect(content().string(org.hamcrest.Matchers.containsString("Un motif est requis")));
+        assertThat(orderStatus(orderId)).isEqualTo(LabOrderStatus.COMPLETED);
+
+        mockMvc.perform(post(LAB_ORDERS + "/{id}/void", orderId).contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"reason\":\"Doublon : mauvais dossier patient\"}")
+                .with(signedInAs(director)).with(csrf()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.status").value("ENTERED_IN_ERROR"))
+            .andExpect(jsonPath("$.data.cancellationReason").value("Doublon : mauvais dossier patient"));
+        assertThat(orderStatus(orderId)).isEqualTo(LabOrderStatus.ENTERED_IN_ERROR);
+
+        // Audited as its own event, naming the order and the patient.
+        assertThat(applicationContext.getBean(com.example.hms.repository.AuditEventLogRepository.class).findAll())
+            .anyMatch(row -> row.getEventType() == com.example.hms.enums.AuditEventType.LAB_ORDER_ENTERED_IN_ERROR
+                && orderId.toString().equals(row.getResourceId())
+                && patient.getId().equals(row.getPatientId()));
+
+        // Hidden from the clinical views: the result, the order's result list, the review queue.
+        mockMvc.perform(get(LAB_RESULTS + "/{id}", resultId).contextPath(API).with(signedInAs(doctor)))
+            .andExpect(status().isNotFound());
+        mockMvc.perform(get(LAB_RESULTS).contextPath(API).param("labOrderId", orderId.toString())
+                .with(signedInAs(director)))
+            .andExpect(status().isOk())
+            .andExpect(content().string(org.hamcrest.Matchers.not(
+                org.hamcrest.Matchers.containsString(resultId.toString()))));
+        mockMvc.perform(get(REVIEW_QUEUE).contextPath(API).with(signedInAs(doctor)))
+            .andExpect(status().isOk())
+            .andExpect(content().string(org.hamcrest.Matchers.not(
+                org.hamcrest.Matchers.containsString(resultId.toString()))));
+
+        // Kept, never deleted.
+        org.springframework.jdbc.core.JdbcTemplate jdbc =
+            applicationContext.getBean(org.springframework.jdbc.core.JdbcTemplate.class);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM lab.lab_results WHERE id = ?", Long.class, resultId))
+            .isEqualTo(1L);
+
+        // A voided order takes no new result, and is not voided twice.
+        postResult(scientist, orderId, NORMAL_VALUE).andExpect(status().isBadRequest());
+        mockMvc.perform(post(LAB_ORDERS + "/{id}/void", orderId).contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"reason\":\"encore\"}")
+                .with(signedInAs(director)).with(csrf()))
+            .andExpect(status().isBadRequest());
+        assertThat(jdbc.queryForObject("SELECT cancellation_reason FROM lab.lab_orders WHERE id = ?",
+            String.class, orderId)).isEqualTo("Doublon : mauvais dossier patient");
+    }
+
+    @Test
     @DisplayName("QA D649: a specimen collected in the future is refused")
     void futureCollectionIsRefused() throws Exception {
         UUID orderId = placeOrder(LocalDateTime.now().minusHours(1));

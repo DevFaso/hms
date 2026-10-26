@@ -52,6 +52,12 @@ public class PatientMedicationResponseDTO {
             + "False once it is cancelled, discontinued, or was never signed.")
     private boolean refillable;
 
+    @Schema(description = "Why refillable is false: CONTROLLED (a controlled medicine, never renewed "
+            + "from the portal) or NOT_REFILLABLE (cancelled, discontinued, never signed or no renewals "
+            + "left). Null while it is refillable. QA D813: the portal named a controlled medicine's "
+            + "refusal as an exhausted prescription.")
+    private String refillBlockedReason;
+
     @Schema(description = "Where the patient's most recent refill request stands: "
             + "REQUESTED, PAUSED, APPROVED, DENIED, DISPENSED or CANCELLED. "
             + "Null when they have never asked for one.")

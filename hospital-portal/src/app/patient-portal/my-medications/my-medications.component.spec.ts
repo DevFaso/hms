@@ -2,8 +2,13 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 import { MyMedicationsComponent } from './my-medications.component';
-import { PatientPortalService, MedicationSummary } from '../../services/patient-portal.service';
+import {
+  PatientPortalService,
+  MedicationRefill,
+  MedicationSummary,
+} from '../../services/patient-portal.service';
 import { ToastService } from '../../core/toast.service';
+import fr from '../../../assets/i18n/fr.json';
 
 describe('MyMedicationsComponent', () => {
   let component: MyMedicationsComponent;
@@ -111,7 +116,7 @@ describe('MyMedicationsComponent — refill visibility', () => {
     };
   }
 
-  async function render(m: MedicationSummary) {
+  async function render(m: MedicationSummary, refills: MedicationRefill[] = []) {
     requestRefill = jasmine.createSpy('requestRefill').and.returnValue(of({ id: 'rf-1' }));
     toast = { success: jasmine.createSpy('success'), error: jasmine.createSpy('error') };
 
@@ -123,7 +128,7 @@ describe('MyMedicationsComponent — refill visibility', () => {
           useValue: {
             getMyMedications: () => of([m]),
             getMyPrescriptions: () => of([]),
-            getMyRefills: () => of([]),
+            getMyRefills: () => of(refills),
             requestRefill,
           },
         },
@@ -234,6 +239,70 @@ describe('MyMedicationsComponent — refill visibility', () => {
 
     expect(toast.error).toHaveBeenCalledWith('You already have a refill request awaiting review');
   });
+
+  function useFrench(): void {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', fr);
+    translate.use('fr');
+    fixture.detectChanges();
+  }
+
+  it('QA D813: names a controlled medicine as controlled, not as out of renewals', async () => {
+    await render(
+      med({ medicationName: 'Morphine', refillable: false, refillBlockedReason: 'CONTROLLED' }),
+    );
+    useFrench();
+    const text = (
+      fixture.nativeElement.querySelector('[data-testid="med-not-refillable-rx-1"]') as HTMLElement
+    ).textContent!;
+    expect(text).toContain(fr.PORTAL.MEDICATIONS.NOT_REFILLABLE_CONTROLLED);
+    expect(text).toContain('contrôlé');
+    expect(text).not.toContain('plus être renouvelée');
+  });
+
+  it('QA D813: an exhausted prescription keeps the no-renewals wording, worded as the API is', async () => {
+    await render(med({ refillable: false, refillBlockedReason: 'NOT_REFILLABLE' }));
+    useFrench();
+    const text = (
+      fixture.nativeElement.querySelector('[data-testid="med-not-refillable-rx-1"]') as HTMLElement
+    ).textContent!;
+    // The same sentence as patient.refill.notRefillable in messages-patient_fr.properties.
+    expect(text).toContain(
+      'Cette ordonnance ne peut plus être renouvelée. Contactez votre équipe soignante pour une nouvelle ordonnance.',
+    );
+  });
+
+  for (const status of [
+    'REQUESTED',
+    'PAUSED',
+    'APPROVED',
+    'DENIED',
+    'DISPENSED',
+    'CANCELLED',
+  ] as const) {
+    it(`QA D816: the row and the history name a ${status} request the same way`, async () => {
+      await render(med({ refillRequestStatus: status, refillRequestOpen: false }), [
+        {
+          id: 'rf-1',
+          prescriptionId: 'rx-1',
+          medicationName: 'Metformin 500mg',
+          preferredPharmacy: '',
+          status,
+          requestedAt: '2026-10-25T10:00:00',
+          updatedAt: null,
+          notes: '',
+        },
+      ]);
+      useFrench();
+      const host = fixture.nativeElement as HTMLElement;
+      const row = host.querySelector('[data-testid="med-refill-status-rx-1"]')!.textContent!.trim();
+      const history = host
+        .querySelector('[data-testid="refill-history-status-rf-1"]')!
+        .textContent!.trim();
+      expect(history).toBe(row);
+      expect(history).toBe((fr.REFILLS as Record<string, string>)[`STATUS_${status}`]);
+    });
+  }
 
   it('styles approved, denied and held decisions distinctly', async () => {
     await render(med());

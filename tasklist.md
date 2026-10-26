@@ -2205,6 +2205,15 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 
 ## Standing platform debt — owed, not parity
 
+- **QA D813 (round 13): the native apps do not read why a refill is blocked.**
+  The portal now names a controlled medicine's refusal as controlled, on the
+  row (`refillBlockedReason` on `GET /me/patient/medications`) and in the
+  refill refusal (`patient.refill.controlled`), in the same words
+  (`fix/qa-r13-portal-admin`). The Android and iOS apps decode neither
+  `refillable` nor `refillBlockedReason`: they still offer the refill on a
+  controlled medicine and show the server's refusal, which now names the right
+  reason. Owed: decode the field and say it on the row. Deferred because it
+  is a change to both store apps and their release, not to the portal.
 - **QA D793/D799 (round 12): an administration-time allergy acknowledgement.**
   The beta-lactam cross-reactivity advisory now shows at prescribing, on
   every edit, at the signature, on the eMAR row (queue chip, a card before

@@ -207,7 +207,7 @@
           (ngModelChange)="selectOrg($event)"
         >
           @for (org of organizations(); track org.id) {
-            <option [value]="org.id">{{ org.name }}</option>
+            <option [value]="org.id">{{ org.name | orgText: org.code }}</option>
           }
         </select>
       </div>

@@ -120,6 +120,24 @@ class LabSpecimenServiceImplTest {
         verify(labSpecimenRepository, never()).save(any());
     }
 
+    /** QA D820: an order voided as entered in error takes no specimen. */
+    @Test
+    void createSpecimen_onAVoidedOrder_isRefused() {
+        labOrder.setStatus(LabOrderStatus.ENTERED_IN_ERROR);
+        LabSpecimenRequestDTO request = LabSpecimenRequestDTO.builder()
+            .labOrderId(labOrderId)
+            .specimenType("BLOOD")
+            .build();
+        when(labOrderRepository.findById(labOrderId)).thenReturn(Optional.of(labOrder));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        assertThatThrownBy(() -> service.createSpecimen(request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .satisfies(e -> assertThat(((BusinessException) e).getMessageKey())
+                .isEqualTo("lab.order.enteredInError"));
+        verify(labSpecimenRepository, never()).save(any());
+    }
+
     @Test
     void createSpecimen_noLabOrderId_throwsBusinessException() {
         LabSpecimenRequestDTO request = LabSpecimenRequestDTO.builder().build(); // labOrderId is null

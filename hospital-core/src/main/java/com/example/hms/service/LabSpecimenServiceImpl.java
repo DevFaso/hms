@@ -54,6 +54,10 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
         if (!labOrder.isHandledBy(roleValidator.requireActiveHospitalId())) {
             throw new ResourceNotFoundException("laborder.notfound");
         }
+        // QA D820: an order voided as entered in error takes nothing further.
+        if (labOrder.getStatus() == LabOrderStatus.ENTERED_IN_ERROR) {
+            throw new BusinessException("lab.order.enteredInError");
+        }
 
         // QA D637: a specimen cannot be collected before the test was ordered
         // (a few minutes of clock skew between devices are tolerated).

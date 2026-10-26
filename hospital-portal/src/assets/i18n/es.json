@@ -2601,7 +2601,7 @@
     "PROVINCE_PLACEHOLDER": "ej. Kadiogo",
     "REGION": "Región",
     "REGION_PLACEHOLDER": "ej. Centre, Île-de-France",
-    "REQUIRED_FIELDS": "El nombre, la ciudad, el país, el teléfono y una dirección o un apartado postal son obligatorios.",
+    "REQUIRED_FIELDS": "El nombre, el teléfono, el país, la ciudad y la dirección (calle) son obligatorios.",
     "ADDRESS_OR_PO_BOX_HINT": "La dirección (calle) es obligatoria; el apartado postal es opcional.",
     "SEARCH_PLACEHOLDER": "Buscar hospitales…",
     "SECTOR": "Sector / Barrio",
@@ -2897,6 +2897,17 @@
       "PENDING_QA_REVIEW": "Pendiente de revisión de calidad",
       "REJECTED": "Rechazada",
       "RETIRED": "Retirada"
+    },
+    "CANCELLATION_REASON": "Motivo de cancelación",
+    "VOID": {
+      "ACTION": "Marcar como registrada por error",
+      "TITLE": "Marcar esta orden como registrada por error",
+      "EXPLAIN": "Úselo cuando la orden se creó por error (paciente equivocado, prueba equivocada). La orden y sus resultados se conservan, pero sus resultados ya no aparecerán en ninguna vista clínica. Orden:",
+      "REASON": "Motivo del error",
+      "REASON_PLACEHOLDER": "ej. Orden creada para el paciente equivocado",
+      "CONFIRM": "Marcar como registrada por error",
+      "DONE": "La orden está marcada como registrada por error.",
+      "FAILED": "No se pudo marcar la orden como registrada por error."
     }
   },
   "LAB_STAFF": {
@@ -3916,7 +3927,9 @@
     "TITLE": "Organizaciones",
     "TYPE": "Tipo",
     "TYPE_REQUIRED": "Elija un tipo de organización.",
-    "UPDATED": "Organización actualizada"
+    "UPDATED": "Organización actualizada",
+    "DEFAULT_ORG_NAME": "Organización sanitaria predeterminada",
+    "DEFAULT_ORG_DESCRIPTION": "Organización predeterminada para los hospitales sin una organización asignada"
   },
   "PANEL": {
     "TITLE": "Gestión de paneles",
@@ -4632,9 +4645,10 @@
       "REFILL_HISTORY": "Historial de renovaciones",
       "REQUESTED": "Solicitado",
       "COMPLETED": "Completado",
-      "NOT_REFILLABLE": "Esta receta ya no puede renovarse — solicite una nueva a su equipo de atención.",
+      "NOT_REFILLABLE": "Esta receta ya no se puede renovar. Póngase en contacto con su equipo de atención para obtener una nueva receta.",
       "READY_AT": "Lista para recoger en {{pharmacy}}",
-      "READY_SINCE": "Desde el {{date}}"
+      "READY_SINCE": "Desde el {{date}}",
+      "NOT_REFILLABLE_CONTROLLED": "Este es un medicamento controlado: no se puede renovar desde el portal. Póngase en contacto con su equipo de atención para obtener una nueva receta."
     },
     "LAB_RESULTS": {
       "TITLE": "Resultados de pruebas",
@@ -4707,8 +4721,9 @@
       "PAYMENT_PENDING_NOTE": "Los pagos declarados aquí los confirma el hospital antes de que cambie su saldo.",
       "PENDING_DECLARED": "Ya declarado, pendiente de confirmación",
       "LEFT_TO_DECLARE": "Queda por declarar",
-      "AMOUNT_EXCEEDS_PENDING": "Puede declarar como máximo {{max}} F CFA: {{pending}} F CFA ya declarados están pendientes de confirmación.",
-      "CREDITED_TO": "Abonado en la factura {{number}}"
+      "AMOUNT_EXCEEDS_PENDING": "Puede declarar como máximo {{max}}: {{pending}} ya declarados están pendientes de confirmación.",
+      "CREDITED_TO": "Abonado en la factura {{number}}",
+      "FULLY_DECLARED": "Saldo declarado, pendiente de confirmación por la caja"
     },
     "CARE_TEAM": {
       "TITLE": "Mi equipo de atención",
@@ -5262,7 +5277,8 @@
         "PENDING": "Pendiente",
         "RECEIVED": "Recibido",
         "RESULTED": "Con resultados",
-        "VERIFIED": "Verificado"
+        "VERIFIED": "Verificado",
+        "ENTERED_IN_ERROR": "Registrada por error"
       },
       "ABNORMAL_FLAG": {
         "ABNORMAL": "Anormal",
@@ -5565,7 +5581,8 @@
         "PRESCRIPTION_QUEUE_CLAIM_EXPIRED": "Asignación caducada",
         "USER_RESTORE": "Usuario restaurado",
         "LAB_ORDER_CANCELLED": "Orden de laboratorio cancelada",
-        "LAB_RESULT_SELF_RELEASED": "Resultado de laboratorio autovalidado"
+        "LAB_RESULT_SELF_RELEASED": "Resultado de laboratorio autovalidado",
+        "LAB_ORDER_ENTERED_IN_ERROR": "Orden de laboratorio registrada por error"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelada",
@@ -7351,7 +7368,8 @@
     "PRIMARY_NAV_ARIA": "Navegación principal",
     "SETTINGS": "Configuración",
     "SIGN_OUT": "Cerrar Sesión",
-    "TOGGLE_SIDEBAR": "Alternar barra lateral"
+    "TOGGLE_SIDEBAR": "Alternar barra lateral",
+    "LANGUAGE": "Idioma"
   },
   "SIGNATURES": {
     "ALGORITHM": "Algoritmo",

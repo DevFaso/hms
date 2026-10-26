@@ -107,3 +107,32 @@ describe('StaffListComponent — one hospital-admin job title (QA D541)', () => 
     expect(component.filtered().map((s) => s.id)).toEqual(['1', '2']);
   });
 });
+
+/** QA D818: a new staff member is never placed at an archived hospital. */
+describe('StaffListComponent — no archived hospital for a new placement (QA D818)', () => {
+  it('offers open hospitals, and an edited member keeps their own closed one', () => {
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: StaffService, useValue: { list: () => of([]) } },
+        { provide: HospitalService, useValue: {} },
+        { provide: UserService, useValue: {} },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj('ToastService', ['success', 'error']),
+        },
+        { provide: RoleContextService, useValue: {} },
+        { provide: PermissionService, useValue: { hasPermission: () => true } },
+        { provide: TranslateService, useValue: { instant: (k: string) => k } },
+      ],
+    });
+    const component = TestBed.runInInjectionContext(() => new StaffListComponent());
+    component.hospitals.set([
+      { id: 'h1', name: 'CMA Pissy', lifecycleState: 'ACTIVE' },
+      { id: 'h2', name: 'Ancien CMA', lifecycleState: 'ARCHIVED' },
+      { id: 'h3', name: 'CSPS Tanghin', lifecycleState: 'SUSPENDED' },
+    ] as never);
+    expect(component.hospitalOptions().map((h) => h.id)).toEqual(['h1', 'h3']);
+    component.editing.set({ id: 's1', hospitalName: 'Ancien CMA' } as StaffResponse);
+    expect(component.hospitalOptions().map((h) => h.id)).toEqual(['h1', 'h2', 'h3']);
+  });
+});

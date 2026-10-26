@@ -407,3 +407,46 @@ describe('UserListComponent — the Profil column is labelled (QA D528/D663)', (
     expect(cells).not.toContain('STAFF');
   });
 });
+
+/** QA D818: a new user's role is never granted at an archived hospital. */
+describe('UserListComponent — no archived hospital in the create picker (QA D818)', () => {
+  it('lists only open hospitals for a super-admin', () => {
+    const users = jasmine.createSpyObj<UserService>('UserService', ['list', 'search']);
+    users.list.and.returnValue(
+      of({ content: [], totalElements: 0, totalPages: 0, number: 0, size: 20 }) as never,
+    );
+    TestBed.configureTestingModule({
+      imports: [UserListComponent, TranslateModule.forRoot()],
+      providers: [
+        provideRouter([]),
+        { provide: UserService, useValue: users },
+        { provide: RoleService, useValue: { list: () => of([]) } },
+        {
+          provide: HospitalService,
+          useValue: {
+            list: () =>
+              of([
+                { id: 'h1', name: 'CMA Pissy', lifecycleState: 'ACTIVE' },
+                { id: 'h2', name: 'Ancien CMA', lifecycleState: 'ARCHIVED' },
+                { id: 'h3', name: 'CMA à purger', lifecycleState: 'PENDING_PURGE' },
+              ]),
+            getMyHospitalAsResponse: () => of(null),
+          },
+        },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj<ToastService>('ToastService', [
+            'success',
+            'error',
+            'warning',
+          ]),
+        },
+        { provide: RoleContextService, useValue: { isSuperAdmin: () => true } },
+        { provide: ImpersonationService, useValue: { active: () => null } },
+      ],
+    });
+    const component = TestBed.createComponent(UserListComponent).componentInstance;
+    component.loadHospitals();
+    expect(component.availableHospitals().map((h) => h.id)).toEqual(['h1']);
+  });
+});

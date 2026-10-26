@@ -12,6 +12,7 @@ import {
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { roleContextStub } from '../testing/role-context.stub';
+import fr from '../../assets/i18n/fr.json';
 
 /**
  * The Type column used to render `formatType(org.type)` — "Community Hospital"
@@ -226,5 +227,53 @@ describe('OrganizationListComponent — the Type select (D6)', () => {
     expect(toast.error).toHaveBeenCalled();
     const hint = (fixture.nativeElement as HTMLElement).querySelector('#orgTypeError');
     expect(hint?.textContent).toContain('ORGANIZATIONS.TYPE_REQUIRED');
+  });
+});
+
+/** QA D822: the default organisation's seed text, rendered in French. */
+describe('OrganizationListComponent — the default organisation in French (QA D822)', () => {
+  it('renders the name and description in French, and finds it by the French name', async () => {
+    const orgSpy = jasmine.createSpyObj<OrganizationService>('OrganizationService', [
+      'list',
+      'getTypes',
+    ]);
+    orgSpy.list.and.returnValue(
+      of({ content: [], totalElements: 0, totalPages: 0, size: 20, number: 0 }),
+    );
+    orgSpy.getTypes.and.returnValue(of([]));
+    await TestBed.configureTestingModule({
+      imports: [OrganizationListComponent, TranslateModule.forRoot()],
+      providers: [
+        provideRouter([]),
+        { provide: OrganizationService, useValue: orgSpy },
+        { provide: ToastService, useValue: jasmine.createSpyObj('ToastService', ['error']) },
+        {
+          provide: RoleContextService,
+          useValue: roleContextStub({ superAdmin: true, hospitalId: null, roles: [] }),
+        },
+      ],
+    }).compileComponents();
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', fr);
+    translate.use('fr');
+    const fixture = TestBed.createComponent(OrganizationListComponent);
+    fixture.detectChanges();
+    fixture.componentInstance.organizations.set([
+      {
+        id: 'o-default',
+        name: 'Default Healthcare Organization',
+        code: 'DEFAULT_ORG',
+        description: 'Default organization for hospitals without specific organization assignment',
+        type: 'HEALTHCARE_NETWORK',
+        hospitals: [],
+      } as unknown as OrganizationResponse,
+    ]);
+    fixture.detectChanges();
+    const text = (fixture.nativeElement as HTMLElement).textContent!;
+    expect(text).toContain(fr.ORGANIZATIONS.DEFAULT_ORG_NAME);
+    expect(text).toContain(fr.ORGANIZATIONS.DEFAULT_ORG_DESCRIPTION);
+    expect(text).not.toContain('Default Healthcare Organization');
+    fixture.componentInstance.searchTerm.set('défaut');
+    expect(fixture.componentInstance.filtered().map((o) => o.id)).toEqual(['o-default']);
   });
 });

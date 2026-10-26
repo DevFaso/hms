@@ -10,6 +10,7 @@ import {
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { CfaPipe } from '../../shared/pipes/cfa.pipe';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { formatCfa } from '../../shared/i18n/app-locale';
 
 @Component({
   selector: 'app-my-billing',
@@ -80,7 +81,17 @@ export class MyBillingComponent implements OnInit {
     return Math.max((inv.balance ?? 0) - this.pendingOf(inv), 0);
   }
 
+  /**
+   * QA D814: "Pay now" only while something is left to declare. With the
+   * whole balance declared and awaiting the cashier, the dialog could only
+   * offer 0 F CFA.
+   */
+  canDeclare(inv: PortalInvoice): boolean {
+    return this.isPayable(inv) && this.declarable(inv) > 0;
+  }
+
   openPayDialog(inv: PortalInvoice) {
+    if (!this.canDeclare(inv)) return;
     this.payingInvoice.set(inv);
     // QA D421: prefilled with what is left to declare, not the full balance
     // (which the server refused whenever a declaration was pending).
@@ -115,8 +126,8 @@ export class MyBillingComponent implements OnInit {
     if (this.payAmount > this.declarable(inv)) {
       this.payError.set(
         this.translate.instant('PORTAL.BILLING.AMOUNT_EXCEEDS_PENDING', {
-          max: this.declarable(inv).toFixed(0),
-          pending: this.pendingOf(inv).toFixed(0),
+          max: formatCfa(this.declarable(inv)),
+          pending: formatCfa(this.pendingOf(inv)),
         }),
       );
       return;
@@ -143,7 +154,8 @@ export class MyBillingComponent implements OnInit {
         this.paySuccess.set(
           // QA D140: a declaration is not a settlement; staff confirm it.
           this.translate.instant('PORTAL.BILLING.PAYMENT_PENDING', {
-            amount: this.payAmount.toFixed(0),
+            // QA D815: "500 F CFA", as every other amount on the page.
+            amount: formatCfa(this.payAmount),
           }),
         );
         this.loadInvoices();
