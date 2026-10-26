@@ -281,14 +281,14 @@ class AdmissionServiceImplTest {
 
     @Test
     void d804_updateAdmissionToAnotherDepartmentMovesTheStayEncounter() {
-        com.example.hms.model.Hospital hospital = new com.example.hms.model.Hospital();
-        hospital.setId(UUID.randomUUID());
+        com.example.hms.model.Hospital stayHospital = new com.example.hms.model.Hospital();
+        stayHospital.setId(UUID.randomUUID());
         Admission admission = new Admission();
         admission.setId(admissionId);
-        admission.setHospital(hospital);
+        admission.setHospital(stayHospital);
         com.example.hms.model.Department cardiology = new com.example.hms.model.Department();
         cardiology.setId(UUID.randomUUID());
-        cardiology.setHospital(hospital);
+        cardiology.setHospital(stayHospital);
         AdmissionUpdateRequestDTO request = new AdmissionUpdateRequestDTO();
         request.setDepartmentId(cardiology.getId());
         when(admissionRepository.findById(admissionId)).thenReturn(Optional.of(admission));

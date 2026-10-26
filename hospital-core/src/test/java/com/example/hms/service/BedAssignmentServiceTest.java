@@ -3,8 +3,10 @@ package com.example.hms.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.example.hms.enums.AdmissionStatus;
@@ -95,9 +97,9 @@ class BedAssignmentServiceTest {
     @Test
     @SuppressWarnings("unchecked")
     void d804_aTransferToAnotherDepartmentsBedMovesTheStayEncounterToo() {
-        AdmissionStayEncounterService stayEncounters = org.mockito.Mockito.mock(AdmissionStayEncounterService.class);
+        AdmissionStayEncounterService stayEncounters = mock(AdmissionStayEncounterService.class);
         org.springframework.beans.factory.ObjectProvider<AdmissionStayEncounterService> provider =
-            org.mockito.Mockito.mock(org.springframework.beans.factory.ObjectProvider.class);
+            mock(org.springframework.beans.factory.ObjectProvider.class);
         org.mockito.Mockito.doAnswer(inv -> {
             ((java.util.function.Consumer<AdmissionStayEncounterService>) inv.getArgument(0)).accept(stayEncounters);
             return null;
@@ -115,15 +117,15 @@ class BedAssignmentServiceTest {
         service.assignBed(admission, bed.getId(), java.util.Set.of(BedStatus.AVAILABLE, BedStatus.RESERVED));
 
         assertThat(admission.getDepartment()).isSameAs(cardiology);
-        org.mockito.Mockito.verify(stayEncounters).followStayDepartment(admission);
+        verify(stayEncounters).followStayDepartment(admission);
     }
 
     @Test
     @SuppressWarnings("unchecked")
     void d804_aBedInAWardWithNoDepartmentLeavesTheEncounterAlone() {
-        AdmissionStayEncounterService stayEncounters = org.mockito.Mockito.mock(AdmissionStayEncounterService.class);
+        AdmissionStayEncounterService stayEncounters = mock(AdmissionStayEncounterService.class);
         org.springframework.beans.factory.ObjectProvider<AdmissionStayEncounterService> provider =
-            org.mockito.Mockito.mock(org.springframework.beans.factory.ObjectProvider.class);
+            mock(org.springframework.beans.factory.ObjectProvider.class);
         org.mockito.Mockito.lenient().doAnswer(inv -> {
             ((java.util.function.Consumer<AdmissionStayEncounterService>) inv.getArgument(0)).accept(stayEncounters);
             return null;
@@ -134,7 +136,7 @@ class BedAssignmentServiceTest {
 
         service.assignBed(admission, next.getId());
 
-        org.mockito.Mockito.verifyNoInteractions(stayEncounters);
+        verifyNoInteractions(stayEncounters);
     }
 
     @Test

@@ -108,6 +108,8 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -532,7 +534,7 @@ class PatientServiceImplTest {
 
         assertThat(patient.getPhoneVerifiedAt()).isNotNull();
         // Once for the new record, once for the stamp.
-        verify(patientRepository, org.mockito.Mockito.times(2)).save(patient);
+        verify(patientRepository, times(2)).save(patient);
     }
 
     @Test
@@ -563,7 +565,7 @@ class PatientServiceImplTest {
 
         assertThat(patient.getPhoneVerifiedAt()).isNull();
         // Only the new record's own save: no stamp.
-        verify(patientRepository, org.mockito.Mockito.times(1)).save(patient);
+        verify(patientRepository, times(1)).save(patient);
     }
 
     @Test
@@ -1642,7 +1644,7 @@ class PatientServiceImplTest {
         staffUser.setId(userId);
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(userRepository.findById(userId)).thenReturn(Optional.of(staffUser));
-        org.mockito.Mockito.doThrow(new com.example.hms.exception.ConflictException("userId:patient.account.staffAccount"))
+        doThrow(new com.example.hms.exception.ConflictException("userId:patient.account.staffAccount"))
             .when(accountLinkGuard).requireLinkable(staffUser, null);
 
         assertThatThrownBy(() -> patientService.createPatientByStaff(request, Locale.FRENCH))
@@ -1663,7 +1665,7 @@ class PatientServiceImplTest {
         user.setId(userId);
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-        org.mockito.Mockito.doThrow(new com.example.hms.exception.ConflictException("userId:patient.account.alreadyLinked"))
+        doThrow(new com.example.hms.exception.ConflictException("userId:patient.account.alreadyLinked"))
             .when(accountLinkGuard).requireLinkable(user, null);
 
         assertThatThrownBy(() -> patientService.createPatientByStaff(request, Locale.ENGLISH))
@@ -1681,7 +1683,7 @@ class PatientServiceImplTest {
         staffUser.setId(userId);
         when(userRepository.findById(userId)).thenReturn(Optional.of(staffUser));
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
-        org.mockito.Mockito.doThrow(new com.example.hms.exception.ConflictException("userId:patient.account.staffAccount"))
+        doThrow(new com.example.hms.exception.ConflictException("userId:patient.account.staffAccount"))
             .when(accountLinkGuard).requireLinkable(staffUser, null);
 
         assertThatThrownBy(() -> patientService.createPatient(request, Locale.ENGLISH))
@@ -1701,7 +1703,7 @@ class PatientServiceImplTest {
         PatientRequestDTO request = PatientRequestDTO.builder().userId(newUserId).build();
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(userRepository.findById(newUserId)).thenReturn(Optional.of(staffUser));
-        org.mockito.Mockito.doThrow(new com.example.hms.exception.ConflictException("userId:patient.account.staffAccount"))
+        doThrow(new com.example.hms.exception.ConflictException("userId:patient.account.staffAccount"))
             .when(accountLinkGuard).requireLinkable(staffUser, patientId);
 
         assertThatThrownBy(() -> patientService.updatePatient(patientId, request, Locale.ENGLISH))
@@ -1719,7 +1721,7 @@ class PatientServiceImplTest {
         patient.setUser(current);
         PatientRequestDTO request = PatientRequestDTO.builder().userId(current.getId()).build();
         org.springframework.test.util.ReflectionTestUtils.setField(patientService, "addressHistoryRecorder",
-            org.mockito.Mockito.mock(PatientAddressHistoryRecorder.class));
+            mock(PatientAddressHistoryRecorder.class));
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(userRepository.findById(current.getId())).thenReturn(Optional.of(current));
         when(patientRepository.save(patient)).thenReturn(patient);

@@ -87,6 +87,7 @@ public class ReceptionServiceImpl implements ReceptionService {
     private static final String STATUS_WALK_IN = "WALK_IN";
     private static final String STATUS_IN_PROGRESS = "IN_PROGRESS";
     private static final String STATUS_COMPLETED = "COMPLETED";
+    private static final String STATUS_CANCELLED = "CANCELLED";
     private static final String STATUS_LEFT_WITHOUT_BEING_SEEN = "LEFT_WITHOUT_BEING_SEEN";
     private static final String ENTITY_TYPE_ENCOUNTER = "ENCOUNTER";
 
@@ -390,7 +391,7 @@ public class ReceptionServiceImpl implements ReceptionService {
             return STATUS_LEFT_WITHOUT_BEING_SEEN;
         }
         if (appt.getStatus() == AppointmentStatus.NO_SHOW) return "NO_SHOW";
-        if (appt.getStatus() == AppointmentStatus.CANCELLED) return "CANCELLED";
+        if (appt.getStatus() == AppointmentStatus.CANCELLED) return STATUS_CANCELLED;
         if (appt.getStatus() == AppointmentStatus.COMPLETED && encounter == null) return STATUS_COMPLETED;
         if (encounter == null) return appt.getStatus().name();
         return switch (encounter.getStatus()) {
@@ -399,7 +400,7 @@ public class ReceptionServiceImpl implements ReceptionService {
             case IN_PROGRESS, AWAITING_RESULTS -> STATUS_IN_PROGRESS;
             case READY_FOR_DISCHARGE -> STATUS_IN_PROGRESS;
             case COMPLETED -> STATUS_COMPLETED;
-            case CANCELLED -> "CANCELLED";
+            case CANCELLED -> STATUS_CANCELLED;
             case LEFT_WITHOUT_BEING_SEEN -> STATUS_LEFT_WITHOUT_BEING_SEEN;
             default -> appt.getStatus().name();
         };
@@ -530,7 +531,7 @@ public class ReceptionServiceImpl implements ReceptionService {
             case COMPLETED -> STATUS_COMPLETED;
             // A walk-in closed without a consultation is closed: it went back
             // to the walk-in column as if it were still waiting.
-            case CANCELLED -> "CANCELLED";
+            case CANCELLED -> STATUS_CANCELLED;
             case LEFT_WITHOUT_BEING_SEEN -> STATUS_LEFT_WITHOUT_BEING_SEEN;
             default -> STATUS_WALK_IN;
         };

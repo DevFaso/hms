@@ -123,8 +123,9 @@ class ReportGenerationServiceTest {
             definition(ReportType.ENCOUNTER_ACTIVITY, ReportPeriod.DAILY), "2026-08-21");
 
         String csv = new String(report.content(), StandardCharsets.UTF_8);
-        assertThat(csv).contains("date,encounters_total,completed,cancelled,left_without_being_seen");
-        assertThat(csv).contains("2026-08-21,3,1,1,1");
+        assertThat(csv)
+            .contains("date,encounters_total,completed,cancelled,left_without_being_seen")
+            .contains("2026-08-21,3,1,1,1");
         assertThat(report.rowCount()).isEqualTo(1);
         assertThat(report.filename()).isEqualTo("encounter_activity_20260821.csv");
     }
@@ -148,10 +149,10 @@ class ReportGenerationServiceTest {
             definition(ReportType.APPOINTMENT_ACTIVITY, ReportPeriod.MONTHLY), "202607");
 
         String csv = new String(report.content(), StandardCharsets.UTF_8);
-        assertThat(csv).contains(
-            "date,appointments_total,completed,cancelled,no_show,left_without_being_seen");
-        assertThat(csv).contains("2026-07-03,2,1,0,1,0");
-        assertThat(csv).contains("2026-07-04,1,0,0,0,0");
+        assertThat(csv)
+            .contains("date,appointments_total,completed,cancelled,no_show,left_without_being_seen")
+            .contains("2026-07-03,2,1,0,1,0")
+            .contains("2026-07-04,1,0,0,0,0");
         assertThat(report.rowCount()).isEqualTo(2);
     }
 

@@ -1,7 +1,6 @@
 package com.example.hms.service;
 
 import com.example.hms.enums.AdmissionStatus;
-import com.example.hms.enums.EncounterStatus;
 import com.example.hms.enums.EncounterType;
 import com.example.hms.model.Admission;
 import com.example.hms.model.Encounter;
