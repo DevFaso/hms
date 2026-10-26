@@ -1038,6 +1038,37 @@ export class EnumLabelService implements OnDestroy {
     return result;
   }
 
+  /**
+   * QA D836: the label for a FREE-TEXT value that may also be one of the
+   * domain's curated codes — a lab sample type is typed by the lab ("EDTA",
+   * "LCR", "Sang total (EDTA)") but older rows carry a code ("SERUM").
+   * The domain's translated or curated label wins when the value is one of
+   * its codes; anything else is shown exactly as typed. Never prettified:
+   * a one-word abbreviation looks like a code, and title-casing it read
+   * "Edta" / "Lcr". Other enum groups are not scanned either — a typed word
+   * that happens to be a status code elsewhere is still the lab's text.
+   */
+  labelOrAsTyped(value: string | null | undefined, domain: string): string {
+    if (!value) return '';
+    const lang = this.translate.getCurrentLang() || this.translate.getFallbackLang() || 'en';
+    // '=' cannot start a domain name, so this never collides with transform()'s keys.
+    const memoKey = `${lang}|=${domain}|${value}`;
+    const cached = this.memo.get(memoKey);
+    if (cached !== undefined) return cached;
+
+    const path = `PORTAL.ENUM.${EnumLabelService.toUpperSnake(domain)}.${value}`;
+    const translated: unknown = this.translate.instant(path);
+    let result = value;
+    if (typeof translated === 'string' && translated && translated !== path) {
+      result = translated;
+    } else {
+      const curated = EnumLabelService.LABELS[domain]?.[value];
+      if (curated) result = curated;
+    }
+    this.memo.set(memoKey, result);
+    return result;
+  }
+
   /** Convert camelCase domain → UPPER_SNAKE_CASE for the JSON path lookup. */
   private static toUpperSnake(camel: string): string {
     return camel.replaceAll(/([a-z0-9])([A-Z])/g, '$1_$2').toUpperCase();

@@ -105,7 +105,9 @@
               <td>{{ def.testName }}</td>
               <td>{{ def.category }}</td>
               <td>{{ def.unit }}</td>
-              <td>{{ def.sampleType ? (def.sampleType | enumLabel: 'specimenType') : '' }}</td>
+              <td>
+                {{ def.sampleType ? (def.sampleType | enumLabel: 'specimenType' : 'asTyped') : '' }}
+              </td>
               <td>
                 <span class="status-badge" [ngClass]="statusClass(def.approvalStatus)">
                   {{ 'LAB_TEST_CONFIG.STATUS_' + def.approvalStatus | translate }}

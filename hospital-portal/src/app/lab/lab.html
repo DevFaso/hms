@@ -700,7 +700,11 @@
                   <tr>
                     <td>{{ s.accessionNumber || '—' }}</td>
                     <td>
-                      {{ s.specimenType ? (s.specimenType | enumLabel: 'specimenType') : '—' }}
+                      {{
+                        s.specimenType
+                          ? (s.specimenType | enumLabel: 'specimenType' : 'asTyped')
+                          : '—'
+                      }}
                     </td>
                     <td>
                       {{ s.collectedAt ? (s.collectedAt | serverTime | date: 'short') : '—' }}
