@@ -151,7 +151,7 @@
                   >
                     <span class="material-symbols-outlined">visibility</span>
                   </button>
-                  @if (canEditOrder() && !isIncomingExternal(order)) {
+                  @if (canEditOrder() && isEditable(order)) {
                     <button
                       class="action-link edit-link"
                       [title]="'COMMON.EDIT' | translate"
@@ -180,7 +180,7 @@
                       <span class="material-symbols-outlined" aria-hidden="true">block</span>
                     </button>
                   }
-                  @if (canDeleteOrder() && !isIncomingExternal(order) && !hasResultsStage(order)) {
+                  @if (canDeleteOrder() && isDeletable(order)) {
                     <button
                       class="action-link delete-link"
                       [title]="'COMMON.DELETE' | translate"

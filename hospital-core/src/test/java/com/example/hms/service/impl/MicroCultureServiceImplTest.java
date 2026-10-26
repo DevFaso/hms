@@ -274,6 +274,36 @@ class MicroCultureServiceImplTest {
     }
 
     @Test
+    void aVoidedOrdersCultureTakesNoChangeAndNotifiesNobody() {
+        // QA D820, self-review of #960: the order was voided as entered in error
+        // after a PRELIMINARY growth culture was started. Already loaded in the
+        // persistence context, so the entity restriction does not stand between
+        // the request and the row: the service must refuse every change itself.
+        culture.setGrowthResult(MicroGrowthResult.GROWTH);
+        when(isolateRepository.countByCultureResult_Id(cultureId)).thenReturn(1L);
+        when(isolateRepository.findByCultureResult_IdOrderByIsolateNumberAscCreatedAtAsc(cultureId))
+            .thenReturn(List.of(storedIsolate()));
+        order.setStatus(LabOrderStatus.ENTERED_IN_ERROR);
+        MicroCultureUpdateDTO update = MicroCultureUpdateDTO.builder().gramStain("GPC in clusters").build();
+        MicroIsolateRequestDTO isolate = MicroIsolateRequestDTO.builder().organismName("Klebsiella").build();
+
+        assertThatThrownBy(() -> service.finalizeCulture(cultureId, hospitalId, null))
+            .isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.updateCulture(cultureId, hospitalId, update))
+            .isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.addIsolate(cultureId, hospitalId, isolate))
+            .isInstanceOf(ResourceNotFoundException.class);
+        assertThatThrownBy(() -> service.getCulture(cultureId, hospitalId))
+            .isInstanceOf(ResourceNotFoundException.class);
+
+        assertThat(culture.getStatus()).isEqualTo(MicroCultureStatus.PRELIMINARY);
+        assertThat(culture.getGramStain()).isNull();
+        verify(cultureRepository, never()).save(any(MicroCultureResult.class));
+        verify(isolateRepository, never()).save(any(MicroIsolate.class));
+        verify(notificationService, never()).created(anyString(), anyString(), anyString());
+    }
+
+    @Test
     void mutationAfterFinalDemandsACorrectionReason() {
         culture.setStatus(MicroCultureStatus.FINAL);
         MicroCultureUpdateDTO update = MicroCultureUpdateDTO.builder().gramStain("GPC in clusters").build();

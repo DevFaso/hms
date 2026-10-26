@@ -231,6 +231,21 @@ export class LabComponent implements OnInit {
     return ['RESULTED', 'VERIFIED', 'COMPLETED'].includes(String(o.status ?? '').toUpperCase());
   }
 
+  /**
+   * QA D820: an order voided as entered in error is kept exactly as it was
+   * voided; the server refuses an edit (400) and a delete (409) on it, so
+   * neither is offered. Nor is either offered on an order another hospital
+   * sent here, which belongs to the ordering hospital.
+   */
+  isEditable(o: LabOrderResponse): boolean {
+    return !this.isIncomingExternal(o) && o.status !== 'ENTERED_IN_ERROR';
+  }
+
+  /** As {@link isEditable}, and never on an order that carries results (QA D601/D616). */
+  isDeletable(o: LabOrderResponse): boolean {
+    return this.isEditable(o) && !this.hasResultsStage(o);
+  }
+
   isSentOut(o: LabOrderResponse): boolean {
     return !!o.performingHospitalId && !this.isIncomingExternal(o);
   }

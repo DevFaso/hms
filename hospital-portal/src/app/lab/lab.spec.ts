@@ -499,6 +499,26 @@ describe('LabComponent — performing laboratory', () => {
     expect(fixture.nativeElement.querySelector('.delete-link')).not.toBeNull();
   });
 
+  it('QA D820: a voided order offers neither Edit nor Delete, which the server refuses', async () => {
+    // Voided before any result: the results-stage check alone let the trash through (409).
+    await setup(['ROLE_SUPER_ADMIN'], [order({ id: 'o-void', status: 'ENTERED_IN_ERROR' })]);
+    expect(fixture.nativeElement.querySelectorAll('tbody tr').length)
+      .withContext('the voided order is rendered')
+      .toBeGreaterThanOrEqual(1);
+    expect(fixture.nativeElement.querySelector('.edit-link'))
+      .withContext('edit answers 400 lab.order.enteredInError')
+      .toBeNull();
+    expect(fixture.nativeElement.querySelector('.delete-link'))
+      .withContext('delete answers 409 lab.order.deleteClosed')
+      .toBeNull();
+
+    // The same caller on an open order is still offered both.
+    TestBed.resetTestingModule();
+    await setup(['ROLE_SUPER_ADMIN'], [order({ id: 'o-ordered', status: 'ORDERED' })]);
+    expect(fixture.nativeElement.querySelector('.edit-link')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.delete-link')).not.toBeNull();
+  });
+
   it('QA D616: a lab technician who also holds ROLE_ADMIN, with no role picked, gets the trash (the reported case)', async () => {
     // No role equivalence maps LAB_TECHNICIAN to ADMIN (only physician roles
     // expand, to DOCTOR). The /lab icon reaches a technician only through a

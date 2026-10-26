@@ -318,6 +318,15 @@ public class MicroCultureServiceImpl implements MicroCultureService {
                 || !Objects.equals(culture.getHospital().getId(), hospitalId))) {
             throw new ResourceNotFoundException("microculture.culture.notFound", cultureId);
         }
+        // QA D820: the entity restriction already keeps a voided order's culture
+        // out of every query; this also catches one loaded before the void in the
+        // same persistence context, so no read or change (edit, isolate,
+        // susceptibility, finalize and its positive-culture notification) ever
+        // reaches it. Hidden, so not found, like the restriction answers.
+        if (culture.getLabOrder() != null
+            && culture.getLabOrder().getStatus() == LabOrderStatus.ENTERED_IN_ERROR) {
+            throw new ResourceNotFoundException("microculture.culture.notFound", cultureId);
+        }
         return culture;
     }
 
