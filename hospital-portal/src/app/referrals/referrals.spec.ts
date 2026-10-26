@@ -6,6 +6,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ReferralsComponent } from './referrals';
 import { RoleContextService } from '../core/role-context.service';
 import { AuthService } from '../auth/auth.service';
+import { ToastService } from '../core/toast.service';
 import { signal } from '@angular/core';
 
 describe('ReferralsComponent', () => {
@@ -356,6 +357,20 @@ describe('ReferralsComponent', () => {
     req.flush({ id: 'r1', status: 'SCHEDULED' });
     httpMock.match((r) => r.url.includes('/referrals')).forEach((r) => r.flush([]));
     httpMock.match((r) => r.url.includes('/hospitals')).forEach((r) => r.flush([]));
+  });
+
+  it('QA D890: an empty referral form is not posted; the toast names fields by their labels', () => {
+    const toast = TestBed.inject(ToastService);
+    spyOn(toast, 'error');
+    flushInitRequests();
+    component.openCreate();
+
+    component.submitForm();
+
+    httpMock.expectNone((r) => r.method === 'POST' && r.url === '/referrals');
+    const message = (toast.error as jasmine.Spy).calls.mostRecent().args[0] as string;
+    expect(message).toContain('COMMON.MISSING_REQUIRED_FIELDS');
+    expect(message).not.toContain('targetSpecialty');
   });
 
   it('executeSchedule is a no-op when appointment time is empty', () => {

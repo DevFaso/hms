@@ -162,6 +162,28 @@ class LabTestDefinitionSearchNullKeywordTest {
     }
 
     /**
+     * QA D836: "Hématologie" was saved and shown as "HÉMATOLOGIE", and
+     * "Sang total (EDTA)" came back "Sang total (edta)" (upper-cased on save,
+     * then title-cased by the label pipe). Labels are kept as typed; only the
+     * test code is normalised, and the category filter still ignores case.
+     */
+    @Test
+    void d836_categoryAndSampleTypeAreSavedAsTyped() {
+        LabTestDefinition nfs = entityManager.persist(LabTestDefinition.builder()
+            .testCode(" nfs ").name("Numération formule sanguine").category(" Hématologie ")
+            .unit("g/dL").sampleType("Sang total (EDTA)").active(false).build());
+        entityManager.flush();
+        entityManager.clear();
+
+        LabTestDefinition saved = repository.findById(nfs.getId()).orElseThrow();
+        assertThat(saved.getCategory()).isEqualTo("Hématologie");
+        assertThat(saved.getSampleType()).isEqualTo("Sang total (EDTA)");
+        assertThat(saved.getTestCode()).isEqualTo("NFS");
+        assertThat(repository.search(null, null, "hématologie", null, null, true, null, PageRequest.of(0, 20))
+            .getContent()).extracting(LabTestDefinition::getTestCode).containsExactly("NFS");
+    }
+
+    /**
      * D30: a scoped read (not every hospital) still parses with a null or an
      * unknown hospital id and returns the global catalog, never an error.
      */

@@ -586,6 +586,44 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
 
     private static final String OWNER = "GeneralReferral";
 
+    /**
+     * QA D889: the referral list and detail print the patient's MRN under the
+     * name, and the response never carried one, so the line was blank.
+     * #965 review: the MRN at the hospital the reader acts at first, when it is
+     * the sending or the receiving side — an incoming referral listed at the
+     * receiving hospital showed the referring hospital's MRN even when the
+     * patient has one here. Then the referring hospital's, then the receiving
+     * one's. A registration row pointing at a hard-deleted hospital leaves it
+     * unknown, never a 500.
+     */
+    private String resolvePatientMrn(Patient patient, Hospital hospital, Hospital receivingHospital,
+                                     UUID readerHospitalId, java.util.UUID referralId) {
+        if (patient == null) {
+            return null;
+        }
+        try {
+            UUID sendingId = hospital != null ? hospital.getId() : null;
+            UUID receivingId = receivingHospital != null ? receivingHospital.getId() : null;
+            String mrn = null;
+            if (readerHospitalId != null
+                    && (readerHospitalId.equals(sendingId) || readerHospitalId.equals(receivingId))) {
+                mrn = patient.getMrnForHospital(readerHospitalId);
+            }
+            if ((mrn == null || mrn.isBlank()) && sendingId != null) {
+                mrn = patient.getMrnForHospital(sendingId);
+            }
+            if ((mrn == null || mrn.isBlank()) && receivingId != null) {
+                mrn = patient.getMrnForHospital(receivingId);
+            }
+            return mrn == null || mrn.isBlank() ? null : mrn;
+        } catch (jakarta.persistence.EntityNotFoundException
+                 | org.springframework.orm.jpa.JpaObjectRetrievalFailureException ex) {
+            org.slf4j.LoggerFactory.getLogger(GeneralReferralServiceImpl.class)
+                .warn("Referral {}: patient registration points at a missing hospital; MRN unavailable.", referralId);
+            return null;
+        }
+    }
+
     private GeneralReferralResponseDTO toResponse(GeneralReferral referral) {
         GeneralReferralResponseDTO dto = new GeneralReferralResponseDTO();
         java.util.UUID referralId = referral.getId();
@@ -611,6 +649,10 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
 
         dto.setPatientId(patient != null ? patient.getId() : null);
         dto.setPatientName(extractPatientName(patient));
+        // The acting hospital as the one tenant resolver answers it; null for a
+        // patient or a super-admin in global view (never a caller-supplied id).
+        dto.setPatientMrn(resolvePatientMrn(patient, hospital, receivingHospital,
+            roleValidator.getCurrentHospitalId(), referralId));
         dto.setHospitalId(hospital != null ? hospital.getId() : null);
         dto.setHospitalName(hospital != null ? hospital.getName() : null);
         dto.setReceivingHospitalId(receivingHospital != null ? receivingHospital.getId() : null);

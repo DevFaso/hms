@@ -1702,7 +1702,8 @@
     "SYSTEM": "System",
     "MINUTES_SHORT": "{{count}} min",
     "COPYRIGHT_FOOTER": "© {{year}} e-Keneya — Hospital Management System",
-    "PATIENT_PICKER_NO_MATCH": "No patient matches this search."
+    "PATIENT_PICKER_NO_MATCH": "No patient matches this search.",
+    "MISSING_REQUIRED_FIELDS": "Required fields missing: {{fields}}"
   },
   "CONSULTATIONS": {
     "ACKNOWLEDGE": "Acknowledge",
@@ -2304,8 +2305,8 @@
     "SUBTITLE": "Search the master patient index by name + DOB + sex + national ID. Confirm the match if the breakdown looks right, or create a new patient if no candidate is the same person.",
     "SEARCH": "Search candidates",
     "SEARCHING": "Searching…",
-    "ERROR": "EMPI candidate search failed. The probabilistic match flag may be off — see docs/runbooks/empi-probabilistic-matching.md.",
-    "DISABLED": "Duplicate-patient matching is not enabled for this deployment. Ask an administrator to enable app.empi.probabilistic.enabled.",
+    "ERROR": "The duplicate-patient check could not be completed. Try again; if it keeps failing, contact your administrator.",
+    "DISABLED": "Duplicate-patient matching is not enabled at this facility. Contact your administrator.",
     "NO_MATCHES": "No candidates met the configured score threshold.",
     "NOT_THIS_ONE": "None of the candidates above is the same person?",
     "CREATE_NEW_PATIENT": "Create a new patient instead",
@@ -2497,7 +2498,8 @@
     "START": "Start visit",
     "STARTED": "Visit started",
     "CHECK_OUT": "Check out",
-    "NOT_FOUND": "Encounter not found"
+    "NOT_FOUND": "Encounter not found",
+    "NOTE_EARLIER_ENTRIES": "Earlier entries of this stay"
   },
   "FCP": {
     "CONFIRM_PASSWORD": "Confirm Password",
@@ -3051,7 +3053,12 @@
     "PLACEHOLDER_SAMPLE": "e.g. Blood",
     "PLACEHOLDER_MINUTES": "Minutes",
     "CRITICAL_LOW": "Critical low (below)",
-    "CRITICAL_HIGH": "Critical high (above)"
+    "CRITICAL_HIGH": "Critical high (above)",
+    "CRITICAL_LIMITS_HINT": "Critical limits are the panic values: a result beyond them is graded CRITICAL and pages the ordering doctor. A result that is only outside the reference range is graded high or low and pages nobody. Leave them empty when the test has no panic value.",
+    "EXPECTED_RESULT": "Expected result (qualitative test)",
+    "EXPECTED_RESULT_PLACEHOLDER": "e.g. Negative",
+    "EXPECTED_RESULT_HINT": "For a test answered in words (a rapid test, a culture), give the normal answer instead of a numeric range. The patient sees it beside the result.",
+    "EXPECTED_RESULT_SHORT": "Expected: {{value}}"
   },
   "LAB_RESULTS": {
     "TITLE": "Lab Results",
@@ -3138,7 +3145,8 @@
     "CORRECTION": "Correction",
     "CORRECTION_OF": "Correction of the released result {{test}} ({{value}}). The released value stays on record, marked superseded.",
     "SUPERSEDED": "Superseded",
-    "SUPERSEDED_HINT": "A correction replaced this released result; the correction is the current value."
+    "SUPERSEDED_HINT": "A correction replaced this released result; the correction is the current value.",
+    "EXPECTED_RESULT": "Expected result"
   },
   "LAB_RELEASE": {
     "TITLE": "Release Worklist",
@@ -7844,7 +7852,8 @@
     "TITLE": "Pre-Check-In",
     "UPDATED_DEMOGRAPHICS": "Updated Demographics",
     "YES": "Yes",
-    "ZIP": "Zip Code"
+    "ZIP": "Zip Code",
+    "DATE_AT_TIME": "{{date}} at {{time}}"
   },
   "TRACKER": {
     "TITLE": "Patient Tracker Board",
@@ -8882,7 +8891,8 @@
     "URGENCY_ROUTINE": "Routine",
     "URGENCY_ELECTIVE": "Elective",
     "URGENCY_URGENT": "Urgent",
-    "URGENCY_EMERGENT": "Emergent"
+    "URGENCY_EMERGENT": "Emergent",
+    "PAST_DATE": "The planned date and time cannot be in the past."
   },
   "REGISTRATIONS": {
     "TITLE": "Hospital Registrations",

@@ -205,6 +205,44 @@ class CriticalValueNotificationServiceTest {
         assertThat(mapper.raisesCriticalAlert("LOW")).isFalse();
     }
 
+    /**
+     * QA D832 (r13 re-report of D313): the round-13 setup's fasting glucose,
+     * 0.70-1.10 g/L with no critical limits (the script typed the panic values
+     * into the range notes). A glycémie of 1.20 g/L is HIGH and pages nobody;
+     * once the laboratory sets the limits (0.40 / 4.00 g/L), 4.50 is CRITICAL
+     * and pages, 3.00 stays HIGH.
+     */
+    @Test
+    void d832_theSetupGlucoseIsHighNotCriticalUntilItsLimitsAreSet() {
+        ReflectionTestUtils.setField(service, "labResultMapper", new LabResultMapper());
+        com.example.hms.model.LabTestDefinition glucose = result.getLabOrder().getLabTestDefinition();
+        glucose.setUnit("g/L");
+        glucose.setReferenceRanges(new java.util.ArrayList<>(List.of(
+            com.example.hms.model.LabTestReferenceRange.builder().minValue(0.70).maxValue(1.10).unit("g/L")
+                .gender("ALL").ageMin(0).ageMax(120)
+                .notes("Valeurs critiques : < 0,40 g/L ou > 4,00 g/L").build())));
+        result.setResultUnit("g/L");
+        result.setResultValue("1.20");
+        LabResultMapper mapper = new LabResultMapper();
+
+        service.notifyIfCritical(result);
+
+        assertThat(mapper.severityFlagOf(result)).isEqualTo("HIGH");
+        assertThat(result.getCriticalNotifiedAt()).isNull();
+        verify(notificationService, never()).created(anyString(), anyString(), anyString());
+
+        glucose.getReferenceRanges().get(0).setCriticalLow(0.40);
+        glucose.getReferenceRanges().get(0).setCriticalHigh(4.00);
+        result.setResultValue("3.00");
+        assertThat(mapper.severityFlagOf(result)).isEqualTo("HIGH");
+        result.setResultValue("4.50");
+        assertThat(mapper.severityFlagOf(result)).isEqualTo("CRITICAL");
+
+        service.notifyIfCritical(result);
+
+        verify(notificationService).created(anyString(), eq("dr.diallo"), eq("CRITICAL_LAB_RESULT"));
+    }
+
     /** QA D271: once critical limits exist, a value below the range but above them stays LOW. */
     @Test
     void aLowInsideCriticalLimitsIsLabelledLowAndNotPaged() {

@@ -494,6 +494,7 @@ public class EncounterController {
                            "Original note remains unchanged; addendum is clearly marked.")
     public ResponseEntity<EncounterNoteAddendumResponseDTO> addEncounterNoteAddendum(
         @PathVariable UUID encounterId,
+        @RequestParam(value = "noteId", required = false) UUID noteId,
         @Valid @RequestBody EncounterNoteAddendumRequestDTO request,
         Locale locale,
         Authentication auth,
@@ -501,8 +502,10 @@ public class EncounterController {
     ) {
         boolean isSuperAdmin = authUtils.hasAuthority(auth, ROLE_SUPER_ADMIN);
         UUID hospitalId = authUtils.resolveHospitalScope(auth, ctx.hospitalId(), false);
+        // QA D831: on a stay each progress note is its own entry; noteId names
+        // the one the addendum corrects (none = the current entry).
         EncounterNoteAddendumResponseDTO response =
-            encounterService.addEncounterNoteAddendum(encounterId, request, locale, isSuperAdmin, hospitalId);
+            encounterService.addEncounterNoteAddendum(encounterId, noteId, request, locale, isSuperAdmin, hospitalId);
         return ResponseEntity
             .created(URI.create("/encounters/" + encounterId + "/notes/addendums"))
             .body(response);
@@ -522,9 +525,11 @@ public class EncounterController {
                    + "A signature cannot be asserted in the note body.")
     public ResponseEntity<EncounterNoteResponseDTO> signEncounterNote(
         @PathVariable UUID encounterId,
+        @RequestParam(value = "noteId", required = false) UUID noteId,
         Locale locale
     ) {
-        return ResponseEntity.ok(encounterService.signEncounterNote(encounterId, locale));
+        // QA D831: a stay holds one entry per progress note; noteId names one.
+        return ResponseEntity.ok(encounterService.signEncounterNote(encounterId, noteId, locale));
     }
 
     /**
@@ -541,9 +546,10 @@ public class EncounterController {
                    + "profile at the note's hospital.")
     public ResponseEntity<EncounterNoteResponseDTO> cosignEncounterNote(
         @PathVariable UUID encounterId,
+        @RequestParam(value = "noteId", required = false) UUID noteId,
         Locale locale
     ) {
-        return ResponseEntity.ok(encounterService.cosignEncounterNote(encounterId, locale));
+        return ResponseEntity.ok(encounterService.cosignEncounterNote(encounterId, noteId, locale));
     }
 
     @GetMapping(value = "/{encounterId}/notes/history", consumes = MediaType.ALL_VALUE)

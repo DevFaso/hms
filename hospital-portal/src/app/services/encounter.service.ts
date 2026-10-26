@@ -53,6 +53,9 @@ export interface EncounterNoteResponse {
   content: string;
   authorName: string;
   createdAt: string;
+  /** QA D831: when the entry was documented (a stay holds one entry per progress note). */
+  documentedAt?: string | null;
+  authorUserId?: string | null;
   /* Ceremony evidence (P3 #20), present on EncounterNoteResponseDTO payloads
      (encounter.note, addNote/sign/cosign responses). signatureValue null on a
      signed note means "asserted before V125, unverifiable". */
@@ -62,6 +65,20 @@ export interface EncounterNoteResponse {
   requiresCosign?: boolean;
   cosignedAt?: string | null;
   cosignedByName?: string | null;
+  /* The note sections (EncounterNoteResponseDTO), shown before a clinician
+     signs or co-signs an entry (#965 review). */
+  chiefComplaint?: string | null;
+  historyOfPresentIllness?: string | null;
+  reviewOfSystems?: string | null;
+  physicalExam?: string | null;
+  diagnosticResults?: string | null;
+  subjective?: string | null;
+  objective?: string | null;
+  assessment?: string | null;
+  plan?: string | null;
+  implementation?: string | null;
+  evaluation?: string | null;
+  patientInstructions?: string | null;
 }
 
 /**
@@ -121,6 +138,13 @@ export interface EncounterResponse {
   createdBy: string;
   updatedBy: string;
   note: EncounterNoteResponse;
+  /**
+   * QA D831: every note entry of the encounter, oldest first, when it has more
+   * than one (an inpatient stay's progress notes). `note` is the last of them.
+   */
+  noteEntries?: EncounterNoteResponse[] | null;
+  /** QA D831: set on an inpatient stay, whose notes are progress entries. */
+  admissionId?: string | null;
   patientFullName: string;
   staffFullName: string;
   nursingIntakeTimestamp: string | null;
@@ -400,10 +424,14 @@ export class EncounterService {
   addAddendum(
     encounterId: string,
     req: EncounterNoteAddendumRequest,
+    noteId?: string,
   ): Observable<EncounterNoteAddendumResponse> {
+    // QA D831: a stay holds one entry per progress note; noteId names the
+    // entry the addendum corrects. Without it the server takes the current entry.
     return this.http.post<EncounterNoteAddendumResponse>(
       `${this.baseUrl}/${encounterId}/notes/addendums`,
       req,
+      noteId ? { params: { noteId } } : {},
     );
   }
 
@@ -415,13 +443,26 @@ export class EncounterService {
 
   /** Author-only signing ceremony (P3 #20) — the backend resolves the signer
    *  and refuses non-authors; empty body by design. */
-  signNote(encounterId: string): Observable<EncounterNoteResponse> {
-    return this.http.post<EncounterNoteResponse>(`${this.baseUrl}/${encounterId}/notes/sign`, {});
+  signNote(encounterId: string, noteId?: string): Observable<EncounterNoteResponse> {
+    // QA D831: a stay holds one entry per progress note; noteId names the one
+    // on screen. Without it the server takes the current entry only.
+    return this.http.post<EncounterNoteResponse>(
+      `${this.baseUrl}/${encounterId}/notes/sign`,
+      {},
+      noteId ? { params: { noteId } } : {},
+    );
   }
 
-  /** Attending co-signature — backend refuses the note's own author. */
-  cosignNote(encounterId: string): Observable<EncounterNoteResponse> {
-    return this.http.post<EncounterNoteResponse>(`${this.baseUrl}/${encounterId}/notes/cosign`, {});
+  /**
+   * Attending co-signature — backend refuses the note's own author. noteId
+   * names the entry on screen; without it the server takes the current entry.
+   */
+  cosignNote(encounterId: string, noteId?: string): Observable<EncounterNoteResponse> {
+    return this.http.post<EncounterNoteResponse>(
+      `${this.baseUrl}/${encounterId}/notes/cosign`,
+      {},
+      noteId ? { params: { noteId } } : {},
+    );
   }
 
   submitTriage(

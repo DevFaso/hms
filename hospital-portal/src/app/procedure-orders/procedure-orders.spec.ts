@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { TranslateService } from '@ngx-translate/core';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 
 import { ProcedureOrdersComponent } from './procedure-orders';
 import { ProcedureOrderResponse, ProcedureOrderService } from '../services/procedure-order.service';
@@ -66,6 +66,54 @@ describe('ProcedureOrdersComponent', () => {
         consentObtainedAt: '2026-10-24T14:00:00',
         consentObtainedBy: 'Dr Test',
       }),
+    );
+  });
+
+  it('QA D857: a reschedule to 01/01/2020 09:00 is refused before any request', () => {
+    jasmine.clock().mockDate(new Date(2026, 9, 26, 10, 0, 0));
+    const toast = TestBed.inject(ToastService);
+    spyOn(toast, 'error');
+    component.viewedOrder.set({ ...order, status: 'SCHEDULED', consentObtained: true });
+    component.openAction('schedule');
+    component.scheduleDatetime = '2020-01-01T09:00';
+
+    component.submitSchedule();
+
+    expect(service.update).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith('PROCEDURES.PAST_DATE');
+  });
+
+  it('QA D857: a future reschedule still goes through', () => {
+    jasmine.clock().mockDate(new Date(2026, 9, 26, 10, 0, 0));
+    component.viewedOrder.set({ ...order, status: 'SCHEDULED', consentObtained: true });
+    component.openAction('schedule');
+    component.scheduleDatetime = '2026-10-27T09:00';
+
+    component.submitSchedule();
+
+    expect(service.update).toHaveBeenCalledOnceWith(
+      'o1',
+      jasmine.objectContaining({ status: 'SCHEDULED' }),
+    );
+  });
+
+  it("QA D857: the server's refusal reason is shown, not the generic error", () => {
+    const toast = TestBed.inject(ToastService);
+    spyOn(toast, 'error');
+    service.update.and.returnValue(
+      throwError(() => ({
+        status: 400,
+        error: {
+          message: "La date et l'heure prévues d'un acte ne peuvent pas être dans le passé.",
+        },
+      })),
+    );
+    component.viewedOrder.set(order);
+
+    component.setStatus('SCHEDULED');
+
+    expect(toast.error).toHaveBeenCalledWith(
+      "La date et l'heure prévues d'un acte ne peuvent pas être dans le passé.",
     );
   });
 });

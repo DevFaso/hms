@@ -66,6 +66,14 @@ public class LabTestDefinitionRequestDTO {
     @Size(max = 1000)
     private String preparationInstructions;
 
+    /**
+     * QA D834: the expected (normal) answer of a qualitative test, such as
+     * "Négatif" for a malaria rapid test. A qualitative test has no numeric
+     * range; this is what it is reviewed, graded and shown against.
+     */
+    @Size(max = 255)
+    private String expectedResult;
+
     @Min(1)
     @Max(10080)
     private Integer turnaroundTime;

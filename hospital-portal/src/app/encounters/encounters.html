@@ -340,9 +340,121 @@
             </div>
           }
 
+          <!-- QA D831 (#965 review): one addendum form, shown under the entry it corrects. -->
+          <ng-template #addendumForm>
+            <h3>{{ 'ENCOUNTERS.ADD_ADDENDUM' | translate }}</h3>
+            <textarea
+              class="note-input"
+              data-testid="addendum-content"
+              [(ngModel)]="addendumContent"
+              rows="3"
+              [attr.aria-label]="'ENCOUNTERS.ADDENDUM_ARIA' | translate"
+              [placeholder]="'ENCOUNTERS.ADDENDUM_PLACEHOLDER' | translate"
+            ></textarea>
+            <div class="note-actions">
+              <button
+                class="btn-primary"
+                data-testid="addendum-save"
+                (click)="addAddendum()"
+                [disabled]="!addendumContent.trim() || addendumSaving()"
+              >
+                {{ 'COMMON.SAVE' | translate }}
+              </button>
+              <button class="btn-secondary" (click)="closeAddendumForm()">
+                {{ 'COMMON.CANCEL' | translate }}
+              </button>
+            </div>
+          </ng-template>
+
+          @if (earlierNoteEntries().length > 0) {
+            <!-- QA D831: each progress entry of the stay is its own, signed by its author and co-signed by id. -->
+            <div class="detail-section" data-testid="note-earlier-entries">
+              <h3>{{ 'ENCOUNTERS.NOTE_EARLIER_ENTRIES' | translate }}</h3>
+              @for (view of earlierNoteEntryViews(); track view.entry.id) {
+                <div class="note-history-item" data-testid="note-entry">
+                  <span class="note-meta">
+                    @if (view.entry.authorName) {
+                      <strong>{{ view.entry.authorName }}</strong> —
+                    }
+                    {{ view.entry.documentedAt | serverTime | date: 'short' }} ·
+                    @if (view.entry.signedAt) {
+                      {{ 'ENCOUNTERS.NOTE_SIGNED_AT' | translate }}
+                      {{ view.entry.signedAt | serverTime | date: 'short' }}
+                    } @else {
+                      {{ 'ENCOUNTERS.NOTE_UNSIGNED' | translate }}
+                    }
+                  </span>
+                  <!-- #965 review: the entry's text, read before it is signed or co-signed. -->
+                  @for (section of view.sections; track section.labelKey) {
+                    <p class="notes-content" data-testid="note-entry-section">
+                      <strong>{{ section.labelKey | translate }}</strong> {{ section.text }}
+                    </p>
+                  }
+                  @if (!view.entry.signedAt) {
+                    <button
+                      class="btn-secondary"
+                      data-testid="sign-note-entry"
+                      (click)="signNoteEntry(view.entry)"
+                      [disabled]="signingEntryId() !== null"
+                    >
+                      <span class="material-symbols-outlined">draw</span>
+                      {{
+                        (signingEntryId() === view.entry.id
+                          ? 'ENCOUNTERS.NOTE_SIGNING'
+                          : 'ENCOUNTERS.SIGN_NOTE'
+                        ) | translate
+                      }}
+                    </button>
+                  } @else if (view.entry.requiresCosign && !view.entry.cosignedAt) {
+                    <span class="note-meta cosign-pending">
+                      {{ 'ENCOUNTERS.NOTE_COSIGN_PENDING' | translate }}
+                    </span>
+                    <button
+                      class="btn-secondary"
+                      data-testid="cosign-note-entry"
+                      (click)="cosignNoteEntry(view.entry)"
+                      [disabled]="cosigningEntryId() !== null"
+                    >
+                      <span class="material-symbols-outlined">approval</span>
+                      {{
+                        (cosigningEntryId() === view.entry.id
+                          ? 'ENCOUNTERS.NOTE_COSIGNING'
+                          : 'ENCOUNTERS.COSIGN_NOTE'
+                        ) | translate
+                      }}
+                    </button>
+                  }
+                  <!-- #965 review: a signed earlier entry is corrected by an addendum filed under it. -->
+                  @if (addendumOnEarlierEntry() && addendumTargetId() === view.entry.id) {
+                    <div data-testid="note-entry-addendum-form">
+                      <ng-container *ngTemplateOutlet="addendumForm"></ng-container>
+                    </div>
+                  } @else {
+                    <button
+                      class="btn-secondary"
+                      data-testid="addendum-note-entry"
+                      (click)="openAddendumForm(view.entry.id)"
+                    >
+                      <span class="material-symbols-outlined">post_add</span>
+                      {{ 'ENCOUNTERS.ADD_ADDENDUM' | translate }}
+                    </button>
+                  }
+                </div>
+              }
+            </div>
+          }
+
           @if (noteState(); as note) {
             <div class="detail-section" data-testid="note-signature-section">
               <h3>{{ 'ENCOUNTERS.NOTE_SIGNATURE' | translate }}</h3>
+              @if (!note.signedAt || (note.requiresCosign && !note.cosignedAt)) {
+                <!-- #965 review: the text of the entry the buttons below act on. -->
+                @for (section of currentNoteSections(); track section.labelKey) {
+                  <p class="notes-content" data-testid="note-current-section">
+                    <strong>{{ section.labelKey | translate }}</strong> {{ section.text }}
+                  </p>
+                }
+              }
               @if (note.signedAt) {
                 <p class="note-meta" data-testid="note-signed-line">
                   {{ 'ENCOUNTERS.NOTE_SIGNED_AT' | translate }}
@@ -410,8 +522,9 @@
           }
 
           <div class="detail-section detail-section--actions">
-            <!-- A signed note is locked (P3 #20) — content changes go through addenda. -->
-            @if (!showNoteForm() && !noteState()?.signedAt) {
+            <!-- A signed note is locked (P3 #20) — content changes go through addenda.
+                 QA D831: on a stay each note is a new progress entry, offered after a signed one. -->
+            @if (!showNoteForm() && (!noteState()?.signedAt || enc.admissionId)) {
               <button
                 class="btn-secondary"
                 [title]="'ENCOUNTERS.ADD_NOTE' | translate"
@@ -443,36 +556,19 @@
           }
 
           <div class="detail-section">
-            @if (!showAddendumForm()) {
+            @if (showAddendumForm() && !addendumOnEarlierEntry()) {
+              <ng-container *ngTemplateOutlet="addendumForm"></ng-container>
+            } @else {
+              <!-- QA D831: this button corrects the current entry, the one shown above. -->
               <button
                 class="btn-secondary"
+                data-testid="addendum-current-entry"
                 [title]="'ENCOUNTERS.ADD_ADDENDUM' | translate"
-                (click)="showAddendumForm.set(true)"
+                (click)="openAddendumForm(noteState()?.id)"
               >
                 <span class="material-symbols-outlined">post_add</span>
                 {{ 'ENCOUNTERS.ADD_ADDENDUM' | translate }}
               </button>
-            } @else {
-              <h3>{{ 'ENCOUNTERS.ADD_ADDENDUM' | translate }}</h3>
-              <textarea
-                class="note-input"
-                [(ngModel)]="addendumContent"
-                rows="3"
-                [attr.aria-label]="'ENCOUNTERS.ADDENDUM_ARIA' | translate"
-                [placeholder]="'ENCOUNTERS.ADDENDUM_PLACEHOLDER' | translate"
-              ></textarea>
-              <div class="note-actions">
-                <button
-                  class="btn-primary"
-                  (click)="addAddendum()"
-                  [disabled]="!addendumContent.trim() || addendumSaving()"
-                >
-                  {{ 'COMMON.SAVE' | translate }}
-                </button>
-                <button class="btn-secondary" (click)="showAddendumForm.set(false)">
-                  {{ 'COMMON.CANCEL' | translate }}
-                </button>
-              </div>
             }
           </div>
         </div>

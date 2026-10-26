@@ -25,6 +25,8 @@ public class GeneralReferralResponseDTO {
     
     private UUID patientId;
     private String patientName;
+    /** QA D889: the patient's MRN at the referral's hospital (the list and detail show it). */
+    private String patientMrn;
     
     private UUID hospitalId;
     private String hospitalName;

@@ -87,6 +87,7 @@ import {
 
 import { currentLocale, formatCfa } from '../shared/i18n/app-locale';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { ClockTimePipe } from '../shared/pipes/clock-time.pipe';
 // ── Local interfaces ────────────────────────────────────────────────────────
 
 interface QuickAction {
@@ -138,6 +139,7 @@ export { currentMedications };
   selector: 'app-dashboard',
   standalone: true,
   imports: [
+    ClockTimePipe,
     ServerTimePipe,
     CommonModule,
     RouterLink,

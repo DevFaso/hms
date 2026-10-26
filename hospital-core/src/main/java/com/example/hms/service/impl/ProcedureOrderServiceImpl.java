@@ -80,6 +80,9 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
             .or(() -> staffRepository.findFirstByUserIdOrderByCreatedAtAsc(orderingProviderId))
             .orElseThrow(() -> new ResourceNotFoundException("procedureOrder.orderingProvider.notFound", orderingProviderId));
 
+        // QA D857: a procedure is not planned for a time already past.
+        requireNotInPast(request.getScheduledDatetime());
+
         Encounter encounter = null;
         if (request.getEncounterId() != null) {
             encounter = encounterRepository.findById(request.getEncounterId())
@@ -98,7 +101,9 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
             .indication(request.getIndication())
             .clinicalNotes(request.getClinicalNotes())
             .urgency(request.getUrgency())
-            .status(ProcedureOrderStatus.ORDERED)
+            // QA D880: an order placed with its date is already planned,
+            // exactly as a later reschedule of an ORDERED order makes it.
+            .status(request.getScheduledDatetime() != null ? ProcedureOrderStatus.SCHEDULED : ProcedureOrderStatus.ORDERED)
             .scheduledDatetime(request.getScheduledDatetime())
             .estimatedDurationMinutes(request.getEstimatedDurationMinutes())
             .requiresAnesthesia(request.getRequiresAnesthesia() != null ? request.getRequiresAnesthesia() : Boolean.FALSE)
@@ -231,11 +236,19 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
         ProcedureOrder procedureOrder = getProcedureOrderEntity(orderId);
 
         if (procedureOrder.getStatus() == ProcedureOrderStatus.COMPLETED) {
-            throw new BusinessException("Cannot update a completed procedure order");
+            throw new BusinessException("procedureOrder.completed.locked");
         }
 
         if (procedureOrder.getStatus() == ProcedureOrderStatus.CANCELLED) {
-            throw new BusinessException("Cannot update a cancelled procedure order");
+            throw new BusinessException("procedureOrder.cancelled.locked");
+        }
+
+        // QA D857: a reschedule to a past date was accepted (01/01/2020 made
+        // the order "Planifié" and offered "Débuter la procédure"). Checked
+        // before anything is applied, so a refused request changes nothing.
+        if (updateDTO.getScheduledDatetime() != null
+                && !updateDTO.getScheduledDatetime().equals(procedureOrder.getScheduledDatetime())) {
+            requireNotInPast(updateDTO.getScheduledDatetime());
         }
 
         if (updateDTO.getStatus() != null) {
@@ -269,11 +282,11 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
         ProcedureOrder procedureOrder = getProcedureOrderEntity(orderId);
 
         if (procedureOrder.getStatus() == ProcedureOrderStatus.COMPLETED) {
-            throw new BusinessException("Cannot cancel a completed procedure order");
+            throw new BusinessException("procedureOrder.completed.cancel");
         }
 
         if (procedureOrder.getStatus() == ProcedureOrderStatus.CANCELLED) {
-            throw new BusinessException("Procedure order is already cancelled");
+            throw new BusinessException("procedureOrder.alreadyCancelled");
         }
 
         procedureOrder.setStatus(ProcedureOrderStatus.CANCELLED);
@@ -295,6 +308,21 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
         return orders.stream()
             .map(this::toResponseDTO)
             .toList();
+    }
+
+    /**
+     * QA D857: how far before "now" a planned time may lie and still be taken
+     * as now: the form's clock and the server's differ by a few minutes, and a
+     * procedure planned "for now" is not a past one.
+     */
+    private static final long SCHEDULE_PAST_TOLERANCE_MINUTES = 15;
+
+    /** QA D857: a planned date and time must not be in the past. */
+    private static void requireNotInPast(LocalDateTime scheduledDatetime) {
+        if (scheduledDatetime != null
+                && scheduledDatetime.isBefore(LocalDateTime.now().minusMinutes(SCHEDULE_PAST_TOLERANCE_MINUTES))) {
+            throw new BusinessException("procedureOrder.scheduledInPast");
+        }
     }
 
     // Helper methods

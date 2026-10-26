@@ -150,7 +150,7 @@
             <tr class="data-row">
               <td>{{ a.gestationalWeek }}</td>
               <td>{{ a.appointmentDate | serverTime | date: 'mediumDate' }}</td>
-              <td>{{ a.startTime || '—' }}</td>
+              <td>{{ (a.startTime | clockTime) || '—' }}</td>
               <td>{{ (a.status | enumLabel: 'appointmentStatus') || '—' }}</td>
               <td class="actions-cell">
                 <button

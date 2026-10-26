@@ -76,7 +76,7 @@ public class CheckOutMapper {
         }
 
         AfterVisitSummaryDTO summary = builder.build();
-        fillFromSignedNote(summary, encounter.getEncounterNote());
+        fillFromSignedNote(summary, encounter.getLatestSignedEncounterNote());
         return summary;
     }
 

@@ -1,4 +1,4 @@
-import { toNoteHistoryView } from './note-history-view';
+import { noteEntrySections, toNoteHistoryView } from './note-history-view';
 
 describe('toNoteHistoryView (QA D43)', () => {
   it('reads the SOAP sections and signer out of the snapshots', () => {
@@ -36,5 +36,24 @@ describe('toNoteHistoryView (QA D43)', () => {
     expect(view.authorName).toBe('Dr A');
     expect(view.sections).toEqual([]);
     expect(toNoteHistoryView({ id: 'h3', changedAt: 'x' }).authorName).toBeNull();
+  });
+});
+
+describe('noteEntrySections (#965 review)', () => {
+  it('lists the filled sections of an entry in form order, with their labels', () => {
+    const sections = noteEntrySections({
+      id: 'n1',
+      subjective: ' QA R13 J0 toux fébrile ',
+      plan: 'Ceftriaxone IV',
+      objective: '   ',
+    } as never);
+    expect(sections).toEqual([
+      { labelKey: 'ENCOUNTERS.NOTE_FORM_SOAP_S', text: 'QA R13 J0 toux fébrile' },
+      { labelKey: 'ENCOUNTERS.NOTE_FORM_SOAP_P', text: 'Ceftriaxone IV' },
+    ]);
+  });
+
+  it('is empty for no entry', () => {
+    expect(noteEntrySections(null)).toEqual([]);
   });
 });

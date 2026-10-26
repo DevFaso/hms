@@ -13,7 +13,12 @@ import { CommonModule } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
 import { Subject, Subscription, takeUntil } from 'rxjs';
 
-import { ChartReview, ChartReviewService } from '../../services/chart-review.service';
+import {
+  ChartReview,
+  ChartReviewEncounter,
+  ChartReviewImaging,
+  ChartReviewService,
+} from '../../services/chart-review.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
@@ -72,6 +77,24 @@ export class ChartReviewComponent implements OnChanges, OnDestroy {
       imaging: c?.imaging?.length ?? 0,
       procedures: c?.procedures?.length ?? 0,
     };
+  });
+
+  /**
+   * QA D829: the timeline's encounter and imaging rows carry the server's
+   * title, which joins the raw codes ("OUTPATIENT — Médecine générale"). The
+   * row is labelled from its own encounter or imaging entry instead, through
+   * the same enum labels the Encounters and Imaging tabs use.
+   */
+  protected readonly encountersById = computed(() => {
+    const byId = new Map<string, ChartReviewEncounter>();
+    for (const e of this.chart()?.encounters ?? []) byId.set(e.id, e);
+    return byId;
+  });
+
+  protected readonly imagingById = computed(() => {
+    const byId = new Map<string, ChartReviewImaging>();
+    for (const i of this.chart()?.imaging ?? []) byId.set(i.id, i);
+    return byId;
   });
 
   private readonly chartReviewService = inject(ChartReviewService);
