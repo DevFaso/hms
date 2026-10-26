@@ -140,6 +140,32 @@ describe('MyRecordsComponent', () => {
     expect(host().querySelectorAll('.dashboard-card').length).toBeGreaterThan(0);
   });
 
+  it('QA D841: shows the record number each hospital gave the patient', () => {
+    portal.getHealthSummary.and.returnValue(
+      of(
+        summary({
+          profile: {
+            dateOfBirth: '1990-01-01',
+            hospitalRecords: [
+              { hospitalId: 'h-a', hospitalName: 'CHU Wend-Panga', mrn: 'CHW7848' },
+              { hospitalId: 'h-b', hospitalName: 'Clinique Nabonswendé', mrn: 'CNK4035' },
+            ],
+          } as HealthSummaryDTO['profile'],
+        }),
+      ),
+    );
+    create();
+    expect(texts('[data-testid="my-record-numbers"] li')).toEqual([
+      'CHU Wend-Panga : CHW7848',
+      'Clinique Nabonswendé : CNK4035',
+    ]);
+  });
+
+  it('QA D841: shows no record-number block when no registration carries one', () => {
+    create();
+    expect(host().querySelector('[data-testid="my-record-numbers"]')).toBeNull();
+  });
+
   it('links each card to its page', () => {
     create();
     const links = Array.from(host().querySelectorAll('a.card-link')).map((a) =>

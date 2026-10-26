@@ -1,7 +1,7 @@
 import { computed } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 
 import { OrderSetListComponent } from './order-set-list.component';
@@ -63,6 +63,22 @@ describe('OrderSetListComponent', () => {
     }).compileComponents();
 
     fixture = TestBed.createComponent(OrderSetListComponent);
+  });
+
+  it('QA D859: the admission type is shown in the reader language, not as ELECTIVE', (done) => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', {
+      PORTAL: { ENUM: { ADMISSION_TYPE: { EMERGENCY: 'Urgence' } } },
+    });
+    translate.use('fr');
+    fixture.detectChanges();
+    setTimeout(() => {
+      fixture.detectChanges();
+      const row = fixture.nativeElement.querySelector('[data-os-id="os-1"]') as HTMLElement;
+      expect(row.textContent).toContain('Urgence');
+      expect(row.textContent).not.toContain('EMERGENCY');
+      done();
+    }, DEBOUNCE_WAIT_MS);
   });
 
   it('loads + renders the rows on init', (done) => {

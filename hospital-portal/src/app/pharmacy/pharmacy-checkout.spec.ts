@@ -12,7 +12,10 @@ type DispenseResult =
 describe('PharmacyCheckoutComponent (QA D264)', () => {
   let svc: jasmine.SpyObj<PharmacyService>;
 
-  function create(chargeAmount: number | null): PharmacyCheckoutComponent {
+  function create(
+    chargeAmount: number | null,
+    paid: boolean | null = false,
+  ): PharmacyCheckoutComponent {
     svc = jasmine.createSpyObj<PharmacyService>('PharmacyService', [
       'getDispense',
       'createPayment',
@@ -26,13 +29,20 @@ describe('PharmacyCheckoutComponent (QA D264)', () => {
           content: [
             { id: 'd-1', status: 'COMPLETED', medicationName: 'Paracétamol' },
             { id: 'd-2', status: 'CANCELLED', medicationName: 'Paracétamol' },
+            // QA D843: dispense e9a33ec4 was paid 3 600 F CFA cash and still listed.
+            {
+              id: 'e9a33ec4',
+              status: 'COMPLETED',
+              medicationName: 'Artéméther-Luméfantrine',
+              paid: true,
+            },
           ],
         },
       }) as never,
     );
     svc.getDispense.and.returnValue(
       of({
-        data: { id: 'd-1', patientId: 'p-1', quantityDispensed: 9, chargeAmount },
+        data: { id: 'd-1', patientId: 'p-1', quantityDispensed: 9, chargeAmount, paid },
       } as unknown as DispenseResult),
     );
     TestBed.configureTestingModule({
@@ -69,5 +79,26 @@ describe('PharmacyCheckoutComponent (QA D264)', () => {
     expect(svc.listDispensesByPharmacy).toHaveBeenCalledWith('ph-1', 0, 50);
     expect(c.dispenses().map((d) => d.id)).toEqual(['d-1']);
     expect(svc.getDispense).toHaveBeenCalledWith('d-1');
+  });
+
+  it('QA D843: leaves a paid fill out of the list', () => {
+    const c = create(3600);
+    expect(c.dispenses().map((d) => d.id)).not.toContain('e9a33ec4');
+  });
+
+  it('QA D843: a paid fill opened anyway says so and takes no second payment', () => {
+    const c = create(3600, true);
+    expect(c.isPaid()).toBeTrue();
+    c.submit();
+    expect(svc.createPayment).not.toHaveBeenCalled();
+  });
+
+  it('QA D843: an unpaid priced fill is still paid normally', () => {
+    const c = create(3600, false);
+    svc.createPayment.and.returnValue(of({ data: { id: 'pay-1' } }) as never);
+    c.submit();
+    expect(svc.createPayment).toHaveBeenCalledWith(
+      jasmine.objectContaining({ dispenseId: 'd-1', amount: 3600 }),
+    );
   });
 });

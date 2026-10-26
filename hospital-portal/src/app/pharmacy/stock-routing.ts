@@ -1,4 +1,11 @@
-import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  computed,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -12,6 +19,7 @@ import {
   StockCheckResult,
   PartnerOption,
   RoutingDecisionResponse,
+  WorkQueuePrescription,
 } from '../services/pharmacy.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { RoleContextService } from '../core/role-context.service';
@@ -56,6 +64,29 @@ export class StockRoutingComponent implements OnInit {
   // Prescription lookup
   prescriptionId = '';
   checking = signal(false);
+
+  /**
+   * QA D888: the page only offered a box for a raw prescription UUID, which
+   * nobody at a counter has. The pharmacist now searches the orders waiting
+   * at this hospital's dispensary (the work queue) by patient or medication
+   * and picks one; the deep link from the dispensing queue still fills it in.
+   */
+  readonly queue = signal<WorkQueuePrescription[]>([]);
+  readonly queueLoading = signal(false);
+  readonly queueError = signal(false);
+  readonly rxSearch = signal('');
+  readonly selected = signal<WorkQueuePrescription | null>(null);
+  /** At most this many matches are listed; typing more narrows them. */
+  static readonly MAX_MATCHES = 8;
+  readonly matches = computed(() => {
+    const term = this.rxSearch().trim().toLocaleLowerCase();
+    if (!term) {
+      return [];
+    }
+    return this.queue()
+      .filter((rx) => this.searchText(rx).includes(term))
+      .slice(0, StockRoutingComponent.MAX_MATCHES);
+  });
   stockResult = signal<StockCheckResult | null>(null);
 
   /**
@@ -134,6 +165,59 @@ export class StockRoutingComponent implements OnInit {
     if (idFromRoute) {
       this.prescriptionId = idFromRoute;
       this.checkStock();
+    }
+    this.loadQueue();
+  }
+
+  /** QA D888: the orders a pharmacist can pick from, newest first. */
+  loadQueue(): void {
+    this.queueLoading.set(true);
+    this.queueError.set(false);
+    this.svc.getDispenseWorkQueue(0, 100).subscribe({
+      next: (res) => {
+        this.queue.set(res?.data?.content ?? []);
+        this.queueLoading.set(false);
+        this.syncSelectedFromQueue();
+      },
+      error: () => {
+        this.queue.set([]);
+        this.queueLoading.set(false);
+        this.queueError.set(true);
+      },
+    });
+  }
+
+  /** QA D888: picking an order runs the stock check for it. */
+  pickPrescription(rx: WorkQueuePrescription): void {
+    this.selected.set(rx);
+    this.rxSearch.set('');
+    this.prescriptionId = rx.id;
+    this.checkStock();
+  }
+
+  /** Enter in the search box takes the first match, when there is one. */
+  pickFirstMatch(): void {
+    const first = this.matches()[0];
+    if (first) {
+      this.pickPrescription(first);
+    }
+  }
+
+  patientLabel(rx: WorkQueuePrescription): string {
+    return [rx.patient?.firstName, rx.patient?.lastName].filter((p) => !!p).join(' ');
+  }
+
+  private searchText(rx: WorkQueuePrescription): string {
+    return [this.patientLabel(rx), rx.medicationName, rx.dosage]
+      .filter((p) => !!p)
+      .join(' ')
+      .toLocaleLowerCase();
+  }
+
+  /** A deep-linked order is named once the queue arrives, instead of shown as an id. */
+  private syncSelectedFromQueue(): void {
+    if (this.prescriptionId && !this.selected()) {
+      this.selected.set(this.queue().find((rx) => rx.id === this.prescriptionId) ?? null);
     }
   }
 

@@ -70,6 +70,7 @@ describe('StockRoutingComponent', () => {
       'backOrder',
       'partnerRespond',
       'confirmPartnerDispense',
+      'getDispenseWorkQueue',
     ]);
     toastSvc = jasmine.createSpyObj('ToastService', ['success', 'error']);
 
@@ -80,6 +81,27 @@ describe('StockRoutingComponent', () => {
     pharmacySvc.backOrder.and.returnValue(of({ data: { id: 'dec-3' } } as any));
     pharmacySvc.partnerRespond.and.returnValue(of({ data: { id: 'dec-1' } } as any));
     pharmacySvc.confirmPartnerDispense.and.returnValue(of({ data: { id: 'dec-1' } } as any));
+    pharmacySvc.getDispenseWorkQueue.and.returnValue(
+      of({
+        data: {
+          content: [
+            {
+              id: 'rx-amox',
+              medicationName: 'Amoxicilline',
+              dosage: '500 mg',
+              status: 'SIGNED',
+              patient: { id: 'p-1', firstName: 'Seydou', lastName: 'Traoré' },
+            },
+            {
+              id: 'rx-para',
+              medicationName: 'Paracétamol',
+              status: 'SIGNED',
+              patient: { id: 'p-2', firstName: 'Awa', lastName: 'Ouédraogo' },
+            },
+          ],
+        },
+      } as any),
+    );
 
     await TestBed.configureTestingModule({
       imports: [StockRoutingComponent, TranslateModule.forRoot()],
@@ -129,6 +151,55 @@ describe('StockRoutingComponent', () => {
 
     expect(c.prescriptionId).toBe('rx-deep-1');
     expect(pharmacySvc.checkStock).toHaveBeenCalledWith('rx-deep-1');
+    // QA D888: the deep link still works alongside the search.
+    expect(pharmacySvc.getDispenseWorkQueue).toHaveBeenCalled();
+  });
+
+  it('QA D888: offers no raw prescription-id box, only a search over the queue', () => {
+    expect(fixture.nativeElement.querySelector('#prescriptionIdInput')).toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-testid="routing-rx-search"]')).not.toBeNull();
+    expect(pharmacySvc.getDispenseWorkQueue).toHaveBeenCalledWith(0, 100);
+  });
+
+  it('QA D888: finds an order by patient name and checks stock for the one picked', () => {
+    component.rxSearch.set('traoré');
+    fixture.detectChanges();
+    expect(component.matches().map((rx) => rx.id)).toEqual(['rx-amox']);
+
+    (
+      fixture.nativeElement.querySelector('[data-testid="routing-rx-rx-amox"]') as HTMLElement
+    ).click();
+    fixture.detectChanges();
+
+    expect(pharmacySvc.checkStock).toHaveBeenCalledWith('rx-amox');
+    expect(component.prescriptionId).toBe('rx-amox');
+    const chosen = fixture.nativeElement.querySelector(
+      '[data-testid="routing-rx-selected"]',
+    ) as HTMLElement;
+    expect(chosen.textContent).toContain('Seydou Traoré');
+    expect(chosen.textContent).toContain('Amoxicilline');
+  });
+
+  it('QA D888: finds an order by medication, and Enter takes the first match', () => {
+    component.rxSearch.set('parac');
+    component.pickFirstMatch();
+    expect(pharmacySvc.checkStock).toHaveBeenCalledWith('rx-para');
+  });
+
+  it('QA D888: says so when nothing matches, and when the queue cannot be read', () => {
+    component.rxSearch.set('zzz');
+    fixture.detectChanges();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="routing-rx-no-match"]'),
+    ).not.toBeNull();
+
+    pharmacySvc.getDispenseWorkQueue.and.returnValue(throwError(() => ({ status: 403 })));
+    component.loadQueue();
+    fixture.detectChanges();
+    expect(component.queueError()).toBeTrue();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="routing-rx-queue-error"]'),
+    ).not.toBeNull();
   });
 
   it('should create', () => {

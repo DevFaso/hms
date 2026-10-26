@@ -13,12 +13,13 @@ import {
   MedicationCatalogItemResponse,
 } from '../services/pharmacy.service';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { CfaPipe } from '../shared/pipes/cfa.pipe';
 import { serverDateOrInstant } from '../shared/date-utils';
 
 @Component({
   selector: 'app-inventory-dashboard',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule],
+  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, CfaPipe],
   templateUrl: './inventory-dashboard.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './inventory-dashboard.scss',
@@ -39,6 +40,8 @@ export class InventoryDashboardComponent implements OnInit {
 
   // Stock levels
   inventoryItems = signal<InventoryItemResponse[]>([]);
+  /** QA D835: the row whose price box is open; every other row shows its price as text. */
+  editingPriceId = signal<string | null>(null);
   stockLoading = signal(false);
   currentPage = 0;
   pageSize = 20;
@@ -229,6 +232,7 @@ export class InventoryDashboardComponent implements OnInit {
               r.id === item.id ? { ...r, unitPrice: saved?.unitPrice ?? price } : r,
             ),
           );
+          this.editingPriceId.set(null);
           this.toast.success(this.translate.instant('PHARMACY.PRICE_SAVED'));
         },
         error: (err) => {

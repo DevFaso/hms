@@ -235,6 +235,56 @@ describe('TransfusionComponent', () => {
     expect(component.showReactionModal()).toBeFalse();
   });
 
+  it('QA D858/D885: shows the server reason for a refused reaction, in the caller language', () => {
+    txSpy.recordReaction.and.returnValue(
+      throwError(() => ({
+        status: 400,
+        error: {
+          message: "L'heure de début de la réaction ne peut pas être dans le futur.",
+        },
+      })),
+    );
+    component.openReaction('adm-1');
+    component.reactionForm.onsetAt = '2099-01-01T10:00';
+    component.reactionForm.signsSymptoms = 'Fièvre 38,6 °C';
+    component.submitReaction();
+
+    expect(toastSpy.error).toHaveBeenCalledWith(
+      "L'heure de début de la réaction ne peut pas être dans le futur.",
+    );
+    expect(component.showReactionModal()).toBeTrue();
+  });
+
+  it('QA D884/D885: shows the field reason for a refused unit count', () => {
+    txSpy.createRequest.and.returnValue(
+      throwError(() => ({
+        status: 400,
+        error: {
+          error: 'Validation Failed',
+          message: 'Erreurs de validation dans la requête',
+          fieldErrors: { unitsRequested: 'Une demande ne peut porter que sur 20 poches au plus.' },
+        },
+      })),
+    );
+    component.requestForm.patientId = 'p1';
+    component.requestForm.unitsRequested = 500;
+    component.requestForm.indication = 'x';
+    component.submitRequest();
+
+    expect(toastSpy.error).toHaveBeenCalledWith(
+      'Une demande ne peut porter que sur 20 poches au plus.',
+    );
+  });
+
+  it('QA D858/D883/D884: the pickers stop at today and now, the counts at the server limits', () => {
+    component.openUnitModal();
+    component.openReaction('adm-1');
+    expect(component.maxCollectedOn).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(component.maxOnsetAt).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/);
+    expect(component.maxUnitsPerRequest).toBe(20);
+    expect(component.maxUnitVolumeMl).toBe(1000);
+  });
+
   it('does not record a reaction with no signs described', () => {
     component.openReaction('adm-1');
     component.reactionForm.onsetAt = '2026-08-25T10:00';

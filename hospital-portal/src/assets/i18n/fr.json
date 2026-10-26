@@ -1069,7 +1069,45 @@
     "SEARCH_PLACEHOLDER": "Rechercher un ensemble…",
     "SYNONYMS_PLACEHOLDER": "Séparés par des virgules (ex. Tylenol, paracétamol)",
     "VERSION_HISTORY": "Historique des versions",
-    "VERSION_RETIRED": "retirée"
+    "VERSION_RETIRED": "retirée",
+    "NAME_REQUIRED": "Donnez un nom à l'ensemble d'ordres.",
+    "ITEM_NAME_REQUIRED": "Cet élément doit avoir un nom.",
+    "ITEM_TYPE": {
+      "MEDICATION": "Médicament",
+      "LAB": "Analyse de laboratoire",
+      "IMAGING": "Imagerie",
+      "DIET": "Régime alimentaire",
+      "ACTIVITY": "Activité",
+      "MONITORING": "Surveillance"
+    },
+    "DOSE_UNIT": {
+      "MCG": "µg",
+      "IU": "UI",
+      "TABLET": "comprimé",
+      "PUFF": "bouffée",
+      "DROP": "goutte",
+      "UNIT": "unité"
+    },
+    "FREQUENCY": {
+      "QD": "Une fois par jour (QD)",
+      "BID": "Deux fois par jour (BID)",
+      "TID": "Trois fois par jour (TID)",
+      "QID": "Quatre fois par jour (QID)",
+      "Q4H": "Toutes les 4 heures (Q4H)",
+      "Q6H": "Toutes les 6 heures (Q6H)",
+      "Q8H": "Toutes les 8 heures (Q8H)",
+      "PRN": "Si besoin (PRN)"
+    },
+    "ROUTE": {
+      "PO": "Voie orale (PO)",
+      "IV": "Intraveineuse (IV)",
+      "IM": "Intramusculaire (IM)",
+      "SC": "Sous-cutanée (SC)",
+      "PR": "Voie rectale (PR)",
+      "INH": "Inhalée (INH)",
+      "TOPICAL": "Cutanée (topique)",
+      "NASAL": "Voie nasale"
+    }
   },
   "REFILLS": {
     "QUEUE_TITLE": "Demandes de renouvellement",
@@ -4791,7 +4829,9 @@
       "QUICK_LINKS": "Liens rapides",
       "UPCOMING_APPOINTMENTS": "Rendez-vous à venir",
       "MEDICAL_HISTORY": "Antécédents médicaux et familiaux",
-      "CARE_TEAM": "Mon équipe de soins"
+      "CARE_TEAM": "Mon équipe de soins",
+      "RECORD_NUMBERS": "Mes numéros de dossier",
+      "UNKNOWN_HOSPITAL": "Hôpital sans nom"
     },
     "SHARING": {
       "TITLE": "Qui a consulté mon dossier",
@@ -8586,7 +8626,14 @@
     "PRICE_SAVED": "Prix enregistré.",
     "PRICE_INVALID": "Le prix doit être un nombre entier de francs, positif ou nul.",
     "PRICE_SAVE_FAILED": "Le prix n'a pas pu être enregistré.",
-    "UNIT_COST_NEGATIVE": "Le coût unitaire ne peut pas être négatif."
+    "UNIT_COST_NEGATIVE": "Le coût unitaire ne peut pas être négatif.",
+    "EDIT_PRICE": "Modifier le prix unitaire",
+    "MTM_CLOSED": "Clôturée",
+    "ROUTING_RX_SEARCH": "Rechercher l'ordonnance",
+    "ROUTING_RX_SEARCH_PLACEHOLDER": "Nom du patient ou médicament…",
+    "ROUTING_RX_QUEUE_FAILED": "Les ordonnances en attente à la dispensation n'ont pas pu être chargées.",
+    "ROUTING_RX_NO_MATCH": "Aucune ordonnance en attente ne correspond à cette recherche.",
+    "ROUTING_RX_SELECTED": "Ordonnance :"
   },
   "LAB_QC": {
     "TITLE": "Tableau de bord du contrôle qualité",
@@ -11196,7 +11243,8 @@
     "DISPENSE_PICK": "Délivrance à encaisser",
     "DISPENSE_PICK_PLACEHOLDER": "Choisir une délivrance",
     "NO_DISPENSES": "Aucune délivrance à encaisser dans cette pharmacie.",
-    "DISPENSES_LOAD_FAILED": "Impossible de charger les délivrances de la pharmacie."
+    "DISPENSES_LOAD_FAILED": "Impossible de charger les délivrances de la pharmacie.",
+    "ALREADY_PAID": "Cette délivrance est déjà payée. Aucun second paiement n'est encaissé."
   },
   "MY_PHARMACY_INVOICES": {
     "TITLE": "Mes factures de pharmacie",

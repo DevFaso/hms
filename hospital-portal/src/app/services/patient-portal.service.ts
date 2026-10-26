@@ -30,6 +30,20 @@ export interface PatientProfileDTO {
   profileImageUrl: string | null;
   hospitalId?: string;
   hospitalName?: string;
+  /** The medical record number at {@link hospitalId}. */
+  mrn?: string | null;
+  /**
+   * QA D841: one entry per hospital the patient is registered at, each with
+   * the record number THAT hospital gave them (they quote it at the desk).
+   */
+  hospitalRecords?: PatientHospitalRecord[];
+}
+
+/** One hospital registration as the patient profile carries it. */
+export interface PatientHospitalRecord {
+  hospitalId: string;
+  hospitalName?: string | null;
+  mrn?: string | null;
 }
 
 export interface HealthSummaryDTO {

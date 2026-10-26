@@ -1069,7 +1069,45 @@
     "SEARCH_PLACEHOLDER": "Search order sets…",
     "SYNONYMS_PLACEHOLDER": "Comma-separated alternates (e.g. Tylenol, paracetamol)",
     "VERSION_HISTORY": "Version history",
-    "VERSION_RETIRED": "retired"
+    "VERSION_RETIRED": "retired",
+    "NAME_REQUIRED": "Give the order set a name.",
+    "ITEM_NAME_REQUIRED": "This item needs a name.",
+    "ITEM_TYPE": {
+      "MEDICATION": "Medication",
+      "LAB": "Lab test",
+      "IMAGING": "Imaging",
+      "DIET": "Diet",
+      "ACTIVITY": "Activity",
+      "MONITORING": "Monitoring"
+    },
+    "DOSE_UNIT": {
+      "MCG": "mcg",
+      "IU": "IU",
+      "TABLET": "tablet",
+      "PUFF": "puff",
+      "DROP": "drop",
+      "UNIT": "unit"
+    },
+    "FREQUENCY": {
+      "QD": "Once daily (QD)",
+      "BID": "Twice daily (BID)",
+      "TID": "Three times daily (TID)",
+      "QID": "Four times daily (QID)",
+      "Q4H": "Every 4 hours (Q4H)",
+      "Q6H": "Every 6 hours (Q6H)",
+      "Q8H": "Every 8 hours (Q8H)",
+      "PRN": "As needed (PRN)"
+    },
+    "ROUTE": {
+      "PO": "Oral (PO)",
+      "IV": "Intravenous (IV)",
+      "IM": "Intramuscular (IM)",
+      "SC": "Subcutaneous (SC)",
+      "PR": "Rectal (PR)",
+      "INH": "Inhaled (INH)",
+      "TOPICAL": "Topical",
+      "NASAL": "Nasal"
+    }
   },
   "REFILLS": {
     "QUEUE_TITLE": "Refill requests",
@@ -4791,7 +4829,9 @@
       "QUICK_LINKS": "Quick Links",
       "UPCOMING_APPOINTMENTS": "Upcoming Appointments",
       "MEDICAL_HISTORY": "Medical & Family History",
-      "CARE_TEAM": "My Care Team"
+      "CARE_TEAM": "My Care Team",
+      "RECORD_NUMBERS": "My record numbers",
+      "UNKNOWN_HOSPITAL": "Unnamed hospital"
     },
     "SHARING": {
       "TITLE": "Who accessed my record",
@@ -8586,7 +8626,14 @@
     "PRICE_SAVED": "Price saved.",
     "PRICE_INVALID": "The price must be a whole number of francs, zero or more.",
     "PRICE_SAVE_FAILED": "The price could not be saved.",
-    "UNIT_COST_NEGATIVE": "Unit cost cannot be negative."
+    "UNIT_COST_NEGATIVE": "Unit cost cannot be negative.",
+    "EDIT_PRICE": "Change the unit price",
+    "MTM_CLOSED": "Closed",
+    "ROUTING_RX_SEARCH": "Find the prescription",
+    "ROUTING_RX_SEARCH_PLACEHOLDER": "Patient name or medication…",
+    "ROUTING_RX_QUEUE_FAILED": "The prescriptions waiting at the dispensary could not be loaded.",
+    "ROUTING_RX_NO_MATCH": "No waiting prescription matches this search.",
+    "ROUTING_RX_SELECTED": "Prescription:"
   },
   "LAB_QC": {
     "TITLE": "Quality Control Dashboard",
@@ -11196,7 +11243,8 @@
     "DISPENSE_PICK": "Dispense to collect",
     "DISPENSE_PICK_PLACEHOLDER": "Choose a dispense",
     "NO_DISPENSES": "No dispense to collect at this pharmacy.",
-    "DISPENSES_LOAD_FAILED": "The pharmacy's dispenses could not be loaded."
+    "DISPENSES_LOAD_FAILED": "The pharmacy's dispenses could not be loaded.",
+    "ALREADY_PAID": "This dispense has already been paid. No second payment is taken."
   },
   "MY_PHARMACY_INVOICES": {
     "TITLE": "My pharmacy invoices",

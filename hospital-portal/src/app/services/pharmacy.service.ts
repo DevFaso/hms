@@ -306,6 +306,12 @@ export interface DispenseResponse {
   quantityDispensed: number;
   /** QA D264: what the dispense costs; null when the pharmacy has not priced the medication. */
   chargeAmount?: number | null;
+  /**
+   * QA D843: a payment is already POSTED against this dispense. Sent by
+   * GET /pharmacy/dispense/{id} and the pharmacy list the checkout reads;
+   * absent elsewhere.
+   */
+  paid?: boolean | null;
   unit?: string;
   substitution: boolean;
   substitutionReason?: string;

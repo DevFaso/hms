@@ -108,8 +108,13 @@
                   {{ 'DRUG_INTERACTIONS.SEVERITY_' + row.severity | translate }}
                 </span>
               </td>
-              <td class="recommendation-cell" [title]="row.recommendation">
-                {{ row.recommendation }}
+              <!-- QA D887: the advice in the reader's language; the form edits the stored text. -->
+              <td
+                class="recommendation-cell"
+                [title]="row.displayRecommendation || row.recommendation"
+                [attr.data-testid]="'ddi-recommendation-' + row.id"
+              >
+                {{ row.displayRecommendation || row.recommendation }}
               </td>
               <td class="source-cell">{{ row.sourceDatabase || '—' }}</td>
               <td>
