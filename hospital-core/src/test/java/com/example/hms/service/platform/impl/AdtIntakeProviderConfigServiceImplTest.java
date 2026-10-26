@@ -39,7 +39,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -113,7 +112,8 @@ class AdtIntakeProviderConfigServiceImplTest {
         when(assignmentRepository.findById(assignmentId)).thenReturn(Optional.of(assignment));
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
 
-        assertThatThrownBy(() -> service.upsert(sampleRequest(true, null), Locale.FRENCH))
+        var enabledRequest = sampleRequest(true, null);
+        assertThatThrownBy(() -> service.upsert(enabledRequest, Locale.FRENCH))
             .isInstanceOf(FieldBusinessException.class)
             .satisfies(ex -> {
                 assertThat(((FieldBusinessException) ex).getField()).isEqualTo("defaultAssignmentId");
@@ -284,7 +284,8 @@ class AdtIntakeProviderConfigServiceImplTest {
             providerUserId, hospitalId, AdtIntakeProviderConfigService.ADMITTING_ROLE_CODES))
             .thenReturn(false);
 
-        assertThatThrownBy(() -> service.upsert(sampleRequest(true, null), Locale.FRENCH))
+        var enabledRequest = sampleRequest(true, null);
+        assertThatThrownBy(() -> service.upsert(enabledRequest, Locale.FRENCH))
             .isInstanceOf(FieldBusinessException.class)
             .satisfies(ex -> {
                 FieldBusinessException refusal = (FieldBusinessException) ex;
@@ -311,7 +312,8 @@ class AdtIntakeProviderConfigServiceImplTest {
         provider.setHospital(other);
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
 
-        assertThatThrownBy(() -> service.upsert(sampleRequest(true, null), Locale.FRENCH))
+        var enabledRequest = sampleRequest(true, null);
+        assertThatThrownBy(() -> service.upsert(enabledRequest, Locale.FRENCH))
             .isInstanceOf(FieldBusinessException.class)
             .extracting(ex -> ((FieldBusinessException) ex).getMessageKey())
             .isEqualTo("adtIntakeProviderConfig.admittingProvider.notAtHospital");
@@ -324,7 +326,8 @@ class AdtIntakeProviderConfigServiceImplTest {
         provider.setActive(false);
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
 
-        assertThatThrownBy(() -> service.upsert(sampleRequest(true, null), Locale.FRENCH))
+        var enabledRequest = sampleRequest(true, null);
+        assertThatThrownBy(() -> service.upsert(enabledRequest, Locale.FRENCH))
             .isInstanceOf(FieldBusinessException.class)
             .extracting(ex -> ((FieldBusinessException) ex).getField())
             .isEqualTo("admittingProviderId");
@@ -343,7 +346,8 @@ class AdtIntakeProviderConfigServiceImplTest {
         when(assignmentRepository.findById(assignmentId)).thenReturn(Optional.of(foreign));
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
 
-        assertThatThrownBy(() -> service.upsert(sampleRequest(true, null), Locale.FRENCH))
+        var enabledRequest = sampleRequest(true, null);
+        assertThatThrownBy(() -> service.upsert(enabledRequest, Locale.FRENCH))
             .isInstanceOf(FieldBusinessException.class)
             .extracting(ex -> ((FieldBusinessException) ex).getField())
             .isEqualTo("defaultAssignmentId");
@@ -361,7 +365,8 @@ class AdtIntakeProviderConfigServiceImplTest {
         when(departmentRepository.findById(departmentId)).thenReturn(Optional.of(foreign));
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
 
-        assertThatThrownBy(() -> service.upsert(sampleRequest(true, null), Locale.FRENCH))
+        var enabledRequest = sampleRequest(true, null);
+        assertThatThrownBy(() -> service.upsert(enabledRequest, Locale.FRENCH))
             .isInstanceOf(FieldBusinessException.class)
             .extracting(ex -> ((FieldBusinessException) ex).getField())
             .isEqualTo("departmentId");

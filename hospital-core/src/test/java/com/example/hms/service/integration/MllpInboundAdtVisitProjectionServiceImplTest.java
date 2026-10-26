@@ -49,6 +49,7 @@ import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -730,7 +731,7 @@ class MllpInboundAdtVisitProjectionServiceImplTest {
                 adt("A04", "V-A04-PAIR-" + i), patient, hospital, "REG", "HOSP1", "MSG-A04-PAIR-" + i);
             assertThat(result).isEqualTo(VisitProjectionResult.NO_MATCH);
         }
-        verify(assignmentRepository, org.mockito.Mockito.times(3)).findById(config.getDefaultAssignmentId());
+        verify(assignmentRepository, times(3)).findById(config.getDefaultAssignmentId());
         verify(encounterRepository, never()).save(any());
         verifyNoInteractions(auditEventLogService);
     }

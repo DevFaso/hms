@@ -156,10 +156,11 @@ public class AdtIntakeProviderConfigServiceImpl
         entity.setDefaultAcuityLevel(request.defaultAcuityLevel());
         entity.setDefaultEncounterType(request.defaultEncounterType());
         String chiefComplaint = request.defaultChiefComplaint();
+        Locale effectiveLocale = locale != null
+            ? locale : org.springframework.context.i18n.LocaleContextHolder.getLocale();
         entity.setDefaultChiefComplaint(
             chiefComplaint == null || chiefComplaint.isBlank()
-                ? messageSource.getMessage(DEFAULT_CHIEF_COMPLAINT_KEY, null, DEFAULT_CHIEF_COMPLAINT,
-                    locale != null ? locale : org.springframework.context.i18n.LocaleContextHolder.getLocale())
+                ? messageSource.getMessage(DEFAULT_CHIEF_COMPLAINT_KEY, null, DEFAULT_CHIEF_COMPLAINT, effectiveLocale)
                 : chiefComplaint.trim());
         // Default to disabled when the field is absent; admin must opt
         // in explicitly so we never flip auto-create on by accident on
