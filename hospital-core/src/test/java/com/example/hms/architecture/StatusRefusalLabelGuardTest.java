@@ -41,7 +41,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  *       the raw code;</li>
  *   <li>a refusal in the encounter, reception, appointment or admission
  *       services passes a status by {@code name()}, as a bare
- *       {@code getStatus()}, or through {@code String.valueOf(...)};</li>
+ *       {@code getStatus()}, through {@code String.valueOf(...)}, or into a
+ *       sentence composed in code ({@code String.format}, {@code .formatted},
+ *       a {@code +} join) around a status variable;</li>
  *   <li>an {@code encounter.*}, {@code reception.*} or {@code appointment.*}
  *       message spells a status code in its own text ("Expected ARRIVED or
  *       TRIAGE").</li>
@@ -57,6 +59,14 @@ class StatusRefusalLabelGuardTest {
     private static final Pattern RAW_STATUS_ARGUMENT = Pattern.compile(
         "\\.name\\(\\)|getStatus\\(\\)\\s*[,)]"
             + "|String\\.valueOf\\(\\s*\\w*(?i:status|current|previous|from|open)\\w*\\s*\\)");
+    /** A sentence composed in code: {@code String.format}, {@code .formatted}, or a {@code +} join with a literal. */
+    private static final Pattern COMPOSED = Pattern.compile("String\\.format\\(|\\.formatted\\(|\"\\s*\\+|\\+\\s*\"");
+    private static final Pattern LITERAL = Pattern.compile("\"(?:[^\"\\\\]|\\\\.)*\"");
+    /** A status already turned into its label is not a raw code, whatever surrounds it. */
+    private static final Pattern LABELLED = Pattern.compile(
+        "\\w*\\.labelOf\\([^()]*\\)|[\\w.]+(?:\\(\\))?\\.localizedLabel\\(\\)");
+    private static final Pattern STATUS_IDENTIFIER = Pattern.compile(
+        "\\b\\w*(?i:status|current|requested|previous|from|open)\\w*\\b");
     private static final Pattern WORKFLOW_KEY = Pattern.compile("^(encounter|reception|appointment)\\..*");
     private static final List<String> LOCALES = List.of("", "_en", "_fr", "_es");
 
@@ -93,7 +103,8 @@ class StatusRefusalLabelGuardTest {
     }
 
     @Test
-    @DisplayName("no workflow refusal passes a status as its code (name(), a bare getStatus(), String.valueOf)")
+    @DisplayName("no workflow refusal passes a status as its code (name(), a bare getStatus(), String.valueOf,"
+        + " or a sentence composed around it with String.format, .formatted or +)")
     void refusalsPassTheLabel() throws IOException {
         List<String> offenders = new ArrayList<>();
         try (Stream<Path> files = Files.walk(SERVICES)) {
@@ -116,8 +127,17 @@ class StatusRefusalLabelGuardTest {
             throw new BusinessException("consultation.start.badStatus", consultation.getStatus());
             throw new BusinessException("reception.checkin.notToday", String.valueOf(appointment.getAppointmentDate()));
             throw new BusinessException("encounter.status.closed", from.localizedLabel());
+            throw new BusinessException(
+                String.format("Cannot transition from %s to %s", current, requested));
+            throw new BusinessException("Cannot mark appointment as %s before (%s)".formatted(newStatus, start));
+            throw new BusinessException("Cannot transition from " + currentStatus);
+            throw new BusinessException(currentStatus + " cannot be confirmed");
+            throw new BusinessException("appointment.status.invalidTransition",
+                AppointmentStatus.labelOf(current), AppointmentStatus.labelOf(requested));
+            throw new BusinessException("Invalid action: " + action);
+            throw new BusinessException("Moved from %s".formatted(AppointmentStatus.labelOf(previous)));
             """;
-        assertThat(rawStatusRefusals("x", old)).hasSize(4);
+        assertThat(rawStatusRefusals("x", old)).hasSize(8);
     }
 
     @Test
@@ -158,13 +178,29 @@ class StatusRefusalLabelGuardTest {
         return properties;
     }
 
+    /**
+     * A refusal whose sentence is built in code around a status variable
+     * ("Cannot transition from %s to %s", current, requested): the enum's
+     * toString() is its code, and the sentence is English in every locale.
+     * Literals are blanked first so their words ("from") do not count, and a
+     * status already passed through labelOf/localizedLabel is not one.
+     */
+    private static boolean composesAStatus(String statement) {
+        if (!COMPOSED.matcher(statement).find()) {
+            return false;
+        }
+        String code = LITERAL.matcher(statement).replaceAll("\"\"");
+        code = LABELLED.matcher(code).replaceAll("");
+        return STATUS_IDENTIFIER.matcher(code).find();
+    }
+
     private static List<String> rawStatusRefusals(String file, String source) {
         List<String> found = new ArrayList<>();
         Matcher refusal = REFUSAL.matcher(source);
         while (refusal.find()) {
             int end = source.indexOf(';', refusal.end());
             String statement = source.substring(refusal.start(), end < 0 ? source.length() : end);
-            if (RAW_STATUS_ARGUMENT.matcher(statement).find()) {
+            if (RAW_STATUS_ARGUMENT.matcher(statement).find() || composesAStatus(statement)) {
                 int line = (int) source.substring(0, refusal.start()).chars().filter(c -> c == '\n').count() + 1;
                 found.add(file + ":" + line + " " + statement.replaceAll("\\s+", " "));
             }

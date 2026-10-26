@@ -144,7 +144,8 @@ class AppointmentStatusTransitionTest {
         assertThatThrownBy(() ->
             appointmentService.confirmOrCancelAppointment(appointmentId, "complete", null, "doctor_b"))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("before its scheduled start time");
+            .satisfies(ex -> org.assertj.core.api.Assertions.assertThat(((BusinessException) ex).getMessageKey())
+                .isEqualTo("appointment.status.notStartedYet"));
 
         verify(appointmentRepository, never()).save(any());
     }
@@ -159,7 +160,8 @@ class AppointmentStatusTransitionTest {
         assertThatThrownBy(() ->
             appointmentService.confirmOrCancelAppointment(appointmentId, "no_show", null, "doctor_b"))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("before its scheduled start time");
+            .satisfies(ex -> org.assertj.core.api.Assertions.assertThat(((BusinessException) ex).getMessageKey())
+                .isEqualTo("appointment.status.notStartedYet"));
 
         verify(appointmentRepository, never()).save(any());
     }
@@ -196,7 +198,7 @@ class AppointmentStatusTransitionTest {
         assertThatThrownBy(() ->
             appointmentService.confirmOrCancelAppointment(appointmentId, "complete", null, "doctor_b"))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Cannot transition from SCHEDULED to COMPLETED");
+            .satisfies(ex -> refusedAsTransition(ex, AppointmentStatus.SCHEDULED, AppointmentStatus.COMPLETED));
 
         verify(appointmentRepository, never()).save(any());
     }
@@ -211,7 +213,7 @@ class AppointmentStatusTransitionTest {
         assertThatThrownBy(() ->
             appointmentService.confirmOrCancelAppointment(appointmentId, "complete", null, "doctor_b"))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Cannot transition from COMPLETED to COMPLETED");
+            .satisfies(ex -> refusedAsTransition(ex, AppointmentStatus.COMPLETED, AppointmentStatus.COMPLETED));
 
         verify(appointmentRepository, never()).save(any());
     }
@@ -226,7 +228,7 @@ class AppointmentStatusTransitionTest {
         assertThatThrownBy(() ->
             appointmentService.confirmOrCancelAppointment(appointmentId, "confirm", null, "doctor_b"))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Cannot transition from COMPLETED to CONFIRMED");
+            .satisfies(ex -> refusedAsTransition(ex, AppointmentStatus.COMPLETED, AppointmentStatus.CONFIRMED));
     }
 
     @Test
@@ -239,7 +241,7 @@ class AppointmentStatusTransitionTest {
         assertThatThrownBy(() ->
             appointmentService.confirmOrCancelAppointment(appointmentId, "cancel", null, "doctor_b"))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Cannot transition from CANCELLED");
+            .satisfies(ex -> refusedAsTransition(ex, AppointmentStatus.CANCELLED, AppointmentStatus.CANCELLED));
     }
 
     // ── Valid transitions ──
@@ -477,7 +479,7 @@ class AppointmentStatusTransitionTest {
         assertThatThrownBy(() ->
             appointmentService.confirmOrCancelAppointment(appointmentId, "schedule", null, "doctor_b"))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Cannot transition from COMPLETED to SCHEDULED");
+            .satisfies(ex -> refusedAsTransition(ex, AppointmentStatus.COMPLETED, AppointmentStatus.SCHEDULED));
 
         verify(appointmentRepository, never()).save(any());
     }
@@ -489,8 +491,97 @@ class AppointmentStatusTransitionTest {
         assertThatThrownBy(() ->
             appointmentService.confirmOrCancelAppointment(appointmentId, "schedule", null, "doctor_b"))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Cannot transition from CANCELLED to SCHEDULED");
+            .satisfies(ex -> refusedAsTransition(ex, AppointmentStatus.CANCELLED, AppointmentStatus.SCHEDULED));
 
         verify(appointmentRepository, never()).save(any());
+    }
+    // ── QA D825: the refusal names both statuses as people read them ──
+
+    @Test
+    void qaD825_aRefusedStatusChangeReadsInTheCallersLanguage() {
+        // The desk, in French, tried to confirm a COMPLETED appointment and read
+        // « Cannot transition from COMPLETED to CONFIRMED »: English, and codes.
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        try {
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+            givenAppointment(AppointmentStatus.COMPLETED, LocalDate.now().minusDays(1));
+
+            assertThatThrownBy(() ->
+                appointmentService.confirmOrCancelAppointment(appointmentId, "confirm", java.util.Locale.FRENCH, "doctor_b"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("Impossible de passer ce rendez-vous de « Terminé » à « Confirmé ».");
+
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.forLanguageTag("es"));
+            assertThatThrownBy(() ->
+                appointmentService.confirmOrCancelAppointment(appointmentId, "confirm", null, "doctor_b"))
+                .hasMessage("No se puede pasar esta cita de «Completada» a «Confirmada».");
+        } finally {
+            com.example.hms.utility.MessageUtil.setMessageSource(null);
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        }
+        verify(appointmentRepository, never()).save(any());
+    }
+
+    @Test
+    void qaD825_completingBeforeTheStartNamesTheStatusInTheCallersLanguage() {
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        try {
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+            givenAppointment(AppointmentStatus.CHECKED_IN, LocalDate.now().plusDays(1));
+
+            assertThatThrownBy(() ->
+                appointmentService.confirmOrCancelAppointment(appointmentId, "complete", java.util.Locale.FRENCH, "doctor_b"))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> {
+                    BusinessException refused = (BusinessException) ex;
+                    org.assertj.core.api.Assertions.assertThat(refused.getMessageKey())
+                        .isEqualTo("appointment.status.notStartedYet");
+                    org.assertj.core.api.Assertions.assertThat(refused.getMessage())
+                        .startsWith("Ce rendez-vous ne peut pas être marqué « Terminé » avant son heure de début prévue (")
+                        .doesNotContain("COMPLETED")
+                        .doesNotContainPattern("\\d{4}-\\d{2}-\\d{2}T");
+                });
+        } finally {
+            com.example.hms.utility.MessageUtil.setMessageSource(null);
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        }
+        verify(appointmentRepository, never()).save(any());
+    }
+
+    @Test
+    void qaD825_theEditFormRefusesAStatusChangeWithTheSameKey() {
+        // PUT /appointments/{id} with a status the state machine refuses.
+        givenAppointment(AppointmentStatus.COMPLETED, LocalDate.now().minusDays(1));
+        Patient patient = appointment.getPatient();
+        Staff staff = appointment.getStaff();
+        when(patientRepository.findById(patient.getId())).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staff.getId())).thenReturn(Optional.of(staff));
+        when(hospitalRepository.findClinicalById(hospital.getId())).thenReturn(Optional.of(hospital));
+        when(assignmentRepository.findActiveStaffAssignment(any(), any()))
+            .thenReturn(Optional.of(appointment.getAssignment()));
+        when(staffAvailabilityService.isStaffAvailable(any(), any())).thenReturn(true);
+        com.example.hms.payload.dto.AppointmentRequestDTO edit = new com.example.hms.payload.dto.AppointmentRequestDTO();
+        edit.setPatientId(patient.getId());
+        edit.setStaffId(staff.getId());
+        edit.setHospitalId(hospital.getId());
+        edit.setAppointmentDate(appointment.getAppointmentDate());
+        edit.setStartTime(appointment.getStartTime());
+        edit.setEndTime(appointment.getEndTime());
+        edit.setStatus(AppointmentStatus.CONFIRMED);
+
+        assertThatThrownBy(() ->
+            appointmentService.updateAppointment(appointmentId, edit, java.util.Locale.ENGLISH, "doctor_b"))
+            .isInstanceOf(BusinessException.class)
+            .satisfies(ex -> refusedAsTransition(ex, AppointmentStatus.COMPLETED, AppointmentStatus.CONFIRMED));
+
+        verify(appointmentRepository, never()).save(any());
+    }
+
+    private static void refusedAsTransition(Throwable ex, AppointmentStatus from, AppointmentStatus to) {
+        BusinessException refused = (BusinessException) ex;
+        org.assertj.core.api.Assertions.assertThat(refused.getMessageKey())
+            .isEqualTo("appointment.status.invalidTransition");
+        org.assertj.core.api.Assertions.assertThat(refused.getArgs())
+            .containsExactly(AppointmentStatus.labelOf(from), AppointmentStatus.labelOf(to));
     }
 }

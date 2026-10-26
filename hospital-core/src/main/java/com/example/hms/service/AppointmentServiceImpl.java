@@ -67,6 +67,7 @@ public class AppointmentServiceImpl implements AppointmentService {
     private static final String USER_NOT_FOUND_BY_USERNAME_KEY = "user.notFoundByUsername";
     private static final String PATIENT_NOT_FOUND_FOR_USER_KEY = "patient.notFoundForUser";
     private static final String APPOINTMENT_NOT_FOUND_KEY = "appointment.notFound";
+    private static final String INVALID_TRANSITION_KEY = "appointment.status.invalidTransition";
 
     @Override
     @Transactional(readOnly = true)
@@ -196,8 +197,8 @@ public class AppointmentServiceImpl implements AppointmentService {
         }
         Set<AppointmentStatus> allowed = VALID_TRANSITIONS.getOrDefault(current, Set.of());
         if (!allowed.contains(requested)) {
-            throw new BusinessException(
-                String.format("Cannot transition from %s to %s", current, requested));
+            throw new BusinessException(INVALID_TRANSITION_KEY,
+                AppointmentStatus.labelOf(current), AppointmentStatus.labelOf(requested));
         }
     }
 
@@ -790,15 +791,15 @@ public class AppointmentServiceImpl implements AppointmentService {
             case "reschedule" -> newStatus = AppointmentStatus.RESCHEDULED;
             case "in_progress"-> newStatus = AppointmentStatus.IN_PROGRESS;
             case "fail"       -> newStatus = AppointmentStatus.FAILED;
-            default -> throw new BusinessException("Invalid action: " + action);
+            default -> throw new BusinessException("appointment.invalidAction", action);
         }
 
         // ── Validate status transition ──
         AppointmentStatus currentStatus = appointment.getStatus();
         Set<AppointmentStatus> allowed = VALID_TRANSITIONS.getOrDefault(currentStatus, Set.of());
         if (!allowed.contains(newStatus)) {
-            throw new BusinessException(
-                String.format("Cannot transition from %s to %s", currentStatus, newStatus));
+            throw new BusinessException(INVALID_TRANSITION_KEY,
+                AppointmentStatus.labelOf(currentStatus), AppointmentStatus.labelOf(newStatus));
         }
         requireVisitCompletedBeforeAppointment(appointment, newStatus);
 
@@ -807,9 +808,11 @@ public class AppointmentServiceImpl implements AppointmentService {
             LocalDateTime appointmentStart = LocalDateTime.of(
                 appointment.getAppointmentDate(), appointment.getStartTime());
             if (LocalDateTime.now().isBefore(appointmentStart)) {
-                throw new BusinessException(
-                    String.format("Cannot mark appointment as %s before its scheduled start time (%s)",
-                        newStatus, appointmentStart));
+                throw new BusinessException("appointment.status.notStartedYet",
+                    AppointmentStatus.labelOf(newStatus),
+                    appointmentStart.format(java.time.format.DateTimeFormatter
+                        .ofLocalizedDateTime(java.time.format.FormatStyle.SHORT)
+                        .withLocale(LocaleContextHolder.getLocale())));
             }
         }
 
