@@ -736,6 +736,151 @@ class LaborServiceImplTest {
         assertThat(episode.getStatus()).isEqualTo(LaborStatus.ACTIVE);
     }
 
+    /* ── QA D806: the times of a delivery follow the labour they end ── */
+
+    /** The QA walk: partograph entry at 18:42, birth typed 18:23, placenta 15:43. */
+    private void chartedAt(LocalDateTime observedAt) {
+        LaborPartographEntry entry = LaborPartographEntry.builder().episode(episode).observationTime(observedAt).build();
+        when(entryRepository.findFirstByEpisode_IdOrderByObservationTimeDesc(episodeId)).thenReturn(Optional.of(entry));
+    }
+
+    @Test
+    void qaD806ABirthEarlierThanAChartedPartographEntryIsRefusedOnTheBirthField() {
+        LocalDateTime entryAt = LocalDateTime.now().minusHours(1);          // 18:42
+        episode.setLaborOnsetAt(entryAt.minusHours(8));
+        chartedAt(entryAt);
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        request.setBirthDateTime(entryAt.minusMinutes(19));                   // 18:23
+        request.setPlacentaDeliveredAt(entryAt.minusMinutes(179));            // 15:43
+
+        assertThatThrownBy(() -> service.recordDelivery(patientId, episodeId, recorderUserId, request))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "birthDateTime")
+            .hasFieldOrPropertyWithValue("messageKey", "labor.delivery.beforeLastPartograph");
+        assertThat(episode.getStatus()).isEqualTo(LaborStatus.ACTIVE);
+        verify(deliveryRecordRepository, never()).save(any(DeliveryRecord.class));
+    }
+
+    @Test
+    void qaD806APlacentaDeliveredBeforeTheBirthIsRefusedOnThePlacentaField() {
+        LocalDateTime entryAt = LocalDateTime.now().minusHours(2);
+        episode.setLaborOnsetAt(entryAt.minusHours(8));
+        chartedAt(entryAt);
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        request.setBirthDateTime(entryAt.plusMinutes(20));
+        request.setPlacentaDeliveredAt(entryAt.minusMinutes(40));
+
+        assertThatThrownBy(() -> service.recordDelivery(patientId, episodeId, recorderUserId, request))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "placentaDeliveredAt")
+            .hasFieldOrPropertyWithValue("messageKey", "labor.delivery.placentaBeforeBirth");
+        verify(deliveryRecordRepository, never()).save(any(DeliveryRecord.class));
+    }
+
+    @Test
+    void qaD806APlacentaWithNoBirthTimeIsComparedWithTheRecordedBirth() {
+        // No birth time typed: the birth is recorded now, so a placenta two hours ago precedes it.
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        request.setPlacentaDeliveredAt(LocalDateTime.now().minusHours(2));
+
+        assertThatThrownBy(() -> service.recordDelivery(patientId, episodeId, recorderUserId, request))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "placentaDeliveredAt");
+    }
+
+    @Test
+    void qaD806TimesInOrderAreStillRecorded() {
+        LocalDateTime entryAt = LocalDateTime.now().minusHours(2);
+        episode.setLaborOnsetAt(entryAt.minusHours(8));
+        chartedAt(entryAt);
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        request.setBirthDateTime(entryAt);                                    // at the last entry: allowed
+        request.setPlacentaDeliveredAt(entryAt.plusMinutes(15));
+
+        var response = service.recordDelivery(patientId, episodeId, recorderUserId, request);
+
+        assertThat(response.getPlacentaDeliveredAt()).isEqualTo(entryAt.plusMinutes(15));
+        assertThat(episode.getStatus()).isEqualTo(LaborStatus.DELIVERED);
+    }
+
+    @Test
+    void qaD806ABirthBeforeOnsetNowNamesTheBirthField() {
+        episode.setLaborOnsetAt(LocalDateTime.now().minusHours(2));
+        DeliveryRecordRequestDTO request = deliveryRequest();
+        request.setBirthDateTime(LocalDateTime.now().minusHours(5));
+
+        assertThatThrownBy(() -> service.recordDelivery(patientId, episodeId, recorderUserId, request))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "birthDateTime")
+            .hasFieldOrPropertyWithValue("messageKey", "labor.delivery.beforeOnset");
+    }
+
+    /* ── QA D809: gravidity and parity describe one possible history ── */
+
+    private void admissible() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+    }
+
+    @Test
+    void qaD809AnAdmissionTypedG1P3IsRefusedOnTheParaField() {
+        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId)
+            .laborOnsetAt(LocalDateTime.now().minusHours(2)).gravida(1).para(3).build();
+
+        assertThatThrownBy(() -> service.startEpisode(patientId, recorderUserId, request))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "para")
+            .hasFieldOrPropertyWithValue("messageKey", "maternity.obstetric.paraAboveGravida");
+        verify(episodeRepository, never()).save(any(LaborEpisode.class));
+        verify(maternalHistoryRepository, never()).save(any(MaternalHistory.class));
+    }
+
+    @Test
+    void qaD809AGravidityTypedBelowTheRecordedParityIsRefused() {
+        admissible();
+        MaternalHistory history = new MaternalHistory();
+        history.setGravida(4);
+        history.setPara(3);
+        when(maternalHistoryRepository.findFirstByPatient_IdAndHospital_IdInOrderByVersionNumberDescRecordedDateDesc(eq(patientId), any()))
+            .thenReturn(Optional.of(history));
+        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId)
+            .laborOnsetAt(LocalDateTime.now().minusHours(2)).gravida(1).build();
+
+        assertThatThrownBy(() -> service.startEpisode(patientId, recorderUserId, request))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "para");
+        verify(episodeRepository, never()).save(any(LaborEpisode.class));
+    }
+
+    @Test
+    void qaD809CountsSnapshottedUnchangedFromHerRecordDoNotBlockTheAdmission() {
+        admissible();
+        MaternalHistory history = new MaternalHistory();
+        history.setGravida(1);
+        history.setPara(3);
+        when(maternalHistoryRepository.findFirstByPatient_IdAndHospital_IdInOrderByVersionNumberDescRecordedDateDesc(eq(patientId), any()))
+            .thenReturn(Optional.of(history));
+        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId)
+            .laborOnsetAt(LocalDateTime.now().minusHours(2)).build();
+
+        LaborEpisodeResponseDTO created = service.startEpisode(patientId, recorderUserId, request);
+
+        assertThat(created.getGravida()).isEqualTo(1);
+        assertThat(created.getPara()).isEqualTo(3);
+    }
+
+    @Test
+    void qaD809ConsistentTypedCountsAreKept() {
+        admissible();
+        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId)
+            .laborOnsetAt(LocalDateTime.now().minusHours(2)).gravida(3).para(2).build();
+
+        LaborEpisodeResponseDTO created = service.startEpisode(patientId, recorderUserId, request);
+
+        assertThat(created.getGravida()).isEqualTo(3);
+        assertThat(created.getPara()).isEqualTo(2);
+    }
+
     /* ── QA D172: every alert text comes from the French staff bundle ── */
 
     @Test
@@ -1088,6 +1233,66 @@ class LaborServiceImplTest {
         // Her counts changed with the birth since: not carried as if current.
         assertThat(opened.getGravida()).isNull();
         assertThat(opened.getPara()).isNull();
+    }
+
+    /**
+     * Review of #958: her previous delivered record is G3 P1 A2, and an
+     * unbooked labour is admitted typed G1 P0. The abortions are carried
+     * forward with her past history, so the new current version would read
+     * G1 P0 A2 (P + A above G) and refuse every later edit on a field the
+     * midwife never typed. The admission is refused instead, and nothing is
+     * saved.
+     */
+    @Test
+    void aCarriedAbortionCountAboveTheTypedGravidityIsRefused_D809() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        MaternalHistory previous = new MaternalHistory();
+        previous.setRecordedDate(LocalDateTime.now().minusYears(2));
+        previous.setGravida(3);
+        previous.setPara(1);
+        previous.setAbortions(2);
+        previous.setHospital(hospital);
+        historiesOnRecord(previous);
+        when(maternalHistoryRepository.findMaxVersionByPatientId(patientId)).thenReturn(1);
+        when(deliveryRecordRepository.existsByPatient_IdAndBirthDateTimeGreaterThanEqual(
+            org.mockito.ArgumentMatchers.eq(patientId), any(LocalDateTime.class)))
+            .thenAnswer(inv -> inv.<LocalDateTime>getArgument(1).isBefore(LocalDateTime.now().minusYears(1)));
+        LaborEpisodeRequestDTO request = LaborEpisodeRequestDTO.builder().hospitalId(hospitalId)
+            .laborOnsetAt(LocalDateTime.now().minusHours(1)).gestationalAgeWeeks(38).gravida(1).para(0).build();
+
+        assertThatThrownBy(() -> service.startEpisode(patientId, recorderUserId, request))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "maternity.obstetric.outcomesAboveGravida");
+        verify(maternalHistoryRepository, never()).save(any(MaternalHistory.class));
+        verify(episodeRepository, never()).save(any(LaborEpisode.class));
+    }
+
+    /** Review of #958: typed counts that leave room for the carried abortions open the record. */
+    @Test
+    void aTypedGravidityCoveringTheCarriedAbortionsOpensTheRecord_D809() {
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        MaternalHistory previous = new MaternalHistory();
+        previous.setRecordedDate(LocalDateTime.now().minusYears(2));
+        previous.setGravida(3);
+        previous.setPara(1);
+        previous.setAbortions(2);
+        previous.setHospital(hospital);
+        historiesOnRecord(previous);
+        when(maternalHistoryRepository.findMaxVersionByPatientId(patientId)).thenReturn(1);
+        when(deliveryRecordRepository.existsByPatient_IdAndBirthDateTimeGreaterThanEqual(
+            org.mockito.ArgumentMatchers.eq(patientId), any(LocalDateTime.class)))
+            .thenAnswer(inv -> inv.<LocalDateTime>getArgument(1).isBefore(LocalDateTime.now().minusYears(1)));
+
+        service.startEpisode(patientId, recorderUserId, LaborEpisodeRequestDTO.builder().hospitalId(hospitalId)
+            .laborOnsetAt(LocalDateTime.now().minusHours(1)).gestationalAgeWeeks(38).gravida(4).para(2).build());
+
+        org.mockito.ArgumentCaptor<MaternalHistory> captor = org.mockito.ArgumentCaptor.forClass(MaternalHistory.class);
+        verify(maternalHistoryRepository).save(captor.capture());
+        assertThat(captor.getValue().getGravida()).isEqualTo(4);
+        assertThat(captor.getValue().getPara()).isEqualTo(2);
+        assertThat(captor.getValue().getAbortions()).isEqualTo(2);
     }
 
     /**

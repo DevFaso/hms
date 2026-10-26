@@ -150,6 +150,20 @@ public class AppointmentServiceImpl implements AppointmentService {
     private static final String ROLE_NURSE_CODE = "ROLE_NURSE";
     private static final String ROLE_RECEPTIONIST_CODE = "ROLE_RECEPTIONIST";
 
+    /**
+     * QA D823: every role that books FOR a patient, i.e. every role
+     * {@code AppointmentController.APPOINTMENT_BOOK_ROLES} admits except
+     * PATIENT. This list used to name only admin, doctor, nurse and
+     * receptionist, so a midwife (or a STAFF account) the controller let in was
+     * treated as a patient booking for herself, and her booking for a patient
+     * she can read answered 404 "patient not found". Guarded by
+     * {@code AppointmentBookingRolesGuardTest}: a role added to the controller
+     * without being added here fails the build.
+     */
+    static final List<String> STAFF_BOOKING_ROLES = List.of(
+        ROLE_SUPER_ADMIN_CODE, "ROLE_HOSPITAL_ADMIN", ROLE_ADMIN_CODE, "ROLE_STAFF",
+        ROLE_RECEPTIONIST_CODE, ROLE_DOCTOR_CODE, ROLE_NURSE_CODE, "ROLE_MIDWIFE");
+
     /** Allowed status transitions: current → set of valid next statuses. */
     private static final Map<AppointmentStatus, Set<AppointmentStatus>> VALID_TRANSITIONS;
     static {
@@ -257,6 +271,15 @@ public class AppointmentServiceImpl implements AppointmentService {
         return hospitals;
     }
 
+    /** Holds any of {@link #STAFF_BOOKING_ROLES}, by the same active-assignment rule as {@link #hasRole}. */
+    private boolean isStaffBooker(User user) {
+        if (user == null) {
+            return false;
+        }
+        List<UserRoleHospitalAssignment> assignments = assignmentRepository.findAllByUserId(user.getId());
+        return STAFF_BOOKING_ROLES.stream().anyMatch(code -> EffectiveRoles.holds(user, assignments, code));
+    }
+
     private boolean hasRole(User user, String roleCode) {
         if (user == null) {
             log.warn("hasRole() check failed: user is null");
@@ -289,22 +312,10 @@ public class AppointmentServiceImpl implements AppointmentService {
     public AppointmentSummaryDTO createAppointment(AppointmentRequestDTO request, Locale locale, String username) {
         User currentUser = getUserOrThrow(username);
 
-        // Authorization: Staff/admins can book for any patient; pure patients can only book for themselves
-        boolean isStaffOrAdmin = isSuperAdmin(currentUser)
-            || hasRole(currentUser, "ROLE_HOSPITAL_ADMIN")
-            || hasRole(currentUser, ROLE_ADMIN_CODE)
-            || hasRole(currentUser, ROLE_DOCTOR_CODE)
-            || hasRole(currentUser, ROLE_NURSE_CODE)
-            || hasRole(currentUser, ROLE_RECEPTIONIST_CODE);
-
-        log.debug("🔐 Authorization check: user={}, isStaffOrAdmin={}, isSuperAdmin={}, hasAdmin={}, hasDoctor={}, hasNurse={}, hasReceptionist={}",
-            currentUser.getUsername(),
-            isStaffOrAdmin,
-            isSuperAdmin(currentUser),
-            hasRole(currentUser, ROLE_ADMIN_CODE),
-            hasRole(currentUser, ROLE_DOCTOR_CODE),
-            hasRole(currentUser, ROLE_NURSE_CODE),
-            hasRole(currentUser, ROLE_RECEPTIONIST_CODE));
+        // Authorization: staff book for any patient registered at the booking
+        // hospital; a pure patient books only for themselves (QA D823: one list
+        // for every staff booking role, so a midwife is not taken for a patient).
+        boolean isStaffOrAdmin = isStaffBooker(currentUser);
 
         // --- Patient resolution (falls back to authenticated user) ---
         // A pure patient books only for themselves. Naming anyone else answers

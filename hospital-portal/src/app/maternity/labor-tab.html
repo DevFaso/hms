@@ -117,10 +117,9 @@
   @if (activeEpisode(); as episode) {
     <div class="view-section action-form">
       <div class="filter-bar">
-        <h3 class="section-heading">
-          {{ 'LABOR.ACTIVE_EPISODE' | translate }}
-          <span class="risk-badge risk-moderate">{{ 'LABOR.STATUS_ACTIVE' | translate }}</span>
-        </h3>
+        <!-- QA D811: the heading already says the labour is in progress; a
+             second "in labour" badge repeated the status. -->
+        <h3 class="section-heading">{{ 'LABOR.ACTIVE_EPISODE' | translate }}</h3>
         <div>
           <button class="btn-secondary" (click)="entryFormOpen.set(true)">
             <span class="material-symbols-outlined">add</span>
@@ -172,13 +171,18 @@
             · {{ 'LABOR.SEX_' + record.infantSex | translate }}
           }
           @if (record.birthWeightGrams) {
-            · {{ record.birthWeightGrams }} g
+            · {{ record.birthWeightGrams | measure: 'g' }}
           }
           @if (record.apgarOneMinute !== null && record.apgarFiveMinute !== null) {
             · APGAR {{ record.apgarOneMinute }}/{{ record.apgarFiveMinute }}
           }
           @if (record.estimatedBloodLossMl !== null) {
-            · {{ 'LABOR.BLOOD_LOSS' | translate }}: {{ record.estimatedBloodLossMl }} ml
+            <!-- QA D827: the form label carries "(ml)"; the summary names the unit once, after the value. -->
+            ·
+            {{
+              'LABOR.BLOOD_LOSS_VALUE'
+                | translate: { value: (record.estimatedBloodLossMl | measure: 'ml') }
+            }}
           }
         </p>
         @for (alert of record.alerts; track $index) {
@@ -240,7 +244,8 @@
               </td>
               <td>
                 {{ entry.systolicBpMmHg ?? '—' }}/{{ entry.diastolicBpMmHg ?? '—' }} ·
-                {{ entry.pulseBpm ?? '—' }} · {{ entry.temperatureCelsius ?? '—' }}°C
+                {{ entry.pulseBpm | measure: 'bpm' }} ·
+                {{ entry.temperatureCelsius | measure: '°C' }}
               </td>
               <td>
                 @for (alert of entry.alerts; track $index) {
@@ -416,7 +421,7 @@
             <input id="pe-pulse" type="number" min="0" max="300" [(ngModel)]="entryForm.pulseBpm" />
           </div>
           <div class="field">
-            <label for="pe-sys">SYS</label>
+            <label for="pe-sys">{{ 'LABOR.SYSTOLIC' | translate }}</label>
             <input
               id="pe-sys"
               type="number"
@@ -426,7 +431,7 @@
             />
           </div>
           <div class="field">
-            <label for="pe-dia">DIA</label>
+            <label for="pe-dia">{{ 'LABOR.DIASTOLIC' | translate }}</label>
             <input
               id="pe-dia"
               type="number"
@@ -436,11 +441,13 @@
             />
           </div>
           <div class="field">
-            <label for="pe-temp">°C</label>
+            <label for="pe-temp">{{ 'LABOR.TEMPERATURE' | translate }}</label>
             <input
               id="pe-temp"
               type="number"
               step="0.1"
+              min="25"
+              max="44"
               [(ngModel)]="entryForm.temperatureCelsius"
             />
           </div>
@@ -565,7 +572,7 @@
         </div>
         <div class="form-row gtpal-row">
           <div class="field">
-            <label for="dl-apgar1">APGAR 1'</label>
+            <label for="dl-apgar1">{{ 'LABOR.APGAR_ONE' | translate }}</label>
             <input
               id="dl-apgar1"
               type="number"
@@ -575,7 +582,7 @@
             />
           </div>
           <div class="field">
-            <label for="dl-apgar5">APGAR 5'</label>
+            <label for="dl-apgar5">{{ 'LABOR.APGAR_FIVE' | translate }}</label>
             <input
               id="dl-apgar5"
               type="number"

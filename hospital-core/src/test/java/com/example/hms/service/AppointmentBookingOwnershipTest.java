@@ -287,6 +287,55 @@ class AppointmentBookingOwnershipTest {
         verify(patientRepository).findByUserId(patientUser.getId());
     }
 
+    /**
+     * QA D823 (re-test of D810): midwife A, assigned at hospital A, books the
+     * prenatal visit "Planifier" opens for a patient registered at A (GET
+     * /patients/{id} answered 200 for her). The booking answered 404 "patient
+     * not found" because the service took every role outside admin, doctor,
+     * nurse and receptionist for a patient booking for herself. Every staff
+     * role the controller admits now books as staff: the patient is loaded by
+     * id and put through the same registration check a receptionist's booking
+     * is, and no "is this your own record" check runs.
+     */
+    @org.junit.jupiter.params.ParameterizedTest(name = "{0}")
+    @org.junit.jupiter.params.provider.ValueSource(strings = {
+        "ROLE_MIDWIFE", "ROLE_STAFF", "ROLE_RECEPTIONIST", "ROLE_DOCTOR", "ROLE_NURSE", "ROLE_HOSPITAL_ADMIN"})
+    @DisplayName("QA D823: every staff booking role books for a registered patient as staff, not as that patient")
+    void staffBookingRoleBooksForARegisteredPatient(String roleCode) {
+        com.example.hms.model.Hospital hospitalA = new com.example.hms.model.Hospital();
+        hospitalA.setId(UUID.randomUUID());
+        User staffUser = new User();
+        staffUser.setId(UUID.randomUUID());
+        staffUser.setUsername("staff." + roleCode.toLowerCase(Locale.ROOT));
+        staffUser.setUserRoles(Set.of());
+        Role role = new Role();
+        role.setCode(roleCode);
+        com.example.hms.model.UserRoleHospitalAssignment assignment = new com.example.hms.model.UserRoleHospitalAssignment();
+        assignment.setUser(staffUser);
+        assignment.setRole(role);
+        assignment.setHospital(hospitalA);
+        assignment.setActive(true);
+        when(userRepository.findByUsername(staffUser.getUsername())).thenReturn(Optional.of(staffUser));
+        when(assignmentRepository.findAllByUserId(staffUser.getId())).thenReturn(List.of(assignment));
+
+        Patient rasmata = new Patient();
+        rasmata.setId(UUID.randomUUID());
+        when(patientRepository.findByIdUnscoped(rasmata.getId())).thenReturn(Optional.of(rasmata));
+        when(hospitalRepository.findClinicalById(hospitalA.getId())).thenReturn(Optional.of(hospitalA));
+        AppointmentRequestDTO request = forPatientId(rasmata.getId());
+        request.setHospitalId(hospitalA.getId());
+        // The registration check passed means the patient step is behind us;
+        // stop there rather than wire the staff, department and schedule.
+        IllegalStateException pastThePatientStep = new IllegalStateException("past the patient step");
+        doThrow(pastThePatientStep).when(patientRegistrationGuard).requireRegisteredAt(rasmata.getId(), hospitalA.getId());
+
+        Throwable outcome = org.assertj.core.api.Assertions.catchThrowable(
+            () -> service.createAppointment(request, locale, staffUser.getUsername()));
+
+        assertThat(outcome).isSameAs(pastThePatientStep);
+        verify(patientRepository, never()).existsByIdAndUserId(any(), any());
+    }
+
     @Test
     @DisplayName("QA D351: a staff booking keeps the reason it was booked for")
     void bookingKeepsTheReason() {

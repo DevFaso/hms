@@ -240,10 +240,10 @@
                   {{ o.observationTime ? (o.observationTime | serverTime | date: 'short') : '—' }}
                 </td>
                 <td>
-                  {{ o.temperatureCelsius ?? '—' }}°C · {{ o.systolicBpMmHg ?? '—' }}/{{
+                  {{ o.temperatureCelsius | measure: '°C' }} · {{ o.systolicBpMmHg ?? '—' }}/{{
                     o.diastolicBpMmHg ?? '—'
                   }}
-                  · {{ o.pulseBpm ?? '—' }} bpm
+                  · {{ o.pulseBpm | measure: 'bpm' }}
                 </td>
                 <td>
                   {{ o.fundusTone ? ('POSTPARTUM.FUNDUS_' + o.fundusTone | translate) : '—' }}
@@ -323,8 +323,9 @@
                 </td>
                 <td>{{ apgarSummary(a) }}</td>
                 <td>
-                  {{ a.temperatureCelsius ?? '—' }}°C · {{ a.heartRateBpm ?? '—' }} bpm ·
-                  {{ a.oxygenSaturationPercent ?? '—' }}%
+                  {{ a.temperatureCelsius | measure: '°C' }} ·
+                  {{ a.heartRateBpm | measure: 'bpm' }} ·
+                  {{ a.oxygenSaturationPercent | measure: '%' }}
                 </td>
                 <td>
                   @if (a.escalationRecommended) {
@@ -387,20 +388,22 @@
         <h3 class="section-heading">{{ 'POSTPARTUM.VITALS' | translate }}</h3>
         <div class="form-row gtpal-row">
           <div class="field">
-            <label for="obs-temp">°C</label>
+            <label for="obs-temp">{{ 'POSTPARTUM.TEMPERATURE' | translate }}</label>
             <input
               id="obs-temp"
               type="number"
               step="0.1"
+              min="25"
+              max="44"
               [(ngModel)]="observationForm.temperatureCelsius"
             />
           </div>
           <div class="field">
-            <label for="obs-sys">SYS</label>
+            <label for="obs-sys">{{ 'POSTPARTUM.SYSTOLIC' | translate }}</label>
             <input id="obs-sys" type="number" [(ngModel)]="observationForm.systolicBpMmHg" />
           </div>
           <div class="field">
-            <label for="obs-dia">DIA</label>
+            <label for="obs-dia">{{ 'POSTPARTUM.DIASTOLIC' | translate }}</label>
             <input id="obs-dia" type="number" [(ngModel)]="observationForm.diastolicBpMmHg" />
           </div>
           <div class="field">
@@ -619,7 +622,7 @@
         <h3 class="section-heading">{{ 'POSTPARTUM.APGAR' | translate }}</h3>
         <div class="form-row gtpal-row">
           <div class="field">
-            <label for="nb-apgar1">1 min</label>
+            <label for="nb-apgar1">{{ 'POSTPARTUM.APGAR_ONE' | translate }}</label>
             <input
               id="nb-apgar1"
               type="number"
@@ -629,7 +632,7 @@
             />
           </div>
           <div class="field">
-            <label for="nb-apgar5">5 min</label>
+            <label for="nb-apgar5">{{ 'POSTPARTUM.APGAR_FIVE' | translate }}</label>
             <input
               id="nb-apgar5"
               type="number"
@@ -639,7 +642,7 @@
             />
           </div>
           <div class="field">
-            <label for="nb-apgar10">10 min</label>
+            <label for="nb-apgar10">{{ 'POSTPARTUM.APGAR_TEN' | translate }}</label>
             <input
               id="nb-apgar10"
               type="number"
@@ -652,11 +655,13 @@
         <h3 class="section-heading">{{ 'POSTPARTUM.VITALS' | translate }}</h3>
         <div class="form-row gtpal-row">
           <div class="field">
-            <label for="nb-temp">°C</label>
+            <label for="nb-temp">{{ 'POSTPARTUM.TEMPERATURE' | translate }}</label>
             <input
               id="nb-temp"
               type="number"
               step="0.1"
+              min="25"
+              max="44"
               [(ngModel)]="assessmentForm.temperatureCelsius"
             />
           </div>

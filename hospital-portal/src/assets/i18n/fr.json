@@ -145,6 +145,7 @@
     "BIRTH_TIME": "Heure de naissance",
     "BIRTH_WEIGHT": "Poids de naissance (g)",
     "BLOOD_LOSS": "Pertes sanguines (ml)",
+    "BLOOD_LOSS_VALUE": "Pertes sanguines : {{value}}",
     "CHART_X_AXIS": "Heures de phase active",
     "CONTRACTIONS": "Contractions",
     "CONTRACTIONS_TEN": "Contractions /10 min",
@@ -240,7 +241,14 @@
     "TIME": "Heure",
     "URINE_ML": "Urine (ml)",
     "UTEROTONIC_GIVEN": "Utérotonique administré (GATPA)",
-    "PICK_PATIENT_HINT": "Choisissez une patiente pour voir son dossier de travail."
+    "PICK_PATIENT_HINT": "Choisissez une patiente pour voir son dossier de travail.",
+    "SYSTOLIC": "Systolique (mmHg)",
+    "DIASTOLIC": "Diastolique (mmHg)",
+    "TEMPERATURE": "Température (°C)",
+    "APGAR_ONE": "APGAR à 1 min",
+    "APGAR_FIVE": "APGAR à 5 min",
+    "BIRTH_BEFORE_LAST_ENTRY": "Heure de naissance : elle ne peut pas précéder une observation déjà portée sur le partogramme.",
+    "PLACENTA_BEFORE_BIRTH": "Délivrance du placenta : elle ne peut pas précéder la naissance."
   },
   "TENANT_LIFECYCLE": {
     "BACK_TO_LIST": "Retour aux organisations",
@@ -9182,6 +9190,9 @@
     "HISTORY_CREATED": "Antécédents maternels enregistrés",
     "HISTORY_UPDATED": "Antécédents mis à jour (nouvelle version)",
     "HISTORY_SAVE_ERROR": "Échec de l'enregistrement des antécédents",
+    "HISTORY_ALREADY_EXISTS": "Cette patiente a déjà un historique maternel. Ouvrez-le et mettez-le à jour pour enregistrer une nouvelle version.",
+    "OPEN_EXISTING_HISTORY": "Ouvrir et mettre à jour l'historique",
+    "HISTORY_HELD_ELSEWHERE": "L'historique maternel de cette patiente est détenu par un autre établissement. Il ne peut pas être mis à jour ici.",
     "SUM_SUBMITTED": "Soumises",
     "SUM_ACKNOWLEDGED": "Accusées",
     "SUM_IN_PROGRESS": "En cours",
@@ -9253,7 +9264,10 @@
     "POSTPARTUM_TAB": "Post-partum",
     "URGENCY_ATTACHMENT_REQUIRED": "Les références prioritaires et urgentes exigent au moins une pièce jointe justificative, que ce formulaire ne prend pas encore en charge. Créez la référence en Routine pour le moment.",
     "VERSIONS_LOAD_ERROR": "Échec du chargement de l'historique des versions",
-    "NO_VERSIONS": "Aucune version antérieure"
+    "NO_VERSIONS": "Aucune version antérieure",
+    "PARA_ABOVE_GRAVIDA": "La parité (P) ne peut pas dépasser la gestité (G) : chaque accouchement compté dans P est aussi une grossesse comptée dans G.",
+    "OUTCOMES_ABOVE_GRAVIDA": "La parité (P) plus les avortements (A) ne peuvent pas dépasser la gestité (G) : chaque grossesse se termine par au plus l'un des deux.",
+    "RECORDED_FUTURE": "Enregistré : la date ne peut pas être dans le futur."
   },
   "ULTRASOUND": {
     "WORKLIST_ALL": "Toutes les demandes",
@@ -9419,7 +9433,10 @@
     "VISIT_INITIAL_INTAKE": "Première consultation",
     "VISIT_ROUTINE_CHECK": "Contrôle de routine",
     "VISIT_ULTRASOUND": "Échographie",
-    "VISIT_LATE_PREGNANCY": "Fin de grossesse"
+    "VISIT_LATE_PREGNANCY": "Fin de grossesse",
+    "BOOK": "Planifier",
+    "BOOK_REASON": "Consultation prénatale (CPN) — {{week}} SA",
+    "BOOK_HINT": "Planifiez une visite recommandée pour en faire un rendez-vous ; elle apparaît alors comme planifiée. Le jour venu, enregistrez l'arrivée de la patiente sur le rendez-vous pour ouvrir la consultation où la visite (constantes, examen) est saisie."
   },
   "PRO": {
     "HEADING": "Dépistage de santé mentale ({{instrument}})",
@@ -9598,7 +9615,13 @@
     "DELIVERY_LINK_NONE": "Non lié (né ailleurs)",
     "DELIVERY_LINKED": "lié à l'accouchement",
     "PICK_PATIENT_HINT": "Choisissez une patiente pour voir son suivi post-partum.",
-    "PHASE_UNKNOWN": "Phase non encore définie"
+    "PHASE_UNKNOWN": "Phase non encore définie",
+    "APGAR_ONE": "APGAR à 1 min",
+    "APGAR_FIVE": "APGAR à 5 min",
+    "APGAR_TEN": "APGAR à 10 min",
+    "TEMPERATURE": "Température (°C)",
+    "SYSTOLIC": "Systolique (mmHg)",
+    "DIASTOLIC": "Diastolique (mmHg)"
   },
   "ASSIGN_ADMIN": {
     "TITLE": "Administration des Affectations",
@@ -11179,5 +11202,10 @@
     "WEIGHT": "Le poids doit être compris entre {{min}} et {{max}} kg.",
     "HEIGHT": "La taille doit être comprise entre {{min}} et {{max}} cm.",
     "HEAD_CIRCUMFERENCE": "Le périmètre crânien doit être compris entre {{min}} et {{max}} cm."
+  },
+  "FIELD_LIMITS": {
+    "RANGE": "{{field}} : la valeur doit être comprise entre {{min}} et {{max}}.",
+    "MIN": "{{field}} : la valeur doit être supérieure ou égale à {{min}}.",
+    "FIELD_REASON": "{{field}} : {{reason}}"
   }
 }

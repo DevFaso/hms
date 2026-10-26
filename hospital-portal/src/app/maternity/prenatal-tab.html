@@ -85,6 +85,7 @@
             <th scope="col">{{ 'PRENATAL.TARGET_DATE' | translate }}</th>
             <th scope="col">{{ 'PRENATAL.WINDOW' | translate }}</th>
             <th scope="col">{{ 'COMMON.STATUS' | translate }}</th>
+            <th scope="col">{{ 'COMMON.ACTIONS' | translate }}</th>
           </tr>
         </thead>
         <tbody>
@@ -108,11 +109,27 @@
                   </span>
                 }
               </td>
+              <td class="actions-cell">
+                <!-- QA D810: book the recommended visit (opens the appointment form, prefilled). -->
+                @if (bookLinks()[$index]; as params) {
+                  <a
+                    class="btn-secondary btn-sm"
+                    routerLink="/appointments/new"
+                    [queryParams]="params"
+                    [title]="'PRENATAL.BOOK' | translate"
+                  >
+                    <span class="material-symbols-outlined">event_available</span>
+                    {{ 'PRENATAL.BOOK' | translate }}
+                  </a>
+                }
+              </td>
             </tr>
           }
         </tbody>
       </table>
     </div>
+    <!-- QA D810: how a planned visit becomes a recorded one. -->
+    <p class="muted">{{ 'PRENATAL.BOOK_HINT' | translate }}</p>
   }
 
   @if (s.existingAppointments.length > 0) {

@@ -27,6 +27,19 @@ export function toServerDateTime(localValue: string): string {
   return Number.isNaN(instant.getTime()) ? localValue : instant.toISOString().slice(0, 19);
 }
 
+/**
+ * QA D806/D821: a `datetime-local` value (the reader's wall clock) as an
+ * instant, to compare it with "now" or with a server time read through
+ * {@link fromServerDateTime} before a form is sent. Null when empty or unreadable.
+ */
+export function localInputInstant(localValue: string | null | undefined): Date | null {
+  if (!localValue) {
+    return null;
+  }
+  const instant = new Date(localValue);
+  return Number.isNaN(instant.getTime()) ? null : instant;
+}
+
 /** The reverse: a server (UTC, zone-less) time as a `datetime-local` value in the user's zone. */
 export function toLocalInputValue(serverValue: string): string {
   const zoned = /(Z|[+-]\d{2}:\d{2})$/.test(serverValue) ? serverValue : serverValue + 'Z';
