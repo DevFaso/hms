@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { HttpErrorResponse } from '@angular/common/http';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 
@@ -6,7 +7,7 @@ import { AdtIntakeConfigComponent } from './adt-intake-config.component';
 import { AdtIntakeConfig, AdtIntakeConfigService } from '../../services/adt-intake-config.service';
 import { HospitalService } from '../../services/hospital.service';
 import { ReferralService } from '../../services/referral.service';
-import { StaffService } from '../../services/staff.service';
+import { StaffResponse, StaffService } from '../../services/staff.service';
 import { ToastService } from '../../core/toast.service';
 
 describe('AdtIntakeConfigComponent', () => {
@@ -123,5 +124,104 @@ describe('AdtIntakeConfigComponent', () => {
     expect(toast.success).toHaveBeenCalled();
     // Reload triggered after save.
     expect(svc.list).toHaveBeenCalledTimes(2);
+  });
+
+  const member = (id: string, roleCode: string, assignmentId?: string): StaffResponse =>
+    ({
+      id,
+      userId: 'u-' + id,
+      username: id,
+      name: 'Staff ' + id,
+      email: '',
+      hospitalId: 'h1',
+      roleCode,
+      assignmentId,
+      active: true,
+      createdAt: '',
+    }) as StaffResponse;
+
+  interface Exposed {
+    form: Record<string, unknown>;
+    staffOptions: () => { id: string; label: string; assignmentId: string | null }[];
+    assignmentOptions: () => { assignmentId: string | null }[];
+    selectHospital: (o: { id: string; label: string }) => void;
+    onProviderChange: (id: string) => void;
+    fieldError: (field: string) => string | null;
+    save: (e: Event) => void;
+  }
+
+  it('QA D852: the admitting-provider picker offers the hospital physicians only', () => {
+    staff.list.and.returnValue(
+      of([
+        member('doc', 'ROLE_DOCTOR', 'a-doc'),
+        member('surg', 'ROLE_SURGEON', 'a-surg'),
+        member('admin', 'ROLE_HOSPITAL_ADMIN', 'a-admin'),
+        member('nurse', 'ROLE_NURSE', 'a-nurse'),
+        member('desk', 'ROLE_RECEPTIONIST'),
+      ]),
+    );
+    fixture.detectChanges();
+    const c = fixture.componentInstance as unknown as Exposed;
+    c.selectHospital({ id: 'h1', label: 'Hospital A' });
+
+    expect(c.staffOptions().map((o) => o.id)).toEqual(['doc', 'surg']);
+    // No raw ROLE_* code in what the picker shows.
+    expect(c.staffOptions().every((o) => !o.label.includes('ROLE_'))).toBeTrue();
+  });
+
+  it('QA D872: the default assignment is picked from the physicians, and follows the provider', () => {
+    staff.list.and.returnValue(
+      of([
+        member('doc', 'ROLE_DOCTOR', 'a-doc'),
+        member('admin', 'ROLE_HOSPITAL_ADMIN', 'a-admin'),
+      ]),
+    );
+    fixture.detectChanges();
+    const c = fixture.componentInstance as unknown as Exposed;
+    c.selectHospital({ id: 'h1', label: 'Hospital A' });
+
+    expect(c.assignmentOptions().map((o) => o.assignmentId)).toEqual(['a-doc']);
+    c.form['admittingProviderId'] = 'doc';
+    c.onProviderChange('doc');
+    expect(c.form['defaultAssignmentId']).toBe('a-doc');
+  });
+
+  it('QA D872: a blank complaint is sent as null so the server writes it in the admin language', () => {
+    fixture.detectChanges();
+    const c = fixture.componentInstance as unknown as Exposed;
+    c.form['hospitalId'] = 'h2';
+    c.form['admittingProviderId'] = 'p2';
+    expect(c.form['defaultChiefComplaint']).toBe('');
+    c.save({ preventDefault: () => undefined } as unknown as Event);
+
+    expect(svc.upsert).toHaveBeenCalledOnceWith(
+      jasmine.objectContaining({ defaultChiefComplaint: null }),
+    );
+  });
+
+  it('QA D872: a refused save shows the server reason on the field it names', () => {
+    const reason =
+      'Seul un médecin ou un chirurgien de cet hôpital peut être le médecin admetteur.';
+    svc.upsert.and.returnValue(
+      throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 400,
+            error: {
+              message: reason,
+              field: 'admittingProviderId',
+              fieldErrors: { admittingProviderId: reason },
+            },
+          }),
+      ),
+    );
+    fixture.detectChanges();
+    const c = fixture.componentInstance as unknown as Exposed;
+    c.form['hospitalId'] = 'h2';
+    c.form['admittingProviderId'] = 'p2';
+    c.save({ preventDefault: () => undefined } as unknown as Event);
+
+    expect(c.fieldError('admittingProviderId')).toBe(reason);
+    expect(toast.error).toHaveBeenCalledWith(reason);
   });
 });

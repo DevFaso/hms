@@ -286,5 +286,31 @@ describe('ChatComponent new-conversation picker', () => {
 
       expect(toast.error).toHaveBeenCalledOnceWith('CHAT.USERS_LOAD_FAILED');
     });
+
+    it('QA D877: a refused send shows the server reason, not a generic failure', () => {
+      setUp(['ROLE_DOCTOR']);
+      component.activeConversation.set({
+        conversationUserId: SELF,
+        conversationUserName: 'Moi',
+        lastMessageContent: '',
+        lastMessageTimestamp: '',
+        lastMessageRead: true,
+        unreadCount: 0,
+      });
+      component.messageText = 'moi';
+      component.sendMessage();
+
+      httpMock
+        .expectOne((r) => r.url === '/chat/send')
+        .flush(
+          { message: 'Vous ne pouvez pas vous envoyer un message à vous-même.' },
+          { status: 400, statusText: 'Bad Request' },
+        );
+
+      expect(toast.error).toHaveBeenCalledOnceWith(
+        'Vous ne pouvez pas vous envoyer un message à vous-même.',
+      );
+      expect(component.sendingMessage()).toBeFalse();
+    });
   });
 });

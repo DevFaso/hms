@@ -12,6 +12,7 @@ import {
   Dhis2PeriodType,
 } from '../../../services/integrations/dhis2.model';
 import { RoleContextService } from '../../../core/role-context.service';
+import { refusalReason } from '../../../shared/refusal-reason';
 import { ToastService } from '../../../core/toast.service';
 
 /**
@@ -76,7 +77,7 @@ import { ToastService } from '../../../core/toast.service';
                 <td>{{ m.hmsConceptCode }}</td>
                 <td>{{ m.dhis2DataElementUid }}</td>
                 <td>{{ m.dhis2CategoryOptionComboUid || '—' }}</td>
-                <td>{{ m.periodType }}</td>
+                <td>{{ 'DHIS2.PERIOD.' + m.periodType | translate }}</td>
                 <td>{{ m.active ? '✓' : '·' }}</td>
                 <td>
                   <button
@@ -246,9 +247,9 @@ export class Dhis2MappingEditorComponent implements OnDestroy {
         this.newRow = this.emptyRow();
         this.refresh();
       },
-      error: () => {
+      error: (err) => {
         this.saving.set(false);
-        this.toast.error(this.translate.instant('DHIS2.MAPPINGS.ADD_FAILED'));
+        this.toast.error(refusalReason(err) ?? this.translate.instant('DHIS2.MAPPINGS.ADD_FAILED'));
       },
     });
   }
@@ -261,7 +262,10 @@ export class Dhis2MappingEditorComponent implements OnDestroy {
         this.toast.success(this.translate.instant('DHIS2.MAPPINGS.DELETED'));
         this.refresh();
       },
-      error: () => this.toast.error(this.translate.instant('DHIS2.MAPPINGS.DELETE_FAILED')),
+      error: (err) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('DHIS2.MAPPINGS.DELETE_FAILED'),
+        ),
     });
   }
 

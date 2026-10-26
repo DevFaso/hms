@@ -966,6 +966,14 @@ export class EnumLabelService implements OnDestroy {
       ORTHO_IMAGING: 'Orthopaedic imaging',
       RESP_TELEMED: 'Respiratory telemedicine',
     },
+    // QA D871: the ADT intake form's default acuity.
+    acuityLevel: {
+      LEVEL_1_MINIMAL: 'Level 1 - minimal',
+      LEVEL_2_MODERATE: 'Level 2 - moderate',
+      LEVEL_3_MAJOR: 'Level 3 - major',
+      LEVEL_4_SEVERE: 'Level 4 - severe',
+      LEVEL_5_CRITICAL: 'Level 5 - critical',
+    },
     // QA D528/D663: tier-2 English for the domains #928 declared.
     profileType: {
       STAFF: 'Staff',

@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { provideHttpClient, withXhr } from '@angular/common/http';
+import { HttpErrorResponse, provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
@@ -24,8 +24,10 @@ const fakeSummary = (): IntegrationHealthSummary => ({
       integrationId: 'eligibility',
       displayName: 'Insurance eligibility & prior-auth',
       serviceType: null,
-      provider: 'StubEligibilityProvider',
+      provider: 'Insurer connector',
       enabled: true,
+      probeSupported: true,
+      resyncSupported: true,
       capabilities: ['Coverage check'],
       rolledUpStatus: 'FAILING',
       organizations: [
@@ -48,6 +50,8 @@ const fakeSummary = (): IntegrationHealthSummary => ({
       serviceType: 'EHR',
       provider: 'FHIR Reference Sandbox',
       enabled: true,
+      probeSupported: false,
+      resyncSupported: false,
       capabilities: [],
       rolledUpStatus: 'HEALTHY',
       organizations: [],
@@ -61,32 +65,24 @@ const fakeProbeResult = (
   integrationId: 'eligibility',
   ok: true,
   latencyMs: 42,
-  errorMessage: null,
-  probedAt: '2026-05-03T08:00:00Z',
+  message: null,
   ...overrides,
 });
 
 const fakeBuckets = (): IntegrationHistoryBucket[] => [
-  {
-    bucketStart: '2026-05-02T08:00:00Z',
-    bucketEnd: '2026-05-02T09:00:00Z',
-    healthyCount: 5,
-    degradedCount: 0,
-    failingCount: 0,
-  },
-  {
-    bucketStart: '2026-05-02T09:00:00Z',
-    bucketEnd: '2026-05-02T10:00:00Z',
-    healthyCount: 2,
-    degradedCount: 0,
-    failingCount: 8,
-  },
+  // The backend's IntegrationHistoryBucketDTO shape (QA D851).
+  { bucketStart: '2026-05-02T08:00:00', successCount: 5, failureCount: 0 },
+  { bucketStart: '2026-05-02T09:00:00', successCount: 2, failureCount: 8 },
 ];
 
 describe('IntegrationHealthComponent', () => {
   let service: jasmine.SpyObj<IntegrationHealthService>;
 
   function setup(): IntegrationHealthComponent {
+    return setupFixture().componentInstance;
+  }
+
+  function setupFixture() {
     TestBed.configureTestingModule({
       imports: [IntegrationHealthComponent, TranslateModule.forRoot()],
       providers: [
@@ -98,7 +94,7 @@ describe('IntegrationHealthComponent', () => {
     });
     const fixture = TestBed.createComponent(IntegrationHealthComponent);
     fixture.detectChanges();
-    return fixture.componentInstance;
+    return fixture;
   }
 
   beforeEach(() => {
@@ -183,18 +179,61 @@ describe('IntegrationHealthComponent', () => {
     expect(cmp.rowAction('eligibility').errorKey).toBe('INTEGRATION_HEALTH.PROBE.ERROR');
   });
 
-  it('resync() shares the same row-action state machine as probe()', () => {
+  it('QA D851: a 202 with no body is an accepted re-sync, not a failure', () => {
     service.getInventory.and.returnValue(of(fakeSummary()));
-    service.resync.and.returnValue(
-      of(fakeProbeResult({ ok: false, errorMessage: 'partner down' })),
-    );
+    service.resync.and.returnValue(of(undefined));
 
     const cmp = setup();
     cmp.resync(new Event('click'), 'eligibility');
 
     expect(service.resync).toHaveBeenCalledWith('eligibility');
-    expect(cmp.rowAction('eligibility').result?.ok).toBeFalse();
-    expect(cmp.rowAction('eligibility').result?.errorMessage).toBe('partner down');
+    expect(cmp.rowAction('eligibility').resyncAccepted).toBeTrue();
+    expect(cmp.rowAction('eligibility').errorKey).toBeNull();
+    // Initial load + silent refresh after the accepted re-sync.
+    expect(service.getInventory).toHaveBeenCalledTimes(2);
+  });
+
+  it('QA D851: a failed probe shows the server message the backend sends as `message`', () => {
+    service.getInventory.and.returnValue(of(fakeSummary()));
+    service.probe.and.returnValue(of(fakeProbeResult({ ok: false, message: 'partner down' })));
+
+    const cmp = setup();
+    cmp.probe(new Event('click'), 'eligibility');
+
+    expect(cmp.rowAction('eligibility').result?.message).toBe('partner down');
+  });
+
+  it('QA D851: a refused action shows the server reason, not the generic text', () => {
+    service.getInventory.and.returnValue(of(fakeSummary()));
+    service.resync.and.returnValue(
+      throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 400,
+            error: { message: 'Cette intégration ne peut pas être resynchronisée.' },
+          }),
+      ),
+    );
+
+    const cmp = setup();
+    cmp.resync(new Event('click'), 'eligibility');
+
+    expect(cmp.rowAction('eligibility').errorKey).toBe(
+      'Cette intégration ne peut pas être resynchronisée.',
+    );
+  });
+
+  it('QA D851: Test and Re-sync buttons appear only where the row supports them', () => {
+    service.getInventory.and.returnValue(of(fakeSummary()));
+
+    const fixture = setupFixture();
+    const el = fixture.nativeElement as HTMLElement;
+
+    expect(el.querySelector('[data-test="probe-eligibility"]')).not.toBeNull();
+    expect(el.querySelector('[data-test="resync-eligibility"]')).not.toBeNull();
+    expect(el.querySelector('[data-test="probe-ehr"]')).toBeNull();
+    expect(el.querySelector('[data-test="resync-ehr"]')).toBeNull();
+    expect(el.querySelector('[data-test="no-actions-ehr"]')).not.toBeNull();
   });
 
   it('resync() failure surfaces the RESYNC error key, not PROBE', () => {
@@ -225,6 +264,9 @@ describe('IntegrationHealthComponent', () => {
     expect(state.buckets.length).toBe(2);
     // Two points → space-separated x,y pairs in the polyline path.
     expect(state.sparklinePath.split(' ').length).toBe(2);
+    // QA D851: plotted from the backend's success/failure counts: no
+    // failures sits at the bottom (y=30), 8 of 10 failing at y=6.
+    expect(state.sparklinePath).toBe('0.00,30.00 100.00,6.00');
   });
 
   it('history error surfaces in the drawer state', () => {

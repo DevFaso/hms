@@ -411,7 +411,7 @@
               type="text"
               [(ngModel)]="defForm.loincCode"
               [readonly]="clinicalFieldsLocked()"
-              placeholder="e.g. 718-7"
+              [placeholder]="'LAB_TEST_CONFIG.LOINC_PLACEHOLDER' | translate"
               pattern="^\d{1,7}-\d$"
               [class.invalid]="!isLoincValid()"
             />

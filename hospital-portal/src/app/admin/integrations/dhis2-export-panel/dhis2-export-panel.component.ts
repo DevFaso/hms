@@ -21,6 +21,7 @@ import {
   Dhis2TriggerRequest,
 } from '../../../services/integrations/dhis2.model';
 import { RoleContextService } from '../../../core/role-context.service';
+import { refusalReason } from '../../../shared/refusal-reason';
 import { ToastService } from '../../../core/toast.service';
 import { ServerTimePipe } from '../../../shared/pipes/server-time.pipe';
 
@@ -120,7 +121,9 @@ import { ServerTimePipe } from '../../../shared/pipes/server-time.pipe';
                 <td>{{ r.datasetUid }}</td>
                 <td>{{ r.periodIso }}</td>
                 <td>
-                  <span class="status-pill" [ngClass]="statusClass(r.status)">{{ r.status }}</span>
+                  <span class="status-pill" [ngClass]="statusClass(r.status)">{{
+                    'DHIS2.RUN_STATUS.' + r.status | translate
+                  }}</span>
                 </td>
                 <td>{{ r.valueCount }}</td>
                 <td>{{ r.skippedCount }}</td>
@@ -237,9 +240,11 @@ export class Dhis2ExportPanelComponent implements OnInit, OnDestroy {
         this.toast.success(this.translate.instant('DHIS2.PANEL.TRIGGERED'));
         this.refreshRuns();
       },
-      error: () => {
+      error: (err) => {
         this.triggering.set(false);
-        this.toast.error(this.translate.instant('DHIS2.PANEL.TRIGGER_FAILED'));
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('DHIS2.PANEL.TRIGGER_FAILED'),
+        );
       },
     });
   }

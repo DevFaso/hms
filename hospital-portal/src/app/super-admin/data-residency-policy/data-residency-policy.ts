@@ -1,4 +1,5 @@
 import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
@@ -7,6 +8,16 @@ import { catchError, of } from 'rxjs';
 import { OrganizationRegion } from '../../services/data-residency.model';
 import { RegionPolicyService } from '../../services/region-policy.service';
 import { RegionPolicyRow } from '../../services/region-policy.model';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+
+/**
+ * QA D867: the export formats TenantExportPackager knows, shown by name.
+ * Empty means "the global default".
+ */
+export const EXPORT_FORMATS: readonly string[] = ['STANDARD', 'GDPR_PORTABILITY'];
+
+/** The actor a seeded or scheduled change is stamped with. */
+const SYSTEM_ACTOR = 'system';
 
 interface EditState {
   region: OrganizationRegion;
@@ -20,7 +31,7 @@ interface EditState {
 @Component({
   selector: 'app-data-residency-policy',
   standalone: true,
-  imports: [FormsModule, RouterLink, TranslateModule],
+  imports: [FormsModule, RouterLink, TranslateModule, DatePipe, ServerTimePipe],
   templateUrl: './data-residency-policy.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './data-residency-policy.scss',
@@ -75,6 +86,25 @@ export class DataResidencyPolicyComponent implements OnInit {
         }),
       )
       .subscribe((caps) => this.remoteProvisioningCapable.set(caps.remoteProvisioningCapable));
+  }
+
+  /** The formats the editor offers: the known ones, plus the row's own when it is another. */
+  exportFormatOptions(current: string): string[] {
+    return current && !EXPORT_FORMATS.includes(current)
+      ? [...EXPORT_FORMATS, current]
+      : [...EXPORT_FORMATS];
+  }
+
+  /** A known format by its translated name; another value as written. */
+  exportFormatKey(format: string | null): string | null {
+    return format && EXPORT_FORMATS.includes(format)
+      ? `REGION_POLICY.EXPORT_FORMAT.${format}`
+      : null;
+  }
+
+  /** QA D867: the platform's own changes are signed "system"; say so in words. */
+  isSystemActor(actor: string | null | undefined): boolean {
+    return (actor ?? '').trim().toLowerCase() === SYSTEM_ACTOR;
   }
 
   startEdit(row: RegionPolicyRow): void {

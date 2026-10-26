@@ -2205,6 +2205,23 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 
 ## Standing platform debt — owed, not parity
 
+- **QA D851 (round 14): the partner connectors have no row in the integration console.**
+  History, re-sync and test connection now know every integration the console
+  lists, and each row says which of the two actions it has, so the console
+  shows only buttons that work (`fix/qa-r14-platform-integrations`). Owed: the
+  four partner connector stubs (`partner.nhis`, `partner.nhia`,
+  `partner.cnamgs`, `partner.mutuelle`) register a probe and a re-sync but no
+  inventory row, so those actions are reachable by URL only. Listing them is a
+  new console section (names, provider, per-organization status for a payer
+  that is not configured yet), not the defect, which was about the four rows
+  already listed.
+- **QA D855 (round 14): the scheduled-report e-mail itself is in English.**
+  A malformed recipient is now refused at creation and before a run, in the
+  admin's language, on the recipients field (`fix/qa-r14-platform-integrations`).
+  Owed: the subject and body of the e-mail the run sends are still built in
+  English in `ScheduledReportService`; translating them needs a language per
+  report definition (the recipients are not users with a stored locale), which
+  is a new column and a choice on the form.
 - **QA D819 (round 13): the reverse of the patient-only-account rule.**
   Every path that writes `Patient.user` now refuses a staff account or one
   already linked to another record (`PatientAccountLinkGuard`, 409 on

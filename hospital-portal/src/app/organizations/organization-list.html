@@ -273,7 +273,7 @@
                 type="tel"
                 [(ngModel)]="createForm.contactPhone"
                 name="contactPhone"
-                placeholder="+1 (555) 000-0000"
+                [placeholder]="'ORGANIZATIONS.PHONE_PLACEHOLDER' | translate"
               />
             </div>
             <div class="field">

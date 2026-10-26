@@ -200,10 +200,23 @@
           id="rep-recipients"
           class="form-textarea"
           rows="2"
+          [class.invalid]="!!recipientsError()"
+          [attr.aria-invalid]="recipientsError() ? true : null"
+          [attr.aria-describedby]="recipientsError() ? 'rep-recipients-error' : null"
           [placeholder]="'REPORTS.RECIPIENTS_HINT' | translate"
           [ngModel]="recipients()"
-          (ngModelChange)="recipients.set($event)"
+          (ngModelChange)="recipients.set($event); recipientsError.set(null)"
         ></textarea>
+        @if (recipientsError(); as reason) {
+          <p
+            id="rep-recipients-error"
+            class="field-error"
+            role="alert"
+            data-test="recipients-error"
+          >
+            {{ reason }}
+          </p>
+        }
       </div>
     </div>
     <div class="modal-footer">
