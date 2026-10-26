@@ -116,10 +116,12 @@ class GlobalExceptionHandlerTest {
         @DisplayName("a service BusinessException key renders French")
         void businessKeyIsFrench() {
             ResponseEntity<Object> response = inFrench(() -> handler.handleBusinessException(
-                new BusinessException("billing.payment.exceedsBalance", "5000", "2000"), request));
+                new BusinessException("billing.payment.exceedsBalance",
+                    new java.math.BigDecimal("999999"), new java.math.BigDecimal("450.00")), request));
 
-            assertThat((String) bodyOf(response).get("message"))
-                .isEqualTo("Le montant du paiement (5000) dépasse le solde dû (2000).");
+            // QA D828: grouped in French and written in F CFA, as the portal writes every amount.
+            assertThat(((String) bodyOf(response).get("message")).replace(' ', ' ').replace(' ', ' '))
+                .isEqualTo("Le montant du paiement (999 999 F CFA) dépasse le solde dû (450 F CFA).");
         }
     }
 
