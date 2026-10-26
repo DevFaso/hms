@@ -51,9 +51,11 @@
                       <span class="material-symbols-outlined">corporate_fare</span>
                     </div>
                     <div>
-                      <span class="org-name">{{ org.name }}</span>
+                      <span class="org-name">{{ org.name | orgText: org.code }}</span>
                       @if (org.description) {
-                        <span class="org-desc">{{ org.description }}</span>
+                        <span class="org-desc">{{
+                          org.description | orgText: org.code : 'description'
+                        }}</span>
                       }
                       @if (org.lifecycleState && org.lifecycleState !== 'ACTIVE') {
                         <span
@@ -72,9 +74,11 @@
                       <span class="material-symbols-outlined">corporate_fare</span>
                     </div>
                     <div>
-                      <span class="org-name">{{ org.name }}</span>
+                      <span class="org-name">{{ org.name | orgText: org.code }}</span>
                       @if (org.description) {
-                        <span class="org-desc">{{ org.description }}</span>
+                        <span class="org-desc">{{
+                          org.description | orgText: org.code : 'description'
+                        }}</span>
                       }
                       @if (org.lifecycleState && org.lifecycleState !== 'ACTIVE') {
                         <span

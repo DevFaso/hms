@@ -197,6 +197,14 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
                     IntegrationMessageStatus.FAILED, "cross-tenant rejection");
                 return MllpInboundOutcome.REJECTED_NOT_FOUND;
             }
+            if (order.getStatus() == com.example.hms.enums.LabOrderStatus.ENTERED_IN_ERROR) {
+                // QA D820: a voided order takes no result. Its own hospital's
+                // sender is told so (AE), as for any invalid order.
+                log.warn("MLLP ORU^R01 placer={} maps to an order voided as entered in error", quotedPlacer);
+                recordInboundMessage(integrationId, organizationId, rawMessageBody,
+                    IntegrationMessageStatus.FAILED, "order entered in error");
+                return MllpInboundOutcome.REJECTED_INVALID;
+            }
             ordersByPlacer.put(placer, order);
         }
 

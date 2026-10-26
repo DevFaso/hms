@@ -2982,7 +2982,9 @@ public class EncounterServiceImpl implements EncounterService {
             java.util.EnumSet.of(
                     com.example.hms.enums.LabOrderStatus.COMPLETED,
                     com.example.hms.enums.LabOrderStatus.VERIFIED,
-                    com.example.hms.enums.LabOrderStatus.CANCELLED);
+                    com.example.hms.enums.LabOrderStatus.CANCELLED,
+                    // QA D820: a voided order holds nothing open.
+                    com.example.hms.enums.LabOrderStatus.ENTERED_IN_ERROR);
 
     /** Terminal statuses for procedure orders. */
     private static final java.util.Set<com.example.hms.enums.ProcedureOrderStatus> PROC_TERMINAL =

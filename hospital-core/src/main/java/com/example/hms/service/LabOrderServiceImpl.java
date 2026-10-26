@@ -125,6 +125,10 @@ public class LabOrderServiceImpl implements LabOrderService {
         // The clinical order belongs to the hospital that placed it: the
         // performing laboratory reads and results it but never rewrites it.
         requireOrderingHospital(existing);
+        // QA D820: an order voided as entered in error is kept as it was voided.
+        if (existing.getStatus() == LabOrderStatus.ENTERED_IN_ERROR) {
+            throw new BusinessException("lab.order.enteredInError");
+        }
 
         Hospital previousPerformer = existing.getPerformingHospital();
         LabOrder updated = buildLabOrder(existing, request, false);
@@ -761,6 +765,15 @@ public class LabOrderServiceImpl implements LabOrderService {
 
         // ── Hospital scope enforcement: deletion stays with the ordering hospital ──
         requireOrderingHospital(labOrder);
+        // QA D820: a completed order, or one voided as entered in error, is part
+        // of the record. A voided order's results no longer load (LabResult's
+        // restriction), so the results check below cannot see them; the status
+        // is checked first.
+        if (labOrder.getStatus() == LabOrderStatus.COMPLETED
+                || labOrder.getStatus() == LabOrderStatus.ENTERED_IN_ERROR) {
+            throw new com.example.hms.exception.ConflictException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("lab.order.deleteClosed"));
+        }
         // QA D601 class: an order that carries results is part of the chart;
         // hard-deleting it would orphan them. It can only be cancelled.
         if (labResultRepository.existsByLabOrder_Id(id)) {
@@ -980,6 +993,41 @@ public class LabOrderServiceImpl implements LabOrderService {
 
     @Override
     @Transactional
+    public LabOrderResponseDTO voidLabOrder(UUID id, String reason, Locale locale) {
+        // Locked first, so a result being released concurrently cannot
+        // complete the order underneath the void (the release path decides
+        // under the same lock).
+        LabOrder labOrder = labOrderRepository.findWithLockById(id)
+            .orElseThrow(() -> new ResourceNotFoundException(LAB_ORDER_NOT_FOUND));
+        // An ordering-side decision, like a cancel: a performing laboratory
+        // does not void another hospital's order.
+        requireOrderingHospital(labOrder);
+        LabOrderStatus committed = labOrderRepository.findStatusById(id);
+        if (committed == LabOrderStatus.ENTERED_IN_ERROR) {
+            throw new BusinessException("lab.order.alreadyVoided");
+        }
+        // A cancelled order is already closed, and its one reason column holds
+        // why it was cancelled: a void would overwrite that reason.
+        if (committed == LabOrderStatus.CANCELLED) {
+            throw new BusinessException("lab.order.voidCancelled");
+        }
+        requireOrderDecisionAuthority(roleValidator.getCurrentUserId(), labOrder.getHospital().getId(),
+            "lab.order.voidForbidden");
+        String voidReason = normalizeRequiredText(reason, "lab.order.voidReasonRequired");
+        if (voidReason.length() > MAX_CANCELLATION_REASON) {
+            throw new BusinessException("lab.order.voidReasonTooLong", MAX_CANCELLATION_REASON);
+        }
+        // The one reason column on the order: for a voided order it says why it
+        // was entered in error. Who voided it and when is the audit row.
+        labOrder.setCancellationReason(voidReason);
+        labOrder.setStatus(LabOrderStatus.ENTERED_IN_ERROR);
+        LabOrder saved = labOrderRepository.save(labOrder);
+        log.info("Lab order {} voided as entered in error", saved.getId());
+        return labOrderMapper.toLabOrderResponseDTO(saved);
+    }
+
+    @Override
+    @Transactional
     public LabOrderResponseDTO transitionLabOrderStatus(UUID id, LabOrderStatus toStatus, String reason,
                                                         Locale locale) {
         LabOrder labOrder = labOrderRepository.findById(id)
@@ -1019,14 +1067,7 @@ public class LabOrderServiceImpl implements LabOrderService {
         UUID currentUserId = roleValidator.getCurrentUserId();
 
         if (to == LabOrderStatus.CANCELLED) {
-            // QA D666: the lab director is the laboratory's senior manager.
-            // QA D666 decision (E9 #67): a hospital admin does not cancel a
-            // clinical order; the controller does not admit the role either.
-            if (!roleValidator.isLabManager(currentUserId, orderingHospitalId)
-                    && !roleValidator.isLabDirector(currentUserId, orderingHospitalId)
-                    && !roleValidator.isSuperAdminFromAuth()) {
-                throw new BusinessException("lab.order.cancelForbidden");
-            }
+            requireOrderDecisionAuthority(currentUserId, orderingHospitalId, "lab.order.cancelForbidden");
             return;
         }
 
@@ -1038,6 +1079,22 @@ public class LabOrderServiceImpl implements LabOrderService {
             case VERIFIED, COMPLETED -> requireLabScientistOrManager(currentUserId, hospitalId,
                     "verify or complete a lab order");
             default -> throw new BusinessException("lab.order.statusNotTransitionable", to.name());
+        }
+    }
+
+    /**
+     * Who may cancel or void an order: the ordering hospital's lab manager or
+     * lab director, or a super-admin.
+     *
+     * <p>QA D666: the lab director is the laboratory's senior manager.
+     * QA D666 decision (E9 #67): a hospital admin does not cancel a clinical
+     * order; the controller does not admit the role either.
+     */
+    private void requireOrderDecisionAuthority(UUID currentUserId, UUID orderingHospitalId, String refusalKey) {
+        if (!roleValidator.isLabManager(currentUserId, orderingHospitalId)
+                && !roleValidator.isLabDirector(currentUserId, orderingHospitalId)
+                && !roleValidator.isSuperAdminFromAuth()) {
+            throw new BusinessException(refusalKey);
         }
     }
 

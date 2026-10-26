@@ -159,7 +159,9 @@
                       <tr>
                         <td>
                           {{
-                            org.organizationName ?? ('INTEGRATION_HEALTH.PLATFORM_WIDE' | translate)
+                            org.organizationName
+                              ? (org.organizationName | orgText)
+                              : ('INTEGRATION_HEALTH.PLATFORM_WIDE' | translate)
                           }}
                         </td>
                         <td>

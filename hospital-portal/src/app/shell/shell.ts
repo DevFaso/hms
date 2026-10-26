@@ -1928,6 +1928,10 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     this.toast.dismiss(id);
   }
 
+  onLangSelect(event: Event): void {
+    this.switchLang((event.target as HTMLSelectElement).value);
+  }
+
   switchLang(lang: string): void {
     if (switchLanguage(lang, this.translate)) this.currentLang.set(storedLang());
   }

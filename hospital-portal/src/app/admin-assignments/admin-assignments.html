@@ -259,7 +259,7 @@
           <span>{{ 'ASSIGN_ADMIN.HOSPITAL' | translate }}</span>
           <select [ngModel]="formHospitalId()" (ngModelChange)="formHospitalId.set($event)">
             <option value="">—</option>
-            @for (h of hospitals(); track h.id) {
+            @for (h of formHospitalOptions(); track h.id) {
               <option [value]="h.id">{{ h.name }}</option>
             }
           </select>
@@ -340,7 +340,7 @@
           <fieldset class="form-field">
             <legend>{{ 'ASSIGN_ADMIN.HOSPITALS' | translate }} *</legend>
             <div class="checkbox-grid">
-              @for (h of hospitals(); track h.id) {
+              @for (h of assignableHospitals(); track h.id) {
                 <label class="check-field">
                   <input
                     type="checkbox"
@@ -603,7 +603,7 @@
                 (ngModelChange)="importDefaultHospitalId.set($event)"
               >
                 <option value="">—</option>
-                @for (h of hospitals(); track h.id) {
+                @for (h of assignableHospitals(); track h.id) {
                   <option [value]="h.id">{{ h.name }}</option>
                 }
               </select>

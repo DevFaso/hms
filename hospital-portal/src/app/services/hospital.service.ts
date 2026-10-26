@@ -56,6 +56,21 @@ export interface HospitalResponse {
   updatedAt: string;
 }
 
+/**
+ * QA D818: the lifecycle states that take no new role assignment, mirroring
+ * the server's FacilityAssignmentGuard.CLOSED_STATES (which answers 409).
+ */
+const CLOSED_FOR_ASSIGNMENT: readonly string[] = ['ARCHIVED', 'PENDING_PURGE', 'PURGED'];
+
+/**
+ * QA D818: whether a hospital may be offered in a picker that grants a role
+ * there. An absent state (an older payload) is treated as open; the server
+ * still decides.
+ */
+export function isOpenForAssignment(hospital: { lifecycleState?: string | null }): boolean {
+  return !CLOSED_FOR_ASSIGNMENT.includes(hospital.lifecycleState ?? '');
+}
+
 /** One row of `GET /hospitals/directory`: no contact details. */
 export interface HospitalDirectoryEntry {
   id: string;

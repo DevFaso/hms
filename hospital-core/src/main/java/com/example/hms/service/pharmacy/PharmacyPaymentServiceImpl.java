@@ -220,7 +220,9 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
         BigDecimal charge = DispenseCharge.of(dispense, inventoryItemRepository)
                 .orElseThrow(() -> new BusinessException("pharmacy.payment.noPrice"));
         if (charge.compareTo(amount) != 0) {
-            throw new BusinessException("pharmacy.payment.amountMismatch", charge.toPlainString());
+            // QA D828: the number itself (grouped in the caller's language) and the
+            // bundle writes "F CFA" after it, never a bare figure or the raw XOF code.
+            throw new BusinessException("pharmacy.payment.amountMismatch", charge);
         }
     }
 

@@ -73,6 +73,13 @@ export class LabComponent implements OnInit {
   readonly canDeleteOrder = computed(() =>
     this.roleContext.hasAnyActiveRole(actionRoles('labOrderDelete')),
   );
+  /**
+   * QA D820: a COMPLETED order had no way out but an admin DELETE. The lab
+   * manager or director (or a super-admin) voids it as entered in error.
+   */
+  readonly canVoidOrder = computed(() =>
+    this.roleContext.hasAnyActiveRole(actionRoles('labOrderVoid')),
+  );
 
   /**
    * Everything the laboratory still owes: from the order being placed,
@@ -121,6 +128,11 @@ export class LabComponent implements OnInit {
   saving = signal(false);
   editingId = signal<string | null>(null);
   form: LabOrderRequest = this.emptyForm();
+
+  // QA D820: void (entered in error)
+  voidingOrder = signal<LabOrderResponse | null>(null);
+  voidReason = signal('');
+  voiding = signal(false);
 
   showDeleteConfirm = signal(false);
   deletingOrder = signal<LabOrderResponse | null>(null);
@@ -217,6 +229,21 @@ export class LabComponent implements OnInit {
    */
   hasResultsStage(o: LabOrderResponse): boolean {
     return ['RESULTED', 'VERIFIED', 'COMPLETED'].includes(String(o.status ?? '').toUpperCase());
+  }
+
+  /**
+   * QA D820: an order voided as entered in error is kept exactly as it was
+   * voided; the server refuses an edit (400) and a delete (409) on it, so
+   * neither is offered. Nor is either offered on an order another hospital
+   * sent here, which belongs to the ordering hospital.
+   */
+  isEditable(o: LabOrderResponse): boolean {
+    return !this.isIncomingExternal(o) && o.status !== 'ENTERED_IN_ERROR';
+  }
+
+  /** As {@link isEditable}, and never on an order that carries results (QA D601/D616). */
+  isDeletable(o: LabOrderResponse): boolean {
+    return this.isEditable(o) && !this.hasResultsStage(o);
   }
 
   isSentOut(o: LabOrderResponse): boolean {
@@ -448,6 +475,51 @@ export class LabComponent implements OnInit {
     });
   }
 
+  /**
+   * QA D820: offered on this hospital's own orders while open or completed;
+   * not on one already voided, nor on a cancelled one (already closed, and
+   * the server keeps its cancel reason).
+   */
+  isVoidable(o: LabOrderResponse): boolean {
+    return (
+      !this.isIncomingExternal(o) && o.status !== 'ENTERED_IN_ERROR' && o.status !== 'CANCELLED'
+    );
+  }
+
+  openVoid(o: LabOrderResponse): void {
+    this.voidReason.set('');
+    this.voidingOrder.set(o);
+  }
+
+  closeVoid(): void {
+    this.voidingOrder.set(null);
+    this.voidReason.set('');
+  }
+
+  onVoidReasonInput(event: Event): void {
+    this.voidReason.set((event.target as HTMLTextAreaElement).value);
+  }
+
+  executeVoid(): void {
+    const order = this.voidingOrder();
+    const reason = this.voidReason().trim();
+    if (!order || !reason) return;
+    this.voiding.set(true);
+    this.labService.voidOrder(order.id, reason).subscribe({
+      next: () => {
+        this.toast.success(this.translate.instant('LAB.VOID.DONE'));
+        this.voiding.set(false);
+        this.closeVoid();
+        this.loadOrders();
+      },
+      error: (err: { error?: { message?: string } }) => {
+        // The server's refusal is written for the reader (localised).
+        this.toast.error(err?.error?.message ?? this.translate.instant('LAB.VOID.FAILED'));
+        this.voiding.set(false);
+      },
+    });
+  }
+
   confirmDelete(o: LabOrderResponse): void {
     this.deletingOrder.set(o);
     this.showDeleteConfirm.set(true);
@@ -554,6 +626,7 @@ export class LabComponent implements OnInit {
       case 'ORDERED':
         return 'status-badge status-pending';
       case 'CANCELLED':
+      case 'ENTERED_IN_ERROR':
         return 'status-badge status-cancelled';
       default:
         return 'status-badge';
@@ -668,7 +741,8 @@ export class LabComponent implements OnInit {
 
   collectSpecimen(): void {
     const order = this.specimensOrder();
-    if (!order || !this.specimenForm.specimenType.trim()) return;
+    if (!order || !this.specimensOrderAcceptsSpecimens() || !this.specimenForm.specimenType.trim())
+      return;
     this.specimenSaving.set(true);
     this.labService
       .createSpecimen(order.id, {
@@ -723,8 +797,20 @@ export class LabComponent implements OnInit {
     });
   }
 
+  /**
+   * QA D820: an order voided as entered in error takes no further specimen,
+   * and a specimen already collected on it is not received (the server
+   * refuses both, and a receipt would queue an analyzer work order).
+   */
+  specimensOrderAcceptsSpecimens(): boolean {
+    return this.specimensOrder()?.status !== 'ENTERED_IN_ERROR';
+  }
+
   canReceive(specimen: LabSpecimen): boolean {
-    return specimen.status === 'COLLECTED' || specimen.status === 'IN_TRANSIT';
+    return (
+      this.specimensOrderAcceptsSpecimens() &&
+      (specimen.status === 'COLLECTED' || specimen.status === 'IN_TRANSIT')
+    );
   }
 
   getSpecimenStatusClass(status: string): string {

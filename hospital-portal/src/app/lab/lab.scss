@@ -438,7 +438,8 @@
   &.edit-link:hover {
     color: #0ea5e9;
   }
-  &.delete-link:hover {
+  &.delete-link:hover,
+  &.void-link:hover {
     color: #ef4444;
     background: #fef2f2;
   }

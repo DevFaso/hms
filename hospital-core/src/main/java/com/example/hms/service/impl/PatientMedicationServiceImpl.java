@@ -41,6 +41,8 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
     private static final int DEFAULT_LIMIT = 50;
     /** The key PatientChartAccess throws: a refused staff read reads as "no such patient". */
     private static final String MSG_PATIENT_NOT_FOUND = "patient.notFound";
+    static final String REFILL_BLOCKED_CONTROLLED = "CONTROLLED";
+    static final String REFILL_BLOCKED_NOT_REFILLABLE = "NOT_REFILLABLE";
 
     private final PrescriptionRepository prescriptionRepository;
     /** QA D719 re-test: the catalog decides "controlled" too, not the tick alone. */
@@ -174,6 +176,9 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
         LocalDate startDate = com.example.hms.service.MedicationCourseStatus.startDate(prescription);
         LocalDate endDate = com.example.hms.service.MedicationCourseStatus.endDate(prescription);
         String status = com.example.hms.service.MedicationCourseStatus.of(prescription, closedStays);
+        // QA D813: the same gate the portal's refill request applies, in the same order, so the
+        // row and the server's refusal name the same reason.
+        String refillBlockedReason = refillBlockedReason(prescription);
 
         return PatientMedicationResponseDTO.builder()
             .id(prescription.getId())
@@ -190,7 +195,8 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
             .refillsAllowed(prescription.getRefillsAllowed())
             .refillsRemaining(prescription.getRefillsRemaining())
             .refillsUsed(prescription.getRefillsUsed())
-            .refillable(prescription.allowsRefill() && !controlledResolver.isControlled(prescription))
+            .refillable(refillBlockedReason == null)
+            .refillBlockedReason(refillBlockedReason)
             .refillRequestStatus(latestRefill != null && latestRefill.getStatus() != null
                 ? latestRefill.getStatus().name() : null)
             .refillRequestUpdatedAt(latestRefill != null ? latestRefill.getUpdatedAt() : null)
@@ -199,6 +205,15 @@ public class PatientMedicationServiceImpl implements PatientMedicationService {
             .hospitalId(CrossHospitalReachRecorder.hospitalIdOf(prescription.getHospital()))
             .hospitalName(prescription.getHospital() != null ? prescription.getHospital().getName() : null)
             .build();
+    }
+
+    /** CONTROLLED wins over NOT_REFILLABLE: a controlled medicine is refused even with renewals left. */
+    private String refillBlockedReason(Prescription prescription) {
+        boolean allowsRefill = prescription.allowsRefill();
+        if (controlledResolver.isControlled(prescription)) {
+            return REFILL_BLOCKED_CONTROLLED;
+        }
+        return allowsRefill ? null : REFILL_BLOCKED_NOT_REFILLABLE;
     }
 
     private static PatientMedicationResponseDTO withReadiness(

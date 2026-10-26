@@ -91,6 +91,10 @@ public class MicroCultureServiceImpl implements MicroCultureService {
         if (order.getStatus() == LabOrderStatus.CANCELLED) {
             throw new BusinessException("A cancelled lab order cannot receive a culture report.");
         }
+        // QA D820: nor can one voided as entered in error.
+        if (order.getStatus() == LabOrderStatus.ENTERED_IN_ERROR) {
+            throw new BusinessException("lab.order.enteredInError");
+        }
         Patient patient = order.getPatient();
         if (patient == null) {
             throw new BusinessException("The lab order has no patient attached.");
@@ -312,6 +316,15 @@ public class MicroCultureServiceImpl implements MicroCultureService {
         if (hospitalId != null
             && (culture.getHospital() == null
                 || !Objects.equals(culture.getHospital().getId(), hospitalId))) {
+            throw new ResourceNotFoundException("microculture.culture.notFound", cultureId);
+        }
+        // QA D820: the entity restriction already keeps a voided order's culture
+        // out of every query; this also catches one loaded before the void in the
+        // same persistence context, so no read or change (edit, isolate,
+        // susceptibility, finalize and its positive-culture notification) ever
+        // reaches it. Hidden, so not found, like the restriction answers.
+        if (culture.getLabOrder() != null
+            && culture.getLabOrder().getStatus() == LabOrderStatus.ENTERED_IN_ERROR) {
             throw new ResourceNotFoundException("microculture.culture.notFound", cultureId);
         }
         return culture;

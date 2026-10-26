@@ -26,6 +26,11 @@ export interface LabOrderResponse {
   primaryDiagnosisCode: string;
   additionalDiagnosisCodes: string[];
   orderChannel: string;
+  /**
+   * Why the order was cancelled, or (QA D820) why it was voided as entered in
+   * error; absent otherwise.
+   */
+  cancellationReason?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -504,6 +509,17 @@ export class LabService {
 
   deleteOrder(id: string): Observable<void> {
     return this.http.delete<void>(`/lab-orders/${id}`);
+  }
+
+  /**
+   * QA D820: void an order entered in error, a COMPLETED one included. Never
+   * a delete: the order reads ENTERED_IN_ERROR with the reason, and its
+   * results stop appearing anywhere.
+   */
+  voidOrder(id: string, reason: string): Observable<LabOrderResponse> {
+    return this.http
+      .post<ApiWrapper<LabOrderResponse>>(`/lab-orders/${id}/void`, { reason })
+      .pipe(map((res) => res.data));
   }
 
   // ── Lab Result CRUD ──────────────────────────────────────────────────

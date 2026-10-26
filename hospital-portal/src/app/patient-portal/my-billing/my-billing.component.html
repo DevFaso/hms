@@ -77,11 +77,23 @@
                   inv.status | enumLabel: 'invoiceStatus'
                 }}</span>
               }
-              @if (isPayable(inv)) {
-                <button class="pay-btn" (click)="openPayDialog(inv)">
+              @if (canDeclare(inv)) {
+                <button
+                  class="pay-btn"
+                  [attr.data-testid]="'pay-btn-' + inv.id"
+                  (click)="openPayDialog(inv)"
+                >
                   <span class="material-symbols-outlined">payment</span>
                   {{ 'PORTAL.BILLING.PAY_NOW' | translate }}
                 </button>
+              } @else if (isPayable(inv)) {
+                <!--
+                  QA D814: the whole balance is already declared and waits for
+                  the cashier, so there is nothing left to pay from here.
+                -->
+                <span class="pli-meta" [attr.data-testid]="'fully-declared-' + inv.id">{{
+                  'PORTAL.BILLING.FULLY_DECLARED' | translate
+                }}</span>
               }
             </div>
           </div>

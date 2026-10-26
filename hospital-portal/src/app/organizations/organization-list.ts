@@ -24,11 +24,12 @@ import { ToastService } from '../core/toast.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { EnumLabelService } from '../core/enum-label.service';
+import { OrgTextPipe, seededOrgTextKey } from '../shared/pipes/org-text.pipe';
 
 @Component({
   selector: 'app-organization-list',
   standalone: true,
-  imports: [FormsModule, RouterLink, TranslateModule, EnumLabelPipe],
+  imports: [FormsModule, RouterLink, TranslateModule, EnumLabelPipe, OrgTextPipe],
   templateUrl: './organization-list.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './organization-list.scss',
@@ -81,6 +82,8 @@ export class OrganizationListComponent implements OnInit {
     return all.filter(
       (o) =>
         o.name.toLowerCase().includes(term) ||
+        // QA D822: the default organisation's name is shown translated.
+        this.shownName(o).toLowerCase().includes(term) ||
         o.code.toLowerCase().includes(term) ||
         (o.type?.toLowerCase().includes(term) ?? false) ||
         // The Type column renders a translated label; searching has to
@@ -88,6 +91,12 @@ export class OrganizationListComponent implements OnInit {
         this.typeLabel(o.type).toLowerCase().includes(term),
     );
   });
+
+  /** The name as the list shows it (QA D822). */
+  private shownName(o: OrganizationResponse): string {
+    const key = seededOrgTextKey(o.name, o.code);
+    return key ? this.translate.instant(key) : o.name;
+  }
 
   showCreate = signal(false);
   saving = signal(false);

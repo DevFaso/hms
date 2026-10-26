@@ -2049,4 +2049,110 @@ class BillingInvoiceServiceImplTest {
 
         verify(invoiceRepository).saveAndFlush(any(BillingInvoice.class));
     }
+
+    // =========================================================================
+    // QA D828: the refusal names every amount in F CFA, in each language
+    // =========================================================================
+
+    /** The refusal as the API answers it: the real bundles, in that language, spaces made plain. */
+    private static String rendered(com.example.hms.exception.BusinessException refused, Locale locale) {
+        return com.example.hms.i18n.TestMessageSources.bundles()
+            .getMessage(refused.getMessageKey(), refused.getArgs(), locale)
+            .replace(' ', ' ').replace(' ', ' ');
+    }
+
+    private BillingInvoice owing450(UUID patientId) {
+        BillingInvoice invoice = payableInvoice(patientId);
+        invoice.setTotalAmount(new BigDecimal("450.00"));
+        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+        return invoice;
+    }
+
+    /** Re-test call: PATIENT_A3 POSTs 999 999 by mobile money on an invoice whose balance is 450. */
+    @Test
+    void qaD828_patientOverpaymentRefusalWritesFCfa() {
+        UUID patientId = UUID.randomUUID();
+        BillingInvoice invoice = owing450(patientId);
+        UUID invoiceId = invoice.getId();
+        var tooMuch = com.example.hms.payload.dto.portal.PatientPaymentRequestDTO.builder()
+            .amount(new BigDecimal("999999")).paymentMethod("MOBILE_MONEY")
+            .transactionReference("OM-QA-828").build();
+
+        com.example.hms.exception.BusinessException refused = assertThrows(
+            com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.recordPatientPayment(invoiceId, patientId, UUID.randomUUID(), tooMuch,
+                Locale.FRENCH));
+
+        assertEquals("billing.payment.exceedsBalance", refused.getMessageKey());
+        assertEquals("Le montant du paiement (999 999 F CFA) dépasse le solde dû (450 F CFA).",
+            rendered(refused, Locale.FRENCH));
+        assertEquals("El importe del pago (999.999 F CFA) supera el saldo pendiente (450 F CFA).",
+            rendered(refused, Locale.forLanguageTag("es")));
+        assertEquals("Payment amount (999,999 F CFA) exceeds balance due (450 F CFA).",
+            rendered(refused, Locale.ENGLISH));
+        verify(paymentTransactionRepository, never()).save(any());
+    }
+
+    /** Re-test call: 100 more on an invoice whose whole 450 balance is already declared. */
+    @Test
+    void qaD828_fullyDeclaredRefusalWritesFCfa() {
+        UUID patientId = UUID.randomUUID();
+        BillingInvoice invoice = owing450(patientId);
+        UUID invoiceId = invoice.getId();
+        when(paymentTransactionRepository.sumAmountByInvoiceAndStatus(invoiceId,
+            com.example.hms.enums.PaymentStatus.PENDING)).thenReturn(new BigDecimal("450.00"));
+        var hundred = com.example.hms.payload.dto.portal.PatientPaymentRequestDTO.builder()
+            .amount(new BigDecimal("100")).paymentMethod("MOBILE_MONEY")
+            .transactionReference("OM-QA-828-B").build();
+
+        com.example.hms.exception.BusinessException refused = assertThrows(
+            com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.recordPatientPayment(invoiceId, patientId, UUID.randomUUID(), hundred,
+                Locale.FRENCH));
+
+        assertEquals("billing.payment.exceedsWithPending", refused.getMessageKey());
+        assertEquals("Vous avez saisi 100 F CFA, mais 450 F CFA déjà déclarés sont en attente de confirmation : "
+            + "vous pouvez déclarer au plus 0 F CFA de plus.", rendered(refused, Locale.FRENCH));
+        assertEquals("Ha introducido 100 F CFA, pero 450 F CFA ya declarados están pendientes de confirmación: "
+            + "puede declarar como máximo 0 F CFA más.", rendered(refused, Locale.forLanguageTag("es")));
+        assertEquals("You entered 100 F CFA, but 450 F CFA you already declared is awaiting confirmation: "
+            + "you can declare at most 0 F CFA more.", rendered(refused, Locale.ENGLISH));
+    }
+
+    /** Sibling: the cashier taking the whole balance beside the patient's pending declaration. */
+    @Test
+    void qaD828_staffRefusalBesideAPendingDeclarationWritesFCfa() {
+        UUID patientId = UUID.randomUUID();
+        BillingInvoice invoice = owing450(patientId);
+        UUID invoiceId = invoice.getId();
+        when(paymentTransactionRepository.sumAmountByInvoiceAndStatus(invoiceId,
+            com.example.hms.enums.PaymentStatus.PENDING)).thenReturn(new BigDecimal("150.00"));
+        var whole = new com.example.hms.payload.dto.StaffPaymentRequestDTO(new BigDecimal("450"), "cash", null, null);
+
+        com.example.hms.exception.BusinessException refused = assertThrows(
+            com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.recordStaffPayment(invoiceId, whole, null, Locale.FRENCH));
+
+        assertEquals("billing.payment.staffExceedsWithPending", refused.getMessageKey());
+        assertEquals("Vous avez saisi 450 F CFA, mais le patient a déclaré 150 F CFA en attente de confirmation : "
+            + "confirmez ou rejetez d’abord cette déclaration, ou encaissez au plus 300 F CFA.",
+            rendered(refused, Locale.FRENCH));
+    }
+
+    /** Sibling: the cashier's plain overpayment (no declaration pending) on a 7 450 balance. */
+    @Test
+    void qaD828_staffOverpaymentRefusalWritesFCfa() {
+        UUID patientId = UUID.randomUUID();
+        BillingInvoice invoice = owing450(patientId);
+        invoice.setTotalAmount(new BigDecimal("7450.00"));
+        UUID invoiceId = invoice.getId();
+        var tooMuch = new com.example.hms.payload.dto.StaffPaymentRequestDTO(new BigDecimal("12000"), "cash", null, null);
+
+        com.example.hms.exception.BusinessException refused = assertThrows(
+            com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.recordStaffPayment(invoiceId, tooMuch, null, Locale.FRENCH));
+
+        assertEquals("Le montant du paiement (12 000 F CFA) dépasse le solde dû (7 450 F CFA).",
+            rendered(refused, Locale.FRENCH));
+    }
 }

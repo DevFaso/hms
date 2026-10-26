@@ -2610,7 +2610,7 @@
     "PROVINCE_PLACEHOLDER": "e.g., Kadiogo",
     "REGION": "Region",
     "REGION_PLACEHOLDER": "e.g., Centre, Île-de-France",
-    "REQUIRED_FIELDS": "Name, city, country, phone number, and an address or a P.O. box are required.",
+    "REQUIRED_FIELDS": "Name, phone number, country, city and street address are required.",
     "ADDRESS_OR_PO_BOX_HINT": "The street address is required; the P.O. box is optional.",
     "SEARCH_PLACEHOLDER": "Search hospitals…",
     "SECTOR": "Sector / Neighborhood",
@@ -2906,6 +2906,17 @@
       "PENDING_QA_REVIEW": "Pending QA review",
       "REJECTED": "Rejected",
       "RETIRED": "Retired"
+    },
+    "CANCELLATION_REASON": "Cancellation reason",
+    "VOID": {
+      "ACTION": "Mark as entered in error",
+      "TITLE": "Mark this order as entered in error",
+      "EXPLAIN": "Use this when the order was placed by mistake (wrong patient, wrong test). The order and its results are kept for the record, but its results will no longer appear in any clinical view. Order:",
+      "REASON": "Reason for the error",
+      "REASON_PLACEHOLDER": "e.g. Ordered for the wrong patient",
+      "CONFIRM": "Mark as entered in error",
+      "DONE": "The order is marked as entered in error.",
+      "FAILED": "The order could not be marked as entered in error."
     }
   },
   "LAB_STAFF": {
@@ -3925,7 +3936,9 @@
     "TITLE": "Organizations",
     "TYPE": "Type",
     "TYPE_REQUIRED": "Choose an organization type.",
-    "UPDATED": "Organization updated"
+    "UPDATED": "Organization updated",
+    "DEFAULT_ORG_NAME": "Default Healthcare Organization",
+    "DEFAULT_ORG_DESCRIPTION": "Default organization for hospitals without specific organization assignment"
   },
   "PANEL": {
     "TITLE": "Panel Management",
@@ -4641,9 +4654,10 @@
       "REFILL_HISTORY": "Refill History",
       "REQUESTED": "Requested",
       "COMPLETED": "Completed",
-      "NOT_REFILLABLE": "This prescription can no longer be refilled — ask your care team for a new one.",
+      "NOT_REFILLABLE": "This prescription can no longer be refilled. Please contact your care team for a new prescription.",
       "READY_AT": "Ready for collection at {{pharmacy}}",
-      "READY_SINCE": "Since {{date}}"
+      "READY_SINCE": "Since {{date}}",
+      "NOT_REFILLABLE_CONTROLLED": "This is a controlled medicine: it cannot be renewed from the portal. Please contact your care team for a new prescription."
     },
     "LAB_RESULTS": {
       "TITLE": "Test Results",
@@ -4716,8 +4730,9 @@
       "PAYMENT_PENDING_NOTE": "Payments made here are confirmed by the hospital before your balance changes.",
       "PENDING_DECLARED": "Already declared, awaiting confirmation",
       "LEFT_TO_DECLARE": "Left to declare",
-      "AMOUNT_EXCEEDS_PENDING": "You can declare at most {{max}} F CFA: {{pending}} F CFA already declared is awaiting confirmation.",
-      "CREDITED_TO": "Credited to invoice {{number}}"
+      "AMOUNT_EXCEEDS_PENDING": "You can declare at most {{max}}: {{pending}} already declared is awaiting confirmation.",
+      "CREDITED_TO": "Credited to invoice {{number}}",
+      "FULLY_DECLARED": "Balance declared, awaiting the cashier's confirmation"
     },
     "CARE_TEAM": {
       "TITLE": "My Care Team",
@@ -5273,7 +5288,8 @@
         "PENDING": "Pending",
         "RECEIVED": "Received",
         "RESULTED": "Resulted",
-        "VERIFIED": "Verified"
+        "VERIFIED": "Verified",
+        "ENTERED_IN_ERROR": "Entered in error"
       },
       "ABNORMAL_FLAG": {
         "ABNORMAL": "Abnormal",
@@ -5576,7 +5592,8 @@
         "PRESCRIPTION_QUEUE_CLAIM_EXPIRED": "Work-queue claim expired",
         "USER_RESTORE": "User Restored",
         "LAB_ORDER_CANCELLED": "Lab Order Cancelled",
-        "LAB_RESULT_SELF_RELEASED": "Lab Result Self-Released"
+        "LAB_RESULT_SELF_RELEASED": "Lab Result Self-Released",
+        "LAB_ORDER_ENTERED_IN_ERROR": "Lab Order Entered in Error"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelled",
@@ -7363,7 +7380,8 @@
     "PRIMARY_NAV_ARIA": "Primary navigation",
     "SETTINGS": "Settings",
     "SIGN_OUT": "Sign Out",
-    "TOGGLE_SIDEBAR": "Toggle sidebar"
+    "TOGGLE_SIDEBAR": "Toggle sidebar",
+    "LANGUAGE": "Language"
   },
   "SIGNATURES": {
     "ALGORITHM": "Algorithm",

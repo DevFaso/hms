@@ -9,7 +9,11 @@ import {
 
 import { FormsModule } from '@angular/forms';
 import { StaffService, StaffResponse, StaffUpsertRequest } from '../services/staff.service';
-import { HospitalService, HospitalResponse } from '../services/hospital.service';
+import {
+  HospitalService,
+  HospitalResponse,
+  isOpenForAssignment,
+} from '../services/hospital.service';
 import { UserService, UserSummary } from '../services/user.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
@@ -224,6 +228,16 @@ export class StaffListComponent implements OnInit {
         },
       });
     }
+  }
+
+  /**
+   * QA D818: the super-admin's hospital options. A new staff member is never
+   * placed at an archived hospital; an edited one keeps showing their own,
+   * even if it has closed since.
+   */
+  hospitalOptions(): HospitalResponse[] {
+    const current = this.editing()?.hospitalName;
+    return this.hospitals().filter((h) => isOpenForAssignment(h) || h.name === current);
   }
 
   get lockedHospitalName(): string {

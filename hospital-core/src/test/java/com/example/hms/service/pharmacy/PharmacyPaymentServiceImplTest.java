@@ -684,6 +684,30 @@ class PharmacyPaymentServiceImplTest {
     }
 
     @Test
+    @DisplayName("QA D828: the refusal names the charge grouped and in F CFA, never a bare figure or XOF")
+    void chargeMismatchNamesTheChargeInFCfa() {
+        dispense.setQuantityDispensed(new BigDecimal("9")); // 9 x 250 = 2 250
+        PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.CASH);
+        dto.setAmount(new BigDecimal("999999"));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
+
+        BusinessException refused = (BusinessException) org.assertj.core.api.Assertions
+                .catchThrowable(() -> service.createPayment(dto));
+
+        org.springframework.context.MessageSource bundles = com.example.hms.i18n.TestMessageSources.bundles();
+        java.util.function.Function<java.util.Locale, String> render = locale -> bundles
+                .getMessage(refused.getMessageKey(), refused.getArgs(), locale)
+                .replace(' ', ' ').replace(' ', ' ');
+        assertThat(render.apply(java.util.Locale.FRENCH))
+                .isEqualTo("Le montant doit être celui de la délivrance : 2 250 F CFA.");
+        assertThat(render.apply(java.util.Locale.forLanguageTag("es")))
+                .isEqualTo("El importe debe ser el de la dispensación: 2.250 F CFA.");
+        assertThat(render.apply(java.util.Locale.ENGLISH))
+                .isEqualTo("The amount must be the dispense charge: 2,250 F CFA.");
+    }
+
+    @Test
     @DisplayName("QA D264: an underpayment is refused too")
     void underpaymentIsRefused() {
         PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.CASH);

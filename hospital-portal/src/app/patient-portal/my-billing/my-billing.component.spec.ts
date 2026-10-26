@@ -3,6 +3,8 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 import { MyBillingComponent } from './my-billing.component';
 import { PatientPortalService, PortalInvoice } from '../../services/patient-portal.service';
+import { formatCfa } from '../../shared/i18n/app-locale';
+import fr from '../../../assets/i18n/fr.json';
 
 /**
  * The patient's statements and the pay-an-invoice dialog. Asserted through the
@@ -132,7 +134,7 @@ describe('MyBillingComponent', () => {
     (host().querySelector('.pay-submit-btn') as HTMLElement).click();
     fixture.detectChanges();
     expect(portal.payInvoice).not.toHaveBeenCalled();
-    expect(text('.pay-error')).toBe('Au plus 150 : 150 en attente');
+    expect(text('.pay-error')).toBe(`Au plus ${formatCfa(150)} : ${formatCfa(150)} en attente`);
   });
 
   it('QA D428: a folded copay names the invoice it was credited to', () => {
@@ -175,8 +177,56 @@ describe('MyBillingComponent', () => {
       paymentMethod: 'MOBILE_MONEY',
       transactionReference: 'MM-123',
     });
-    expect(text('.pay-success')).toBe('Paiement de 50 déclaré, en attente de confirmation');
+    expect(text('.pay-success')).toBe(
+      `Paiement de ${formatCfa(50)} déclaré, en attente de confirmation`,
+    );
     expect(portal.getMyInvoices).toHaveBeenCalledTimes(2);
+  });
+
+  it('QA D814: no "Pay now" on an invoice whose whole balance is already declared', () => {
+    // The QA invoice -000024: everything owed is declared and awaits the cashier.
+    create([
+      invoice({ id: 'full', balance: 500, amount: 500, pending: 500 }),
+      invoice({ id: 'part', balance: 500, amount: 500, pending: 200 }),
+    ]);
+    expect(host().querySelector('[data-testid="pay-btn-full"]')).toBeNull();
+    expect(host().querySelector('[data-testid="fully-declared-full"]')).not.toBeNull();
+    // Still owed until the cashier confirms, so it stays in the balance.
+    expect(component.totalBalance()).toBe(1000);
+    // A partly declared invoice still offers what is left.
+    expect(host().querySelector('[data-testid="pay-btn-part"]')).not.toBeNull();
+    // Nor can the dialog be opened another way with nothing to declare.
+    component.openPayDialog(component.invoices()[0]);
+    expect(component.payingInvoice()).toBeNull();
+  });
+
+  it('QA D815: the declared-payment confirmation names the currency, in the real French text', () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', fr);
+    portal.payInvoice.and.returnValue(of(invoice({ balance: 1000 })));
+    create([invoice({ balance: 1000, amount: 1000 })]);
+    openDialog();
+    component.payAmount = 500;
+    component.payMethod = 'CASH';
+    (host().querySelector('.pay-submit-btn') as HTMLElement).click();
+    fixture.detectChanges();
+
+    const success = text('.pay-success');
+    expect(success).toContain(`paiement de ${formatCfa(500)}`);
+    expect(success).toContain('F CFA');
+  });
+
+  it('QA D815: the over-declaration refusal names the currency once, in the real French text', () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', fr);
+    create([invoice({ balance: 300, amount: 300, pending: 150 })]);
+    openDialog();
+    component.payAmount = 200;
+    (host().querySelector('.pay-submit-btn') as HTMLElement).click();
+    fixture.detectChanges();
+    const error = text('.pay-error');
+    expect(error).toContain(formatCfa(150));
+    expect(error.match(/CFA/g)?.length).toBe(2);
   });
 
   it('refuses a fractional franc amount without calling the server (QA D184)', () => {

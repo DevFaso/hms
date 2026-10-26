@@ -48,6 +48,10 @@ final class SharedClinicalRowsCleanup {
         // order, so the outbox goes before the orders.
         context.getBean(InstrumentOutboxRepository.class).deleteAll();
         context.getBean(LabResultRepository.class).deleteAll();
+        // QA D820: a voided order's results do not load (LabResult's
+        // restriction), so the repository wipe above cannot see them; they
+        // would pin their order through fk_labresult_order.
+        context.getBean(org.springframework.jdbc.core.JdbcTemplate.class).update("DELETE FROM lab.lab_results");
         context.getBean(LabSpecimenRepository.class).deleteAll();
         context.getBean(LabOrderRepository.class).deleteAll();
         context.getBean(LabTestDefinitionRepository.class).deleteAll();
