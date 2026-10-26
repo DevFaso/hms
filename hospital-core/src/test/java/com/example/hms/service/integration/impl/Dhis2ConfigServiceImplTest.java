@@ -126,7 +126,8 @@ class Dhis2ConfigServiceImplTest {
             {"https://admin:pw@93.184.216.34", "dhis2FacilityConfig.baseUrl.credentials"},
         };
         for (String[] c : cases) {
-            assertThatThrownBy(() -> service.upsertFacilityConfig(hospitalId, request(c[0])))
+            Dhis2FacilityConfigRequestDTO refused = request(c[0]);
+            assertThatThrownBy(() -> service.upsertFacilityConfig(hospitalId, refused))
                 .as(c[0])
                 .isInstanceOf(FieldBusinessException.class)
                 .hasFieldOrPropertyWithValue("field", "baseUrl")
