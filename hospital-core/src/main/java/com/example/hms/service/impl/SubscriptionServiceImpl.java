@@ -73,7 +73,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
     @Override
     @Transactional
     public SubscriptionPlanResponseDTO updatePlan(UUID planId, SubscriptionPlanRequestDTO request) {
-        SubscriptionPlan plan = planRepository.findById(planId)
+        SubscriptionPlan plan = planRepository.findByIdForUpdate(planId)
             .orElseThrow(() -> new ResourceNotFoundException(SUBSCRIPTION_PLAN_NOT_FOUND_KEY, planId));
         String currency = request.getCurrency() != null
             ? normalizeCurrency(request.getCurrency())
@@ -101,7 +101,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
     @Override
     @Transactional
     public void deactivatePlan(UUID planId) {
-        SubscriptionPlan plan = planRepository.findById(planId)
+        SubscriptionPlan plan = planRepository.findByIdForUpdate(planId)
             .orElseThrow(() -> new ResourceNotFoundException(SUBSCRIPTION_PLAN_NOT_FOUND_KEY, planId));
         if (!plan.isActive()) {
             return;
@@ -173,7 +173,7 @@ public class SubscriptionServiceImpl implements SubscriptionService {
     ) {
         Organization organization = organizationRepository.findById(organizationId)
             .orElseThrow(() -> new ResourceNotFoundException("organization.notFound", organizationId));
-        SubscriptionPlan plan = planRepository.findById(request.getPlanId())
+        SubscriptionPlan plan = planRepository.findByIdForUpdate(request.getPlanId())
             .orElseThrow(() -> new ResourceNotFoundException(SUBSCRIPTION_PLAN_NOT_FOUND_KEY, request.getPlanId()));
 
         // PR #228 review — refuse to assign a deactivated plan. The

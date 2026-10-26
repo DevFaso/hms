@@ -148,17 +148,6 @@ public class ReportController {
         return hospitalId;
     }
 
-    /** Light shape check — the mail server is the real authority. */
-    private static void validateRecipients(String recipients) {
-        for (String email : recipients.split(",")) {
-            String trimmed = email.trim();
-            if (trimmed.isEmpty()) continue;
-            if (!trimmed.contains("@") || trimmed.length() > 254) {
-                throw new BusinessException("'" + trimmed + "' is not a valid email address.");
-            }
-        }
-    }
-
     private static ReportDefinitionResponseDTO toDto(ReportDefinition definition) {
         return ReportDefinitionResponseDTO.builder()
                 .id(definition.getId())

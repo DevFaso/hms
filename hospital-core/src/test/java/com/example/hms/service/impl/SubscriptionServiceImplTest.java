@@ -162,7 +162,7 @@ class SubscriptionServiceImplTest {
     void updatePlanMissing() {
         UUID id = UUID.randomUUID();
         SubscriptionPlanRequestDTO req = new SubscriptionPlanRequestDTO();
-        when(planRepository.findById(id)).thenReturn(Optional.empty());
+        when(planRepository.findByIdForUpdate(id)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.updatePlan(id, req))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -172,7 +172,7 @@ class SubscriptionServiceImplTest {
     @DisplayName("updatePlan applies partial fields and preserves the rest")
     void updatePlanApplies() {
         SubscriptionPlan existing = plan("PRO", true);
-        when(planRepository.findById(existing.getId())).thenReturn(Optional.of(existing));
+        when(planRepository.findByIdForUpdate(existing.getId())).thenReturn(Optional.of(existing));
 
         SubscriptionPlanRequestDTO req = SubscriptionPlanRequestDTO.builder()
             .name("Pro v2")
@@ -192,7 +192,7 @@ class SubscriptionServiceImplTest {
     @DisplayName("updatePlan deactivates when active=false")
     void updatePlanDeactivate() {
         SubscriptionPlan existing = plan("PRO", true);
-        when(planRepository.findById(existing.getId())).thenReturn(Optional.of(existing));
+        when(planRepository.findByIdForUpdate(existing.getId())).thenReturn(Optional.of(existing));
 
         SubscriptionPlanRequestDTO req = SubscriptionPlanRequestDTO.builder()
             .name("Pro")
@@ -215,7 +215,7 @@ class SubscriptionServiceImplTest {
     @DisplayName("deactivatePlan flips active flag")
     void deactivatePlan() {
         SubscriptionPlan p = plan("PRO", true);
-        when(planRepository.findById(p.getId())).thenReturn(Optional.of(p));
+        when(planRepository.findByIdForUpdate(p.getId())).thenReturn(Optional.of(p));
 
         service.deactivatePlan(p.getId());
 
@@ -227,7 +227,7 @@ class SubscriptionServiceImplTest {
     @DisplayName("QA D850: a plan an organization is subscribed to cannot be deactivated (409), nothing saved")
     void deactivatePlanInUseIsRefused() {
         SubscriptionPlan p = plan("ESS81562", true);
-        when(planRepository.findById(p.getId())).thenReturn(Optional.of(p));
+        when(planRepository.findByIdForUpdate(p.getId())).thenReturn(Optional.of(p));
         when(subscriptionRepository.countByPlanIdAndStatus(p.getId(), OrganizationSubscription.Status.ACTIVE))
             .thenReturn(1L);
         UUID planId = p.getId();
@@ -240,10 +240,32 @@ class SubscriptionServiceImplTest {
     }
 
     @Test
+    @DisplayName("QA D850: deactivate, edit and assign load the plan through the row-locking finder, never a plain findById")
+    void planLoadsTakeTheRowLock() {
+        SubscriptionPlan p = plan("ESS81562", true);
+        Organization o = org("Clinique");
+        when(planRepository.findByIdForUpdate(p.getId())).thenReturn(Optional.of(p));
+        when(organizationRepository.findById(o.getId())).thenReturn(Optional.of(o));
+        when(subscriptionRepository.findByOrganizationIdAndStatus(
+            o.getId(), OrganizationSubscription.Status.ACTIVE)).thenReturn(Optional.empty());
+
+        service.assignPlan(o.getId(), OrganizationSubscriptionRequestDTO.builder()
+            .planId(p.getId()).seatLimit(5).build());
+        service.updatePlan(p.getId(), SubscriptionPlanRequestDTO.builder()
+            .name("Essentiel").tierCode("ESS81562").monthlyPriceCents(1000L).includedSeats(5).build());
+        service.deactivatePlan(p.getId());
+
+        // Without the lock, an assign and a deactivate racing at READ COMMITTED
+        // both commit and leave an ACTIVE subscription on an inactive plan.
+        verify(planRepository, times(3)).findByIdForUpdate(p.getId());
+        verify(planRepository, never()).findById(any());
+    }
+
+    @Test
     @DisplayName("QA D850: deactivating through an edit (active=false) is held to the same rule")
     void updatePlanDeactivateInUseIsRefused() {
         SubscriptionPlan p = plan("ESS81562", true);
-        when(planRepository.findById(p.getId())).thenReturn(Optional.of(p));
+        when(planRepository.findByIdForUpdate(p.getId())).thenReturn(Optional.of(p));
         when(subscriptionRepository.countByPlanIdAndStatus(p.getId(), OrganizationSubscription.Status.ACTIVE))
             .thenReturn(2L);
         SubscriptionPlanRequestDTO req = SubscriptionPlanRequestDTO.builder()
@@ -261,7 +283,7 @@ class SubscriptionServiceImplTest {
     @DisplayName("QA D850: an edit that keeps the plan active is not blocked by its subscriptions")
     void updatePlanKeepingActiveIsAllowedWhileInUse() {
         SubscriptionPlan p = plan("PRO", true);
-        when(planRepository.findById(p.getId())).thenReturn(Optional.of(p));
+        when(planRepository.findByIdForUpdate(p.getId())).thenReturn(Optional.of(p));
         SubscriptionPlanRequestDTO req = SubscriptionPlanRequestDTO.builder()
             .name("Pro v3").tierCode("PRO").monthlyPriceCents(1000L).includedSeats(5).active(true).build();
 
@@ -312,7 +334,7 @@ class SubscriptionServiceImplTest {
     @DisplayName("deactivatePlan throws ResourceNotFound for unknown id")
     void deactivatePlanMissing() {
         UUID id = UUID.randomUUID();
-        when(planRepository.findById(id)).thenReturn(Optional.empty());
+        when(planRepository.findByIdForUpdate(id)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.deactivatePlan(id))
             .isInstanceOf(ResourceNotFoundException.class);
@@ -324,7 +346,7 @@ class SubscriptionServiceImplTest {
         Organization o = org("Korle Bu");
         SubscriptionPlan p = plan("PRO", false);
         when(organizationRepository.findById(o.getId())).thenReturn(Optional.of(o));
-        when(planRepository.findById(p.getId())).thenReturn(Optional.of(p));
+        when(planRepository.findByIdForUpdate(p.getId())).thenReturn(Optional.of(p));
 
         OrganizationSubscriptionRequestDTO req = OrganizationSubscriptionRequestDTO.builder()
             .planId(p.getId())
@@ -344,7 +366,7 @@ class SubscriptionServiceImplTest {
         Organization o = org("Korle Bu");
         SubscriptionPlan p = plan("PRO", true);
         when(organizationRepository.findById(o.getId())).thenReturn(Optional.of(o));
-        when(planRepository.findById(p.getId())).thenReturn(Optional.of(p));
+        when(planRepository.findByIdForUpdate(p.getId())).thenReturn(Optional.of(p));
         when(subscriptionRepository.findByOrganizationIdAndStatus(
             o.getId(), OrganizationSubscription.Status.ACTIVE))
             .thenReturn(Optional.empty());
@@ -378,7 +400,7 @@ class SubscriptionServiceImplTest {
         existing.setId(UUID.randomUUID());
 
         when(organizationRepository.findById(o.getId())).thenReturn(Optional.of(o));
-        when(planRepository.findById(newPlan.getId())).thenReturn(Optional.of(newPlan));
+        when(planRepository.findByIdForUpdate(newPlan.getId())).thenReturn(Optional.of(newPlan));
         when(subscriptionRepository.findByOrganizationIdAndStatus(
             o.getId(), OrganizationSubscription.Status.ACTIVE))
             .thenReturn(Optional.of(existing));
@@ -402,7 +424,7 @@ class SubscriptionServiceImplTest {
         Organization o = org("Korle Bu");
         SubscriptionPlan p = plan("PRO", true);
         when(organizationRepository.findById(o.getId())).thenReturn(Optional.of(o));
-        when(planRepository.findById(p.getId())).thenReturn(Optional.of(p));
+        when(planRepository.findByIdForUpdate(p.getId())).thenReturn(Optional.of(p));
         when(subscriptionRepository.findByOrganizationIdAndStatus(any(), any()))
             .thenReturn(Optional.empty());
 
@@ -439,7 +461,7 @@ class SubscriptionServiceImplTest {
     void assignMissingPlan() {
         Organization o = org("Korle Bu");
         when(organizationRepository.findById(o.getId())).thenReturn(Optional.of(o));
-        when(planRepository.findById(any())).thenReturn(Optional.empty());
+        when(planRepository.findByIdForUpdate(any())).thenReturn(Optional.empty());
 
         OrganizationSubscriptionRequestDTO req = OrganizationSubscriptionRequestDTO.builder()
             .planId(UUID.randomUUID()).seatLimit(1).build();

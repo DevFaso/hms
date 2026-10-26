@@ -132,7 +132,19 @@
                     ({{ result.latencyMs }} ms)
                   }
                 } @else {
-                  {{ result.message || ('INTEGRATION_HEALTH.ACTION.FAIL' | translate) }}
+                  <!-- The probe's own text is the connector's English diagnostic:
+                       the label stays in the reader's language, the detail is a tooltip
+                       (as lastErrorMessage in the history table). -->
+                  {{ 'INTEGRATION_HEALTH.ACTION.FAIL' | translate }}
+                  @if (result.message) {
+                    <span
+                      class="err-tooltip"
+                      [title]="result.message"
+                      [attr.data-test]="'probe-detail-' + row.integrationId"
+                    >
+                      <span class="material-symbols-outlined" aria-hidden="true">info</span>
+                    </span>
+                  }
                 }
               </span>
             } @else if (rowAction(row.integrationId).resyncAccepted) {

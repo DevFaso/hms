@@ -203,6 +203,26 @@ describe('IntegrationHealthComponent', () => {
     expect(cmp.rowAction('eligibility').result?.message).toBe('partner down');
   });
 
+  it('QA D851: a failed probe reads in the UI language; the connector text is only a tooltip', () => {
+    service.getInventory.and.returnValue(of(fakeSummary()));
+    service.probe.and.returnValue(
+      of(
+        fakeProbeResult({ ok: false, message: 'Probe threw IllegalStateException: partner down' }),
+      ),
+    );
+
+    const fixture = setupFixture();
+    fixture.componentInstance.probe(new Event('click'), 'eligibility');
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+
+    const status = el.querySelector('.action-status.fail') as HTMLElement;
+    expect(status.textContent).toContain('INTEGRATION_HEALTH.ACTION.FAIL');
+    expect(status.textContent).not.toContain('partner down');
+    const detail = el.querySelector('[data-test="probe-detail-eligibility"]') as HTMLElement;
+    expect(detail.getAttribute('title')).toBe('Probe threw IllegalStateException: partner down');
+  });
+
   it('QA D851: a refused action shows the server reason, not the generic text', () => {
     service.getInventory.and.returnValue(of(fakeSummary()));
     service.resync.and.returnValue(

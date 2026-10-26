@@ -69,7 +69,7 @@ class SuperAdminSubscriptionPlanQaTest {
             .name("Essentiel Faso").tierCode("ESS81562").monthlyPriceCents(2_500_000L)
             .currency("XOF").includedSeats(25).featureKeys("lab,pharmacy").active(true).build();
         plan.setId(UUID.randomUUID());
-        when(planRepository.findById(plan.getId())).thenReturn(Optional.of(plan));
+        when(planRepository.findByIdForUpdate(plan.getId())).thenReturn(Optional.of(plan));
         when(subscriptionRepository.countByPlanIdAndStatus(plan.getId(), OrganizationSubscription.Status.ACTIVE))
             .thenReturn(1L);
 
@@ -87,7 +87,7 @@ class SuperAdminSubscriptionPlanQaTest {
         SubscriptionPlan plan = SubscriptionPlan.builder()
             .name("Ancienne").tierCode("OLD").monthlyPriceCents(0L).currency("XOF").active(true).build();
         plan.setId(UUID.randomUUID());
-        when(planRepository.findById(plan.getId())).thenReturn(Optional.of(plan));
+        when(planRepository.findByIdForUpdate(plan.getId())).thenReturn(Optional.of(plan));
 
         mvc.perform(delete("/super-admin/subscriptions/plans/" + plan.getId()))
             .andExpect(status().isNoContent());
