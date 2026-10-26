@@ -790,7 +790,8 @@ class EncounterNoteSignatureTest {
         com.example.hms.payload.dto.EncounterNoteAddendumRequestDTO request =
             com.example.hms.payload.dto.EncounterNoteAddendumRequestDTO.builder().content("Ajout").build();
 
-        assertThatThrownBy(() -> service.addEncounterNoteAddendum(encounterId, note.getId(), request, LOCALE, false, hospitalId))
+        UUID noteId = note.getId();
+        assertThatThrownBy(() -> service.addEncounterNoteAddendum(encounterId, noteId, request, LOCALE, false, hospitalId))
             .isInstanceOf(ResourceNotFoundException.class);
         assertThat(note.getAddenda()).isEmpty();
         verify(encounterNoteAddendumRepository, never()).save(any(com.example.hms.model.encounter.EncounterNoteAddendum.class));

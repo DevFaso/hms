@@ -189,12 +189,8 @@ public class LabTestDefinition extends BaseEntity {
     private String rejectionReason;
 
     /**
-     * D48: a test may be ordered only once the approval workflow has made it
-     * ACTIVE (and nobody has switched it off). A DRAFT, a definition still in
-     * review, a rejected or a retired one is not orderable, whatever the
-     * {@code active} flag says.
+     * QA D834: a qualitative test states the answer it expects instead of a numeric range.
      */
-    /** QA D834: a qualitative test states the answer it expects instead of a numeric range. */
     public boolean hasExpectedResult() {
         return expectedResult != null && !expectedResult.isBlank();
     }
@@ -204,6 +200,12 @@ public class LabTestDefinition extends BaseEntity {
         return (referenceRanges != null && !referenceRanges.isEmpty()) || hasExpectedResult();
     }
 
+    /**
+     * D48: a test may be ordered only once the approval workflow has made it
+     * ACTIVE (and nobody has switched it off). A DRAFT, a definition still in
+     * review, a rejected or a retired one is not orderable, whatever the
+     * {@code active} flag says.
+     */
     public boolean isOrderable() {
         return active && approvalStatus == LabTestDefinitionApprovalStatus.ACTIVE;
     }

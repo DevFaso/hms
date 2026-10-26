@@ -575,19 +575,6 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
     }
 
     /**
-     * The range the row was graded against — {@link LabResultMapper#gradedReferenceRange},
-     * the same selection that produced its severity — labelled ONLY with the
-     * unit configured on that range.
-     *
-     * <p>This used to format the first configured range whatever the grading
-     * had picked, and to stamp the RESULT's unit onto a range that carried
-     * none. The first showed a value graded in mmol/L beside mg/dL limits; the
-     * second asserted a unit nobody configured, and made the mismatch
-     * undetectable to a client that checks the displayed unit against the
-     * row's. A unitless range is therefore shown as bare numbers: the limits
-     * are real, the unit is not known, and a client can see that it is not.
-     */
-    /**
      * QA D834: what the patient reads after "Normal:". The graded numeric
      * range; for a qualitative test, which has none, its expected answer
      * ("Négatif"). The fake 0-0 range a qualitative test once needed read
@@ -603,6 +590,19 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
             : null;
     }
 
+    /**
+     * The range the row was graded against — {@link LabResultMapper#gradedReferenceRange},
+     * the same selection that produced its severity — labelled ONLY with the
+     * unit configured on that range.
+     *
+     * <p>This used to format the first configured range whatever the grading
+     * had picked, and to stamp the RESULT's unit onto a range that carried
+     * none. The first showed a value graded in mmol/L beside mg/dL limits; the
+     * second asserted a unit nobody configured, and made the mismatch
+     * undetectable to a client that checks the displayed unit against the
+     * row's. A unitless range is therefore shown as bare numbers: the limits
+     * are real, the unit is not known, and a client can see that it is not.
+     */
     private String formatReferenceRange(LabResultReferenceRangeDTO range) {
         if (range == null) {
             return null;

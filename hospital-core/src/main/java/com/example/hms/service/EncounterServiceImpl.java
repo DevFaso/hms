@@ -94,6 +94,8 @@ import com.example.hms.service.i18n.PatientLocaleResolver;
 @Service
 @RequiredArgsConstructor
 public class EncounterServiceImpl implements EncounterService {
+    private static final String NOTE_NOT_FOUND_KEY = "encounter.note.notfound";
+
 
     /** QA D788: where a visit closed without a consultation keeps its outcome and reason. */
     static final String UNSEEN_OUTCOME_FIELD = "unseenOutcome";
@@ -748,7 +750,7 @@ public class EncounterServiceImpl implements EncounterService {
         }
         List<EncounterNote> entries = encounterNoteRepository.findByEncounter_IdOrderByCreatedAtAscIdAsc(encounterId);
         EncounterNote note = pickNoteEntry(entries, noteId)
-            .orElseThrow(() -> new ResourceNotFoundException("encounter.note.notfound"));
+            .orElseThrow(() -> new ResourceNotFoundException(NOTE_NOT_FOUND_KEY));
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId != null
             && note.getHospital() != null
@@ -784,11 +786,11 @@ public class EncounterServiceImpl implements EncounterService {
                                                UUID callerHospitalId, Locale locale) {
         if (noteId == null) {
             return currentNoteEntry(encounter)
-                .orElseThrow(() -> new BusinessException(messageSource.getMessage("encounter.note.notfound", null, locale)));
+                .orElseThrow(() -> new BusinessException(messageSource.getMessage(NOTE_NOT_FOUND_KEY, null, locale)));
         }
         EncounterNote note = pickNoteEntry(
                 encounterNoteRepository.findByEncounter_IdOrderByCreatedAtAscIdAsc(encounter.getId()), noteId)
-            .orElseThrow(() -> new ResourceNotFoundException("encounter.note.notfound"));
+            .orElseThrow(() -> new ResourceNotFoundException(NOTE_NOT_FOUND_KEY));
         UUID noteHospitalId = note.getHospital() != null ? note.getHospital().getId() : null;
         if (!isSuperAdmin && noteHospitalId != null && !isAtCallerHospital(noteHospitalId, callerHospitalId)) {
             throw encounterNotFound(encounter.getId());
