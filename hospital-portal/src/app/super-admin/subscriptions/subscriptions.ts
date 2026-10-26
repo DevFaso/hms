@@ -204,6 +204,12 @@ export class SubscriptionsComponent implements OnInit {
     this.updateForm('monthlyPriceCents', hundredths);
   }
 
+  /** QA D621: the unit beside a typed amount — francs CFA read "F CFA", not "XOF". */
+  currencyUnit(code: string | null | undefined): string {
+    const upper = (code || '').toUpperCase();
+    return upper === 'XOF' ? 'F CFA' : upper;
+  }
+
   /** The currency's name in the reader's language ("franc CFA (BCEAO)"), or the code. */
   currencyLabel(code: string): string {
     try {

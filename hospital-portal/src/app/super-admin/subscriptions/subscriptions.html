@@ -122,7 +122,9 @@
           </select>
         </label>
         <label>
-          <span>{{ 'SUBSCRIPTIONS.FORM.PRICE' | translate: { currency: form().currency } }}</span>
+          <span>{{
+            'SUBSCRIPTIONS.FORM.PRICE' | translate: { currency: currencyUnit(form().currency) }
+          }}</span>
           <input
             type="number"
             min="0"

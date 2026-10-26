@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { HttpErrorResponse, provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 
 import { SubscriptionsComponent } from './subscriptions';
@@ -113,6 +113,25 @@ describe('SubscriptionsComponent', () => {
     expect(cmp.priceStep()).toBe(0.01);
     cmp.updatePrice(49.99);
     expect(cmp.form().monthlyPriceCents).toBe(4999);
+  });
+
+  it('QA D621: the price label names francs CFA as F CFA, never the raw XOF code', () => {
+    const cmp = setup();
+    expect(cmp.currencyUnit('XOF')).toBe('F CFA');
+    expect(cmp.currencyUnit('xof')).toBe('F CFA');
+    expect(cmp.currencyUnit('EUR')).toBe('EUR');
+
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', {
+      SUBSCRIPTIONS: { FORM: { PRICE: 'Prix mensuel ({{currency}})' } },
+    });
+    translate.use('fr');
+    const fixture = TestBed.createComponent(SubscriptionsComponent);
+    fixture.componentInstance.startCreate();
+    fixture.detectChanges();
+    const text: string = fixture.nativeElement.textContent;
+    expect(text).toContain('Prix mensuel (F CFA)');
+    expect(text).not.toContain('(XOF)');
   });
 
   it('QA D865: the currency is picked from ISO codes; a legacy code stays selectable', () => {
