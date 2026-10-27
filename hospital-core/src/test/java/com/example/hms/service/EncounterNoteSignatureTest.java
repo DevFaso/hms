@@ -212,9 +212,10 @@ class EncounterNoteSignatureTest {
     @Test
     void signRefusedForAnotherClinician() {
         when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
+        UUID noteId = note.getId();
 
         // 403, not 400: any doctor holds the role, only the author holds the note.
-        assertThatThrownBy(() -> service.signEncounterNote(encounterId, note.getId(), LOCALE))
+        assertThatThrownBy(() -> service.signEncounterNote(encounterId, noteId, LOCALE))
             .isInstanceOf(AccessDeniedException.class)
             .hasMessageContaining("author");
         // QA D895: without an id nobody else's entry is a candidate at all.
@@ -227,8 +228,9 @@ class EncounterNoteSignatureTest {
     @Test
     void signCannotBeReissued() {
         note.setSignedAt(LocalDateTime.now().minusHours(1));
+        UUID noteId = note.getId();
 
-        assertThatThrownBy(() -> service.signEncounterNote(encounterId, note.getId(), LOCALE))
+        assertThatThrownBy(() -> service.signEncounterNote(encounterId, noteId, LOCALE))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("already been signed");
         // QA D895: without an id, a signed entry is not one of the caller's to sign.
@@ -746,8 +748,9 @@ class EncounterNoteSignatureTest {
         // Path re-verified: naming another author's entry is the author-only
         // 403; naming none finds no entry of the caller's (QA D895), a 400.
         secondDoctor();
+        UUID noteId = note.getId();
 
-        assertThatThrownBy(() -> service.signEncounterNote(encounterId, note.getId(), LOCALE))
+        assertThatThrownBy(() -> service.signEncounterNote(encounterId, noteId, LOCALE))
             .isInstanceOf(AccessDeniedException.class);
         assertThatThrownBy(() -> service.signEncounterNote(encounterId, LOCALE))
             .isInstanceOf(BusinessException.class);

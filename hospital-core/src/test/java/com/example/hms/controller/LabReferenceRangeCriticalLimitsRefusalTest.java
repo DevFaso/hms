@@ -16,7 +16,10 @@ import java.util.Locale;
 import java.util.UUID;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -98,8 +101,7 @@ class LabReferenceRangeCriticalLimitsRefusalTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("[{\"minValue\":3.9,\"maxValue\":6.1,\"criticalLow\":2.5,\"criticalHigh\":25.0}]"))
             .andExpect(status().isOk());
-        org.mockito.Mockito.verify(service).updateReferenceRanges(org.mockito.ArgumentMatchers.any(),
-            org.mockito.ArgumentMatchers.anyList());
+        verify(service).updateReferenceRanges(any(), anyList());
     }
 
     @Test

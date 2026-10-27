@@ -674,10 +674,10 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
         }
     }
 
-    /** Statuses whose reference ranges were reviewed and may not move without a new review (QA D159). */
     /** The request property a definition body carries its ranges under. */
     private static final String REFERENCE_RANGES_FIELD = "referenceRanges";
 
+    /** Statuses whose reference ranges were reviewed and may not move without a new review (QA D159). */
     private static final EnumSet<LabTestDefinitionApprovalStatus> RANGES_LOCKED = EnumSet.of(
         LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW,
         LabTestDefinitionApprovalStatus.PENDING_DIRECTOR_APPROVAL,
