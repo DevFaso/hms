@@ -58,6 +58,18 @@ export class DischargeComponent implements OnInit {
     'ROLE_DOCTOR',
     'ROLE_SUPER_ADMIN',
   ]);
+  private readonly isSuperAdmin = this.roleContext.hasAnyActiveRole(['ROLE_SUPER_ADMIN']);
+
+  /**
+   * QA D930: a draft summary is edited, finalized or deleted by its
+   * discharging provider only (the server refuses everyone else), so the
+   * buttons are not offered on another doctor's row.
+   */
+  canWriteSummary(summary: DischargeSummary): boolean {
+    if (!this.canEditSummaries) return false;
+    if (this.isSuperAdmin) return true;
+    return !!this.staffId && summary.dischargingProviderId === this.staffId;
+  }
   /** Backend allows NURSE/MIDWIFE on by-hospital + pending-results (NOT unfinalized). */
   readonly canViewSummaries = this.roleContext.hasAnyActiveRole([
     'ROLE_DOCTOR',

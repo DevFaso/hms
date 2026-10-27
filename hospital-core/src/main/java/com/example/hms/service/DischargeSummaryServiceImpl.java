@@ -211,6 +211,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
             .orElseThrow(() -> new ResourceNotFoundException(DISCHARGE_SUMMARY_NOT_FOUND_KEY, summaryId));
 
         enforceHospitalScope(existing, summaryId);
+        requireAuthor(existing);
 
         // Cannot update finalized summaries
         if (Boolean.TRUE.equals(existing.getIsFinalized())) {
@@ -406,6 +407,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
             .orElseThrow(() -> new ResourceNotFoundException(DISCHARGE_SUMMARY_NOT_FOUND_KEY, summaryId));
 
         enforceHospitalScope(dischargeSummary, summaryId);
+        requireAuthor(dischargeSummary);
 
         // Cannot delete finalized summaries
         if (Boolean.TRUE.equals(dischargeSummary.getIsFinalized())) {
@@ -414,6 +416,16 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
 
         dischargeSummaryRepository.delete(dischargeSummary);
         log.info("Discharge summary deleted successfully: {}", summaryId);
+    }
+
+    /**
+     * QA D930: a draft summary belongs to its discharging provider. Another
+     * doctor at the same hospital may read it but not rewrite or delete it;
+     * only the author (or a verified super-admin in global view) may. Same
+     * rule as finalize (QA D503), applied to the other two writes.
+     */
+    private static void requireAuthor(DischargeSummary summary) {
+        com.example.hms.security.CallerIdentity.requireCallerUnlessSuperAdmin(summary.getDischargingProvider());
     }
 
     private void enforceHospitalScope(DischargeSummary summary, UUID summaryId) {

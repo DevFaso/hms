@@ -302,6 +302,30 @@ class DischargeSummaryServiceImplTest {
             .isInstanceOf(BusinessException.class);
     }
 
+    @Test void qaD930_anotherDoctorCannotDeleteTheAuthorsDraft() {
+        com.example.hms.model.User doctorTwo = new com.example.hms.model.User();
+        doctorTwo.setId(UUID.randomUUID());
+        actAs(doctorTwo);
+        when(dischargeSummaryRepository.findById(summaryId)).thenReturn(Optional.of(summary));
+        UUID doctorTwoStaffId = UUID.randomUUID();
+        assertThatThrownBy(() -> service.deleteDischargeSummary(summaryId, doctorTwoStaffId))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        verify(dischargeSummaryRepository, never()).delete(any(DischargeSummary.class));
+    }
+
+    @Test void qaD930_anotherDoctorCannotRewriteTheAuthorsDraft() {
+        com.example.hms.model.User doctorTwo = new com.example.hms.model.User();
+        doctorTwo.setId(UUID.randomUUID());
+        actAs(doctorTwo);
+        DischargeSummaryRequestDTO req = buildRequest();
+        req.setDischargeDiagnosis("Rewritten by another doctor");
+        when(dischargeSummaryRepository.findById(summaryId)).thenReturn(Optional.of(summary));
+        assertThatThrownBy(() -> service.updateDischargeSummary(summaryId, req, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(summary.getDischargeDiagnosis()).isNotEqualTo("Rewritten by another doctor");
+        verify(dischargeSummaryRepository, never()).save(any());
+    }
+
     // ── enforceHospitalScope: cross-hospital → 404 ────────────────────
 
     @Test void getDischargeSummaryById_crossHospital_throws() {

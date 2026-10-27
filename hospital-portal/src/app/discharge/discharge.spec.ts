@@ -61,4 +61,20 @@ describe('DischargeComponent — encounter picker label', () => {
     expect(component.selectedPatient()?.mrn).toBe('CHW5448');
     expect(component.selectedPatient()?.firstName).toBe('Fatimata');
   });
+
+  // QA D930: only the discharging provider may edit, finalize or delete a draft.
+  it('offers the draft actions only on the signed-in doctor own summary (QA D930)', () => {
+    const writable = component as unknown as {
+      canEditSummaries: boolean;
+      isSuperAdmin: boolean;
+      staffId: string | null;
+    };
+    writable.canEditSummaries = true;
+    writable.isSuperAdmin = false;
+    writable.staffId = 'staff-a';
+    const own = { id: 's1', dischargingProviderId: 'staff-a' } as DischargeSummary;
+    const other = { id: 's2', dischargingProviderId: 'staff-b' } as DischargeSummary;
+    expect(component.canWriteSummary(own)).toBeTrue();
+    expect(component.canWriteSummary(other)).toBeFalse();
+  });
 });

@@ -229,7 +229,7 @@
                   >
                     {{ 'COMMON.VIEW' | translate }}
                   </button>
-                  @if (!s.isFinalized && canEditSummaries) {
+                  @if (!s.isFinalized && canWriteSummary(s)) {
                     <button
                       class="btn-secondary btn-sm"
                       (click)="openEditSummary(s)"
