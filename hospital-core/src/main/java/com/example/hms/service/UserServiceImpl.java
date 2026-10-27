@@ -1383,7 +1383,8 @@ public class UserServiceImpl implements UserService {
                 !scoped && includeDeleted, !scoped && onlyDeleted, scoped, directoryHospitals(scope), pageable)
             : userRepository.findStaffDirectoryPaged(
                 scoped, directoryHospitals(scope), !scoped && includeDeleted, !scoped && onlyDeleted, pageable);
-        return users.map(u -> directoryRow(u, scope));
+        Set<UUID> manageable = accountAccess.manageableAmong(users.getContent());
+        return users.map(u -> directoryRow(u, scope, manageable));
     }
 
     @Override
@@ -1405,7 +1406,8 @@ public class UserServiceImpl implements UserService {
                 !scoped && includeDeleted, !scoped && onlyDeleted, scoped, directoryHospitals(scope), pageable)
             : userRepository.searchStaffDirectory(name, phoneDigits(name), role, email, false,
                 !scoped && includeDeleted, !scoped && onlyDeleted, scoped, directoryHospitals(scope), pageable);
-        return users.map(u -> directoryRow(u, scope));
+        Set<UUID> manageable = accountAccess.manageableAmong(users.getContent());
+        return users.map(u -> directoryRow(u, scope, manageable));
     }
 
     @Override
@@ -1441,7 +1443,7 @@ public class UserServiceImpl implements UserService {
      * account without a loaded profile slipped past, and staff addresses are no
      * business of a nurse's directory either. Administrators keep the full row.
      */
-    private UserSummaryDTO directoryRow(User user, DirectoryScope scope) {
+    private UserSummaryDTO directoryRow(User user, DirectoryScope scope, Set<UUID> manageable) {
         UserSummaryDTO dto = userMapper.toSummaryDTO(user);
         if (dto == null) {
             return null;
@@ -1451,8 +1453,9 @@ public class UserServiceImpl implements UserService {
             dto.setUsername(null);
         }
         // QA D914: the list offered edit and delete on accounts a hospital admin
-        // may not administer, and the save came back "user not found".
-        dto.setManageable(scope.everyone() || accountAccess.canAdminister(user));
+        // may not administer, and the save came back "user not found". Decided
+        // for the whole page at once (UserAccountAccess.manageableAmong).
+        dto.setManageable(manageable.contains(user.getId()));
         return dto;
     }
 
@@ -1853,7 +1856,8 @@ public class UserServiceImpl implements UserService {
      * refusal is no existence oracle.
      */
     private RuntimeException refused(AuditEventType type, String action, User target) {
-        RuntimeException answer = accountAccess.canView(target)
+        // A deleted account is answered as missing: GET does not show it either.
+        RuntimeException answer = !target.isDeleted() && accountAccess.canView(target)
                 ? new com.example.hms.exception.ClientSafeAccessDeniedException(
                     MessageUtil.resolve("user.administer.notYours"))
                 : userNotFound(target.getId());

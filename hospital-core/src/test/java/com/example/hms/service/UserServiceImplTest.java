@@ -1975,7 +1975,8 @@ class UserServiceImplTest {
         /** A stranger: may neither administer nor read the account. */
         private void refuseAdministration() {
             when(accountAccess.canAdminister(user)).thenReturn(false);
-            when(accountAccess.canView(user)).thenReturn(false);
+            // Not asked for a deleted account (restore), which is answered as missing anyway.
+            lenient().when(accountAccess.canView(user)).thenReturn(false);
         }
 
         @Test
@@ -1989,12 +1990,25 @@ class UserServiceImplTest {
 
             assertThatThrownBy(() -> userService.updateUser(userId, dto))
                     .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class)
-                    .hasMessage("Only a super administrator can change or delete this account: "
-                        + "it is not managed by your hospital alone.");
+                    .hasMessage("Only a super administrator can change or delete this account.");
             verify(userRepository, never()).save(any());
             verify(auditEventLogService).logEvent(argThat(r ->
                     r.getStatus() == com.example.hms.enums.AuditStatus.FAILURE
                             && r.getEventType() == com.example.hms.enums.AuditEventType.USER_UPDATE));
+        }
+
+        @Test
+        @DisplayName("QA D914: a deleted account stays missing, as GET answers it, even to a caller who could read it")
+        void aDeletedAccountIsStillAnsweredAsMissing() {
+            user.setDeleted(true);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(accountAccess.canAdminister(user)).thenReturn(false);
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setFirstName("Changed");
+
+            assertThatThrownBy(() -> userService.updateUser(userId, dto))
+                    .isInstanceOf(ResourceNotFoundException.class);
+            verify(accountAccess, never()).canView(user);
         }
 
         @Test
@@ -2445,7 +2459,7 @@ class UserServiceImplTest {
                     .builder().id(patientAccount.getId()).email("p@example.com").username("p@example.com")
                     .firstName("Pat").build());
 
-            when(accountAccess.canAdminister(patientAccount)).thenReturn(false);
+            when(accountAccess.manageableAmong(any())).thenReturn(Set.of());
 
             var row = userService.getAllUsers(0, 10, false, false).getContent().get(0);
 

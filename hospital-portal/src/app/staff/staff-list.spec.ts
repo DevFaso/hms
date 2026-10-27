@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { TranslateService } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of } from 'rxjs';
 
 import { StaffListComponent } from './staff-list';
@@ -144,28 +144,35 @@ describe('StaffListComponent — no archived hospital for a new placement (QA D8
 });
 
 describe('StaffListComponent — no deactivate on your own card (QA D916)', () => {
-  let component: StaffListComponent;
-
-  beforeEach(() => {
+  it('offers Deactivate on a colleague card only, never on the signed-in account', () => {
     const staffService = jasmine.createSpyObj<StaffService>('StaffService', ['list']);
-    staffService.list.and.returnValue(of([]));
+    staffService.list.and.returnValue(
+      of([
+        { id: 's-me', userId: 'me', name: 'Qa Econome', active: true },
+        { id: 's-other', userId: 'someone-else', name: 'Qa Veilleur', active: true },
+      ] as StaffResponse[]),
+    );
     TestBed.configureTestingModule({
+      imports: [StaffListComponent, TranslateModule.forRoot()],
       providers: [
         { provide: StaffService, useValue: staffService },
-        { provide: HospitalService, useValue: {} },
-        { provide: UserService, useValue: {} },
-        { provide: ToastService, useValue: jasmine.createSpyObj('ToastService', ['success']) },
-        { provide: RoleContextService, useValue: {} },
+        { provide: HospitalService, useValue: { getMyHospitalAsResponse: () => of(null) } },
+        { provide: UserService, useValue: { list: () => of({ content: [] }) } },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj('ToastService', ['success', 'error']),
+        },
+        { provide: RoleContextService, useValue: { isSuperAdmin: () => false } },
         { provide: AuthService, useValue: authStub },
         { provide: PermissionService, useValue: { hasPermission: () => true } },
-        { provide: TranslateService, useValue: { instant: (k: string) => k } },
       ],
     });
-    component = TestBed.runInInjectionContext(() => new StaffListComponent());
-  });
-
-  it('knows the card of the signed-in account, and only that one', () => {
-    expect(component.isOwnCard({ userId: 'me' } as StaffResponse)).toBeTrue();
-    expect(component.isOwnCard({ userId: 'someone-else' } as StaffResponse)).toBeFalse();
+    const fixture = TestBed.createComponent(StaffListComponent);
+    fixture.detectChanges();
+    const buttons = (fixture.nativeElement as HTMLElement).querySelectorAll(
+      '[data-test="staff-deactivate"]',
+    );
+    expect(buttons.length).toBe(1);
+    expect(fixture.componentInstance.isOwnCard({ userId: 'me' } as StaffResponse)).toBeTrue();
   });
 });
