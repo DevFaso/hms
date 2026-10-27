@@ -56,9 +56,9 @@ describe('AuditDescriptionService (QA D894)', () => {
   });
 
   it('reads the performing-lab result read and the low-stock alert (#968)', () => {
-    expect(
-      describeIn('fr', 'Cross-hospital lab result read at the performing laboratory'),
-    ).toBe('Résultat d’analyses d’un autre hôpital consulté par le laboratoire exécutant');
+    expect(describeIn('fr', 'Cross-hospital lab result read at the performing laboratory')).toBe(
+      'Résultat d’analyses d’un autre hôpital consulté par le laboratoire exécutant',
+    );
     expect(
       describeIn(
         'fr',
