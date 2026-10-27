@@ -459,6 +459,10 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^Cross-hospital lab order read at the performing laboratory$/,
   },
   {
+    key: 'AUDIT.DESC.CROSS_HOSPITAL_READ_LAB_RESULT',
+    re: /^Cross-hospital lab result read at the performing laboratory$/,
+  },
+  {
     key: 'AUDIT.DESC.CROSS_HOSPITAL_READ',
     re: /^Cross-hospital (.+) read on the treatment relationship(.*)$/,
     params: ['subject', 'extra'],
@@ -979,6 +983,11 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^([A-Z_]+): (\S+) units$/,
     params: ['type', 'quantity'],
     localise: { type: 'enum' },
+  },
+  {
+    key: 'AUDIT.DESC.STOCK_REORDER_ALERT',
+    re: /^Low stock alert: (.+?) at (.+) — (\S+) on hand, reorder threshold (\S+)$/,
+    params: ['medication', 'pharmacy', 'onHand', 'threshold'],
   },
   {
     key: 'AUDIT.DESC.CATALOG_ITEM_DEACTIVATED',

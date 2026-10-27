@@ -425,16 +425,21 @@ public class InventoryServiceImpl implements InventoryService {
         List<InventoryItem> lowStock = inventoryItemRepository.findBelowReorderThresholdByHospital(hospitalId);
         // The alert is pushed to the user who triggered the sweep, so the
         // recipient IS the caller and the request locale is the right one.
+        // The audit row is read by everyone, each in their own language
+        // (QA D894): it is written in English, the shape the portal's
+        // pattern reads, whatever the caller's language.
         Locale locale = LocaleContextHolder.getLocale();
         String unknown = messageSource.getMessage("inventory.lowStock.unknown", null, locale);
+        String unknownForAudit = messageSource.getMessage("inventory.lowStock.unknown", null, Locale.ENGLISH);
         for (InventoryItem item : lowStock) {
-            String medicationName = item.getMedicationCatalogItem() != null
-                    ? item.getMedicationCatalogItem().getNameFr() : unknown;
-            String pharmacyName = item.getPharmacy() != null
-                    ? item.getPharmacy().getName() : unknown;
-            Object[] alertArgs = {medicationName, pharmacyName,
-                String.valueOf(item.getQuantityOnHand()), String.valueOf(item.getReorderThreshold())};
-            String message = messageSource.getMessage("inventory.lowStock.notification", alertArgs, locale);
+            boolean hasMedication = item.getMedicationCatalogItem() != null;
+            boolean hasPharmacy = item.getPharmacy() != null;
+            String onHand = String.valueOf(item.getQuantityOnHand());
+            String threshold = String.valueOf(item.getReorderThreshold());
+            Object[] alertArgs = {hasMedication ? item.getMedicationCatalogItem().getNameFr() : unknown,
+                hasPharmacy ? item.getPharmacy().getName() : unknown, onHand, threshold};
+            Object[] auditArgs = {hasMedication ? item.getMedicationCatalogItem().getNameFr() : unknownForAudit,
+                hasPharmacy ? item.getPharmacy().getName() : unknownForAudit, onHand, threshold};
 
             try {
                 UUID currentUserId = roleValidator.getCurrentUserId();
@@ -449,7 +454,9 @@ public class InventoryServiceImpl implements InventoryService {
                 log.warn("Failed to send reorder alert for item {}: {}", item.getId(), e.getMessage());
             }
 
-            logAudit(AuditEventType.STOCK_REORDER_ALERT, message, item.getId().toString());
+            logAudit(AuditEventType.STOCK_REORDER_ALERT,
+                messageSource.getMessage("inventory.lowStock.notification", auditArgs, Locale.ENGLISH),
+                item.getId().toString());
         }
     }
 

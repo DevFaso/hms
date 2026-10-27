@@ -36,9 +36,13 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>This builds every description the server can write, from the source:
  * each {@code .eventDescription(…)} argument is followed through string
  * concatenation, {@code String.format}, ternaries, local variables, string
- * constants, the arguments callers pass to a helper's parameter, a helper's
+ * constants (of any scanned class, {@code Type.NAME}, and a constant naming
+ * another), the arguments callers pass to a helper's parameter, a helper's
  * return values and English bundle messages. Anything that is not a literal
- * becomes a placeholder. Every description built must match one of the
+ * becomes a placeholder, except where it IS the whole description: there, a
+ * value the scan cannot build (a message in the caller's language, an unknown
+ * call) fails the guard for its file, even when another caller of the same
+ * helper passes a literal. Every description built must match one of the
  * portal's patterns ({@code audit-description-patterns.ts}), and every
  * pattern must have its text in the three locales. A site the scan cannot
  * build is listed in {@link #NOT_BUILT} with the reason it needs no pattern;
@@ -75,6 +79,12 @@ class AuditDescriptionCoverageTest {
     private static final Pattern ENGLISH_MESSAGE = Pattern.compile(
         "^(?:[\\w.]*\\.)?MessageUtil\\.resolve\\(\\s*(?:java\\.util\\.)?Locale\\.ENGLISH\\s*,\\s*(.*)\\)$", Pattern.DOTALL);
     private static final Pattern IDENTIFIER = Pattern.compile("^[A-Za-z_]\\w*$");
+    /** {@code Type.CONSTANT} or {@code com.example.Type.CONSTANT}: a constant of another class. */
+    private static final Pattern QUALIFIED_CONSTANT = Pattern.compile("^(?:[a-z]\\w*\\.)*([A-Z]\\w*)\\.([A-Z][A-Z0-9_]*)$");
+    /** {@code messageSource.getMessage(key, args, locale)}: English bundle text only with Locale.ENGLISH. */
+    private static final Pattern SOURCE_MESSAGE = Pattern.compile(
+        "^(?:\\w+\\.)?messageSource\\.getMessage\\((.*)\\)$", Pattern.DOTALL);
+    private static final Pattern ENGLISH_LOCALE = Pattern.compile("^(?:java\\.util\\.)?Locale\\.ENGLISH$");
     private static final Pattern LOCAL_CALL = Pattern.compile("^([a-z]\\w*)\\s*\\((.*)\\)$", Pattern.DOTALL);
     private static final Pattern PATTERN_LINE = Pattern.compile("^\\s*re: /(.*)/,\\s*$");
     private static final Pattern KEY_LINE = Pattern.compile("^\\s*key: '([A-Z0-9_.]+)',\\s*$");
@@ -89,6 +99,8 @@ class AuditDescriptionCoverageTest {
     private static final Map<String, String> ENGLISH = new HashMap<>();
     private static final Map<String, Set<String>> SAMPLES = new TreeMap<>();
     private static final Set<String> UNBUILT = new TreeSet<>();
+    /** For each unbuilt file, the expressions that could not be built, with their line. */
+    private static final Map<String, Set<String>> UNBUILT_SITES = new TreeMap<>();
     private static final List<Pattern> PORTAL_PATTERNS = new ArrayList<>();
     private static final List<String> PORTAL_KEYS = new ArrayList<>();
 
@@ -118,13 +130,13 @@ class AuditDescriptionCoverageTest {
                 int open = site.end() - 1;
                 int close = matching(source.masked(), open);
                 String argument = source.text().substring(open + 1, close);
-                List<String> built = evaluate(argument, new Context(source, open, Set.of()), 0);
+                List<String> built = evaluate(argument, new Context(source, open, Set.of(), true), 0);
                 List<String> usable = (built == null ? List.of(String.valueOf(HOLE)) : built).stream()
                     .map(AuditDescriptionCoverageTest::collapse)
                     .filter(sample -> !sample.replace(String.valueOf(HOLE), "").isBlank())
                     .toList();
                 if (usable.isEmpty()) {
-                    UNBUILT.add(source.path());
+                    unbuilt(source, open, argument);
                 }
                 for (String sample : usable) {
                     SAMPLES.computeIfAbsent(sample, k -> new TreeSet<>())
@@ -150,7 +162,11 @@ class AuditDescriptionCoverageTest {
         assertThat(SAMPLES.keySet()).contains(
             "Login failed: bad credentials",
             "Super-admin global-view request: " + HOLE + " " + HOLE,
-            "Super-admin cross-tenant read: recent-activity (" + HOLE + " rows)");
+            "Super-admin cross-tenant read: recent-activity (" + HOLE + " rows)",
+            // a qualified constant passed to a helper, and a constant naming another one (#968)
+            "Cross-hospital lab result read at the performing laboratory",
+            // a bundle message read in English, whatever the caller's language (#968)
+            "Low stock alert: " + HOLE + " at " + HOLE + " — " + HOLE + " on hand, reorder threshold " + HOLE);
         assertThat(PORTAL_PATTERNS).as("portal patterns").hasSizeGreaterThan(150);
         assertThat(PORTAL_KEYS).hasSameSizeAs(PORTAL_PATTERNS);
     }
@@ -171,8 +187,10 @@ class AuditDescriptionCoverageTest {
 
     @Test
     void onlyTheListedSitesAreLeftUnbuiltAndTheListOnlyShrinks() {
-        assertThat(UNBUILT).as("sites whose description the scan cannot build: write the description "
-            + "as one expression, or list the file in NOT_BUILT with the reason").isSubsetOf(NOT_BUILT.keySet());
+        Map<String, Set<String>> unlisted = new TreeMap<>(UNBUILT_SITES);
+        unlisted.keySet().removeAll(NOT_BUILT.keySet());
+        assertThat(unlisted).as("sites whose description the scan cannot build: write the description "
+            + "as one expression, or list the file in NOT_BUILT with the reason").isEmpty();
         assertThat(NOT_BUILT.keySet()).as("NOT_BUILT entries that are now built: remove them")
             .isSubsetOf(UNBUILT);
     }
@@ -231,8 +249,43 @@ class AuditDescriptionCoverageTest {
 
     // --------------------------------------------------------------- evaluation
 
-    /** Where an expression sits: the file, a position in it, and the parameters already followed. */
-    private record Context(Source source, int position, Set<String> trail) {
+    /**
+     * Where an expression sits: the file, a position in it, the parameters
+     * already followed, and whether its value is the WHOLE description (not a
+     * part of a concatenation or a message key), so a value the scan cannot
+     * build there is a description nobody checked, not a parameter.
+     */
+    private record Context(Source source, int position, Set<String> trail, boolean whole) {
+
+        Context at(Source where, int at) {
+            return new Context(where, at, trail, whole);
+        }
+
+        Context part() {
+            return new Context(source, position, trail, false);
+        }
+    }
+
+    /**
+     * A description the scan cannot build: its file fails the guard unless it
+     * is in {@link #NOT_BUILT}. Recorded for the whole description of a site
+     * and for every alternative of it (a ternary branch, a local assignment, a
+     * constant, a return, an argument a caller passes for a helper's
+     * parameter), so one unbuildable caller is not hidden by another caller's
+     * literal.
+     */
+    private static void unbuilt(Source source, int position, String expression) {
+        UNBUILT.add(source.path());
+        UNBUILT_SITES.computeIfAbsent(source.path(), k -> new TreeSet<>())
+            .add(lineOf(source.text(), position) + ": " + expression.strip().replaceAll("\\s+", " "));
+    }
+
+    /** {@code values} as one alternative of a whole description: an unbuildable one is recorded. */
+    private static List<String> alternative(List<String> values, Context context, int position, String expression) {
+        if (values == null && context.whole()) {
+            unbuilt(context.source(), position, expression);
+        }
+        return orHole(values);
     }
 
     private static List<String> evaluate(String expression, Context context, int depth) {
@@ -249,8 +302,10 @@ class AuditDescriptionCoverageTest {
             int colon = indexOfTop(mask(rest), ':');
             if (colon >= 0) {
                 List<String> out = new ArrayList<>();
-                out.addAll(orHole(evaluate(rest.substring(0, colon), context, depth + 1)));
-                out.addAll(orHole(evaluate(rest.substring(colon + 1), context, depth + 1)));
+                String yes = rest.substring(0, colon);
+                String no = rest.substring(colon + 1);
+                out.addAll(alternative(evaluate(yes, context, depth + 1), context, context.position(), yes));
+                out.addAll(alternative(evaluate(no, context, depth + 1), context, context.position(), no));
                 return distinct(out);
             }
         }
@@ -258,7 +313,7 @@ class AuditDescriptionCoverageTest {
         if (parts.size() > 1) {
             List<String> results = List.of("");
             for (String part : parts) {
-                List<String> values = orHole(evaluate(part, context, depth + 1));
+                List<String> values = orHole(evaluate(part, context.part(), depth + 1));
                 List<String> next = new ArrayList<>();
                 for (String prefix : results) {
                     for (String value : values) {
@@ -275,6 +330,9 @@ class AuditDescriptionCoverageTest {
         if (LITERAL.matcher(e).matches()) {
             return List.of(unescape(e.substring(1, e.length() - 1)));
         }
+        if ("null".equals(e)) {
+            return List.of(String.valueOf(HOLE)); // no description at all: nothing to read
+        }
         Matcher format = FORMAT.matcher(e);
         if (format.find()) {
             String fmt = unescape(format.group(1).substring(1, format.group(1).length() - 1));
@@ -284,11 +342,23 @@ class AuditDescriptionCoverageTest {
         if (message.matches()) {
             return englishMessage(message.group(1), context, depth);
         }
+        Matcher sourceMessage = SOURCE_MESSAGE.matcher(e);
+        if (sourceMessage.matches()) {
+            List<String> args = splitTop(sourceMessage.group(1), mask(sourceMessage.group(1)), ",");
+            if (ENGLISH_LOCALE.matcher(args.get(args.size() - 1)).matches()) {
+                return englishMessage(sourceMessage.group(1), context, depth);
+            }
+            return null; // the caller's language: the row would stay in it for every reader
+        }
         if (depth >= MAX_DEPTH) {
             return null;
         }
         if (IDENTIFIER.matcher(e).matches()) {
             return variable(e, context, depth);
+        }
+        Matcher qualified = QUALIFIED_CONSTANT.matcher(e);
+        if (qualified.matches()) {
+            return qualifiedConstant(qualified.group(1), qualified.group(2), context, depth);
         }
         Matcher call = LOCAL_CALL.matcher(e);
         if (call.matches() && matching(maskedE, e.indexOf('(')) == e.length() - 1) {
@@ -300,7 +370,7 @@ class AuditDescriptionCoverageTest {
     private static List<String> englishMessage(String arguments, Context context, int depth) {
         List<String> args = splitTop(arguments, mask(arguments), ",");
         List<String> out = new ArrayList<>();
-        for (String key : orHole(evaluate(args.get(0), context, depth + 1))) {
+        for (String key : orHole(evaluate(args.get(0), context.part(), depth + 1))) {
             String text = ENGLISH.get(key);
             if (text != null) {
                 out.add(text.replace("''", "'").replaceAll("\\{\\d+}", String.valueOf(HOLE)));
@@ -322,17 +392,16 @@ class AuditDescriptionCoverageTest {
                 assigned = true;
                 String rest = body.substring(assignment.end());
                 String value = splitTop(rest, mask(rest), ";").get(0);
-                out.addAll(orHole(evaluate(value, new Context(source, method.start() + 1, context.trail()), depth + 1)));
+                out.addAll(alternative(evaluate(value, context.at(source, method.start() + 1), depth + 1), context,
+                    method.start() + assignment.end(), value));
             }
             if (assigned) {
                 return distinct(out);
             }
         }
-        Matcher constant = Pattern.compile("static\\s+final\\s+String\\s+" + Pattern.quote(name)
-            + "\\s*=\\s*(\"(?:[^\"\\\\]|\\\\.)*\")\\s*;").matcher(source.text());
-        if (constant.find()) {
-            String literal = constant.group(1);
-            return List.of(unescape(literal.substring(1, literal.length() - 1)));
+        List<String> constant = constant(source, name, context, depth);
+        if (constant != null) {
+            return constant;
         }
         if (method == null || !method.params().contains(name)) {
             return null;
@@ -370,7 +439,8 @@ class AuditDescriptionCoverageTest {
                 if (args.size() != method.params().size()) {
                     continue;
                 }
-                out.addAll(orHole(evaluate(args.get(index), new Context(caller, open, Set.copyOf(trail)), depth + 1)));
+                Context atCall = new Context(caller, open, Set.copyOf(trail), context.whole());
+                out.addAll(alternative(evaluate(args.get(index), atCall, depth + 1), atCall, open, args.get(index)));
             }
         }
         return out.isEmpty() ? null : distinct(out);
@@ -388,7 +458,40 @@ class AuditDescriptionCoverageTest {
             while (ret.find()) {
                 String rest = body.substring(ret.end());
                 String value = splitTop(rest, mask(rest), ";").get(0);
-                out.addAll(orHole(evaluate(value, new Context(source, method.start() + 1, context.trail()), depth + 1)));
+                out.addAll(alternative(evaluate(value, context.at(source, method.start() + 1), depth + 1), context,
+                    method.start() + ret.end(), value));
+            }
+        }
+        return out.isEmpty() ? null : distinct(out);
+    }
+
+    /**
+     * The value of the {@code static final String} constant {@code name} of
+     * {@code source}, whatever its initializer: a literal, a concatenation or
+     * another constant ({@code A = B.C}), followed in the file that declares
+     * it. Null when {@code source} declares no such constant.
+     */
+    private static List<String> constant(Source source, String name, Context context, int depth) {
+        Matcher declaration = Pattern.compile("static\\s+final\\s+String\\s+" + Pattern.quote(name) + "\\s*=(?!=)\\s*")
+            .matcher(source.masked());
+        if (!declaration.find()) {
+            return null;
+        }
+        String rest = source.text().substring(declaration.end());
+        String value = splitTop(rest, mask(rest), ";").get(0);
+        Context inFile = context.at(source, declaration.end());
+        return alternative(evaluate(value, inFile, depth + 1), inFile, declaration.end(), value);
+    }
+
+    /** {@code Type.NAME}: the constant as declared by every scanned class named {@code Type}. */
+    private static List<String> qualifiedConstant(String type, String name, Context context, int depth) {
+        List<String> out = new ArrayList<>();
+        for (Source source : SOURCES.values()) {
+            if (source.className().equals(type)) {
+                List<String> values = constant(source, name, context, depth);
+                if (values != null) {
+                    out.addAll(values);
+                }
             }
         }
         return out.isEmpty() ? null : distinct(out);

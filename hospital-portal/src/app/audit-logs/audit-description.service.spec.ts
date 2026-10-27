@@ -55,6 +55,28 @@ describe('AuditDescriptionService (QA D894)', () => {
     );
   });
 
+  it('reads the performing-lab result read and the low-stock alert (#968)', () => {
+    expect(
+      describeIn('fr', 'Cross-hospital lab result read at the performing laboratory'),
+    ).toBe('Résultat d’analyses d’un autre hôpital consulté par le laboratoire exécutant');
+    expect(
+      describeIn(
+        'fr',
+        'Low stock alert: Paracétamol 500 mg at Pharmacie centrale — 3 on hand, reorder threshold 10',
+      ),
+    ).toBe(
+      'Alerte de stock bas : Paracétamol 500 mg à Pharmacie centrale — 3 en stock, seuil de réapprovisionnement 10',
+    );
+    expect(
+      describeIn(
+        'es',
+        'Low stock alert: Paracétamol 500 mg at Pharmacie centrale — 3 on hand, reorder threshold 10',
+      ),
+    ).toBe(
+      'Alerta de stock bajo: Paracétamol 500 mg en Pharmacie centrale — 3 disponibles, umbral de reposición 10',
+    );
+  });
+
   it('keeps the D774 and D869 readings', () => {
     expect(describeIn('fr', 'Hospital scope refused (NOT_PERMITTED)')).toContain(
       'Accès à l’hôpital refusé',
