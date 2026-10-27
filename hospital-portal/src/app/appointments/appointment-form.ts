@@ -174,7 +174,7 @@ export class AppointmentFormComponent implements OnInit {
         distinctUntilChanged(),
         switchMap((q) => {
           this.patientSearchLoading.set(true);
-          return this.patientService.list(undefined, q || undefined);
+          return this.patientService.list(this.patientSearchHospitalId(), q || undefined);
         }),
       )
       .subscribe({
@@ -208,6 +208,15 @@ export class AppointmentFormComponent implements OnInit {
     this.selectedPatient.set(null);
     delete this.form.patientId;
     this.patientQuery.set('');
+  }
+
+  /**
+   * QA D912 (#967 review): the hospital whose patients, and whose MRN, the
+   * typeahead offers: the form's hospital, else the request scope, which for
+   * a super-admin is the hospital the scope chip picked, not their home one.
+   */
+  private patientSearchHospitalId(): string | undefined {
+    return this.form.hospitalId || this.roleContext.effectiveHospitalIdForRequest() || undefined;
   }
 
   patientInitials(p: PatientResponse): string {

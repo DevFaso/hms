@@ -156,6 +156,23 @@ describe('EncountersComponent', () => {
 
   // QA D903/D912: the chip showed the email, or an empty line for a
   // phone-only patient, instead of this hospital's MRN.
+  // QA D912 (#967 review): the row carries no MRN, but its contact details do;
+  // the reopened chip passed an empty email and showed nothing under the name.
+  it('falls back to the row phone on a reopened encounter chip (QA D912)', () => {
+    const fixture = TestBed.createComponent(EncountersComponent);
+    fixture.detectChanges();
+    fixture.componentInstance.openEdit(
+      mockEncounter({
+        patientName: 'Fatimata Zongo',
+        patientEmail: '',
+        patientPhoneNumber: '70001003',
+      }),
+    );
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('.picker-chip .chip-sub')?.textContent?.trim()).toBe('70001003');
+  });
+
   it('names the patient by MRN in the chip and the options (QA D912)', () => {
     const fixture = TestBed.createComponent(EncountersComponent);
     fixture.detectChanges();

@@ -179,7 +179,15 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
             }
         }
 
-        BigDecimal needed = prescription.getQuantity() != null ? prescription.getQuantity() : BigDecimal.ONE;
+        // QA D913 (#967 review): what the shelf must cover is what is still
+        // OWED, the same remainder route, back-order and print use. A partially
+        // filled order (routable) was compared against its full prescribed
+        // quantity, and a legacy order without one against an invented 1 instead
+        // of its regimen estimate. Unknown stays unknown (null on the wire, the
+        // page then says "insufficient" without numbers); the comparison still
+        // needs at least one unit on the shelf.
+        BigDecimal remaining = remainingQuantity(prescription);
+        BigDecimal needed = remaining != null ? remaining : BigDecimal.ONE;
         boolean sufficient = totalOnHand.compareTo(needed) >= 0;
 
         List<PartnerOptionDTO> partnerOptions = new ArrayList<>();
@@ -209,7 +217,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
                 .pharmacyName(null)
                 .pharmacyId(null)
                 .quantityOnHand(totalOnHand)
-                .quantityRequired(needed)
+                .quantityRequired(remaining)
                 .sufficient(sufficient)
                 .partnerPharmacies(partnerOptions)
                 .build();

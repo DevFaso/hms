@@ -82,7 +82,9 @@ export class RecallsPanelComponent implements OnInit {
   notes = signal('');
 
   ngOnInit(): void {
-    const hospitalId = this.roleCtx.activeHospitalId ?? undefined;
+    // QA D912 (#967 review): the request scope, so a super-admin scoped to
+    // another hospital searches its patients (and MRNs), not their home one.
+    const hospitalId = this.roleCtx.effectiveHospitalIdForRequest() ?? undefined;
     if (hospitalId) {
       this.referralService.getDepartmentsByHospital(hospitalId).subscribe({
         next: (list) => this.departments.set(list),

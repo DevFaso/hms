@@ -96,7 +96,9 @@ export class WaitlistPanelComponent implements OnInit {
   actingOnEntryId = signal<string | null>(null);
 
   ngOnInit(): void {
-    const hospitalId = this.roleCtx.activeHospitalId ?? undefined;
+    // QA D912 (#967 review): the request scope, so a super-admin scoped to
+    // another hospital searches its patients (and MRNs), not their home one.
+    const hospitalId = this.roleCtx.effectiveHospitalIdForRequest() ?? undefined;
 
     if (hospitalId) {
       this.referralService.getDepartmentsByHospital(hospitalId).subscribe({

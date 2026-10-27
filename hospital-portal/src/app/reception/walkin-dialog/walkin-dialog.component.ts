@@ -79,7 +79,9 @@ export class WalkInDialogComponent implements OnInit {
   ];
 
   ngOnInit(): void {
-    const hospitalId = this.roleCtx.activeHospitalId ?? undefined;
+    // QA D912 (#967 review): the request scope, so a super-admin scoped to
+    // another hospital searches its patients (and MRNs), not their home one.
+    const hospitalId = this.roleCtx.effectiveHospitalIdForRequest() ?? undefined;
     this.staffService.list(hospitalId).subscribe({
       next: (list) => this.allStaff.set((list ?? []).filter(isClinicalProvider)),
     });
@@ -131,7 +133,8 @@ export class WalkInDialogComponent implements OnInit {
   submit(): void {
     const patient = this.selectedPatient();
     const staff = this.selectedStaff();
-    const hospitalId = this.roleCtx.activeHospitalId;
+    // The walk-in is registered where its patient was searched.
+    const hospitalId = this.roleCtx.effectiveHospitalIdForRequest();
 
     if (!patient || !staff || !hospitalId || !this.departmentId()) {
       this.toast.error(this.translate.instant('RECEPTION.WALKIN_VALIDATION_ERROR'));

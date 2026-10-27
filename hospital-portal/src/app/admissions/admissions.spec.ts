@@ -43,6 +43,8 @@ describe('AdmissionsComponent', () => {
   let superAdmin: ReturnType<typeof signal<boolean>>;
   let queryTab: string | null;
   let activeRoles: string[];
+  /** The request scope (X-Hospital-Id): the chip's hospital for a super-admin. */
+  let requestScope: string | null;
 
   const member = (id: string, roleCode: string) => ({ id, roleCode }) as StaffResponse;
   const adm = (overrides: Partial<AdmissionResponse> = {}) =>
@@ -65,6 +67,7 @@ describe('AdmissionsComponent', () => {
     queryTab = null;
     superAdmin = signal(false);
     activeRoles = ['ROLE_DOCTOR'];
+    requestScope = 'h1';
     admissionService = jasmine.createSpyObj<AdmissionService>('AdmissionService', [
       'getAll',
       'create',
@@ -122,6 +125,7 @@ describe('AdmissionsComponent', () => {
           provide: RoleContextService,
           useValue: {
             activeHospitalId: 'h1',
+            effectiveHospitalIdForRequest: () => requestScope,
             isSuperAdmin: superAdmin,
             globalView: signal(false),
             hasAnyActiveRole: (roles: string[]) => roles.some((r) => activeRoles.includes(r)),
@@ -322,6 +326,24 @@ describe('AdmissionsComponent', () => {
       expect(component.patientInitials({} as PatientResponse)).toBe('?');
       component.clearPatient();
       expect(component.selectedPatient()).toBeNull();
+    }));
+
+    // QA D912 (#967 review): a super-admin whose home hospital is A but whose
+    // scope chip picked B was offered A's patients, and A's MRN on the chip.
+    it("searches the scope chip's hospital, not a super-admin's home one", fakeAsync(() => {
+      superAdmin.set(true);
+      requestScope = 'hB';
+      patientService.list.and.returnValue(of([]));
+      component.initPatientSearch();
+      component.onPatientQueryChange('kab');
+      tick(250);
+      expect(patientService.list).toHaveBeenCalledWith('hB', 'kab');
+
+      // A hospital picked on the form wins: the stay is created there.
+      component.form.hospitalId = 'hC';
+      component.onPatientQueryChange('zon');
+      tick(250);
+      expect(patientService.list).toHaveBeenCalledWith('hC', 'zon');
     }));
 
     it('clears the spinner when the search fails', fakeAsync(() => {

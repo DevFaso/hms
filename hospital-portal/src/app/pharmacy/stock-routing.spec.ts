@@ -1,5 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { signal } from '@angular/core';
+import { LOCALE_ID, signal } from '@angular/core';
+import { registerLocaleData } from '@angular/common';
+import localeFr from '@angular/common/locales/fr';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
@@ -651,6 +653,42 @@ describe('StockRoutingComponent', () => {
       });
 
       expect(badge.textContent?.trim()).toBe('Stock insuffisant');
+    });
+
+    it("formats the quantities in the reader's locale (12,5 in French)", async () => {
+      registerLocaleData(localeFr, 'fr');
+      TestBed.resetTestingModule();
+      await TestBed.configureTestingModule({
+        imports: [StockRoutingComponent, TranslateModule.forRoot()],
+        providers: [
+          provideHttpClient(withXhr()),
+          provideHttpClientTesting(),
+          { provide: PharmacyService, useValue: pharmacySvc },
+          { provide: ToastService, useValue: toastSvc },
+          { provide: RoleContextService, useValue: roleContextStub },
+          {
+            provide: ActivatedRoute,
+            useValue: { snapshot: { paramMap: convertToParamMap({}) } },
+          },
+          { provide: LOCALE_ID, useValue: 'fr' },
+        ],
+      }).compileComponents();
+      const translate = TestBed.inject(TranslateService);
+      translate.setTranslation('fr', {
+        PHARMACY: { INSUFFICIENT_STOCK_OF: 'Stock insuffisant ({{onHand}} / {{required}})' },
+      });
+      translate.use('fr');
+      fixture = TestBed.createComponent(StockRoutingComponent);
+      component = fixture.componentInstance;
+      fixture.detectChanges();
+
+      const badge = statusBadgeFor({
+        quantityOnHand: 12.5,
+        quantityRequired: 60,
+        sufficient: false,
+      });
+
+      expect(badge.textContent?.trim()).toBe('Stock insuffisant (12,5 / 60)');
     });
 
     it('keeps "out of stock" for an empty shelf only', () => {

@@ -51,7 +51,7 @@ describe('RecallsPanelComponent', () => {
 
   const mockPatientService = { list: () => of([]) };
   const mockReferralService = { getDepartmentsByHospital: () => of([]) };
-  const mockRoleCtx = { activeHospitalId: 'h1' };
+  const mockRoleCtx = { activeHospitalId: 'h1', effectiveHospitalIdForRequest: () => 'h1' };
 
   beforeEach(async () => {
     mockReceptionService = {

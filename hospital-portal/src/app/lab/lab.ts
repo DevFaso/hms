@@ -403,7 +403,8 @@ export class LabComponent implements OnInit {
   }
 
   private patientSearchHospitalId(): string | undefined {
-    return this.form.hospitalId || this.roleContext.activeHospitalId || undefined;
+    // QA D912 (#967 review): the chip's hospital for a super-admin, not their home one.
+    return this.form.hospitalId || this.roleContext.effectiveHospitalIdForRequest() || undefined;
   }
 
   openCreate(): void {
@@ -444,6 +445,8 @@ export class LabComponent implements OnInit {
       id: '',
       firstName: o.patientFullName?.split(' ')[0] ?? '',
       lastName: o.patientFullName?.split(' ').slice(1).join(' ') ?? '',
+      // QA D912: no MRN on the row, and QA D527 keeps the patient's email off
+      // lab orders, so the chip is the name alone (no empty line under it).
     } as PatientResponse);
     this.editing.set(true);
     this.editingId.set(o.id);

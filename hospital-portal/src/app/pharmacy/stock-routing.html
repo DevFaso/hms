@@ -132,7 +132,7 @@
         <div class="stock-info">
           <span class="label">{{ 'PHARMACY.QTY_ON_HAND_COLUMN' | translate }}:</span>
           <span class="value" [class.text-danger]="!stockResult()!.sufficient">
-            {{ stockResult()!.quantityOnHand }}
+            {{ stockResult()!.quantityOnHand | number: '1.0-2' }}
           </span>
         </div>
         <div class="stock-info">
@@ -154,8 +154,8 @@
                     'PHARMACY.INSUFFICIENT_STOCK_OF'
                       | translate
                         : {
-                            onHand: stockResult()!.quantityOnHand,
-                            required,
+                            onHand: (stockResult()!.quantityOnHand | number: '1.0-2'),
+                            required: (required | number: '1.0-2'),
                           }
                   }}
                 } @else {

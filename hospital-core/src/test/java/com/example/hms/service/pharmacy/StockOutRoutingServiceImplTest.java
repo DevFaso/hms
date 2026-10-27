@@ -479,6 +479,51 @@ class StockOutRoutingServiceImplTest {
         assertThat(result.getPartnerPharmacies()).isEmpty();
     }
 
+    /** Stubs a dispensary holding {@code onHand} of the order's drug. */
+    private void stubDispensaryStock(BigDecimal onHand) {
+        InventoryItem dispensaryInventory = InventoryItem.builder()
+                .pharmacy(dispensary)
+                .medicationCatalogItem(catalogItem)
+                .quantityOnHand(onHand)
+                .active(true)
+                .build();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findById(prescriptionId)).thenReturn(Optional.of(prescription));
+        when(medicationCatalogItemRepository.findByHospitalIdAndCode(hospitalId, "AMOX500"))
+                .thenReturn(Optional.of(catalogItem));
+        when(inventoryItemRepository.findByPharmacyHospitalIdAndMedicationCatalogItemIdAndActiveTrue(
+                hospitalId, medicationId)).thenReturn(List.of(dispensaryInventory));
+    }
+
+    @Test
+    @DisplayName("QA D913: a partially filled order needs only what is still owed")
+    void checkStockComparesTheRemainder() {
+        // 8 of the 10 prescribed are already handed over; 5 on the shelf cover the 2 owed.
+        prescription.setStatus(PrescriptionStatus.PARTIALLY_FILLED);
+        when(dispenseRepository.sumQuantityDispensedForPrescription(
+                prescriptionId, com.example.hms.repository.pharmacy.DispenseRepository.NOT_A_FILL))
+                .thenReturn(BigDecimal.valueOf(8));
+        stubDispensaryStock(BigDecimal.valueOf(5));
+
+        StockCheckResultDTO result = service.checkStock(prescriptionId);
+
+        assertThat(result.getQuantityRequired()).isEqualByComparingTo("2");
+        assertThat(result.isSufficient()).isTrue();
+        assertThat(result.getPartnerPharmacies()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("QA D913: an order with no quantity and no readable regimen sends no required quantity")
+    void checkStockDoesNotInventARequiredQuantity() {
+        prescription.setQuantity(null);
+        stubDispensaryStock(BigDecimal.ZERO);
+
+        StockCheckResultDTO result = service.checkStock(prescriptionId);
+
+        assertThat(result.getQuantityRequired()).isNull();
+        assertThat(result.isSufficient()).isFalse();
+    }
+
     @Test
     @DisplayName("checkStock should throw when prescription belongs to other hospital")
     void checkStockShouldRejectCrossHospital() {

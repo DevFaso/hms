@@ -2232,8 +2232,11 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   (`fix/qa-r15-clinical-pharmacy`), and a reopened admission, discharge, imaging
   or ultrasound order carries the row's `patientMrn`. `EncounterResponseDTO`,
   `LabOrderResponseDTO` and `PrescriptionResponseDTO` carry no MRN, so their edit
-  forms rebuild the chip with the name alone (no empty line, no email); so do a
-  reopened birth plan and obstetric history, whose rows carry no MRN either.
+  forms fall back down the same rule: a reopened encounter shows the row's
+  email, else its phone; a reopened prescription its email; a reopened lab
+  order the name alone (QA D527 keeps the email off lab orders). A reopened
+  birth plan or obstetric history also shows the name alone; their rows carry
+  no MRN either.
   Owed: a hospital-scoped `patientMrn` on those DTOs, resolved the way
   `AdmissionMapper.resolvePatientMrn` does, and passed into the chip as
   discharge does. Not changed here because each mapper serves list endpoints and

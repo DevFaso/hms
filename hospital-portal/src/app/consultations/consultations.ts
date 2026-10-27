@@ -292,7 +292,8 @@ export class ConsultationsComponent implements OnInit {
   }
 
   private patientSearchHospitalId(): string | undefined {
-    return this.form.hospitalId || this.roleContext.activeHospitalId || undefined;
+    // QA D912 (#967 review): the chip's hospital for a super-admin, not their home one.
+    return this.form.hospitalId || this.roleContext.effectiveHospitalIdForRequest() || undefined;
   }
 
   openCreate(): void {

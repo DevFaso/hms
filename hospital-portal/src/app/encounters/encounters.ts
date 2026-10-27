@@ -296,9 +296,8 @@ export class EncountersComponent implements OnInit {
         distinctUntilChanged(),
         switchMap((q) => {
           this.patientSearchLoading.set(true);
-          // ── TENANT ISOLATION: always scope patient search to active hospital ──
-          const hid = this.roleContext.activeHospitalId ?? undefined;
-          return this.patientService.list(hid, q);
+          // ── TENANT ISOLATION: always scope patient search to the form's hospital ──
+          return this.patientService.list(this.patientSearchHospitalId(), q);
         }),
       )
       .subscribe({
@@ -331,6 +330,15 @@ export class EncountersComponent implements OnInit {
     this.selectedPatient.set(null);
     this.form.patientId = '';
     this.patientQuery.set('');
+  }
+
+  /**
+   * QA D912 (#967 review): the hospital whose patients, and whose MRN, the
+   * typeahead offers: the form's hospital, else the request scope, which for
+   * a super-admin is the hospital the scope chip picked, not their home one.
+   */
+  private patientSearchHospitalId(): string | undefined {
+    return this.form.hospitalId || this.roleContext.effectiveHospitalIdForRequest() || undefined;
   }
 
   patientInitials(p: PatientResponse): string {
@@ -419,7 +427,9 @@ export class EncountersComponent implements OnInit {
       id: enc.patientId,
       firstName: enc.patientName?.split(' ')[0] ?? '',
       lastName: enc.patientName?.split(' ').slice(1).join(' ') ?? '',
-      email: '',
+      // QA D912: the row has no MRN; its contact details keep the chip's fallback.
+      email: enc.patientEmail,
+      phoneNumberPrimary: enc.patientPhoneNumber,
     } as PatientResponse);
     this.loadDepartmentsFor(enc.hospitalId ?? '');
     this.showModal.set(true);
