@@ -14,6 +14,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { forkJoin, of, Subject, Subscription } from 'rxjs';
 import { catchError, debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 import { PatientService, PatientResponse } from '../../services/patient.service';
+import { patientSubline } from './patient-subline';
 
 /**
  * Debounced patient typeahead with the shared chip/dropdown idiom.
@@ -166,7 +167,7 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
    * preselected patient rebuilt from a row that had none).
    */
   subline(p: PatientResponse): string {
-    return p.mrn?.trim() || p.email?.trim() || p.phoneNumberPrimary?.trim() || '';
+    return patientSubline(p);
   }
 
   initials(p: PatientResponse): string {

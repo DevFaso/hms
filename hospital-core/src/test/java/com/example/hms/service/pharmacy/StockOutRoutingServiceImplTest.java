@@ -185,6 +185,8 @@ class StockOutRoutingServiceImplTest {
 
         assertThat(result.getMedicationName()).isEqualTo("Amoxicillin 500mg");
         assertThat(result.getQuantityOnHand()).isEqualByComparingTo(BigDecimal.ONE);
+        // QA D913: the page needs the order's quantity to say "1 / 10", not "out of stock".
+        assertThat(result.getQuantityRequired()).isEqualByComparingTo(BigDecimal.TEN);
         assertThat(result.isSufficient()).isFalse();
         assertThat(result.getPartnerPharmacies()).hasSize(1);
         assertThat(result.getPartnerPharmacies().get(0).getPharmacyId()).isEqualTo(partnerId);

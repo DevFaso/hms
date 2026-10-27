@@ -47,6 +47,7 @@ import { AuthService } from '../auth/auth.service';
 import { actionRoles } from '../core/action-permissions';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { serverInstant } from '../shared/date-utils';
+import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
 
 /**
  * The prescriber's list tabs (gap G10).
@@ -142,6 +143,7 @@ export const PRESCRIPTION_TABS: readonly { id: PrescriptionTab; labelKey: string
   selector: 'app-prescriptions',
   standalone: true,
   imports: [
+    PatientSublinePipe,
     ServerTimePipe,
     CommonModule,
     FormsModule,

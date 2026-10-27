@@ -28,6 +28,8 @@ export interface AdmissionResponse {
   id: string;
   patientId: string;
   patientName: string;
+  /** This hospital's MRN for the patient (AdmissionMapper resolves it per hospital). */
+  patientMrn?: string | null;
   hospitalId: string;
   hospitalName: string;
   departmentId: string;

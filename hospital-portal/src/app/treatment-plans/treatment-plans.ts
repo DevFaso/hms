@@ -21,11 +21,13 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { missingRequiredMessage } from '../shared/required-fields';
 import { labelledRefusalReason } from '../shared/refusal-reason';
+import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
 
 @Component({
   selector: 'app-treatment-plans',
   standalone: true,
   imports: [
+    PatientSublinePipe,
     ServerTimePipe,
     CommonModule,
     FormsModule,

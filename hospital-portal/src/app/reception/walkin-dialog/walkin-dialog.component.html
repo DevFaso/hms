@@ -55,8 +55,8 @@
               (keydown.enter)="selectPatient(p)"
             >
               <span class="result-name">{{ p.firstName }} {{ p.lastName }}</span>
-              @if (p.mrn) {
-                <span class="result-meta">MRN: {{ p.mrn }}</span>
+              @if (p | patientSubline; as sub) {
+                <span class="result-meta">{{ sub }}</span>
               }
             </li>
           }
@@ -66,6 +66,9 @@
         <div class="selected-badge">
           <span class="material-symbols-outlined">check_circle</span>
           {{ selectedPatient()!.firstName }} {{ selectedPatient()!.lastName }}
+          @if (selectedPatient() | patientSubline; as sub) {
+            <span class="result-meta">{{ sub }}</span>
+          }
           <button class="clear-btn" (click)="selectedPatient.set(null); patientQuery.set('')">
             <span class="material-symbols-outlined">close</span>
           </button>

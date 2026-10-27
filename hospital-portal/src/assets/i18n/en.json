@@ -8515,6 +8515,8 @@
     "OFFLINE_SYNC_FAILED": "Sync failed — {{count}} dispense(s) still queued",
     "OFFLINE_SYNC_NOW": "Sync now",
     "ON_FORMULARY": "On Formulary",
+    "INSUFFICIENT_STOCK": "Insufficient stock",
+    "INSUFFICIENT_STOCK_OF": "Insufficient stock ({{onHand}} / {{required}})",
     "OUT_OF_STOCK": "Out of Stock",
     "OVERRIDDEN": "Overridden",
     "PARTNER": "Partner",

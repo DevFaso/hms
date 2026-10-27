@@ -482,6 +482,8 @@ export interface StockCheckResult {
   /** Null when `quantityOnHand` is an aggregate across all hospital dispensaries. */
   pharmacyId: string | null;
   quantityOnHand: number;
+  /** QA D913: the order's quantity; absent from a server that predates it. */
+  quantityRequired?: number | null;
   sufficient: boolean;
   partnerPharmacies: PartnerOption[];
 }

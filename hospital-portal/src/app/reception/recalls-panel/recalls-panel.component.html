@@ -152,6 +152,9 @@
               @for (p of patientResults(); track p.id) {
                 <li (click)="selectPatient(p)" (keydown.enter)="selectPatient(p)" tabindex="0">
                   {{ p.firstName }} {{ p.lastName }}
+                  @if (p | patientSubline; as sub) {
+                    <span class="mrn-hint">· {{ sub }}</span>
+                  }
                   @if (p.dateOfBirth) {
                     <span class="dob-hint"
                       >({{ p.dateOfBirth | serverTime | date: 'mediumDate' }})</span

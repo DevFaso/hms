@@ -17,13 +17,14 @@ import { PatientService, PatientResponse } from '../../services/patient.service'
 import { StaffService, StaffResponse, isClinicalProvider } from '../../services/staff.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
+import { PatientSublinePipe } from '../../shared/patient-picker/patient-subline';
 
 type EncounterType = 'CONSULTATION' | 'FOLLOW_UP' | 'EMERGENCY' | 'OUTPATIENT' | 'INPATIENT';
 
 @Component({
   selector: 'app-walkin-dialog',
   standalone: true,
-  imports: [FormsModule, TranslateModule],
+  imports: [PatientSublinePipe, FormsModule, TranslateModule],
   templateUrl: './walkin-dialog.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './walkin-dialog.component.scss',

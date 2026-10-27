@@ -209,6 +209,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
                 .pharmacyName(null)
                 .pharmacyId(null)
                 .quantityOnHand(totalOnHand)
+                .quantityRequired(needed)
                 .sufficient(sufficient)
                 .partnerPharmacies(partnerOptions)
                 .build();

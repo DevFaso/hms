@@ -8,6 +8,10 @@ import { of, throwError } from 'rxjs';
 import { EncounterService, EncounterResponse } from '../services/encounter.service';
 import { LabComponent } from './lab';
 import {
+  EXPECTED_PICKER_SUBLINES,
+  renderPickerSublines,
+} from '../testing/patient-subline.fixtures';
+import {
   LabService,
   LabOrderResponse,
   LabSpecimen,
@@ -143,6 +147,15 @@ describe('LabComponent — performing laboratory', () => {
 
     expect(component.canCreateOrder()).toBeFalse();
     expect(labService.listPerformingLabs).not.toHaveBeenCalled();
+  });
+
+  // QA D903/D912: the chip showed the email, or an empty line for a
+  // phone-only patient, instead of this hospital's MRN.
+  it('names the patient by MRN in the chip and the options (QA D912)', async () => {
+    await setup(['ROLE_DOCTOR'], []);
+    component.openCreate();
+    fixture.detectChanges();
+    expect(renderPickerSublines(fixture, component)).toEqual(EXPECTED_PICKER_SUBLINES);
   });
 
   it('offers a provider the performing laboratories, defaulting to this hospital', async () => {

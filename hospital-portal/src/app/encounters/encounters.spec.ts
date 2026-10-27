@@ -7,6 +7,10 @@ import { of, throwError } from 'rxjs';
 
 import { EncountersComponent } from './encounters';
 import {
+  EXPECTED_PICKER_SUBLINES,
+  renderPickerSublines,
+} from '../testing/patient-subline.fixtures';
+import {
   EncounterService,
   EncounterResponse,
   EncounterNoteResponse,
@@ -148,6 +152,18 @@ describe('EncountersComponent', () => {
     }).compileComponents();
 
     component = TestBed.createComponent(EncountersComponent).componentInstance;
+  });
+
+  // QA D903/D912: the chip showed the email, or an empty line for a
+  // phone-only patient, instead of this hospital's MRN.
+  it('names the patient by MRN in the chip and the options (QA D912)', () => {
+    const fixture = TestBed.createComponent(EncountersComponent);
+    fixture.detectChanges();
+    fixture.componentInstance.openCreate();
+    fixture.detectChanges();
+    expect(renderPickerSublines(fixture, fixture.componentInstance)).toEqual(
+      EXPECTED_PICKER_SUBLINES,
+    );
   });
 
   it('QA D427: a pharmacist reading encounters is offered no New, Edit or Delete', () => {

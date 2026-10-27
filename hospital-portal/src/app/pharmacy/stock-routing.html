@@ -139,14 +139,33 @@
           <span class="label">{{ 'PHARMACY.STATUS' | translate }}:</span>
           <span
             class="badge"
-            [class.badge-success]="stockResult()!.sufficient"
-            [class.badge-danger]="!stockResult()!.sufficient"
+            data-testid="stock-status"
+            [class.badge-success]="stockStatus() === 'IN_STOCK'"
+            [class.badge-warning]="stockStatus() === 'INSUFFICIENT'"
+            [class.badge-danger]="stockStatus() === 'OUT_OF_STOCK'"
           >
-            {{
-              stockResult()!.sufficient
-                ? ('PHARMACY.IN_STOCK' | translate)
-                : ('PHARMACY.OUT_OF_STOCK' | translate)
-            }}
+            @switch (stockStatus()) {
+              @case ('IN_STOCK') {
+                {{ 'PHARMACY.IN_STOCK' | translate }}
+              }
+              @case ('INSUFFICIENT') {
+                @if (stockResult()!.quantityRequired; as required) {
+                  {{
+                    'PHARMACY.INSUFFICIENT_STOCK_OF'
+                      | translate
+                        : {
+                            onHand: stockResult()!.quantityOnHand,
+                            required,
+                          }
+                  }}
+                } @else {
+                  {{ 'PHARMACY.INSUFFICIENT_STOCK' | translate }}
+                }
+              }
+              @default {
+                {{ 'PHARMACY.OUT_OF_STOCK' | translate }}
+              }
+            }
           </span>
         </div>
       </div>

@@ -24,6 +24,7 @@ import { ToastService } from '../../core/toast.service';
 import { debounceTime, distinctUntilChanged, Subject, switchMap, catchError, of } from 'rxjs';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { localDateString } from '../../shared/date-utils';
+import { PatientSublinePipe } from '../../shared/patient-picker/patient-subline';
 
 type RecallFilter = 'ALL' | RecallStatus;
 
@@ -35,7 +36,7 @@ type RecallFilter = 'ALL' | RecallStatus;
 @Component({
   selector: 'app-recalls-panel',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule],
+  imports: [PatientSublinePipe, ServerTimePipe, CommonModule, FormsModule, TranslateModule],
   templateUrl: './recalls-panel.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './recalls-panel.component.scss',

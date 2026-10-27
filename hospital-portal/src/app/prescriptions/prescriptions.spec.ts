@@ -15,6 +15,10 @@ import {
   TAB_BY_STATUS,
 } from './prescriptions';
 import {
+  EXPECTED_PICKER_SUBLINES,
+  renderPickerSublines,
+} from '../testing/patient-subline.fixtures';
+import {
   PrescriptionService,
   CommunityPharmacyService,
   PrescriptionResponse,
@@ -121,6 +125,14 @@ describe('PrescriptionsComponent — SMS dispatch modal', () => {
     component.showDispatchModal.set(true);
     fixture.detectChanges();
   }
+
+  // QA D903/D912: the chip showed the email, or an empty line for a
+  // phone-only patient, instead of this hospital's MRN.
+  it('names the patient by MRN in the chip and the options (QA D912)', () => {
+    component.openCreate();
+    fixture.detectChanges();
+    expect(renderPickerSublines(fixture, component)).toEqual(EXPECTED_PICKER_SUBLINES);
+  });
 
   it('never offers a completed or cancelled encounter for a new order (QA D739)', () => {
     const encounters = TestBed.inject(EncounterService);

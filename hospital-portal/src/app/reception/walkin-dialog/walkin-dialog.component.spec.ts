@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { WalkInDialogComponent } from './walkin-dialog.component';
+import { SUBLINE_AWA, SUBLINE_FATIMATA } from '../../testing/patient-subline.fixtures';
 import { TranslateModule } from '@ngx-translate/core';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
@@ -52,6 +53,21 @@ describe('WalkInDialogComponent', () => {
     component.selectPatient(patient);
     expect(component.selectedPatient()).toEqual(patient);
     expect(component.patientQuery()).toBe('Jane Doe');
+  });
+
+  // QA D912: the selected-patient badge named the patient but not the MRN.
+  it('names the patient by MRN in the results and the selected badge (QA D912)', () => {
+    const host = fixture.nativeElement as HTMLElement;
+    component.patientResults.set([SUBLINE_AWA, SUBLINE_FATIMATA]);
+    fixture.detectChanges();
+    const metas = Array.from(host.querySelectorAll('.autocomplete-list .result-meta')).map((m) =>
+      m.textContent?.trim(),
+    );
+    expect(metas).toEqual(['CHW2572', 'CHW1444']);
+
+    component.selectPatient(SUBLINE_FATIMATA);
+    fixture.detectChanges();
+    expect(host.querySelector('.selected-badge .result-meta')?.textContent?.trim()).toBe('CHW1444');
   });
 
   it('should select staff', () => {

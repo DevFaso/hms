@@ -13,6 +13,7 @@ import { RoleContextService } from '../core/role-context.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { localDateString } from '../shared/date-utils';
+import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
 
 interface DeptOption {
   id: string;
@@ -22,7 +23,7 @@ interface DeptOption {
 @Component({
   selector: 'app-appointment-form',
   standalone: true,
-  imports: [FormsModule, RouterLink, TranslateModule, EnumLabelPipe],
+  imports: [PatientSublinePipe, FormsModule, RouterLink, TranslateModule, EnumLabelPipe],
   templateUrl: './appointment-form.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './appointment-form.scss',

@@ -35,6 +35,7 @@ import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospit
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { fromServerDateTime, toLocalInputValue, toServerDateTime } from '../shared/date-utils';
 import { BedService, BedResponse } from '../services/bed.service';
+import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
 
 interface OrderSetPickerCtx {
   hospitalId: string;
@@ -50,6 +51,7 @@ const CANCELLABLE_STATUSES = new Set<string>(['PENDING', 'ACTIVE', 'ON_LEAVE']);
   selector: 'app-admissions',
   standalone: true,
   imports: [
+    PatientSublinePipe,
     CommonModule,
     FormsModule,
     TranslateModule,
@@ -463,6 +465,8 @@ export class AdmissionsComponent implements OnInit {
       firstName: a.patientName?.split(' ')[0] ?? '',
       lastName: a.patientName?.split(' ').slice(1).join(' ') ?? '',
       email: '',
+      // QA D912: reopening an admission keeps this hospital's MRN on the chip.
+      mrn: a.patientMrn ?? undefined,
     } as PatientResponse);
     this.loadDepartmentsFor(a.hospitalId ?? '');
     this.editing.set(true);

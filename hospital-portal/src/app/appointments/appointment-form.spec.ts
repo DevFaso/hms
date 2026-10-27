@@ -1,4 +1,4 @@
-import { TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
@@ -13,6 +13,10 @@ import { HospitalResponse, HospitalService } from '../services/hospital.service'
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { localDateString } from '../shared/date-utils';
+import {
+  EXPECTED_PICKER_SUBLINES,
+  renderPickerSublines,
+} from '../testing/patient-subline.fixtures';
 
 /**
  * QA D810: the prenatal calendar's "Book" action opens the appointment form
@@ -20,6 +24,7 @@ import { localDateString } from '../shared/date-utils';
  */
 describe('AppointmentFormComponent — prefill from the prenatal calendar', () => {
   let patients: jasmine.SpyObj<PatientService>;
+  let fixture: ComponentFixture<AppointmentFormComponent>;
 
   function create(params: Record<string, string>): AppointmentFormComponent {
     patients = jasmine.createSpyObj<PatientService>('PatientService', ['list', 'getById']);
@@ -71,7 +76,8 @@ describe('AppointmentFormComponent — prefill from the prenatal calendar', () =
         },
       ],
     });
-    const component = TestBed.createComponent(AppointmentFormComponent).componentInstance;
+    fixture = TestBed.createComponent(AppointmentFormComponent);
+    const component = fixture.componentInstance;
     component.ngOnInit();
     return component;
   }
@@ -106,6 +112,14 @@ describe('AppointmentFormComponent — prefill from the prenatal calendar', () =
     expect(patients.getById).not.toHaveBeenCalled();
     expect(component.form.appointmentDate).toBe('');
     expect(component.form.startTime).toBe('');
+  });
+
+  // QA D903/D912: the chip and the options led with the email, so a phone-only
+  // patient read ' · MRN CHW1444'; both now give this hospital's MRN alone.
+  it('names the patient by MRN in the chip and the options (QA D912)', () => {
+    const component = create({});
+    fixture.detectChanges();
+    expect(renderPickerSublines(fixture, component)).toEqual(EXPECTED_PICKER_SUBLINES);
   });
 
   it('opens blank with no query parameters', () => {

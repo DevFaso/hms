@@ -1,7 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { formatDate } from '@angular/common';
 import { signal } from '@angular/core';
-import { TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
@@ -20,6 +20,10 @@ import { BedResponse, BedService } from '../services/bed.service';
 import { AppliedOrderSetSummary } from '../services/order-set.service';
 import { toLocalInputValue } from '../shared/date-utils';
 import { roleContextStub } from '../testing/role-context.stub';
+import {
+  EXPECTED_PICKER_SUBLINES,
+  renderPickerSublines,
+} from '../testing/patient-subline.fixtures';
 
 /**
  * QA D176 (regression of D84/D123): the server refused a nurse or a midwife as
@@ -466,6 +470,14 @@ describe('AdmissionsComponent', () => {
  */
 describe('AdmissionsComponent row actions (rendered, D527)', () => {
   function render(roles: string[], status = 'ACTIVE', admissionDateTime?: string): HTMLElement {
+    return mount(roles, status, admissionDateTime).nativeElement as HTMLElement;
+  }
+
+  function mount(
+    roles: string[],
+    status = 'ACTIVE',
+    admissionDateTime?: string,
+  ): ComponentFixture<AdmissionsComponent> {
     const admissions = jasmine.createSpyObj<AdmissionService>('AdmissionService', ['getAll']);
     admissions.getAll.and.returnValue(
       of([
@@ -519,10 +531,36 @@ describe('AdmissionsComponent row actions (rendered, D527)', () => {
     });
     const fixture = TestBed.createComponent(AdmissionsComponent);
     fixture.detectChanges();
-    return fixture.nativeElement as HTMLElement;
+    return fixture;
   }
 
   const newButton = (el: HTMLElement) => el.querySelector('.page-actions .btn-primary');
+
+  // QA D903/D912: the chip showed the email, or an empty line for a phone-only
+  // patient, and the option led with the email; both now name the MRN.
+  it('names the patient by MRN in the chip and the options (QA D912)', () => {
+    const fixture = mount(['ROLE_DOCTOR']);
+    fixture.componentInstance.openCreate();
+    fixture.detectChanges();
+    expect(renderPickerSublines(fixture, fixture.componentInstance)).toEqual(
+      EXPECTED_PICKER_SUBLINES,
+    );
+  });
+
+  it('keeps the MRN on the chip when an admission is reopened (QA D912)', () => {
+    const fixture = mount(['ROLE_DOCTOR']);
+    fixture.componentInstance.openEdit({
+      id: 'a1',
+      hospitalId: 'h1',
+      patientId: 'p1',
+      patientName: 'Awa Kaboré',
+      patientMrn: 'CHW2572',
+      status: 'ACTIVE',
+    } as AdmissionResponse);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('.picker-chip .chip-sub')?.textContent?.trim()).toBe('CHW2572');
+  });
 
   it('shows a nurse edit, order sets and beds, but not New, Discharge or Delete', () => {
     const el = render(['ROLE_NURSE']);

@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { RecallsPanelComponent } from './recalls-panel.component';
+import { SUBLINE_AWA, SUBLINE_FATIMATA } from '../../testing/patient-subline.fixtures';
 import { TranslateModule } from '@ngx-translate/core';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
@@ -99,6 +100,18 @@ describe('RecallsPanelComponent', () => {
     component.statusFilter.set('ALL');
     component.loadRecalls();
     expect(mockReceptionService.getRecalls).toHaveBeenCalledWith({ status: undefined });
+  });
+
+  // QA D912: two patients with the same name were told apart by nothing but a
+  // birth date; each search result now carries this hospital's MRN.
+  it('names each search result by MRN (QA D912)', () => {
+    component.openAddForm();
+    component.patientResults.set([SUBLINE_AWA, SUBLINE_FATIMATA]);
+    fixture.detectChanges();
+    const hints = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('.autocomplete-list .mrn-hint'),
+    ).map((h) => h.textContent?.trim());
+    expect(hints).toEqual(['· CHW2572', '· CHW1444']);
   });
 
   it('refuses to create a recall without the required fields', () => {

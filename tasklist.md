@@ -2226,6 +2226,19 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   bounded by `min` = the administration's start. Not changed here because it
   is a new screen, not a fix: there is no administration list to put a button
   on. Until it ships, the D901 refusal protects API clients only.
+- **QA D912 residual (round 15): a reopened encounter, lab order or prescription
+  has no MRN on its chip.** Every hand-written patient picker now names the
+  patient by this hospital's MRN through the shared `patientSubline`
+  (`fix/qa-r15-clinical-pharmacy`), and a reopened admission, discharge, imaging
+  or ultrasound order carries the row's `patientMrn`. `EncounterResponseDTO`,
+  `LabOrderResponseDTO` and `PrescriptionResponseDTO` carry no MRN, so their edit
+  forms rebuild the chip with the name alone (no empty line, no email); so do a
+  reopened birth plan and obstetric history, whose rows carry no MRN either.
+  Owed: a hospital-scoped `patientMrn` on those DTOs, resolved the way
+  `AdmissionMapper.resolvePatientMrn` does, and passed into the chip as
+  discharge does. Not changed here because each mapper serves list endpoints and
+  reading the patient's hospital registrations there needs a fetch plan, not a
+  one-line mapping.
 - **QA D868 (round 14): a permission catalogue the roles page can edit.**
   The roles page now titles a system role in the reader's language and says
   "built-in access" instead of "0 permissions"; the permissions dialog

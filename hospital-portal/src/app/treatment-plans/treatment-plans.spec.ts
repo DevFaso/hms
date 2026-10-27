@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
 import { ActivatedRoute } from '@angular/router';
-import { TranslateService } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 
 import { TreatmentPlansComponent } from './treatment-plans';
@@ -11,6 +12,11 @@ import { PatientService } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
+import { roleContextStub } from '../testing/role-context.stub';
+import {
+  EXPECTED_PICKER_SUBLINES,
+  renderPickerSublines,
+} from '../testing/patient-subline.fixtures';
 
 describe('TreatmentPlansComponent (QA D890)', () => {
   let component: TreatmentPlansComponent;
@@ -93,5 +99,48 @@ describe('TreatmentPlansComponent (QA D890)', () => {
     component.submitForm();
 
     expect(toast.error).toHaveBeenCalledWith('Un plan actif existe déjà.');
+  });
+});
+
+describe('TreatmentPlansComponent patient picker (rendered, QA D912)', () => {
+  // QA D903/D912: the chip showed the email, or an empty line for a
+  // phone-only patient, instead of this hospital's MRN.
+  it('names the patient by MRN in the chip and the options', () => {
+    TestBed.configureTestingModule({
+      imports: [TreatmentPlansComponent, TranslateModule.forRoot()],
+      providers: [
+        provideRouter([]),
+        {
+          provide: TreatmentPlanService,
+          useValue: { getAll: () => of([]), create: () => of({}), update: () => of({}) },
+        },
+        {
+          provide: HospitalService,
+          useValue: { list: () => of([]), getMyHospitalAsResponse: () => of({ id: 'h1' }) },
+        },
+        { provide: StaffService, useValue: { list: () => of([]) } },
+        { provide: PatientService, useValue: { list: () => of([]) } },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error']),
+        },
+        {
+          provide: RoleContextService,
+          useValue: roleContextStub({
+            superAdmin: false,
+            hospitalId: 'h1',
+            roles: ['ROLE_DOCTOR'],
+          }),
+        },
+        { provide: HospitalScopeUrlService, useValue: { applyUrlScopeSync: () => undefined } },
+      ],
+    });
+    const fixture = TestBed.createComponent(TreatmentPlansComponent);
+    fixture.detectChanges();
+    fixture.componentInstance.openCreate();
+    fixture.detectChanges();
+    expect(renderPickerSublines(fixture, fixture.componentInstance)).toEqual(
+      EXPECTED_PICKER_SUBLINES,
+    );
   });
 });

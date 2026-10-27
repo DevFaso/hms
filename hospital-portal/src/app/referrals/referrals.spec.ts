@@ -4,6 +4,10 @@ import { provideHttpClientTesting, HttpTestingController } from '@angular/common
 import { provideRouter } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ReferralsComponent } from './referrals';
+import {
+  EXPECTED_PICKER_SUBLINES,
+  renderPickerSublines,
+} from '../testing/patient-subline.fixtures';
 import { RoleContextService } from '../core/role-context.service';
 import { AuthService } from '../auth/auth.service';
 import { ToastService } from '../core/toast.service';
@@ -95,6 +99,19 @@ describe('ReferralsComponent', () => {
   it('should create', () => {
     flushInitRequests();
     expect(component).toBeTruthy();
+  });
+
+  // QA D903/D912: the chip showed the email, or an empty line for a
+  // phone-only patient, instead of this hospital's MRN.
+  it('names the patient by MRN in the chip and the options (QA D912)', () => {
+    flushInitRequests();
+    fixture.detectChanges();
+    flushInitRequests();
+    component.openCreate();
+    // The form loads the locked hospital's departments as it opens.
+    flushInitRequests();
+    fixture.detectChanges();
+    expect(renderPickerSublines(fixture, component)).toEqual(EXPECTED_PICKER_SUBLINES);
   });
 
   it('QA D427: a nurse is not offered New referral, which the API refuses', () => {

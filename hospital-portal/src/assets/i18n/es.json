@@ -8515,6 +8515,8 @@
     "OFFLINE_SYNC_FAILED": "Error de sincronización — {{count}} dispensación(es) siguen en cola",
     "OFFLINE_SYNC_NOW": "Sincronizar ahora",
     "ON_FORMULARY": "En el formulario",
+    "INSUFFICIENT_STOCK": "Existencias insuficientes",
+    "INSUFFICIENT_STOCK_OF": "Existencias insuficientes ({{onHand}} / {{required}})",
     "OUT_OF_STOCK": "Sin existencias",
     "OVERRIDDEN": "Anulado",
     "PARTNER": "Asociada",
