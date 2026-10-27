@@ -72,11 +72,17 @@ class LegacyLabApprovalStatusLabelsTest {
         for (String line : source.substring(start, end).split("\n")) {
             Matcher matcher = ENTRY.matcher(line);
             if (matcher.matches()) {
-                String label = matcher.group(1) != null ? matcher.group(1)
-                    : matcher.group(2) != null ? matcher.group(2) : matcher.group(3);
-                map.put(label, matcher.group(4));
+                map.put(firstPresent(matcher.group(1), matcher.group(2), matcher.group(3)), matcher.group(4));
             }
         }
         return map;
+    }
+
+    /** The key as written: single-quoted, double-quoted or bare, whichever alternative matched. */
+    private static String firstPresent(String singleQuoted, String doubleQuoted, String bare) {
+        if (singleQuoted != null) {
+            return singleQuoted;
+        }
+        return doubleQuoted != null ? doubleQuoted : bare;
     }
 }

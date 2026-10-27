@@ -119,7 +119,7 @@ public class GlobalExceptionHandler {
      * ConflictMessagePrefixTest checks every bundle message against this.
      */
     public static final Pattern CONFLICT_FIELD_PREFIX =
-        Pattern.compile("^([a-z][A-Za-z0-9_]*+(?:\\.[A-Za-z0-9_]++|\\[\\d++])*+):(?!\\s)");
+        Pattern.compile("^([a-z]\\w*+(?:\\.\\w++|\\[\\d++])*+):(?!\\s)");
 
     @ExceptionHandler(ConflictException.class)
     public ResponseEntity<Object> handleConflictException(ConflictException ex, WebRequest request) {
