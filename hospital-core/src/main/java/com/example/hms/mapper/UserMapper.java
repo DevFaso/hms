@@ -87,10 +87,10 @@ public class UserMapper {
         Set<RoleSummaryDTO> roleDtos = mapRolesToSummaryDTOs(roles);
 
         // QA D910: the ACCOUNT's status, as the list, the database and sign-in
-        // read it. An account switched off kept answering active=true here
-        // because one of its assignments was still on, so PUT /users/{id}
-        // {active:false} looked like it had not worked. Whether a role is on
-        // at a hospital is the assignments' business, not this flag's.
+        // read it. An account switched off kept answering active here because
+        // one of its assignments was still on, so switching the account off
+        // looked like it had not worked. Whether a role is on at a hospital is
+        // the assignments' business, not this flag's.
         boolean active = user.isActive();
 
         // profile derivation

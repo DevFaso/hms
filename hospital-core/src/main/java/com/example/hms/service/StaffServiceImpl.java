@@ -277,24 +277,30 @@ public class StaffServiceImpl implements StaffService {
 
         boolean wasActive = existingStaff.isActive();
         staffMapper.updateStaffFromDto(dto, existingStaff, user, hospital, department, assignment);
-        // QA D907: an edit never switches a deactivated record back on while
-        // the access it stands for is off - that read as "active" for someone
-        // who cannot sign in here. Access comes back through the assignment
-        // (a new code, or a super-admin), which brings the record back with it.
-        if (!wasActive && existingStaff.getAssignment() != null
-                && Boolean.FALSE.equals(existingStaff.getAssignment().getActive())) {
-            existingStaff.setActive(false);
-        }
-        // QA D907 (#968 review): switching a record off through PUT
-        // {active:false} cuts the same access DELETE does, under the same rules.
-        if (wasActive && !existingStaff.isActive()) {
-            assignmentService.retireStaffAccessAtHospital(user.getId(), hospital.getId(),
-                assignment != null ? assignment.getId() : null);
-        }
+        applyActiveTransition(wasActive, existingStaff, user.getId(), hospital.getId(), assignment.getId());
         Staff updatedStaff = staffRepository.save(existingStaff);
 
         handleHeadOfDepartmentUpdates(dto, existingStaff, department, locale);
         return staffMapper.toStaffDTO(updatedStaff);
+    }
+
+    /**
+     * QA D907: an edit never switches a deactivated record back on while the
+     * access it stands for is off - that read as "active" for someone who
+     * cannot sign in here. Access comes back through the assignment (a new
+     * code, or a super-admin), which brings the record back with it. And
+     * switching a record off through PUT {active:false} cuts the same access
+     * DELETE does, under the same rules (#968 review).
+     */
+    private void applyActiveTransition(boolean wasActive, Staff staff, UUID userId,
+                                       UUID hospitalId, UUID assignmentId) {
+        if (!wasActive && staff.getAssignment() != null
+                && Boolean.FALSE.equals(staff.getAssignment().getActive())) {
+            staff.setActive(false);
+        }
+        if (wasActive && !staff.isActive()) {
+            assignmentService.retireStaffAccessAtHospital(userId, hospitalId, assignmentId);
+        }
     }
 
     @Transactional

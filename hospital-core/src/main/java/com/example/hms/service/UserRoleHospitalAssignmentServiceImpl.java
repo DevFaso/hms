@@ -89,6 +89,7 @@ import com.example.hms.security.provider.FacilityAssignmentGuard;
 @Transactional
 public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAssignmentService {
     private static final String UNKNOWN_ROLE = "UNKNOWN_ROLE";
+    private static final String UNKNOWN_USER = "unknown user";
     private static final String AUDIT_ENTITY_ASSIGNMENT = "USER_ROLE_ASSIGNMENT";
 
 
@@ -1472,7 +1473,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private AuditEventRequestDTO staffAccessRevokedEvent(UserRoleHospitalAssignment row, User actor) {
         User assignee = row.getUser();
         String roleCode = getRoleCode(row.getRole());
-        String assigneeDisplay = resolveDisplayName(assignee, "unknown user");
+        String assigneeDisplay = resolveDisplayName(assignee, UNKNOWN_USER);
         Map<String, Object> details = new HashMap<>();
         details.put("revokedRole", roleCode);
         details.put("reason", "STAFF_DEACTIVATED");
@@ -2483,7 +2484,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             }
 
             String roleDisplay = role != null ? getRoleCode(role) : UNKNOWN_ROLE;
-            String assigneeDisplay = resolveDisplayName(assignee, "unknown user");
+            String assigneeDisplay = resolveDisplayName(assignee, UNKNOWN_USER);
 
             AuditEventRequestDTO auditEvent = AuditEventRequestDTO.builder()
                 .userId(registrar.getId())
@@ -2528,7 +2529,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             User assignee = assignment.getUser();
             Role role = assignment.getRole();
 
-            String assigneeDisplay = resolveDisplayName(assignee, "unknown user");
+            String assigneeDisplay = resolveDisplayName(assignee, UNKNOWN_USER);
             String roleDisplay = role != null ? getRoleCode(role) : UNKNOWN_ROLE;
 
             AuditEventRequestDTO auditEvent = AuditEventRequestDTO.builder()
