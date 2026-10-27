@@ -76,13 +76,15 @@
               >
                 <span class="material-symbols-outlined">edit</span>
               </button>
-              <button
-                class="btn-sm delete"
-                (click)="confirmDelete(role)"
-                [title]="'ROLES.DELETE_ROLE' | translate"
-              >
-                <span class="material-symbols-outlined">delete</span>
-              </button>
+              @if (!role.builtIn) {
+                <button
+                  class="btn-sm delete"
+                  (click)="confirmDelete(role)"
+                  [title]="'ROLES.DELETE_ROLE' | translate"
+                >
+                  <span class="material-symbols-outlined">delete</span>
+                </button>
+              }
             </div>
           </div>
         </div>

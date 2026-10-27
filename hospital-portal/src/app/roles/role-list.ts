@@ -175,6 +175,8 @@ export class RoleListComponent implements OnInit {
   }
 
   confirmDelete(role: RoleResponse): void {
+    // A built-in role is never deleted (the server answers 409); no trash icon offers it.
+    if (role.builtIn) return;
     this.deletingRole.set(role);
     this.showDeleteConfirm.set(true);
   }

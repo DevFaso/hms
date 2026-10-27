@@ -220,6 +220,56 @@ class SuperAdminContinuityIT extends BaseIT {
             .extracting(Role::getCode).isEqualTo("ROLE_SUPER_ADMIN");
     }
 
+    @Test
+    void theSuperAdminRoleCannotBeDeleted() throws Exception {
+        // #968 review: DELETE /roles/{id} only checked that the role existed.
+        // No foreign key holds user_role_hospital_assignment.role_id, so it
+        // answered 204 and left every super-admin assignment on a missing role.
+        User admin = createUser();
+        UserRoleHospitalAssignment own = createSuperAdminAssignment(admin);
+        Role superAdmin = own.getRole();
+        signInAs(admin);
+
+        mockMvc.perform(delete(API_CONTEXT + "/roles/{id}", superAdmin.getId()).contextPath(API_CONTEXT)
+                .header("Accept-Language", "fr"))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.message", startsWith("Un rôle intégré ne peut pas être supprimé")));
+        mockMvc.perform(delete(API_CONTEXT + "/assignments/role/{roleId}", superAdmin.getId())
+                .contextPath(API_CONTEXT).header("Accept-Language", "es"))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.message", startsWith("Un rol integrado no se puede eliminar")));
+
+        assertThat(roleRepository.findById(superAdmin.getId())).isPresent();
+        assertThat(assignmentRepository.findById(own.getId())).get()
+            .extracting(a -> a.getRole().getId()).isEqualTo(superAdmin.getId());
+    }
+
+    @Test
+    void aCustomRoleIsDeletedOnlyOnceNobodyHoldsIt() throws Exception {
+        User admin = createUser();
+        createSuperAdminAssignment(admin);
+        User holder = createUser();
+        Role custom = roleRepository.saveAndFlush(Role.builder()
+            .name("Custom " + nextIdentifier()).code("CUSTOM_" + nextIdentifier()).build());
+        UserRoleHospitalAssignment held = assignmentRepository.saveAndFlush(UserRoleHospitalAssignment.builder()
+            .assignmentCode("ASSIGN-" + nextIdentifier()).description("Custom - retired")
+            .startDate(LocalDate.now()).registeredBy(admin).user(holder).hospital(null).role(custom)
+            .assignedAt(LocalDateTime.now()).active(false).build());
+        signInAs(admin);
+
+        // Even a retired assignment keeps the role: deleting it would dangle.
+        mockMvc.perform(delete(API_CONTEXT + "/roles/{id}", custom.getId()).contextPath(API_CONTEXT)
+                .header("Accept-Language", "fr"))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.message", startsWith("Impossible de supprimer le rôle")));
+        assertThat(roleRepository.findById(custom.getId())).isPresent();
+
+        assignmentRepository.delete(held);
+        mockMvc.perform(delete(API_CONTEXT + "/roles/{id}", custom.getId()).contextPath(API_CONTEXT))
+            .andExpect(status().isNoContent());
+        assertThat(roleRepository.findById(custom.getId())).isEmpty();
+    }
+
     private void signInAs(User user) {
         ActingScopeTestSupport.globalSuperAdmin(user.getId());
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(

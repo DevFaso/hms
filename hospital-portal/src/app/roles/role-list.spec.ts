@@ -152,4 +152,33 @@ describe('RoleListComponent (QA D868)', () => {
     expect(code.readOnly).toBeFalse();
     expect((fixture.nativeElement as HTMLElement).querySelector('#roleCodeHint')).toBeNull();
   });
+
+  it('offers no trash icon on a built-in role and never opens its delete dialog (QA D902, #968 review)', () => {
+    const component = fixture.componentInstance;
+    const superAdmin = role({
+      id: 'sa',
+      name: 'ROLE_SUPER_ADMIN',
+      authority: 'ROLE_SUPER_ADMIN',
+      code: 'ROLE_SUPER_ADMIN',
+      builtIn: true,
+    });
+    const custom = role({
+      id: 'r2',
+      name: 'Chef de garde',
+      authority: 'ROLE_CHEF_GARDE',
+      code: 'ROLE_CHEF_GARDE',
+      builtIn: false,
+    });
+    roles.list.and.returnValue(of([superAdmin, custom]));
+    component.loadRoles();
+    fixture.detectChanges();
+    const cards = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('.role-card'));
+    expect(cards.map((c) => c.querySelector('.btn-sm.delete') !== null)).toEqual([false, true]);
+
+    component.confirmDelete(superAdmin);
+    expect(component.showDeleteConfirm()).toBeFalse();
+    expect(component.deletingRole()).toBeNull();
+    component.confirmDelete(custom);
+    expect(component.deletingRole()).toBe(custom);
+  });
 });

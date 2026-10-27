@@ -1,5 +1,6 @@
 package com.example.hms.service;
 
+import com.example.hms.config.SecurityConstants;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.exception.BusinessException;
@@ -1479,8 +1480,16 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             throw new AccessDeniedException("Access denied");
         }
         final Locale locale = LocaleContextHolder.getLocale();
-        List<UserRoleHospitalAssignment> attached = assignmentRepository.findByRoleId(roleId);
-        if (!attached.isEmpty()) {
+        // QA D902 (#968 review): the same rule as DELETE /roles/{id} - a
+        // built-in role is never deleted, assigned or not.
+        boolean builtIn = roleRepository.findById(roleId)
+            .map(Role::getCode)
+            .filter(SecurityConstants::isBuiltInRoleCode)
+            .isPresent();
+        if (builtIn) {
+            throw new ConflictException(messageSource.getMessage("role.delete.builtIn", null, locale));
+        }
+        if (assignmentRepository.existsByRoleId(roleId)) {
             throw new ConflictException(
                 messageSource.getMessage(MSG_ROLE_DELETE_CONFLICT,
                     null,

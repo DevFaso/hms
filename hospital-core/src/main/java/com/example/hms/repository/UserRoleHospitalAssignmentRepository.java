@@ -103,6 +103,9 @@ public interface UserRoleHospitalAssignmentRepository extends JpaRepository<User
 
     List<UserRoleHospitalAssignment> findByRoleId(UUID roleId);
 
+    /** Whether any assignment, live or retired, still carries this role. */
+    boolean existsByRoleId(UUID roleId);
+
     Optional<UserRoleHospitalAssignment> findFirstByHospitalIdAndRole_Name(UUID hospitalId, String roleName);
 
     Optional<UserRoleHospitalAssignment> findByUserIdAndHospitalIdAndRole_Name(UUID userId, UUID hospitalId, String roleName);
