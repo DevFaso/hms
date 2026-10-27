@@ -98,7 +98,24 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
   },
   {
     key: 'AUDIT.DESC.LAB_DEFINITION_STEP_SINGLE_DIRECTOR',
-    re: /^Lab test definition (\S+): approval step (\S+), new status (\S+) \(the approver also completed the QA review\)\.$/,
+    re: /^Lab test definition (\S+): approval step (\S+), new status (.+?) \(the approver also completed the QA review\)\.$/,
+    params: ['code', 'step', 'status'],
+    localise: { step: 'labDefinitionAction', status: 'labApprovalStatus' },
+  },
+  // QA D905: rows written before #968 are in the approver's language, with
+  // the status already a label ("Actif", "En attente de revue qualité"); the
+  // labApprovalStatus domain reads those labels back as their code. The
+  // single-director shapes come first, or the general ones below would take
+  // the French or Spanish suffix as part of the status.
+  {
+    key: 'AUDIT.DESC.LAB_DEFINITION_STEP_SINGLE_DIRECTOR_FR',
+    re: /^Examen de laboratoire (\S+) : étape d'approbation (\S+), nouveau statut (.+?) \(l'approbateur a aussi effectué la revue qualité\)\.$/,
+    params: ['code', 'step', 'status'],
+    localise: { step: 'labDefinitionAction', status: 'labApprovalStatus' },
+  },
+  {
+    key: 'AUDIT.DESC.LAB_DEFINITION_STEP_SINGLE_DIRECTOR_ES',
+    re: /^Prueba de laboratorio (\S+): paso de aprobación (\S+), nuevo estado (.+?) \(el aprobador también realizó la revisión de calidad\)\.$/,
     params: ['code', 'step', 'status'],
     localise: { step: 'labDefinitionAction', status: 'labApprovalStatus' },
   },
@@ -127,6 +144,19 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     key: 'AUDIT.DESC.LAB_DEFINITION_STEP',
     re: /^Lab test definition (\S+): approval step (\S+), new status (.+?)\.$/,
     params: ['code', 'step', 'status'],
+    localise: { step: 'labDefinitionAction', status: 'labApprovalStatus' },
+  },
+  // QA D905: the shape before QA D638 named neither the test nor a label.
+  {
+    key: 'AUDIT.DESC.LAB_DEFINITION_STEP_LEGACY_SINGLE_DIRECTOR',
+    re: /^Lab test definition approval step (\S+) -> (\S+) \(the approver also completed the QA review\)$/,
+    params: ['step', 'status'],
+    localise: { step: 'labDefinitionAction', status: 'labApprovalStatus' },
+  },
+  {
+    key: 'AUDIT.DESC.LAB_DEFINITION_STEP_LEGACY',
+    re: /^Lab test definition approval step (\S+) -> (\S+)$/,
+    params: ['step', 'status'],
     localise: { step: 'labDefinitionAction', status: 'labApprovalStatus' },
   },
   {
@@ -987,6 +1017,18 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
   {
     key: 'AUDIT.DESC.STOCK_REORDER_ALERT',
     re: /^Low stock alert: (.+?) at (.+) — (\S+) on hand, reorder threshold (\S+)$/,
+    params: ['medication', 'pharmacy', 'onHand', 'threshold'],
+  },
+  // QA D905 sibling: before #968 the low-stock row was written in the
+  // language of whoever triggered the sweep.
+  {
+    key: 'AUDIT.DESC.STOCK_REORDER_ALERT_FR',
+    re: /^Alerte de stock bas : (.+?) à (.+) — (\S+) en stock, seuil de réapprovisionnement (\S+)$/,
+    params: ['medication', 'pharmacy', 'onHand', 'threshold'],
+  },
+  {
+    key: 'AUDIT.DESC.STOCK_REORDER_ALERT_ES',
+    re: /^Alerta de stock bajo: (.+?) en (.+) — (\S+) disponibles, umbral de reposición (\S+)$/,
     params: ['medication', 'pharmacy', 'onHand', 'threshold'],
   },
   {

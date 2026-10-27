@@ -20,6 +20,42 @@ const WRITE_ACTION_KEYS: Readonly<Record<string, string>> = {
 const RAW_TOKEN = /\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b/g;
 const CODE = /^[A-Z][A-Z0-9_]*$/;
 
+/**
+ * QA D905: before #968 a lab approval row was written in the approver's
+ * language with the status as a label, not a code ("…nouveau statut Actif."),
+ * so ES and EN readers saw the French word. These are the server's labels
+ * (lab.definition.status.* in the three bundles), read back as their code.
+ */
+const LEGACY_LAB_APPROVAL_STATUS: Readonly<Record<string, string>> = {
+  draft: 'DRAFT',
+  brouillon: 'DRAFT',
+  borrador: 'DRAFT',
+  'awaiting qa review': 'PENDING_QA_REVIEW',
+  'en attente de revue qualité': 'PENDING_QA_REVIEW',
+  'pendiente de revisión de calidad': 'PENDING_QA_REVIEW',
+  'awaiting director approval': 'PENDING_DIRECTOR_APPROVAL',
+  "en attente d'approbation du directeur": 'PENDING_DIRECTOR_APPROVAL',
+  'pendiente de aprobación del director': 'PENDING_DIRECTOR_APPROVAL',
+  approved: 'APPROVED',
+  approuvé: 'APPROVED',
+  aprobado: 'APPROVED',
+  active: 'ACTIVE',
+  actif: 'ACTIVE',
+  activo: 'ACTIVE',
+  rejected: 'REJECTED',
+  rejeté: 'REJECTED',
+  rechazado: 'REJECTED',
+  retired: 'RETIRED',
+  retiré: 'RETIRED',
+  retirado: 'RETIRED',
+};
+
+/** A stored lab approval status, label or code, as its code. */
+function labApprovalCode(value: string): string {
+  const key = value.trim().toLowerCase().replaceAll('’', "'");
+  return LEGACY_LAB_APPROVAL_STATUS[key] ?? value;
+}
+
 /** The parts of an audit row its description is read from. */
 export interface DescribableAuditRow {
   eventDescription?: string | null;
@@ -77,7 +113,9 @@ export class AuditDescriptionService {
   }
 
   private localise(value: string, domain: AuditParamDomain): string {
-    if (domain === 'labApprovalStatus') return this.lookup(value, 'LAB.APPROVAL_STATUS', true);
+    if (domain === 'labApprovalStatus') {
+      return this.lookup(labApprovalCode(value), 'LAB.APPROVAL_STATUS', true);
+    }
     // QA D869: an unknown refusal reason stays verbatim.
     if (domain === 'scopeRefusal') return this.lookup(value, 'AUDIT.SCOPE_REFUSAL', false);
     if (domain === 'enum') {

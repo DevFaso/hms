@@ -126,6 +126,111 @@ describe('AuditDescriptionService (QA D894)', () => {
     ).toContain('Lab test definition GLY');
   });
 
+  /**
+   * QA D905 replay: HOSPITAL_ADMIN_A in ES, /audit-logs filtered on
+   * "Configuración modificada", read "Prueba de laboratorio TDRP-R149285:
+   * paso de aprobación Activación, nuevo estado Actif." The row predates
+   * #968: French, with the status already a French label.
+   */
+  it('reads a stored French or Spanish status label as its code in every language (QA D905)', () => {
+    const stored =
+      "Examen de laboratoire TDRP-R149285 : étape d'approbation ACTIVATE, nouveau statut Actif.";
+    const inSpanish = describeIn('es', stored);
+    expect(inSpanish).toContain(`nuevo estado ${es.LAB.APPROVAL_STATUS.ACTIVE}.`);
+    expect(inSpanish).not.toContain('Actif');
+    const inEnglish = describeIn('en', stored);
+    expect(inEnglish).toContain(`new status ${en.LAB.APPROVAL_STATUS.ACTIVE}.`);
+    expect(inEnglish).not.toContain('Actif');
+
+    const storedEs =
+      'Prueba de laboratorio GLY: paso de aprobación SUBMIT_FOR_QA, nuevo estado Pendiente de revisión de calidad.';
+    expect(describeIn('fr', storedEs)).toContain(
+      `nouveau statut ${fr.LAB.APPROVAL_STATUS.PENDING_QA_REVIEW}.`,
+    );
+    expect(
+      describeIn(
+        'es',
+        'Lab test definition GLY: approval step APPROVE, new status Awaiting director approval.',
+      ),
+    ).toContain(`nuevo estado ${es.LAB.APPROVAL_STATUS.PENDING_DIRECTOR_APPROVAL}.`);
+  });
+
+  it('keeps a stored single-director suffix out of the status, in French and Spanish rows (QA D905)', () => {
+    const storedFr =
+      "Examen de laboratoire GLY : étape d'approbation APPROVE, nouveau statut Approuvé (l'approbateur a aussi effectué la revue qualité).";
+    const inSpanish = describeIn('es', storedFr);
+    expect(inSpanish).toContain(`nuevo estado ${es.LAB.APPROVAL_STATUS.APPROVED}`);
+    expect(inSpanish).toContain('(el aprobador también realizó la revisión de calidad)');
+    expect(inSpanish).not.toContain('approbateur');
+
+    const storedEs =
+      'Prueba de laboratorio GLY: paso de aprobación APPROVE, nuevo estado Aprobado (el aprobador también realizó la revisión de calidad).';
+    const inEnglish = describeIn('en', storedEs);
+    expect(inEnglish).toMatch(/^Lab test definition GLY: approval step /);
+    expect(inEnglish).toContain(
+      `, new status ${en.LAB.APPROVAL_STATUS.APPROVED} (the approver also completed the QA review).`,
+    );
+  });
+
+  it('reads the pre-D638 lab approval shape, and the low-stock rows written in French or Spanish (QA D905 siblings)', () => {
+    const legacy = describeIn('fr', 'Lab test definition approval step ACTIVATE -> ACTIVE');
+    expect(legacy).toContain('Examen de laboratoire : étape d’approbation');
+    expect(legacy).toContain(`nouveau statut ${fr.LAB.APPROVAL_STATUS.ACTIVE}.`);
+    expect(
+      describeIn(
+        'es',
+        'Lab test definition approval step APPROVE -> APPROVED (the approver also completed the QA review)',
+      ),
+    ).toContain('(el aprobador también realizó la revisión de calidad)');
+
+    expect(
+      describeIn(
+        'es',
+        'Alerte de stock bas : Paracétamol 500 mg à Pharmacie centrale — 3 en stock, seuil de réapprovisionnement 10',
+      ),
+    ).toBe(
+      'Alerta de stock bajo: Paracétamol 500 mg en Pharmacie centrale — 3 disponibles, umbral de reposición 10',
+    );
+    expect(
+      describeIn(
+        'en',
+        'Alerta de stock bajo: Paracétamol 500 mg en Farmacia central — 3 disponibles, umbral de reposición 10',
+      ),
+    ).toBe(
+      'Low stock alert: Paracétamol 500 mg at Farmacia central — 3 on hand, reorder threshold 10',
+    );
+  });
+
+  /**
+   * QA D894, the super-admin rows the round-15 re-test could not replay (the
+   * dev super-admin had lost its role, D902): a failed login, a global-view
+   * request and a cross-tenant read, in all three languages.
+   */
+  it('reads the super-admin rows of D894 in Spanish and English too', () => {
+    expect(describeIn('es', 'Super-admin global-view request: GET /audit-logs')).toBe(
+      es.AUDIT.DESC.GLOBAL_VIEW_REQUEST.replace('{{method}}', 'GET').replace(
+        '{{path}}',
+        '/audit-logs',
+      ),
+    );
+    expect(describeIn('es', 'Super-admin global-view request: GET /audit-logs')).not.toContain(
+      'Super-admin',
+    );
+    expect(
+      describeIn('es', 'Super-admin cross-tenant read: recent-activity (12 rows)'),
+    ).not.toContain('cross-tenant');
+    expect(describeIn('es', 'Login failed: account not active')).not.toContain('Login failed');
+    expect(describeIn('en', 'Login failed: bad credentials')).toBe(
+      en.AUDIT.DESC.LOGIN_FAILED_BAD_CREDENTIALS,
+    );
+    expect(describeIn('en', 'Super-admin cross-tenant read: recent-activity (12 rows)')).toContain(
+      '12',
+    );
+    expect(describeIn('fr', 'Login failed: account not active')).toBe(
+      fr.AUDIT.DESC.LOGIN_FAILED_INACTIVE,
+    );
+  });
+
   it('every pattern has its text in all three locales, and every phrase group it uses exists', () => {
     const missing: string[] = [];
     for (const [lang, bundle] of Object.entries({ en, fr, es })) {
