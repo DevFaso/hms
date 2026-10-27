@@ -126,8 +126,6 @@ describe('PrescriptionsComponent — SMS dispatch modal', () => {
     fixture.detectChanges();
   }
 
-  // QA D903/D912: the chip showed the email, or an empty line for a
-  // phone-only patient, instead of this hospital's MRN.
   // QA D912 (#967 review): the reopened chip passed an empty email although
   // the row carries the patient's.
   it('falls back to the row email on a reopened prescription chip (QA D912)', () => {
@@ -145,6 +143,8 @@ describe('PrescriptionsComponent — SMS dispatch modal', () => {
     );
   });
 
+  // QA D903/D912: the chip showed the email, or an empty line for a
+  // phone-only patient, instead of this hospital's MRN.
   it('names the patient by MRN in the chip and the options (QA D912)', () => {
     component.openCreate();
     fixture.detectChanges();

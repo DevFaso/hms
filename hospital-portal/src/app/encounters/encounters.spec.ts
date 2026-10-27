@@ -1,4 +1,4 @@
-import { TestBed } from '@angular/core/testing';
+import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
@@ -154,8 +154,6 @@ describe('EncountersComponent', () => {
     component = TestBed.createComponent(EncountersComponent).componentInstance;
   });
 
-  // QA D903/D912: the chip showed the email, or an empty line for a
-  // phone-only patient, instead of this hospital's MRN.
   // QA D912 (#967 review): the row carries no MRN, but its contact details do;
   // the reopened chip passed an empty email and showed nothing under the name.
   it('falls back to the row phone on a reopened encounter chip (QA D912)', () => {
@@ -173,6 +171,8 @@ describe('EncountersComponent', () => {
     expect(el.querySelector('.picker-chip .chip-sub')?.textContent?.trim()).toBe('70001003');
   });
 
+  // QA D903/D912: the chip showed the email, or an empty line for a
+  // phone-only patient, instead of this hospital's MRN.
   it('names the patient by MRN in the chip and the options (QA D912)', () => {
     const fixture = TestBed.createComponent(EncountersComponent);
     fixture.detectChanges();
@@ -182,6 +182,21 @@ describe('EncountersComponent', () => {
       EXPECTED_PICKER_SUBLINES,
     );
   });
+
+  it("opens a super-admin's new visit, and its patient search, at the chip's hospital (QA D912)", fakeAsync(() => {
+    roleCtx.isSuperAdmin = () => true;
+    roleCtx.effectiveHospitalIdForRequest = () => 'hB';
+    // A super-admin's hospital is not locked; the search starts with the page.
+    component.initPatientSearch();
+    component.openCreate();
+    expect(component.form.hospitalId).toBe('hB');
+
+    const patients = TestBed.inject(PatientService) as jasmine.SpyObj<PatientService>;
+    patients.list.calls.reset();
+    component.onPatientQueryChange('kab');
+    tick(250);
+    expect(patients.list).toHaveBeenCalledWith('hB', 'kab');
+  }));
 
   it('QA D427: a pharmacist reading encounters is offered no New, Edit or Delete', () => {
     activeRoles = ['ROLE_PHARMACIST'];

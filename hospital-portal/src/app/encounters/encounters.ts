@@ -390,8 +390,11 @@ export class EncountersComponent implements OnInit {
   // ── CRUD ──
   openCreate(): void {
     this.form = this.emptyForm();
-    // ── TENANT ISOLATION: pre-fill hospitalId from active context ──
-    this.form.hospitalId = this.roleContext.activeHospitalId ?? '';
+    // ── TENANT ISOLATION: pre-fill hospitalId from the request scope ──
+    // QA D912 (#967 review): for a super-admin that is the scope chip's
+    // hospital, not their home one, so the visit and the patient search (and
+    // the MRN on the chip) start at the hospital they are working in.
+    this.form.hospitalId = this.roleContext.effectiveHospitalIdForRequest() ?? '';
     this.editing.set(false);
     this.editingId = '';
     this.editingOriginalDate = '';
