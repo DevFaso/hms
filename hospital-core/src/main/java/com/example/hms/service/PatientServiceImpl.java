@@ -749,7 +749,10 @@ public class PatientServiceImpl implements PatientService {
         }
         return results.stream()
             .filter(p -> registrationRepository.existsByPatientIdAndHospitalId(p.getId(), scopeHospitalId))
-            .map(p -> buildPatientDto(p, hospitalId))
+            // QA D903: map at the hospital the filter used, so the MRN is THIS hospital's (the
+            // mapper falls back to any hospital's MRN when given no scope) and the D504
+            // sharing opt-out is applied — never the unscoped view of a scoped read.
+            .map(p -> buildPatientDto(p, scopeHospitalId))
             .toList();
     }
 

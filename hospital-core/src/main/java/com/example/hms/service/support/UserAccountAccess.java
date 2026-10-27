@@ -569,13 +569,7 @@ public class UserAccountAccess {
 
     private boolean administers(Caller caller, User target, List<UserRoleHospitalAssignment> assignments) {
         Set<UUID> administered = administeredHospitals(caller);
-        if (administered.isEmpty() || assignments.isEmpty() || holdsAny(target, assignments, ADMIN_ROLES)) {
-            return false;
-        }
-        boolean assignedOnlyHere = assignments.stream()
-            .map(UserAccountAccess::hospitalIdOf)
-            .allMatch(hospitalId -> hospitalId != null && administered.contains(hospitalId));
-        if (!assignedOnlyHere) {
+        if (!administersByAssignments(administered, target, assignments)) {
             return false;
         }
         // A patient's footprint is also its registrations: one assignment here
@@ -583,6 +577,47 @@ public class UserAccountAccess {
         // and read the other hospital's records as the patient.
         return registrationRepository.findHospitalIdsByPatientUserId(target.getId()).stream()
             .allMatch(hospitalId -> hospitalId != null && administered.contains(hospitalId));
+    }
+
+    /** Every assignment at a hospital the caller administers, and no admin role anywhere. */
+    private static boolean administersByAssignments(Set<UUID> administered, User target,
+                                                    List<UserRoleHospitalAssignment> assignments) {
+        if (administered.isEmpty() || assignments.isEmpty() || holdsAny(target, assignments, ADMIN_ROLES)) {
+            return false;
+        }
+        return assignments.stream()
+            .map(UserAccountAccess::hospitalIdOf)
+            .allMatch(hospitalId -> hospitalId != null && administered.contains(hospitalId));
+    }
+
+    /**
+     * QA D914: of these directory rows, the accounts the caller may edit or
+     * delete, decided for the whole page at once (the caller and the rows'
+     * assignments are each read once). It reads assignments and admin roles
+     * only: whether a patient is also registered at another hospital is not
+     * the caller's to learn from a list, so such an account still shows its
+     * actions and its save gets the neutral refusal.
+     */
+    public Set<UUID> manageableAmong(java.util.Collection<User> targets) {
+        if (targets == null || targets.isEmpty()) {
+            return Set.of();
+        }
+        Set<UUID> ids = targets.stream().map(User::getId).filter(Objects::nonNull).collect(Collectors.toSet());
+        Caller caller = caller();
+        if (caller.superAdmin()) {
+            return ids;
+        }
+        Set<UUID> administered = administeredHospitals(caller);
+        if (administered.isEmpty()) {
+            return Set.of();
+        }
+        java.util.Map<UUID, List<UserRoleHospitalAssignment>> byUser = assignmentRepository.findByUserIdIn(ids).stream()
+            .filter(a -> a.getUser() != null)
+            .collect(Collectors.groupingBy(a -> a.getUser().getId()));
+        return targets.stream()
+            .filter(t -> administersByAssignments(administered, t, byUser.getOrDefault(t.getId(), List.of())))
+            .map(User::getId)
+            .collect(Collectors.toSet());
     }
 
     private boolean isUnclaimedOrphan(Caller caller, User target, List<UserRoleHospitalAssignment> assignments) {

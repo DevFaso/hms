@@ -21,6 +21,10 @@ public class MtmReviewResponseDTO {
 
     private UUID id;
     private UUID patientId;
+    /** QA D900: who the review is for, so the list never shows a bare UUID. */
+    private String patientName;
+    /** QA D900: the patient's MRN at the review's hospital. */
+    private String patientMrn;
     private UUID hospitalId;
     private UUID pharmacistUserId;
     private LocalDateTime reviewDate;

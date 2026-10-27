@@ -15,6 +15,10 @@ import {
   TAB_BY_STATUS,
 } from './prescriptions';
 import {
+  EXPECTED_PICKER_SUBLINES,
+  renderPickerSublines,
+} from '../testing/patient-subline.fixtures';
+import {
   PrescriptionService,
   CommunityPharmacyService,
   PrescriptionResponse,
@@ -121,6 +125,46 @@ describe('PrescriptionsComponent — SMS dispatch modal', () => {
     component.showDispatchModal.set(true);
     fixture.detectChanges();
   }
+
+  // QA D912 (#967 review): the reopened chip passed an empty email although
+  // the row carries the patient's.
+  it('falls back to the row phone on a reopened prescription chip (QA D912)', () => {
+    // The re-test: Fatimata Zongo has a phone and no email.
+    component.openEdit({
+      id: 'rx-10',
+      patientId: 'p-fatimata',
+      patientFullName: 'Fatimata Zongo',
+      patientEmail: '',
+      patientPhone: '70001003',
+      status: 'DRAFT',
+    } as PrescriptionResponse);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('.picker-chip .chip-sub')?.textContent?.trim()).toBe('70001003');
+  });
+
+  it('falls back to the row email on a reopened prescription chip (QA D912)', () => {
+    component.openEdit({
+      id: 'rx-9',
+      patientId: 'p-awa',
+      patientFullName: 'Awa Kaboré',
+      patientEmail: 'awa.kabore@example.test',
+      status: 'DRAFT',
+    } as PrescriptionResponse);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('.picker-chip .chip-sub')?.textContent?.trim()).toBe(
+      'awa.kabore@example.test',
+    );
+  });
+
+  // QA D903/D912: the chip showed the email, or an empty line for a
+  // phone-only patient, instead of this hospital's MRN.
+  it('names the patient by MRN in the chip and the options (QA D912)', () => {
+    component.openCreate();
+    fixture.detectChanges();
+    expect(renderPickerSublines(fixture, component)).toEqual(EXPECTED_PICKER_SUBLINES);
+  });
 
   it('never offers a completed or cancelled encounter for a new order (QA D739)', () => {
     const encounters = TestBed.inject(EncounterService);

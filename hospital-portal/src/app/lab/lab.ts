@@ -34,11 +34,19 @@ import { shortOrderCode } from '../shared/lab/order-code';
 import { actionRoles } from '../core/action-permissions';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { serverInstant } from '../shared/date-utils';
+import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
 
 @Component({
   selector: 'app-lab',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [
+    PatientSublinePipe,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+  ],
   templateUrl: './lab.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lab.scss',
@@ -395,7 +403,8 @@ export class LabComponent implements OnInit {
   }
 
   private patientSearchHospitalId(): string | undefined {
-    return this.form.hospitalId || this.roleContext.activeHospitalId || undefined;
+    // QA D912 (#967 review): the chip's hospital for a super-admin, not their home one.
+    return this.form.hospitalId || this.roleContext.effectiveHospitalIdForRequest() || undefined;
   }
 
   openCreate(): void {
@@ -436,6 +445,8 @@ export class LabComponent implements OnInit {
       id: '',
       firstName: o.patientFullName?.split(' ')[0] ?? '',
       lastName: o.patientFullName?.split(' ').slice(1).join(' ') ?? '',
+      // QA D912: no MRN on the row, and QA D527 keeps the patient's email off
+      // lab orders, so the chip is the name alone (no empty line under it).
     } as PatientResponse);
     this.editing.set(true);
     this.editingId.set(o.id);

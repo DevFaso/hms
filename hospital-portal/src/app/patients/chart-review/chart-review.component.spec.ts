@@ -5,6 +5,9 @@ import { Observable, Subject, of, throwError } from 'rxjs';
 
 import { ChartReviewComponent } from './chart-review.component';
 import { ChartReview, ChartReviewService } from '../../services/chart-review.service';
+import en from '../../../assets/i18n/en.json';
+import es from '../../../assets/i18n/es.json';
+import fr from '../../../assets/i18n/fr.json';
 
 describe('ChartReviewComponent', () => {
   let fixture: ComponentFixture<ChartReviewComponent>;
@@ -261,6 +264,139 @@ describe('ChartReviewComponent', () => {
     for (const expected of ['pret-pour-la-sortie', 'resultats-disponibles', 'reporte']) {
       expect(pills).withContext(`timeline pill ${expected}`).toContain(expected);
     }
+  });
+
+  /** The timeline pills, section then status, as rendered. */
+  function timelinePills(): string[] {
+    return Array.from(
+      fixture.nativeElement.querySelectorAll(
+        '[data-testid="chart-review-panel-timeline"] .chart-review__timeline-head',
+      ) as NodeListOf<HTMLElement>,
+    ).map((el) => (el.textContent ?? '').replace(/\s+/g, ' ').trim());
+  }
+
+  function d897Chart(): ChartReview {
+    const chart = populatedChart();
+    chart.timeline = [
+      {
+        id: 'n-1',
+        section: 'NOTE',
+        occurredAt: '2026-10-26T10:00:00',
+        title: 'SOAP',
+        status: 'SIGNED',
+      },
+      {
+        id: 'e-1',
+        section: 'ENCOUNTER',
+        occurredAt: '2026-10-26T09:00:00',
+        title: 'A',
+        status: 'COMPLETED',
+      },
+      {
+        id: 'i-1',
+        section: 'IMAGING',
+        occurredAt: '2026-10-26T08:00:00',
+        title: 'B',
+        status: 'FINAL',
+      },
+      {
+        id: 'p-1',
+        section: 'PROCEDURE',
+        occurredAt: '2026-10-26T07:00:00',
+        title: 'C',
+        status: 'COMPLETED',
+      },
+      {
+        id: 'm-1',
+        section: 'MEDICATION',
+        occurredAt: '2026-10-26T06:00:00',
+        title: 'D',
+        status: 'SIGNED',
+      },
+    ];
+    return chart;
+  }
+
+  it('QA D897: French timeline statuses agree with their section ("Note Signée", "Consultation Terminée")', () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', fr);
+    translate.use('fr');
+    chartSpy.getChartReview.and.returnValue(of(d897Chart()));
+
+    setPatient('p-897');
+
+    expect(timelinePills()).toEqual([
+      'Note Signée',
+      'Consultation Terminée',
+      'Imagerie Finale',
+      'Procédure Terminée',
+      // A masculine noun keeps the shared label.
+      'Médicament Signé',
+    ]);
+  });
+
+  it('QA D897: Spanish agrees too, and its procedimiento is masculine', () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('es', es);
+    translate.use('es');
+    chartSpy.getChartReview.and.returnValue(of(d897Chart()));
+
+    setPatient('p-897');
+
+    expect(timelinePills()).toEqual([
+      'Nota Firmada',
+      'Consulta Completada',
+      'Imagen Definitiva',
+      'Procedimiento Completado',
+      'Medicamento Firmado',
+    ]);
+  });
+
+  it('QA D897: English is unchanged, and a status with no agreed label keeps the shared one', () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('en', en);
+    translate.use('en');
+    const chart = d897Chart();
+    chart.timeline = [
+      ...(chart.timeline ?? []),
+      {
+        id: 'r-1',
+        section: 'RESULT',
+        occurredAt: '2026-10-26T05:00:00',
+        title: 'E',
+        status: 'HIGH',
+      },
+    ];
+    chartSpy.getChartReview.and.returnValue(of(chart));
+
+    setPatient('p-897');
+
+    const pills = timelinePills();
+    expect(pills.slice(0, 5)).toEqual([
+      'Note Signed',
+      'Encounter Completed',
+      'Imaging Final',
+      'Procedure Completed',
+      'Medication Signed',
+    ]);
+    expect(pills[5]).not.toContain('TIMELINE_STATUS');
+  });
+
+  it('QA D897: every agreed label exists in all three languages for the same statuses', () => {
+    const trees = [en, fr, es].map(
+      (d) =>
+        (
+          d as unknown as {
+            CHART_REVIEW: { TIMELINE_STATUS: Record<string, Record<string, string>> };
+          }
+        ).CHART_REVIEW.TIMELINE_STATUS,
+    );
+    const shape = (t: Record<string, Record<string, string>>): string[] =>
+      Object.entries(t).flatMap(([section, labels]) =>
+        Object.keys(labels).map((s) => `${section}.${s}`),
+      );
+    expect(shape(trees[1]).sort()).toEqual(shape(trees[0]).sort());
+    expect(shape(trees[2]).sort()).toEqual(shape(trees[0]).sort());
   });
 
   for (const [lang, label] of [

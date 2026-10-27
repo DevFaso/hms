@@ -1228,6 +1228,30 @@ class InventoryServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D894: a French caller still writes the audit row in English, the shape the portal reads")
+        void d894_auditTextIsEnglishWhateverTheCallerLanguage() {
+            stubHospitalScope();
+            when(inventoryItemRepository.findBelowReorderThresholdByHospital(hospitalId))
+                    .thenReturn(List.of(inventoryItem));
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+            try {
+                service.triggerReorderAlerts();
+            } finally {
+                org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+            }
+
+            org.mockito.ArgumentCaptor<AuditEventRequestDTO> audit =
+                    org.mockito.ArgumentCaptor.forClass(AuditEventRequestDTO.class);
+            verify(auditEventLogService).logEvent(audit.capture());
+            assertThat(audit.getValue().getEventDescription())
+                    .startsWith("Low stock alert: ")
+                    .contains(" on hand, reorder threshold ")
+                    .doesNotContain("Alerte");
+        }
+
+        @Test
         @DisplayName("does nothing when hospitalId is null")
         void noHospitalId() {
             stubHospitalScopeNull();

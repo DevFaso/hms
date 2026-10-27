@@ -212,21 +212,31 @@ class EncounterNoteSignatureTest {
     @Test
     void signRefusedForAnotherClinician() {
         when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
+        UUID noteId = note.getId();
 
         // 403, not 400: any doctor holds the role, only the author holds the note.
-        assertThatThrownBy(() -> service.signEncounterNote(encounterId, LOCALE))
+        assertThatThrownBy(() -> service.signEncounterNote(encounterId, noteId, LOCALE))
             .isInstanceOf(AccessDeniedException.class)
             .hasMessageContaining("author");
+        // QA D895: without an id nobody else's entry is a candidate at all.
+        assertThatThrownBy(() -> service.signEncounterNote(encounterId, LOCALE))
+            .isInstanceOf(BusinessException.class)
+            .hasMessage("You have no unsigned note entry on this encounter to sign.");
         assertThat(note.getSignedAt()).isNull();
     }
 
     @Test
     void signCannotBeReissued() {
         note.setSignedAt(LocalDateTime.now().minusHours(1));
+        UUID noteId = note.getId();
 
-        assertThatThrownBy(() -> service.signEncounterNote(encounterId, LOCALE))
+        assertThatThrownBy(() -> service.signEncounterNote(encounterId, noteId, LOCALE))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("already been signed");
+        // QA D895: without an id, a signed entry is not one of the caller's to sign.
+        assertThatThrownBy(() -> service.signEncounterNote(encounterId, LOCALE))
+            .isInstanceOf(BusinessException.class)
+            .hasMessage("You have no unsigned note entry on this encounter to sign.");
     }
 
     @Test
@@ -619,34 +629,102 @@ class EncounterNoteSignatureTest {
         assertThat(encounter.getEncounterNote()).isSameAs(second);
     }
 
-    @Test
-    void d831_aSignWithoutAnEntryNeverReachesADraftThatIsNotOnScreen() {
-        // #965 review, k5.js replay: DOCTOR_A clicks Sign under DOCTOR2_A's J1
-        // (the current entry on screen). The server used to sign DOCTOR_A's
-        // J0 instead, a text the signer was not shown. Without a note id only
-        // the current entry is a candidate, so the author-only refusal stands;
-        // DOCTOR_A signs J0 by naming it.
-        note.setCreatedAt(LocalDateTime.now().minusHours(2));
-        User doctor2 = new User();
-        doctor2.setId(UUID.randomUUID());
+    /** DOCTOR2_A's J1 entry, written after DOCTOR_A's J0 on the same encounter (d831.js). */
+    private EncounterNote secondDoctorsEntry(User doctor2) {
         EncounterNote secondEntry = EncounterNote.builder()
             .encounter(encounter).patient(encounter.getPatient()).hospital(encounter.getHospital())
             .author(doctor2).authorName("Issouf Compaoré").documentedAt(LocalDateTime.now()).build();
         secondEntry.setId(UUID.randomUUID());
         secondEntry.setCreatedAt(LocalDateTime.now());
+        return secondEntry;
+    }
+
+    @Test
+    void d895_aSignWithoutAnEntrySignsTheCallersOwnEntryNotTheLatest() {
+        // d831.js / d831b.js on encounter 928f9fec: DOCTOR_A posts J0, then
+        // DOCTOR2_A posts J1. DOCTOR_A's POST /notes/sign with no noteId got
+        // 403 (J1 is not hers), and 400 "already signed" once J1 was signed.
+        note.setCreatedAt(LocalDateTime.now().minusHours(2));
+        User doctor2 = new User();
+        doctor2.setId(UUID.randomUUID());
+        EncounterNote secondEntry = secondDoctorsEntry(doctor2);
         when(encounterNoteRepository.findByEncounter_IdOrderByCreatedAtAscIdAsc(encounterId))
             .thenReturn(List.of(note, secondEntry));
 
-        assertThatThrownBy(() -> service.signEncounterNote(encounterId, LOCALE))
-            .isInstanceOf(AccessDeniedException.class);
-        assertThat(note.isSigned()).isFalse();
-        assertThat(secondEntry.isSigned()).isFalse();
-
-        service.signEncounterNote(encounterId, note.getId(), LOCALE);
+        service.signEncounterNote(encounterId, LOCALE);
 
         assertThat(note.isSigned()).isTrue();
         assertThat(note.getSignedByUserId()).isEqualTo(authorUserId);
         assertThat(secondEntry.isSigned()).isFalse();
+    }
+
+    @Test
+    void d895_onceTheLatestEntryIsSignedTheCallersOwnEntryIsStillSigned() {
+        // d831b.js: J1 already signed by DOCTOR2_A; DOCTOR_A was told "déjà signée".
+        note.setCreatedAt(LocalDateTime.now().minusHours(2));
+        User doctor2 = new User();
+        doctor2.setId(UUID.randomUUID());
+        EncounterNote secondEntry = secondDoctorsEntry(doctor2);
+        secondEntry.setSignedAt(LocalDateTime.now().minusMinutes(5));
+        secondEntry.setSignatureValue("ab".repeat(32));
+        when(encounterNoteRepository.findByEncounter_IdOrderByCreatedAtAscIdAsc(encounterId))
+            .thenReturn(List.of(note, secondEntry));
+
+        service.signEncounterNote(encounterId, LOCALE);
+
+        assertThat(note.isSigned()).isTrue();
+        // Nothing left to sign: a translated 400, never the other doctor's entry.
+        assertThatThrownBy(() -> service.signEncounterNote(encounterId, LOCALE))
+            .isInstanceOf(BusinessException.class)
+            .hasMessage("You have no unsigned note entry on this encounter to sign.");
+    }
+
+    @Test
+    void d895_twoUnsignedEntriesOfTheCallersAreNeverGuessedBetween() {
+        // The #965 concern: never sign a text the signer did not choose.
+        note.setCreatedAt(LocalDateTime.now().minusHours(2));
+        EncounterNote laterOwn = secondDoctorsEntry(authorUser);
+        when(encounterNoteRepository.findByEncounter_IdOrderByCreatedAtAscIdAsc(encounterId))
+            .thenReturn(List.of(note, laterOwn));
+
+        assertThatThrownBy(() -> service.signEncounterNote(encounterId, LOCALE))
+            .isInstanceOf(BusinessException.class)
+            .hasMessage("You have several unsigned note entries on this encounter. Name the one to sign (noteId).");
+        assertThat(note.isSigned()).isFalse();
+        assertThat(laterOwn.isSigned()).isFalse();
+
+        // Naming one signs that one only (the portal path).
+        service.signEncounterNote(encounterId, laterOwn.getId(), LOCALE);
+        assertThat(laterOwn.isSigned()).isTrue();
+        assertThat(note.isSigned()).isFalse();
+    }
+
+    @Test
+    void d895_theRefusalsAreTranslated() {
+        java.util.Properties fr = new java.util.Properties();
+        java.util.Properties es = new java.util.Properties();
+        try (var frIn = new java.io.InputStreamReader(getClass().getResourceAsStream("/i18n/messages-clinical_fr.properties"),
+                java.nio.charset.StandardCharsets.UTF_8);
+             var esIn = new java.io.InputStreamReader(getClass().getResourceAsStream("/i18n/messages-clinical_es.properties"),
+                java.nio.charset.StandardCharsets.UTF_8)) {
+            fr.load(frIn);
+            es.load(esIn);
+        } catch (java.io.IOException e) {
+            throw new AssertionError(e);
+        }
+        assertThat(fr.getProperty("encounter.note.sign.noOwnUnsigned")).contains("non signée");
+        assertThat(fr.getProperty("encounter.note.sign.ambiguous")).contains("noteId");
+        assertThat(es.getProperty("encounter.note.sign.noOwnUnsigned")).contains("sin firmar");
+        assertThat(es.getProperty("encounter.note.sign.ambiguous")).contains("noteId");
+    }
+
+    @Test
+    void d895_aForeignHospitalStillGetsA404NotTheOwnEntryRefusal() {
+        when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
+        when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
+
+        assertThatThrownBy(() -> service.signEncounterNote(encounterId, LOCALE))
+            .isInstanceOf(ResourceNotFoundException.class);
     }
 
     @Test
@@ -667,12 +745,15 @@ class EncounterNoteSignatureTest {
 
     @Test
     void d831_anotherDoctorStillCannotSignADraftThatIsNotTheirs() {
-        // Path re-verified: with no own entry, the current entry is chosen and
-        // the author-only refusal stands.
+        // Path re-verified: naming another author's entry is the author-only
+        // 403; naming none finds no entry of the caller's (QA D895), a 400.
         secondDoctor();
+        UUID noteId = note.getId();
 
-        assertThatThrownBy(() -> service.signEncounterNote(encounterId, LOCALE))
+        assertThatThrownBy(() -> service.signEncounterNote(encounterId, noteId, LOCALE))
             .isInstanceOf(AccessDeniedException.class);
+        assertThatThrownBy(() -> service.signEncounterNote(encounterId, LOCALE))
+            .isInstanceOf(BusinessException.class);
         assertThat(note.isSigned()).isFalse();
     }
 

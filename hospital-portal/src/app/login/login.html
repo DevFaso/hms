@@ -139,16 +139,29 @@
               />
             </svg>
             <input
+              #bootstrapPhoneInput
               id="bs-phone"
               type="tel"
+              inputmode="tel"
               [(ngModel)]="bootstrap.phoneNumber"
+              (ngModelChange)="bootstrapPhoneError = ''"
               name="bsPhone"
               required
               autocomplete="tel"
-              placeholder="+1234567890"
+              [placeholder]="'LOGIN.PHONE_PLACEHOLDER' | translate"
+              [attr.aria-invalid]="bootstrapPhoneError ? 'true' : null"
+              [attr.aria-describedby]="
+                bootstrapPhoneError ? 'bs-phone-hint bs-phone-error' : 'bs-phone-hint'
+              "
               [disabled]="bootstrapLoading"
             />
           </div>
+          <small id="bs-phone-hint" class="field-hint">{{ 'USERS.PHONE_HINT' | translate }}</small>
+          @if (bootstrapPhoneError) {
+            <small id="bs-phone-error" class="field-error" role="alert">{{
+              bootstrapPhoneError
+            }}</small>
+          }
         </div>
 
         <div class="form-group">

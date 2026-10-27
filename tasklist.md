@@ -2205,6 +2205,76 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 
 ## Standing platform debt — owed, not parity
 
+- **QA D899 residual (round 15): the stock check counts expired lots.**
+  Stock routing now resolves a free-text order to the shelf by the dispense
+  DRUG rule (`fix/qa-r15-clinical-pharmacy`), but its on-hand figure is still
+  the inventory item's `quantityOnHand`, which includes lots that have passed
+  their expiry date and that the dispense refuses. Owed: count only in-date
+  lots with stock (the FEFO query), and decide what a lot-less inventory item
+  reports. Not changed here because the same figure feeds the inventory
+  dashboard and reorder alerts, and the QA case (300 in-date units reported
+  as 0) did not involve an expired lot.
+- **QA D901 residual (round 15): the portal cannot record a transfusion
+  reaction.** The API now refuses a reaction dated before the administration
+  started (`fix/qa-r15-clinical-pharmacy`), but the portal has no
+  administration panel: the transfusion page can start an administration and
+  nothing more. No list of a patient's administrations, no complete or stop
+  action, and the existing reaction modal (`openReaction`) is reached only
+  from its spec. Owed: an administrations panel (list per patient via
+  `GET /transfusions/administrations/patient/{id}`, complete, stop, and a
+  report-reaction action that opens the existing modal), with the onset picker
+  bounded by `min` = the administration's start. Not changed here because it
+  is a new screen, not a fix: there is no administration list to put a button
+  on. Until it ships, the D901 refusal protects API clients only.
+- **QA D912 residual (round 15): a reopened encounter, lab order or prescription
+  has no MRN on its chip.** Every hand-written patient picker now names the
+  patient by this hospital's MRN through the shared `patientSubline`
+  (`fix/qa-r15-clinical-pharmacy`), and a reopened admission, discharge, imaging
+  or ultrasound order carries the row's `patientMrn`. `EncounterResponseDTO`,
+  `LabOrderResponseDTO` and `PrescriptionResponseDTO` carry no MRN, so their edit
+  forms fall back down the same rule: a reopened encounter shows the row's
+  email, else its phone; a reopened prescription its email; a reopened lab
+  order the name alone (QA D527 keeps the email off lab orders). A reopened
+  birth plan or obstetric history also shows the name alone; their rows carry
+  no MRN either.
+  Owed: a hospital-scoped `patientMrn` on those DTOs, resolved the way
+  `AdmissionMapper.resolvePatientMrn` does, and passed into the chip as
+  discharge does. Not changed here because each mapper serves list endpoints and
+  reading the patient's hospital registrations there needs a fetch plan, not a
+  one-line mapping.
+- **QA D911 (round 15): the remaining English success messages.**
+  `DELETE /users/{id}`, the profile image upload and delete, and the MFA
+  enrolment check now answer in the reader's language from the backend
+  bundles (`fix/qa-r15-admin-security`). Owed, same shape and cheap each but
+  outside the account area: `AuthController` ("Logged out successfully.",
+  "Email verified successfully."), `OrganizationController` ("Default security
+  policies applied successfully"), `LabTestDefinitionController` and
+  `LabTestValidationStudyController` ("Deleted successfully."),
+  `PatientController` ("Diagnosis removed successfully."). The portal shows its
+  own toasts for these, so nothing reads them on screen today.
+- **QA D907 (round 15): the user directory's role column after a deactivation.**
+  Deactivating a staff record now switches off the person's roles at that
+  hospital and leaves the account on (`fix/qa-r15-admin-security`), so /users
+  rightly still reads "Actif". Owed: its role column comes from the legacy
+  `user_roles` links (`UserMapper.toSummaryDTO`), which a deactivation - of a
+  staff record or of an assignment - never removes, so a nurse with no active
+  role anywhere still reads "Infirmier(ère)" there. Reading the role from the
+  active assignments is a query change on the paged directory (one join per
+  page), not part of the deactivation.
+
+- **QA D907 (#968 review): staff records and their assignments drift apart the other way.**
+  A staff deactivation now switches the roles off and an assignment coming
+  back on brings its staff record back; /staff shows a record inactive while
+  its role is off (`fix/qa-r15-admin-security`). Owed: switching an assignment
+  off directly (PATCH `/deactivate`, `DELETE /assignments/user/{id}`, the
+  provider staff page) leaves `staff.active = true` in the database, so the
+  `...ActiveTrue` staff queries behind `/staff/hospital/{id}/active` and the
+  staff validators still return that person. Either retire the linked staff
+  record on every assignment switch-off, or filter those queries on the
+  assignment. Also owed: `POST`/`PUT /staff` check the caller's read scope
+  (any role at the hospital), not that they administer it; only the
+  switch-off path now requires an administrator of that hospital.
+
 - **QA D868 (round 14): a permission catalogue the roles page can edit.**
   The roles page now titles a system role in the reader's language and says
   "built-in access" instead of "0 permissions"; the permissions dialog

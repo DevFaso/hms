@@ -10,7 +10,7 @@ import {
   signal,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Subject, Subscription, takeUntil } from 'rxjs';
 
 import {
@@ -19,6 +19,7 @@ import {
   ChartReviewImaging,
   ChartReviewService,
 } from '../../services/chart-review.service';
+import { EnumLabelService } from '../../core/enum-label.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
@@ -98,6 +99,8 @@ export class ChartReviewComponent implements OnChanges, OnDestroy {
   });
 
   private readonly chartReviewService = inject(ChartReviewService);
+  private readonly translate = inject(TranslateService);
+  private readonly enumLabels = inject(EnumLabelService);
   private readonly destroyed$ = new Subject<void>();
   private inFlight?: Subscription;
 
@@ -154,6 +157,25 @@ export class ChartReviewComponent implements OnChanges, OnDestroy {
 
   protected sectionLabelKey(section: string): string {
     return `CHART_REVIEW.SECTION.${section}`;
+  }
+
+  /**
+   * QA D897: the timeline pill reads as one phrase with the section pill
+   * before it ("NOTE SIGNÉE", "CONSULTATION TERMINÉE"), so its status agrees
+   * with that section's noun, whose gender differs by language (a French
+   * procédure is feminine, a Spanish procedimiento masculine). Each section
+   * whose noun needs it has its own labels under
+   * CHART_REVIEW.TIMELINE_STATUS; any other value keeps the shared `status`
+   * label.
+   */
+  protected timelineStatus(event: { section: string; status?: string | null }): string {
+    const status = event.status;
+    if (!status) return '';
+    const key = `CHART_REVIEW.TIMELINE_STATUS.${event.section}.${status}`;
+    const agreed: unknown = this.translate.instant(key);
+    return typeof agreed === 'string' && agreed !== key
+      ? agreed
+      : this.enumLabels.transform(status, 'status');
   }
 
   /** Stable DOM id for a tab button — used to wire tabpanel `aria-labelledby`. */

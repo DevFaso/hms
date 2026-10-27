@@ -46,6 +46,15 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
 
     List<InventoryItem> findByPharmacyHospitalIdAndMedicationCatalogItemIdAndActiveTrue(UUID hospitalId, UUID medicationCatalogItemId);
 
+    /**
+     * QA D899: every active item of the hospital's pharmacies with its catalog
+     * item loaded, so the stock check can match a free-text order to the
+     * shelf by the dispense DRUG rule without one query per item.
+     */
+    @Query("SELECT i FROM InventoryItem i JOIN FETCH i.medicationCatalogItem "
+         + "WHERE i.pharmacy.hospital.id = :hospitalId AND i.active = true")
+    List<InventoryItem> findActiveWithCatalogItemByHospitalId(@Param("hospitalId") UUID hospitalId);
+
     /*
      * Atomic stock movements (#825 security finding 1). Read-modify-write on
      * the entity lost an update when two requests on DIFFERENT orders moved

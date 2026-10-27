@@ -1,9 +1,11 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { signal } from '@angular/core';
+import { LOCALE_ID, signal } from '@angular/core';
+import { registerLocaleData } from '@angular/common';
+import localeFr from '@angular/common/locales/fr';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError, Subject } from 'rxjs';
 
 import { ToastService } from '../core/toast.service';
@@ -606,5 +608,103 @@ describe('StockRoutingComponent', () => {
     expect(component.statusBadgeClass('COMPLETED')).toBe('badge-success');
     expect(component.routingTypeBadgeClass('BACKORDER')).toBe('badge-warning');
     expect(component.routingTypeBadgeClass('PRINT')).toBe('badge-secondary');
+  });
+
+  describe('stock status (QA D913)', () => {
+    /** Checks `data` for rx-1 and returns the rendered status badge. */
+    function statusBadgeFor(data: Record<string, unknown>): HTMLElement {
+      pharmacySvc.checkStock.and.returnValue(
+        of({ data: { ...stockCheckResponse.data, ...data } } as any),
+      );
+      component.prescriptionId = 'rx-1';
+      component.checkStock();
+      fixture.detectChanges();
+      return fixture.nativeElement.querySelector('[data-testid="stock-status"]');
+    }
+
+    beforeEach(() => {
+      const translate = TestBed.inject(TranslateService);
+      translate.setTranslation('fr', {
+        PHARMACY: {
+          IN_STOCK: 'En stock',
+          OUT_OF_STOCK: 'En rupture de stock',
+          INSUFFICIENT_STOCK: 'Stock insuffisant',
+          INSUFFICIENT_STOCK_OF: 'Stock insuffisant ({{onHand}} / {{required}})',
+        },
+      });
+      translate.use('fr');
+    });
+
+    it('says insufficient, with on hand and required, when some but not enough is on hand', () => {
+      // The re-test: 50 Ocytocine on the shelf for an order of 60.
+      const badge = statusBadgeFor({ quantityOnHand: 50, quantityRequired: 60, sufficient: false });
+
+      expect(component.stockStatus()).toBe('INSUFFICIENT');
+      expect(badge.textContent?.trim()).toBe('Stock insuffisant (50 / 60)');
+      expect(badge.classList).toContain('badge-warning');
+      expect(badge.classList).not.toContain('badge-danger');
+    });
+
+    it('says insufficient without numbers when the server does not send the required quantity', () => {
+      const badge = statusBadgeFor({
+        quantityOnHand: 50,
+        quantityRequired: undefined,
+        sufficient: false,
+      });
+
+      expect(badge.textContent?.trim()).toBe('Stock insuffisant');
+    });
+
+    it("formats the quantities in the reader's locale (12,5 in French)", async () => {
+      registerLocaleData(localeFr, 'fr');
+      TestBed.resetTestingModule();
+      await TestBed.configureTestingModule({
+        imports: [StockRoutingComponent, TranslateModule.forRoot()],
+        providers: [
+          provideHttpClient(withXhr()),
+          provideHttpClientTesting(),
+          { provide: PharmacyService, useValue: pharmacySvc },
+          { provide: ToastService, useValue: toastSvc },
+          { provide: RoleContextService, useValue: roleContextStub },
+          {
+            provide: ActivatedRoute,
+            useValue: { snapshot: { paramMap: convertToParamMap({}) } },
+          },
+          { provide: LOCALE_ID, useValue: 'fr' },
+        ],
+      }).compileComponents();
+      const translate = TestBed.inject(TranslateService);
+      translate.setTranslation('fr', {
+        PHARMACY: { INSUFFICIENT_STOCK_OF: 'Stock insuffisant ({{onHand}} / {{required}})' },
+      });
+      translate.use('fr');
+      fixture = TestBed.createComponent(StockRoutingComponent);
+      component = fixture.componentInstance;
+      fixture.detectChanges();
+
+      const badge = statusBadgeFor({
+        quantityOnHand: 12.5,
+        quantityRequired: 60,
+        sufficient: false,
+      });
+
+      expect(badge.textContent?.trim()).toBe('Stock insuffisant (12,5 / 60)');
+    });
+
+    it('keeps "out of stock" for an empty shelf only', () => {
+      const badge = statusBadgeFor({ quantityOnHand: 0, quantityRequired: 60, sufficient: false });
+
+      expect(component.stockStatus()).toBe('OUT_OF_STOCK');
+      expect(badge.textContent?.trim()).toBe('En rupture de stock');
+      expect(badge.classList).toContain('badge-danger');
+    });
+
+    it('says in stock when the shelf covers the order', () => {
+      const badge = statusBadgeFor({ quantityOnHand: 300, quantityRequired: 60, sufficient: true });
+
+      expect(component.stockStatus()).toBe('IN_STOCK');
+      expect(badge.textContent?.trim()).toBe('En stock');
+      expect(badge.classList).toContain('badge-success');
+    });
   });
 });

@@ -47,6 +47,7 @@ import { AuthService } from '../auth/auth.service';
 import { actionRoles } from '../core/action-permissions';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { serverInstant } from '../shared/date-utils';
+import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
 
 /**
  * The prescriber's list tabs (gap G10).
@@ -142,6 +143,7 @@ export const PRESCRIPTION_TABS: readonly { id: PrescriptionTab; labelKey: string
   selector: 'app-prescriptions',
   standalone: true,
   imports: [
+    PatientSublinePipe,
     ServerTimePipe,
     CommonModule,
     FormsModule,
@@ -329,8 +331,7 @@ export class PrescriptionsComponent implements OnInit {
       this.openCreate();
       if (patientId) {
         this.form.patientId = patientId;
-        const hid = this.roleContext.activeHospitalId ?? undefined;
-        this.patientService.list(hid, '').subscribe((list) => {
+        this.patientService.list(this.patientSearchHospitalId(), '').subscribe((list) => {
           const match = list.find((p) => p.id === patientId);
           if (match) this.selectPatient(match);
         });
@@ -459,9 +460,8 @@ export class PrescriptionsComponent implements OnInit {
         distinctUntilChanged(),
         switchMap((q) => {
           this.patientSearchLoading.set(true);
-          // ── TENANT ISOLATION: scope patient search to active hospital ──
-          const hid = this.roleContext.activeHospitalId ?? undefined;
-          return this.patientService.list(hid, q);
+          // ── TENANT ISOLATION: scope patient search to the request's hospital ──
+          return this.patientService.list(this.patientSearchHospitalId(), q);
         }),
       )
       .subscribe({
@@ -531,6 +531,15 @@ export class PrescriptionsComponent implements OnInit {
     return [date, e.departmentName].filter((part) => !!part).join(' · ');
   }
 
+  /**
+   * QA D912 (#967 review): the hospital whose patients, and whose MRN, the
+   * typeahead offers: the request scope, which for a super-admin is the
+   * hospital the scope chip picked, not their home hospital.
+   */
+  private patientSearchHospitalId(): string | undefined {
+    return this.roleContext.effectiveHospitalIdForRequest() ?? undefined;
+  }
+
   patientInitials(p: PatientResponse): string {
     return ((p.firstName?.[0] ?? '') + (p.lastName?.[0] ?? '')).toUpperCase() || '?';
   }
@@ -580,7 +589,9 @@ export class PrescriptionsComponent implements OnInit {
       id: p.patientId ?? '',
       firstName: p.patientFullName?.split(' ')[0] ?? '',
       lastName: p.patientFullName?.split(' ').slice(1).join(' ') ?? '',
-      email: '',
+      // QA D912: the row has no MRN; its contact details keep the chip's fallback.
+      email: p.patientEmail,
+      phoneNumberPrimary: p.patientPhone,
     } as PatientResponse);
     this.patientEncounters.set([]);
     if (p.patientId) this.loadPatientEncounters(p.patientId);

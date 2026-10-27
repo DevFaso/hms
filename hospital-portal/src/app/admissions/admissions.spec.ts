@@ -1,10 +1,10 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { formatDate } from '@angular/common';
 import { signal } from '@angular/core';
-import { TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 
 import { AdmissionsComponent } from './admissions';
 import { AdmissionResponse, AdmissionService } from '../services/admission.service';
@@ -20,6 +20,10 @@ import { BedResponse, BedService } from '../services/bed.service';
 import { AppliedOrderSetSummary } from '../services/order-set.service';
 import { toLocalInputValue } from '../shared/date-utils';
 import { roleContextStub } from '../testing/role-context.stub';
+import {
+  EXPECTED_PICKER_SUBLINES,
+  renderPickerSublines,
+} from '../testing/patient-subline.fixtures';
 
 /**
  * QA D176 (regression of D84/D123): the server refused a nurse or a midwife as
@@ -39,6 +43,8 @@ describe('AdmissionsComponent', () => {
   let superAdmin: ReturnType<typeof signal<boolean>>;
   let queryTab: string | null;
   let activeRoles: string[];
+  /** The request scope (X-Hospital-Id): the chip's hospital for a super-admin. */
+  let requestScope: string | null;
 
   const member = (id: string, roleCode: string) => ({ id, roleCode }) as StaffResponse;
   const adm = (overrides: Partial<AdmissionResponse> = {}) =>
@@ -61,6 +67,7 @@ describe('AdmissionsComponent', () => {
     queryTab = null;
     superAdmin = signal(false);
     activeRoles = ['ROLE_DOCTOR'];
+    requestScope = 'h1';
     admissionService = jasmine.createSpyObj<AdmissionService>('AdmissionService', [
       'getAll',
       'create',
@@ -118,6 +125,7 @@ describe('AdmissionsComponent', () => {
           provide: RoleContextService,
           useValue: {
             activeHospitalId: 'h1',
+            effectiveHospitalIdForRequest: () => requestScope,
             isSuperAdmin: superAdmin,
             globalView: signal(false),
             hasAnyActiveRole: (roles: string[]) => roles.some((r) => activeRoles.includes(r)),
@@ -320,6 +328,24 @@ describe('AdmissionsComponent', () => {
       expect(component.selectedPatient()).toBeNull();
     }));
 
+    // QA D912 (#967 review): a super-admin whose home hospital is A but whose
+    // scope chip picked B was offered A's patients, and A's MRN on the chip.
+    it("searches the scope chip's hospital, not a super-admin's home one", fakeAsync(() => {
+      superAdmin.set(true);
+      requestScope = 'hB';
+      patientService.list.and.returnValue(of([]));
+      component.initPatientSearch();
+      component.onPatientQueryChange('kab');
+      tick(250);
+      expect(patientService.list).toHaveBeenCalledWith('hB', 'kab');
+
+      // A hospital picked on the form wins: the stay is created there.
+      component.form.hospitalId = 'hC';
+      component.onPatientQueryChange('zon');
+      tick(250);
+      expect(patientService.list).toHaveBeenCalledWith('hC', 'zon');
+    }));
+
     it('clears the spinner when the search fails', fakeAsync(() => {
       patientService.list.and.returnValue(throwError(() => new Error('x')));
       component.initPatientSearch();
@@ -364,6 +390,38 @@ describe('AdmissionsComponent', () => {
       component.submitForm();
       const sent = admissionService.create.calls.mostRecent().args[0];
       expect(sent.admissionDateTime).toBe(new Date('2026-10-23T07:48').toISOString().slice(0, 19));
+    });
+
+    // QA D918: the physicians were loaded once for the home hospital, so a stay
+    // at another hospital offered physicians the server refuses there.
+    it("offers the physicians of the stay's hospital", () => {
+      departmentLookup.getActiveDepartments.and.returnValue(of([]));
+      const staff = TestBed.inject(StaffService) as jasmine.SpyObj<StaffService>;
+      component.ngOnInit();
+      expect(staff.list).toHaveBeenCalledWith('h1');
+
+      component.openEdit(adm({ hospitalId: 'hB' }));
+      expect(staff.list).toHaveBeenCalledWith('hB');
+
+      component.form.admittingProviderId = 'doc';
+      component.onHospitalChange('h2');
+      expect(staff.list).toHaveBeenCalledWith('h2');
+      expect(component.form.admittingProviderId).toBe('');
+    });
+
+    it("offers no physician of the previous hospital while the next hospital's load (QA D918)", () => {
+      departmentLookup.getActiveDepartments.and.returnValue(of([]));
+      const staff = TestBed.inject(StaffService) as jasmine.SpyObj<StaffService>;
+      component.ngOnInit();
+      expect(component.staffMembers().length).toBeGreaterThan(0);
+
+      const pending = new Subject<StaffResponse[]>();
+      staff.list.and.returnValue(pending);
+      component.onHospitalChange('hB');
+      expect(component.staffMembers()).toEqual([]);
+
+      pending.next([member('docB', 'ROLE_DOCTOR')]);
+      expect(component.staffMembers().map((s) => s.id)).toEqual(['docB']);
     });
 
     it('edits an existing admission', () => {
@@ -466,6 +524,15 @@ describe('AdmissionsComponent', () => {
  */
 describe('AdmissionsComponent row actions (rendered, D527)', () => {
   function render(roles: string[], status = 'ACTIVE', admissionDateTime?: string): HTMLElement {
+    return mount(roles, status, admissionDateTime).nativeElement as HTMLElement;
+  }
+
+  function mount(
+    roles: string[],
+    status = 'ACTIVE',
+    admissionDateTime?: string,
+    superAdmin = false,
+  ): ComponentFixture<AdmissionsComponent> {
     const admissions = jasmine.createSpyObj<AdmissionService>('AdmissionService', ['getAll']);
     admissions.getAll.and.returnValue(
       of([
@@ -484,7 +551,16 @@ describe('AdmissionsComponent row actions (rendered, D527)', () => {
       'list',
       'getMyHospitalAsResponse',
     ]);
-    hospitals.list.and.returnValue(of([]));
+    hospitals.list.and.returnValue(
+      of(
+        superAdmin
+          ? ([
+              { id: 'h1', name: 'Hôpital A' },
+              { id: 'hB', name: 'Clinique B' },
+            ] as HospitalResponse[])
+          : [],
+      ),
+    );
     hospitals.getMyHospitalAsResponse.and.returnValue(of({ id: 'h1' } as HospitalResponse));
     const staff = jasmine.createSpyObj<StaffService>('StaffService', ['list']);
     staff.list.and.returnValue(of([]));
@@ -513,16 +589,61 @@ describe('AdmissionsComponent row actions (rendered, D527)', () => {
         },
         {
           provide: RoleContextService,
-          useValue: roleContextStub({ superAdmin: false, hospitalId: 'h1', roles }),
+          useValue: roleContextStub({ superAdmin, hospitalId: 'h1', roles }),
         },
       ],
     });
     const fixture = TestBed.createComponent(AdmissionsComponent);
     fixture.detectChanges();
-    return fixture.nativeElement as HTMLElement;
+    return fixture;
   }
 
   const newButton = (el: HTMLElement) => el.querySelector('.page-actions .btn-primary');
+
+  // QA D903/D912: the chip showed the email, or an empty line for a phone-only
+  // patient, and the option led with the email; both now name the MRN.
+  it('names the patient by MRN in the chip and the options (QA D912)', () => {
+    const fixture = mount(['ROLE_DOCTOR']);
+    fixture.componentInstance.openCreate();
+    fixture.detectChanges();
+    expect(renderPickerSublines(fixture, fixture.componentInstance)).toEqual(
+      EXPECTED_PICKER_SUBLINES,
+    );
+  });
+
+  // QA D912: [value] on the select ran before its @for options existed, so a
+  // super-admin reopening a stay at B saw "Select a hospital".
+  it("shows a super-admin the reopened stay's hospital as selected (QA D912)", () => {
+    const fixture = mount(['ROLE_SUPER_ADMIN'], 'ACTIVE', undefined, true);
+    fixture.componentInstance.openEdit({
+      id: 'a2',
+      hospitalId: 'hB',
+      patientId: 'p1',
+      patientName: 'Awa Kaboré',
+      status: 'ACTIVE',
+    } as AdmissionResponse);
+    fixture.detectChanges();
+    const select = (fixture.nativeElement as HTMLElement).querySelector(
+      '#adm-hospitalId',
+    ) as HTMLSelectElement;
+    expect(select.value).toBe('hB');
+    expect(select.selectedOptions[0]?.textContent?.trim()).toBe('Clinique B');
+  });
+
+  it('keeps the MRN on the chip when an admission is reopened (QA D912)', () => {
+    const fixture = mount(['ROLE_DOCTOR']);
+    fixture.componentInstance.openEdit({
+      id: 'a1',
+      hospitalId: 'h1',
+      patientId: 'p1',
+      patientName: 'Awa Kaboré',
+      patientMrn: 'CHW2572',
+      status: 'ACTIVE',
+    } as AdmissionResponse);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('.picker-chip .chip-sub')?.textContent?.trim()).toBe('CHW2572');
+  });
 
   it('shows a nurse edit, order sets and beds, but not New, Discharge or Delete', () => {
     const el = render(['ROLE_NURSE']);

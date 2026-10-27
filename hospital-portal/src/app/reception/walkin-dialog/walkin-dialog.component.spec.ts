@@ -1,5 +1,6 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { WalkInDialogComponent } from './walkin-dialog.component';
+import { SUBLINE_AWA, SUBLINE_FATIMATA } from '../../testing/patient-subline.fixtures';
 import { TranslateModule } from '@ngx-translate/core';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
@@ -13,15 +14,18 @@ describe('WalkInDialogComponent', () => {
   let component: WalkInDialogComponent;
   let fixture: ComponentFixture<WalkInDialogComponent>;
 
-  const mockPatientService = { list: () => of([]) };
+  const mockPatientService = { list: (_hospitalId?: string, _q?: string) => of([]) };
   const mockStaffService = { list: () => of([]) };
-  const mockRoleCtx = { activeHospitalId: 'h1' };
+  /** The request scope (X-Hospital-Id): the chip's hospital for a super-admin. */
+  let requestScope = 'h1';
+  const mockRoleCtx = { activeHospitalId: 'h1', effectiveHospitalIdForRequest: () => requestScope };
   const mockToastService = {
     success: jasmine.createSpy('success'),
     error: jasmine.createSpy('error'),
   };
 
   beforeEach(async () => {
+    requestScope = 'h1';
     await TestBed.configureTestingModule({
       imports: [WalkInDialogComponent, TranslateModule.forRoot()],
       providers: [
@@ -53,6 +57,45 @@ describe('WalkInDialogComponent', () => {
     expect(component.selectedPatient()).toEqual(patient);
     expect(component.patientQuery()).toBe('Jane Doe');
   });
+
+  // QA D912: the selected-patient badge named the patient but not the MRN.
+  it('names the patient by MRN in the results and the selected badge (QA D912)', () => {
+    const host = fixture.nativeElement as HTMLElement;
+    component.patientResults.set([SUBLINE_AWA, SUBLINE_FATIMATA]);
+    fixture.detectChanges();
+    const metas = Array.from(host.querySelectorAll('.autocomplete-list .result-meta')).map((m) =>
+      m.textContent?.trim(),
+    );
+    expect(metas).toEqual(['CHW2572', 'CHW1444']);
+
+    component.selectPatient(SUBLINE_FATIMATA);
+    fixture.detectChanges();
+    expect(host.querySelector('.selected-badge .result-meta')?.textContent?.trim()).toBe('CHW1444');
+  });
+
+  // QA D912 (#967 review): a super-admin whose home hospital is h1 but whose
+  // scope chip picked hB searched h1's patients and registered the walk-in there.
+  it("searches and registers at the scope chip's hospital (QA D912)", fakeAsync(() => {
+    requestScope = 'hB';
+    const listSpy = spyOn(mockPatientService, 'list').and.callThrough();
+    const scoped = TestBed.createComponent(WalkInDialogComponent);
+    const dialog = scoped.componentInstance;
+    scoped.detectChanges();
+
+    dialog.onPatientQueryChange('kab');
+    tick(350);
+    expect(listSpy).toHaveBeenCalledWith('hB', 'kab');
+
+    const httpMock = TestBed.inject(HttpTestingController);
+    httpMock.match('/departments').forEach((r) => r.flush([]));
+    dialog.selectedPatient.set(SUBLINE_AWA);
+    dialog.selectedStaff.set({ id: 's1', name: 'Nurse_B' } as never);
+    dialog.departmentId.set('d1');
+    dialog.submit();
+    const req = httpMock.expectOne('/encounters');
+    expect(req.request.body.hospitalId).toBe('hB');
+    req.flush({});
+  }));
 
   it('should select staff', () => {
     const staff = { id: 's1', name: 'Dr. Smith', departmentName: 'Cardio' } as any;

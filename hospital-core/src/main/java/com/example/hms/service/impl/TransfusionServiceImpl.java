@@ -9,6 +9,7 @@ import com.example.hms.enums.TransfusionAdministrationStatus;
 import com.example.hms.enums.TransfusionRequestStatus;
 import com.example.hms.enums.TransfusionUrgency;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.TransfusionMapper;
 import com.example.hms.model.BloodUnit;
@@ -114,7 +115,8 @@ public class TransfusionServiceImpl implements TransfusionService {
         UUID hospitalId = requireHospital();
         // QA D858 class: a specimen cannot have been collected in the future,
         // and a screen that is already stale when recorded protects nobody.
-        requireNotInFuture(request.getSpecimenCollectedAt(), "transfusion.bloodGroup.specimenInFuture");
+        requireNotInFuture(request.getSpecimenCollectedAt(), "specimenCollectedAt",
+            "transfusion.bloodGroup.specimenInFuture");
         requireInFuture(request.getExpiresAt());
         Patient patient = patientChartAccess.require(request.getPatientId(), hospitalId);
 
@@ -274,6 +276,13 @@ public class TransfusionServiceImpl implements TransfusionService {
                 .filter(e -> e.getHospital() == null
                     || Objects.equals(e.getHospital().getId(), hospitalId))
                 .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound", request.getEncounterId()));
+        }
+
+        // QA D901 (sibling ordering): blood cannot be needed by a time that has
+        // already passed when it is asked for; that is a typing error.
+        if (request.getRequiredBy() != null
+                && request.getRequiredBy().isBefore(LocalDateTime.now(clock).minus(CLOCK_SKEW))) {
+            throw new FieldBusinessException("requiredBy", "transfusion.request.requiredByInPast");
         }
 
         TransfusionRequest entity = TransfusionRequest.builder()
@@ -624,8 +633,17 @@ public class TransfusionServiceImpl implements TransfusionService {
         // QA D858: NURSE_A recorded a reaction with onsetAt = now + 24h and got
         // 201. A reaction is observed, so its onset is in the past (a few
         // minutes of clock skew between the ward PC and the server aside).
-        requireNotInFuture(request.getOnsetAt(), "transfusion.reaction.onsetInFuture");
+        requireNotInFuture(request.getOnsetAt(), "onsetAt", "transfusion.reaction.onsetInFuture");
         TransfusionAdministration administration = loadAdministrationScoped(administrationId);
+        // QA D901: reaction 7b374e6a was saved with an onset ten days before
+        // administration 36dc2b02 was hung. A reaction to a transfusion begins
+        // once it has started; the ward PC's clock may lag the server's by
+        // the usual skew, and no more.
+        LocalDateTime startedAt = administration.getStartedAt();
+        if (startedAt != null && request.getOnsetAt() != null
+                && request.getOnsetAt().isBefore(startedAt.minus(CLOCK_SKEW))) {
+            throw new FieldBusinessException("onsetAt", "transfusion.reaction.onsetBeforeStart");
+        }
 
         TransfusionReaction reaction = TransfusionReaction.builder()
             .administration(administration)
@@ -703,9 +721,10 @@ public class TransfusionServiceImpl implements TransfusionService {
      * between the ward PC and the server are tolerated, as the partograph and
      * the postpartum observations do.
      */
-    private void requireNotInFuture(LocalDateTime at, String messageKey) {
+    private void requireNotInFuture(LocalDateTime at, String field, String messageKey) {
         if (at != null && at.isAfter(LocalDateTime.now(clock).plus(CLOCK_SKEW))) {
-            throw new BusinessException(messageKey);
+            // QA D901: on its field, so a form can mark it (still a BusinessException).
+            throw new FieldBusinessException(field, messageKey);
         }
     }
 

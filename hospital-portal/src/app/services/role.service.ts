@@ -14,6 +14,8 @@ export interface RoleResponse {
   authority: string;
   description: string;
   code: string;
+  /** A role the platform ships with: its code cannot change (QA D902, #968 review). */
+  builtIn?: boolean;
   permissions: PermissionResponse[];
   createdAt: string;
   updatedAt: string;

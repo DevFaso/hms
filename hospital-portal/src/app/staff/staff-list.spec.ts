@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { TranslateService } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of } from 'rxjs';
 
 import { StaffListComponent } from './staff-list';
@@ -9,6 +9,9 @@ import { UserService } from '../services/user.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { PermissionService } from '../core/permission.service';
+import { AuthService } from '../auth/auth.service';
+
+const authStub = { getUserProfile: () => ({ id: 'me' }), getUserId: () => 'me' };
 
 /**
  * QA D195: the specialization list is medical specialties, and the server
@@ -33,6 +36,7 @@ describe('StaffListComponent — specialization only for physicians (QA D195)', 
           useValue: jasmine.createSpyObj('ToastService', ['success', 'error']),
         },
         { provide: RoleContextService, useValue: {} },
+        { provide: AuthService, useValue: authStub },
         { provide: PermissionService, useValue: { hasPermission: () => true } },
         { provide: TranslateService, useValue: { instant: (k: string) => k } },
       ],
@@ -84,6 +88,7 @@ describe('StaffListComponent — one hospital-admin job title (QA D541)', () => 
           useValue: jasmine.createSpyObj('ToastService', ['success', 'error']),
         },
         { provide: RoleContextService, useValue: {} },
+        { provide: AuthService, useValue: authStub },
         { provide: PermissionService, useValue: { hasPermission: () => true } },
         { provide: TranslateService, useValue: { instant: (k: string) => k } },
       ],
@@ -121,6 +126,7 @@ describe('StaffListComponent — no archived hospital for a new placement (QA D8
           useValue: jasmine.createSpyObj('ToastService', ['success', 'error']),
         },
         { provide: RoleContextService, useValue: {} },
+        { provide: AuthService, useValue: authStub },
         { provide: PermissionService, useValue: { hasPermission: () => true } },
         { provide: TranslateService, useValue: { instant: (k: string) => k } },
       ],
@@ -134,5 +140,39 @@ describe('StaffListComponent — no archived hospital for a new placement (QA D8
     expect(component.hospitalOptions().map((h) => h.id)).toEqual(['h1', 'h3']);
     component.editing.set({ id: 's1', hospitalName: 'Ancien CMA' } as StaffResponse);
     expect(component.hospitalOptions().map((h) => h.id)).toEqual(['h1', 'h2', 'h3']);
+  });
+});
+
+describe('StaffListComponent — no deactivate on your own card (QA D916)', () => {
+  it('offers Deactivate on a colleague card only, never on the signed-in account', () => {
+    const staffService = jasmine.createSpyObj<StaffService>('StaffService', ['list']);
+    staffService.list.and.returnValue(
+      of([
+        { id: 's-me', userId: 'me', name: 'Qa Econome', active: true },
+        { id: 's-other', userId: 'someone-else', name: 'Qa Veilleur', active: true },
+      ] as StaffResponse[]),
+    );
+    TestBed.configureTestingModule({
+      imports: [StaffListComponent, TranslateModule.forRoot()],
+      providers: [
+        { provide: StaffService, useValue: staffService },
+        { provide: HospitalService, useValue: { getMyHospitalAsResponse: () => of(null) } },
+        { provide: UserService, useValue: { list: () => of({ content: [] }) } },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj('ToastService', ['success', 'error']),
+        },
+        { provide: RoleContextService, useValue: { isSuperAdmin: () => false } },
+        { provide: AuthService, useValue: authStub },
+        { provide: PermissionService, useValue: { hasPermission: () => true } },
+      ],
+    });
+    const fixture = TestBed.createComponent(StaffListComponent);
+    fixture.detectChanges();
+    const buttons = (fixture.nativeElement as HTMLElement).querySelectorAll(
+      '[data-test="staff-deactivate"]',
+    );
+    expect(buttons.length).toBe(1);
+    expect(fixture.componentInstance.isOwnCard({ userId: 'me' } as StaffResponse)).toBeTrue();
   });
 });

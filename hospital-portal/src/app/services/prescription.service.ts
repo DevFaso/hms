@@ -8,6 +8,8 @@ export interface PrescriptionResponse {
   patientId: string;
   patientFullName: string;
   patientEmail: string;
+  /** QA D912: the patient's primary phone; absent from a server that predates it. */
+  patientPhone?: string;
   staffId: string;
   staffFullName: string;
   encounterId: string;

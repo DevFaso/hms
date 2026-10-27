@@ -19,6 +19,10 @@ import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { RoleContextStub, roleContextStub } from '../testing/role-context.stub';
 import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
+import {
+  EXPECTED_PICKER_SUBLINES,
+  renderPickerSublines,
+} from '../testing/patient-subline.fixtures';
 
 function mockConsult(overrides: Partial<ConsultationResponse> = {}): ConsultationResponse {
   return {
@@ -369,6 +373,18 @@ describe('ConsultationsComponent', () => {
     component.submitAssign();
     expect(consultSpy.assign).toHaveBeenCalledWith('c1', 'st1', undefined);
     expect(component.showAssignModal()).toBeFalse();
+  });
+
+  // QA D903/D912: the chip showed the email, or an empty line for a
+  // phone-only patient, instead of this hospital's MRN.
+  it('names the patient by MRN in the chip and the options (QA D912)', () => {
+    const fixture = TestBed.createComponent(ConsultationsComponent);
+    fixture.detectChanges();
+    fixture.componentInstance.openCreate();
+    fixture.detectChanges();
+    expect(renderPickerSublines(fixture, fixture.componentInstance)).toEqual(
+      EXPECTED_PICKER_SUBLINES,
+    );
   });
 
   it('offers Reassign while the consult is held, not only when ASSIGNED (D749)', () => {

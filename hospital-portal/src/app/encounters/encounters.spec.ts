@@ -1,11 +1,15 @@
-import { TestBed } from '@angular/core/testing';
+import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 
 import { EncountersComponent } from './encounters';
+import {
+  EXPECTED_PICKER_SUBLINES,
+  renderPickerSublines,
+} from '../testing/patient-subline.fixtures';
 import {
   EncounterService,
   EncounterResponse,
@@ -148,6 +152,133 @@ describe('EncountersComponent', () => {
     }).compileComponents();
 
     component = TestBed.createComponent(EncountersComponent).componentInstance;
+  });
+
+  // QA D912 (#967 review): the row carries no MRN, but its contact details do;
+  // the reopened chip passed an empty email and showed nothing under the name.
+  it('falls back to the row phone on a reopened encounter chip (QA D912)', () => {
+    const fixture = TestBed.createComponent(EncountersComponent);
+    fixture.detectChanges();
+    fixture.componentInstance.openEdit(
+      mockEncounter({
+        patientName: 'Fatimata Zongo',
+        patientEmail: '',
+        patientPhoneNumber: '70001003',
+      }),
+    );
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('.picker-chip .chip-sub')?.textContent?.trim()).toBe('70001003');
+  });
+
+  // QA D903/D912: the chip showed the email, or an empty line for a
+  // phone-only patient, instead of this hospital's MRN.
+  it('names the patient by MRN in the chip and the options (QA D912)', () => {
+    const fixture = TestBed.createComponent(EncountersComponent);
+    fixture.detectChanges();
+    fixture.componentInstance.openCreate();
+    fixture.detectChanges();
+    expect(renderPickerSublines(fixture, fixture.componentInstance)).toEqual(
+      EXPECTED_PICKER_SUBLINES,
+    );
+  });
+
+  it("opens a super-admin's new visit, and its patient search, at the chip's hospital (QA D912)", fakeAsync(() => {
+    roleCtx.isSuperAdmin = () => true;
+    roleCtx.effectiveHospitalIdForRequest = () => 'hB';
+    // A super-admin's hospital is not locked; the search starts with the page.
+    component.initPatientSearch();
+    deptLookupSpy.getActiveDepartments.calls.reset();
+    component.openCreate();
+    expect(component.form.hospitalId).toBe('hB');
+    // The prefill fires no (change), so the form loads hB's departments itself.
+    expect(deptLookupSpy.getActiveDepartments).toHaveBeenCalledWith('hB');
+
+    const patients = TestBed.inject(PatientService) as jasmine.SpyObj<PatientService>;
+    patients.list.calls.reset();
+    component.onPatientQueryChange('kab');
+    tick(250);
+    expect(patients.list).toHaveBeenCalledWith('hB', 'kab');
+  }));
+
+  describe('super-admin scoped to hospital B (QA D912, D918)', () => {
+    let staff: jasmine.SpyObj<StaffService>;
+
+    beforeEach(() => {
+      roleCtx.isSuperAdmin = () => true;
+      roleCtx.effectiveHospitalIdForRequest = () => 'hB';
+      (TestBed.inject(AuthService) as jasmine.SpyObj<AuthService>).hasAnyRole.and.returnValue(true);
+      hospitalSpy.list.and.returnValue(
+        of([
+          { id: 'h1', name: 'Hôpital A' },
+          { id: 'hB', name: 'Clinique B' },
+        ] as HospitalResponse[]),
+      );
+      staff = TestBed.inject(StaffService) as jasmine.SpyObj<StaffService>;
+      staff.list.calls.reset();
+    });
+
+    function openNewVisit() {
+      const fixture = TestBed.createComponent(EncountersComponent);
+      fixture.detectChanges();
+      fixture.componentInstance.openCreate();
+      fixture.detectChanges();
+      return fixture;
+    }
+
+    it('shows hospital B as selected in the new-visit form', () => {
+      const fixture = openNewVisit();
+      const select = (fixture.nativeElement as HTMLElement).querySelector(
+        '#enc-hospitalId',
+      ) as HTMLSelectElement;
+      expect(select.value).toBe('hB');
+      expect(select.selectedOptions[0]?.textContent?.trim()).toBe('Clinique B');
+    });
+
+    it("offers hospital B's clinicians, and another hospital's after a change", () => {
+      const fixture = openNewVisit();
+      expect(staff.list).toHaveBeenCalledWith('hB');
+      expect(staff.list).not.toHaveBeenCalledWith('h1');
+
+      fixture.componentInstance.form.staffId = 'st-b';
+      fixture.componentInstance.onHospitalChange('h1');
+      expect(staff.list).toHaveBeenCalledWith('h1');
+      expect(fixture.componentInstance.form.staffId).toBe('');
+    });
+
+    it("offers no clinician of the previous hospital while the next hospital's load", () => {
+      const doctor = (id: string, hospitalId: string) =>
+        ({ id, name: id, email: '', hospitalId, roleCode: 'ROLE_DOCTOR' }) as StaffResponse;
+      staff.list.and.returnValue(of([doctor('st-b', 'hB')]));
+      const fixture = openNewVisit();
+      const cmp = fixture.componentInstance;
+      expect(cmp.staffMembers().map((s) => s.id)).toEqual(['st-b']);
+
+      const pending = new Subject<StaffResponse[]>();
+      staff.list.and.returnValue(pending);
+      cmp.onHospitalChange('h1');
+      expect(cmp.staffMembers()).toEqual([]);
+
+      pending.next([doctor('st-a', 'h1')]);
+      expect(cmp.staffMembers().map((s) => s.id)).toEqual(['st-a']);
+    });
+
+    it("shows the server's reason when the visit is refused", () => {
+      const fixture = openNewVisit();
+      encounterSpy.create.and.returnValue(
+        throwError(() => ({
+          status: 400,
+          error: {
+            message:
+              'El miembro del personal seleccionado no pertenece al hospital de la consulta.',
+          },
+        })),
+      );
+      fixture.componentInstance.submitForm();
+      expect(toastSpy.error).toHaveBeenCalledWith(
+        'El miembro del personal seleccionado no pertenece al hospital de la consulta.',
+      );
+    });
   });
 
   it('QA D427: a pharmacist reading encounters is offered no New, Edit or Delete', () => {

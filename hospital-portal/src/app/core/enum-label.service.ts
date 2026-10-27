@@ -1047,6 +1047,27 @@ export class EnumLabelService implements OnDestroy {
   }
 
   /**
+   * QA D908: the label defined for the value — in the locale files or the
+   * curated English map — or `null` when there is none, never the Title-Case
+   * prettification {@link transform} falls back to. A caller that keeps an
+   * unlabelled token verbatim asks this instead of comparing the label with
+   * the prettified code: "Activate" is ACTIVATE's real English label and
+   * reads exactly like the prettified code, so that comparison showed the
+   * raw token to English readers.
+   */
+  knownLabel(value: string | null | undefined, domain?: string): string | null {
+    if (!value) return null;
+    const lang = this.translate.getCurrentLang() || this.translate.getFallbackLang() || 'en';
+    // '?' cannot start a domain name, so this never collides with the other keys.
+    const memoKey = `${lang}|?${domain ?? ''}|${value}`;
+    const cached = this.memo.get(memoKey);
+    if (cached !== undefined) return cached || null;
+    const result = this.lookupKnown(value, domain);
+    this.memo.set(memoKey, result ?? '');
+    return result;
+  }
+
+  /**
    * QA D836: the label for a FREE-TEXT value that may also be one of the
    * domain's curated codes — a lab sample type is typed by the lab ("EDTA",
    * "LCR", "Sang total (EDTA)") but older rows carry a code ("SERUM").
@@ -1107,6 +1128,23 @@ export class EnumLabelService implements OnDestroy {
 
   /** Three-tier lookup. See class JSDoc. */
   private lookup(value: string, domain?: string): string {
+    const known = this.lookupKnown(value, domain);
+    if (known) return known;
+
+    // 3) Prettify — UPPER_SNAKE_CASE → Title Case. QA D836: only a code is
+    // prettified. Free text someone typed ("Sang total (EDTA)", a lab sample
+    // type) is shown as typed: title-casing it read "Sang total (edta)".
+    if (!EnumLabelService.CODE_LIKE.test(value)) {
+      return value;
+    }
+    return value
+      .split('_')
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(' ');
+  }
+
+  /** Tiers 1 and 2 of {@link lookup}: a defined label, or `null`. */
+  private lookupKnown(value: string, domain?: string): string | null {
     // 1) i18n — PORTAL.ENUM.<GROUP>.<VALUE>
     if (domain) {
       const group = EnumLabelService.toUpperSnake(domain);
@@ -1140,16 +1178,6 @@ export class EnumLabelService implements OnDestroy {
     for (const map of Object.values(EnumLabelService.LABELS)) {
       if (map[value]) return map[value];
     }
-
-    // 3) Prettify — UPPER_SNAKE_CASE → Title Case. QA D836: only a code is
-    // prettified. Free text someone typed ("Sang total (EDTA)", a lab sample
-    // type) is shown as typed: title-casing it read "Sang total (edta)".
-    if (!EnumLabelService.CODE_LIKE.test(value)) {
-      return value;
-    }
-    return value
-      .split('_')
-      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-      .join(' ');
+    return null;
   }
 }

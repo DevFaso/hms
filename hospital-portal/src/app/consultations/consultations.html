@@ -502,9 +502,9 @@
                   <span class="chip-name"
                     >{{ selectedPatient()!.firstName }} {{ selectedPatient()!.lastName }}</span
                   >
-                  <span class="chip-sub">{{
-                    selectedPatient()!.mrn || selectedPatient()!.email
-                  }}</span>
+                  @if (selectedPatient() | patientSubline; as sub) {
+                    <span class="chip-sub">{{ sub }}</span>
+                  }
                 </span>
                 <button
                   type="button"
@@ -541,7 +541,9 @@
                         <span class="opt-avatar">{{ patientInitials(p) }}</span>
                         <span class="opt-info">
                           <span class="opt-name">{{ p.firstName }} {{ p.lastName }}</span>
-                          <span class="opt-meta">{{ p.mrn }} · {{ p.email }}</span>
+                          @if (p | patientSubline; as sub) {
+                            <span class="opt-meta">{{ sub }}</span>
+                          }
                         </span>
                       </li>
                     }

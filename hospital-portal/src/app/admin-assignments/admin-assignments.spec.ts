@@ -1,13 +1,15 @@
 import { TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { of } from 'rxjs';
+import { HttpErrorResponse } from '@angular/common/http';
+import { of, throwError } from 'rxjs';
 
 import { AdminAssignmentsComponent } from './admin-assignments';
 import { AssignmentAdminService, AssignmentResponse } from '../services/assignment-admin.service';
 import { HospitalService } from '../services/hospital.service';
 import { RoleResponse, RoleService } from '../services/role.service';
 import { RoleContextService } from '../core/role-context.service';
+import { AuthService } from '../auth/auth.service';
 import { ToastService } from '../core/toast.service';
 
 /**
@@ -27,6 +29,7 @@ describe('AdminAssignmentsComponent — patient assignments start inactive (QA D
     service.create.and.returnValue(of({} as AssignmentResponse));
     TestBed.configureTestingModule({
       providers: [
+        { provide: AuthService, useValue: { getUserProfile: () => null, getUserId: () => null } },
         { provide: AssignmentAdminService, useValue: service },
         { provide: HospitalService, useValue: {} },
         { provide: RoleService, useValue: {} },
@@ -100,6 +103,7 @@ describe('AdminAssignmentsComponent — the role dropdown lists only grantable r
     TestBed.configureTestingModule({
       imports: [AdminAssignmentsComponent, TranslateModule.forRoot()],
       providers: [
+        { provide: AuthService, useValue: { getUserProfile: () => null, getUserId: () => null } },
         { provide: AssignmentAdminService, useValue: service },
         { provide: HospitalService, useValue: { list: () => of([]) } },
         { provide: RoleService, useValue: { list: () => of(roleRows) } },
@@ -166,6 +170,7 @@ describe('AdminAssignmentsComponent — no archived hospital in a granting picke
     TestBed.configureTestingModule({
       imports: [AdminAssignmentsComponent, TranslateModule.forRoot()],
       providers: [
+        { provide: AuthService, useValue: { getUserProfile: () => null, getUserId: () => null } },
         { provide: AssignmentAdminService, useValue: service },
         { provide: HospitalService, useValue: { list: () => of(hospitals) } },
         { provide: RoleService, useValue: { list: () => of([]) } },
@@ -264,5 +269,236 @@ describe('AdminAssignmentsComponent — no archived hospital in a granting picke
       ...OPEN,
       'h-archived',
     ]);
+  });
+});
+
+/**
+ * QA round 14: a 409 on delete said "a staff record still references this
+ * assignment" whatever was in the way (a department, encounters...). The
+ * server names it in the reader's language; the toast shows that.
+ */
+describe('AdminAssignmentsComponent — delete refusal names what still uses the assignment', () => {
+  let component: AdminAssignmentsComponent;
+  let service: jasmine.SpyObj<AssignmentAdminService>;
+  let toast: jasmine.SpyObj<ToastService>;
+  const row = { id: 'a-1' } as AssignmentResponse;
+
+  beforeEach(() => {
+    service = jasmine.createSpyObj<AssignmentAdminService>('AssignmentAdminService', ['delete']);
+    toast = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error']);
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: AuthService, useValue: { getUserProfile: () => null, getUserId: () => null } },
+        { provide: AssignmentAdminService, useValue: service },
+        { provide: HospitalService, useValue: {} },
+        { provide: RoleService, useValue: {} },
+        { provide: RoleContextService, useValue: {} },
+        { provide: ToastService, useValue: toast },
+        { provide: TranslateService, useValue: { instant: (k: string) => k } },
+        { provide: ActivatedRoute, useValue: {} },
+      ],
+    });
+    component = TestBed.runInInjectionContext(() => new AdminAssignmentsComponent());
+    spyOn(window, 'confirm').and.returnValue(true);
+  });
+
+  it("shows the server's sentence on a 409", () => {
+    service.delete.and.returnValue(
+      throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 409,
+            error: { message: 'Impossible de supprimer l’affectation : … des services.' },
+          }),
+      ),
+    );
+    component.delete(row);
+    expect(toast.error).toHaveBeenCalledWith(
+      'Impossible de supprimer l’affectation : … des services.',
+    );
+  });
+
+  it('falls back to the generic conflict text when the 409 has no message', () => {
+    service.delete.and.returnValue(
+      throwError(() => new HttpErrorResponse({ status: 409, error: null })),
+    );
+    component.delete(row);
+    expect(toast.error).toHaveBeenCalledWith('ASSIGN_ADMIN.DELETE_CONFLICT');
+  });
+
+  it('keeps the generic error for anything other than a 409', () => {
+    service.delete.and.returnValue(
+      throwError(
+        () => new HttpErrorResponse({ status: 500, error: { message: 'Internal Server Error' } }),
+      ),
+    );
+    component.delete(row);
+    expect(toast.error).toHaveBeenCalledWith('ASSIGN_ADMIN.ACTION_ERROR');
+  });
+});
+
+/**
+ * QA D902 replay: the dev super-admin opened /admin-assignments with no
+ * filter and clicked the trash icon on the first row, their own global
+ * assignment; it was deleted and the account lost super-admin. The own row
+ * now offers no delete or deactivate, and the server's 409 reads in words.
+ */
+describe('AdminAssignmentsComponent — the signed-in account cannot remove its own row (QA D902)', () => {
+  let component: AdminAssignmentsComponent;
+  let service: jasmine.SpyObj<AssignmentAdminService>;
+  let toast: jasmine.SpyObj<ToastService>;
+  const own = { id: 'a-own', userId: 'u-me', active: true } as AssignmentResponse;
+  const other = { id: 'a-other', userId: 'u-other', active: true } as AssignmentResponse;
+
+  beforeEach(() => {
+    service = jasmine.createSpyObj<AssignmentAdminService>('AssignmentAdminService', [
+      'deactivate',
+    ]);
+    toast = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error']);
+    TestBed.configureTestingModule({
+      providers: [
+        {
+          provide: AuthService,
+          useValue: { getUserProfile: () => ({ id: 'u-me' }), getUserId: () => 'u-me' },
+        },
+        { provide: AssignmentAdminService, useValue: service },
+        { provide: HospitalService, useValue: {} },
+        { provide: RoleService, useValue: {} },
+        { provide: RoleContextService, useValue: {} },
+        { provide: ToastService, useValue: toast },
+        { provide: TranslateService, useValue: { instant: (k: string) => k } },
+        { provide: ActivatedRoute, useValue: {} },
+      ],
+    });
+    component = TestBed.runInInjectionContext(() => new AdminAssignmentsComponent());
+  });
+
+  it('treats only the caller’s own row as their own', () => {
+    expect(component.isOwnRow(own)).toBeTrue();
+    expect(component.isOwnRow(other)).toBeFalse();
+    expect(component.isOwnRow({ id: 'a-x' } as AssignmentResponse)).toBeFalse();
+  });
+
+  it('shows the server’s sentence when a deactivation is refused with a 409', () => {
+    const sentence =
+      'Cette modification laisserait la plateforme sans aucun super administrateur actif. Attribuez d’abord ce rôle à un autre compte.';
+    service.deactivate.and.returnValue(
+      throwError(() => new HttpErrorResponse({ status: 409, error: { message: sentence } })),
+    );
+    component.deactivate(other);
+    expect(toast.error).toHaveBeenCalledWith(sentence);
+  });
+});
+
+describe('AdminAssignmentsComponent — no trash icon on the caller’s own row, rendered (QA D902)', () => {
+  it('renders delete on another account’s row and not on the signed-in account’s', () => {
+    const rows = [
+      { id: 'a-own', userId: 'u-me', active: true, roleCode: 'ROLE_SUPER_ADMIN' },
+      { id: 'a-other', userId: 'u-other', active: true, roleCode: 'ROLE_NURSE' },
+    ] as AssignmentResponse[];
+    const service = jasmine.createSpyObj<AssignmentAdminService>('AssignmentAdminService', [
+      'list',
+    ]);
+    service.list.and.returnValue(
+      of({ content: rows, totalElements: 2, totalPages: 1, number: 0 }) as never,
+    );
+    TestBed.configureTestingModule({
+      imports: [AdminAssignmentsComponent, TranslateModule.forRoot()],
+      providers: [
+        {
+          provide: AuthService,
+          useValue: { getUserProfile: () => ({ id: 'u-me' }), getUserId: () => 'u-me' },
+        },
+        { provide: AssignmentAdminService, useValue: service },
+        { provide: HospitalService, useValue: { list: () => of([]) } },
+        { provide: RoleService, useValue: { list: () => of([]) } },
+        {
+          provide: RoleContextService,
+          useValue: {
+            isSuperAdmin: () => true,
+            hasAnyActiveRole: () => true,
+            activeHospitalId: null,
+          },
+        },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj('ToastService', ['success', 'error']),
+        },
+        {
+          provide: ActivatedRoute,
+          useValue: { snapshot: { queryParamMap: convertToParamMap({}) } },
+        },
+      ],
+    });
+    const fixture = TestBed.createComponent(AdminAssignmentsComponent);
+    fixture.detectChanges();
+    const bodyRows = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('tbody tr'),
+    ) as HTMLElement[];
+    expect(bodyRows.length).toBe(2);
+    expect(bodyRows[0].querySelector('[data-test="assignment-delete"]')).toBeNull();
+    expect(bodyRows[1].querySelector('[data-test="assignment-delete"]')).not.toBeNull();
+  });
+});
+
+/**
+ * QA D915: a hospital admin ticked "Actif" on an inactive row and the server
+ * refused it. Only a super-admin switches a row on directly; the form now says
+ * so and keeps the row as it is.
+ */
+describe('AdminAssignmentsComponent — a hospital admin is not offered "Active" on an inactive row (QA D915)', () => {
+  let component: AdminAssignmentsComponent;
+  let service: jasmine.SpyObj<AssignmentAdminService>;
+  let superAdmin: boolean;
+
+  beforeEach(() => {
+    superAdmin = false;
+    service = jasmine.createSpyObj<AssignmentAdminService>('AssignmentAdminService', ['update']);
+    service.update.and.returnValue(of({} as AssignmentResponse));
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: AuthService, useValue: { getUserProfile: () => null, getUserId: () => null } },
+        { provide: AssignmentAdminService, useValue: service },
+        { provide: HospitalService, useValue: {} },
+        { provide: RoleService, useValue: {} },
+        { provide: RoleContextService, useValue: { isSuperAdmin: () => superAdmin } },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj('ToastService', ['success', 'error']),
+        },
+        { provide: TranslateService, useValue: { instant: (k: string) => k } },
+        { provide: ActivatedRoute, useValue: {} },
+      ],
+    });
+    component = TestBed.runInInjectionContext(() => new AdminAssignmentsComponent());
+    spyOn(component, 'load');
+    component.roles.set([{ id: 'r-nurse', code: 'ROLE_NURSE' } as RoleResponse]);
+  });
+
+  const inactiveRow = {
+    id: 'a1',
+    userId: 'u1',
+    roleId: 'r-nurse',
+    hospitalId: 'h1',
+    active: false,
+  } as AssignmentResponse;
+
+  it('locks "Active" for a hospital admin and leaves the state out of the save', () => {
+    component.openEdit(inactiveRow);
+    expect(component.activationLocked()).toBeTrue();
+    component.formActive.set(true);
+    component.submitEdit();
+    expect(service.update.calls.mostRecent().args[1].active).toBeUndefined();
+  });
+
+  it('still offers it on an active row, and to a super-admin', () => {
+    component.openEdit({ ...inactiveRow, active: true });
+    expect(component.activationLocked()).toBeFalse();
+    superAdmin = true;
+    component.openEdit(inactiveRow);
+    expect(component.activationLocked()).toBeFalse();
+    component.formActive.set(true);
+    component.submitEdit();
+    expect(service.update.calls.mostRecent().args[1].active).toBeTrue();
   });
 });

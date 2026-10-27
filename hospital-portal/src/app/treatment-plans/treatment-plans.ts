@@ -21,11 +21,13 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { missingRequiredMessage } from '../shared/required-fields';
 import { labelledRefusalReason } from '../shared/refusal-reason';
+import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
 
 @Component({
   selector: 'app-treatment-plans',
   standalone: true,
   imports: [
+    PatientSublinePipe,
     ServerTimePipe,
     CommonModule,
     FormsModule,
@@ -153,8 +155,7 @@ export class TreatmentPlansComponent implements OnInit {
         distinctUntilChanged(),
         switchMap((q) => {
           this.patientSearchLoading.set(true);
-          const hid = this.roleContext.activeHospitalId ?? undefined;
-          return this.patientService.list(hid, q);
+          return this.patientService.list(this.patientSearchHospitalId(), q);
         }),
       )
       .subscribe({
@@ -187,6 +188,15 @@ export class TreatmentPlansComponent implements OnInit {
     this.selectedPatient.set(null);
     this.form.patientId = '';
     this.patientQuery.set('');
+  }
+
+  /**
+   * QA D912 (#967 review): the hospital whose patients, and whose MRN, the
+   * typeahead offers: the form's hospital, else the request scope, which for
+   * a super-admin is the hospital the scope chip picked, not their home one.
+   */
+  private patientSearchHospitalId(): string | undefined {
+    return this.form.hospitalId || this.roleContext.effectiveHospitalIdForRequest() || undefined;
   }
 
   patientInitials(p: PatientResponse): string {

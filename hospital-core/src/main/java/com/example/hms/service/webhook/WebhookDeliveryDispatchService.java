@@ -40,7 +40,9 @@ import java.util.UUID;
  * <p>A 2xx is SENT and resets the endpoint's strike count; anything else
  * retries until the ceiling and then lands terminally in ERROR, striking
  * the endpoint; at the threshold the endpoint auto-disables — a dead
- * receiver must not accumulate an unbounded queue.
+ * receiver must not accumulate an unbounded queue. A delivery the transport
+ * refused before sending (the host resolves to a non-public address: DNS
+ * rebinding) is terminal at once.
  */
 @Service
 @Slf4j
@@ -169,7 +171,10 @@ public class WebhookDeliveryDispatchService {
             ? result.error()
             : "Receiver returned HTTP " + result.httpStatus();
         delivery.setLastError(truncate(error));
-        if (delivery.getAttempts() >= properties.getMaxAttempts()) {
+        // Refused before sending (the host now resolves inside, or the URL is
+        // no longer public HTTPS): nothing was sent, and a retry would be
+        // refused too, so it is terminal at once and strikes the endpoint.
+        if (result.refused() || delivery.getAttempts() >= properties.getMaxAttempts()) {
             delivery.setStatus(WebhookDeliveryStatus.ERROR);
             strike(endpoint);
         }

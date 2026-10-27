@@ -13,6 +13,7 @@ import { RoleContextService } from '../core/role-context.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { localDateString } from '../shared/date-utils';
+import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
 
 interface DeptOption {
   id: string;
@@ -22,7 +23,7 @@ interface DeptOption {
 @Component({
   selector: 'app-appointment-form',
   standalone: true,
-  imports: [FormsModule, RouterLink, TranslateModule, EnumLabelPipe],
+  imports: [PatientSublinePipe, FormsModule, RouterLink, TranslateModule, EnumLabelPipe],
   templateUrl: './appointment-form.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './appointment-form.scss',
@@ -173,7 +174,7 @@ export class AppointmentFormComponent implements OnInit {
         distinctUntilChanged(),
         switchMap((q) => {
           this.patientSearchLoading.set(true);
-          return this.patientService.list(undefined, q || undefined);
+          return this.patientService.list(this.patientSearchHospitalId(), q || undefined);
         }),
       )
       .subscribe({
@@ -207,6 +208,15 @@ export class AppointmentFormComponent implements OnInit {
     this.selectedPatient.set(null);
     delete this.form.patientId;
     this.patientQuery.set('');
+  }
+
+  /**
+   * QA D912 (#967 review): the hospital whose patients, and whose MRN, the
+   * typeahead offers: the form's hospital, else the request scope, which for
+   * a super-admin is the hospital the scope chip picked, not their home one.
+   */
+  private patientSearchHospitalId(): string | undefined {
+    return this.form.hospitalId || this.roleContext.effectiveHospitalIdForRequest() || undefined;
   }
 
   patientInitials(p: PatientResponse): string {

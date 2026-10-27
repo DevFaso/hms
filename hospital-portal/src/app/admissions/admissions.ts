@@ -10,8 +10,8 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
-import { Subject } from 'rxjs';
-import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
+import { Subject, of } from 'rxjs';
+import { catchError, debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 import {
   AdmissionService,
   AdmissionResponse,
@@ -35,6 +35,7 @@ import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospit
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { fromServerDateTime, toLocalInputValue, toServerDateTime } from '../shared/date-utils';
 import { BedService, BedResponse } from '../services/bed.service';
+import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
 
 interface OrderSetPickerCtx {
   hospitalId: string;
@@ -50,6 +51,7 @@ const CANCELLABLE_STATUSES = new Set<string>(['PENDING', 'ACTIVE', 'ON_LEAVE']);
   selector: 'app-admissions',
   standalone: true,
   imports: [
+    PatientSublinePipe,
     CommonModule,
     FormsModule,
     TranslateModule,
@@ -141,6 +143,15 @@ export class AdmissionsComponent implements OnInit {
     return [{ id: myStaffId, name, email: profile?.email ?? '' }];
   });
   private allStaff: StaffResponse[] = [];
+  /**
+   * QA D918: the physicians offered are those of the stay's hospital. The
+   * list was loaded once for the home hospital, so a super-admin working on
+   * hospital B was offered A's physicians, which the server refuses. A newer
+   * hospital cancels the load of an older one.
+   */
+  private readonly staffHospital$ = new Subject<string>();
+  /** The hospital the staff list was last requested for. */
+  private staffHospitalId: string | null = null;
   departments = signal<DepartmentOption[]>([]);
   departmentsLoading = signal(false);
   departmentsFailed = signal(false);
@@ -250,14 +261,23 @@ export class AdmissionsComponent implements OnInit {
 
     this.load();
     this.loadAssignedHospitals();
-    // ── TENANT ISOLATION: scope staff list to active hospital ──
-    const hid = this.roleContext.activeHospitalId;
-    this.staffService.list(hid ?? undefined).subscribe((s) => {
-      this.allStaff = s ?? [];
-      // Physicians only: the server refuses a nurse or a midwife as admitting,
-      // attending or discharging provider (QA D84, D176).
-      this.staffMembers.set((s ?? []).filter(isPhysician));
-    });
+    // ── TENANT ISOLATION: scope staff list to the stay's hospital ──
+    this.staffHospital$
+      .pipe(
+        distinctUntilChanged(),
+        switchMap((hid) =>
+          this.staffService.list(hid).pipe(catchError(() => of([] as StaffResponse[]))),
+        ),
+      )
+      .subscribe((s) => {
+        this.allStaff = s ?? [];
+        // Physicians only: the server refuses a nurse or a midwife as admitting,
+        // attending or discharging provider (QA D84, D176).
+        this.staffMembers.set((s ?? []).filter(isPhysician));
+      });
+    this.loadStaffFor(
+      this.roleContext.effectiveHospitalIdForRequest() ?? this.roleContext.activeHospitalId,
+    );
     this.initPatientSearch();
 
     const tab = this.route.snapshot.queryParamMap.get('tab');
@@ -311,9 +331,8 @@ export class AdmissionsComponent implements OnInit {
         distinctUntilChanged(),
         switchMap((q) => {
           this.patientSearchLoading.set(true);
-          // ── TENANT ISOLATION: scope patient search to active hospital ──
-          const hid = this.roleContext.activeHospitalId ?? undefined;
-          return this.patientService.list(hid, q);
+          // ── TENANT ISOLATION: scope patient search to the form's hospital ──
+          return this.patientService.list(this.patientSearchHospitalId(), q);
         }),
       )
       .subscribe({
@@ -348,6 +367,15 @@ export class AdmissionsComponent implements OnInit {
     this.patientQuery.set('');
   }
 
+  /**
+   * QA D912 (#967 review): the hospital whose patients, and whose MRN, the
+   * typeahead offers: the form's hospital, else the request scope, which for
+   * a super-admin is the hospital the scope chip picked, not their home one.
+   */
+  private patientSearchHospitalId(): string | undefined {
+    return this.form.hospitalId || this.roleContext.effectiveHospitalIdForRequest() || undefined;
+  }
+
   patientInitials(p: PatientResponse): string {
     return ((p.firstName?.[0] ?? '') + (p.lastName?.[0] ?? '')).toUpperCase() || '?';
   }
@@ -356,7 +384,19 @@ export class AdmissionsComponent implements OnInit {
   onHospitalChange(hospitalId: string): void {
     this.form.hospitalId = hospitalId;
     this.form.departmentId = undefined;
+    // QA D918: a physician of the previous hospital is refused at this one.
+    this.form.admittingProviderId = '';
     this.loadDepartmentsFor(hospitalId);
+    this.loadStaffFor(hospitalId);
+  }
+
+  /** QA D918: (re)load the physicians of `hospitalId`; a no-op when unchanged. */
+  loadStaffFor(hospitalId: string | null | undefined): void {
+    if (!hospitalId || hospitalId === this.staffHospitalId) return;
+    this.staffHospitalId = hospitalId;
+    // The previous hospital's physicians must not be pickable while this loads.
+    this.staffMembers.set([]);
+    this.staffHospital$.next(hospitalId);
   }
 
   /**
@@ -405,6 +445,7 @@ export class AdmissionsComponent implements OnInit {
     // (change) that loads the departments never fired and the list stayed
     // empty. Load them for whatever hospital the form already carries.
     this.loadDepartmentsFor(this.form.hospitalId);
+    this.loadStaffFor(this.form.hospitalId);
     this.showModal.set(true);
   }
 
@@ -463,8 +504,11 @@ export class AdmissionsComponent implements OnInit {
       firstName: a.patientName?.split(' ')[0] ?? '',
       lastName: a.patientName?.split(' ').slice(1).join(' ') ?? '',
       email: '',
+      // QA D912: reopening an admission keeps this hospital's MRN on the chip.
+      mrn: a.patientMrn ?? undefined,
     } as PatientResponse);
     this.loadDepartmentsFor(a.hospitalId ?? '');
+    this.loadStaffFor(a.hospitalId);
     this.editing.set(true);
     this.editingId.set(a.id);
     this.showModal.set(true);
@@ -540,6 +584,7 @@ export class AdmissionsComponent implements OnInit {
   /* ── Discharge ── */
   confirmDischarge(a: AdmissionResponse): void {
     this.dischargingAdm.set(a);
+    this.loadStaffFor(a.hospitalId);
     this.dischargeForm = {
       dischargeDisposition: 'HOME',
       dischargeSummary: '',

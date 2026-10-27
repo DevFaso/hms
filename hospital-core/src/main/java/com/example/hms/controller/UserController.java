@@ -52,6 +52,7 @@ public class UserController {
     private final com.example.hms.service.PatientAccountRegistrationService patientAccountRegistrationService;
     private final com.example.hms.repository.HospitalRepository hospitalRepository;
     private final RoleValidator roleValidator;
+    private final org.springframework.context.MessageSource messageSource;
 
     @WriteAudited(skip = true, reason = "service emits USER_CREATE / USER_UPDATE / USER_DELETE")
     @Operation(
@@ -248,7 +249,9 @@ public class UserController {
     @PreAuthorize("hasAnyAuthority(" + SecurityConstants.USER_REGISTRAR_AUTHORITIES + ")")
     public ResponseEntity<MessageResponse> deleteUser(@PathVariable UUID id) {
         userService.deleteUser(id);
-        return ResponseEntity.ok(new MessageResponse("User deleted successfully."));
+        // QA D911: in the reader's language, like every other answer here.
+        return ResponseEntity.ok(new MessageResponse(messageSource.getMessage(
+            "user.deleted", null, org.springframework.context.i18n.LocaleContextHolder.getLocale())));
     }
 
     @WriteAudited(skip = true, reason = "service emits USER_RESTORE")

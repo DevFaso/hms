@@ -120,6 +120,17 @@ export class StockRoutingComponent implements OnInit {
   stockResult = signal<StockCheckResult | null>(null);
 
   /**
+   * QA D913: "not enough" is not "none". A shelf holding 50 of the 60 the
+   * order needs was labelled out of stock; only an empty shelf is a stock-out.
+   */
+  readonly stockStatus = computed<'IN_STOCK' | 'INSUFFICIENT' | 'OUT_OF_STOCK' | null>(() => {
+    const result = this.stockResult();
+    if (!result) return null;
+    if (result.sufficient) return 'IN_STOCK';
+    return Number(result.quantityOnHand) > 0 ? 'INSUFFICIENT' : 'OUT_OF_STOCK';
+  });
+
+  /**
    * One in-flight history read at a time; a newer one cancels its predecessor.
    *
    * <p>Independent subscriptions raced, and this screen made that race

@@ -21,6 +21,13 @@ public class PrescriptionResponseDTO {
     private UUID patientId;
     private String patientFullName;
     private String patientEmail;
+    /**
+     * QA D912: the patient's primary phone, so a reopened prescription for a
+     * patient with no email still identifies them under the name. The MRN is
+     * not carried: it lives on the patient's hospital registrations, a
+     * collection the list queries do not fetch.
+     */
+    private String patientPhone;
 
     private UUID staffId;
     private String staffFullName;

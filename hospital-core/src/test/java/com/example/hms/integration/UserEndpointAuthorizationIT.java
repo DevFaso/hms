@@ -302,8 +302,10 @@ class UserEndpointAuthorizationIT extends BaseIT {
             .build());
         String hashBefore = hashOf(patientA);
 
+        // QA D914: the admin reads this account (GET answers it), so the
+        // refusal says why (403) instead of calling it missing.
         assertThat(status(put("/users/" + patientA.getId()), admin, Map.of("password", "Admin-Reset-Pass-1")))
-            .isEqualTo(404);
+            .isEqualTo(403);
         assertThat(hashOf(patientA)).isEqualTo(hashBefore);
     }
 
@@ -540,8 +542,9 @@ class UserEndpointAuthorizationIT extends BaseIT {
         User peer = account("hadmA2", "ROLE_HOSPITAL_ADMIN", hospitalA);
         String hashBefore = hashOf(peer);
 
+        // QA D914: a peer the admin can read is refused in words (403), not as missing.
         assertThat(status(put("/users/" + peer.getId()), hms(adminA, "ROLE_HOSPITAL_ADMIN"),
-            Map.of("password", "Takeover-Pass-1"))).isEqualTo(404);
+            Map.of("password", "Takeover-Pass-1"))).isEqualTo(403);
         assertThat(hashOf(peer)).isEqualTo(hashBefore);
         assertThat(status(put("/users/" + peer.getId()), hms(superAdmin, "ROLE_SUPER_ADMIN"),
             Map.of("firstName", "Renamed"))).isEqualTo(200);

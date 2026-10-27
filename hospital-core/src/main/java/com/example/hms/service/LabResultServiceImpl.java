@@ -1452,9 +1452,11 @@ public class LabResultServiceImpl implements LabResultService {
      */
     private void auditSelfReleaseAfterCommit(UUID labResultId, UUID actorId, UUID hospitalId, UUID patientId) {
         // QA D638: the row is anchored at the releasing hospital and carries the
-        // patient id (an id, never a name), and its text is in the caller's
-        // language, resolved here while the request locale is still bound.
-        String description = com.example.hms.utility.MessageUtil.resolveOrRaw("labresult.audit.selfRelease");
+        // patient id (an id, never a name). QA D894: its text is written in
+        // English, like every audit description, and read in the reader's
+        // language by the audit log.
+        String description = com.example.hms.utility.MessageUtil.resolve(java.util.Locale.ENGLISH,
+            "labresult.audit.selfRelease");
         TransactionCallbacks.afterCommit(() -> {
             try {
                 auditEventLogService.logEvent(AuditEventRequestDTO.builder()

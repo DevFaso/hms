@@ -482,6 +482,8 @@ export interface StockCheckResult {
   /** Null when `quantityOnHand` is an aggregate across all hospital dispensaries. */
   pharmacyId: string | null;
   quantityOnHand: number;
+  /** QA D913: the order's quantity; absent from a server that predates it. */
+  quantityRequired?: number | null;
   sufficient: boolean;
   partnerPharmacies: PartnerOption[];
 }
@@ -1289,6 +1291,9 @@ export interface MtmReviewRequest {
 export interface MtmReviewResponse {
   id: string;
   patientId: string;
+  /** QA D900: the patient's name and MRN at the review's hospital, so the list never shows the UUID. */
+  patientName?: string;
+  patientMrn?: string;
   hospitalId: string;
   pharmacistUserId: string;
   reviewDate: string;

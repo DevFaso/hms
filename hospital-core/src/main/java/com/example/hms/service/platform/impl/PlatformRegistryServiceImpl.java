@@ -412,21 +412,17 @@ public class PlatformRegistryServiceImpl implements PlatformRegistryService {
         HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
         String actor = ctx.getPrincipalUsername();
         UUID organizationId = Optional.ofNullable(service.getOrganization()).map(Organization::getId).orElse(null);
-        StringBuilder description = new StringBuilder("Platform ")
-            .append(action)
-            .append(" type=").append(service.getServiceType())
-            .append(" organizationId=").append(organizationId);
-        if (hospitalId != null) {
-            description.append(" hospitalId=").append(hospitalId);
-        }
-        if (departmentId != null) {
-            description.append(" departmentId=").append(departmentId);
-        }
+        // One expression, so AuditDescriptionCoverageTest can read the shape (QA D894).
+        String description = "Platform " + action
+            + " type=" + service.getServiceType()
+            + " organizationId=" + organizationId
+            + (hospitalId != null ? " hospitalId=" + hospitalId : "")
+            + (departmentId != null ? " departmentId=" + departmentId : "");
         AuditEventRequestDTO event = AuditEventRequestDTO.builder()
             .userId(ctx.getPrincipalUserId())
             .userName(actor != null && !actor.isBlank() ? actor : SYSTEM_ACTOR)
             .eventType(AuditEventType.PLATFORM_REGISTRY_UPDATED)
-            .eventDescription(description.toString())
+            .eventDescription(description)
             .resourceId(service.getId() == null ? null : service.getId().toString())
             .resourceName(service.getServiceType() == null ? null : service.getServiceType().name())
             .entityType(AUDIT_ENTITY_TYPE)

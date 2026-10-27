@@ -491,21 +491,12 @@ public class PatientEverythingService {
     }
 
     private static String describe(UUID patientId, PatientEverythingParams params, int entryCount) {
-        StringBuilder sb = new StringBuilder("FHIR ")
-            .append(PATIENT_PREFIX)
-            .append(patientId)
-            .append("/$everything returned a ")
-            .append(entryCount)
-            .append("-entry Bundle");
-        if (params.since() != null) {
-            sb.append(" since=").append(params.since());
-        }
-        if (!params.types().isEmpty()) {
-            sb.append(" types=").append(String.join(",", params.types()));
-        }
-        sb.append(" count=").append(params.count())
-            .append(" cursor=").append(params.cursor());
-        return sb.toString();
+        // One expression, so AuditDescriptionCoverageTest can read the shape (QA D894).
+        return "FHIR " + PATIENT_PREFIX + patientId + "/$everything returned a " + entryCount + "-entry Bundle"
+            + (params.since() != null ? " since=" + params.since() : "")
+            + (params.types().isEmpty() ? "" : " types=" + String.join(",", params.types()))
+            + " count=" + params.count()
+            + " cursor=" + params.cursor();
     }
 
     private static void addEntry(Bundle bundle, Resource resource) {

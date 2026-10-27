@@ -30,12 +30,37 @@ class LabReferenceRangeOrderTest {
 
     @Test
     void invertedOrInsideCriticalLimitsAreRefused() {
+        // QA D896: each refusal names the limit it is about.
         List<LabTestReferenceRangeDTO> ranges1 = List.of(range(3.5, 5.0, 6.5, 2.5));
         assertThatThrownBy(() -> LabTestDefinitionServiceImpl.requireOrderedRanges(ranges1))
-            .hasFieldOrPropertyWithValue("messageKey", "lab.referenceRange.criticalInverted");
-        List<LabTestReferenceRangeDTO> ranges2 = List.of(range(3.5, 5.0, 4.0, 6.5));
-        assertThatThrownBy(() -> LabTestDefinitionServiceImpl.requireOrderedRanges(ranges2))
-            .hasFieldOrPropertyWithValue("messageKey", "lab.referenceRange.criticalInverted");
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "lab.referenceRange.criticalHigh.belowCriticalLow")
+            .hasFieldOrPropertyWithValue("field", "[0].criticalHigh");
+        List<LabTestReferenceRangeDTO> ranges2 = List.of(range(3.5, 5.0, 2.0, 6.5), range(3.5, 5.0, 4.0, 6.5));
+        assertThatThrownBy(() -> LabTestDefinitionServiceImpl.requireOrderedRanges(ranges2, "referenceRanges"))
+            .hasFieldOrPropertyWithValue("messageKey", "lab.referenceRange.criticalLow.insideRange")
+            .hasFieldOrPropertyWithValue("field", "referenceRanges[1].criticalLow");
+        List<LabTestReferenceRangeDTO> ranges5 = List.of(range(3.9, 6.1, null, 5.0));
+        assertThatThrownBy(() -> LabTestDefinitionServiceImpl.requireOrderedRanges(ranges5))
+            .hasFieldOrPropertyWithValue("messageKey", "lab.referenceRange.criticalHigh.insideRange")
+            .hasFieldOrPropertyWithValue("field", "[0].criticalHigh");
+    }
+
+    @Test
+    void qaD896TheBeanConstraintNamesTheLimitItIsAbout() {
+        Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
+        assertThat(validator.validate(range(3.9, 6.1, null, 5.0)))
+            .singleElement()
+            .satisfies(v -> {
+                assertThat(v.getPropertyPath()).hasToString("criticalHigh");
+                assertThat(v.getMessageTemplate()).isEqualTo("{lab.referenceRange.criticalHigh.insideRange}");
+            });
+        assertThat(validator.validate(range(3.9, 6.1, 4.5, 5.0)))
+            .extracting(v -> v.getPropertyPath().toString())
+            .containsExactlyInAnyOrder("criticalLow", "criticalHigh");
+        assertThat(validator.validate(range(3.9, 6.1, 9.0, 2.0)))
+            .extracting(v -> v.getPropertyPath().toString())
+            .containsExactly("criticalHigh");
     }
 
     @Test
@@ -53,5 +78,6 @@ class LabReferenceRangeOrderTest {
         Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
         assertThat(validator.validate(range(5.0, 3.5, null, null))).isNotEmpty();
         assertThat(validator.validate(range(3.5, 5.0, 2.5, 6.5))).isEmpty();
+        assertThat(validator.validate(range(3.5, 5.0, 6.5, 2.5))).isNotEmpty();
     }
 }

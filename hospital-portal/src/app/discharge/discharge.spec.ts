@@ -5,6 +5,7 @@ import { provideRouter } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { DischargeComponent } from './discharge';
 import { EncounterResponse } from '../services/encounter.service';
+import { DischargeSummary } from '../services/discharge.service';
 
 describe('DischargeComponent — encounter picker label', () => {
   let component: DischargeComponent;
@@ -38,5 +39,26 @@ describe('DischargeComponent — encounter picker label', () => {
       status: 'ARRIVED',
     } as EncounterResponse);
     expect(label).toBe('— INPATIENT (ARRIVED)');
+  });
+
+  // QA D903: reopening a summary rebuilds the picker chip from the row, so the
+  // row's MRN must travel with it or the chip falls back to an empty line.
+  it('keeps the summary MRN on the preselected patient when editing (QA D903)', () => {
+    spyOn(component as never, 'requireStaffContext').and.returnValue(true as never);
+    spyOn(component as never, 'loadEncountersFor');
+    component.openEditSummary({
+      id: 's1',
+      patientId: 'pz',
+      patientName: 'Fatimata Zongo',
+      patientMrn: 'CHW5448',
+      encounterId: 'e1',
+      hospitalId: 'h1',
+      hospitalName: 'H',
+      dischargingProviderId: 'u1',
+      dischargingProviderName: 'Dr',
+      dischargeDate: '2026-10-26',
+    } as DischargeSummary);
+    expect(component.selectedPatient()?.mrn).toBe('CHW5448');
+    expect(component.selectedPatient()?.firstName).toBe('Fatimata');
   });
 });

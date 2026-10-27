@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { WaitlistPanelComponent } from './waitlist-panel.component';
+import { SUBLINE_AWA, SUBLINE_FATIMATA } from '../../testing/patient-subline.fixtures';
 import { TranslateModule } from '@ngx-translate/core';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
@@ -56,7 +57,7 @@ describe('WaitlistPanelComponent', () => {
   const mockPatientService = { list: () => of([]) };
   const mockReferralService = { getDepartmentsByHospital: () => of([]) };
   const mockStaffService = { list: () => of([]) };
-  const mockRoleCtx = { activeHospitalId: 'h1' };
+  const mockRoleCtx = { activeHospitalId: 'h1', effectiveHospitalIdForRequest: () => 'h1' };
 
   beforeEach(async () => {
     mockReceptionService = {
@@ -112,6 +113,18 @@ describe('WaitlistPanelComponent', () => {
     component.openAddForm();
     expect(component.showAddForm()).toBe(true);
     expect(component.selectedPatient()).toBeNull();
+  });
+
+  // QA D912: two patients with the same name were told apart by nothing but a
+  // birth date; each search result now carries this hospital's MRN.
+  it('names each search result by MRN (QA D912)', () => {
+    component.openAddForm();
+    component.patientResults.set([SUBLINE_AWA, SUBLINE_FATIMATA]);
+    fixture.detectChanges();
+    const hints = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('.autocomplete-list .mrn-hint'),
+    ).map((h) => h.textContent?.trim());
+    expect(hints).toEqual(['· CHW2572', '· CHW1444']);
   });
 
   it('should select patient', () => {

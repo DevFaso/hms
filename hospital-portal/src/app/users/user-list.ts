@@ -23,6 +23,7 @@ import {
 import { ToastService } from '../core/toast.service';
 import { deliveryWarningKeys, hasActivationSent } from '../shared/delivery-warnings';
 import { RoleContextService } from '../core/role-context.service';
+import { AuthService } from '../auth/auth.service';
 import { ImpersonationService } from '../services/impersonation.service';
 import { Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -115,6 +116,7 @@ export class UserListComponent implements OnInit, OnDestroy {
   private readonly hospitalService = inject(HospitalService);
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly auth = inject(AuthService);
   private readonly impersonation = inject(ImpersonationService);
   private readonly router = inject(Router);
   private readonly translate = inject(TranslateService);
@@ -643,6 +645,21 @@ export class UserListComponent implements OnInit, OnDestroy {
 
   // ── MVP-4: support impersonation ────────────────────────────────────
   /** True when the current user is a super admin and the row is impersonable. */
+  /** QA D902: the signed-in account is never offered its own delete (the server refuses it). */
+  isSelf(user: UserSummary): boolean {
+    const me = this.auth.getUserProfile()?.id ?? this.auth.getUserId();
+    return !!me && user.id === me;
+  }
+
+  /**
+   * QA D914: an account a hospital admin may not administer (it is also
+   * managed at another hospital, or holds an admin role) offers no edit or
+   * delete; saving it answered "user not found".
+   */
+  isManageable(user: UserSummary): boolean {
+    return user.manageable !== false;
+  }
+
   canImpersonate(user: UserSummary): boolean {
     if (!this.roleContext.isSuperAdmin()) return false;
     if (user.deleted || !user.active) return false;

@@ -9,8 +9,9 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
-import { Subject } from 'rxjs';
-import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
+import { Subject, of } from 'rxjs';
+import { catchError, debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
+import { refusalReason } from '../shared/refusal-reason';
 import {
   EncounterService,
   EncounterRequest,
@@ -38,11 +39,13 @@ import { CheckoutDialogComponent } from '../checkout/checkout-dialog/checkout-di
 import { actionRoles, SERVICE_RULE_ROLES } from '../core/action-permissions';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { serverLocalDate, toServerDateTime } from '../shared/date-utils';
+import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
 
 @Component({
   selector: 'app-encounters',
   standalone: true,
   imports: [
+    PatientSublinePipe,
     ServerTimePipe,
     CommonModule,
     FormsModule,
@@ -167,6 +170,16 @@ export class EncountersComponent implements OnInit {
   hospitals = signal<HospitalResponse[]>([]);
   staffMembers = signal<{ id: string; name: string }[]>([]);
   private allStaff: StaffResponse[] = [];
+  /**
+   * QA D918: the clinicians offered are those of the form's hospital. The list
+   * was loaded once for the home hospital, so a super-admin scoped to B was
+   * offered A's clinicians and the server refused the visit. A newer hospital
+   * cancels the load of an older one.
+   */
+  private readonly staffHospital$ = new Subject<string>();
+  /** The hospital the staff list was last requested for. */
+  private staffHospitalId: string | null = null;
+
   departments = signal<DepartmentOption[]>([]);
   departmentsLoading = signal(false);
   /**
@@ -273,16 +286,27 @@ export class EncountersComponent implements OnInit {
       }
     }
 
-    // ── TENANT ISOLATION: scope staff list to active hospital ──
-    const hid = this.roleContext.activeHospitalId;
-    this.staffService.list(hid ?? undefined).subscribe({
-      next: (list) => {
-        this.allStaff = list;
+    // ── TENANT ISOLATION: scope staff list to the form's hospital ──
+    this.staffHospital$
+      .pipe(
+        distinctUntilChanged(),
+        switchMap((hid) =>
+          this.staffService.list(hid).pipe(catchError(() => of([] as StaffResponse[]))),
+        ),
+      )
+      .subscribe((list) => {
+        this.allStaff = list ?? [];
         this.staffMembers.set(
-          list.filter(isClinicalProvider).map((s) => ({ id: s.id, name: s.name || s.email })),
+          this.allStaff
+            .filter(isClinicalProvider)
+            .map((s) => ({ id: s.id, name: s.name || s.email })),
         );
-      },
-    });
+      });
+    this.loadStaffFor(
+      this.lockedHospitalId ??
+        this.roleContext.effectiveHospitalIdForRequest() ??
+        this.roleContext.activeHospitalId,
+    );
     this.initPatientSearch();
   }
 
@@ -294,9 +318,8 @@ export class EncountersComponent implements OnInit {
         distinctUntilChanged(),
         switchMap((q) => {
           this.patientSearchLoading.set(true);
-          // ── TENANT ISOLATION: always scope patient search to active hospital ──
-          const hid = this.roleContext.activeHospitalId ?? undefined;
-          return this.patientService.list(hid, q);
+          // ── TENANT ISOLATION: always scope patient search to the form's hospital ──
+          return this.patientService.list(this.patientSearchHospitalId(), q);
         }),
       )
       .subscribe({
@@ -331,6 +354,15 @@ export class EncountersComponent implements OnInit {
     this.patientQuery.set('');
   }
 
+  /**
+   * QA D912 (#967 review): the hospital whose patients, and whose MRN, the
+   * typeahead offers: the form's hospital, else the request scope, which for
+   * a super-admin is the hospital the scope chip picked, not their home one.
+   */
+  private patientSearchHospitalId(): string | undefined {
+    return this.form.hospitalId || this.roleContext.effectiveHospitalIdForRequest() || undefined;
+  }
+
   patientInitials(p: PatientResponse): string {
     return ((p.firstName?.[0] ?? '') + (p.lastName?.[0] ?? '')).toUpperCase() || '?';
   }
@@ -339,7 +371,19 @@ export class EncountersComponent implements OnInit {
   onHospitalChange(hospitalId: string): void {
     this.form.hospitalId = hospitalId;
     this.form.departmentId = undefined;
+    // QA D918: a clinician of the previous hospital is refused at this one.
+    this.form.staffId = '';
     this.loadDepartmentsFor(hospitalId);
+    this.loadStaffFor(hospitalId);
+  }
+
+  /** QA D918: (re)load the clinicians of `hospitalId`; a no-op when unchanged. */
+  loadStaffFor(hospitalId: string | null | undefined): void {
+    if (!hospitalId || hospitalId === this.staffHospitalId) return;
+    this.staffHospitalId = hospitalId;
+    // The previous hospital's clinicians must not be pickable while this loads.
+    this.staffMembers.set([]);
+    this.staffHospital$.next(hospitalId);
   }
 
   /**
@@ -380,8 +424,11 @@ export class EncountersComponent implements OnInit {
   // ── CRUD ──
   openCreate(): void {
     this.form = this.emptyForm();
-    // ── TENANT ISOLATION: pre-fill hospitalId from active context ──
-    this.form.hospitalId = this.roleContext.activeHospitalId ?? '';
+    // ── TENANT ISOLATION: pre-fill hospitalId from the request scope ──
+    // QA D912 (#967 review): for a super-admin that is the scope chip's
+    // hospital, not their home one, so the visit and the patient search (and
+    // the MRN on the chip) start at the hospital they are working in.
+    this.form.hospitalId = this.roleContext.effectiveHospitalIdForRequest() ?? '';
     this.editing.set(false);
     this.editingId = '';
     this.editingOriginalDate = '';
@@ -393,6 +440,12 @@ export class EncountersComponent implements OnInit {
     if (this.lockedHospitalId) {
       this.form.hospitalId = this.lockedHospitalId;
       this.loadDepartmentsFor(this.lockedHospitalId);
+    } else if (this.form.hospitalId) {
+      // A prefilled hospital never fires the select's (change): load its
+      // departments here, or the required list is empty (#967 review, round 2),
+      // and its clinicians (QA D918).
+      this.loadDepartmentsFor(this.form.hospitalId);
+      this.loadStaffFor(this.form.hospitalId);
     }
 
     this.showModal.set(true);
@@ -417,9 +470,12 @@ export class EncountersComponent implements OnInit {
       id: enc.patientId,
       firstName: enc.patientName?.split(' ')[0] ?? '',
       lastName: enc.patientName?.split(' ').slice(1).join(' ') ?? '',
-      email: '',
+      // QA D912: the row has no MRN; its contact details keep the chip's fallback.
+      email: enc.patientEmail,
+      phoneNumberPrimary: enc.patientPhoneNumber,
     } as PatientResponse);
     this.loadDepartmentsFor(enc.hospitalId ?? '');
+    this.loadStaffFor(enc.hospitalId);
     this.showModal.set(true);
   }
 
@@ -470,8 +526,10 @@ export class EncountersComponent implements OnInit {
         this.loadEncounters();
         this.saving.set(false);
       },
-      error: () => {
-        this.toast.error(this.translate.instant('ENCOUNTERS.SAVE_FAILED'));
+      error: (err) => {
+        // QA D918: the server says why (e.g. a clinician of another hospital),
+        // in the reader's language; the generic text is for anything else.
+        this.toast.error(refusalReason(err) ?? this.translate.instant('ENCOUNTERS.SAVE_FAILED'));
         this.saving.set(false);
       },
     });

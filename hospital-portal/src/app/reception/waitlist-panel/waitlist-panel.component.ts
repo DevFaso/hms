@@ -28,13 +28,14 @@ import { ToastService } from '../../core/toast.service';
 import { debounceTime, distinctUntilChanged, Subject, switchMap, catchError, of } from 'rxjs';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { serverInstant } from '../../shared/date-utils';
+import { PatientSublinePipe } from '../../shared/patient-picker/patient-subline';
 
 type WaitlistStatus = 'ALL' | 'WAITING' | 'OFFERED' | 'CLOSED';
 
 @Component({
   selector: 'app-waitlist-panel',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule],
+  imports: [PatientSublinePipe, ServerTimePipe, CommonModule, FormsModule, TranslateModule],
   templateUrl: './waitlist-panel.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './waitlist-panel.component.scss',
@@ -95,7 +96,9 @@ export class WaitlistPanelComponent implements OnInit {
   actingOnEntryId = signal<string | null>(null);
 
   ngOnInit(): void {
-    const hospitalId = this.roleCtx.activeHospitalId ?? undefined;
+    // QA D912 (#967 review): the request scope, so a super-admin scoped to
+    // another hospital searches its patients (and MRNs), not their home one.
+    const hospitalId = this.roleCtx.effectiveHospitalIdForRequest() ?? undefined;
 
     if (hospitalId) {
       this.referralService.getDepartmentsByHospital(hospitalId).subscribe({
