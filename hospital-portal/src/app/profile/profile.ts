@@ -14,6 +14,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { AuthService, LoginUserProfile } from '../auth/auth.service';
 import { MFA_STEP_UP_MESSAGES, MfaService, MfaEnrollmentResponse } from '../auth/mfa.service';
 import { OidcAuthService } from '../auth/oidc-auth.service';
+import { AuditDescriptionService } from '../audit-logs/audit-description.service';
 import { ToastService } from '../core/toast.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
@@ -49,6 +50,7 @@ export class ProfileComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly translate = inject(TranslateService);
   private readonly oidcAuth = inject(OidcAuthService);
+  private readonly auditDescriptions = inject(AuditDescriptionService);
 
   private static readonly VALID_TABS: readonly ProfileTab[] = [
     'overview',
@@ -954,6 +956,11 @@ export class ProfileComponent implements OnInit {
       roleName: stored.roleName,
       staffId: stored.staffId,
     };
+  }
+
+  /** QA D894: the activity's description in the reader's language, as on the audit log. */
+  describeActivity(event: AuditEvent): string {
+    return this.auditDescriptions.describe(event);
   }
 
   getActivityIcon(eventType: string): string {

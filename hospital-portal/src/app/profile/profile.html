@@ -1133,7 +1133,9 @@
                             formatTimestamp(event.eventTimestamp)
                           }}</span>
                         </div>
-                        <p class="timeline-desc">{{ event.eventDescription }}</p>
+                        <p class="timeline-desc" [title]="event.eventDescription || ''">
+                          {{ describeActivity(event) }}
+                        </p>
                         <div class="timeline-meta">
                           @if (event.ipAddress) {
                             <span class="meta-tag">

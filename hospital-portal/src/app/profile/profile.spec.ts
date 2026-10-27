@@ -1,14 +1,19 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { signal, WritableSignal } from '@angular/core';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 import { ProfileComponent } from './profile';
 import { AuthService, LoginUserProfile } from '../auth/auth.service';
 import { MfaService } from '../auth/mfa.service';
 import { OidcAuthService } from '../auth/oidc-auth.service';
 import { ToastService } from '../core/toast.service';
-import { EmailChangeResponse, ProfileService, UserProfile } from '../services/profile.service';
+import {
+  AuditEvent,
+  EmailChangeResponse,
+  ProfileService,
+  UserProfile,
+} from '../services/profile.service';
 
 const profile = (email: string, firstName = 'Awa'): UserProfile => ({
   id: 'u1',
@@ -506,5 +511,20 @@ describe('ProfileComponent — editing the profile', () => {
       fixture.detectChanges();
       expect(byId('pwdCurrent')).toBeNull();
     });
+  });
+  it('QA D894: the activity timeline reads a system description in the reader language', () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', {
+      AUDIT: {
+        DESC: { LOGIN_FAILED_BAD_CREDENTIALS: 'Échec de connexion : identifiants incorrects' },
+      },
+    });
+    translate.use('fr');
+    expect(
+      component.describeActivity({
+        eventDescription: 'Login failed: bad credentials',
+        entityType: 'USER',
+      } as AuditEvent),
+    ).toBe('Échec de connexion : identifiants incorrects');
   });
 });
