@@ -192,6 +192,34 @@ class SuperAdminContinuityIT extends BaseIT {
             .extracting(UserRoleHospitalAssignment::getActive).isEqualTo(false);
     }
 
+    @Test
+    void theSuperAdminRolesCodeCannotBeEditedAway() throws Exception {
+        // #968 review: PUT /roles/{id} rewrote the code of any role. A new
+        // code on the super-admin role stripped it from every holder at once,
+        // with nobody left to grant it back.
+        User admin = createUser();
+        Role superAdmin = createSuperAdminAssignment(admin).getRole();
+        signInAs(admin);
+
+        mockMvc.perform(put(API_CONTEXT + "/roles/{id}", superAdmin.getId()).contextPath(API_CONTEXT)
+                .header("Accept-Language", "fr").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\":\"" + superAdmin.getName() + "\",\"code\":\"ROLE_PLATFORM_OWNER\"}"))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.message", startsWith("Le code d'autorité d'un rôle intégré")));
+        assertThat(roleRepository.findById(superAdmin.getId())).get()
+            .extracting(Role::getCode).isEqualTo("ROLE_SUPER_ADMIN");
+
+        // The same code, in another case, is not a change: the edit goes through.
+        mockMvc.perform(put(API_CONTEXT + "/roles/{id}", superAdmin.getId()).contextPath(API_CONTEXT)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\":\"" + superAdmin.getName() + "\",\"code\":\"role_super_admin\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.code").value("ROLE_SUPER_ADMIN"))
+            .andExpect(jsonPath("$.builtIn").value(true));
+        assertThat(roleRepository.findById(superAdmin.getId())).get()
+            .extracting(Role::getCode).isEqualTo("ROLE_SUPER_ADMIN");
+    }
+
     private void signInAs(User user) {
         ActingScopeTestSupport.globalSuperAdmin(user.getId());
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(

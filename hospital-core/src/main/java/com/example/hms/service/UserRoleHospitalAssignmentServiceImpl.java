@@ -1377,14 +1377,19 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         boolean shielded = userRepository.findById(userId)
             .map(user -> scope.shields(user, assignments))
             .orElse(false);
-        List<UserRoleHospitalAssignment> deactivated = shielded
+        List<UserRoleHospitalAssignment> candidates = shielded
             ? List.of()
-            : assignments.stream()
-                .filter(scope::mayChange)
-                .filter(UserRoleHospitalAssignmentServiceImpl::retire)
-                .toList();
+            : assignments.stream().filter(scope::mayChange).toList();
+        // QA D902: checked on the rows as they are now - once retire() has
+        // switched them off, none reads as a live super-admin and the check
+        // could never refuse. scope.shields already keeps a super-admin's
+        // account out of a hospital admin's reach; this holds even if it
+        // did not.
+        requireSuperAdminRemains(candidates);
+        List<UserRoleHospitalAssignment> deactivated = candidates.stream()
+            .filter(UserRoleHospitalAssignmentServiceImpl::retire)
+            .toList();
         if (!deactivated.isEmpty()) {
-            requireSuperAdminRemains(deactivated);
             assignmentRepository.saveAll(deactivated);
         }
         log.info("🔒 Deactivated {} assignment(s) for user ID '{}' within the caller's scope.",
@@ -1434,8 +1439,16 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
     /**
      * QA D902: refuses a change that would take away the last live super-admin
-     * assignment. The live ones are re-read under a row lock, so two removals
-     * racing each other are counted one after the other.
+     * assignment. Before counting the others it locks the super-admin role
+     * rows ({@link RoleRepository#lockRolesWithCodes}), the one lock every
+     * such removal takes - an assignment's, or its account's switch-off or
+     * deletion. Two removals racing each other therefore run one after the
+     * other: the second waits, and its count (a new statement, so a new
+     * READ COMMITTED snapshot) sees what the first committed.
+     *
+     * <p>{@code losing} must be read before the change marks those rows or
+     * their account as no longer live: a row that already reads inactive is
+     * not counted as lost.
      */
     private void requireSuperAdminRemains(Collection<UserRoleHospitalAssignment> losing) {
         Set<UUID> lost = losing.stream()
@@ -1446,7 +1459,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         if (lost.isEmpty()) {
             return;
         }
-        boolean anotherRemains = assignmentRepository.lockLiveAssignmentsWithRoleCodes(SUPER_ADMIN_CODES).stream()
+        roleRepository.lockRolesWithCodes(SUPER_ADMIN_CODES);
+        boolean anotherRemains = assignmentRepository.findLiveAssignmentsWithRoleCodes(SUPER_ADMIN_CODES).stream()
             .anyMatch(row -> !lost.contains(row.getId()));
         if (!anotherRemains) {
             throw new ConflictException(com.example.hms.utility.MessageUtil.resolve("users.assignment.lastSuperAdmin"));

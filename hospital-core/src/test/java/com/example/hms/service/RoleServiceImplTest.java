@@ -171,4 +171,64 @@ class RoleServiceImplTest {
     void listBlueprintsExposesAllDefinitions() {
         assertThat(service.listBlueprints()).hasSize(RoleBlueprint.values().length);
     }
+
+    private Role storedRole(String code) {
+        Role role = Role.builder().name(code).code(code).permissions(new LinkedHashSet<>()).build();
+        role.setId(UUID.randomUUID());
+        when(roleRepository.findById(role.getId())).thenReturn(Optional.of(role));
+        return role;
+    }
+
+    @Test
+    void aBuiltInRolesCodeIsNeverChanged() {
+        // QA D902 (#968 review): a new code stripped the role from every holder.
+        Role superAdmin = storedRole("ROLE_SUPER_ADMIN");
+        RoleRequestDTO request = RoleRequestDTO.builder().name("ROLE_SUPER_ADMIN").code("ROLE_OWNER").build();
+        UUID id = superAdmin.getId();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.update(id, request))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class);
+        assertThat(superAdmin.getCode()).isEqualTo("ROLE_SUPER_ADMIN");
+        verify(roleRepository, org.mockito.Mockito.never()).save(any(Role.class));
+    }
+
+    @Test
+    void aBlankCodeOnABuiltInRoleKeepsItsCodeInsteadOfDerivingOneFromTheName() {
+        Role doctor = storedRole("ROLE_DOCTOR");
+        when(roleRepository.findByCode("ROLE_DOCTOR")).thenReturn(Optional.of(doctor));
+        when(roleRepository.findByNameIgnoreCase("Medecin")).thenReturn(Optional.empty());
+        when(roleRepository.save(any(Role.class))).thenAnswer(invocation -> invocation.getArgument(0, Role.class));
+
+        RoleResponseDTO response = service.update(doctor.getId(),
+            RoleRequestDTO.builder().name("Medecin").code(" ").build());
+
+        assertThat(response.getCode()).isEqualTo("ROLE_DOCTOR");
+        assertThat(response.isBuiltIn()).isTrue();
+        assertThat(response.getName()).isEqualTo("Medecin");
+    }
+
+    @Test
+    void noCustomRoleTakesABuiltInCode() {
+        Role custom = storedRole("CLINICAL_ADMIN");
+        RoleRequestDTO request = RoleRequestDTO.builder().name("Clinical Admin").code("SUPER_ADMIN").build();
+        UUID id = custom.getId();
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.update(id, request))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class);
+        assertThat(custom.getCode()).isEqualTo("CLINICAL_ADMIN");
+    }
+
+    @Test
+    void aCustomRolesCodeStaysEditable() {
+        Role custom = storedRole("CLINICAL_ADMIN");
+        when(roleRepository.findByCode("CLINICAL_LEAD")).thenReturn(Optional.empty());
+        when(roleRepository.findByNameIgnoreCase("Clinical Lead")).thenReturn(Optional.empty());
+        when(roleRepository.save(any(Role.class))).thenAnswer(invocation -> invocation.getArgument(0, Role.class));
+
+        RoleResponseDTO response = service.update(custom.getId(),
+            RoleRequestDTO.builder().name("Clinical Lead").code("clinical lead").build());
+
+        assertThat(response.getCode()).isEqualTo("CLINICAL_LEAD");
+        assertThat(response.isBuiltIn()).isFalse();
+    }
 }

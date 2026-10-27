@@ -148,13 +148,22 @@
             </div>
             <div class="field">
               <label for="roleCode">{{ 'ROLES.CODE' | translate }}</label>
+              <!-- QA D902 (#968 review): every gate reads a built-in role by
+                   its code; a new one stripped it from every holder. -->
               <input
                 id="roleCode"
                 type="text"
                 [(ngModel)]="createForm.code"
                 name="code"
+                [readonly]="codeLocked()"
+                [attr.aria-describedby]="codeLocked() ? 'roleCodeHint' : null"
                 [placeholder]="'ROLES.CODE_PLACEHOLDER' | translate"
               />
+              @if (codeLocked()) {
+                <small id="roleCodeHint" class="field-hint">{{
+                  'ROLES.CODE_BUILT_IN_HINT' | translate
+                }}</small>
+              }
             </div>
           </div>
           <div class="modal-actions">

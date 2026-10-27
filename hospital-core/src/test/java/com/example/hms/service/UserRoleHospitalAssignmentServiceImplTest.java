@@ -1070,7 +1070,7 @@ class UserRoleHospitalAssignmentServiceImplTest {
     @Test
     void qaD902_switchingOffTheLastSuperAdminRowThroughPutIsRefused() {
         makeItTheSuperAdminRow();
-        when(assignmentRepository.lockLiveAssignmentsWithRoleCodes(any())).thenReturn(List.of(assignment));
+        when(assignmentRepository.findLiveAssignmentsWithRoleCodes(any())).thenReturn(List.of(assignment));
         UserRoleHospitalAssignmentRequestDTO dto = new UserRoleHospitalAssignmentRequestDTO();
         dto.setActive(false);
 
@@ -1079,6 +1079,32 @@ class UserRoleHospitalAssignmentServiceImplTest {
             .hasMessageContaining("no active super administrator");
         assertThat(assignment.getActive()).isTrue();
         verify(assignmentRepository, never()).save(any());
+        // #968 review: the one lock every removal takes comes before the count.
+        org.mockito.InOrder order = org.mockito.Mockito.inOrder(roleRepository, assignmentRepository);
+        order.verify(roleRepository).lockRolesWithCodes(Set.of("ROLE_SUPER_ADMIN", "SUPER_ADMIN"));
+        order.verify(assignmentRepository).findLiveAssignmentsWithRoleCodes(any());
+    }
+
+    @Test
+    void qaD902_aScopedRetireCountsTheRowsBeforeSwitchingThemOff() {
+        // #968 review: the check ran on the rows after retire() had switched
+        // them off, so none read as a live super-admin and it never refused.
+        makeItTheSuperAdminRow();
+        UserAccountAccess.AssignmentScope scope = mock(UserAccountAccess.AssignmentScope.class);
+        when(scope.everywhere()).thenReturn(false);
+        when(scope.shields(any(), any())).thenReturn(false);
+        when(scope.mayChange(any())).thenReturn(true);
+        when(accountAccess.assignmentScope()).thenReturn(scope);
+        when(assignmentRepository.findByUserId(assignee.getId())).thenReturn(List.of(assignment));
+        when(userRepository.findById(assignee.getId())).thenReturn(Optional.of(assignee));
+        when(assignmentRepository.findLiveAssignmentsWithRoleCodes(any())).thenReturn(List.of(assignment));
+
+        UUID assigneeId = assignee.getId();
+        assertThatThrownBy(() -> service.retireAssignmentsForUserWithinCallerScope(assigneeId))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class)
+            .hasMessageContaining("no active super administrator");
+        assertThat(assignment.getActive()).isTrue();
+        verify(assignmentRepository, never()).saveAll(any());
     }
 
     @Test
@@ -1103,7 +1129,7 @@ class UserRoleHospitalAssignmentServiceImplTest {
 
         service.updateAssignment(assignment.getId(), dto);
 
-        verify(assignmentRepository, never()).lockLiveAssignmentsWithRoleCodes(any());
+        verify(assignmentRepository, never()).findLiveAssignmentsWithRoleCodes(any());
     }
 
     @Test
@@ -1111,7 +1137,7 @@ class UserRoleHospitalAssignmentServiceImplTest {
         makeItTheSuperAdminRow();
         UserRoleHospitalAssignment other = new UserRoleHospitalAssignment();
         other.setId(UUID.randomUUID());
-        when(assignmentRepository.lockLiveAssignmentsWithRoleCodes(any())).thenReturn(List.of(assignment, other));
+        when(assignmentRepository.findLiveAssignmentsWithRoleCodes(any())).thenReturn(List.of(assignment, other));
 
         service.deactivateAssignment(assignment.getId());
 

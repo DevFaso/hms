@@ -1,4 +1,11 @@
-import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  computed,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import {
@@ -60,6 +67,8 @@ export class RoleListComponent implements OnInit {
   saving = signal(false);
   editing = signal<RoleResponse | null>(null);
   createForm: RoleCreateRequest = { name: '' };
+  /** The role being edited is built in: its code field is read-only. */
+  readonly codeLocked = computed(() => this.editing()?.builtIn === true);
 
   // Delete
   showDeleteConfirm = signal(false);
@@ -139,8 +148,11 @@ export class RoleListComponent implements OnInit {
     }
     this.saving.set(true);
     const existing = this.editing();
+    // A built-in role always sends back its stored code, whatever the field holds.
+    const payload: RoleCreateRequest =
+      existing?.builtIn === true ? { ...this.createForm, code: existing.code } : this.createForm;
     const op = existing
-      ? this.roleService.update(existing.id, this.createForm)
+      ? this.roleService.update(existing.id, payload)
       : this.roleService.create(this.createForm);
 
     op.subscribe({

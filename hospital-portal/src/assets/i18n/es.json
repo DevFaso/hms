@@ -7666,6 +7666,7 @@
     "ALL_PERMISSIONS": "Todos los permisos",
     "ASSIGNED_USERS": "Usuarios asignados",
     "CODE": "Código",
+    "CODE_BUILT_IN_HINT": "El código de un rol integrado lo leen las reglas de acceso de la plataforma y no se puede cambiar.",
     "CODE_PLACEHOLDER": "Ingrese el código...",
     "CONFIRM_DELETE": "¿Está seguro de que desea eliminar este rol?",
     "CREATE_FIRST": "Cree su primer rol para comenzar",
