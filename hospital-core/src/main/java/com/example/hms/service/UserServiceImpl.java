@@ -1443,10 +1443,16 @@ public class UserServiceImpl implements UserService {
      */
     private UserSummaryDTO directoryRow(User user, DirectoryScope scope) {
         UserSummaryDTO dto = userMapper.toSummaryDTO(user);
-        if (dto != null && !scope.seesPatientContacts()) {
+        if (dto == null) {
+            return null;
+        }
+        if (!scope.seesPatientContacts()) {
             dto.setEmail(null);
             dto.setUsername(null);
         }
+        // QA D914: the list offered edit and delete on accounts a hospital admin
+        // may not administer, and the save came back "user not found".
+        dto.setManageable(scope.everyone() || accountAccess.canAdminister(user));
         return dto;
     }
 
@@ -1479,14 +1485,15 @@ public class UserServiceImpl implements UserService {
         // and a FAILURE row.
         User user = userRepository.findById(id)
                 .orElseThrow(() -> userNotFound(id));
-        if (!accountAccess.canDelete(user)) {
-            throw refused(AuditEventType.USER_DELETE, "delete", id);
-        }
         // QA D902: an account never deletes itself (a super-admin's
         // canDelete is true for every account, their own included). Another
-        // administrator does it.
+        // administrator does it. Asked first, so a hospital admin's own
+        // account reads this, not the D914 "not yours" refusal below.
         if (accountAccess.isSelf(user)) {
             throw new ConflictException(MessageUtil.resolve("user.delete.self"));
+        }
+        if (!accountAccess.canDelete(user)) {
+            throw refused(AuditEventType.USER_DELETE, "delete", user);
         }
         // QA D327: a second delete of a deleted account changed nothing yet
         // answered success and wrote a second USER_DELETE audit row.
@@ -1535,7 +1542,7 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> userNotFound(id));
         if (!accountAccess.canAdminister(user)) {
-            throw refused(AuditEventType.USER_RESTORE, "restore", id);
+            throw refused(AuditEventType.USER_RESTORE, "restore", user);
         }
         // QA D327: restoring an account that is not deleted re-ran the
         // restore (and could switch a never-activated account's state) and
@@ -1648,7 +1655,7 @@ public class UserServiceImpl implements UserService {
         if (accountAccess.isSelf(user)) {
             requireSelfServiceChangesOnly(user, dto);
         } else if (!accountAccess.canAdminister(user)) {
-            throw refused(AuditEventType.USER_UPDATE, "update", id);
+            throw refused(AuditEventType.USER_UPDATE, "update", user);
         }
         // A deleted account is restored first, then edited: an edit would
         // otherwise rewrite a tombstone nobody can see (D126).
@@ -1836,11 +1843,25 @@ public class UserServiceImpl implements UserService {
 
     /**
      * A refused cross-account write: recorded as a FAILURE (actor id and
-     * target id only: no names, never the submitted values), then answered
-     * exactly like a missing account. The audit service writes in its own
-     * transaction, so the row survives this one's rollback.
+     * target id only: no names, never the submitted values). The audit service
+     * writes in its own transaction, so the row survives this one's rollback.
+     *
+     * <p>QA D914: an account the caller can READ (GET /users/{id} answers it)
+     * is refused as what it is - a 403 saying only a super-admin may change
+     * it - not as a missing account the caller just opened. Anything the
+     * caller cannot read is still answered exactly like a missing id, so the
+     * refusal is no existence oracle.
      */
-    private ResourceNotFoundException refused(AuditEventType type, String action, UUID targetId) {
+    private RuntimeException refused(AuditEventType type, String action, User target) {
+        RuntimeException answer = accountAccess.canView(target)
+                ? new com.example.hms.exception.ClientSafeAccessDeniedException(
+                    MessageUtil.resolve("user.administer.notYours"))
+                : userNotFound(target.getId());
+        recordRefusal(type, action, target.getId());
+        return answer;
+    }
+
+    private void recordRefusal(AuditEventType type, String action, UUID targetId) {
         auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                 .userId(accountAccess.currentUserId().orElse(null))
                 .eventType(type)
@@ -1849,7 +1870,6 @@ public class UserServiceImpl implements UserService {
                 .entityType("USER")
                 .status(AuditStatus.FAILURE)
                 .build());
-        return userNotFound(targetId);
     }
 
     /**

@@ -140,9 +140,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private static final String DEFAULT_CONFIRMATION_ACTOR_MISMATCH = "Only the assigner who created this assignment can confirm it.";
     private static final String DEFAULT_ACTOR_RESOLUTION_FAILURE = "Unable to resolve the current user.";
     private static final String DEFAULT_HOLDER_CHANGE = "assignment.holderChange.superAdminOnly";
-    private static final String DEFAULT_ACTIVATION_THROUGH_CODE =
-        "Only a super-admin can activate an assignment directly. Send the holder a new code "
-            + "(regenerate the code); the assignment activates when they confirm it.";
+    /** QA D915: a key, so the refusal reads in the caller's language. */
+    private static final String DEFAULT_ACTIVATION_THROUGH_CODE = "assignment.activation.throughCode";
     private static final long CONFIRMATION_CODE_EXPIRY_HOURS = 48;
     private static final List<String> DEFAULT_PROFILE_CHECKLIST = List.of(
         "Review and confirm your personal information",

@@ -651,6 +651,15 @@ export class UserListComponent implements OnInit, OnDestroy {
     return !!me && user.id === me;
   }
 
+  /**
+   * QA D914: an account a hospital admin may not administer (it is also
+   * managed at another hospital, or holds an admin role) offers no edit or
+   * delete; saving it answered "user not found".
+   */
+  isManageable(user: UserSummary): boolean {
+    return user.manageable !== false;
+  }
+
   canImpersonate(user: UserSummary): boolean {
     if (!this.roleContext.isSuperAdmin()) return false;
     if (user.deleted || !user.active) return false;

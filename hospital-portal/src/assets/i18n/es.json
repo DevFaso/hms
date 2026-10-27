@@ -7220,6 +7220,7 @@
     "MFA_STEPUP_IMPERSONATION": "Una sesión de soporte no puede configurar ni cambiar el autenticador de esta cuenta. El titular de la cuenta debe hacerlo personalmente.",
     "MFA_SET_UP": "Configurar una aplicación de autenticación",
     "MFA_COUNTS": "{{enrolled}} registrado(s), {{verified}} verificado(s)",
+    "RECOVERY_COUNTS": "{{configured}} configurado(s), {{verified}} verificado(s)",
     "SET_UP_TOTP": "Configurar TOTP",
     "CHANGE_PASSWORD_DESC": "Introduzca su contraseña actual y elija una nueva de al menos 8 caracteres.",
     "PASSWORD_TOO_SHORT": "La nueva contraseña debe tener al menos 8 caracteres.",
@@ -10299,7 +10300,8 @@
     "DELETE_CONFLICT": "No se puede eliminar: otros registros aún usan esta asignación. Desactívela en su lugar.",
     "IMPORT_FILE_REQUIRED": "Elija primero un archivo CSV",
     "IMPORT_ERROR": "La importación falló",
-    "PATIENT_ACTIVATES_ITSELF": "Una asignación de paciente se activa con la verificación del propio paciente, no aquí."
+    "PATIENT_ACTIVATES_ITSELF": "Una asignación de paciente se activa con la verificación del propio paciente, no aquí.",
+    "ACTIVATE_THROUGH_CODE": "Solo un superadministrador activa una asignación directamente. Envíe un nuevo código a su titular (icono de llave): se activa cuando lo confirme."
   },
   "ADMIN_GOV": {
     "TITLE": "Consola de Gobernanza",

@@ -1399,4 +1399,25 @@ class UserRoleHospitalAssignmentServiceImplTest {
         assertThat(ownRowElsewhere.getActive()).isTrue();
         verify(assignmentRepository).saveAll(List.of(assignment));
     }
+
+    @Test
+    void qaD915_aHospitalAdminSwitchingARowOnIsToldWhyInTheirLanguage() {
+        // QA D915: the refusal was a hard-coded English sentence in every language.
+        assignment.setActive(false);
+        when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
+        when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(false);
+        UserRoleHospitalAssignmentRequestDTO dto = new UserRoleHospitalAssignmentRequestDTO();
+        dto.setActive(true);
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+        UUID id = assignment.getId();
+        try {
+            assertThatThrownBy(() -> service.updateAssignment(id, dto))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageStartingWith("Seul un super administrateur peut activer directement une affectation.");
+        } finally {
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        }
+        assertThat(assignment.getActive()).isFalse();
+        verify(assignmentRepository, never()).save(any());
+    }
 }

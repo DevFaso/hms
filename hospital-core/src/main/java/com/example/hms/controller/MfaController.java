@@ -53,10 +53,10 @@ import java.util.OptionalLong;
 public class MfaController {
 
     private static final String AUTHENTICATED_USER_NOT_FOUND = "Authenticated user not found";
-    private static final String NOT_FULLY_AUTHENTICATED =
-            "MFA enrollment requires a fully authenticated session — partial mfaToken is not sufficient.";
+    private static final String NOT_FULLY_AUTHENTICATED = "mfa.enrollment.partialSession";
 
-    private static final String INVALID_MFA_TOKEN = "Invalid or expired MFA token.";
+    /** QA D911 (re-test 3): every answer here is shown as it is, so it is a bundle key. */
+    private static final String INVALID_MFA_TOKEN = "mfa.token.invalid";
     private static final String PICK_NOT_HONOURED = "auth.mfa.pickNotHonoured";
 
     private final MfaService mfaService;
@@ -82,7 +82,7 @@ public class MfaController {
      */
     private ResponseEntity<Object> pickRefusal(String mfaToken, User user) {
         if (jwtTokenProvider.mfaTokenSelectedRoles(mfaToken).isEmpty()) {
-            return ResponseEntity.status(401).body(new MessageResponse(INVALID_MFA_TOKEN));
+            return ResponseEntity.status(401).body(new MessageResponse(message(INVALID_MFA_TOKEN)));
         }
         auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                 .userId(user.getId())
@@ -128,7 +128,7 @@ public class MfaController {
 
     /** 401 for a caller holding only a partial mfaToken, not a full access token. */
     private ResponseEntity<Object> notFullyAuthenticated() {
-        return ResponseEntity.status(401).body(new MessageResponse(NOT_FULLY_AUTHENTICATED));
+        return ResponseEntity.status(401).body(new MessageResponse(message(NOT_FULLY_AUTHENTICATED)));
     }
 
     /**
@@ -211,7 +211,7 @@ public class MfaController {
                     .build());
             // QA D911: in the reader's language.
             return ResponseEntity.ok(new MessageResponse(
-                messageSource.getMessage("mfa.enrollment.verified", null, org.springframework.context.i18n.LocaleContextHolder.getLocale())));
+                message("mfa.enrollment.verified")));
         }
 
         auditEventLogService.logEvent(AuditEventRequestDTO.builder()
@@ -221,7 +221,7 @@ public class MfaController {
                 .status(AuditStatus.FAILURE)
                 .eventDescription("Invalid TOTP code during enrollment verification")
                 .build());
-        return ResponseEntity.badRequest().body(new MessageResponse("Invalid TOTP code."));
+        return ResponseEntity.badRequest().body(new MessageResponse(message("mfa.enrollment.invalidCode")));
     }
 
     /**
@@ -248,7 +248,7 @@ public class MfaController {
         // Validate the mfaToken
         if (!jwtTokenProvider.isMfaToken(request.mfaToken()) || isSpentOrRevoked(request.mfaToken())) {
             return ResponseEntity.status(401)
-                    .body(new MessageResponse(INVALID_MFA_TOKEN));
+                    .body(new MessageResponse(message(INVALID_MFA_TOKEN)));
         }
 
         String username = jwtTokenProvider.getUsernameFromJWT(request.mfaToken());
@@ -276,7 +276,7 @@ public class MfaController {
                     .eventDescription("MFA code refused during login: too many wrong codes")
                     .build());
             return ResponseEntity.status(429)
-                    .body(new MessageResponse("Too many wrong codes. Try again in a few minutes."));
+                    .body(new MessageResponse(message("mfa.login.tooManyCodes")));
         }
 
         // Check the code without writing anything yet: TOTP first, then a
@@ -297,7 +297,7 @@ public class MfaController {
                     .eventDescription("Invalid MFA code during login")
                     .build());
             return ResponseEntity.status(401)
-                    .body(new MessageResponse("Invalid MFA code."));
+                    .body(new MessageResponse(message("mfa.login.invalidCode")));
         }
 
         // The code is right. Claim the challenge atomically BEFORE anything is
@@ -306,7 +306,7 @@ public class MfaController {
         // and gets a session; the other spends nothing.
         if (!claim(request.mfaToken())) {
             return ResponseEntity.status(401)
-                    .body(new MessageResponse(INVALID_MFA_TOKEN));
+                    .body(new MessageResponse(message(INVALID_MFA_TOKEN)));
         }
         boolean spent = totp
                 ? mfaService.claimTotpStep(user.getId(), totpStep.getAsLong())
@@ -316,7 +316,7 @@ public class MfaController {
             // and its challenge is already spent, so it must start again. The
             // attempt still counts (never a way to reset the lockout).
             return ResponseEntity.status(401)
-                    .body(new MessageResponse("That code was just used. Sign in again."));
+                    .body(new MessageResponse(message("mfa.login.codeJustUsed")));
         }
         mfaService.clearCodeAttempts(user.getId());
 
@@ -439,4 +439,9 @@ public class MfaController {
             @jakarta.validation.constraints.NotBlank String mfaToken,
             @jakarta.validation.constraints.NotBlank @jakarta.validation.constraints.Size(min = 6, max = 8) String code
     ) {}
+
+    /** A bundle message in the reader's language (the request's Accept-Language). */
+    private String message(String key) {
+        return messageSource.getMessage(key, null, org.springframework.context.i18n.LocaleContextHolder.getLocale());
+    }
 }

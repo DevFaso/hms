@@ -7220,6 +7220,7 @@
     "MFA_STEPUP_IMPERSONATION": "A support session cannot set up or change the authenticator of this account. The account holder must do it themselves.",
     "MFA_SET_UP": "Set up an authenticator app",
     "MFA_COUNTS": "{{enrolled}} enrolled, {{verified}} verified",
+    "RECOVERY_COUNTS": "{{configured}} configured, {{verified}} verified",
     "SET_UP_TOTP": "Set Up TOTP",
     "CHANGE_PASSWORD_DESC": "Enter your current password, then choose a new one of at least 8 characters.",
     "PASSWORD_TOO_SHORT": "The new password must be at least 8 characters.",
@@ -10299,7 +10300,8 @@
     "DELETE_CONFLICT": "Cannot delete: other records still use this assignment. Deactivate it instead.",
     "IMPORT_FILE_REQUIRED": "Choose a CSV file first",
     "IMPORT_ERROR": "The import failed",
-    "PATIENT_ACTIVATES_ITSELF": "A patient assignment is activated by the patient's own verification, not here."
+    "PATIENT_ACTIVATES_ITSELF": "A patient assignment is activated by the patient's own verification, not here.",
+    "ACTIVATE_THROUGH_CODE": "Only a super administrator switches an assignment on directly. Send the holder a new code (key icon): it comes on when they confirm it."
   },
   "ADMIN_GOV": {
     "TITLE": "Governance Console",

@@ -1065,8 +1065,14 @@
                     <div>
                       <p class="health-title">{{ 'PROFILE.RECOVERY_CONTACTS' | translate }}</p>
                       <p class="health-value">
-                        {{ credentials()!.recoveryContactCount }} configured,
-                        {{ credentials()!.verifiedRecoveryContacts }} verified
+                        {{
+                          'PROFILE.RECOVERY_COUNTS'
+                            | translate
+                              : {
+                                  configured: credentials()!.recoveryContactCount,
+                                  verified: credentials()!.verifiedRecoveryContacts,
+                                }
+                        }}
                       </p>
                     </div>
                   </div>

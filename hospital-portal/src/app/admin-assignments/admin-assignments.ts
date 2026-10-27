@@ -134,6 +134,15 @@ export class AdminAssignmentsComponent implements OnInit {
     return (role?.code ?? '').toUpperCase().replace(/^ROLE_/, '') === 'PATIENT';
   });
 
+  /**
+   * QA D915: only a super-admin switches a row on directly; a hospital admin
+   * sends a new code instead. The edit form does not offer "Active" to them on
+   * a row that is off (the server refuses it): it reads unchecked and locked.
+   */
+  activationLocked(): boolean {
+    return this.modal() === 'edit' && !this.roleContext.isSuperAdmin() && !this.selected()?.active;
+  }
+
   /* Multi-scope form */
   multiHospitalIds = signal<Set<string>>(new Set());
   multiSendNotifications = signal(true);
@@ -359,8 +368,10 @@ export class AdminAssignmentsComponent implements OnInit {
         roleId: this.formRoleId(),
         hospitalId: this.formHospitalId() || undefined,
         startDate: this.formStartDate() || undefined,
-        // A patient row keeps the state its verification gave it.
-        active: this.patientRoleSelected() ? undefined : this.formActive(),
+        // A patient row keeps the state its verification gave it, and so
+        // does a row a hospital admin may not switch on (QA D915).
+        active:
+          this.patientRoleSelected() || this.activationLocked() ? undefined : this.formActive(),
       })
       .subscribe({
         next: (updated) => {

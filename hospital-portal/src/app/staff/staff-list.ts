@@ -18,6 +18,7 @@ import { UserService, UserSummary } from '../services/user.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { PermissionService } from '../core/permission.service';
+import { AuthService } from '../auth/auth.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { localDateString } from '../shared/date-utils';
@@ -48,6 +49,7 @@ export class StaffListComponent implements OnInit {
   private readonly roleContext = inject(RoleContextService);
   private readonly permissions = inject(PermissionService);
   private readonly translate = inject(TranslateService);
+  private readonly auth = inject(AuthService);
 
   /** True when the user can create/edit/delete staff (admin roles only). */
   readonly canManageStaff = this.permissions.hasPermission('Manage Staff');
@@ -401,6 +403,15 @@ export class StaffListComponent implements OnInit {
   }
 
   // ---------- Delete ----------
+  /**
+   * QA D916: the signed-in admin's own card offers no "Deactivate", as on
+   * /users and /admin-assignments (D902); the server refuses it anyway.
+   */
+  isOwnCard(member: StaffResponse): boolean {
+    const me = this.auth.getUserProfile()?.id ?? this.auth.getUserId();
+    return !!me && member.userId === me;
+  }
+
   confirmDelete(member: StaffResponse): void {
     this.deletingStaff.set(member);
     this.showDeleteConfirm.set(true);

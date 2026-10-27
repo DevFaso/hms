@@ -1972,8 +1972,44 @@ class UserServiceImplTest {
             user.setDeleted(false);
         }
 
+        /** A stranger: may neither administer nor read the account. */
         private void refuseAdministration() {
             when(accountAccess.canAdminister(user)).thenReturn(false);
+            when(accountAccess.canView(user)).thenReturn(false);
+        }
+
+        @Test
+        @DisplayName("QA D914: PUT on an account the caller reads but may not administer: 403 in words, nothing saved")
+        void updateOfAReadableAccountIsRefusedInWords() {
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(accountAccess.canAdminister(user)).thenReturn(false);
+            when(accountAccess.canView(user)).thenReturn(true);
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setFirstName("Changed");
+
+            assertThatThrownBy(() -> userService.updateUser(userId, dto))
+                    .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class)
+                    .hasMessage("Only a super administrator can change or delete this account: "
+                        + "it is not managed by your hospital alone.");
+            verify(userRepository, never()).save(any());
+            verify(auditEventLogService).logEvent(argThat(r ->
+                    r.getStatus() == com.example.hms.enums.AuditStatus.FAILURE
+                            && r.getEventType() == com.example.hms.enums.AuditEventType.USER_UPDATE));
+        }
+
+        @Test
+        @DisplayName("QA D914: DELETE of an account the caller reads but may not administer: 403 in words, untouched")
+        void deleteOfAReadableAccountIsRefusedInWords() {
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(accountAccess.canDelete(user)).thenReturn(false);
+            when(accountAccess.canView(user)).thenReturn(true);
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+
+            assertThatThrownBy(() -> userService.deleteUser(userId))
+                    .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class)
+                    .hasMessageStartingWith("Seul un super administrateur peut modifier ou supprimer ce compte");
+            assertThat(user.isDeleted()).isFalse();
+            verifyNoInteractions(assignmentService);
         }
 
         @Test
@@ -2175,6 +2211,7 @@ class UserServiceImplTest {
         void deleteByStrangerIsRefusedAsMissing() {
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(accountAccess.canDelete(user)).thenReturn(false);
+            when(accountAccess.canView(user)).thenReturn(false);
 
             assertThatThrownBy(() -> userService.deleteUser(userId))
                     .isInstanceOf(ResourceNotFoundException.class);
@@ -2408,8 +2445,11 @@ class UserServiceImplTest {
                     .builder().id(patientAccount.getId()).email("p@example.com").username("p@example.com")
                     .firstName("Pat").build());
 
+            when(accountAccess.canAdminister(patientAccount)).thenReturn(false);
+
             var row = userService.getAllUsers(0, 10, false, false).getContent().get(0);
 
+            assertThat(row.getManageable()).as("QA D914: no edit or delete offered").isFalse();
             assertThat(row.getEmail()).isNull();
             assertThat(row.getUsername()).isNull();
             assertThat(row.getFirstName()).isEqualTo("Pat");

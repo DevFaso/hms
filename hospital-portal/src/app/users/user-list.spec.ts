@@ -496,3 +496,54 @@ describe('UserListComponent — no archived hospital in the create picker (QA D8
     expect(component.availableHospitals().map((h) => h.id)).toEqual(['h1']);
   });
 });
+
+/**
+ * QA D914: a hospital admin saved an account also managed at another hospital
+ * and read "user not found". The list now offers no edit or delete on it.
+ */
+describe('UserListComponent — no edit or delete on an account the caller may not manage (QA D914)', () => {
+  function rowButtons(): { edit: number; del: number } {
+    const page = {
+      content: [
+        { id: 'shared', firstName: 'Qa', lastName: 'Sentinelle', active: true, manageable: false },
+        { id: 'local', firstName: 'Qa', lastName: 'Veilleur', active: true, manageable: true },
+      ],
+      number: 0,
+      totalPages: 1,
+      totalElements: 2,
+    };
+    const users = jasmine.createSpyObj<UserService>('UserService', ['list', 'search']);
+    users.list.and.returnValue(of(page) as never);
+    users.search.and.returnValue(of(page) as never);
+    TestBed.configureTestingModule({
+      imports: [UserListComponent, TranslateModule.forRoot()],
+      providers: [
+        { provide: AuthService, useValue: { getUserProfile: () => null, getUserId: () => null } },
+        provideRouter([]),
+        { provide: UserService, useValue: users },
+        { provide: RoleService, useValue: { list: () => of([]) } },
+        {
+          provide: HospitalService,
+          useValue: { list: () => of({ content: [] }), getMyHospitalAsResponse: () => of(null) },
+        },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj('ToastService', ['success', 'error', 'warning', 'info']),
+        },
+        { provide: RoleContextService, useValue: { isSuperAdmin: () => false } },
+        { provide: ImpersonationService, useValue: { active: () => null } },
+      ],
+    });
+    const fixture = TestBed.createComponent(UserListComponent);
+    fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+    return {
+      edit: root.querySelectorAll('button.action-link.edit').length,
+      del: root.querySelectorAll('button.action-link.delete').length,
+    };
+  }
+
+  it('shows edit and delete on the manageable row only', () => {
+    expect(rowButtons()).toEqual({ edit: 1, del: 1 });
+  });
+});

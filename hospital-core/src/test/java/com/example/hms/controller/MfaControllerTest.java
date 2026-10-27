@@ -165,6 +165,22 @@ class MfaControllerTest {
     }
 
     @Test
+    void verifyEnrollment_aWrongCodeIsRefusedInTheReadersLanguage() throws Exception {
+        // QA D911 (re-test 3): the refusal stayed "Invalid TOTP code." in every
+        // language, and /profile shows it as it is.
+        when(mfaService.verifyEnrollment(org.mockito.ArgumentMatchers.eq(USER_ID), org.mockito.ArgumentMatchers.eq("000000"), any()))
+                .thenReturn(false);
+
+        mockMvc.perform(post("/auth/mfa/verify-enrollment")
+                        .header("Accept-Language", "fr")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"000000\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value(
+                    "Ce code n'a pas été accepté. Saisissez le code actuel de votre application d'authentification."));
+    }
+
+    @Test
     void verifyEnrollment_answersInTheReadersLanguage() throws Exception {
         // QA D911: the success message came back in English whatever the reader's language.
         when(mfaService.verifyEnrollment(org.mockito.ArgumentMatchers.eq(USER_ID), org.mockito.ArgumentMatchers.eq("123456"), any()))
@@ -187,7 +203,7 @@ class MfaControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"code\":\"000000\"}"))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("Invalid TOTP code."));
+                .andExpect(jsonPath("$.message").value("That code was not accepted. Enter the current code from your authenticator app."));
     }
 
     // ── Status ──
@@ -317,7 +333,7 @@ class MfaControllerTest {
                         .content("{\"mfaToken\":\"mfa-tok-late\",\"code\":\"654321\"}"))
                 .andExpect(status().isUnauthorized())
                 // an expired challenge is not reported as a revoked role
-                .andExpect(jsonPath("$.message").value("Invalid or expired MFA token."));
+                .andExpect(jsonPath("$.message").value("This verification step has expired. Sign in again."));
         verify(mfaService, never()).reserveCodeAttempt(any());
     }
 
@@ -339,7 +355,7 @@ class MfaControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"mfaToken\":\"expired-token\",\"code\":\"654321\"}"))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.message").value("Invalid or expired MFA token."));
+                .andExpect(jsonPath("$.message").value("This verification step has expired. Sign in again."));
     }
 
     @Test
@@ -352,7 +368,7 @@ class MfaControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"mfaToken\":\"mfa-tok-123\",\"code\":\"999999\"}"))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.message").value("Invalid MFA code."));
+                .andExpect(jsonPath("$.message").value("That code was not accepted. Enter the current code from your authenticator app, or an unused backup code."));
     }
 
     @Test
@@ -388,7 +404,7 @@ class MfaControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"mfaToken\":\"mfa-tok-123\",\"code\":\"654321\"}"))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.message").value("Invalid or expired MFA token."));
+                .andExpect(jsonPath("$.message").value("This verification step has expired. Sign in again."));
         verifyNoInteractions(mfaService);
     }
 
@@ -576,7 +592,7 @@ class MfaControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"mfaToken\":\"mfa-tok-123\",\"code\":\"654321\"}"))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.message").value("Invalid or expired MFA token."));
+                .andExpect(jsonPath("$.message").value("This verification step has expired. Sign in again."));
     }
 
     @Test
@@ -589,6 +605,6 @@ class MfaControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"mfaToken\":\"mfa-tok-123\",\"code\":\"654321\"}"))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.message").value("Invalid or expired MFA token."));
+                .andExpect(jsonPath("$.message").value("This verification step has expired. Sign in again."));
     }
 }

@@ -440,3 +440,65 @@ describe('AdminAssignmentsComponent — no trash icon on the caller’s own row,
     expect(bodyRows[1].querySelector('[data-test="assignment-delete"]')).not.toBeNull();
   });
 });
+
+/**
+ * QA D915: a hospital admin ticked "Actif" on an inactive row and the server
+ * refused it. Only a super-admin switches a row on directly; the form now says
+ * so and keeps the row as it is.
+ */
+describe('AdminAssignmentsComponent — a hospital admin is not offered "Active" on an inactive row (QA D915)', () => {
+  let component: AdminAssignmentsComponent;
+  let service: jasmine.SpyObj<AssignmentAdminService>;
+  let superAdmin: boolean;
+
+  beforeEach(() => {
+    superAdmin = false;
+    service = jasmine.createSpyObj<AssignmentAdminService>('AssignmentAdminService', ['update']);
+    service.update.and.returnValue(of({} as AssignmentResponse));
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: AuthService, useValue: { getUserProfile: () => null, getUserId: () => null } },
+        { provide: AssignmentAdminService, useValue: service },
+        { provide: HospitalService, useValue: {} },
+        { provide: RoleService, useValue: {} },
+        { provide: RoleContextService, useValue: { isSuperAdmin: () => superAdmin } },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj('ToastService', ['success', 'error']),
+        },
+        { provide: TranslateService, useValue: { instant: (k: string) => k } },
+        { provide: ActivatedRoute, useValue: {} },
+      ],
+    });
+    component = TestBed.runInInjectionContext(() => new AdminAssignmentsComponent());
+    spyOn(component, 'load');
+    component.roles.set([{ id: 'r-nurse', code: 'ROLE_NURSE' } as RoleResponse]);
+  });
+
+  const inactiveRow = {
+    id: 'a1',
+    userId: 'u1',
+    roleId: 'r-nurse',
+    hospitalId: 'h1',
+    active: false,
+  } as AssignmentResponse;
+
+  it('locks "Active" for a hospital admin and leaves the state out of the save', () => {
+    component.openEdit(inactiveRow);
+    expect(component.activationLocked()).toBeTrue();
+    component.formActive.set(true);
+    component.submitEdit();
+    expect(service.update.calls.mostRecent().args[1].active).toBeUndefined();
+  });
+
+  it('still offers it on an active row, and to a super-admin', () => {
+    component.openEdit({ ...inactiveRow, active: true });
+    expect(component.activationLocked()).toBeFalse();
+    superAdmin = true;
+    component.openEdit(inactiveRow);
+    expect(component.activationLocked()).toBeFalse();
+    component.formActive.set(true);
+    component.submitEdit();
+    expect(service.update.calls.mostRecent().args[1].active).toBeTrue();
+  });
+});

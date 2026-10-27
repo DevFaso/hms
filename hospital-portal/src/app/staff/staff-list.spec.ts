@@ -9,6 +9,9 @@ import { UserService } from '../services/user.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { PermissionService } from '../core/permission.service';
+import { AuthService } from '../auth/auth.service';
+
+const authStub = { getUserProfile: () => ({ id: 'me' }), getUserId: () => 'me' };
 
 /**
  * QA D195: the specialization list is medical specialties, and the server
@@ -33,6 +36,7 @@ describe('StaffListComponent — specialization only for physicians (QA D195)', 
           useValue: jasmine.createSpyObj('ToastService', ['success', 'error']),
         },
         { provide: RoleContextService, useValue: {} },
+        { provide: AuthService, useValue: authStub },
         { provide: PermissionService, useValue: { hasPermission: () => true } },
         { provide: TranslateService, useValue: { instant: (k: string) => k } },
       ],
@@ -84,6 +88,7 @@ describe('StaffListComponent — one hospital-admin job title (QA D541)', () => 
           useValue: jasmine.createSpyObj('ToastService', ['success', 'error']),
         },
         { provide: RoleContextService, useValue: {} },
+        { provide: AuthService, useValue: authStub },
         { provide: PermissionService, useValue: { hasPermission: () => true } },
         { provide: TranslateService, useValue: { instant: (k: string) => k } },
       ],
@@ -121,6 +126,7 @@ describe('StaffListComponent — no archived hospital for a new placement (QA D8
           useValue: jasmine.createSpyObj('ToastService', ['success', 'error']),
         },
         { provide: RoleContextService, useValue: {} },
+        { provide: AuthService, useValue: authStub },
         { provide: PermissionService, useValue: { hasPermission: () => true } },
         { provide: TranslateService, useValue: { instant: (k: string) => k } },
       ],
@@ -134,5 +140,32 @@ describe('StaffListComponent — no archived hospital for a new placement (QA D8
     expect(component.hospitalOptions().map((h) => h.id)).toEqual(['h1', 'h3']);
     component.editing.set({ id: 's1', hospitalName: 'Ancien CMA' } as StaffResponse);
     expect(component.hospitalOptions().map((h) => h.id)).toEqual(['h1', 'h2', 'h3']);
+  });
+});
+
+describe('StaffListComponent — no deactivate on your own card (QA D916)', () => {
+  let component: StaffListComponent;
+
+  beforeEach(() => {
+    const staffService = jasmine.createSpyObj<StaffService>('StaffService', ['list']);
+    staffService.list.and.returnValue(of([]));
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: StaffService, useValue: staffService },
+        { provide: HospitalService, useValue: {} },
+        { provide: UserService, useValue: {} },
+        { provide: ToastService, useValue: jasmine.createSpyObj('ToastService', ['success']) },
+        { provide: RoleContextService, useValue: {} },
+        { provide: AuthService, useValue: authStub },
+        { provide: PermissionService, useValue: { hasPermission: () => true } },
+        { provide: TranslateService, useValue: { instant: (k: string) => k } },
+      ],
+    });
+    component = TestBed.runInInjectionContext(() => new StaffListComponent());
+  });
+
+  it('knows the card of the signed-in account, and only that one', () => {
+    expect(component.isOwnCard({ userId: 'me' } as StaffResponse)).toBeTrue();
+    expect(component.isOwnCard({ userId: 'someone-else' } as StaffResponse)).toBeFalse();
   });
 });

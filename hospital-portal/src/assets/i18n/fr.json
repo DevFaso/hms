@@ -7220,6 +7220,7 @@
     "MFA_STEPUP_IMPERSONATION": "Une session de support ne peut pas configurer ni modifier l'authentificateur de ce compte. Le titulaire du compte doit le faire lui-même.",
     "MFA_SET_UP": "Configurer une application d'authentification",
     "MFA_COUNTS": "{{enrolled}} inscrit(s), {{verified}} vérifié(s)",
+    "RECOVERY_COUNTS": "{{configured}} configuré(s), {{verified}} vérifié(s)",
     "SET_UP_TOTP": "Configurer TOTP",
     "CHANGE_PASSWORD_DESC": "Saisissez votre mot de passe actuel, puis choisissez-en un nouveau d’au moins 8 caractères.",
     "PASSWORD_TOO_SHORT": "Le nouveau mot de passe doit comporter au moins 8 caractères.",
@@ -10299,7 +10300,8 @@
     "DELETE_CONFLICT": "Suppression impossible : d'autres enregistrements utilisent encore cette affectation. Désactivez-la plutôt.",
     "IMPORT_FILE_REQUIRED": "Choisissez d'abord un fichier CSV",
     "IMPORT_ERROR": "L'import a échoué",
-    "PATIENT_ACTIVATES_ITSELF": "Une affectation patient est activée par la vérification du patient lui-même, pas ici."
+    "PATIENT_ACTIVATES_ITSELF": "Une affectation patient est activée par la vérification du patient lui-même, pas ici.",
+    "ACTIVATE_THROUGH_CODE": "Seul un super administrateur active directement une affectation. Envoyez un nouveau code à son titulaire (icône clé) : elle s’active dès qu’il le confirme."
   },
   "ADMIN_GOV": {
     "TITLE": "Console de Gouvernance",
