@@ -68,9 +68,15 @@ class AuditDescriptionCoverageTest {
         "com/example/hms/security/audit/WriteAuditInterceptor.java",
         "\"METHOD /route\": read by WRITE_DESCRIPTION in AuditDescriptionService, with the entity");
 
+    /**
+     * A declaration starts at the beginning of the text or right after a
+     * whitespace, ';', '{' or '}', which the match consumes; every token is
+     * bounded, so a failed attempt never re-reads more than one declaration's
+     * length.
+     */
     private static final Pattern METHOD = Pattern.compile(
-        "(?<![\\w.\\[\\]?])(?:(public|private|protected)\\s++)?(?:(?:static|final|synchronized|default)\\s++)*+"
-            + "[\\w\\[\\].?]++(?:<[^>]*+>[>\\[\\]]*+)?\\s++(\\w++)\\s*+\\(");
+        "(?:^|[\\s;{}])(?:(public|private|protected)\\s++)?(?:(?:static|final|synchronized|default)\\s++)*+"
+            + "[\\w\\[\\].?]{1,200}+(?:<[^>]{0,300}+>[>\\[\\]]{0,10}+)?\\s++(\\w{1,200}+)\\s*+\\(");
     private static final Pattern BODY_START = Pattern.compile("^\\s*+(?:throws\\s++[\\w.,][\\w.,\\s]*+)?\\{");
     private static final Set<String> NOT_METHODS = Set.of("if", "for", "while", "switch", "catch", "return",
         "new", "else", "synchronized", "try");

@@ -27,6 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -193,7 +194,7 @@ class RoleServiceImplTest {
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.update(id, request))
             .isInstanceOf(com.example.hms.exception.ConflictException.class);
         assertThat(superAdmin.getCode()).isEqualTo("ROLE_SUPER_ADMIN");
-        verify(roleRepository, org.mockito.Mockito.never()).save(any(Role.class));
+        verify(roleRepository, never()).save(any(Role.class));
     }
 
     @Test
@@ -246,7 +247,7 @@ class RoleServiceImplTest {
             org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.create(request))
                 .isInstanceOf(com.example.hms.exception.ConflictException.class);
         }
-        verify(roleRepository, org.mockito.Mockito.never()).save(any(Role.class));
+        verify(roleRepository, never()).save(any(Role.class));
     }
 
     @Test
@@ -258,8 +259,8 @@ class RoleServiceImplTest {
 
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.delete(id))
             .isInstanceOf(com.example.hms.exception.ConflictException.class);
-        verify(roleRepository, org.mockito.Mockito.never()).delete(any(Role.class));
-        verify(roleRepository, org.mockito.Mockito.never()).deleteById(any(UUID.class));
+        verify(roleRepository, never()).delete(any(Role.class));
+        verify(roleRepository, never()).deleteById(any(UUID.class));
     }
 
     @Test
@@ -270,7 +271,7 @@ class RoleServiceImplTest {
 
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.delete(id))
             .isInstanceOf(com.example.hms.exception.ConflictException.class);
-        verify(roleRepository, org.mockito.Mockito.never()).delete(any(Role.class));
+        verify(roleRepository, never()).delete(any(Role.class));
     }
 
     @Test
