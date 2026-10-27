@@ -188,8 +188,11 @@ describe('EncountersComponent', () => {
     roleCtx.effectiveHospitalIdForRequest = () => 'hB';
     // A super-admin's hospital is not locked; the search starts with the page.
     component.initPatientSearch();
+    deptLookupSpy.getActiveDepartments.calls.reset();
     component.openCreate();
     expect(component.form.hospitalId).toBe('hB');
+    // The prefill fires no (change), so the form loads hB's departments itself.
+    expect(deptLookupSpy.getActiveDepartments).toHaveBeenCalledWith('hB');
 
     const patients = TestBed.inject(PatientService) as jasmine.SpyObj<PatientService>;
     patients.list.calls.reset();

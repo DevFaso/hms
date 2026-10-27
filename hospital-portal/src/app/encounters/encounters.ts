@@ -406,6 +406,10 @@ export class EncountersComponent implements OnInit {
     if (this.lockedHospitalId) {
       this.form.hospitalId = this.lockedHospitalId;
       this.loadDepartmentsFor(this.lockedHospitalId);
+    } else if (this.form.hospitalId) {
+      // A prefilled hospital never fires the select's (change): load its
+      // departments here, or the required list is empty (#967 review, round 2).
+      this.loadDepartmentsFor(this.form.hospitalId);
     }
 
     this.showModal.set(true);
