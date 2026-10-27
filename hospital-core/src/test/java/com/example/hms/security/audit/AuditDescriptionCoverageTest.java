@@ -70,7 +70,7 @@ class AuditDescriptionCoverageTest {
 
     private static final Pattern METHOD = Pattern.compile(
         "(?:(public|private|protected)\\s++)?(?:(?:static|final|synchronized|default)\\s++)*+"
-            + "[\\w<>\\[\\],.?]+(?:\\s*+<[^>]*+>)?\\s++(\\w++)\\s*+\\(");
+            + "[\\w\\[\\].?]++(?:<[^>]*+>[>\\[\\]]*+)?\\s++(\\w++)\\s*+\\(");
     private static final Pattern BODY_START = Pattern.compile("^\\s*+(?:throws\\s++[\\w.,][\\w.,\\s]*+)?\\{");
     private static final Set<String> NOT_METHODS = Set.of("if", "for", "while", "switch", "catch", "return",
         "new", "else", "synchronized", "try");
