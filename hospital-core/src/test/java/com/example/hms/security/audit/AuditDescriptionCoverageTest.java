@@ -69,7 +69,7 @@ class AuditDescriptionCoverageTest {
         "\"METHOD /route\": read by WRITE_DESCRIPTION in AuditDescriptionService, with the entity");
 
     private static final Pattern METHOD = Pattern.compile(
-        "(?:(public|private|protected)\\s++)?(?:(?:static|final|synchronized|default)\\s++)*+"
+        "(?<![\\w.])(?:(public|private|protected)\\s++)?(?:(?:static|final|synchronized|default)\\s++)*+"
             + "[\\w\\[\\].?]++(?:<[^>]*+>[>\\[\\]]*+)?\\s++(\\w++)\\s*+\\(");
     private static final Pattern BODY_START = Pattern.compile("^\\s*+(?:throws\\s++[\\w.,][\\w.,\\s]*+)?\\{");
     private static final Set<String> NOT_METHODS = Set.of("if", "for", "while", "switch", "catch", "return",
