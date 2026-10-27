@@ -3,7 +3,7 @@ import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 
 import { EncountersComponent } from './encounters';
 import {
@@ -244,6 +244,23 @@ describe('EncountersComponent', () => {
       fixture.componentInstance.onHospitalChange('h1');
       expect(staff.list).toHaveBeenCalledWith('h1');
       expect(fixture.componentInstance.form.staffId).toBe('');
+    });
+
+    it("offers no clinician of the previous hospital while the next hospital's load", () => {
+      const doctor = (id: string, hospitalId: string) =>
+        ({ id, name: id, email: '', hospitalId, roleCode: 'ROLE_DOCTOR' }) as StaffResponse;
+      staff.list.and.returnValue(of([doctor('st-b', 'hB')]));
+      const fixture = openNewVisit();
+      const cmp = fixture.componentInstance;
+      expect(cmp.staffMembers().map((s) => s.id)).toEqual(['st-b']);
+
+      const pending = new Subject<StaffResponse[]>();
+      staff.list.and.returnValue(pending);
+      cmp.onHospitalChange('h1');
+      expect(cmp.staffMembers()).toEqual([]);
+
+      pending.next([doctor('st-a', 'h1')]);
+      expect(cmp.staffMembers().map((s) => s.id)).toEqual(['st-a']);
     });
 
     it("shows the server's reason when the visit is refused", () => {

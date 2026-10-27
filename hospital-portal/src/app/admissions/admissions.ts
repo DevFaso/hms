@@ -150,6 +150,8 @@ export class AdmissionsComponent implements OnInit {
    * hospital cancels the load of an older one.
    */
   private readonly staffHospital$ = new Subject<string>();
+  /** The hospital the staff list was last requested for. */
+  private staffHospitalId: string | null = null;
   departments = signal<DepartmentOption[]>([]);
   departmentsLoading = signal(false);
   departmentsFailed = signal(false);
@@ -390,7 +392,11 @@ export class AdmissionsComponent implements OnInit {
 
   /** QA D918: (re)load the physicians of `hospitalId`; a no-op when unchanged. */
   loadStaffFor(hospitalId: string | null | undefined): void {
-    if (hospitalId) this.staffHospital$.next(hospitalId);
+    if (!hospitalId || hospitalId === this.staffHospitalId) return;
+    this.staffHospitalId = hospitalId;
+    // The previous hospital's physicians must not be pickable while this loads.
+    this.staffMembers.set([]);
+    this.staffHospital$.next(hospitalId);
   }
 
   /**

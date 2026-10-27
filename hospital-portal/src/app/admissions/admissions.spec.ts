@@ -4,7 +4,7 @@ import { signal } from '@angular/core';
 import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 
 import { AdmissionsComponent } from './admissions';
 import { AdmissionResponse, AdmissionService } from '../services/admission.service';
@@ -409,6 +409,21 @@ describe('AdmissionsComponent', () => {
       expect(component.form.admittingProviderId).toBe('');
     });
 
+    it("offers no physician of the previous hospital while the next hospital's load (QA D918)", () => {
+      departmentLookup.getActiveDepartments.and.returnValue(of([]));
+      const staff = TestBed.inject(StaffService) as jasmine.SpyObj<StaffService>;
+      component.ngOnInit();
+      expect(component.staffMembers().length).toBeGreaterThan(0);
+
+      const pending = new Subject<StaffResponse[]>();
+      staff.list.and.returnValue(pending);
+      component.onHospitalChange('hB');
+      expect(component.staffMembers()).toEqual([]);
+
+      pending.next([member('docB', 'ROLE_DOCTOR')]);
+      expect(component.staffMembers().map((s) => s.id)).toEqual(['docB']);
+    });
+
     it('edits an existing admission', () => {
       departmentLookup.getActiveDepartments.and.returnValue(of([]));
       component.openEdit(adm({ admissionDateTime: '2026-10-18T10:00:00' }));
@@ -516,6 +531,7 @@ describe('AdmissionsComponent row actions (rendered, D527)', () => {
     roles: string[],
     status = 'ACTIVE',
     admissionDateTime?: string,
+    superAdmin = false,
   ): ComponentFixture<AdmissionsComponent> {
     const admissions = jasmine.createSpyObj<AdmissionService>('AdmissionService', ['getAll']);
     admissions.getAll.and.returnValue(
@@ -535,7 +551,16 @@ describe('AdmissionsComponent row actions (rendered, D527)', () => {
       'list',
       'getMyHospitalAsResponse',
     ]);
-    hospitals.list.and.returnValue(of([]));
+    hospitals.list.and.returnValue(
+      of(
+        superAdmin
+          ? ([
+              { id: 'h1', name: 'Hôpital A' },
+              { id: 'hB', name: 'Clinique B' },
+            ] as HospitalResponse[])
+          : [],
+      ),
+    );
     hospitals.getMyHospitalAsResponse.and.returnValue(of({ id: 'h1' } as HospitalResponse));
     const staff = jasmine.createSpyObj<StaffService>('StaffService', ['list']);
     staff.list.and.returnValue(of([]));
@@ -564,7 +589,7 @@ describe('AdmissionsComponent row actions (rendered, D527)', () => {
         },
         {
           provide: RoleContextService,
-          useValue: roleContextStub({ superAdmin: false, hospitalId: 'h1', roles }),
+          useValue: roleContextStub({ superAdmin, hospitalId: 'h1', roles }),
         },
       ],
     });
@@ -584,6 +609,25 @@ describe('AdmissionsComponent row actions (rendered, D527)', () => {
     expect(renderPickerSublines(fixture, fixture.componentInstance)).toEqual(
       EXPECTED_PICKER_SUBLINES,
     );
+  });
+
+  // QA D912: [value] on the select ran before its @for options existed, so a
+  // super-admin reopening a stay at B saw "Select a hospital".
+  it("shows a super-admin the reopened stay's hospital as selected (QA D912)", () => {
+    const fixture = mount(['ROLE_SUPER_ADMIN'], 'ACTIVE', undefined, true);
+    fixture.componentInstance.openEdit({
+      id: 'a2',
+      hospitalId: 'hB',
+      patientId: 'p1',
+      patientName: 'Awa Kaboré',
+      status: 'ACTIVE',
+    } as AdmissionResponse);
+    fixture.detectChanges();
+    const select = (fixture.nativeElement as HTMLElement).querySelector(
+      '#adm-hospitalId',
+    ) as HTMLSelectElement;
+    expect(select.value).toBe('hB');
+    expect(select.selectedOptions[0]?.textContent?.trim()).toBe('Clinique B');
   });
 
   it('keeps the MRN on the chip when an admission is reopened (QA D912)', () => {
