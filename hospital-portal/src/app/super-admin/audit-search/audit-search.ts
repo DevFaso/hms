@@ -40,6 +40,7 @@ const ALL_SOURCES: AuditSource[] = ['SUPPORT', 'FRONTEND', 'PERMISSION_MATRIX', 
 type ActiveTab = 'support' | 'aggregated';
 
 import { EnumLabelService } from '../../core/enum-label.service';
+import { AuditDescriptionService } from '../../audit-logs/audit-description.service';
 import { toLocalInputValue, toServerDateTime } from '../../shared/date-utils';
 @Component({
   selector: 'app-super-admin-audit-search',
@@ -64,6 +65,21 @@ export class SuperAdminAuditSearchComponent implements OnInit {
   /** QA D619: an audit entity token as its keyed label (core/enum-label.service). */
   entityLabel(raw: string | null | undefined): string | null {
     return this.enumLabels.auditEntityLabel(raw);
+  }
+
+  private readonly descriptions = inject(AuditDescriptionService);
+
+  /**
+   * QA D894: SUPPORT and PLATFORM_CONFIG rows carry the server's English
+   * audit description (SuperAdminAuditAggregationServiceImpl.toDto), so they
+   * are read through the same patterns as /super-admin/audit-logs. FRONTEND
+   * (portal metadata) and PERMISSION_MATRIX summaries are not audit
+   * descriptions and stay as they are; the raw text is kept in the tooltip.
+   */
+  summaryText(row: AggregatedAuditEvent): string {
+    if (!row.summary) return '';
+    if (row.source !== 'SUPPORT' && row.source !== 'PLATFORM_CONFIG') return row.summary;
+    return this.descriptions.describe({ eventDescription: row.summary });
   }
 
   private readonly residencyService = inject(DataResidencyService);
