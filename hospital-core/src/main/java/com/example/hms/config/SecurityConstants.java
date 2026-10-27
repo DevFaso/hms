@@ -175,7 +175,9 @@ public class SecurityConstants {
      * ROLE_SUPER_ADMIN, the platform's only way back. {@code PUT /roles/{id}}
      * refuses a code change to or from any of them; the name and description
      * stay editable. {@code SUPER_ADMIN} is the legacy spelling still counted
-     * as a super-admin.
+     * as a super-admin. The codes V159 retired (no gate reads them, and
+     * RoleRegistryTest keeps it so) are not listed: a leftover row with one of
+     * them is an ordinary role that can be deleted once nobody holds it.
      */
     public static final java.util.Set<String> BUILT_IN_ROLE_CODES = java.util.Set.of(
         ROLE_SUPER_ADMIN, "SUPER_ADMIN", ROLE_HOSPITAL_ADMIN, ROLE_ADMIN, ROLE_DOCTOR, "ROLE_PHYSICIAN",
@@ -183,8 +185,7 @@ public class SecurityConstants {
         ROLE_LAB_SCIENTIST, ROLE_LAB_TECHNICIAN, ROLE_LAB_MANAGER, ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER,
         ROLE_PHARMACIST, "ROLE_PHARMACY_VERIFIER", "ROLE_CLAIMS_REVIEWER", "ROLE_INVENTORY_CLERK",
         "ROLE_STORE_MANAGER", ROLE_ACCOUNTANT, "ROLE_BILLING_SPECIALIST", ROLE_RADIOLOGIST, ROLE_SURGEON,
-        ROLE_ANESTHESIOLOGIST, ROLE_PHYSIOTHERAPIST, "ROLE_PROVIDER_ADMIN",
-        "ROLE_MANAGER", "ROLE_SECURITY", "ROLE_SUPPORT");
+        ROLE_ANESTHESIOLOGIST, ROLE_PHYSIOTHERAPIST, "ROLE_PROVIDER_ADMIN");
 
     /** Whether this stored role code is one the platform ships with ({@link #BUILT_IN_ROLE_CODES}). */
     public static boolean isBuiltInRoleCode(String code) {

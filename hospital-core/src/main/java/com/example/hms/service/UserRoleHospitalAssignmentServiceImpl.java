@@ -1487,7 +1487,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             .filter(SecurityConstants::isBuiltInRoleCode)
             .isPresent();
         if (builtIn) {
-            throw new ConflictException(messageSource.getMessage("role.delete.builtIn", null, locale));
+            throw new ConflictException(com.example.hms.utility.MessageUtil.resolve("role.delete.builtIn"));
         }
         if (assignmentRepository.existsByRoleId(roleId)) {
             throw new ConflictException(

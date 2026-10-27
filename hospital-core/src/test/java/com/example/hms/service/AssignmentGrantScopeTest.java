@@ -2,6 +2,7 @@ package com.example.hms.service;
 
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.ConflictException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.UserRoleHospitalAssignmentMapper;
 import com.example.hms.model.Hospital;
@@ -1105,14 +1106,41 @@ class AssignmentGrantScopeTest {
         }
 
         @Test
-        @DisplayName("a verified super-admin deletes an unassigned role")
+        @DisplayName("a verified super-admin deletes an unassigned custom role")
         void superAdminDeletesARole() {
             signInAsSuperAdmin();
-            when(assignmentRepository.findByRoleId(nurse.getId())).thenReturn(List.of());
+            Role custom = role("ROLE_WARD_SCRIBE");
+            when(roleRepository.findById(custom.getId())).thenReturn(Optional.of(custom));
+            when(assignmentRepository.existsByRoleId(custom.getId())).thenReturn(false);
 
-            service.deleteRole(nurse.getId());
+            service.deleteRole(custom.getId());
 
-            verify(roleRepository).deleteById(nurse.getId());
+            verify(roleRepository).deleteById(custom.getId());
+        }
+
+        @Test
+        @DisplayName("a built-in role is never deleted, even unassigned: 409, nothing deleted")
+        void builtInRoleIsNeverDeleted() {
+            signInAsSuperAdmin();
+            UUID nurseRoleId = nurse.getId();
+
+            assertThatThrownBy(() -> service.deleteRole(nurseRoleId))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("built-in");
+            verify(roleRepository, never()).deleteById(any());
+        }
+
+        @Test
+        @DisplayName("a custom role still assigned to someone is not deleted: 409, nothing deleted")
+        void assignedCustomRoleIsNotDeleted() {
+            signInAsSuperAdmin();
+            Role custom = role("ROLE_WARD_SCRIBE");
+            UUID customId = custom.getId();
+            when(roleRepository.findById(customId)).thenReturn(Optional.of(custom));
+            when(assignmentRepository.existsByRoleId(customId)).thenReturn(true);
+
+            assertThatThrownBy(() -> service.deleteRole(customId)).isInstanceOf(ConflictException.class);
+            verify(roleRepository, never()).deleteById(any());
         }
     }
 }

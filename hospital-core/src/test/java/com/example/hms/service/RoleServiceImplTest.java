@@ -239,8 +239,9 @@ class RoleServiceImplTest {
     @Test
     void noNewRoleTakesABuiltInCode() {
         // #968 review: a custom SUPER_ADMIN row, once assigned, counted as
-        // "another super-admin remains". Legacy and retired codes included.
-        for (String code : List.of("SUPER_ADMIN", "role physician", "ROLE_MANAGER")) {
+        // "another super-admin remains". The legacy spelling and a code given
+        // in lower case with a space are normalised before the check.
+        for (String code : List.of("SUPER_ADMIN", "role physician", "role lab manager")) {
             RoleRequestDTO request = RoleRequestDTO.builder().name("Custom " + code).code(code).build();
             org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.create(request))
                 .isInstanceOf(com.example.hms.exception.ConflictException.class);
