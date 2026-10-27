@@ -1323,6 +1323,7 @@ class UserRoleHospitalAssignmentServiceImplTest {
         com.example.hms.model.Staff retiredStaff = new com.example.hms.model.Staff();
         retiredStaff.setActive(false);
         retiredStaff.setAssignment(assignment);
+        retiredStaff.setHospital(hospital);
         when(assignmentRepository.findByAssignmentCode(VALID_CODE)).thenReturn(Optional.of(assignment));
         when(assignmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
         when(staffRepository.findByAssignment_Id(assignment.getId())).thenReturn(List.of(retiredStaff));
@@ -1348,6 +1349,7 @@ class UserRoleHospitalAssignmentServiceImplTest {
         }).when(mapper).updateEntity(any(), any(), any(), any());
         com.example.hms.model.Staff retiredStaff = new com.example.hms.model.Staff();
         retiredStaff.setActive(false);
+        retiredStaff.setHospital(hospital);
         when(staffRepository.findByAssignment_Id(assignment.getId())).thenReturn(List.of(retiredStaff));
         UserRoleHospitalAssignmentRequestDTO dto = new UserRoleHospitalAssignmentRequestDTO();
         dto.setActive(true);
@@ -1355,5 +1357,46 @@ class UserRoleHospitalAssignmentServiceImplTest {
         service.updateAssignment(assignment.getId(), dto);
 
         assertThat(retiredStaff.isActive()).isTrue();
+    }
+
+    @Test
+    void qaD907_aRowMovedToAnotherHospitalNeverRevivesTheOldHospitalsStaffRecord() {
+        // #968 review: a super-admin moved the row from A to B; B's admin
+        // re-invited it, and the code switched A's deactivated record back on.
+        Hospital previous = new Hospital();
+        previous.setId(UUID.randomUUID());
+        assignee.setActive(true);
+        assignment.setActive(false);
+        com.example.hms.model.Staff atPrevious = new com.example.hms.model.Staff();
+        atPrevious.setActive(false);
+        atPrevious.setHospital(previous);
+        when(assignmentRepository.findByAssignmentCode(VALID_CODE)).thenReturn(Optional.of(assignment));
+        when(assignmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(staffRepository.findByAssignment_Id(assignment.getId())).thenReturn(List.of(atPrevious));
+
+        service.verifyAssignmentByCode(VALID_CODE, VALID_PIN);
+
+        assertThat(assignment.getActive()).isTrue();
+        assertThat(atPrevious.isActive()).isFalse();
+        verify(staffRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void qaD907_theRecordsOwnRowAtAnotherHospitalIsThatHospitalsBusiness() {
+        // Pins isStaffAccessAt: the staff record's own row counts only when it
+        // is platform-wide, never when it sits at another hospital.
+        Hospital elsewhere = new Hospital();
+        elsewhere.setId(UUID.randomUUID());
+        UserRoleHospitalAssignment ownRowElsewhere = rowFor("ROLE_NURSE", elsewhere, true, null);
+        assignment.setActive(true);
+        assignment.setConfirmationCode(null);
+        when(assignmentRepository.findByUserId(assignee.getId())).thenReturn(List.of(assignment, ownRowElsewhere));
+
+        int retired = service.retireStaffAccessAtHospital(assignee.getId(), hospital.getId(), ownRowElsewhere.getId());
+
+        assertThat(retired).isEqualTo(1);
+        assertThat(assignment.getActive()).isFalse();
+        assertThat(ownRowElsewhere.getActive()).isTrue();
+        verify(assignmentRepository).saveAll(List.of(assignment));
     }
 }

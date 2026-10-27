@@ -1506,8 +1506,14 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         if (assignment.getId() == null) {
             return;
         }
+        UUID hospitalId = assignment.getHospital() != null ? assignment.getHospital().getId() : null;
+        // Only a record at the assignment's own hospital: a row a super-admin
+        // moved to another hospital must not revive the old hospital's staff
+        // record when the new hospital's admin re-invites it (#968 review).
         List<Staff> retired = staffRepository.findByAssignment_Id(assignment.getId()).stream()
             .filter(staff -> !staff.isActive())
+            .filter(staff -> hospitalId != null && staff.getHospital() != null
+                && hospitalId.equals(staff.getHospital().getId()))
             .toList();
         retired.forEach(staff -> staff.setActive(true));
         if (!retired.isEmpty()) {
