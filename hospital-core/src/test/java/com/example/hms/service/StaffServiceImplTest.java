@@ -62,6 +62,7 @@ class StaffServiceImplTest {
     @Mock private UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock private RoleRepository roleRepository;
     @Mock private com.example.hms.security.tenant.ActingScopeResolver actingScopeResolver;
+    @Mock private UserRoleHospitalAssignmentService assignmentService;
 
     @InjectMocks
     private StaffServiceImpl staffService;
@@ -856,11 +857,13 @@ class StaffServiceImplTest {
 
         UserRoleHospitalAssignment activeAssignment = new UserRoleHospitalAssignment();
         activeAssignment.setId(UUID.randomUUID());
+        activeAssignment.setHospital(hospital);
+        activeAssignment.setActive(true);
 
         when(userRepository.findByEmail("doctor@test.com")).thenReturn(Optional.of(user));
         when(hospitalRepository.findByName("Test Hospital")).thenReturn(Optional.of(hospital));
-        when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(user.getId(), hospitalId))
-            .thenReturn(Optional.of(activeAssignment));
+        when(assignmentRepository.findByUser_IdAndActiveTrue(user.getId()))
+            .thenReturn(List.of(activeAssignment));
         when(staffRepository.existsByLicenseNumber("LIC-NEW")).thenReturn(false);
         when(staffMapper.toStaff(dto, user, hospital, null, activeAssignment)).thenReturn(staff);
         when(staffRepository.save(staff)).thenReturn(staff);
@@ -1229,5 +1232,125 @@ class StaffServiceImplTest {
         verify(assignmentRepository).existsActiveByUserAndHospitalAndAnyRoleCode(eq(callerId), eq(hospitalId),
             org.mockito.ArgumentMatchers.argThat(codes -> codes.contains("ROLE_LAB_DIRECTOR")
                 && codes.contains("ROLE_HOSPITAL_ADMIN") && !codes.contains("ROLE_DOCTOR")));
+    }
+
+    // QA D907: the dialog promises the person loses access; the staff row
+    // alone used to change and their role at the hospital stayed on.
+
+    @Test
+    void deleteStaff_switchesOffTheAccessItStoodForAtItsHospital() {
+        UserRoleHospitalAssignment linked = new UserRoleHospitalAssignment();
+        linked.setId(UUID.randomUUID());
+        staff.setAssignment(linked);
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(departmentRepository.existsByHeadOfDepartmentId(staffId)).thenReturn(false);
+
+        staffService.deleteStaff(staffId, locale);
+
+        verify(assignmentService).retireStaffAccessAtHospital(user.getId(), hospitalId, linked.getId());
+        assertThat(staff.isActive()).isFalse();
+        verify(staffRepository).save(staff);
+    }
+
+    @Test
+    void deleteStaff_aRecordSwitchedOffBeforeTheFixStillHasItsAccessCut() {
+        staff.setActive(false);
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(departmentRepository.existsByHeadOfDepartmentId(staffId)).thenReturn(false);
+
+        staffService.deleteStaff(staffId, locale);
+
+        verify(assignmentService).retireStaffAccessAtHospital(user.getId(), hospitalId, null);
+    }
+
+    @Test
+    void deleteStaff_aRefusedAccessCutLeavesTheRecordAsItWas() {
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(departmentRepository.existsByHeadOfDepartmentId(staffId)).thenReturn(false);
+        when(assignmentService.retireStaffAccessAtHospital(any(), any(), any()))
+            .thenThrow(new com.example.hms.exception.ConflictException("own"));
+
+        assertThatThrownBy(() -> staffService.deleteStaff(staffId, locale))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class);
+        assertThat(staff.isActive()).isTrue();
+        verify(staffRepository, never()).save(any());
+    }
+
+    @Test
+    void updateStaff_anEditNeverSwitchesTheRecordBackOnWhileItsAccessIsOff() {
+        UserRoleHospitalAssignment retired = new UserRoleHospitalAssignment();
+        retired.setId(UUID.randomUUID());
+        retired.setHospital(hospital);
+        retired.setActive(false);
+        staff.setActive(false);
+        staff.setAssignment(retired);
+        StaffRequestDTO dto = StaffRequestDTO.builder()
+            .userEmail("doctor@test.com")
+            .hospitalName("Test Hospital")
+            .jobTitle("NURSE")
+            .licenseNumber("LIC-001")
+            .build();
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(userRepository.findByEmail("doctor@test.com")).thenReturn(Optional.of(user));
+        when(hospitalRepository.findByName("Test Hospital")).thenReturn(Optional.of(hospital));
+        // Only a patient row is on here: it is no staff access.
+        UserRoleHospitalAssignment patientRow = new UserRoleHospitalAssignment();
+        patientRow.setHospital(hospital);
+        patientRow.setActive(true);
+        Role patient = new Role();
+        patient.setCode("ROLE_PATIENT");
+        patientRow.setRole(patient);
+        when(assignmentRepository.findByUser_IdAndActiveTrue(user.getId())).thenReturn(List.of(patientRow));
+        // What the lookup this replaced answered: the patient row.
+        org.mockito.Mockito.lenient()
+            .when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(user.getId(), hospitalId))
+            .thenReturn(Optional.of(patientRow));
+        // The mapper applies the request's default active=true, as the real one does.
+        org.mockito.Mockito.doAnswer(inv -> {
+            Staff target = inv.getArgument(1);
+            target.setAssignment(inv.getArgument(5));
+            target.setActive(true);
+            return null;
+        }).when(staffMapper).updateStaffFromDto(any(), any(), any(), any(), any(), any());
+        when(staffRepository.save(staff)).thenReturn(staff);
+        when(staffMapper.toStaffDTO(staff)).thenReturn(staffDto);
+
+        staffService.updateStaff(staffId, dto, locale);
+
+        assertThat(staff.getAssignment()).as("never relinked to the patient row").isSameAs(retired);
+        assertThat(staff.isActive()).isFalse();
+    }
+
+    @Test
+    void updateStaff_switchingTheRecordOffCutsItsAccessToo() {
+        // #968 review: PUT {active:false} reached the D907 state DELETE no longer does.
+        UserRoleHospitalAssignment linked = new UserRoleHospitalAssignment();
+        linked.setId(UUID.randomUUID());
+        linked.setHospital(hospital);
+        linked.setActive(true);
+        staff.setAssignment(linked);
+        StaffRequestDTO dto = StaffRequestDTO.builder()
+            .userEmail("doctor@test.com")
+            .hospitalName("Test Hospital")
+            .jobTitle("NURSE")
+            .licenseNumber("LIC-001")
+            .active(false)
+            .build();
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(userRepository.findByEmail("doctor@test.com")).thenReturn(Optional.of(user));
+        when(hospitalRepository.findByName("Test Hospital")).thenReturn(Optional.of(hospital));
+        when(assignmentRepository.findByUser_IdAndActiveTrue(user.getId())).thenReturn(List.of(linked));
+        org.mockito.Mockito.doAnswer(inv -> {
+            Staff target = inv.getArgument(1);
+            target.setAssignment(inv.getArgument(5));
+            target.setActive(((StaffRequestDTO) inv.getArgument(0)).isActive());
+            return null;
+        }).when(staffMapper).updateStaffFromDto(any(), any(), any(), any(), any(), any());
+        when(staffRepository.save(staff)).thenReturn(staff);
+        when(staffMapper.toStaffDTO(staff)).thenReturn(staffDto);
+
+        staffService.updateStaff(staffId, dto, locale);
+
+        verify(assignmentService).retireStaffAccessAtHospital(user.getId(), hospitalId, linked.getId());
     }
 }

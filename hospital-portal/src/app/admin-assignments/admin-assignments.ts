@@ -25,6 +25,7 @@ import {
 import { RoleService, RoleResponse } from '../services/role.service';
 import { grantableRoles } from '../core/grantable-roles';
 import { RoleContextService } from '../core/role-context.service';
+import { AuthService } from '../auth/auth.service';
 import { ToastService } from '../core/toast.service';
 import { deliveryWarningKeys, hasActivationSent } from '../shared/delivery-warnings';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
@@ -52,6 +53,7 @@ export class AdminAssignmentsComponent implements OnInit {
   private readonly hospitalService = inject(HospitalService);
   private readonly roleService = inject(RoleService);
   private readonly roleContext = inject(RoleContextService);
+  private readonly auth = inject(AuthService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
   private readonly route = inject(ActivatedRoute);
@@ -131,6 +133,15 @@ export class AdminAssignmentsComponent implements OnInit {
     const role = this.roles().find((r) => r.id === this.formRoleId());
     return (role?.code ?? '').toUpperCase().replace(/^ROLE_/, '') === 'PATIENT';
   });
+
+  /**
+   * QA D915: only a super-admin switches a row on directly; a hospital admin
+   * sends a new code instead. The edit form does not offer "Active" to them on
+   * a row that is off (the server refuses it): it reads unchecked and locked.
+   */
+  activationLocked(): boolean {
+    return this.modal() === 'edit' && !this.roleContext.isSuperAdmin() && !this.selected()?.active;
+  }
 
   /* Multi-scope form */
   multiHospitalIds = signal<Set<string>>(new Set());
@@ -357,8 +368,10 @@ export class AdminAssignmentsComponent implements OnInit {
         roleId: this.formRoleId(),
         hospitalId: this.formHospitalId() || undefined,
         startDate: this.formStartDate() || undefined,
-        // A patient row keeps the state its verification gave it.
-        active: this.patientRoleSelected() ? undefined : this.formActive(),
+        // A patient row keeps the state its verification gave it, and so
+        // does a row a hospital admin may not switch on (QA D915).
+        active:
+          this.patientRoleSelected() || this.activationLocked() ? undefined : this.formActive(),
       })
       .subscribe({
         next: (updated) => {
@@ -416,14 +429,36 @@ export class AdminAssignmentsComponent implements OnInit {
     });
   }
 
+  /**
+   * QA D902: the signed-in account's own row. A super-admin deleted their own
+   * global assignment from here and lost the role; the server refuses it now,
+   * and the row offers no delete or deactivate to begin with.
+   */
+  isOwnRow(row: AssignmentResponse): boolean {
+    const me = this.auth.getUserProfile()?.id ?? this.auth.getUserId();
+    return !!me && row.userId === me;
+  }
+
   deactivate(row: AssignmentResponse): void {
     this.service.deactivate(row.id).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('ASSIGN_ADMIN.DEACTIVATED'));
         this.patchRow({ ...row, active: false });
       },
-      error: () => this.toast.error(this.translate.instant('ASSIGN_ADMIN.ACTION_ERROR')),
+      // QA D902: a 409 says why in the reader's language (the platform's
+      // last super-admin, your own assignment).
+      error: (err: HttpErrorResponse) => this.toastRefusal(err, 'ASSIGN_ADMIN.ACTION_ERROR'),
     });
+  }
+
+  /** A 409's own message when it has one, else the given fallback. */
+  private toastRefusal(err: HttpErrorResponse, fallbackKey: string): void {
+    const serverMessage: unknown = err.status === 409 ? err.error?.message : null;
+    this.toast.error(
+      typeof serverMessage === 'string' && serverMessage.trim()
+        ? serverMessage
+        : this.translate.instant(fallbackKey),
+    );
   }
 
   delete(row: AssignmentResponse): void {
@@ -433,13 +468,13 @@ export class AdminAssignmentsComponent implements OnInit {
         this.toast.success(this.translate.instant('ASSIGN_ADMIN.DELETED'));
         this.rows.update((list) => list.filter((r) => r.id !== row.id));
       },
-      error: (err: HttpErrorResponse) => {
-        this.toast.error(
-          err.status === 409
-            ? this.translate.instant('ASSIGN_ADMIN.DELETE_CONFLICT')
-            : this.translate.instant('ASSIGN_ADMIN.ACTION_ERROR'),
-        );
-      },
+      // QA round 14: the server names what still uses the assignment
+      // (staff, encounters, departments...), in the reader's language.
+      error: (err: HttpErrorResponse) =>
+        this.toastRefusal(
+          err,
+          err.status === 409 ? 'ASSIGN_ADMIN.DELETE_CONFLICT' : 'ASSIGN_ADMIN.ACTION_ERROR',
+        ),
     });
   }
 

@@ -8,9 +8,10 @@ import com.example.hms.service.support.OutboundUrlGuard;
  * an unchecked value is an SSRF vector into the private network.
  *
  * <p>The checks live in {@link OutboundUrlGuard}, shared with the DHIS2
- * base URL (QA D898). They run at REGISTRATION time only: delivery does
- * not re-resolve, so DNS rebinding between registration and delivery is
- * not defeated here; the registrant is an authenticated hospital admin.
+ * base URL (QA D898). They run at registration; every delivery checks
+ * again in {@link WebhookDeliveryTransport}, whose client connects only to
+ * the address its own lookup found public, so a name that rebinds to a
+ * private address after registration is refused at delivery.
  *
  * <p>QA D873: each refusal is a bundle key about the {@code url} field, so
  * the admin reads it in their language, under the URL box.

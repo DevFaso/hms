@@ -29,6 +29,8 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @ControllerAdvice
@@ -105,6 +107,20 @@ public class GlobalExceptionHandler {
         return buildErrorResponse(HttpStatus.NOT_FOUND, ex.getMessage(), request);
     }
 
+    /**
+     * The {@code "field:"} prefix of a {@link ConflictException} message: a
+     * field name (a lower-case identifier, dots and indexes allowed) touching
+     * the colon, and the message touching it on the other side. QA D904: the text before ANY first colon was taken as a field
+     * name, so a translated sentence ("Impossible de supprimer l'affectation :
+     * elle est encore utilisée...", "Cannot delete assignment: ...") lost its
+     * first half and reached the toast as a lower-case fragment. A sentence
+     * does not match: it starts with a capital, or has a space or an
+     * apostrophe before its colon (French also puts a space before it).
+     * ConflictMessagePrefixTest checks every bundle message against this.
+     */
+    public static final Pattern CONFLICT_FIELD_PREFIX =
+        Pattern.compile("^([a-z]\\w*+(?:\\.\\w++|\\[\\d++])*+):(?!\\s)");
+
     @ExceptionHandler(ConflictException.class)
     public ResponseEntity<Object> handleConflictException(ConflictException ex, WebRequest request) {
         // Convention: message may be prefixed with "field:" to identify the offending field.
@@ -112,10 +128,10 @@ public class GlobalExceptionHandler {
         String raw = ex.getMessage();
         String field = null;
         String message = raw;
-        if (raw != null && raw.contains(":")) {
-            int idx = raw.indexOf(':');
-            field = raw.substring(0, idx).trim();
-            message = raw.substring(idx + 1).trim();
+        Matcher prefix = raw == null ? null : CONFLICT_FIELD_PREFIX.matcher(raw);
+        if (prefix != null && prefix.lookingAt()) {
+            field = prefix.group(1);
+            message = raw.substring(prefix.end()).trim();
         }
         Map<String, Object> body = new LinkedHashMap<>();
         body.put(FIELD_TIMESTAMP, LocalDateTime.now());

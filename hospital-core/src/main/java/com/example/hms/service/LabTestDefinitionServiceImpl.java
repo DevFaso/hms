@@ -628,10 +628,14 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             .userId(actor.getId())
             .hospitalName(hospital != null ? hospital.getName() : null)
             .hospitalId(hospital != null ? hospital.getId() : null)
-            // QA D638: the row names the step and the definition, in the caller's language.
-            .eventDescription(com.example.hms.utility.MessageUtil.resolveOrRaw(
+            // QA D638: the row names the step and the definition. QA D894: in
+            // English with the step and the status as codes, like every other
+            // audit description; the audit log reads it in the reader's language
+            // (a row written in the caller's language stayed French for everyone).
+            .eventDescription(com.example.hms.utility.MessageUtil.resolve(java.util.Locale.ENGLISH,
                 singleDirectorException ? "lab.definition.audit.stepSingleDirector" : "lab.definition.audit.step",
-                action, definition.getTestCode(), statusLabel(definition.getApprovalStatus())))
+                action, definition.getTestCode(),
+                definition.getApprovalStatus() == null ? "" : definition.getApprovalStatus().name()))
             .entityType("LabTestDefinition")
             .resourceId(definition.getId() != null ? definition.getId().toString() : null)
             .build();

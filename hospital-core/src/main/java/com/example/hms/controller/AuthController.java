@@ -87,8 +87,9 @@ public class AuthController {
 
     private static final String EMAIL_VERIFICATION_FAILED = "Email verification failed.";
     private static final String BEARER_PREFIX = "Bearer ";
-    private static final String NOT_AUTHENTICATED = "Not authenticated.";
-    private static final String USER_NOT_FOUND = "User not found.";
+    // QA D911 (re-test 3): the profile shows these as they are; bundle keys.
+    private static final String NOT_AUTHENTICATED = "auth.session.notAuthenticated";
+    private static final String USER_NOT_FOUND = "auth.session.userNotFound";
 
     /**
      * Shown when authentication succeeded but the account is not enabled.
@@ -233,7 +234,7 @@ public class AuthController {
         if (count > 0) {
             log.info("[BOOTSTRAP] Signup attempted but users already exist (count={})", count);
             return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(new MessageResponse("Bootstrap not allowed; users already exist."));
+                    .body(new MessageResponse(MessageUtil.resolve("auth.r7.bootstrapNotAllowed")));
         }
         var result = userService.bootstrapFirstUser(request);
         if (!result.isSuccess()) {
@@ -1155,13 +1156,13 @@ public class AuthController {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new MessageResponse(NOT_AUTHENTICATED));
+                    .body(new MessageResponse(MessageUtil.resolve(NOT_AUTHENTICATED)));
         }
         String username = authentication.getName();
         var userOpt = userRepository.findByUsername(username);
         if (userOpt.isEmpty()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new MessageResponse(USER_NOT_FOUND));
+                    .body(new MessageResponse(MessageUtil.resolve(USER_NOT_FOUND)));
         }
         var user = userOpt.get();
 
@@ -1225,13 +1226,13 @@ public class AuthController {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new MessageResponse(NOT_AUTHENTICATED));
+                    .body(new MessageResponse(MessageUtil.resolve(NOT_AUTHENTICATED)));
         }
         String currentUsername = authentication.getName();
         var userOpt = userRepository.findByUsername(currentUsername);
         if (userOpt.isEmpty()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new MessageResponse(USER_NOT_FOUND));
+                    .body(new MessageResponse(MessageUtil.resolve(USER_NOT_FOUND)));
         }
         var user = userOpt.get();
 
@@ -1310,13 +1311,13 @@ public class AuthController {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.isAuthenticated()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new MessageResponse(NOT_AUTHENTICATED));
+                    .body(new MessageResponse(MessageUtil.resolve(NOT_AUTHENTICATED)));
         }
         String username = authentication.getName();
         var userOpt = userRepository.findByUsername(username);
         if (userOpt.isEmpty()) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                    .body(new MessageResponse(USER_NOT_FOUND));
+                    .body(new MessageResponse(MessageUtil.resolve(USER_NOT_FOUND)));
         }
         var user = userOpt.get();
         boolean mustRename = user.isForceUsernameChange();

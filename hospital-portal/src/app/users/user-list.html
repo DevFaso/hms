@@ -170,7 +170,7 @@
               </td>
               <td>
                 <div class="action-group">
-                  @if (!user.deleted) {
+                  @if (!user.deleted && (isSelf(user) || isManageable(user))) {
                     <button
                       class="action-link edit"
                       [title]="'COMMON.EDIT' | translate"
@@ -188,7 +188,7 @@
                     >
                       <span class="material-symbols-outlined">restore</span>
                     </button>
-                  } @else {
+                  } @else if (!isSelf(user) && isManageable(user)) {
                     <button
                       class="action-link delete"
                       [title]="'COMMON.DELETE' | translate"

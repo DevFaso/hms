@@ -57,12 +57,24 @@ public class StaffMapper {
         dto.setStartDate(staff.getStartDate());
         dto.setEndDate(staff.getEndDate());
         // Active means working AND able to sign in: an account that was never
-        // activated (users.is_active = false) is not active staff (D221).
-        dto.setActive(staff.isActive() && (staff.getUser() == null || staff.getUser().isActive()));
+        // activated (users.is_active = false) is not active staff (D221), and
+        // neither is one whose role here was switched off (QA D907).
+        dto.setActive(staff.isActive() && (staff.getUser() == null || staff.getUser().isActive())
+            && assignmentGrantsAccess(staff));
         dto.setCreatedAt(staff.getCreatedAt());
         dto.setUpdatedAt(staff.getUpdatedAt());
 
         return dto;
+    }
+
+    /** The staff record's role assignment is on (a dangling or missing one is not judged here). */
+    private static boolean assignmentGrantsAccess(Staff staff) {
+        try {
+            UserRoleHospitalAssignment assignment = staff.getAssignment();
+            return assignment == null || !Boolean.FALSE.equals(assignment.getActive());
+        } catch (EntityNotFoundException e) {
+            return true;
+        }
     }
 
     private void populateUserInfo(StaffResponseDTO dto, User user) {

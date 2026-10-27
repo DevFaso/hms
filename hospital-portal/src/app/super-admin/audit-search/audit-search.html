@@ -395,7 +395,7 @@
                       {{ row.status ? (row.status | enumLabel: 'auditStatus') : '—' }}
                     </span>
                   </td>
-                  <td class="cell-summary">{{ row.summary || '' }}</td>
+                  <td class="cell-summary" [title]="row.summary || ''">{{ summaryText(row) }}</td>
                 </tr>
               }
             </tbody>

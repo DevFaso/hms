@@ -1065,8 +1065,14 @@
                     <div>
                       <p class="health-title">{{ 'PROFILE.RECOVERY_CONTACTS' | translate }}</p>
                       <p class="health-value">
-                        {{ credentials()!.recoveryContactCount }} configured,
-                        {{ credentials()!.verifiedRecoveryContacts }} verified
+                        {{
+                          'PROFILE.RECOVERY_COUNTS'
+                            | translate
+                              : {
+                                  configured: credentials()!.recoveryContactCount,
+                                  verified: credentials()!.verifiedRecoveryContacts,
+                                }
+                        }}
                       </p>
                     </div>
                   </div>
@@ -1133,7 +1139,9 @@
                             formatTimestamp(event.eventTimestamp)
                           }}</span>
                         </div>
-                        <p class="timeline-desc">{{ event.eventDescription }}</p>
+                        <p class="timeline-desc" [title]="event.eventDescription || ''">
+                          {{ describeActivity(event) }}
+                        </p>
                         <div class="timeline-meta">
                           @if (event.ipAddress) {
                             <span class="meta-tag">

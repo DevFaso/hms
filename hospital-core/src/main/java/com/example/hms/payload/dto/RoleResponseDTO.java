@@ -25,6 +25,8 @@ public class RoleResponseDTO {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private String code;
+    /** A role the platform ships with: its code is read-only (QA D902, #968 review). */
+    private boolean builtIn;
 }
 
 

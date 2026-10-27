@@ -1,7 +1,9 @@
 package com.example.hms.service;
 
+import com.example.hms.config.SecurityConstants;
 import com.example.hms.enums.RoleBlueprint;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.ConflictException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.RoleMapper;
 import com.example.hms.model.Permission;
@@ -11,6 +13,8 @@ import com.example.hms.payload.dto.RoleRequestDTO;
 import com.example.hms.payload.dto.RoleResponseDTO;
 import com.example.hms.repository.PermissionRepository;
 import com.example.hms.repository.RoleRepository;
+import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
+import com.example.hms.utility.MessageUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -36,10 +40,12 @@ public class RoleServiceImpl implements RoleService {
     private final RoleRepository roleRepository;
     private final PermissionRepository permissionRepository;
     private final RoleMapper roleMapper;
+    private final UserRoleHospitalAssignmentRepository assignmentRepository;
 
     private static final String ROLE_NOT_FOUND = "role.notFound";
     private static final String ROLE_TEMPLATE_NOT_FOUND = "role.template.notFound";
     private static final String PERMISSION_NOT_FOUND = "permission.notFound";
+    private static final String ROLE_CODE_BUILT_IN = "role.code.builtIn";
 
     @Override
     @Transactional
@@ -49,6 +55,11 @@ public class RoleServiceImpl implements RoleService {
         String normalizedDescription = normalizeDescription(request.getDescription());
 
         validateFields(normalizedName, normalizedCode);
+        // #968 review: no new role takes a built-in code - a custom row
+        // carrying SUPER_ADMIN, once assigned, would count as a super-admin.
+        if (SecurityConstants.isBuiltInRoleCode(normalizedCode)) {
+            throw new ConflictException(MessageUtil.resolve(ROLE_CODE_BUILT_IN));
+        }
         checkDuplicate(normalizedName, normalizedCode, null);
 
         Role role = roleMapper.toEntity(request);
@@ -66,7 +77,7 @@ public class RoleServiceImpl implements RoleService {
         Role role = roleRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(ROLE_NOT_FOUND));
         String normalizedName = normalizeName(request.getName());
-        String normalizedCode = normalizeCode(request.getCode(), normalizedName);
+        String normalizedCode = codeAfterUpdate(role, request.getCode(), normalizedName);
         String normalizedDescription = normalizeDescription(request.getDescription());
 
         validateFields(normalizedName, normalizedCode);
@@ -83,10 +94,21 @@ public class RoleServiceImpl implements RoleService {
     @Override
     @Transactional
     public void delete(UUID id) {
-        if (!roleRepository.existsById(id)) {
-            throw new ResourceNotFoundException(ROLE_NOT_FOUND);
+        Role role = roleRepository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException(ROLE_NOT_FOUND));
+        // QA D902 (#968 review): a built-in role is never deleted - every gate
+        // reads it by its code, and deleting the super-admin role left every
+        // super-admin assignment pointing at nothing. Nothing in the schema
+        // stops a role that is still assigned from going either (no foreign
+        // key on user_role_hospital_assignment.role_id), so any assignment,
+        // live or retired, keeps the role.
+        if (SecurityConstants.isBuiltInRoleCode(role.getCode())) {
+            throw new ConflictException(MessageUtil.resolve("role.delete.builtIn"));
         }
-        roleRepository.deleteById(id);
+        if (assignmentRepository.existsByRoleId(id)) {
+            throw new ConflictException(MessageUtil.resolve("role.delete.conflict"));
+        }
+        roleRepository.delete(role);
     }
 
     @Override
@@ -182,6 +204,30 @@ public class RoleServiceImpl implements RoleService {
                 throw new BusinessException("role.duplicate");
             }
         });
+    }
+
+    /**
+     * QA D902 (#968 review): the code a role carries after this edit. A
+     * built-in role keeps its code - every gate reads the role by it, and a
+     * new one stripped the role from every holder at once (for the super-admin
+     * role, with nobody left to grant it back). A blank code on a built-in
+     * role means "unchanged" rather than "derive it from the new name"; any
+     * other code is refused with a 409, and no role takes a built-in code it
+     * does not already carry.
+     */
+    private String codeAfterUpdate(Role role, String requestedCode, String normalizedName) {
+        String storedCode = role.getCode();
+        boolean builtIn = SecurityConstants.isBuiltInRoleCode(storedCode);
+        if (builtIn && (requestedCode == null || requestedCode.isBlank())) {
+            return storedCode;
+        }
+        String normalizedCode = normalizeCode(requestedCode, normalizedName);
+        boolean changes = storedCode == null || normalizedCode == null
+            || !storedCode.equalsIgnoreCase(normalizedCode);
+        if (changes && (builtIn || SecurityConstants.isBuiltInRoleCode(normalizedCode))) {
+            throw new ConflictException(MessageUtil.resolve(ROLE_CODE_BUILT_IN));
+        }
+        return builtIn ? storedCode : normalizedCode;
     }
 
     private String normalizeName(String name) {

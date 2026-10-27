@@ -278,6 +278,27 @@ class GlobalExceptionHandlerTest {
                 .containsEntry("field", "email")
                 .containsEntry("message", "Value 'a:b' is already used.");
         }
+
+        /**
+         * QA D904: the assignment-delete refusals, as the three bundles word
+         * them, reached the toast cut at their first colon, with the first
+         * half sent as {@code field}.
+         */
+        @org.junit.jupiter.params.ParameterizedTest
+        @org.junit.jupiter.params.provider.ValueSource(strings = {
+            "Impossible de supprimer l'affectation : elle est encore utilisée par des services, des traductions de services. Désactivez-la plutôt pour conserver cet historique.",
+            "No se puede eliminar la asignación: todavía hay fichas de personal vinculadas. Reasigne o retire primero ese personal.",
+            "Cannot delete assignment: encounters were recorded under it. Deactivate it instead to keep that history."
+        })
+        void aTranslatedSentenceWithAColonIsSentWhole(String sentence) {
+            ResponseEntity<Object> response = handler.handleConflictException(new ConflictException(sentence), request);
+
+            @SuppressWarnings("unchecked")
+            Map<String, Object> body = (Map<String, Object>) response.getBody();
+            assertThat(body).isNotNull()
+                .doesNotContainKey("field")
+                .containsEntry("message", sentence);
+        }
     }
 
     // =========================================================================

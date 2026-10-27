@@ -1155,6 +1155,39 @@ class LabTestDefinitionServiceImplTest {
         }
     }
 
+    /**
+     * QA D894: the row is written in English with the step and the status as
+     * codes, whatever the caller's language, so the audit log reads it in its
+     * reader's language. It used to be written in the caller's language and
+     * stayed French for an English or Spanish reader.
+     */
+    @Test
+    void processApproval_auditDescriptionIsEnglishWithCodesWhateverTheCallersLanguage() {
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.APPROVED);
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+        holdsRolesAtHospital(director);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            when(repository.save(definition)).thenReturn(definition);
+            when(mapper.toDto(definition)).thenReturn(responseDTO);
+            definition.getReferenceRanges().add(com.example.hms.model.LabTestReferenceRange.builder()
+                .minValue(3.5).maxValue(5.0).unit("mmol/L").build());
+
+            service.processApprovalAction(defId, approvalReq("ACTIVATE"));
+
+            verify(auditEventLogService).logEvent(org.mockito.ArgumentMatchers.argThat(
+                e -> "Lab test definition CBC: approval step ACTIVATE, new status ACTIVE."
+                    .equals(e.getEventDescription())));
+        } finally {
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        }
+    }
+
     /** QA D213: a failing audit write never undoes the approval step. */
     @Test
     void processApproval_activate_auditFailure_doesNotUndoTheStep() {

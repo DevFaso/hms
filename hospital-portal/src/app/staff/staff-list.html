@@ -183,13 +183,16 @@
                 >
                   <span class="material-symbols-outlined">edit</span>
                 </button>
-                <button
-                  class="action-link danger"
-                  [title]="'STAFF.DEACTIVATE' | translate"
-                  (click)="confirmDelete(member)"
-                >
-                  <span class="material-symbols-outlined">person_off</span>
-                </button>
+                @if (!isOwnCard(member)) {
+                  <button
+                    class="action-link danger"
+                    data-test="staff-deactivate"
+                    [title]="'STAFF.DEACTIVATE' | translate"
+                    (click)="confirmDelete(member)"
+                  >
+                    <span class="material-symbols-outlined">person_off</span>
+                  </button>
+                }
               </div>
             }
           </div>

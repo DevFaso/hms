@@ -163,6 +163,27 @@
   }
 }
 
+// QA D906: a field's own hint and error, under the input.
+.form-group .field-hint,
+.form-group .field-error {
+  display: block;
+  margin-top: 0.375rem;
+  font-size: 0.8125rem;
+}
+
+.form-group .field-hint {
+  color: #6b7280;
+}
+
+.form-group .field-error {
+  color: #b91c1c;
+  font-weight: 500;
+}
+
+.input-wrapper input[aria-invalid='true'] {
+  border-color: #b91c1c;
+}
+
 .form-options {
   display: flex;
   justify-content: space-between;
