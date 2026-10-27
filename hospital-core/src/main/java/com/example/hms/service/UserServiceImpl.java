@@ -1482,11 +1482,20 @@ public class UserServiceImpl implements UserService {
         if (!accountAccess.canDelete(user)) {
             throw refused(AuditEventType.USER_DELETE, "delete", id);
         }
+        // QA D902: an account never deletes itself (a super-admin's
+        // canDelete is true for every account, their own included). Another
+        // administrator does it.
+        if (accountAccess.isSelf(user)) {
+            throw new ConflictException(MessageUtil.resolve("user.delete.self"));
+        }
         // QA D327: a second delete of a deleted account changed nothing yet
         // answered success and wrote a second USER_DELETE audit row.
         if (user.isDeleted()) {
             throw new ConflictException(com.example.hms.utility.MessageUtil.resolve("user.alreadyDeleted"));
         }
+        // QA D902: decided while the account is still live - once it is
+        // switched off below, its super-admin row no longer counts as one.
+        assignmentService.requireSuperAdminRemainsWithoutUser(id);
 
         // Read before anything is switched off: the restore puts back this
         // answer, since afterwards nothing on the account or its rows can
@@ -1659,6 +1668,11 @@ public class UserServiceImpl implements UserService {
             user.setPhoneNumber(normalizePhone(dto.getPhoneNumber(), activeHospitalFromContext()));
         }
         if (dto.getActive() != null) {
+            // QA D902: switching off an account that holds the last live
+            // super-admin assignment would leave the platform with none.
+            if (Boolean.FALSE.equals(dto.getActive()) && user.isActive()) {
+                assignmentService.requireSuperAdminRemainsWithoutUser(user.getId());
+            }
             reactivated = applyActive(user, dto.getActive());
         }
 

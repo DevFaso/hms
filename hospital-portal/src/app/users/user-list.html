@@ -188,7 +188,7 @@
                     >
                       <span class="material-symbols-outlined">restore</span>
                     </button>
-                  } @else {
+                  } @else if (!isSelf(user)) {
                     <button
                       class="action-link delete"
                       [title]="'COMMON.DELETE' | translate"

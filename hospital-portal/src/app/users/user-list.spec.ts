@@ -12,6 +12,7 @@ import { RoleResponse, RoleService } from '../services/role.service';
 import { HospitalService } from '../services/hospital.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { AuthService } from '../auth/auth.service';
 import { ImpersonationService } from '../services/impersonation.service';
 
 /**
@@ -48,6 +49,7 @@ describe('UserListComponent registration', () => {
     TestBed.configureTestingModule({
       imports: [UserListComponent, TranslateModule.forRoot()],
       providers: [
+        { provide: AuthService, useValue: { getUserProfile: () => null, getUserId: () => null } },
         provideRouter([]),
         { provide: UserService, useValue: users },
         { provide: RoleService, useValue: { list: () => of([]) } },
@@ -272,6 +274,7 @@ describe('UserListComponent create modal as a hospital admin (QA D189, D195)', (
     TestBed.configureTestingModule({
       imports: [UserListComponent, TranslateModule.forRoot()],
       providers: [
+        { provide: AuthService, useValue: { getUserProfile: () => null, getUserId: () => null } },
         provideRouter([]),
         { provide: UserService, useValue: users },
         { provide: RoleService, useValue: { list: () => of(roles) } },
@@ -353,6 +356,7 @@ describe('UserListComponent onboarding as a hospital admin (D201)', () => {
     TestBed.configureTestingModule({
       imports: [UserListComponent, TranslateModule.forRoot()],
       providers: [
+        { provide: AuthService, useValue: { getUserProfile: () => null, getUserId: () => null } },
         provideRouter([]),
         { provide: UserService, useValue: users },
         { provide: RoleService, useValue: { list: () => of([]) } },
@@ -406,6 +410,7 @@ describe('UserListComponent — the Profil column is labelled (QA D528/D663)', (
     TestBed.configureTestingModule({
       imports: [UserListComponent, TranslateModule.forRoot()],
       providers: [
+        { provide: AuthService, useValue: { getUserProfile: () => null, getUserId: () => null } },
         provideRouter([]),
         { provide: UserService, useValue: users },
         { provide: RoleService, useValue: { list: () => of([]) } },
@@ -458,6 +463,7 @@ describe('UserListComponent — no archived hospital in the create picker (QA D8
     TestBed.configureTestingModule({
       imports: [UserListComponent, TranslateModule.forRoot()],
       providers: [
+        { provide: AuthService, useValue: { getUserProfile: () => null, getUserId: () => null } },
         provideRouter([]),
         { provide: UserService, useValue: users },
         { provide: RoleService, useValue: { list: () => of([]) } },

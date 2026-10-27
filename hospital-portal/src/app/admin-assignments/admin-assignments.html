@@ -161,24 +161,27 @@
                 >
                   <span class="material-symbols-outlined">forward_to_inbox</span>
                 </button>
-                @if (row.active) {
+                @if (!isOwnRow(row)) {
+                  @if (row.active) {
+                    <button
+                      type="button"
+                      class="icon-btn warn"
+                      (click)="deactivate(row)"
+                      [title]="'ASSIGN_ADMIN.DEACTIVATE' | translate"
+                    >
+                      <span class="material-symbols-outlined">block</span>
+                    </button>
+                  }
                   <button
                     type="button"
-                    class="icon-btn warn"
-                    (click)="deactivate(row)"
-                    [title]="'ASSIGN_ADMIN.DEACTIVATE' | translate"
+                    class="icon-btn danger"
+                    data-test="assignment-delete"
+                    (click)="delete(row)"
+                    [title]="'COMMON.DELETE' | translate"
                   >
-                    <span class="material-symbols-outlined">block</span>
+                    <span class="material-symbols-outlined">delete</span>
                   </button>
                 }
-                <button
-                  type="button"
-                  class="icon-btn danger"
-                  (click)="delete(row)"
-                  [title]="'COMMON.DELETE' | translate"
-                >
-                  <span class="material-symbols-outlined">delete</span>
-                </button>
               </td>
             </tr>
           }

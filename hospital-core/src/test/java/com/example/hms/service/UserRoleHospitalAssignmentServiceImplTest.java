@@ -1048,4 +1048,85 @@ class UserRoleHospitalAssignmentServiceImplTest {
         verify(eventPublisher)
             .publishEvent(org.mockito.ArgumentMatchers.any(com.example.hms.event.AssignmentCreatedEvent.class));
     }
+
+    // -----------------------------------------------------------------------
+    // QA D902: never your own assignment, never the last live super-admin's
+    // -----------------------------------------------------------------------
+
+    /** The fixture row, turned into the platform's global super-admin assignment. */
+    private void makeItTheSuperAdminRow() {
+        Role superAdmin = new Role();
+        superAdmin.setId(UUID.randomUUID());
+        superAdmin.setName("SUPER_ADMIN");
+        superAdmin.setCode("ROLE_SUPER_ADMIN");
+        assignment.setRole(superAdmin);
+        assignment.setHospital(null);
+        assignment.setActive(true);
+        org.mockito.Mockito.lenient().when(assignmentRepository.findById(assignment.getId()))
+            .thenReturn(Optional.of(assignment));
+        org.mockito.Mockito.lenient().when(roleValidator.isSuperAdminFromJwtClaim()).thenReturn(true);
+    }
+
+    @Test
+    void qaD902_switchingOffTheLastSuperAdminRowThroughPutIsRefused() {
+        makeItTheSuperAdminRow();
+        when(assignmentRepository.lockLiveAssignmentsWithRoleCodes(any())).thenReturn(List.of(assignment));
+        UserRoleHospitalAssignmentRequestDTO dto = new UserRoleHospitalAssignmentRequestDTO();
+        dto.setActive(false);
+
+        assertThatThrownBy(() -> service.updateAssignment(assignment.getId(), dto))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class)
+            .hasMessageContaining("no active super administrator");
+        assertThat(assignment.getActive()).isTrue();
+        verify(assignmentRepository, never()).save(any());
+    }
+
+    @Test
+    void qaD902_reRolingYourOwnRowThroughPutIsRefused() {
+        makeItTheSuperAdminRow();
+        when(accountAccess.isSelf(assignee)).thenReturn(true);
+        UserRoleHospitalAssignmentRequestDTO dto = new UserRoleHospitalAssignmentRequestDTO();
+        dto.setActive(false);
+
+        assertThatThrownBy(() -> service.updateAssignment(assignment.getId(), dto))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class)
+            .hasMessageContaining("your own assignment");
+        verify(assignmentRepository, never()).save(any());
+    }
+
+    @Test
+    void qaD902_anEditThatKeepsTheGrantIsNotCheckedAtAll() {
+        makeItTheSuperAdminRow();
+        when(assignmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        UserRoleHospitalAssignmentRequestDTO dto = new UserRoleHospitalAssignmentRequestDTO();
+        dto.setActive(true);
+
+        service.updateAssignment(assignment.getId(), dto);
+
+        verify(assignmentRepository, never()).lockLiveAssignmentsWithRoleCodes(any());
+    }
+
+    @Test
+    void qaD902_anotherLiveSuperAdminLetsTheRowGo() {
+        makeItTheSuperAdminRow();
+        UserRoleHospitalAssignment other = new UserRoleHospitalAssignment();
+        other.setId(UUID.randomUUID());
+        when(assignmentRepository.lockLiveAssignmentsWithRoleCodes(any())).thenReturn(List.of(assignment, other));
+
+        service.deactivateAssignment(assignment.getId());
+
+        assertThat(assignment.getActive()).isFalse();
+    }
+
+    @Test
+    void qaD902_theBulkProviderDeactivationRefusesTheCallersOwnRowBeforeChangingAny() {
+        signedInAsProviderAdminHere();
+        UUID id = assignment.getId();
+        when(assignmentRepository.findById(id)).thenReturn(Optional.of(assignment));
+        when(accountAccess.isSelf(assignee)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.deactivateProviderStaffAssignments(List.of(id)))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class);
+        verify(assignmentRepository, never()).saveAll(any());
+    }
 }

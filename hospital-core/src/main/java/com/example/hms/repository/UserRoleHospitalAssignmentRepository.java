@@ -173,6 +173,26 @@ public interface UserRoleHospitalAssignmentRepository extends JpaRepository<User
                                                 @Param("roleCode") String roleCode);
 
     /**
+     * QA D902: every live assignment holding one of these role codes (active,
+     * on an active, undeleted account), locked until the transaction ends. A
+     * change that would take one away re-counts them under this lock, so two
+     * super-admins removing each other at the same moment cannot both pass
+     * the "another one remains" check. Ordered by id: every caller takes the
+     * row locks in the same order.
+     */
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+        SELECT a
+        FROM UserRoleHospitalAssignment a
+        WHERE a.active = TRUE
+          AND a.user.isActive = TRUE
+          AND a.user.isDeleted = FALSE
+          AND UPPER(a.role.code) IN (:roleCodes)
+        ORDER BY a.id
+    """)
+    List<UserRoleHospitalAssignment> lockLiveAssignmentsWithRoleCodes(@Param("roleCodes") Set<String> roleCodes);
+
+    /**
      * QA D157 (#891 review): a controlled-substance witness must be an active,
      * undeleted account as well as hold an active assignment.
      */

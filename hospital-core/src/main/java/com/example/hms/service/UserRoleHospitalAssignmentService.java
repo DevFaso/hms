@@ -121,6 +121,13 @@ public interface UserRoleHospitalAssignmentService {
     void retireAssignmentsForUserWithinCallerScope(UUID userId);
 
     /**
+     * QA D902: refuses (409) when switching this account off would leave the
+     * platform with no live super-admin assignment. For
+     * {@code UserService.updateUser}, before it deactivates the account.
+     */
+    void requireSuperAdminRemainsWithoutUser(UUID userId);
+
+    /**
      * Delete a role (only if unassigned).
      */
     void deleteRole(UUID roleId);

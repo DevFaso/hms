@@ -92,6 +92,9 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
 
     private static final String ROLE_SUPER_ADMIN = "ROLE_SUPER_ADMIN";
+    private static final String MSG_REMOVE_OWN = "users.assignment.removeOwn";
+    /** QA D902: the codes the super-admin role is stored under. */
+    private static final Set<String> SUPER_ADMIN_CODES = Set.of(ROLE_SUPER_ADMIN, "SUPER_ADMIN");
     private static final String ROLE_DOCTOR = "ROLE_DOCTOR";
     private static final String ROLE_PATIENT = "ROLE_PATIENT";
     private static final String MSG_PATIENT_FROM_PATIENT_FORM = "assignments.roles.patientFromPatientForm";
@@ -424,6 +427,13 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
         enforcePatientInactiveConstraint(dto, newRole, target);
         checkTupleDuplicateOnUpdate(id, target, newUser, newRole, newHospital, locale);
+        // QA D902: a new role, a new holder or a switch-off takes the grant
+        // away from whoever held it - never the caller's own, never the last
+        // live super-admin's. Decided before the mapper overwrites the row.
+        if (takesGrantAway(target, newUser, newRole, activeAfter)) {
+            requireNotCallersOwn(target);
+            requireSuperAdminRemains(List.of(target));
+        }
 
         if (Boolean.TRUE.equals(dto.getActive())) {
             checkActiveDoctorConflict(dto, newUser, newRole, newHospital, locale);
@@ -1170,6 +1180,11 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     @Override
     public void deleteAssignment(UUID id) {
         UserRoleHospitalAssignment doomed = findChangeable(id);
+        // QA D902: a super-admin deleted their own global assignment, the
+        // platform's only one, and lost the role. Never your own row, and
+        // never the last live super-admin's.
+        requireNotCallersOwn(doomed);
+        requireSuperAdminRemains(List.of(doomed));
         // Prevent deletion if a Staff record still references this assignment.
         // Deleting it would leave the staff row with a dangling FK and cause a 500
         // on every /api/staff call that touches that row.
@@ -1242,7 +1257,11 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
     @Override
     public void deactivateProviderStaffAssignments(Collection<UUID> ids) {
-        List<UserRoleHospitalAssignment> retired = findAllChangeable(ids, accountAccess.providerStaffScope()).stream()
+        List<UserRoleHospitalAssignment> rows = findAllChangeable(ids, accountAccess.providerStaffScope());
+        // QA D902: checked on every row before any is switched off.
+        rows.forEach(this::requireNotCallersOwn);
+        requireSuperAdminRemains(rows);
+        List<UserRoleHospitalAssignment> retired = rows.stream()
             .filter(UserRoleHospitalAssignmentServiceImpl::retire)
             .toList();
         if (!retired.isEmpty()) {
@@ -1254,6 +1273,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     @Override
     public void deactivateAssignment(UUID id) {
         UserRoleHospitalAssignment assignment = findChangeable(id);
+        requireNotCallersOwn(assignment);
+        requireSuperAdminRemains(List.of(assignment));
         if (!retire(assignment)) {
             log.info("⏭️ Assignment ID '{}' is already inactive with no live invitation — no change.", id);
             return;
@@ -1302,7 +1323,9 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
      */
     @Override
     public void deleteAllAssignmentsForUser(UUID userId) {
+        requireNotCallersOwnAccount(userId);
         List<UserRoleHospitalAssignment> assignments = assignmentRepository.findByUserId(userId);
+        requireSuperAdminRemains(assignments);
         // Every row, including a pending invitation that was never active:
         // its code must stop working too (see retire).
         List<UserRoleHospitalAssignment> deactivated = assignments.stream()
@@ -1343,6 +1366,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
      */
     @Override
     public void retireAssignmentsForUserWithinCallerScope(UUID userId) {
+        // QA D902: never the caller's own account, whatever their scope.
+        requireNotCallersOwnAccount(userId);
         UserAccountAccess.AssignmentScope scope = accountAccess.assignmentScope();
         if (scope.everywhere()) {
             deleteAllAssignmentsForUser(userId);
@@ -1359,10 +1384,78 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 .filter(UserRoleHospitalAssignmentServiceImpl::retire)
                 .toList();
         if (!deactivated.isEmpty()) {
+            requireSuperAdminRemains(deactivated);
             assignmentRepository.saveAll(deactivated);
         }
         log.info("🔒 Deactivated {} assignment(s) for user ID '{}' within the caller's scope.",
             deactivated.size(), userId);
+    }
+
+    /* ===================== Platform continuity (QA D902) ===================== */
+
+
+    /** Whether this update leaves the row's current holder without its current grant. */
+    private static boolean takesGrantAway(UserRoleHospitalAssignment target, User newUser, Role newRole,
+                                          boolean activeAfter) {
+        boolean switchedOff = Boolean.TRUE.equals(target.getActive()) && !activeAfter;
+        boolean roleChanges = target.getRole() == null || !Objects.equals(newRole.getId(), target.getRole().getId());
+        boolean holderChanges = target.getUser() == null || newUser == null
+            || !Objects.equals(newUser.getId(), target.getUser().getId());
+        return switchedOff || roleChanges || holderChanges;
+    }
+
+    /**
+     * QA D902: nobody removes, deactivates or re-roles their own assignment,
+     * whatever the role. A hospital admin's own admin row is already out of
+     * their reach ({@link #findChangeable} answers 404); a super-admin's was
+     * not, and deleting it took the platform's only super-admin away. Another
+     * administrator does it.
+     */
+    private void requireNotCallersOwn(UserRoleHospitalAssignment row) {
+        if (row.getUser() != null && accountAccess.isSelf(row.getUser())) {
+            throw new ConflictException(com.example.hms.utility.MessageUtil.resolve(MSG_REMOVE_OWN));
+        }
+    }
+
+    /** {@link #requireNotCallersOwn} for every row of an account at once. */
+    private void requireNotCallersOwnAccount(UUID userId) {
+        if (userId != null && accountAccess.currentUserId().map(userId::equals).orElse(false)) {
+            throw new ConflictException(com.example.hms.utility.MessageUtil.resolve(MSG_REMOVE_OWN));
+        }
+    }
+
+    /** A super-admin row that signs someone in today: active, on an active, undeleted account. */
+    private boolean isLiveSuperAdmin(UserRoleHospitalAssignment row) {
+        User holder = row.getUser();
+        return Boolean.TRUE.equals(row.getActive())
+            && row.getRole() != null && isRoleCode(getRoleCode(row.getRole()), ROLE_SUPER_ADMIN)
+            && holder != null && holder.isActive() && !holder.isDeleted();
+    }
+
+    /**
+     * QA D902: refuses a change that would take away the last live super-admin
+     * assignment. The live ones are re-read under a row lock, so two removals
+     * racing each other are counted one after the other.
+     */
+    private void requireSuperAdminRemains(Collection<UserRoleHospitalAssignment> losing) {
+        Set<UUID> lost = losing.stream()
+            .filter(this::isLiveSuperAdmin)
+            .map(UserRoleHospitalAssignment::getId)
+            .filter(Objects::nonNull)
+            .collect(java.util.stream.Collectors.toSet());
+        if (lost.isEmpty()) {
+            return;
+        }
+        boolean anotherRemains = assignmentRepository.lockLiveAssignmentsWithRoleCodes(SUPER_ADMIN_CODES).stream()
+            .anyMatch(row -> !lost.contains(row.getId()));
+        if (!anotherRemains) {
+            throw new ConflictException(com.example.hms.utility.MessageUtil.resolve("users.assignment.lastSuperAdmin"));
+        }
+    }
+
+    @Override
+    public void requireSuperAdminRemainsWithoutUser(UUID userId) {
+        requireSuperAdminRemains(assignmentRepository.findByUserId(userId));
     }
 
     /** Roles are platform-wide: deleting one is the super-admin's alone. */
