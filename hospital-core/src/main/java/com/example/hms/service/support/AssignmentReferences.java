@@ -11,6 +11,7 @@ import jakarta.persistence.metamodel.SingularAttribute;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
@@ -78,10 +79,13 @@ public class AssignmentReferences {
     }
 
     private static List<SingularAttribute<?, ?>> assignmentAttributes(EntityType<?> entity) {
-        return entity.getSingularAttributes().stream()
-            .filter(attribute -> attribute.getJavaType() == UserRoleHospitalAssignment.class)
-            .<SingularAttribute<?, ?>>map(attribute -> attribute)
-            .sorted(Comparator.comparing(SingularAttribute::getName))
-            .toList();
+        List<SingularAttribute<?, ?>> attributes = new ArrayList<>();
+        for (SingularAttribute<?, ?> attribute : entity.getSingularAttributes()) {
+            if (attribute.getJavaType() == UserRoleHospitalAssignment.class) {
+                attributes.add(attribute);
+            }
+        }
+        attributes.sort(Comparator.comparing(SingularAttribute::getName));
+        return attributes;
     }
 }
