@@ -401,6 +401,23 @@ class PatientServiceImplTest {
         verify(patientMapper, never()).toPatientDTO(patient, null);
     }
 
+    // QA D903: with no hospital passed, the lookup filters at the active hospital — and must map at
+    // it too, or the picker shows another hospital's MRN (the mapper's unscoped fallback).
+    @Test
+    void lookupPatientsMapsAtTheResolvedActiveHospitalSoTheMrnIsThatHospitals() {
+        PatientResponseDTO scoped = PatientResponseDTO.builder().id(patientId).mrn("CHW5448").build();
+        when(patientRepository.findByMrn("CHW5448")).thenReturn(List.of(patient));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
+        when(patientMapper.toPatientDTO(patient, hospitalId)).thenReturn(scoped);
+        when(patientVitalSignService.getLatestSnapshot(patientId, hospitalId)).thenReturn(Optional.empty());
+
+        assertThat(patientService.lookupPatients(null, null, null, null, "CHW5448", null, Locale.ENGLISH))
+            .extracting(PatientResponseDTO::getMrn)
+            .containsExactly("CHW5448");
+        verify(patientMapper, never()).toPatientDTO(patient, null);
+    }
+
     // ═══════════════ getPatientByIdUnscoped ═══════════════
 
     @Test

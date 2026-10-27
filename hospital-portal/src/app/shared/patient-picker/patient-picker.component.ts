@@ -96,7 +96,14 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
       .subscribe(([scoped, exact]) => {
         const merged: PatientResponse[] = [];
         for (const p of [...(exact ?? []), ...(scoped ?? [])]) {
-          if (!merged.some((m) => m.id === p.id)) merged.push(p);
+          const kept = merged.findIndex((m) => m.id === p.id);
+          if (kept < 0) {
+            merged.push(p);
+          } else if (!merged[kept].mrn?.trim() && p.mrn?.trim()) {
+            // QA D903: the hospital-scoped search knows this hospital's MRN even
+            // when the exact-identifier hit came back without one.
+            merged[kept] = { ...merged[kept], mrn: p.mrn };
+          }
         }
         const items = merged.slice(0, 8);
         this.suggestions.set(items);
@@ -150,6 +157,16 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
     this.suggestions.set([]);
     this.dropdownOpen.set(false);
     this.selectedChange.emit(null);
+  }
+
+  /**
+   * QA D903: the line under the name identifies the patient AT THIS HOSPITAL —
+   * the MRN the server resolved for the request's hospital scope. Contact
+   * details are only the fallback for a record that carries no MRN (e.g. a
+   * preselected patient rebuilt from a row that had none).
+   */
+  subline(p: PatientResponse): string {
+    return p.mrn?.trim() || p.email?.trim() || p.phoneNumberPrimary?.trim() || '';
   }
 
   initials(p: PatientResponse): string {

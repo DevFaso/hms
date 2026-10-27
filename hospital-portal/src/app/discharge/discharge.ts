@@ -454,6 +454,8 @@ export class DischargeComponent implements OnInit {
       firstName: summary.patientName?.split(' ')[0] ?? '',
       lastName: summary.patientName?.split(' ').slice(1).join(' ') ?? '',
       email: '',
+      // QA D903: the picker chip identifies the patient by this hospital's MRN.
+      mrn: summary.patientMrn,
     } as PatientResponse);
     this.loadEncountersFor(summary.patientId);
     this.showSummaryModal.set(true);

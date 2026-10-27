@@ -3,7 +3,9 @@
     <div class="chip-avatar">{{ initials(sp) }}</div>
     <div class="chip-info">
       <span class="chip-name">{{ sp.firstName }} {{ sp.lastName }}</span>
-      <span class="chip-sub">{{ sp.email || sp.phoneNumberPrimary }}</span>
+      @if (subline(sp); as sub) {
+        <span class="chip-sub">{{ sub }}</span>
+      }
     </div>
     <button
       type="button"
@@ -47,7 +49,9 @@
             <div class="opt-avatar">{{ initials(p) }}</div>
             <div class="opt-info">
               <span class="opt-name">{{ p.firstName }} {{ p.lastName }}</span>
-              <span class="opt-meta">{{ p.email || p.phoneNumberPrimary }}</span>
+              @if (subline(p); as sub) {
+                <span class="opt-meta">{{ sub }}</span>
+              }
             </div>
           </div>
         }
