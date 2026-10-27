@@ -10,6 +10,13 @@ describe('toE164 (mirror of the server PhoneNumbers.toE164)', () => {
     expect(toE164('70.20-20(20)')).toBe('+22670202020');
   });
 
+  it("trims like Java's String.trim: C0 controls at the ends go, a no-break space stays", () => {
+    expect(toE164('\u001f70202020\u0000')).toBe('+22670202020');
+    expect(toE164('\u0001+22670202020')).toBe('+22670202020');
+    expect(toE164('70202020\u00a0')).toBeNull();
+    expect(toE164('7020\u00012020')).toBeNull();
+  });
+
   it('accepts a foreign international number', () => {
     expect(toE164('+33 6 12 34 56 78')).toBe('+33612345678');
   });

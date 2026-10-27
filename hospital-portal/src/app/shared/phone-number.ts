@@ -31,7 +31,7 @@ export function toE164(
   if (!raw?.trim()) {
     return null;
   }
-  const compact = raw.replace(FORMATTING, '');
+  const compact = javaTrim(raw).replace(FORMATTING, '');
   let candidate: string;
   if (compact.startsWith('+')) {
     candidate = compact;
@@ -56,4 +56,21 @@ export function toE164(
     return null;
   }
   return candidate;
+}
+
+/**
+ * Java's `String.trim()`: drops every code unit up to U+0020 at both ends
+ * (the C0 controls included, which `\s` and JavaScript's `trim()` do not
+ * cover), and nothing else (a no-break space stays, as it does on the server).
+ */
+function javaTrim(value: string): string {
+  let start = 0;
+  let end = value.length;
+  while (start < end && value.charCodeAt(start) <= 0x20) {
+    start++;
+  }
+  while (end > start && value.charCodeAt(end - 1) <= 0x20) {
+    end--;
+  }
+  return value.substring(start, end);
 }
