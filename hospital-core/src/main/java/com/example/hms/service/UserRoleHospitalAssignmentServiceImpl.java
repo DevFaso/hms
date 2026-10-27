@@ -1415,6 +1415,12 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         }
         // QA D902: never the caller's own access, whatever their scope.
         requireNotCallersOwnAccount(userId);
+        // Only an administrator of that hospital switches its staff off: holding
+        // any other role there (a nurse at B who administers A) is not enough.
+        UserAccountAccess.AssignmentScope scope = accountAccess.assignmentScope();
+        if (!scope.everywhere() && (hospitalId == null || !scope.hospitalIds().contains(hospitalId))) {
+            throw new AccessDeniedException("Access denied");
+        }
         List<UserRoleHospitalAssignment> held = assignmentRepository.findByUserId(userId);
         List<UserRoleHospitalAssignment> doomed = held.stream()
             .filter(row -> isStaffAccessAt(row, hospitalId, staffAssignmentId))
@@ -1426,7 +1432,6 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         // Every row or none: a staff record switched off while an
         // administrator role at the same hospital stays on would again say
         // "no longer has access" about someone who still has it.
-        UserAccountAccess.AssignmentScope scope = accountAccess.assignmentScope();
         boolean outOfReach = !scope.everywhere()
             && (scope.shields(doomed.get(0).getUser(), held) || !doomed.stream().allMatch(scope::mayChange));
         if (outOfReach) {
@@ -1442,24 +1447,27 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             .toList();
         doomed.forEach(UserRoleHospitalAssignmentServiceImpl::retire);
         assignmentRepository.saveAll(doomed);
-        TransactionCallbacks.afterCommit(() -> events.forEach(auditEventLogService::logEvent));
+        // logEvents never throws: a failed audit must not turn a committed
+        // deactivation into a 500.
+        TransactionCallbacks.afterCommit(() -> auditEventLogService.logEvents(events));
         log.info("🔒 Staff record deactivated: retired {} assignment(s) for user ID '{}' at hospital '{}'.",
             doomed.size(), userId, hospitalId);
         return doomed.size();
     }
 
     /**
-     * QA D907: a staff role row at this hospital (or the staff record's own
-     * row). A patient row is the holder's own care, never staff access.
+     * QA D907: a staff role row at this hospital, or the staff record's own
+     * row when it is a platform-wide one. A patient row is the holder's own
+     * care, never staff access; a row at another hospital is that hospital's.
      */
     private boolean isStaffAccessAt(UserRoleHospitalAssignment row, UUID hospitalId, UUID staffAssignmentId) {
         if (row.getRole() == null || isRoleCode(getRoleCode(row.getRole()), ROLE_PATIENT)) {
             return false;
         }
-        if (staffAssignmentId != null && staffAssignmentId.equals(row.getId())) {
-            return true;
+        if (row.getHospital() == null) {
+            return staffAssignmentId != null && staffAssignmentId.equals(row.getId());
         }
-        return hospitalId != null && row.getHospital() != null && hospitalId.equals(row.getHospital().getId());
+        return hospitalId != null && hospitalId.equals(row.getHospital().getId());
     }
 
     private AuditEventRequestDTO staffAccessRevokedEvent(UserRoleHospitalAssignment row, User actor) {

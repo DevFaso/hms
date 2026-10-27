@@ -1301,6 +1301,10 @@ class StaffServiceImplTest {
         patient.setCode("ROLE_PATIENT");
         patientRow.setRole(patient);
         when(assignmentRepository.findByUser_IdAndActiveTrue(user.getId())).thenReturn(List.of(patientRow));
+        // What the lookup this replaced answered: the patient row.
+        org.mockito.Mockito.lenient()
+            .when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(user.getId(), hospitalId))
+            .thenReturn(Optional.of(patientRow));
         // The mapper applies the request's default active=true, as the real one does.
         org.mockito.Mockito.doAnswer(inv -> {
             Staff target = inv.getArgument(1);
@@ -1315,5 +1319,38 @@ class StaffServiceImplTest {
 
         assertThat(staff.getAssignment()).as("never relinked to the patient row").isSameAs(retired);
         assertThat(staff.isActive()).isFalse();
+    }
+
+    @Test
+    void updateStaff_switchingTheRecordOffCutsItsAccessToo() {
+        // #968 review: PUT {active:false} reached the D907 state DELETE no longer does.
+        UserRoleHospitalAssignment linked = new UserRoleHospitalAssignment();
+        linked.setId(UUID.randomUUID());
+        linked.setHospital(hospital);
+        linked.setActive(true);
+        staff.setAssignment(linked);
+        StaffRequestDTO dto = StaffRequestDTO.builder()
+            .userEmail("doctor@test.com")
+            .hospitalName("Test Hospital")
+            .jobTitle("NURSE")
+            .licenseNumber("LIC-001")
+            .active(false)
+            .build();
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(userRepository.findByEmail("doctor@test.com")).thenReturn(Optional.of(user));
+        when(hospitalRepository.findByName("Test Hospital")).thenReturn(Optional.of(hospital));
+        when(assignmentRepository.findByUser_IdAndActiveTrue(user.getId())).thenReturn(List.of(linked));
+        org.mockito.Mockito.doAnswer(inv -> {
+            Staff target = inv.getArgument(1);
+            target.setAssignment(inv.getArgument(5));
+            target.setActive(((StaffRequestDTO) inv.getArgument(0)).isActive());
+            return null;
+        }).when(staffMapper).updateStaffFromDto(any(), any(), any(), any(), any(), any());
+        when(staffRepository.save(staff)).thenReturn(staff);
+        when(staffMapper.toStaffDTO(staff)).thenReturn(staffDto);
+
+        staffService.updateStaff(staffId, dto, locale);
+
+        verify(assignmentService).retireStaffAccessAtHospital(user.getId(), hospitalId, linked.getId());
     }
 }

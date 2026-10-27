@@ -1205,16 +1205,18 @@ class UserRoleHospitalAssignmentServiceImplTest {
         assertThat(doctorElsewhere.getActive()).as("a role at another hospital is not touched").isTrue();
         assertThat(assignee.isActive()).as("the account stays on").isTrue();
         verify(assignmentRepository).saveAll(List.of(assignment, pendingHere));
-        org.mockito.ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> audit =
-            org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
-        verify(auditEventLogService, times(2)).logEvent(audit.capture());
-        assertThat(audit.getAllValues())
+        @SuppressWarnings("unchecked")
+        org.mockito.ArgumentCaptor<List<com.example.hms.payload.dto.AuditEventRequestDTO>> audit =
+            org.mockito.ArgumentCaptor.forClass(List.class);
+        verify(auditEventLogService).logEvents(audit.capture());
+        List<com.example.hms.payload.dto.AuditEventRequestDTO> rows = audit.getValue();
+        assertThat(rows).hasSize(2)
             .extracting(com.example.hms.payload.dto.AuditEventRequestDTO::getEventType)
             .containsOnly(com.example.hms.enums.AuditEventType.ROLE_REVOKED);
-        assertThat(audit.getAllValues().get(0).getEventDescription())
+        assertThat(rows.get(0).getEventDescription())
             .isEqualTo("Revoked role 'ROLE_NURSE' from John Doe: staff record deactivated");
-        assertThat(audit.getAllValues().get(0).getUserId()).isEqualTo(admin.getId());
-        assertThat(audit.getAllValues().get(0).getHospitalId()).isEqualTo(hospital.getId());
+        assertThat(rows.get(0).getUserId()).isEqualTo(admin.getId());
+        assertThat(rows.get(0).getHospitalId()).isEqualTo(hospital.getId());
     }
 
     @Test
@@ -1230,7 +1232,7 @@ class UserRoleHospitalAssignmentServiceImplTest {
             .hasMessageContaining("your own assignment");
         assertThat(assignment.getActive()).isTrue();
         verify(assignmentRepository, never()).saveAll(any());
-        verify(auditEventLogService, never()).logEvent(any());
+        verify(auditEventLogService, never()).logEvents(any());
     }
 
     @Test
@@ -1243,6 +1245,7 @@ class UserRoleHospitalAssignmentServiceImplTest {
         when(scope.shields(any(), any())).thenReturn(false);
         when(scope.mayChange(assignment)).thenReturn(true);
         when(scope.mayChange(adminHere)).thenReturn(false);
+        when(scope.hospitalIds()).thenReturn(Set.of(hospital.getId()));
         when(accountAccess.assignmentScope()).thenReturn(scope);
         UUID userId = assignee.getId();
         UUID hospitalId = hospital.getId();
@@ -1253,6 +1256,35 @@ class UserRoleHospitalAssignmentServiceImplTest {
             .hasMessageContaining("super administrator must end that access");
         assertThat(assignment.getActive()).isTrue();
         assertThat(adminHere.getActive()).isTrue();
+        verify(assignmentRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void qaD907_aHospitalAdminSwitchesOffANurseAtTheHospitalTheyAdminister() {
+        assignment.setActive(true);
+        when(assignmentRepository.findByUserId(assignee.getId())).thenReturn(List.of(assignment));
+        when(accountAccess.assignmentScope())
+            .thenReturn(new UserAccountAccess.AssignmentScope(false, Set.of(hospital.getId())));
+
+        assertThat(service.retireStaffAccessAtHospital(assignee.getId(), hospital.getId(), assignment.getId()))
+            .isEqualTo(1);
+        assertThat(assignment.getActive()).isFalse();
+    }
+
+    @Test
+    void qaD907_aRoleHeldThereIsNotAdministeringThatHospital() {
+        // #968 review: an administrator of A who is a nurse at B could switch
+        // off B's staff, whose record they can see.
+        assignment.setActive(true);
+        when(accountAccess.assignmentScope())
+            .thenReturn(new UserAccountAccess.AssignmentScope(false, Set.of(UUID.randomUUID())));
+        UUID userId = assignee.getId();
+        UUID hospitalId = hospital.getId();
+        UUID assignmentId = assignment.getId();
+
+        assertThatThrownBy(() -> service.retireStaffAccessAtHospital(userId, hospitalId, assignmentId))
+            .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        assertThat(assignment.getActive()).isTrue();
         verify(assignmentRepository, never()).saveAll(any());
     }
 
@@ -1281,7 +1313,7 @@ class UserRoleHospitalAssignmentServiceImplTest {
         assertThat(service.retireStaffAccessAtHospital(assignee.getId(), hospital.getId(), assignment.getId()))
             .isZero();
         verify(assignmentRepository, never()).saveAll(any());
-        verify(auditEventLogService, never()).logEvent(any());
+        verify(auditEventLogService, never()).logEvents(any());
     }
 
     @Test

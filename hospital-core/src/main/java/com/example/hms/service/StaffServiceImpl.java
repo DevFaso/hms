@@ -285,6 +285,12 @@ public class StaffServiceImpl implements StaffService {
                 && Boolean.FALSE.equals(existingStaff.getAssignment().getActive())) {
             existingStaff.setActive(false);
         }
+        // QA D907 (#968 review): switching a record off through PUT
+        // {active:false} cuts the same access DELETE does, under the same rules.
+        if (wasActive && !existingStaff.isActive()) {
+            assignmentService.retireStaffAccessAtHospital(user.getId(), hospital.getId(),
+                assignment != null ? assignment.getId() : null);
+        }
         Staff updatedStaff = staffRepository.save(existingStaff);
 
         handleHeadOfDepartmentUpdates(dto, existingStaff, department, locale);

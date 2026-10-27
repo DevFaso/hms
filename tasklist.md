@@ -2225,6 +2225,19 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   active assignments is a query change on the paged directory (one join per
   page), not part of the deactivation.
 
+- **QA D907 (#968 review): staff records and their assignments drift apart the other way.**
+  A staff deactivation now switches the roles off and an assignment coming
+  back on brings its staff record back; /staff shows a record inactive while
+  its role is off (`fix/qa-r15-admin-security`). Owed: switching an assignment
+  off directly (PATCH `/deactivate`, `DELETE /assignments/user/{id}`, the
+  provider staff page) leaves `staff.active = true` in the database, so the
+  `...ActiveTrue` staff queries behind `/staff/hospital/{id}/active` and the
+  staff validators still return that person. Either retire the linked staff
+  record on every assignment switch-off, or filter those queries on the
+  assignment. Also owed: `POST`/`PUT /staff` check the caller's read scope
+  (any role at the hospital), not that they administer it; only the
+  switch-off path now requires an administrator of that hospital.
+
 - **QA D868 (round 14): a permission catalogue the roles page can edit.**
   The roles page now titles a system role in the reader's language and says
   "built-in access" instead of "0 permissions"; the permissions dialog
