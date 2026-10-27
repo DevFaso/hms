@@ -69,15 +69,16 @@ class AuditDescriptionCoverageTest {
         "\"METHOD /route\": read by WRITE_DESCRIPTION in AuditDescriptionService, with the entity");
 
     private static final Pattern METHOD = Pattern.compile(
-        "(?:(public|private|protected)\\s+)?(?:static\\s+|final\\s+|synchronized\\s+|default\\s+)*"
-            + "[\\w<>\\[\\],.?]+(?:\\s*<[^>]*>)?\\s+(\\w+)\\s*\\(");
-    private static final Pattern BODY_START = Pattern.compile("^\\s*(?:throws\\s+[\\w.,\\s]+)?\\{");
+        "(?:(public|private|protected)\\s++)?(?:(?:static|final|synchronized|default)\\s++)*+"
+            + "[\\w<>\\[\\],.?]+(?:\\s*+<[^>]*+>)?\\s++(\\w++)\\s*+\\(");
+    private static final Pattern BODY_START = Pattern.compile("^\\s*+(?:throws\\s++[\\w.,][\\w.,\\s]*+)?\\{");
     private static final Set<String> NOT_METHODS = Set.of("if", "for", "while", "switch", "catch", "return",
         "new", "else", "synchronized", "try");
     private static final Pattern LITERAL = Pattern.compile("\"(?:[^\"\\\\]|\\\\.)*\"");
     private static final Pattern FORMAT = Pattern.compile("^String\\.format\\(\\s*(\"(?:[^\"\\\\]|\\\\.)*\")");
     private static final Pattern ENGLISH_MESSAGE = Pattern.compile(
-        "^(?:[\\w.]*\\.)?MessageUtil\\.resolve\\(\\s*(?:java\\.util\\.)?Locale\\.ENGLISH\\s*,\\s*(.*)\\)$", Pattern.DOTALL);
+        "^(?:\\w++\\.)*MessageUtil\\.resolve\\(\\s*+(?:java\\.util\\.)?Locale\\.ENGLISH\\s*+,\\s*+(.*)\\)$",
+        Pattern.DOTALL);
     private static final Pattern IDENTIFIER = Pattern.compile("^[A-Za-z_]\\w*$");
     /** {@code Type.CONSTANT} or {@code com.example.Type.CONSTANT}: a constant of another class. */
     private static final Pattern QUALIFIED_CONSTANT = Pattern.compile("^(?:[a-z]\\w*\\.)*([A-Z]\\w*)\\.([A-Z][A-Z0-9_]*)$");
@@ -159,7 +160,7 @@ class AuditDescriptionCoverageTest {
     @Test
     void theScanFindsTheDescriptionsTheReportNamed() {
         assertThat(SAMPLES.keySet()).as("descriptions built from the source").hasSizeGreaterThan(250);
-        assertThat(SAMPLES.keySet()).contains(
+        assertThat(SAMPLES).containsKeys(
             "Login failed: bad credentials",
             "Super-admin global-view request: " + HOLE + " " + HOLE,
             "Super-admin cross-tenant read: recent-activity (" + HOLE + " rows)",
@@ -196,7 +197,7 @@ class AuditDescriptionCoverageTest {
     }
 
     @Test
-    void everyPatternHasItsTextInTheThreeLocales() throws IOException {
+    void everyPatternHasItsTextInTheThreeLocales() {
         JsonMapper mapper = JsonMapper.builder().build();
         List<String> missing = new ArrayList<>();
         for (String locale : List.of("en", "fr", "es")) {

@@ -441,18 +441,7 @@ public class InventoryServiceImpl implements InventoryService {
             Object[] auditArgs = {hasMedication ? item.getMedicationCatalogItem().getNameFr() : unknownForAudit,
                 hasPharmacy ? item.getPharmacy().getName() : unknownForAudit, onHand, threshold};
 
-            try {
-                UUID currentUserId = roleValidator.getCurrentUserId();
-                if (currentUserId != null) {
-                    User user = userRepository.findById(currentUserId).orElse(null);
-                    if (user != null) {
-                        notificationService.createNotification("inventory.lowStock.notification", alertArgs,
-                            user.getUsername(), "REORDER_ALERT");
-                    }
-                }
-            } catch (Exception e) {
-                log.warn("Failed to send reorder alert for item {}: {}", item.getId(), e.getMessage());
-            }
+            pushReorderAlert(item, alertArgs);
 
             logAudit(AuditEventType.STOCK_REORDER_ALERT,
                 messageSource.getMessage("inventory.lowStock.notification", auditArgs, Locale.ENGLISH),
@@ -461,6 +450,21 @@ public class InventoryServiceImpl implements InventoryService {
     }
 
     // ── Private helpers ──────────────────────────────────────────────────
+
+    /** Pushes the low-stock alert to the caller who triggered the sweep; a failure never stops the sweep. */
+    private void pushReorderAlert(InventoryItem item, Object[] alertArgs) {
+        try {
+            UUID currentUserId = roleValidator.getCurrentUserId();
+            if (currentUserId == null) {
+                return;
+            }
+            userRepository.findById(currentUserId).ifPresent(user ->
+                notificationService.createNotification("inventory.lowStock.notification", alertArgs,
+                    user.getUsername(), "REORDER_ALERT"));
+        } catch (Exception e) {
+            log.warn("Failed to send reorder alert for item {}: {}", item.getId(), e.getMessage());
+        }
+    }
 
     private Pharmacy resolvePharmacy(UUID pharmacyId) {
         return pharmacyRepository.findById(pharmacyId)

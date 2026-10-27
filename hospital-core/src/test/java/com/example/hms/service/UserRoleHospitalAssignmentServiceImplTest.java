@@ -944,7 +944,7 @@ class UserRoleHospitalAssignmentServiceImplTest {
     void aKeyThePreCheckCannotSeeIsStillRefusedAsAConflict() {
         UUID id = assignment.getId();
         when(assignmentRepository.findById(id)).thenReturn(Optional.of(assignment));
-        org.mockito.Mockito.doThrow(new org.springframework.dao.DataIntegrityViolationException("fk"))
+        doThrow(new org.springframework.dao.DataIntegrityViolationException("fk"))
             .when(assignmentRepository).flush();
 
         assertThatThrownBy(() -> service.deleteAssignment(id))
