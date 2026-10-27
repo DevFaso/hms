@@ -1,4 +1,4 @@
-import { TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
@@ -413,5 +413,127 @@ describe('Login — password flow leaves SUPER_ADMIN in global view', () => {
     expect(roleContext.effectiveHospitalIdForRequest())
       .withContext('hospital-admin interceptor scope MUST be the primary hospital')
       .toBe(primaryHospitalId);
+  });
+});
+
+/**
+ * QA D906: the first-run form checks the phone with the server's rule, so an
+ * e-mail address a browser autofilled into the phone field is flagged on the
+ * field itself, before anything is sent.
+ */
+describe('Login — bootstrap phone field (QA D906)', () => {
+  let httpMock: HttpTestingController;
+  let component: Login;
+  let host: HTMLElement;
+  let fixture: ComponentFixture<Login>;
+
+  beforeEach(() => {
+    const oidcSpy = jasmine.createSpyObj<OidcAuthService>('OidcAuthService', [
+      'isEnabled',
+      'isAvailable',
+      'discoveryFailed',
+      'login',
+    ]);
+    oidcSpy.isEnabled.and.returnValue(false);
+    oidcSpy.isAvailable.and.returnValue(false);
+    oidcSpy.discoveryFailed.and.returnValue(false);
+
+    TestBed.configureTestingModule({
+      imports: [Login, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        provideRouter([]),
+        { provide: OidcAuthService, useValue: oidcSpy },
+      ],
+    });
+    const translate = TestBed.inject(TranslateService);
+    spyOn(translate, 'instant').and.callFake((key: string | string[]) => key as string);
+    fixture = TestBed.createComponent(Login);
+    component = fixture.componentInstance;
+    host = fixture.nativeElement as HTMLElement;
+    httpMock = TestBed.inject(HttpTestingController);
+
+    fixture.detectChanges();
+    httpMock.expectOne('/auth/bootstrap-status').flush({ allowed: true });
+    fixture.detectChanges();
+
+    component.bootstrap = {
+      username: 'first_admin',
+      email: 'admin@example.com',
+      password: 'Secret123!',
+      confirmPassword: 'Secret123!',
+      firstName: 'Awa',
+      lastName: 'Ouedraogo',
+      phoneNumber: '',
+    };
+  });
+
+  afterEach(() => {
+    httpMock.verify();
+  });
+
+  const phoneInput = (): HTMLInputElement => host.querySelector<HTMLInputElement>('#bs-phone')!;
+
+  it('keeps the phone and e-mail autocomplete hints distinct and asks for a phone keypad', () => {
+    expect(phoneInput().getAttribute('type')).toBe('tel');
+    expect(phoneInput().getAttribute('autocomplete')).toBe('tel');
+    expect(phoneInput().getAttribute('inputmode')).toBe('tel');
+    expect(host.querySelector('#bs-email')!.getAttribute('autocomplete')).toBe('email');
+    expect(host.querySelector('#bs-username')!.getAttribute('autocomplete')).toBe('username');
+    expect(phoneInput().getAttribute('placeholder')).toBe('LOGIN.PHONE_PLACEHOLDER');
+    expect(phoneInput().getAttribute('aria-invalid')).toBeNull();
+  });
+
+  it('refuses an e-mail typed into the phone field inline, focused, without calling the API', () => {
+    component.bootstrap.phoneNumber = 'admin@example.com';
+    component.submitBootstrap();
+    fixture.detectChanges();
+
+    httpMock.expectNone('/auth/bootstrap-signup');
+    expect(component.bootstrapPhoneError).toBe('USERS.PHONE_INVALID');
+    expect(component.error).toBe('');
+    expect(phoneInput().getAttribute('aria-invalid')).toBe('true');
+    expect(phoneInput().getAttribute('aria-describedby')).toContain('bs-phone-error');
+    expect(host.querySelector('#bs-phone-error')?.textContent?.trim()).toBe('USERS.PHONE_INVALID');
+    expect(document.activeElement).toBe(phoneInput());
+  });
+
+  it('clears the inline error as soon as the phone is edited', async () => {
+    // NgModel joins the form in a microtask; wait for it before typing.
+    await fixture.whenStable();
+    component.bootstrap.phoneNumber = 'admin@example.com';
+    component.submitBootstrap();
+    fixture.detectChanges();
+
+    const input = phoneInput();
+    input.value = '70202020';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    expect(component.bootstrapPhoneError).toBe('');
+    expect(input.getAttribute('aria-invalid')).toBeNull();
+    expect(host.querySelector('#bs-phone-error')).toBeNull();
+  });
+
+  for (const accepted of ['70202020', '+22670202020']) {
+    it(`accepts ${accepted} and sends it as typed`, () => {
+      component.bootstrap.phoneNumber = accepted;
+      component.submitBootstrap();
+
+      const req = httpMock.expectOne('/auth/bootstrap-signup');
+      expect(req.request.body.phoneNumber).toBe(accepted);
+      expect(component.bootstrapPhoneError).toBe('');
+      req.flush({ username: 'first_admin' });
+    });
+  }
+
+  it("keeps the server's message as a fallback banner", () => {
+    component.bootstrap.phoneNumber = '70202020';
+    component.submitBootstrap();
+    httpMock
+      .expectOne('/auth/bootstrap-signup')
+      .flush({ message: 'server says no' }, { status: 400, statusText: 'Bad Request' });
+    expect(component.error).toBe('server says no');
   });
 });

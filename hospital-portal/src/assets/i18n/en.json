@@ -3859,6 +3859,7 @@
     "LAST_NAME_PLACEHOLDER": "Last name",
     "USERNAME_CHOOSE_PLACEHOLDER": "Choose a username",
     "PASSWORD_MIN_PLACEHOLDER": "Min 8 characters",
+    "PHONE_PLACEHOLDER": "e.g. 70202020 or +226 70 20 20 20",
     "CONFIRM_PASSWORD_PLACEHOLDER": "Re-enter password",
     "USERNAME_PLACEHOLDER": "Enter your username",
     "PASSWORD_PLACEHOLDER": "Enter your password",
