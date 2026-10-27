@@ -433,4 +433,24 @@ class UserControllerTest {
                     .authorities(AuthorityUtils.createAuthorityList("ROLE_SUPER_ADMIN"))))
             .andExpect(status().isNotFound());
     }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+        "en, User deleted.",
+        "fr, Utilisateur supprimé.",
+        "es, Usuario eliminado."
+    })
+    void deleteUser_answersInTheReadersLanguage(String language, String expected) throws Exception {
+        // QA D911: the answer was "User deleted successfully." whatever the
+        // reader's language.
+        UUID id = UUID.randomUUID();
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/users/{id}", id)
+                .header("Accept-Language", language)
+                .with(SecurityMockMvcRequestPostProcessors.user("superadmin")
+                    .authorities(AuthorityUtils.createAuthorityList("ROLE_SUPER_ADMIN"))))
+            .andExpect(status().isOk())
+            .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                .jsonPath("$.message").value(expected));
+        verify(userService).deleteUser(id);
+    }
 }

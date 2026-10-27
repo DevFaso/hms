@@ -145,6 +145,7 @@ public class StaffServiceImpl implements StaffService {
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final RoleRepository roleRepository;
     private final com.example.hms.security.tenant.ActingScopeResolver actingScopeResolver;
+    private final UserRoleHospitalAssignmentService assignmentService;
 
 
     @Override
@@ -206,7 +207,7 @@ public class StaffServiceImpl implements StaffService {
                 .orElseThrow(() -> new ResourceNotFoundException("assignment.notFound"));
         } else {
             // No role specified — resolve the user's active assignment at this hospital
-            assignment = assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(user.getId(), hospital.getId())
+            assignment = activeStaffAssignmentAt(user.getId(), hospital.getId())
                 .orElseThrow(() -> new BusinessRuleException(
                     getLocalizedMessage("staff.assignment.required", new Object[]{dto.getUserEmail(), dto.getHospitalName()}, locale)));
         }
@@ -256,7 +257,7 @@ public class StaffServiceImpl implements StaffService {
                 .orElseThrow(() -> new ResourceNotFoundException("assignment.notFound"));
         } else {
             // No role change requested — resolve the user's active assignment at this hospital
-            assignment = assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(user.getId(), hospital.getId())
+            assignment = activeStaffAssignmentAt(user.getId(), hospital.getId())
                 .orElseGet(existingStaff::getAssignment); // fall back to existing if nothing active found yet
             if (assignment == null) {
                 throw new BusinessRuleException(
@@ -274,7 +275,16 @@ public class StaffServiceImpl implements StaffService {
 
         validateRoleSpecificRequirements(dto, dto.getRoleName(), locale);
 
+        boolean wasActive = existingStaff.isActive();
         staffMapper.updateStaffFromDto(dto, existingStaff, user, hospital, department, assignment);
+        // QA D907: an edit never switches a deactivated record back on while
+        // the access it stands for is off - that read as "active" for someone
+        // who cannot sign in here. Access comes back through the assignment
+        // (a new code, or a super-admin), which brings the record back with it.
+        if (!wasActive && existingStaff.getAssignment() != null
+                && Boolean.FALSE.equals(existingStaff.getAssignment().getActive())) {
+            existingStaff.setActive(false);
+        }
         Staff updatedStaff = staffRepository.save(existingStaff);
 
         handleHeadOfDepartmentUpdates(dto, existingStaff, department, locale);
@@ -321,12 +331,47 @@ public class StaffServiceImpl implements StaffService {
             );
         }
 
+        // QA D907: the dialog promises the person loses access here, and only
+        // the staff row used to change - their role assignment stayed on, so
+        // they still signed in and read patients. The access this record stood
+        // for at its hospital is switched off with it, in this transaction:
+        // never the caller's own, never the last super-admin's, never a row the
+        // caller may not change (refused, nothing changed). The account stays
+        // on - its holder may work at another hospital. A record switched off
+        // before this rule still has its access cut on a second deactivation.
+        // An open session loses the hospital on its very next request: the
+        // hospital scope is rebuilt from the live assignments on every request
+        // (ActingScopeResolver.liveContext), so naming this hospital answers
+        // 403 NO_LONGER_PERMITTED. The role name itself leaves the session at
+        // the next token refresh, which re-reads the active assignments.
+        UUID userId = staff.getUser() != null ? staff.getUser().getId() : null;
+        UUID hospitalId = staff.getHospital() != null ? staff.getHospital().getId() : null;
+        UUID assignmentId = staff.getAssignment() != null ? staff.getAssignment().getId() : null;
+        assignmentService.retireStaffAccessAtHospital(userId, hospitalId, assignmentId);
+
         if (!staff.isActive()) {
             return;
         }
 
         staff.setActive(false);
         staffRepository.save(staff);
+    }
+
+    /**
+     * The holder's active staff assignment at this hospital. A patient row is
+     * their own care, not a job: linking a staff record to it read a
+     * deactivated nurse who is also a patient there as active staff again
+     * (QA D907).
+     */
+    private Optional<UserRoleHospitalAssignment> activeStaffAssignmentAt(UUID userId, UUID hospitalId) {
+        return assignmentRepository.findByUser_IdAndActiveTrue(userId).stream()
+            .filter(a -> a.getHospital() != null && hospitalId.equals(a.getHospital().getId()))
+            .filter(a -> a.getRole() == null || !isPatientRole(a.getRole().getCode()))
+            .findFirst();
+    }
+
+    private static boolean isPatientRole(String code) {
+        return code != null && "PATIENT".equalsIgnoreCase(code.startsWith("ROLE_") ? code.substring(5) : code);
     }
 
     @Override

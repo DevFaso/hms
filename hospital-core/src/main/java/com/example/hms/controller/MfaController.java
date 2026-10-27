@@ -60,6 +60,7 @@ public class MfaController {
     private static final String PICK_NOT_HONOURED = "auth.mfa.pickNotHonoured";
 
     private final MfaService mfaService;
+    private final org.springframework.context.MessageSource messageSource;
     private final UserRepository userRepository;
     private final AuditEventLogService auditEventLogService;
     private final JwtTokenProvider jwtTokenProvider;
@@ -208,7 +209,9 @@ public class MfaController {
                     .status(AuditStatus.SUCCESS)
                     .eventDescription("TOTP enrollment verified")
                     .build());
-            return ResponseEntity.ok(new MessageResponse("MFA enrollment verified successfully."));
+            // QA D911: in the reader's language.
+            return ResponseEntity.ok(new MessageResponse(
+                messageSource.getMessage("mfa.enrollment.verified", null, org.springframework.context.i18n.LocaleContextHolder.getLocale())));
         }
 
         auditEventLogService.logEvent(AuditEventRequestDTO.builder()

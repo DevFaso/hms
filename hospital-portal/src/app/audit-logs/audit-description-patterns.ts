@@ -91,6 +91,13 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     localise: { role: 'role' },
   },
   {
+    // QA D907: a staff deactivation switches off the person's roles there.
+    key: 'AUDIT.DESC.ROLE_REVOKED_STAFF_DEACTIVATED',
+    re: /^Revoked role '([^']+)' from (.+): staff record deactivated$/,
+    params: ['role', 'name'],
+    localise: { role: 'role' },
+  },
+  {
     key: 'AUDIT.DESC.ASSIGNMENT_CONFIRMED',
     re: /^Confirmed assignment '([^']+)' for (.+)$/,
     params: ['role', 'name'],

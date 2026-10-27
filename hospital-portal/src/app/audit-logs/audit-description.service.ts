@@ -154,19 +154,17 @@ export class AuditDescriptionService {
 
   /**
    * QA D774: a role or enum token in the reader's language. Only a real label
-   * replaces it: when the lookup would merely prettify (GLU -> "Glu",
-   * HB_A1C -> "Hb A1c"), the token is an identifier and is kept verbatim.
+   * replaces it: a token with none (GLU, HB_A1C) is an identifier and is kept
+   * verbatim. QA D908: "has a label" is asked of the label vocabulary, not
+   * read off the text — ACTIVATE's English label "Activate" reads exactly like
+   * the prettified code, and the comparison showed English readers the raw
+   * token.
    */
   private label(value: string, domain?: string): string {
     if (!CODE.test(value)) return value;
     const role = value.startsWith('ROLE_');
     const code = (role ? bareRole(value) : value) ?? value;
     const group = role ? 'role' : domain;
-    const label = this.enumLabels.transform(code, group);
-    const prettified = code
-      .split('_')
-      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
-      .join(' ');
-    return label && label !== prettified ? label : value;
+    return this.enumLabels.knownLabel(code, group) ?? value;
   }
 }

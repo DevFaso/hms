@@ -121,6 +121,24 @@ public interface UserRoleHospitalAssignmentService {
     void retireAssignmentsForUserWithinCallerScope(UUID userId);
 
     /**
+     * QA D907: deactivating a staff record ends the access it stood for at its
+     * hospital. Retires, as {@link #deactivateAssignment} does, the record's
+     * own assignment and every other staff (non-patient) assignment the holder
+     * has at that hospital, active or still waiting on its code. The account
+     * itself stays on: its holder may work at another hospital.
+     *
+     * <p>Refused (409), with nothing changed, for the caller's own account,
+     * when one of those rows is out of the caller's reach (an administrator
+     * role, for a hospital admin) and when it would leave no live
+     * super-admin. Each row switched off is audited as {@code ROLE_REVOKED}
+     * once the transaction commits. For {@code StaffService.deleteStaff},
+     * which has already decided the caller may change the staff record.
+     *
+     * @return how many assignments were switched off
+     */
+    int retireStaffAccessAtHospital(UUID userId, UUID hospitalId, UUID staffAssignmentId);
+
+    /**
      * QA D902: refuses (409) when switching this account off would leave the
      * platform with no live super-admin assignment. For
      * {@code UserService.updateUser}, before it deactivates the account.

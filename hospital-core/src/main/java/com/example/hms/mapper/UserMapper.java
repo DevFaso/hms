@@ -66,7 +66,8 @@ public class UserMapper {
     /**
      * Preferred: maps from user + assignments when you have them (e.g., after
      * admin-register).
-     * Uses assignments to compute active state and roles more accurately.
+     * Uses assignments to compute roles more accurately; {@code active} is the
+     * account's own flag (QA D910).
      */
     public UserResponseDTO toResponseDTO(User user, Set<UserRoleHospitalAssignment> assignments) {
         if (user == null)
@@ -85,9 +86,12 @@ public class UserMapper {
         Set<Role> roles = !rolesFromAssignments.isEmpty() ? rolesFromAssignments : safeRolesFromUserRoles(user);
         Set<RoleSummaryDTO> roleDtos = mapRolesToSummaryDTOs(roles);
 
-        // active: any active assignment? fallback to user.isActive()
-        boolean active = (assignments != null && assignments.stream().anyMatch(a -> a != null && Boolean.TRUE.equals(a.getActive())))
-                || user.isActive();
+        // QA D910: the ACCOUNT's status, as the list, the database and sign-in
+        // read it. An account switched off kept answering active=true here
+        // because one of its assignments was still on, so PUT /users/{id}
+        // {active:false} looked like it had not worked. Whether a role is on
+        // at a hospital is the assignments' business, not this flag's.
+        boolean active = user.isActive();
 
         // profile derivation
         String profileType = deriveProfileType(user);

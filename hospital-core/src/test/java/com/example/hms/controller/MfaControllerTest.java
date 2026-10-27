@@ -161,7 +161,21 @@ class MfaControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"code\":\"123456\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.message").value("MFA enrollment verified successfully."));
+                .andExpect(jsonPath("$.message").value("Two-step verification is set up."));
+    }
+
+    @Test
+    void verifyEnrollment_answersInTheReadersLanguage() throws Exception {
+        // QA D911: the success message came back in English whatever the reader's language.
+        when(mfaService.verifyEnrollment(org.mockito.ArgumentMatchers.eq(USER_ID), org.mockito.ArgumentMatchers.eq("123456"), any()))
+                .thenReturn(true);
+
+        mockMvc.perform(post("/auth/mfa/verify-enrollment")
+                        .header("Accept-Language", "fr")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"code\":\"123456\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("La vérification en deux étapes est configurée."));
     }
 
     @Test

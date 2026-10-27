@@ -94,6 +94,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
     private static final String ROLE_SUPER_ADMIN = "ROLE_SUPER_ADMIN";
     private static final String MSG_REMOVE_OWN = "users.assignment.removeOwn";
+    private static final String MSG_STAFF_ACCESS_OUT_OF_REACH = "staff.deactivate.accessOutOfReach";
     /** QA D902: the codes the super-admin role is stored under. */
     private static final Set<String> SUPER_ADMIN_CODES = Set.of(ROLE_SUPER_ADMIN, "SUPER_ADMIN");
     private static final String ROLE_DOCTOR = "ROLE_DOCTOR";
@@ -442,6 +443,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         // Resolved before anything on the row changes: a re-invite with no
         // registrar would leave a row nobody can confirm.
         User newRegistrar = reinvite ? requireCallerAccount(locale) : null;
+        boolean wasActive = Boolean.TRUE.equals(target.getActive());
 
         mapper.updateEntity(target, dto, newHospital, newRole);
         target.setUser(newUser);
@@ -453,6 +455,9 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             facilityAssignmentGuard.requireSingleFacilityKind(newUser, newRoleCode, newHospital, target.getId());
         }
         UserRoleHospitalAssignment saved = assignmentRepository.save(target);
+        if (!wasActive && Boolean.TRUE.equals(saved.getActive())) {
+            restoreLinkedStaff(saved);
+        }
         if (reinvite) {
             eventPublisher.publishEvent(new AssignmentCreatedEvent(saved.getId()));
             recordAssignmentAudit(saved);
@@ -1071,6 +1076,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         assignment.setActive(true);
         assignment.setTempPlainPassword(null);
         assignmentRepository.save(assignment);
+        restoreLinkedStaff(assignment);
         log.info("✅ Assignment '{}' verified and activated via {}.", assignment.getId(), source);
 
         // Activate the user account if it was pending assignment verification
@@ -1300,13 +1306,18 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
      * re-inviting goes through the resend path, which issues a new code.
      */
     private static boolean retire(UserRoleHospitalAssignment assignment) {
-        boolean changed = !Boolean.FALSE.equals(assignment.getActive())
-            || assignment.getConfirmationCode() != null
-            || assignment.getTempPlainPassword() != null;
+        boolean changed = stillGrantsAccess(assignment);
         assignment.setActive(false);
         assignment.setConfirmationCode(null);
         assignment.setTempPlainPassword(null);
         return changed;
+    }
+
+    /** Active, or still able to come on through its code: what {@link #retire} takes away. */
+    private static boolean stillGrantsAccess(UserRoleHospitalAssignment assignment) {
+        return !Boolean.FALSE.equals(assignment.getActive())
+            || assignment.getConfirmationCode() != null
+            || assignment.getTempPlainPassword() != null;
     }
 
     /**
@@ -1395,6 +1406,106 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         }
         log.info("🔒 Deactivated {} assignment(s) for user ID '{}' within the caller's scope.",
             deactivated.size(), userId);
+    }
+
+    @Override
+    public int retireStaffAccessAtHospital(UUID userId, UUID hospitalId, UUID staffAssignmentId) {
+        if (userId == null) {
+            return 0;
+        }
+        // QA D902: never the caller's own access, whatever their scope.
+        requireNotCallersOwnAccount(userId);
+        List<UserRoleHospitalAssignment> held = assignmentRepository.findByUserId(userId);
+        List<UserRoleHospitalAssignment> doomed = held.stream()
+            .filter(row -> isStaffAccessAt(row, hospitalId, staffAssignmentId))
+            .filter(UserRoleHospitalAssignmentServiceImpl::stillGrantsAccess)
+            .toList();
+        if (doomed.isEmpty()) {
+            return 0;
+        }
+        // Every row or none: a staff record switched off while an
+        // administrator role at the same hospital stays on would again say
+        // "no longer has access" about someone who still has it.
+        UserAccountAccess.AssignmentScope scope = accountAccess.assignmentScope();
+        boolean outOfReach = !scope.everywhere()
+            && (scope.shields(doomed.get(0).getUser(), held) || !doomed.stream().allMatch(scope::mayChange));
+        if (outOfReach) {
+            throw new ConflictException(com.example.hms.utility.MessageUtil.resolve(MSG_STAFF_ACCESS_OUT_OF_REACH));
+        }
+        // QA D902: on the rows as they are now, before retire() switches them off.
+        requireSuperAdminRemains(doomed);
+        User actor = accountAccess.currentUserId().flatMap(userRepository::findById).orElse(null);
+        // Built while the rows are still attached; written only once the
+        // switch-off has committed, so a rollback leaves no revocation behind.
+        List<AuditEventRequestDTO> events = doomed.stream()
+            .map(row -> staffAccessRevokedEvent(row, actor))
+            .toList();
+        doomed.forEach(UserRoleHospitalAssignmentServiceImpl::retire);
+        assignmentRepository.saveAll(doomed);
+        TransactionCallbacks.afterCommit(() -> events.forEach(auditEventLogService::logEvent));
+        log.info("🔒 Staff record deactivated: retired {} assignment(s) for user ID '{}' at hospital '{}'.",
+            doomed.size(), userId, hospitalId);
+        return doomed.size();
+    }
+
+    /**
+     * QA D907: a staff role row at this hospital (or the staff record's own
+     * row). A patient row is the holder's own care, never staff access.
+     */
+    private boolean isStaffAccessAt(UserRoleHospitalAssignment row, UUID hospitalId, UUID staffAssignmentId) {
+        if (row.getRole() == null || isRoleCode(getRoleCode(row.getRole()), ROLE_PATIENT)) {
+            return false;
+        }
+        if (staffAssignmentId != null && staffAssignmentId.equals(row.getId())) {
+            return true;
+        }
+        return hospitalId != null && row.getHospital() != null && hospitalId.equals(row.getHospital().getId());
+    }
+
+    private AuditEventRequestDTO staffAccessRevokedEvent(UserRoleHospitalAssignment row, User actor) {
+        User assignee = row.getUser();
+        String roleCode = getRoleCode(row.getRole());
+        String assigneeDisplay = resolveDisplayName(assignee, "unknown user");
+        Map<String, Object> details = new HashMap<>();
+        details.put("revokedRole", roleCode);
+        details.put("reason", "STAFF_DEACTIVATED");
+        if (assignee != null) {
+            details.put("assigneeId", assignee.getId());
+        }
+        return AuditEventRequestDTO.builder()
+            .userId(actor != null ? actor.getId() : null)
+            .userName(resolveDisplayName(actor, null))
+            .assignmentId(row.getId())
+            .hospitalName(resolveHospitalName(row.getHospital()))
+            .hospitalId(row.getHospital() != null ? row.getHospital().getId() : null)
+            .resourceName(assigneeDisplay)
+            .resourceId(row.getId() != null ? row.getId().toString() : null)
+            .entityType(AUDIT_ENTITY_ASSIGNMENT)
+            .eventType(AuditEventType.ROLE_REVOKED)
+            .eventDescription(String.format("Revoked role '%s' from %s: staff record deactivated",
+                roleCode, assigneeDisplay))
+            .status(AuditStatus.SUCCESS)
+            .details(details)
+            .build();
+    }
+
+    /**
+     * QA D907: the staff record a staff deactivation switched off with this
+     * assignment comes back with it, so /staff does not go on reading
+     * "inactive" for someone who works here again.
+     */
+    private void restoreLinkedStaff(UserRoleHospitalAssignment assignment) {
+        if (assignment.getId() == null) {
+            return;
+        }
+        List<Staff> retired = staffRepository.findByAssignment_Id(assignment.getId()).stream()
+            .filter(staff -> !staff.isActive())
+            .toList();
+        retired.forEach(staff -> staff.setActive(true));
+        if (!retired.isEmpty()) {
+            staffRepository.saveAll(retired);
+            log.info("✅ Restored {} staff record(s) with assignment '{}'.", retired.size(), assignment.getId());
+        }
     }
 
     /* ===================== Platform continuity (QA D902) ===================== */

@@ -97,4 +97,28 @@ describe('EnumLabelService', () => {
     expect(service.transform(undefined, 'role')).toBe('');
     expect(service.transform('', 'role')).toBe('');
   });
+
+  describe('knownLabel (QA D908)', () => {
+    it('answers a defined label even when it reads like the prettified code', () => {
+      translate.setTranslation(
+        'en',
+        { PORTAL: { ENUM: { LAB_DEFINITION_ACTION: { ACTIVATE: 'Activate' } } } },
+        true,
+      );
+      expect(service.knownLabel('ACTIVATE', 'labDefinitionAction')).toBe('Activate');
+    });
+
+    it('answers null where transform would only prettify, and for a blank value', () => {
+      expect(service.knownLabel('ZZ_NOT_A_CODE', 'labDefinitionAction')).toBeNull();
+      expect(service.transform('ZZ_NOT_A_CODE', 'labDefinitionAction')).toBe('Zz Not A Code');
+      expect(service.knownLabel('')).toBeNull();
+      expect(service.knownLabel(null)).toBeNull();
+    });
+
+    it('reads the curated English map too, and remembers a miss per language', () => {
+      expect(service.knownLabel('ACTIVE', 'status')).toBe('Active');
+      expect(service.knownLabel('ZZ_NOT_A_CODE')).toBeNull();
+      expect(service.knownLabel('ZZ_NOT_A_CODE')).toBeNull();
+    });
+  });
 });

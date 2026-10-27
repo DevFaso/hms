@@ -264,6 +264,49 @@ describe('AuditDescriptionService (QA D894)', () => {
     expect(wrong).toEqual([]);
   });
 
+  /**
+   * QA D908: in English the approval steps ACTIVATE and APPROVE showed raw,
+   * because their labels ("Activate", "Approve") read exactly like the
+   * prettified code and label() took that as "no label". SUBMIT_FOR_QA, whose
+   * label differs, read correctly.
+   */
+  it('reads an approval step whose English label looks like its code (QA D908)', () => {
+    const activate = describeIn(
+      'en',
+      'Lab test definition GLY: approval step ACTIVATE, new status ACTIVE.',
+    );
+    expect(activate).toBe(
+      `Lab test definition GLY: approval step ${en.PORTAL.ENUM.LAB_DEFINITION_ACTION.ACTIVATE}, new status ${en.LAB.APPROVAL_STATUS.ACTIVE}.`,
+    );
+    expect(
+      describeIn('en', 'Lab test definition GLY: approval step APPROVE, new status APPROVED.'),
+    ).toContain(`approval step ${en.PORTAL.ENUM.LAB_DEFINITION_ACTION.APPROVE},`);
+    // A token with no label anywhere is still an identifier, kept as written.
+    expect(describeIn('en', 'Sensitivity category changed from HIV to ZZ_UNKNOWN')).toContain(
+      'ZZ_UNKNOWN',
+    );
+  });
+
+  it('reads a staff deactivation that switched a role off (QA D907)', () => {
+    const row = "Revoked role 'ROLE_NURSE' from Qa Veilleur: staff record deactivated";
+    expect(describeIn('fr', row)).toBe(
+      fr.AUDIT.DESC.ROLE_REVOKED_STAFF_DEACTIVATED.replace(
+        '{{role}}',
+        fr.PORTAL.ENUM.ROLE.NURSE,
+      ).replace('{{name}}', 'Qa Veilleur'),
+    );
+    expect(describeIn('es', row)).not.toContain('ROLE_NURSE');
+  });
+
+  it('names the super-admin recent-activity read in French and Spanish (QA D909)', () => {
+    translate.use('fr');
+    expect(service.entityLabel('RECENT_ACTIVITY_BUNDLE')).toBe(
+      fr.PORTAL.ENUM.AUDIT_ENTITY_TYPE.RECENT_ACTIVITY_BUNDLE,
+    );
+    translate.use('es');
+    expect(service.entityLabel('RECENT_ACTIVITY_BUNDLE')).not.toBe('Recent Activity Bundle');
+  });
+
   it('describes the profile activity the same way', () => {
     expect(describeIn('fr', 'Refresh token revoked on logout (jti=abc)')).toBe(
       'Jeton de renouvellement révoqué à la déconnexion (jti=abc)',

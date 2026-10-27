@@ -77,6 +77,9 @@ public interface StaffRepository extends JpaRepository<Staff, UUID> {
 
     boolean existsByAssignment_Id(UUID assignmentId);
 
+    /** QA D907: the staff records an assignment stands for. */
+    List<Staff> findByAssignment_Id(UUID assignmentId);
+
     @Query("select s.user.id from Staff s where lower(s.licenseNumber) = lower(:license)")
     Optional<UUID> findUserIdByLicense(@Param("license") String license);
 

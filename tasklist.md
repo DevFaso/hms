@@ -2205,6 +2205,26 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 
 ## Standing platform debt — owed, not parity
 
+- **QA D911 (round 15): the remaining English success messages.**
+  `DELETE /users/{id}`, the profile image upload and delete, and the MFA
+  enrolment check now answer in the reader's language from the backend
+  bundles (`fix/qa-r15-admin-security`). Owed, same shape and cheap each but
+  outside the account area: `AuthController` ("Logged out successfully.",
+  "Email verified successfully."), `OrganizationController` ("Default security
+  policies applied successfully"), `LabTestDefinitionController` and
+  `LabTestValidationStudyController` ("Deleted successfully."),
+  `PatientController` ("Diagnosis removed successfully."). The portal shows its
+  own toasts for these, so nothing reads them on screen today.
+- **QA D907 (round 15): the user directory's role column after a deactivation.**
+  Deactivating a staff record now switches off the person's roles at that
+  hospital and leaves the account on (`fix/qa-r15-admin-security`), so /users
+  rightly still reads "Actif". Owed: its role column comes from the legacy
+  `user_roles` links (`UserMapper.toSummaryDTO`), which a deactivation - of a
+  staff record or of an assignment - never removes, so a nurse with no active
+  role anywhere still reads "Infirmier(ère)" there. Reading the role from the
+  active assignments is a query change on the paged directory (one join per
+  page), not part of the deactivation.
+
 - **QA D868 (round 14): a permission catalogue the roles page can edit.**
   The roles page now titles a system role in the reader's language and says
   "built-in access" instead of "0 permissions"; the permissions dialog
