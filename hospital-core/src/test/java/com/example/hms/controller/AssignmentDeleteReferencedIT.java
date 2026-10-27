@@ -38,6 +38,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -111,6 +112,37 @@ class AssignmentDeleteReferencedIT extends BaseIT {
                 .header("Accept-Language", "es"))
             .andExpect(status().isConflict())
             .andExpect(jsonPath("$.message", containsString("todavía la usan servicios")));
+    }
+
+    /**
+     * QA D904: the 409 came back as {@code field="Impossible de supprimer
+     * l'affectation"} and a message starting "elle est encore utilisée…": the
+     * handler took the text before the first colon as a field name, and the
+     * toast showed only the lower-case second half. The whole sentence, in
+     * all three languages, and no field.
+     */
+    @Test
+    void theRefusalIsSentWholeInEveryLanguageNotCutAtItsColon() throws Exception {
+        Hospital hospital = createHospital();
+        UserRoleHospitalAssignment assignment = createAssignment(hospital);
+        createDepartment(hospital, assignment);
+
+        mockMvc.perform(delete(API_CONTEXT + "/assignments/{id}", assignment.getId()).contextPath(API_CONTEXT)
+                .header("Accept-Language", "fr"))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.message",
+                startsWith("Impossible de supprimer l'affectation : elle est encore utilisée par des services")))
+            .andExpect(jsonPath("$.field").doesNotExist());
+        mockMvc.perform(delete(API_CONTEXT + "/assignments/{id}", assignment.getId()).contextPath(API_CONTEXT)
+                .header("Accept-Language", "es"))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.message", startsWith("No se puede eliminar la asignación: todavía la usan")))
+            .andExpect(jsonPath("$.field").doesNotExist());
+        mockMvc.perform(delete(API_CONTEXT + "/assignments/{id}", assignment.getId()).contextPath(API_CONTEXT)
+                .header("Accept-Language", "en"))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.message", startsWith("Cannot delete assignment: it is still used by departments")))
+            .andExpect(jsonPath("$.field").doesNotExist());
     }
 
     @Test
