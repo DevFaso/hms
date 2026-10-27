@@ -778,9 +778,13 @@
                 (change)="onHospitalChange($any($event.target).value)"
                 required
               >
-                <option value="">{{ 'ENCOUNTERS.SELECT_HOSPITAL' | translate }}</option>
+                <option value="" [selected]="!form.hospitalId">
+                  {{ 'ENCOUNTERS.SELECT_HOSPITAL' | translate }}
+                </option>
+                <!-- QA D912: [value] on the select ran before these options
+                     existed, so a prefilled hospital showed as unselected. -->
                 @for (h of hospitals(); track h.id) {
-                  <option [value]="h.id">{{ h.name }}</option>
+                  <option [value]="h.id" [selected]="h.id === form.hospitalId">{{ h.name }}</option>
                 }
               </select>
             }

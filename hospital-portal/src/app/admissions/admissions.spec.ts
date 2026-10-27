@@ -392,6 +392,23 @@ describe('AdmissionsComponent', () => {
       expect(sent.admissionDateTime).toBe(new Date('2026-10-23T07:48').toISOString().slice(0, 19));
     });
 
+    // QA D918: the physicians were loaded once for the home hospital, so a stay
+    // at another hospital offered physicians the server refuses there.
+    it("offers the physicians of the stay's hospital", () => {
+      departmentLookup.getActiveDepartments.and.returnValue(of([]));
+      const staff = TestBed.inject(StaffService) as jasmine.SpyObj<StaffService>;
+      component.ngOnInit();
+      expect(staff.list).toHaveBeenCalledWith('h1');
+
+      component.openEdit(adm({ hospitalId: 'hB' }));
+      expect(staff.list).toHaveBeenCalledWith('hB');
+
+      component.form.admittingProviderId = 'doc';
+      component.onHospitalChange('h2');
+      expect(staff.list).toHaveBeenCalledWith('h2');
+      expect(component.form.admittingProviderId).toBe('');
+    });
+
     it('edits an existing admission', () => {
       departmentLookup.getActiveDepartments.and.returnValue(of([]));
       component.openEdit(adm({ admissionDateTime: '2026-10-18T10:00:00' }));

@@ -86,6 +86,7 @@ public class PrescriptionMapper {
             .patientId(patient != null ? patient.getId() : null)
             .patientFullName(resolvePatientFullName(patient))
             .patientEmail(patient != null ? nullSafe(patient.getEmail()) : "")
+            .patientPhone(patient != null ? nullSafe(patient.getPhoneNumberPrimary()) : "")
 
             .staffId(staff != null ? staff.getId() : null)
             .staffFullName(resolveStaffFullName(staff))

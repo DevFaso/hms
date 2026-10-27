@@ -591,6 +591,7 @@ export class PrescriptionsComponent implements OnInit {
       lastName: p.patientFullName?.split(' ').slice(1).join(' ') ?? '',
       // QA D912: the row has no MRN; its contact details keep the chip's fallback.
       email: p.patientEmail,
+      phoneNumberPrimary: p.patientPhone,
     } as PatientResponse);
     this.patientEncounters.set([]);
     if (p.patientId) this.loadPatientEncounters(p.patientId);

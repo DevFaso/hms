@@ -10,8 +10,8 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
-import { Subject } from 'rxjs';
-import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
+import { Subject, of } from 'rxjs';
+import { catchError, debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 import {
   AdmissionService,
   AdmissionResponse,
@@ -143,6 +143,13 @@ export class AdmissionsComponent implements OnInit {
     return [{ id: myStaffId, name, email: profile?.email ?? '' }];
   });
   private allStaff: StaffResponse[] = [];
+  /**
+   * QA D918: the physicians offered are those of the stay's hospital. The
+   * list was loaded once for the home hospital, so a super-admin working on
+   * hospital B was offered A's physicians, which the server refuses. A newer
+   * hospital cancels the load of an older one.
+   */
+  private readonly staffHospital$ = new Subject<string>();
   departments = signal<DepartmentOption[]>([]);
   departmentsLoading = signal(false);
   departmentsFailed = signal(false);
@@ -252,14 +259,23 @@ export class AdmissionsComponent implements OnInit {
 
     this.load();
     this.loadAssignedHospitals();
-    // ── TENANT ISOLATION: scope staff list to active hospital ──
-    const hid = this.roleContext.activeHospitalId;
-    this.staffService.list(hid ?? undefined).subscribe((s) => {
-      this.allStaff = s ?? [];
-      // Physicians only: the server refuses a nurse or a midwife as admitting,
-      // attending or discharging provider (QA D84, D176).
-      this.staffMembers.set((s ?? []).filter(isPhysician));
-    });
+    // ── TENANT ISOLATION: scope staff list to the stay's hospital ──
+    this.staffHospital$
+      .pipe(
+        distinctUntilChanged(),
+        switchMap((hid) =>
+          this.staffService.list(hid).pipe(catchError(() => of([] as StaffResponse[]))),
+        ),
+      )
+      .subscribe((s) => {
+        this.allStaff = s ?? [];
+        // Physicians only: the server refuses a nurse or a midwife as admitting,
+        // attending or discharging provider (QA D84, D176).
+        this.staffMembers.set((s ?? []).filter(isPhysician));
+      });
+    this.loadStaffFor(
+      this.roleContext.effectiveHospitalIdForRequest() ?? this.roleContext.activeHospitalId,
+    );
     this.initPatientSearch();
 
     const tab = this.route.snapshot.queryParamMap.get('tab');
@@ -366,7 +382,15 @@ export class AdmissionsComponent implements OnInit {
   onHospitalChange(hospitalId: string): void {
     this.form.hospitalId = hospitalId;
     this.form.departmentId = undefined;
+    // QA D918: a physician of the previous hospital is refused at this one.
+    this.form.admittingProviderId = '';
     this.loadDepartmentsFor(hospitalId);
+    this.loadStaffFor(hospitalId);
+  }
+
+  /** QA D918: (re)load the physicians of `hospitalId`; a no-op when unchanged. */
+  loadStaffFor(hospitalId: string | null | undefined): void {
+    if (hospitalId) this.staffHospital$.next(hospitalId);
   }
 
   /**
@@ -415,6 +439,7 @@ export class AdmissionsComponent implements OnInit {
     // (change) that loads the departments never fired and the list stayed
     // empty. Load them for whatever hospital the form already carries.
     this.loadDepartmentsFor(this.form.hospitalId);
+    this.loadStaffFor(this.form.hospitalId);
     this.showModal.set(true);
   }
 
@@ -477,6 +502,7 @@ export class AdmissionsComponent implements OnInit {
       mrn: a.patientMrn ?? undefined,
     } as PatientResponse);
     this.loadDepartmentsFor(a.hospitalId ?? '');
+    this.loadStaffFor(a.hospitalId);
     this.editing.set(true);
     this.editingId.set(a.id);
     this.showModal.set(true);
@@ -552,6 +578,7 @@ export class AdmissionsComponent implements OnInit {
   /* ── Discharge ── */
   confirmDischarge(a: AdmissionResponse): void {
     this.dischargingAdm.set(a);
+    this.loadStaffFor(a.hospitalId);
     this.dischargeForm = {
       dischargeDisposition: 'HOME',
       dischargeSummary: '',

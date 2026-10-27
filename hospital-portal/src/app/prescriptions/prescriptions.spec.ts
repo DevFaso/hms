@@ -128,6 +128,21 @@ describe('PrescriptionsComponent — SMS dispatch modal', () => {
 
   // QA D912 (#967 review): the reopened chip passed an empty email although
   // the row carries the patient's.
+  it('falls back to the row phone on a reopened prescription chip (QA D912)', () => {
+    // The re-test: Fatimata Zongo has a phone and no email.
+    component.openEdit({
+      id: 'rx-10',
+      patientId: 'p-fatimata',
+      patientFullName: 'Fatimata Zongo',
+      patientEmail: '',
+      patientPhone: '70001003',
+      status: 'DRAFT',
+    } as PrescriptionResponse);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('.picker-chip .chip-sub')?.textContent?.trim()).toBe('70001003');
+  });
+
   it('falls back to the row email on a reopened prescription chip (QA D912)', () => {
     component.openEdit({
       id: 'rx-9',

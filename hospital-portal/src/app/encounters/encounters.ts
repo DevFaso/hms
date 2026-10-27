@@ -9,8 +9,9 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
-import { Subject } from 'rxjs';
-import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
+import { Subject, of } from 'rxjs';
+import { catchError, debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
+import { refusalReason } from '../shared/refusal-reason';
 import {
   EncounterService,
   EncounterRequest,
@@ -169,6 +170,14 @@ export class EncountersComponent implements OnInit {
   hospitals = signal<HospitalResponse[]>([]);
   staffMembers = signal<{ id: string; name: string }[]>([]);
   private allStaff: StaffResponse[] = [];
+  /**
+   * QA D918: the clinicians offered are those of the form's hospital. The list
+   * was loaded once for the home hospital, so a super-admin scoped to B was
+   * offered A's clinicians and the server refused the visit. A newer hospital
+   * cancels the load of an older one.
+   */
+  private readonly staffHospital$ = new Subject<string>();
+
   departments = signal<DepartmentOption[]>([]);
   departmentsLoading = signal(false);
   /**
@@ -275,16 +284,27 @@ export class EncountersComponent implements OnInit {
       }
     }
 
-    // ── TENANT ISOLATION: scope staff list to active hospital ──
-    const hid = this.roleContext.activeHospitalId;
-    this.staffService.list(hid ?? undefined).subscribe({
-      next: (list) => {
-        this.allStaff = list;
+    // ── TENANT ISOLATION: scope staff list to the form's hospital ──
+    this.staffHospital$
+      .pipe(
+        distinctUntilChanged(),
+        switchMap((hid) =>
+          this.staffService.list(hid).pipe(catchError(() => of([] as StaffResponse[]))),
+        ),
+      )
+      .subscribe((list) => {
+        this.allStaff = list ?? [];
         this.staffMembers.set(
-          list.filter(isClinicalProvider).map((s) => ({ id: s.id, name: s.name || s.email })),
+          this.allStaff
+            .filter(isClinicalProvider)
+            .map((s) => ({ id: s.id, name: s.name || s.email })),
         );
-      },
-    });
+      });
+    this.loadStaffFor(
+      this.lockedHospitalId ??
+        this.roleContext.effectiveHospitalIdForRequest() ??
+        this.roleContext.activeHospitalId,
+    );
     this.initPatientSearch();
   }
 
@@ -349,7 +369,15 @@ export class EncountersComponent implements OnInit {
   onHospitalChange(hospitalId: string): void {
     this.form.hospitalId = hospitalId;
     this.form.departmentId = undefined;
+    // QA D918: a clinician of the previous hospital is refused at this one.
+    this.form.staffId = '';
     this.loadDepartmentsFor(hospitalId);
+    this.loadStaffFor(hospitalId);
+  }
+
+  /** QA D918: (re)load the clinicians of `hospitalId`; a no-op when unchanged. */
+  loadStaffFor(hospitalId: string | null | undefined): void {
+    if (hospitalId) this.staffHospital$.next(hospitalId);
   }
 
   /**
@@ -408,8 +436,10 @@ export class EncountersComponent implements OnInit {
       this.loadDepartmentsFor(this.lockedHospitalId);
     } else if (this.form.hospitalId) {
       // A prefilled hospital never fires the select's (change): load its
-      // departments here, or the required list is empty (#967 review, round 2).
+      // departments here, or the required list is empty (#967 review, round 2),
+      // and its clinicians (QA D918).
       this.loadDepartmentsFor(this.form.hospitalId);
+      this.loadStaffFor(this.form.hospitalId);
     }
 
     this.showModal.set(true);
@@ -439,6 +469,7 @@ export class EncountersComponent implements OnInit {
       phoneNumberPrimary: enc.patientPhoneNumber,
     } as PatientResponse);
     this.loadDepartmentsFor(enc.hospitalId ?? '');
+    this.loadStaffFor(enc.hospitalId);
     this.showModal.set(true);
   }
 
@@ -489,8 +520,10 @@ export class EncountersComponent implements OnInit {
         this.loadEncounters();
         this.saving.set(false);
       },
-      error: () => {
-        this.toast.error(this.translate.instant('ENCOUNTERS.SAVE_FAILED'));
+      error: (err) => {
+        // QA D918: the server says why (e.g. a clinician of another hospital),
+        // in the reader's language; the generic text is for anything else.
+        this.toast.error(refusalReason(err) ?? this.translate.instant('ENCOUNTERS.SAVE_FAILED'));
         this.saving.set(false);
       },
     });

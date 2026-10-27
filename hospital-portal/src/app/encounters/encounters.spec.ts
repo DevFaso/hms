@@ -201,6 +201,69 @@ describe('EncountersComponent', () => {
     expect(patients.list).toHaveBeenCalledWith('hB', 'kab');
   }));
 
+  describe('super-admin scoped to hospital B (QA D912, D918)', () => {
+    let staff: jasmine.SpyObj<StaffService>;
+
+    beforeEach(() => {
+      roleCtx.isSuperAdmin = () => true;
+      roleCtx.effectiveHospitalIdForRequest = () => 'hB';
+      (TestBed.inject(AuthService) as jasmine.SpyObj<AuthService>).hasAnyRole.and.returnValue(true);
+      hospitalSpy.list.and.returnValue(
+        of([
+          { id: 'h1', name: 'Hôpital A' },
+          { id: 'hB', name: 'Clinique B' },
+        ] as HospitalResponse[]),
+      );
+      staff = TestBed.inject(StaffService) as jasmine.SpyObj<StaffService>;
+      staff.list.calls.reset();
+    });
+
+    function openNewVisit() {
+      const fixture = TestBed.createComponent(EncountersComponent);
+      fixture.detectChanges();
+      fixture.componentInstance.openCreate();
+      fixture.detectChanges();
+      return fixture;
+    }
+
+    it('shows hospital B as selected in the new-visit form', () => {
+      const fixture = openNewVisit();
+      const select = (fixture.nativeElement as HTMLElement).querySelector(
+        '#enc-hospitalId',
+      ) as HTMLSelectElement;
+      expect(select.value).toBe('hB');
+      expect(select.selectedOptions[0]?.textContent?.trim()).toBe('Clinique B');
+    });
+
+    it("offers hospital B's clinicians, and another hospital's after a change", () => {
+      const fixture = openNewVisit();
+      expect(staff.list).toHaveBeenCalledWith('hB');
+      expect(staff.list).not.toHaveBeenCalledWith('h1');
+
+      fixture.componentInstance.form.staffId = 'st-b';
+      fixture.componentInstance.onHospitalChange('h1');
+      expect(staff.list).toHaveBeenCalledWith('h1');
+      expect(fixture.componentInstance.form.staffId).toBe('');
+    });
+
+    it("shows the server's reason when the visit is refused", () => {
+      const fixture = openNewVisit();
+      encounterSpy.create.and.returnValue(
+        throwError(() => ({
+          status: 400,
+          error: {
+            message:
+              'El miembro del personal seleccionado no pertenece al hospital de la consulta.',
+          },
+        })),
+      );
+      fixture.componentInstance.submitForm();
+      expect(toastSpy.error).toHaveBeenCalledWith(
+        'El miembro del personal seleccionado no pertenece al hospital de la consulta.',
+      );
+    });
+  });
+
   it('QA D427: a pharmacist reading encounters is offered no New, Edit or Delete', () => {
     activeRoles = ['ROLE_PHARMACIST'];
     const fixture = TestBed.createComponent(EncountersComponent);
