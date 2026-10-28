@@ -248,7 +248,11 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
         // Review of #975: the rejection above was judged on the specimen as
         // loaded; a rejection that committed since is seen here, under the
         // order lock every specimen writer takes, before any result is saved.
-        for (Map.Entry<String, LabOrder> entry : ordersByPlacer.entrySet()) {
+        // Locked in order-id order, so two messages naming the same orders in
+        // a different order cannot deadlock each other.
+        List<Map.Entry<String, LabOrder>> byOrderId = new ArrayList<>(ordersByPlacer.entrySet());
+        byOrderId.sort(Map.Entry.comparingByValue(java.util.Comparator.comparing(LabOrder::getId)));
+        for (Map.Entry<String, LabOrder> entry : byOrderId) {
             labOrderRepository.findWithLockById(entry.getValue().getId());
             if (specimenRepository.findStatusById(specimenIdByPlacer.get(entry.getKey()))
                     == com.example.hms.enums.LabSpecimenStatus.REJECTED) {

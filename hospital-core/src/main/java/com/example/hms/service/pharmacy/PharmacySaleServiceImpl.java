@@ -147,6 +147,15 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
                 .orElseThrow(() -> new ResourceNotFoundException("medication.catalog.notfound"));
 
         StockLot lot = lineDto.getStockLotId() == null ? null : sellingLot(lineDto, pharmacy);
+        if (lot != null) {
+            // Review of #975: the sale's lines together never take more than
+            // the lot holds - an oversold lot would also hand later lines a
+            // FEFO credit for stock that is not there.
+            BigDecimal taken = takenByLot.getOrDefault(lot.getId(), lineDto.getQuantity());
+            if (lot.getRemainingQuantity() != null && taken.compareTo(lot.getRemainingQuantity()) > 0) {
+                throw new BusinessException("stock.lot.insufficient", lot.getLotNumber(), taken.toPlainString());
+            }
+        }
         String lineNotes = lot == null ? lineDto.getNotes() : notesWithFefoReason(lineDto, lot, takenByLot);
 
         BigDecimal lineTotal = lineDto.getQuantity()

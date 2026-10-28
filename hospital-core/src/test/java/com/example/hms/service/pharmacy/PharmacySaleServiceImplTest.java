@@ -268,6 +268,33 @@ class PharmacySaleServiceImplTest {
     }
 
     @Test
+    @DisplayName("review of #975: the lines of a sale together never take more than the lot holds")
+    void linesTakingMoreThanTheLotHoldsAreRefused() {
+        InventoryItem invItem = InventoryItem.builder().pharmacy(pharmacy).build();
+        StockLot lot = StockLot.builder().inventoryItem(invItem).lotNumber("R16-PCM-COURT")
+                .remainingQuantity(BigDecimal.TEN).build();
+        lot.setId(UUID.randomUUID());
+        SaleLineRequestDTO first = line(new BigDecimal("6"), BigDecimal.ONE);
+        first.setStockLotId(lot.getId());
+        SaleLineRequestDTO second = line(new BigDecimal("5"), BigDecimal.ONE);
+        second.setStockLotId(lot.getId());
+        PharmacySaleRequestDTO dto = request(List.of(first, second));
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(userId);
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(pharmacyRepository.findByIdAndHospital_Id(pharmacyId, hospitalId)).thenReturn(Optional.of(pharmacy));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(catalogItemRepository.findById(itemId)).thenReturn(Optional.of(item));
+        when(stockLotRepository.findById(lot.getId())).thenReturn(Optional.of(lot));
+
+        assertThatThrownBy(() -> service.createSale(dto))
+                .isInstanceOf(BusinessException.class)
+                .extracting("messageKey").isEqualTo("stock.lot.insufficient");
+        verify(saleRepository, never()).save(any());
+    }
+
+    @Test
     @DisplayName("review of #975: each line is judged on what the other lines of the same sale take, in any order")
     void aSaleSplitAcrossLotsTellsTheRuleWhatTheOtherLinesTake() {
         InventoryItem invItem = InventoryItem.builder().pharmacy(pharmacy).build();

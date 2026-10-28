@@ -356,6 +356,36 @@ class MllpInboundLabServiceImplTest {
     }
 
     @Test
+    @DisplayName("Review of #975 — the orders of one message are locked in id order, whatever order the message names them in")
+    void theOrdersOfAMessageAreLockedInIdOrder() {
+        LabOrder later = new LabOrder();
+        later.setId(new UUID(0, 2));
+        later.setHospital(hospital);
+        LabSpecimen laterTube = new LabSpecimen();
+        laterTube.setId(UUID.randomUUID());
+        laterTube.setLabOrder(later);
+        LabOrder earlier = new LabOrder();
+        earlier.setId(new UUID(0, 1));
+        earlier.setHospital(hospital);
+        LabSpecimen earlierTube = new LabSpecimen();
+        earlierTube.setId(UUID.randomUUID());
+        earlierTube.setLabOrder(earlier);
+        when(specimenRepository.findByAccessionNumber("ACC-LATER")).thenReturn(Optional.of(laterTube));
+        when(specimenRepository.findByAccessionNumber("ACC-EARLIER")).thenReturn(Optional.of(earlierTube));
+        // The first order locked is found rejected, so nothing else is locked.
+        when(specimenRepository.findStatusById(earlierTube.getId()))
+            .thenReturn(com.example.hms.enums.LabSpecimenStatus.REJECTED);
+
+        MllpInboundOutcome outcome = service.processOruR01(
+            List.of(observation("ACC-LATER", "5.4"), observation("ACC-EARLIER", "6.1")), hospital, "APP", "FAC",
+            "MSG-CTRL-ORDER", "MSH|...\r");
+
+        assertThat(outcome).isEqualTo(MllpInboundOutcome.REJECTED_INVALID);
+        verify(labOrderRepository).findWithLockById(earlier.getId());
+        verify(labOrderRepository, never()).findWithLockById(later.getId());
+    }
+
+    @Test
     @DisplayName("QA D820 — an order voided as entered in error takes no result from the analyser")
     void rejectedWhenTheOrderWasVoided() {
         labOrder.setStatus(com.example.hms.enums.LabOrderStatus.ENTERED_IN_ERROR);

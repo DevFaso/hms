@@ -41,6 +41,8 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
     private final InstrumentOutboxService instrumentOutboxService;
     /** QA D962: tells the ordering clinician a specimen was rejected. */
     private final com.example.hms.service.lab.LabSpecimenRejectionNotifier rejectionNotifier;
+    /** Review of #975: a result already recorded from the tube (even preliminary) bars its rejection. */
+    private final com.example.hms.repository.LabResultRepository labResultRepository;
 
     /** The specimen.rejection_reason column width (V239). */
     static final int MAX_REJECTION_REASON = 500;
@@ -203,6 +205,13 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
             throw new BusinessException("lab.order.enteredInError");
         }
         if (!LabOrderLifecycle.acceptsSpecimenRejection(committedStatus)) {
+            throw new BusinessException("lab.specimen.rejectAfterResult");
+        }
+        // Review of #975: an analyser's preliminary result leaves the order
+        // short of RESULTED, so the status alone would let the tube be refused
+        // while its value stays on the order. Any result row bars it; the
+        // result is corrected instead.
+        if (labResultRepository.existsByLabOrder_Id(labOrder.getId())) {
             throw new BusinessException("lab.specimen.rejectAfterResult");
         }
 

@@ -47,6 +47,7 @@ class LabSpecimenRejectionTest {
     @Mock private RoleValidator roleValidator;
     @Mock private InstrumentOutboxService instrumentOutboxService;
     @Mock private LabSpecimenRejectionNotifier rejectionNotifier;
+    @Mock private com.example.hms.repository.LabResultRepository labResultRepository;
 
     @InjectMocks
     private LabSpecimenServiceImpl service;
@@ -197,5 +198,19 @@ class LabSpecimenRejectionTest {
             .hasFieldOrPropertyWithValue("messageKey", "lab.specimen.changedConcurrently");
         verify(labSpecimenRepository, never()).save(any());
         verify(instrumentOutboxService, never()).enqueueSpecimenReceived(any());
+    }
+
+    @Test
+    @DisplayName("Review of #975 — a tube whose analyser already sent a (preliminary) result is corrected, not rejected")
+    void aRecordedResultBarsTheRejection() {
+        when(labOrderRepository.findStatusById(labOrder.getId())).thenReturn(LabOrderStatus.IN_PROGRESS);
+        when(labResultRepository.existsByLabOrder_Id(labOrder.getId())).thenReturn(true);
+        UUID id = specimen.getId();
+
+        assertThatThrownBy(() -> service.rejectSpecimen(id, "Hémolysé", Locale.FRENCH))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "lab.specimen.rejectAfterResult");
+        verify(labSpecimenRepository, never()).save(any());
+        verify(labOrderRepository, never()).updateStatusFrom(any(), any(), any());
     }
 }
