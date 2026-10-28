@@ -248,6 +248,31 @@ class FrontDeskRoundTripIT extends BaseIT {
         assertThat(reopened.getLinkedAppointment()).isNull();
     }
 
+    @Test
+    @DisplayName("D985: a visit that does not answer the recall leaves it open; booking from the recall list links exactly that one")
+    void onlyTheVisitARecallAsksForSchedulesIt() throws Exception {
+        PatientRecall review = recallRepository.save(PatientRecall.builder()
+            .patient(aicha).hospital(hospital)
+            .dueDate(LocalDate.now().plusMonths(6)).reason("Bilan diabète").build());
+
+        // An acute visit tomorrow: the recall names no department or clinician, so only an explicit link moves it.
+        mockMvc.perform(post(API + "/appointments").contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(appointmentBody(aicha, LocalDate.now().plusDays(1), "08:00", "08:30", "Fièvre"))
+                .with(asReceptionist()))
+            .andExpect(status().isCreated());
+        assertThat(recallRepository.findById(review.getId()).orElseThrow().getStatus()).isEqualTo(RecallStatus.PENDING);
+
+        String body = appointmentBody(aicha, LocalDate.now().plusMonths(6), "09:00", "09:30", "Bilan")
+            .replace("\"reason\"", "\"recallId\":\"" + review.getId() + "\",\"reason\"");
+        mockMvc.perform(post(API + "/appointments").contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON).content(body)
+                .with(asReceptionist()))
+            .andExpect(status().isCreated());
+        assertThat(recallRepository.findById(review.getId()).orElseThrow().getStatus())
+            .isEqualTo(RecallStatus.SCHEDULED);
+    }
+
     // ---------------------------------------------------------------- insurance
 
     @Test
@@ -308,22 +333,20 @@ class FrontDeskRoundTripIT extends BaseIT {
     }
 
     @Test
-    @DisplayName("D926: a required field sent blank is refused, and another record's number is a 409")
-    void blanksAndTakenNumbersAreRefused() throws Exception {
-        patient("Seydou", "Traoré", LocalDate.of(1970, 2, 2), "70001002");
-
-        mockMvc.perform(patch(API + "/patients/{id}", aicha.getId()).contextPath(API)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"lastName\":\"  \"}")
-                .with(asReceptionist()))
-            .andExpect(status().isBadRequest());
-        mockMvc.perform(patch(API + "/patients/{id}", aicha.getId()).contextPath(API)
-                .contentType(MediaType.APPLICATION_JSON).content("{\"phoneNumberPrimary\":\"+226 70 00 10 02\"}")
-                .with(asReceptionist()))
-            .andExpect(status().isConflict());
+    @DisplayName("D926: a required field sent blank is refused and nothing is changed")
+    void blanksAreRefused() throws Exception {
+        for (String body : List.of("{\"lastName\":\"  \"}", "{\"phoneNumberPrimary\":\" \"}",
+                "{\"gender\":\"\"}")) {
+            mockMvc.perform(patch(API + "/patients/{id}", aicha.getId()).contextPath(API)
+                    .contentType(MediaType.APPLICATION_JSON).content(body)
+                    .with(asReceptionist()))
+                .andExpect(status().isBadRequest());
+        }
 
         Patient stored = patientRepository.findById(aicha.getId()).orElseThrow();
         assertThat(stored.getLastName()).isEqualTo("Kaboré");
         assertThat(stored.getPhoneNumberPrimary()).isEqualTo("70161099");
+        assertThat(stored.getGender()).isEqualTo("F");
     }
 
     // ------------------------------------------------------------ match/search

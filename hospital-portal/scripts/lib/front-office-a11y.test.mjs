@@ -48,10 +48,15 @@ test('D988: every icon-only button has an accessible name', () => {
     const html = read(f);
     for (const m of html.matchAll(/<button\b([^>]*)>([\s\S]*?)<\/button>/g)) {
       const [, attrs, body] = m;
+      // The visible text outside the icon span: what is left between tags
+      // (split, not strip: this reads a template, it sanitizes nothing).
       const text = body
-        .replace(/<span\b[^>]*material-symbols-outlined[^>]*>[\s\S]*?<\/span>/g, '')
-        .replace(/<[^>]+>/g, '')
-        .replace(/&times;/g, '')
+        .split(/<span\b[^>]*material-symbols-outlined[^>]*>[^<]*<\/span>/)
+        .join(' ')
+        .split(/<[^>]*>/)
+        .join(' ')
+        .split('&times;')
+        .join(' ')
         .trim();
       const iconOnly = text === '' && /material-symbols-outlined|&times;/.test(body);
       if (iconOnly && !/aria-label/.test(attrs)) {

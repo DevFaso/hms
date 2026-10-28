@@ -32,15 +32,15 @@ class AppointmentSlotRulesTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = AppointmentStatus.class, names = {"CANCELLED", "NO_SHOW"})
-    @DisplayName("D937: a cancelled booking or a no-show frees its slot")
+    @EnumSource(value = AppointmentStatus.class, names = {"CANCELLED", "NO_SHOW", "RESCHEDULED"})
+    @DisplayName("D937: a cancelled booking, a no-show or a superseded (RESCHEDULED) booking frees its slot")
     void freedSlots(AppointmentStatus status) {
         assertThat(AppointmentSlotRules.overlapsHeldSlot(List.of(booked(status, 14)), null,
             LocalDateTime.of(DAY, LocalTime.of(14, 0)), LocalDateTime.of(DAY, LocalTime.of(14, 30)))).isFalse();
     }
 
     @ParameterizedTest
-    @EnumSource(value = AppointmentStatus.class, names = {"CANCELLED", "NO_SHOW"}, mode = EnumSource.Mode.EXCLUDE)
+    @EnumSource(value = AppointmentStatus.class, names = {"CANCELLED", "NO_SHOW", "RESCHEDULED"}, mode = EnumSource.Mode.EXCLUDE)
     @DisplayName("every other status keeps its slot")
     void heldSlots(AppointmentStatus status) {
         assertThat(AppointmentSlotRules.overlapsHeldSlot(List.of(booked(status, 14)), null,
@@ -59,16 +59,51 @@ class AppointmentSlotRulesTest {
     @DisplayName("D978: a patient books a future time inside the patient booking day")
     void patientBookingTimes() {
         LocalDateTime now = LocalDateTime.of(DAY, LocalTime.of(22, 51));
-        assertThatThrownBy(() -> AppointmentSlotRules.requirePatientBookable(
-            LocalDateTime.of(DAY, LocalTime.of(8, 0)), LocalDateTime.of(DAY, LocalTime.of(8, 30)), now))
+        LocalDateTime passed = LocalDateTime.of(DAY, LocalTime.of(8, 0));
+        LocalDateTime passedEnd = passed.plusMinutes(30);
+        LocalDateTime night = LocalDateTime.of(DAY.plusDays(6), LocalTime.of(2, 30));
+        LocalDateTime nightEnd = night.plusMinutes(30);
+        assertThatThrownBy(() -> AppointmentSlotRules.requirePatientBookable(passed, passedEnd, now))
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("portal.booking.pastTime");
-        assertThatThrownBy(() -> AppointmentSlotRules.requirePatientBookable(
-            LocalDateTime.of(DAY.plusDays(6), LocalTime.of(2, 30)),
-            LocalDateTime.of(DAY.plusDays(6), LocalTime.of(3, 0)), now))
+        assertThatThrownBy(() -> AppointmentSlotRules.requirePatientBookable(night, nightEnd, now))
             .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("portal.booking.outsideHours");
         AppointmentSlotRules.requirePatientBookable(
             LocalDateTime.of(DAY.plusDays(1), LocalTime.of(9, 0)),
             LocalDateTime.of(DAY.plusDays(1), LocalTime.of(9, 30)), now);
+    }
+
+    @Test
+    @DisplayName("rows with a missing date or time never conflict; the next day is not the same slot")
+    void incompleteRowsAndOtherDays() {
+        Appointment noTime = booked(AppointmentStatus.SCHEDULED, 14);
+        noTime.setStartTime(null);
+        Appointment noStatus = booked(AppointmentStatus.SCHEDULED, 9);
+        noStatus.setStatus(null);
+        LocalDateTime at14 = LocalDateTime.of(DAY, LocalTime.of(14, 0));
+        assertThat(AppointmentSlotRules.overlapsHeldSlot(List.of(noTime), null, at14, at14.plusMinutes(30)))
+            .isFalse();
+        // An appointment with no status holds its slot.
+        LocalDateTime at9 = LocalDateTime.of(DAY, LocalTime.of(9, 0));
+        assertThat(AppointmentSlotRules.overlapsHeldSlot(List.of(noStatus), UUID.randomUUID(), at9, at9.plusMinutes(30)))
+            .isTrue();
+        // Back to back is not an overlap.
+        assertThat(AppointmentSlotRules.overlapsHeldSlot(List.of(noStatus), null, at9.plusMinutes(30), at9.plusMinutes(60)))
+            .isFalse();
+    }
+
+    @Test
+    @DisplayName("D978: before 07:00, after 19:00 or across midnight is outside the patient booking day")
+    void outsideThePatientDay() {
+        LocalDateTime now = LocalDateTime.of(DAY, LocalTime.of(6, 0));
+        LocalDateTime early = LocalDateTime.of(DAY.plusDays(1), LocalTime.of(6, 30));
+        LocalDateTime late = LocalDateTime.of(DAY.plusDays(1), LocalTime.of(18, 45));
+        LocalDateTime night = LocalDateTime.of(DAY.plusDays(1), LocalTime.of(18, 0));
+        assertThatThrownBy(() -> AppointmentSlotRules.requirePatientBookable(early, early.plusMinutes(30), now))
+            .isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> AppointmentSlotRules.requirePatientBookable(late, late.plusMinutes(30), now))
+            .isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> AppointmentSlotRules.requirePatientBookable(night, night.plusHours(7), now))
+            .isInstanceOf(BusinessException.class);
     }
 }

@@ -303,4 +303,14 @@ describe('PermissionService', () => {
     roleContext.activeRole = 'ROLE_DOCTOR';
     expect(service.hasActivePermission('Create Encounters')).toBeTrue();
   });
+
+  it('QA D997 review: a grant only the backend carries still shows for the acting role', () => {
+    setup(['ROLE_RECEPTIONIST']);
+    const roleContext = TestBed.inject(RoleContextService);
+    roleContext.setRoles(['ROLE_RECEPTIONIST']);
+    roleContext.activeRole = 'ROLE_RECEPTIONIST';
+    spyOn(service, 'hasPermission').and.callFake((p: string) => p === 'Backend Only Grant');
+    expect(service.hasActivePermission('Backend Only Grant')).toBeTrue();
+    expect(service.hasActivePermission('Nobody Grants This')).toBeFalse();
+  });
 });

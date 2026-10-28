@@ -135,24 +135,66 @@ public class PatientRecallServiceImpl implements PatientRecallService {
         return toDto(recallRepository.save(recall), hospitalId);
     }
 
+    /** QA D985: how early a visit may come and still answer a recall. */
+    private static final int RECALL_EARLY_DAYS = 30;
+
     @Override
     @Transactional
-    public void scheduleOpenRecallFor(Appointment appointment) {
+    public void scheduleOpenRecallFor(Appointment appointment, UUID recallId) {
         if (appointment == null || appointment.getPatient() == null || appointment.getHospital() == null) {
             return;
         }
         UUID hospitalId = appointment.getHospital().getId();
-        UUID departmentId = appointment.getDepartment() != null ? appointment.getDepartment().getId() : null;
-        recallRepository.findByPatient_IdAndStatusIn(appointment.getPatient().getId(), OPEN_STATUSES).stream()
-            .filter(r -> r.getHospital() != null && hospitalId.equals(r.getHospital().getId()))
-            .filter(r -> r.getDepartment() == null || r.getDepartment().getId().equals(departmentId))
-            .min(java.util.Comparator.comparing(PatientRecall::getDueDate,
-                java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())))
-            .ifPresent(recall -> {
-                recall.setLinkedAppointment(appointment);
-                recall.setStatus(RecallStatus.SCHEDULED);
-                recallRepository.save(recall);
-            });
+        UUID patientId = appointment.getPatient().getId();
+        java.util.Optional<PatientRecall> target;
+        if (recallId != null) {
+            // Booked from the recall list: exactly that recall, if it is this
+            // patient's, at this hospital, and still open.
+            target = recallRepository.findByIdAndHospital_Id(recallId, hospitalId)
+                .filter(r -> OPEN_STATUSES.contains(r.getStatus()))
+                .filter(r -> r.getPatient() != null && patientId.equals(r.getPatient().getId()));
+        } else {
+            target = recallRepository.findByPatient_IdAndStatusIn(patientId, OPEN_STATUSES).stream()
+                .filter(r -> r.getHospital() != null && hospitalId.equals(r.getHospital().getId()))
+                .filter(r -> asksForThisVisit(r, appointment))
+                .min(java.util.Comparator.comparing(PatientRecall::getDueDate,
+                    java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())));
+        }
+        target.ifPresent(recall -> {
+            recall.setLinkedAppointment(appointment);
+            recall.setStatus(RecallStatus.SCHEDULED);
+            recallRepository.save(recall);
+        });
+    }
+
+    /**
+     * A recall visibly asks for this visit when it names the visit's
+     * department or clinician and the visit is not far ahead of its due date.
+     * An acute visit in another service, or months before the recall is due,
+     * does not answer it.
+     */
+    private static boolean asksForThisVisit(PatientRecall recall, Appointment appointment) {
+        boolean sameDepartment = recall.getDepartment() != null && appointment.getDepartment() != null
+            && recall.getDepartment().getId().equals(appointment.getDepartment().getId());
+        boolean sameClinician = recall.getPreferredProvider() != null && appointment.getStaff() != null
+            && recall.getPreferredProvider().getId().equals(appointment.getStaff().getId());
+        if (!sameDepartment && !sameClinician) {
+            return false;
+        }
+        return recall.getDueDate() == null || appointment.getAppointmentDate() == null
+            || !appointment.getAppointmentDate().isBefore(recall.getDueDate().minusDays(RECALL_EARLY_DAYS));
+    }
+
+    @Override
+    @Transactional
+    public void completeRecallsOf(UUID appointmentId) {
+        if (appointmentId == null) {
+            return;
+        }
+        for (PatientRecall recall : recallRepository.findByLinkedAppointment_IdAndStatus(
+                appointmentId, RecallStatus.SCHEDULED)) {
+            finish(recall, RecallStatus.CLOSED);
+        }
     }
 
     @Override

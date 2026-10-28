@@ -26,13 +26,15 @@ public enum AppointmentStatus {
 
     /**
      * QA D937: whether an appointment in this status still occupies its
-     * clinician's time. A cancelled booking or a no-show frees the slot; every
-     * other status (UNKNOWN included, to stay on the safe side) keeps it. Every
-     * overlap check filters on this, so a cancelled appointment can never
-     * block the next booking again.
+     * clinician's time. A cancelled booking, a no-show and a RESCHEDULED row
+     * (the superseded booking: both reschedule paths land the moved visit on
+     * SCHEDULED, and the status action releases the slot inventory) free the
+     * slot; every other status (UNKNOWN included, to stay on the safe side)
+     * keeps it. Every overlap check filters on this, so a cancelled
+     * appointment can never block the next booking again.
      */
     public boolean holdsSlot() {
-        return this != CANCELLED && this != NO_SHOW;
+        return this != CANCELLED && this != NO_SHOW && this != RESCHEDULED;
     }
 
     /** Whether {@code status} holds its slot; an appointment with no status does. */

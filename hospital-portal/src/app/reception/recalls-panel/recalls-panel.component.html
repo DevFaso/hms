@@ -81,7 +81,11 @@
                   class="btn-sm btn-primary"
                   data-testid="book-recall"
                   routerLink="/appointments/new"
-                  [queryParams]="{ patientId: recall.patientId, reason: recall.reason }"
+                  [queryParams]="{
+                    patientId: recall.patientId,
+                    reason: recall.reason,
+                    recallId: recall.id,
+                  }"
                 >
                   {{ 'RECEPTION.BOOK_RECALL' | translate }}
                 </a>

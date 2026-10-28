@@ -549,10 +549,18 @@ export class PermissionService {
     if (roles.length === 0) {
       return this.hasPermission(permission);
     }
-    return roles.some((role) => {
+    const grants = (role: string) => {
       const perms = this.ROLE_PERMISSIONS[role];
       return !!perms && (perms.includes('*') || perms.includes(permission));
-    });
+    };
+    if (roles.some(grants)) {
+      return true;
+    }
+    // A grant the acting role's static map does not list (one the backend's
+    // merged permissions carry) still counts, unless another role the user
+    // holds is what grants it: that is the union this check exists to narrow.
+    const otherRoles = this.auth.getRoles().filter((r) => !roles.includes(r));
+    return this.hasPermission(permission) && !otherRoles.some(grants);
   }
 
   hasAnyPermission(...permissions: string[]): boolean {

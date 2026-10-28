@@ -2034,7 +2034,7 @@ public class UserServiceImpl implements UserService {
             // QA D789: a patient row at a hospital archived since stays off;
             // the account itself is still verified.
             if (assignment.getRole() != null
-                    && "ROLE_PATIENT".equalsIgnoreCase(assignment.getRole().getCode())
+                    && ROLE_PATIENT.equalsIgnoreCase(assignment.getRole().getCode())
                     && !Boolean.TRUE.equals(assignment.getActive())
                     && (assignment.getHospital() == null
                         || !com.example.hms.security.provider.FacilityAssignmentGuard
@@ -2045,13 +2045,10 @@ public class UserServiceImpl implements UserService {
             }
         }
 
-        // Activate the Patient entity to match the now-verified User
-        patientRepository.findByUserId(user.getId()).ifPresent(patient -> {
-            if (!patient.isActive()) {
-                patient.setActive(true);
-                patientRepository.save(patient);
-            }
-        });
+        // The Patient row's active flag is the record's administrative soft
+        // delete, not the account's state (createPatient, QA D27/V188): the
+        // link verifies the account and never brings back a record staff
+        // switched off.
 
         log.info("✅ Email verified for user {}. Activated {} patient assignment(s).", user.getId(), activated);
         return true;

@@ -172,6 +172,11 @@ export class AppointmentFormComponent implements OnInit {
     if (reason) {
       this.form.reason = reason.trim().slice(0, 255);
     }
+    // QA D985: booked from the recall list, the booking schedules that recall.
+    const recallId = params.get('recallId');
+    if (recallId && /^[0-9a-f-]{36}$/i.test(recallId)) {
+      this.form.recallId = recallId;
+    }
     const patientId = params.get('patientId');
     if (patientId && /^[0-9a-f-]{36}$/i.test(patientId)) {
       this.patientService.getById(patientId).subscribe({

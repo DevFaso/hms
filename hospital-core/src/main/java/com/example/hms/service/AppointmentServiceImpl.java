@@ -426,7 +426,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         Appointment saved = appointmentRepository.save(appointment);
         // QA D985: the recall this visit answers is now scheduled.
         if (recallService != null && AppointmentStatus.holdsSlot(saved.getStatus())) {
-            recallService.scheduleOpenRecallFor(saved);
+            recallService.scheduleOpenRecallFor(saved, request.getRecallId());
         }
 
         // Outbound webhooks (Tier 2 item 45): thin id-reference only. The
@@ -855,9 +855,12 @@ public class AppointmentServiceImpl implements AppointmentService {
         if (newStatus == AppointmentStatus.CANCELLED || newStatus == AppointmentStatus.RESCHEDULED) {
             slotInventoryService.releaseForAppointment(appointment.getId());
         }
-        // QA D985: a recall scheduled with a visit that will not happen is open again.
+        // QA D985: a recall scheduled with a visit that will not happen is open
+        // again; one whose visit took place is fulfilled.
         if (recallService != null && !newStatus.holdsSlot()) {
             recallService.reopenRecallsOf(appointment.getId());
+        } else if (recallService != null && newStatus == AppointmentStatus.COMPLETED) {
+            recallService.completeRecallsOf(appointment.getId());
         }
 
         // Outbound webhooks (Tier 2 item 45).

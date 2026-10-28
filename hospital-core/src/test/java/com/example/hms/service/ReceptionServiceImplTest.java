@@ -77,6 +77,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -865,6 +866,70 @@ class ReceptionServiceImplTest {
                     "XYZ NOMATCH", null, null, hospitalId);
 
             assertThat(result).isEmpty();
+        }
+
+        private Patient registered(String first, String last, LocalDate dob, String phone, boolean here) {
+            Patient p = new Patient();
+            p.setId(UUID.randomUUID());
+            p.setFirstName(first);
+            p.setLastName(last);
+            p.setDateOfBirth(dob);
+            p.setPhoneNumberPrimary(phone);
+            p.setActive(true);
+            com.example.hms.model.PatientHospitalRegistration r = new com.example.hms.model.PatientHospitalRegistration();
+            com.example.hms.model.Hospital h = new com.example.hms.model.Hospital();
+            h.setId(here ? hospitalId : UUID.randomUUID());
+            r.setHospital(h);
+            r.setActive(true);
+            r.setMrn("CHW1444");
+            p.setHospitalRegistrations(new java.util.HashSet<>(Set.of(r)));
+            return p;
+        }
+
+        @Test
+        @DisplayName("QA D924: the phone does not filter; name and DOB find the record whatever phone is typed")
+        void aDifferentPhoneStillFindsTheRecord() {
+            Patient fatimata = registered("Fatimata", "Zongo", LocalDate.of(1991, 7, 22), "+22670161000", true);
+            when(patientRepo.searchPatientsExtended(any(), eq("%zongo fatimata%"), eq("1991-07-22"), isNull(), any(),
+                    eq(hospitalId), eq(true), any()))
+                    .thenReturn(new PageImpl<>(List.of(fatimata)));
+            when(patientRepo.findAllByPhoneSubscriber("%70161099")).thenReturn(List.of());
+
+            List<DuplicateCandidateDTO> result = service.getDuplicateCandidates(
+                    "Zongo Fatimata", "1991-07-22", "+22670161099", hospitalId);
+
+            assertThat(result).singleElement().satisfies(c -> {
+                assertThat(c.getPatientId()).isEqualTo(fatimata.getId());
+                assertThat(c.getConfidenceScore()).isEqualTo(80);
+                assertThat(c.getMrn()).isEqualTo("CHW1444");
+            });
+        }
+
+        @Test
+        @DisplayName("QA D924/D942: the same subscriber, however written, scores; a shared number alone is not a duplicate")
+        void theSameSubscriberScores() {
+            Patient same = registered("Aïcha", "Kaboré", LocalDate.of(1991, 7, 22), "70 16 10 99", true);
+            Patient sharedPhoneOnly = registered("Issa", "Kaboré", LocalDate.of(2015, 1, 1), "70161099", true);
+            Patient elsewhere = registered("Aïcha", "Kaboré", LocalDate.of(1991, 7, 22), "70161099", false);
+            when(patientRepo.searchPatientsExtended(any(), any(), any(), any(), any(), eq(hospitalId), eq(true), any()))
+                    .thenReturn(new PageImpl<>(List.of()));
+            when(patientRepo.findAllByPhoneSubscriber("%70161099"))
+                    .thenReturn(List.of(same, sharedPhoneOnly, elsewhere));
+
+            List<DuplicateCandidateDTO> result = service.getDuplicateCandidates(
+                    "Aicha Kabore", "1991-07-22", "+22670161099", hospitalId);
+
+            assertThat(result).singleElement().satisfies(c -> {
+                assertThat(c.getPatientId()).isEqualTo(same.getId());
+                assertThat(c.getConfidenceScore()).isEqualTo(100);
+            });
+        }
+
+        @Test
+        @DisplayName("no name, no DOB and a short phone ask nothing")
+        void nothingToAsk() {
+            assertThat(service.getDuplicateCandidates(null, " ", "12", hospitalId)).isEmpty();
+            verify(patientRepo, never()).findAllByPhoneSubscriber(any());
         }
     }
 

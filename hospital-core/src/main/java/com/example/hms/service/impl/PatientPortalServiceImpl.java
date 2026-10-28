@@ -598,7 +598,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
 
         // QA D978: a patient books a future time within the patient booking day.
         com.example.hms.service.AppointmentSlotRules.requirePatientBookable(
-                requestedStart, requestedEnd, java.time.LocalDateTime.now());
+                requestedStart, requestedEnd, java.time.LocalDateTime.now(java.time.ZoneId.systemDefault()));
 
         // Staff availability check
         if (!staffAvailabilityService.isStaffAvailable(staff.getId(), requestedStart)) {
@@ -636,7 +636,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         Appointment saved = appointmentRepository.save(appointment);
         // QA D985: a recall the patient answers by booking is scheduled.
         if (recallService != null) {
-            recallService.scheduleOpenRecallFor(saved);
+            recallService.scheduleOpenRecallFor(saved, null);
         }
         log.info("Patient {} self-scheduled appointment {} at hospital {} department {}",
                 patientId, saved.getId(), hospital.getName(), department.getName());
@@ -806,7 +806,11 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         java.time.LocalDateTime newStart = java.time.LocalDateTime.of(dto.getNewDate(), dto.getNewStartTime());
         java.time.LocalDateTime newEnd = java.time.LocalDateTime.of(dto.getNewDate(), dto.getNewEndTime());
         com.example.hms.service.AppointmentSlotRules.requirePatientBookable(
-                newStart, newEnd, java.time.LocalDateTime.now());
+                newStart, newEnd, java.time.LocalDateTime.now(java.time.ZoneId.systemDefault()));
+        if (appointment.getStaff() != null
+                && !staffAvailabilityService.isStaffAvailable(appointment.getStaff().getId(), newStart)) {
+            throw new BusinessException(MessageUtil.resolve("portal.booking.providerUnavailable"));
+        }
         if (appointment.getStaff() != null && com.example.hms.service.AppointmentSlotRules.overlapsHeldSlot(
                 appointmentRepository.findByStaff_IdAndAppointmentDate(appointment.getStaff().getId(), dto.getNewDate()),
                 appointment.getId(), newStart, newEnd)) {

@@ -2369,6 +2369,14 @@ public class EncounterServiceImpl implements EncounterService {
                 && appointment.getStatus() != com.example.hms.enums.AppointmentStatus.CANCELLED) {
             appointment.setStatus(com.example.hms.enums.AppointmentStatus.COMPLETED);
             appointmentRepository.save(appointment);
+            // QA D985 (branch C1): the recall this visit answered is fulfilled.
+            for (com.example.hms.model.scheduling.PatientRecall answered : patientRecallRepository
+                    .findByLinkedAppointment_IdAndStatus(appointment.getId(),
+                        com.example.hms.enums.RecallStatus.SCHEDULED)) {
+                answered.setStatus(com.example.hms.enums.RecallStatus.CLOSED);
+                answered.setClosedAt(now);
+                patientRecallRepository.save(answered);
+            }
         }
 
         // (c2) Feed the follow-up request into the recall worklist (P3 #22).

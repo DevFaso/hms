@@ -30,12 +30,22 @@ public interface PatientRecallService {
     RecallResponseDTO linkAppointment(UUID recallId, UUID hospitalId, UUID appointmentId);
 
     /**
-     * QA D985: booking the visit a recall asks for schedules the recall. The
-     * open recall (pending or notified) of the appointment's patient at its
-     * hospital, in its department or in none, due soonest, is linked to the
-     * appointment and moves to SCHEDULED. Nothing happens when there is none.
+     * QA D985: booking the visit a recall asks for schedules the recall.
+     * With {@code recallId} (the desk booked from the recall list) that recall,
+     * when it is open and the appointment's patient's at its hospital. Without
+     * it, the open recall that visibly asks for this visit: same patient and
+     * hospital, the recall's department or preferred clinician is the
+     * appointment's, and the visit is no earlier than 30 days before the recall
+     * is due. A recall naming neither is linked only explicitly. Nothing
+     * happens when none qualifies.
      */
-    void scheduleOpenRecallFor(com.example.hms.model.Appointment appointment);
+    void scheduleOpenRecallFor(com.example.hms.model.Appointment appointment, java.util.UUID recallId);
+
+    /**
+     * QA D985: the visit a recall was scheduled with took place; the recall is
+     * fulfilled (CLOSED).
+     */
+    void completeRecallsOf(java.util.UUID appointmentId);
 
     /**
      * QA D985: the appointment a recall was scheduled with was cancelled or

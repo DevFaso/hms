@@ -467,7 +467,8 @@ public class PatientServiceImpl implements PatientService {
             if (phone == null) {
                 throw new BusinessException("patient.r16.phoneRequired");
             }
-            requirePhoneFree(phone, patient.getId());
+            // A number is not unique to one record: a child is registered with
+            // the mother's phone (the database has no unique constraint on it).
             patient.setPhoneNumberPrimary(phone);
             changedFields.add("phoneNumberPrimary");
         }
@@ -579,33 +580,29 @@ public class PatientServiceImpl implements PatientService {
     }
 
     /**
-     * The primary number is unique: another record holding the same
-     * subscriber, however it was written, is a translated 409 instead of a
-     * constraint violation at commit.
-     */
-    private void requirePhoneFree(String phone, UUID patientId) {
-        boolean taken = findByPhone(phone).stream()
-            .anyMatch(other -> !other.getId().equals(patientId)
-                && PatientMatchKeys.samePhone(other.getPhoneNumberPrimary(), phone));
-        if (taken) {
-            throw new ConflictException(MessageUtil.resolve("patient.r16.phoneTaken"));
-        }
-    }
-
-    /**
      * QA D926: a demographics correction is audited like every other patient
      * write. The description names the fields changed, never their values.
      */
     private void auditPatientUpdate(Patient patient, String description) {
+        // After the commit: a write that fails at commit (a unique number,
+        // an e-mail) must not leave a SUCCESS row for a change that never
+        // happened. The audit runs in its own transaction.
+        final UUID actorId = roleValidator.getCurrentUserId();
+        final String actorName = SecurityUtils.getCurrentUsername();
+        com.example.hms.utility.TransactionCallbacks.afterCommit(() -> emitPatientUpdate(patient, description,
+            actorId, actorName));
+    }
+
+    private void emitPatientUpdate(Patient patient, String description, UUID actorId, String actorName) {
         try {
             auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                 .eventType(AuditEventType.PATIENT_UPDATE)
                 .status(AuditStatus.SUCCESS)
-                .entityType("PATIENT")
+                .entityType(AUDIT_ENTITY_PATIENT)
                 .resourceId(patient.getId().toString())
                 .patientId(patient.getId())
-                .userId(roleValidator.getCurrentUserId())
-                .userName(SecurityUtils.getCurrentUsername())
+                .userId(actorId)
+                .userName(actorName)
                 .eventDescription(description)
                 .build());
         } catch (RuntimeException ex) {
@@ -856,7 +853,10 @@ public class PatientServiceImpl implements PatientService {
         } else if (normMrn != null && !normMrn.isBlank()) {
             results = patientRepository.findByMrn(normMrn);
         } else if (normIdentifier != null && !normIdentifier.isBlank()) {
-            List<Patient> phoneHits = findByPhone(normIdentifier);
+            // QA D942: only an identifier written like a phone number is
+            // looked up as one; an e-mail or an MRN with digits never is.
+            List<Patient> phoneHits = PatientMatchKeys.looksLikePhone(normIdentifier)
+                ? findByPhone(normIdentifier) : List.of();
             if (!phoneHits.isEmpty()) {
                 results = phoneHits;
             } else {
@@ -923,7 +923,11 @@ public class PatientServiceImpl implements PatientService {
     private List<Patient> findByPhone(String typed) {
         String key = PatientMatchKeys.phoneKey(typed);
         if (PatientMatchKeys.isSubscriberKey(key)) {
-            return patientRepository.findAllByPhoneSubscriber("%" + key);
+            // The eight digits narrow the candidates; the full number decides.
+            return patientRepository.findAllByPhoneSubscriber("%" + key).stream()
+                .filter(p -> PatientMatchKeys.samePhone(p.getPhoneNumberPrimary(), typed)
+                    || PatientMatchKeys.samePhone(p.getPhoneNumberSecondary(), typed))
+                .toList();
         }
         String exact = typed == null ? null : typed.trim();
         if (exact == null || exact.isEmpty()) {
