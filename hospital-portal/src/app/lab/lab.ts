@@ -36,6 +36,7 @@ import { actionRoles } from '../core/action-permissions';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { serverInstant } from '../shared/date-utils';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
+import { ActivatedRoute } from '@angular/router';
 
 @Component({
   selector: 'app-lab',
@@ -59,6 +60,7 @@ export class LabComponent implements OnInit {
   private readonly labService = inject(LabService);
   private readonly hospitalService = inject(HospitalService);
   private readonly patientService = inject(PatientService);
+  private readonly activatedRoute = inject(ActivatedRoute);
   private readonly encounterService = inject(EncounterService);
   /** QA D177: the selected patient's encounters, so the order links one by name, not by a typed id. */
   readonly patientEncounters = signal<EncounterResponse[]>([]);
@@ -204,6 +206,7 @@ export class LabComponent implements OnInit {
     this.loadOrders();
     this.loadAssignedHospitals();
     this.initPatientSearch();
+    this.openFromQuery();
     this.labService.listTestDefinitions().subscribe((defs) => this.labTestDefs.set(defs));
     if (this.canCreateOrder()) {
       this.labService.listPerformingLabs().subscribe({
@@ -215,6 +218,27 @@ export class LabComponent implements OnInit {
       next: (assignments) => {
         const active = assignments.find((a) => a.active);
         if (active) this.activeAssignmentId = active.id;
+      },
+    });
+  }
+
+  /**
+   * QA D956: `/lab?new=1&patientId=…` opens the order form on that patient.
+   * The worklist's "Demander des Analyses" pointed at `/lab/new`, a route that
+   * does not exist, so the wildcard sent the doctor back to the dashboard.
+   */
+  private openFromQuery(): void {
+    const params = this.activatedRoute.snapshot.queryParamMap;
+    if (params.get('new') !== '1' || !this.canCreateOrder()) return;
+    this.openCreate();
+    const patientId = params.get('patientId');
+    if (!patientId) return;
+    this.patientService.getById(patientId, this.patientSearchHospitalId()).subscribe({
+      next: (patient) => {
+        if (patient?.id === patientId) this.selectPatient(patient);
+      },
+      error: () => {
+        /* the form stays open; the doctor searches for the patient */
       },
     });
   }

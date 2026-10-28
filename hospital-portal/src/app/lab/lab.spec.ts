@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { provideRouter } from '@angular/router';
+import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 
@@ -75,7 +75,14 @@ describe('LabComponent — performing laboratory', () => {
     };
   }
 
-  async function setup(roles: string[], orders: LabOrderResponse[], hospitalId = HOSPITAL_A) {
+  let patientService: jasmine.SpyObj<PatientService>;
+
+  async function setup(
+    roles: string[],
+    orders: LabOrderResponse[],
+    hospitalId = HOSPITAL_A,
+    query: Record<string, string> = {},
+  ) {
     scope = roleContextStub({ superAdmin: false, hospitalId, roles });
 
     labService = jasmine.createSpyObj<LabService>('LabService', [
@@ -106,8 +113,11 @@ describe('LabComponent — performing laboratory', () => {
     hospitalService.getMyHospitalAsResponse.and.returnValue(
       of({ id: hospitalId, name: 'Ordering Hospital A' } as unknown as HospitalResponse),
     );
-    const patientService = jasmine.createSpyObj<PatientService>('PatientService', ['list']);
+    patientService = jasmine.createSpyObj<PatientService>('PatientService', ['list', 'getById']);
     patientService.list.and.returnValue(of([]));
+    patientService.getById.and.returnValue(
+      of({ id: query['patientId'] ?? 'none', firstName: 'Awa', lastName: 'O' } as PatientResponse),
+    );
     const profileService = jasmine.createSpyObj<ProfileService>('ProfileService', [
       'getAssignments',
     ]);
@@ -136,6 +146,10 @@ describe('LabComponent — performing laboratory', () => {
         { provide: PrintLabelService, useValue: printService },
         { provide: AuthService, useValue: auth },
         { provide: RoleContextService, useValue: scope },
+        {
+          provide: ActivatedRoute,
+          useValue: { snapshot: { queryParamMap: convertToParamMap(query) } },
+        },
       ],
     }).compileComponents();
 
@@ -143,6 +157,18 @@ describe('LabComponent — performing laboratory', () => {
     component = fixture.componentInstance;
     fixture.detectChanges();
   }
+
+  it('QA D956: /lab?new=1&patientId=… opens the order form on that patient', async () => {
+    await setup(['ROLE_DOCTOR'], [], HOSPITAL_A, { new: '1', patientId: 'pat-awa' });
+    expect(component.showModal()).toBeTrue();
+    expect(patientService.getById).toHaveBeenCalledWith('pat-awa', jasmine.anything());
+    expect(component.form.patientId).toBe('pat-awa');
+  });
+
+  it('QA D956: a plain /lab opens no form', async () => {
+    await setup(['ROLE_DOCTOR'], []);
+    expect(component.showModal()).toBeFalse();
+  });
 
   it('does not offer a midwife the order form the server refuses her (D106)', async () => {
     await setup(['ROLE_MIDWIFE'], []);
