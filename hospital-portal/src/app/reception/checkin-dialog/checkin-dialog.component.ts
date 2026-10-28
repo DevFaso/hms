@@ -21,6 +21,7 @@ import {
 import { ToastService } from '../../core/toast.service';
 import { BillingService } from '../../services/billing.service';
 import { refusalReason } from '../../shared/refusal-reason';
+import { saveResponse } from '../../shared/download-file';
 import { DESK_PAYMENT_METHODS, deskMethodNeedsReference } from '../desk-payment-methods';
 
 @Component({
@@ -123,14 +124,10 @@ export class CheckinDialogComponent {
   private downloadCopayReceipt(response: CheckInResponse): void {
     if (!response.copayInvoiceId || !response.copayPaymentId) return;
     this.billing.getReceiptPdf(response.copayInvoiceId, response.copayPaymentId).subscribe({
-      next: (blob) => {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `recu-${response.encounterCode || response.encounterId}.pdf`;
-        a.click();
-        URL.revokeObjectURL(url);
-      },
+      // QA D1009 (#973): the receipt keeps the server's name (its receipt number);
+      // the encounter code is only the fallback.
+      next: (res) =>
+        saveResponse(res, `recu-${response.encounterCode || response.encounterId}.pdf`),
       error: () => this.toast.error(this.translate.instant('RECEPTION.RECEIPT_FAILED')),
     });
   }

@@ -6,6 +6,8 @@ import { provideHttpClient, withXhr } from '@angular/common/http';
 import { ReceptionService, ReceptionQueueItem, CheckInResponse } from '../reception.service';
 import { ToastService } from '../../core/toast.service';
 import { of, throwError } from 'rxjs';
+import { HttpHeaders, HttpResponse } from '@angular/common/http';
+import { BillingService } from '../../services/billing.service';
 
 describe('CheckinDialogComponent', () => {
   let component: CheckinDialogComponent;
@@ -173,6 +175,44 @@ describe('CheckinDialogComponent', () => {
     const sent = mockReceptionService.checkInPatient.calls.mostRecent().args[0];
     expect(sent.copayMethod).toBe('MOBILE_MONEY');
     expect(sent.copayReference).toBe('OM-778812');
+  });
+
+  it('QA D975 + D1009: the copay receipt is saved under the server name, the encounter code only as fallback', () => {
+    const billing = TestBed.inject(BillingService);
+    const anchors: HTMLAnchorElement[] = [];
+    const realCreate = document.createElement.bind(document);
+    spyOn(document, 'createElement').and.callFake((tag: string) => {
+      const el = realCreate(tag);
+      if (tag === 'a') {
+        spyOn(el as HTMLAnchorElement, 'click');
+        anchors.push(el as HTMLAnchorElement);
+      }
+      return el;
+    });
+    spyOn(URL, 'createObjectURL').and.returnValue('blob:receipt');
+    spyOn(URL, 'revokeObjectURL');
+    const receipt = spyOn(billing, 'getReceiptPdf');
+    const withCopay = { ...sampleResponse, copayInvoiceId: 'inv-1', copayPaymentId: 'pay-1' };
+    mockReceptionService.checkInPatient.and.returnValue(of(withCopay));
+    component.identityConfirmed.set(true);
+
+    receipt.and.returnValue(
+      of(
+        new HttpResponse({
+          body: new Blob(['%PDF']),
+          headers: new HttpHeaders({
+            'Content-Disposition': 'attachment; filename="REC-2026-0042.pdf"',
+          }),
+        }),
+      ),
+    );
+    component.submit();
+    expect(receipt).toHaveBeenCalledWith('inv-1', 'pay-1');
+    expect(anchors.pop()?.download).toBe('REC-2026-0042.pdf');
+
+    receipt.and.returnValue(of(new HttpResponse({ body: new Blob(['%PDF']) })));
+    component.submit();
+    expect(anchors.pop()?.download).toBe('recu-ENC-20260410-AB12CD.pdf');
   });
 
   it('QA D988: the check-in dialog is a modal dialog', () => {
