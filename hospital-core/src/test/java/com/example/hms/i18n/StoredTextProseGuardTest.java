@@ -1,5 +1,7 @@
 package com.example.hms.i18n;
 
+import com.example.hms.testsupport.GuardAllowlist;
+import com.example.hms.testsupport.GuardAllowlist.Allowance;
 import com.example.hms.testsupport.SourceScan;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -110,8 +112,6 @@ class StoredTextProseGuardTest {
         return words >= 2;
     }
 
-    private record Allowance(int count, String reason) { }
-
     private static final String D952 = "QA D952: nursing intake written into encounter notes with English headers";
     private static final String D989 = "QA D989: triage pain score stored as English \"Pain scale: 8\"";
     private static final String D1000 = "QA D1000: English routing reasons in the FR/ES pharmacy UI";
@@ -125,16 +125,8 @@ class StoredTextProseGuardTest {
     private static final String SEEDED_DESCRIPTION =
         "QA D941 class: a description seeded in English and shown in the admin UI; a later migration re-keys it (never edit the applied one)";
 
-    private static Map<String, Allowance> allow(Object... siteCountReason) {
-        Map<String, Allowance> out = new TreeMap<>();
-        for (int i = 0; i < siteCountReason.length; i += 3) {
-            out.put((String) siteCountReason[i], new Allowance((Integer) siteCountReason[i + 1], (String) siteCountReason[i + 2]));
-        }
-        return out;
-    }
-
     /** Sites as they stand: {@code file::literal}, how many places write it, why. Shrink only. */
-    private static final Map<String, Allowance> ALLOWED = allow(
+    private static final Map<String, Allowance> ALLOWED = GuardAllowlist.allow(
         "service/ClinicalDashboardServiceImpl.java::Appointments Today", 1, PRE_EXISTING,
         "service/ClinicalDashboardServiceImpl.java::Pending Results", 1, PRE_EXISTING,
         "service/ClinicalDashboardServiceImpl.java::Active Patients", 1, PRE_EXISTING,
@@ -189,11 +181,13 @@ class StoredTextProseGuardTest {
         String source = SourceScan.stripComments(rawSource);
         int[] starts = SourceScan.statementStarts(source);
         Map<String, Integer> out = new TreeMap<>();
+        List<int[]> sinkArguments = new ArrayList<>();
         Matcher sink = TEXT_SINK.matcher(source);
         while (sink.find()) {
             int open = sink.end() - 1;
             int close = SourceScan.closingParen(source, open);
             String argument = source.substring(open + 1, close);
+            sinkArguments.add(new int[] {open, close});
             // The receiver chain of the sink — from the statement's real start (a `;`
             // inside a literal does not end a statement) to the sink itself — decides
             // the exemption; the argument does not.
@@ -212,17 +206,21 @@ class StoredTextProseGuardTest {
                 out.merge(file + "::" + fallback.group(1), 1, Integer::sum);
             }
         }
-        // A header already counted through a sink (`.append("[Nursing Assessment]")`) is
-        // one site, not two; a header handed to a helper method is counted here. The
-        // same log/audit exemption applies: `log.info("[Scheduler Lock] " + name)` is a log line.
+        // A header inside a sink's argument (`.append("[Nursing Assessment]")`) was counted
+        // above; a header handed to a helper method is counted here, once per occurrence.
+        // The same log/audit exemption applies: `log.info("[Scheduler Lock] " + name)` is a log line.
         Matcher header = SECTION_HEADER.matcher(source);
         while (header.find()) {
-            String receiver = source.substring(SourceScan.statementStartBefore(starts, header.start()), header.start());
+            int at = header.start();
+            if (sinkArguments.stream().anyMatch(range -> at > range[0] && at < range[1])) {
+                continue;
+            }
+            String receiver = source.substring(SourceScan.statementStartBefore(starts, at), at);
             if (EXEMPT_RECEIVER.matcher(receiver).find()) {
                 continue;
             }
             String literal = header.group();
-            out.putIfAbsent(file + "::" + literal.substring(1, literal.length() - 1), 1);
+            out.merge(file + "::" + literal.substring(1, literal.length() - 1), 1, Integer::sum);
         }
         return out;
     }
@@ -239,25 +237,11 @@ class StoredTextProseGuardTest {
                 }
             }
         }
-        List<String> fresh = new ArrayList<>();
-        actual.forEach((site, n) -> {
-            int allowed = ALLOWED.containsKey(site) ? ALLOWED.get(site).count() : 0;
-            if (n > allowed) {
-                fresh.add(site + " ×" + n + " (allowed " + allowed + ")");
-            }
-        });
-        assertThat(fresh)
+        assertThat(GuardAllowlist.overAllowance(actual, ALLOWED))
             .as("stored text is read in English for good: resolve a key (MessageUtil) or store a code the portal labels"
                 + SourceScan.MANDATE)
             .isEmpty();
-
-        List<String> stale = new ArrayList<>();
-        ALLOWED.forEach((site, allowance) -> {
-            int n = actual.getOrDefault(site, 0);
-            if (n < allowance.count()) {
-                stale.add(site + ": " + n + " left, " + allowance.count() + " allowed — lower it");
-            }
-        });
+        List<String> stale = GuardAllowlist.stale(actual, ALLOWED);
         assertThat(stale)
             .as("a site was keyed: lower its count so the gain cannot be spent again" + SourceScan.MANDATE)
             .isEmpty();
@@ -285,6 +269,7 @@ class StoredTextProseGuardTest {
             notifier.toUser(user).about(eventDescription).message("Your result is ready for review");
             log.info("[Scheduler Lock] " + name);
             LOG.warn("--- Sweep aborted ---");
+            appendSectionIfPresent(noteBuilder, "[Nursing Assessment]", other);
             // noteBuilder.append("Not a real section header") — a comment is not a site
             """;
         assertThat(sites("x", source)).containsOnly(
@@ -296,7 +281,7 @@ class StoredTextProseGuardTest {
             Map.entry("x::Walk-in", 1),
             Map.entry("x::Your result is ready for review", 1),
             Map.entry("x::[Medication Reconciliation] ", 1),
-            Map.entry("x::[Nursing Assessment]", 1),
+            Map.entry("x::[Nursing Assessment]", 2),
             Map.entry("x::\\n\\n--- Nursing Intake ---\\n", 1));
     }
 }

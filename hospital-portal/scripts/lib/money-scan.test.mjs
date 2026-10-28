@@ -24,7 +24,8 @@ test('D948: an amount through | number has no currency and two decimals', () => 
 
 test('| cfa passes, and a rate, a count or a page total is not money', () => {
   const html = `{{ inv.balanceDue | cfa }} {{ paymentCollectionRate() | number: '1.1-1' }}
-    {{ totalPages }} {{ stats().total }} {{ w.totalBeds | number }} {{ copayPercent | number }}`;
+    {{ totalPages }} {{ stats().total }} {{ w.totalBeds | number }} {{ copayPercent | number }}
+    {{ stats().total | number }} {{ row.total | number: '1.0-0' }} {{ ward.net | number }}`;
   assert.deepEqual(moneyTemplateFindings(html), []);
 });
 
@@ -100,6 +101,13 @@ test('D621: a component helper that formats money without formatCfa, or Intl cur
   assert.deepEqual(anchors(moneyComponentFindings(helper)), ['helper:formatCurrency']);
   const loose = `const label = new Intl.NumberFormat(locale, { style: 'currency', currency }).format(v);`;
   assert.deepEqual(anchors(moneyComponentFindings(loose)), ['helper:Intl currency']);
+  // The house idiom passes a call as the locale: the argument list is read whole.
+  const houseIdiom = `const s = new Intl.NumberFormat(currentLocale(), { style: 'currency', currency: 'XOF' }).format(v);
+    const t = v.toLocaleString(currentLocale(), { style: 'currency', currency: 'XOF' });`;
+  assert.deepEqual(anchors(moneyComponentFindings(houseIdiom)), [
+    'helper:Intl currency',
+    'helper:Intl currency',
+  ]);
   // A brace inside a string does not end the helper's body.
   const braceInString = `formatMoney(v: number): string {
     const unit = '}'; const open = "{";

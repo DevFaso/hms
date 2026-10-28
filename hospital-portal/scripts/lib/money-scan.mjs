@@ -33,7 +33,9 @@ const MONEY_TAIL =
  * in a count, a rate, a code or a date.
  */
 const MONEY_WORD =
-  /^(?:[a-z][A-Za-z0-9]*)?(?:Amount|Price|Balance|Copay|Copayment|Revenue|Subtotal|Fee|Fees|Cost|Paid|Due|Charge|Charges|Payment|Discount|Refund|Total|Tax|Vat|Net|Gross)$|^(?:amount|price|balance|copay|copayment|revenue|subtotal|fee|fees|cost|paid|due|charge|charges|payment|discount|refund|total|tax|vat|net|gross)$/;
+  /^(?:[a-z][A-Za-z0-9]*)?(?:Amount|Price|Balance|Copay|Copayment|Revenue|Subtotal|Fee|Fees|Cost|Paid|Due|Charge|Charges|Payment|Discount|Refund|Total|Tax|Vat|Net|Gross)$|^(?:amount|price|balance|copay|copayment|revenue|subtotal|fee|fees|cost|paid|due|charge|charges|payment|discount|refund|tax|vat)$/;
+// A bare `total`, `net` or `gross` is as often a count (beds, visits) as money:
+// only the compound forms (grandTotal, lineTotal, netAmount) count, in every rule.
 // Case-sensitive camelCase suffixes: `discount` is money, `lineCount` is not.
 const NOT_MONEY =
   /[a-z0-9](?:Rate|Percent|Pct|Ratio|Count|Days|Hours|Minutes|Index|Number|Share|Code|Score|Invoices|Visits|Items|Length|At|On|Date|By)$/;
@@ -67,7 +69,26 @@ const FIXED_RE = new RegExp(
 
 const HELPER_DECL =
   /^\s*(?:private\s+|protected\s+|public\s+|readonly\s+)*(format(?:Currency|Money|Amount|Price|Fcfa|Cfa))\s*\([^)]*\)\s*(?::\s*string\s*)?\{/gm;
-const INTL_CURRENCY = /new\s+Intl\.NumberFormat\([^)]*\)|toLocaleString\(\s*[^)]*\)/g;
+// Only the opener: the argument list is read balanced, so
+// `new Intl.NumberFormat(currentLocale(), { style: 'currency', … })` is seen whole.
+const INTL_CURRENCY = /new\s+Intl\.NumberFormat\(|\.toLocaleString\(/g;
+
+/** The balanced `( … )` argument list opened at `openParenIndex`, strings skipped. */
+function argumentsAfter(source, openParenIndex) {
+  let depth = 0;
+  for (let i = openParenIndex; i < source.length; i++) {
+    const ch = source[i];
+    if (ch === "'" || ch === '"' || ch === '`') {
+      for (i++; i < source.length && source[i] !== ch; i++) {
+        if (source[i] === '\\') i++;
+      }
+      continue;
+    }
+    if (ch === '(') depth++;
+    else if (ch === ')' && --depth === 0) return source.slice(openParenIndex, i + 1);
+  }
+  return source.slice(openParenIndex);
+}
 
 const lineAt = lineOf;
 
@@ -178,15 +199,12 @@ export function moneyComponentFindings(source, isLocaleModule = false) {
     });
   }
   for (const m of source.matchAll(INTL_CURRENCY)) {
-    if (!/style\s*:\s*['"]currency['"]|currency\s*:/.test(m[0])) continue;
+    const args = argumentsAfter(source, m.index + m[0].length - 1);
+    if (!/style\s*:\s*['"]currency['"]|currency\s*:/.test(args)) continue;
     if (helperBodies.some(([start, end]) => m.index > start && m.index < end)) continue;
     // Asking Intl how many decimals a currency has prints nothing.
-    if (
-      /^\s*\.resolvedOptions\(/.test(
-        source.slice(m.index + m[0].length, m.index + m[0].length + 40),
-      )
-    )
-      continue;
+    const afterCall = m.index + m[0].length - 1 + args.length;
+    if (/^\s*\.resolvedOptions\(/.test(source.slice(afterCall, afterCall + 40))) continue;
     out.push({
       line: lineAt(source, m.index),
       rule: 'helper',

@@ -1,5 +1,7 @@
 package com.example.hms.architecture;
 
+import com.example.hms.testsupport.GuardAllowlist;
+import com.example.hms.testsupport.GuardAllowlist.Allowance;
 import com.example.hms.testsupport.SourceScan;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -72,7 +74,15 @@ class PostCommitLazyAssociationGuardTest {
      * one chain that reads no row.
      */
     static final Pattern ANY_CHAIN = Pattern.compile(
-        "\\.(?!getClass\\(\\))get[A-Z]\\w*\\(\\)\\s*\\.\\s*get\\w+\\(");
+        "\\.(?!(?:getClass|getCause|getMessage|getPayload|getBody|getMonth|getYear|getDayOfWeek|getKey|getValue)\\(\\))"
+            + "get[A-Z]\\w*\\(\\)\\s*\\.\\s*get\\w+\\(");
+
+    /**
+     * Post-commit chains a reviewer looked at and found to read no row (a DTO, an
+     * exception, a date) — {@code "file:line chain", count, reason}. Empty today: the
+     * lambdas pass ids. A chain on an entity is never pinned, it is fixed.
+     */
+    private static final Map<String, Allowance> ALLOWED_POST_COMMIT = GuardAllowlist.allow();
 
     /** A post-commit callback handed to any wrapper: the `(` of the call. */
     private static final Pattern POST_COMMIT_CALL = Pattern.compile("\\b(?:afterCommit|registerSynchronization)\\(");
@@ -83,15 +93,15 @@ class PostCommitLazyAssociationGuardTest {
     /** An interceptor's or TransactionSynchronization's override: the `(` of its parameter list. */
     private static final Pattern OVERRIDE = Pattern.compile("\\bvoid\\s+(?:afterCompletion|afterCommit)\\s*\\(");
 
-    private record Allowance(int count, String reason) { }
-
+    /** {@code file, chain, count, reason} quadruples, keyed {@code "file chain"} for {@link GuardAllowlist}. */
     private static Map<String, Allowance> allow(Object... fileChainCountReason) {
-        Map<String, Allowance> out = new TreeMap<>();
-        for (int i = 0; i < fileChainCountReason.length; i += 4) {
-            out.put(fileChainCountReason[i] + " " + fileChainCountReason[i + 1],
-                new Allowance((Integer) fileChainCountReason[i + 2], (String) fileChainCountReason[i + 3]));
+        Object[] triples = new Object[fileChainCountReason.length / 4 * 3];
+        for (int i = 0, k = 0; i < fileChainCountReason.length; i += 4, k += 3) {
+            triples[k] = fileChainCountReason[i] + " " + fileChainCountReason[i + 1];
+            triples[k + 1] = fileChainCountReason[i + 2];
+            triples[k + 2] = fileChainCountReason[i + 3];
         }
-        return out;
+        return GuardAllowlist.allow(triples);
     }
 
     private static final String LOADED_HERE =
@@ -168,12 +178,14 @@ class PostCommitLazyAssociationGuardTest {
         report(file, source, open, close, out, ANY_CHAIN);
     }
 
-    /** One line per chain; an override nested in a scanned argument is the same chain, reported once. */
+    /**
+     * One {@code "file:line chain"} per chain; an override nested in a scanned argument
+     * is the same chain, reported once.
+     */
     private static void report(String file, String source, int open, int close, List<String> out, Pattern chain) {
         Matcher c = chain.matcher(source.substring(open, close));
         while (c.find()) {
-            out.add(file + ":" + SourceScan.lineOf(source, open + c.start()) + ": " + normalise(c.group())
-                + " in post-commit code (no session: pass ids)");
+            out.add(file + ":" + SourceScan.lineOf(source, open + c.start()) + " " + normalise(c.group()));
         }
     }
 
@@ -187,9 +199,14 @@ class PostCommitLazyAssociationGuardTest {
                 offenders.addAll(postCommitChains(rel, Files.readString(p, StandardCharsets.UTF_8)));
             }
         }
-        assertThat(offenders)
-            .as("post-commit code runs with no persistence context: pass ids to the REQUIRES_NEW service (#564, D921)"
+        Map<String, Integer> actual = GuardAllowlist.counts(offenders);
+        assertThat(GuardAllowlist.overAllowance(actual, ALLOWED_POST_COMMIT))
+            .as("post-commit code runs with no persistence context: pass ids to the REQUIRES_NEW service (#564, D921);"
+                + " a chain on a DTO or an exception a reviewer checked goes in ALLOWED_POST_COMMIT with the reason"
                 + SourceScan.MANDATE)
+            .isEmpty();
+        assertThat(GuardAllowlist.stale(actual, ALLOWED_POST_COMMIT))
+            .as("a pinned post-commit chain is gone: delete its line" + SourceScan.MANDATE)
             .isEmpty();
     }
 
@@ -207,26 +224,13 @@ class PostCommitLazyAssociationGuardTest {
                     .forEach((chain, n) -> actual.put(rel + " " + chain, n));
             }
         }
-        List<String> fresh = new ArrayList<>();
-        actual.forEach((site, n) -> {
-            int allowed = ALLOWED_IN_CONTROLLERS.containsKey(site) ? ALLOWED_IN_CONTROLLERS.get(site).count() : 0;
-            if (n > allowed) {
-                fresh.add(site + " ×" + n + " (allowed " + allowed + ")");
-            }
-        });
-        assertThat(fresh)
+        assertThat(GuardAllowlist.overAllowance(actual, ALLOWED_IN_CONTROLLERS))
             .as("a controller walked an association: return a DTO from the service, or pass ids (QA D921)"
                 + SourceScan.MANDATE)
             .isEmpty();
-
-        List<String> stale = new ArrayList<>();
-        ALLOWED_IN_CONTROLLERS.forEach((site, allowance) -> {
-            int n = actual.getOrDefault(site, 0);
-            if (n < allowance.count()) {
-                stale.add(site + ": " + n + " left, " + allowance.count() + " allowed — lower it");
-            }
-        });
-        assertThat(stale).as("a site was fixed: shrink its allowance in the same change" + SourceScan.MANDATE).isEmpty();
+        assertThat(GuardAllowlist.stale(actual, ALLOWED_IN_CONTROLLERS))
+            .as("a site was fixed: shrink its allowance in the same change" + SourceScan.MANDATE)
+            .isEmpty();
     }
 
     @Test
@@ -284,6 +288,8 @@ class PostCommitLazyAssociationGuardTest {
             private void unlistedAssociation(Referral referral) {
                 TransactionCallbacks.afterCommit(() -> sms.send(referral.getReferringProvider().getPhone()));
                 TransactionCallbacks.afterCommit(() -> log.info(referral.getClass().getSimpleName()));
+                TransactionCallbacks.afterCommit(() -> log.warn(ex.getCause().getMessage()));
+                TransactionCallbacks.afterCommit(() -> audit.record(event.getPayload().getHospitalId()));
             }
             @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
             @Retryable(include = {MailException.class})

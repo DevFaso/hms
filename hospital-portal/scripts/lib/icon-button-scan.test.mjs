@@ -35,7 +35,9 @@ test('a button with visible text, a translated label or an <img alt> is named by
   const html = `<button><span class="material-symbols-outlined">save</span> {{ 'X.SAVE' | translate }}</button>
     <button><span class="material-symbols-outlined">add</span><span class="sr-only">Ajouter</span></button>
     <button><img src="x.png" alt="Supprimer" /></button>
-    <button>@if (busy()) { <span class="material-symbols-outlined">sync</span> } @else { Envoyer }</button>`;
+    <button>@if (busy()) { <span class="material-symbols-outlined">sync</span> } @else { Envoyer }</button>
+    <button (click)="x()"><ng-content></ng-content></button>
+    <button (click)="y()"><app-status-chip [status]="s"></app-status-chip></button>`;
   assert.deepEqual(rules(html), []);
 });
 

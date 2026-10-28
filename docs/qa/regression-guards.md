@@ -59,7 +59,9 @@ with a stable id `file::rule::anchor` (never a line number), and
 six gates on that, and reports every failing gate, not just the first. Each
 gate also runs alone (`node scripts/check-a11y-dialogs.mjs`). The Java guards
 share `testsupport/SourceScan` (balanced braces/parens through string, char and
-text-block literals and comments, statement start, line numbers).
+text-block literals and comments, annotation skipping, statement starts, line
+numbers) and `testsupport/GuardAllowlist` (the allowance shape — site, count,
+reason — and the two assertions every guard makes: `overAllowance`, `stale`).
 
 | Gate (`npm run …`) | Class it stops | Rules | QA defects | Pins today |
 |---|---|---|---|---|

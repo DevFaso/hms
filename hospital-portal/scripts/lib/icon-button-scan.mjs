@@ -34,6 +34,10 @@ const IMG_EMPTY_ALT = /<img\b(?=[^>]*\balt=""|(?![^>]*\balt=))[^>]*>/g;
 const COMMENT = /<!--[\s\S]*?-->/g;
 const CONTROL_FLOW =
   /@(?:if|else if|else|for|switch|case|default|empty|let|defer|placeholder|loading|error)\b[^{]*\{|\}/g;
+// Projected content and a child component (`<app-status-chip>`, `<app-avatar>`)
+// render text of their own: they are content, not an icon.
+const PROJECTED_OR_CHILD =
+  /<ng-content\b[^>]*>(?:<\/ng-content>)?|<(?!mat-icon\b)[a-z]+-[a-z-]+\b[^>]*>/g;
 const ANY_TAG = /<\/?[A-Za-z][^>]*>/g;
 
 export function visibleText(inner) {
@@ -46,6 +50,7 @@ export function visibleText(inner) {
     .replace(I_TAG, ' ')
     .replace(IMG_NAMED, (_, alt) => ` ${alt ?? 'alt'} `)
     .replace(IMG_EMPTY_ALT, ' ')
+    .replace(PROJECTED_OR_CHILD, ' content ')
     .replace(CONTROL_FLOW, ' ')
     .replace(ANY_TAG, ' ')
     .replace(/&nbsp;|&#160;/g, ' ')

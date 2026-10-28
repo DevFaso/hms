@@ -1,5 +1,7 @@
 package com.example.hms.architecture;
 
+import com.example.hms.testsupport.GuardAllowlist;
+import com.example.hms.testsupport.GuardAllowlist.Allowance;
 import com.example.hms.testsupport.SourceScan;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -66,22 +68,40 @@ class UpdateHandlerServiceTestCoverageTest {
         "the handler calls no *Service: it writes through a repository or a differently named collaborator,"
             + " so only a controller IT can cover it";
 
-    /** {@code Controller#handler -> service.method} with no test today. Shrink only. */
-    private static final Map<String, String> ALLOWED = new TreeMap<>(Map.ofEntries(
-        Map.entry("BedManagementController#updateBed -> bedManagementService.updateBed", DARK),
-        Map.entry("NotificationController#markAllRead -> notificationService.markAllReadForUser", DARK),
-        Map.entry("PatientController#updatePatientAllergy -> patientService.updatePatientAllergy", DARK),
-        Map.entry("PatientPortalController#markAllNotificationsRead -> notificationService.markAllReadForUser", DARK),
-        Map.entry("PatientPortalController#updateNotificationPreferences -> portalService.updateMyNotificationPreferences", DARK),
-        Map.entry("PermissionController#updatePermission -> permissionService.updatePermission", DARK),
-        Map.entry("RoleController#setPermissions -> roleService.assignPermissions", DARK),
-        Map.entry("OrganizationController#updateOrganization -> <none>.<none>",
-            NO_SERVICE + " (the controller loads, checks and saves the Organization through organizationRepository itself)")));
+    /**
+     * Method names so common that their bare appearance in some test proves nothing
+     * ({@code repository.update(}, another service's {@code cancel(}): for these the
+     * test must call the SAME {@code service.method} pair the handler calls.
+     */
+    static final Set<String> GENERIC_NAMES = Set.of(
+        "update", "create", "delete", "save", "cancel", "close", "assign", "archive", "apply", "run", "send", "set",
+        "get", "find", "list", "remove", "add", "process", "handle", "execute", "complete", "start", "stop", "reset",
+        "activate", "deactivate", "approve", "reject", "submit", "transition", "move", "mark", "toggle", "sync");
 
-    private record Delegation(int mapping, String handler, String service, String method) {
+    /** {@code Controller#handler -> service.method} with no test today. Shrink only. */
+    private static final Map<String, Allowance> ALLOWED = GuardAllowlist.allow(
+        "AdvanceDirectiveController#update -> advanceDirectiveService.update", 1,
+            DARK + " (a generic name: no test of AdvanceDirectiveService calls update)",
+        "BedManagementController#updateBed -> bedManagementService.updateBed", 1, DARK,
+        "NotificationController#markAllRead -> notificationService.markAllReadForUser", 1, DARK,
+        "PatientController#updatePatientAllergy -> patientService.updatePatientAllergy", 1, DARK,
+        "PatientPortalController#markAllNotificationsRead -> notificationService.markAllReadForUser", 1, DARK,
+        "PatientPortalController#updateNotificationPreferences -> portalService.updateMyNotificationPreferences", 1, DARK,
+        "PermissionController#updatePermission -> permissionService.updatePermission", 1, DARK,
+        "RoleController#setPermissions -> roleService.assignPermissions", 1, DARK,
+        "OrganizationController#updateOrganization -> <none>.<none>", 1,
+            NO_SERVICE + " (the controller loads, checks and saves the Organization through organizationRepository itself)");
+
+    private record Delegation(int mapping, String handler, String service, String serviceType, String method) {
         String key() {
             return handler + " -> " + service + "." + method;
         }
+    }
+
+    /** The declared type of a field: {@code private final AdvanceDirectiveService advanceDirectiveService;}. */
+    static String fieldType(String source, String field) {
+        Matcher m = Pattern.compile("\\b([A-Z]\\w*)\\s+" + Pattern.quote(field) + "\\s*[;=]").matcher(source);
+        return m.find() ? m.group(1) : "<unknown>";
     }
 
     /**
@@ -101,7 +121,7 @@ class UpdateHandlerServiceTestCoverageTest {
                 // Reported, not skipped: the assertion names the controller and line
                 // instead of two integers that disagree.
                 String where = controller + ":" + SourceScan.lineOf(source, mapping.start());
-                out.add(new Delegation(mapping.start(), where, "<unparsed>", "<unparsed>"));
+                out.add(new Delegation(mapping.start(), where, "<unparsed>", "<none>", "<unparsed>"));
                 continue;
             }
             String handler = controller + "#" + signature.group(1);
@@ -110,11 +130,11 @@ class UpdateHandlerServiceTestCoverageTest {
             Matcher c = SERVICE_CALL.matcher(body);
             while (c.find()) {
                 if (seen.add(c.group(1) + "." + c.group(2))) {
-                    out.add(new Delegation(mapping.start(), handler, c.group(1), c.group(2)));
+                    out.add(new Delegation(mapping.start(), handler, c.group(1), fieldType(source, c.group(1)), c.group(2)));
                 }
             }
             if (seen.isEmpty()) {
-                out.add(new Delegation(mapping.start(), handler, "<none>", "<none>"));
+                out.add(new Delegation(mapping.start(), handler, "<none>", "<none>", "<none>"));
             }
         }
         return out;
@@ -189,13 +209,47 @@ class UpdateHandlerServiceTestCoverageTest {
                 if (GUARD_TEST.matcher(p.getFileName().toString()).matches()) {
                     continue;
                 }
-                Matcher m = CALLED.matcher(withoutStubs(SourceScan.stripComments(Files.readString(p, StandardCharsets.UTF_8))));
+                String calls = withoutStubs(SourceScan.stripComments(Files.readString(p, StandardCharsets.UTF_8)));
+                Matcher m = CALLED.matcher(calls);
                 while (m.find()) {
                     names.add(m.group(1));
+                }
+                // The `service.method` pairs too: a generic name is covered only by its own
+                // pair — by the field name, or by the service TYPE the test file names (a
+                // service test calls `service.update(` on a mock typed AdvanceDirectiveService).
+                Matcher pair = SERVICE_CALL.matcher(calls);
+                Set<String> methods = new TreeSet<>();
+                while (pair.find()) {
+                    names.add(pair.group(1) + "." + pair.group(2));
+                    methods.add(pair.group(2));
+                }
+                Matcher type = SERVICE_TYPE.matcher(calls);
+                Set<String> types = new TreeSet<>();
+                while (type.find()) {
+                    types.add(type.group(1));
+                }
+                for (String t : types) {
+                    for (String method : methods) {
+                        names.add(t + "." + method);
+                    }
                 }
             }
         }
         return names;
+    }
+
+    /** A service type a test file names: {@code AdvanceDirectiveService}, {@code AdvanceDirectiveServiceImpl}. */
+    private static final Pattern SERVICE_TYPE = Pattern.compile("\\b([A-Z]\\w*Service)(?:Impl)?\\b");
+
+    /**
+     * A handler's delegation is exercised when a test calls the same {@code service.method}
+     * pair (by the field's name or its declared type), or — for a name specific enough to
+     * mean one thing — the method by name.
+     */
+    static boolean covered(Set<String> called, Delegation d) {
+        return called.contains(d.service() + "." + d.method())
+            || called.contains(d.serviceType() + "." + d.method())
+            || (!GENERIC_NAMES.contains(d.method()) && called.contains(d.method()));
     }
 
     /** The PUT/PATCH mapping annotations of a source whose comments are already stripped. */
@@ -225,7 +279,7 @@ class UpdateHandlerServiceTestCoverageTest {
                     handled.add(controller + "@" + d.mapping());
                     if (d.method().equals("<unparsed>")) {
                         unparsed.add(d.handler());
-                    } else if (d.method().equals("<none>") || !called.contains(d.method())) {
+                    } else if (d.method().equals("<none>") || !covered(called, d)) {
                         dark.add(d.key());
                     }
                 }
@@ -235,24 +289,14 @@ class UpdateHandlerServiceTestCoverageTest {
         assertThat(unparsed).as("PUT/PATCH mappings whose handler signature the scan could not read").isEmpty();
         assertThat(handled).as("one handler per PUT/PATCH mapping").hasSize(mappings);
 
-        List<String> fresh = new ArrayList<>();
-        for (String key : dark) {
-            if (!ALLOWED.containsKey(key)) {
-                fresh.add(key);
-            }
-        }
-        assertThat(fresh)
+        Map<String, Integer> actual = GuardAllowlist.counts(dark);
+        assertThat(GuardAllowlist.overAllowance(actual, ALLOWED))
             .as("an update endpoint no test exercises: add a test that reads the row back after the update (QA D923 class)"
                 + SourceScan.MANDATE)
             .isEmpty();
-
-        List<String> stale = new ArrayList<>();
-        for (String key : ALLOWED.keySet()) {
-            if (!dark.contains(key)) {
-                stale.add(key);
-            }
-        }
-        assertThat(stale).as("the handler is now tested: delete its line" + SourceScan.MANDATE).isEmpty();
+        assertThat(GuardAllowlist.stale(actual, ALLOWED))
+            .as("the handler is now tested: delete its line" + SourceScan.MANDATE)
+            .isEmpty();
     }
 
     @Test
@@ -334,5 +378,19 @@ class UpdateHandlerServiceTestCoverageTest {
         String kept = withoutStubs(test);
         assertThat(kept).contains("renameFoo(", "perform(")
             .doesNotContain("updateFoo(", "updateBar(", "updateBaz(", "updateQux(");
+    }
+
+    @Test
+    @DisplayName("a generic method name is covered only by a test calling the same service.method pair")
+    void genericNamesNeedTheirPair() {
+        Set<String> called = Set.of("update", "repository.update", "renameWard", "wardService.renameWard");
+        Delegation rename = new Delegation(0, "WardController#rename", "wardService", "WardService", "renameWard");
+        Delegation update = new Delegation(0, "WardController#update", "wardService", "WardService", "update");
+        assertThat(covered(called, rename)).isTrue();
+        assertThat(covered(called, update)).isFalse();
+        assertThat(covered(Set.of("wardService.update"), update)).isTrue();
+        // A service test names the TYPE and calls the method on a mock named otherwise.
+        assertThat(covered(Set.of("WardService.update", "service.update"), update)).isTrue();
+        assertThat(fieldType("private final WardService wardService;\n", "wardService")).isEqualTo("WardService");
     }
 }

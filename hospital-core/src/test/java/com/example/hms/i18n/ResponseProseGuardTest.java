@@ -1,5 +1,7 @@
 package com.example.hms.i18n;
 
+import com.example.hms.testsupport.GuardAllowlist;
+import com.example.hms.testsupport.GuardAllowlist.Allowance;
 import com.example.hms.testsupport.SourceScan;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -9,7 +11,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -54,7 +55,11 @@ class ResponseProseGuardTest {
      * — alone or as the head of a concatenation ({@code .body("Invalid slot: " + slot)}).
      */
     static final Pattern BODY_LITERAL = Pattern.compile(
-        "(?:\\.body|ResponseEntity\\.ok)\\(\\s*\"((?:[^\"\\\\]|\\\\.)*)\"\\s*[+)]");
+        "(?:\\.body|ResponseEntity\\.ok)\\(\\s*\"((?:[^\"\\\\]|\\\\.)*)\"\\s*(?:[+)]|\\.formatted\\()");
+    /** The same, parameterised: {@code .body(String.format("…", x))}, {@code new MessageResponse(String.format("…", x))}. */
+    static final Pattern FORMAT_LITERAL = Pattern.compile(
+        "(?:\\.body|ResponseEntity\\.ok|new\\s+MessageResponse|new\\s+EmailVerificationResponseDTO)\\(\\s*String\\.format\\(\\s*"
+            + "\"((?:[^\"\\\\]|\\\\.)*)\"");
     /** The opening of an ad hoc body map; its message-bearing entries are read from the whole argument list. */
     static final Pattern MAP_OF = Pattern.compile("\\bMap\\.of\\(");
     static final Pattern MAP_MESSAGE_ENTRY = Pattern.compile(
@@ -79,21 +84,11 @@ class ResponseProseGuardTest {
         return words >= 2;
     }
 
-    private record Allowance(int count, String reason) { }
-
     private static final String PRE_EXISTING = "pre-existing English response (class of QA D940/D977); key it with the next touch";
     private static final String D921 = "QA D921 path: verifyEmail's bodies";
 
-    private static Map<String, Allowance> allow(Object... siteCountReason) {
-        Map<String, Allowance> out = new TreeMap<>();
-        for (int i = 0; i < siteCountReason.length; i += 3) {
-            out.put((String) siteCountReason[i], new Allowance((Integer) siteCountReason[i + 1], (String) siteCountReason[i + 2]));
-        }
-        return out;
-    }
-
     /** Sites as they stand: {@code file::sentence}, how many times it is written, why it is tolerated. Shrink only. */
-    private static final Map<String, Allowance> ALLOWED = allow(
+    private static final Map<String, Allowance> ALLOWED = GuardAllowlist.allow(
         "controller/AuthController.java::Public self-registration is no longer available.", 1, PRE_EXISTING,
         "controller/AuthController.java::Email verified successfully.", 1, D921,
         "controller/AuthController.java::Email verification failed.", 3, D921 + " (EMAIL_VERIFICATION_FAILED constant)",
@@ -139,7 +134,7 @@ class ResponseProseGuardTest {
         while (c.find()) {
             constants.put(c.group(1), c.group(2));
         }
-        for (Pattern pattern : List.of(MESSAGE_DTO, BODY_LITERAL)) {
+        for (Pattern pattern : List.of(MESSAGE_DTO, BODY_LITERAL, FORMAT_LITERAL)) {
             Matcher m = pattern.matcher(source);
             while (m.find()) {
                 String literal = m.group(m.groupCount());
@@ -184,26 +179,11 @@ class ResponseProseGuardTest {
                 actual.putAll(sites(rel, Files.readString(p, StandardCharsets.UTF_8)));
             }
         }
-        List<String> fresh = new ArrayList<>();
-        actual.forEach((site, n) -> {
-            int allowed = ALLOWED.containsKey(site) ? ALLOWED.get(site).count() : 0;
-            if (n > allowed) {
-                fresh.add(site + " ×" + n + " (allowed " + allowed + ")");
-            }
-        });
-        assertThat(fresh)
+        assertThat(GuardAllowlist.overAllowance(actual, ALLOWED))
             .as("resolve a messages*.properties key (MessageUtil.resolve) instead of an English sentence in the body"
                 + SourceScan.MANDATE)
             .isEmpty();
-
-        List<String> stale = new ArrayList<>();
-        ALLOWED.forEach((site, allowance) -> {
-            int n = actual.getOrDefault(site, 0);
-            if (n < allowance.count()) {
-                stale.add(site + ": " + n + " left, " + allowance.count() + " allowed — lower it");
-            }
-        });
-        assertThat(stale)
+        assertThat(GuardAllowlist.stale(actual, ALLOWED))
             .as("a site was keyed: lower its count so the gain cannot be spent again" + SourceScan.MANDATE)
             .isEmpty();
     }
@@ -229,9 +209,13 @@ class ResponseProseGuardTest {
             return ResponseEntity.ok(Map.of("count", items.size(), "message", REFRESH_INVALID_MESSAGE));
             return ResponseEntity.ok("Password changed successfully");
             return ResponseEntity.badRequest().body("Invalid appointment slot: " + slot);
+            return ResponseEntity.badRequest().body("Invalid appointment slot: %s".formatted(slot));
+            return ResponseEntity.ok(new MessageResponse(String.format("Slot %s is taken", slot)));
             """;
         assertThat(sites("x", source)).containsOnly(
             Map.entry("x::Logged out successfully.", 2),
+            Map.entry("x::Invalid appointment slot: %s", 1),
+            Map.entry("x::Slot %s is taken", 1),
             Map.entry("x::Mail service unavailable", 1),
             Map.entry("x::Failed to send email", 1),
             Map.entry("x::Invalid appointment slot: ", 1),

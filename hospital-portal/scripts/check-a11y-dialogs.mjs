@@ -45,8 +45,8 @@ export const gate = {
     'A site not listed fails the build; fix a dialog, then delete its pins.',
   ],
   hint:
-    'Give the modal role="dialog" aria-modal="true" aria-labelledby="<title id>" and close it on (keydown.escape) — ' +
-    'see shared/patient-picker or reception/walkin-dialog for the house shape.',
+    'Give the modal role="dialog" aria-modal="true" aria-labelledby="<title id>" and put (keydown.escape) on the ' +
+    'dialog element itself or a WRAPPING backdrop (never a sibling), or use a native <dialog> opened with showModal().',
 };
 
 if (isMain(import.meta.url)) runGate(gate);
