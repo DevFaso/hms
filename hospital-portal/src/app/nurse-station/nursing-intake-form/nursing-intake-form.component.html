@@ -6,12 +6,15 @@
 >
   <div
     class="intake-dialog"
+    appModalDialog
+    aria-labelledby="intake-dialog-title"
+    (escaped)="dismissed.emit()"
     (click)="$event.stopPropagation()"
     (keydown)="$event.stopPropagation()"
     tabindex="-1"
   >
     <header class="intake-dialog__header">
-      <h3>{{ 'INTAKE.TITLE' | translate }}</h3>
+      <h3 id="intake-dialog-title">{{ 'INTAKE.TITLE' | translate }}</h3>
       <button
         class="btn-close"
         (click)="dismissed.emit()"
@@ -28,10 +31,12 @@
           <span class="label">{{ 'INTAKE.PATIENT' | translate }}:</span>
           <span class="value">{{ encounter.patientFullName || encounter.patientName }}</span>
         </div>
-        <div class="info-row">
-          <span class="label">{{ 'INTAKE.ENCOUNTER' | translate }}:</span>
-          <span class="value">{{ encounter.id | slice: 0 : 8 }}</span>
-        </div>
+        @if (encounter.code) {
+          <div class="info-row">
+            <span class="label">{{ 'INTAKE.ENCOUNTER' | translate }}:</span>
+            <span class="value">{{ encounter.code }}</span>
+          </div>
+        }
       </div>
     }
 
@@ -55,6 +60,25 @@
       <!-- Allergy reconciliation -->
       <fieldset class="form-section">
         <legend>{{ 'INTAKE.ALLERGIES' | translate }}</legend>
+        @if (documentedAllergies().length > 0) {
+          <div class="documented">
+            <p class="documented__title">{{ 'INTAKE.DOCUMENTED_ALLERGIES' | translate }}</p>
+            <ul class="documented__list">
+              @for (a of documentedAllergies(); track a.id) {
+                <li>
+                  <strong>{{ a.allergenDisplay }}</strong>
+                  @if (a.severity) {
+                    · {{ 'CHART.SEVERITY_' + a.severity | translate }}
+                  }
+                  @if (a.reaction) {
+                    · {{ a.reaction }}
+                  }
+                </li>
+              }
+            </ul>
+            <p class="documented__hint">{{ 'INTAKE.DOCUMENTED_ALLERGIES_HINT' | translate }}</p>
+          </div>
+        }
         <div class="allergy-list">
           @for (allergy of allergies(); track $index; let i = $index) {
             <div class="allergy-row">
@@ -109,6 +133,37 @@
       <!-- Medication reconciliation -->
       <fieldset class="form-section">
         <legend>{{ 'INTAKE.MEDICATIONS' | translate }}</legend>
+        @if (documentedMedications().length > 0) {
+          <div class="documented">
+            <p class="documented__title">{{ 'INTAKE.DOCUMENTED_MEDICATIONS' | translate }}</p>
+            <ul class="documented__list">
+              @for (rx of documentedMedications(); track rx.id) {
+                <li>
+                  <span>
+                    <strong>{{ rx.medicationDisplayName || rx.medicationName }}</strong>
+                    @if (rx.dosage) {
+                      {{ rx.dosage }}
+                    }
+                    @if (rx.frequency) {
+                      · {{ rx.frequency }}
+                    }
+                  </span>
+                  <button
+                    type="button"
+                    class="btn-add btn-add--inline"
+                    [disabled]="isReconciled(rx)"
+                    (click)="reconcilePrescription(rx)"
+                  >
+                    {{
+                      (isReconciled(rx) ? 'INTAKE.RECONCILED' : 'INTAKE.RECONCILE_MEDICATION')
+                        | translate
+                    }}
+                  </button>
+                </li>
+              }
+            </ul>
+          </div>
+        }
         <div class="medication-list">
           @for (med of medications(); track $index; let i = $index) {
             <div class="medication-row">
