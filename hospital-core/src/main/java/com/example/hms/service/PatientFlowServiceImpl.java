@@ -113,6 +113,7 @@ public class PatientFlowServiceImpl implements PatientFlowService {
                 .urgency(derivedUrgency)
                 .state(column)
                 .flowSource("ENCOUNTER")
+                .encounterType(enc.getEncounterType() != null ? enc.getEncounterType().name() : null)
                 .build();
     }
 
@@ -136,8 +137,11 @@ public class PatientFlowServiceImpl implements PatientFlowService {
     }
 
     private long computeEncounterElapsedMinutes(Encounter enc) {
-        if (enc.getEncounterDate() == null) return 0;
-        return Math.max(ElapsedTime.minutesBetween(enc.getEncounterDate(), LocalDateTime.now()), 0);
+        // QA D990: the wait runs from the patient's arrival; a visit day's
+        // midnight encounterDate showed "1128m" on the board.
+        LocalDateTime from = enc.getArrivalTimestamp() != null ? enc.getArrivalTimestamp() : enc.getEncounterDate();
+        if (from == null) return 0;
+        return Math.max(ElapsedTime.minutesBetween(from, LocalDateTime.now()), 0);
     }
 
     private long computeAdmissionElapsedMinutes(Admission adm) {

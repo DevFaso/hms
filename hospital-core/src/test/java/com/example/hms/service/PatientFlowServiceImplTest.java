@@ -151,6 +151,36 @@ class PatientFlowServiceImplTest {
     }
 
     @Test
+    void qaD994_anEmergencyCardCarriesItsTypeAndWaitsFromArrival() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        givenStaffFor(userId, stubStaff(staffId));
+        Patient patient = mock(Patient.class);
+        when(patient.getId()).thenReturn(UUID.randomUUID());
+        when(patient.getFirstName()).thenReturn("Boukaré");
+        when(patient.getLastName()).thenReturn("Kiemtoré");
+        Encounter enc = mock(Encounter.class);
+        when(enc.getId()).thenReturn(UUID.randomUUID());
+        when(enc.getPatient()).thenReturn(patient);
+        when(enc.getEncounterType()).thenReturn(com.example.hms.enums.EncounterType.EMERGENCY);
+        // The visit day's midnight, but the patient arrived ten minutes ago (QA D990).
+        org.mockito.Mockito.lenient().when(enc.getEncounterDate())
+            .thenReturn(java.time.LocalDate.now().atStartOfDay());
+        when(enc.getArrivalTimestamp()).thenReturn(LocalDateTime.now().minusMinutes(10));
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), any(EncounterStatus.class)))
+                .thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.ARRIVED))
+                .thenReturn(List.of(enc));
+
+        PatientFlowItemDTO item = service.getPatientFlow(userId).values().stream()
+            .flatMap(List::stream).findFirst().orElseThrow();
+
+        assertEquals("EMERGENCY", item.getEncounterType());
+        assertTrue(item.getElapsedMinutes() >= 9 && item.getElapsedMinutes() <= 11,
+            "waits from arrival, not midnight: " + item.getElapsedMinutes());
+    }
+
+    @Test
     void getPatientFlow_skipsNullPatient() {
         UUID userId = UUID.randomUUID();
         UUID staffId = UUID.randomUUID();
