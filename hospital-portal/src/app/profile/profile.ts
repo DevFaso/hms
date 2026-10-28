@@ -698,6 +698,27 @@ export class ProfileComponent implements OnInit {
     const phoneChanged = (data.phoneNumber ?? '') !== (u.phoneNumber ?? '');
 
     this.saving.set(true);
+    // QA D939: an account with no phone cannot be put back (a blank phone is not
+    // written), so there the record takes the phone first and the account follows.
+    if (
+      phoneChanged &&
+      this.isPatientOnly() &&
+      !(u.phoneNumber ?? '').trim() &&
+      (data.phoneNumber ?? '').trim()
+    ) {
+      this.patientPortal
+        .updateMyProfile({ phoneNumberPrimary: data.phoneNumber!.trim() })
+        .subscribe({
+          next: () => this.saveAccount(u, data, emailChanged, newEmail, password),
+          error: (err) => {
+            this.saving.set(false);
+            this.toast.error(
+              err?.error?.message ?? this.translate.instant('PROFILE.RECORD_PHONE_SYNC_FAILED'),
+            );
+          },
+        });
+      return;
+    }
     this.saveAccount(u, data, emailChanged, newEmail, password, phoneChanged);
   }
 
@@ -724,6 +745,7 @@ export class ProfileComponent implements OnInit {
             this.syncRecordPhone(u, updated, emailChanged, newEmail, password);
             return;
           }
+          // (An account with no phone before took the record first, in saveProfile.)
           this.applySavedProfile(updated);
           this.toast.success(this.translate.instant('PROFILE.UPDATED'));
           if (emailChanged) {

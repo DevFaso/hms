@@ -86,6 +86,18 @@ export class DialogA11yDirective implements OnInit, OnDestroy {
     first.focus();
   }
 
+  /** Focus that left the box (to the page body): Escape still closes the top dialog, Tab comes back in. */
+  @HostListener('document:keydown', ['$event'])
+  onDocumentKeydown(event: KeyboardEvent): void {
+    const box: HTMLElement = this.host.nativeElement;
+    if (!this.isTop() || box.contains(document.activeElement)) return;
+    this.onKeydown(event);
+    if (event.key === 'Tab' && !event.defaultPrevented) {
+      event.preventDefault();
+      (this.focusables()[0] ?? box).focus();
+    }
+  }
+
   /**
    * On the box itself: focus is moved in when it opens and kept inside, and
    * the templates' own `(keydown.escape)="$event.stopPropagation()"` (there

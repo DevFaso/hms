@@ -99,9 +99,9 @@ public class DisclosureAccountingServiceImpl implements DisclosureAccountingServ
                                                            LocalDateTime to, Pageable pageable) {
         // Folded over the most recent rows first, then paged: a repeat across a
         // page boundary still shows once, and the pager counts the lines shown.
-        org.springframework.data.domain.Sort sort = pageable.getSort().isSorted()
-            ? pageable.getSort()
-            : org.springframework.data.domain.Sort.unsorted();
+        // The fold window is the most recent rows whatever sort the client asks for
+        // (the query orders newest first); the patient's list has one order.
+        org.springframework.data.domain.Sort sort = org.springframework.data.domain.Sort.unsorted();
         if (pageable.isUnpaged()) {
             return new org.springframework.data.domain.PageImpl<>(
                 foldRepeats(getEntries(patientId, from, to, pageable).getContent()));

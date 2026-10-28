@@ -104,4 +104,16 @@ describe('DialogA11yDirective (QA D976)', () => {
     const middle = key(el('amount'), 'Tab');
     expect(middle.defaultPrevented).toBeFalse();
   }));
+  it('closes on Escape and brings Tab back in when focus has left the box', fakeAsync(() => {
+    openDialog();
+    (document.activeElement as HTMLElement).blur();
+    const tab = key(document.body, 'Tab');
+    expect(tab.defaultPrevented).toBeTrue();
+    expect(document.activeElement).toBe(el('amount'));
+    (document.activeElement as HTMLElement).blur();
+    key(document.body, 'Escape');
+    fixture.detectChanges();
+    tick();
+    expect(fixture.componentInstance.open()).toBeFalse();
+  }));
 });

@@ -160,6 +160,18 @@ describe('ProfileComponent — editing the profile', () => {
       expect(profiles.updateProfile.calls.mostRecent().args[1].phoneNumber).toBe('+22670000000');
     });
 
+    it('an account with no phone before: the record takes it first, a refusal saves nothing', () => {
+      profiles.getUserProfile.and.returnValue(
+        of({ ...profile('old@example.test'), phoneNumber: '' }),
+      );
+      portal.updateMyProfile.and.returnValue(throwError(() => ({ error: { message: 'taken' } })));
+      const patient = asPatient();
+      patient.updateField('phoneNumber', '+22676112233');
+      patient.saveProfile();
+      expect(toast.error).toHaveBeenCalledWith('taken');
+      expect(profiles.updateProfile).not.toHaveBeenCalled();
+    });
+
     it('a staff account phone stays the login contact only', () => {
       component.updateField('phoneNumber', '+22676112233');
       component.saveProfile();

@@ -497,10 +497,14 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
                 BigDecimal declared = paymentTransactionRepository.sumAmountByInvoiceAndStatus(invoice.getId(),
                     PaymentStatus.PENDING);
                 BigDecimal room = total.subtract(alreadyPaid).subtract(declared != null ? declared : BigDecimal.ZERO);
-                amount = left.min(room);
+                if (left.compareTo(room) > 0) {
+                    throw new BusinessException("billing.adjustment.creditBeyondUnpaid",
+                        formatFrancs(room.max(BigDecimal.ZERO), locale));
+                }
+                amount = left;
             }
             if (amount != null && amount.compareTo(left) > 0) {
-                throw new BusinessException("billing.adjustment.moreThanLine", formatFrancs(left));
+                throw new BusinessException("billing.adjustment.moreThanLine", formatFrancs(left, locale));
             }
         }
         if (amount == null || amount.signum() <= 0) {
@@ -509,7 +513,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         requireWholeAmount(amount);
         // Earlier discounts may already have lowered the total under the line.
         if (amount.compareTo(total) > 0) {
-            throw new BusinessException("billing.adjustment.moreThanTotal", formatFrancs(total));
+            throw new BusinessException("billing.adjustment.moreThanTotal", formatFrancs(total, locale));
         }
         BigDecimal paid = invoice.getAmountPaid() != null ? invoice.getAmountPaid() : BigDecimal.ZERO;
         BigDecimal newTotal = total.subtract(amount);
@@ -559,8 +563,9 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     }
 
     /** Whole francs grouped as the reader writes them ("4 000", "4,000", "4.000"). */
-    private static String formatFrancs(BigDecimal amount) {
-        java.text.NumberFormat format = java.text.NumberFormat.getIntegerInstance(LocaleContextHolder.getLocale());
+    private static String formatFrancs(BigDecimal amount, Locale locale) {
+        java.text.NumberFormat format = java.text.NumberFormat.getIntegerInstance(
+            locale != null ? locale : LocaleContextHolder.getLocale());
         format.setGroupingUsed(true);
         return format.format(amount.setScale(0, java.math.RoundingMode.HALF_UP).longValueExact())
             .replace('\u00a0', ' ').replace('\u202f', ' ');

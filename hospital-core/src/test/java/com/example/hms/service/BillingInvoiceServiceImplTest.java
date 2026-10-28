@@ -2161,11 +2161,12 @@ class BillingInvoiceServiceImplTest {
                 UUID.randomUUID(), Locale.FRENCH));
         assertEquals("billing.adjustment.moreThanTotal", refused.getMessageKey());
 
-        // Left empty, a credit note credits what is left on the line, at most what the invoice still totals.
-        billingInvoiceService.addAdjustment(invoice.getId(),
-            adjustment(com.example.hms.enums.InvoiceAdjustmentType.CREDIT_NOTE, null, "Erreur", line.getId()),
-            UUID.randomUUID(), Locale.FRENCH);
-        assertEquals(0, BigDecimal.ZERO.compareTo(invoice.getTotalAmount()));
+        // Left empty, a credit note never silently credits less than the line: it says how much it can.
+        com.example.hms.exception.BusinessException capped = assertThrows(com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.addAdjustment(invoice.getId(),
+                adjustment(com.example.hms.enums.InvoiceAdjustmentType.CREDIT_NOTE, null, "Erreur", line.getId()),
+                UUID.randomUUID(), Locale.FRENCH));
+        assertEquals("billing.adjustment.creditBeyondUnpaid", capped.getMessageKey());
     }
 
     @Test
@@ -2211,12 +2212,13 @@ class BillingInvoiceServiceImplTest {
         line.setTotalPrice(new BigDecimal("8000"));
         when(invoiceItemRepository.findById(line.getId())).thenReturn(Optional.of(line));
 
-        billingInvoiceService.addAdjustment(invoice.getId(),
-            adjustment(com.example.hms.enums.InvoiceAdjustmentType.CREDIT_NOTE, null, "NFS non faite", line.getId()),
-            UUID.randomUUID(), Locale.FRENCH);
-
-        assertEquals(0, new BigDecimal("6000").compareTo(invoice.getTotalAmount()));
-        assertEquals(InvoiceStatus.PAID, invoice.getStatus());
+        // The whole line cannot be credited without reversing a payment: the refusal says how much can.
+        com.example.hms.exception.BusinessException refused = assertThrows(com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.addAdjustment(invoice.getId(),
+                adjustment(com.example.hms.enums.InvoiceAdjustmentType.CREDIT_NOTE, null, "NFS non faite", line.getId()),
+                UUID.randomUUID(), Locale.FRENCH));
+        assertEquals("billing.adjustment.creditBeyondUnpaid", refused.getMessageKey());
+        assertEquals(0, new BigDecimal("10000").compareTo(invoice.getTotalAmount()));
     }
 
     @Test
