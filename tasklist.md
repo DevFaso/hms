@@ -2409,7 +2409,18 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   scope, and an ultrasound order update has no author check. Procedure
   orders, admissions, problems, allergies and family/social history are left
   team-owned on purpose (the surgical/ward team acts on them); that is a
-  product decision to confirm, not an oversight.
+  product decision to confirm, not an oversight. (5) D1003: the CVX code
+  stays a required typed field because the DHIS2 ADX export counts doses by
+  it; the PEV vaccine list offers names only. A vetted PEV-vaccine to CVX
+  table (supplied by the user, never invented) would let the form fill the
+  code. (6) D930: a draft discharge summary is editable by the visit's
+  treating doctor, but finalize still requires the discharging provider
+  (QA D503), who is the visit's clinician of record and may be the nurse
+  who opened it; the Résumés tab shows the buttons to the discharging
+  provider only. Checkout should name the treating doctor as discharging
+  provider. (7) D961: the certificate's examination date is the visit's
+  date on the server clock (UTC); right for UTC+0 hospitals, a day early
+  for a past-day visit at a UTC+1 hospital until hospitals carry a zone.
 
 ### Execution plan (2026-09-26)
 

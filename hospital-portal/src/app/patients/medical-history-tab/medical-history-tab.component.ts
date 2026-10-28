@@ -358,6 +358,11 @@ export class MedicalHistoryTabComponent implements OnInit {
     'PATIENT_REPORT',
   ];
 
+  /** A source this form writes, which has a label; a legacy free-text source is shown as typed. */
+  isKnownSource(source: string | null | undefined): boolean {
+    return !!source && this.immunizationSources.includes(source);
+  }
+
   /** A dose dated before today is a transcription unless the clinician says otherwise. */
   onImmunizationDateChange(date: string): void {
     this.immunizationForm.administrationDate = date;
@@ -423,7 +428,8 @@ export class MedicalHistoryTabComponent implements OnInit {
 
   submitImmunization(): void {
     const form = this.immunizationForm;
-    if (!form.vaccineDisplay.trim() || !form.administrationDate) {
+    // The CVX code stays required: the DHIS2 export counts doses by it.
+    if (!form.vaccineCode.trim() || !form.vaccineDisplay.trim() || !form.administrationDate) {
       this.toast.error(this.translate.instant('MED_HISTORY.IMMUNIZATION_REQUIRED_FIELDS'));
       return;
     }

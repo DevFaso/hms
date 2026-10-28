@@ -47,6 +47,7 @@ describe('MedicalHistoryTabComponent — past PEV doses (QA D1003)', () => {
   it('a 2021 dose from the card is recorded as such, with no vaccinator here', () => {
     component.openCreateImmunization();
     component.immunizationForm.vaccineDisplay = 'Pentavalent (DTC-HepB-Hib)';
+    component.immunizationForm.vaccineCode = '102';
     component.onImmunizationDateChange('2021-03-10');
 
     component.submitImmunization();
@@ -54,13 +55,13 @@ describe('MedicalHistoryTabComponent — past PEV doses (QA D1003)', () => {
     const sent = history.createImmunization.calls.mostRecent().args[0];
     expect(sent.sourceOfRecord).toBe('VACCINATION_CARD');
     expect(sent.administeredByStaffId).toBeUndefined();
-    // The CVX code is optional now; the vaccine is chosen by name.
-    expect(sent.vaccineCode).toBe('');
+    expect(sent.vaccineCode).toBe('102');
   });
 
   it('a dose given today is credited to the clinician who records it', () => {
     component.openCreateImmunization();
     component.immunizationForm.vaccineDisplay = 'BCG (tuberculose)';
+    component.immunizationForm.vaccineCode = '19';
 
     component.submitImmunization();
 
@@ -75,6 +76,7 @@ describe('MedicalHistoryTabComponent — past PEV doses (QA D1003)', () => {
       id: 'im9',
       patientId: 'p1',
       vaccineDisplay: 'BCG',
+      vaccineCode: '19',
       administrationDate: '2025-01-10',
       administeredByStaffId: 'staff-original',
     } as never);

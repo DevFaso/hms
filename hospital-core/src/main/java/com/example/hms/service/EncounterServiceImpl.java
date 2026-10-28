@@ -387,7 +387,7 @@ public class EncounterServiceImpl implements EncounterService {
         if (request.getStatus() != null) {
             encounter.setStatus(request.getStatus());
         } else {
-            encounter.setStatus(defaultInitialStatus(request.getEncounterType()));
+            encounter.setStatus(defaultInitialStatus(request.getEncounterType(), encounterDate));
         }
         // QA D990: an arrived patient waits from now, not from the visit day's midnight.
         if (encounter.getStatus() == EncounterStatus.ARRIVED && encounter.getArrivalTimestamp() == null) {
@@ -1105,8 +1105,12 @@ public class EncounterServiceImpl implements EncounterService {
      * starts IN_PROGRESS. A nurse-created urgences visit used to start
      * IN_PROGRESS and never reached the triage queue.
      */
-    static EncounterStatus defaultInitialStatus(com.example.hms.enums.EncounterType type) {
-        if (type == com.example.hms.enums.EncounterType.EMERGENCY || !callerIsDoctor()) {
+    static EncounterStatus defaultInitialStatus(com.example.hms.enums.EncounterType type, LocalDateTime encounterDate) {
+        // Review of #971: a visit entered for another day (a past visit
+        // recorded late, or one booked ahead) is not an arrival now and keeps
+        // the previous default; only today's visit goes to the triage queue.
+        boolean today = encounterDate == null || encounterDate.toLocalDate().equals(java.time.LocalDate.now());
+        if (today && (type == com.example.hms.enums.EncounterType.EMERGENCY || !callerIsDoctor())) {
             return EncounterStatus.ARRIVED;
         }
         return EncounterStatus.IN_PROGRESS;
@@ -2455,9 +2459,13 @@ public class EncounterServiceImpl implements EncounterService {
         UUID encounterId = encounter.getId();
         // Id projections only, withdrawn / cancelled orders left out: billing
         // must never charge an order the clinician took back.
+        // Unsigned drafts, withdrawn orders and partner rejections are not billable.
         List<UUID> prescriptionIds = prescriptionRepository.findIdsByEncounterIdAndStatusNotIn(encounterId,
-            java.util.EnumSet.of(com.example.hms.enums.PrescriptionStatus.CANCELLED,
-                com.example.hms.enums.PrescriptionStatus.DISCONTINUED));
+            java.util.EnumSet.of(com.example.hms.enums.PrescriptionStatus.DRAFT,
+                com.example.hms.enums.PrescriptionStatus.PENDING_SIGNATURE,
+                com.example.hms.enums.PrescriptionStatus.CANCELLED,
+                com.example.hms.enums.PrescriptionStatus.DISCONTINUED,
+                com.example.hms.enums.PrescriptionStatus.PARTNER_REJECTED));
         eventPublisher.publishEvent(new com.example.hms.event.EncounterCheckedOutEvent(
             encounterId,
             encounter.getCode(),

@@ -303,7 +303,9 @@
                   }}
                   @if (im.sourceOfRecord && im.sourceOfRecord !== 'GIVEN_HERE') {
                     <span class="flag-badge" data-testid="immunization-source">{{
-                      'MED_HISTORY.SOURCE.' + im.sourceOfRecord | translate
+                      isKnownSource(im.sourceOfRecord)
+                        ? ('MED_HISTORY.SOURCE.' + im.sourceOfRecord | translate)
+                        : im.sourceOfRecord
                     }}</span>
                   }
                 </td>
@@ -718,7 +720,7 @@
             </datalist>
           </div>
           <div class="field">
-            <label for="im-code">{{ 'MED_HISTORY.VACCINE_CODE_OPTIONAL' | translate }}</label>
+            <label for="im-code">{{ 'MED_HISTORY.VACCINE_CODE' | translate }} *</label>
             <input id="im-code" type="text" [(ngModel)]="immunizationForm.vaccineCode" />
           </div>
         </div>

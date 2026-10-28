@@ -228,8 +228,10 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
         // QA D955 class: a plan is approved or signed off by someone other than its author.
         boolean approves = requestDTO.getAction() == com.example.hms.enums.TreatmentPlanReviewAction.APPROVED
             || requestDTO.getAction() == com.example.hms.enums.TreatmentPlanReviewAction.SIGNED_OFF;
-        if (approves && plan.getAuthor() != null && plan.getAuthor().getId() != null
-                && plan.getAuthor().getId().equals(reviewer.getId())) {
+        if (approves && plan.getAuthor() != null && (java.util.Objects.equals(plan.getAuthor().getId(), reviewer.getId())
+                || (plan.getAuthor().getUser() != null && reviewer.getUser() != null
+                    && plan.getAuthor().getUser().getId() != null
+                    && plan.getAuthor().getUser().getId().equals(reviewer.getUser().getId())))) {
             throw new com.example.hms.exception.ClientSafeAccessDeniedException(
                 com.example.hms.utility.MessageUtil.resolveOrRaw("treatmentPlan.review.notAuthor"));
         }

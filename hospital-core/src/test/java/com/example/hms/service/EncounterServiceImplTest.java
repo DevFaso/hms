@@ -2767,6 +2767,25 @@ class EncounterServiceImplTest {
         }
 
         @Test
+        void qaD990_aPastVisitEnteredByANurseKeepsThePreviousDefault() {
+            // Review of #971: a visit recorded late for last week is not an arrival now.
+            Encounter fresh = encounter();
+            fresh.setStatus(EncounterStatus.IN_PROGRESS);
+            fresh.setArrivalTimestamp(null);
+            when(encounterMapper.mergeEncounter(any(com.example.hms.payload.dto.EncounterRequestDTO.class),
+                    isNull(), any(Patient.class), any(Staff.class), any(Hospital.class),
+                    org.mockito.ArgumentMatchers.<Appointment>isNull(), any()))
+                .thenReturn(fresh);
+            org.mockito.Mockito.lenient().when(roleValidator.isDoctor(userId, hospitalId)).thenReturn(true);
+            actWithRole("ROLE_NURSE");
+
+            service.createEncounter(request(null, LocalDateTime.now().minusDays(7)), locale);
+
+            assertThat(fresh.getStatus()).isEqualTo(EncounterStatus.IN_PROGRESS);
+            assertThat(fresh.getArrivalTimestamp()).isNull();
+        }
+
+        @Test
         void qaD990_anEmergencyVisitGoesThroughTriageEvenWhenADoctorOpensIt() {
             Encounter fresh = encounter();
             fresh.setStatus(EncounterStatus.IN_PROGRESS);

@@ -296,12 +296,17 @@ public class MedicalCertificateServiceImpl implements MedicalCertificateService 
         return out;
     }
 
+    /** WinAnsi characters outside Latin-1 that the standard fonts draw (oe ligatures, quotes, dashes, ellipsis, euro). */
+    private static final String WIN_ANSI_EXTRA = "\u0152\u0153\u0160\u0161\u0178\u017d\u017e\u0192\u02c6\u02dc\u2013\u2014\u2018\u2019\u201a\u201c\u201d\u201e\u2020\u2021\u2022\u2026\u2030\u2039\u203a\u20ac\u2122";
+
     /** The standard fonts are WinAnsi: keep what they can draw (French and Spanish letters are in it). */
     static String pdfSafe(String text) {
         if (text == null) return "";
         StringBuilder sb = new StringBuilder(text.length());
-        for (char ch : text.replace('’', '\'').replace(' ', ' ').replace(' ', ' ').toCharArray()) {
-            sb.append(ch == '\n' || (ch >= 0x20 && ch <= 0x7e) || (ch >= 0xa0 && ch <= 0xff) || ch == '—' ? ch : '?');
+        for (char ch : text.replace('\u202f', ' ').replace('\u00a0', ' ').toCharArray()) {
+            boolean drawable = ch == '\n' || (ch >= 0x20 && ch <= 0x7e) || (ch >= 0xa0 && ch <= 0xff)
+                || WIN_ANSI_EXTRA.indexOf(ch) >= 0;
+            sb.append(drawable ? ch : '?');
         }
         return sb.toString();
     }

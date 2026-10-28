@@ -185,6 +185,20 @@ class ConsultationServiceImplTest {
         assertThat(service.acknowledgeConsultation(consultationId, staffId).getStatus()).isEqualTo(ConsultationStatus.ACKNOWLEDGED);
     }
 
+    @Test void qaD955_aConsultCannotBeCreatedWithItsRequesterAsConsultant() {
+        ConsultationRequestDTO r = new ConsultationRequestDTO();
+        r.setPatientId(patientId); r.setHospitalId(hospitalId);
+        r.setSpecialtyRequested("Cardiology"); r.setUrgency(ConsultationUrgency.ROUTINE);
+        r.setPreferredConsultantId(staffId);
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        org.mockito.Mockito.lenient().when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
+        org.mockito.Mockito.lenient().when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        org.mockito.Mockito.lenient().when(roleValidator.isDoctor(staff.getUser().getId(), hospitalId)).thenReturn(true);
+        assertThatThrownBy(() -> service.createConsultation(r, staffId)).isInstanceOf(BusinessException.class);
+        org.mockito.Mockito.verify(consultationRepository, org.mockito.Mockito.never()).save(any());
+    }
+
     // QA D955 class: the requester is never the consultant of her own consult.
     @Test void qaD955_theRequesterCannotBeTheConsultant() {
         Consultation requested = buildConsultation(ConsultationStatus.REQUESTED);

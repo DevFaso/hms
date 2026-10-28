@@ -311,6 +311,21 @@ class PatientDocumentServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D961: a patient cannot upload a file as a doctor-issued certificate")
+        void qaD961_aPatientCannotUploadACertificate() {
+            com.example.hms.payload.dto.portal.PatientDocumentRequestDTO request =
+                new com.example.hms.payload.dto.portal.PatientDocumentRequestDTO();
+            request.setDocumentType(PatientDocumentType.MEDICAL_CERTIFICATE);
+            org.mockito.Mockito.lenient().when(patientRepository.findByUserId(userId)).thenReturn(Optional.of(patient));
+            org.mockito.Mockito.lenient().when(userRepository.findById(userId)).thenReturn(Optional.of(new com.example.hms.model.User()));
+            assertThatThrownBy(() -> service.uploadDocument(auth,
+                    new org.springframework.mock.web.MockMultipartFile("file", "c.pdf", "application/pdf", new byte[]{1}),
+                    request))
+                    .isInstanceOf(IllegalArgumentException.class);
+            org.mockito.Mockito.verify(documentRepository, org.mockito.Mockito.never()).save(any());
+        }
+
+        @Test
         @DisplayName("QA D961: a certificate the doctor issued cannot be deleted by the patient")
         void qaD961_aDoctorIssuedCertificateStays() {
             UUID docId = UUID.randomUUID();

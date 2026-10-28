@@ -55,8 +55,9 @@ public class SepsisQsofaProtocolRule implements BpaRule {
         "altered mental status", "ams", "delirium", "encephalopathy",
         "confusion", "decreased loc", "gcs",
         // QA D953: the problem list is written in French or Spanish here.
-        "conscience", "délire", "encéphalopathie", "obnubilation",
-        "confusional", "conciencia", "encefalopatía", "delirio"
+        "altération de la conscience", "trouble de la conscience", "troubles de la conscience",
+        "conscience altérée", "délire", "encéphalopathie", "obnubilation",
+        "confusional", "alteración de la conciencia", "conciencia alterada", "encefalopatía", "delirio"
     );
 
     private final BpaProtocolRepository protocolRepository;

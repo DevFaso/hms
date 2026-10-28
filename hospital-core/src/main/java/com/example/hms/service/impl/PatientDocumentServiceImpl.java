@@ -98,6 +98,12 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
                     com.example.hms.utility.MessageUtil.resolveOrRaw("portal.document.futureDate"));
         }
 
+        // QA D961 review: a medical certificate is issued by a doctor from a
+        // visit; a patient upload labelled as one would pass for it.
+        if (request.getDocumentType() == com.example.hms.enums.PatientDocumentType.MEDICAL_CERTIFICATE) {
+            throw new IllegalArgumentException(
+                    com.example.hms.utility.MessageUtil.resolveOrRaw("medicalCertificate.patientCannotUpload"));
+        }
         FileUploadService.StoredFileDescriptor descriptor = fileUploadService.uploadPatientDocument(file, userId);
 
         PatientUploadedDocument doc = PatientUploadedDocument.builder()

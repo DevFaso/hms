@@ -390,6 +390,20 @@ class GeneralReferralServiceImplTest {
     }
 
     @Test
+    @DisplayName("QA D955: a referral cannot be created with its referrer as receiver")
+    void qaD955_theReferrerCannotBeTheReceiverAtCreation() {
+        GeneralReferralRequestDTO dto = buildRequest();
+        dto.setReceivingProviderId(referringProviderId);
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(staffRepository.findById(referringProviderId)).thenReturn(Optional.of(referringProvider));
+
+        assertThatThrownBy(() -> service.createReferral(dto))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        org.mockito.Mockito.verify(referralRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    @Test
     @DisplayName("QA D955: a colleague cannot name the referrer as the receiver either")
     void qaD955_theReferrerCannotBeNamedTheReceiver() {
         GeneralReferral referral = buildReferral();

@@ -136,6 +136,12 @@ public class ConsultationServiceImpl implements ConsultationService {
             consultant = resolveStaffAt(request.getPreferredConsultantId(), hospital.getId())
                 .orElseThrow(() -> new BusinessException("consultation.consultant.notAtHospital"));
             requireConsultantAtHospital(consultant, hospital.getId());
+            // QA D955 class: a consult asks a colleague, from its creation on.
+            if (requestingProvider != null && requestingProvider.getUser() != null && consultant.getUser() != null
+                    && requestingProvider.getUser().getId() != null
+                    && requestingProvider.getUser().getId().equals(consultant.getUser().getId())) {
+                throw new BusinessException("consultation.consultant.notRequester");
+            }
         }
 
         LocalDateTime slaDueBy = calculateSlaDueBy(request.getUrgency());

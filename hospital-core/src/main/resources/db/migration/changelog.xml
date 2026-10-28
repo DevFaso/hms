@@ -3118,4 +3118,18 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- =================================================================
+         V240 (round 16, QA D971): the BPA protocol row for the
+         hypertension-in-pregnancy advisory card, so an administrator can
+         switch it off or edit its text. Seeded active; ON CONFLICT DO
+         NOTHING keeps an administrator's change on a re-run. V239 is not
+         used on this branch (another round-16 branch holds it).
+         ================================================================= -->
+    <changeSet id="V240-bpa-pregnancy-hypertension-protocol" author="hms-team" runOnChange="false">
+        <sqlFile path="V240__bpa_pregnancy_hypertension_protocol.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
 </databaseChangeLog>

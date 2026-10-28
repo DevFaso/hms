@@ -127,6 +127,12 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
             // QA D273: only a physician acts on a received referral (acknowledge, schedule,
             // start, complete are doctor-only), so a nurse cannot be the one it is addressed to.
             requirePhysicianAt(receivingProvider, addressedTo);
+            // QA D955: the referral goes to someone else, from its creation on
+            // (checked after the hospital rules, which keep their own refusals).
+            if (sameUser(receivingProvider, referringProvider)) {
+                throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                    com.example.hms.utility.MessageUtil.resolveOrRaw("generalReferral.receiver.notReferrer"));
+            }
         }
 
         // A source department is one of the sending hospital's.

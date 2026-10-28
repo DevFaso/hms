@@ -205,6 +205,20 @@ class MedicalCertificateServiceImplTest {
     }
 
     @Test
+    void theWinAnsiCharactersADoctorTypesAreKept() {
+        String typed = "\u0153d\u00e8me \u201crepos strict\u201d \u2026 \u2013 \u20ac";
+        assertThat(MedicalCertificateServiceImpl.pdfSafe(typed)).isEqualTo(typed);
+        assertThat(MedicalCertificateServiceImpl.pdfSafe("\u4e2d")).isEqualTo("?");
+    }
+
+    @Test
+    void remarksWithOeAndCurlyQuotesRenderOnThePdf() throws Exception {
+        service.issue(encounterId, MedicalCertificateRequestDTO.builder()
+            .type(MedicalCertificateType.GENERAL).remarks("\u0152d\u00e8me \u201crepos strict\u201d").build());
+        assertThat(pdfText()).contains("\u0152d\u00e8me \u201crepos strict\u201d");
+    }
+
+    @Test
     void theFingerprintChangesWithWhatIsCertified() {
         Patient p = encounter.getPatient();
         LocalDateTime at = LocalDateTime.of(2026, 10, 27, 10, 0);
