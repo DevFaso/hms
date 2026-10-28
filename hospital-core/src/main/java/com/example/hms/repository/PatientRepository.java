@@ -245,7 +245,7 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
      * "70 00 10 02"). Cross-hospital by design, like the matchers above.
      */
     @Query("SELECT p FROM Patient p WHERE " + PRIMARY_PHONE_DIGITS + " LIKE :subscriberPattern"
-        + " OR " + SECONDARY_PHONE_DIGITS + " LIKE :subscriberPattern")
+        + " OR " + SECONDARY_PHONE_DIGITS + " LIKE :subscriberPattern ORDER BY p.createdAt DESC, p.id")
     List<Patient> findAllByPhoneSubscriber(@Param("subscriberPattern") String subscriberPattern,
                                            Pageable pageable);
 
@@ -258,7 +258,7 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
     @Query("SELECT DISTINCT p FROM Patient p JOIN p.hospitalRegistrations r"
         + " WHERE r.hospital.id = :hospitalId AND r.active = true"
         + " AND (" + PRIMARY_PHONE_DIGITS + " LIKE :subscriberPattern"
-        + " OR " + SECONDARY_PHONE_DIGITS + " LIKE :subscriberPattern)")
+        + " OR " + SECONDARY_PHONE_DIGITS + " LIKE :subscriberPattern) ORDER BY p.createdAt DESC, p.id")
     List<Patient> findAllByPhoneSubscriberAtHospital(@Param("subscriberPattern") String subscriberPattern,
                                                      @Param("hospitalId") UUID hospitalId,
                                                      Pageable pageable);

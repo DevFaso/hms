@@ -148,11 +148,18 @@ public class PatientRecallServiceImpl implements PatientRecallService {
         UUID patientId = appointment.getPatient().getId();
         java.util.Optional<PatientRecall> target;
         if (recallId != null) {
-            // Booked from the recall list: exactly that recall, if it is this
-            // patient's, at this hospital, and still open.
-            target = recallRepository.findByIdAndHospital_Id(recallId, hospitalId)
-                .filter(r -> OPEN_STATUSES.contains(r.getStatus()))
-                .filter(r -> r.getPatient() != null && patientId.equals(r.getPatient().getId()));
+            // Booked from the recall list: exactly that recall. One that is not
+            // this patient's, not this hospital's or no longer open is a refusal,
+            // never a silent no-op that leaves the recall chasing the patient.
+            PatientRecall named = recallRepository.findByIdAndHospital_Id(recallId, hospitalId)
+                .orElseThrow(() -> new ResourceNotFoundException("recall.notFound", recallId));
+            if (!OPEN_STATUSES.contains(named.getStatus())) {
+                throw new BusinessException("recall.book.notOpen");
+            }
+            if (named.getPatient() == null || !patientId.equals(named.getPatient().getId())) {
+                throw new BusinessException("recall.book.otherPatient");
+            }
+            target = java.util.Optional.of(named);
         } else {
             target = recallRepository.findByPatient_IdAndStatusIn(patientId, OPEN_STATUSES).stream()
                 .filter(r -> r.getHospital() != null && hospitalId.equals(r.getHospital().getId()))

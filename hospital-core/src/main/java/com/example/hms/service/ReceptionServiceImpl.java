@@ -463,14 +463,13 @@ public class ReceptionServiceImpl implements ReceptionService {
     }
 
     /**
-     * QA D944: a walk-in's reason is its chief complaint, else the notes the
-     * desk typed (walk-ins registered before the chief complaint was sent),
-     * else nothing: the queue shows its own translated placeholder. It used to
-     * be the English literal "Walk-in" in every language.
+     * QA D944: a walk-in's reason is its chief complaint, else nothing: the
+     * queue shows its own translated placeholder. It used to be the English
+     * literal "Walk-in" in every language. Never the encounter notes: those
+     * are the clinician's, written during the visit, and not the desk's.
      */
     static String walkInReason(Encounter walkIn) {
-        if (notBlank(walkIn.getChiefComplaint())) return walkIn.getChiefComplaint();
-        return notBlank(walkIn.getNotes()) ? walkIn.getNotes() : null;
+        return notBlank(walkIn.getChiefComplaint()) ? walkIn.getChiefComplaint() : null;
     }
 
     /** QA D239: the booked reason, else the chief complaint triage recorded, else the booking notes. */

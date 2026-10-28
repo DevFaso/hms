@@ -430,9 +430,10 @@ class ReceptionServiceImplTest {
             withComplaint.setNotes("autre");
             assertThat(ReceptionServiceImpl.walkInReason(withComplaint)).isEqualTo("Fièvre depuis 2 jours, toux");
 
-            Encounter legacy = new Encounter();
-            legacy.setNotes("Fièvre depuis 2 jours, toux");
-            assertThat(ReceptionServiceImpl.walkInReason(legacy)).isEqualTo("Fièvre depuis 2 jours, toux");
+            // The clinician's notes are never the desk's reason (review round 6).
+            Encounter clinicalNotesOnly = new Encounter();
+            clinicalNotesOnly.setNotes("VIH+, discuter observance ARV");
+            assertThat(ReceptionServiceImpl.walkInReason(clinicalNotesOnly)).isNull();
 
             assertThat(ReceptionServiceImpl.walkInReason(new Encounter())).isNull();
         }

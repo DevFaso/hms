@@ -39,6 +39,8 @@ public class LookupController {
 
     private final AppointmentRepository appointmentRepository;
     private final RoleValidator roleValidator;
+    /** QA D942: the acting hospital's country gives a national number its calling code. */
+    private final com.example.hms.repository.HospitalRepository hospitalRepository;
 
     // Lookup appointments by patient email
     // Not attributable by PatientAccessAuditInterceptor: the patient is
@@ -80,9 +82,14 @@ public class LookupController {
         List<Appointment> appointments = activeHospitalId != null
             ? appointmentRepository.findByPatientPhoneNumberAndHospitalId(pattern, activeHospitalId)
             : appointmentRepository.findByPatientPhoneNumber(pattern);
+        // A national number takes the acting hospital's calling code, as every patient match does.
+        String callingCode = com.example.hms.utility.PhoneNumbers.callingCodeForCountry(activeHospitalId == null
+            ? null
+            : hospitalRepository.findById(activeHospitalId).map(com.example.hms.model.Hospital::getCountry).orElse(null));
         return ResponseEntity.ok(appointments.stream()
             .filter(a -> !subscriber || a.getPatient() == null
-                || com.example.hms.utility.PatientMatchKeys.samePhone(a.getPatient().getPhoneNumberPrimary(), phone))
+                || com.example.hms.utility.PatientMatchKeys.samePhone(a.getPatient().getPhoneNumberPrimary(), phone,
+                    callingCode))
             .map(this::toAppointmentSummaryDTO).toList());
     }
 

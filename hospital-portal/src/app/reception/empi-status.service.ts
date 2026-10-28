@@ -2,6 +2,7 @@ import { Injectable, inject, signal } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { CanActivateFn, Router } from '@angular/router';
 import { Observable, catchError, map, of, shareReplay } from 'rxjs';
+import { backgroundRequestOptions } from '../services/ws-transport';
 
 /**
  * QA D987: whether the duplicate-patient matcher (EMPI probabilistic search)
@@ -20,16 +21,21 @@ export class EmpiStatusService {
   /** Asks once per session; later calls share the answer. null: not known (a failed read). */
   load(): Observable<boolean | null> {
     if (!this.request$) {
-      this.request$ = this.http.get<{ enabled: boolean }>('/empi/candidates/status').pipe(
-        map((res) => res?.enabled === true),
-        // A failed read is "unknown", not "off": it is not kept, so the next
-        // navigation asks again instead of hiding the page for the session.
-        catchError(() => {
-          this.request$ = null;
-          return of(null);
-        }),
-        shareReplay(1),
-      );
+      // A background probe: the status endpoint admits the matcher's roles only,
+      // and a 403 for anyone else (a pharmacist, a midwife) must not redirect
+      // the shell to the forbidden page on login.
+      this.request$ = this.http
+        .get<{ enabled: boolean }>('/empi/candidates/status', backgroundRequestOptions())
+        .pipe(
+          map((res) => res?.enabled === true),
+          // A failed read is "unknown", not "off": it is not kept, so the next
+          // navigation asks again instead of hiding the page for the session.
+          catchError(() => {
+            this.request$ = null;
+            return of(null);
+          }),
+          shareReplay(1),
+        );
       this.request$.subscribe((on) => this.enabled.set(on));
     }
     return this.request$;

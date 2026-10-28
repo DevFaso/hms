@@ -317,16 +317,23 @@ class PatientRecallServiceImplTest {
         service.scheduleOpenRecallFor(a, recall.getId());
         assertThat(recall.getStatus()).isEqualTo(RecallStatus.SCHEDULED);
 
+        // Round 6: a named recall that cannot be linked is a refusal, never a silent no-op.
         PatientRecall closed = existingRecall(RecallStatus.CLOSED);
-        service.scheduleOpenRecallFor(a, closed.getId());
+        assertThatThrownBy(() -> service.scheduleOpenRecallFor(a, closed.getId()))
+            .isInstanceOf(BusinessException.class);
         assertThat(closed.getStatus()).isEqualTo(RecallStatus.CLOSED);
 
         Patient someoneElse = mock(Patient.class);
         when(someoneElse.getId()).thenReturn(UUID.randomUUID());
         PatientRecall foreign = existingRecall(RecallStatus.PENDING);
         foreign.setPatient(someoneElse);
-        service.scheduleOpenRecallFor(a, foreign.getId());
+        assertThatThrownBy(() -> service.scheduleOpenRecallFor(a, foreign.getId()))
+            .isInstanceOf(BusinessException.class);
         assertThat(foreign.getStatus()).isEqualTo(RecallStatus.PENDING);
+
+        UUID unknown = UUID.randomUUID();
+        assertThatThrownBy(() -> service.scheduleOpenRecallFor(a, unknown))
+            .isInstanceOf(ResourceNotFoundException.class);
     }
 
     @Test

@@ -1377,6 +1377,12 @@ public class UserServiceImpl implements UserService {
         }
         // The deleted view is the super-admin's: a scoped call never asks for it.
         boolean scoped = !scope.everyone();
+        // QA D919: a scoped caller asking for the deleted worklist gets an empty
+        // page, never the live list (the rule the controllers apply, kept here
+        // for every other caller of this listing).
+        if (scoped && onlyDeleted) {
+            return Page.empty(pageable);
+        }
         // QA D430: a non-administrator lists colleagues only, never patient accounts.
         Page<User> users = scope.seesPatientContacts()
             ? userRepository.findAllPaged(
@@ -1397,6 +1403,9 @@ public class UserServiceImpl implements UserService {
             return Page.empty(pageable);
         }
         boolean scoped = !scope.everyone();
+        if (scoped && onlyDeleted) {
+            return Page.empty(pageable); // QA D919, as getAllUsers
+        }
         // The free-text box also finds an account by e-mail or phone (D119);
         // phones are stored in E.164, so "70 20 20 20" is matched on its digits.
         // QA D198: a caller who cannot read contact details cannot search on them either.

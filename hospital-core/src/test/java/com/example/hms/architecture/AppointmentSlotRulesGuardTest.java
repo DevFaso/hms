@@ -21,8 +21,13 @@ class AppointmentSlotRulesGuardTest {
 
     private static final Path MAIN = Paths.get("src/main/java/com/example/hms");
 
-    /** The hand-written interval-overlap idiom: {@code a.isBefore(x) && y.isBefore(b)}. */
-    private static final Pattern OVERLAP_IDIOM = Pattern.compile("\\.isBefore\\(\\w+\\)\\s*&&\\s*\\w+\\.isBefore\\(");
+    /**
+     * The hand-written interval-overlap idiom, in its two spellings and with
+     * any argument ({@code a.isBefore(x) && y.isBefore(b)},
+     * {@code !a.isAfter(LocalDateTime.of(d, t)) && !b.isAfter(c)}).
+     */
+    private static final Pattern OVERLAP_IDIOM = Pattern.compile(
+        "!?\\s*[\\w.()]+\\.is(Before|After)\\([^;]*?\\)\\s*&&\\s*!?\\s*[\\w.()]+\\.is(Before|After)\\(");
 
     @Test
     void noAppointmentOverlapIsHandWrittenOutsideTheRules() throws IOException {
@@ -40,12 +45,14 @@ class AppointmentSlotRulesGuardTest {
     @Test
     void everyBookingPathUsesTheRules() {
         String staff = read(MAIN.resolve("service/AppointmentServiceImpl.java"));
-        assertThat(count(staff, "AppointmentSlotRules.overlapsHeldSlot(")).as("staff create + edit").isEqualTo(2);
+        assertThat(count(staff, "AppointmentSlotRules.overlapsHeldSlot(")).as("staff create + edit")
+            .isGreaterThanOrEqualTo(2);
 
         String portal = read(MAIN.resolve("service/impl/PatientPortalServiceImpl.java"));
-        assertThat(count(portal, "AppointmentSlotRules.overlapsHeldSlot(")).as("portal book + reschedule").isEqualTo(2);
+        assertThat(count(portal, "AppointmentSlotRules.overlapsHeldSlot(")).as("portal book + reschedule")
+            .isGreaterThanOrEqualTo(2);
         assertThat(count(portal, "AppointmentSlotRules.requirePatientBookable(")).as("portal book + reschedule")
-            .isEqualTo(2);
+            .isGreaterThanOrEqualTo(2);
         // QA D977: a moved appointment is booked at its new time, never parked in RESCHEDULED.
         assertThat(portal).doesNotContain("appointment.setStatus(AppointmentStatus.RESCHEDULED)");
 

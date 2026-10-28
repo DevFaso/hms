@@ -251,6 +251,8 @@ export class AppointmentFormComponent implements OnInit {
   clearPatient(): void {
     this.selectedPatient.set(null);
     delete this.form.patientId;
+    // The recall belonged to the patient just cleared (QA D985).
+    delete this.form.recallId;
     this.patientQuery.set('');
   }
 

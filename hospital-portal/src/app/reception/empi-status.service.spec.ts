@@ -2,6 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { EmpiStatusService } from './empi-status.service';
+import { BACKGROUND_REQUEST } from '../services/ws-transport';
 
 describe('EmpiStatusService (QA D987)', () => {
   beforeEach(() =>
@@ -15,7 +16,11 @@ describe('EmpiStatusService (QA D987)', () => {
     const http = TestBed.inject(HttpTestingController);
     service.load().subscribe();
     service.load().subscribe();
-    http.expectOne('/empi/candidates/status').flush({ enabled: true });
+    const probe = http.expectOne('/empi/candidates/status');
+    // Round 6: a background request, so a 403 for a role the matcher does not
+    // admit never redirects the shell to /error/403.
+    expect(probe.request.context.get(BACKGROUND_REQUEST)).toBeTrue();
+    probe.flush({ enabled: true });
     expect(service.enabled()).toBeTrue();
     http.verify();
   });
