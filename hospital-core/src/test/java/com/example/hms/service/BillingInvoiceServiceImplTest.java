@@ -1447,7 +1447,7 @@ class BillingInvoiceServiceImplTest {
         encounter.setId(UUID.randomUUID());
         BillingInvoice first = BillingInvoice.builder().encounter(encounter).checkInCopay(true)
             .status(InvoiceStatus.PAID).build();
-        when(invoiceRepository.findByEncounter_IdAndStatusNot(encounter.getId(), InvoiceStatus.CANCELLED))
+        when(invoiceRepository.findByEncounter_IdAndStatusNot(encounter.getId(), InvoiceStatus.DRAFT))
             .thenReturn(List.of(first));
 
         billingInvoiceService.recordCheckInCopay(encounter, new BigDecimal("1000"), UUID.randomUUID());
@@ -2244,6 +2244,85 @@ class BillingInvoiceServiceImplTest {
         assertEquals(1, detail.adjustments().size());
         assertEquals("WAIVER", detail.adjustments().get(0).type());
         assertNull(detail.adjustments().get(0).reason());
+    }
+
+    @Test
+    void addAdjustment_neverUnderAPaymentThePatientDeclared_D974() {
+        com.example.hms.repository.InvoiceAdjustmentRepository repo = adjustments();
+        BillingInvoice invoice = issued("10000", "0");
+        when(paymentTransactionRepository.sumAmountByInvoiceAndStatus(invoice.getId(),
+            com.example.hms.enums.PaymentStatus.PENDING)).thenReturn(new BigDecimal("10000"));
+
+        com.example.hms.exception.BusinessException refused = assertThrows(com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.addAdjustment(invoice.getId(),
+                adjustment(com.example.hms.enums.InvoiceAdjustmentType.DISCOUNT, "4000", "Remise", null),
+                UUID.randomUUID(), Locale.FRENCH));
+        assertEquals("billing.adjustment.belowPending", refused.getMessageKey());
+        verify(repo, never()).save(any());
+    }
+
+    @Test
+    void addAdjustment_aPaidInvoiceIsNotAdjusted_D974() {
+        adjustments();
+        BillingInvoice paid = issued("1000", "1000");
+        paid.setStatus(InvoiceStatus.PAID);
+
+        com.example.hms.exception.BusinessException refused = assertThrows(com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.addAdjustment(paid.getId(),
+                adjustment(com.example.hms.enums.InvoiceAdjustmentType.DISCOUNT, "100", "Remise", null),
+                UUID.randomUUID(), Locale.FRENCH));
+        assertEquals("billing.adjustment.notIssued", refused.getMessageKey());
+    }
+
+    @Test
+    void portalPdf_carriesTheAdjustmentButNotTheClerksReason_D974() {
+        com.example.hms.repository.InvoiceAdjustmentRepository repo = adjustments();
+        UUID patientId = UUID.randomUUID();
+        BillingInvoice invoice = portalInvoice(patientId, InvoiceStatus.PAID);
+        when(repo.findByInvoice_IdOrderByCreatedAtAsc(invoice.getId())).thenReturn(List.of(
+            com.example.hms.model.InvoiceAdjustment.builder().invoice(invoice)
+                .type(com.example.hms.enums.InvoiceAdjustmentType.WAIVER)
+                .amount(new BigDecimal("500")).reason("famille en conflit").build()));
+        when(pdfInvoiceService.generateInvoicePdf(any(), any(), any(), any(), any())).thenReturn(new byte[] {1});
+
+        billingInvoiceService.getPortalInvoicePdf(invoice.getId(), patientId, Locale.FRENCH);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<com.example.hms.model.InvoiceAdjustment>> printed = ArgumentCaptor.forClass(List.class);
+        verify(pdfInvoiceService).generateInvoicePdf(any(), any(), any(), printed.capture(), any());
+        assertEquals(1, printed.getValue().size());
+        assertNull(printed.getValue().get(0).getReason());
+    }
+
+    @Test
+    void aCopayAlreadyFoldedIntoTheVisitInvoiceStillCountsAsTheVisitsCopay_D936() {
+        com.example.hms.model.Encounter encounter = new com.example.hms.model.Encounter();
+        encounter.setId(UUID.randomUUID());
+        BillingInvoice visitInvoice = BillingInvoice.builder().status(InvoiceStatus.SENT).build();
+        BillingInvoice folded = BillingInvoice.builder().encounter(encounter).checkInCopay(true)
+            .status(InvoiceStatus.CANCELLED).creditedToInvoice(visitInvoice).build();
+        when(invoiceRepository.findByEncounter_IdAndStatusNot(encounter.getId(), InvoiceStatus.DRAFT))
+            .thenReturn(List.of(folded));
+
+        billingInvoiceService.recordCheckInCopay(encounter, new BigDecimal("1000"), UUID.randomUUID());
+
+        verify(invoiceRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void createInvoice_withoutVisitCode_doesNotReachBackToAnOldCopay_D936() {
+        pinnedHospital();
+        Patient patient = registeredPatient();
+        BillingInvoice old = BillingInvoice.builder().patient(patient).checkInCopay(true).status(InvoiceStatus.PAID)
+            .invoiceDate(LocalDate.now().minusDays(90)).amountPaid(new BigDecimal("1000")).build();
+        old.setId(UUID.randomUUID());
+        when(invoiceRepository.findByPatient_IdAndHospital_IdAndCheckInCopayTrueAndStatus(
+            patient.getId(), HOSPITAL_ID, InvoiceStatus.PAID)).thenReturn(List.of(old));
+
+        BillingInvoiceResponseDTO pharmacy = billingInvoiceService.createInvoice(
+            requestFor(patient).totalAmount(new BigDecimal("3000")).status(InvoiceStatus.SENT).build(), Locale.FRENCH);
+
+        assertNull(pharmacy.getEncounterCode());
     }
 
     @Test

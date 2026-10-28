@@ -174,10 +174,7 @@ export class BillingComponent implements OnInit {
 
   /** QA D974: only an issued invoice is adjusted; a draft's lines are edited instead. */
   canAdjustInvoice(inv: BillingInvoiceResponse): boolean {
-    return (
-      this.canAdjust &&
-      (inv.status === 'SENT' || inv.status === 'PARTIALLY_PAID' || inv.status === 'PAID')
-    );
+    return this.canAdjust && (inv.status === 'SENT' || inv.status === 'PARTIALLY_PAID');
   }
 
   private loadAdjustments(invoiceId: string): void {

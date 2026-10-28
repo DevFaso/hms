@@ -1014,7 +1014,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional(readOnly = true)
     public Page<AccessLogEntryDTO> getMyAccessLog(Authentication auth, Pageable pageable) {
         UUID patientId = resolvePatientId(auth);
-        return disclosureAccountingService.getEntries(patientId, null, null, pageable);
+        return disclosureAccountingService.getEntriesAsPatientSees(patientId, null, null, pageable);
     }
 
     @Override
@@ -1025,7 +1025,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                                                              java.time.LocalDateTime to,
                                                              Pageable pageable) {
         UUID patientId = resolvePatientId(auth);
-        return disclosureAccountingService.getAccounting(patientId, from, to, pageable);
+        return disclosureAccountingService.getAccountingAsPatientSees(patientId, from, to, pageable);
     }
 
     // ── Private helpers ──────────────────────────────────────────────────

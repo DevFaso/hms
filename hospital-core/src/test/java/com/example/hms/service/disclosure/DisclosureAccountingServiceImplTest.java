@@ -255,9 +255,12 @@ class DisclosureAccountingServiceImplTest {
         when(auditRepository.findDisclosuresForPatient(any(), any(), any(), any(), any()))
             .thenReturn(new PageImpl<>(rows));
 
-        List<AccessLogEntryDTO> shown = service.getEntries(patientId, null, null, pageable).getContent();
+        List<AccessLogEntryDTO> shown = service.getEntriesAsPatientSees(patientId, null, null, pageable).getContent();
 
         assertThat(shown).filteredOn(e -> e.getCategory() == DisclosureCategory.SHARED_WITH_PROVIDER).hasSize(2);
+        // The staff accounting of disclosures keeps every row.
+        assertThat(service.getEntries(patientId, null, null, pageable).getContent())
+            .filteredOn(e -> e.getCategory() == DisclosureCategory.SHARED_WITH_PROVIDER).hasSize(6);
         // Every emergency access stays a line of its own.
         assertThat(shown).filteredOn(e -> e.getCategory() == DisclosureCategory.EMERGENCY_ACCESS).hasSize(2);
     }

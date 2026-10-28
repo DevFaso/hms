@@ -66,9 +66,27 @@ public class DisclosureAccountingServiceImpl implements DisclosureAccountingServ
     private Page<AccessLogEntryDTO> queryEntries(UUID patientId, Set<AuditEventType> accountable,
                                                  LocalDateTime from, LocalDateTime to,
                                                  Pageable pageable) {
-        Page<AccessLogEntryDTO> page = auditRepository
+        return auditRepository
             .findDisclosuresForPatient(patientId, accountable, from, to, pageable)
             .map(this::toEntry);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public DisclosureAccountingDTO getAccountingAsPatientSees(UUID patientId, LocalDateTime from,
+                                                              LocalDateTime to, Pageable pageable) {
+        DisclosureAccountingDTO accounting = getAccounting(patientId, from, to, pageable);
+        accounting.setEntries(foldRepeats(accounting.getEntries()));
+        return accounting;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<AccessLogEntryDTO> getEntriesAsPatientSees(UUID patientId, LocalDateTime from,
+                                                           LocalDateTime to, Pageable pageable) {
+        Page<AccessLogEntryDTO> page = getEntries(patientId, from, to, pageable);
+        // The page keeps its own totals: they count the rows the audit holds,
+        // the same rows the per-category counts add up.
         return new org.springframework.data.domain.PageImpl<>(foldRepeats(page.getContent()),
             page.getPageable(), page.getTotalElements());
     }

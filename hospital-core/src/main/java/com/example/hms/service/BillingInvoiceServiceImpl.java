@@ -377,13 +377,21 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
      * and its visit is not invoiced yet, the new invoice is that visit's.
      * With two or more the visit is not guessed; the form lists them instead.
      */
+    private static final long COPAY_LINK_WINDOW_DAYS = 30;
+
     private Encounter soleOpenCopayVisit(Patient patient, UUID hospitalId) {
         List<BillingInvoice> open = invoiceRepository
             .findByPatient_IdAndHospital_IdAndCheckInCopayTrueAndStatus(patient.getId(), hospitalId, InvoiceStatus.PAID);
         if (open == null || open.size() != 1) {
             return null;
         }
-        Encounter visit = open.get(0).getEncounter();
+        BillingInvoice copay = open.get(0);
+        // An old copay is not today's visit: past 30 days the clerk picks the visit from the form.
+        if (copay.getInvoiceDate() != null && copay.getInvoiceDate()
+                .isBefore(LocalDate.now(java.time.ZoneId.systemDefault()).minusDays(COPAY_LINK_WINDOW_DAYS))) {
+            return null;
+        }
+        Encounter visit = copay.getEncounter();
         if (visit == null || visit.getId() == null || visit.getHospital() == null
                 || !hospitalId.equals(visit.getHospital().getId())) {
             return null;
@@ -484,13 +492,14 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
 
     /** QA D974: an adjustment lowers what is owed on an issued invoice; a draft's lines are edited instead. */
     private static final java.util.Set<InvoiceStatus> ADJUSTABLE =
-        java.util.EnumSet.of(InvoiceStatus.SENT, InvoiceStatus.PARTIALLY_PAID, InvoiceStatus.PAID);
+        java.util.EnumSet.of(InvoiceStatus.SENT, InvoiceStatus.PARTIALLY_PAID);
 
     @Override
     @Transactional
     public BillingInvoiceResponseDTO addAdjustment(UUID invoiceId,
                                                    com.example.hms.payload.dto.InvoiceAdjustmentRequestDTO request,
                                                    UUID staffId, Locale locale) {
+        requireAdjustmentLedger();
         BillingInvoice invoice = loadInScopeForUpdate(invoiceId);
         if (!ADJUSTABLE.contains(invoice.getStatus())) {
             throw new BusinessException("billing.adjustment.notIssued");
@@ -529,6 +538,13 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         if (newTotal.compareTo(paid) < 0) {
             throw new BusinessException("billing.adjustment.belowPaid");
         }
+        // QA D724: nor is a payment the patient declared and the cashier has not
+        // confirmed yet; lowering the total under it would orphan that payment.
+        BigDecimal pending = paymentTransactionRepository.sumAmountByInvoiceAndStatus(invoice.getId(),
+            PaymentStatus.PENDING);
+        if (pending != null && newTotal.compareTo(paid.add(pending)) < 0) {
+            throw new BusinessException("billing.adjustment.belowPending");
+        }
         adjustmentRepository.save(com.example.hms.model.InvoiceAdjustment.builder()
             .invoice(invoice)
             .invoiceItem(line)
@@ -551,10 +567,16 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     @Override
     @Transactional(readOnly = true)
     public List<com.example.hms.payload.dto.InvoiceAdjustmentResponseDTO> listAdjustments(UUID invoiceId) {
+        requireAdjustmentLedger();
         BillingInvoice invoice = loadInScope(invoiceId);
         return adjustmentRepository.findByInvoice_IdOrderByCreatedAtAsc(invoice.getId()).stream()
             .map(com.example.hms.payload.dto.InvoiceAdjustmentResponseDTO::from)
             .toList();
+    }
+
+    /** The ledger is a Spring bean in every running context; a test that builds the service by hand sets it. */
+    private void requireAdjustmentLedger() {
+        java.util.Objects.requireNonNull(adjustmentRepository, "adjustmentRepository");
     }
 
     /** "4 000", the way the refusals print francs CFA. */
@@ -611,7 +633,8 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, invoiceId)), patientId);
         List<com.example.hms.payload.dto.InvoiceItemResponseDTO> items = invoiceItemRepository
             .findByBillingInvoiceId(invoiceId).stream()
-            .map(invoiceItemMapper::toInvoiceItemResponseDTO)
+            .map((invoiceItemMapper != null ? invoiceItemMapper : new com.example.hms.mapper.InvoiceItemMapper())
+                ::toInvoiceItemResponseDTO)
             .toList();
         List<PaymentTransactionResponseDTO> payments = paymentTransactionRepository
             .findByInvoice_IdOrderByCreatedAtAsc(invoiceId).stream()
@@ -637,7 +660,8 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     public InvoicePdfResponseDTO getPortalInvoicePdf(UUID invoiceId, UUID patientId, Locale locale) {
         BillingInvoice invoice = requirePortalVisible(invoiceRepository.findByIdWithRefs(invoiceId)
             .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, invoiceId)), patientId);
-        return renderInvoicePdf(invoice, locale);
+        // QA D974: the clerk's reason stays with billing, on paper too.
+        return renderInvoicePdf(invoice, locale, false);
     }
 
     @Override
@@ -953,11 +977,11 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
                 && !activeHospitalId.equals(invoice.getHospital().getId())) {
             throw new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, invoiceId);
         }
-        return renderInvoicePdf(invoice, locale);
+        return renderInvoicePdf(invoice, locale, true);
     }
 
-    /** The invoice PDF of an invoice the caller may already read. */
-    private InvoicePdfResponseDTO renderInvoicePdf(BillingInvoice invoice, Locale locale) {
+    /** The invoice PDF of an invoice the caller may already read; the adjustment reasons for staff only. */
+    private InvoicePdfResponseDTO renderInvoicePdf(BillingInvoice invoice, Locale locale, boolean withReasons) {
         UUID invoiceId = invoice.getId();
         List<InvoiceItem> items = invoiceItemRepository.findByBillingInvoiceId(invoiceId);
         Locale effectiveLocale = locale != null ? locale : LocaleContextHolder.getLocale();
@@ -967,6 +991,12 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         // QA D974: the adjustments are on the paper too, so lines and total agree.
         List<com.example.hms.model.InvoiceAdjustment> adjustments = adjustmentRepository != null
             ? adjustmentRepository.findByInvoice_IdOrderByCreatedAtAsc(invoiceId) : List.of();
+        if (!withReasons && adjustments != null) {
+            adjustments = adjustments.stream()
+                .map(a -> com.example.hms.model.InvoiceAdjustment.builder().invoice(a.getInvoice())
+                    .invoiceItem(a.getInvoiceItem()).type(a.getType()).amount(a.getAmount()).build())
+                .toList();
+        }
         byte[] pdf = pdfInvoiceService.generateInvoicePdf(invoice, items,
             payments != null ? payments : List.of(), adjustments != null ? adjustments : List.of(), effectiveLocale);
         return new InvoicePdfResponseDTO(pdf, invoice.getInvoiceNumber(), invoice.getId());
@@ -1521,8 +1551,9 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         // QA D936 (class): one copay per visit. A repeated or retried check-in
         // of the same encounter does not bill the patient a second copay.
         if (encounter.getId() != null && invoiceRepository
-                .findByEncounter_IdAndStatusNot(encounter.getId(), InvoiceStatus.CANCELLED).stream()
-                .anyMatch(BillingInvoice::isCheckInCopay)) {
+                .findByEncounter_IdAndStatusNot(encounter.getId(), InvoiceStatus.DRAFT).stream()
+                .anyMatch(existing -> existing.isCheckInCopay()
+                    && (existing.getStatus() != InvoiceStatus.CANCELLED || existing.getCreditedToInvoice() != null))) {
             LOG.info("Check-in copay already recorded for encounter {}; not billed again", encounter.getId());
             return;
         }

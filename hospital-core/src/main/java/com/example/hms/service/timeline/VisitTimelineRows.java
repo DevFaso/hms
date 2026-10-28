@@ -68,10 +68,27 @@ public class VisitTimelineRows {
     private final GeneralReferralRepository referralRepository;
     private final EncounterRepository encounterRepository;
     private final EncounterNoteRepository encounterNoteRepository;
+    /** The same classification the other chronology rows use (E8 #51): explicit tag, codes, department. */
+    private final com.example.hms.service.recordaccess.SensitivityClassifier sensitivityClassifier;
+
+    /** A referral to one of these is sensitive whatever department receives it. */
+    private static final Set<com.example.hms.enums.ReferralSpecialty> SENSITIVE_SPECIALTIES = EnumSet.of(
+        com.example.hms.enums.ReferralSpecialty.PSYCHIATRY, com.example.hms.enums.ReferralSpecialty.PSYCHOLOGY,
+        com.example.hms.enums.ReferralSpecialty.BEHAVIORAL_HEALTH, com.example.hms.enums.ReferralSpecialty.INFECTIOUS_DISEASE);
 
     /** Every visit row of the patient at the acting hospital, in the categories asked for. */
     public List<PatientTimelineEntryDTO> collect(UUID patientId, UUID actingHospitalId, Set<String> categoryFilters) {
         List<PatientTimelineEntryDTO> rows = new ArrayList<>();
+        // The patient's visits here, read once: a note, an order and an imaging
+        // order take their sensitivity from the visit that wrote them.
+        Map<UUID, Encounter> visitsHere = new HashMap<>();
+        if (wanted(categoryFilters, CATEGORY_NOTE) || wanted(categoryFilters, CATEGORY_IMAGING)) {
+            encounterRepository.findByPatient_Id(patientId).stream()
+                .filter(encounter -> !encounter.isPrescriptionAnchor())
+                .filter(encounter -> isLocal(encounter.getHospital(), actingHospitalId))
+                .filter(encounter -> encounter.getId() != null)
+                .forEach(encounter -> visitsHere.put(encounter.getId(), encounter));
+        }
         if (wanted(categoryFilters, CATEGORY_DIAGNOSIS)) {
             problemRepository.findByPatient_IdAndHospital_Id(patientId, actingHospitalId)
                 .forEach(problem -> rows.add(diagnosisRow(problem, actingHospitalId)));
@@ -84,15 +101,11 @@ public class VisitTimelineRows {
         if (wanted(categoryFilters, CATEGORY_IMAGING)) {
             imagingOrderRepository.findByPatient_IdAndHospital_Id(patientId, actingHospitalId).stream()
                 .filter(order -> order.getStatus() != ImagingOrderStatus.DRAFT)
-                .forEach(order -> rows.add(imagingOrderRow(order, actingHospitalId)));
+                .forEach(order -> rows.add(imagingOrderRow(order, actingHospitalId,
+                    order.getEncounterId() != null ? visitsHere.get(order.getEncounterId()) : null)));
         }
         if (wanted(categoryFilters, CATEGORY_NOTE)) {
-            List<UUID> visits = encounterRepository.findByPatient_Id(patientId).stream()
-                .filter(encounter -> !encounter.isPrescriptionAnchor())
-                .filter(encounter -> isLocal(encounter.getHospital(), actingHospitalId))
-                .map(Encounter::getId)
-                .filter(java.util.Objects::nonNull)
-                .toList();
+            List<UUID> visits = new ArrayList<>(visitsHere.keySet());
             if (!visits.isEmpty()) {
                 encounterNoteRepository.findByEncounter_IdIn(visits).stream()
                     .filter(note -> note.getSignedAt() != null)
@@ -118,7 +131,7 @@ public class VisitTimelineRows {
             statusLabel(problem.getStatus() != null ? problem.getStatus().name() : null));
         return row(problem.getId(), CATEGORY_DIAGNOSIS,
             coalesce(problem.getCreatedAt(), atStartOfDay(problem.getOnsetDate())), summary,
-            problem.getSensitivityCategory() != null, metadata, problem.getHospital(), acting);
+            sensitivityClassifier.effectiveCategory(problem) != null, metadata, problem.getHospital(), acting);
     }
 
     private PatientTimelineEntryDTO labOrderRow(LabOrder order, UUID acting) {
@@ -131,11 +144,11 @@ public class VisitTimelineRows {
             : null;
         String summary = MessageUtil.resolveOrRaw("timeline.labOrder.summary",
             test != null ? test : MessageUtil.resolveOrRaw("timeline.category.LAB_ORDER"));
-        return row(order.getId(), CATEGORY_LAB_ORDER, order.getOrderDatetime(), summary, false, metadata,
-            order.getHospital(), acting);
+        return row(order.getId(), CATEGORY_LAB_ORDER, order.getOrderDatetime(), summary, sensitive(order.getEncounter()),
+            metadata, order.getHospital(), acting);
     }
 
-    private PatientTimelineEntryDTO imagingOrderRow(ImagingOrder order, UUID acting) {
+    private PatientTimelineEntryDTO imagingOrderRow(ImagingOrder order, UUID acting, Encounter visit) {
         Map<String, Object> metadata = new HashMap<>();
         putIfNotNull(metadata, META_STATUS, order.getStatus() != null ? order.getStatus().name() : null);
         putIfNotNull(metadata, META_CLINICIAN, order.getOrderingProviderName());
@@ -145,7 +158,7 @@ public class VisitTimelineRows {
         String summary = MessageUtil.resolveOrRaw("timeline.imagingOrder.summary",
             what != null ? what : MessageUtil.resolveOrRaw("timeline.category.IMAGING"),
             order.getStatus() != null ? label(order.getStatus()) : "");
-        return row(order.getId(), CATEGORY_IMAGING, order.getOrderedAt(), summary, false, metadata,
+        return row(order.getId(), CATEGORY_IMAGING, order.getOrderedAt(), summary, sensitive(visit), metadata,
             order.getHospital(), acting);
     }
 
@@ -161,8 +174,8 @@ public class VisitTimelineRows {
         if (plan != null) {
             summary.append(" · ").append(MessageUtil.resolveOrRaw("timeline.note.plan", plan));
         }
-        return row(note.getId(), CATEGORY_NOTE, note.getSignedAt(), summary.toString(), false, metadata,
-            note.getHospital(), acting);
+        return row(note.getId(), CATEGORY_NOTE, note.getSignedAt(), summary.toString(), sensitive(note.getEncounter()),
+            metadata, note.getHospital(), acting);
     }
 
     private PatientTimelineEntryDTO referralRow(GeneralReferral referral, UUID acting) {
@@ -181,9 +194,17 @@ public class VisitTimelineRows {
         if (reason != null) {
             summary = summary + " — " + reason;
         }
+        boolean sensitive = (referral.getTargetSpecialty() != null && SENSITIVE_SPECIALTIES.contains(referral.getTargetSpecialty()))
+            || sensitivityClassifier.effectiveCategory(null, referral.getTargetDepartment()) != null
+            || sensitivityClassifier.effectiveCategory(null, referral.getSourceDepartment()) != null;
         return row(referral.getId(), CATEGORY_REFERRAL,
-            coalesce(referral.getSubmittedAt(), referral.getCreatedAt()), summary, false, metadata,
+            coalesce(referral.getSubmittedAt(), referral.getCreatedAt()), summary, sensitive, metadata,
             referral.getHospital(), acting);
+    }
+
+    /** A row written in a sensitive visit is sensitive (the timeline hides it unless asked). */
+    private boolean sensitive(Encounter visit) {
+        return visit != null && sensitivityClassifier.effectiveCategory(visit) != null;
     }
 
     private static PatientTimelineEntryDTO row(UUID id, String category, LocalDateTime when, String summary,

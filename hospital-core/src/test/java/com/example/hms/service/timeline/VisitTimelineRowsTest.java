@@ -59,8 +59,10 @@ class VisitTimelineRowsTest {
     private final GeneralReferralRepository referrals = mock(GeneralReferralRepository.class);
     private final EncounterRepository encounters = mock(EncounterRepository.class);
     private final EncounterNoteRepository notes = mock(EncounterNoteRepository.class);
+    private final com.example.hms.service.recordaccess.SensitivityClassifier classifier =
+        mock(com.example.hms.service.recordaccess.SensitivityClassifier.class);
     private final VisitTimelineRows rows =
-        new VisitTimelineRows(problems, labOrders, imagingOrders, referrals, encounters, notes);
+        new VisitTimelineRows(problems, labOrders, imagingOrders, referrals, encounters, notes, classifier);
 
     private final UUID patientId = UUID.randomUUID();
     private final Hospital here = hospital();
@@ -125,6 +127,7 @@ class VisitTimelineRowsTest {
         signed.setPlan("Artésunate IV, contrôle TDR à J3");
         signed.setSignedAt(LocalDateTime.now().minusHours(1));
         signed.setSignedByName("Dr Ouédraogo");
+        signed.setEncounter(visit);
         EncounterNote draft = new EncounterNote();
         draft.setId(UUID.randomUUID());
         draft.setHospital(here);
@@ -157,6 +160,22 @@ class VisitTimelineRowsTest {
             "Note signée — Paludisme grave probable · Plan : Artésunate IV, contrôle TDR à J3",
             "Orientation vers Cardiologie (Envoyée) — Souffle systolique");
         assertThat(visit).allSatisfy(row -> assertThat(row.getMetadata()).containsEntry("foreign", false));
+        assertThat(visit).noneMatch(PatientTimelineEntryDTO::isSensitive);
+    }
+
+    @Test
+    void aNoteAndAnOrderOfASensitiveVisitAreSensitiveRows() {
+        aFullConsultation();
+        when(classifier.effectiveCategory(org.mockito.ArgumentMatchers.any(Encounter.class)))
+            .thenReturn(com.example.hms.enums.SensitivityCategory.HIV);
+        when(classifier.effectiveCategory(org.mockito.ArgumentMatchers.any(PatientProblem.class)))
+            .thenReturn(com.example.hms.enums.SensitivityCategory.HIV);
+
+        List<PatientTimelineEntryDTO> visit = rows.collect(patientId, here.getId(), Set.of());
+
+        assertThat(visit).filteredOn(PatientTimelineEntryDTO::isSensitive)
+            .extracting(PatientTimelineEntryDTO::getCategory)
+            .contains("NOTE", "DIAGNOSIS");
     }
 
     @Test

@@ -46,6 +46,9 @@ describe('patientChartChangeInterceptor (QA D957)', () => {
     mock.expectOne(`/patients/${id}/allergies`).flush({}, { status: 400, statusText: 'Bad' });
     http.post('/encounters/e1/notes', {}).subscribe();
     mock.expectOne('/encounters/e1/notes').flush({});
+    // The doctor's timeline is a read sent as a POST.
+    http.post(`/patients/${id}/doctor-timeline`, {}).subscribe();
+    mock.expectOne(`/patients/${id}/doctor-timeline`).flush({});
     expect(seen).toEqual([]);
   });
 });

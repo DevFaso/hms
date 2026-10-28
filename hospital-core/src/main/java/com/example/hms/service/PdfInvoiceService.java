@@ -115,9 +115,11 @@ public class PdfInvoiceService {
             for (var adjustment : adjustments) {
                 w.ensureRoom(16);
                 w.down(16);
-                w.text(BODY, 10, MARGIN, t.get("pdf.invoice.adjustmentLine",
-                    t.get("pdf.invoice.adjustment." + adjustment.getType().name()),
-                    safe(adjustment.getReason()), money(adjustment.getAmount())));
+                String kind = t.get("pdf.invoice.adjustment." + adjustment.getType().name());
+                w.text(BODY, 10, MARGIN, adjustment.getReason() == null || adjustment.getReason().isBlank()
+                    ? t.get("pdf.invoice.adjustmentLineNoReason", kind, money(adjustment.getAmount()))
+                    : t.get("pdf.invoice.adjustmentLine", kind, safe(adjustment.getReason()),
+                        money(adjustment.getAmount())));
             }
 
             BigDecimal total = nz(invoice.getTotalAmount());

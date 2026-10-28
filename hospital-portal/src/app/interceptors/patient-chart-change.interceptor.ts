@@ -25,14 +25,18 @@ export class PatientChartChanges {
   }
 }
 
-const PATIENT_WRITE = /^\/?patients\/([0-9a-fA-F-]{36})\/[^?]+/;
+const PATIENT_WRITE = /^\/?patients\/([0-9a-fA-F-]{36})\/([^?]+)/;
+
+/** Reads sent as a POST (the reason travels in the body): no chart changed. */
+const READ_ONLY_POSTS =
+  /(^|\/)(doctor-timeline|search|filter|lookup|query|preview|validate|check)$/;
 
 export const patientChartChangeInterceptor: HttpInterceptorFn = (req, next) => {
   if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') {
     return next(req);
   }
   const match = PATIENT_WRITE.exec(req.url.replace(/^\/api\//, '/'));
-  if (!match) return next(req);
+  if (!match || READ_ONLY_POSTS.test(match[2])) return next(req);
   const changes = inject(PatientChartChanges);
   const patientId = match[1];
   return next(req).pipe(
