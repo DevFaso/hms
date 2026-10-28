@@ -2097,6 +2097,8 @@ class EncounterServiceImplTest {
             org.mockito.ArgumentMatchers.eq(List.of()),
             org.mockito.ArgumentMatchers.argThat((String subject) -> !"Your After-Visit Summary is Ready".equals(subject)),
             anyString());
+        // QA D972: completing through PUT hands the visit to billing like a checkout.
+        verify(eventPublisher).publishEvent(any(com.example.hms.event.EncounterCheckedOutEvent.class));
     }
 
     /**
@@ -2191,6 +2193,7 @@ class EncounterServiceImplTest {
         verify(dischargeSummaryRepository, never()).save(any(DischargeSummary.class));
         verify(notificationService, never()).created(anyString(), anyString(), anyString());
         verify(emailService, never()).sendHtml(any(), any(), any(), anyString(), anyString());
+        verify(eventPublisher, never()).publishEvent(any(com.example.hms.event.EncounterCheckedOutEvent.class));
         assertThat(merged.getCheckoutTimestamp()).isNull();
     }
 
