@@ -695,24 +695,46 @@ export class ProfileComponent implements OnInit {
       this.toast.error(this.translate.instant('PROFILE.EMAIL_CHANGE_PASSWORD_REQUIRED'));
       return;
     }
+    const phoneChanged = (data.phoneNumber ?? '') !== (u.phoneNumber ?? '');
+
+    this.saving.set(true);
+    // QA D939: a patient's phone lives on the patient record the hospital calls.
+    // The record takes it first; a refusal there (another patient's phone)
+    // leaves both numbers as they were instead of splitting them.
+    if (phoneChanged && this.isPatientOnly() && (data.phoneNumber ?? '').trim()) {
+      this.patientPortal
+        .updateMyProfile({ phoneNumberPrimary: data.phoneNumber!.trim() })
+        .subscribe({
+          next: () => this.saveAccount(u, data, emailChanged, newEmail, password),
+          error: (err) => {
+            this.saving.set(false);
+            this.toast.error(
+              err?.error?.message ?? this.translate.instant('PROFILE.RECORD_PHONE_SYNC_FAILED'),
+            );
+          },
+        });
+      return;
+    }
+    this.saveAccount(u, data, emailChanged, newEmail, password);
+  }
+
+  /** The account part of {@link saveProfile}: names and phone, then the e-mail step. */
+  private saveAccount(
+    u: UserProfile,
+    data: ProfileUpdateRequest,
+    emailChanged: boolean,
+    newEmail: string,
+    password: string,
+  ): void {
     const detailsChanged =
       (data.firstName ?? '') !== (u.firstName ?? '') ||
       (data.lastName ?? '') !== (u.lastName ?? '') ||
       (data.phoneNumber ?? '') !== (u.phoneNumber ?? '');
-
-    const phoneChanged = (data.phoneNumber ?? '') !== (u.phoneNumber ?? '');
-
-    this.saving.set(true);
     if (detailsChanged) {
       this.profileService.updateProfile(u.id, { ...data, email: u.email }).subscribe({
         next: (updated) => {
           this.applySavedProfile(updated);
           this.toast.success(this.translate.instant('PROFILE.UPDATED'));
-          // QA D939: a patient's new phone reaches the patient record the
-          // hospital calls, not only the login account.
-          if (phoneChanged && this.isPatientOnly() && (updated.phoneNumber ?? '').trim()) {
-            this.syncPatientRecordPhone(updated.phoneNumber!.trim());
-          }
           if (emailChanged) {
             this.requestEmailChange(newEmail, password);
           } else {
@@ -729,16 +751,6 @@ export class ProfileComponent implements OnInit {
     } else {
       this.saving.set(false);
     }
-  }
-
-  /** QA D939: the record's primary phone follows the account phone; a refusal is said, not swallowed. */
-  private syncPatientRecordPhone(phone: string): void {
-    this.patientPortal.updateMyProfile({ phoneNumberPrimary: phone }).subscribe({
-      error: (err) =>
-        this.toast.error(
-          err?.error?.message ?? this.translate.instant('PROFILE.RECORD_PHONE_SYNC_FAILED'),
-        ),
-    });
   }
 
   /** Step 1 of an email change: the server sends a code to the new address. */

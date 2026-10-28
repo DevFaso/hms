@@ -476,18 +476,21 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         }
         InvoiceItem line = null;
         BigDecimal amount = request.getAmount();
-        if (request.getType() == com.example.hms.enums.InvoiceAdjustmentType.CREDIT_NOTE) {
-            if (request.getInvoiceItemId() == null) {
-                throw new BusinessException("billing.adjustment.lineRequired");
-            }
+        boolean creditNote = request.getType() == com.example.hms.enums.InvoiceAdjustmentType.CREDIT_NOTE;
+        if (creditNote && request.getInvoiceItemId() == null) {
+            throw new BusinessException("billing.adjustment.lineRequired");
+        }
+        BigDecimal total = invoice.getTotalAmount() != null ? invoice.getTotalAmount() : BigDecimal.ZERO;
+        // A discount or a waiver may name a line too: it is then held against that line.
+        if (request.getInvoiceItemId() != null) {
             line = invoiceItemRepository.findById(request.getInvoiceItemId())
                 .filter(item -> item.getBillingInvoice() != null && invoiceId.equals(item.getBillingInvoice().getId()))
                 .orElseThrow(() -> new BusinessException("billing.adjustment.lineNotOnInvoice"));
             BigDecimal lineTotal = line.getTotalPrice() != null ? line.getTotalPrice() : BigDecimal.ZERO;
             BigDecimal credited = adjustmentRepository.sumByInvoiceItemId(line.getId());
             BigDecimal left = lineTotal.subtract(credited != null ? credited : BigDecimal.ZERO);
-            if (amount == null) {
-                amount = left;
+            if (amount == null && creditNote) {
+                amount = left.min(total);
             }
             if (amount.compareTo(left) > 0) {
                 throw new BusinessException("billing.adjustment.moreThanLine", formatFrancs(left));
@@ -497,7 +500,6 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             throw new BusinessException("billing.adjustment.amountPositive");
         }
         requireWholeAmount(amount);
-        BigDecimal total = invoice.getTotalAmount() != null ? invoice.getTotalAmount() : BigDecimal.ZERO;
         // Earlier discounts may already have lowered the total under the line.
         if (amount.compareTo(total) > 0) {
             throw new BusinessException("billing.adjustment.moreThanTotal", formatFrancs(total));
@@ -555,7 +557,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             .longValueExact()).replace('\u00a0', ' ').replace('\u202f', ' ');
     }
 
-    /** QA D974: who lowered the invoice, how and by how much (ids and amounts, no reason text: it may name the patient). */
+    /** QA D974: who lowered which invoice and how (ids and the kind only, as the payment audit: no amount, no reason text). */
     private void auditAdjustmentAfterCommit(UUID actorId, BillingInvoice invoice,
                                             com.example.hms.enums.InvoiceAdjustmentType type, BigDecimal amount) {
         if (auditEventLogService == null) {
@@ -568,8 +570,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
                     .eventType(AuditEventType.INVOICE_UPDATED)
                     .status(com.example.hms.enums.AuditStatus.SUCCESS)
                     .userId(actorId)
-                    .eventDescription("Invoice adjustment " + type + " of " + amount.toPlainString()
-                        + " on invoice " + invoiceIdText)
+                    .eventDescription("Invoice adjustment " + type + " on invoice " + invoiceIdText)
                     .entityType("BillingInvoice")
                     .resourceId(invoiceIdText)
                     .build());

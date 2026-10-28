@@ -2624,8 +2624,11 @@ user, data steps, and the residuals each PR recorded (the bullets dated
   lower an issued invoice with a mandatory reason, an audit row and the line
   on the PDF; a credit note reverses a line. Still owed: a refund when a credit
   note would leave the invoice below what was already paid (today the payment
-  is reversed first), and a report of adjustments per period for the
-  accountant.
+  is reversed first), a report of adjustments per period for the
+  accountant, and a status of its own for an invoice settled by a waiver
+  (today it ends PAID with amountPaid 0: nothing is owed and revenue sums
+  amountPaid, but the paid tab and paid counts include it; a WAIVED status
+  needs a product decision and a migration of the status column users).
 
 - **~~Device-only history notes are filed under a different identity per login path
   (#709 iOS, #710 Android).~~ Closed by #791** (2026-10-03): both apps resolve

@@ -2580,8 +2580,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
     /** QA D941: each checklist line in the caller's language, the English line when a key is missing. */
     private List<String> localizedProfileChecklist(Role role) {
-        List<String> english = buildRoleProfileChecklist(role);
-        String owner = checklistOwner(english);
+        String owner = checklistKey(role);
+        List<String> english = owner.equals("DEFAULT") ? DEFAULT_PROFILE_CHECKLIST : ROLE_PROFILE_CHECKLISTS.get(owner);
         Locale locale = LocaleContextHolder.getLocale();
         List<String> out = new java.util.ArrayList<>(english.size());
         for (int i = 0; i < english.size(); i++) {
@@ -2590,14 +2590,18 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         return out;
     }
 
-    /** The key segment of a checklist: its role, or DEFAULT. */
-    private static String checklistOwner(List<String> checklist) {
-        for (Map.Entry<String, List<String>> entry : ROLE_PROFILE_CHECKLISTS.entrySet()) {
-            if (entry.getValue() == checklist) {
-                return entry.getKey();
-            }
+    /** The checklist's key: the role code it is listed under (with or without ROLE_), else DEFAULT. */
+    private String checklistKey(Role role) {
+        String code = role != null ? getRoleCode(role) : null;
+        if (code == null || code.isBlank()) {
+            return "DEFAULT";
         }
-        return "DEFAULT";
+        String normalized = code.trim().toUpperCase(Locale.ROOT);
+        if (ROLE_PROFILE_CHECKLISTS.containsKey(normalized)) {
+            return normalized;
+        }
+        String prefixed = normalized.startsWith(ROLE_PREFIX) ? normalized : ROLE_PREFIX + normalized;
+        return ROLE_PROFILE_CHECKLISTS.containsKey(prefixed) ? prefixed : "DEFAULT";
     }
 
     private List<String> buildRoleProfileChecklist(Role role) {

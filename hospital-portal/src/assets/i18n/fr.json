@@ -1502,7 +1502,7 @@
     "WRITE_DELETE": "Suppression : {{entity}}",
     "WRITE_ENTITY_UNKNOWN": "enregistrement",
     "DESC": {
-      "INVOICE_ADJUSTMENT": "{{kind}} de {{amount}} sur la facture {{invoice}}",
+      "INVOICE_ADJUSTMENT": "{{kind}} sur la facture {{invoice}}",
       "PATIENT_RECORD_VIEWED": "Dossier patient consulté",
       "USER_PROFILE_UPDATED": "Profil utilisateur mis à jour",
       "USER_CREATED": "Nouveau compte utilisateur créé",

@@ -659,6 +659,16 @@ describe('BillingComponent', () => {
       expect(component.form.encounterReference).toBe('ENC-20261027-25DB1D');
     });
 
+    it('does not carry the proposed visit to another patient', () => {
+      fixture.detectChanges();
+      component.openCreate();
+      billingSpy.searchInvoices.and.returnValue(of(mockPage([copay])));
+      component.onPatientPicked({ id: 'pat-1' } as never);
+      billingSpy.searchInvoices.and.returnValue(of(mockPage([])));
+      component.onPatientPicked({ id: 'pat-2' } as never);
+      expect(component.form.encounterReference).toBeUndefined();
+    });
+
     it('lists nothing when the copays were already taken', () => {
       fixture.detectChanges();
       component.openCreate();

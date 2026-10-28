@@ -83,9 +83,8 @@ public class VisitTimelineRows {
         // order take their sensitivity from the visit that wrote them.
         Map<UUID, Encounter> visitsHere = new HashMap<>();
         if (wanted(categoryFilters, CATEGORY_NOTE) || wanted(categoryFilters, CATEGORY_IMAGING)) {
-            encounterRepository.findByPatient_Id(patientId).stream()
+            encounterRepository.findByPatient_IdAndHospital_Id(patientId, actingHospitalId).stream()
                 .filter(encounter -> !encounter.isPrescriptionAnchor())
-                .filter(encounter -> isLocal(encounter.getHospital(), actingHospitalId))
                 .filter(encounter -> encounter.getId() != null)
                 .forEach(encounter -> visitsHere.put(encounter.getId(), encounter));
         }

@@ -119,7 +119,7 @@ class VisitTimelineRowsTest {
 
         Encounter visit = Encounter.builder().hospital(here).encounterType(EncounterType.OUTPATIENT).build();
         visit.setId(UUID.randomUUID());
-        when(encounters.findByPatient_Id(patientId)).thenReturn(List.of(visit));
+        when(encounters.findByPatient_IdAndHospital_Id(patientId, here.getId())).thenReturn(List.of(visit));
         EncounterNote signed = new EncounterNote();
         signed.setId(UUID.randomUUID());
         signed.setHospital(here);

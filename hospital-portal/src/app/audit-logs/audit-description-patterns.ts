@@ -1199,8 +1199,8 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
   {
     // QA D974: a discount, waiver or credit note on an invoice.
     key: 'AUDIT.DESC.INVOICE_ADJUSTMENT',
-    re: /^Invoice adjustment ([A-Z_]+) of (\S+) on invoice (\S+)$/,
-    params: ['kind', 'amount', 'invoice'],
+    re: /^Invoice adjustment ([A-Z_]+) on invoice (\S+)$/,
+    params: ['kind', 'invoice'],
     localise: { kind: 'phrase:INVOICE_ADJUSTMENT' },
   },
   {

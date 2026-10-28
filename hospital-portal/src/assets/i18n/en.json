@@ -1502,7 +1502,7 @@
     "WRITE_DELETE": "Deleted: {{entity}}",
     "WRITE_ENTITY_UNKNOWN": "record",
     "DESC": {
-      "INVOICE_ADJUSTMENT": "{{kind}} of {{amount}} on invoice {{invoice}}",
+      "INVOICE_ADJUSTMENT": "{{kind}} on invoice {{invoice}}",
       "PATIENT_RECORD_VIEWED": "Patient record viewed",
       "USER_PROFILE_UPDATED": "User profile updated",
       "USER_CREATED": "New user account created",

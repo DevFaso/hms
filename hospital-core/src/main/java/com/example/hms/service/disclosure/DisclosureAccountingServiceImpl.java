@@ -76,7 +76,10 @@ public class DisclosureAccountingServiceImpl implements DisclosureAccountingServ
     public DisclosureAccountingDTO getAccountingAsPatientSees(UUID patientId, LocalDateTime from,
                                                               LocalDateTime to, Pageable pageable) {
         DisclosureAccountingDTO accounting = getAccounting(patientId, from, to, pageable);
-        accounting.setEntries(foldRepeats(accounting.getEntries()));
+        Page<AccessLogEntryDTO> folded = getEntriesAsPatientSees(patientId, from, to, pageable);
+        accounting.setEntries(folded.getContent());
+        accounting.setTotalPages(folded.getTotalPages());
+        accounting.setPage(folded.getNumber());
         return accounting;
     }
 
@@ -84,12 +87,23 @@ public class DisclosureAccountingServiceImpl implements DisclosureAccountingServ
     @Transactional(readOnly = true)
     public Page<AccessLogEntryDTO> getEntriesAsPatientSees(UUID patientId, LocalDateTime from,
                                                            LocalDateTime to, Pageable pageable) {
-        Page<AccessLogEntryDTO> page = getEntries(patientId, from, to, pageable);
-        // The page keeps its own totals: they count the rows the audit holds,
-        // the same rows the per-category counts add up.
-        return new org.springframework.data.domain.PageImpl<>(foldRepeats(page.getContent()),
-            page.getPageable(), page.getTotalElements());
+        // Folded over the most recent rows first, then paged: a repeat across a
+        // page boundary still shows once, and the pager counts the lines shown.
+        org.springframework.data.domain.Sort sort = pageable.getSort().isSorted()
+            ? pageable.getSort()
+            : org.springframework.data.domain.Sort.unsorted();
+        List<AccessLogEntryDTO> folded = foldRepeats(getEntries(patientId, from, to,
+            org.springframework.data.domain.PageRequest.of(0, PATIENT_FOLD_WINDOW, sort)).getContent());
+        if (pageable.isUnpaged()) {
+            return new org.springframework.data.domain.PageImpl<>(folded);
+        }
+        int start = (int) Math.min((long) pageable.getPageNumber() * pageable.getPageSize(), folded.size());
+        int end = Math.min(start + pageable.getPageSize(), folded.size());
+        return new org.springframework.data.domain.PageImpl<>(folded.subList(start, end), pageable, folded.size());
     }
+
+    /** QA D979: the most recent audit rows folded for the patient's list (older ones are in the staff accounting). */
+    private static final int PATIENT_FOLD_WINDOW = 2000;
 
     /** QA D979: the window in which the same person reading the same way again shows once. */
     private static final java.time.Duration REPEAT_WINDOW = java.time.Duration.ofMinutes(30);

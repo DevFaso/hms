@@ -264,4 +264,25 @@ class DisclosureAccountingServiceImplTest {
         // Every emergency access stays a line of its own.
         assertThat(shown).filteredOn(e -> e.getCategory() == DisclosureCategory.EMERGENCY_ACCESS).hasSize(2);
     }
+
+    @Test
+    @DisplayName("QA D979: a repeat across a page boundary shows once, and the pager counts the lines shown")
+    void aRepeatAcrossAPageBoundaryShowsOnce() {
+        LocalDateTime now = LocalDateTime.now();
+        List<AuditEventLog> rows = new java.util.ArrayList<>();
+        for (int i = 0; i < 25; i++) {
+            AuditEventLog share = row(AuditEventType.RECORD_SHARE, "PATIENT", "Joséphine Hien");
+            share.setEventTimestamp(now.minusSeconds(10L * i));
+            rows.add(share);
+        }
+        when(auditRepository.findDisclosuresForPatient(any(), any(), any(), any(), any()))
+            .thenReturn(new PageImpl<>(rows));
+
+        org.springframework.data.domain.Page<AccessLogEntryDTO> page =
+            service.getEntriesAsPatientSees(patientId, null, null, PageRequest.of(0, 20));
+
+        assertThat(page.getContent()).hasSize(1);
+        assertThat(page.getTotalElements()).isEqualTo(1);
+        assertThat(page.getTotalPages()).isEqualTo(1);
+    }
 }

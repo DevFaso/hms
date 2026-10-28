@@ -129,6 +129,8 @@ export class BillingComponent implements OnInit {
    * the visit each one was paid for and links it in one click.
    */
   openCopays = signal<BillingInvoiceResponse[]>([]);
+  /** The visit code the form filled in itself (cleared when the patient changes). */
+  private proposedVisit: string | null = null;
 
   /* ── Invoice lines (detail panel) ── */
   items = signal<InvoiceItemResponse[]>([]);
@@ -350,6 +352,10 @@ export class BillingComponent implements OnInit {
   /** QA D936: the copays a new invoice for this patient should take. */
   private loadOpenCopays(patientId: string | null): void {
     this.openCopays.set([]);
+    if (this.proposedVisit && this.form.encounterReference === this.proposedVisit) {
+      this.form.encounterReference = undefined;
+    }
+    this.proposedVisit = null;
     if (!patientId || this.editing()) return;
     this.billingService.searchInvoices({ patientId, statuses: ['PAID'] }, 0, 50).subscribe({
       next: (res) => {
@@ -361,6 +367,7 @@ export class BillingComponent implements OnInit {
         // QA D936: one open copay is proposed as the visit; the clerk sees it and may clear it.
         if (open.length === 1 && !this.form.encounterReference) {
           this.form.encounterReference = open[0].encounterCode ?? undefined;
+          this.proposedVisit = this.form.encounterReference ?? null;
         }
       },
       error: () => this.openCopays.set([]),

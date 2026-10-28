@@ -2157,9 +2157,35 @@ class BillingInvoiceServiceImplTest {
 
         com.example.hms.exception.BusinessException refused = assertThrows(com.example.hms.exception.BusinessException.class,
             () -> billingInvoiceService.addAdjustment(invoice.getId(),
-                adjustment(com.example.hms.enums.InvoiceAdjustmentType.CREDIT_NOTE, null, "Erreur", line.getId()),
+                adjustment(com.example.hms.enums.InvoiceAdjustmentType.CREDIT_NOTE, "5000", "Erreur", line.getId()),
                 UUID.randomUUID(), Locale.FRENCH));
         assertEquals("billing.adjustment.moreThanTotal", refused.getMessageKey());
+
+        // Left empty, a credit note credits what is left on the line, at most what the invoice still totals.
+        billingInvoiceService.addAdjustment(invoice.getId(),
+            adjustment(com.example.hms.enums.InvoiceAdjustmentType.CREDIT_NOTE, null, "Erreur", line.getId()),
+            UUID.randomUUID(), Locale.FRENCH);
+        assertEquals(0, BigDecimal.ZERO.compareTo(invoice.getTotalAmount()));
+    }
+
+    @Test
+    void addAdjustment_aDiscountOnALineIsHeldAgainstThatLine_D974() {
+        com.example.hms.repository.InvoiceAdjustmentRepository repo = adjustments();
+        BillingInvoice invoice = issued("6000", "0");
+        com.example.hms.model.InvoiceItem line = new com.example.hms.model.InvoiceItem();
+        line.setId(UUID.randomUUID());
+        line.setBillingInvoice(invoice);
+        line.setTotalPrice(new BigDecimal("3000"));
+        when(invoiceItemRepository.findById(line.getId())).thenReturn(Optional.of(line));
+
+        billingInvoiceService.addAdjustment(invoice.getId(),
+            adjustment(com.example.hms.enums.InvoiceAdjustmentType.DISCOUNT, "1000", "Remise", line.getId()),
+            UUID.randomUUID(), Locale.FRENCH);
+
+        ArgumentCaptor<com.example.hms.model.InvoiceAdjustment> row =
+            ArgumentCaptor.forClass(com.example.hms.model.InvoiceAdjustment.class);
+        verify(repo).save(row.capture());
+        assertEquals(line, row.getValue().getInvoiceItem());
     }
 
     @Test
