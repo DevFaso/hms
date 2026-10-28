@@ -96,7 +96,12 @@ export class PatientDemographicsEditComponent implements OnInit {
    * (review round 8).
    */
   private streetOf(address: string): string {
-    const known = [this.patient.city, this.patient.state, this.patient.zipCode, this.patient.country]
+    const known = [
+      this.patient.city,
+      this.patient.state,
+      this.patient.zipCode,
+      this.patient.country,
+    ]
       .map((v) => (v ?? '').trim().toLowerCase())
       .filter((v) => v !== '');
     const parts = address.split(',').map((s) => s.trim());
