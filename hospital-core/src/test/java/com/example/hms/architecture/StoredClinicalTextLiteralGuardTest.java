@@ -49,7 +49,7 @@ class StoredClinicalTextLiteralGuardTest {
     private static final Pattern LITERAL = Pattern.compile("\"((?:[^\"\\\\]|\\\\.)*)\"");
     private static final Pattern WORD = Pattern.compile("[A-Za-z]{3,}");
     private static final Pattern MESSAGE_KEY = Pattern.compile("[a-z][a-zA-Z0-9]*(?:\\.[a-zA-Z0-9_]+)+");
-    private static final Pattern HEADER_SHAPED = Pattern.compile("\\[[A-Z][a-z]+[^\\]]*]|-{3}\\s*[A-Za-z]");
+    private static final Pattern HEADER_SHAPED = Pattern.compile("\\[[A-Z][a-z][^\\]]*]|-{3}\\s*[A-Za-z]");
 
     @Test
     @DisplayName("clinical services write no English prose into stored records")

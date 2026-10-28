@@ -110,7 +110,7 @@ public class MedicalCertificateServiceImpl implements MedicalCertificateService 
             ? Locale.forLanguageTag(request.getLanguage())
             : patientLocaleResolver.resolve(patient, NotificationLocales.PATIENT_FALLBACK);
 
-        LocalDateTime signedAt = LocalDateTime.now();
+        LocalDateTime signedAt = LocalDateTime.now(java.time.ZoneId.systemDefault());
         List<String> body = bodyLines(certificate, patient, doctor, locale);
         String fingerprint = fingerprint(certificate, patient, doctor, hospital, signedAt);
         byte[] pdf = render(locale, hospital, certificate, body, doctor, signedAt, fingerprint);
@@ -176,7 +176,7 @@ public class MedicalCertificateServiceImpl implements MedicalCertificateService 
 
     static Certificate describe(Encounter encounter, MedicalCertificateRequestDTO request) {
         LocalDate visitDay = encounter.getEncounterDate() != null
-            ? encounter.getEncounterDate().toLocalDate() : LocalDate.now();
+            ? encounter.getEncounterDate().toLocalDate() : LocalDate.now(java.time.ZoneId.systemDefault());
         String remarks = request.getRemarks() == null || request.getRemarks().isBlank()
             ? null : request.getRemarks().trim();
         return switch (request.getType()) {

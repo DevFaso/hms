@@ -391,7 +391,7 @@ public class EncounterServiceImpl implements EncounterService {
         }
         // QA D990: an arrived patient waits from now, not from the visit day's midnight.
         if (encounter.getStatus() == EncounterStatus.ARRIVED && encounter.getArrivalTimestamp() == null) {
-            encounter.setArrivalTimestamp(LocalDateTime.now());
+            encounter.setArrivalTimestamp(LocalDateTime.now(java.time.ZoneId.systemDefault()));
         }
         ensureEncounterCode(encounter);
 
@@ -441,7 +441,7 @@ public class EncounterServiceImpl implements EncounterService {
         // QA D990: a visit marked ARRIVED here (a scheduled patient shows up) waits from now.
         if (merged.getStatus() == EncounterStatus.ARRIVED && previousStatus != EncounterStatus.ARRIVED
                 && merged.getArrivalTimestamp() == null) {
-            merged.setArrivalTimestamp(LocalDateTime.now());
+            merged.setArrivalTimestamp(LocalDateTime.now(java.time.ZoneId.systemDefault()));
         }
 
         // QA D788: a status written here obeys the closing rules of the check-out.
@@ -1115,7 +1115,7 @@ public class EncounterServiceImpl implements EncounterService {
      * entered for another day is not an arrival now.
      */
     static EncounterStatus defaultInitialStatus(com.example.hms.enums.EncounterType type, LocalDateTime encounterDate) {
-        boolean today = encounterDate == null || encounterDate.toLocalDate().equals(java.time.LocalDate.now());
+        boolean today = encounterDate == null || encounterDate.toLocalDate().equals(java.time.LocalDate.now(java.time.ZoneId.systemDefault()));
         if (today && type == com.example.hms.enums.EncounterType.EMERGENCY) {
             return EncounterStatus.ARRIVED;
         }
@@ -2457,7 +2457,7 @@ public class EncounterServiceImpl implements EncounterService {
     /** QA D972: a visit completed through PUT /encounters/{id} is handed to billing like a checkout. */
     private void publishCheckedOutOnCompletion(Encounter encounter) {
         publishCheckedOut(encounter, encounter.getCheckoutTimestamp() != null
-            ? encounter.getCheckoutTimestamp() : LocalDateTime.now());
+            ? encounter.getCheckoutTimestamp() : LocalDateTime.now(java.time.ZoneId.systemDefault()));
     }
 
     /**
@@ -2886,6 +2886,18 @@ public class EncounterServiceImpl implements EncounterService {
 
         // Read by the patient: their language, never English literals.
         Locale patientLocale = patientLocaleResolver.resolve(patient, NotificationLocales.PATIENT_FALLBACK);
+        String subject = messageSource.getMessage("encounter.visitSummary.email.subject", null, patientLocale);
+        String body = visitSummaryEmailBody(encounter, patient, patientLocale);
+
+        try {
+            emailService.sendHtml(List.of(patientEmail), List.of(), List.of(), subject, body);
+        } catch (Exception ignored) {
+            // AVS persistence must not be rolled back due to email transport failures.
+        }
+    }
+
+    /** The after-visit summary e-mail body, in the patient's language, every interpolated name escaped. */
+    private String visitSummaryEmailBody(Encounter encounter, Patient patient, Locale patientLocale) {
         String patientName = joinName(patient.getFirstName(), patient.getLastName());
         String providerName = encounter.getStaff() != null && encounter.getStaff().getName() != null
             ? encounter.getStaff().getName()
@@ -2896,8 +2908,7 @@ public class EncounterServiceImpl implements EncounterService {
         String greetingName = patientName.isBlank()
             ? messageSource.getMessage("encounter.visitSummary.email.patientFallback", null, patientLocale)
             : patientName;
-        String subject = messageSource.getMessage("encounter.visitSummary.email.subject", null, patientLocale);
-        String body = "<h2>" + messageSource.getMessage("encounter.visitSummary.email.title", null, patientLocale)
+        return "<h2>" + messageSource.getMessage("encounter.visitSummary.email.title", null, patientLocale)
             + "</h2><p>" + org.springframework.web.util.HtmlUtils.htmlEscape(messageSource.getMessage("encounter.visitSummary.email.greeting",
                 new Object[]{greetingName}, patientLocale))
             + "</p><p>" + messageSource.getMessage("encounter.visitSummary.email.body",
@@ -2905,12 +2916,6 @@ public class EncounterServiceImpl implements EncounterService {
             + "</p><p><strong>" + messageSource.getMessage("encounter.visitSummary.email.provider", null, patientLocale)
             + "</strong> " + org.springframework.web.util.HtmlUtils.htmlEscape(providerName) + "</p><p>"
             + messageSource.getMessage("encounter.visitSummary.email.closing", null, patientLocale) + "</p>";
-
-        try {
-            emailService.sendHtml(List.of(patientEmail), List.of(), List.of(), subject, body);
-        } catch (Exception ignored) {
-            // AVS persistence must not be rolled back due to email transport failures.
-        }
     }
 
     private static boolean isBlankText(String value) {

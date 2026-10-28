@@ -498,7 +498,7 @@ public class FileUploadService {
             Files.copy(digestStream, filePath, StandardCopyOption.REPLACE_EXISTING);
         }
 
-        String relativePath = patientDocumentUrlPrefix + "/" + PATIENT_DOCUMENTS_PATH + "/" + filename;
+        String relativePath = patientDocumentRelativePath(filename);
         long sizeBytes = Files.size(filePath);
         String checksum = HexFormat.of().formatHex(digest.digest());
 
@@ -532,7 +532,7 @@ public class FileUploadService {
         Files.write(filePath, content);
         MessageDigest digest = createSha256Digest();
         String checksum = HexFormat.of().formatHex(digest.digest(content));
-        String relativePath = patientDocumentUrlPrefix + "/" + PATIENT_DOCUMENTS_PATH + "/" + filename;
+        String relativePath = patientDocumentRelativePath(filename);
         return new StoredFileDescriptor(relativePath, buildPublicUrl(relativePath), baseName + ".pdf",
             "application/pdf", content.length, checksum);
     }
@@ -643,6 +643,11 @@ public class FileUploadService {
             sizeBytes,
             checksum
         );
+    }
+
+    /** The stored key of a patient document: {@code <prefix>/patient-documents/<filename>}. */
+    private String patientDocumentRelativePath(String filename) {
+        return String.join("/", patientDocumentUrlPrefix, PATIENT_DOCUMENTS_PATH, filename);
     }
 
     private static String relativeUploadPath(String subdir, String filename) {

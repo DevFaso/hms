@@ -141,7 +141,7 @@ public class PatientFlowServiceImpl implements PatientFlowService {
         // midnight encounterDate showed "1128m" on the board.
         LocalDateTime from = enc.getArrivalTimestamp() != null ? enc.getArrivalTimestamp() : enc.getEncounterDate();
         if (from == null) return 0;
-        return Math.max(ElapsedTime.minutesBetween(from, LocalDateTime.now()), 0);
+        return Math.max(ElapsedTime.minutesBetween(from, LocalDateTime.now(java.time.ZoneId.systemDefault())), 0);
     }
 
     private long computeAdmissionElapsedMinutes(Admission adm) {

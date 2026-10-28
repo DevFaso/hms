@@ -35,7 +35,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -140,28 +139,32 @@ class MedicalCertificateServiceImplTest {
     @Test
     void aVisitClosedUnseenHasNothingToCertify() {
         encounter.setStatus(EncounterStatus.LEFT_WITHOUT_BEING_SEEN);
-        assertThatThrownBy(() -> service.issue(encounterId, MedicalCertificateRequestDTO.builder()
-            .type(MedicalCertificateType.ATTENDANCE).build()))
+        MedicalCertificateRequestDTO request = MedicalCertificateRequestDTO.builder()
+            .type(MedicalCertificateType.ATTENDANCE).build();
+        assertThatThrownBy(() -> service.issue(encounterId, request))
             .isInstanceOf(BusinessException.class);
         verify(documentRepository, never()).save(any());
     }
 
     @Test
     void aSickLeaveNeedsItsDaysAndCannotStartBeforeTheVisit() {
-        assertThatThrownBy(() -> service.issue(encounterId, MedicalCertificateRequestDTO.builder()
-            .type(MedicalCertificateType.SICK_LEAVE).build()))
+        MedicalCertificateRequestDTO request = MedicalCertificateRequestDTO.builder()
+            .type(MedicalCertificateType.SICK_LEAVE).build();
+        assertThatThrownBy(() -> service.issue(encounterId, request))
             .isInstanceOf(BusinessException.class);
-        assertThatThrownBy(() -> service.issue(encounterId, MedicalCertificateRequestDTO.builder()
-            .type(MedicalCertificateType.SICK_LEAVE).days(2).startDate(LocalDate.now().minusDays(3)).build()))
+        MedicalCertificateRequestDTO request2 = MedicalCertificateRequestDTO.builder()
+            .type(MedicalCertificateType.SICK_LEAVE).days(2).startDate(LocalDate.now().minusDays(3)).build();
+        assertThatThrownBy(() -> service.issue(encounterId, request2))
             .isInstanceOf(BusinessException.class);
     }
 
     @Test
     void aDoctorWithNoStaffRecordAtTheVisitsHospitalCannotSign() {
-        when(staffRepository.findByUserIdAndHospitalId(eq(doctor.getUser().getId()), eq(hospital.getId())))
+        when(staffRepository.findByUserIdAndHospitalId(doctor.getUser().getId(), hospital.getId()))
             .thenReturn(Optional.empty());
-        assertThatThrownBy(() -> service.issue(encounterId, MedicalCertificateRequestDTO.builder()
-            .type(MedicalCertificateType.ATTENDANCE).build()))
+        MedicalCertificateRequestDTO request = MedicalCertificateRequestDTO.builder()
+            .type(MedicalCertificateType.ATTENDANCE).build();
+        assertThatThrownBy(() -> service.issue(encounterId, request))
             .isInstanceOf(ClientSafeAccessDeniedException.class);
     }
 
@@ -172,8 +175,9 @@ class MedicalCertificateServiceImplTest {
         other.setHospital(hospital);
         encounter.setStaff(other);
         when(noteRepository.existsByEncounter_IdAndAuthor_Id(encounterId, doctor.getUser().getId())).thenReturn(false);
-        assertThatThrownBy(() -> service.issue(encounterId, MedicalCertificateRequestDTO.builder()
-            .type(MedicalCertificateType.SICK_LEAVE).days(30).build()))
+        MedicalCertificateRequestDTO request = MedicalCertificateRequestDTO.builder()
+            .type(MedicalCertificateType.SICK_LEAVE).days(30).build();
+        assertThatThrownBy(() -> service.issue(encounterId, request))
             .isInstanceOf(ClientSafeAccessDeniedException.class);
         verify(documentRepository, never()).save(any());
     }
@@ -194,8 +198,9 @@ class MedicalCertificateServiceImplTest {
             com.example.hms.security.context.HospitalContext.builder()
                 .activeHospitalId(UUID.randomUUID()).build());
         try {
-            assertThatThrownBy(() -> service.issue(encounterId, MedicalCertificateRequestDTO.builder()
-                .type(MedicalCertificateType.ATTENDANCE).build()))
+            MedicalCertificateRequestDTO request = MedicalCertificateRequestDTO.builder()
+                .type(MedicalCertificateType.ATTENDANCE).build();
+            assertThatThrownBy(() -> service.issue(encounterId, request))
                 .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
         } finally {
             com.example.hms.security.context.HospitalContextHolder.clear();

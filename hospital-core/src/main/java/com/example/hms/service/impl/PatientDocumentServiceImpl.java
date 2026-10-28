@@ -181,23 +181,17 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
                                                            PatientDocumentType documentType, Pageable pageable) {
         StaffReach reach = requireRegisteredAt(hospitalId, patientId);
         auditBreakGlassRead(hospitalId, patientId, reach, null);
-        Page<PatientUploadedDocument> page;
-        if (hospitalId == null) {
-            page = documentType == null
-                    ? documentRepository.findByPatient_IdAndDeletedAtIsNull(patientId, pageable)
-                    : documentRepository.findByPatient_IdAndDocumentTypeAndDeletedAtIsNull(patientId, documentType, pageable);
-        } else {
-            // QA D961: another hospital's certificate is not listed here.
-            page = documentType == null
-                    ? documentRepository.findForStaff(patientId, hospitalId, pageable)
-                    : documentRepository.findForStaffByType(patientId, hospitalId, documentType, pageable);
-        }
+        // QA D961: another hospital's certificate is not listed here
+        // (requireRegisteredAt refuses a null hospital, so the scope is always set).
+        Page<PatientUploadedDocument> page = documentType == null
+                ? documentRepository.findForStaff(patientId, hospitalId, pageable)
+                : documentRepository.findForStaffByType(patientId, hospitalId, documentType, pageable);
         return page.map(documentMapper::toDto);
     }
 
     /** QA D961: a document another hospital issued reads as missing here. */
     private static void requireIssuedHereOrUploaded(PatientUploadedDocument doc, UUID hospitalId, UUID documentId) {
-        if (hospitalId != null && doc.getIssuingHospital() != null
+        if (doc.getIssuingHospital() != null
                 && !hospitalId.equals(doc.getIssuingHospital().getId())) {
             throw new ResourceNotFoundException("patientDocument.notFound", documentId);
         }

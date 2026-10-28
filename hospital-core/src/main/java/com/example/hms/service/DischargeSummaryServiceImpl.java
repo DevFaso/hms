@@ -427,9 +427,10 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
      */
     private void requireAuthor(DischargeSummary summary) {
         // Review of #971: the draft is its discharging provider's (checkout
-        // names the doctor who closed the visit). Only a summary with no
-        // discharging provider at all falls back to the visit's treating
-        // clinician, so a consultant's addendum never opens a colleague's draft.
+        // names the doctor who closed the visit). Only a summary held by no one,
+        // or by a non-physician (the nurse or midwife who opened the visit),
+        // falls back to a physician who wrote a note on the visit; a draft
+        // held by another doctor never opens to a colleague.
         UUID hospitalId = summary.getHospital() != null ? summary.getHospital().getId() : null;
         if (com.example.hms.security.CallerIdentity.isCaller(summary.getDischargingProvider())
                 || com.example.hms.security.CallerIdentity.isGlobalSuperAdmin()

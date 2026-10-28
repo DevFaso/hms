@@ -181,7 +181,7 @@ class ImmunizationServiceImplTest {
         service.updateImmunization(immunizationId, dto);
 
         assertThat(existing.getAdministeredBy()).isNull();
-        verify(staffRepository, org.mockito.Mockito.never()).findById(any());
+        verify(staffRepository, never()).findById(any());
     }
 
     @Test

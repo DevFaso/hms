@@ -386,7 +386,7 @@ class GeneralReferralServiceImplTest {
 
         assertThatThrownBy(() -> service.acknowledgeReferral(referralId, "self", referringProviderId))
             .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
-        org.mockito.Mockito.verify(referralRepository, org.mockito.Mockito.never()).save(any());
+        verify(referralRepository, never()).save(any());
     }
 
     @Test
@@ -400,7 +400,7 @@ class GeneralReferralServiceImplTest {
 
         assertThatThrownBy(() -> service.createReferral(dto))
             .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
-        org.mockito.Mockito.verify(referralRepository, org.mockito.Mockito.never()).save(any());
+        verify(referralRepository, never()).save(any());
     }
 
     @Test
@@ -441,7 +441,7 @@ class GeneralReferralServiceImplTest {
             };
         };
         assertThatThrownBy(call).isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
-        org.mockito.Mockito.verify(referralRepository, org.mockito.Mockito.never()).save(any());
+        verify(referralRepository, never()).save(any());
     }
 
     // ── completeReferral ────────────────────────────────────────────────────

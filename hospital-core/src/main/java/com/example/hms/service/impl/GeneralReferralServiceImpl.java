@@ -129,10 +129,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
             requirePhysicianAt(receivingProvider, addressedTo);
             // QA D955: the referral goes to someone else, from its creation on
             // (checked after the hospital rules, which keep their own refusals).
-            if (sameUser(receivingProvider, referringProvider)) {
-                throw new com.example.hms.exception.ClientSafeAccessDeniedException(
-                    com.example.hms.utility.MessageUtil.resolveOrRaw("generalReferral.receiver.notReferrer"));
-            }
+            requireReceiverIsNotReferrer(receivingProvider, referringProvider);
         }
 
         // A source department is one of the sending hospital's.
@@ -204,10 +201,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         }
         requirePhysicianAt(receivingProvider, receivingHospitalId);
         // QA D955: the referral goes to someone else; the referrer cannot be named its receiver.
-        if (sameUser(receivingProvider, referral.getReferringProvider())) {
-            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
-                com.example.hms.utility.MessageUtil.resolveOrRaw("generalReferral.receiver.notReferrer"));
-        }
+        requireReceiverIsNotReferrer(receivingProvider, referral.getReferringProvider());
         ReferralStatus before = referral.getStatus();
         referral.acknowledge(notes, receivingProvider);
         referral = referralRepository.save(referral);
@@ -520,6 +514,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     }
 
     private static final String REFERRAL_NOT_FOUND = "generalReferral.notFound";
+    private static final String RECEIVER_NOT_REFERRER = "generalReferral.receiver.notReferrer";
 
     /**
      * QA D90: receiver-side transitions (acknowledge, schedule, start, complete, reject)
@@ -545,14 +540,19 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         Staff referrer = referral.getReferringProvider();
         if (callerId != null && referrer != null && referrer.getUser() != null
                 && callerId.equals(referrer.getUser().getId())) {
+            // The key stays literal here: ReferralStepActorGuardTest reads it in this method.
             throw new com.example.hms.exception.ClientSafeAccessDeniedException(
                 com.example.hms.utility.MessageUtil.resolveOrRaw("generalReferral.receiver.notReferrer"));
         }
         return targetId;
     }
 
-    private static boolean sameUser(Staff a, Staff b) {
-        return com.example.hms.security.CallerIdentity.sameUser(a, b);
+    /** QA D955: a referral goes to someone else; its referrer is never its receiver. */
+    private static void requireReceiverIsNotReferrer(Staff receiver, Staff referrer) {
+        if (com.example.hms.security.CallerIdentity.sameUser(receiver, referrer)) {
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw(RECEIVER_NOT_REFERRER));
+        }
     }
 
     private GeneralReferral findReferral(UUID referralId) {

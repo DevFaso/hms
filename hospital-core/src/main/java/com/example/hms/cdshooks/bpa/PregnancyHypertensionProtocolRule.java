@@ -65,7 +65,7 @@ public class PregnancyHypertensionProtocolRule implements BpaRule {
     @Override
     public List<CdsCard> evaluate(BpaRuleContext context) {
         if (context == null || !context.hasPatient()) return List.of();
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(java.time.ZoneId.systemDefault());
         if (!isPregnant(context.estimatedDueDate(), today)) return List.of();
 
         PatientVitalSign latest = latestBloodPressure(context.recentVitals());

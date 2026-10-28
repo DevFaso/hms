@@ -142,8 +142,10 @@ class EncounterServiceImplTest {
     }
 
     @org.junit.jupiter.api.AfterEach
-    void clearSignIn() {
+    void clearSignInAndLocale() {
         org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        // QA D952 tests switch the request locale to French.
+        org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
     }
 
     @BeforeEach
@@ -730,11 +732,6 @@ class EncounterServiceImplTest {
         org.springframework.context.i18n.LocaleContextHolder.setLocale(Locale.FRENCH);
         lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class)))
             .thenAnswer(inv -> real.getMessage(inv.getArgument(0), inv.getArgument(1), inv.getArgument(2)));
-    }
-
-    @org.junit.jupiter.api.AfterEach
-    void resetLocale() {
-        org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
     }
 
     @Test
