@@ -42,9 +42,8 @@ export function gestationalAge(
   dueDate: string | null | undefined,
   today: Date = new Date(),
 ): { weeks: number; days: number } | null {
-  const due = parseDay(dueDate);
-  if (!due) return null;
-  const start = new Date(due);
+  const start = parseDay(dueDate);
+  if (!start) return null;
   start.setDate(start.getDate() - PREGNANCY_DAYS);
   const midnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const elapsed = Math.round((midnight.getTime() - start.getTime()) / 86_400_000);

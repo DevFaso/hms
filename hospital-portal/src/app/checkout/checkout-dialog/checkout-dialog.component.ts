@@ -22,6 +22,7 @@ import {
   AfterVisitSummary,
 } from '../../services/encounter.service';
 import { ToastService } from '../../core/toast.service';
+import { serverLocalDate } from '../../shared/date-utils';
 import { AuthService } from '../../auth/auth.service';
 import { PatientService, PatientProblem } from '../../services/patient.service';
 import { PrescriptionService, PrescriptionResponse } from '../../services/prescription.service';
@@ -141,7 +142,8 @@ export class CheckoutDialogComponent {
       if (assessment) this.fillIfEmpty(this.dischargeDiagnosesText, assessment);
       return;
     }
-    const visitDay = (enc.arrivalTimestamp || enc.encounterDate || '').slice(0, 10);
+    // The reader's calendar day of the visit (server times are UTC).
+    const visitDay = serverLocalDate(enc.arrivalTimestamp || enc.encounterDate);
     forkJoin({
       problems: this.patientService
         .listDiagnoses(enc.patientId, { hospitalId: enc.hospitalId || undefined })
@@ -161,7 +163,7 @@ export class CheckoutDialogComponent {
         if (this._encounter?.id !== enc.id) return;
         const diagnoses = problems
           .filter((p) => p.status !== 'RESOLVED' && p.status !== 'INACTIVE')
-          .filter((p) => !!visitDay && !!p.onsetDate && p.onsetDate.slice(0, 10) >= visitDay)
+          .filter((p) => !!visitDay && !!p.onsetDate && serverLocalDate(p.onsetDate) >= visitDay)
           .map((p) =>
             p.problemCode ? `${p.problemDisplay} (${p.problemCode})` : p.problemDisplay,
           );
@@ -185,7 +187,7 @@ export class CheckoutDialogComponent {
           this.referralSummary,
           referrals
             .filter((r) => !CheckoutDialogComponent.CLOSED_REFERRAL.has(r.status))
-            .filter((r) => !!visitDay && (r.createdAt ?? '').slice(0, 10) >= visitDay)
+            .filter((r) => !!visitDay && serverLocalDate(r.createdAt) >= visitDay)
             .map((r) =>
               [r.targetDepartmentName || r.targetSpecialty, r.referralReason]
                 .filter((x) => !!x && String(x).trim())

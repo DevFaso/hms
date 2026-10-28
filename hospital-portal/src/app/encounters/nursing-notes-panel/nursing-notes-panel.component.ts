@@ -12,6 +12,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslateModule } from '@ngx-translate/core';
 import { NursingNote, NursingNoteService } from '../../services/nursing-note.service';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { serverInstant, serverLocalDate } from '../../shared/date-utils';
 
 /** One labelled part of a note, in the order the template writes it. */
 export interface NursingNotePart {
@@ -93,13 +94,13 @@ export class NursingNotesPanelComponent implements OnChanges {
     const sorted = [...list].sort((a, b) => stamp(b) - stamp(a));
     if (!this.since) return sorted;
     // The visit's day, from its start: a note from earlier that day still belongs.
-    const from = new Date(this.since.slice(0, 10) + 'T00:00:00').getTime();
+    const from = new Date(`${serverLocalDate(this.since)}T00:00:00`).getTime();
     return Number.isNaN(from) ? sorted : sorted.filter((n) => stamp(n) >= from);
   }
 }
 
 function stamp(note: NursingNote): number {
   const at = note.documentedAt ?? note.eventOccurredAt;
-  const t = at ? new Date(at).getTime() : 0;
+  const t = at ? serverInstant(at).getTime() : 0;
   return Number.isNaN(t) ? 0 : t;
 }

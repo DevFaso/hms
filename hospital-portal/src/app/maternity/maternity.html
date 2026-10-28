@@ -144,7 +144,7 @@
                 <td>{{ patientName(h.patientId) }}</td>
                 <td>{{ h.recordedDate | serverTime | date: 'medium' }}</td>
                 <td data-testid="history-edd-cell">
-                  {{ dueDateOf(h) ? (dueDateOf(h) | date: 'mediumDate') : '—' }}
+                  {{ dueDateOf(h) ? (dueDateOf(h) | serverTime | date: 'mediumDate') : '—' }}
                 </td>
                 <td data-testid="history-ga-cell">
                   @if (gestationalAgeOf(h); as ga) {
