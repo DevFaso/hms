@@ -1,3 +1,4 @@
+import { EmpiStatusService } from '../reception/empi-status.service';
 import {
   Component,
   computed,
@@ -120,6 +121,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly downtime = inject(DowntimeService);
   /** Whether this session acts at a provider facility (provider plan AC-12). */
   private readonly providerContext = inject(ProviderContextService);
+  private readonly empiStatus = inject(EmpiStatusService);
   readonly translate = inject(TranslateService);
   private notifSub?: Subscription;
   private readCountSub?: Subscription;
@@ -1393,7 +1395,9 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // doctors could not reach the panel at all, the second reachability
     // defect on this same surface. Roles mirror the RoleGuard on
     // 'reception/empi-candidates'.
+    // QA D987: and only while the matcher is switched on; it answers 404 off.
     if (
+      this.empiStatus.enabled() === true &&
       this.hasAnyRole([
         'ROLE_RECEPTIONIST',
         'ROLE_NURSE',
@@ -1651,6 +1655,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   ngOnInit(): void {
     this.userProfile.set(this.auth.getUserProfile());
     this.permissions.loadFromBackend();
+    // QA D987: the duplicate-patient entry depends on the matcher being on.
+    this.empiStatus.load();
 
     this.loadNotifications();
     this.loadUnreadMessages();

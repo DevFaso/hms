@@ -443,6 +443,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
   completedToday = computed(
     () => this.todayAppointments().filter((a) => a.status === 'COMPLETED').length,
   );
+  /** QA D945: today's appointments whose patient is checked in and waiting. */
+  checkedInToday = computed(
+    () => this.todayAppointments().filter((a) => a.status === 'CHECKED_IN').length,
+  );
   pendingToday = computed(
     () =>
       this.todayAppointments().filter((a) => a.status === 'SCHEDULED' || a.status === 'CONFIRMED')
@@ -884,7 +888,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
     for (const [perm, action] of all) {
       if (
         !seen.has(action.route) &&
-        this.permissions.hasPermission(perm) &&
+        // QA D997: the acting role's actions only.
+        this.permissions.hasActivePermission(perm) &&
         this.canAccessRoute(action.route)
       ) {
         seen.add(action.route);

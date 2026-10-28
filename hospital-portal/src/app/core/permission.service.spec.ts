@@ -3,6 +3,7 @@ import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
 import { PermissionService } from './permission.service';
 import { AuthService } from '../auth/auth.service';
+import { RoleContextService } from './role-context.service';
 
 describe('PermissionService', () => {
   let service: PermissionService;
@@ -290,5 +291,16 @@ describe('PermissionService', () => {
       expect(service.hasPermission('Sign Medical Reports')).toBeFalse();
       expect(service.hasPermission('Access Nurse Station')).toBeTrue();
     });
+  });
+
+  it('QA D997: an action is offered for the role the user acts in, not every role held', () => {
+    setup(['ROLE_LAB_DIRECTOR', 'ROLE_DOCTOR']);
+    const roleContext = TestBed.inject(RoleContextService);
+    roleContext.setRoles(['ROLE_LAB_DIRECTOR', 'ROLE_DOCTOR']);
+    roleContext.activeRole = 'ROLE_LAB_DIRECTOR';
+    expect(service.hasPermission('Create Encounters')).toBeTrue();
+    expect(service.hasActivePermission('Create Encounters')).toBeFalse();
+    roleContext.activeRole = 'ROLE_DOCTOR';
+    expect(service.hasActivePermission('Create Encounters')).toBeTrue();
   });
 });

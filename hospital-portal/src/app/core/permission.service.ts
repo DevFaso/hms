@@ -1,3 +1,4 @@
+import { RoleContextService } from './role-context.service';
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject, signal } from '@angular/core';
 
@@ -24,6 +25,7 @@ const BACKEND_PERMISSION_ALIASES: Record<string, string[]> = {
 export class PermissionService {
   private readonly auth = inject(AuthService);
   private readonly http = inject(HttpClient);
+  private readonly roleContext = inject(RoleContextService);
 
   /**
    * Permissions granted by the backend for the signed-in user
@@ -531,6 +533,26 @@ export class PermissionService {
       }
     }
     return false;
+  }
+
+  /**
+   * QA D997: whether the role the user is ACTING in grants `permission`.
+   * {@link hasPermission} unions every role the account holds (and the
+   * backend's merged grants do too), so a lab director who is also a doctor
+   * was offered "Start a consultation" while acting as lab director, and the
+   * click ended on the 403 page. Use this for actions offered on screen.
+   * Falls back to {@link hasPermission} before a role is chosen.
+   */
+  hasActivePermission(permission: string): boolean {
+    const active = this.roleContext.activeRole;
+    const roles = active ? [active] : this.roleContext.activeRoles;
+    if (roles.length === 0) {
+      return this.hasPermission(permission);
+    }
+    return roles.some((role) => {
+      const perms = this.ROLE_PERMISSIONS[role];
+      return !!perms && (perms.includes('*') || perms.includes(permission));
+    });
   }
 
   hasAnyPermission(...permissions: string[]): boolean {

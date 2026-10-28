@@ -177,7 +177,7 @@
         <div class="snap-field">
           <span class="field-label">{{ 'RECEPTION.TOTAL_BALANCE_DUE' | translate }}</span>
           <span class="field-val" [class.balance-due]="s.billing.totalBalanceDue > 0">
-            {{ s.billing.totalBalanceDue | number: '1.2-2' }}
+            {{ s.billing.totalBalanceDue | cfa }}
           </span>
         </div>
       </div>
@@ -200,6 +200,8 @@
     role="dialog"
     aria-modal="true"
     [attr.aria-label]="'RECEPTION.ATTEST_ELIGIBILITY' | translate"
+    appDialogFocus
+    (dialogDismiss)="showAttestModal.set(false)"
   >
     <div class="attest-header">
       <h3>{{ 'RECEPTION.ATTEST_ELIGIBILITY' | translate }}</h3>

@@ -12,7 +12,8 @@ describe('PaymentPendingPanelComponent', () => {
   let fixture: ComponentFixture<PaymentPendingPanelComponent>;
 
   const mockReceptionService = {
-    recordPayment: () => of({}),
+    recordPayment: (_invoiceId: string, _amount: number, _method?: string, _reference?: string) =>
+      of({}),
   };
 
   const mockToastService = {
@@ -64,5 +65,40 @@ describe('PaymentPendingPanelComponent', () => {
     component.selectedInvoiceId.set(null);
     component.submitPayment();
     expect(component.paying()).toBe(false);
+  });
+
+  it('QA D948: offers Mobile Money, needs its reference, and sends it', () => {
+    expect(component.methods.map((m) => m.value)).toContain('MOBILE_MONEY');
+    const spy = spyOn(mockReceptionService, 'recordPayment').and.returnValue(of({}));
+    component.payingItem.set({ patientId: 'p1', patientName: 'Seydou' } as any);
+    component.selectedInvoiceId.set('inv-1');
+    component.payAmount.set(1500);
+    component.payMethod.set('MOBILE_MONEY');
+
+    component.submitPayment();
+    expect(spy).not.toHaveBeenCalled();
+
+    component.payReference.set(' OM-778812 ');
+    component.submitPayment();
+    expect(spy).toHaveBeenCalledWith('inv-1', 1500, 'MOBILE_MONEY', 'OM-778812');
+  });
+
+  it('QA D948: shows francs CFA without decimals', () => {
+    component.payingItem.set({ patientId: 'p1', patientName: 'Seydou' } as any);
+    component.openInvoices.set([
+      {
+        id: 'inv-1',
+        invoiceNumber: 'F-1',
+        totalAmount: 1500,
+        amountPaid: 0,
+        balanceDue: 1500,
+        status: 'SENT',
+      },
+    ] as any);
+    component.loadingInvoices.set(false);
+    fixture.detectChanges();
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('F\u00a0CFA');
+    expect(text).not.toContain('1 500,00');
   });
 });

@@ -14,6 +14,17 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { localDateString } from '../shared/date-utils';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
+import { comboboxKey } from '../shared/a11y/combobox-keys';
+import { labelledRefusalReason } from '../shared/refusal-reason';
+
+/** QA D984: the label each refused field is reported under. */
+const APPOINTMENT_FIELD_LABELS: Readonly<Record<string, string>> = {
+  appointmentDate: 'APPOINTMENTS.DATE',
+  startTime: 'APPOINTMENTS.START_TIME',
+  endTime: 'APPOINTMENTS.END_TIME',
+  reason: 'APPOINTMENTS.REASON',
+  notes: 'APPOINTMENTS.NOTES',
+};
 
 interface DeptOption {
   id: string;
@@ -45,6 +56,8 @@ export class AppointmentFormComponent implements OnInit {
   patientQuery = signal('');
   patientSuggestions = signal<PatientResponse[]>([]);
   patientDropdownOpen = signal(false);
+  /** QA D947: the suggestion the arrow keys are on (-1: none). */
+  patientActive = signal(-1);
   patientSearchLoading = signal(false);
   selectedPatient = signal<PatientResponse | null>(null);
   private readonly patientSearch$ = new Subject<string>();
@@ -53,6 +66,8 @@ export class AppointmentFormComponent implements OnInit {
   staffQuery = signal('');
   staffSuggestions = signal<StaffResponse[]>([]);
   staffDropdownOpen = signal(false);
+  /** QA D947: the suggestion the arrow keys are on (-1: none). */
+  staffActive = signal(-1);
   staffSearchLoading = signal(false);
   selectedStaff = signal<StaffResponse | null>(null);
   private readonly staffSearch$ = new Subject<string>();
@@ -194,6 +209,30 @@ export class AppointmentFormComponent implements OnInit {
       this.patientSuggestions.set([]);
       this.patientDropdownOpen.set(false);
     }
+  }
+
+  /** QA D947: ArrowDown/ArrowUp/Enter/Tab/Escape on the patient picker. */
+  onPatientKeydown(event: KeyboardEvent): void {
+    const options = this.patientDropdownOpen() ? this.patientSuggestions() : [];
+    const step = comboboxKey(event, options.length, this.patientActive());
+    if (step.pick) {
+      this.selectPatient(options[step.active]);
+    } else if (step.close) {
+      this.patientDropdownOpen.set(false);
+    }
+    this.patientActive.set(step.close ? -1 : step.active);
+  }
+
+  /** QA D947: the same keyboard on the staff picker. */
+  onStaffKeydown(event: KeyboardEvent): void {
+    const options = this.staffDropdownOpen() ? this.staffSuggestions() : [];
+    const step = comboboxKey(event, options.length, this.staffActive());
+    if (step.pick) {
+      this.selectStaff(options[step.active]);
+    } else if (step.close) {
+      this.staffDropdownOpen.set(false);
+    }
+    this.staffActive.set(step.close ? -1 : step.active);
   }
 
   selectPatient(p: PatientResponse): void {
@@ -434,8 +473,11 @@ export class AppointmentFormComponent implements OnInit {
         this.router.navigate(['/appointments']);
       },
       error: (err) => {
+        // QA D984: a validation refusal names the field and its reason
+        // ("Date : must be today or later"), not the generic text.
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('APPOINTMENTS.TOAST.CREATE_FAILED'),
+          labelledRefusalReason(err, this.translate, APPOINTMENT_FIELD_LABELS) ??
+            this.translate.instant('APPOINTMENTS.TOAST.CREATE_FAILED'),
         );
         this.saving.set(false);
       },
