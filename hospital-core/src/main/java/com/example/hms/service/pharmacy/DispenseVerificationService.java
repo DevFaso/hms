@@ -227,7 +227,22 @@ public class DispenseVerificationService {
         // name when it is the whole first part of the prescribed text,
         // ending on a word boundary ("paracetamol 500 mg" matches, a longer
         // word that merely starts with the name does not).
-        String folded = fold(prescribedName);
+        return namesCatalogItem(prescribedName, item);
+    }
+
+    /**
+     * QA D138 / D922: whether free text names this catalogue item, the way
+     * people write it ("Paracétamol 500 mg comprimé" names "paracetamol").
+     * Accent- and case-insensitive; the catalogue name must be the whole first
+     * part of the text, ending on a word boundary. The one name rule shared by
+     * the dispense DRUG check and the prescription's catalogue resolution.
+     */
+    public static boolean namesCatalogItem(String prescribedName, MedicationCatalogItem item) {
+        String normalized = normalize(prescribedName);
+        if (normalized.isEmpty() || item == null) {
+            return false;
+        }
+        String folded = fold(normalized);
         return namesDrug(folded, item.getGenericName())
             || namesDrug(folded, item.getBrandName())
             || namesDrug(folded, item.getNameFr());

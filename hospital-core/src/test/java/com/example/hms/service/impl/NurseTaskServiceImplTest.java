@@ -3440,7 +3440,8 @@ class NurseTaskServiceImplTest {
         List<NurseMedicationTaskResponseDTO> tasks = service.getMedicationTasks(nurseId, hospitalId, null);
 
         assertThat(tasks).hasSize(1);
-        assertThat(tasks.get(0).getStatus()).isEqualTo("DUE");
+        // QA D949: eight hours away is not yet due (it was reported DUE and refused on Give).
+        assertThat(tasks.get(0).getStatus()).isEqualTo("UPCOMING");
         assertThat(tasks.get(0).getDueTime()).isEqualTo(firstSlot.plusHours(12));
     }
 
@@ -3990,4 +3991,86 @@ class NurseTaskServiceImplTest {
             .hasFieldOrPropertyWithValue("messageKey", "nurse.mar.patientDischarged");
         verify(marRepository, never()).save(any(MedicationAdministrationRecord.class));
     }
+
+    // ── QA round 16 (D928, D929, D949, D950, D922) ──────────────────────
+
+    private List<NurseMedicationTaskResponseDTO> marFor(UUID nurseId, UUID hospitalId, Prescription rx,
+                                                        String filter,
+                                                        MedicationAdministrationRecord... closed) {
+        UUID patientId = rx.getPatient().getId();
+        when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null))
+            .thenReturn(List.of(patient(patientId, "Awa Kabore", "Awa", "Kabore")));
+        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+            .thenReturn(List.of(rx));
+        lenient().when(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId()))
+            .thenReturn(List.of(closed));
+        return service.getMedicationTasks(nurseId, hospitalId, filter);
+    }
+
+    /**
+     * QA D928 replay (u16.js): "Une fois par jour", held. The course used to
+     * become COMPLETED with no due time, so days 2-5 vanished. The next dose
+     * is tomorrow, and the held dose is said to be held (D929).
+     */
+    @Test
+    void d928_aFrenchWordFrequencyKeepsTheCourseAfterAHeldDose() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "Une fois par jour");
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        LocalDateTime firstSlot = rx.getCreatedAt();
+
+        List<NurseMedicationTaskResponseDTO> tasks = marFor(UUID.randomUUID(), hospitalId, rx, null,
+            closedDose(rx, firstSlot, MedicationAdministrationStatus.HELD));
+
+        assertThat(tasks).hasSize(1);
+        assertThat(tasks.get(0).getStatus()).isEqualTo("UPCOMING");
+        assertThat(tasks.get(0).getDueTime()).isEqualTo(firstSlot.plusHours(24));
+        assertThat(tasks.get(0).getLastOutcome()).isEqualTo("HELD");
+    }
+
+    /** QA D929: a one-off dose that was refused ends the course, and the row says it was refused. */
+    @Test
+    void d929_aFinishedCourseCarriesTheLastOutcome() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "une seule fois");
+        rx.setStatus(PrescriptionStatus.SIGNED);
+
+        List<NurseMedicationTaskResponseDTO> tasks = marFor(UUID.randomUUID(), hospitalId, rx, null,
+            closedDose(rx, rx.getCreatedAt(), MedicationAdministrationStatus.REFUSED));
+
+        assertThat(tasks.get(0).getStatus()).isEqualTo("COMPLETED");
+        assertThat(tasks.get(0).getLastOutcome()).isEqualTo("REFUSED");
+    }
+
+    /**
+     * QA D949: tomorrow's dose is not "to give" and is not counted as due;
+     * the eMAR's "still to give" list (PENDING) leaves it out.
+     */
+    @Test
+    void d949_aSlotBeyondTheEarlyWindowIsUpcomingAndNotPending() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "q24h");
+        rx.setStatus(PrescriptionStatus.SIGNED);
+
+        List<NurseMedicationTaskResponseDTO> pending = marFor(UUID.randomUUID(), hospitalId, rx, "PENDING",
+            closedDose(rx, rx.getCreatedAt(), MedicationAdministrationStatus.GIVEN));
+
+        assertThat(pending).isEmpty();
+    }
+
+    /** QA D950/D922: the route as a form code, and the controlled flag, on the MAR row. */
+    @Test
+    void d950_theRowCarriesTheRouteCodeAndTheControlledFlag() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "q4h");
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        rx.setRoute("INTRAVENOUS");
+        rx.setControlledSubstance(true);
+
+        List<NurseMedicationTaskResponseDTO> tasks = marFor(UUID.randomUUID(), hospitalId, rx, null);
+
+        assertThat(tasks.get(0).getRouteCode()).isEqualTo("IV");
+        assertThat(tasks.get(0).isControlledSubstance()).isTrue();
+    }
+
 }

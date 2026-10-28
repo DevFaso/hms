@@ -1,3 +1,4 @@
+import { CdkTrapFocus } from '@angular/cdk/a11y';
 import {
   Component,
   OnInit,
@@ -34,7 +35,7 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 @Component({
   selector: 'app-lab-outbox',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule],
+  imports: [CdkTrapFocus, ServerTimePipe, CommonModule, FormsModule, TranslateModule],
   templateUrl: './lab-outbox.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lab-outbox.scss',

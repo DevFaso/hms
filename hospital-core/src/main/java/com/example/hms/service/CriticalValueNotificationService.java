@@ -542,6 +542,18 @@ public class CriticalValueNotificationService {
             : NotificationLocalizer.key("patient.fallback.generic");
         String value = localizedValue(result.getResultValue(), locale)
             + (result.getResultUnit() != null ? " " + result.getResultUnit() : "");
+        // QA D931: a critical CORRECTION says so, and names the value it
+        // replaces; the clinician may have acted on that one.
+        if (!escalation && result.getSupersedesResultId() != null) {
+            String replaced = labResultRepository.findById(result.getSupersedesResultId())
+                .map(old -> localizedValue(old.getResultValue(), locale)
+                    + (old.getResultUnit() != null ? " " + old.getResultUnit() : ""))
+                .orElse(null);
+            if (replaced != null) {
+                return NotificationText.of("lab.critical.correction.notification",
+                    testName, value, patientName, replaced);
+            }
+        }
         return NotificationText.of(
             escalation ? "lab.critical.escalation" : "lab.critical.notification",
             testName, value, patientName);
@@ -552,7 +564,7 @@ public class CriticalValueNotificationService {
      * keeping the scale the laboratory reported. Anything that is not a plain
      * number ("Positif", "&lt;0.5") is shown as entered.
      */
-    static String localizedValue(String raw, java.util.Locale locale) {
+    public static String localizedValue(String raw, java.util.Locale locale) {
         if (raw == null) {
             return "";
         }

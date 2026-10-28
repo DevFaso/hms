@@ -42,6 +42,18 @@ public class PrescriptionMapper {
     }
 
     /**
+     * QA D934: whether an unsigned order's prescriber holds a signature of her
+     * own (doctor, physician, surgeon) at the order's hospital. Optional for
+     * the same reason as the catalog repository.
+     */
+    private com.example.hms.utility.RoleValidator roleValidator;
+
+    @Autowired(required = false)
+    public void setRoleValidator(com.example.hms.utility.RoleValidator roleValidator) {
+        this.roleValidator = roleValidator;
+    }
+
+    /**
      * Statuses the pharmacy writes (gap G7). While the row is in one of these
      * the status IS the latest pharmacy event; DRAFT, SIGNED, CANCELLED and
      * the like are the prescriber's, and report no pharmacy event.
@@ -97,6 +109,7 @@ public class PrescriptionMapper {
 
             .medicationName(p.getMedicationName())
             .medicationDisplayName(p.getMedicationDisplayName())
+            .medicationCatalogItemId(p.getMedicationCatalogItemId())
 
             .dosage(p.getDosage())
             .frequency(p.getFrequency())
@@ -115,6 +128,7 @@ public class PrescriptionMapper {
             .status(p.getStatus() != null ? p.getStatus().name() : null)
             .controlledSubstance(controlled)
             .requiresCosign(p.isRequiresCosign())
+            .awaitingPhysicianSignature(awaitsPhysicianSignature(p, staff, resolveHospitalId(hospital, enc)))
             .takeHome(p.isTakeHome())
             .twoFactorVerifiedAt(p.getTwoFactorVerifiedAt())
             .cosignedAt(p.getCosignedAt())
@@ -337,6 +351,24 @@ public class PrescriptionMapper {
         return catalogRepository.findByHospitalIdAndCode(hospitalId, medicationCode.trim())
             .map(MedicationCatalogItem::isControlled)
             .orElse(false);
+    }
+
+    /**
+     * QA D934: an unsigned order drafted by a nurse or a midwife of the
+     * order's hospital ({@code RoleValidator.draftsForPhysicianSignature}),
+     * the same rule {@code PrescriptionServiceImpl} applies when a doctor
+     * signs it.
+     */
+    private boolean awaitsPhysicianSignature(Prescription p, Staff staff, java.util.UUID hospitalId) {
+        if (roleValidator == null || hospitalId == null || p.getSignatureValue() != null
+                || (p.getStatus() != PrescriptionStatus.DRAFT && p.getStatus() != PrescriptionStatus.PENDING_SIGNATURE)) {
+            return false;
+        }
+        java.util.UUID userId = staff != null && staff.getUser() != null ? staff.getUser().getId() : null;
+        if (userId == null) {
+            return false;
+        }
+        return roleValidator.draftsForPhysicianSignature(userId, hospitalId);
     }
 
     private java.util.UUID resolveHospitalId(Hospital hospital, Encounter enc) {

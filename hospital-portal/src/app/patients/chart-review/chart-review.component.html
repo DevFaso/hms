@@ -328,7 +328,8 @@
                     </td>
                     <td>{{ m.dosage || '—' }}</td>
                     <td>
-                      {{ m.frequency || '—' }} · {{ m.route || '—' }} · {{ m.duration || '—' }}
+                      {{ m.frequency || '—' }} · {{ (m.route | medicationRoute) || '—' }} ·
+                      {{ m.duration || '—' }}
                     </td>
                     <td>
                       <span class="chart-review__pill" [ngClass]="statusClass(m.status)">

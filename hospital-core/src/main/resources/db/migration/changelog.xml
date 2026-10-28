@@ -3118,4 +3118,14 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- V239 (round 16): a specimen can be rejected with a reason; the reason,
+         the rejecting user and the time are stored on the specimen (QA D962).
+         Plain statements, no DO block. Idempotent. -->
+    <changeSet id="V239-lab-specimen-rejection" author="hms-team" runOnChange="false">
+        <sqlFile path="V239__lab_specimen_rejection.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

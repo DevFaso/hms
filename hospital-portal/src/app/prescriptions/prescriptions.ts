@@ -22,6 +22,7 @@ import {
 } from '../services/prescription.service';
 import {
   DispenseResponse,
+  MedicationCatalogItemResponse,
   PharmacyService,
   RoutingDecisionResponse,
 } from '../services/pharmacy.service';
@@ -48,6 +49,7 @@ import { actionRoles } from '../core/action-permissions';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { serverInstant } from '../shared/date-utils';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
+import { canonicalRoute } from '../shared/pipes/medication-route.pipe';
 
 /**
  * The prescriber's list tabs (gap G10).
@@ -323,6 +325,7 @@ export class PrescriptionsComponent implements OnInit {
     this.load();
     this.loadPrescribers();
     this.initPatientSearch();
+    this.initCatalogSearch();
     this.initPharmacyHistory();
 
     const params = this.route.snapshot.queryParamMap;
@@ -453,6 +456,57 @@ export class PrescriptionsComponent implements OnInit {
     };
   }
 
+  /**
+   * QA D922/D935: the hospital's catalogue items matching the typed name. A
+   * pick sends its id, so the catalogue's controlled flag and paediatric
+   * ceiling apply to the order (the server resolves a typed name too).
+   */
+  readonly catalogOptions = signal<MedicationCatalogItemResponse[]>([]);
+  private readonly catalogSearch$ = new Subject<string>();
+
+  initCatalogSearch(): void {
+    this.catalogSearch$
+      .pipe(
+        debounceTime(250),
+        distinctUntilChanged(),
+        switchMap((q) =>
+          q.length < 2
+            ? of([] as MedicationCatalogItemResponse[])
+            : this.pharmacyService.searchMedications(q, 0, 15).pipe(
+                map((page) => page.content ?? []),
+                catchError(() => of([] as MedicationCatalogItemResponse[])),
+              ),
+        ),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((items) => this.catalogOptions.set(items));
+  }
+
+  /**
+   * The text a catalogue option puts in the medication field: name, strength
+   * and form, so a tablet and a syrup of the same name and strength (one of
+   * them perhaps controlled) read apart in the list.
+   */
+  catalogLabel(item: MedicationCatalogItemResponse): string {
+    const strength = [item.strength, item.strengthUnit].filter((v) => !!v).join(' ');
+    const form = item.form ? this.translate.instant(`PHARMACY.FORM_OPTION.${item.form}`) : '';
+    return [item.nameFr, strength, form].filter((v) => !!v).join(' ');
+  }
+
+  /** The picked catalogue item, when the field holds one option's text exactly. */
+  readonly pickedCatalogItem = signal<MedicationCatalogItemResponse | null>(null);
+
+  onMedicationNameChange(value: string): void {
+    this.form.medicationName = value;
+    // Review of #975: two options reading the same must not resolve to the
+    // first one's id; the server then resolves (or refuses) the typed name.
+    const matches = this.catalogOptions().filter((o) => this.catalogLabel(o) === value);
+    const picked = matches.length === 1 ? matches[0] : null;
+    this.pickedCatalogItem.set(picked);
+    this.form.medicationCatalogItemId = picked ? picked.id : null;
+    if (!picked) this.catalogSearch$.next((value ?? '').trim());
+  }
+
   initPatientSearch(): void {
     this.patientSearch$
       .pipe(
@@ -553,6 +607,7 @@ export class PrescriptionsComponent implements OnInit {
 
   openCreate(): void {
     this.form = this.emptyForm();
+    this.resetCatalogPick();
     // QA D123: a clinician prescribing opens the form with THEMSELVES as the
     // prescriber, instead of an empty choice in a list of colleagues.
     this.form.staffId = this.ownPrescriberStaffId();
@@ -570,6 +625,7 @@ export class PrescriptionsComponent implements OnInit {
     // QA D660: a withdrawn order is read-only, every field; the server
     // refuses any edit of it, so no form is opened on one.
     if (isWithdrawnStatus(p.status)) return;
+    this.resetCatalogPick();
     this.form = {
       patientId: p.patientId ?? '',
       staffId: p.staffId ?? '',
@@ -577,13 +633,15 @@ export class PrescriptionsComponent implements OnInit {
       medicationName: p.medicationName ?? '',
       dosage: p.dosage ?? '',
       frequency: p.frequency ?? '',
-      route: p.route ?? '',
+      // QA D950: a stored "ORAL" opens on the form's own PO option.
+      route: canonicalRoute(p.route) ?? p.route ?? '',
       duration: p.duration ?? '',
       quantity: p.quantity ?? null,
       quantityUnit: p.quantityUnit ?? '',
       notes: p.notes ?? '',
       status: (p.status as PrescriptionRequest['status']) ?? 'DRAFT',
       takeHome: !!p.takeHome,
+      medicationCatalogItemId: p.medicationCatalogItemId ?? null,
     };
     this.selectedPatient.set({
       id: p.patientId ?? '',
@@ -622,6 +680,17 @@ export class PrescriptionsComponent implements OnInit {
     this.showModal.set(false);
     this.formError.set('');
     this.resetCdsState();
+    this.resetCatalogPick();
+  }
+
+  /**
+   * Review of #975: the previous form's catalogue pick (and its "controlled"
+   * hint) is not carried into the next order opened. The options stay: the
+   * search skips a repeated query, so clearing them would leave a re-typed
+   * name with nothing to pick.
+   */
+  private resetCatalogPick(): void {
+    this.pickedCatalogItem.set(null);
   }
 
   /**
@@ -773,7 +842,10 @@ export class PrescriptionsComponent implements OnInit {
    * — so this is presentation only: it hides a button that would 403.
    */
   canSign(p: PrescriptionResponse): boolean {
-    if (!this.canSignRole() || this.isOtherPrescriber(p)) return false;
+    // QA D934: a nurse's or midwife's draft is signed by a doctor of the hospital.
+    if (!this.canSignRole() || (this.isOtherPrescriber(p) && !p.awaitingPhysicianSignature)) {
+      return false;
+    }
     return p.status === 'DRAFT' || p.status === 'PENDING_SIGNATURE';
   }
 

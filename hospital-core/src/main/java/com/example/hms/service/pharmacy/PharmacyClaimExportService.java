@@ -91,12 +91,10 @@ public class PharmacyClaimExportService {
     private List<PharmacyClaim> loadClaims(List<PharmacyClaimStatus> statuses) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId == null) {
-            throw new BusinessException(
-                    "Claim export requires an active hospital context. "
-                            + "Super-admin users must select a hospital or provide X-Hospital-Id.");
+            throw new BusinessException("pharmacy.claim.export.hospitalRequired");
         }
         if (statuses == null || statuses.isEmpty()) {
-            throw new BusinessException("At least one claim status is required for export");
+            throw new BusinessException("pharmacy.claim.export.statusRequired");
         }
         return claimRepository.findByHospitalIdAndClaimStatusIn(hospitalId, statuses);
     }

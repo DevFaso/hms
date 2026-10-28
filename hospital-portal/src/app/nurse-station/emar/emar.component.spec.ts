@@ -1,3 +1,4 @@
+import { formatDate } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
@@ -72,18 +73,28 @@ describe('EmarComponent (P1 #8 — five-rights barcode-scan loop)', () => {
 
   it("QA D647: shows the due time in the reader's local zone, not the server's UTC clock", () => {
     // The server sends a zone-less UTC wall time; the header clock is local.
-    nurseSpy.getMedicationMAR.and.returnValue(
-      of([{ ...sampleTask, dueTime: '2026-04-30T08:00:00' }]),
-    );
+    // QA D949: a dose of another day shows its date, so the zone is checked on
+    // a time of the reader's today (one minute ago, as UTC wall clock).
+    const local = new Date(Date.now() - 60_000);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const utcWall = `${local.getUTCFullYear()}-${pad(local.getUTCMonth() + 1)}-${pad(local.getUTCDate())}T${pad(local.getUTCHours())}:${pad(local.getUTCMinutes())}:00`;
+    nurseSpy.getMedicationMAR.and.returnValue(of([{ ...sampleTask, dueTime: utcWall }]));
 
     fixture.detectChanges();
 
-    const local = new Date(Date.UTC(2026, 3, 30, 8, 0, 0));
-    const hh = String(local.getHours()).padStart(2, '0');
-    const mm = String(local.getMinutes()).padStart(2, '0');
     const text =
       root().querySelector(`[data-testid="emar-task-${sampleTask.id}"]`)?.textContent ?? '';
-    expect(text).toContain(`${hh}:${mm}`);
+    expect(text).toContain(`${pad(local.getHours())}:${pad(local.getMinutes())}`);
+  });
+
+  it('QA D949: an overdue dose of another day shows its date, not the time alone', () => {
+    nurseSpy.getMedicationMAR.and.returnValue(
+      of([{ ...sampleTask, dueTime: '2026-04-30T08:00:00' }]),
+    );
+    fixture.detectChanges();
+    const text =
+      root().querySelector(`[data-testid="emar-task-${sampleTask.id}"]`)?.textContent ?? '';
+    expect(text).toContain(formatDate(new Date(Date.UTC(2026, 3, 30, 8)), 'short', 'en-US'));
   });
 
   describe('QA D799: the beta-lactam cross-reactivity advisory reaches the nurse', () => {
