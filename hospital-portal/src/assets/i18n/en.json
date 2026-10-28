@@ -6699,11 +6699,15 @@
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergy",
+        "DIAGNOSIS": "Diagnosis",
         "ENCOUNTER": "Encounter",
         "IMAGING": "Imaging",
+        "LAB_ORDER": "Lab test ordered",
         "LAB_RESULT": "Lab result",
+        "NOTE": "Note",
         "PRESCRIPTION": "Prescription",
-        "PROCEDURE": "Procedure"
+        "PROCEDURE": "Procedure",
+        "REFERRAL": "Referral"
       },
       "SPECIMEN_TYPE": {
         "BLOOD": "Blood",

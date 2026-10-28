@@ -1109,11 +1109,32 @@ export class PatientChartComponent implements OnInit, OnChanges {
         return 'medication';
       case 'LAB_RESULT':
         return 'science';
+      case 'LAB_ORDER':
+        return 'biotech';
       case 'ALLERGY':
         return 'warning';
+      case 'DIAGNOSIS':
+        return 'diagnosis';
+      case 'IMAGING':
+        return 'radiology';
+      case 'NOTE':
+        return 'description';
+      case 'REFERRAL':
+        return 'forward_to_inbox';
       default:
         return 'event_note';
     }
+  }
+
+  /**
+   * QA D996: what kind of row it is. A visit reads its own type
+   * ("Hospitalisation", "Urgence") instead of "Consultation" for every one.
+   */
+  timelineKind(e: TimelineEntry): { domain: string; value: string } {
+    const type = e.category === 'ENCOUNTER' ? e.metadata?.['encounterType'] : null;
+    return typeof type === 'string' && type
+      ? { domain: 'encounterType', value: type }
+      : { domain: 'timelineCategory', value: e.category };
   }
 
   /**

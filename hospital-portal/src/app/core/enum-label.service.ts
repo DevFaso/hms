@@ -756,11 +756,15 @@ export class EnumLabelService implements OnDestroy {
     /* ── Patient chart timeline categories (PatientServiceImpl CATEGORY_*) ── */
     timelineCategory: {
       ALLERGY: 'Allergy',
+      DIAGNOSIS: 'Diagnosis',
       ENCOUNTER: 'Encounter',
       IMAGING: 'Imaging',
+      LAB_ORDER: 'Lab test ordered',
       LAB_RESULT: 'Lab result',
+      NOTE: 'Note',
       PRESCRIPTION: 'Prescription',
       PROCEDURE: 'Procedure',
+      REFERRAL: 'Referral',
     },
 
     /* ── Immunization status ───────────────────────────────── */

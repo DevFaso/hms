@@ -6665,11 +6665,15 @@
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergie",
+        "DIAGNOSIS": "Diagnostic",
         "ENCOUNTER": "Consultation",
         "IMAGING": "Imagerie",
+        "LAB_ORDER": "Analyse demandée",
         "LAB_RESULT": "Résultat de laboratoire",
+        "NOTE": "Note",
         "PRESCRIPTION": "Ordonnance",
-        "PROCEDURE": "Acte"
+        "PROCEDURE": "Acte",
+        "REFERRAL": "Orientation"
       },
       "SPECIMEN_TYPE": {
         "BLOOD": "Sang",
