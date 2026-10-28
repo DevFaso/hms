@@ -59,6 +59,18 @@ public class StockTransactionController {
         return ResponseEntity.ok(ApiResponseWrapper.success(stockTransactionService.listWitnessCandidates()));
     }
 
+    @GetMapping("/returnable-dispenses")
+    @PreAuthorize("hasAnyRole('PHARMACIST', 'INVENTORY_CLERK', 'STORE_MANAGER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    @Operation(summary = "Fills a return can be booked against",
+            description = "QA D932: the completed or partial fills of this item (and lot) with stock still out")
+    @ApiResponse(responseCode = "200", description = "Fills retrieved")
+    public ResponseEntity<ApiResponseWrapper<List<com.example.hms.payload.dto.pharmacy.ReturnableDispenseDTO>>>
+            listReturnableDispenses(@RequestParam UUID inventoryItemId,
+                                    @RequestParam(required = false) UUID stockLotId) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                stockTransactionService.listReturnableDispenses(inventoryItemId, stockLotId)));
+    }
+
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('PHARMACIST', 'INVENTORY_CLERK', 'STORE_MANAGER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
     @Operation(summary = "Get transaction", description = "Retrieve a stock transaction by ID")

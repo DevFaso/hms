@@ -895,6 +895,63 @@ class StockTransactionServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D932: the return form lists the lot's fills with stock still out, and what each can take back")
+        void listsTheFillsAReturnCanBeBookedAgainst() {
+            var open = dispenseOf(new BigDecimal("5"), com.example.hms.enums.DispenseStatus.COMPLETED, stockLot);
+            var partlyBack = dispenseOf(new BigDecimal("4"), com.example.hms.enums.DispenseStatus.PARTIAL, stockLot);
+            var allBack = dispenseOf(new BigDecimal("2"), com.example.hms.enums.DispenseStatus.COMPLETED, stockLot);
+            com.example.hms.model.Patient patient = new com.example.hms.model.Patient();
+            patient.setFirstName("Awa");
+            patient.setLastName("Ouedraogo");
+            open.setPatient(patient);
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            when(dispenseRepository.findByStockLot_IdAndStatusInOrderByCreatedAtDesc(eq(stockLotId), any()))
+                    .thenReturn(List.of(open, partlyBack, allBack));
+            when(stockTransactionRepository.sumQuantityByReferences(any(), eq(java.util.EnumSet.of(StockTransactionType.RETURN))))
+                    .thenReturn(List.<Object[]>of(new Object[] {partlyBack.getId(), new BigDecimal("1")},
+                            new Object[] {allBack.getId(), new BigDecimal("2")}));
+
+            var rows = service.listReturnableDispenses(inventoryItemId, stockLotId);
+
+            assertThat(rows).extracting(com.example.hms.payload.dto.pharmacy.ReturnableDispenseDTO::dispenseId)
+                    .containsExactly(open.getId(), partlyBack.getId());
+            assertThat(rows.get(0).returnableQuantity()).isEqualByComparingTo("5");
+            assertThat(rows.get(0).patientName()).isEqualTo("Awa Ouedraogo");
+            assertThat(rows.get(0).lotNumber()).isEqualTo("LOT-001");
+            assertThat(rows.get(1).returnableQuantity()).isEqualByComparingTo("3");
+        }
+
+        @Test
+        @DisplayName("QA D932: another hospital's item is not found, and its fills are never read")
+        void anotherHospitalsItemIsNotListed() {
+            Hospital other = new Hospital();
+            other.setId(UUID.randomUUID());
+            pharmacy.setHospital(other);
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+
+            assertThatThrownBy(() -> service.listReturnableDispenses(inventoryItemId, stockLotId))
+                    .isInstanceOf(ResourceNotFoundException.class);
+            verify(dispenseRepository, never()).findByStockLot_IdAndStatusInOrderByCreatedAtDesc(any(), any());
+        }
+
+        @Test
+        @DisplayName("QA D932: a lot of another item is refused")
+        void aLotOfAnotherItemIsRefused() {
+            InventoryItem otherItem = InventoryItem.builder().pharmacy(pharmacy).build();
+            otherItem.setId(UUID.randomUUID());
+            stockLot.setInventoryItem(otherItem);
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+
+            assertThatThrownBy(() -> service.listReturnableDispenses(inventoryItemId, stockLotId))
+                    .isInstanceOf(BusinessException.class);
+        }
+
+        @Test
         @DisplayName("D604: nothing is returned against a cancelled dispense (its cancel already put it back)")
         void refusesAReturnAgainstACancelledDispense() {
             var dispense = dispenseOf(new BigDecimal("4"), com.example.hms.enums.DispenseStatus.CANCELLED, stockLot);

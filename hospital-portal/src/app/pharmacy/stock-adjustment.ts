@@ -20,6 +20,7 @@ import {
   StockTransactionRequest,
   StockTransactionResponse,
   StockWitnessCandidate,
+  ReturnableDispense,
 } from '../services/pharmacy.service';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
@@ -107,6 +108,15 @@ export class StockAdjustmentComponent implements OnInit {
   returnReference = '';
   /** QA D964: why a transfer takes a later-dated lot than first-expired-first-out would. */
   fefoReason = '';
+  /**
+   * QA D932: the fill the return is booked against. The form used to clear
+   * the reference for a return, so the server refused every return of
+   * dispensed stock ("doit indiquer sa délivrance"), morphine included.
+   */
+  returnDispenseId = '';
+  readonly returnableDispenses = signal<ReturnableDispense[]>([]);
+  readonly returnableLoading = signal(false);
+  private returnableSeq = 0;
 
   /** Convenience getters for the template's `@if` blocks. */
   readonly isReceipt = computed(() => this.txType() === 'RECEIPT');
@@ -221,6 +231,8 @@ export class StockAdjustmentComponent implements OnInit {
     this.transferDestinationPharmacyId = '';
     this.returnReference = '';
     this.fefoReason = '';
+    this.returnDispenseId = '';
+    this.returnableDispenses.set([]);
   }
 
   onItemChange(itemId: string): void {
@@ -232,9 +244,49 @@ export class StockAdjustmentComponent implements OnInit {
       next: (res) => {
         this.itemLots.set(res?.data?.content ?? []);
         this.preselectTransferLot();
+        this.loadReturnableDispenses();
       },
       error: () => this.itemLots.set([]),
     });
+  }
+
+  /** QA D932: a new lot names other fills; the return's dispense is chosen again. */
+  onLotChange(): void {
+    this.returnDispenseId = '';
+    this.loadReturnableDispenses();
+  }
+
+  /**
+   * QA D932: the fills of the chosen item (and lot, when it is kept in lots)
+   * that a return can be booked against. A late answer for another item or
+   * lot is dropped.
+   */
+  loadReturnableDispenses(): void {
+    const seq = ++this.returnableSeq;
+    this.returnableDispenses.set([]);
+    const itemId = this.form.inventoryItemId;
+    const lotId = this.form.stockLotId;
+    if (!this.isReturn() || !itemId || (this.itemLots().length > 0 && !lotId)) {
+      this.returnableLoading.set(false);
+      return;
+    }
+    this.returnableLoading.set(true);
+    this.svc.listReturnableDispenses(itemId, lotId || undefined).subscribe({
+      next: (res) => {
+        if (seq !== this.returnableSeq) return;
+        this.returnableDispenses.set(res?.data ?? []);
+        this.returnableLoading.set(false);
+      },
+      error: () => {
+        if (seq !== this.returnableSeq) return;
+        this.returnableLoading.set(false);
+      },
+    });
+  }
+
+  /** QA D932: the fill the return is booked against, if one is chosen. */
+  selectedReturnDispense(): ReturnableDispense | undefined {
+    return this.returnableDispenses().find((d) => d.dispenseId === this.returnDispenseId);
   }
 
   /** QA D964: the item's lots a movement can take stock from (stock left, not expired), shortest-dated first. */
@@ -286,6 +338,7 @@ export class StockAdjustmentComponent implements OnInit {
     this.form.transactionType = t;
     this.resetTypedForm();
     this.preselectTransferLot();
+    this.loadReturnableDispenses();
   }
 
   /** Pharmacies available as transfer destinations (excludes the source). */
@@ -367,8 +420,16 @@ export class StockAdjustmentComponent implements OnInit {
     if (this.earlierTransferLot() && !this.fefoReason.trim()) {
       return 'PHARMACY.FEFO_REASON_REQUIRED';
     }
-    if (this.isReturn() && !this.returnReference?.trim()) {
-      return 'PHARMACY.RETURN_REFERENCE_REQUIRED';
+    // QA D932: a return of dispensed stock names its dispense; without one it
+    // can only give back a transfer, identified by its reference.
+    if (this.isReturn() && !this.returnDispenseId && !this.returnReference?.trim()) {
+      return this.returnableDispenses().length > 0
+        ? 'PHARMACY.RETURN_DISPENSE_REQUIRED'
+        : 'PHARMACY.RETURN_REFERENCE_REQUIRED';
+    }
+    const returnDispense = this.isReturn() ? this.selectedReturnDispense() : undefined;
+    if (returnDispense && Number(this.form.quantity) > returnDispense.returnableQuantity) {
+      return 'PHARMACY.RETURN_EXCEEDS_DISPENSE';
     }
     if (this.isReceipt() && !this.receiptLotNumber?.trim()) {
       return 'PHARMACY.RECEIPT_LOT_REQUIRED';
@@ -423,8 +484,15 @@ export class StockAdjustmentComponent implements OnInit {
       this.form.referenceId = this.transferDestinationPharmacyId;
       this.form.reason = `TRANSFER to ${this.transferDestinationName()}`;
     } else if (this.isReturn()) {
-      // Return reference is a free-text supplier doc number, not a UUID — keep in reason.
-      this.form.reason = `RETURN ref ${this.returnReference.trim()}`;
+      // QA D932: the dispense IS a UUID; the server books the return against
+      // it and caps it at what that fill delivered and did not get back. The
+      // ledger reason carries the typed reference, else a short dispense ref
+      // (never the patient's name).
+      this.form.referenceId = this.returnDispenseId || undefined;
+      const ref =
+        this.returnReference.trim() ||
+        (this.returnDispenseId ? `D-${this.returnDispenseId.slice(0, 8)}` : '');
+      this.form.reason = `RETURN ref ${ref}`;
     }
   }
 

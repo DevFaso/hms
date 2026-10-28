@@ -187,6 +187,85 @@ public class StockTransactionServiceImpl implements StockTransactionService {
                 .toList();
     }
 
+    /** QA D932: the states a fill can be returned against (the same as requireReturnWithinDispense). */
+    private static final List<com.example.hms.enums.DispenseStatus> RETURNABLE_FILL_STATES = List.of(
+            com.example.hms.enums.DispenseStatus.COMPLETED, com.example.hms.enums.DispenseStatus.PARTIAL);
+    /** QA D932: the most fills the return form lists. */
+    static final int RETURNABLE_LIST_MAX = 50;
+
+    /**
+     * QA D932: a return of dispensed stock must name its dispense, and the
+     * form had no way to: it cleared the reference and the server refused
+     * every return ("Un retour de stock délivré doit indiquer sa délivrance").
+     * The fills listed are those {@link #requireReturnWithinDispense} accepts
+     * for this item and lot, with what each can still take back.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.example.hms.payload.dto.pharmacy.ReturnableDispenseDTO> listReturnableDispenses(
+            UUID inventoryItemId, UUID stockLotId) {
+        InventoryItem item = resolveInventoryItem(inventoryItemId);
+        enforceHospitalScope(item.getPharmacy());
+        List<com.example.hms.model.pharmacy.Dispense> fills;
+        if (stockLotId != null) {
+            StockLot lot = stockLotRepository.findById(stockLotId)
+                    .orElseThrow(() -> new ResourceNotFoundException("stockLot.notFound", stockLotId));
+            if (lot.getInventoryItem() == null || !item.getId().equals(lot.getInventoryItem().getId())) {
+                throw new BusinessException(MessageUtil.resolve("stockTransaction.lot.wrongItem"));
+            }
+            fills = dispenseRepository.findByStockLot_IdAndStatusInOrderByCreatedAtDesc(stockLotId,
+                    RETURNABLE_FILL_STATES);
+        } else if (item.getMedicationCatalogItem() != null && item.getPharmacy() != null) {
+            fills = dispenseRepository
+                    .findTop50ByPharmacy_IdAndMedicationCatalogItem_IdAndStockLotIsNullAndStatusInOrderByCreatedAtDesc(
+                            item.getPharmacy().getId(), item.getMedicationCatalogItem().getId(),
+                            RETURNABLE_FILL_STATES);
+        } else {
+            fills = List.of();
+        }
+        if (fills == null || fills.isEmpty()) {
+            return List.of();
+        }
+        List<com.example.hms.model.pharmacy.Dispense> recent = fills.stream().limit(RETURNABLE_LIST_MAX).toList();
+        Map<UUID, BigDecimal> returned = new java.util.HashMap<>();
+        List<Object[]> rows = stockTransactionRepository.sumQuantityByReferences(
+                recent.stream().map(com.example.hms.model.pharmacy.Dispense::getId).toList(), RETURNED_TYPES);
+        if (rows != null) {
+            for (Object[] row : rows) {
+                if (row != null && row.length == 2 && row[0] instanceof UUID id && row[1] instanceof BigDecimal sum) {
+                    returned.put(id, sum);
+                }
+            }
+        }
+        List<com.example.hms.payload.dto.pharmacy.ReturnableDispenseDTO> out = new java.util.ArrayList<>();
+        for (com.example.hms.model.pharmacy.Dispense d : recent) {
+            BigDecimal returnable = nz(d.getQuantityDispensed()).subtract(nz(returned.get(d.getId())));
+            if (returnable.signum() <= 0) {
+                continue;
+            }
+            out.add(new com.example.hms.payload.dto.pharmacy.ReturnableDispenseDTO(
+                    d.getId(),
+                    d.getPrescription() != null ? d.getPrescription().getId() : null,
+                    patientName(d.getPatient()),
+                    d.getMedicationName(),
+                    d.getDispensedAt(),
+                    d.getQuantityDispensed(),
+                    returnable,
+                    d.getUnit(),
+                    d.getStockLot() != null ? d.getStockLot().getLotNumber() : null));
+        }
+        return out;
+    }
+
+    private static String patientName(com.example.hms.model.Patient patient) {
+        if (patient == null) {
+            return null;
+        }
+        String full = (Objects.toString(patient.getFirstName(), "").trim() + " "
+                + Objects.toString(patient.getLastName(), "").trim()).trim();
+        return full.isEmpty() ? null : full;
+    }
+
     // ── Private helpers ──────────────────────────────────────────────────
 
     /**

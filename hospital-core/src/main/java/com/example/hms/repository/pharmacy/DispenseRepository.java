@@ -48,6 +48,13 @@ public interface DispenseRepository extends JpaRepository<Dispense, UUID> {
 
     Page<Dispense> findByPharmacyId(UUID pharmacyId, Pageable pageable);
 
+    /**
+     * QA D932: the newest fills of an item that is not kept in lots - from
+     * that pharmacy, of that catalogue item, with no lot - in the given states.
+     */
+    List<Dispense> findTop50ByPharmacy_IdAndMedicationCatalogItem_IdAndStockLotIsNullAndStatusInOrderByCreatedAtDesc(
+            UUID pharmacyId, UUID medicationCatalogItemId, Collection<DispenseStatus> statuses);
+
     /** QA D653: the fills taken from one lot in the given states, newest first. */
     List<Dispense> findByStockLot_IdAndStatusInOrderByCreatedAtDesc(UUID stockLotId,
                                                                     Collection<DispenseStatus> statuses);

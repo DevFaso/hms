@@ -188,6 +188,22 @@ export interface StockTransactionRequest {
   fefoOverrideReason?: string;
 }
 
+/**
+ * QA D932: a fill a return can be booked against (completed or partial, of
+ * the chosen item and lot, with stock still out).
+ */
+export interface ReturnableDispense {
+  dispenseId: string;
+  prescriptionId?: string;
+  patientName?: string;
+  medicationName?: string;
+  dispensedAt?: string;
+  quantityDispensed: number;
+  returnableQuantity: number;
+  unit?: string;
+  lotNumber?: string;
+}
+
 export interface StockTransactionResponse {
   id: string;
   inventoryItemId: string;
@@ -823,6 +839,19 @@ export class PharmacyService {
   listWitnessCandidates(): Observable<ApiResponse<StockWitnessCandidate[]>> {
     return this.http.get<ApiResponse<StockWitnessCandidate[]>>(
       '/pharmacy/stock-transactions/witness-candidates',
+    );
+  }
+
+  /** QA D932: the fills a return of this item (and lot) can be booked against. */
+  listReturnableDispenses(
+    inventoryItemId: string,
+    stockLotId?: string,
+  ): Observable<ApiResponse<ReturnableDispense[]>> {
+    let params = new HttpParams().set('inventoryItemId', inventoryItemId);
+    if (stockLotId) params = params.set('stockLotId', stockLotId);
+    return this.http.get<ApiResponse<ReturnableDispense[]>>(
+      '/pharmacy/stock-transactions/returnable-dispenses',
+      { params },
     );
   }
 

@@ -51,6 +51,16 @@ public interface StockTransactionRepository extends JpaRepository<StockTransacti
     BigDecimal sumQuantityForReference(@Param("referenceId") UUID referenceId,
                                        @Param("types") Collection<StockTransactionType> types);
 
+    /**
+     * QA D932: {@link #sumQuantityForReference} for several references in one
+     * query, as {@code [referenceId, total]} rows; a reference with nothing
+     * moved has no row.
+     */
+    @Query("SELECT t.referenceId, COALESCE(SUM(t.quantity), 0) FROM StockTransaction t "
+         + "WHERE t.referenceId IN :referenceIds AND t.transactionType IN :types GROUP BY t.referenceId")
+    java.util.List<Object[]> sumQuantityByReferences(@Param("referenceIds") Collection<UUID> referenceIds,
+                                           @Param("types") Collection<StockTransactionType> types);
+
     Page<StockTransaction> findByInventoryItemPharmacyId(UUID pharmacyId, Pageable pageable);
 
     @Query("SELECT t FROM StockTransaction t WHERE t.inventoryItem.pharmacy.id = :pharmacyId " +

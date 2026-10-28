@@ -20,6 +20,13 @@ public interface StockTransactionService {
     /** QA D157: who in the active hospital may witness a controlled-substance movement. */
     List<StockWitnessCandidateDTO> listWitnessCandidates();
 
+    /**
+     * QA D932: the fills a return of this item (and lot) can be booked
+     * against, newest first, each with what can still come back.
+     */
+    List<com.example.hms.payload.dto.pharmacy.ReturnableDispenseDTO> listReturnableDispenses(
+            UUID inventoryItemId, UUID stockLotId);
+
     Page<StockTransactionResponseDTO> listByInventoryItem(UUID inventoryItemId, Pageable pageable);
 
     Page<StockTransactionResponseDTO> listByPharmacy(UUID pharmacyId, Pageable pageable);
