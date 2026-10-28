@@ -148,11 +148,16 @@ public class ControlledDrugRegisterService {
                     userName(tx.getWitnessedByUser()),
                     reasonText(LocaleContextHolder.getLocale(), tx.getReason())));
         }
+        // Review of #975: the shelf count is today's; it is only comparable
+        // with a closing balance carried to today, and a truncated register
+        // has no closing balance at all (its last row is not the period's).
+        boolean coversToday = !to.isBefore(LocalDate.now(java.time.ZoneId.systemDefault()));
         List<ControlledRegisterDrugDTO> out = new ArrayList<>();
         for (InventoryItem item : drugs) {
             BigDecimal open = opening.getOrDefault(item.getId(), BigDecimal.ZERO);
             out.add(new ControlledRegisterDrugDTO(item.getId(), drugName(item), item.getUnit(), open,
-                    balance.getOrDefault(item.getId(), open), item.getQuantityOnHand(),
+                    truncated ? null : balance.getOrDefault(item.getId(), open),
+                    coversToday && !truncated ? item.getQuantityOnHand() : null,
                     entries.getOrDefault(item.getId(), List.of())));
         }
         return new ControlledRegisterDTO(pharmacy.getId(), pharmacy.getName(), from, to, truncated, out);

@@ -266,8 +266,7 @@ public class PrescriptionSmsDispatchServiceImpl implements PrescriptionSmsDispat
 
     private void requireDispatchable(Prescription rx) {
         if (!DISPATCHABLE_STATUSES.contains(rx.getStatus())) {
-            throw new BusinessException("prescription.dispatch.wrongStatus",
-                com.example.hms.utility.MessageUtil.resolveOrRaw("cds.enum." + rx.getStatus().name()));
+            throw new BusinessException("prescription.dispatch.wrongStatus", rx.getStatus().localizedLabel());
         }
         // QA D792: nor a ward order of an ended stay (the rule the counter applies).
         if (endedStayOrders.endedWithAStay(rx)) {

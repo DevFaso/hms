@@ -410,8 +410,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         PrescriptionStatus status = prescription.getStatus();
         if (status != null && status != PrescriptionStatus.DRAFT
                 && status != PrescriptionStatus.PENDING_SIGNATURE) {
-            throw new BusinessException("prescription.sign.wrongStatus",
-                com.example.hms.utility.MessageUtil.resolveOrRaw("cds.enum." + status.name()));
+            throw new BusinessException("prescription.sign.wrongStatus", status.localizedLabel());
         }
 
         Staff signer = resolveSigningPrescriber(prescription);
@@ -482,8 +481,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         PrescriptionStatus status = prescription.getStatus();
         if (status != null && status != PrescriptionStatus.DRAFT
                 && status != PrescriptionStatus.PENDING_SIGNATURE) {
-            throw new BusinessException("prescription.cosign.wrongStatus",
-                com.example.hms.utility.MessageUtil.resolveOrRaw("cds.enum." + status.name()));
+            throw new BusinessException("prescription.cosign.wrongStatus", status.localizedLabel());
         }
 
         Staff prescriber = prescription.getStaff();
@@ -1029,6 +1027,18 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         String allergyOverride = checkAllergyConflicts(patient, request);
 
         com.example.hms.model.medication.MedicationCatalogItem catalogItem = applyCatalogPick(request, hospitalId);
+        // Review of #975: an edit that names the same drug but sends neither
+        // id nor code keeps the item the order was written from (the mapper
+        // would write the null over it, dropping the controlled flag and the
+        // paediatric ceiling the link carries).
+        if (catalogItem == null && request.getMedicationCatalogItemId() == null
+                && existing.getMedicationCatalogItemId() != null
+                && !textDiffers(request.getMedicationName(), existing.getMedicationName())) {
+            request.setMedicationCatalogItemId(existing.getMedicationCatalogItemId());
+            catalogItem = medicationCatalogItemRepository == null ? null : medicationCatalogItemRepository
+                .findByIdAndHospital_Id(existing.getMedicationCatalogItemId(), hospitalId)
+                .orElse(null);
+        }
 
         // CDS rule engine: drug-drug, duplicate-order, pediatric-dose. QA D970:
         // the order being edited is not a duplicate of itself.
@@ -1893,7 +1903,16 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             return item;
         }
         if (request.getMedicationCode() != null && !request.getMedicationCode().isBlank()) {
-            return null;
+            // Review of #975: a code names this hospital's item as well as an
+            // id does; the item is written on the order so an edit sending the
+            // code alone does not drop the link (the mapper copies the id).
+            com.example.hms.model.medication.MedicationCatalogItem coded = medicationCatalogItemRepository
+                .findByHospitalIdAndCode(hospitalId, request.getMedicationCode().trim())
+                .orElse(null);
+            if (coded != null) {
+                request.setMedicationCatalogItemId(coded.getId());
+            }
+            return coded;
         }
         List<com.example.hms.model.medication.MedicationCatalogItem> named =
             catalogItemsNamed(request.getMedicationName(), hospitalId);

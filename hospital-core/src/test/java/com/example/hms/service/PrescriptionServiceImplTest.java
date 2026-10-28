@@ -4886,6 +4886,84 @@ class PrescriptionServiceImplTest {
             org.mockito.ArgumentMatchers.isNull());
     }
 
+    /** Review of #975: a code names this hospital's item; the order is linked to it. */
+    @Test
+    void d922_aMedicationCodeResolvesToTheHospitalsItem() {
+        PrescriptionRequestDTO request = buildRequest();
+        request.setMedicationCode("N02AA01");
+        com.example.hms.model.medication.MedicationCatalogItem morphine = catalogItem("Morphine", true);
+        Prescription mappedEntity = new Prescription();
+        stubCreateContext(request, mappedEntity);
+        when(catalogRepo.findByHospitalIdAndCode(hospitalId, "N02AA01")).thenReturn(Optional.of(morphine));
+
+        prescriptionService.createPrescription(request, Locale.ENGLISH);
+
+        assertThat(request.getMedicationCatalogItemId()).isEqualTo(morphine.getId());
+        verify(cdsRuleEngine).evaluateProposedPrescription(any(), any(), any(), any(), any(), eq(morphine),
+            org.mockito.ArgumentMatchers.isNull());
+    }
+
+    /**
+     * Review of #975: an edit echoing the same drug name without the catalogue
+     * id (a client that never sent one) keeps the item the order was written
+     * from, so the controlled flag and the paediatric ceiling survive the edit.
+     */
+    @Test
+    void d922_anEditWithoutTheCatalogIdKeepsTheOrdersItem() {
+        UUID prescriptionId = UUID.randomUUID();
+        UUID linkedItemId = UUID.randomUUID();
+        PrescriptionRequestDTO request = buildRequest();
+        Prescription existing = new Prescription();
+        existing.setId(prescriptionId);
+        existing.setMedicationName(TEST_MEDICATION);
+        existing.setMedicationCatalogItemId(linkedItemId);
+        UserRoleHospitalAssignment staffAssignment = new UserRoleHospitalAssignment();
+        staffAssignment.setId(UUID.randomUUID());
+        staffAssignment.setHospital(encounter.getHospital());
+        staff.setAssignment(staffAssignment);
+        UUID currentUser = staff.getUser().getId();
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(existing));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
+        when(prescriptionRepository.save(existing)).thenReturn(existing);
+        when(prescriptionMapper.toResponseDTO(existing)).thenReturn(PrescriptionResponseDTO.builder().build());
+
+        prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH);
+
+        assertThat(request.getMedicationCatalogItemId()).isEqualTo(linkedItemId);
+    }
+
+    @Test
+    void d922_anEditNamingAnotherDrugDropsTheOldItem() {
+        UUID prescriptionId = UUID.randomUUID();
+        PrescriptionRequestDTO request = buildRequest();
+        request.setMedicationName("Amoxicilline");
+        Prescription existing = new Prescription();
+        existing.setId(prescriptionId);
+        existing.setMedicationName("Morphine");
+        existing.setMedicationCatalogItemId(UUID.randomUUID());
+        UserRoleHospitalAssignment staffAssignment = new UserRoleHospitalAssignment();
+        staffAssignment.setId(UUID.randomUUID());
+        staffAssignment.setHospital(encounter.getHospital());
+        staff.setAssignment(staffAssignment);
+        UUID currentUser = staff.getUser().getId();
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(existing));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
+        when(prescriptionRepository.save(existing)).thenReturn(existing);
+        when(prescriptionMapper.toResponseDTO(existing)).thenReturn(PrescriptionResponseDTO.builder().build());
+
+        prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH);
+
+        assertThat(request.getMedicationCatalogItemId()).isNull();
+    }
+
     /** QA D970: the order being edited is not a duplicate of itself. */
     @Test
     void d970_anEditIsEvaluatedWithoutItself() {

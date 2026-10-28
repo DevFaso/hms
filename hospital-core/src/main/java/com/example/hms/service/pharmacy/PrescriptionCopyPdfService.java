@@ -170,9 +170,4 @@ public class PrescriptionCopyPdfService {
     private static String firstNonBlank(String first, String second) {
         return first != null && !first.isBlank() ? first : second;
     }
-
-    /** Kept for symmetry with the register: a date on the copy is the patient's calendar date. */
-    static String isoDate(LocalDate day) {
-        return day == null ? "" : day.toString();
-    }
 }

@@ -44,12 +44,22 @@ public final class RoutingReasonText {
             "Superseded: re-dispatched by SMS to ",
             "Not delivered: the SMS to the pharmacy failed");
 
-    private static final String SEPARATOR = "(?=\\. (?:Note: |Superseded: |Not delivered: )|$)";
+    /**
+     * A fragment up to the next ". Note: " / ". Superseded: " / ". Not delivered: "
+     * or the end. Written as "any non-period, or a period not starting a
+     * separator" rather than a lazy {@code (.+?)} with a lookahead: the two
+     * branches cannot match the same character, so a pharmacist's long typed
+     * reason is read in one pass (CodeQL polynomial-ReDoS on #975).
+     */
+    private static final String UNTIL_ANY_SEPARATOR =
+            "((?:[^.]|\\.(?! (?:Note: |Superseded: |Not delivered: )))+)";
+    private static final String UNTIL_SUPERSEDED_OR_FAILED =
+            "((?:[^.]|\\.(?! (?:Superseded: |Not delivered: )))+)";
     private static final Pattern DISPATCHED = Pattern.compile(
-            "^Dispatched by SMS to (HOSPITAL_DISPENSARY|PARTNER_PHARMACY|COMMUNITY_PHARMACY) (.+?)" + SEPARATOR);
-    private static final Pattern NOTE = Pattern.compile("\\. Note: (.+?)(?=\\. (?:Superseded: |Not delivered: )|$)");
+            "^Dispatched by SMS to (HOSPITAL_DISPENSARY|PARTNER_PHARMACY|COMMUNITY_PHARMACY) " + UNTIL_ANY_SEPARATOR);
+    private static final Pattern NOTE = Pattern.compile("\\. Note: " + UNTIL_SUPERSEDED_OR_FAILED);
     private static final Pattern SUPERSEDED = Pattern.compile(
-            "(^|\\. )Superseded: re-dispatched by SMS to (.+?)" + SEPARATOR);
+            "(^|\\. )Superseded: re-dispatched by SMS to " + UNTIL_ANY_SEPARATOR);
 
     private RoutingReasonText() {
     }

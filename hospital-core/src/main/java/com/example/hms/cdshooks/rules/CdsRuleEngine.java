@@ -286,7 +286,9 @@ public class CdsRuleEngine {
 
     /** "mg/kg", "mg / kg", "g/kg" right after the leading number. */
     private static final Pattern PER_KG = Pattern.compile(
-        "^\\s*\\d+[\\.,]?\\d*\\s*(mg|g)?\\s*/\\s*kg\\b",
+        // The unit, when present, owns the spaces after it: no two adjacent
+        // \s* for a typed run of spaces to be split between (CodeQL ReDoS).
+        "^\\s*\\d+[\\.,]?\\d*\\s*(?:(?:mg|g)\\s*)?/\\s*kg\\b",
         Pattern.CASE_INSENSITIVE
     );
 

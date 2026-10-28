@@ -268,6 +268,34 @@ class PharmacySaleServiceImplTest {
     }
 
     @Test
+    @DisplayName("review of #975: a FEFO reason that overflows the line's 500-character notes is refused with the key, not a constraint violation")
+    void aFefoReasonThatOverflowsTheLineNotesIsRefused() {
+        UUID stockLotId = UUID.randomUUID();
+        InventoryItem invItem = InventoryItem.builder().pharmacy(pharmacy).build();
+        StockLot lot = StockLot.builder().inventoryItem(invItem).build();
+        lot.setId(stockLotId);
+        SaleLineRequestDTO l = line(BigDecimal.ONE, BigDecimal.TEN);
+        l.setStockLotId(stockLotId);
+        l.setNotes("n".repeat(400));
+        l.setFefoOverrideReason("r".repeat(150));
+        PharmacySaleRequestDTO dto = request(List.of(l));
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(userId);
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(pharmacyRepository.findByIdAndHospital_Id(pharmacyId, hospitalId)).thenReturn(Optional.of(pharmacy));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(catalogItemRepository.findById(itemId)).thenReturn(Optional.of(item));
+        when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(lot));
+        when(fefoLotPolicy.requireFefoOrReason(lot, BigDecimal.ONE, "r".repeat(150))).thenReturn("r".repeat(150));
+
+        assertThatThrownBy(() -> service.createSale(dto))
+                .isInstanceOf(BusinessException.class)
+                .extracting("messageKey").isEqualTo("pharmacy.fefo.reasonTooLong");
+        verify(saleRepository, never()).save(any());
+    }
+
+    @Test
     @DisplayName("createSale: rejects negative quantity")
     void rejectsNegativeQuantity() {
         PharmacySaleRequestDTO dto = request(List.of(line(BigDecimal.ZERO, BigDecimal.TEN)));

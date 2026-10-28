@@ -147,6 +147,25 @@ class ControlledDrugRegisterServiceTest {
         assertThat(drug.closingBalance()).isEqualByComparingTo("89");
     }
 
+    /**
+     * Review of #975: the shelf count is today's, so it is reported only when
+     * the period reaches today; a register of a past quarter compares nothing
+     * and flags no false discrepancy.
+     */
+    @Test
+    void theShelfCountIsReportedOnlyWhenThePeriodCoversToday() {
+        stubLedger();
+
+        ControlledRegisterDrugDTO current = service.register(pharmacy.getId(), null, from, to).drugs().get(0);
+        assertThat(current.quantityOnHand()).isEqualByComparingTo("89");
+
+        LocalDate pastFrom = from.minusMonths(6);
+        LocalDate pastTo = to.minusMonths(6);
+        ControlledRegisterDrugDTO past = service.register(pharmacy.getId(), null, pastFrom, pastTo).drugs().get(0);
+        assertThat(past.quantityOnHand()).isNull();
+        assertThat(past.closingBalance()).isNotNull();
+    }
+
     @Test
     void anotherHospitalsPharmacyIsNotFoundAndItsLedgerIsNeverRead() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());

@@ -50,6 +50,11 @@ import java.util.UUID;
 @Transactional
 public class PharmacySaleServiceImpl implements PharmacySaleService {
 
+    /** SaleLine.notes column length; the line's own note and a FEFO reason share it. */
+    static final int LINE_NOTES_MAX = 500;
+    /** The marker of a FEFO override in a line's notes, as on a fill. */
+    static final String FEFO_NOTE_PREFIX = "FEFO: ";
+
     private final PharmacySaleRepository saleRepository;
     private final PharmacyRepository pharmacyRepository;
     private final HospitalRepository hospitalRepository;
@@ -146,8 +151,17 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
             String fefoReason = fefoLotPolicy.requireFefoOrReason(lot, lineDto.getQuantity(),
                     lineDto.getFefoOverrideReason());
             if (fefoReason != null) {
-                lineNotes = (lineNotes == null || lineNotes.isBlank() ? "" : lineNotes.trim() + "\n")
-                        + "FEFO: " + fefoReason;
+                String existing = lineNotes == null || lineNotes.isBlank() ? null : lineNotes.trim();
+                String combined = (existing == null ? "" : existing + "\n") + FEFO_NOTE_PREFIX + fefoReason;
+                // Review of #975: SaleLine.notes is 500 characters; refused up
+                // front with what still fits, as the dispense path does, instead
+                // of a constraint violation at flush.
+                if (combined.length() > LINE_NOTES_MAX) {
+                    throw new BusinessException("pharmacy.fefo.reasonTooLong",
+                            String.valueOf(Math.max(0, LINE_NOTES_MAX
+                                    - (existing == null ? 0 : existing.length() + 1) - FEFO_NOTE_PREFIX.length())));
+                }
+                lineNotes = combined;
             }
         }
 
