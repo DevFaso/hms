@@ -68,6 +68,9 @@ public interface MedicationCatalogItemRepository extends JpaRepository<Medicatio
 
     Page<MedicationCatalogItem> findByHospital_IdAndCategoryAndActiveTrue(UUID hospitalId, String category, Pageable pageable);
 
+    /** Review of #975: the category list in the super-admin's global view, every tenant's active items. */
+    Page<MedicationCatalogItem> findByCategoryAndActiveTrue(String category, Pageable pageable);
+
     Optional<MedicationCatalogItem> findByIdAndHospital_Id(UUID id, UUID hospitalId);
 
     boolean existsByAtcCodeAndHospital_Id(String atcCode, UUID hospitalId);

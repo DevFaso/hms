@@ -164,7 +164,7 @@ class LabOrderLifecycleTest {
         }
         for (LabOrderStatus status : new LabOrderStatus[] {
             LabOrderStatus.RESULTED, LabOrderStatus.VERIFIED, LabOrderStatus.COMPLETED,
-            LabOrderStatus.ENTERED_IN_ERROR}) {
+            LabOrderStatus.ENTERED_IN_ERROR, LabOrderStatus.CANCELLED}) {
             assertThat(LabOrderLifecycle.acceptsSpecimenRejection(status)).as(status.name()).isFalse();
         }
         assertThat(LabOrderLifecycle.statusAfterSpecimenRejected(null)).isNull();

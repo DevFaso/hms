@@ -183,10 +183,13 @@ public final class LabOrderLifecycle {
     /**
      * Whether an order at {@code current} may have a specimen rejected: not
      * once a result exists (RESULTED, VERIFIED, COMPLETED), since a result
-     * from the specimen is corrected, not un-sampled; not on a void.
+     * from the specimen is corrected, not un-sampled; not on a void; not on a
+     * cancelled order (review of #975: nobody wants a new sample for it, and
+     * the rejection would page the clinician for one).
      */
     public static boolean acceptsSpecimenRejection(LabOrderStatus current) {
         return current != null && current != LabOrderStatus.ENTERED_IN_ERROR
+            && current != LabOrderStatus.CANCELLED
             && current != LabOrderStatus.RESULTED && current != LabOrderStatus.VERIFIED
             && current != LabOrderStatus.COMPLETED;
     }

@@ -392,7 +392,10 @@ public class ControlledDrugRegisterService {
         String v = value;
         char first = v.charAt(0);
         boolean number = v.matches("-?\\d+(\\.\\d+)?");
-        if (first == '=' || first == '+' || first == '@' || (first == '-' && !number)) {
+        // OWASP CSV injection: '=', '+', '@', '-' and also a leading tab or
+        // carriage return, which spreadsheet importers treat as triggers.
+        if (first == '=' || first == '+' || first == '@' || first == '\t' || first == '\r'
+                || (first == '-' && !number)) {
             v = "'" + v;
         }
         if (v.contains(";") || v.contains("\"") || v.contains("\n") || v.contains("\r")) {

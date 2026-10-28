@@ -336,6 +336,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                 if (allergies == null) {
                     allergies = patientAllergyRepository.findByPatient_Id(ctx.patientId());
                 }
+                boolean controlled = pharmacistVerificationService.isControlledSubstance(rx);
                 result.add(NurseMedicationTaskResponseDTO.builder()
                     .id(rx.getId())
                     .patientId(ctx.patientId())
@@ -347,9 +348,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                     .dueTime(dueTime)
                     .status(marStatus)
                     .lastOutcome(lastClosed.map(r -> r.getStatus().name()).orElse(null))
-                    .controlledSubstance(pharmacistVerificationService.isControlledSubstance(rx))
+                    .controlledSubstance(controlled)
                     .requiresPharmacistVerification(
-                        pharmacistVerificationService.requiresVerification(rx))
+                        pharmacistVerificationService.requiresVerification(rx, controlled))
                     .pharmacistVerified(pharmacistVerificationService.isVerified(rx))
                     .cdsAdvisories(allergyAdvisories(rx.getMedicationName(), allergies))
                     .build());
@@ -412,11 +413,12 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         return com.example.hms.service.InpatientOrderEnd.endedWithAStay(rx, closedStays);
     }
 
-    /** Returns true when a status filter is active and the given status does not match it. */
+    /** DUE or OVERDUE: a dose the nurse can record now (QA D949). */
     private static boolean isDueStatus(String marStatus) {
         return STATUS_DUE.equals(marStatus) || STATUS_OVERDUE.equals(marStatus);
     }
 
+    /** Returns true when a status filter is active and the given status does not match it. */
     private boolean isFilteredOut(String statusFilter, String actualStatus) {
         if (statusFilter == null || statusFilter.isBlank()) return false;
         String wanted = statusFilter.trim().toUpperCase(Locale.ROOT);

@@ -354,9 +354,9 @@ public class PrescriptionMapper {
     }
 
     /**
-     * QA D934: an unsigned order whose prescriber is not a doctor, physician
-     * or surgeon at the order's hospital (a nurse's or a midwife's draft).
-     * The same rule {@code PrescriptionServiceImpl} applies when a doctor
+     * QA D934: an unsigned order drafted by a nurse or a midwife of the
+     * order's hospital ({@code RoleValidator.draftsForPhysicianSignature}),
+     * the same rule {@code PrescriptionServiceImpl} applies when a doctor
      * signs it.
      */
     private boolean awaitsPhysicianSignature(Prescription p, Staff staff, java.util.UUID hospitalId) {
@@ -368,9 +368,7 @@ public class PrescriptionMapper {
         if (userId == null) {
             return false;
         }
-        return !(roleValidator.isDoctor(userId, hospitalId)
-            || roleValidator.isPhysician(userId, hospitalId)
-            || roleValidator.isSurgeon(userId, hospitalId));
+        return roleValidator.draftsForPhysicianSignature(userId, hospitalId);
     }
 
     private java.util.UUID resolveHospitalId(Hospital hospital, Encounter enc) {

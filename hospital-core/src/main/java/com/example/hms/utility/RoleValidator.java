@@ -186,6 +186,32 @@ public class RoleValidator {
             userId, hospitalId, expandCodesForDb(baseCode));
     }
 
+    /** Any of several base codes, in ONE query (the repository takes the whole set). */
+    private boolean hasAnyCode(UUID userId, UUID hospitalId, String... baseCodes) {
+        var wanted = new HashSet<String>();
+        for (var base : baseCodes) wanted.addAll(expandCodesForDb(base));
+        return assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(userId, hospitalId, wanted);
+    }
+
+    /**
+     * QA D934: a doctor, physician or surgeon at {@code hospitalId} - the roles
+     * whose signature a prescription carries. One query over the three codes.
+     */
+    public boolean isSigningPhysician(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, DOCTOR_ROLE, PHYSICIAN_ROLE, SURGEON_ROLE);
+    }
+
+    /**
+     * QA D934: a nurse or a midwife at {@code hospitalId} who is not also a
+     * signing physician there: her draft waits for a doctor of that hospital
+     * to sign. Deliberately NOT "anyone who is not a physician" (review of
+     * #975): a doctor credentialed elsewhere, or a prescriber outside these
+     * two roles, keeps "only the prescribing clinician signs".
+     */
+    public boolean draftsForPhysicianSignature(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, NURSE_ROLE, "MIDWIFE") && !isSigningPhysician(userId, hospitalId);
+    }
+
     public boolean isDoctor(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, DOCTOR_ROLE); }
     public boolean isPhysician(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, PHYSICIAN_ROLE); }
     public boolean isSurgeon(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, SURGEON_ROLE); }

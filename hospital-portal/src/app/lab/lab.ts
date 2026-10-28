@@ -933,6 +933,7 @@ export class LabComponent implements OnInit {
     const status = this.specimensOrder()?.status;
     return (
       this.specimensOrderAcceptsSpecimens() &&
+      status !== 'CANCELLED' &&
       status !== 'RESULTED' &&
       status !== 'VERIFIED' &&
       status !== 'COMPLETED'

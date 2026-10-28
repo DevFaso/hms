@@ -4930,10 +4930,71 @@ class PrescriptionServiceImplTest {
         when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
         when(prescriptionRepository.save(existing)).thenReturn(existing);
         when(prescriptionMapper.toResponseDTO(existing)).thenReturn(PrescriptionResponseDTO.builder().build());
+        com.example.hms.model.medication.MedicationCatalogItem linked = catalogItem(TEST_MEDICATION, true);
+        linked.setId(linkedItemId);
+        when(catalogRepo.findByIdAndHospital_Id(linkedItemId, hospitalId)).thenReturn(Optional.of(linked));
 
         prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH);
 
         assertThat(request.getMedicationCatalogItemId()).isEqualTo(linkedItemId);
+        // The kept link is the answer: no name resolution runs over the catalogue.
+        verify(catalogRepo, never()).findByHospital_IdAndActiveTrue(any(), any());
+        verify(cdsRuleEngine).evaluateProposedPrescription(any(), any(), any(), any(), any(), eq(linked),
+            eq(prescriptionId));
+    }
+
+    /**
+     * Review of #975: a legacy order never linked, whose name matches two
+     * controlled items, stays editable: an edit keeping the name leaves it as
+     * it was instead of refusing every edit as ambiguous.
+     */
+    @Test
+    void d922_anEditOfAnUnlinkedLegacyOrderKeepingItsNameIsNotRefusedAsAmbiguous() {
+        UUID prescriptionId = UUID.randomUUID();
+        PrescriptionRequestDTO request = buildRequest();
+        request.setMedicationName("Morphine");
+        Prescription existing = new Prescription();
+        existing.setId(prescriptionId);
+        existing.setMedicationName("Morphine");
+        UserRoleHospitalAssignment staffAssignment = new UserRoleHospitalAssignment();
+        staffAssignment.setId(UUID.randomUUID());
+        staffAssignment.setHospital(encounter.getHospital());
+        staff.setAssignment(staffAssignment);
+        UUID currentUser = staff.getUser().getId();
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(existing));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
+        when(prescriptionRepository.save(existing)).thenReturn(existing);
+        when(prescriptionMapper.toResponseDTO(existing)).thenReturn(PrescriptionResponseDTO.builder().build());
+        when(catalogRepo.findByHospital_IdAndActiveTrue(eq(hospitalId), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(
+                List.of(catalogItem("Morphine", true), catalogItem("Morphine", true))));
+
+        prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH);
+
+        assertThat(request.getMedicationCatalogItemId()).isNull();
+        verify(prescriptionRepository).save(existing);
+    }
+
+    /** Review of #975: a code no catalogue item carries does not let the name escape the flag. */
+    @Test
+    void d922_anUnknownCodeFallsThroughToTheName() {
+        PrescriptionRequestDTO request = buildRequest();
+        request.setMedicationName("Morphine");
+        request.setMedicationCode("7052");
+        com.example.hms.model.medication.MedicationCatalogItem morphine = catalogItem("Morphine", true);
+        Prescription mappedEntity = new Prescription();
+        stubCreateContext(request, mappedEntity);
+        when(catalogRepo.findByHospitalIdAndCode(hospitalId, "7052")).thenReturn(Optional.empty());
+        when(catalogRepo.findByHospital_IdAndActiveTrue(eq(hospitalId), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(morphine)));
+
+        prescriptionService.createPrescription(request, Locale.ENGLISH);
+
+        assertThat(request.getMedicationCatalogItemId()).isEqualTo(morphine.getId());
     }
 
     @Test
@@ -5006,7 +5067,8 @@ class PrescriptionServiceImplTest {
         when(prescriptionRepository.findById(rx.getId())).thenReturn(Optional.of(rx));
         when(roleValidator.requireActiveHospitalId()).thenReturn(rxHospitalId);
         when(roleValidator.getCurrentUserId()).thenReturn(doctorUserId);
-        lenient().when(roleValidator.isDoctor(doctorUserId, rxHospitalId)).thenReturn(true);
+        when(roleValidator.draftsForPhysicianSignature(midwifeUserId, rxHospitalId)).thenReturn(true);
+        when(roleValidator.isSigningPhysician(doctorUserId, rxHospitalId)).thenReturn(true);
         when(staffRepository.findByUserIdAndHospitalId(doctorUserId, rxHospitalId)).thenReturn(Optional.of(doctor));
         when(prescriptionRepository.save(rx)).thenReturn(rx);
         when(prescriptionMapper.toResponseDTO(rx)).thenReturn(PrescriptionResponseDTO.builder().build());
@@ -5027,12 +5089,38 @@ class PrescriptionServiceImplTest {
         when(prescriptionRepository.findById(rx.getId())).thenReturn(Optional.of(rx));
         when(roleValidator.requireActiveHospitalId()).thenReturn(rxHospitalId);
         when(roleValidator.getCurrentUserId()).thenReturn(doctorUserId);
-        lenient().when(roleValidator.isDoctor(any(), eq(rxHospitalId))).thenReturn(true);
+        // The other doctor holds a signature of her own: her draft is not a nurse's.
+        when(roleValidator.draftsForPhysicianSignature(otherDoctorUserId, rxHospitalId)).thenReturn(false);
+        lenient().when(roleValidator.isSigningPhysician(doctorUserId, rxHospitalId)).thenReturn(true);
 
         UUID rxId = rx.getId();
         assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, Locale.ENGLISH))
             .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
         assertThat(rx.getSignatureValue()).isNull();
+    }
+
+    /**
+     * Review of #975: the rule is "a nurse's or a midwife's draft", not "anyone
+     * who is not a physician here": a prescriber outside those roles (a doctor
+     * credentialed elsewhere, a dentist) keeps "only the prescriber signs".
+     */
+    @Test
+    void d934_aDraftOfAnotherKindOfPrescriberIsNotSignedByALocalDoctor() {
+        UUID otherPrescriberUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(otherPrescriberUserId);
+        UUID rxHospitalId = rx.getHospital().getId();
+        UUID doctorUserId = UUID.randomUUID();
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(Optional.of(rx));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(rxHospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(doctorUserId);
+        when(roleValidator.draftsForPhysicianSignature(otherPrescriberUserId, rxHospitalId)).thenReturn(false);
+        lenient().when(roleValidator.isSigningPhysician(doctorUserId, rxHospitalId)).thenReturn(true);
+
+        UUID rxId = rx.getId();
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(rx.getSignatureValue()).isNull();
+        verify(staffRepository, never()).findByUserIdAndHospitalId(any(), any());
     }
 
 }

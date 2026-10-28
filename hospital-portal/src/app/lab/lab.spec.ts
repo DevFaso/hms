@@ -370,7 +370,7 @@ describe('LabComponent — performing laboratory', () => {
       expect(component.canReject({ ...received, status: 'PROCESSING' })).toBeFalse();
       expect(component.canReject({ ...received, status: 'REJECTED' })).toBeFalse();
       // Review of #975: once the order has a result the server refuses the rejection.
-      for (const status of ['RESULTED', 'VERIFIED', 'COMPLETED', 'ENTERED_IN_ERROR']) {
+      for (const status of ['RESULTED', 'VERIFIED', 'COMPLETED', 'ENTERED_IN_ERROR', 'CANCELLED']) {
         component.openSpecimens(order({ status }));
         expect(component.canReject(received)).withContext(status).toBeFalse();
       }

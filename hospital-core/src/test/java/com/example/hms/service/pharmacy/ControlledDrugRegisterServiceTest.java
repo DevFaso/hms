@@ -221,6 +221,9 @@ class ControlledDrugRegisterServiceTest {
     void aCellThatLooksLikeAFormulaIsNeutralised() {
         assertThat(ControlledDrugRegisterService.csvCell("=HYPERLINK(\"x\")")).isEqualTo("\"'=HYPERLINK(\"\"x\"\")\"");
         assertThat(ControlledDrugRegisterService.csvCell("-2")).isEqualTo("-2");
+        // Review of #975: a leading tab is a formula trigger in spreadsheet imports too.
+        assertThat(ControlledDrugRegisterService.csvCell("\t=HYPERLINK(\"x\")")).startsWith("\"'\t=");
+        assertThat(ControlledDrugRegisterService.csvCell("\r+1")).startsWith("\"'\r+");
         assertThat(ControlledDrugRegisterService.csvCell("a;b")).isEqualTo("\"a;b\"");
     }
 
