@@ -178,6 +178,7 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
         // hospital-scoped order in the receiving hospital or the whole
         // message is rejected.
         Map<String, LabOrder> ordersByPlacer = new LinkedHashMap<>();
+        Map<String, java.util.UUID> specimenIdByPlacer = new java.util.HashMap<>();
         for (ParsedObservation observation : observations) {
             String placer = observation.placerOrderNumber().trim();
             if (ordersByPlacer.containsKey(placer)) {
@@ -242,6 +243,21 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
                 return MllpInboundOutcome.REJECTED_INVALID;
             }
             ordersByPlacer.put(placer, order);
+            specimenIdByPlacer.put(placer, specimen.get().getId());
+        }
+        // Review of #975: the rejection above was judged on the specimen as
+        // loaded; a rejection that committed since is seen here, under the
+        // order lock every specimen writer takes, before any result is saved.
+        for (Map.Entry<String, LabOrder> entry : ordersByPlacer.entrySet()) {
+            labOrderRepository.findWithLockById(entry.getValue().getId());
+            if (specimenRepository.findStatusById(specimenIdByPlacer.get(entry.getKey()))
+                    == com.example.hms.enums.LabSpecimenStatus.REJECTED) {
+                log.warn("MLLP ORU^R01 placer={} maps to a specimen rejected while the message was read",
+                    Hl7SenderText.quote(entry.getKey()));
+                recordInboundMessage(integrationId, organizationId, rawMessageBody,
+                    IntegrationMessageStatus.FAILED, "specimen rejected");
+                return MllpInboundOutcome.REJECTED_INVALID;
+            }
         }
 
         List<String> setIds = normalizedSetIds(observations);

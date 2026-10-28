@@ -933,15 +933,6 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             : prescriptionRepository.findByHospital_IdAndStatusIn(hospitalId, filter, pageable);
     }
 
-    /**
-     * Review of #975: an edit that names the same drug but sends neither id
-     * nor code keeps the item the order was written from, BEFORE any
-     * resolution runs (the mapper would write the null over the link,
-     * dropping the controlled flag and the paediatric ceiling it carries).
-     * An edit of a legacy, unlinked order keeping its name is resolved
-     * leniently by {@code applyCatalogPick}: one match links it, several
-     * leave it as it was. Returns whether the edit names the same drug.
-     */
     /** The same person: the same staff row, or two staff rows of one user account. */
     private static boolean sameClinician(Staff a, Staff b) {
         if (a == null || b == null) {
@@ -954,6 +945,15 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             && a.getUser().getId().equals(b.getUser().getId());
     }
 
+    /**
+     * Review of #975: an edit that names the same drug but sends neither id
+     * nor code keeps the item the order was written from, BEFORE any
+     * resolution runs (the mapper would write the null over the link,
+     * dropping the controlled flag and the paediatric ceiling it carries).
+     * An edit of a legacy, unlinked order keeping its name is resolved
+     * leniently by {@code applyCatalogPick}: one match links it, several
+     * leave it as it was. Returns whether the edit names the same drug.
+     */
     private static boolean keepCatalogLinkBeforeResolution(Prescription existing, PrescriptionRequestDTO request) {
         boolean sameDrugEdit = !textDiffers(request.getMedicationName(), existing.getMedicationName());
         if (existing.getMedicationCatalogItemId() != null && sameDrugEdit

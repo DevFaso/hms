@@ -106,14 +106,12 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
                 .build();
 
         BigDecimal runningTotal = BigDecimal.ZERO;
-        // What the lines before this one take off each lot (nothing moves
-        // until the sale is saved), so FEFO judges each line on what is left.
-        java.util.Map<java.util.UUID, BigDecimal> takenByLot = new java.util.HashMap<>();
+        // What the sale's lines take off each lot (nothing moves until the
+        // sale is saved), so FEFO judges each line on what the others leave,
+        // whatever order the lines were entered in (review of #975).
+        java.util.Map<java.util.UUID, BigDecimal> takenByLot = quantityTakenByLot(dto.getLines());
         for (SaleLineRequestDTO lineDto : dto.getLines()) {
-            SaleLine line = buildLine(lineDto, pharmacy, java.util.Map.copyOf(takenByLot));
-            if (line.getStockLot() != null && line.getStockLot().getId() != null) {
-                takenByLot.merge(line.getStockLot().getId(), line.getQuantity(), BigDecimal::add);
-            }
+            SaleLine line = buildLine(lineDto, pharmacy, takenByLot);
             sale.addLine(line);
             runningTotal = runningTotal.add(line.getLineTotal());
         }
@@ -123,6 +121,17 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
         log.info("Recorded pharmacy sale {} ({} lines, total {})",
                 saved.getId(), saved.getLines().size(), saved.getTotalAmount());
         return mapper.toResponseDTO(saved);
+    }
+
+    /** The quantity each lot gives up across all the lines of a sale (positive quantities only). */
+    private static java.util.Map<java.util.UUID, BigDecimal> quantityTakenByLot(java.util.List<SaleLineRequestDTO> lines) {
+        java.util.Map<java.util.UUID, BigDecimal> taken = new java.util.HashMap<>();
+        for (SaleLineRequestDTO line : lines) {
+            if (line.getStockLotId() != null && line.getQuantity() != null && line.getQuantity().signum() > 0) {
+                taken.merge(line.getStockLotId(), line.getQuantity(), BigDecimal::add);
+            }
+        }
+        return java.util.Map.copyOf(taken);
     }
 
     private SaleLine buildLine(SaleLineRequestDTO lineDto, Pharmacy pharmacy,

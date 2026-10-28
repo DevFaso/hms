@@ -43,11 +43,11 @@ public class FefoLotPolicy {
     }
 
     /**
-     * {@link #earlierLot(StockLot, BigDecimal)}, less what earlier lines of
-     * the same movement already take off each lot ({@code alreadyTaken}, by
-     * lot id): a counter sale is built line by line before any stock moves,
-     * so 10 from the shorter lot then 5 from the next is FEFO, not a skip
-     * (review of #975).
+     * {@link #earlierLot(StockLot, BigDecimal)}, less what the other lines of
+     * the same movement take off each lot ({@code alreadyTaken}, by lot id;
+     * the chosen lot's own entry is never read): a counter sale is built
+     * before any stock moves, so 10 from the shorter lot and 5 from the next
+     * is FEFO, not a skip, in either order (review of #975).
      */
     public Optional<StockLot> earlierLot(StockLot chosen, BigDecimal quantity,
                                          java.util.Map<java.util.UUID, BigDecimal> alreadyTaken) {

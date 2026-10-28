@@ -336,6 +336,26 @@ class MllpInboundLabServiceImplTest {
     }
 
     @Test
+    @DisplayName("Review of #975 — a tube rejected while the ORU was being read takes no result either")
+    void rejectedWhenTheSpecimenWasRejectedSinceItWasRead() {
+        specimen.setStatus(com.example.hms.enums.LabSpecimenStatus.RECEIVED);
+        when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
+        when(specimenRepository.findStatusById(specimen.getId()))
+            .thenReturn(com.example.hms.enums.LabSpecimenStatus.REJECTED);
+
+        MllpInboundOutcome outcome = service.processOruR01(
+            List.of(observation("ACC-1", "5.4")), hospital, "APP", "FAC",
+            "MSG-CTRL-REJ2", "MSH|...\r");
+
+        assertThat(outcome).isEqualTo(MllpInboundOutcome.REJECTED_INVALID);
+        verify(labOrderRepository).findWithLockById(labOrder.getId());
+        verify(labResultRepository, never()).save(any());
+        verify(messageRecorder).recordMessage(
+            any(), any(), any(), any(), any(),
+            eq(IntegrationMessageStatus.FAILED), eq("specimen rejected"));
+    }
+
+    @Test
     @DisplayName("QA D820 — an order voided as entered in error takes no result from the analyser")
     void rejectedWhenTheOrderWasVoided() {
         labOrder.setStatus(com.example.hms.enums.LabOrderStatus.ENTERED_IN_ERROR);

@@ -186,6 +186,15 @@ class ControlledDrugRegisterServiceTest {
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
+    /** Review of #975: both ends of the period count, and exactly 366 days is still a register. */
+    @Test
+    void aPeriodOfExactly366DaysIsAccepted() {
+        stubLedger();
+        LocalDate day366 = from.plusDays(365);
+
+        assertThat(service.register(pharmacy.getId(), null, from, day366).drugs()).isNotEmpty();
+    }
+
     @Test
     void aBackwardsOrOverlongPeriodIsRefused() {
         UUID pharmacyId = pharmacy.getId();
