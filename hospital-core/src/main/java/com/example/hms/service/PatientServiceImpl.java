@@ -422,7 +422,7 @@ public class PatientServiceImpl implements PatientService {
         Patient updatedPatient = patientRepository.save(patient);
         // QA D926: the full replace is audited like the PATCH (the controller
         // opts out of the generic write audit on the strength of this row).
-        auditPatientUpdate(updatedPatient, "Patient demographics replaced");
+        auditPatientUpdate(updatedPatient, phoneHospitalId, "Patient demographics replaced");
 
         return buildPatientDto(updatedPatient, dto.getHospitalId());
     }
@@ -459,7 +459,8 @@ public class PatientServiceImpl implements PatientService {
             .toList();
         if (!changedFields.isEmpty()) {
             patientRepository.save(patient);
-            auditPatientUpdate(patient, "Patient demographics updated: " + String.join(", ", changedFields));
+            auditPatientUpdate(patient, hospitalId != null ? hospitalId : patient.getHospitalId(),
+                "Patient demographics updated: " + String.join(", ", changedFields));
         }
 
         // The caller's hospital's view (its MRN, its sharing opt-out), not the
@@ -622,7 +623,7 @@ public class PatientServiceImpl implements PatientService {
      * QA D926: a demographics correction is audited like every other patient
      * write. The description names the fields changed, never their values.
      */
-    private void auditPatientUpdate(Patient patient, String description) {
+    private void auditPatientUpdate(Patient patient, UUID hospitalId, String description) {
         // After the commit: a write that fails at commit (a unique number,
         // an e-mail) must not leave a SUCCESS row for a change that never
         // happened. The audit runs in its own transaction.
@@ -631,14 +632,15 @@ public class PatientServiceImpl implements PatientService {
         try {
             final UUID actorId = roleValidator.getCurrentUserId();
             final String actorName = SecurityUtils.getCurrentUsername();
-            com.example.hms.utility.TransactionCallbacks.afterCommit(() -> emitPatientUpdate(patient, description,
-                actorId, actorName));
+            com.example.hms.utility.TransactionCallbacks.afterCommit(() -> emitPatientUpdate(patient, hospitalId,
+                description, actorId, actorName));
         } catch (RuntimeException ex) {
             log.warn("Failed to schedule demographics audit for patient {}: {}", patient.getId(), ex.getMessage());
         }
     }
 
-    private void emitPatientUpdate(Patient patient, String description, UUID actorId, String actorName) {
+    private void emitPatientUpdate(Patient patient, UUID hospitalId, String description, UUID actorId,
+                                   String actorName) {
         try {
             auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                 .eventType(AuditEventType.PATIENT_UPDATE)
@@ -646,6 +648,9 @@ public class PatientServiceImpl implements PatientService {
                 .entityType(AUDIT_ENTITY_PATIENT)
                 .resourceId(patient.getId().toString())
                 .patientId(patient.getId())
+                // The hospital the edit was made at anchors the row in that
+                // hospital's audit log, as the generic write audit did (review round 12).
+                .hospitalId(hospitalId)
                 .userId(actorId)
                 .userName(actorName)
                 .eventDescription(description)

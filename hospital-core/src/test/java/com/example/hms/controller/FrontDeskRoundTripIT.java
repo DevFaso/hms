@@ -368,8 +368,11 @@ class FrontDeskRoundTripIT extends BaseIT {
                 && a.getEventDescription() != null && a.getEventDescription().startsWith("Patient demographics"))
             .toList();
         // The first PATCH moved the city (lastName was already Kaboré); the second changed nothing.
-        assertThat(audit).singleElement().satisfies(a ->
-            assertThat(a.getEventDescription()).contains("address").doesNotContain("lastName"));
+        assertThat(audit).singleElement().satisfies(a -> {
+            assertThat(a.getEventDescription()).contains("address").doesNotContain("lastName");
+            // Round 12: anchored at the desk's hospital, so its audit log shows it.
+            assertThat(a.getHospitalId()).isEqualTo(hospital.getId());
+        });
     }
 
     @Test

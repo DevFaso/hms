@@ -65,7 +65,7 @@ public class EncounterRequestDTO {
      * of a walk-in). It used to travel as {@code notes}, so the queue showed
      * "Walk-in" and triage started with an empty chief complaint.
      */
-    @Size(max = 2000, message = "{encounter.notes.size}")
+    @Size(max = 2000, message = "{encounter.chiefComplaint.size}")
     private String chiefComplaint;
 
     /** Department is usually required for check-in/queueing */
