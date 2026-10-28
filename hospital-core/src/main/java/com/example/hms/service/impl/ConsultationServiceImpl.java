@@ -820,6 +820,13 @@ public class ConsultationServiceImpl implements ConsultationService {
      */
     private void requireConsultantAtHospital(Staff consultant, Consultation consultation) {
         requireConsultantAtHospital(consultant, consultation.getHospital() != null ? consultation.getHospital().getId() : null);
+        // QA D955 class: a consult asks a colleague; the requester is never its consultant.
+        Staff requester = consultation.getRequestingProvider();
+        if (requester != null && requester.getUser() != null && consultant.getUser() != null
+                && requester.getUser().getId() != null
+                && requester.getUser().getId().equals(consultant.getUser().getId())) {
+            throw new BusinessException("consultation.consultant.notRequester");
+        }
     }
 
     private void requireConsultantAtHospital(Staff consultant, UUID hospitalId) {

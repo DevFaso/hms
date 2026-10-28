@@ -233,6 +233,13 @@ describe('ReferralsComponent', () => {
     expect(component.isReceivingSide({ id: 'r-5', hospitalId: 'h-A' } as any)).toBeTrue();
   });
 
+  it('QA D955: the referrer is offered no receiving step on her own internal referral', () => {
+    const own = { id: 'r-6', hospitalId: 'h-A', referringProviderId: 'staff-1' } as any;
+    expect(component.isReceivingSide(own)).toBeFalse();
+    const el = showAsDoctor({ ...own, status: 'SUBMITTED' });
+    expect(el.querySelector('.action-link.acknowledge')).toBeNull();
+  });
+
   it('QA D611: a refused cancel shows the server reason in the dialog', () => {
     roleContextStub.hasAnyActiveRole.and.callFake((roles: string[]) =>
       roles.includes('ROLE_DOCTOR'),

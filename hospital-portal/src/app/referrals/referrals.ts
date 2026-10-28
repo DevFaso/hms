@@ -105,7 +105,11 @@ export class ReferralsComponent implements OnInit {
   isReceivingSide(r: ReferralResponse): boolean {
     const active = this.roleContext.effectiveHospitalIdForRequest();
     const target = r.receivingHospitalId || r.hospitalId;
-    return !!active && !!target && active === target;
+    // QA D955: an internal referral's two sides are one hospital; the
+    // receiving steps still belong to someone other than the referrer.
+    const staffId = this.auth.getUserProfile()?.staffId;
+    const isReferrer = !!staffId && r.referringProviderId === staffId;
+    return !!active && !!target && active === target && !isReferrer;
   }
 
   /** QA D412/D427: a draft is sent by the clinician who wrote it, and only by them. */

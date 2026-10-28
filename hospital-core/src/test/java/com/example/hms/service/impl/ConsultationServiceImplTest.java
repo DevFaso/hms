@@ -185,6 +185,19 @@ class ConsultationServiceImplTest {
         assertThat(service.acknowledgeConsultation(consultationId, staffId).getStatus()).isEqualTo(ConsultationStatus.ACKNOWLEDGED);
     }
 
+    // QA D955 class: the requester is never the consultant of her own consult.
+    @Test void qaD955_theRequesterCannotBeTheConsultant() {
+        Consultation requested = buildConsultation(ConsultationStatus.REQUESTED);
+        requested.setRequestingProvider(staff);
+        when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(requested));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        org.mockito.Mockito.lenient().when(roleValidator.isDoctor(staff.getUser().getId(), hospitalId)).thenReturn(true);
+        org.mockito.Mockito.lenient().when(scopeResolver.isVerifiedSuperAdmin()).thenReturn(true);
+        assertThatThrownBy(() -> service.acknowledgeConsultation(consultationId, staffId))
+            .isInstanceOf(BusinessException.class);
+        org.mockito.Mockito.verify(consultationRepository, org.mockito.Mockito.never()).save(any());
+    }
+
     @Test void acknowledgeConsultation_alreadyAcknowledged() {
         when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(buildConsultation(ConsultationStatus.ACKNOWLEDGED)));
         assertThatThrownBy(() -> service.acknowledgeConsultation(consultationId, staffId)).isInstanceOf(BusinessException.class);

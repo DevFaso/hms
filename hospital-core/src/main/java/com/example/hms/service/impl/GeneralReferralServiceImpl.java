@@ -197,6 +197,11 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
             throw new ResourceNotFoundException("generalReferral.receivingProvider.notFound", receivingProviderId);
         }
         requirePhysicianAt(receivingProvider, receivingHospitalId);
+        // QA D955: the referral goes to someone else; the referrer cannot be named its receiver.
+        if (sameUser(receivingProvider, referral.getReferringProvider())) {
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("generalReferral.receiver.notReferrer"));
+        }
         ReferralStatus before = referral.getStatus();
         referral.acknowledge(notes, receivingProvider);
         referral = referralRepository.save(referral);
@@ -291,8 +296,10 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
 
     private String buildAppointmentReason(GeneralReferral referral) {
         String reason = referral.getReferralReason();
-        String prefix = "Referral";
-        return (reason == null || reason.isBlank()) ? prefix : prefix + ": " + reason;
+        // Stored on the appointment the receiving desk reads: the bundle, not an English word.
+        return (reason == null || reason.isBlank())
+            ? com.example.hms.utility.MessageUtil.resolveOrRaw("generalReferral.appointment.reason")
+            : com.example.hms.utility.MessageUtil.resolve("generalReferral.appointment.reasonWith", reason);
     }
 
     @Override
@@ -524,7 +531,23 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
             throw new com.example.hms.exception.ClientSafeAccessDeniedException(
                 com.example.hms.utility.MessageUtil.resolveOrRaw("generalReferral.receivingSide.required"));
         }
+        // QA D955: an internal referral's sending and receiving hospital are the
+        // same, so the hospital check alone let the referrer accept, start and
+        // complete her own referral. Every receiving-side step is refused to
+        // the clinician who sent it.
+        UUID callerId = roleValidator.getCurrentUserId();
+        Staff referrer = referral.getReferringProvider();
+        if (callerId != null && referrer != null && referrer.getUser() != null
+                && callerId.equals(referrer.getUser().getId())) {
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("generalReferral.receiver.notReferrer"));
+        }
         return targetId;
+    }
+
+    private static boolean sameUser(Staff a, Staff b) {
+        return a != null && b != null && a.getUser() != null && b.getUser() != null
+            && a.getUser().getId() != null && a.getUser().getId().equals(b.getUser().getId());
     }
 
     private GeneralReferral findReferral(UUID referralId) {
