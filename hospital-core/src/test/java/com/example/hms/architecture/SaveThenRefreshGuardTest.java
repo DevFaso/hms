@@ -96,10 +96,13 @@ class SaveThenRefreshGuardTest {
             // Only a `return` that always runs counts: one at the block's own level that
             // starts a statement, not one inside a nested `if { … }`, a lambda or a
             // brace-less `if (x) return y;`.
-            boolean leavesMethod =
-                RETURN.matcher(source.substring(SourceScan.statementStart(source, m.start()), semicolon)).find()
-                    || unconditional(source.substring(semicolon + 1, blockEnd), RETURN, true) >= 0;
-            int windowEnd = leavesMethod ? blockEnd : endOfEnclosingMethod(source, m.start(), semicolon + 1);
+            // A save inside a `return` statement (`if (isNew) return repo.save(fresh);`)
+            // leaves the method itself: nothing after it ever runs after this save.
+            boolean returnsTheSave =
+                RETURN.matcher(source.substring(SourceScan.statementStart(source, m.start()), semicolon)).find();
+            boolean leavesMethod = unconditional(source.substring(semicolon + 1, blockEnd), RETURN, true) >= 0;
+            int windowEnd = returnsTheSave ? semicolon + 1
+                : leavesMethod ? blockEnd : endOfEnclosingMethod(source, m.start(), semicolon + 1);
             String rest = source.substring(semicolon + 1, windowEnd);
             String saved = m.group(1);
             // Every refresh that follows is checked, not only the first: a refresh of
@@ -516,6 +519,14 @@ class SaveThenRefreshGuardTest {
         assertThat(siteKey(offenders("service/A.java", multiLine).get(0)))
             .isEqualTo("service/A.java save(Appointment.builder() .notes(n) .build()) refresh(saved)");
         assertThat(offenders("x", thisField)).hasSize(1);
+        String bracelessReturnedSave = """
+                public Appointment upsert(Appointment fresh) {
+                    if (isNew) return appointmentRepository.save(fresh);
+                    entityManager.refresh(fresh);
+                    return fresh;
+                }
+            """;
+        assertThat(offenders("x", bracelessReturnedSave)).isEmpty();
         assertThat(offenders("x", elseBranch)).isEmpty();
         assertThat(offenders("x", afterTheElse)).hasSize(1);
         assertThat(offenders("x", nestedReturn)).hasSize(1);

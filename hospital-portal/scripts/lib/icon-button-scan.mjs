@@ -63,7 +63,8 @@ export function visibleText(inner) {
 function isNamed(tag) {
   for (const name of ['aria-label', 'aria-labelledby']) {
     const value = attrValue(tag, name);
-    if (value !== undefined && value.trim() !== '') return true;
+    // A bound empty literal (`[attr.aria-label]="''"`) names nothing either.
+    if (value !== undefined && value.replace(/^\s*(['"`])\s*\1\s*$/, '').trim() !== '') return true;
   }
   return false;
 }

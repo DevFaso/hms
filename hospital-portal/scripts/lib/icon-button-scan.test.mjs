@@ -98,3 +98,8 @@ test('a two-way-bound field is anchored on its binding, so two unlabelled rows a
     'field-label:input dose',
   ]);
 });
+
+test('a bound empty aria-label names nothing', () => {
+  const html = `<button [attr.aria-label]="''" (click)="del()"><span class="material-symbols-outlined">delete</span></button>`;
+  assert.equal(rules(html).length, 1);
+});
