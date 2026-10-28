@@ -7,6 +7,8 @@ import com.example.hms.model.Patient;
 import com.example.hms.model.PatientProblem;
 import com.example.hms.model.PatientVitalSign;
 import com.example.hms.model.Prescription;
+import com.example.hms.model.MaternalHistory;
+import com.example.hms.repository.MaternalHistoryRepository;
 import com.example.hms.repository.PatientProblemRepository;
 import com.example.hms.repository.PatientVitalSignRepository;
 import com.example.hms.repository.PrescriptionRepository;
@@ -17,6 +19,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.EnumSet;
@@ -88,6 +91,8 @@ public class BpaRuleEngine {
     private final PatientVitalSignRepository vitalSignRepository;
     private final PatientProblemRepository problemRepository;
     private final PrescriptionRepository prescriptionRepository;
+    /** QA D971: the current pregnancy's due date; null outside Spring (no pregnancy is assumed). */
+    private final MaternalHistoryRepository maternalHistoryRepository;
 
     public BpaRuleEngine(
         List<BpaRule> rules,
@@ -95,10 +100,22 @@ public class BpaRuleEngine {
         PatientProblemRepository problemRepository,
         PrescriptionRepository prescriptionRepository
     ) {
+        this(rules, vitalSignRepository, problemRepository, prescriptionRepository, null);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public BpaRuleEngine(
+        List<BpaRule> rules,
+        PatientVitalSignRepository vitalSignRepository,
+        PatientProblemRepository problemRepository,
+        PrescriptionRepository prescriptionRepository,
+        MaternalHistoryRepository maternalHistoryRepository
+    ) {
         this.rules = List.copyOf(rules);
         this.vitalSignRepository = vitalSignRepository;
         this.problemRepository = problemRepository;
         this.prescriptionRepository = prescriptionRepository;
+        this.maternalHistoryRepository = maternalHistoryRepository;
     }
 
     /** Build a context for the given patient; never null. */
@@ -112,7 +129,8 @@ public class BpaRuleEngine {
             hospitalId,
             loadRecentVitals(patientId, hospitalId),
             loadActiveProblems(patientId, hospitalId),
-            loadActivePrescriptions(patientId, hospitalId)
+            loadActivePrescriptions(patientId, hospitalId),
+            loadEstimatedDueDate(patientId, hospitalId)
         );
     }
 
@@ -172,6 +190,26 @@ public class BpaRuleEngine {
         return all.stream()
             .filter(p -> p.getStatus() == null || ACTIVE_PROBLEM_STATUSES.contains(p.getStatus()))
             .toList();
+    }
+
+    /**
+     * QA D971: the due date of the current maternal history (latest version),
+     * ultrasound-dated first, then the recorded date, then LMP + 280 days.
+     */
+    LocalDate loadEstimatedDueDate(UUID patientId, UUID hospitalId) {
+        if (maternalHistoryRepository == null) return null;
+        java.util.Optional<MaternalHistory> current = hospitalId != null
+            ? maternalHistoryRepository.findFirstByPatient_IdAndHospital_IdInOrderByVersionNumberDescRecordedDateDesc(
+                patientId, List.of(hospitalId))
+            : maternalHistoryRepository.findCurrentByPatientId(patientId);
+        return current.map(BpaRuleEngine::dueDateOf).orElse(null);
+    }
+
+    static LocalDate dueDateOf(MaternalHistory history) {
+        if (history.getEstimatedDueDateByUltrasound() != null) return history.getEstimatedDueDateByUltrasound();
+        if (history.getEstimatedDueDate() != null) return history.getEstimatedDueDate();
+        return history.getLastMenstrualPeriod() == null ? null
+            : history.getLastMenstrualPeriod().plusDays(PregnancyHypertensionProtocolRule.PREGNANCY_DAYS);
     }
 
     List<Prescription> loadActivePrescriptions(UUID patientId, UUID hospitalId) {
