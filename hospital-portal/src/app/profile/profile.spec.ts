@@ -88,7 +88,9 @@ describe('ProfileComponent — editing the profile', () => {
       'getMyProfile',
     ]);
     portal.updateMyProfile.and.returnValue(of({} as PatientProfileDTO));
-    portal.getMyProfile.and.returnValue(of({ phone: '+22670111111' } as PatientProfileDTO));
+    portal.getMyProfile.and.returnValue(
+      of({ phoneNumberPrimary: '+22670111111' } as PatientProfileDTO),
+    );
 
     await TestBed.configureTestingModule({
       imports: [ProfileComponent, TranslateModule.forRoot()],

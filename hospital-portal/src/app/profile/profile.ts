@@ -709,7 +709,14 @@ export class ProfileComponent implements OnInit {
       // The record's phone is read first, so a refused account save can give it back.
       this.patientPortal.getMyProfile().subscribe({
         next: (record) =>
-          this.saveRecordThenAccount(u, data, emailChanged, newEmail, password, record?.phone),
+          this.saveRecordThenAccount(
+            u,
+            data,
+            emailChanged,
+            newEmail,
+            password,
+            record?.phoneNumberPrimary,
+          ),
         error: () => this.saveRecordThenAccount(u, data, emailChanged, newEmail, password),
       });
       return;

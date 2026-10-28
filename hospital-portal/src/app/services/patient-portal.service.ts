@@ -13,7 +13,8 @@ export interface PatientProfileDTO {
   dateOfBirth: string;
   gender: string;
   email: string;
-  phone: string;
+  /** The record's phone, as the backend names it (the hospital calls this one). */
+  phoneNumberPrimary: string;
   address: string;
   emergencyContactName: string;
   emergencyContactPhone: string;
