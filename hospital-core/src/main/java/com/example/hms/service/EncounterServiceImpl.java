@@ -308,6 +308,8 @@ public class EncounterServiceImpl implements EncounterService {
     private final com.example.hms.repository.scheduling.PatientRecallRepository patientRecallRepository;
     /** QA D795: the stay's own department, which a transfer moves (BedAssignmentService, QA D237). */
     private final com.example.hms.repository.AdmissionRepository admissionRepository;
+    /** QA D972 hand-off: publishes {@link com.example.hms.event.EncounterCheckedOutEvent} at checkout. */
+    private final org.springframework.context.ApplicationEventPublisher eventPublisher;
 
         private void recordHistory(Encounter encounter, String changeType, String changedBy, String previousValuesJson) {
             EncounterHistory history = EncounterHistory.builder()
@@ -2437,7 +2439,38 @@ public class EncounterServiceImpl implements EncounterService {
                 avs.setPrescriptionSummary(medicationsAtDischarge(summary));
             }
         });
+        publishCheckedOut(encounter, now);
         return avs;
+    }
+
+    /**
+     * QA D972 hand-off (prepared in round 16): the clinic tells billing that a
+     * visit is complete, with its billable items, through an event billing
+     * consumes after commit. Nothing here knows about invoices.
+     */
+    private void publishCheckedOut(Encounter encounter, LocalDateTime checkedOutAt) {
+        if (eventPublisher == null) {
+            return;
+        }
+        UUID encounterId = encounter.getId();
+        org.springframework.data.domain.Page<Prescription> prescriptions = prescriptionRepository
+            .findByEncounter_Id(encounterId, org.springframework.data.domain.Pageable.unpaged());
+        List<UUID> prescriptionIds = prescriptions == null ? List.of() : prescriptions.getContent().stream()
+            .filter(rx -> rx.getStatus() == null || !rx.getStatus().isWithdrawn())
+            .map(Prescription::getId)
+            .toList();
+        eventPublisher.publishEvent(new com.example.hms.event.EncounterCheckedOutEvent(
+            encounterId,
+            encounter.getCode(),
+            encounter.getPatient() != null ? encounter.getPatient().getId() : null,
+            encounter.getHospital() != null ? encounter.getHospital().getId() : null,
+            encounter.getDepartment() != null ? encounter.getDepartment().getId() : null,
+            encounter.getStaff() != null ? encounter.getStaff().getId() : null,
+            encounter.getEncounterType() != null ? encounter.getEncounterType().name() : null,
+            checkedOutAt,
+            prescriptionIds,
+            labOrderRepository.findIdsByEncounterId(encounterId),
+            procedureOrderRepository.findIdsByEncounterId(encounterId)));
     }
 
     @Override

@@ -41,4 +41,8 @@ public interface ProcedureOrderRepository extends JpaRepository<ProcedureOrder, 
 
     /** True when the encounter has at least one procedure order whose status is NOT in the given terminal set. */
     boolean existsByEncounter_IdAndStatusNotIn(UUID encounterId, java.util.Collection<ProcedureOrderStatus> terminalStatuses);
+
+    /** QA D972 hand-off: the ids of a visit's procedure orders, for the checkout event billing consumes. */
+    @org.springframework.data.jpa.repository.Query("select o.id from ProcedureOrder o where o.encounter.id = :encounterId")
+    java.util.List<UUID> findIdsByEncounterId(@org.springframework.data.repository.query.Param("encounterId") UUID encounterId);
 }

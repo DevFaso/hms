@@ -107,6 +107,7 @@ class EncounterServiceImplTest {
     @Mock private EncounterNoteHistoryRepository encounterNoteHistoryRepository;
     @Mock private LabOrderRepository labOrderRepository;
     @Mock private PrescriptionRepository prescriptionRepository;
+    @Mock private org.springframework.context.ApplicationEventPublisher eventPublisher;
     @Mock private ObgynReferralRepository obgynReferralRepository;
     @Mock private UserRepository userRepository;
     @Mock private DischargeSummaryRepository dischargeSummaryRepository;
@@ -1032,6 +1033,49 @@ class EncounterServiceImplTest {
         verify(dischargeSummaryRepository).save(any(DischargeSummary.class));
         verify(notificationService).created(anyString(), org.mockito.ArgumentMatchers.eq("patient1"), org.mockito.ArgumentMatchers.eq("DISCHARGE_SUMMARY"));
         verify(emailService).sendHtml(org.mockito.ArgumentMatchers.eq(List.of("patient@example.com")), org.mockito.ArgumentMatchers.eq(List.of()), org.mockito.ArgumentMatchers.eq(List.of()), org.mockito.ArgumentMatchers.argThat((String subject) -> !"Your After-Visit Summary is Ready".equals(subject)), anyString());
+    }
+
+    @Test
+    void qaD972_checkoutPublishesTheCompletedVisitWithItsBillableItems() {
+        UUID encounterId = UUID.randomUUID();
+        Hospital hospital = new Hospital();
+        hospital.setId(UUID.randomUUID());
+        Patient patient = new Patient();
+        patient.setId(UUID.randomUUID());
+        Encounter encounter = new Encounter();
+        encounter.setId(encounterId);
+        encounter.setStatus(EncounterStatus.IN_PROGRESS);
+        encounter.setHospital(hospital);
+        encounter.setPatient(patient);
+        encounter.setEncounterType(com.example.hms.enums.EncounterType.OUTPATIENT);
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
+        lenient().when(checkOutMapper.toAfterVisitSummary(any(Encounter.class), any(CheckOutRequestDTO.class), any()))
+            .thenReturn(AfterVisitSummaryDTO.builder().encounterId(encounterId).build());
+        lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.FRENCH);
+        lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("ok");
+        com.example.hms.model.Prescription signed = new com.example.hms.model.Prescription();
+        signed.setId(UUID.randomUUID());
+        signed.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
+        com.example.hms.model.Prescription cancelled = new com.example.hms.model.Prescription();
+        cancelled.setId(UUID.randomUUID());
+        cancelled.setStatus(com.example.hms.enums.PrescriptionStatus.CANCELLED);
+        lenient().when(prescriptionRepository.findByEncounter_Id(eq(encounterId), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(signed, cancelled)));
+        UUID labOrderId = UUID.randomUUID();
+        when(labOrderRepository.findIdsByEncounterId(encounterId)).thenReturn(List.of(labOrderId));
+
+        service.checkOut(encounterId, CheckOutRequestDTO.builder().build(), "doctor1", true, null);
+
+        org.mockito.ArgumentCaptor<com.example.hms.event.EncounterCheckedOutEvent> event =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.event.EncounterCheckedOutEvent.class);
+        verify(eventPublisher).publishEvent(event.capture());
+        assertThat(event.getValue().encounterId()).isEqualTo(encounterId);
+        assertThat(event.getValue().prescriptionIds()).containsExactly(signed.getId());
+        assertThat(event.getValue().labOrderIds()).containsExactly(labOrderId);
+        assertThat(event.getValue().checkedOutAt()).isNotNull();
+        assertThat(event.getValue().encounterType()).isEqualTo("OUTPATIENT");
+        assertThat(event.getValue().patientId()).isEqualTo(patient.getId());
     }
 
     @Test

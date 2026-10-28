@@ -2376,6 +2376,41 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   push during a run can be labelled with the newer head; (5) a PR with only
   generated files still calls the model; (6) tests for those cases.
 
+- **QA D972 — clinic-to-billing hand-off at checkout (round 16, branch B
+  prepared the producer; the consumer is owed).** A checked-out visit creates
+  no charge: only the copay invoice exists, and only maternity delivery posts
+  lines automatically. `EncounterServiceImpl.checkOut` now publishes
+  `com.example.hms.event.EncounterCheckedOutEvent` (ids and scalars only:
+  encounter, code, patient, hospital, department, provider staff, encounter
+  type, checkout time, the visit's non-withdrawn prescription ids, its lab
+  order ids and procedure order ids). Owed: a billing listener
+  (`@TransactionalEventListener(phase = AFTER_COMMIT)` + `REQUIRES_NEW`, the
+  `DeliveryChargeService` idiom) that turns it into draft charges on the
+  visit's invoice from the hospital's price list, idempotent per encounter
+  (a unique key on the encounter id so a replayed event never bills twice),
+  and a test that a failed charge never rolls the checkout back.
+- **Round 16 branch B follow-ups that live in other branches' files.**
+  (1) The nursing-notes panel (`encounters/nursing-notes-panel`, D927) is in
+  the encounter detail only; the patient chart (`patients/patient-detail`)
+  should embed `<app-nursing-notes-panel [patientId]>` too. (2) The ward
+  vitals dialog in `nurse-station.html` has no pain field (D989 note), and
+  the chart's vitals list shows the localised `notes` text, not a structured
+  pain score (a `pain_score` column like `postpartum_observations` would let
+  every screen format it). (3) The treatment-plans page still offers Edit on
+  a colleague's plan; the server now refuses it (D930 class), so the button
+  should be hidden for non-authors. (4) Author checks still missing on
+  documents owned by other branches, found in the D930 audit: an unsigned
+  prescription draft can be rewritten or deleted by any prescriber
+  (`PrescriptionServiceImpl.update/deletePrescription`), a lab order can be
+  hard-deleted by anyone at the ordering hospital
+  (`LabOrderServiceImpl.deleteLabOrder`), an imaging report draft can be
+  edited, signed or voided by any clinician (`ImagingReportServiceImpl`), an
+  imaging order can be cancelled through `updateOrderStatus` by anyone in
+  scope, and an ultrasound order update has no author check. Procedure
+  orders, admissions, problems, allergies and family/social history are left
+  team-owned on purpose (the surgical/ward team acts on them); that is a
+  product decision to confirm, not an oversight.
+
 ### Execution plan (2026-09-26)
 
 The roadmap above is done except #46 (deferred by the user). What remains is
