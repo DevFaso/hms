@@ -35,4 +35,14 @@ describe('formatCfa (QA D621)', () => {
   it('leaves another currency to Intl', () => {
     expect(formatCfa(10, 'EUR', 'en-US')).toContain('€');
   });
+
+  // QA D1008: es-ES groups from five digits (minimumGroupingDigits 2), so a
+  // 4-digit amount read "4000 F CFA" while French read "4 000 F CFA" — and the
+  // `\.?` above let both through. Pending until formatCfa passes
+  // `useGrouping: 'always'` (the production fix lives on another branch);
+  // flip to `it` in that PR. docs/qa/regression-guards.md lists it.
+  xit('D1008: groups a 4-digit amount in Spanish like every other language', () => {
+    expect(plain(formatCfa(4000, 'XOF', 'es-ES'))).toBe('4.000 F CFA');
+    expect(plain(formatCfa(1500, 'XOF', 'es-ES'))).toBe('1.500 F CFA');
+  });
 });
