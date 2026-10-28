@@ -19,13 +19,19 @@ export class PatientChartChanges {
     this.changed.next(patientId);
   }
 
-  /** Emits each time a write on this patient's chart succeeds. */
+  /** Emits each time a write on this patient's chart succeeds ('*': a write that names no patient). */
   of(patientId: string): Observable<string> {
-    return this.changed.pipe(filter((id) => id === patientId));
+    return this.changed.pipe(filter((id) => id === patientId || id === ANY_PATIENT));
   }
 }
 
-const PATIENT_WRITE = /^\/?patients\/([0-9a-fA-F-]{36})\/([^?]+)/;
+const PATIENT_WRITE = /^\/?patients\/([0-9a-fA-F-]{36})(?:\/([^?]*))?(?:\?|$)/;
+
+/** Writes that change a visit (the banner's active encounter) without the patient in the URL. */
+const VISIT_WRITE = /^\/?(encounters|reception)(\/|$)/;
+
+/** Every subscriber is told: the write named no patient. */
+export const ANY_PATIENT = '*';
 
 /** Reads sent as a POST (the reason travels in the body): no chart changed. */
 const READ_ONLY_POSTS =
@@ -35,10 +41,12 @@ export const patientChartChangeInterceptor: HttpInterceptorFn = (req, next) => {
   if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') {
     return next(req);
   }
-  const match = PATIENT_WRITE.exec(req.url.replace(/^\/api\//, '/'));
-  if (!match || READ_ONLY_POSTS.test(match[2])) return next(req);
+  const path = req.url.replace(/^\/api\//, '/');
+  const match = PATIENT_WRITE.exec(path);
+  const visitWrite = !match && VISIT_WRITE.test(path) && !READ_ONLY_POSTS.test(path.split('?')[0]);
+  if ((!match || READ_ONLY_POSTS.test(match[2] ?? '')) && !visitWrite) return next(req);
   const changes = inject(PatientChartChanges);
-  const patientId = match[1];
+  const patientId = match ? match[1] : ANY_PATIENT;
   return next(req).pipe(
     tap((event) => {
       if (event.type === HttpEventType.Response && event.ok) changes.notify(patientId);

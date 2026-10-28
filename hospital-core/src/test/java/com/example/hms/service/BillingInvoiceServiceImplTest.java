@@ -2174,9 +2174,49 @@ class BillingInvoiceServiceImplTest {
         InvoiceStatus next = org.springframework.test.util.ReflectionTestUtils.invokeMethod(BillingInvoiceServiceImpl.class,
             "requestedStatusOnUpdate", InvoiceStatus.PAID, InvoiceStatus.CANCELLED, false);
         assertEquals(InvoiceStatus.CANCELLED, next);
+        // Only cancelled: a waived invoice never goes back to "sent" at 0.
+        assertThrows(com.example.hms.exception.BusinessException.class,
+            () -> org.springframework.test.util.ReflectionTestUtils.invokeMethod(BillingInvoiceServiceImpl.class,
+                "requestedStatusOnUpdate", InvoiceStatus.PAID, InvoiceStatus.SENT, false));
         assertThrows(com.example.hms.exception.BusinessException.class,
             () -> org.springframework.test.util.ReflectionTestUtils.invokeMethod(BillingInvoiceServiceImpl.class,
                 "requestedStatusOnUpdate", InvoiceStatus.PAID, InvoiceStatus.CANCELLED, true));
+    }
+
+    @Test
+    void addAdjustment_aFullyCreditedLineSaysSo_D974() {
+        com.example.hms.repository.InvoiceAdjustmentRepository repo = adjustments();
+        BillingInvoice invoice = issued("6000", "0");
+        com.example.hms.model.InvoiceItem line = new com.example.hms.model.InvoiceItem();
+        line.setId(UUID.randomUUID());
+        line.setBillingInvoice(invoice);
+        line.setTotalPrice(new BigDecimal("3000"));
+        when(invoiceItemRepository.findById(line.getId())).thenReturn(Optional.of(line));
+        when(repo.sumByInvoiceItemId(line.getId())).thenReturn(new BigDecimal("3000"));
+
+        com.example.hms.exception.BusinessException refused = assertThrows(com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.addAdjustment(invoice.getId(),
+                adjustment(com.example.hms.enums.InvoiceAdjustmentType.CREDIT_NOTE, null, "Erreur", line.getId()),
+                UUID.randomUUID(), Locale.FRENCH));
+        assertEquals("billing.adjustment.lineFullyCredited", refused.getMessageKey());
+    }
+
+    @Test
+    void addAdjustment_anEmptyCreditNoteStaysWithinWhatIsStillOwed_D974() {
+        adjustments();
+        BillingInvoice invoice = issued("10000", "6000");
+        com.example.hms.model.InvoiceItem line = new com.example.hms.model.InvoiceItem();
+        line.setId(UUID.randomUUID());
+        line.setBillingInvoice(invoice);
+        line.setTotalPrice(new BigDecimal("8000"));
+        when(invoiceItemRepository.findById(line.getId())).thenReturn(Optional.of(line));
+
+        billingInvoiceService.addAdjustment(invoice.getId(),
+            adjustment(com.example.hms.enums.InvoiceAdjustmentType.CREDIT_NOTE, null, "NFS non faite", line.getId()),
+            UUID.randomUUID(), Locale.FRENCH);
+
+        assertEquals(0, new BigDecimal("6000").compareTo(invoice.getTotalAmount()));
+        assertEquals(InvoiceStatus.PAID, invoice.getStatus());
     }
 
     @Test

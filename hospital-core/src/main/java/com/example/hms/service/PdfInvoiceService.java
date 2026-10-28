@@ -118,7 +118,7 @@ public class PdfInvoiceService {
                 String kind = t.get("pdf.invoice.adjustment." + adjustment.getType().name());
                 w.text(BODY, 10, MARGIN, adjustment.getReason() == null || adjustment.getReason().isBlank()
                     ? t.get("pdf.invoice.adjustmentLineNoReason", kind, money(adjustment.getAmount()))
-                    : t.get("pdf.invoice.adjustmentLine", kind, safe(adjustment.getReason()),
+                    : t.get("pdf.invoice.adjustmentLine", kind, shortReason(adjustment.getReason()),
                         money(adjustment.getAmount())));
             }
 
@@ -409,5 +409,11 @@ public class PdfInvoiceService {
                 return baos.toByteArray();
             }
         }
+    }
+
+    /** QA D974: a reason fits one printed line (the full text stays on the adjustment). */
+    private static String shortReason(String reason) {
+        String text = reason == null ? "" : reason.strip();
+        return text.length() > 60 ? text.substring(0, 59) + "…" : text;
     }
 }

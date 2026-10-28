@@ -285,4 +285,29 @@ class DisclosureAccountingServiceImplTest {
         assertThat(page.getTotalElements()).isEqualTo(1);
         assertThat(page.getTotalPages()).isEqualTo(1);
     }
+
+    @Test
+    @DisplayName("QA D979: rows beyond the fold window follow, read a window-sized page at a time")
+    void olderRowsFollowInOrder() {
+        List<AuditEventLog> window = new java.util.ArrayList<>();
+        LocalDateTime now = LocalDateTime.now();
+        for (int i = 0; i < 2000; i++) {
+            AuditEventLog r = row(AuditEventType.BREAK_GLASS_ACCESS, "BREAK_GLASS_SESSION", "Dr " + i);
+            r.setEventTimestamp(now.minusMinutes(i));
+            window.add(r);
+        }
+        AuditEventLog oldest = row(AuditEventType.BREAK_GLASS_ACCESS, "BREAK_GLASS_SESSION", "Dr old");
+        when(auditRepository.findDisclosuresForPatient(any(), any(), any(), any(), any())).thenAnswer(inv -> {
+            org.springframework.data.domain.Pageable p = inv.getArgument(4);
+            return p.getPageNumber() == 0
+                ? new PageImpl<>(window, p, 2001)
+                : new PageImpl<>(List.of(oldest), p, 2001);
+        });
+
+        org.springframework.data.domain.Page<AccessLogEntryDTO> last =
+            service.getEntriesAsPatientSees(patientId, null, null, PageRequest.of(100, 20));
+
+        assertThat(last.getTotalElements()).isEqualTo(2001);
+        assertThat(last.getContent()).extracting(AccessLogEntryDTO::getActor).containsExactly("Dr old");
+    }
 }

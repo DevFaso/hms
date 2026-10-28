@@ -44,11 +44,18 @@ describe('patientChartChangeInterceptor (QA D957)', () => {
     mock.expectOne(`/patients/${id}/allergies`).flush([]);
     http.post(`/patients/${id}/allergies`, {}).subscribe({ error: () => undefined });
     mock.expectOne(`/patients/${id}/allergies`).flush({}, { status: 400, statusText: 'Bad' });
-    http.post('/encounters/e1/notes', {}).subscribe();
-    mock.expectOne('/encounters/e1/notes').flush({});
     // The doctor's timeline is a read sent as a POST.
     http.post(`/patients/${id}/doctor-timeline`, {}).subscribe();
     mock.expectOne(`/patients/${id}/doctor-timeline`).flush({});
     expect(seen).toEqual([]);
+  });
+  it('notifies on a write on the patient itself, and every banner on a visit write', () => {
+    http.put(`/patients/${id}`, {}).subscribe();
+    mock.expectOne(`/patients/${id}`).flush({});
+    http.post('/encounters/e1/checkout', {}).subscribe();
+    mock.expectOne('/encounters/e1/checkout').flush({});
+    http.post('/encounters/search', {}).subscribe();
+    mock.expectOne('/encounters/search').flush({});
+    expect(seen).toEqual([id, '*']);
   });
 });
