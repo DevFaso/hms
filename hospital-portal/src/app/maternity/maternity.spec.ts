@@ -227,6 +227,21 @@ describe('MaternityComponent — new history for a patient who already has one (
     expect(notice()).toBeNull();
   });
 
+  it('QA D1005: the due date follows the LMP and the gestational age is shown', () => {
+    const page = fixture.componentInstance;
+    // Through the field, as the midwife types it (the page is OnPush).
+    const lmp = host().querySelector('#history-lmp') as HTMLInputElement;
+    lmp.value = '2026-05-20';
+    lmp.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    expect(page.historyForm.menstrualHistory?.estimatedDueDate).toBe('2027-02-24');
+    expect(host().querySelector('[data-testid="history-ga"]')).not.toBeNull();
+    // A due date the midwife typed herself is kept when the LMP changes.
+    page.historyForm.menstrualHistory!.estimatedDueDate = '2027-03-01';
+    page.onLmpChange('2026-05-21');
+    expect(page.historyForm.menstrualHistory?.estimatedDueDate).toBe('2027-03-01');
+  });
+
   it('a patient with no history (404) keeps the create open', () => {
     maternity.currentForPatient.and.returnValue(
       throwError(() => new HttpErrorResponse({ status: 404 })),

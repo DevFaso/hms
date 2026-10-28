@@ -129,6 +129,8 @@
             <tr>
               <th scope="col">{{ 'MATERNITY.PATIENT' | translate }}</th>
               <th scope="col">{{ 'MATERNITY.RECORDED' | translate }}</th>
+              <th scope="col">{{ 'MATERNITY.EDD' | translate }}</th>
+              <th scope="col">{{ 'MATERNITY.GA' | translate }}</th>
               <th scope="col">{{ 'MATERNITY.VERSION' | translate }}</th>
               <th scope="col">{{ 'MATERNITY.RISK' | translate }}</th>
               <th scope="col">{{ 'MATERNITY.FLAGS' | translate }}</th>
@@ -141,6 +143,16 @@
               <tr class="data-row">
                 <td>{{ patientName(h.patientId) }}</td>
                 <td>{{ h.recordedDate | serverTime | date: 'medium' }}</td>
+                <td data-testid="history-edd-cell">
+                  {{ dueDateOf(h) ? (dueDateOf(h) | date: 'mediumDate') : '—' }}
+                </td>
+                <td data-testid="history-ga-cell">
+                  @if (gestationalAgeOf(h); as ga) {
+                    {{ 'MATERNITY.GA_SHORT' | translate: { weeks: ga.weeks, days: ga.days } }}
+                  } @else {
+                    —
+                  }
+                </td>
                 <td>v{{ h.versionNumber ?? 1 }}</td>
                 <td>
                   <span class="{{ riskClass(h.riskCategory) }}">
@@ -645,7 +657,8 @@
             <input
               id="history-lmp"
               type="date"
-              [(ngModel)]="historyForm.menstrualHistory!.lastMenstrualPeriod"
+              [ngModel]="historyForm.menstrualHistory!.lastMenstrualPeriod"
+              (ngModelChange)="onLmpChange($event)"
             />
           </div>
           <div class="field">
@@ -653,8 +666,14 @@
             <input
               id="history-edd"
               type="date"
+              aria-describedby="history-ga"
               [(ngModel)]="historyForm.menstrualHistory!.estimatedDueDate"
             />
+            @if (formGestationalAge(); as ga) {
+              <small id="history-ga" class="field-hint" data-testid="history-ga">
+                {{ 'MATERNITY.GA_TODAY' | translate: { weeks: ga.weeks, days: ga.days } }}
+              </small>
+            }
           </div>
         </div>
 

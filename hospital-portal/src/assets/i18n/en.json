@@ -9774,6 +9774,9 @@
     }
   },
   "MATERNITY": {
+    "GA": "Gestational age",
+    "GA_SHORT": "{{weeks}} wk {{days}} d",
+    "GA_TODAY": "Gestational age today: {{weeks}} weeks {{days}} days",
     "LABOR_TAB": "Labor & Delivery",
     "PATIENT_NAME_UNAVAILABLE": "Patient (name unavailable)",
     "TITLE": "Maternity",

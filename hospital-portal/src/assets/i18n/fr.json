@@ -9774,6 +9774,9 @@
     }
   },
   "MATERNITY": {
+    "GA": "Terme",
+    "GA_SHORT": "{{weeks}} SA {{days}} j",
+    "GA_TODAY": "Terme aujourd'hui : {{weeks}} SA {{days}} j",
     "LABOR_TAB": "Travail et accouchement",
     "PATIENT_NAME_UNAVAILABLE": "Patiente (nom indisponible)",
     "TITLE": "Maternité",

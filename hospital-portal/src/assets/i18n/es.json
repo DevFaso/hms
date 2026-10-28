@@ -9774,6 +9774,9 @@
     }
   },
   "MATERNITY": {
+    "GA": "Edad gestacional",
+    "GA_SHORT": "{{weeks}} sem {{days}} d",
+    "GA_TODAY": "Edad gestacional hoy: {{weeks}} semanas {{days}} días",
     "LABOR_TAB": "Parto",
     "PATIENT_NAME_UNAVAILABLE": "Paciente (nombre no disponible)",
     "TITLE": "Maternidad",
