@@ -477,12 +477,10 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         }
         staffRepository.findByUserIdAndHospitalId(callerId, hospitalId).ifPresent(staff -> {
             summary.setDischargingProvider(staff);
-            // Her staff record's own assignment, never a nurse one she also holds.
+            // Her staff record's own assignment, never a nurse one she also holds;
+            // with none on the record, the summary keeps its assignment.
             if (staff.getAssignment() != null) {
                 summary.setAssignment(staff.getAssignment());
-            } else {
-                assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(callerId, hospitalId)
-                    .ifPresent(summary::setAssignment);
             }
         });
     }

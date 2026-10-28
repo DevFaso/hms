@@ -158,8 +158,9 @@ export class CheckoutDialogComponent {
           map((r) => r.items),
           catchError(() => of([] as PatientProblem[])),
         ),
+      // Review of #971: this visit's prescriptions, not one page of the patient's.
       prescriptions: this.prescriptionService
-        .list({ patientId: enc.patientId })
+        .list({ encounterId: enc.id })
         .pipe(catchError(() => of([] as PrescriptionResponse[]))),
       referrals: this.referralService
         .getByPatient(enc.patientId)

@@ -2787,10 +2787,9 @@ public class EncounterServiceImpl implements EncounterService {
         if (closingDoctor != null && !isPhysicianAt(current, encounter)) {
             summary.setDischargingProvider(closingDoctor);
             // Review of #971: the doctor's own assignment (her staff record's), never a nurse one she also holds.
+            // With none on her staff record, the visit's own (any active one she holds could be a nurse one).
             summary.setAssignment(closingDoctor.getAssignment() != null ? closingDoctor.getAssignment()
-                : assignmentRepository
-                    .findFirstByUser_IdAndHospital_IdAndActiveTrue(closingDoctor.getUser().getId(), encounter.getHospital().getId())
-                    .orElse(encounter.getAssignment()));
+                : encounter.getAssignment());
         } else if (summary.getDischargingProvider() == null) {
             summary.setDischargingProvider(encounter.getStaff());
             summary.setAssignment(encounter.getAssignment());

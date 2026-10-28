@@ -383,6 +383,33 @@ class DischargeSummaryServiceImplTest {
         assertThat(summary.getAssignment()).isSameAs(doctorAssignment);
     }
 
+    @Test void qaD930_aHandOverNeverFilesTheSummaryUnderAnotherAssignmentSheHolds() {
+        // Review of #971: with no assignment on her doctor staff record, the
+        // summary keeps its own; any active assignment she holds could be a nurse one.
+        com.example.hms.model.User doctor = new com.example.hms.model.User();
+        doctor.setId(UUID.randomUUID());
+        Staff doctorStaff = new Staff();
+        doctorStaff.setId(UUID.randomUUID());
+        doctorStaff.setUser(doctor);
+        com.example.hms.model.UserRoleHospitalAssignment nurseAssignment = new com.example.hms.model.UserRoleHospitalAssignment();
+        nurseAssignment.setId(UUID.randomUUID());
+        org.mockito.Mockito.lenient().when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(doctor.getId(), hospitalId))
+            .thenReturn(Optional.of(nurseAssignment));
+        com.example.hms.model.UserRoleHospitalAssignment before = summary.getAssignment();
+        actAs(doctor);
+        when(roleValidator.getCurrentUserId()).thenReturn(doctor.getId());
+        org.mockito.Mockito.lenient().when(roleValidator.isDoctor(doctor.getId(), hospitalId)).thenReturn(true);
+        when(encounterNoteRepository.existsByEncounter_IdAndAuthor_Id(encounterId, doctor.getId())).thenReturn(true);
+        when(staffRepository.findByUserIdAndHospitalId(doctor.getId(), hospitalId)).thenReturn(Optional.of(doctorStaff));
+        when(dischargeSummaryRepository.findById(summaryId)).thenReturn(Optional.of(summary));
+        when(dischargeSummaryRepository.save(any(DischargeSummary.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.updateDischargeSummary(summaryId, buildRequest(), Locale.ENGLISH);
+
+        assertThat(summary.getDischargingProvider()).isEqualTo(doctorStaff);
+        assertThat(summary.getAssignment()).isSameAs(before).isNotSameAs(nurseAssignment);
+    }
+
     @Test void qaD930_aNurseWhoWroteANoteCannotDeleteAColleaguesNurseHeldDraft() {
         // Review of #971: the treating-clinician fallback is for physicians only.
         com.example.hms.model.User nurseB = new com.example.hms.model.User();

@@ -342,6 +342,11 @@ describe('CheckoutDialogComponent — prefilled from the visit (QA D960)', () =>
     expect(component.referralSummary()).toBe('Cardiologie — Souffle');
   });
 
+  it("asks for this visit's prescriptions, not one page of the patient's (review of #971)", async () => {
+    await open(true);
+    expect(TestBed.inject(PrescriptionService).list).toHaveBeenCalledWith({ encounterId: 'enc-9' });
+  });
+
   it('falls back to the note assessment for a role that cannot read the record', async () => {
     await open(false);
     expect(component.dischargeDiagnosesText()).toBe('Accès palustre');
