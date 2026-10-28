@@ -21,13 +21,14 @@ import {
 } from '../../services/encounter.service';
 import { ToastService } from '../../core/toast.service';
 import { RovingFocusDirective } from '../../shared/a11y/roving-focus.directive';
+import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 
 type ConsciousnessOption = 'ALERT' | 'NEW_CONFUSION' | 'VOICE' | 'PAIN' | 'UNRESPONSIVE';
 
 @Component({
   selector: 'app-triage-form',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, RovingFocusDirective],
+  imports: [CommonModule, FormsModule, TranslateModule, RovingFocusDirective, ModalDialogDirective],
   templateUrl: './triage-form.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './triage-form.component.scss',

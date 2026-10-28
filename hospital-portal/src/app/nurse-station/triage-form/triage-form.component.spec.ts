@@ -57,6 +57,33 @@ describe('TriageFormComponent', () => {
     fixture.detectChanges();
   });
 
+  // QA D992: the visit is named by its code, never by a slice of its UUID.
+  it('names the encounter by its visit code, never a UUID fragment (QA D992)', () => {
+    component.encounter = {
+      ...sampleEncounter,
+      id: '42a0451a-0000-4000-8000-000000000000',
+      code: 'ENC-20261027-51B828',
+    } as EncounterResponse;
+    fixture.detectChanges();
+    const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
+    expect(text).toContain('ENC-20261027-51B828');
+    expect(text).not.toContain('42a0451a');
+  });
+
+  // QA D1004: the triage overlay is a modal dialog for keyboard and screen-reader users.
+  it('is a labelled modal dialog that closes on Escape (QA D1004)', () => {
+    const dialog = (fixture.nativeElement as HTMLElement).querySelector(
+      '.triage-dialog',
+    ) as HTMLElement;
+    expect(dialog.getAttribute('role')).toBe('dialog');
+    expect(dialog.getAttribute('aria-modal')).toBe('true');
+    expect(dialog.getAttribute('aria-labelledby')).toBe('triage-dialog-title');
+    expect(dialog.contains(document.activeElement)).toBeTrue();
+    const closed = spyOn(component.dismissed, 'emit');
+    dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(closed).toHaveBeenCalled();
+  });
+
   it('should create', () => {
     expect(component).toBeTruthy();
   });
