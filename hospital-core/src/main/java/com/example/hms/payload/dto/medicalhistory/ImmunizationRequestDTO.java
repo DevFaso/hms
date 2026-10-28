@@ -35,6 +35,8 @@ public class ImmunizationRequestDTO {
     private UUID encounterId;
 
     // Vaccine Information
+    // Kept required (review of #971): the DHIS2 ADX export counts doses by
+    // this code, so a dose saved without one would drop out of the report.
     @NotBlank(message = "{immunization.vaccineCode.required}")
     @Size(max = 50)
     @Schema(description = "Vaccine CVX code", requiredMode = Schema.RequiredMode.REQUIRED)

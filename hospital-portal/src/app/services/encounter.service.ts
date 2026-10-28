@@ -127,6 +127,8 @@ export interface EncounterResponse {
   encounterDate: string;
   notes: string;
   arrivalTimestamp: string | null;
+  /** When the visit was checked out (server local time); absent while it is open. */
+  checkoutTimestamp?: string | null;
   chiefComplaint: string;
   esiScore: number | null;
   roomAssignment: string;

@@ -7,13 +7,13 @@
     <div class="page-actions">
       @if (activeTab() === 'approvals' && canRequest) {
         <button class="btn-primary" (click)="openRequest()">
-          <span class="material-symbols-outlined">add</span>
+          <span class="material-symbols-outlined" aria-hidden="true">add</span>
           {{ 'DISCHARGE.REQUEST_DISCHARGE' | translate }}
         </button>
       }
       @if (activeTab() === 'summaries' && canEditSummaries) {
         <button class="btn-primary" (click)="openCreateSummary()">
-          <span class="material-symbols-outlined">add</span>
+          <span class="material-symbols-outlined" aria-hidden="true">add</span>
           {{ 'DISCHARGE.NEW_SUMMARY' | translate }}
         </button>
       }
@@ -229,7 +229,7 @@
                   >
                     {{ 'COMMON.VIEW' | translate }}
                   </button>
-                  @if (!s.isFinalized && canEditSummaries) {
+                  @if (!s.isFinalized && canWriteSummary(s)) {
                     <button
                       class="btn-secondary btn-sm"
                       (click)="openEditSummary(s)"
@@ -237,13 +237,15 @@
                     >
                       {{ 'COMMON.EDIT' | translate }}
                     </button>
-                    <button
-                      class="btn-primary btn-sm"
-                      (click)="openFinalize(s)"
-                      [title]="'DISCHARGE.FINALIZE' | translate"
-                    >
-                      {{ 'DISCHARGE.FINALIZE' | translate }}
-                    </button>
+                    @if (canFinalizeSummary(s)) {
+                      <button
+                        class="btn-primary btn-sm"
+                        (click)="openFinalize(s)"
+                        [title]="'DISCHARGE.FINALIZE' | translate"
+                      >
+                        {{ 'DISCHARGE.FINALIZE' | translate }}
+                      </button>
+                    }
                     <button
                       class="btn-danger btn-sm"
                       (click)="openDelete(s)"
@@ -272,6 +274,7 @@
   >
     <div
       class="modal"
+      aria-labelledby="discharge-dialog-1-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
@@ -279,7 +282,7 @@
       (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="discharge-dialog-1-title">
           {{
             (decisionMode() === 'approve' ? 'DISCHARGE.APPROVE_TITLE' : 'DISCHARGE.REJECT_TITLE')
               | translate
@@ -290,7 +293,7 @@
           (click)="closeDecision()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -354,6 +357,7 @@
   >
     <div
       class="modal"
+      aria-labelledby="discharge-dialog-2-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
@@ -361,13 +365,13 @@
       (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'DISCHARGE.CANCEL_TITLE' | translate }}</h2>
+        <h2 id="discharge-dialog-2-title">{{ 'DISCHARGE.CANCEL_TITLE' | translate }}</h2>
         <button
           class="modal-close"
           (click)="closeCancel()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -401,6 +405,7 @@
   >
     <div
       class="modal"
+      aria-labelledby="discharge-dialog-3-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
@@ -408,13 +413,13 @@
       (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'DISCHARGE.REQUEST_TITLE' | translate }}</h2>
+        <h2 id="discharge-dialog-3-title">{{ 'DISCHARGE.REQUEST_TITLE' | translate }}</h2>
         <button
           class="modal-close"
           (click)="closeRequest()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -458,6 +463,7 @@
   >
     <div
       class="modal modal-lg"
+      aria-labelledby="discharge-dialog-4-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
@@ -465,7 +471,7 @@
       (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="discharge-dialog-4-title">
           {{
             (editingSummaryId() ? 'DISCHARGE.EDIT_SUMMARY' : 'DISCHARGE.NEW_SUMMARY') | translate
           }}
@@ -475,7 +481,7 @@
           (click)="closeSummaryModal()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -585,7 +591,7 @@
         <div class="section-heading">
           {{ 'DISCHARGE.MEDICATIONS' | translate }}
           <button type="button" class="btn-add-row" (click)="addMedication()">
-            <span class="material-symbols-outlined">add</span>
+            <span class="material-symbols-outlined" aria-hidden="true">add</span>
             {{ 'DISCHARGE.ADD_MEDICATION' | translate }}
           </button>
         </div>
@@ -625,7 +631,7 @@
                 (click)="removeMedication($index)"
                 [attr.aria-label]="'COMMON.DELETE' | translate"
               >
-                <span class="material-symbols-outlined">delete</span>
+                <span class="material-symbols-outlined" aria-hidden="true">delete</span>
               </button>
             </div>
           }
@@ -634,7 +640,7 @@
         <div class="section-heading">
           {{ 'DISCHARGE.PENDING_TESTS' | translate }}
           <button type="button" class="btn-add-row" (click)="addPendingTest()">
-            <span class="material-symbols-outlined">add</span>
+            <span class="material-symbols-outlined" aria-hidden="true">add</span>
             {{ 'DISCHARGE.ADD_PENDING_TEST' | translate }}
           </button>
         </div>
@@ -672,7 +678,7 @@
                 (click)="removePendingTest($index)"
                 [attr.aria-label]="'COMMON.DELETE' | translate"
               >
-                <span class="material-symbols-outlined">delete</span>
+                <span class="material-symbols-outlined" aria-hidden="true">delete</span>
               </button>
             </div>
           }
@@ -681,7 +687,7 @@
         <div class="section-heading">
           {{ 'DISCHARGE.FOLLOW_UPS' | translate }}
           <button type="button" class="btn-add-row" (click)="addFollowUp()">
-            <span class="material-symbols-outlined">add</span>
+            <span class="material-symbols-outlined" aria-hidden="true">add</span>
             {{ 'DISCHARGE.ADD_FOLLOW_UP' | translate }}
           </button>
         </div>
@@ -714,7 +720,7 @@
                 (click)="removeFollowUp($index)"
                 [attr.aria-label]="'COMMON.DELETE' | translate"
               >
-                <span class="material-symbols-outlined">delete</span>
+                <span class="material-symbols-outlined" aria-hidden="true">delete</span>
               </button>
             </div>
           }
@@ -746,6 +752,7 @@
   <div class="modal-backdrop" tabindex="-1" (click)="closeView()" (keydown.escape)="closeView()">
     <div
       class="modal modal-lg"
+      aria-labelledby="discharge-dialog-5-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
@@ -753,13 +760,15 @@
       (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'DISCHARGE.SUMMARY_FOR' | translate }} {{ s.patientName }}</h2>
+        <h2 id="discharge-dialog-5-title">
+          {{ 'DISCHARGE.SUMMARY_FOR' | translate }} {{ s.patientName }}
+        </h2>
         <button
           class="modal-close"
           (click)="closeView()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -866,6 +875,7 @@
   >
     <div
       class="modal"
+      aria-labelledby="discharge-dialog-6-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
@@ -873,13 +883,13 @@
       (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'DISCHARGE.FINALIZE_TITLE' | translate }}</h2>
+        <h2 id="discharge-dialog-6-title">{{ 'DISCHARGE.FINALIZE_TITLE' | translate }}</h2>
         <button
           class="modal-close"
           (click)="closeFinalize()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -916,6 +926,7 @@
   >
     <div
       class="modal"
+      aria-labelledby="discharge-dialog-7-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
@@ -923,13 +934,13 @@
       (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'DISCHARGE.DELETE_TITLE' | translate }}</h2>
+        <h2 id="discharge-dialog-7-title">{{ 'DISCHARGE.DELETE_TITLE' | translate }}</h2>
         <button
           class="modal-close"
           (click)="closeDelete()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">

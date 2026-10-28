@@ -45,6 +45,7 @@ import { PrenatalTabComponent } from './prenatal-tab';
 import { PostpartumTabComponent } from './postpartum-tab';
 import { LaborTabComponent } from './labor-tab';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { dueDateFromLmp, effectiveDueDate, gestationalAge } from './pregnancy-dates';
 
 /** The history form's fields the server names under `fieldErrors`. */
 const HISTORY_LABELS: Record<string, string> = {
@@ -321,13 +322,43 @@ export class MaternityComponent implements OnInit {
         );
       },
       error: () => {
-        // Names stay blank; the table falls back to the MRN-less id prefix.
+        // Names stay blank; the table says the name is unavailable.
       },
     });
   }
 
+  /**
+   * QA D1005: the due date follows the LMP (Naegele, as the server computes
+   * it) unless the midwife typed her own; the gestational age is shown beside
+   * it and on the list.
+   */
+  onLmpChange(lmp: string): void {
+    const menstrual = this.historyForm.menstrualHistory ?? (this.historyForm.menstrualHistory = {});
+    const previousAuto = dueDateFromLmp(menstrual.lastMenstrualPeriod);
+    menstrual.lastMenstrualPeriod = lmp;
+    if (!menstrual.estimatedDueDate || menstrual.estimatedDueDate === previousAuto) {
+      menstrual.estimatedDueDate = dueDateFromLmp(lmp) || undefined;
+    }
+  }
+
+  formGestationalAge(): { weeks: number; days: number } | null {
+    return gestationalAge(effectiveDueDate(this.historyForm.menstrualHistory));
+  }
+
+  dueDateOf(history: MaternalHistoryResponse): string {
+    return effectiveDueDate(history.menstrualHistory);
+  }
+
+  gestationalAgeOf(history: MaternalHistoryResponse): { weeks: number; days: number } | null {
+    return gestationalAge(this.dueDateOf(history));
+  }
+
   patientName(patientId: string): string {
-    return this.patientNames.get(patientId) || `${patientId.substring(0, 8)}…`;
+    // QA D992 class: never a slice of the UUID; say the name is unavailable.
+    return (
+      this.patientNames.get(patientId) ||
+      (this.translate.instant('MATERNITY.PATIENT_NAME_UNAVAILABLE') as string)
+    );
   }
 
   setWorklist(w: BoardWorklist): void {

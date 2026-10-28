@@ -233,6 +233,8 @@ export class PrescriptionService {
     patientId?: string;
     staffId?: string;
     hospitalId?: string;
+    /** One visit's prescriptions (used without patientId, which the server reads first). */
+    encounterId?: string;
     /**
      * Gap G12 — restrict the page to these `PrescriptionStatus` values. One
      * repeated `status` query parameter per value. Omitted or empty means
@@ -255,6 +257,7 @@ export class PrescriptionService {
       if (filters.patientId) params = params.set('patientId', filters.patientId);
       if (filters.staffId) params = params.set('staffId', filters.staffId);
       if (filters.hospitalId) params = params.set('hospitalId', filters.hospitalId);
+      if (filters.encounterId) params = params.set('encounterId', filters.encounterId);
       for (const status of filters.statuses ?? []) {
         params = params.append('status', status);
       }

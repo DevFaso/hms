@@ -21,13 +21,14 @@ import {
 } from '../../services/encounter.service';
 import { ToastService } from '../../core/toast.service';
 import { RovingFocusDirective } from '../../shared/a11y/roving-focus.directive';
+import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 
 type ConsciousnessOption = 'ALERT' | 'NEW_CONFUSION' | 'VOICE' | 'PAIN' | 'UNRESPONSIVE';
 
 @Component({
   selector: 'app-triage-form',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, RovingFocusDirective],
+  imports: [CommonModule, FormsModule, TranslateModule, RovingFocusDirective, ModalDialogDirective],
   templateUrl: './triage-form.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './triage-form.component.scss',
@@ -118,6 +119,38 @@ export class TriageFormComponent {
     this.translate.onLangChange
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe(() => (this.esiOptionsCache = this.buildEsiOptions()));
+  }
+
+  /**
+   * Review of #971: Escape closes the dialog only while nothing has been
+   * typed; once vitals are entered it would throw them away, so it is ignored
+   * (the Close button still closes).
+   */
+  onEscape(): void {
+    if (!this.hasEntries()) this.dismissed.emit();
+  }
+
+  hasEntries(): boolean {
+    const vitals = [
+      this.temperatureCelsius(),
+      this.heartRateBpm(),
+      this.respiratoryRateBpm(),
+      this.systolicBpMmHg(),
+      this.diastolicBpMmHg(),
+      this.spo2Percent(),
+      this.weightKg(),
+      this.heightCm(),
+      this.painScale(),
+      this.fallRiskScore(),
+    ];
+    return (
+      vitals.some((v) => v !== null) ||
+      !!this.consciousnessLevel() ||
+      this.onOxygen() ||
+      this.fallRisk() ||
+      !!this.roomAssignment().trim() ||
+      this.chiefComplaint().trim() !== (this.encounter?.chiefComplaint ?? '').trim()
+    );
   }
 
   get canSubmit(): boolean {
