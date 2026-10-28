@@ -21,22 +21,28 @@ import { resolve } from 'node:path';
 import { moneyTemplateFindings, moneyComponentFindings } from './lib/money-scan.mjs';
 import { scanTemplates, PORTAL_DIR } from './lib/template-gate.mjs';
 import { scanComponents } from './lib/component-sources.mjs';
-import { runGate, dedupe } from './lib/baseline.mjs';
+import { runGate, dedupe, isMain } from './lib/baseline.mjs';
 
 const LOCALE_MODULE = 'src/app/shared/i18n/app-locale.ts';
 
-runGate({
+export const gate = {
   name: 'money format',
   baselinePath: resolve(PORTAL_DIR, 'scripts', 'money-format-baseline.json'),
   // An inline template's `.toFixed(` is seen by both scans; dedupe keeps one finding per site.
-  findings: dedupe([
-    ...scanTemplates(moneyTemplateFindings),
-    ...scanComponents((source, file) => moneyComponentFindings(source, file === LOCALE_MODULE)),
-  ]),
+  findings: (ctx) =>
+    dedupe([
+      ...scanTemplates(moneyTemplateFindings, {}, ctx),
+      ...scanComponents(
+        (source, file) => moneyComponentFindings(source, file === LOCALE_MODULE),
+        ctx,
+      ),
+    ]),
   comment: [
     'Amounts printed without formatCfa / | cfa, as they stand today.',
     'Each key is "file::rule::anchor"; "why" is the QA defect id or the reason.',
     'A site not listed fails the build; fix it, then delete its pin.',
   ],
   hint: 'Use {{ amount | cfa }} in templates and formatCfa(amount) in code (shared/i18n/app-locale.ts).',
-});
+};
+
+if (isMain(import.meta.url)) runGate(gate);

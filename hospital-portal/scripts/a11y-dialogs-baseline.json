@@ -98,6 +98,14 @@
       "count": 1,
       "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
     },
+    "src/app/bed-board/bed-board.html::escape::modal <{{ 'BED_BOARD.PRECAUTIONS_FOR' | translate: { name: precauti>": {
+      "count": 1,
+      "why": "D976 class: (keydown.escape) sits on a SIBLING backdrop, which never receives the key while focus is inside the dialog"
+    },
+    "src/app/bed-board/bed-board.html::escape::modal <{{ 'BED_BOARD.TRANSFER_FOR' | translate: { name: transferTar>": {
+      "count": 1,
+      "why": "D976 class: (keydown.escape) sits on a SIBLING backdrop, which never receives the key while focus is inside the dialog"
+    },
     "src/app/bed-management/bed-management.html::label::modal-card <{{ (editingBedId() ? 'BEDS.EDIT_BED' : 'BEDS.NEW_BED') | tra>": {
       "count": 1,
       "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
@@ -642,6 +650,14 @@
       "count": 1,
       "why": "D988: check-in dialog is not a modal"
     },
+    "src/app/reception/close-unseen-dialog/close-unseen-dialog.component.html::escape::dialog-box <{{ 'RECEPTION.CLOSE_UNSEEN_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "D976 class: (keydown.escape) sits on a SIBLING backdrop, which never receives the key while focus is inside the dialog"
+    },
+    "src/app/reception/patient-snapshot-drawer/patient-snapshot-drawer.component.html::escape::attest-modal <{{ 'RECEPTION.ATTEST_ELIGIBILITY' | translate }}>": {
+      "count": 1,
+      "why": "D976 class: (keydown.escape) sits on a SIBLING backdrop, which never receives the key while focus is inside the dialog"
+    },
     "src/app/reception/payment-pending-panel/payment-pending-panel.component.html::role::modal-box <{{ 'RECEPTION.COLLECT_PAYMENT' | translate }} — {{ payingIte>": {
       "count": 1,
       "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
@@ -657,6 +673,10 @@
     "src/app/reception/waitlist-panel/waitlist-panel.component.html::escape::modal-panel <{{ 'RECEPTION.OFFER_SLOT_TO' | translate: { name: entry.pati>": {
       "count": 1,
       "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/reception/walkin-dialog/walkin-dialog.component.html::escape::dialog-box <{{ 'RECEPTION.REGISTER_WALKIN' | translate }}>": {
+      "count": 1,
+      "why": "D976 class: (keydown.escape) sits on a SIBLING backdrop, which never receives the key while focus is inside the dialog"
     },
     "src/app/referrals/referrals.html::role::modal <{{ 'REFERRALS.ACKNOWLEDGE_REFERRAL' | translate }}>": {
       "count": 1,

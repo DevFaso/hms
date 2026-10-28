@@ -142,6 +142,10 @@
       "count": 2,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
+    "src/app/appointments/appointment-list.html::icon-button::a arrow_forward": {
+      "count": 1,
+      "why": "D173 class: icon-only link (routerLink/href) announced by its ligature text"
+    },
     "src/app/appointments/appointment-list.html::icon-button::button close": {
       "count": 4,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
@@ -262,6 +266,14 @@
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
+    "src/app/dashboard/dashboard.html::icon-button::a science": {
+      "count": 1,
+      "why": "D173 class: icon-only link (routerLink/href) announced by its ligature text"
+    },
+    "src/app/dashboard/dashboard.html::icon-button::a stethoscope": {
+      "count": 1,
+      "why": "D173 class: icon-only link (routerLink/href) announced by its ligature text"
+    },
     "src/app/dashboard/dashboard.html::icon-button::button refresh": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
@@ -353,6 +365,10 @@
     "src/app/feature-flags/feature-flags.html::icon-button::button icon": {
       "count": 2,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/hospitals/hospital-list.html::icon-button::a open_in_new": {
+      "count": 1,
+      "why": "D173 class: icon-only link (routerLink/href) announced by its ligature text"
     },
     "src/app/hospitals/hospital-list.html::icon-button::button close": {
       "count": 2,
@@ -793,6 +809,10 @@
     "src/app/patients/patient-chart/patient-chart.component.html::icon-button::button edit": {
       "count": 2,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/patients/patient-list.html::icon-button::a arrow_forward": {
+      "count": 1,
+      "why": "D173 class: icon-only link (routerLink/href) announced by its ligature text"
     },
     "src/app/patients/patient-list.html::icon-button::button close": {
       "count": 5,

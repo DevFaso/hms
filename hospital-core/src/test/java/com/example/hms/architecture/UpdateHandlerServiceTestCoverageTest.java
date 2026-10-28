@@ -37,28 +37,24 @@ import static org.assertj.core.api.Assertions.assertThat;
  *
  * <p>For each handler the scan collects every {@code xxxService.method(} call in
  * its body; each method name must appear as {@code method(} in some file under
- * {@code src/test/java}. A handler that calls no {@code *Service} at all — it
- * writes through a repository or a collaborator named otherwise — is reported
- * as {@code -> <none>}: nothing a service test could cover. Handlers listed
- * below are the ones dark today; the list may only shrink.
+ * {@code src/test/java} other than this one (its own fixtures must not count).
+ * A handler that calls no {@code *Service} at all — it writes through a
+ * repository or a collaborator named otherwise — is reported as
+ * {@code -> <none>}: nothing a service test could cover. Handlers listed below
+ * are the ones dark today; the list may only shrink.
  */
 @DisplayName("Every PUT/PATCH handler's service method is named by a test")
 class UpdateHandlerServiceTestCoverageTest {
 
     private static final Path MAIN = Paths.get("src/main/java/com/example/hms/controller");
     private static final Path TESTS = Paths.get("src/test/java");
+    private static final String SELF = UpdateHandlerServiceTestCoverageTest.class.getSimpleName() + ".java";
 
-    /** A PUT or PATCH mapping annotation, imported or fully qualified. */
+    /** A PUT or PATCH mapping annotation, imported or fully qualified. Comments are stripped first. */
     static final Pattern MAPPING = Pattern.compile("@(?:[\\w.]+\\.)?(?:PutMapping|PatchMapping)\\b");
 
-    /**
-     * The handler signature after the mapping: {@code public <type> name(}. Whatever
-     * sits between — more annotations, {@code @Operation(... "multi-line" ...)}, a
-     * comment — is skipped by looking for the next {@code public}; the return type
-     * carries no parentheses, so a {@code "public API"} inside an annotation's
-     * text cannot be mistaken for it.
-     */
-    static final Pattern SIGNATURE = Pattern.compile("\\bpublic\\s+[^;{()]*?\\s+(\\w+)\\s*\\(");
+    /** The handler signature once the annotations after the mapping are skipped: {@code public <type> name(}. */
+    static final Pattern SIGNATURE = Pattern.compile("public\\s+[^;{()]*?\\s+(\\w+)\\s*\\(");
 
     /** {@code something[sS]ervice.method(} inside the handler body. */
     static final Pattern SERVICE_CALL = Pattern.compile("\\b(\\w*[sS]ervice\\w*)\\s*\\.\\s*(\\w+)\\s*\\(");
@@ -80,19 +76,25 @@ class UpdateHandlerServiceTestCoverageTest {
         Map.entry("OrganizationController#updateOrganization -> <none>.<none>",
             NO_SERVICE + " (the controller loads, checks and saves the Organization through organizationRepository itself)")));
 
-    private record Delegation(String handler, String service, String method) {
+    private record Delegation(int mapping, String handler, String service, String method) {
         String key() {
             return handler + " -> " + service + "." + method;
         }
     }
 
-    /** Every handler of the controller source and the service calls in its body. */
-    static List<Delegation> delegations(String controller, String source) {
+    /**
+     * Every handler of the controller source and the service calls in its body, one
+     * group per mapping annotation ({@code mapping} is the annotation's offset, so
+     * two overloads of one name stay two handlers).
+     */
+    static List<Delegation> delegations(String controller, String rawSource) {
+        String source = SourceScan.stripComments(rawSource);
         List<Delegation> out = new ArrayList<>();
         Matcher mapping = MAPPING.matcher(source);
         while (mapping.find()) {
-            Matcher signature = SIGNATURE.matcher(source);
-            if (!signature.find(mapping.end())) {
+            int at = skipAnnotations(source, mapping.end());
+            Matcher signature = SIGNATURE.matcher(source).region(at, source.length());
+            if (!signature.lookingAt()) {
                 continue;
             }
             int params = signature.end() - 1;
@@ -100,40 +102,67 @@ class UpdateHandlerServiceTestCoverageTest {
             if (open < 0) {
                 continue;
             }
+            String handler = controller + "#" + signature.group(1);
             String body = source.substring(open, SourceScan.closingBrace(source, open));
             Set<String> seen = new TreeSet<>();
             Matcher c = SERVICE_CALL.matcher(body);
             while (c.find()) {
                 if (seen.add(c.group(1) + "." + c.group(2))) {
-                    out.add(new Delegation(controller + "#" + signature.group(1), c.group(1), c.group(2)));
+                    out.add(new Delegation(mapping.start(), handler, c.group(1), c.group(2)));
                 }
             }
             if (seen.isEmpty()) {
-                out.add(new Delegation(controller + "#" + signature.group(1), "<none>", "<none>"));
+                out.add(new Delegation(mapping.start(), handler, "<none>", "<none>"));
             }
         }
         return out;
     }
 
-    private static String allTestSources() throws IOException {
+    /**
+     * From the end of the mapping annotation: past its own argument list and every
+     * further annotation (with or without arguments), to the first character of the
+     * signature. An {@code @Operation(description = "a public API ...")} is skipped
+     * whole, so its text cannot be read as the signature.
+     */
+    static int skipAnnotations(String source, int from) {
+        int i = from;
+        while (i < source.length()) {
+            while (i < source.length() && Character.isWhitespace(source.charAt(i))) {
+                i++;
+            }
+            if (i < source.length() && source.charAt(i) == '(') {
+                i = SourceScan.closingParen(source, i) + 1;
+            } else if (i < source.length() && source.charAt(i) == '@') {
+                i++;
+                while (i < source.length() && (Character.isLetterOrDigit(source.charAt(i)) || source.charAt(i) == '.'
+                    || source.charAt(i) == '_')) {
+                    i++;
+                }
+            } else {
+                return i;
+            }
+        }
+        return i;
+    }
+
+    private static String otherTestSources() throws IOException {
         StringBuilder all = new StringBuilder();
         try (Stream<Path> files = Files.walk(TESTS)) {
             for (Path p : files.filter(f -> f.toString().endsWith(".java")).toList()) {
+                if (p.getFileName().toString().equals(SELF)) {
+                    continue;
+                }
                 all.append(Files.readString(p, StandardCharsets.UTF_8)).append('\n');
             }
         }
         return all.toString();
     }
 
-    private static int countMappings() throws IOException {
+    private static int countMappings(String rawSource) {
         int n = 0;
-        try (Stream<Path> files = Files.walk(MAIN)) {
-            for (Path p : files.filter(f -> f.toString().endsWith(".java")).toList()) {
-                Matcher m = MAPPING.matcher(Files.readString(p, StandardCharsets.UTF_8));
-                while (m.find()) {
-                    n++;
-                }
-            }
+        Matcher m = MAPPING.matcher(SourceScan.stripComments(rawSource));
+        while (m.find()) {
+            n++;
         }
         return n;
     }
@@ -141,14 +170,17 @@ class UpdateHandlerServiceTestCoverageTest {
     @Test
     @DisplayName("no PUT/PATCH handler delegates to a service method no test names, beyond the listed ones")
     void updateHandlersAreExercised() throws IOException {
-        String tests = allTestSources();
+        String tests = otherTestSources();
         Set<String> dark = new TreeSet<>();
-        Set<String> handlers = new TreeSet<>();
+        int mappings = 0;
+        Set<String> handled = new TreeSet<>();
         try (Stream<Path> files = Files.walk(MAIN)) {
             for (Path p : files.filter(f -> f.toString().endsWith(".java")).toList()) {
                 String controller = p.getFileName().toString().replace(".java", "");
-                for (Delegation d : delegations(controller, Files.readString(p, StandardCharsets.UTF_8))) {
-                    handlers.add(d.handler());
+                String source = Files.readString(p, StandardCharsets.UTF_8);
+                mappings += countMappings(source);
+                for (Delegation d : delegations(controller, source)) {
+                    handled.add(controller + "@" + d.mapping());
                     if (d.method().equals("<none>")
                         || !Pattern.compile("\\b" + Pattern.quote(d.method()) + "\\s*\\(").matcher(tests).find()) {
                         dark.add(d.key());
@@ -156,8 +188,8 @@ class UpdateHandlerServiceTestCoverageTest {
                 }
             }
         }
-        // Every mapping annotation found a handler: the signature scan did not skip any.
-        assertThat(handlers).as("one handler per PUT/PATCH mapping").hasSize(countMappings());
+        // Every mapping annotation found its handler: the signature scan skipped none.
+        assertThat(handled).as("one handler per PUT/PATCH mapping").hasSize(mappings);
 
         List<String> fresh = new ArrayList<>();
         for (String key : dark) {
@@ -179,43 +211,55 @@ class UpdateHandlerServiceTestCoverageTest {
     }
 
     @Test
-    @DisplayName("the handler scan reads the house controller shapes, multi-line @Operation included")
+    @DisplayName("the handler scan reads the house controller shapes: multi-line @Operation, overloads, Javadoc mentions")
     void theScanReadsTheHouseShapes() {
         String source = """
+            /** Updates. {@code @PutMapping} is mentioned here and must not count. */
             @PutMapping("/{id}")
             @PreAuthorize(APPOINTMENT_MANAGE_ROLES)
-            public ResponseEntity<AppointmentResponseDTO> updateAppointment(
+            public ResponseEntity<AppointmentResponseDTO> updateProbeVisit(
                 @PathVariable UUID id,
                 @Valid @RequestBody AppointmentRequestDTO request) {
                 Locale locale = parseLocale(lang);
                 return ResponseEntity.ok(
-                    appointmentService.updateAppointment(id, request, locale, getUsername(authentication)));
+                    probeVisitService.updateProbeVisit(id, request, locale, getUsername(authentication)));
             }
 
             @PatchMapping("/{id}/status")
-            @Operation(summary = "Transition", description = "A public API that "
-                + "moves the visit; (parens) and {braces} in the text.")
+            @Operation(summary = "Transition", description = "A public API that moves (reschedules) "
+                + "the visit; (parens) and {braces} in the text.")
             // a comment before the signature
-            public ResponseEntity<Void> patchStatus(@PathVariable UUID id) {
-                encounterWorkflowService.transition(id);
-                auditService.record(id);
+            public ResponseEntity<Void> patchProbeStatus(@PathVariable UUID id) {
+                probeWorkflowService.transitionProbe(id);
+                probeAuditService.recordProbe(id);
                 return ResponseEntity.noContent().build();
             }
 
             @org.springframework.web.bind.annotation.PutMapping("/{id}/owner")
-            public void reassign(@PathVariable UUID id, @RequestBody Map<String, String> body) {
-                userRepository.save(load(id));
+            public void reassignProbe(@PathVariable UUID id, @RequestBody Map<String, String> body) {
+                probeRepository.save(loadProbe(id));
+            }
+
+            @PutMapping("/{id}/owner/{sub}")
+            public void reassignProbe(@PathVariable UUID id, @PathVariable UUID sub) {
+                probeOwnerService.reassignProbe(id, sub);
             }
 
             @GetMapping("/{id}")
             public ResponseEntity<AppointmentResponseDTO> get(@PathVariable UUID id) {
-                return ResponseEntity.ok(appointmentService.getAppointment(id));
+                return ResponseEntity.ok(probeVisitService.getProbeVisit(id));
             }
             """;
-        assertThat(delegations("AppointmentController", source)).extracting(Delegation::key).containsExactlyInAnyOrder(
-            "AppointmentController#updateAppointment -> appointmentService.updateAppointment",
-            "AppointmentController#patchStatus -> auditService.record",
-            "AppointmentController#patchStatus -> encounterWorkflowService.transition",
-            "AppointmentController#reassign -> <none>.<none>");
+        List<Delegation> found = delegations("ProbeController", source);
+        assertThat(found).extracting(Delegation::key).containsExactlyInAnyOrder(
+            "ProbeController#updateProbeVisit -> probeVisitService.updateProbeVisit",
+            "ProbeController#patchProbeStatus -> probeAuditService.recordProbe",
+            "ProbeController#patchProbeStatus -> probeWorkflowService.transitionProbe",
+            "ProbeController#reassignProbe -> <none>.<none>",
+            "ProbeController#reassignProbe -> probeOwnerService.reassignProbe");
+        assertThat(found.stream().map(Delegation::mapping).distinct().count())
+            .as("four mappings, the Javadoc mention not among them")
+            .isEqualTo(4);
+        assertThat(countMappings(source)).isEqualTo(4);
     }
 }

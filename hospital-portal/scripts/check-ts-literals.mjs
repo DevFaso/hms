@@ -21,16 +21,18 @@ import { resolve } from 'node:path';
 import { tsLiteralFindings } from './lib/ts-literal-scan.mjs';
 import { scanComponents } from './lib/component-sources.mjs';
 import { PORTAL_DIR } from './lib/template-gate.mjs';
-import { runGate } from './lib/baseline.mjs';
+import { runGate, isMain } from './lib/baseline.mjs';
 
-runGate({
+export const gate = {
   name: 'ts literals',
   baselinePath: resolve(PORTAL_DIR, 'scripts', 'ts-literals-baseline.json'),
-  findings: scanComponents((source) => tsLiteralFindings(source)),
+  findings: (ctx) => scanComponents((source) => tsLiteralFindings(source), ctx),
   comment: [
     'English sentences handed to a toast or a status signal from component code,',
     "as they stand today. A site not listed fails the build; translate.instant('KEY')",
     'is the only way text reaches a toast. Key a site, then delete its pin.',
   ],
   hint: "Put the sentence in the three locale files and pass translate.instant('SECTION.KEY').",
-});
+};
+
+if (isMain(import.meta.url)) runGate(gate);

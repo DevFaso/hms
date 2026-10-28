@@ -25,8 +25,17 @@ import { lineOf } from './html-tags.mjs';
 const MONEY_TAIL =
   '(?:amount|price|balance|copay|copayment|revenue|subtotal|fee|fees|cost|paid|due|charge|charges|payment|discount|refund|' +
   'totalAmount|totalDue|totalPaid|unitPrice|lineTotal|grandTotal|amountDue|balanceDue)';
+/**
+ * The last identifier of the expression must BE a money word (`amount`,
+ * `balanceDue`) or END in a capitalised one (`totalAmount`, `copayDue`): a
+ * substring match read `feedbackScore`, `overdueInvoices` and `unpaidVisits` as
+ * money. And a word that merely contains one is still not money when it ends
+ * in a count, a rate, a code or a date.
+ */
+const MONEY_WORD =
+  /^(?:[a-z][A-Za-z0-9]*)?(?:Amount|Price|Balance|Copay|Copayment|Revenue|Subtotal|Fee|Fees|Cost|Paid|Due|Charge|Charges|Payment|Discount|Refund|Total)$|^(?:amount|price|balance|copay|copayment|revenue|subtotal|fee|fees|cost|paid|due|charge|charges|payment|discount|refund)$/;
 const NOT_MONEY =
-  /(?:rate|percent|pct|ratio|count|days|hours|minutes|index|number|share)\s*(?:\(\))?\s*$/i;
+  /(?:rate|percent|pct|ratio|count|days|hours|minutes|index|number|share|code|score|invoices|visits|items|length|at|on|date|by)$/i;
 
 const EXPR = String.raw`([\w$.?!()\[\]'"]*?\w*${MONEY_TAIL}\w*(?:\(\))?)`;
 // `[?!]?` — `inv.amount?.toFixed(2)` and `inv.amount!.toFixed(2)` are the same
@@ -41,7 +50,11 @@ const INTL_CURRENCY = /new\s+Intl\.NumberFormat\([^)]*\)|toLocaleString\(\s*[^)]
 const lineAt = lineOf;
 
 function isMoney(expr) {
-  return !NOT_MONEY.test(expr);
+  const last = name(expr)
+    .split(/\?\.|!\.|\./)
+    .pop()
+    .replace(/[!?()[\]'"]/g, '');
+  return MONEY_WORD.test(last) && !NOT_MONEY.test(last);
 }
 
 /** The expression without a leading `(`: `(point.amount | number` names `point.amount`. */

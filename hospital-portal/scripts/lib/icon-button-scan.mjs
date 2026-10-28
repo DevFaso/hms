@@ -57,13 +57,21 @@ function isNamed(tag) {
   return hasAttr(tag, 'aria-label') || hasAttr(tag, 'aria-labelledby');
 }
 
+/**
+ * A control that needs a name: a <button>, an <a> that does something (a
+ * (click), a routerLink or an href — the D173 shape was an icon-only sidebar
+ * link), or anything with role="button" / role="link".
+ */
 function isButton(tag) {
   if (tag.name === 'button') return true;
-  if (tag.name === 'a' && [...tag.attrs.keys()].some((k) => /^\(click\)|^\(keydown/.test(k))) {
+  if (
+    tag.name === 'a' &&
+    [...tag.attrs.keys()].some((k) => /^\(click\)|^\(keydown|routerLink|^href$|^\[href\]$/.test(k))
+  ) {
     return true;
   }
   const role = attrValue(tag, 'role');
-  return role !== undefined && role.replace(/['"]/g, '').trim() === 'button';
+  return role !== undefined && /^(?:button|link)$/.test(role.replace(/['"]/g, '').trim());
 }
 
 function iconSummary(inner) {

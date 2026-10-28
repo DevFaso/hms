@@ -22,12 +22,13 @@ import { resolve } from 'node:path';
 
 import { pickerFindings, PICKER_COMPONENT } from './lib/patient-picker-scan.mjs';
 import { scanTemplates, PORTAL_DIR } from './lib/template-gate.mjs';
-import { runGate } from './lib/baseline.mjs';
+import { runGate, isMain } from './lib/baseline.mjs';
 
-runGate({
+export const gate = {
   name: 'patient picker',
   baselinePath: resolve(PORTAL_DIR, 'scripts', 'patient-picker-baseline.json'),
-  findings: scanTemplates(pickerFindings, { skip: (rel) => rel.startsWith(PICKER_COMPONENT) }),
+  findings: (ctx) =>
+    scanTemplates(pickerFindings, { skip: (rel) => rel.startsWith(PICKER_COMPONENT) }, ctx),
   comment: [
     'Hand-written patient pickers (search input + own suggestion list), as they',
     'stand today. Each key is "template::rule::<iterable>"; "why" is the QA',
@@ -35,4 +36,6 @@ runGate({
     'with <app-patient-picker>, then delete its pin.',
   ],
   hint: 'Replace the input + list with <app-patient-picker (selected)="..."> (src/app/shared/patient-picker).',
-});
+};
+
+if (isMain(import.meta.url)) runGate(gate);

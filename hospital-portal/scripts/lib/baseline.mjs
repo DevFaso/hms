@@ -21,6 +21,8 @@
  * }
  */
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export function loadBaseline(path) {
   if (!existsSync(path)) return { pinned: {} };
@@ -87,25 +89,30 @@ export function writeBaseline(path, findings, comment, previous = { pinned: {} }
 }
 
 /**
- * The one exit path every gate shares: print the fresh findings with file:line
- * and the class of bug, print the stale pins, exit 1 unless `--report-only`.
+ * One gate, evaluated: print the fresh findings with file:line and the class of
+ * bug, print the stale pins, and say whether it passed. `--write-baseline`
+ * rewrites the pins instead; `--report-only` prints and always passes.
  *
- * @param {object} o
- * @param {string} o.name gate name for the summary line
- * @param {string} o.baselinePath
- * @param {object[]} o.findings
- * @param {string[]} o.comment the `$comment` written by `--write-baseline`
- * @param {string} o.hint one line telling the reader how to fix a fresh finding
- * @param {string} o.root paths in the report are relative to this
+ * @param {object} gate
+ * @param {string} gate.name gate name for the summary line
+ * @param {string} gate.baselinePath
+ * @param {object[] | ((ctx: object) => object[])} gate.findings the findings, or
+ *   a function of the shared scan context (lib/template-gate.mjs `buildContext`)
+ *   so that scripts/check-guards.mjs can read the tree once for every gate
+ * @param {string[]} gate.comment the `$comment` written by `--write-baseline`
+ * @param {string} gate.hint one line telling the reader how to fix a fresh finding
+ * @param {string[]} argv the command-line flags
+ * @param {object} [ctx] the shared scan context, when the caller built one
+ * @returns {boolean} whether the gate passed
  */
-export function runGate({ name, baselinePath, findings, comment, hint }) {
-  const argv = process.argv.slice(2);
+export function evaluateGate({ name, baselinePath, findings, comment, hint }, argv, ctx) {
   const reportOnly = argv.includes('--report-only');
   const baseline = loadBaseline(baselinePath);
+  if (typeof findings === 'function') findings = findings(ctx);
   if (argv.includes('--write-baseline')) {
     writeBaseline(baselinePath, findings, comment, baseline);
     console.log(`${name}: wrote ${tally(findings).size} pin(s) to ${baselinePath} — read the diff`);
-    return;
+    return true;
   }
   const { fresh, stale } = compare(findings, baseline);
   for (const f of fresh) {
@@ -125,5 +132,19 @@ export function runGate({ name, baselinePath, findings, comment, hint }) {
     `${name}: ${findings.length} site(s) found, ${pinnedTotal} pinned, ` +
       `${fresh.length} new, ${stale.length} stale pin(s)`,
   );
-  if (!reportOnly && (fresh.length > 0 || stale.length > 0)) process.exit(1);
+  return reportOnly || (fresh.length === 0 && stale.length === 0);
+}
+
+/** A gate run on its own (`node scripts/check-x.mjs`): evaluate, exit 1 on failure. */
+export function runGate(gate) {
+  if (!evaluateGate(gate, process.argv.slice(2))) process.exit(1);
+}
+
+/**
+ * Whether `moduleUrl` (a script's `import.meta.url`) is the file node was asked
+ * to run — so a gate module can be imported by scripts/check-guards.mjs without
+ * running itself.
+ */
+export function isMain(moduleUrl) {
+  return process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(moduleUrl);
 }

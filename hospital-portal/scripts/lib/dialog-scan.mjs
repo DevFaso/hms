@@ -28,8 +28,30 @@ const CONTAINER_TOKEN =
 
 const DIALOG_ROLES = new Set(['dialog', 'alertdialog']);
 
-export const ESCAPE_HANDLER =
-  /keydown\.escape|keydown\.esc\b|['"]Escape['"]|cdkTrapFocus|MatDialog|@angular\/cdk\/dialog|\bDialogRef\b/;
+/**
+ * An Escape handler that belongs to the whole component: a document/window
+ * HostListener, or the CDK/Material dialog service, which closes on Escape
+ * itself. A `(keydown.escape)` must sit on the dialog element, an ancestor or
+ * a descendant (checked per dialog); a focus trap or an `'Escape'` string
+ * elsewhere in the file (a typeahead's key handler) does not close a dialog.
+ */
+export const COMPONENT_ESCAPE =
+  /HostListener\(\s*['"](?:document:|window:)?keydown\.esc(?:ape)?['"]|MatDialog|@angular\/cdk\/dialog|\bDialogRef\b/;
+const ESCAPE_ATTR = /^\(keydown\.esc(?:ape)?\)$/;
+const KEYDOWN_ATTR = /^\(keydown\)$/;
+const ESCAPE_KEY = /['"]Escape['"]/;
+const ESCAPE_IN_MARKUP = /\(keydown\.esc(?:ape)?\)=/;
+
+function hasEscapeAttr(tag) {
+  return [...tag.attrs.keys()].some((k) => ESCAPE_ATTR.test(k));
+}
+
+/** A `(keydown)="onKey($event)"` whose component reads `event.key === 'Escape'`. */
+function hasKeydownEscape(tag, componentSource) {
+  return (
+    [...tag.attrs.keys()].some((k) => KEYDOWN_ATTR.test(k)) && ESCAPE_KEY.test(componentSource)
+  );
+}
 
 function headingOf(inner) {
   if (inner == null) return '';
@@ -62,7 +84,7 @@ export function dialogFindings(html, componentSource = html, dialogSelectors = n
   const tokens = tags(html);
   const out = [];
   const stack = [];
-  const hasEscape = ESCAPE_HANDLER.test(componentSource);
+  const componentEscape = COMPONENT_ESCAPE.test(componentSource);
   const childDialog =
     dialogSelectors.size > 0
       ? new RegExp(
@@ -102,6 +124,12 @@ export function dialogFindings(html, componentSource = html, dialogSelectors = n
           message: `role="${role}" with no name: add aria-labelledby pointing at its title`,
         });
       }
+      const hasEscape =
+        componentEscape ||
+        hasEscapeAttr(tag) ||
+        hasKeydownEscape(tag, componentSource) ||
+        stack.some((s) => s.escape) ||
+        (inner != null && ESCAPE_IN_MARKUP.test(inner));
       if (!hasEscape) {
         out.push({
           line: tag.line,
@@ -127,7 +155,13 @@ export function dialogFindings(html, componentSource = html, dialogSelectors = n
         });
       }
     }
-    if (!tag.selfClosing) stack.push({ name: tag.name, isDialog });
+    if (!tag.selfClosing) {
+      stack.push({
+        name: tag.name,
+        isDialog,
+        escape: hasEscapeAttr(tag) || hasKeydownEscape(tag, componentSource),
+      });
+    }
   });
   return out;
 }

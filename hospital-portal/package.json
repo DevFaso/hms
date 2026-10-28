@@ -36,7 +36,7 @@
     "guard:money-format": "node scripts/check-money-format.mjs",
     "guard:ts-literals": "node scripts/check-ts-literals.mjs",
     "guard:uuid-fragments": "node scripts/check-uuid-fragments.mjs",
-    "guards": "npm run guard:a11y-dialogs && npm run guard:a11y-names && npm run guard:patient-picker && npm run guard:money-format && npm run guard:ts-literals && npm run guard:uuid-fragments",
+    "guards": "node scripts/check-guards.mjs",
     "test:scripts": "node --test \"scripts/**/*.test.mjs\"",
     "i18n:report": "node scripts/check-i18n-coverage.mjs --report-only"
   },

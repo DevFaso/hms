@@ -56,8 +56,28 @@ test('a container inside, or wrapping, a role="dialog" element is not reported a
   const html = `<div class="modal" role="dialog" aria-modal="true" aria-label="x" (keydown.escape)="c()">
       <div class="modal-dialog"><div class="modal-content">body</div></div>
     </div>
-    <div class="modal-wrapper"><div class="x-dialog" role="alertdialog" aria-modal="true" aria-label="y"></div></div>`;
+    <div class="modal-wrapper" (keydown.escape)="c()"><div class="x-dialog" role="alertdialog" aria-modal="true" aria-label="y"></div></div>`;
   assert.deepEqual(dialogFindings(html), []);
+});
+
+test('D976: an Escape handler on a SIBLING backdrop never fires while focus is inside the dialog', () => {
+  const html = `<div class="modal-backdrop" tabindex="-1" (click)="close()" (keydown.escape)="close()"></div>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="t"><h2 id="t">T</h2></div>`;
+  assert.deepEqual(rules(html, html), ['escape']);
+  const nested = `<div class="modal-backdrop" (click)="close()" (keydown.escape)="close()">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="t"><h2 id="t">T</h2></div></div>`;
+  assert.deepEqual(dialogFindings(nested), []);
+  const keydown = `<div class="modal" role="dialog" aria-modal="true" aria-label="x" (keydown)="onKey($event)"></div>`;
+  assert.deepEqual(
+    dialogFindings(keydown, `${keydown}\nif (event.key === 'Escape') this.close();`),
+    [],
+  );
+  // A focus trap or an 'Escape' string elsewhere in the file is not a handler on this dialog.
+  const bare = `<div class="modal" role="dialog" aria-modal="true" aria-label="x"></div>`;
+  assert.deepEqual(
+    rules(bare, `${bare}\ncdkTrapFocus; if (e.key === 'Escape') this.closeTypeahead();`),
+    ['escape'],
+  );
 });
 
 test('a container that only wraps a child component which is itself a dialog delegates', () => {

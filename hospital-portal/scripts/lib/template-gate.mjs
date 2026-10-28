@@ -26,15 +26,32 @@ export function componentSourceFor(file, text) {
 }
 
 /**
+ * Every template of the portal with what the scanners need about it, read once.
+ * scripts/check-guards.mjs builds this once and hands it to all six gates; a
+ * gate run on its own builds it for itself.
+ *
+ * @returns {{ file: string, rel: string, text: string, lineOffset: number, componentSource: string }[]}
+ */
+export function loadTemplates() {
+  return templatesIn(SRC_DIR).map(({ file, text, lineOffset }) => ({
+    file,
+    rel: relative(PORTAL_DIR, file).replaceAll('\\', '/'),
+    text,
+    lineOffset,
+    componentSource: componentSourceFor(file, text),
+  }));
+}
+
+/**
  * @param {(html: string, componentSource: string, file: string) => {line:number, rule:string, anchor:string, message:string}[]} scan
  * @param {{ skip?: (relFile: string) => boolean }} [options]
+ * @param {{ templates?: ReturnType<typeof loadTemplates> }} [ctx] a shared context; read from disk when absent
  */
-export function scanTemplates(scan, options = {}) {
+export function scanTemplates(scan, options = {}, ctx = {}) {
   const findings = [];
-  for (const { file, text, lineOffset } of templatesIn(SRC_DIR)) {
-    const rel = relative(PORTAL_DIR, file).replaceAll('\\', '/');
+  for (const { rel, text, lineOffset, componentSource } of ctx.templates ?? loadTemplates()) {
     if (options.skip?.(rel)) continue;
-    for (const hit of scan(text, componentSourceFor(file, text), rel)) {
+    for (const hit of scan(text, componentSource, rel)) {
       findings.push({
         ...hit,
         file: rel,

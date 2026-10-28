@@ -1,5 +1,6 @@
 package com.example.hms.architecture;
 
+import com.example.hms.testsupport.SourceScan;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -63,8 +64,7 @@ class SaveThenRefreshGuardTest {
             String argument = m.group(2);
             String refreshed = m.group(3);
             if (refreshed.equals(argument) || refreshed.equals(saved)) {
-                int line = 1 + (int) source.chars().limit(m.start()).filter(c -> c == '\n').count();
-                out.add(file + ":" + line + ": save(" + argument + ") then refresh(" + refreshed
+                out.add(file + ":" + SourceScan.lineOf(source, m.start()) + ": save(" + argument + ") then refresh(" + refreshed
                     + ") — the refresh re-reads the row and discards the pending update (QA D923)");
             }
         }

@@ -139,8 +139,12 @@ class StoredTextProseGuardTest {
             int open = sink.end() - 1;
             int close = closingParen(source, open);
             String argument = source.substring(open + 1, close);
-            String statement = source.substring(source.lastIndexOf(';', sink.start()) + 1, close);
-            if (EXEMPT_STATEMENT.matcher(statement).find()) {
+            // The receiver chain of the sink — from the statement's start (a `;`
+            // inside a literal does not end a statement) to the sink itself — decides
+            // the exemption; the argument does not, so a notification whose message
+            // happens to mention `eventDescription` is still scanned.
+            String receiver = source.substring(SourceScan.statementStart(source, sink.start()), sink.start());
+            if (EXEMPT_STATEMENT.matcher(receiver).find()) {
                 continue;
             }
             Matcher literal = LITERAL.matcher(argument);
@@ -213,8 +217,11 @@ class StoredTextProseGuardTest {
             builder.append(", ").append(name);
             notificationRepository.save(Notification.builder().title("Lab result ready").build());
             json.append('"').append(name).append('"');
+            audit.record(AuditEvent.builder().title("a; b").description("Patient merged into master record"));
+            notification.setMessage(eventDescription + " is ready for review");
             """;
         assertThat(sites("x", source)).containsExactly(
+            "x:: is ready for review",
             "x:: medication(s) reported:\\n",
             "x::Lab result ready",
             "x::Medication out of stock; placed on back order",

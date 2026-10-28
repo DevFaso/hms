@@ -3,9 +3,10 @@ package com.example.hms.testsupport;
 /**
  * Balanced-delimiter walking for the source-scanning guards
  * ({@code architecture/*GuardTest}, {@code i18n/*ProseGuardTest}). One copy,
- * so a fix to how a {@code '"'} char literal or a {@code "}"} string is skipped
- * reaches every scan: the first versions each carried their own walker, and
- * only one of them knew about char literals.
+ * so a fix to how a {@code '"'} char literal, a {@code "}"} string, a
+ * {@code """} text block or a {@code /* ... *&#47;} comment is skipped reaches
+ * every scan: the first versions each carried their own walker, and only one
+ * of them knew about char literals.
  */
 public final class SourceScan {
 
@@ -25,20 +26,49 @@ public final class SourceScan {
     private static int closing(String source, int open, char opener, char closer) {
         int depth = 0;
         for (int i = open; i < source.length(); i++) {
+            int skipped = endOfLiteralOrComment(source, i);
+            if (skipped >= 0) {
+                i = skipped;
+                continue;
+            }
             char ch = source.charAt(i);
-            if (ch == '"') {
-                i = endOfStringLiteral(source, i);
-            } else if (ch == '\'') {
-                i = endOfCharLiteral(source, i);
-            } else if (ch == '/' && i + 1 < source.length() && source.charAt(i + 1) == '/') {
-                i = endOfLine(source, i);
-            } else if (ch == opener) {
+            if (ch == opener) {
                 depth++;
             } else if (ch == closer && --depth == 0) {
                 return i;
             }
         }
         return source.length();
+    }
+
+    /**
+     * When a string literal, text block, char literal or comment starts at
+     * {@code i}: the index of its last character. Otherwise {@code -1}.
+     */
+    public static int endOfLiteralOrComment(String source, int i) {
+        if (source.startsWith("\"\"\"", i)) {
+            int end = source.indexOf("\"\"\"", i + 3);
+            return end < 0 ? source.length() : end + 2;
+        }
+        char ch = source.charAt(i);
+        if (ch == '"') {
+            return endOfStringLiteral(source, i);
+        }
+        if (ch == '\'') {
+            return endOfCharLiteral(source, i);
+        }
+        if (ch == '/' && i + 1 < source.length()) {
+            char next = source.charAt(i + 1);
+            if (next == '/') {
+                int nl = source.indexOf('\n', i);
+                return nl < 0 ? source.length() : nl - 1;
+            }
+            if (next == '*') {
+                int end = source.indexOf("*/", i + 2);
+                return end < 0 ? source.length() : end + 1;
+            }
+        }
+        return -1;
     }
 
     /** The index of the closing quote of the string literal opened at {@code openQuote}. */
@@ -63,9 +93,53 @@ public final class SourceScan {
         return Math.min(i + 1, source.length());
     }
 
-    private static int endOfLine(String source, int from) {
-        int nl = source.indexOf('\n', from);
-        return nl < 0 ? source.length() : nl;
+    /**
+     * The source with every {@code //} and {@code /* *&#47;} comment blanked
+     * (spaces, newlines kept), so that a {@code @PutMapping} or a {@code public}
+     * written in a Javadoc is not read as code. Literals are kept verbatim.
+     */
+    public static String stripComments(String source) {
+        StringBuilder out = new StringBuilder(source.length());
+        for (int i = 0; i < source.length(); i++) {
+            char ch = source.charAt(i);
+            if (ch == '/' && i + 1 < source.length() && (source.charAt(i + 1) == '/' || source.charAt(i + 1) == '*')) {
+                int end = endOfLiteralOrComment(source, i);
+                for (int k = i; k <= end && k < source.length(); k++) {
+                    out.append(source.charAt(k) == '\n' ? '\n' : ' ');
+                }
+                i = end;
+                continue;
+            }
+            int literalEnd = endOfLiteralOrComment(source, i);
+            if (literalEnd >= 0) {
+                out.append(source, i, Math.min(literalEnd + 1, source.length()));
+                i = literalEnd;
+                continue;
+            }
+            out.append(ch);
+        }
+        return out.toString();
+    }
+
+    /**
+     * The index just after the {@code ;}, {@code {} or {@code }} that precedes
+     * {@code index} outside any literal or comment: where the statement
+     * containing {@code index} starts. A {@code ;} inside a string does not count.
+     */
+    public static int statementStart(String source, int index) {
+        int start = 0;
+        for (int i = 0; i < index; i++) {
+            int skipped = endOfLiteralOrComment(source, i);
+            if (skipped >= 0) {
+                i = skipped;
+                continue;
+            }
+            char ch = source.charAt(i);
+            if (ch == ';' || ch == '{' || ch == '}') {
+                start = i + 1;
+            }
+        }
+        return start;
     }
 
     /** 1-based line of {@code index} in {@code source}. */

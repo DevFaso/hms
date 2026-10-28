@@ -25,16 +25,19 @@ import { resolve } from 'node:path';
 import { dialogFindings } from './lib/dialog-scan.mjs';
 import { dialogComponentSelectors } from './lib/component-sources.mjs';
 import { scanTemplates, PORTAL_DIR } from './lib/template-gate.mjs';
-import { runGate } from './lib/baseline.mjs';
+import { runGate, isMain } from './lib/baseline.mjs';
 
-const childDialogs = dialogComponentSelectors();
-
-runGate({
+export const gate = {
   name: 'a11y dialogs',
   baselinePath: resolve(PORTAL_DIR, 'scripts', 'a11y-dialogs-baseline.json'),
-  findings: scanTemplates((html, componentSource) =>
-    dialogFindings(html, componentSource, childDialogs),
-  ),
+  findings: (ctx) => {
+    const childDialogs = dialogComponentSelectors(ctx);
+    return scanTemplates(
+      (html, componentSource) => dialogFindings(html, componentSource, childDialogs),
+      {},
+      ctx,
+    );
+  },
   comment: [
     'Dialogs that lack role/aria-modal/a name/Escape, as they stand today.',
     'Each key is "template::rule::anchor"; "count" is how many such sites the',
@@ -44,4 +47,6 @@ runGate({
   hint:
     'Give the modal role="dialog" aria-modal="true" aria-labelledby="<title id>" and close it on (keydown.escape) — ' +
     'see shared/patient-picker or reception/walkin-dialog for the house shape.',
-});
+};
+
+if (isMain(import.meta.url)) runGate(gate);

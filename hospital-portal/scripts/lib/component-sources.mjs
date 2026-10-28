@@ -23,10 +23,11 @@ export function componentSources() {
 
 /**
  * @param {(source: string, relFile: string) => {line:number, rule:string, anchor:string, message:string}[]} scan
+ * @param {{ components?: ReturnType<typeof componentSources> }} [ctx] a shared context; read from disk when absent
  */
-export function scanComponents(scan) {
+export function scanComponents(scan, ctx = {}) {
   const findings = [];
-  for (const { file, text } of componentSources()) {
+  for (const { file, text } of ctx.components ?? componentSources()) {
     for (const hit of scan(text, file)) {
       findings.push({ ...hit, file, id: `${file}::${hit.rule}::${hit.anchor}` });
     }
@@ -39,10 +40,12 @@ export function scanComponents(scan) {
  * (`role="dialog"` or `role="alertdialog"` anywhere in it). A page that wraps
  * `<app-order-set-picker>` in a `<div class="modal">` delegates the dialog
  * semantics to the child; the dialog gate must not report that wrapper.
+ *
+ * @param {{ components?: ReturnType<typeof componentSources> }} [ctx]
  */
-export function dialogComponentSelectors() {
+export function dialogComponentSelectors(ctx = {}) {
   const selectors = new Set();
-  for (const { file, text } of componentSources()) {
+  for (const { file, text } of ctx.components ?? componentSources()) {
     const selector = /selector:\s*['"]([^'"]+)['"]/.exec(text);
     if (!selector) continue;
     let template;

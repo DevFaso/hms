@@ -28,6 +28,16 @@ test('| cfa passes, and a rate, a count or a page total is not money', () => {
   assert.deepEqual(moneyTemplateFindings(html), []);
 });
 
+test('a word that merely contains a money word is not money', () => {
+  const html = `{{ feedbackScore | number: '1.1-1' }} {{ overdueInvoices | number }}
+    {{ unpaidVisits | number }} {{ costCenterCode | number }} {{ row.paidAt | number }}`;
+  assert.deepEqual(moneyTemplateFindings(html), []);
+  assert.deepEqual(
+    anchors(moneyTemplateFindings(`{{ row.totalAmount | number }} {{ x.grandTotal | number }}`)),
+    ['pipe:row.totalAmount | number', 'pipe:x.grandTotal | number'],
+  );
+});
+
 test('toFixed on an amount is hand formatting', () => {
   assert.deepEqual(anchors(moneyTemplateFindings(`{{ item.unitPrice.toFixed(2) }}`)), [
     'fixed:item.unitPrice.toFixed',

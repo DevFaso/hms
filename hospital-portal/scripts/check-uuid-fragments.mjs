@@ -21,20 +21,23 @@ import { resolve } from 'node:path';
 import { uuidFragmentFindings } from './lib/uuid-fragment-scan.mjs';
 import { scanTemplates, PORTAL_DIR } from './lib/template-gate.mjs';
 import { scanComponents } from './lib/component-sources.mjs';
-import { runGate, dedupe } from './lib/baseline.mjs';
+import { runGate, dedupe, isMain } from './lib/baseline.mjs';
 
-runGate({
+export const gate = {
   name: 'uuid fragments',
   baselinePath: resolve(PORTAL_DIR, 'scripts', 'uuid-fragments-baseline.json'),
   // An inline template is seen by both scans; dedupe keeps one finding per site.
-  findings: dedupe([
-    ...scanTemplates((html) => uuidFragmentFindings(html)),
-    ...scanComponents((source) => uuidFragmentFindings(source)),
-  ]),
+  findings: (ctx) =>
+    dedupe([
+      ...scanTemplates((html) => uuidFragmentFindings(html), {}, ctx),
+      ...scanComponents((source) => uuidFragmentFindings(source), ctx),
+    ]),
   comment: [
     'UUID fragments shown on screen, as they stand today.',
     'Each key is "file::rule::anchor"; "why" is the QA defect id or the reason.',
     'A site not listed fails the build; show the human code, then delete its pin.',
   ],
   hint: 'Show the human code the API already carries (encounterNumber, mrn, invoiceNumber, orderNumber), not a slice of the id.',
-});
+};
+
+if (isMain(import.meta.url)) runGate(gate);

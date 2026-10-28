@@ -35,10 +35,21 @@ test('a button with visible text, a translated label or an <img alt> is named by
   assert.deepEqual(rules(html), []);
 });
 
-test('an <a (click)> or role="button" element is a button too; <img alt=""> is an icon', () => {
+test('an <a (click)>, <a routerLink>, <a href> or role="button" element is a control too; <img alt=""> is an icon', () => {
   const html = `<a (click)="open()"><span class="material-symbols-outlined">open_in_new</span></a>
-    <div role="button" (click)="x()"><img src="i.svg" alt="" /></div>`;
-  assert.deepEqual(rules(html), ['icon-button:a open_in_new', 'icon-button:div icon']);
+    <div role="button" (click)="x()"><img src="i.svg" alt="" /></div>
+    <a routerLink="/billing"><span class="material-symbols-outlined">payments</span></a>
+    <a [routerLink]="['/lab']"><span class="material-symbols-outlined">science</span></a>
+    <a href="/help" target="_blank"><span class="material-symbols-outlined">help</span></a>
+    <a routerLink="/x" [attr.aria-label]="'X' | translate"><span class="material-symbols-outlined">x</span></a>
+    <a class="plain">text link</a>`;
+  assert.deepEqual(rules(html), [
+    'icon-button:a open_in_new',
+    'icon-button:div icon',
+    'icon-button:a payments',
+    'icon-button:a science',
+    'icon-button:a help',
+  ]);
 });
 
 test('D993: an <input>/<textarea>/<select> with no label, aria-label or <label for> fails', () => {

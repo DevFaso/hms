@@ -54,11 +54,17 @@ reverted (PR body of the guard PR records the runs).
 All six share one shape (`scripts/lib/baseline.mjs`): a scan produces findings
 with a stable id `file::rule::anchor` (never a line number), and
 `scripts/<gate>-baseline.json` pins how many such sites exist today and why.
+`npm run guards` is `scripts/check-guards.mjs`: it reads the templates (every
+`.html` and every inline `template:`) and the `.ts` sources once, evaluates all
+six gates on that, and reports every failing gate, not just the first. Each
+gate also runs alone (`node scripts/check-a11y-dialogs.mjs`). The Java guards
+share `testsupport/SourceScan` (balanced braces/parens through string, char and
+text-block literals and comments, statement start, line numbers).
 
 | Gate (`npm run …`) | Class it stops | Rules | QA defects | Pins today |
 |---|---|---|---|---|
-| `guard:a11y-dialogs` | A modal that is not a dialog to assistive technology. | `role` (class names it a modal, no `role="dialog"` on it, an ancestor or a descendant, including a child component that is itself a dialog), `modal` (no `aria-modal`), `label` (no `aria-labelledby`/`aria-label`), `escape` (component has no Escape handler) | D976, D988, D1004, D968 (D173 earlier) | 188 (83 role, 81 label, 12 modal, 12 escape) |
-| `guard:a11y-names` | A control with no accessible name. | `icon-button` (a `<button>`, `<a (click)>` or `role="button"` whose content minus icons is empty and that has no `aria-label(ledby)`; `title` alone does not count), `field-label` (`<input>`/`<textarea>`/`<select>` with no `aria-label`, no `<label for>`, no enclosing `<label>`) | D988, D999, D1006, D993 (D173/D200 earlier) | 378 sites / 269 pins (227 icon buttons, 42 fields) |
+| `guard:a11y-dialogs` | A modal that is not a dialog to assistive technology. | `role` (class names it a modal, no `role="dialog"` on it, an ancestor or a descendant, including a child component that is itself a dialog), `modal` (no `aria-modal`), `label` (no `aria-labelledby`/`aria-label`), `escape` (no `(keydown.escape)` on the dialog, an ancestor or a descendant, no `document:keydown.escape` HostListener, no CDK/Material dialog — an Escape bound on a **sibling** backdrop never fires while focus is inside the dialog, and a focus trap or an `'Escape'` string elsewhere in the file is not a handler) | D976, D988, D1004, D968 (D173 earlier) | 193 (83 role, 81 label, 12 modal, 17 escape) |
+| `guard:a11y-names` | A control with no accessible name. | `icon-button` (a `<button>`, an `<a>` with `(click)`/`routerLink`/`href`, or `role="button"`/`"link"` whose content minus icons is empty and that has no `aria-label(ledby)`; `title` alone does not count), `field-label` (`<input>`/`<textarea>`/`<select>` with no `aria-label`, no `<label for>`, no enclosing `<label>`) | D988, D999, D1006, D993 (D173/D200 earlier) | 383 sites (232 icon buttons/links, 42 fields) |
 | `guard:patient-picker` | A hand-written patient picker (search input + own suggestion list with a `selectPatient(...)` handler) instead of `<app-patient-picker>`. | `hand-written-picker` | D947 (D943/D942 as seen from each copy) | 11 |
 | `guard:money-format` | Money printed without `formatCfa` / `\| cfa`. | `pipe` (`\| number` / `\| currency` on an amount-shaped field), `helper` (a component `formatCurrency/Money/Amount/Price` not delegating to `formatCfa`, or Intl currency formatting outside one), `fixed` (`.toFixed(` on an amount) | D948, D1008, D621 | 6 |
 | `guard:ts-literals` | An English sentence handed to a toast or a status signal from component code — the layer the locale gates cannot see. | `toast`, `signal` | D940 class | 4 (all in `reset-password.ts`, pre-existing, not yet a QA defect) |

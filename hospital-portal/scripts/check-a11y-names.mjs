@@ -22,12 +22,12 @@ import { resolve } from 'node:path';
 
 import { nameFindings } from './lib/icon-button-scan.mjs';
 import { scanTemplates, PORTAL_DIR } from './lib/template-gate.mjs';
-import { runGate } from './lib/baseline.mjs';
+import { runGate, isMain } from './lib/baseline.mjs';
 
-runGate({
+export const gate = {
   name: 'a11y names',
   baselinePath: resolve(PORTAL_DIR, 'scripts', 'a11y-names-baseline.json'),
-  findings: scanTemplates(nameFindings),
+  findings: (ctx) => scanTemplates(nameFindings, {}, ctx),
   comment: [
     'Icon-only buttons and unlabelled fields, as they stand today.',
     'Each key is "template::rule::anchor"; "count" is how many such controls the',
@@ -37,4 +37,6 @@ runGate({
   hint:
     'Icon-only button: [attr.aria-label]="\'SECTION.ACTION\' | translate" and aria-hidden="true" on the icon. ' +
     'Field: a <label for>, or [attr.aria-label] on the control.',
-});
+};
+
+if (isMain(import.meta.url)) runGate(gate);
