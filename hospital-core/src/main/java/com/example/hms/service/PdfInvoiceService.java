@@ -65,6 +65,15 @@ public class PdfInvoiceService {
                                      List<InvoiceItem> items,
                                      List<PaymentTransaction> payments,
                                      Locale locale) {
+        return generateInvoicePdf(invoice, items, payments, List.of(), locale);
+    }
+
+    /** QA D974: with the discounts, waivers and credit notes printed between the lines and the total. */
+    public byte[] generateInvoicePdf(BillingInvoice invoice,
+                                     List<InvoiceItem> items,
+                                     List<PaymentTransaction> payments,
+                                     List<com.example.hms.model.InvoiceAdjustment> adjustments,
+                                     Locale locale) {
         PdfLabels t = PdfLabels.of(messageSource, locale);
         try (var doc = new PDDocument()) {
             var w = new Writer(doc);
@@ -101,6 +110,14 @@ public class PdfInvoiceService {
                     it.getQuantity() != null ? String.valueOf(it.getQuantity()) : "",
                     money(it.getUnitPrice()),
                     money(lineTotal(it)));
+            }
+
+            for (var adjustment : adjustments) {
+                w.ensureRoom(16);
+                w.down(16);
+                w.text(BODY, 10, MARGIN, t.get("pdf.invoice.adjustmentLine",
+                    t.get("pdf.invoice.adjustment." + adjustment.getType().name()),
+                    safe(adjustment.getReason()), money(adjustment.getAmount())));
             }
 
             BigDecimal total = nz(invoice.getTotalAmount());

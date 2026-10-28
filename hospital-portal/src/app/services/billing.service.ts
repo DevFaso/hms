@@ -148,6 +148,32 @@ export interface PaymentRow {
   createdAt?: string | null;
 }
 
+/** QA D974: how an issued invoice was lowered. */
+export type InvoiceAdjustmentType = 'DISCOUNT' | 'WAIVER' | 'CREDIT_NOTE';
+export const INVOICE_ADJUSTMENT_TYPES: InvoiceAdjustmentType[] = [
+  'DISCOUNT',
+  'WAIVER',
+  'CREDIT_NOTE',
+];
+
+export interface InvoiceAdjustmentRequest {
+  type: InvoiceAdjustmentType;
+  /** Whole francs; may be left out for a credit note (the line's remainder). */
+  amount?: number | null;
+  reason: string;
+  invoiceItemId?: string | null;
+}
+
+export interface InvoiceAdjustmentRow {
+  id: string;
+  type: InvoiceAdjustmentType;
+  amount: number;
+  reason: string;
+  invoiceItemId?: string | null;
+  invoiceItemDescription?: string | null;
+  createdAt?: string | null;
+}
+
 export interface InvoiceSearchFilters {
   patientId?: string;
   statuses?: InvoiceStatus[];
@@ -315,6 +341,21 @@ export class BillingService {
       `/billing-invoices/${invoiceId}/payments/${paymentId}/reverse`,
       { reason },
     );
+  }
+
+  /** QA D974: discount, waive or credit part of an issued invoice, with a reason. */
+  addAdjustment(
+    invoiceId: string,
+    req: InvoiceAdjustmentRequest,
+  ): Observable<BillingInvoiceResponse> {
+    return this.http.post<BillingInvoiceResponse>(
+      `/billing-invoices/${invoiceId}/adjustments`,
+      req,
+    );
+  }
+
+  listAdjustments(invoiceId: string): Observable<InvoiceAdjustmentRow[]> {
+    return this.http.get<InvoiceAdjustmentRow[]>(`/billing-invoices/${invoiceId}/adjustments`);
   }
 
   /** QA D1009: each receipt has its own number ("…-R2"), carried in Content-Disposition. */

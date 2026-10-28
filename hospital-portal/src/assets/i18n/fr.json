@@ -1986,6 +1986,17 @@
     }
   },
   "BILLING": {
+    "ADJUSTMENTS": "Remises, exonérations et avoirs",
+    "ADJUSTMENT_AMOUNT": "Montant (F CFA)",
+    "ADJUSTMENT_AMOUNT_HINT": "Laissez vide pour créditer tout ce qui reste sur la ligne.",
+    "ADJUSTMENT_FAILED": "L’ajustement n’a pas pu être enregistré.",
+    "ADJUSTMENT_LINE": "Ligne annulée",
+    "ADJUSTMENT_LINE_REQUIRED": "Choisissez la ligne que l’avoir annule.",
+    "ADJUSTMENT_REASON": "Motif",
+    "ADJUSTMENT_REASON_REQUIRED": "Indiquez le motif de la remise, de l’exonération ou de l’avoir.",
+    "ADJUSTMENT_SAVED": "Facture ajustée.",
+    "ADJUSTMENT_SUBMIT": "Appliquer",
+    "ADJUSTMENT_TYPE": "Type",
     "ALL_STATUSES": "Tous les statuts",
     "AMOUNT": "Montant",
     "AMOUNT_PAID": "Montant Payé",
@@ -2026,6 +2037,7 @@
     "NEW_INVOICE": "Nouvelle Facture",
     "NOTES": "Notes",
     "NOTES_PLACEHOLDER": "Notes de facture…",
+    "NO_ADJUSTMENTS": "Aucune remise, exonération ni avoir.",
     "NO_INVOICES": "Aucune facture trouvée",
     "OPEN_COPAYS_INTRO": "Ce patient a payé un ticket modérateur à l’accueil qu’aucune facture n’a encore repris. Liez sa visite pour que ce montant soit déduit et que le patient ne paie pas deux fois :",
     "OPEN_COPAY_LINE": "{{amount}} pour la visite {{visit}} (facture {{invoice}})",
@@ -2123,7 +2135,12 @@
       "REVERSED": "Contre-passé"
     },
     "PAYMENT_PENDING_DECLARED": "Un paiement de {{amount}} déclaré par le patient attend une confirmation. Confirmez-le ou rejetez-le avant d'encaisser ce montant à nouveau.",
-    "PATIENT_LOCKED_ISSUED": "Cette facture a été émise : son patient ne peut pas être changé. Annulez-la et émettez une nouvelle facture."
+    "PATIENT_LOCKED_ISSUED": "Cette facture a été émise : son patient ne peut pas être changé. Annulez-la et émettez une nouvelle facture.",
+    "ADJUSTMENT_TYPES": {
+      "CREDIT_NOTE": "Avoir",
+      "DISCOUNT": "Remise",
+      "WAIVER": "Exonération (gratuité)"
+    }
   },
   "CHAT": {
     "ACCESS_DENIED": "Vous n'avez pas l'autorisation d'accéder à la messagerie.",

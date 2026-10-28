@@ -489,6 +489,98 @@
             }
           </div>
 
+          <!-- QA D974: discounts, waivers and credit notes, each with its reason. -->
+          <div class="lines-section adjustments-section" data-testid="adjustments">
+            <h3>{{ 'BILLING.ADJUSTMENTS' | translate }}</h3>
+            @if (adjustments().length === 0) {
+              <p class="field-hint">{{ 'BILLING.NO_ADJUSTMENTS' | translate }}</p>
+            } @else {
+              <ul class="adjustment-list">
+                @for (a of adjustments(); track a.id) {
+                  <li [attr.data-testid]="'adjustment-' + a.id">
+                    <strong>{{ 'BILLING.ADJUSTMENT_TYPES.' + a.type | translate }}</strong>
+                    — {{ formatCurrency(a.amount) }}
+                    @if (a.invoiceItemDescription) {
+                      ({{ a.invoiceItemDescription }})
+                    }
+                    <span class="field-hint">{{ a.reason }}</span>
+                  </li>
+                }
+              </ul>
+            }
+            @if (canAdjustInvoice(inv)) {
+              <div class="adjustment-form">
+                <div class="field">
+                  <label for="adj-type">{{ 'BILLING.ADJUSTMENT_TYPE' | translate }}</label>
+                  <select
+                    id="adj-type"
+                    [ngModel]="adjustmentType()"
+                    (ngModelChange)="adjustmentType.set($event)"
+                  >
+                    @for (t of adjustmentTypes; track t) {
+                      <option [value]="t">{{ 'BILLING.ADJUSTMENT_TYPES.' + t | translate }}</option>
+                    }
+                  </select>
+                </div>
+                @if (adjustmentType() === 'CREDIT_NOTE') {
+                  <div class="field">
+                    <label for="adj-line">{{ 'BILLING.ADJUSTMENT_LINE' | translate }} *</label>
+                    <select
+                      id="adj-line"
+                      required
+                      [ngModel]="adjustmentLineId()"
+                      (ngModelChange)="adjustmentLineId.set($event)"
+                    >
+                      <option value="">—</option>
+                      @for (it of items(); track it.id) {
+                        <option [value]="it.id">
+                          {{ it.itemDescription }} — {{ formatCurrency(it.totalPrice) }}
+                        </option>
+                      }
+                    </select>
+                  </div>
+                }
+                <div class="field">
+                  <label for="adj-amount"
+                    >{{ 'BILLING.ADJUSTMENT_AMOUNT' | translate
+                    }}{{ adjustmentType() === 'CREDIT_NOTE' ? '' : ' *' }}</label
+                  >
+                  <input
+                    id="adj-amount"
+                    type="number"
+                    min="1"
+                    step="1"
+                    [ngModel]="adjustmentAmount()"
+                    (ngModelChange)="adjustmentAmount.set($event)"
+                  />
+                  @if (adjustmentType() === 'CREDIT_NOTE') {
+                    <p class="field-hint">{{ 'BILLING.ADJUSTMENT_AMOUNT_HINT' | translate }}</p>
+                  }
+                </div>
+                <div class="field">
+                  <label for="adj-reason">{{ 'BILLING.ADJUSTMENT_REASON' | translate }} *</label>
+                  <textarea
+                    id="adj-reason"
+                    rows="2"
+                    maxlength="500"
+                    required
+                    [ngModel]="adjustmentReason()"
+                    (ngModelChange)="adjustmentReason.set($event)"
+                  ></textarea>
+                </div>
+                <button
+                  type="button"
+                  class="btn-secondary"
+                  data-testid="adjustment-submit"
+                  [disabled]="adjustmentSaving()"
+                  (click)="submitAdjustment()"
+                >
+                  {{ 'BILLING.ADJUSTMENT_SUBMIT' | translate }}
+                </button>
+              </div>
+            }
+          </div>
+
           <div class="lines-section payments-section">
             <h3>{{ 'BILLING.PAYMENTS' | translate }}</h3>
             @if (payments().length === 0) {

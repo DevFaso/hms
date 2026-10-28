@@ -26,6 +26,16 @@ public interface BillingInvoiceService {
      */
     Page<BillingInvoiceResponseDTO> getInvoicesForPortalPatient(UUID patientId, Pageable pageable, Locale locale);
 
+    /**
+     * QA D974: a discount, a waiver or a credit note on an issued invoice, with
+     * its mandatory reason; the total is lowered and the row audited.
+     */
+    BillingInvoiceResponseDTO addAdjustment(UUID invoiceId, com.example.hms.payload.dto.InvoiceAdjustmentRequestDTO request,
+                                            UUID staffId, Locale locale);
+
+    /** QA D974: the discounts, waivers and credit notes of an invoice in the caller's scope. */
+    List<com.example.hms.payload.dto.InvoiceAdjustmentResponseDTO> listAdjustments(UUID invoiceId);
+
     /** QA D982: one of the patient's issued invoices with its lines and payments; another's answers 404. */
     com.example.hms.payload.dto.portal.PortalInvoiceDetailDTO getPortalInvoiceDetail(UUID invoiceId, UUID patientId);
 

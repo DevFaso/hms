@@ -157,6 +157,20 @@
                     </tbody>
                   </table>
                 }
+                @if (d.adjustments.length > 0) {
+                  <!-- QA D974: why the total is lower than the lines. -->
+                  <ul class="detail-payments" data-testid="portal-adjustments">
+                    @for (a of d.adjustments; track a.id) {
+                      <li>
+                        <span>{{ 'BILLING.ADJUSTMENT_TYPES.' + a.type | translate }}</span>
+                        @if (a.invoiceItemDescription) {
+                          <span>({{ a.invoiceItemDescription }})</span>
+                        }
+                        <span>−{{ a.amount | cfa }}</span>
+                      </li>
+                    }
+                  </ul>
+                }
                 <h3 class="detail-title">{{ 'PORTAL.BILLING.PAYMENTS' | translate }}</h3>
                 @if (d.payments.length === 0) {
                   <p class="pli-meta">{{ 'PORTAL.BILLING.NO_PAYMENTS' | translate }}</p>

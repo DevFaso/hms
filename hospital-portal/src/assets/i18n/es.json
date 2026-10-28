@@ -1986,6 +1986,17 @@
     }
   },
   "BILLING": {
+    "ADJUSTMENTS": "Descuentos, exenciones y notas de crédito",
+    "ADJUSTMENT_AMOUNT": "Importe (F CFA)",
+    "ADJUSTMENT_AMOUNT_HINT": "Déjelo vacío para acreditar todo lo que queda en la línea.",
+    "ADJUSTMENT_FAILED": "No se pudo guardar el ajuste.",
+    "ADJUSTMENT_LINE": "Línea anulada",
+    "ADJUSTMENT_LINE_REQUIRED": "Elija la línea que anula la nota de crédito.",
+    "ADJUSTMENT_REASON": "Motivo",
+    "ADJUSTMENT_REASON_REQUIRED": "Indique el motivo del descuento, la exención o la nota de crédito.",
+    "ADJUSTMENT_SAVED": "Factura ajustada.",
+    "ADJUSTMENT_SUBMIT": "Aplicar",
+    "ADJUSTMENT_TYPE": "Tipo",
     "ALL_STATUSES": "Todos los estados",
     "AMOUNT": "Importe",
     "AMOUNT_PAID": "Importe pagado",
@@ -2026,6 +2037,7 @@
     "NEW_INVOICE": "Nueva factura",
     "NOTES": "Notas",
     "NOTES_PLACEHOLDER": "Notas de la factura…",
+    "NO_ADJUSTMENTS": "Ningún descuento, exención ni nota de crédito.",
     "NO_INVOICES": "No se encontraron facturas",
     "OPEN_COPAYS_INTRO": "Este paciente pagó un copago en la admisión que ninguna factura ha recogido todavía. Vincule su visita para que se descuente y el paciente no pague dos veces:",
     "OPEN_COPAY_LINE": "{{amount}} por la visita {{visit}} (factura {{invoice}})",
@@ -2123,7 +2135,12 @@
       "REVERSED": "Revertido"
     },
     "PAYMENT_PENDING_DECLARED": "Un pago de {{amount}} declarado por el paciente está pendiente de confirmación. Confírmelo o rechácelo antes de cobrar ese importe de nuevo.",
-    "PATIENT_LOCKED_ISSUED": "Esta factura ya fue emitida: no se puede cambiar su paciente. Anúlela y emita una nueva factura."
+    "PATIENT_LOCKED_ISSUED": "Esta factura ya fue emitida: no se puede cambiar su paciente. Anúlela y emita una nueva factura.",
+    "ADJUSTMENT_TYPES": {
+      "CREDIT_NOTE": "Nota de crédito",
+      "DISCOUNT": "Descuento",
+      "WAIVER": "Exención (gratuidad)"
+    }
   },
   "CHAT": {
     "ACCESS_DENIED": "No tiene permiso para acceder a la mensajería.",

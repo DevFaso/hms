@@ -512,6 +512,13 @@ export interface PortalInvoiceDetail {
   invoice: PortalInvoice;
   lines: PortalInvoiceLine[];
   payments: PortalInvoicePayment[];
+  /** QA D974: what was discounted, waived or credited. */
+  adjustments: {
+    id: string;
+    type: string;
+    amount: number;
+    invoiceItemDescription?: string | null;
+  }[];
 }
 
 export interface PortalInvoice {
@@ -1219,6 +1226,7 @@ export class PatientPortalService {
           invoice: InvoiceApiResponse;
           items: PortalInvoiceLine[] | null;
           payments: PortalInvoicePayment[] | null;
+          adjustments?: PortalInvoiceDetail['adjustments'] | null;
         }>
       >(`${this.base}/billing/invoices/${invoiceId}`)
       .pipe(
@@ -1231,6 +1239,10 @@ export class PatientPortalService {
             totalPrice: Number(l.totalPrice ?? 0),
           })),
           payments: (r.data.payments ?? []).map((p) => ({ ...p, amount: Number(p.amount ?? 0) })),
+          adjustments: (r.data.adjustments ?? []).map((a) => ({
+            ...a,
+            amount: Number(a.amount ?? 0),
+          })),
         })),
       );
   }

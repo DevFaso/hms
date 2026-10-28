@@ -474,6 +474,119 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
 
     private com.example.hms.mapper.InvoiceItemMapper invoiceItemMapper;
 
+    /** QA D974: the adjustments ledger. Setter-injected, like the other late additions. */
+    private com.example.hms.repository.InvoiceAdjustmentRepository adjustmentRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setAdjustmentRepository(com.example.hms.repository.InvoiceAdjustmentRepository adjustmentRepository) {
+        this.adjustmentRepository = adjustmentRepository;
+    }
+
+    /** QA D974: an adjustment lowers what is owed on an issued invoice; a draft's lines are edited instead. */
+    private static final java.util.Set<InvoiceStatus> ADJUSTABLE =
+        java.util.EnumSet.of(InvoiceStatus.SENT, InvoiceStatus.PARTIALLY_PAID, InvoiceStatus.PAID);
+
+    @Override
+    @Transactional
+    public BillingInvoiceResponseDTO addAdjustment(UUID invoiceId,
+                                                   com.example.hms.payload.dto.InvoiceAdjustmentRequestDTO request,
+                                                   UUID staffId, Locale locale) {
+        BillingInvoice invoice = loadInScopeForUpdate(invoiceId);
+        if (!ADJUSTABLE.contains(invoice.getStatus())) {
+            throw new BusinessException("billing.adjustment.notIssued");
+        }
+        String reason = request.getReason() != null ? request.getReason().trim() : "";
+        if (reason.isEmpty()) {
+            throw new BusinessException("billing.adjustment.reasonRequired");
+        }
+        InvoiceItem line = null;
+        BigDecimal amount = request.getAmount();
+        if (request.getType() == com.example.hms.enums.InvoiceAdjustmentType.CREDIT_NOTE) {
+            if (request.getInvoiceItemId() == null) {
+                throw new BusinessException("billing.adjustment.lineRequired");
+            }
+            line = invoiceItemRepository.findById(request.getInvoiceItemId())
+                .filter(item -> item.getBillingInvoice() != null && invoiceId.equals(item.getBillingInvoice().getId()))
+                .orElseThrow(() -> new BusinessException("billing.adjustment.lineNotOnInvoice"));
+            BigDecimal lineTotal = line.getTotalPrice() != null ? line.getTotalPrice() : BigDecimal.ZERO;
+            BigDecimal credited = adjustmentRepository.sumByInvoiceItemId(line.getId());
+            BigDecimal left = lineTotal.subtract(credited != null ? credited : BigDecimal.ZERO);
+            if (amount == null) {
+                amount = left;
+            }
+            if (amount.compareTo(left) > 0) {
+                throw new BusinessException("billing.adjustment.moreThanLine", formatFrancs(left));
+            }
+        }
+        if (amount == null || amount.signum() <= 0) {
+            throw new BusinessException("billing.adjustment.amountPositive");
+        }
+        requireWholeAmount(amount);
+        BigDecimal total = invoice.getTotalAmount() != null ? invoice.getTotalAmount() : BigDecimal.ZERO;
+        BigDecimal paid = invoice.getAmountPaid() != null ? invoice.getAmountPaid() : BigDecimal.ZERO;
+        BigDecimal newTotal = total.subtract(amount);
+        // Money already received is never written off silently: reverse the payment first.
+        if (newTotal.compareTo(paid) < 0) {
+            throw new BusinessException("billing.adjustment.belowPaid");
+        }
+        adjustmentRepository.save(com.example.hms.model.InvoiceAdjustment.builder()
+            .invoice(invoice)
+            .invoiceItem(line)
+            .type(request.getType())
+            .amount(amount)
+            .reason(reason)
+            .createdBy(staffId)
+            .build());
+        invoice.setTotalAmount(newTotal);
+        if (paid.compareTo(newTotal) >= 0) {
+            invoice.setStatus(InvoiceStatus.PAID);
+        } else if (paid.signum() > 0) {
+            invoice.setStatus(InvoiceStatus.PARTIALLY_PAID);
+        }
+        BillingInvoice saved = invoiceRepository.save(invoice);
+        auditAdjustmentAfterCommit(staffId, saved, request.getType(), amount);
+        return toPortalResponse(saved);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.example.hms.payload.dto.InvoiceAdjustmentResponseDTO> listAdjustments(UUID invoiceId) {
+        BillingInvoice invoice = loadInScope(invoiceId);
+        return adjustmentRepository.findByInvoice_IdOrderByCreatedAtAsc(invoice.getId()).stream()
+            .map(com.example.hms.payload.dto.InvoiceAdjustmentResponseDTO::from)
+            .toList();
+    }
+
+    /** "4 000", the way the refusals print francs CFA. */
+    private static String formatFrancs(BigDecimal amount) {
+        return String.format(java.util.Locale.FRANCE, "%,d", amount.setScale(0, java.math.RoundingMode.HALF_UP)
+            .longValueExact()).replace('\u00a0', ' ').replace('\u202f', ' ');
+    }
+
+    /** QA D974: who lowered the invoice, how and by how much (ids and amounts, no reason text: it may name the patient). */
+    private void auditAdjustmentAfterCommit(UUID actorId, BillingInvoice invoice,
+                                            com.example.hms.enums.InvoiceAdjustmentType type, BigDecimal amount) {
+        if (auditEventLogService == null) {
+            return;
+        }
+        String invoiceIdText = String.valueOf(invoice.getId());
+        com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
+            try {
+                auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
+                    .eventType(AuditEventType.INVOICE_UPDATED)
+                    .status(com.example.hms.enums.AuditStatus.SUCCESS)
+                    .userId(actorId)
+                    .eventDescription("Invoice adjustment " + type + " of " + amount.toPlainString()
+                        + " on invoice " + invoiceIdText)
+                    .entityType("BillingInvoice")
+                    .resourceId(invoiceIdText)
+                    .build());
+            } catch (RuntimeException ex) {
+                LOG.warn("Adjustment audit not written for invoice {}: {}", invoiceIdText, ex.getClass().getSimpleName());
+            }
+        });
+    }
+
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     void setInvoiceItemMapper(com.example.hms.mapper.InvoiceItemMapper invoiceItemMapper) {
         this.invoiceItemMapper = invoiceItemMapper;
@@ -508,7 +621,15 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
                 row.paymentMethod(), row.referenceNumber(), null, row.status(), row.reversalReason(),
                 row.reversedAt(), row.createdAt()))
             .toList();
-        return new com.example.hms.payload.dto.portal.PortalInvoiceDetailDTO(toPortalResponse(invoice), items, payments);
+        List<com.example.hms.payload.dto.InvoiceAdjustmentResponseDTO> adjustments = adjustmentRepository == null
+            ? List.of()
+            : adjustmentRepository.findByInvoice_IdOrderByCreatedAtAsc(invoiceId).stream()
+                .map(com.example.hms.payload.dto.InvoiceAdjustmentResponseDTO::from)
+                .map(a -> new com.example.hms.payload.dto.InvoiceAdjustmentResponseDTO(a.id(), a.type(), a.amount(),
+                    null, a.invoiceItemId(), a.invoiceItemDescription(), a.createdAt()))
+                .toList();
+        return new com.example.hms.payload.dto.portal.PortalInvoiceDetailDTO(toPortalResponse(invoice), items, payments,
+            adjustments);
     }
 
     @Override
@@ -795,6 +916,11 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, invoiceId));
         BigDecimal sum = invoiceRepository.sumItemsByInvoiceId(invoiceId);
         BigDecimal total = sum != null ? sum : BigDecimal.ZERO;
+        // QA D974: what was discounted, waived or credited stays off the total.
+        if (adjustmentRepository != null) {
+            BigDecimal adjusted = adjustmentRepository.sumByInvoiceId(invoiceId);
+            total = total.subtract(adjusted != null ? adjusted : BigDecimal.ZERO).max(BigDecimal.ZERO);
+        }
         BigDecimal paid = invoice.getAmountPaid() != null ? invoice.getAmountPaid() : BigDecimal.ZERO;
         if (total.compareTo(paid) < 0) {
             throw new BusinessException("billing.invoice.totalBelowPaid");
@@ -838,8 +964,11 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
 
         // QA D141: the confirmed payments are printed under the totals.
         List<PaymentTransaction> payments = paymentTransactionRepository.findByInvoice_IdOrderByCreatedAtAsc(invoiceId);
+        // QA D974: the adjustments are on the paper too, so lines and total agree.
+        List<com.example.hms.model.InvoiceAdjustment> adjustments = adjustmentRepository != null
+            ? adjustmentRepository.findByInvoice_IdOrderByCreatedAtAsc(invoiceId) : List.of();
         byte[] pdf = pdfInvoiceService.generateInvoicePdf(invoice, items,
-            payments != null ? payments : List.of(), effectiveLocale);
+            payments != null ? payments : List.of(), adjustments != null ? adjustments : List.of(), effectiveLocale);
         return new InvoicePdfResponseDTO(pdf, invoice.getInvoiceNumber(), invoice.getId());
     }
 

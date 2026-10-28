@@ -88,6 +88,7 @@ public class VisitTimelineRows {
         }
         if (wanted(categoryFilters, CATEGORY_NOTE)) {
             List<UUID> visits = encounterRepository.findByPatient_Id(patientId).stream()
+                .filter(encounter -> !encounter.isPrescriptionAnchor())
                 .filter(encounter -> isLocal(encounter.getHospital(), actingHospitalId))
                 .map(Encounter::getId)
                 .filter(java.util.Objects::nonNull)

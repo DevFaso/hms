@@ -288,6 +288,7 @@ describe('MyBillingComponent', () => {
         { id: 'p1', amount: 1000, paymentMethod: 'CASH', status: 'CONFIRMED' },
         { id: 'p2', amount: 500, paymentMethod: 'MOBILE_MONEY', status: 'PENDING' },
       ],
+      adjustments: [{ id: 'a1', type: 'WAIVER', amount: 500, invoiceItemDescription: 'NFS' }],
     };
 
     it('shows a declared payment on the card itself', () => {
@@ -304,6 +305,10 @@ describe('MyBillingComponent', () => {
       expect(portal.getMyInvoiceDetail).toHaveBeenCalledWith('inv1');
       const panel = host().querySelector('[data-testid="invoice-detail-inv1"]') as HTMLElement;
       expect(panel.textContent).toContain('Consultation');
+      // QA D974: why the total is lower than the lines.
+      expect(panel.querySelector('[data-testid="portal-adjustments"]')?.textContent).toContain(
+        'NFS',
+      );
       expect(
         panel.querySelector('[data-testid="payment-p1"] [data-status="CONFIRMED"]'),
       ).not.toBeNull();

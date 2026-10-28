@@ -63,7 +63,10 @@ describe('BillingComponent', () => {
       'reversePayment',
       'getReceiptPdf',
       'getSummary',
+      'addAdjustment',
+      'listAdjustments',
     ]);
+    billingSpy.listAdjustments.and.returnValue(of([]));
     billingSpy.listPayments.and.returnValue(of([]));
     billingSpy.getSummary.and.returnValue(
       of({ total: 0, paid: 0, outstanding: 0, overdue: 0, totalRevenue: 0, balance: 0 }),
@@ -673,6 +676,48 @@ describe('BillingComponent', () => {
       component.paymentMethod.set('CASH');
       fixture.detectChanges();
       expect(component.paymentReferenceRequired()).toBeFalse();
+    });
+  });
+
+  describe('discount, waiver and credit note (QA D974)', () => {
+    beforeEach(() => {
+      fixture.detectChanges();
+      component.viewInvoice(component.invoices()[0]);
+      fixture.detectChanges();
+    });
+
+    it('refuses an adjustment without a reason', () => {
+      component.adjustmentType.set('WAIVER');
+      component.adjustmentAmount.set(1000);
+      component.submitAdjustment();
+      expect(billingSpy.addAdjustment).not.toHaveBeenCalled();
+      expect(toastSpy.error).toHaveBeenCalledWith('BILLING.ADJUSTMENT_REASON_REQUIRED');
+    });
+
+    it('a credit note names its line and may leave the amount to the server', () => {
+      billingSpy.addAdjustment.and.returnValue(
+        of(mockInvoice({ totalAmount: 500, balanceDue: 500 })),
+      );
+      component.adjustmentType.set('CREDIT_NOTE');
+      component.adjustmentReason.set('NFS non réalisée');
+      component.submitAdjustment();
+      expect(billingSpy.addAdjustment).not.toHaveBeenCalled();
+      component.adjustmentLineId.set('item-9');
+      component.submitAdjustment();
+      expect(billingSpy.addAdjustment).toHaveBeenCalledWith('inv-1', {
+        type: 'CREDIT_NOTE',
+        amount: null,
+        reason: 'NFS non réalisée',
+        invoiceItemId: 'item-9',
+      });
+      expect(billingSpy.listAdjustments).toHaveBeenCalledWith('inv-1');
+    });
+
+    it('shows the form on an issued invoice only', () => {
+      expect(
+        fixture.nativeElement.querySelector('[data-testid="adjustment-submit"]'),
+      ).not.toBeNull();
+      expect(component.canAdjustInvoice(mockInvoice({ status: 'DRAFT' }))).toBeFalse();
     });
   });
 

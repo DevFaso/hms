@@ -10,6 +10,9 @@ import {
   InvoiceItemResponse,
   InvoiceStatus,
   INVOICE_ITEM_CATEGORIES,
+  INVOICE_ADJUSTMENT_TYPES,
+  InvoiceAdjustmentRow,
+  InvoiceAdjustmentType,
   INVOICE_STATUSES,
   PaymentRow,
   STAFF_PAYMENT_METHODS,
@@ -73,6 +76,12 @@ export class BillingComponent implements OnInit {
     'ROLE_BILLING_SPECIALIST',
     'ROLE_ACCOUNTANT',
     'ROLE_RECEPTIONIST',
+  ]);
+  /** QA D974: the server lets these roles discount, waive or credit an issued invoice. */
+  readonly canAdjust = this.roleContext.hasAnyActiveRole([
+    'ROLE_SUPER_ADMIN',
+    'ROLE_HOSPITAL_ADMIN',
+    'ROLE_BILLING_SPECIALIST',
   ]);
   /** QA D142: the server reverses a payment for these roles only. */
   readonly canReversePayment = this.roleContext.hasAnyActiveRole([
@@ -153,6 +162,83 @@ export class BillingComponent implements OnInit {
   paymentReference = signal('');
   paymentSaving = signal(false);
   readonly paymentMethods: StaffPaymentMethod[] = STAFF_PAYMENT_METHODS;
+
+  /* ── Adjustments (detail panel, QA D974) ── */
+  adjustments = signal<InvoiceAdjustmentRow[]>([]);
+  readonly adjustmentTypes: InvoiceAdjustmentType[] = INVOICE_ADJUSTMENT_TYPES;
+  adjustmentType = signal<InvoiceAdjustmentType>('DISCOUNT');
+  adjustmentAmount = signal<number | null>(null);
+  adjustmentReason = signal('');
+  adjustmentLineId = signal('');
+  adjustmentSaving = signal(false);
+
+  /** QA D974: only an issued invoice is adjusted; a draft's lines are edited instead. */
+  canAdjustInvoice(inv: BillingInvoiceResponse): boolean {
+    return (
+      this.canAdjust &&
+      (inv.status === 'SENT' || inv.status === 'PARTIALLY_PAID' || inv.status === 'PAID')
+    );
+  }
+
+  private loadAdjustments(invoiceId: string): void {
+    this.billingService.listAdjustments(invoiceId).subscribe({
+      next: (rows) => {
+        if (this.selectedInvoice()?.id === invoiceId) this.adjustments.set(rows ?? []);
+      },
+      error: () => this.adjustments.set([]),
+    });
+  }
+
+  private resetAdjustment(): void {
+    this.adjustmentType.set('DISCOUNT');
+    this.adjustmentAmount.set(null);
+    this.adjustmentReason.set('');
+    this.adjustmentLineId.set('');
+  }
+
+  submitAdjustment(): void {
+    const inv = this.selectedInvoice();
+    if (!inv || this.adjustmentSaving()) return;
+    const reason = this.adjustmentReason().trim();
+    const type = this.adjustmentType();
+    const amount = this.adjustmentAmount();
+    const line = this.adjustmentLineId();
+    if (!reason) {
+      this.toast.error(this.translate.instant('BILLING.ADJUSTMENT_REASON_REQUIRED'));
+      return;
+    }
+    if (type === 'CREDIT_NOTE' && !line) {
+      this.toast.error(this.translate.instant('BILLING.ADJUSTMENT_LINE_REQUIRED'));
+      return;
+    }
+    if (type !== 'CREDIT_NOTE' && (!amount || amount <= 0 || !Number.isInteger(amount))) {
+      this.toast.error(this.translate.instant('BILLING.PAYMENT_WHOLE_AMOUNT'));
+      return;
+    }
+    this.adjustmentSaving.set(true);
+    this.billingService
+      .addAdjustment(inv.id, {
+        type,
+        amount: amount || null,
+        reason,
+        invoiceItemId: type === 'CREDIT_NOTE' ? line : null,
+      })
+      .subscribe({
+        next: (updated) => {
+          this.adjustmentSaving.set(false);
+          this.resetAdjustment();
+          this.toast.success(this.translate.instant('BILLING.ADJUSTMENT_SAVED'));
+          this.applyUpdated(updated);
+          this.loadAdjustments(updated.id);
+        },
+        error: (err: HttpErrorResponse) => {
+          this.adjustmentSaving.set(false);
+          this.toast.error(
+            err.error?.message ?? this.translate.instant('BILLING.ADJUSTMENT_FAILED'),
+          );
+        },
+      });
+  }
 
   /* ── Payments ledger (detail panel, QA D140/D142) ── */
   payments = signal<PaymentRow[]>([]);
@@ -479,6 +565,9 @@ ${this.translate.instant('BILLING.SUPPLEMENTARY_CONFIRM')}`)
     this.resetNewItem();
     this.loadItems(inv.id);
     this.loadPayments(inv.id);
+    this.resetAdjustment();
+    this.adjustments.set([]);
+    this.loadAdjustments(inv.id);
   }
 
   closeDetail(): void {

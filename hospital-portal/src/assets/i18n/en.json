@@ -1986,6 +1986,17 @@
     }
   },
   "BILLING": {
+    "ADJUSTMENTS": "Discounts, waivers and credit notes",
+    "ADJUSTMENT_AMOUNT": "Amount (F CFA)",
+    "ADJUSTMENT_AMOUNT_HINT": "Leave empty to credit what is left on the line.",
+    "ADJUSTMENT_FAILED": "The adjustment could not be saved.",
+    "ADJUSTMENT_LINE": "Line reversed",
+    "ADJUSTMENT_LINE_REQUIRED": "Choose the line the credit note reverses.",
+    "ADJUSTMENT_REASON": "Reason",
+    "ADJUSTMENT_REASON_REQUIRED": "Give the reason for the discount, waiver or credit note.",
+    "ADJUSTMENT_SAVED": "Invoice adjusted.",
+    "ADJUSTMENT_SUBMIT": "Apply",
+    "ADJUSTMENT_TYPE": "Kind",
     "ALL_STATUSES": "All statuses",
     "AMOUNT": "Amount",
     "AMOUNT_PAID": "Amount Paid",
@@ -2026,6 +2037,7 @@
     "NEW_INVOICE": "New Invoice",
     "NOTES": "Notes",
     "NOTES_PLACEHOLDER": "Invoice notes…",
+    "NO_ADJUSTMENTS": "No discount, waiver or credit note.",
     "NO_INVOICES": "No invoices found",
     "OPEN_COPAYS_INTRO": "This patient paid a copay at check-in that no invoice has taken yet. Link its visit so the copay is deducted and the patient does not pay twice:",
     "OPEN_COPAY_LINE": "{{amount}} for visit {{visit}} (invoice {{invoice}})",
@@ -2123,7 +2135,12 @@
       "REVERSED": "Reversed"
     },
     "PAYMENT_PENDING_DECLARED": "A payment of {{amount}} declared by the patient is awaiting confirmation. Confirm or reject it before taking that amount again.",
-    "PATIENT_LOCKED_ISSUED": "This invoice has been issued: its patient cannot be changed. Cancel it and issue a new invoice."
+    "PATIENT_LOCKED_ISSUED": "This invoice has been issued: its patient cannot be changed. Cancel it and issue a new invoice.",
+    "ADJUSTMENT_TYPES": {
+      "CREDIT_NOTE": "Credit note",
+      "DISCOUNT": "Discount",
+      "WAIVER": "Waiver (free care)"
+    }
   },
   "CHAT": {
     "ACCESS_DENIED": "You do not have permission to access chat.",

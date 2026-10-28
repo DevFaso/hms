@@ -15,6 +15,8 @@ import java.util.List;
 public record PortalInvoiceDetailDTO(
     BillingInvoiceResponseDTO invoice,
     List<InvoiceItemResponseDTO> items,
-    List<PaymentTransactionResponseDTO> payments
+    List<PaymentTransactionResponseDTO> payments,
+    /** QA D974: what was discounted, waived or credited (type and amount; the clerk's reason stays with billing). */
+    List<com.example.hms.payload.dto.InvoiceAdjustmentResponseDTO> adjustments
 ) {
 }
