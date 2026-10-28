@@ -1502,6 +1502,7 @@
     "WRITE_DELETE": "Suppression : {{entity}}",
     "WRITE_ENTITY_UNKNOWN": "enregistrement",
     "DESC": {
+      "INVOICE_ADJUSTMENT": "{{kind}} de {{amount}} sur la facture {{invoice}}",
       "PATIENT_RECORD_VIEWED": "Dossier patient consulté",
       "USER_PROFILE_UPDATED": "Profil utilisateur mis à jour",
       "USER_CREATED": "Nouveau compte utilisateur créé",
@@ -1983,6 +1984,11 @@
       "EMERGENCY_FORCE_LOGOUT_ALL": "Déconnexion d’urgence de tous",
       "EMERGENCY_FORCE_MFA_REENROL": "Réinitialisation d’urgence de la double authentification",
       "EMERGENCY_KILL_FEATURE": "Désactivation d’urgence d’une fonctionnalité"
+    },
+    "INVOICE_ADJUSTMENT": {
+      "CREDIT_NOTE": "Avoir",
+      "DISCOUNT": "Remise",
+      "WAIVER": "Exonération"
     }
   },
   "BILLING": {

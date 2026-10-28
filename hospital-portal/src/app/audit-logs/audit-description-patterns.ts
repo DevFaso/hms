@@ -1197,6 +1197,13 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     localise: { what: 'phrase:PAYMENT_EVENT' },
   },
   {
+    // QA D974: a discount, waiver or credit note on an invoice.
+    key: 'AUDIT.DESC.INVOICE_ADJUSTMENT',
+    re: /^Invoice adjustment ([A-Z_]+) of (\S+) on invoice (\S+)$/,
+    params: ['kind', 'amount', 'invoice'],
+    localise: { kind: 'phrase:INVOICE_ADJUSTMENT' },
+  },
+  {
     key: 'AUDIT.DESC.STATUS_WAS',
     re: /^(.+) \(was ([A-Z_]+)\)$/,
     params: ['what', 'previous'],

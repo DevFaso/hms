@@ -1502,6 +1502,7 @@
     "WRITE_DELETE": "Deleted: {{entity}}",
     "WRITE_ENTITY_UNKNOWN": "record",
     "DESC": {
+      "INVOICE_ADJUSTMENT": "{{kind}} of {{amount}} on invoice {{invoice}}",
       "PATIENT_RECORD_VIEWED": "Patient record viewed",
       "USER_PROFILE_UPDATED": "User profile updated",
       "USER_CREATED": "New user account created",
@@ -1983,6 +1984,11 @@
       "EMERGENCY_FORCE_LOGOUT_ALL": "Emergency sign-out of everyone",
       "EMERGENCY_FORCE_MFA_REENROL": "Emergency two-factor reset",
       "EMERGENCY_KILL_FEATURE": "Emergency feature switch-off"
+    },
+    "INVOICE_ADJUSTMENT": {
+      "CREDIT_NOTE": "Credit note",
+      "DISCOUNT": "Discount",
+      "WAIVER": "Waiver"
     }
   },
   "BILLING": {
