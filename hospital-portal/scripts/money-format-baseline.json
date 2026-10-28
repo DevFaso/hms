@@ -5,29 +5,9 @@
     "A site not listed fails the build; fix it, then delete its pin."
   ],
   "pinned": {
-    "src/app/dashboard/dashboard.html::pipe::point.amount | number": {
-      "count": 1,
-      "why": "pre-existing (class D948): amount printed by | number; use | cfa"
-    },
     "src/app/encounters/eligibility-check-dialog/eligibility-check-dialog.component.html::raw::r.copayAmount raw": {
       "count": 1,
       "why": "pre-existing (class D621/D948): an amount interpolated with no format at all; use | cfa"
-    },
-    "src/app/patient-portal/my-family-access/proxy-data-viewer/proxy-data-viewer.component.html::pipe::inv.amount | number": {
-      "count": 1,
-      "why": "pre-existing (class D948): amount printed by | number; use | cfa"
-    },
-    "src/app/patient-portal/my-family-access/proxy-data-viewer/proxy-data-viewer.component.html::pipe::inv.balance | number": {
-      "count": 1,
-      "why": "pre-existing (class D948): amount printed by | number; use | cfa"
-    },
-    "src/app/reception/patient-snapshot-drawer/patient-snapshot-drawer.component.html::pipe::s.billing.totalBalanceDue | number": {
-      "count": 1,
-      "why": "D948: front-desk payment dialog shows \"Solde: 1 500,00\" with no currency"
-    },
-    "src/app/reception/payment-pending-panel/payment-pending-panel.component.html::pipe::inv.balanceDue | number": {
-      "count": 1,
-      "why": "D948: front-desk payment dialog shows \"Solde: 1 500,00\" with no currency"
     },
     "src/app/super-admin/cost-panel/cost-panel.component.ts::pipe::row.chargebackAmount | number": {
       "count": 1,

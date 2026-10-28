@@ -54,6 +54,31 @@ test('QA D1002: lab values, dates and labels are formatted for the reader', () =
   assert.deepEqual(offenders, []);
 });
 
+/**
+ * Round 16 siblings: every other template that shows a lab result value (the
+ * doctor's results panel, the lab in-basket, the chart review...) formats the
+ * value with | labValue and keeps the colon in the translation. Their dates go
+ * through locale-aware helpers (formatDate with the reader's locale, or
+ * | serverTime | date), so only the value and colon rules apply there.
+ */
+const resultTemplatesOutsideLab = () =>
+  walk(appDir, ['.html']).filter(
+    (f) =>
+      !relative(appDir, f).replaceAll('\\', '/').startsWith('lab/') &&
+      /\.resultValue\b/.test(readFileSync(f, 'utf8')),
+  );
+
+test('QA D1002 (siblings): lab values and label colons outside lab/ are formatted for the reader', () => {
+  const files = resultTemplatesOutsideLab();
+  assert.ok(files.length >= 3, `found ${files.length} templates showing a lab result outside lab/`);
+  const offenders = files.flatMap((f) =>
+    localeOffenders(readFileSync(f, 'utf8'), relative(appDir, f).replaceAll('\\', '/')).filter(
+      (o) => !o.includes(' date without | date'),
+    ),
+  );
+  assert.deepEqual(offenders, []);
+});
+
 test('QA D1002 guard: the scan sees the shapes the defect had', () => {
   assert.equal(localeOffenders('<strong>{{ r.resultValue }}</strong>').length, 1);
   assert.equal(localeOffenders('<td>{{ r.followUpDate || "—" }}</td>').length, 1);

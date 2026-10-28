@@ -219,7 +219,8 @@
                   </header>
                   @if (n.authorName) {
                     <p class="chart-review__card-meta">
-                      {{ 'CHART_REVIEW.AUTHOR' | translate }}: {{ n.authorName }}
+                      {{ 'CHART_REVIEW.AUTHOR' | translate }}{{ 'COMMON.COLON' | translate }}
+                      {{ n.authorName }}
                       @if (n.authorCredentials) {
                         <span class="chart-review__card-credentials"
                           >, {{ n.authorCredentials }}</span
@@ -269,7 +270,7 @@
                       }
                     </td>
                     <td>
-                      {{ r.resultValue }}
+                      {{ r.resultValue | labValue }}
                       @if (r.resultUnit) {
                         <span class="chart-review__muted">{{ r.resultUnit }}</span>
                       }
@@ -379,13 +380,13 @@
                   <p class="chart-review__card-meta">
                     @if (i.orderedAt) {
                       <span
-                        >{{ 'CHART_REVIEW.ORDERED' | translate }}:
+                        >{{ 'CHART_REVIEW.ORDERED' | translate }}{{ 'COMMON.COLON' | translate }}
                         {{ i.orderedAt | serverTime | date: 'medium' }}</span
                       >
                     }
                     @if (i.scheduledFor) {
                       <span>
-                        · {{ 'CHART_REVIEW.SCHEDULED' | translate }}:
+                        · {{ 'CHART_REVIEW.SCHEDULED' | translate }}{{ 'COMMON.COLON' | translate }}
                         {{ i.scheduledFor | serverTime | date: 'mediumDate' }}</span
                       >
                     }
@@ -395,7 +396,10 @@
                   </p>
                   @if (i.clinicalQuestion) {
                     <p class="chart-review__card-body">
-                      <strong>{{ 'CHART_REVIEW.CLINICAL_QUESTION' | translate }}:</strong>
+                      <strong
+                        >{{ 'CHART_REVIEW.CLINICAL_QUESTION' | translate
+                        }}{{ 'COMMON.COLON' | translate }}</strong
+                      >
                       {{ i.clinicalQuestion }}
                     </p>
                   }

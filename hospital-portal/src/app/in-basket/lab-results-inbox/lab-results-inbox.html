@@ -146,7 +146,7 @@
                     </a>
                   </td>
                   <td>
-                    <span class="result-value">{{ r.resultValue || '—' }}</span>
+                    <span class="result-value">{{ r.resultValue | labValue }}</span>
                     @if (directionKey(r); as dirKey) {
                       <span class="result-direction">{{ dirKey | translate }}</span>
                     }

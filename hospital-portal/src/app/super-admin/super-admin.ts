@@ -22,6 +22,7 @@ import {
 import { ActionPanel, PlatformService, PlatformSummary } from '../services/platform.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { formatLabNumber } from '../lab/shared/lab-value.pipe';
 
 interface ControlTowerStat {
   key: string;
@@ -574,8 +575,11 @@ export class SuperAdminComponent implements OnInit {
         (v): v is string => typeof v === 'string' && v.trim().length > 0,
       ) ?? '';
     const ordered = SuperAdminComponent.ACTIVITY_FIELDS[tab] ?? [];
+    // QA D1002 class: a lab value in the summary reads in the reader's number format.
     const stringFields = ordered
-      .map((field) => item[field])
+      .map((field) =>
+        field === 'resultValue' ? formatLabNumber(item[field] as string) : item[field],
+      )
       .map((v) => (v == null ? '' : String(v)))
       .filter((s) => s.length > 0);
     // Activity-row timestamp extractor.

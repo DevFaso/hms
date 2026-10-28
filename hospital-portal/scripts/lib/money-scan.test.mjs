@@ -174,3 +174,12 @@ test('an arrow helper and a helper with a default argument or another return typ
     'helper:formatMoney',
   ]);
 });
+
+test('D967: a controlled-drug register balance is a count of units, not money', () => {
+  const html = `<strong>{{ drug.openingBalance }}</strong> <strong>{{ drug.closingBalance | number }}</strong>
+    <b>{{ inv.balance }}</b> <b>{{ account.closingBalanceAmount }}</b>`;
+  assert.deepEqual(anchors(moneyTemplateFindings(html)), [
+    'raw:inv.balance raw',
+    'raw:account.closingBalanceAmount raw',
+  ]);
+});

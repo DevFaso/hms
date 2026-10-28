@@ -18,6 +18,7 @@ import { HospitalScopeChipComponent } from '../../shared/hospital-scope-chip/hos
 import { HospitalScopeHintComponent } from '../../shared/hospital-scope-chip/hospital-scope-hint.component';
 import { currentLocale } from '../../shared/i18n/app-locale';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { LabValuePipe } from '../../lab/shared/lab-value.pipe';
 
 /** QA D731: the server sends resultedAt as a zone-less UTC wall time. */
 const SERVER_TIME = new ServerTimePipe();
@@ -97,7 +98,13 @@ function isQualitativeValue(value: string | null | undefined): boolean {
 @Component({
   selector: 'app-lab-results-inbox',
   standalone: true,
-  imports: [RouterLink, TranslateModule, HospitalScopeChipComponent, HospitalScopeHintComponent],
+  imports: [
+    RouterLink,
+    TranslateModule,
+    HospitalScopeChipComponent,
+    HospitalScopeHintComponent,
+    LabValuePipe,
+  ],
   templateUrl: './lab-results-inbox.html',
   styleUrl: './lab-results-inbox.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

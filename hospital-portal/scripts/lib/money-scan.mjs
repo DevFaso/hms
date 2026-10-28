@@ -41,6 +41,11 @@ const MONEY_WORD =
 const NOT_MONEY =
   /[a-z0-9](?:Rate|Percent|Pct|Ratio|Count|Days|Hours|Minutes|Index|Number|Share|Code|Score|Invoices|Visits|Items|Length|At|On|Date|By)$/;
 
+// QA D967 (round 16): a controlled-drug register's opening and closing
+// balances are counts of units on the shelf, not money; they are formatted
+// as numbers (| number), never as CFA.
+const STOCK_BALANCE = /^(?:opening|closing)Balance$/;
+
 const EXPR = String.raw`([\w$.?!()\[\]'"]*?\w*${MONEY_TAIL}\w*(?:\(\))?)`;
 // `[?!]?` — `inv.amount?.toFixed(2)` and `inv.amount!.toFixed(2)` are the same
 // hand formatting, and `(line.amount * rate).toFixed(2)` the same again.
@@ -88,7 +93,7 @@ function isMoney(expr) {
     .split(/\?\.|!\.|\./)
     .pop()
     .replace(/[!?()[\]'"]/g, '');
-  return MONEY_WORD.test(last) && !NOT_MONEY.test(last);
+  return MONEY_WORD.test(last) && !NOT_MONEY.test(last) && !STOCK_BALANCE.test(last);
 }
 
 /** The expression without a leading `(`: `(point.amount | number` names `point.amount`. */
