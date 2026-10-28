@@ -117,6 +117,50 @@ class PatientMatchKeysGuardTest {
         }
     }
 
+    @Test
+    void everyPhoneComparisonPassesTheHospitalCallingCode() throws IOException {
+        // QA D942 (review rounds 5-7): a national number takes the acting
+        // hospital's calling code before the full digits compare. The two-argument
+        // samePhone assumes Burkina Faso, so at an Ivorian hospital 70001002 would
+        // match another patient's +22670001002. Only PatientMatchKeys may call it.
+        int calls = 0;
+        for (Path f : javaFiles()) {
+            if (f.endsWith("PatientMatchKeys.java")) {
+                continue;
+            }
+            String src = read(f);
+            int at = src.indexOf("PatientMatchKeys.samePhone(");
+            while (at >= 0) {
+                int open = src.indexOf('(', at);
+                assertThat(topLevelArguments(src, open)).as(f + " compares phones without the hospital calling code"
+                    + " (use samePhone(a, b, callingCode))").isEqualTo(3);
+                calls++;
+                at = src.indexOf("PatientMatchKeys.samePhone(", open);
+            }
+        }
+        assertThat(calls).as("samePhone callers (lookup, search, duplicates, audit)").isGreaterThanOrEqualTo(4);
+    }
+
+    /** The number of top-level arguments of the call whose '(' is at {@code open}. */
+    private static int topLevelArguments(String src, int open) {
+        int depth = 0;
+        int args = 1;
+        for (int i = open; i < src.length(); i++) {
+            char c = src.charAt(i);
+            if (c == '(') {
+                depth++;
+            } else if (c == ')') {
+                depth--;
+                if (depth == 0) {
+                    return args;
+                }
+            } else if (c == ',' && depth == 1) {
+                args++;
+            }
+        }
+        throw new IllegalStateException("unbalanced call at " + open);
+    }
+
     private static List<Path> javaFiles() throws IOException {
         try (Stream<Path> files = Files.walk(MAIN)) {
             return files.filter(f -> f.toString().endsWith(".java")).toList();

@@ -319,8 +319,12 @@ class PatientRecallServiceImplTest {
 
         // Round 6: a named recall that cannot be linked is a refusal, never a silent no-op.
         PatientRecall closed = existingRecall(RecallStatus.CLOSED);
+        // The refusal names the recallId field: the form drops the recall and resubmits without it.
         assertThatThrownBy(() -> service.scheduleOpenRecallFor(a, closed.getId()))
-            .isInstanceOf(BusinessException.class);
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting(e -> ((com.example.hms.exception.FieldBusinessException) e).getField()
+                + "/" + ((com.example.hms.exception.FieldBusinessException) e).getMessageKey())
+            .isEqualTo("recallId/recall.book.notOpen");
         assertThat(closed.getStatus()).isEqualTo(RecallStatus.CLOSED);
 
         Patient someoneElse = mock(Patient.class);
@@ -333,7 +337,9 @@ class PatientRecallServiceImplTest {
 
         UUID unknown = UUID.randomUUID();
         assertThatThrownBy(() -> service.scheduleOpenRecallFor(a, unknown))
-            .isInstanceOf(ResourceNotFoundException.class);
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting(e -> ((com.example.hms.exception.FieldBusinessException) e).getField())
+            .isEqualTo("recallId");
     }
 
     @Test

@@ -3,6 +3,7 @@ package com.example.hms.service.scheduling;
 import com.example.hms.enums.RecallStatus;
 import com.example.hms.enums.RecallType;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Appointment;
 import com.example.hms.model.Department;
@@ -135,6 +136,9 @@ public class PatientRecallServiceImpl implements PatientRecallService {
         return toDto(recallRepository.save(recall), hospitalId);
     }
 
+    /** QA D985: the booking request property a recall refusal is about. */
+    private static final String RECALL_FIELD = "recallId";
+
     /** QA D985: how early a visit may come and still answer a recall. */
     private static final int RECALL_EARLY_DAYS = 30;
 
@@ -151,13 +155,15 @@ public class PatientRecallServiceImpl implements PatientRecallService {
             // Booked from the recall list: exactly that recall. One that is not
             // this patient's, not this hospital's or no longer open is a refusal,
             // never a silent no-op that leaves the recall chasing the patient.
+            // The refusal rolls the booking back and names the recallId field,
+            // so the form drops the recall and the next submit books without it.
             PatientRecall named = recallRepository.findByIdAndHospital_Id(recallId, hospitalId)
-                .orElseThrow(() -> new ResourceNotFoundException("recall.notFound", recallId));
+                .orElseThrow(() -> new FieldBusinessException(RECALL_FIELD, "recall.book.notFound"));
             if (!OPEN_STATUSES.contains(named.getStatus())) {
-                throw new BusinessException("recall.book.notOpen");
+                throw new FieldBusinessException(RECALL_FIELD, "recall.book.notOpen");
             }
             if (named.getPatient() == null || !patientId.equals(named.getPatient().getId())) {
-                throw new BusinessException("recall.book.otherPatient");
+                throw new FieldBusinessException(RECALL_FIELD, "recall.book.otherPatient");
             }
             target = java.util.Optional.of(named);
         } else {

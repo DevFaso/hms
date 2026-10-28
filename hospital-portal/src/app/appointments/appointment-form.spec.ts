@@ -179,4 +179,41 @@ describe('AppointmentFormComponent — prefill from the prenatal calendar', () =
     expect(shown).toBe('FIELD_LIMITS.FIELD_REASON');
     expect(shown).not.toBe('La demande contient des erreurs de validation');
   });
+
+  it('QA D985: a refused recall is dropped, so the next submit books without it', () => {
+    const component = create({ recallId: '11111111-2222-3333-4444-555555555555' });
+    expect(component.form.recallId).toBe('11111111-2222-3333-4444-555555555555');
+    const toast = TestBed.inject(ToastService) as jasmine.SpyObj<ToastService>;
+    const appointments = TestBed.inject(AppointmentService) as jasmine.SpyObj<AppointmentService>;
+    appointments.create.and.returnValue(
+      throwError(() => ({
+        status: 400,
+        error: {
+          error: 'Bad Request',
+          message:
+            'Ce rappel n’est plus ouvert. Validez de nouveau pour prendre le rendez-vous sans lui.',
+          field: 'recallId',
+          fieldErrors: { recallId: 'Ce rappel n’est plus ouvert.' },
+        },
+      })),
+    );
+    component.form.appointmentDate = '2099-01-01';
+    component.form.startTime = '09:00';
+    component.form.endTime = '09:30';
+    component.form.patientId = 'p-1';
+    component.form.staffId = 's-1';
+
+    component.submit();
+
+    expect(component.form.recallId).toBeUndefined();
+    expect(toast.error.calls.mostRecent().args[0]).toContain('Ce rappel n’est plus ouvert');
+
+    // Any other refusal keeps the recall the desk booked from.
+    component.form.recallId = '11111111-2222-3333-4444-555555555555';
+    appointments.create.and.returnValue(
+      throwError(() => ({ status: 400, error: { error: 'Bad Request', message: 'slot taken' } })),
+    );
+    component.submit();
+    expect(component.form.recallId).toBe('11111111-2222-3333-4444-555555555555');
+  });
 });

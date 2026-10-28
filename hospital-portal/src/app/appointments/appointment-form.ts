@@ -480,6 +480,12 @@ export class AppointmentFormComponent implements OnInit {
         this.router.navigate(['/appointments']);
       },
       error: (err) => {
+        // QA D985: a recall the booking cannot answer (closed meanwhile, another
+        // patient's) rolls the booking back; drop it so the next submit books
+        // the visit without it, as the refusal says.
+        if ((err as { error?: { field?: unknown } } | null)?.error?.field === 'recallId') {
+          delete this.form.recallId;
+        }
         // QA D984: a validation refusal names the field and its reason
         // ("Date : must be today or later"), not the generic text.
         this.toast.error(
