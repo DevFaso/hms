@@ -68,9 +68,8 @@ class SaveThenRefreshGuardTest {
      * — per SITE, not per file, so fixing D923 and adding another save-then-refresh in
      * the same file in one PR still fails. Shrink only: the fix deletes the line here too.
      */
-    private static final Map<String, Allowance> ALLOWED = GuardAllowlist.allow(
-        "service/AppointmentServiceImpl.java save(existing) refresh(saved)", 1,
-        "QA D923: updateAppointment refreshes the saved appointment before the flush; every PUT edit is discarded");
+    private static final Map<String, Allowance> ALLOWED = GuardAllowlist.allow();
+    // QA D923's site (AppointmentServiceImpl save(existing) refresh(saved)) was fixed by #972: none left.
 
     static List<String> offenders(String file, String rawSource) {
         String source = SourceScan.stripComments(rawSource);

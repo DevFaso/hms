@@ -111,14 +111,11 @@ class PostCommitLazyAssociationGuardTest {
 
     private static final String LOADED_HERE =
         "chain on a row the same handler loaded by id; the proxy is initialised. Move to the service when touched";
-    private static final String D921 =
-        "QA D921: verifyEmail walks assignment.getRole()/getHospital() after userRepository.save() with no"
-            + " transaction — the lazy load fails and the patient assignment stays inactive";
 
     /** Controller chains as they stand. Shrink only. */
     private static final Map<String, Allowance> ALLOWED_IN_CONTROLLERS = allow(
-        "controller/AuthController.java", ".getRole().getCode(", 2, D921 + " (one of the two is line ~969, loaded here)",
-        "controller/AuthController.java", ".getHospital().getLifecycleState(", 1, D921,
+        // The two QA D921 chains (verifyEmail) left with #972: activation runs in its service now.
+        "controller/AuthController.java", ".getRole().getCode(", 1, LOADED_HERE,
         "controller/AuthController.java", ".getHospital().getId(", 2, LOADED_HERE,
         "controller/AuthController.java", ".getHospital().getName(", 1, LOADED_HERE,
         "controller/CredentialingController.java", ".getStaff().getId(", 1, LOADED_HERE,

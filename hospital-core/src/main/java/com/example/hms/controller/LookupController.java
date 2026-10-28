@@ -86,11 +86,13 @@ public class LookupController {
         String callingCode = com.example.hms.utility.PhoneNumbers.callingCodeForCountry(activeHospitalId == null
             ? null
             : hospitalRepository.findById(activeHospitalId).map(com.example.hms.model.Hospital::getCountry).orElse(null));
+        // The full-number check reads the summary the handler builds anyway, not the
+        // patient association (PostCommitLazyAssociationGuardTest: no controller chain).
         return ResponseEntity.ok(appointments.stream()
-            .filter(a -> !subscriber || a.getPatient() == null
-                || com.example.hms.utility.PatientMatchKeys.samePhone(a.getPatient().getPhoneNumberPrimary(), phone,
-                    callingCode))
-            .map(this::toAppointmentSummaryDTO).toList());
+            .map(this::toAppointmentSummaryDTO)
+            .filter(dto -> !subscriber || dto.getPatientId() == null
+                || com.example.hms.utility.PatientMatchKeys.samePhone(dto.getPatientPhone(), phone, callingCode))
+            .toList());
     }
 
     // Lookup appointments by patient MRN

@@ -125,9 +125,12 @@ export class CheckinDialogComponent {
     if (!response.copayInvoiceId || !response.copayPaymentId) return;
     this.billing.getReceiptPdf(response.copayInvoiceId, response.copayPaymentId).subscribe({
       // QA D1009 (#973): the receipt keeps the server's name (its receipt number);
-      // the encounter code is only the fallback.
+      // the encounter code is only the fallback, never the database id (D1009).
       next: (res) =>
-        saveResponse(res, `recu-${response.encounterCode || response.encounterId}.pdf`),
+        saveResponse(
+          res,
+          response.encounterCode ? `recu-${response.encounterCode}.pdf` : 'recu.pdf',
+        ),
       error: () => this.toast.error(this.translate.instant('RECEPTION.RECEIPT_FAILED')),
     });
   }

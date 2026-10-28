@@ -91,7 +91,7 @@ class ResponseProseGuardTest {
     private static final Map<String, Allowance> ALLOWED = GuardAllowlist.allow(
         "controller/AuthController.java::Public self-registration is no longer available.", 1, PRE_EXISTING,
         "controller/AuthController.java::Email verified successfully.", 1, D921,
-        "controller/AuthController.java::Email verification failed.", 3, D921 + " (EMAIL_VERIFICATION_FAILED constant)",
+        "controller/AuthController.java::Email verification failed.", 1, D921 + " (EMAIL_VERIFICATION_FAILED constant)",
         "controller/AuthController.java::If the email is registered, a new verification link has been sent.", 2, PRE_EXISTING,
         "controller/AuthController.java::Account is already verified. You can log in.", 1, PRE_EXISTING,
         "controller/AuthController.java::If the number is registered, a new activation code has been sent.", 1, PRE_EXISTING,

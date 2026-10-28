@@ -38,7 +38,7 @@ class BillingChargeCreatorGuardTest {
         "createInvoice: one invoice per clientRequestId (QA D94), a second live invoice on a visit only when "
             + "confirmed as supplementary (QA D529), and the form proposing the visit of the patient's open copay "
             + "so it is credited (QA D936) — BillingInvoiceServiceImplTest *_D94, *_D529, billing.spec D936",
-        "service/BillingInvoiceServiceImpl.java#recordCheckInCopay",
+        "service/BillingInvoiceServiceImpl.java#doRecordCheckInCopay",
         "one check-in copay per encounter, live or folded, under a row lock on the encounter (QA D936) — "
             + "BillingInvoiceServiceImplTest.aSecondCheckInOfTheSameVisitIsNotBilledAgain_D936",
         "service/DeliveryChargeService.java#chargeDelivery",

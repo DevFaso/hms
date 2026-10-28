@@ -210,7 +210,6 @@ class StoredTextProseGuardTest {
     }
 
     private static final String D952 = "QA D952: nursing intake written into encounter notes with English headers";
-    private static final String D944 = "QA D944: the walk-in's reason falls back to the English \"Walk-in\" in the queue";
     private static final String PRE_EXISTING = "pre-existing English stored text (class of QA D952/D989); key it with the next touch";
     private static final String CDS_CARD =
         "QA D935/D953 class: CDS card text composed in English (the \"HMS PEDIATRIC DOSE CHECK\" source label shape); key it";
@@ -226,7 +225,6 @@ class StoredTextProseGuardTest {
         "service/ClinicalDashboardServiceImpl.java::Active Patients", 1, PRE_EXISTING,
         "service/ClinicalDashboardServiceImpl.java::Refill Requests", 1, PRE_EXISTING,
         "service/DepartmentServiceImpl.java::Auto-provisioned hospital admin assignment for department creation", 1, PRE_EXISTING,
-        "service/ReceptionServiceImpl.java::Walk-in", 1, D944,
         "service/SecurityPolicyGovernanceServiceImpl.java::Security baseline", 1, PRE_EXISTING,
         "service/impl/PatientPortalServiceImpl.java::Patient cancelled: ", 1, PRE_EXISTING,
         "service/impl/PatientPortalServiceImpl.java::Patient rescheduled: ", 1, PRE_EXISTING,
