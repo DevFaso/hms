@@ -37,6 +37,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -664,7 +665,7 @@ class AppointmentStatusTransitionTest {
         givenAppointment(AppointmentStatus.SCHEDULED, LocalDate.now().plusDays(7));
         com.example.hms.payload.dto.AppointmentRequestDTO edit = editOf(AppointmentStatus.CANCELLED);
         ReflectionTestUtils.setField(appointmentService, "entityManager",
-            org.mockito.Mockito.mock(jakarta.persistence.EntityManager.class));
+            mock(jakarta.persistence.EntityManager.class));
         org.mockito.Mockito.doAnswer(inv -> {
             appointment.setStatus(AppointmentStatus.CANCELLED);
             return null;
@@ -681,7 +682,7 @@ class AppointmentStatusTransitionTest {
         givenAppointment(AppointmentStatus.SCHEDULED, LocalDate.now().plusDays(7));
         com.example.hms.payload.dto.AppointmentRequestDTO edit = editOf(null);
         ReflectionTestUtils.setField(appointmentService, "entityManager",
-            org.mockito.Mockito.mock(jakarta.persistence.EntityManager.class));
+            mock(jakarta.persistence.EntityManager.class));
         when(appointmentRepository.saveAndFlush(any())).thenReturn(appointment);
 
         appointmentService.updateAppointment(appointmentId, edit, java.util.Locale.ENGLISH, "doctor_b");
@@ -699,7 +700,7 @@ class AppointmentStatusTransitionTest {
                 appointment.getStaff().getId(), appointment.getAppointmentDate()))
             .thenReturn(java.util.List.of(appointment, rebookedAtTheSameTime()));
         ReflectionTestUtils.setField(appointmentService, "entityManager",
-            org.mockito.Mockito.mock(jakarta.persistence.EntityManager.class));
+            mock(jakarta.persistence.EntityManager.class));
         when(appointmentRepository.saveAndFlush(any())).thenReturn(appointment);
 
         appointmentService.updateAppointment(appointmentId, edit, java.util.Locale.ENGLISH, "doctor_b");

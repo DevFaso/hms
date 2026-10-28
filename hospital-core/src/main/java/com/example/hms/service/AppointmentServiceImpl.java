@@ -211,21 +211,12 @@ public class AppointmentServiceImpl implements AppointmentService {
         EnumSet.of(AppointmentStatus.COMPLETED, AppointmentStatus.NO_SHOW);
 
     /**
-     * Reject a status change on the update path that the state machine would
-     * not allow.
-     *
-     * <p>Permissive in two places on purpose. A null requested status means
-     * the caller is editing something else and not touching status; an
-     * unchanged status is a no-op, not a self-transition. Only an actual move
-     * is checked, so ordinary edits — reason, notes, the date and time of a
-     * reschedule — pass through untouched.
-     */
-    /**
      * COMPLETED and NO_SHOW only once the visit has started, on every write
      * path (status action and PUT alike; review round 8: the PUT skipped it).
      */
     private static void requireStartedFor(AppointmentStatus status, LocalDateTime appointmentStart) {
-        if (REQUIRES_APPOINTMENT_STARTED.contains(status) && LocalDateTime.now().isBefore(appointmentStart)) {
+        if (REQUIRES_APPOINTMENT_STARTED.contains(status)
+                && LocalDateTime.now(java.time.ZoneId.systemDefault()).isBefore(appointmentStart)) {
             throw new BusinessException("appointment.status.notStartedYet",
                 AppointmentStatus.labelOf(status),
                 appointmentStart.format(java.time.format.DateTimeFormatter
@@ -298,6 +289,16 @@ public class AppointmentServiceImpl implements AppointmentService {
         }
     }
 
+    /**
+     * Reject a status change on the update path that the state machine would
+     * not allow.
+     *
+     * <p>Permissive in two places on purpose. A null requested status means
+     * the caller is editing something else and not touching status; an
+     * unchanged status is a no-op, not a self-transition. Only an actual move
+     * is checked, so ordinary edits — reason, notes, the date and time of a
+     * reschedule — pass through untouched.
+     */
     private void requireValidStatusChange(AppointmentStatus current, AppointmentStatus requested) {
         if (requested == null || requested == current) {
             return;
