@@ -1372,6 +1372,16 @@ export const routes: Routes = [
           import('./pharmacy/stock-adjustment').then((m) => m.StockAdjustmentComponent),
       },
       {
+        // QA D967: the controlled-drug register; roles mirror ControlledRegisterController.
+        path: 'pharmacy/controlled-register',
+        canActivate: [RoleGuard],
+        data: {
+          roles: ['ROLE_PHARMACIST', 'ROLE_STORE_MANAGER', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+        },
+        loadComponent: () =>
+          import('./pharmacy/controlled-register').then((m) => m.ControlledRegisterComponent),
+      },
+      {
         path: 'pharmacy/dispensing',
         canActivate: [RoleGuard],
         data: {

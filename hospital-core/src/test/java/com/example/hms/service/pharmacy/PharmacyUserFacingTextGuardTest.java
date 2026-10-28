@@ -53,7 +53,7 @@ class PharmacyUserFacingTextGuardTest {
     private static final Pattern RESOLVE = Pattern.compile(
             "MessageUtil\\.resolve(?:OrNull|OrRaw)?\\(\\s*(?:[\\w.]+\\s*,\\s*)?\"((?:[^\"\\\\]|\\\\.)*)\"(\\s*\\+)?");
     private static final Pattern STORED_REASON = Pattern.compile(
-            "(?:\\.reason|recordStockTransaction)\\([^;\"]*?\"((?:[^\"\\\\]|\\\\.)*)\"");
+            "(?:\\.reason\\(\\s*|recordStockTransaction\\([^;\"]*?)\"((?:[^\"\\\\]|\\\\.)*)\"");
 
     /**
      * Stock-ledger reasons are the audit trail of a movement and are stored as

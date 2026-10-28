@@ -188,6 +188,44 @@ export interface StockTransactionRequest {
   fefoOverrideReason?: string;
 }
 
+/** QA D967: one movement of the controlled-drug register, with the drug's balance after it. */
+export interface ControlledRegisterEntry {
+  transactionId: string;
+  occurredAt?: string;
+  movementType: string;
+  /** Signed: in positive, out negative. */
+  quantity: number;
+  lotNumber?: string;
+  balanceAfter: number;
+  patientName?: string;
+  prescriberName?: string;
+  recordedBy?: string;
+  witnessedBy?: string;
+  /** Already in the reader's language. */
+  reason?: string;
+}
+
+/** QA D967: one controlled drug's page of the register. */
+export interface ControlledRegisterDrug {
+  inventoryItemId: string;
+  medicationName?: string;
+  unit?: string;
+  openingBalance: number;
+  closingBalance: number;
+  quantityOnHand?: number;
+  entries: ControlledRegisterEntry[];
+}
+
+/** QA D967: the controlled-drug (stupéfiants) register of a pharmacy over a period. */
+export interface ControlledRegister {
+  pharmacyId: string;
+  pharmacyName?: string;
+  from: string;
+  to: string;
+  truncated: boolean;
+  drugs: ControlledRegisterDrug[];
+}
+
 /**
  * QA D932: a fill a return can be booked against (completed or partial, of
  * the chosen item and lot, with stock still out).
@@ -844,6 +882,43 @@ export class PharmacyService {
     return this.http.get<ApiResponse<StockWitnessCandidate[]>>(
       '/pharmacy/stock-transactions/witness-candidates',
     );
+  }
+
+  /** QA D967: the controlled-drug register (dates are ISO YYYY-MM-DD). */
+  getControlledRegister(
+    pharmacyId: string,
+    from: string,
+    to: string,
+    inventoryItemId?: string,
+  ): Observable<ApiResponse<ControlledRegister>> {
+    return this.http.get<ApiResponse<ControlledRegister>>('/pharmacy/controlled-register', {
+      params: this.registerParams(pharmacyId, from, to, inventoryItemId),
+    });
+  }
+
+  /** QA D967: the register as CSV or PDF, in the reader's language. */
+  exportControlledRegister(
+    format: 'csv' | 'pdf',
+    pharmacyId: string,
+    from: string,
+    to: string,
+    inventoryItemId?: string,
+  ): Observable<Blob> {
+    return this.http.get(`/pharmacy/controlled-register/export.${format}`, {
+      params: this.registerParams(pharmacyId, from, to, inventoryItemId),
+      responseType: 'blob',
+    });
+  }
+
+  private registerParams(
+    pharmacyId: string,
+    from: string,
+    to: string,
+    inventoryItemId?: string,
+  ): HttpParams {
+    let params = new HttpParams().set('pharmacyId', pharmacyId).set('from', from).set('to', to);
+    if (inventoryItemId) params = params.set('inventoryItemId', inventoryItemId);
+    return params;
   }
 
   /** QA D932: the fills a return of this item (and lot) can be booked against. */
