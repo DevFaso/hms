@@ -1,0 +1,161 @@
+<div class="page-container">
+  <div class="page-header">
+    <div>
+      <h1 class="page-title">{{ 'PHARMACY.REGISTER_TITLE' | translate }}</h1>
+      <p class="page-subtitle">{{ 'PHARMACY.REGISTER_SUBTITLE' | translate }}</p>
+    </div>
+    <div class="header-actions">
+      <button
+        class="btn-secondary"
+        type="button"
+        data-testid="register-export-csv"
+        [disabled]="exporting() || !selectedPharmacyId || !periodValid()"
+        (click)="export('csv')"
+      >
+        <span class="material-symbols-outlined" aria-hidden="true">table</span>
+        {{ 'PHARMACY.REGISTER_EXPORT_CSV' | translate }}
+      </button>
+      <button
+        class="btn-secondary"
+        type="button"
+        data-testid="register-export-pdf"
+        [disabled]="exporting() || !selectedPharmacyId || !periodValid()"
+        (click)="export('pdf')"
+      >
+        <span class="material-symbols-outlined" aria-hidden="true">picture_as_pdf</span>
+        {{ 'PHARMACY.REGISTER_EXPORT_PDF' | translate }}
+      </button>
+    </div>
+  </div>
+
+  @if (pharmaciesLoaded() && pharmacies().length === 0) {
+    <p class="muted" role="status">{{ 'PHARMACY.NO_PHARMACY_HINT' | translate }}</p>
+  } @else {
+    <form class="register-filters" (ngSubmit)="load()">
+      <label class="field">
+        {{ 'PHARMACY.SELECT_PHARMACY' | translate }}
+        <select
+          class="pharmacy-select"
+          name="pharmacy"
+          [(ngModel)]="selectedPharmacyId"
+          (ngModelChange)="onPharmacyChange()"
+        >
+          @for (p of pharmacies(); track p.id) {
+            <option [value]="p.id">{{ p.name }}</option>
+          }
+        </select>
+      </label>
+      <label class="field">
+        {{ 'PHARMACY.REGISTER_DRUG' | translate }}
+        <select name="drug" data-testid="register-drug" [(ngModel)]="selectedItemId">
+          <option value="">{{ 'PHARMACY.REGISTER_ALL_DRUGS' | translate }}</option>
+          @for (item of controlledItems(); track item.id) {
+            <option [value]="item.id">{{ item.medicationName }}</option>
+          }
+        </select>
+      </label>
+      <label class="field">
+        {{ 'PHARMACY.REGISTER_FROM' | translate }}
+        <input type="date" name="from" [(ngModel)]="from" />
+      </label>
+      <label class="field">
+        {{ 'PHARMACY.REGISTER_TO' | translate }}
+        <input type="date" name="to" [(ngModel)]="to" />
+      </label>
+      <button class="btn-primary" type="submit" data-testid="register-load" [disabled]="loading()">
+        {{ 'PHARMACY.REGISTER_SHOW' | translate }}
+      </button>
+    </form>
+
+    @if (loading()) {
+      <div class="loading-state">
+        <div class="spinner"></div>
+        <p>{{ 'COMMON.LOADING' | translate }}</p>
+      </div>
+    } @else if (failed()) {
+      <p class="muted" role="alert">{{ 'PHARMACY.REGISTER_LOAD_FAILED' | translate }}</p>
+    } @else if (register(); as reg) {
+      @if (reg.truncated) {
+        <p class="discrepancy" role="status" data-testid="register-truncated">
+          {{ 'PHARMACY.REGISTER_TRUNCATED' | translate }}
+        </p>
+      }
+      @if (reg.drugs.length === 0) {
+        <p class="muted" data-testid="register-no-drugs">
+          {{ 'PHARMACY.REGISTER_NO_DRUGS' | translate }}
+        </p>
+      }
+      @for (drug of reg.drugs; track drug.inventoryItemId) {
+        <section class="drug-card" [attr.data-testid]="'register-drug-' + drug.inventoryItemId">
+          <h2>
+            {{ drug.medicationName }}
+            @if (drug.unit) {
+              <span class="muted">({{ drug.unit }})</span>
+            }
+          </h2>
+          <div class="balances">
+            <span
+              >{{ 'PHARMACY.REGISTER_OPENING' | translate }} :
+              <strong>{{ drug.openingBalance }}</strong></span
+            >
+            <span
+              >{{ 'PHARMACY.REGISTER_CLOSING' | translate }} :
+              <strong>{{ drug.closingBalance }}</strong></span
+            >
+            <span [class.discrepancy]="hasDiscrepancy(drug)"
+              >{{ 'PHARMACY.REGISTER_ON_SHELF' | translate }} :
+              <strong>{{ drug.quantityOnHand ?? '—' }}</strong>
+              @if (hasDiscrepancy(drug)) {
+                <span [attr.data-testid]="'register-discrepancy-' + drug.inventoryItemId">
+                  · {{ 'PHARMACY.REGISTER_DISCREPANCY' | translate }}</span
+                >
+              }
+            </span>
+          </div>
+          @if (drug.entries.length === 0) {
+            <p class="muted">{{ 'PHARMACY.REGISTER_NO_MOVEMENT' | translate }}</p>
+          } @else {
+            <div class="table-scroll">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>{{ 'PHARMACY.REGISTER_COL_DATE' | translate }}</th>
+                    <th>{{ 'PHARMACY.REGISTER_COL_MOVEMENT' | translate }}</th>
+                    <th>{{ 'PHARMACY.REGISTER_COL_QUANTITY' | translate }}</th>
+                    <th>{{ 'PHARMACY.LOT_NUMBER' | translate }}</th>
+                    <th>{{ 'PHARMACY.REGISTER_COL_BALANCE' | translate }}</th>
+                    <th>{{ 'PHARMACY.PATIENT' | translate }}</th>
+                    <th>{{ 'PHARMACY.REGISTER_COL_PRESCRIBER' | translate }}</th>
+                    <th>{{ 'PHARMACY.REGISTER_COL_RECORDED_BY' | translate }}</th>
+                    <th>{{ 'PHARMACY.REGISTER_COL_WITNESS' | translate }}</th>
+                    <th>{{ 'PHARMACY.REGISTER_COL_REASON' | translate }}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (e of drug.entries; track e.transactionId) {
+                    <tr>
+                      <td>{{ e.occurredAt | serverTime | date: 'short' }}</td>
+                      <td>{{ e.movementType | enumLabel: 'stockTransactionType' }}</td>
+                      <td [class.qty-in]="e.quantity > 0" [class.qty-out]="e.quantity < 0">
+                        {{ signed(e.quantity) }}
+                      </td>
+                      <td>{{ e.lotNumber || '—' }}</td>
+                      <td>
+                        <strong>{{ e.balanceAfter }}</strong>
+                      </td>
+                      <td>{{ e.patientName || '—' }}</td>
+                      <td>{{ e.prescriberName || '—' }}</td>
+                      <td>{{ e.recordedBy || '—' }}</td>
+                      <td>{{ e.witnessedBy || '—' }}</td>
+                      <td>{{ e.reason || '—' }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          }
+        </section>
+      }
+    }
+  }
+</div>

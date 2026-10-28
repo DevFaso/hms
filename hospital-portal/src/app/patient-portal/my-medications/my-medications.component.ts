@@ -55,6 +55,23 @@ export class MyMedicationsComponent implements OnInit {
   expandedRxId = signal<string | null>(null);
   requestingRefill = signal<string | null>(null);
 
+  /**
+   * QA D966: a prescription printed for me offers its copy; the page said
+   * "Imprimée pour le patient" with nothing to download.
+   */
+  openPrintedCopy(rxId: string, event?: Event): void {
+    event?.stopPropagation();
+    this.portal.getMyPrintedPrescription(rxId).subscribe({
+      next: (blob) => {
+        const url = URL.createObjectURL(blob);
+        window.open(url, '_blank');
+        setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      },
+      error: () =>
+        this.toast.error(this.translate.instant('PORTAL.MEDICATIONS.PRINTED_COPY_FAILED')),
+    });
+  }
+
   ngOnInit() {
     let pending = 3;
     const done = () => {

@@ -79,6 +79,9 @@ const PAGE_HANDLED_403_ACTION_PATTERNS = [
   /\/prescriptions\/[^/?]+(\?|$)/,
   // QA D661: a refused referral action is reported by the page's toast.
   /\/referrals\/[^/?]+\/(acknowledge|schedule|start|complete|reject|cancel|submit)(\?|$)/,
+  // QA D965: every pharmacy and inventory write reports its own refusal in a
+  // toast; the redirect replaced the stock screen ("Déclencher les alertes").
+  /\/pharmacy\//,
 ];
 
 const SILENT_401_PATTERNS = [/\/chat\/mark-read\//];

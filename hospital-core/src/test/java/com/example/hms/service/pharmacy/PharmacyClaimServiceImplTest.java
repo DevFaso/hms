@@ -152,7 +152,7 @@ class PharmacyClaimServiceImplTest {
 
         assertThatThrownBy(() -> service.createClaim(dto))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("positive");
+                .extracting("messageKey").isEqualTo("pharmacy.claim.amountPositive");
     }
 
     @Test
@@ -209,7 +209,7 @@ class PharmacyClaimServiceImplTest {
         UUID claimId = UUID.randomUUID();
         assertThatThrownBy(() -> service.markRejected(claimId, " "))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("reason");
+                .extracting("messageKey").isEqualTo("pharmacy.claim.rejectionReasonRequired");
     }
 
     @Test
@@ -276,7 +276,7 @@ class PharmacyClaimServiceImplTest {
 
         assertThatThrownBy(() -> service.createClaim(null))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("required");
+                .extracting("messageKey").isEqualTo("pharmacy.claim.requestRequired");
     }
 
     @Test
@@ -314,7 +314,7 @@ class PharmacyClaimServiceImplTest {
 
         assertThatThrownBy(() -> service.createClaim(dto))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("Patient");
+                .extracting("messageKey").isEqualTo("pharmacy.claim.patientMismatch");
     }
 
     @Test
@@ -404,7 +404,7 @@ class PharmacyClaimServiceImplTest {
 
         assertThatThrownBy(() -> service.submitClaim(claimId))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("current user");
+                .extracting("messageKey").isEqualTo("pharmacy.currentUserUnknown");
     }
 
     @Test
@@ -443,7 +443,7 @@ class PharmacyClaimServiceImplTest {
         UUID claimId = UUID.randomUUID();
         assertThatThrownBy(() -> service.markRejected(claimId, null))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("reason");
+                .extracting("messageKey").isEqualTo("pharmacy.claim.rejectionReasonRequired");
     }
 
     @Test

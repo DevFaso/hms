@@ -3701,7 +3701,7 @@ class PrescriptionServiceImplTest {
         UUID rxId = rx.getId();
         assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, java.util.Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("CONTROLLED_SUBSTANCE");
+            .extracting("messageKey").isEqualTo("prescription.safeguard.CONTROLLED_SUBSTANCE.status");
         assertThat(rx.getSignatureValue()).isNull();
     }
 

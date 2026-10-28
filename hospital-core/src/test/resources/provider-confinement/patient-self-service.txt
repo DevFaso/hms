@@ -37,6 +37,7 @@ GET /me/patient/notifications/unread-count
 GET /me/patient/pharmacy/claims
 GET /me/patient/pharmacy/payments
 GET /me/patient/prescriptions
+GET /me/patient/prescriptions/{prescriptionId}/printed-copy
 GET /me/patient/pro-instruments/{code}
 GET /me/patient/pro-screenings
 GET /me/patient/profile

@@ -201,6 +201,11 @@ export const ACTION_PERMISSIONS = {
     endpoint: 'PatientController#deactivatePatientAllergy',
     roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_PHARMACIST'],
   },
+  // QA D965: sending the reorder alerts is the store's act, not the pharmacist's.
+  inventoryReorderTrigger: {
+    endpoint: 'pharmacy.InventoryController#triggerReorderAlerts',
+    roles: ['ROLE_STORE_MANAGER', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+  },
 } as const satisfies Record<string, ActionPermission>;
 
 /**
