@@ -21,7 +21,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 class PortalDownloadNameGuardTest {
 
     private static final Path APP = Path.of("..", "hospital-portal", "src", "app");
-    private static final Pattern NAMED_BY_ID = Pattern.compile("\\.download\\s*=.*\\$\\{[^}]*(?i:id)\\}");
+    /** A template expression inside a saved file name; possessive, so the scan is linear. */
+    private static final Pattern EXPRESSION = Pattern.compile("\\$\\{([^}]*+)\\}");
+    private static final Pattern DOWNLOAD_ASSIGNMENT = Pattern.compile("\\.download\\s*+=");
 
     @Test
     void noSavedFileIsNamedByADatabaseId() throws IOException {
@@ -30,12 +32,28 @@ class PortalDownloadNameGuardTest {
             for (Path file : files.filter(f -> f.toString().endsWith(".ts") && !f.toString().endsWith(".spec.ts")).toList()) {
                 List<String> lines = Files.readAllLines(file, StandardCharsets.UTF_8);
                 for (int i = 0; i < lines.size(); i++) {
-                    if (NAMED_BY_ID.matcher(lines.get(i)).find()) {
+                    if (namedById(lines.get(i))) {
                         offenders.add(APP.relativize(file) + ":" + (i + 1) + "  " + lines.get(i).trim());
                     }
                 }
             }
         }
         assertThat(offenders).isEmpty();
+    }
+
+    /** `x.download = ...${...id}...`: a file named from an identifier (an expression ending in "id"). */
+    private static boolean namedById(String line) {
+        java.util.regex.Matcher assignment = DOWNLOAD_ASSIGNMENT.matcher(line);
+        if (!assignment.find()) {
+            return false;
+        }
+        java.util.regex.Matcher m = EXPRESSION.matcher(line);
+        m.region(assignment.end(), line.length());
+        while (m.find()) {
+            if (m.group(1).toLowerCase(java.util.Locale.ROOT).endsWith("id")) {
+                return true;
+            }
+        }
+        return false;
     }
 }

@@ -144,6 +144,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     /** QA D915: a key, so the refusal reads in the caller's language. */
     private static final String DEFAULT_ACTIVATION_THROUGH_CODE = "assignment.activation.throughCode";
     private static final long CONFIRMATION_CODE_EXPIRY_HOURS = 48;
+    /** The checklist of a role with no checklist of its own (its bundle key segment). */
+    private static final String DEFAULT_CHECKLIST_KEY = "DEFAULT";
     private static final List<String> DEFAULT_PROFILE_CHECKLIST = List.of(
         "Review and confirm your personal information",
         "Add at least one emergency contact",
@@ -2594,19 +2596,19 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private String checklistKey(Role role) {
         String code = role != null ? getRoleCode(role) : null;
         if (code == null || code.isBlank()) {
-            return "DEFAULT";
+            return DEFAULT_CHECKLIST_KEY;
         }
         String normalized = code.trim().toUpperCase(Locale.ROOT);
         if (ROLE_PROFILE_CHECKLISTS.containsKey(normalized)) {
             return normalized;
         }
         String prefixed = normalized.startsWith(ROLE_PREFIX) ? normalized : ROLE_PREFIX + normalized;
-        return ROLE_PROFILE_CHECKLISTS.containsKey(prefixed) ? prefixed : "DEFAULT";
+        return ROLE_PROFILE_CHECKLISTS.containsKey(prefixed) ? prefixed : DEFAULT_CHECKLIST_KEY;
     }
 
     private List<String> buildRoleProfileChecklist(Role role) {
         String key = checklistKey(role);
-        return "DEFAULT".equals(key) ? DEFAULT_PROFILE_CHECKLIST : ROLE_PROFILE_CHECKLISTS.get(key);
+        return DEFAULT_CHECKLIST_KEY.equals(key) ? DEFAULT_PROFILE_CHECKLIST : ROLE_PROFILE_CHECKLISTS.get(key);
     }
 
     @Override

@@ -159,8 +159,9 @@ class VisitTimelineRowsTest {
             "Radiographie · Thorax : Prescrit",
             "Note signée — Paludisme grave probable · Plan : Artésunate IV, contrôle TDR à J3",
             "Orientation vers Cardiologie (Envoyée) — Souffle systolique");
-        assertThat(visit).allSatisfy(row -> assertThat(row.getMetadata()).containsEntry("foreign", false));
-        assertThat(visit).noneMatch(PatientTimelineEntryDTO::isSensitive);
+        assertThat(visit)
+            .allSatisfy(row -> assertThat(row.getMetadata()).containsEntry("foreign", false))
+            .noneMatch(PatientTimelineEntryDTO::isSensitive);
     }
 
     @Test
@@ -217,5 +218,55 @@ class VisitTimelineRowsTest {
         MessageSource bundles = TestMessageSources.bundles();
         String own = bundles.getMessage("timeline.enum." + value.name(), null, null, locale);
         return own != null ? own : bundles.getMessage("pdf.record.enum." + value.name(), null, null, locale);
+    }
+
+    @Test
+    void aRemovedDiagnosisStaysOnTheChronologyWithItsStatus() {
+        // Removal sets INACTIVE, as a clinician may: the row stays, as on the chart's history.
+        PatientProblem removed = new PatientProblem();
+        removed.setId(UUID.randomUUID());
+        removed.setHospital(here);
+        removed.setProblemCode("J18.9");
+        removed.setProblemDisplay("Pneumonie");
+        removed.setStatus(ProblemStatus.INACTIVE);
+        removed.setCreatedAt(LocalDateTime.now().minusHours(2));
+        when(problems.findByPatient_IdAndHospital_Id(patientId, here.getId())).thenReturn(List.of(removed));
+
+        assertThat(rows.collect(patientId, here.getId(), Set.of("DIAGNOSIS")))
+            .extracting(PatientTimelineEntryDTO::getSummary).containsExactly("J18.9 — Pneumonie (Inactif)");
+    }
+
+    @Test
+    void rowsWithLittleOnThemStillRead() {
+        PatientProblem codeOnly = new PatientProblem();
+        codeOnly.setId(UUID.randomUUID());
+        codeOnly.setHospital(here);
+        codeOnly.setProblemCode("R50.9");
+        codeOnly.setStatus(null); // a legacy row with no status reads its code alone
+        codeOnly.setOnsetDate(java.time.LocalDate.of(2026, 10, 20));
+        when(problems.findByPatient_IdAndHospital_Id(patientId, here.getId())).thenReturn(List.of(codeOnly));
+        GeneralReferral bare = new GeneralReferral();
+        bare.setId(UUID.randomUUID());
+        bare.setHospital(here);
+        bare.setStatus(ReferralStatus.ACKNOWLEDGED);
+        when(referrals.findByPatientIdAndHospitalIdOrderByCreatedAtDesc(patientId, here.getId()))
+            .thenReturn(List.of(bare));
+        ImagingOrder noStudy = new ImagingOrder();
+        noStudy.setId(UUID.randomUUID());
+        noStudy.setHospital(here);
+        noStudy.setModality(ImagingModality.CT);
+        noStudy.setStatus(ImagingOrderStatus.SCHEDULED);
+        when(imagingOrders.findByPatient_IdAndHospital_Id(patientId, here.getId())).thenReturn(List.of(noStudy));
+
+        List<PatientTimelineEntryDTO> visit = rows.collect(patientId, here.getId(),
+            Set.of("DIAGNOSIS", "REFERRAL", "IMAGING"));
+
+        assertThat(visit).extracting(PatientTimelineEntryDTO::getSummary).containsExactlyInAnyOrder(
+            "R50.9", "Orientation vers — (Prise en compte)", "Scanner : Programmée");
+        assertThat(visit).filteredOn(r -> "DIAGNOSIS".equals(r.getCategory())).singleElement()
+            .extracting(PatientTimelineEntryDTO::getOccurredAt)
+            .isEqualTo(java.time.LocalDate.of(2026, 10, 20).atStartOfDay());
+        // A constant no bundle labels is still made readable.
+        assertThat(VisitTimelineRows.label(LabOrderStatus.ENTERED_IN_ERROR)).isEqualTo("Entered in error");
     }
 }

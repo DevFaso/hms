@@ -928,7 +928,6 @@ public class ReceptionServiceImpl implements ReceptionService {
         // serialised; the second reads CHECKED_IN and is refused, so the patient
         // is never billed two copays for one visit.
         Appointment appointment = appointmentRepo.lockById(request.getAppointmentId()) // SELECT … FOR UPDATE
-                .or(() -> appointmentRepo.findById(request.getAppointmentId()))
                 .orElseThrow(() -> new ResourceNotFoundException("appointment.notFound", request.getAppointmentId()));
 
         // Validate hospital scope

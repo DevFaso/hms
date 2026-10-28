@@ -474,39 +474,19 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         if (reason.isEmpty()) {
             throw new BusinessException("billing.adjustment.reasonRequired");
         }
-        InvoiceItem line = null;
-        BigDecimal amount = request.getAmount();
         boolean creditNote = request.getType() == com.example.hms.enums.InvoiceAdjustmentType.CREDIT_NOTE;
         if (creditNote && request.getInvoiceItemId() == null) {
             throw new BusinessException("billing.adjustment.lineRequired");
         }
-        BigDecimal total = invoice.getTotalAmount() != null ? invoice.getTotalAmount() : BigDecimal.ZERO;
+        BigDecimal total = nz(invoice.getTotalAmount());
+        BigDecimal paid = nz(invoice.getAmountPaid());
+        BigDecimal pending = nz(paymentTransactionRepository.sumAmountByInvoiceAndStatus(invoice.getId(),
+            PaymentStatus.PENDING));
         // A discount or a waiver may name a line too: it is then held against that line.
-        if (request.getInvoiceItemId() != null) {
-            line = invoiceItemRepository.findById(request.getInvoiceItemId())
-                .filter(item -> item.getBillingInvoice() != null && invoiceId.equals(item.getBillingInvoice().getId()))
-                .orElseThrow(() -> new BusinessException("billing.adjustment.lineNotOnInvoice"));
-            BigDecimal lineTotal = line.getTotalPrice() != null ? line.getTotalPrice() : BigDecimal.ZERO;
-            BigDecimal credited = adjustmentRepository.sumByInvoiceItemId(line.getId());
-            BigDecimal left = lineTotal.subtract(credited != null ? credited : BigDecimal.ZERO);
-            if (left.signum() <= 0) {
-                throw new BusinessException("billing.adjustment.lineFullyCredited");
-            }
-            if (amount == null && creditNote) {
-                BigDecimal alreadyPaid = invoice.getAmountPaid() != null ? invoice.getAmountPaid() : BigDecimal.ZERO;
-                BigDecimal declared = paymentTransactionRepository.sumAmountByInvoiceAndStatus(invoice.getId(),
-                    PaymentStatus.PENDING);
-                BigDecimal room = total.subtract(alreadyPaid).subtract(declared != null ? declared : BigDecimal.ZERO);
-                if (left.compareTo(room) > 0) {
-                    throw new BusinessException("billing.adjustment.creditBeyondUnpaid",
-                        formatFrancs(room.max(BigDecimal.ZERO), locale));
-                }
-                amount = left;
-            }
-            if (amount != null && amount.compareTo(left) > 0) {
-                throw new BusinessException("billing.adjustment.moreThanLine", formatFrancs(left, locale));
-            }
-        }
+        InvoiceItem line = request.getInvoiceItemId() != null ? lineOf(invoice, request.getInvoiceItemId()) : null;
+        BigDecimal amount = line != null
+            ? amountAgainstLine(line, request.getAmount(), creditNote, total.subtract(paid).subtract(pending), locale)
+            : request.getAmount();
         if (amount == null || amount.signum() <= 0) {
             throw new BusinessException("billing.adjustment.amountPositive");
         }
@@ -515,19 +495,8 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         if (amount.compareTo(total) > 0) {
             throw new BusinessException("billing.adjustment.moreThanTotal", formatFrancs(total, locale));
         }
-        BigDecimal paid = invoice.getAmountPaid() != null ? invoice.getAmountPaid() : BigDecimal.ZERO;
         BigDecimal newTotal = total.subtract(amount);
-        // Money already received is never written off silently: reverse the payment first.
-        if (newTotal.compareTo(paid) < 0) {
-            throw new BusinessException("billing.adjustment.belowPaid");
-        }
-        // QA D724: nor is a payment the patient declared and the cashier has not
-        // confirmed yet; lowering the total under it would orphan that payment.
-        BigDecimal pending = paymentTransactionRepository.sumAmountByInvoiceAndStatus(invoice.getId(),
-            PaymentStatus.PENDING);
-        if (pending != null && newTotal.compareTo(paid.add(pending)) < 0) {
-            throw new BusinessException("billing.adjustment.belowPending");
-        }
+        requireRoomUnderPayments(newTotal, paid, pending);
         adjustmentRepository.save(com.example.hms.model.InvoiceAdjustment.builder()
             .invoice(invoice)
             .invoiceItem(line)
@@ -543,8 +512,61 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             invoice.setStatus(InvoiceStatus.PARTIALLY_PAID);
         }
         BillingInvoice saved = invoiceRepository.save(invoice);
-        auditAdjustmentAfterCommit(staffId, saved, request.getType(), amount);
+        // QA D936: like a payment (D272), an adjustment is a moment the copay paid at
+        // check-in after the invoice was issued is taken, when it still fits what is owed.
+        creditCheckInCopays(saved);
+        auditAdjustmentAfterCommit(staffId, saved, request.getType());
         return toPortalResponse(saved);
+    }
+
+    private static BigDecimal nz(BigDecimal value) {
+        return value != null ? value : BigDecimal.ZERO;
+    }
+
+    /** The line the adjustment names; it must be a line of this invoice. */
+    private InvoiceItem lineOf(BillingInvoice invoice, UUID itemId) {
+        return invoiceItemRepository.findById(itemId)
+            .filter(item -> item.getBillingInvoice() != null && invoice.getId().equals(item.getBillingInvoice().getId()))
+            .orElseThrow(() -> new BusinessException("billing.adjustment.lineNotOnInvoice"));
+    }
+
+    /**
+     * What a line-bound adjustment takes off the line: never more than is left
+     * on it; a credit note with no amount takes all that is left, and says how
+     * much could be credited when a payment would have to be reversed first.
+     */
+    private BigDecimal amountAgainstLine(InvoiceItem line, BigDecimal requested, boolean creditNote,
+                                         BigDecimal room, Locale locale) {
+        BigDecimal left = nz(line.getTotalPrice()).subtract(nz(adjustmentRepository.sumByInvoiceItemId(line.getId())));
+        if (left.signum() <= 0) {
+            throw new BusinessException("billing.adjustment.lineFullyCredited");
+        }
+        BigDecimal amount = requested;
+        if (amount == null && creditNote) {
+            if (left.compareTo(room) > 0) {
+                throw new BusinessException("billing.adjustment.creditBeyondUnpaid",
+                    formatFrancs(room.max(BigDecimal.ZERO), locale));
+            }
+            amount = left;
+        }
+        if (amount != null && amount.compareTo(left) > 0) {
+            throw new BusinessException("billing.adjustment.moreThanLine", formatFrancs(left, locale));
+        }
+        return amount;
+    }
+
+    /**
+     * Money already received is never written off silently (reverse the payment
+     * first), nor is a payment the patient declared and the cashier has not
+     * confirmed yet (QA D724: lowering the total under it would orphan it).
+     */
+    private static void requireRoomUnderPayments(BigDecimal newTotal, BigDecimal paid, BigDecimal pending) {
+        if (newTotal.compareTo(paid) < 0) {
+            throw new BusinessException("billing.adjustment.belowPaid");
+        }
+        if (newTotal.compareTo(paid.add(pending)) < 0) {
+            throw new BusinessException("billing.adjustment.belowPending");
+        }
     }
 
     @Override
@@ -573,7 +595,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
 
     /** QA D974: who lowered which invoice and how (ids and the kind only, as the payment audit: no amount, no reason text). */
     private void auditAdjustmentAfterCommit(UUID actorId, BillingInvoice invoice,
-                                            com.example.hms.enums.InvoiceAdjustmentType type, BigDecimal amount) {
+                                            com.example.hms.enums.InvoiceAdjustmentType type) {
         if (auditEventLogService == null) {
             return;
         }
@@ -920,7 +942,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             }
             return requested;
         }
-        if (hasPayments || current == InvoiceStatus.PAID || current == InvoiceStatus.PARTIALLY_PAID) {
+        if (hasPayments || current == InvoiceStatus.PARTIALLY_PAID) {
             throw new BusinessException("billing.invoice.statusLockedByPayments");
         }
         return requested;

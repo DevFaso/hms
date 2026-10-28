@@ -2579,9 +2579,10 @@ public class PatientServiceImpl implements PatientService {
         }
         summary.append(": ").append(result.getResultValue());
         // QA D958: the unit of the result, else the test's own unit.
-        String unit = result.getResultUnit() != null && !result.getResultUnit().isBlank()
-            ? result.getResultUnit()
-            : (test != null ? test.getUnit() : null);
+        String unit = result.getResultUnit();
+        if ((unit == null || unit.isBlank()) && test != null) {
+            unit = test.getUnit();
+        }
         if (unit != null && !unit.isBlank()) {
             summary.append(" ").append(unit);
         }

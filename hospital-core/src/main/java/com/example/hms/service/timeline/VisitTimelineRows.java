@@ -89,6 +89,8 @@ public class VisitTimelineRows {
                 .forEach(encounter -> visitsHere.put(encounter.getId(), encounter));
         }
         if (wanted(categoryFilters, CATEGORY_DIAGNOSIS)) {
+            // Every diagnosis, with its status: a removed one reads "(Inactif)", as on
+            // the chart's history; a clinician may also set INACTIVE, so it is not hidden.
             problemRepository.findByPatient_IdAndHospital_Id(patientId, actingHospitalId)
                 .forEach(problem -> rows.add(diagnosisRow(problem, actingHospitalId)));
         }
@@ -126,12 +128,14 @@ public class VisitTimelineRows {
         putIfNotNull(metadata, "code", problem.getProblemCode());
         putIfNotNull(metadata, META_CLINICIAN, staffName(problem.getRecordedBy()));
         String what = joinCodeAndName(problem.getProblemCode(), problem.getProblemDisplay());
-        String summary = MessageUtil.resolveOrRaw("timeline.diagnosis.summary",
-            what != null ? what : MessageUtil.resolveOrRaw("timeline.category.DIAGNOSIS"),
-            statusLabel(problem.getStatus() != null ? problem.getStatus().name() : null));
+        String label = what != null ? what : MessageUtil.resolveOrRaw("timeline.category.DIAGNOSIS");
+        String status = statusLabel(problem.getStatus() != null ? problem.getStatus().name() : null);
+        String summary = status.isEmpty() ? label : MessageUtil.resolveOrRaw("timeline.diagnosis.summary", label, status);
         return row(problem.getId(), CATEGORY_DIAGNOSIS,
-            coalesce(problem.getCreatedAt(), atStartOfDay(problem.getOnsetDate())), summary,
-            sensitivityClassifier.effectiveCategory(problem) != null, metadata, problem.getHospital(), acting);
+            coalesce(problem.getCreatedAt(), atStartOfDay(problem.getOnsetDate())),
+            summary,
+            sensitivityClassifier.effectiveCategory(problem) != null,
+            provenance(metadata, problem.getHospital(), acting));
     }
 
     private PatientTimelineEntryDTO labOrderRow(LabOrder order, UUID acting) {
@@ -144,8 +148,11 @@ public class VisitTimelineRows {
             : null;
         String summary = MessageUtil.resolveOrRaw("timeline.labOrder.summary",
             test != null ? test : MessageUtil.resolveOrRaw("timeline.category.LAB_ORDER"));
-        return row(order.getId(), CATEGORY_LAB_ORDER, order.getOrderDatetime(), summary, sensitive(order.getEncounter()),
-            metadata, order.getHospital(), acting);
+        return row(order.getId(), CATEGORY_LAB_ORDER,
+            order.getOrderDatetime(),
+            summary,
+            sensitive(order.getEncounter()),
+            provenance(metadata, order.getHospital(), acting));
     }
 
     private PatientTimelineEntryDTO imagingOrderRow(ImagingOrder order, UUID acting, Encounter visit) {
@@ -158,8 +165,11 @@ public class VisitTimelineRows {
         String summary = MessageUtil.resolveOrRaw("timeline.imagingOrder.summary",
             what != null ? what : MessageUtil.resolveOrRaw("timeline.category.IMAGING"),
             order.getStatus() != null ? label(order.getStatus()) : "");
-        return row(order.getId(), CATEGORY_IMAGING, order.getOrderedAt(), summary, sensitive(visit), metadata,
-            order.getHospital(), acting);
+        return row(order.getId(), CATEGORY_IMAGING,
+            order.getOrderedAt(),
+            summary,
+            sensitive(visit),
+            provenance(metadata, order.getHospital(), acting));
     }
 
     private PatientTimelineEntryDTO noteRow(EncounterNote note, UUID acting) {
@@ -174,8 +184,11 @@ public class VisitTimelineRows {
         if (plan != null) {
             summary.append(" · ").append(MessageUtil.resolveOrRaw("timeline.note.plan", plan));
         }
-        return row(note.getId(), CATEGORY_NOTE, note.getSignedAt(), summary.toString(), sensitive(note.getEncounter()),
-            metadata, note.getHospital(), acting);
+        return row(note.getId(), CATEGORY_NOTE,
+            note.getSignedAt(),
+            summary.toString(),
+            sensitive(note.getEncounter()),
+            provenance(metadata, note.getHospital(), acting));
     }
 
     private PatientTimelineEntryDTO referralRow(GeneralReferral referral, UUID acting) {
@@ -198,8 +211,10 @@ public class VisitTimelineRows {
             || sensitivityClassifier.effectiveCategory(null, referral.getTargetDepartment()) != null
             || sensitivityClassifier.effectiveCategory(null, referral.getSourceDepartment()) != null;
         return row(referral.getId(), CATEGORY_REFERRAL,
-            coalesce(referral.getSubmittedAt(), referral.getCreatedAt()), summary, sensitive, metadata,
-            referral.getHospital(), acting);
+            coalesce(referral.getSubmittedAt(), referral.getCreatedAt()),
+            summary,
+            sensitive,
+            provenance(metadata, referral.getHospital(), acting));
     }
 
     /** A row written in a sensitive visit is sensitive (the timeline hides it unless asked). */
@@ -207,14 +222,18 @@ public class VisitTimelineRows {
         return visit != null && sensitivityClassifier.effectiveCategory(visit) != null;
     }
 
-    private static PatientTimelineEntryDTO row(UUID id, String category, LocalDateTime when, String summary,
-                                               boolean sensitive, Map<String, Object> metadata,
-                                               Hospital hospital, UUID acting) {
+    /** The row's provenance, as PatientServiceImpl.stampProvenance writes it for the shared rows. */
+    private static Map<String, Object> provenance(Map<String, Object> metadata, Hospital hospital, UUID acting) {
         if (hospital != null && hospital.getId() != null) {
             metadata.put("sourceHospitalId", hospital.getId().toString());
             putIfNotNull(metadata, "sourceHospitalName", hospital.getName());
             metadata.put("foreign", !hospital.getId().equals(acting));
         }
+        return metadata;
+    }
+
+    private static PatientTimelineEntryDTO row(UUID id, String category, LocalDateTime when, String summary,
+                                               boolean sensitive, Map<String, Object> metadata) {
         return PatientTimelineEntryDTO.builder()
             .entryId(id != null ? id.toString() : null)
             .category(category)

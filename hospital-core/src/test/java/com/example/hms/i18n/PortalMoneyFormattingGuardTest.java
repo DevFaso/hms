@@ -30,7 +30,7 @@ class PortalMoneyFormattingGuardTest {
 
     /** A money-like expression piped through a generic number or currency pipe. */
     private static final Pattern MONEY_THROUGH_NUMBER = Pattern.compile(
-        "(?i)(amount|balance|price|total|cost|paid|due|fee|copay|charge)\\w*\\s*\\)?\\s*\\|\\s*(number|decimal|currency)\\b");
+        "(?i)(amount|balance|price|total|cost|paid|due|fee|copay|charge)\\w*+\\s*+\\)?+\\s*+\\|\\s*+(number|decimal|currency)\\b");
 
     /** A component's own Intl currency formatter (formatCfa is the one place that may). */
     private static final Pattern OWN_CURRENCY_FORMAT = Pattern.compile("style:\\s*'currency'");

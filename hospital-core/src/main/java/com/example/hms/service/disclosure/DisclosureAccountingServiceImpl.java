@@ -77,7 +77,7 @@ public class DisclosureAccountingServiceImpl implements DisclosureAccountingServ
                                                               LocalDateTime to, Pageable pageable) {
         Set<AuditEventType> accountable = DisclosureCategory.accountableEventTypes();
         Map<DisclosureCategory, Long> counts = countByCategory(patientId, accountable, from, to);
-        Page<AccessLogEntryDTO> folded = getEntriesAsPatientSees(patientId, from, to, pageable);
+        Page<AccessLogEntryDTO> folded = foldedEntries(patientId, accountable, from, to, pageable);
         return DisclosureAccountingDTO.builder()
             .from(from)
             .to(to)
@@ -97,19 +97,24 @@ public class DisclosureAccountingServiceImpl implements DisclosureAccountingServ
     @Transactional(readOnly = true)
     public Page<AccessLogEntryDTO> getEntriesAsPatientSees(UUID patientId, LocalDateTime from,
                                                            LocalDateTime to, Pageable pageable) {
-        // Folded over the most recent rows first, then paged: a repeat across a
-        // page boundary still shows once, and the pager counts the lines shown.
-        // The fold window is the most recent rows whatever sort the client asks for
-        // (the query orders newest first); the patient's list has one order.
-        org.springframework.data.domain.Sort sort = org.springframework.data.domain.Sort.unsorted();
+        return foldedEntries(patientId, DisclosureCategory.accountableEventTypes(), from, to, pageable);
+    }
+
+    /**
+     * The patient's list: the most recent rows folded (whatever sort the client
+     * asks for: the query orders newest first, and the list has one order),
+     * then paged with the folded totals, so a repeat across a page boundary
+     * shows once. A record read more than {@link #PATIENT_FOLD_WINDOW} times:
+     * the older rows follow as they are, read a window-sized page at a time.
+     */
+    private Page<AccessLogEntryDTO> foldedEntries(UUID patientId, Set<AuditEventType> accountable,
+                                                  LocalDateTime from, LocalDateTime to, Pageable pageable) {
         if (pageable.isUnpaged()) {
             return new org.springframework.data.domain.PageImpl<>(
-                foldRepeats(getEntries(patientId, from, to, pageable).getContent()));
+                foldRepeats(queryEntries(patientId, accountable, from, to, pageable).getContent()));
         }
-        Page<AccessLogEntryDTO> window = getEntries(patientId, from, to,
-            org.springframework.data.domain.PageRequest.of(0, PATIENT_FOLD_WINDOW, sort));
+        Page<AccessLogEntryDTO> window = queryEntries(patientId, accountable, from, to, windowPage(0));
         List<AccessLogEntryDTO> lines = foldRepeats(window.getContent());
-        // A record read more than PATIENT_FOLD_WINDOW times: the older rows follow, as they are.
         long older = Math.max(0, window.getTotalElements() - window.getContent().size());
         long total = lines.size() + older;
         long start = (long) pageable.getPageNumber() * pageable.getPageSize();
@@ -119,22 +124,32 @@ public class DisclosureAccountingServiceImpl implements DisclosureAccountingServ
             content.add(lines.get((int) i));
         }
         if (end > lines.size()) {
-            // Older rows [from, to) in audit order, read a window-sized page at a time.
-            long fromRow = PATIENT_FOLD_WINDOW + Math.max(0, start - lines.size());
-            long toRow = PATIENT_FOLD_WINDOW + (end - lines.size());
-            for (long pageIndex = fromRow / PATIENT_FOLD_WINDOW; pageIndex * PATIENT_FOLD_WINDOW < toRow; pageIndex++) {
-                List<AccessLogEntryDTO> rows = getEntries(patientId, from, to,
-                    org.springframework.data.domain.PageRequest.of((int) pageIndex, PATIENT_FOLD_WINDOW, sort)).getContent();
-                long base = pageIndex * PATIENT_FOLD_WINDOW;
-                for (int k = 0; k < rows.size(); k++) {
-                    long row = base + k;
-                    if (row >= fromRow && row < toRow) {
-                        content.add(rows.get(k));
-                    }
+            content.addAll(olderRows(patientId, accountable, from, to,
+                PATIENT_FOLD_WINDOW + Math.max(0, start - lines.size()), PATIENT_FOLD_WINDOW + (end - lines.size())));
+        }
+        return new org.springframework.data.domain.PageImpl<>(content, pageable, total);
+    }
+
+    /** Audit rows [fromRow, toRow) past the fold window, in audit order, a window-sized page at a time. */
+    private List<AccessLogEntryDTO> olderRows(UUID patientId, Set<AuditEventType> accountable,
+                                              LocalDateTime from, LocalDateTime to, long fromRow, long toRow) {
+        List<AccessLogEntryDTO> rows = new java.util.ArrayList<>();
+        for (long pageIndex = fromRow / PATIENT_FOLD_WINDOW; pageIndex * PATIENT_FOLD_WINDOW < toRow; pageIndex++) {
+            List<AccessLogEntryDTO> page = queryEntries(patientId, accountable, from, to,
+                windowPage((int) pageIndex)).getContent();
+            long base = pageIndex * PATIENT_FOLD_WINDOW;
+            for (int k = 0; k < page.size(); k++) {
+                long row = base + k;
+                if (row >= fromRow && row < toRow) {
+                    rows.add(page.get(k));
                 }
             }
         }
-        return new org.springframework.data.domain.PageImpl<>(content, pageable, total);
+        return rows;
+    }
+
+    private static Pageable windowPage(int index) {
+        return org.springframework.data.domain.PageRequest.of(index, PATIENT_FOLD_WINDOW);
     }
 
     /** QA D979: the most recent audit rows folded for the patient's list (older ones are in the staff accounting). */
@@ -159,21 +174,31 @@ public class DisclosureAccountingServiceImpl implements DisclosureAccountingServ
         List<AccessLogEntryDTO> kept = new java.util.ArrayList<>(entries.size());
         Map<String, LocalDateTime> lastKept = new java.util.HashMap<>();
         for (AccessLogEntryDTO entry : entries) {
-            if (entry.getCategory() == null || !FOLDABLE.contains(entry.getCategory()) || entry.getTimestamp() == null) {
-                kept.add(entry);
-                continue;
+            String key = foldKey(entry);
+            if (key != null) {
+                LocalDateTime previous = lastKept.get(key);
+                if (previous != null && withinRepeatWindow(entry.getTimestamp(), previous)) {
+                    continue;
+                }
+                lastKept.put(key, entry.getTimestamp());
             }
-            String key = entry.getCategory() + "|" + entry.getActor() + "|" + entry.getHospitalName()
-                + "|" + entry.getDescription();
-            LocalDateTime previous = lastKept.get(key);
-            if (previous != null
-                    && java.time.Duration.between(entry.getTimestamp(), previous).abs().compareTo(REPEAT_WINDOW) <= 0) {
-                continue;
-            }
-            lastKept.put(key, entry.getTimestamp());
             kept.add(entry);
         }
         return kept;
+    }
+
+    /** What a repeat is a repeat of; null for a row that is never folded. */
+    private static String foldKey(AccessLogEntryDTO entry) {
+        if (entry.getCategory() == null || !FOLDABLE.contains(entry.getCategory()) || entry.getTimestamp() == null) {
+            return null;
+        }
+        return entry.getCategory() + "|" + entry.getActor() + "|" + entry.getHospitalName() + "|" + entry.getDescription();
+    }
+
+    /** Audit timestamps are UTC wall-clock values; compared as such. */
+    private static boolean withinRepeatWindow(LocalDateTime a, LocalDateTime b) {
+        return java.time.Duration.between(a.atOffset(java.time.ZoneOffset.UTC), b.atOffset(java.time.ZoneOffset.UTC))
+            .abs().compareTo(REPEAT_WINDOW) <= 0;
     }
 
     /**

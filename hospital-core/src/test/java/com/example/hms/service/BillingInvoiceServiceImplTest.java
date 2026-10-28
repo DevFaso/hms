@@ -2222,6 +2222,21 @@ class BillingInvoiceServiceImplTest {
     }
 
     @Test
+    void addAdjustment_aLowerTotalTakesTheVisitsCopay_D936() {
+        adjustments();
+        BillingInvoice invoice = issued("10000", "0");
+        com.example.hms.model.Encounter visit = new com.example.hms.model.Encounter();
+        visit.setId(UUID.randomUUID());
+        invoice.setEncounter(visit);
+
+        billingInvoiceService.addAdjustment(invoice.getId(),
+            adjustment(com.example.hms.enums.InvoiceAdjustmentType.DISCOUNT, "4000", "Remise", null),
+            UUID.randomUUID(), Locale.FRENCH);
+
+        verify(invoiceRepository).findByEncounter_IdAndCheckInCopayTrueAndStatus(visit.getId(), InvoiceStatus.PAID);
+    }
+
+    @Test
     void addAdjustment_aLineDiscountWithoutAnAmountIsRefusedNot500_D974() {
         adjustments();
         BillingInvoice invoice = issued("6000", "0");

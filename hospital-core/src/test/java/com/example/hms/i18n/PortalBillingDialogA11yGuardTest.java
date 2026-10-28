@@ -33,9 +33,9 @@ class PortalBillingDialogA11yGuardTest {
     /** A backdrop or overlay that holds a dialog box. */
     private static final Pattern OVERLAY = Pattern.compile(
         "class=\"[^\"]*\\b(modal-backdrop|booking-overlay|pre-checkin-overlay|pay-overlay|detail-overlay)\\b");
-    private static final Pattern BUTTON = Pattern.compile("<button\\b([^>]*)>(.*?)</button>", Pattern.DOTALL);
-    private static final Pattern ICON = Pattern.compile(
-        "<span[^>]*material-symbols[^>]*>.*?</span>", Pattern.DOTALL);
+    private static final Pattern BUTTON = Pattern.compile("<button\\b([^>]*+)>(.*?)</button>", Pattern.DOTALL);
+    /** A span with only text inside: an icon ligature when its tag names material-symbols. */
+    private static final Pattern TEXT_SPAN = Pattern.compile("<span\\b([^>]*+)>[^<]*+</span>");
 
     private static List<Path> templates() throws IOException {
         List<Path> out = new ArrayList<>();
@@ -81,7 +81,9 @@ class PortalBillingDialogA11yGuardTest {
             Matcher m = BUTTON.matcher(html);
             while (m.find()) {
                 String attrs = m.group(1);
-                String text = ICON.matcher(m.group(2)).replaceAll("").replaceAll("<[^>]+>", "").trim();
+                String text = TEXT_SPAN.matcher(m.group(2))
+                    .replaceAll(span -> span.group(1).contains("material-symbols") ? "" : Matcher.quoteReplacement(span.group()))
+                    .replaceAll("<[^>]++>", "").trim();
                 if (text.isEmpty() && !attrs.contains("aria-label")) {
                     int line = html.substring(0, m.start()).split("\n", -1).length;
                     offenders.add(APP.relativize(file) + ":" + line);

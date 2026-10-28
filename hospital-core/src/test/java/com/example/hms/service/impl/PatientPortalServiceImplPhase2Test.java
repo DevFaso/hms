@@ -1992,4 +1992,23 @@ class PatientPortalServiceImplPhase2Test {
             assertThat(result).isEmpty();
         }
     }
+
+    @Nested
+    @DisplayName("portal invoice detail (QA D982)")
+    class PortalInvoiceDetail {
+        @Test
+        void theDetailThePdfAndTheReceiptAreThePatientsOwn() {
+            stubPatientResolution();
+            UUID invoiceId = UUID.randomUUID();
+            UUID paymentId = UUID.randomUUID();
+
+            service.getMyInvoiceDetail(auth, invoiceId);
+            service.getMyInvoicePdf(auth, invoiceId, java.util.Locale.FRENCH);
+            service.getMyReceiptPdf(auth, invoiceId, paymentId, java.util.Locale.FRENCH);
+
+            verify(billingInvoiceService).getPortalInvoiceDetail(invoiceId, patientId);
+            verify(billingInvoiceService).getPortalInvoicePdf(invoiceId, patientId, java.util.Locale.FRENCH);
+            verify(billingInvoiceService).getPortalReceiptPdf(invoiceId, paymentId, patientId, java.util.Locale.FRENCH);
+        }
+    }
 }
