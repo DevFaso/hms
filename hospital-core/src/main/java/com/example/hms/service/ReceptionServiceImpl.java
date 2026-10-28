@@ -2,6 +2,7 @@ package com.example.hms.service;
 
 import com.example.hms.service.i18n.NotificationText;
 import com.example.hms.utility.ElapsedTime;
+import com.example.hms.utility.PatientMatchKeys;
 import com.example.hms.enums.AppointmentStatus;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
@@ -452,13 +453,24 @@ public class ReceptionServiceImpl implements ReceptionService {
                         ? walkIn.getStaff().getUser().getFirstName() + " " + walkIn.getStaff().getUser().getLastName()
                         : null)
                 .departmentName(walkIn.getDepartment() != null ? walkIn.getDepartment().getName() : null)
-                .appointmentReason(notBlank(walkIn.getChiefComplaint()) ? walkIn.getChiefComplaint() : "Walk-in")
+                .appointmentReason(walkInReason(walkIn))
                 .status(computedStatus)
                 .waitMinutes(waitMins)
                 .encounterId(walkIn.getId())
                 .hasInsuranceIssue(walkInHospitalId != null && detectInsuranceIssue(p.getId(), walkInHospitalId))
                 .hasOutstandingBalance(walkInHospitalId != null && detectOutstandingBalance(p.getId(), walkInHospitalId))
                 .build();
+    }
+
+    /**
+     * QA D944: a walk-in's reason is its chief complaint, else the notes the
+     * desk typed (walk-ins registered before the chief complaint was sent),
+     * else nothing: the queue shows its own translated placeholder. It used to
+     * be the English literal "Walk-in" in every language.
+     */
+    static String walkInReason(Encounter walkIn) {
+        if (notBlank(walkIn.getChiefComplaint())) return walkIn.getChiefComplaint();
+        return notBlank(walkIn.getNotes()) ? walkIn.getNotes() : null;
     }
 
     /** QA D239: the booked reason, else the chief complaint triage recorded, else the booking notes. */
@@ -574,20 +586,38 @@ public class ReceptionServiceImpl implements ReceptionService {
 
     // ── MVP 11: Duplicate Candidate Detection ─────────────────────────────────
 
+    /**
+     * QA D924: the phone number used to be ANDed with the name and the date of
+     * birth, and the phone is mandatory on the form, so only a patient with the
+     * same number was ever offered, and a second chart was created for
+     * everyone else. Candidates are now the patients matching the name and
+     * date of birth OR the same subscriber number, all folded by
+     * {@link PatientMatchKeys} (accents, phone formatting); the phone only adds
+     * to the score.
+     */
     @Override
     public List<DuplicateCandidateDTO> getDuplicateCandidates(String name, String dob, String phone,
                                                                UUID hospitalId) {
-        String namePattern = (name != null && !name.isBlank())
-                ? "%" + name.trim().toLowerCase() + "%" : null;
-        String phonePattern = (phone != null && !phone.isBlank())
-                ? "%" + phone.trim() + "%" : null;
-        List<Patient> candidates = patientRepo.searchPatientsExtended(
-                null, namePattern, dob, phonePattern, null, hospitalId, true,
-                PageRequest.of(0, 20)).getContent();
+        String namePattern = PatientMatchKeys.nameContainsPattern(name);
+        String dobValue = (dob != null && !dob.isBlank()) ? dob.trim() : null;
+        Map<UUID, Patient> candidates = new java.util.LinkedHashMap<>();
+        if (namePattern != null || dobValue != null) {
+            patientRepo.searchPatientsExtended(
+                    null, namePattern, dobValue, null, null, hospitalId, true,
+                    PageRequest.of(0, 20)).getContent()
+                .forEach(p -> candidates.putIfAbsent(p.getId(), p));
+        }
+        String phoneKey = PatientMatchKeys.phoneKey(phone);
+        if (PatientMatchKeys.isSubscriberKey(phoneKey)) {
+            patientRepo.findAllByPhoneSubscriber("%" + phoneKey).stream()
+                .filter(Patient::isActive)
+                .filter(p -> registeredAt(p, hospitalId))
+                .forEach(p -> candidates.putIfAbsent(p.getId(), p));
+        }
 
-        return candidates.stream()
+        return candidates.values().stream()
                 .map(p -> {
-                    int score = computeConfidenceScore(p, name, dob, phone);
+                    int score = computeConfidenceScore(p, name, dobValue, phone);
                     String mrn = p.getHospitalRegistrations().stream()
                             .filter(r -> r.getHospital() != null && hospitalId.equals(r.getHospital().getId()))
                             .map(PatientHospitalRegistration::getMrn)
@@ -607,18 +637,29 @@ public class ReceptionServiceImpl implements ReceptionService {
                 .toList();
     }
 
+    private static boolean registeredAt(Patient patient, UUID hospitalId) {
+        return hospitalId == null || (patient.getHospitalRegistrations() != null
+            && patient.getHospitalRegistrations().stream()
+                .anyMatch(r -> r.isActive() && r.getHospital() != null && hospitalId.equals(r.getHospital().getId())));
+    }
+
+    /**
+     * Name 50 (accents and word order ignored), date of birth 30, same
+     * subscriber number 20. A shared family phone alone (20) is not a
+     * duplicate; the same name and birth date (80) is one whatever the phone.
+     */
     private int computeConfidenceScore(Patient p, String name, String dob, String phone) {
         int score = 0;
-        if (name != null && !name.isBlank()) {
-            String fullName = (p.getFirstName() + " " + p.getLastName()).toLowerCase();
-            if (fullName.contains(name.trim().toLowerCase())) score += 50;
+        if (name != null && !name.isBlank()
+                && (PatientMatchKeys.nameContains(p.getFirstName() + " " + p.getLastName(), name)
+                    || PatientMatchKeys.nameContains(p.getLastName() + " " + p.getFirstName(), name))) {
+            score += 50;
         }
-        if (dob != null && !dob.isBlank() && p.getDateOfBirth() != null
-                && p.getDateOfBirth().toString().equals(dob)) {
+        if (dob != null && p.getDateOfBirth() != null && p.getDateOfBirth().toString().equals(dob)) {
             score += 30;
         }
-        if (phone != null && !phone.isBlank() && p.getPhoneNumberPrimary() != null
-                && p.getPhoneNumberPrimary().contains(phone.trim())) {
+        if (PatientMatchKeys.samePhone(p.getPhoneNumberPrimary(), phone)
+                || PatientMatchKeys.samePhone(p.getPhoneNumberSecondary(), phone)) {
             score += 20;
         }
         return Math.min(score, 100);

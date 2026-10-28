@@ -417,7 +417,23 @@ class ReceptionServiceImplTest {
             List<ReceptionQueueItemDTO> result = service.getQueue(today, hospitalId, null, null, null);
 
             assertThat(result).hasSize(1);
-            assertThat(result.get(0).getAppointmentReason()).isEqualTo("Walk-in");
+            // QA D944: no English "Walk-in" placeholder; the queue renders its own.
+            assertThat(result.get(0).getAppointmentReason()).isNull();
+        }
+
+        @Test
+        @DisplayName("QA D944: a walk-in's reason is its chief complaint, else the notes the desk typed")
+        void walkInReasonIsTheComplaintTyped() {
+            Encounter withComplaint = new Encounter();
+            withComplaint.setChiefComplaint("Fièvre depuis 2 jours, toux");
+            withComplaint.setNotes("autre");
+            assertThat(ReceptionServiceImpl.walkInReason(withComplaint)).isEqualTo("Fièvre depuis 2 jours, toux");
+
+            Encounter legacy = new Encounter();
+            legacy.setNotes("Fièvre depuis 2 jours, toux");
+            assertThat(ReceptionServiceImpl.walkInReason(legacy)).isEqualTo("Fièvre depuis 2 jours, toux");
+
+            assertThat(ReceptionServiceImpl.walkInReason(new Encounter())).isNull();
         }
 
         @org.junit.jupiter.params.ParameterizedTest(name = "{0}")

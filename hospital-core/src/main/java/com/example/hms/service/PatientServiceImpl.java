@@ -87,7 +87,11 @@ import com.example.hms.repository.StaffRepository;
 import com.example.hms.repository.UltrasoundOrderRepository;
 import com.example.hms.repository.UltrasoundReportRepository;
 import com.example.hms.repository.UserRepository;
+import com.example.hms.security.SecurityUtils;
 import com.example.hms.utility.DiagnosisCodeValidator;
+import com.example.hms.utility.MessageUtil;
+import com.example.hms.utility.PatientMatchKeys;
+import com.example.hms.utility.PhoneNumbers;
 import com.example.hms.utility.RoleValidator;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
@@ -332,7 +336,9 @@ public class PatientServiceImpl implements PatientService {
         // QA D819: a staff account, or one that already logs in to another
         // record, is refused (409) instead of becoming this patient's login.
         accountLinkGuard.requireLinkable(user, null);
-        Patient patient = patientRepository.save(patientMapper.toPatient(dto, user));
+        Patient mapped = patientMapper.toPatient(dto, user);
+        normalizePhones(mapped, hospital);
+        Patient patient = patientRepository.save(mapped);
 
         // The record's active flag is its administrative soft-delete, not the
         // portal account's state: a patient whose account still waits for
@@ -408,6 +414,9 @@ public class PatientServiceImpl implements PatientService {
 
         PatientAddressHistoryRecorder.AddressSnapshot before = addressHistoryRecorder.snapshot(patient);
         patientMapper.updatePatientFromDto(dto, patient, user);
+        UUID phoneHospitalId = dto.getHospitalId() != null ? dto.getHospitalId() : patient.getHospitalId();
+        normalizePhones(patient, phoneHospitalId == null ? null
+            : hospitalRepository.findById(phoneHospitalId).orElse(null));
         addressHistoryRecorder.recordIfMoved(patient, before);
         Patient updatedPatient = patientRepository.save(patient);
 
@@ -429,11 +438,50 @@ public class PatientServiceImpl implements PatientService {
 
         boolean updated = false;
         PatientAddressHistoryRecorder.AddressSnapshot before = addressHistoryRecorder.snapshot(patient);
+        String callingCode = callingCodeFor(hospitalId != null ? hospitalId : patient.getHospitalId());
+        List<String> changedFields = new ArrayList<>();
 
-        updated |= applyNullable(request.getPhoneNumberPrimary(), patient::setPhoneNumberPrimary);
+        // QA D926: the identity the desk corrects. A required field sent blank
+        // is refused rather than cleared.
+        if (applyRequired(request.getFirstName(), patient::setFirstName, "patient.r16.firstNameRequired")) {
+            changedFields.add("firstName");
+        }
+        if (applyRequired(request.getLastName(), patient::setLastName, "patient.r16.lastNameRequired")) {
+            changedFields.add("lastName");
+        }
+        if (applyNullable(request.getMiddleName(), patient::setMiddleName)) {
+            changedFields.add("middleName");
+        }
+        if (request.getDateOfBirth() != null) {
+            patient.setDateOfBirth(request.getDateOfBirth());
+            changedFields.add("dateOfBirth");
+        }
+        if (applyRequired(request.getGender(), patient::setGender, "patient.r16.genderRequired")) {
+            changedFields.add("gender");
+        }
+        if (request.getPhoneNumberPrimary() != null) {
+            String phone = normalizePhone(request.getPhoneNumberPrimary(), callingCode);
+            if (phone == null) {
+                throw new BusinessException("patient.r16.phoneRequired");
+            }
+            requirePhoneFree(phone, patient.getId());
+            patient.setPhoneNumberPrimary(phone);
+            changedFields.add("phoneNumberPrimary");
+        }
+        if (request.getPhoneNumberSecondary() != null) {
+            patient.setPhoneNumberSecondary(normalizePhone(request.getPhoneNumberSecondary(), callingCode));
+            changedFields.add("phoneNumberSecondary");
+        }
+        if (request.getEmail() != null) {
+            String email = trimToNull(request.getEmail());
+            if (email != null && patientRepository.existsEmailOnOtherPatient(email, patient.getId())) {
+                throw new ConflictException(MessageUtil.resolve("patient.r16.emailTaken"));
+            }
+            patient.setEmail(email);
+            changedFields.add("email");
+        }
+        updated |= !changedFields.isEmpty();
         updated |= applyNullable(request.getEthnicity(), patient::setEthnicity);
-        updated |= applyNullable(request.getPhoneNumberSecondary(), patient::setPhoneNumberSecondary);
-        updated |= applyNullable(request.getEmail(), patient::setEmail);
 
         boolean addressTouched = false;
         addressTouched |= applyNullable(request.getAddressLine1(), patient::setAddressLine1);
@@ -456,8 +504,17 @@ public class PatientServiceImpl implements PatientService {
             addressHistoryRecorder.recordIfMoved(patient, before);
         }
 
-        updated |= applyNullable(request.getEmergencyContactName(), patient::setEmergencyContactName);
-        updated |= applyNullable(request.getEmergencyContactPhone(), patient::setEmergencyContactPhone);
+        if (applyNullable(request.getEmergencyContactName(), patient::setEmergencyContactName)) {
+            changedFields.add("emergencyContactName");
+        }
+        if (request.getEmergencyContactPhone() != null) {
+            patient.setEmergencyContactPhone(normalizePhone(request.getEmergencyContactPhone(), callingCode));
+            changedFields.add("emergencyContactPhone");
+        }
+        if (applyNullable(request.getEmergencyContactRelationship(), patient::setEmergencyContactRelationship)) {
+            changedFields.add("emergencyContactRelationship");
+        }
+        updated |= !changedFields.isEmpty();
         updated |= applyNullable(request.getPreferredPharmacy(), patient::setPreferredPharmacy);
         updated |= applyNullable(request.getCareTeamNotes(), patient::setCareTeamNotes);
 
@@ -468,9 +525,89 @@ public class PatientServiceImpl implements PatientService {
 
         if (updated) {
             patientRepository.save(patient);
+            if (!changedFields.isEmpty()) {
+                auditPatientUpdate(patient, changedFields);
+            }
         }
 
         return buildPatientDto(patient, patient.getHospitalId());
+    }
+
+    /** Sets a required text field when one was sent; a blank one is refused (QA D926). */
+    private boolean applyRequired(String value, Consumer<String> setter, String blankKey) {
+        if (value == null) {
+            return false;
+        }
+        String trimmed = trimToNull(value);
+        if (trimmed == null) {
+            throw new BusinessException(blankKey);
+        }
+        setter.accept(trimmed);
+        return true;
+    }
+
+    /**
+     * QA D942: a number as it is stored, E.164 when it is a valid number for
+     * the hospital's country ("70 00 10 02" becomes "+22670001002"), otherwise
+     * as typed, trimmed. {@code null} for a blank value.
+     */
+    private static String normalizePhone(String raw, String callingCode) {
+        String trimmed = trimToNull(raw);
+        if (trimmed == null) {
+            return null;
+        }
+        String e164 = PhoneNumbers.toE164(trimmed, callingCode);
+        return e164 != null ? e164 : trimmed;
+    }
+
+    /** The calling code of a hospital's country; Burkina Faso when unknown. */
+    private String callingCodeFor(UUID hospitalId) {
+        String country = hospitalId == null ? null
+            : hospitalRepository.findById(hospitalId).map(Hospital::getCountry).orElse(null);
+        return PhoneNumbers.callingCodeForCountry(country);
+    }
+
+    /** Stores every number of a new or edited record in its canonical form (QA D942). */
+    private static void normalizePhones(Patient patient, Hospital hospital) {
+        String callingCode = PhoneNumbers.callingCodeForCountry(hospital == null ? null : hospital.getCountry());
+        patient.setPhoneNumberPrimary(normalizePhone(patient.getPhoneNumberPrimary(), callingCode));
+        patient.setPhoneNumberSecondary(normalizePhone(patient.getPhoneNumberSecondary(), callingCode));
+        patient.setEmergencyContactPhone(normalizePhone(patient.getEmergencyContactPhone(), callingCode));
+    }
+
+    /**
+     * The primary number is unique: another record holding the same
+     * subscriber, however it was written, is a translated 409 instead of a
+     * constraint violation at commit.
+     */
+    private void requirePhoneFree(String phone, UUID patientId) {
+        boolean taken = findByPhone(phone).stream()
+            .anyMatch(other -> !other.getId().equals(patientId)
+                && PatientMatchKeys.samePhone(other.getPhoneNumberPrimary(), phone));
+        if (taken) {
+            throw new ConflictException(MessageUtil.resolve("patient.r16.phoneTaken"));
+        }
+    }
+
+    /**
+     * QA D926: a demographics correction is audited like every other patient
+     * write. The description names the fields changed, never their values.
+     */
+    private void auditPatientUpdate(Patient patient, List<String> changedFields) {
+        try {
+            auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                .eventType(AuditEventType.PATIENT_UPDATE)
+                .status(AuditStatus.SUCCESS)
+                .entityType("PATIENT")
+                .resourceId(patient.getId().toString())
+                .patientId(patient.getId())
+                .userId(roleValidator.getCurrentUserId())
+                .userName(SecurityUtils.getCurrentUsername())
+                .eventDescription("Patient demographics updated: " + String.join(", ", changedFields))
+                .build());
+        } catch (RuntimeException ex) {
+            log.warn("Failed to emit demographics audit for patient {}: {}", patient.getId(), ex.getMessage());
+        }
     }
 
     @Override
@@ -510,9 +647,10 @@ public class PatientServiceImpl implements PatientService {
     public List<PatientResponseDTO> searchPatients(PatientSearchCriteria criteria, int page, int size, Locale locale) {
         Pageable pageable = PageRequest.of(page, size);
         String mrn = trimToNull(criteria.getMrn());
-        String namePattern = buildLowercaseContainsPattern(criteria.getName());
+        // QA D942/D943: accents and phone formatting are folded on both sides.
+        String namePattern = PatientMatchKeys.nameContainsPattern(criteria.getName());
         String dob = trimToNull(criteria.getDateOfBirth());
-        String phonePattern = buildPhoneSearchPattern(criteria.getPhone());
+        String phonePattern = PatientMatchKeys.phoneContainsPattern(criteria.getPhone());
         String emailPattern = buildLowercaseContainsPattern(criteria.getEmail());
         UUID hospitalId = criteria.getHospitalId();
         Boolean activeFilter;
@@ -623,7 +761,9 @@ public class PatientServiceImpl implements PatientService {
         // typed fields thrown away: QA D725), is a 409. A second hospital links
         // the existing record through POST /registrations.
         accountLinkGuard.requireLinkable(user, null);
-        Patient patient = patientRepository.save(patientMapper.toPatient(dto, user));
+        Patient mapped = patientMapper.toPatient(dto, user);
+        normalizePhones(mapped, hospital);
+        Patient patient = patientRepository.save(mapped);
 
         // Phone-first: stamp the patient when the desk confirmed an SMS OTP for
         // this exact number. Single-use server-side check — a forged/mismatched
@@ -709,17 +849,13 @@ public class PatientServiceImpl implements PatientService {
         } else if (normUsername != null && !normUsername.isBlank()) {
             results = patientRepository.findByUserUsername(normUsername).map(List::of).orElse(List.of());
         } else if (normPhone != null && !normPhone.isBlank()) {
-            results = patientRepository.findByPhoneNumberPrimary(normPhone)
-                .map(List::of)
-                .or(() -> patientRepository.findByPhoneNumberSecondary(normPhone).map(List::of))
-                .orElse(List.of());
+            results = findByPhone(normPhone);
         } else if (normMrn != null && !normMrn.isBlank()) {
             results = patientRepository.findByMrn(normMrn);
         } else if (normIdentifier != null && !normIdentifier.isBlank()) {
-            Optional<Patient> phoneHit = patientRepository.findByPhoneNumberPrimary(normIdentifier)
-                .or(() -> patientRepository.findByPhoneNumberSecondary(normIdentifier));
-            if (phoneHit.isPresent()) {
-                results = List.of(phoneHit.get());
+            List<Patient> phoneHits = findByPhone(normIdentifier);
+            if (!phoneHits.isEmpty()) {
+                results = phoneHits;
             } else {
                 // Exact email match — see the email branch above for why no substring.
                 Optional<Patient> emailResult = patientRepository.findAllByEmailIgnoreCase(normIdentifier).stream().findFirst();
@@ -765,9 +901,7 @@ public class PatientServiceImpl implements PatientService {
         // LinkedHashMap keeps phone hits (the primary identifier in practice) ahead of email hits.
         Map<UUID, RegistrationMatchDTO> matches = new LinkedHashMap<>();
         if (normPhone != null && !normPhone.isBlank()) {
-            Stream.concat(
-                    patientRepository.findAllByPhoneNumberPrimary(normPhone).stream(),
-                    patientRepository.findAllByPhoneNumberSecondary(normPhone).stream())
+            findByPhone(normPhone)
                 .forEach(p -> matches.putIfAbsent(p.getId(), toRegistrationMatch(p, hospitalId, "PHONE")));
         }
         if (normEmail != null && !normEmail.isBlank()) {
@@ -775,6 +909,27 @@ public class PatientServiceImpl implements PatientService {
                 .forEach(p -> matches.putIfAbsent(p.getId(), toRegistrationMatch(p, hospitalId, "EMAIL")));
         }
         return List.copyOf(matches.values());
+    }
+
+    /**
+     * QA D942: the patients a typed number names, however either side was
+     * written ("+22670001002", "70 00 10 02", "70001002"). A number with all
+     * eight national digits matches on them; anything shorter is not specific
+     * enough to name a subscriber and only matches a number stored exactly so.
+     */
+    private List<Patient> findByPhone(String typed) {
+        String key = PatientMatchKeys.phoneKey(typed);
+        if (PatientMatchKeys.isSubscriberKey(key)) {
+            return patientRepository.findAllByPhoneSubscriber("%" + key);
+        }
+        String exact = typed == null ? null : typed.trim();
+        if (exact == null || exact.isEmpty()) {
+            return List.of();
+        }
+        return patientRepository.findByPhoneNumberPrimary(exact)
+            .or(() -> patientRepository.findByPhoneNumberSecondary(exact))
+            .map(List::of)
+            .orElse(List.of());
     }
 
     private RegistrationMatchDTO toRegistrationMatch(Patient patient, UUID hospitalId, String matchedOn) {
@@ -2780,13 +2935,6 @@ public class PatientServiceImpl implements PatientService {
         return "%" + escaped + "%";
     }
 
-    private static String buildPhoneSearchPattern(String input) {
-        String normalized = trimToNull(input);
-        if (normalized == null) {
-            return null;
-        }
-        return "%" + escapeLike(normalized) + "%";
-    }
 
     private static String escapeLike(String value) {
         return value

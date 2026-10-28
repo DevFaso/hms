@@ -1522,8 +1522,7 @@ class PatientServiceImplTest {
         otherHospital.setId(UUID.randomUUID());
         patient.getHospitalRegistrations().add(activeRegistrationAt(otherHospital));
 
-        when(patientRepository.findAllByPhoneNumberPrimary("+22670707070")).thenReturn(List.of(patient));
-        when(patientRepository.findAllByPhoneNumberSecondary("+22670707070")).thenReturn(List.of());
+        when(patientRepository.findAllByPhoneSubscriber("%70707070")).thenReturn(List.of(patient));
 
         var matches = patientService.findRegistrationMatches(null, "+22670707070", hospitalId);
 
@@ -1545,8 +1544,7 @@ class PatientServiceImplTest {
         patient.setPhoneNumberPrimary("+22670707070");
         patient.getHospitalRegistrations().add(activeRegistrationAt(hospital));
 
-        when(patientRepository.findAllByPhoneNumberPrimary("+22670707070")).thenReturn(List.of(patient));
-        when(patientRepository.findAllByPhoneNumberSecondary("+22670707070")).thenReturn(List.of());
+        when(patientRepository.findAllByPhoneSubscriber("%70707070")).thenReturn(List.of(patient));
 
         var matches = patientService.findRegistrationMatches(null, "+22670707070", hospitalId);
 
@@ -1563,8 +1561,7 @@ class PatientServiceImplTest {
         inactive.setActive(false);
         patient.getHospitalRegistrations().add(inactive);
 
-        when(patientRepository.findAllByPhoneNumberPrimary("+22670707070")).thenReturn(List.of(patient));
-        when(patientRepository.findAllByPhoneNumberSecondary("+22670707070")).thenReturn(List.of());
+        when(patientRepository.findAllByPhoneSubscriber("%70707070")).thenReturn(List.of(patient));
 
         var matches = patientService.findRegistrationMatches(null, "+22670707070", hospitalId);
 
@@ -1578,8 +1575,7 @@ class PatientServiceImplTest {
         patient.setPhoneNumberPrimary("+22670707070");
         patient.setEmail("jane@example.com");
 
-        when(patientRepository.findAllByPhoneNumberPrimary("+22670707070")).thenReturn(List.of(patient));
-        when(patientRepository.findAllByPhoneNumberSecondary("+22670707070")).thenReturn(List.of());
+        when(patientRepository.findAllByPhoneSubscriber("%70707070")).thenReturn(List.of(patient));
         when(patientRepository.findAllByEmailIgnoreCase("jane@example.com")).thenReturn(List.of(patient));
 
         var matches = patientService.findRegistrationMatches("jane@example.com", "+22670707070", hospitalId);
@@ -1594,7 +1590,20 @@ class PatientServiceImplTest {
 
         assertThat(matches).isEmpty();
         verify(patientRepository, never()).findAllByEmailIgnoreCase(any());
-        verify(patientRepository, never()).findAllByPhoneNumberPrimary(any());
+        verify(patientRepository, never()).findAllByPhoneSubscriber(any());
+    }
+
+    @Test
+    void findRegistrationMatchesFindsTheSameSubscriberHoweverEitherSideIsWritten() {
+        // QA D942: "+22670001002" typed at B, "70001002" stored at A, matched on
+        // the eight national digits (the query folds the stored side to digits).
+        patient.setPhoneNumberPrimary("70001002");
+        when(patientRepository.findAllByPhoneSubscriber("%70001002")).thenReturn(List.of(patient));
+
+        for (String typed : List.of("+22670001002", "70 00 10 02", "0022670001002", "70001002")) {
+            var matches = patientService.findRegistrationMatches(null, typed, hospitalId);
+            assertThat(matches).as(typed).hasSize(1);
+        }
     }
 
     @Test

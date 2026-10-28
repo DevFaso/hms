@@ -17,6 +17,25 @@ import java.util.List;
 @Builder
 public class PatientProfileUpdateRequestDTO {
 
+    // QA D926: the front desk corrects the identity a patient was registered
+    // with. Each field is optional (null = unchanged); a required one sent
+    // blank is refused, never cleared.
+
+    @Size(max = 100)
+    private String firstName;
+
+    @Size(max = 100)
+    private String middleName;
+
+    @Size(max = 100)
+    private String lastName;
+
+    @jakarta.validation.constraints.PastOrPresent
+    private java.time.LocalDate dateOfBirth;
+
+    @Size(max = 20)
+    private String gender;
+
     @Size(max = 100)
     private String phoneNumberPrimary;
 
@@ -54,6 +73,10 @@ public class PatientProfileUpdateRequestDTO {
 
     @Size(max = 20)
     private String emergencyContactPhone;
+
+    /** QA D926: who the emergency contact or guardian is to the patient ("Mère"). */
+    @Size(max = 50)
+    private String emergencyContactRelationship;
 
     @Size(max = 255)
     private String preferredPharmacy;
