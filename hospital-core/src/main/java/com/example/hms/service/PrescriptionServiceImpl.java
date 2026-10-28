@@ -404,17 +404,14 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // identity test so that "this is already signed" is the answer even when
         // the caller is not the prescriber.
         if (prescription.getSignatureValue() != null) {
-            throw new BusinessException(
-                "This prescription has already been signed. A signature cannot be reissued; "
-                    + "cancel it and write a new prescription instead.");
+            throw new BusinessException("prescription.sign.alreadySigned");
         }
 
         PrescriptionStatus status = prescription.getStatus();
         if (status != null && status != PrescriptionStatus.DRAFT
                 && status != PrescriptionStatus.PENDING_SIGNATURE) {
-            throw new BusinessException(
-                "Only a prescription in DRAFT or PENDING_SIGNATURE can be signed; this one is "
-                    + status + ".");
+            throw new BusinessException("prescription.sign.wrongStatus",
+                com.example.hms.utility.MessageUtil.resolveOrRaw("cds.enum." + status.name()));
         }
 
         Staff signer = resolveSigningPrescriber(prescription);
@@ -479,23 +476,20 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             throw new BusinessException("prescription.cosign.notRequired");
         }
         if (prescription.getCosignedAt() != null || prescription.getCosignedBy() != null) {
-            throw new BusinessException("This prescription has already been co-signed.");
+            throw new BusinessException("prescription.cosign.alreadyCosigned");
         }
 
         PrescriptionStatus status = prescription.getStatus();
         if (status != null && status != PrescriptionStatus.DRAFT
                 && status != PrescriptionStatus.PENDING_SIGNATURE) {
-            throw new BusinessException(
-                "Only a prescription in DRAFT or PENDING_SIGNATURE can be co-signed; this one is "
-                    + status + ".");
+            throw new BusinessException("prescription.cosign.wrongStatus",
+                com.example.hms.utility.MessageUtil.resolveOrRaw("cds.enum." + status.name()));
         }
 
         Staff prescriber = prescription.getStaff();
         if (prescriber != null && prescriber.getId() != null
                 && prescriber.getId().equals(cosigner.getId())) {
-            throw new BusinessException(
-                "A prescription cannot be co-signed by its own prescriber; the co-signature "
-                    + "exists to put a second clinician's judgment on record.");
+            throw new BusinessException("prescription.cosign.ownPrescriber");
         }
 
         prescription.setCosignedBy(cosigner);
@@ -563,12 +557,11 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // the caller would need, not anything about the record.
         if (!prescriberHere) {
             throw new com.example.hms.exception.ClientSafeAccessDeniedException(
-                "Only a clinician with an active prescribing assignment at the prescribing "
-                    + "hospital can co-sign a prescription.");
+                com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.cosign.prescriberOnly"));
         }
         return staffRepository.findFirstByUserIdOrderByCreatedAtAsc(currentUserId)
             .orElseThrow(() -> new com.example.hms.exception.ClientSafeAccessDeniedException(
-                "Only a clinician with a staff profile can co-sign a prescription."));
+                com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.cosign.staffProfileRequired")));
     }
 
     /**
@@ -734,9 +727,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             return;
         }
         throw new ConflictException(
-            "This prescription is awaiting the prescriber's clarification; edit it and answer with "
-                + "POST /prescriptions/{id}/resolve-clarification, or cancel it, rather than changing "
-                + "its status.");
+            com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.clarification.statusLocked"));
     }
 
     /**

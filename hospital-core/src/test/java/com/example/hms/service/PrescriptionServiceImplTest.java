@@ -3582,7 +3582,8 @@ class PrescriptionServiceImplTest {
 
         assertThatThrownBy(() -> prescriptionService.updatePrescription(rxId, request, Locale.ENGLISH))
             .isInstanceOf(com.example.hms.exception.ConflictException.class)
-            .hasMessageContaining("resolve-clarification");
+            // QA D934 class: a sentence for the prescriber, no longer an API path.
+            .hasMessageContaining("awaiting the prescriber's clarification");
         verify(prescriptionRepository, never()).save(any());
     }
 
@@ -3720,7 +3721,9 @@ class PrescriptionServiceImplTest {
         UUID rxId = rx.getId();
         assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, java.util.Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("DRAFT or PENDING_SIGNATURE");
+            // QA D934 class: the status in words, not the enum constant.
+            .hasMessageContaining("draft or awaiting signature")
+            .hasMessageNotContaining("PENDING_SIGNATURE");
     }
 
     @Test

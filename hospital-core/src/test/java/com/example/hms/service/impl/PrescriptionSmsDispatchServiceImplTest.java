@@ -103,8 +103,16 @@ class PrescriptionSmsDispatchServiceImplTest {
     private Pharmacy pharmacy;
     private User user;
 
+    @org.junit.jupiter.api.AfterEach
+    void resetLocale() {
+        org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+    }
+
     @BeforeEach
     void setUp() {
+        // QA D1000 class: the refusals are message keys, read in the request language.
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
         prescriptionId = UUID.randomUUID();
         pharmacyId = UUID.randomUUID();
         hospitalId = UUID.randomUUID();
@@ -530,7 +538,9 @@ class PrescriptionSmsDispatchServiceImplTest {
 
         assertThatThrownBy(() -> service.dispatch(auth, prescriptionId, req))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("DISPENSED");
+                // The status in words now, not the enum constant.
+                .hasMessageContaining("dispensed")
+                .hasMessageNotContaining("DISPENSED");
 
         verify(smsService, never()).send(anyString(), anyString());
         verify(routingDecisionRepository, never()).save(any());
@@ -878,7 +888,7 @@ class PrescriptionSmsDispatchServiceImplTest {
             assertThatThrownBy(() -> service.dispatch(auth, prescriptionId, req))
                     .isInstanceOf(BusinessException.class)
                     .isNotInstanceOf(PrescriptionDispatchFailedException.class)
-                    .hasMessageContaining(withdrawn.name());
+                    .hasMessageContaining(withdrawn.name().toLowerCase(java.util.Locale.ROOT));
             assertThat(rx.getStatus()).isEqualTo(withdrawn);
         }
         assertThat(PrescriptionSmsDispatchServiceImpl.DISPATCHABLE_STATUSES)
