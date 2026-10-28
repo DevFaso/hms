@@ -289,7 +289,7 @@
                       <span class="precheckin-later" data-testid="precheckin-later">
                         {{
                           'PORTAL.APPOINTMENTS.BOOKING.PRECHECKIN_OPENS_ON'
-                            | translate: { date: (opensOn | date: 'longDate') }
+                            | translate: { date: preCheckInOpensOnLabel(opensOn) }
                         }}
                       </span>
                     }

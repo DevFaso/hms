@@ -21,6 +21,7 @@ import {
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { DialogA11yDirective } from '../../shared/a11y/dialog-a11y.directive';
 import { localDateString } from '../../shared/date-utils';
+import { currentLocale } from '../../shared/i18n/app-locale';
 import { PreCheckinFormComponent } from './pre-checkin-form/pre-checkin-form.component';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { ClockTimePipe } from '../../shared/pipes/clock-time.pipe';
@@ -230,6 +231,11 @@ export class MyAppointmentsComponent implements OnInit {
     if (days === null || days <= 7) return null;
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), now.getDate() + days - 7);
+  }
+
+  /** The opening day as the reader writes a date ("3 novembre 2026"); a local calendar day, not a server instant. */
+  preCheckInOpensOnLabel(day: Date): string {
+    return new Intl.DateTimeFormat(currentLocale(), { dateStyle: 'long' }).format(day);
   }
 
   canModify(appt: PortalAppointment): boolean {
