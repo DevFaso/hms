@@ -22,7 +22,9 @@ import java.util.Optional;
  * <ul>
  *   <li>Respiratory rate ≥ 22 / min</li>
  *   <li>Systolic blood pressure ≤ 100 mmHg</li>
- *   <li>Altered mental status (encoded in the active problem list)</li>
+ *   <li>Altered mental status: a consciousness level other than Alert
+ *       (ACVPU, recorded with the vitals) in the window, or an altered
+ *       mentation entry on the active problem list</li>
  * </ul>
  *
  * <p>Why qSOFA over SIRS for v0: qSOFA needs only three bedside fields
@@ -51,7 +53,10 @@ public class SepsisQsofaProtocolRule implements BpaRule {
      */
     private static final List<String> AMS_HINTS = List.of(
         "altered mental status", "ams", "delirium", "encephalopathy",
-        "confusion", "decreased loc", "gcs"
+        "confusion", "decreased loc", "gcs",
+        // QA D953: the problem list is written in French or Spanish here.
+        "conscience", "délire", "encéphalopathie", "obnubilation",
+        "confusional", "conciencia", "encefalopatía", "delirio"
     );
 
     private final BpaProtocolRepository protocolRepository;
@@ -110,8 +115,16 @@ public class SepsisQsofaProtocolRule implements BpaRule {
         LocalDateTime cutoff = LocalDateTime.now().minus(LOOKBACK);
         boolean rrHigh = false;
         boolean sbpLow = false;
+        boolean alteredConsciousness = false;
         for (PatientVitalSign v : vitals) {
             if (v.getRecordedAt() == null || v.getRecordedAt().isBefore(cutoff)) continue;
+            // QA D953: the triage nurse records mentation as ACVPU with the
+            // vitals. Anything but Alert (new confusion, responds to voice or
+            // pain, unresponsive) is altered mentation for qSOFA (GCS < 15).
+            if (v.getConsciousnessLevel() != null
+                && v.getConsciousnessLevel() != com.example.hms.enums.ConsciousnessLevel.ALERT) {
+                alteredConsciousness = true;
+            }
             if (!rrHigh && v.getRespiratoryRateBpm() != null
                 && v.getRespiratoryRateBpm() >= RR_THRESHOLD) {
                 rrHigh = true;
@@ -120,9 +133,8 @@ public class SepsisQsofaProtocolRule implements BpaRule {
                 && v.getSystolicBpMmHg() <= SBP_THRESHOLD) {
                 sbpLow = true;
             }
-            if (rrHigh && sbpLow) break;
         }
-        boolean ams = problems.stream().anyMatch(p ->
+        boolean ams = alteredConsciousness || problems.stream().anyMatch(p ->
             matchesAny(p.getProblemDisplay(), AMS_HINTS)
                 || matchesAny(p.getProblemCode(), AMS_HINTS));
         return new QsofaScore(rrHigh, sbpLow, ams);
