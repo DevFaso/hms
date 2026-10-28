@@ -3492,6 +3492,18 @@
       "CONFIRM": "Marcar como registrada por error",
       "DONE": "La orden está marcada como registrada por error.",
       "FAILED": "No se pudo marcar la orden como registrada por error."
+    },
+    "REJECT_SPECIMEN": {
+      "ACTION": "Rechazar",
+      "CONFIRM": "Rechazar la muestra",
+      "DONE": "Muestra rechazada. La solicitud vuelve a esperar una toma y se ha avisado al prescriptor.",
+      "EXPLAIN": "La muestra se rechaza y la solicitud vuelve a esperar una nueva toma. Se informa del motivo al prescriptor. Muestra:",
+      "FAILED": "No se pudo rechazar la muestra.",
+      "REASON": "Motivo del rechazo",
+      "REASON_PLACEHOLDER": "p. ej. hemolizada, tubo inadecuado, volumen insuficiente, sin etiqueta",
+      "REASON_VALUE": "Motivo: {{reason}}",
+      "REJECTED_ON_ORDER": "Muestra rechazada por el laboratorio: se necesita una nueva toma",
+      "TITLE": "Rechazar la muestra"
     }
   },
   "LAB_STAFF": {
@@ -6296,6 +6308,7 @@
         "DISCHARGE_SUMMARY": "Informe de alta",
         "LAB_ORDER_RECEIVED": "Solicitud de laboratorio recibida",
         "LAB_RESULT": "Resultado de laboratorio",
+        "LAB_SPECIMEN_REJECTED": "Muestra rechazada",
         "LICENSE_EXPIRY": "Vencimiento de licencia",
         "MEDICATION_REFILL": "Renovación de medicamento",
         "NEWS2_ESCALATION": "Escalamiento NEWS2",

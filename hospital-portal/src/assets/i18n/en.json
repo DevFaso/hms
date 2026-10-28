@@ -3492,6 +3492,18 @@
       "CONFIRM": "Mark as entered in error",
       "DONE": "The order is marked as entered in error.",
       "FAILED": "The order could not be marked as entered in error."
+    },
+    "REJECT_SPECIMEN": {
+      "ACTION": "Reject",
+      "CONFIRM": "Reject the specimen",
+      "DONE": "Specimen rejected. The order is back to awaiting collection and the ordering clinician has been notified.",
+      "EXPLAIN": "The specimen is refused and the order goes back to awaiting a new collection. The ordering clinician is told the reason. Specimen:",
+      "FAILED": "The specimen could not be rejected.",
+      "REASON": "Reason for rejection",
+      "REASON_PLACEHOLDER": "e.g. haemolysed, wrong tube, insufficient volume, unlabelled",
+      "REASON_VALUE": "Reason: {{reason}}",
+      "REJECTED_ON_ORDER": "Specimen rejected by the laboratory: a new sample is needed",
+      "TITLE": "Reject the specimen"
     }
   },
   "LAB_STAFF": {
@@ -6296,6 +6308,7 @@
         "DISCHARGE_SUMMARY": "Discharge Summary",
         "LAB_ORDER_RECEIVED": "Lab order received",
         "LAB_RESULT": "Lab result",
+        "LAB_SPECIMEN_REJECTED": "Specimen rejected",
         "LICENSE_EXPIRY": "License Expiry",
         "MEDICATION_REFILL": "Medication Refill",
         "NEWS2_ESCALATION": "NEWS2 escalation",

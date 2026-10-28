@@ -38,6 +38,20 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
     private final LabSpecimenMapper labSpecimenMapper;
     private final RoleValidator roleValidator;
     private final InstrumentOutboxService instrumentOutboxService;
+    /** QA D962: tells the ordering clinician a specimen was rejected. */
+    private final com.example.hms.service.lab.LabSpecimenRejectionNotifier rejectionNotifier;
+
+    /** The specimen.rejection_reason column width (V239). */
+    static final int MAX_REJECTION_REASON = 500;
+
+    /** Specimens the laboratory can still refuse: not yet analysed, not already refused. */
+    private static final java.util.Set<LabSpecimenStatus> REJECTABLE = java.util.EnumSet.of(
+        LabSpecimenStatus.COLLECTED, LabSpecimenStatus.IN_TRANSIT, LabSpecimenStatus.RECEIVED);
+
+    /** Specimens still standing for the order: another one of these means no re-collection is needed. */
+    private static final java.util.Set<LabSpecimenStatus> LIVE = java.util.EnumSet.of(
+        LabSpecimenStatus.PENDING, LabSpecimenStatus.COLLECTED, LabSpecimenStatus.IN_TRANSIT,
+        LabSpecimenStatus.RECEIVED, LabSpecimenStatus.PROCESSING);
 
     private static final java.time.Duration COLLECTION_SKEW = java.time.Duration.ofMinutes(5);
 
@@ -148,6 +162,62 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
         LabSpecimen saved = labSpecimenRepository.save(specimen);
         advanceOrder(specimen.getLabOrder(), LabOrderStatus.RECEIVED);
         instrumentOutboxService.enqueueSpecimenReceived(saved);
+        return labSpecimenMapper.toResponseDTO(saved);
+    }
+
+    @Override
+    @Transactional
+    public LabSpecimenResponseDTO rejectSpecimen(UUID specimenId, String reason, Locale locale) {
+        LabSpecimen specimen = labSpecimenRepository.findById(specimenId)
+            .orElseThrow(() -> new ResourceNotFoundException("labspecimen.notfound", specimenId));
+        LabOrder labOrder = specimen.getLabOrder();
+        if (!labOrder.isHandledBy(roleValidator.requireActiveHospitalId())) {
+            throw new ResourceNotFoundException("labspecimen.notfound", specimenId);
+        }
+        String trimmed = reason == null ? "" : reason.trim();
+        if (trimmed.isEmpty()) {
+            throw new BusinessException("lab.specimen.rejectReasonRequired");
+        }
+        if (trimmed.length() > MAX_REJECTION_REASON) {
+            throw new BusinessException("lab.specimen.rejectReasonTooLong", MAX_REJECTION_REASON);
+        }
+        if (labOrder.getStatus() == LabOrderStatus.ENTERED_IN_ERROR) {
+            throw new BusinessException("lab.order.enteredInError");
+        }
+        if (!REJECTABLE.contains(specimen.getStatus())) {
+            throw new BusinessException("lab.specimen.notRejectable");
+        }
+
+        // The order row is locked first, as every status writer here does, and
+        // the decision is made on the committed status read under that lock.
+        labOrderRepository.findWithLockById(labOrder.getId());
+        LabOrderStatus committedStatus = labOrderRepository.findStatusById(labOrder.getId());
+        if (committedStatus == LabOrderStatus.ENTERED_IN_ERROR) {
+            throw new BusinessException("lab.order.enteredInError");
+        }
+        if (!LabOrderLifecycle.acceptsSpecimenRejection(committedStatus)) {
+            throw new BusinessException("lab.specimen.rejectAfterResult");
+        }
+
+        specimen.setStatus(LabSpecimenStatus.REJECTED);
+        specimen.setRejectionReason(trimmed);
+        specimen.setRejectedAt(LocalDateTime.now(ZoneId.systemDefault()));
+        specimen.setRejectedById(roleValidator.getCurrentUserId());
+        LabSpecimen saved = labSpecimenRepository.save(specimen);
+
+        // Back to awaiting collection, unless another specimen still stands
+        // for the order (a second tube drawn at the same time).
+        boolean anotherLive = labSpecimenRepository.findByLabOrder_Id(labOrder.getId()).stream()
+            .anyMatch(other -> other != saved && !java.util.Objects.equals(other.getId(), saved.getId())
+                && LIVE.contains(other.getStatus()));
+        LabOrderStatus moveTo = anotherLive ? null : LabOrderLifecycle.statusAfterSpecimenRejected(committedStatus);
+        if (moveTo != null && labOrderRepository.updateStatusFrom(labOrder.getId(), committedStatus, moveTo) == 0) {
+            log.debug("Lab order {} moved from {} while its specimen was being rejected; status left alone",
+                labOrder.getId(), committedStatus);
+        }
+        if (rejectionNotifier != null) {
+            rejectionNotifier.specimenRejected(saved);
+        }
         return labSpecimenMapper.toResponseDTO(saved);
     }
 

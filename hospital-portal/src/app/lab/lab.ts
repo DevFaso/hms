@@ -158,10 +158,23 @@ export class LabComponent implements OnInit {
   receivingSpecimenId = signal<string | null>(null);
   printingSpecimenId = signal<string | null>(null);
 
+  /** QA D962: the specimen being rejected, and the reason typed for it. */
+  rejectingSpecimen = signal<LabSpecimen | null>(null);
+  rejectReason = signal('');
+  rejecting = signal(false);
+  /** QA D962: the specimens of the order open in the detail panel, for their rejection reasons. */
+  detailSpecimens = signal<LabSpecimen[]>([]);
+  readonly rejectedDetailSpecimens = computed(() =>
+    this.detailSpecimens().filter((s) => s.status === 'REJECTED'),
+  );
+
   /** Matches the specimen create/receive @PreAuthorize (lab staff; E9 #67: no admins). */
   readonly canManageSpecimens = this.roleContext.hasAnyActiveRole(
     actionRoles('labSpecimenCollect'),
   );
+
+  /** Matches the specimen reject @PreAuthorize (QA D962). */
+  readonly canRejectSpecimens = this.roleContext.hasAnyActiveRole(actionRoles('labSpecimenReject'));
 
   priorities = ['ROUTINE', 'URGENT', 'STAT', 'ASAP'];
 
@@ -618,10 +631,20 @@ export class LabComponent implements OnInit {
 
   viewOrder(order: LabOrderResponse): void {
     this.selectedOrder.set(order);
+    // QA D962: a rejected specimen and its reason show on the order, so the
+    // ordering doctor sees why a new sample is needed.
+    this.detailSpecimens.set([]);
+    this.labService.listSpecimens(order.id).subscribe({
+      next: (list) => {
+        if (this.selectedOrder()?.id === order.id) this.detailSpecimens.set(list ?? []);
+      },
+      error: () => this.detailSpecimens.set([]),
+    });
   }
 
   closeDetail(): void {
     this.selectedOrder.set(null);
+    this.detailSpecimens.set([]);
   }
 
   getStatusClass(status: string): string {
@@ -806,6 +829,56 @@ export class LabComponent implements OnInit {
       error: () => {
         this.toast.error(this.translate.instant('LAB.TOAST.SPECIMEN_RECEIVE_FAILED'));
         this.receivingSpecimenId.set(null);
+      },
+    });
+  }
+
+  /** QA D962: a specimen still on its way or in the laboratory can be refused. */
+  canReject(specimen: LabSpecimen): boolean {
+    return (
+      this.canRejectSpecimens &&
+      this.specimensOrderAcceptsSpecimens() &&
+      (specimen.status === 'COLLECTED' ||
+        specimen.status === 'IN_TRANSIT' ||
+        specimen.status === 'RECEIVED')
+    );
+  }
+
+  openReject(specimen: LabSpecimen): void {
+    this.rejectReason.set('');
+    this.rejectingSpecimen.set(specimen);
+  }
+
+  closeReject(): void {
+    this.rejectingSpecimen.set(null);
+    this.rejectReason.set('');
+  }
+
+  onRejectReasonInput(event: Event): void {
+    this.rejectReason.set((event.target as HTMLTextAreaElement).value);
+  }
+
+  executeReject(): void {
+    const specimen = this.rejectingSpecimen();
+    const order = this.specimensOrder();
+    const reason = this.rejectReason().trim();
+    if (!specimen || !order || !reason) return;
+    this.rejecting.set(true);
+    this.labService.rejectSpecimen(specimen.id, reason).subscribe({
+      next: () => {
+        this.toast.success(this.translate.instant('LAB.REJECT_SPECIMEN.DONE'));
+        this.rejecting.set(false);
+        this.closeReject();
+        this.loadSpecimens(order.id);
+        // The order is back to awaiting collection: the list must say so.
+        this.loadOrders();
+      },
+      error: (err: { error?: { message?: string } }) => {
+        // The server's refusal is written for the reader (localised).
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('LAB.REJECT_SPECIMEN.FAILED'),
+        );
+        this.rejecting.set(false);
       },
     });
   }

@@ -172,4 +172,34 @@ public final class LabOrderLifecycle {
         }
         return target;
     }
+
+    /**
+     * States a specimen rejection sends back to awaiting collection (QA D962):
+     * the specimen is on its way or in the laboratory, and no result exists.
+     */
+    private static final Set<LabOrderStatus> RECOLLECTABLE = EnumSet.of(
+        LabOrderStatus.PENDING, LabOrderStatus.COLLECTED, LabOrderStatus.RECEIVED, LabOrderStatus.IN_PROGRESS);
+
+    /**
+     * Whether an order at {@code current} may have a specimen rejected: not
+     * once a result exists (RESULTED, VERIFIED, COMPLETED), since a result
+     * from the specimen is corrected, not un-sampled; not on a void.
+     */
+    public static boolean acceptsSpecimenRejection(LabOrderStatus current) {
+        return current != null && current != LabOrderStatus.ENTERED_IN_ERROR
+            && current != LabOrderStatus.RESULTED && current != LabOrderStatus.VERIFIED
+            && current != LabOrderStatus.COMPLETED;
+    }
+
+    /**
+     * QA D962: what the rejection of the order's last live specimen moves
+     * {@code current} to — back to ORDERED, awaiting a new collection — or
+     * {@code null} when it should not move (already awaiting collection,
+     * cancelled, or past the point a rejection can undo). The ONE backward
+     * step the workflow takes, and it is a verdict like the others, written by
+     * the caller's compare-and-set statement.
+     */
+    public static LabOrderStatus statusAfterSpecimenRejected(LabOrderStatus current) {
+        return current != null && RECOLLECTABLE.contains(current) ? LabOrderStatus.ORDERED : null;
+    }
 }

@@ -89,9 +89,11 @@ describe('LabComponent — performing laboratory', () => {
       'listSpecimens',
       'createSpecimen',
       'receiveSpecimen',
+      'rejectSpecimen',
       'submitApprovalAction',
     ]);
     labService.listOrders.and.returnValue(of(orders));
+    labService.listSpecimens.and.returnValue(of([]));
     labService.listTestDefinitions.and.returnValue(of([]));
     labService.listPerformingLabs.and.returnValue(of(labs));
     labService.createOrder.and.returnValue(of(orders[0] ?? order({})));
@@ -255,6 +257,75 @@ describe('LabComponent — performing laboratory', () => {
     expect(component.canReceive(collected)).toBeTrue();
     expect(receiveLabel()).toBeDefined();
     expect(host.querySelector('#specimen-type')).not.toBeNull();
+  });
+
+  describe('QA D962: reject a specimen', () => {
+    const received = {
+      id: 'sp-9',
+      labOrderId: 'o-1',
+      accessionNumber: 'ACC-9',
+      barcodeValue: 'LAB-ACC-9',
+      specimenType: 'BLOOD',
+      collectedAt: null,
+      receivedAt: null,
+      currentLocation: null,
+      status: 'RECEIVED',
+      notes: null,
+    } as LabSpecimen;
+
+    it('the bench rejects a received specimen with a reason; the list reloads', async () => {
+      await setup(['ROLE_LAB_TECHNICIAN'], [order({ status: 'RECEIVED' })]);
+      labService.listSpecimens.and.returnValue(of([received]));
+      labService.rejectSpecimen.and.returnValue(
+        of({ ...received, status: 'REJECTED', rejectionReason: 'Hémolysé' }),
+      );
+      component.openSpecimens(order({ status: 'RECEIVED' }));
+      fixture.detectChanges();
+      const host = fixture.nativeElement as HTMLElement;
+
+      host.querySelector<HTMLButtonElement>('[data-testid="reject-specimen-sp-9"]')!.click();
+      fixture.detectChanges();
+      const confirm = host.querySelector<HTMLButtonElement>('[data-testid="lab-reject-confirm"]')!;
+      expect(confirm.disabled).withContext('a reason is mandatory').toBeTrue();
+      const reason = host.querySelector<HTMLTextAreaElement>('[data-testid="lab-reject-reason"]')!;
+      reason.value = '  Hémolysé ';
+      reason.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      confirm.click();
+
+      expect(labService.rejectSpecimen).toHaveBeenCalledWith('sp-9', 'Hémolysé');
+      expect(labService.listOrders.calls.count()).toBeGreaterThan(1);
+      expect(component.rejectingSpecimen()).toBeNull();
+    });
+
+    it('is not offered on an analysed or already rejected specimen, nor to the ordering doctor', async () => {
+      await setup(['ROLE_LAB_TECHNICIAN'], []);
+      component.openSpecimens(order({ status: 'RECEIVED' }));
+      expect(component.canReject(received)).toBeTrue();
+      expect(component.canReject({ ...received, status: 'PROCESSING' })).toBeFalse();
+      expect(component.canReject({ ...received, status: 'REJECTED' })).toBeFalse();
+      TestBed.resetTestingModule();
+      await setup(['ROLE_DOCTOR'], []);
+      component.openSpecimens(order({ status: 'RECEIVED' }));
+      expect(component.canReject(received)).toBeFalse();
+    });
+
+    it('the order detail shows the doctor why a specimen was rejected', async () => {
+      const o = order({ status: 'ORDERED' });
+      await setup(['ROLE_DOCTOR'], [o]);
+      labService.listSpecimens.and.returnValue(
+        of([{ ...received, status: 'REJECTED', rejectionReason: 'Tube inadapté' } as LabSpecimen]),
+      );
+
+      component.viewOrder(o);
+      fixture.detectChanges();
+
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector(
+          '[data-testid="lab-order-rejected-sp-9"]',
+        )?.textContent,
+      ).toContain('Tube inadapté');
+    });
   });
 
   it('QA D227: the specimens modal names the order by its short code, not the raw UUID', async () => {

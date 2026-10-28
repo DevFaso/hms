@@ -3492,6 +3492,18 @@
       "CONFIRM": "Déclarer saisie par erreur",
       "DONE": "La demande est déclarée saisie par erreur.",
       "FAILED": "La demande n'a pas pu être déclarée saisie par erreur."
+    },
+    "REJECT_SPECIMEN": {
+      "ACTION": "Rejeter",
+      "CONFIRM": "Rejeter l’échantillon",
+      "DONE": "Échantillon rejeté. La demande attend un nouveau prélèvement et le prescripteur a été prévenu.",
+      "EXPLAIN": "L’échantillon est refusé et la demande attend un nouveau prélèvement. Le prescripteur est informé du motif. Échantillon :",
+      "FAILED": "L’échantillon n’a pas pu être rejeté.",
+      "REASON": "Motif du rejet",
+      "REASON_PLACEHOLDER": "ex. hémolysé, tube inadapté, volume insuffisant, non étiqueté",
+      "REASON_VALUE": "Motif : {{reason}}",
+      "REJECTED_ON_ORDER": "Échantillon rejeté par le laboratoire : un nouveau prélèvement est nécessaire",
+      "TITLE": "Rejeter l’échantillon"
     }
   },
   "LAB_STAFF": {
@@ -6262,6 +6274,7 @@
         "DISCHARGE_SUMMARY": "Compte rendu de sortie",
         "LAB_ORDER_RECEIVED": "Demande d’analyse reçue",
         "LAB_RESULT": "Résultat d’analyse",
+        "LAB_SPECIMEN_REJECTED": "Échantillon rejeté",
         "LICENSE_EXPIRY": "Expiration de licence",
         "MEDICATION_REFILL": "Renouvellement d'ordonnance",
         "NEWS2_ESCALATION": "Escalade NEWS2",
