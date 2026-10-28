@@ -1,3 +1,5 @@
+import { EnumLabelService } from '../../core/enum-label.service';
+import { currentLocale } from '../../shared/i18n/app-locale';
 import { CdkTrapFocus } from '@angular/cdk/a11y';
 import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -28,6 +30,7 @@ export class LabTestConfigComponent implements OnInit {
   private readonly labService = inject(LabService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly enumLabels = inject(EnumLabelService);
   private readonly profileService = inject(ProfileService);
   private readonly roleContext = inject(RoleContextService);
 
@@ -520,8 +523,19 @@ export class LabTestConfigComponent implements OnInit {
   describeCondition(rule: LabReflexRule): string {
     try {
       const cond = JSON.parse(rule.condition ?? '{}');
-      if (cond.severityFlag) return `severity = ${cond.severityFlag}`;
-      if (cond.thresholdOperator) return `value ${cond.thresholdOperator} ${cond.thresholdValue}`;
+      // QA D963: the condition is read in the user's language, the flag through
+      // its enum label, never the wire token ("severity = ABNORMAL").
+      if (cond.severityFlag) {
+        return this.translate.instant('LAB_TEST_CONFIG.REFLEX_CONDITION_SEVERITY', {
+          flag: this.enumLabels.transform(cond.severityFlag, 'labSeverityFlag'),
+        });
+      }
+      if (cond.thresholdOperator) {
+        return this.translate.instant('LAB_TEST_CONFIG.REFLEX_CONDITION_THRESHOLD', {
+          operator: cond.thresholdOperator,
+          value: new Intl.NumberFormat(currentLocale()).format(Number(cond.thresholdValue)),
+        });
+      }
     } catch {
       // fall through to raw condition
     }

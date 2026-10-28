@@ -259,6 +259,45 @@ describe('LabComponent — performing laboratory', () => {
     expect(host.querySelector('#specimen-type')).not.toBeNull();
   });
 
+  describe('QA D963: priority and channel are labelled, and STAT stands out', () => {
+    it('offers exactly the priorities the server accepts, labelled, never the raw code', async () => {
+      await setup(['ROLE_DOCTOR'], []);
+      component.openCreate();
+      fixture.detectChanges();
+      const options = Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLOptionElement>(
+          '#lab-priority option',
+        ),
+      ).filter((o) => o.value);
+      expect(options.map((o) => o.value)).toEqual(['ROUTINE', 'URGENT', 'STAT']);
+      // Labelled through the labOrderPriority domain (the English fallback
+      // here, with no locale loaded), never the wire code; ASAP is gone.
+      expect(options.find((o) => o.value === 'ROUTINE')?.textContent?.trim()).not.toBe('ROUTINE');
+      expect(options.find((o) => o.value === 'URGENT')?.textContent?.trim()).not.toBe('URGENT');
+      const channels = Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLOptionElement>(
+          '#lab-orderChannel option',
+        ),
+      );
+      expect(channels.find((c) => c.value === 'PORTAL')?.textContent?.trim()).not.toBe('PORTAL');
+    });
+
+    it('badges a STAT order on the worklist and in the detail, and reads the channel', async () => {
+      const stat = order({ id: 'o-stat', priority: 'STAT' });
+      const routine = order({ id: 'o-routine', priority: 'ROUTINE' });
+      await setup(['ROLE_LAB_TECHNICIAN'], [stat, routine]);
+      const host = fixture.nativeElement as HTMLElement;
+      expect(host.querySelector('[data-testid="lab-priority-o-stat"]')).not.toBeNull();
+      expect(host.querySelector('[data-testid="lab-priority-o-routine"]')).toBeNull();
+
+      component.viewOrder(stat);
+      fixture.detectChanges();
+      const priority = host.querySelector('[data-testid="detail-priority"] .field-value');
+      expect(priority?.classList.contains('priority-stat')).toBeTrue();
+      expect(host.querySelector('.detail-panel')?.textContent).not.toContain('PORTAL');
+    });
+  });
+
   describe('QA D962: reject a specimen', () => {
     const received = {
       id: 'sp-9',

@@ -25,6 +25,8 @@ export interface LabOrderResponse {
   notes: string;
   primaryDiagnosisCode: string;
   additionalDiagnosisCodes: string[];
+  /** QA D963: ROUTINE, URGENT or STAT (LabOrderResponseDTO.priority). */
+  priority?: string | null;
   orderChannel: string;
   /**
    * Why the order was cancelled, or (QA D820) why it was voided as entered in
@@ -39,6 +41,8 @@ export interface LabResultResponse {
   id: string;
   labOrderId: string | null;
   labOrderCode: string;
+  /** QA D963: the order's priority, so the release queue flags STAT and URGENT. */
+  orderPriority?: string | null;
   patientId: string | null;
   patientFullName: string;
   /** QA D527: no longer sent (always null); kept so older payloads still type. */

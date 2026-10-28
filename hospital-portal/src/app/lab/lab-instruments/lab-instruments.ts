@@ -1,4 +1,6 @@
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { CdkTrapFocus } from '@angular/cdk/a11y';
+import { DatePipe } from '@angular/common';
 import {
   Component,
   computed,
@@ -23,7 +25,7 @@ import { refusalReason } from '../../shared/refusal-reason';
 @Component({
   selector: 'app-lab-instruments',
   standalone: true,
-  imports: [CdkTrapFocus, RouterModule, FormsModule, TranslateModule],
+  imports: [CdkTrapFocus, DatePipe, ServerTimePipe, RouterModule, FormsModule, TranslateModule],
   templateUrl: './lab-instruments.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lab-instruments.scss',

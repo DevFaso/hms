@@ -113,7 +113,18 @@
                 <div class="cell-primary">{{ order.patientFullName || '—' }}</div>
               </td>
               <td>
-                <div class="cell-primary">{{ order.labTestName || '—' }}</div>
+                <div class="cell-primary">
+                  {{ order.labTestName || '—' }}
+                  @if (isUrgentPriority(order.priority)) {
+                    <!-- QA D963: STAT and URGENT stand out on the worklist. -->
+                    <span
+                      class="priority-badge"
+                      [class.priority-stat]="order.priority === 'STAT'"
+                      [attr.data-testid]="'lab-priority-' + order.id"
+                      >{{ order.priority | enumLabel: 'labOrderPriority' }}</span
+                    >
+                  }
+                </div>
                 <div class="cell-secondary">{{ order.labTestCode || '' }}</div>
               </td>
               <td>
@@ -125,7 +136,7 @@
                       isIncomingExternal(order) ? 'routing-incoming' : 'routing-outgoing'
                     "
                   >
-                    {{ counterpartLabelKey(order) | translate }}:
+                    {{ counterpartLabelKey(order) | translate }}{{ 'COMMON.COLON' | translate }}
                     {{ counterpartHospitalName(order) }}
                   </div>
                 } @else {
@@ -261,13 +272,24 @@
                 o.status | enumLabel: 'labOrderStatus'
               }}</span>
             </div>
+            <div class="detail-field" data-testid="detail-priority">
+              <span class="field-label">{{ 'LAB.PRIORITY' | translate }}</span
+              ><span
+                class="field-value"
+                [class.priority-badge]="isUrgentPriority(o.priority)"
+                [class.priority-stat]="o.priority === 'STAT'"
+                >{{ o.priority ? (o.priority | enumLabel: 'labOrderPriority') : '—' }}</span
+              >
+            </div>
             <div class="detail-field">
               <span class="field-label">{{ 'LAB.DIAGNOSIS_CODE' | translate }}</span
               ><span class="field-value">{{ o.primaryDiagnosisCode || '—' }}</span>
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'LAB.ORDER_CHANNEL' | translate }}</span
-              ><span class="field-value">{{ o.orderChannel || '—' }}</span>
+              ><span class="field-value">{{
+                o.orderChannel ? (o.orderChannel | enumLabel: 'labOrderChannel') : '—'
+              }}</span>
             </div>
           </div>
           @if (o.clinicalIndication) {
@@ -468,7 +490,7 @@
             <select id="lab-priority" [(ngModel)]="form.priority">
               <option value="">{{ 'LAB.SELECT_PRIORITY' | translate }}</option>
               @for (p of priorities; track p) {
-                <option [value]="p">{{ p }}</option>
+                <option [value]="p">{{ p | enumLabel: 'labOrderPriority' }}</option>
               }
             </select>
           </div>
@@ -537,8 +559,8 @@
           <div class="field">
             <label for="lab-orderChannel">{{ 'LAB.ORDER_CHANNEL' | translate }} *</label>
             <select id="lab-orderChannel" [(ngModel)]="form.orderChannel" required>
-              @for (ch of orderChannels; track ch.value) {
-                <option [value]="ch.value">{{ ch.label }}</option>
+              @for (ch of orderChannels; track ch) {
+                <option [value]="ch">{{ ch | enumLabel: 'labOrderChannel' }}</option>
               }
             </select>
           </div>
@@ -759,7 +781,7 @@
                     <td>{{ s.currentLocation || '—' }}</td>
                     <td>
                       <span [class]="getSpecimenStatusClass(s.status)">{{
-                        'LAB.SPECIMEN_STATUS_' + s.status | translate
+                        s.status | enumLabel: 'labSpecimenStatus'
                       }}</span>
                       @if (s.status === 'REJECTED' && s.rejectionReason) {
                         <div class="cell-secondary" [attr.data-testid]="'specimen-reason-' + s.id">

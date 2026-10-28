@@ -48,7 +48,8 @@ export function dialogProblems(attrs) {
   if (!/\saria-modal="true"/.test(attrs)) problems.push('aria-modal="true"');
   if (!/aria-label(ledby)?\]?=/.test(attrs)) problems.push('an aria-label or aria-labelledby');
   if (!/\scdkTrapFocus(\s|$|=)/.test(attrs)) problems.push('cdkTrapFocus');
-  if (!/\[cdkTrapFocusAutoCapture\]="true"/.test(attrs)) problems.push('[cdkTrapFocusAutoCapture]="true"');
+  if (!/\[cdkTrapFocusAutoCapture\]="true"/.test(attrs))
+    problems.push('[cdkTrapFocusAutoCapture]="true"');
   const escape = /\(keydown\.escape\)="([^"]*)"/.exec(attrs);
   if (!escape || /^\s*\$event\.stopPropagation\(\)\s*;?\s*$/.test(escape[1])) {
     problems.push('a (keydown.escape) that closes it');

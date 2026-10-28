@@ -344,7 +344,9 @@
                   <div class="study-meta">
                     <span
                       ><strong>{{ 'LAB_APPROVAL.STUDIES.DATE_LABEL' | translate }}</strong>
-                      {{ study.studyDate }}</span
+                      {{
+                        study.studyDate ? (study.studyDate | serverTime | date: 'mediumDate') : '—'
+                      }}</span
                     >
                     @if (study.performedByDisplay) {
                       <span

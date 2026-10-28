@@ -1,3 +1,4 @@
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { CdkTrapFocus } from '@angular/cdk/a11y';
 import {
   Component,
@@ -60,7 +61,14 @@ interface QcChartGroup {
 @Component({
   selector: 'app-lab-approval-queue',
   standalone: true,
-  imports: [CdkTrapFocus, CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [
+    CdkTrapFocus,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+  ],
   templateUrl: './lab-approval-queue.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lab-approval-queue.scss',

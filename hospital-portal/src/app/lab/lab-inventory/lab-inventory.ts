@@ -1,4 +1,7 @@
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { CdkTrapFocus } from '@angular/cdk/a11y';
+import { DatePipe } from '@angular/common';
+import { LabValuePipe } from '../shared/lab-value.pipe';
 import {
   Component,
   computed,
@@ -22,7 +25,15 @@ import { ToastService } from '../../core/toast.service';
 @Component({
   selector: 'app-lab-inventory',
   standalone: true,
-  imports: [CdkTrapFocus, RouterModule, FormsModule, TranslateModule],
+  imports: [
+    CdkTrapFocus,
+    DatePipe,
+    ServerTimePipe,
+    LabValuePipe,
+    RouterModule,
+    FormsModule,
+    TranslateModule,
+  ],
   templateUrl: './lab-inventory.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lab-inventory.scss',

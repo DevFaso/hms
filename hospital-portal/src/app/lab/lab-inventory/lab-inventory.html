@@ -157,8 +157,14 @@
               <td>{{ item.name }}</td>
               <td>{{ item.itemCode }}</td>
               <td>{{ item.category ?? '—' }}</td>
-              <td>{{ item.quantity }} {{ item.unit ?? '' }}</td>
-              <td>{{ item.expirationDate ?? '—' }}</td>
+              <td>{{ item.quantity | labValue: item.unit }}</td>
+              <td>
+                {{
+                  item.expirationDate
+                    ? (item.expirationDate | serverTime | date: 'mediumDate')
+                    : '—'
+                }}
+              </td>
               <td>
                 @if (item.expired) {
                   <span class="status-badge expired">{{

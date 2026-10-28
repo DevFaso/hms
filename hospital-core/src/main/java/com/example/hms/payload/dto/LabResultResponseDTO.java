@@ -19,6 +19,8 @@ public class LabResultResponseDTO {
     private String id;
     private String labOrderId;
     private String labOrderCode;
+    /** QA D963: the order's clinical priority (ROUTINE, URGENT, STAT), so the lab sees a STAT result first. */
+    private String orderPriority;
     private String labTestCode;
     private String patientId;
     private String patientFullName;

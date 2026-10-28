@@ -94,6 +94,14 @@
               </td>
               <td>
                 <span class="test-name">{{ row.labTestName }}</span>
+                @if (isUrgentPriority(row)) {
+                  <span
+                    class="priority-badge"
+                    [class.priority-stat]="row.orderPriority === 'STAT'"
+                    [attr.data-testid]="'release-priority-' + row.id"
+                    >{{ row.orderPriority | enumLabel: 'labOrderPriority' }}</span
+                  >
+                }
                 @if (row.labOrderCode) {
                   <span class="order-code mono" [title]="row.labOrderCode">{{
                     shortOrderCode(row.labOrderCode)
@@ -101,10 +109,7 @@
                 }
               </td>
               <td class="numeric">
-                {{ row.resultValue }}
-                @if (row.resultUnit) {
-                  <span class="unit">{{ row.resultUnit }}</span>
-                }
+                {{ row.resultValue | labValue: row.resultUnit }}
               </td>
               <td>
                 <span [class]="severityClass(row)">
@@ -225,7 +230,7 @@
               | translate
                 : {
                     test: target.labTestName,
-                    value: target.resultValue + (target.resultUnit ? ' ' + target.resultUnit : ''),
+                    value: (target.resultValue | labValue: target.resultUnit),
                     patient: target.patientFullName,
                   }
           }}

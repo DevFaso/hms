@@ -176,20 +176,28 @@ export class LabComponent implements OnInit {
   /** Matches the specimen reject @PreAuthorize (QA D962). */
   readonly canRejectSpecimens = this.roleContext.hasAnyActiveRole(actionRoles('labSpecimenReject'));
 
-  priorities = ['ROUTINE', 'URGENT', 'STAT', 'ASAP'];
+  /**
+   * QA D963: exactly the priorities the server accepts
+   * (LabOrderServiceImpl.LAB_PRIORITIES). ASAP was offered and refused with a 400.
+   * Labelled through the labOrderPriority enum domain, never shown raw.
+   */
+  readonly priorities = ['ROUTINE', 'URGENT', 'STAT'];
 
-  /** Localised on every read so the options follow a runtime language switch. */
-  get orderChannels(): { value: string; label: string }[] {
-    return [
-      { value: 'PORTAL', label: this.translate.instant('LAB.ORDER_CHANNEL_OPTION.PORTAL') },
-      { value: 'ELECTRONIC', label: this.translate.instant('LAB.ORDER_CHANNEL_OPTION.ELECTRONIC') },
-      { value: 'PHONE', label: this.translate.instant('LAB.ORDER_CHANNEL_OPTION.PHONE') },
-      { value: 'FAX', label: this.translate.instant('LAB.ORDER_CHANNEL_OPTION.FAX') },
-      { value: 'EMAIL', label: this.translate.instant('LAB.ORDER_CHANNEL_OPTION.EMAIL') },
-      { value: 'WRITTEN', label: this.translate.instant('LAB.ORDER_CHANNEL_OPTION.WRITTEN') },
-      { value: 'WALK_IN', label: this.translate.instant('LAB.ORDER_CHANNEL_OPTION.WALK_IN') },
-      { value: 'OTHER', label: this.translate.instant('LAB.ORDER_CHANNEL_OPTION.OTHER') },
-    ];
+  /** QA D963: LabOrderChannel, labelled through the labOrderChannel enum domain. */
+  readonly orderChannels = [
+    'PORTAL',
+    'ELECTRONIC',
+    'PHONE',
+    'FAX',
+    'EMAIL',
+    'WRITTEN',
+    'WALK_IN',
+    'OTHER',
+  ];
+
+  /** QA D963: a STAT or URGENT order is flagged wherever the lab reads it. */
+  isUrgentPriority(priority: string | null | undefined): boolean {
+    return priority === 'STAT' || priority === 'URGENT';
   }
 
   ngOnInit(): void {

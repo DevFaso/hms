@@ -154,14 +154,22 @@
                 @if (instr.calibrationOverdue) {
                   <span class="overdue-badge">{{ 'LAB_INSTRUMENTS.OVERDUE' | translate }}</span>
                 } @else {
-                  {{ instr.nextCalibrationDate ?? '—' }}
+                  {{
+                    instr.nextCalibrationDate
+                      ? (instr.nextCalibrationDate | serverTime | date: 'mediumDate')
+                      : '—'
+                  }}
                 }
               </td>
               <td>
                 @if (instr.maintenanceOverdue) {
                   <span class="overdue-badge">{{ 'LAB_INSTRUMENTS.OVERDUE' | translate }}</span>
                 } @else {
-                  {{ instr.nextMaintenanceDate ?? '—' }}
+                  {{
+                    instr.nextMaintenanceDate
+                      ? (instr.nextMaintenanceDate | serverTime | date: 'mediumDate')
+                      : '—'
+                  }}
                 }
               </td>
               @if (canManage()) {

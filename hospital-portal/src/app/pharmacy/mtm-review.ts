@@ -1,3 +1,4 @@
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import {
   Component,
   DestroyRef,
@@ -29,7 +30,14 @@ import { refusalReason } from '../shared/refusal-reason';
 @Component({
   selector: 'app-mtm-review',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe, PatientPickerComponent],
+  imports: [
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+    PatientPickerComponent,
+  ],
   templateUrl: './mtm-review.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './mtm-review.scss',

@@ -2185,6 +2185,7 @@
     "CLEAR_SEARCH": "Effacer la recherche",
     "CLOSE": "Fermer",
     "CLOSE_DETAIL_PANEL": "Fermer le panneau de détails",
+    "COLON": " :",
     "COMPLETED": "Terminé",
     "CONFIRM": "Confirmer",
     "CREATE": "Créer",
@@ -3403,16 +3404,6 @@
     "ORDERED_BY": "Demandé par",
     "ORDERED_DATE": "Date de Demande",
     "ORDER_CHANNEL": "Canal de commande",
-    "ORDER_CHANNEL_OPTION": {
-      "ELECTRONIC": "Électronique",
-      "EMAIL": "E-mail",
-      "FAX": "Fax",
-      "OTHER": "Autre",
-      "PHONE": "Téléphone",
-      "PORTAL": "Portail",
-      "WALK_IN": "Sans rendez-vous",
-      "WRITTEN": "Écrit"
-    },
     "ORDER_CODE": "Code de commande",
     "ORDER_DATE": "Date de commande",
     "PATIENT": "Patient",
@@ -3440,13 +3431,6 @@
     "SELECT_TEST": "Sélectionner le test",
     "SENT_TO": "Envoyé à",
     "SPECIMENS": "Échantillons",
-    "SPECIMEN_STATUS_COLLECTED": "Prélevé",
-    "SPECIMEN_STATUS_COMPLETED": "Terminé",
-    "SPECIMEN_STATUS_IN_TRANSIT": "En transit",
-    "SPECIMEN_STATUS_PENDING": "En attente",
-    "SPECIMEN_STATUS_PROCESSING": "En traitement",
-    "SPECIMEN_STATUS_RECEIVED": "Réceptionné",
-    "SPECIMEN_STATUS_REJECTED": "Rejeté",
     "SPECIMEN_TYPE": "Type d’échantillon",
     "SPECIMEN_TYPE_PLACEHOLDER": "p. ex. Sang total, Urine, Écouvillon",
     "STATUS_FILTER": "Statut",
@@ -3585,6 +3569,8 @@
     "REFLEX_ACTIVATE": "Activer",
     "REFLEX_ADD": "Ajouter la règle",
     "REFLEX_CONDITION": "Condition",
+    "REFLEX_CONDITION_SEVERITY": "Gravité = {{flag}}",
+    "REFLEX_CONDITION_THRESHOLD": "Valeur {{operator}} {{value}}",
     "REFLEX_COND_SEVERITY": "Indicateur de sévérité",
     "REFLEX_COND_THRESHOLD": "Seuil numérique",
     "REFLEX_CREATED": "Règle réflexe créée",
@@ -3638,6 +3624,7 @@
     "EXPECTED_RESULT_SHORT": "Attendu : {{value}}"
   },
   "LAB_RESULTS": {
+    "ALL_AGES": "Tous âges",
     "CORRECTED": "Corrigé",
     "CORRECTED_HINT": "Ce résultat corrige un résultat validé auparavant ; l’ancienne valeur reste au dossier, marquée remplacée.",
     "TITLE": "Résultats de laboratoire",
@@ -3728,6 +3715,7 @@
     "EXPECTED_RESULT": "Résultat attendu"
   },
   "LAB_RELEASE": {
+    "FLAG_ABNORMAL": "Anormal",
     "TITLE": "File de validation",
     "SUBTITLE": "Résultats en attente de validation par le laboratoire",
     "AWAITING_COUNT": "{{count}} en attente de validation",
@@ -5260,6 +5248,7 @@
       "NOT_REFILLABLE_CONTROLLED": "Ce médicament est un médicament contrôlé : il ne peut pas être renouvelé depuis le portail. Contactez votre équipe soignante pour une nouvelle ordonnance."
     },
     "LAB_RESULTS": {
+      "RESULT_PREFIX": "Résultat :",
       "TITLE": "Résultats d’analyses",
       "LOADING": "Chargement des résultats…",
       "EMPTY_TITLE": "Aucun résultat",
@@ -5547,6 +5536,30 @@
       "ADDITIONAL_NOTES": "Notes supplémentaires"
     },
     "ENUM": {
+      "LAB_ORDER_CHANNEL": {
+        "ELECTRONIC": "Électronique",
+        "EMAIL": "E-mail",
+        "FAX": "Fax",
+        "OTHER": "Autre",
+        "PHONE": "Téléphone",
+        "PORTAL": "Portail",
+        "WALK_IN": "Sans rendez-vous",
+        "WRITTEN": "Écrit"
+      },
+      "LAB_ORDER_PRIORITY": {
+        "ROUTINE": "Routine",
+        "STAT": "Immédiat (STAT)",
+        "URGENT": "Urgent"
+      },
+      "LAB_SPECIMEN_STATUS": {
+        "COLLECTED": "Prélevé",
+        "COMPLETED": "Terminé",
+        "IN_TRANSIT": "En transit",
+        "PENDING": "En attente",
+        "PROCESSING": "En traitement",
+        "RECEIVED": "Réceptionné",
+        "REJECTED": "Rejeté"
+      },
       "VITAL_TYPE": {
         "BLOOD_PRESSURE": "Pression artérielle",
         "HEART_RATE": "Fréquence cardiaque",
