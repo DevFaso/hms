@@ -6684,7 +6684,7 @@
         "IMAGING": "Imagerie",
         "LAB_ORDER": "Analyse demandée",
         "LAB_RESULT": "Résultat de laboratoire",
-        "NOTE": "Note",
+        "NOTE": "Note clinique",
         "PRESCRIPTION": "Ordonnance",
         "PROCEDURE": "Acte",
         "REFERRAL": "Orientation"

@@ -761,7 +761,7 @@ export class EnumLabelService implements OnDestroy {
       IMAGING: 'Imaging',
       LAB_ORDER: 'Lab test ordered',
       LAB_RESULT: 'Lab result',
-      NOTE: 'Note',
+      NOTE: 'Clinical note',
       PRESCRIPTION: 'Prescription',
       PROCEDURE: 'Procedure',
       REFERRAL: 'Referral',

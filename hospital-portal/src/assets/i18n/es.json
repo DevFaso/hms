@@ -6718,7 +6718,7 @@
         "IMAGING": "Imagenología",
         "LAB_ORDER": "Análisis solicitado",
         "LAB_RESULT": "Resultado de laboratorio",
-        "NOTE": "Nota",
+        "NOTE": "Nota clínica",
         "PRESCRIPTION": "Receta",
         "PROCEDURE": "Procedimiento",
         "REFERRAL": "Derivación"
