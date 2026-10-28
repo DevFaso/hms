@@ -67,6 +67,13 @@
                   >{{ 'PORTAL.BILLING.BALANCE_DUE' | translate }} {{ inv.balance | cfa }}</span
                 >
               }
+              @if (pendingOf(inv) > 0) {
+                <!-- QA D982: a declared payment shows on the card, not only inside "Pay now". -->
+                <span class="pli-meta pli-pending" [attr.data-testid]="'pending-' + inv.id"
+                  >{{ 'PORTAL.BILLING.PENDING_DECLARED' | translate }}
+                  {{ pendingOf(inv) | cfa }}</span
+                >
+              }
               @if (inv.creditedTo) {
                 <!-- QA D428: a folded copay says where the money went, not only "cancelled" -->
                 <span class="pli-status" data-status="CREDITED">{{
@@ -95,8 +102,100 @@
                   'PORTAL.BILLING.FULLY_DECLARED' | translate
                 }}</span>
               }
+              <button
+                type="button"
+                class="detail-btn"
+                [attr.data-testid]="'detail-btn-' + inv.id"
+                [attr.aria-expanded]="openDetailId() === inv.id"
+                [attr.aria-controls]="'invoice-detail-' + inv.id"
+                (click)="toggleDetail(inv)"
+              >
+                {{
+                  (openDetailId() === inv.id
+                    ? 'PORTAL.BILLING.HIDE_DETAIL'
+                    : 'PORTAL.BILLING.SHOW_DETAIL'
+                  ) | translate
+                }}
+              </button>
             </div>
           </div>
+          @if (openDetailId() === inv.id) {
+            <div
+              class="invoice-detail"
+              [id]="'invoice-detail-' + inv.id"
+              [attr.data-testid]="'invoice-detail-' + inv.id"
+            >
+              @if (detailLoading()) {
+                <p class="pli-meta">{{ 'PORTAL.BILLING.LOADING' | translate }}</p>
+              } @else if (detailError()) {
+                <p class="pay-error" role="alert">
+                  {{ 'PORTAL.BILLING.DETAIL_FAILED' | translate }}
+                </p>
+              } @else if (detail(); as d) {
+                <h3 class="detail-title">{{ 'PORTAL.BILLING.LINES' | translate }}</h3>
+                @if (d.lines.length === 0) {
+                  <p class="pli-meta">{{ 'PORTAL.BILLING.NO_LINES' | translate }}</p>
+                } @else {
+                  <table class="detail-table">
+                    <thead>
+                      <tr>
+                        <th scope="col">{{ 'PORTAL.BILLING.LINE_DESCRIPTION' | translate }}</th>
+                        <th scope="col">{{ 'PORTAL.BILLING.LINE_QUANTITY' | translate }}</th>
+                        <th scope="col">{{ 'PORTAL.BILLING.LINE_UNIT_PRICE' | translate }}</th>
+                        <th scope="col">{{ 'PORTAL.BILLING.LINE_TOTAL' | translate }}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (l of d.lines; track l.id) {
+                        <tr>
+                          <td>{{ l.itemDescription }}</td>
+                          <td>{{ l.quantity }}</td>
+                          <td>{{ l.unitPrice | cfa }}</td>
+                          <td>{{ l.totalPrice | cfa }}</td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                }
+                <h3 class="detail-title">{{ 'PORTAL.BILLING.PAYMENTS' | translate }}</h3>
+                @if (d.payments.length === 0) {
+                  <p class="pli-meta">{{ 'PORTAL.BILLING.NO_PAYMENTS' | translate }}</p>
+                } @else {
+                  <ul class="detail-payments">
+                    @for (p of d.payments; track p.id) {
+                      <li [attr.data-testid]="'payment-' + p.id">
+                        <span>{{ p.amount | cfa }}</span>
+                        @if (p.paymentMethod) {
+                          <span>· {{ p.paymentMethod | enumLabel: 'paymentMethod' }}</span>
+                        }
+                        <span class="pli-status" [attr.data-status]="p.status">{{
+                          'BILLING.PAYMENT_STATUSES.' + p.status | translate
+                        }}</span>
+                        @if (p.status === 'CONFIRMED') {
+                          <button
+                            type="button"
+                            class="detail-link"
+                            [attr.data-testid]="'receipt-' + p.id"
+                            (click)="downloadReceipt(inv, p)"
+                          >
+                            {{ 'PORTAL.BILLING.DOWNLOAD_RECEIPT' | translate }}
+                          </button>
+                        }
+                      </li>
+                    }
+                  </ul>
+                }
+                <button
+                  type="button"
+                  class="detail-link"
+                  [attr.data-testid]="'invoice-pdf-' + inv.id"
+                  (click)="downloadInvoice(inv)"
+                >
+                  {{ 'PORTAL.BILLING.DOWNLOAD_INVOICE' | translate }}
+                </button>
+              }
+            </div>
+          }
         }
       </div>
     </section>
@@ -192,10 +291,20 @@
             </div>
 
             <div class="pay-field">
-              <label for="payRef">{{ 'PORTAL.BILLING.REFERENCE' | translate }}</label>
+              <!-- QA D1007: optional only for cash; the label no longer says so for the others. -->
+              <label for="payRef"
+                >{{ 'PORTAL.BILLING.REFERENCE' | translate }}
+                @if (payMethod === 'CASH') {
+                  ({{ 'COMMON.OPTIONAL' | translate | lowercase }})
+                } @else {
+                  *
+                }
+              </label>
               <input
                 id="payRef"
                 type="text"
+                [required]="payMethod !== 'CASH'"
+                [attr.aria-required]="payMethod !== 'CASH'"
                 [(ngModel)]="payReference"
                 [placeholder]="'PORTAL.BILLING.REFERENCE_PLACEHOLDER' | translate"
                 maxlength="120"

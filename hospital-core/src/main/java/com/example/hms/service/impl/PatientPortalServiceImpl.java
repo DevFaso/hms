@@ -474,6 +474,25 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         return billingInvoiceService.getInvoicesForPortalPatient(patientId, pageable, locale);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public com.example.hms.payload.dto.portal.PortalInvoiceDetailDTO getMyInvoiceDetail(Authentication auth, UUID invoiceId) {
+        return billingInvoiceService.getPortalInvoiceDetail(invoiceId, resolvePatientId(auth));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public com.example.hms.payload.dto.InvoicePdfResponseDTO getMyInvoicePdf(Authentication auth, UUID invoiceId, Locale locale) {
+        return billingInvoiceService.getPortalInvoicePdf(invoiceId, resolvePatientId(auth), locale);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public com.example.hms.payload.dto.InvoicePdfResponseDTO getMyReceiptPdf(Authentication auth, UUID invoiceId,
+                                                                             UUID paymentId, Locale locale) {
+        return billingInvoiceService.getPortalReceiptPdf(invoiceId, paymentId, resolvePatientId(auth), locale);
+    }
+
     // ── Pay an invoice ───────────────────────────────────────────────────
 
     @Override

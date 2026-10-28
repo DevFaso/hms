@@ -25,6 +25,15 @@ public interface BillingInvoiceService {
      * (or verifies a proxy grant); nothing else calls this.
      */
     Page<BillingInvoiceResponseDTO> getInvoicesForPortalPatient(UUID patientId, Pageable pageable, Locale locale);
+
+    /** QA D982: one of the patient's issued invoices with its lines and payments; another's answers 404. */
+    com.example.hms.payload.dto.portal.PortalInvoiceDetailDTO getPortalInvoiceDetail(UUID invoiceId, UUID patientId);
+
+    /** QA D982: the patient's own invoice as a PDF. */
+    InvoicePdfResponseDTO getPortalInvoicePdf(UUID invoiceId, UUID patientId, Locale locale);
+
+    /** QA D982: the receipt of one of the patient's confirmed payments. */
+    InvoicePdfResponseDTO getPortalReceiptPdf(UUID invoiceId, UUID paymentId, UUID patientId, Locale locale);
     Page<BillingInvoiceResponseDTO> getInvoicesByHospitalId(UUID hospitalId, Pageable pageable, Locale locale);
     List<BillingInvoiceResponseDTO> getOverdueInvoices(LocalDate referenceDate, Locale locale);
     BillingInvoiceResponseDTO updateInvoice(UUID id, BillingInvoiceRequestDTO dto, Locale locale);

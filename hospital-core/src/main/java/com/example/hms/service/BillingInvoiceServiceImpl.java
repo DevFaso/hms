@@ -472,6 +472,61 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             .map(this::toPortalResponse);
     }
 
+    private com.example.hms.mapper.InvoiceItemMapper invoiceItemMapper;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setInvoiceItemMapper(com.example.hms.mapper.InvoiceItemMapper invoiceItemMapper) {
+        this.invoiceItemMapper = invoiceItemMapper;
+    }
+
+    /**
+     * QA D982: the patient's own issued invoice. Another patient's, or one
+     * still in draft, answers exactly as a missing one.
+     */
+    private BillingInvoice requirePortalVisible(BillingInvoice invoice, UUID patientId) {
+        if (invoice.getPatient() == null || !invoice.getPatient().getId().equals(patientId)
+                || invoice.getStatus() == InvoiceStatus.DRAFT) {
+            throw new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, invoice.getId());
+        }
+        return invoice;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public com.example.hms.payload.dto.portal.PortalInvoiceDetailDTO getPortalInvoiceDetail(UUID invoiceId, UUID patientId) {
+        BillingInvoice invoice = requirePortalVisible(invoiceRepository.findByIdWithRefs(invoiceId)
+            .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, invoiceId)), patientId);
+        List<com.example.hms.payload.dto.InvoiceItemResponseDTO> items = invoiceItemRepository
+            .findByBillingInvoiceId(invoiceId).stream()
+            .map(invoiceItemMapper::toInvoiceItemResponseDTO)
+            .toList();
+        List<PaymentTransactionResponseDTO> payments = paymentTransactionRepository
+            .findByInvoice_IdOrderByCreatedAtAsc(invoiceId).stream()
+            .map(PaymentTransactionResponseDTO::from)
+            // The cashier's notes stay with the cashier.
+            .map(row -> new PaymentTransactionResponseDTO(row.id(), row.amount(), row.paymentDate(),
+                row.paymentMethod(), row.referenceNumber(), null, row.status(), row.reversalReason(),
+                row.reversedAt(), row.createdAt()))
+            .toList();
+        return new com.example.hms.payload.dto.portal.PortalInvoiceDetailDTO(toPortalResponse(invoice), items, payments);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public InvoicePdfResponseDTO getPortalInvoicePdf(UUID invoiceId, UUID patientId, Locale locale) {
+        BillingInvoice invoice = requirePortalVisible(invoiceRepository.findByIdWithRefs(invoiceId)
+            .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, invoiceId)), patientId);
+        return renderInvoicePdf(invoice, locale);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public InvoicePdfResponseDTO getPortalReceiptPdf(UUID invoiceId, UUID paymentId, UUID patientId, Locale locale) {
+        BillingInvoice invoice = requirePortalVisible(invoiceRepository.findByIdWithRefs(invoiceId)
+            .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, invoiceId)), patientId);
+        return renderReceiptPdf(invoice, paymentId, locale);
+    }
+
     /** QA D421: the patient's invoice with what they already declared and staff have not confirmed. */
     private BillingInvoiceResponseDTO toPortalResponse(BillingInvoice invoice) {
         BillingInvoiceResponseDTO dto = invoiceMapper.toBillingInvoiceResponseDTO(invoice);
@@ -772,7 +827,12 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
                 && !activeHospitalId.equals(invoice.getHospital().getId())) {
             throw new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, invoiceId);
         }
+        return renderInvoicePdf(invoice, locale);
+    }
 
+    /** The invoice PDF of an invoice the caller may already read. */
+    private InvoicePdfResponseDTO renderInvoicePdf(BillingInvoice invoice, Locale locale) {
+        UUID invoiceId = invoice.getId();
         List<InvoiceItem> items = invoiceItemRepository.findByBillingInvoiceId(invoiceId);
         Locale effectiveLocale = locale != null ? locale : LocaleContextHolder.getLocale();
 
@@ -793,6 +853,12 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
                 && !activeHospitalId.equals(invoice.getHospital().getId())) {
             throw new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, invoiceId);
         }
+        return renderReceiptPdf(invoice, paymentId, locale);
+    }
+
+    /** The receipt of one confirmed payment on an invoice the caller may already read. */
+    private InvoicePdfResponseDTO renderReceiptPdf(BillingInvoice invoice, UUID paymentId, Locale locale) {
+        UUID invoiceId = invoice.getId();
         PaymentTransaction row = loadPaymentRow(invoice, paymentId);
         // A receipt says money was received: never for a pending, rejected or reversed row.
         if (row.getStatus() != PaymentStatus.CONFIRMED) {

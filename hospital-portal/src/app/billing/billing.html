@@ -944,10 +944,16 @@
           </select>
         </div>
         <div class="field">
-          <label for="payment-reference">{{ 'BILLING.PAYMENT_REFERENCE' | translate }}</label>
+          <!-- QA D1007: the methods the server refuses without a reference say so. -->
+          <label for="payment-reference"
+            >{{ 'BILLING.PAYMENT_REFERENCE' | translate
+            }}{{ paymentReferenceRequired() ? ' *' : '' }}</label
+          >
           <input
             id="payment-reference"
             type="text"
+            [required]="paymentReferenceRequired()"
+            [attr.aria-required]="paymentReferenceRequired()"
             maxlength="120"
             [ngModel]="paymentReference()"
             (ngModelChange)="paymentReference.set($event)"

@@ -656,6 +656,26 @@ describe('BillingComponent', () => {
     });
   });
 
+  describe('payment reference (QA D1007)', () => {
+    it('is required for the methods the server refuses without one', () => {
+      fixture.detectChanges();
+      component.openPayment(component.invoices()[0]);
+      component.paymentMethod.set('MOBILE_MONEY');
+      component.paymentAmount.set(500);
+      component.paymentReference.set('');
+      component.recordPayment();
+      expect(billingSpy.recordPayment).not.toHaveBeenCalled();
+      expect(toastSpy.error).toHaveBeenCalledWith('BILLING.PAYMENT_REFERENCE_REQUIRED');
+      fixture.detectChanges();
+      expect(
+        fixture.nativeElement.querySelector('label[for="payment-reference"]').textContent,
+      ).toContain('*');
+      component.paymentMethod.set('CASH');
+      fixture.detectChanges();
+      expect(component.paymentReferenceRequired()).toBeFalse();
+    });
+  });
+
   describe('receptionist (QA D973)', () => {
     it('may record a payment but not reverse one', async () => {
       TestBed.resetTestingModule();

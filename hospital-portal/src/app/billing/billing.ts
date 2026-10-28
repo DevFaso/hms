@@ -789,6 +789,11 @@ ${this.translate.instant('BILLING.SUPPLEMENTARY_CONFIRM')}`)
     });
   }
 
+  /** QA D1007: the server refuses these methods without a transaction reference. */
+  paymentReferenceRequired(): boolean {
+    return ['MOBILE_MONEY', 'INSURANCE', 'BANK_TRANSFER'].includes(this.paymentMethod());
+  }
+
   closePayment(): void {
     this.showPaymentModal.set(false);
     this.paymentInv.set(null);
@@ -810,8 +815,12 @@ ${this.translate.instant('BILLING.SUPPLEMENTARY_CONFIRM')}`)
       this.toast.error(this.translate.instant('BILLING.PAYMENT_WHOLE_AMOUNT'));
       return;
     }
-    this.paymentSaving.set(true);
     const reference = this.paymentReference().trim();
+    if (this.paymentReferenceRequired() && !reference) {
+      this.toast.error(this.translate.instant('BILLING.PAYMENT_REFERENCE_REQUIRED'));
+      return;
+    }
+    this.paymentSaving.set(true);
     const payment = { amount, method: this.paymentMethod(), reference: reference || undefined };
     this.billingService.recordPayment(inv.id, payment).subscribe({
       next: (updated) => {

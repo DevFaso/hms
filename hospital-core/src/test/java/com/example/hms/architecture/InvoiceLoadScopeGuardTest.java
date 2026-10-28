@@ -51,7 +51,9 @@ class InvoiceLoadScopeGuardTest {
             + "(?:[\\w.<>\\[\\]?]++|,\\s*+)++\\s++(\\w++)\\(");
 
     private static final List<String> SCOPE_CHECKS = List.of(
-        "requireActiveHospitalId", "requireInScope", "requirePinned", "requirePayable");
+        "requireActiveHospitalId", "requireInScope", "requirePinned", "requirePayable",
+        // QA D982: the patient's own issued invoice, else 404.
+        "requirePortalVisible");
 
     /** Internal loads reached only after a scoped load of the same invoice. Shrink only. */
     private static final Map<String, String> ALLOWED = Map.of(

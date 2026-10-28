@@ -2089,6 +2089,83 @@ class BillingInvoiceServiceImplTest {
     }
 
     // =========================================================================
+    // QA D982: the patient sees the lines, the payments and the documents
+    // =========================================================================
+
+    private BillingInvoice portalInvoice(UUID patientId, InvoiceStatus status) {
+        BillingInvoice invoice = payableInvoice(patientId);
+        invoice.setStatus(status);
+        invoice.setInvoiceNumber("GH-2026-000012");
+        when(invoiceRepository.findByIdWithRefs(invoice.getId())).thenReturn(Optional.of(invoice));
+        return invoice;
+    }
+
+    @Test
+    void portalDetail_listsTheLinesAndThePaymentsWithoutTheCashiersNotes_D982() {
+        UUID patientId = UUID.randomUUID();
+        BillingInvoice invoice = portalInvoice(patientId, InvoiceStatus.PARTIALLY_PAID);
+        com.example.hms.model.InvoiceItem line = new com.example.hms.model.InvoiceItem();
+        line.setId(UUID.randomUUID());
+        line.setBillingInvoice(invoice);
+        line.setItemDescription("Consultation");
+        line.setQuantity(1);
+        line.setUnitPrice(new BigDecimal("3000"));
+        when(invoiceItemRepository.findByBillingInvoiceId(invoice.getId())).thenReturn(List.of(line));
+        com.example.hms.model.PaymentTransaction declared = com.example.hms.model.PaymentTransaction.builder()
+            .invoice(invoice).amount(new BigDecimal("500")).notes("vu au guichet, client pressé")
+            .status(com.example.hms.enums.PaymentStatus.PENDING).build();
+        when(paymentTransactionRepository.findByInvoice_IdOrderByCreatedAtAsc(invoice.getId()))
+            .thenReturn(List.of(declared));
+        billingInvoiceService.setInvoiceItemMapper(new com.example.hms.mapper.InvoiceItemMapper());
+
+        com.example.hms.payload.dto.portal.PortalInvoiceDetailDTO detail =
+            billingInvoiceService.getPortalInvoiceDetail(invoice.getId(), patientId);
+
+        assertEquals(1, detail.items().size());
+        assertEquals("Consultation", detail.items().get(0).getItemDescription());
+        assertEquals(1, detail.payments().size());
+        assertEquals("PENDING", detail.payments().get(0).status());
+        assertNull(detail.payments().get(0).notes());
+        assertEquals("GH-2026-000012", detail.invoice().getInvoiceNumber());
+    }
+
+    @Test
+    void portalDetail_anotherPatientsInvoiceAnswersAsAMissingOne_D982() {
+        BillingInvoice invoice = portalInvoice(UUID.randomUUID(), InvoiceStatus.SENT);
+        UUID stranger = UUID.randomUUID();
+
+        assertThrows(com.example.hms.exception.ResourceNotFoundException.class,
+            () -> billingInvoiceService.getPortalInvoiceDetail(invoice.getId(), stranger));
+        assertThrows(com.example.hms.exception.ResourceNotFoundException.class,
+            () -> billingInvoiceService.getPortalInvoicePdf(invoice.getId(), stranger, Locale.FRENCH));
+        assertThrows(com.example.hms.exception.ResourceNotFoundException.class,
+            () -> billingInvoiceService.getPortalReceiptPdf(invoice.getId(), UUID.randomUUID(), stranger, Locale.FRENCH));
+        verify(pdfInvoiceService, never()).generateInvoicePdf(any(), any(), any(), any());
+    }
+
+    @Test
+    void portalDetail_aDraftIsNotIssuedToThePatientYet_D982() {
+        UUID patientId = UUID.randomUUID();
+        BillingInvoice draft = portalInvoice(patientId, InvoiceStatus.DRAFT);
+
+        assertThrows(com.example.hms.exception.ResourceNotFoundException.class,
+            () -> billingInvoiceService.getPortalInvoiceDetail(draft.getId(), patientId));
+    }
+
+    @Test
+    void portalPdf_thePatientDownloadsTheirOwnInvoice_D982() {
+        UUID patientId = UUID.randomUUID();
+        BillingInvoice invoice = portalInvoice(patientId, InvoiceStatus.PAID);
+        when(pdfInvoiceService.generateInvoicePdf(any(), any(), any(), any())).thenReturn(new byte[] {1, 2});
+
+        com.example.hms.payload.dto.InvoicePdfResponseDTO pdf =
+            billingInvoiceService.getPortalInvoicePdf(invoice.getId(), patientId, Locale.FRENCH);
+
+        assertEquals("GH-2026-000012", pdf.suggestedFilename());
+        verify(roleValidator, never()).requireActiveHospitalId();
+    }
+
+    // =========================================================================
     // QA D936: the visit code left empty still takes the check-in copay
     // =========================================================================
 
