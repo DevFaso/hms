@@ -51,7 +51,7 @@ class SaveThenRefreshGuardTest {
 
     /** A refresh of {@code x}, through the entity manager or a house helper ({@code item.refresh(view)} is neither). */
     static final Pattern REFRESH = Pattern.compile(
-        "\\b(?:(?:entityManager|em)\\.refresh|refreshIfManaged|resync)\\(\\s*(\\w+)\\s*\\)");
+        "\\b(?:(?:entityManager|em)\\.refresh|refreshIfManaged|resync)\\(\\s*(?:this\\s*\\.\\s*)?(\\w+)\\s*(?:,[^()]*)?\\)");
 
     /** The keyword before a `( … ) {` that opens a control block, not a method body. */
     private static final Pattern CONTROL_KEYWORD = Pattern.compile(
@@ -79,7 +79,9 @@ class SaveThenRefreshGuardTest {
         while (m.find()) {
             int open = m.end() - 1;
             int close = SourceScan.closingParen(source, open);
-            String argument = source.substring(open + 1, close).strip();
+            // One line, single-spaced: a save argument that spans lines (a builder chain)
+            // still makes a parseable message, and reformatting it does not change the key.
+            String argument = source.substring(open + 1, close).strip().replaceAll("\\s+", " ");
             int semicolon = SourceScan.indexOfOutsideLiterals(source, ';', close);
             if (semicolon < 0) {
                 continue;
@@ -238,7 +240,8 @@ class SaveThenRefreshGuardTest {
         return m.group(1) + " save(" + m.group(2) + ") refresh(" + m.group(3) + ")";
     }
 
-    private static final Pattern HIT = Pattern.compile("^(.+?):\\d+: save\\((.*)\\) then refresh\\((\\w+)\\) — ");
+    private static final Pattern HIT =
+        Pattern.compile("^(.+?):\\d+: save\\((.*)\\) then refresh\\((\\w+)\\) — ", Pattern.DOTALL);
 
     /** Whether {@code argument} is {@code name} or names it: {@code mapper.apply(existing, request)} names {@code existing}. */
     static boolean namesIdentifier(String argument, String name) {
@@ -498,6 +501,21 @@ class SaveThenRefreshGuardTest {
                     entityManager.refresh(existing);
                 }
             """;
+        // A multi-line save argument keys and reports on one line; a refresh with a lock
+        // mode or through `this.` is the same refresh.
+        String multiLine = """
+                Appointment saved = appointmentRepository.save(Appointment.builder()
+                    .notes(n)
+                    .build());
+                entityManager.refresh(saved, LockModeType.PESSIMISTIC_READ);
+            """;
+        String thisField = """
+                appointmentRepository.save(this.current);
+                entityManager.refresh(this.current);
+            """;
+        assertThat(siteKey(offenders("service/A.java", multiLine).get(0)))
+            .isEqualTo("service/A.java save(Appointment.builder() .notes(n) .build()) refresh(saved)");
+        assertThat(offenders("x", thisField)).hasSize(1);
         assertThat(offenders("x", elseBranch)).isEmpty();
         assertThat(offenders("x", afterTheElse)).hasSize(1);
         assertThat(offenders("x", nestedReturn)).hasSize(1);

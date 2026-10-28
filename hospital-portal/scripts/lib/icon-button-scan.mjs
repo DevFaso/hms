@@ -150,6 +150,10 @@ export function nameFindings(html) {
             attrValue(tag, 'formControlName') ??
             attrValue(tag, 'name') ??
             attrValue(tag, 'ngModel') ??
+            // The two-way binding the portal writes (`[(ngModel)]="m.medicationName"`):
+            // without it every such field fell back to `input text` and shared one pin.
+            tag.attrs.get('[(ngModel)]') ??
+            attrValue(tag, 'formControl') ??
             id ??
             type;
           out.push({

@@ -282,7 +282,7 @@
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/chat/chat.html::field-label::input text": {
+    "src/app/chat/chat.html::field-label::input messageText": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
@@ -438,8 +438,32 @@
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/discharge/discharge.html::field-label::input text": {
-      "count": 7,
+    "src/app/discharge/discharge.html::field-label::input f.appointmentType": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/discharge/discharge.html::field-label::input f.location": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/discharge/discharge.html::field-label::input f.providerName": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/discharge/discharge.html::field-label::input m.dosage": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/discharge/discharge.html::field-label::input m.frequency": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/discharge/discharge.html::field-label::input m.medicationName": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/discharge/discharge.html::field-label::input t.testName": {
+      "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
     "src/app/encounters/encounters.html::field-label::input text": {
@@ -1030,8 +1054,12 @@
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/patients/patient-chart/patient-chart.component.html::field-label::input text": {
-      "count": 2,
+    "src/app/patients/patient-chart/patient-chart.component.html::field-label::input s.display": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/patients/patient-chart/patient-chart.component.html::field-label::input s.narrative": {
+      "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
     "src/app/patients/patient-chart/patient-chart.component.html::icon-button::button block (click)=openDeactivateAllergy(a)": {

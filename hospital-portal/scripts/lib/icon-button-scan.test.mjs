@@ -68,7 +68,7 @@ test('D993: an <input>/<textarea>/<select> with no label, aria-label or <label f
     <input type="text" formControlName="scan" placeholder="Scanner" />
     <select [ngModel]="role"><option>a</option></select>`;
   assert.deepEqual(rules(html), [
-    'field-label:textarea text',
+    'field-label:textarea reason',
     'field-label:input scan',
     'field-label:select role',
   ]);
@@ -86,4 +86,15 @@ test('visibleText strips icons, comments and control flow but keeps text', () =>
   assert.equal(visibleText(`<!-- c --><span class="material-symbols-outlined">x</span>`), '');
   assert.equal(visibleText(`@if (a) { <mat-icon>x</mat-icon> } @else { Oui }`), 'Oui');
   assert.equal(visibleText(`<svg><path d="M0"/></svg><i class="fa fa-x"></i>&nbsp;`), '');
+});
+
+test('a two-way-bound field is anchored on its binding, so two unlabelled rows are two pins', () => {
+  const html = `<input type="text" [(ngModel)]="m.medicationName" />
+    <input type="text" [(ngModel)]="m.dosage" />
+    <input type="text" [formControl]="dose" />`;
+  assert.deepEqual(rules(html), [
+    'field-label:input m.medicationName',
+    'field-label:input m.dosage',
+    'field-label:input dose',
+  ]);
 });
