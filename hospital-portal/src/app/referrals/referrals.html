@@ -259,7 +259,22 @@
           <div class="detail-grid">
             <div class="detail-field">
               <span class="field-label">{{ 'PATIENTS.PATIENT' | translate }}</span
-              ><span class="field-value">{{ ref.patientName }}</span>
+              ><span class="field-value"
+                >{{ ref.patientName }}
+                <button
+                  type="button"
+                  class="action-link open-chart"
+                  [disabled]="chartCheck() === 'checking'"
+                  (click)="openPatientChart(ref)"
+                >
+                  {{ 'REFERRALS.OPEN_CHART' | translate }}
+                </button></span
+              >
+              @if (chartCheck() === 'unavailable') {
+                <p class="chart-unavailable" role="status">
+                  {{ 'REFERRALS.CHART_UNAVAILABLE' | translate }}
+                </p>
+              }
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'PATIENTS.MRN' | translate }}</span

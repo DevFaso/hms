@@ -8,7 +8,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 import {
@@ -62,6 +62,29 @@ export class ReferralsComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly scopeUrl = inject(HospitalScopeUrlService);
   private readonly translate = inject(TranslateService);
+  private readonly router = inject(Router);
+
+  /**
+   * QA D998: whether the referral's patient chart opens here. A referral
+   * accepted at another hospital does not by itself open the chart there
+   * (cross-hospital reads are behind a flag), and opening /patients/<id>
+   * used to bounce silently back to the list. The chart is checked first and
+   * the reason is shown in the referral instead.
+   */
+  readonly chartCheck = signal<'idle' | 'checking' | 'unavailable'>('idle');
+
+  openPatientChart(ref: ReferralResponse): void {
+    if (!ref.patientId) return;
+    this.chartCheck.set('checking');
+    const hospitalId = this.roleContext.effectiveHospitalIdForRequest() ?? undefined;
+    this.patientService.getById(ref.patientId, hospitalId).subscribe({
+      next: () => {
+        this.chartCheck.set('idle');
+        this.router.navigate(['/patients', ref.patientId]);
+      },
+      error: () => this.chartCheck.set('unavailable'),
+    });
+  }
 
   /** Cross-tenant signals — drive the chip + Hospital column toggle. */
   protected readonly isSuperAdmin = this.roleContext.isSuperAdmin;
@@ -742,6 +765,7 @@ export class ReferralsComponent implements OnInit {
   }
 
   viewDetail(r: ReferralResponse): void {
+    this.chartCheck.set('idle');
     this.selectedReferral.set(r);
   }
   closeDetail(): void {

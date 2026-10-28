@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
-import { provideRouter } from '@angular/router';
+import { provideRouter, Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ReferralsComponent } from './referrals';
 import {
@@ -231,6 +231,22 @@ describe('ReferralsComponent', () => {
 
   it('QA D775: an internal referral (no receiving hospital) is acted on at its own hospital', () => {
     expect(component.isReceivingSide({ id: 'r-5', hospitalId: 'h-A' } as any)).toBeTrue();
+  });
+
+  it('QA D998: a chart that does not open here is explained in the referral, not a silent bounce', () => {
+    flushInitRequests();
+    const router = TestBed.inject(Router);
+    const nav = spyOn(router, 'navigate');
+    component.viewDetail({ id: 'r-7', patientId: 'p-9', hospitalId: 'h-B' } as any);
+    component.openPatientChart({ id: 'r-7', patientId: 'p-9' } as any);
+    httpMock
+      .expectOne((req) => req.url.includes('/patients/p-9'))
+      .flush({}, { status: 404, statusText: 'Not Found' });
+    expect(component.chartCheck()).toBe('unavailable');
+    expect(nav).not.toHaveBeenCalled();
+    component.openPatientChart({ id: 'r-7', patientId: 'p-9' } as any);
+    httpMock.expectOne((req) => req.url.includes('/patients/p-9')).flush({ id: 'p-9' });
+    expect(nav).toHaveBeenCalledWith(['/patients', 'p-9']);
   });
 
   it('QA D955: the referrer is offered no receiving step on her own internal referral', () => {
