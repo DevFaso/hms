@@ -54,6 +54,38 @@ defect is **not fixed**, whatever the local test says.
    build, and the **sibling paths** the hunt in step 1 found. Local unit
    tests alone do not close a defect ([[verify-on-running-app-before-ready]]).
 
+## Obligation zero — never break what already works
+
+A fix that breaks a working path is worse than the defect: the user loses
+a feature they had, and the next round finds it as a "new" defect. So:
+
+- **The whole suite, every time.** Before every push: the full hospital-core
+  suite (not just the touched module) and the full portal suite, plus
+  `EntitySchemaValidationIT` whenever an entity changed. A red test that
+  "looks unrelated" is a regression until proven otherwise; never skip,
+  delete or weaken an existing test to get green. If an existing test
+  must change, the PR body says which assertion changed and why the old
+  behaviour was wrong.
+- **Behaviour changes are declared.** Any change in what a working path
+  does (a response shape, a status transition, a default, a message key,
+  a permission, a sort order, a rounding) is listed in the PR body under
+  **Behaviour changes** as `old → new, why, who is affected`. Undeclared
+  behaviour change found in review is a blocking finding.
+- **Choke-point fixes are proven on every caller.** When step 2 routes N
+  paths through one shared implementation, each caller keeps or gains a
+  test; the PR body lists the callers. A shared helper that silently
+  changes a caller's behaviour is the most common way a fix breaks
+  something that worked.
+- **Re-run the positive paths.** The round's report has a **What worked**
+  list per area. Before hand-back, re-run the ones your files touch (the
+  same `C:\dev\hms-qa\scripts\<round>\<area>` scripts) and say so in the
+  PR body. The combined-branch re-test re-runs **every** area's What-worked
+  list from this and the earlier rounds, and any item that passed before
+  and fails now is a blocking regression, whoever caused it.
+- **Scope discipline.** The hunt in step 1 widens the fix to the class, not
+  to "while I'm here" refactors. Renames, reformatting, dependency bumps
+  and opportunistic cleanups go in their own PR.
+
 ## The class table — required in the PR body
 
 One row per defect id. A reviewer rejects the PR if a row is missing or a
