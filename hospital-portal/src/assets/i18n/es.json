@@ -9753,6 +9753,7 @@
   },
   "MATERNITY": {
     "LABOR_TAB": "Parto",
+    "PATIENT_NAME_UNAVAILABLE": "Paciente (nombre no disponible)",
     "TITLE": "Maternidad",
     "SUBTITLE": "Tablero de antecedentes maternos y derivaciones OB/GYN",
     "BOARD_TAB": "Tablero de Antecedentes",

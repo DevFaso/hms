@@ -321,13 +321,17 @@ export class MaternityComponent implements OnInit {
         );
       },
       error: () => {
-        // Names stay blank; the table falls back to the MRN-less id prefix.
+        // Names stay blank; the table says the name is unavailable.
       },
     });
   }
 
   patientName(patientId: string): string {
-    return this.patientNames.get(patientId) || `${patientId.substring(0, 8)}…`;
+    // QA D992 class: never a slice of the UUID; say the name is unavailable.
+    return (
+      this.patientNames.get(patientId) ||
+      (this.translate.instant('MATERNITY.PATIENT_NAME_UNAVAILABLE') as string)
+    );
   }
 
   setWorklist(w: BoardWorklist): void {

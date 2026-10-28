@@ -9753,6 +9753,7 @@
   },
   "MATERNITY": {
     "LABOR_TAB": "Labor & Delivery",
+    "PATIENT_NAME_UNAVAILABLE": "Patient (name unavailable)",
     "TITLE": "Maternity",
     "SUBTITLE": "Maternal history board and OB/GYN referrals",
     "BOARD_TAB": "History Board",

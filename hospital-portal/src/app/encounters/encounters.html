@@ -10,7 +10,7 @@
       <app-hospital-scope-chip (scopeChange)="onScopeChange($event)" />
       @if (canCreateEncounter()) {
         <button class="btn-primary" (click)="openCreate()">
-          <span class="material-symbols-outlined">add</span>
+          <span class="material-symbols-outlined" aria-hidden="true">add</span>
           {{ 'ENCOUNTERS.NEW_ENCOUNTER' | translate }}
         </button>
       }
@@ -172,28 +172,31 @@
               <td>
                 <div class="action-group">
                   <button
+                    [attr.aria-label]="'ENCOUNTERS.VIEW_DETAILS' | translate"
                     class="btn-icon"
                     [title]="'ENCOUNTERS.VIEW_DETAILS' | translate"
                     (click)="selectEncounter(enc)"
                   >
-                    <span class="material-symbols-outlined">visibility</span>
+                    <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
                   </button>
                   @if (canEditEncounter()) {
                     <button
+                      [attr.aria-label]="'ENCOUNTERS.EDIT' | translate"
                       class="btn-icon"
                       [title]="'ENCOUNTERS.EDIT' | translate"
                       (click)="openEdit(enc)"
                     >
-                      <span class="material-symbols-outlined">edit</span>
+                      <span class="material-symbols-outlined" aria-hidden="true">edit</span>
                     </button>
                   }
                   @if (canDeleteEncounter()) {
                     <button
+                      [attr.aria-label]="'ENCOUNTERS.DELETE' | translate"
                       class="btn-icon danger"
                       [title]="'ENCOUNTERS.DELETE' | translate"
                       (click)="confirmDelete(enc)"
                     >
-                      <span class="material-symbols-outlined">delete</span>
+                      <span class="material-symbols-outlined" aria-hidden="true">delete</span>
                     </button>
                   }
                 </div>
@@ -210,8 +213,13 @@
       <div class="detail-panel">
         <div class="detail-header">
           <h2>{{ 'ENCOUNTERS.DETAILS' | translate }}</h2>
-          <button class="btn-icon" [title]="'COMMON.CLOSE' | translate" (click)="closeDetail()">
-            <span class="material-symbols-outlined">close</span>
+          <button
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+            class="btn-icon"
+            [title]="'COMMON.CLOSE' | translate"
+            (click)="closeDetail()"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
           </button>
         </div>
         <div class="detail-body">
@@ -269,13 +277,13 @@
                 [disabled]="transitioning()"
                 (click)="startEncounter(enc)"
               >
-                <span class="material-symbols-outlined">play_arrow</span>
+                <span class="material-symbols-outlined" aria-hidden="true">play_arrow</span>
                 {{ 'ENCOUNTERS.START' | translate }}
               </button>
             }
             @if (canCheckOut(enc)) {
               <button class="btn-primary" [disabled]="transitioning()" (click)="openCheckout(enc)">
-                <span class="material-symbols-outlined">logout</span>
+                <span class="material-symbols-outlined" aria-hidden="true">logout</span>
                 {{ 'ENCOUNTERS.CHECK_OUT' | translate }}
               </button>
             }
@@ -285,7 +293,7 @@
                 [disabled]="transitioning()"
                 (click)="completeExamination(enc)"
               >
-                <span class="material-symbols-outlined">task_alt</span>
+                <span class="material-symbols-outlined" aria-hidden="true">task_alt</span>
                 {{ 'ENCOUNTERS.COMPLETE_EXAM' | translate }}
               </button>
             }
@@ -295,13 +303,13 @@
                 [disabled]="transitioning()"
                 (click)="markReadyForDischarge(enc)"
               >
-                <span class="material-symbols-outlined">exit_to_app</span>
+                <span class="material-symbols-outlined" aria-hidden="true">exit_to_app</span>
                 {{ 'ENCOUNTERS.READY_FOR_DISCHARGE' | translate }}
               </button>
             }
             @if (enc.status === 'COMPLETED') {
               <button class="btn-secondary" [disabled]="avsLoading()" (click)="viewAvs(enc)">
-                <span class="material-symbols-outlined">summarize</span>
+                <span class="material-symbols-outlined" aria-hidden="true">summarize</span>
                 {{ 'ENCOUNTERS.VIEW_AVS' | translate }}
               </button>
             }
@@ -397,7 +405,7 @@
                       (click)="signNoteEntry(view.entry)"
                       [disabled]="signingEntryId() !== null"
                     >
-                      <span class="material-symbols-outlined">draw</span>
+                      <span class="material-symbols-outlined" aria-hidden="true">draw</span>
                       {{
                         (signingEntryId() === view.entry.id
                           ? 'ENCOUNTERS.NOTE_SIGNING'
@@ -418,7 +426,7 @@
                         (click)="cosignNoteEntry(view.entry)"
                         [disabled]="cosigningEntryId() !== null"
                       >
-                        <span class="material-symbols-outlined">approval</span>
+                        <span class="material-symbols-outlined" aria-hidden="true">approval</span>
                         {{
                           (cosigningEntryId() === view.entry.id
                             ? 'ENCOUNTERS.NOTE_COSIGNING'
@@ -439,7 +447,7 @@
                       data-testid="addendum-note-entry"
                       (click)="openAddendumForm(view.entry.id)"
                     >
-                      <span class="material-symbols-outlined">post_add</span>
+                      <span class="material-symbols-outlined" aria-hidden="true">post_add</span>
                       {{ 'ENCOUNTERS.ADD_ADDENDUM' | translate }}
                     </button>
                   }
@@ -481,7 +489,7 @@
                     (click)="signNote()"
                     [disabled]="signingNote()"
                   >
-                    <span class="material-symbols-outlined">draw</span>
+                    <span class="material-symbols-outlined" aria-hidden="true">draw</span>
                     {{
                       (signingNote() ? 'ENCOUNTERS.NOTE_SIGNING' : 'ENCOUNTERS.SIGN_NOTE')
                         | translate
@@ -513,7 +521,7 @@
                       (click)="cosignNote()"
                       [disabled]="cosigningNote()"
                     >
-                      <span class="material-symbols-outlined">approval</span>
+                      <span class="material-symbols-outlined" aria-hidden="true">approval</span>
                       {{
                         (cosigningNote() ? 'ENCOUNTERS.NOTE_COSIGNING' : 'ENCOUNTERS.COSIGN_NOTE')
                           | translate
@@ -552,7 +560,7 @@
                 [title]="'ENCOUNTERS.ADD_NOTE' | translate"
                 (click)="showNoteForm.set(true)"
               >
-                <span class="material-symbols-outlined">add</span>
+                <span class="material-symbols-outlined" aria-hidden="true">add</span>
                 {{ 'ENCOUNTERS.ADD_NOTE' | translate }}
               </button>
             }
@@ -561,7 +569,7 @@
               [title]="'ENCOUNTERS.ELIGIBILITY_CHECK_HINT' | translate"
               (click)="openEligibilityDialog()"
             >
-              <span class="material-symbols-outlined">verified_user</span>
+              <span class="material-symbols-outlined" aria-hidden="true">verified_user</span>
               {{ 'ENCOUNTERS.ELIGIBILITY_CHECK' | translate }}
             </button>
           </div>
@@ -588,7 +596,7 @@
                 [title]="'ENCOUNTERS.ADD_ADDENDUM' | translate"
                 (click)="openAddendumForm(noteState()?.id)"
               >
-                <span class="material-symbols-outlined">post_add</span>
+                <span class="material-symbols-outlined" aria-hidden="true">post_add</span>
                 {{ 'ENCOUNTERS.ADD_ADDENDUM' | translate }}
               </button>
             }
@@ -611,14 +619,23 @@
   <div class="modal-backdrop" tabindex="-1" (click)="closeAvs()" (keydown.escape)="closeAvs()">
     <div
       class="modal modal-lg"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="encounters-dialog-1-title"
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'ENCOUNTERS.AVS_TITLE' | translate }} — {{ summary.patientName }}</h2>
-        <button class="modal-close" (click)="closeAvs()">
-          <span class="material-symbols-outlined">close</span>
+        <h2 id="encounters-dialog-1-title">
+          {{ 'ENCOUNTERS.AVS_TITLE' | translate }} — {{ summary.patientName }}
+        </h2>
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="modal-close"
+          (click)="closeAvs()"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -689,18 +706,25 @@
   <div class="modal-backdrop" tabindex="-1" (click)="closeModal()" (keydown.escape)="closeModal()">
     <div
       class="modal modal-lg"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="encounters-dialog-2-title"
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="encounters-dialog-2-title">
           {{
             editing() ? ('ENCOUNTERS.EDIT' | translate) : ('ENCOUNTERS.NEW_ENCOUNTER' | translate)
           }}
         </h2>
-        <button class="modal-close" (click)="closeModal()">
-          <span class="material-symbols-outlined">close</span>
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="modal-close"
+          (click)="closeModal()"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -719,12 +743,13 @@
                   }
                 </div>
                 <button
+                  [attr.aria-label]="'COMMON.CHANGE_PATIENT' | translate"
                   type="button"
                   class="chip-clear"
                   (click)="clearPatient()"
                   [title]="'COMMON.CHANGE_PATIENT' | translate"
                 >
-                  <span class="material-symbols-outlined">close</span>
+                  <span class="material-symbols-outlined" aria-hidden="true">close</span>
                 </button>
               </div>
             } @else {
@@ -909,14 +934,21 @@
   >
     <div
       class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="encounters-dialog-3-title"
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'ENCOUNTERS.DELETE' | translate }}</h2>
-        <button class="modal-close" (click)="cancelDelete()">
-          <span class="material-symbols-outlined">close</span>
+        <h2 id="encounters-dialog-3-title">{{ 'ENCOUNTERS.DELETE' | translate }}</h2>
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="modal-close"
+          (click)="cancelDelete()"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
