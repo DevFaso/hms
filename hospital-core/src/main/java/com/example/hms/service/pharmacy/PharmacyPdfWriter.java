@@ -61,6 +61,15 @@ final class PharmacyPdfWriter implements AutoCloseable {
         }
     }
 
+    /** The height a row of {@code cells} takes once each cell is wrapped to its column. */
+    private float rowHeight(float[] widths, String[] cells, PDFont font, float fontSize) throws IOException {
+        int lines = 1;
+        for (int i = 0; i < cells.length; i++) {
+            lines = Math.max(lines, wrap(font, fontSize, sanitize(font, cells[i]), widths[i] - 4f).size());
+        }
+        return lines * fontSize * LEADING + 2f;
+    }
+
     /** One wrapped block of text, the full content width. */
     void paragraph(PDFont font, float fontSize, String text) throws IOException {
         for (String line : wrap(font, fontSize, sanitize(font, text), contentWidth())) {
@@ -103,7 +112,13 @@ final class PharmacyPdfWriter implements AutoCloseable {
     void tableHeader(float[] widths, String[] cells) throws IOException {
         this.tableWidths = widths.clone();
         this.tableHeader = cells.clone();
-        ensureRoom(16f);
+        // Review of #975: the header wraps in narrow columns ("Date et heure",
+        // "Prescripteur"); it needs its own wrapped height plus one row's, or
+        // it is drawn below the margin at the foot of a page.
+        float headerHeight = rowHeight(widths, cells, BOLD, 8f);
+        if (y - headerHeight - 8f * LEADING - 2f < MARGIN) {
+            newPage();
+        }
         writeRow(widths, cells, BOLD, 8f);
     }
 

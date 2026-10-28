@@ -104,6 +104,8 @@ class ControlledDrugRegisterServiceTest {
         Staff staff = new Staff();
         staff.setUser(doctor);
         rx = new Prescription();
+        // A prescription always has its hospital (NOT NULL); the register shows only its own hospital's.
+        rx.setHospital(hospital);
         rx.setId(UUID.randomUUID());
         rx.setPatient(patient);
         rx.setStaff(staff);
@@ -215,6 +217,42 @@ class ControlledDrugRegisterServiceTest {
             assertThat(text).contains("Registre des stupéfiants").contains("Pharmacie centrale")
                     .contains("Morphine 10 mg").contains("Awa Sanou").contains("Paul Zongo");
         }
+    }
+
+    /**
+     * Review of #975: an id typed into an adjustment, transfer or return reason
+     * never names a patient on the register; only the system-written dispense
+     * reason (and the validated dispense reference) do.
+     */
+    @Test
+    void aPrescriptionIdTypedIntoAReasonNamesNobody() {
+        StockTransaction typed = StockTransaction.builder().transactionType(StockTransactionType.ADJUSTMENT)
+                .reason("DAMAGE: for prescription " + UUID.randomUUID()).build();
+        StockTransaction returned = StockTransaction.builder().transactionType(StockTransactionType.RETURN)
+                .reason("RETURN for prescription " + UUID.randomUUID()).referenceId(UUID.randomUUID()).build();
+        UUID rxId = UUID.randomUUID();
+        StockTransaction dispensed = StockTransaction.builder().transactionType(StockTransactionType.DISPENSE)
+                .reason("Dispense for prescription " + rxId).build();
+
+        assertThat(ControlledDrugRegisterService.systemPrescriptionIdOf(typed)).isNull();
+        assertThat(ControlledDrugRegisterService.systemPrescriptionIdOf(returned)).isNull();
+        assertThat(ControlledDrugRegisterService.systemPrescriptionIdOf(dispensed)).isEqualTo(rxId);
+    }
+
+    /** Review of #975: another hospital's prescription is not shown on this register. */
+    @Test
+    void aPrescriptionOfAnotherHospitalIsNotShown() {
+        stubLedger();
+        com.example.hms.model.Hospital elsewhere = new com.example.hms.model.Hospital();
+        elsewhere.setId(UUID.randomUUID());
+        rx.setHospital(elsewhere);
+
+        ControlledRegisterDrugDTO drug = service.register(pharmacy.getId(), null, from, to).drugs().get(0);
+
+        assertThat(drug.entries()).allSatisfy(e -> {
+            assertThat(e.patientName()).isNull();
+            assertThat(e.prescriberName()).isNull();
+        });
     }
 
     @Test

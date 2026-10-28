@@ -59,6 +59,10 @@ public interface DispenseRepository extends JpaRepository<Dispense, UUID> {
     List<Dispense> findByStockLot_IdAndStatusInOrderByCreatedAtDesc(UUID stockLotId,
                                                                     Collection<DispenseStatus> statuses);
 
+    /** Review of #975: the return form lists at most 50 fills of a lot; the query stops there too. */
+    List<Dispense> findTop50ByStockLot_IdAndStatusInOrderByCreatedAtDesc(UUID stockLotId,
+            java.util.Collection<com.example.hms.enums.DispenseStatus> statuses);
+
     /**
      * T-39: dispenses completed within a time window — used by the refill reminder scheduler
      * to find patients whose supply is running out.

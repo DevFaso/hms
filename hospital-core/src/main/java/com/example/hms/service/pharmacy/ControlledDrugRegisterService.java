@@ -125,7 +125,7 @@ public class ControlledDrugRegisterService {
         if (truncated) {
             rows = rows.subList(0, MAX_ROWS);
         }
-        People people = people(rows);
+        People people = people(rows, pharmacy.getHospital() != null ? pharmacy.getHospital().getId() : null);
 
         Map<UUID, List<ControlledRegisterEntryDTO>> entries = new LinkedHashMap<>();
         Map<UUID, BigDecimal> balance = new HashMap<>(opening);
@@ -258,11 +258,11 @@ public class ControlledDrugRegisterService {
     }
 
     /** The prescriptions behind the dispenses and returns of the period, loaded in two queries. */
-    private People people(List<StockTransaction> rows) {
+    private People people(List<StockTransaction> rows, UUID hospitalId) {
         Set<UUID> prescriptionIds = new HashSet<>();
         Set<UUID> dispenseIds = new HashSet<>();
         for (StockTransaction tx : rows) {
-            UUID fromReason = prescriptionIdIn(tx.getReason());
+            UUID fromReason = systemPrescriptionIdOf(tx);
             if (fromReason != null) {
                 prescriptionIds.add(fromReason);
             } else if (tx.getTransactionType() == StockTransactionType.RETURN && tx.getReferenceId() != null) {
@@ -272,7 +272,7 @@ public class ControlledDrugRegisterService {
         Map<UUID, Prescription> byDispense = new HashMap<>();
         if (!dispenseIds.isEmpty()) {
             for (Dispense d : dispenseRepository.findAllById(dispenseIds)) {
-                if (d.getPrescription() != null) {
+                if (d.getPrescription() != null && atHospital(d.getPrescription(), hospitalId)) {
                     byDispense.put(d.getId(), d.getPrescription());
                 }
             }
@@ -280,10 +280,35 @@ public class ControlledDrugRegisterService {
         Map<UUID, Prescription> byId = new HashMap<>();
         if (!prescriptionIds.isEmpty()) {
             for (Prescription p : prescriptionRepository.findAllById(prescriptionIds)) {
-                byId.put(p.getId(), p);
+                if (atHospital(p, hospitalId)) {
+                    byId.put(p.getId(), p);
+                }
             }
         }
         return new People(byId, byDispense);
+    }
+
+    /**
+     * Review of #975: the prescription a row names in its reason, read ONLY
+     * from a reason the system wrote ("Dispense for prescription <id>" on a
+     * DISPENSE row, and the cancellation reversals of a fill). ADJUSTMENT,
+     * TRANSFER and RETURN reasons are typed by a person, so an id typed there
+     * must never put a patient's name (another hospital's, even) on the
+     * register; a RETURN is linked through its validated dispense reference.
+     */
+    static UUID systemPrescriptionIdOf(StockTransaction tx) {
+        if (tx == null || tx.getTransactionType() == null) {
+            return null;
+        }
+        boolean systemWritten = tx.getTransactionType() == StockTransactionType.DISPENSE
+            || (tx.getTransactionType() == StockTransactionType.RETURN && tx.getReferenceId() == null
+                && tx.getReason() != null && tx.getReason().startsWith("Dispense cancelled"));
+        return systemWritten ? prescriptionIdIn(tx.getReason()) : null;
+    }
+
+    /** A prescription is shown only on its own hospital's register. */
+    private static boolean atHospital(Prescription p, UUID hospitalId) {
+        return hospitalId == null || (p.getHospital() != null && hospitalId.equals(p.getHospital().getId()));
     }
 
     /** Ledger rows name their prescription: "Dispense for prescription <id>" and its reversals. */
@@ -304,7 +329,7 @@ public class ControlledDrugRegisterService {
 
     private record People(Map<UUID, Prescription> byId, Map<UUID, Prescription> byDispense) {
         Prescription prescriptionOf(StockTransaction tx) {
-            UUID id = prescriptionIdIn(tx.getReason());
+            UUID id = systemPrescriptionIdOf(tx);
             if (id != null) {
                 return byId.get(id);
             }

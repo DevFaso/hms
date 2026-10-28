@@ -213,7 +213,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
             if (lot.getInventoryItem() == null || !item.getId().equals(lot.getInventoryItem().getId())) {
                 throw new BusinessException(MessageUtil.resolve("stockTransaction.lot.wrongItem"));
             }
-            fills = dispenseRepository.findByStockLot_IdAndStatusInOrderByCreatedAtDesc(stockLotId,
+            fills = dispenseRepository.findTop50ByStockLot_IdAndStatusInOrderByCreatedAtDesc(stockLotId,
                     RETURNABLE_FILL_STATES);
         } else if (item.getMedicationCatalogItem() != null && item.getPharmacy() != null) {
             fills = dispenseRepository
@@ -237,6 +237,11 @@ public class StockTransactionServiceImpl implements StockTransactionService {
                 }
             }
         }
+        // Review of #975 (minimum necessary): the patient's name is for the
+        // roles that dispense; an inventory clerk picks the fill by its date,
+        // quantity and lot.
+        boolean showsPatient = roleValidator.hasAnyAuthority(
+                "ROLE_PHARMACIST", "ROLE_STORE_MANAGER", "ROLE_HOSPITAL_ADMIN", "ROLE_SUPER_ADMIN");
         List<com.example.hms.payload.dto.pharmacy.ReturnableDispenseDTO> out = new java.util.ArrayList<>();
         for (com.example.hms.model.pharmacy.Dispense d : recent) {
             BigDecimal returnable = nz(d.getQuantityDispensed()).subtract(nz(returned.get(d.getId())));
@@ -246,7 +251,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
             out.add(new com.example.hms.payload.dto.pharmacy.ReturnableDispenseDTO(
                     d.getId(),
                     d.getPrescription() != null ? d.getPrescription().getId() : null,
-                    patientName(d.getPatient()),
+                    showsPatient ? patientName(d.getPatient()) : null,
                     d.getMedicationName(),
                     d.getDispensedAt(),
                     d.getQuantityDispensed(),

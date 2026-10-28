@@ -178,7 +178,9 @@ public final class LabOrderLifecycle {
      * the specimen is on its way or in the laboratory, and no result exists.
      */
     private static final Set<LabOrderStatus> RECOLLECTABLE = EnumSet.of(
-        LabOrderStatus.PENDING, LabOrderStatus.COLLECTED, LabOrderStatus.RECEIVED, LabOrderStatus.IN_PROGRESS);
+        // Not PENDING: that is "acknowledged, awaiting collection" already, and
+        // moving it back to ORDERED would un-acknowledge it (review of #975).
+        LabOrderStatus.COLLECTED, LabOrderStatus.RECEIVED, LabOrderStatus.IN_PROGRESS);
 
     /**
      * Whether an order at {@code current} may have a specimen rejected: not

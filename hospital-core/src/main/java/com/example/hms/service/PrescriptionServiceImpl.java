@@ -1025,6 +1025,16 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         }
         com.example.hms.model.medication.MedicationCatalogItem catalogItem =
             applyCatalogPick(request, hospitalId, sameDrugEdit);
+        // Review of #975: a code that resolves to nothing, then several name
+        // matches, must not unlink a same-drug edit either: whatever path left
+        // the request without an id, the order keeps the item it had.
+        if (request.getMedicationCatalogItemId() == null && existing.getMedicationCatalogItemId() != null
+                && sameDrugEdit) {
+            request.setMedicationCatalogItemId(existing.getMedicationCatalogItemId());
+            catalogItem = medicationCatalogItemRepository == null ? catalogItem : medicationCatalogItemRepository
+                .findByIdAndHospital_Id(existing.getMedicationCatalogItemId(), hospitalId)
+                .orElse(catalogItem);
+        }
 
         // CDS rule engine: drug-drug, duplicate-order, pediatric-dose. QA D970:
         // the order being edited is not a duplicate of itself.

@@ -907,8 +907,9 @@ class StockTransactionServiceImplTest {
             when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
             stubHospitalScope();
             when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
-            when(dispenseRepository.findByStockLot_IdAndStatusInOrderByCreatedAtDesc(eq(stockLotId), any()))
+            when(dispenseRepository.findTop50ByStockLot_IdAndStatusInOrderByCreatedAtDesc(eq(stockLotId), any()))
                     .thenReturn(List.of(open, partlyBack, allBack));
+            when(roleValidator.hasAnyAuthority(any(String[].class))).thenReturn(true);
             when(stockTransactionRepository.sumQuantityByReferences(any(), eq(java.util.EnumSet.of(StockTransactionType.RETURN))))
                     .thenReturn(List.<Object[]>of(new Object[] {partlyBack.getId(), new BigDecimal("1")},
                             new Object[] {allBack.getId(), new BigDecimal("2")}));
@@ -921,6 +922,28 @@ class StockTransactionServiceImplTest {
             assertThat(rows.get(0).patientName()).isEqualTo("Awa Ouedraogo");
             assertThat(rows.get(0).lotNumber()).isEqualTo("LOT-001");
             assertThat(rows.get(1).returnableQuantity()).isEqualByComparingTo("3");
+        }
+
+        @Test
+        @DisplayName("review of #975: an inventory clerk picks the fill without the patient's name (minimum necessary)")
+        void aStockRoleSeesTheFillsWithoutThePatientsName() {
+            var open = dispenseOf(new BigDecimal("5"), com.example.hms.enums.DispenseStatus.COMPLETED, stockLot);
+            com.example.hms.model.Patient patient = new com.example.hms.model.Patient();
+            patient.setFirstName("Awa");
+            patient.setLastName("Ouedraogo");
+            open.setPatient(patient);
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            when(dispenseRepository.findTop50ByStockLot_IdAndStatusInOrderByCreatedAtDesc(eq(stockLotId), any()))
+                    .thenReturn(List.of(open));
+            when(roleValidator.hasAnyAuthority(any(String[].class))).thenReturn(false);
+
+            var rows = service.listReturnableDispenses(inventoryItemId, stockLotId);
+
+            assertThat(rows).hasSize(1);
+            assertThat(rows.get(0).patientName()).isNull();
+            assertThat(rows.get(0).returnableQuantity()).isEqualByComparingTo("5");
         }
 
         @Test

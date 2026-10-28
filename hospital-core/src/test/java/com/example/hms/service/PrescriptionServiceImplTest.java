@@ -4979,6 +4979,44 @@ class PrescriptionServiceImplTest {
         verify(prescriptionRepository).save(existing);
     }
 
+    /**
+     * Review of #975: a same-drug edit whose code resolves to nothing and whose
+     * name matches several items keeps the order's link (it used to be nulled).
+     */
+    @Test
+    void d922_aSameDrugEditWithAnUnknownCodeAndAnAmbiguousNameKeepsItsLink() {
+        UUID prescriptionId = UUID.randomUUID();
+        UUID linkedItemId = UUID.randomUUID();
+        PrescriptionRequestDTO request = buildRequest();
+        request.setMedicationName("Morphine");
+        request.setMedicationCode("7052");
+        Prescription existing = new Prescription();
+        existing.setId(prescriptionId);
+        existing.setMedicationName("Morphine");
+        existing.setMedicationCatalogItemId(linkedItemId);
+        UserRoleHospitalAssignment staffAssignment = new UserRoleHospitalAssignment();
+        staffAssignment.setId(UUID.randomUUID());
+        staffAssignment.setHospital(encounter.getHospital());
+        staff.setAssignment(staffAssignment);
+        UUID currentUser = staff.getUser().getId();
+        when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(existing));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
+        when(prescriptionRepository.save(existing)).thenReturn(existing);
+        when(prescriptionMapper.toResponseDTO(existing)).thenReturn(PrescriptionResponseDTO.builder().build());
+        when(catalogRepo.findByHospitalIdAndCode(hospitalId, "7052")).thenReturn(Optional.empty());
+        when(catalogRepo.findByHospital_IdAndActiveTrue(eq(hospitalId), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(
+                List.of(catalogItem("Morphine", true), catalogItem("Morphine", true))));
+
+        prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH);
+
+        assertThat(request.getMedicationCatalogItemId()).isEqualTo(linkedItemId);
+    }
+
     /** Review of #975: a code no catalogue item carries does not let the name escape the flag. */
     @Test
     void d922_anUnknownCodeFallsThroughToTheName() {
