@@ -587,10 +587,16 @@ public class PatientServiceImpl implements PatientService {
         // After the commit: a write that fails at commit (a unique number,
         // an e-mail) must not leave a SUCCESS row for a change that never
         // happened. The audit runs in its own transaction.
-        final UUID actorId = roleValidator.getCurrentUserId();
-        final String actorName = SecurityUtils.getCurrentUsername();
-        com.example.hms.utility.TransactionCallbacks.afterCommit(() -> emitPatientUpdate(patient, description,
-            actorId, actorName));
+        // Best-effort, like every audit here: resolving the actor must never
+        // fail the write it records.
+        try {
+            final UUID actorId = roleValidator.getCurrentUserId();
+            final String actorName = SecurityUtils.getCurrentUsername();
+            com.example.hms.utility.TransactionCallbacks.afterCommit(() -> emitPatientUpdate(patient, description,
+                actorId, actorName));
+        } catch (RuntimeException ex) {
+            log.warn("Failed to schedule demographics audit for patient {}: {}", patient.getId(), ex.getMessage());
+        }
     }
 
     private void emitPatientUpdate(Patient patient, String description, UUID actorId, String actorName) {
