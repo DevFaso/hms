@@ -276,13 +276,13 @@ export class PatientDetailComponent implements OnInit {
     return this.scopedHospitalId() != null;
   }
 
-  /** Mirrors EncounterController's list READ gate — likewise not the
-   *  'Create Encounters' write permission it used to check. */
   /** QA D927: only the roles `GET /nurse/notes` admits load the panel (a refused read would leave the page). */
   canReadNursingNotes(): boolean {
     return this.roleContext.hasAnyActiveRole(NursingNoteService.READER_ROLES);
   }
 
+  /** Mirrors EncounterController's list READ gate — likewise not the
+   *  'Create Encounters' write permission it used to check. */
   canViewEncounters(): boolean {
     return this.roleContext.hasAnyActiveRole(ENCOUNTER_VIEW_ROLES);
   }

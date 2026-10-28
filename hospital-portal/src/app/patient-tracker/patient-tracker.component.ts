@@ -71,10 +71,6 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
   private readonly trackerWs = inject(PatientTrackerWsService);
   private readonly auth = inject(AuthService);
   /**
-   * QA D788: a visit IN_PROGRESS is checked out by its clinician (it closes their
-   * consultation); the desk waits until the examination is completed.
-   */
-  /**
    * QA D954: a patient who leaves before anyone sees them is closed from the
    * tracker too (the reception's close-unseen dialog, reused), by the roles
    * the endpoint admits.
@@ -93,6 +89,10 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
     this.refresh();
   }
 
+  /**
+   * QA D788: a visit IN_PROGRESS is checked out by its clinician (it closes their
+   * consultation); the desk waits until the examination is completed.
+   */
   get isClinician(): boolean {
     return this.auth.hasAnyRole(['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE']);
   }
