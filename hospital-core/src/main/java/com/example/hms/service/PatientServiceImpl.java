@@ -441,7 +441,7 @@ public class PatientServiceImpl implements PatientService {
 
         boolean updated = false;
         PatientAddressHistoryRecorder.AddressSnapshot before = addressHistoryRecorder.snapshot(patient);
-        String callingCode = callingCodeFor(hospitalId != null ? hospitalId : patient.getHospitalId());
+        String country = countryFor(hospitalId != null ? hospitalId : patient.getHospitalId());
         List<String> changedFields = new ArrayList<>();
 
         // QA D926: the identity the desk corrects. A required field sent blank
@@ -463,7 +463,7 @@ public class PatientServiceImpl implements PatientService {
             changedFields.add("gender");
         }
         if (request.getPhoneNumberPrimary() != null) {
-            String phone = normalizePhone(request.getPhoneNumberPrimary(), callingCode);
+            String phone = normalizePhone(request.getPhoneNumberPrimary(), country);
             if (phone == null) {
                 throw new BusinessException("patient.r16.phoneRequired");
             }
@@ -473,7 +473,7 @@ public class PatientServiceImpl implements PatientService {
             changedFields.add("phoneNumberPrimary");
         }
         if (request.getPhoneNumberSecondary() != null) {
-            patient.setPhoneNumberSecondary(normalizePhone(request.getPhoneNumberSecondary(), callingCode));
+            patient.setPhoneNumberSecondary(normalizePhone(request.getPhoneNumberSecondary(), country));
             changedFields.add("phoneNumberSecondary");
         }
         if (request.getEmail() != null) {
@@ -513,7 +513,7 @@ public class PatientServiceImpl implements PatientService {
             changedFields.add("emergencyContactName");
         }
         if (request.getEmergencyContactPhone() != null) {
-            patient.setEmergencyContactPhone(normalizePhone(request.getEmergencyContactPhone(), callingCode));
+            patient.setEmergencyContactPhone(normalizePhone(request.getEmergencyContactPhone(), country));
             changedFields.add("emergencyContactPhone");
         }
         if (applyNullable(request.getEmergencyContactRelationship(), patient::setEmergencyContactRelationship)) {
@@ -539,7 +539,9 @@ public class PatientServiceImpl implements PatientService {
             auditPatientUpdate(patient, "Patient demographics updated: " + String.join(", ", changedFields));
         }
 
-        return buildPatientDto(patient, patient.getHospitalId());
+        // The caller's hospital's view (its MRN, its sharing opt-out), not the
+        // patient's first hospital: the chart merges this answer.
+        return buildPatientDto(patient, hospitalId != null ? hospitalId : patient.getHospitalId());
     }
 
     /** Sets a required text field when one was sent; a blank one is refused (QA D926). */
@@ -556,32 +558,40 @@ public class PatientServiceImpl implements PatientService {
     }
 
     /**
-     * QA D942: a number as it is stored, E.164 when it is a valid number for
-     * the hospital's country ("70 00 10 02" becomes "+22670001002"), otherwise
-     * as typed, trimmed. {@code null} for a blank value.
+     * QA D942: a number as it is stored, by the facility rule
+     * (PhoneNumbers.normalizeFacilityPhone): E.164 for a country PhoneNumbers
+     * knows, or written with an international prefix ("70 00 10 02" at a
+     * Burkina hospital becomes "+22670001002"); a national number for a
+     * country it does not know keeps its digits (never a guessed +226). A
+     * value that is not a phone number is kept as typed, trimmed. {@code null}
+     * for a blank value.
      */
-    private static String normalizePhone(String raw, String callingCode) {
+    private static String normalizePhone(String raw, String country) {
         String trimmed = trimToNull(raw);
         if (trimmed == null) {
             return null;
         }
-        String e164 = PhoneNumbers.toE164(trimmed, callingCode);
-        return e164 != null ? e164 : trimmed;
+        String normalized = PhoneNumbers.normalizeFacilityPhone(trimmed, country);
+        return normalized != null ? normalized : trimmed;
     }
 
-    /** The calling code of a hospital's country; Burkina Faso when unknown. */
-    private String callingCodeFor(UUID hospitalId) {
-        String country = hospitalId == null ? null
+    /** The calling code a national number typed at this hospital takes (Burkina Faso when unknown). */
+    private String callingCodeAt(UUID hospitalId) {
+        return PhoneNumbers.callingCodeForCountry(countryFor(hospitalId));
+    }
+
+    /** The country of a hospital, or null when unknown (Burkina Faso is then assumed). */
+    private String countryFor(UUID hospitalId) {
+        return hospitalId == null ? null
             : hospitalRepository.findById(hospitalId).map(Hospital::getCountry).orElse(null);
-        return PhoneNumbers.callingCodeForCountry(country);
     }
 
     /** Stores every number of a new or edited record in its canonical form (QA D942). */
     private static void normalizePhones(Patient patient, Hospital hospital) {
-        String callingCode = PhoneNumbers.callingCodeForCountry(hospital == null ? null : hospital.getCountry());
-        patient.setPhoneNumberPrimary(normalizePhone(patient.getPhoneNumberPrimary(), callingCode));
-        patient.setPhoneNumberSecondary(normalizePhone(patient.getPhoneNumberSecondary(), callingCode));
-        patient.setEmergencyContactPhone(normalizePhone(patient.getEmergencyContactPhone(), callingCode));
+        String country = hospital == null ? null : hospital.getCountry();
+        patient.setPhoneNumberPrimary(normalizePhone(patient.getPhoneNumberPrimary(), country));
+        patient.setPhoneNumberSecondary(normalizePhone(patient.getPhoneNumberSecondary(), country));
+        patient.setEmergencyContactPhone(normalizePhone(patient.getEmergencyContactPhone(), country));
     }
 
     /**
@@ -860,14 +870,14 @@ public class PatientServiceImpl implements PatientService {
         } else if (normUsername != null && !normUsername.isBlank()) {
             results = patientRepository.findByUserUsername(normUsername).map(List::of).orElse(List.of());
         } else if (normPhone != null && !normPhone.isBlank()) {
-            results = findByPhone(normPhone);
+            results = findByPhone(normPhone, callingCodeAt(hospitalId));
         } else if (normMrn != null && !normMrn.isBlank()) {
             results = patientRepository.findByMrn(normMrn);
         } else if (normIdentifier != null && !normIdentifier.isBlank()) {
             // QA D942: only an identifier written like a phone number is
             // looked up as one; an e-mail or an MRN with digits never is.
             List<Patient> phoneHits = PatientMatchKeys.looksLikePhone(normIdentifier)
-                ? findByPhone(normIdentifier) : List.of();
+                ? findByPhone(normIdentifier, callingCodeAt(hospitalId)) : List.of();
             if (!phoneHits.isEmpty()) {
                 results = phoneHits;
             } else {
@@ -915,7 +925,7 @@ public class PatientServiceImpl implements PatientService {
         // LinkedHashMap keeps phone hits (the primary identifier in practice) ahead of email hits.
         Map<UUID, RegistrationMatchDTO> matches = new LinkedHashMap<>();
         if (normPhone != null && !normPhone.isBlank()) {
-            findByPhone(normPhone)
+            findByPhone(normPhone, callingCodeAt(hospitalId))
                 .forEach(p -> matches.putIfAbsent(p.getId(), toRegistrationMatch(p, hospitalId, "PHONE")));
         }
         if (normEmail != null && !normEmail.isBlank()) {
@@ -931,14 +941,14 @@ public class PatientServiceImpl implements PatientService {
      * eight national digits matches on them; anything shorter is not specific
      * enough to name a subscriber and only matches a number stored exactly so.
      */
-    private List<Patient> findByPhone(String typed) {
+    private List<Patient> findByPhone(String typed, String callingCode) {
         String key = PatientMatchKeys.phoneKey(typed);
         if (PatientMatchKeys.isSubscriberKey(key)) {
             // The eight digits narrow the candidates; the full number decides.
             return patientRepository.findAllByPhoneSubscriber("%" + key,
                     PageRequest.of(0, PatientRepository.PHONE_SUBSCRIBER_CAP)).stream()
-                .filter(p -> PatientMatchKeys.samePhone(p.getPhoneNumberPrimary(), typed)
-                    || PatientMatchKeys.samePhone(p.getPhoneNumberSecondary(), typed))
+                .filter(p -> PatientMatchKeys.samePhone(p.getPhoneNumberPrimary(), typed, callingCode)
+                    || PatientMatchKeys.samePhone(p.getPhoneNumberSecondary(), typed, callingCode))
                 .toList();
         }
         String exact = typed == null ? null : typed.trim();

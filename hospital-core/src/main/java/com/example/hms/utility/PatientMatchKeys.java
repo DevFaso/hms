@@ -142,32 +142,44 @@ public final class PatientMatchKeys {
      * +225 05 01 23 45 67 (same last eight digits) are two subscribers.
      */
     public static boolean samePhone(String a, String b) {
+        return samePhone(a, b, PhoneNumbers.DEFAULT_CALLING_CODE);
+    }
+
+    /**
+     * Whether two numbers are the same subscriber at a hospital whose calling
+     * code is {@code callingCode}: a national number takes that code (its
+     * trunk zero dropped outside Burkina Faso, as PhoneNumbers.toE164 stores
+     * it), then the full international digits must be equal. A hospital in
+     * Côte d'Ivoire stored "07 01 23 45 67" as +225701234567, and typed again
+     * nationally it is the same subscriber; a Burkina "70001002" is never an
+     * Ivorian +225770001002 that merely ends alike.
+     */
+    public static boolean samePhone(String a, String b, String callingCode) {
         if (!isSubscriberKey(phoneKey(a)) || !isSubscriberKey(phoneKey(b))) {
             return false;
         }
-        boolean aInternational = isInternational(a);
-        boolean bInternational = isInternational(b);
-        if (aInternational != bInternational) {
-            // One side carries its country, the other is national: the national
-            // number (its trunk zero dropped, as PhoneNumbers.toE164 drops it
-            // outside Burkina Faso) ends the international one. A hospital in
-            // Côte d'Ivoire stores "07 01 23 45 67" as +225701234567; typed
-            // again nationally it is the same subscriber.
-            String international = digitsOf(aInternational ? a : b);
-            String national = digitsOf(aInternational ? b : a);
-            String withoutTrunk = national.startsWith("0") ? national.substring(1) : national;
-            return withoutTrunk.length() >= SUBSCRIBER_DIGITS
-                && (international.endsWith(national) || international.endsWith(withoutTrunk));
-        }
-        String ca = PhoneNumbers.toInternationalDigits(a, PhoneNumbers.DEFAULT_CALLING_CODE);
-        String cb = PhoneNumbers.toInternationalDigits(b, PhoneNumbers.DEFAULT_CALLING_CODE);
+        String code = callingCode == null || callingCode.isBlank() ? PhoneNumbers.DEFAULT_CALLING_CODE : callingCode;
+        String ca = international(a, code);
+        String cb = international(b, code);
         return !ca.isEmpty() && ca.equals(cb);
+    }
+
+    /** The full international digits of a number, a national one taking {@code code}. */
+    private static String international(String value, String code) {
+        if (isInternational(value)) {
+            return digitsOf(value);
+        }
+        String national = digitsOf(value);
+        if (national.startsWith("0") && !PhoneNumbers.DEFAULT_CALLING_CODE.equals(code)) {
+            national = national.substring(1);
+        }
+        return code + national;
     }
 
     /** Written with its country: a leading + or 00. */
     private static boolean isInternational(String value) {
         String trimmed = value.trim();
-        return trimmed.startsWith("+") || digitsOf(trimmed).startsWith("00");
+        return trimmed.startsWith("+") || NON_DIGITS.matcher(trimmed).replaceAll("").startsWith("00");
     }
 
     /** Digits only, an international 00 dropped. */

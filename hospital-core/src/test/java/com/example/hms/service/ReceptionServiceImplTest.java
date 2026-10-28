@@ -890,7 +890,7 @@ class ReceptionServiceImplTest {
         @DisplayName("QA D924: the phone does not filter; name and DOB find the record whatever phone is typed")
         void aDifferentPhoneStillFindsTheRecord() {
             Patient fatimata = registered("Fatimata", "Zongo", LocalDate.of(1991, 7, 22), "+22670161000", true);
-            when(patientRepo.searchPatientsExtended(any(), eq("%zongo fatimata%"), eq("1991-07-22"), isNull(), any(),
+            when(patientRepo.searchPatientsExtended(any(), eq("%zongo fatimata%"), isNull(), isNull(), any(),
                     eq(hospitalId), eq(true), any()))
                     .thenReturn(new PageImpl<>(List.of(fatimata)));
             when(patientRepo.findAllByPhoneSubscriberAtHospital(eq("%70161099"), any(), any())).thenReturn(List.of());
@@ -922,6 +922,23 @@ class ReceptionServiceImplTest {
             assertThat(result).singleElement().satisfies(c -> {
                 assertThat(c.getPatientId()).isEqualTo(same.getId());
                 assertThat(c.getConfidenceScore()).isEqualTo(100);
+            });
+        }
+
+        @Test
+        @DisplayName("review: a transposed date of birth does not hide a same-name record (the name is its own source)")
+        void aTransposedDobStillFindsTheName() {
+            Patient aicha = registered("Aïcha", "Kaboré", LocalDate.of(2019, 3, 4), "76000001", true);
+            when(patientRepo.searchPatientsExtended(any(), eq("%aicha kabore%"), isNull(), isNull(), any(),
+                    eq(hospitalId), eq(true), any()))
+                    .thenReturn(new PageImpl<>(List.of(aicha)));
+
+            List<DuplicateCandidateDTO> result = service.getDuplicateCandidates(
+                    "Aicha Kabore", "2019-04-03", "76999999", hospitalId);
+
+            assertThat(result).singleElement().satisfies(c -> {
+                assertThat(c.getPatientId()).isEqualTo(aicha.getId());
+                assertThat(c.getConfidenceScore()).isEqualTo(50);
             });
         }
 

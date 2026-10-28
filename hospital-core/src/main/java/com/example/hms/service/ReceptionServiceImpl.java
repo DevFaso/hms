@@ -605,9 +605,13 @@ public class ReceptionServiceImpl implements ReceptionService {
         String namePattern = PatientMatchKeys.nameContainsPattern(name);
         String dobValue = (dob != null && !dob.isBlank()) ? dob.trim() : null;
         Map<UUID, Patient> candidates = new java.util.LinkedHashMap<>();
-        if (namePattern != null || dobValue != null) {
+        // The name is its own candidate source: a mistyped or transposed date
+        // of birth must not hide a same-name record (the D924 class, one field
+        // gating the others). The date only scores. A DOB alone (30) can never
+        // reach the threshold, so it asks nothing on its own.
+        if (namePattern != null) {
             patientRepo.searchPatientsExtended(
-                    null, namePattern, dobValue, null, null, hospitalId, true,
+                    null, namePattern, null, null, null, hospitalId, true,
                     PageRequest.of(0, 20)).getContent()
                 .forEach(p -> candidates.putIfAbsent(p.getId(), p));
         }
@@ -619,12 +623,17 @@ public class ReceptionServiceImpl implements ReceptionService {
                 .forEach(p -> candidates.putIfAbsent(p.getId(), p));
         }
 
-        // Scored first: a shared family number alone (20) is dropped before
-        // anyone's registrations are read for an MRN.
-        return candidates.values().stream()
-                .filter(p -> computeConfidenceScore(p, name, dobValue, phone) >= 40)
-                .map(p -> {
-                    int score = computeConfidenceScore(p, name, dobValue, phone);
+        // Scored once, first: a shared family number alone (20) is dropped
+        // before anyone's registrations are read for an MRN.
+        String callingCode = com.example.hms.utility.PhoneNumbers.callingCodeForCountry(
+                hospitalRepo.findById(hospitalId).map(Hospital::getCountry).orElse(null));
+        Map<Patient, Integer> scored = new java.util.LinkedHashMap<>();
+        candidates.values().forEach(p -> scored.put(p, computeConfidenceScore(p, name, dobValue, phone, callingCode)));
+        return scored.entrySet().stream()
+                .filter(e -> e.getValue() >= 40)
+                .map(e -> {
+                    Patient p = e.getKey();
+                    int score = e.getValue();
                     String mrn = p.getHospitalRegistrations().stream()
                             .filter(r -> r.getHospital() != null && hospitalId.equals(r.getHospital().getId()))
                             .map(PatientHospitalRegistration::getMrn)
@@ -649,7 +658,7 @@ public class ReceptionServiceImpl implements ReceptionService {
      * subscriber number 20. A shared family phone alone (20) is not a
      * duplicate; the same name and birth date (80) is one whatever the phone.
      */
-    private int computeConfidenceScore(Patient p, String name, String dob, String phone) {
+    private int computeConfidenceScore(Patient p, String name, String dob, String phone, String callingCode) {
         int score = 0;
         if (name != null && !name.isBlank()
                 && (PatientMatchKeys.nameContains(p.getFirstName() + " " + p.getLastName(), name)
@@ -659,8 +668,8 @@ public class ReceptionServiceImpl implements ReceptionService {
         if (dob != null && p.getDateOfBirth() != null && p.getDateOfBirth().toString().equals(dob)) {
             score += 30;
         }
-        if (PatientMatchKeys.samePhone(p.getPhoneNumberPrimary(), phone)
-                || PatientMatchKeys.samePhone(p.getPhoneNumberSecondary(), phone)) {
+        if (PatientMatchKeys.samePhone(p.getPhoneNumberPrimary(), phone, callingCode)
+                || PatientMatchKeys.samePhone(p.getPhoneNumberSecondary(), phone, callingCode)) {
             score += 20;
         }
         return Math.min(score, 100);

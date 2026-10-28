@@ -15,10 +15,10 @@ export class EmpiStatusService {
 
   /** null until the first answer; false when off or unknown. */
   readonly enabled = signal<boolean | null>(null);
-  private request$: Observable<boolean> | null = null;
+  private request$: Observable<boolean | null> | null = null;
 
-  /** Asks once per session; later calls share the answer. */
-  load(): Observable<boolean> {
+  /** Asks once per session; later calls share the answer. null: not known (a failed read). */
+  load(): Observable<boolean | null> {
     if (!this.request$) {
       this.request$ = this.http.get<{ enabled: boolean }>('/empi/candidates/status').pipe(
         map((res) => res?.enabled === true),
@@ -26,7 +26,7 @@ export class EmpiStatusService {
         // navigation asks again instead of hiding the page for the session.
         catchError(() => {
           this.request$ = null;
-          return of(false);
+          return of(null);
         }),
         shareReplay(1),
       );
@@ -36,10 +36,15 @@ export class EmpiStatusService {
   }
 }
 
-/** QA D987: the duplicate-patient page opens only while the matcher is on. */
+/**
+ * QA D987: the duplicate-patient page opens only while the matcher is on.
+ * Off: the dashboard, which every role reaches (not /reception, which a nurse
+ * or doctor may not). Unknown (a failed read): the page opens and shows its
+ * own error rather than bouncing the user away.
+ */
 export const empiEnabledGuard: CanActivateFn = () => {
   const router = inject(Router);
   return inject(EmpiStatusService)
     .load()
-    .pipe(map((on) => (on ? true : router.createUrlTree(['/reception']))));
+    .pipe(map((on) => (on === false ? router.createUrlTree(['/dashboard']) : true)));
 };

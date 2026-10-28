@@ -83,7 +83,8 @@ class HospitalRepositoryCallerCoverageTest {
         entry("UserServiceImpl.createUserWithRolesAndHospital#findById", LABEL + " (the activation message)"),
         entry("UserServiceImpl.normalizePhone#findById", "reads the hospital's country for the phone calling code; grants, writes and lists nothing"),
         // QA D942: a patient's numbers are stored in E.164 for the hospital's country.
-        entry("PatientServiceImpl.callingCodeFor#findById", "reads the hospital's country for the phone calling code; grants, writes and lists nothing"),
+        entry("PatientServiceImpl.countryFor#findById", "reads the hospital's country for the phone calling code; grants, writes and lists nothing"),
+        entry("ReceptionServiceImpl.getDuplicateCandidates#findById", "reads the hospital's country for the phone calling code; grants, writes and lists nothing"),
         entry("PatientServiceImpl.updatePatient#findById", "reads the hospital's country for the phone calling code; grants, writes and lists nothing"),
         entry("UserServiceImpl.findByPhoneInAnyForm#findById", "reads the acting hospital's country for the legacy phone forms; grants, writes and lists nothing"),
         entry("FacilityAssignmentGuard.requireCompatible#findById",

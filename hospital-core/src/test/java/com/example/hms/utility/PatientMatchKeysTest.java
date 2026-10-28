@@ -49,8 +49,10 @@ class PatientMatchKeysTest {
     void theFullNumberDecides() {
         // Two Ivorian numbers that end alike are two subscribers.
         assertThat(PatientMatchKeys.samePhone("+2250701234567", "+2250501234567")).isFalse();
-        // A national form typed at an Ivorian hospital matches its stored E.164 (trunk zero dropped).
-        assertThat(PatientMatchKeys.samePhone("+225701234567", "07 01 23 45 67")).isTrue();
+        // A national form typed at an Ivorian hospital matches its stored E.164 only with
+        // that hospital's code (round 5: nationalNumbersTakeTheHospitalsCode); with the
+        // deployment default (Burkina) it is a different subscriber.
+        assertThat(PatientMatchKeys.samePhone("+225701234567", "07 01 23 45 67")).isFalse();
         assertThat(PatientMatchKeys.samePhone("0022670001002", "70 00 10 02")).isTrue();
         assertThat(PatientMatchKeys.samePhone("+22670001002", "70001003")).isFalse();
     }
@@ -69,5 +71,15 @@ class PatientMatchKeysTest {
     void lettersOutsideTheFoldStay() {
         assertThat(PatientMatchKeys.foldName("Şahin")).isEqualTo("şahin");
         assertThat(PatientMatchKeys.nameContainsPattern("ŞAHIN")).isEqualTo("%şahin%");
+    }
+
+    @Test
+    @DisplayName("review: a national number takes the hospital's calling code before the full digits compare")
+    void nationalNumbersTakeTheHospitalsCode() {
+        // A Burkina 70001002 is never an Ivorian number that merely ends alike.
+        assertThat(PatientMatchKeys.samePhone("+225770001002", "70001002", "226")).isFalse();
+        // At an Ivorian hospital, the national form matches its stored E.164 (trunk zero dropped).
+        assertThat(PatientMatchKeys.samePhone("+225701234567", "07 01 23 45 67", "225")).isTrue();
+        assertThat(PatientMatchKeys.samePhone("+22670001002", "70 00 10 02", "226")).isTrue();
     }
 }

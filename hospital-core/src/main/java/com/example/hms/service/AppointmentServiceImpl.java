@@ -859,7 +859,9 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         // The appointment owns its slot (P3 #22): once the visit is cancelled
         // or moved, the slot goes back into circulation.
-        if (newStatus == AppointmentStatus.CANCELLED || newStatus == AppointmentStatus.RESCHEDULED) {
+        // QA D937: a no-show frees its time like a cancel, in the inventory too.
+        if (newStatus == AppointmentStatus.CANCELLED || newStatus == AppointmentStatus.RESCHEDULED
+                || newStatus == AppointmentStatus.NO_SHOW) {
             slotInventoryService.releaseForAppointment(appointment.getId());
         }
         // QA D985: a recall scheduled with a visit that will not happen is open

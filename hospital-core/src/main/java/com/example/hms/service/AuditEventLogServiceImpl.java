@@ -431,6 +431,15 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
         if (patient == null) {
             patient = patientRepository.findFirstByPhoneNumberSecondary(resourceName).orElse(null);
         }
+        // QA D942: numbers are stored in E.164 now; digits find them too.
+        String key = com.example.hms.utility.PatientMatchKeys.phoneKey(resourceName);
+        if (patient == null && com.example.hms.utility.PatientMatchKeys.isSubscriberKey(key)) {
+            patient = patientRepository.findAllByPhoneSubscriber("%" + key,
+                    org.springframework.data.domain.PageRequest.of(0, PatientRepository.PHONE_SUBSCRIBER_CAP)).stream()
+                .filter(p -> com.example.hms.utility.PatientMatchKeys.samePhone(p.getPhoneNumberPrimary(), resourceName)
+                    || com.example.hms.utility.PatientMatchKeys.samePhone(p.getPhoneNumberSecondary(), resourceName))
+                .findFirst().orElse(null);
+        }
         return patient;
     }
 

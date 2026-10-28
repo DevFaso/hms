@@ -2459,6 +2459,10 @@ public class EncounterServiceImpl implements EncounterService {
                 && appointment.getStatus() != com.example.hms.enums.AppointmentStatus.CANCELLED) {
             appointment.setStatus(com.example.hms.enums.AppointmentStatus.CANCELLED);
             appointmentRepository.save(appointment);
+            // QA D985 (branch C1): the recall this visit answered is open again.
+            if (recallService != null) {
+                recallService.reopenRecallsOf(appointment.getId());
+            }
         }
 
         recordHistory(saved, "CLOSED_UNSEEN", actorUsername, previousValues);
