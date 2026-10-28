@@ -205,6 +205,21 @@ describe('AppointmentFormComponent — prefill from the prenatal calendar', () =
     expect(shown).not.toBe('La demande contient des erreurs de validation');
   });
 
+  it('QA D985 review round 14: picking another patient drops the recall; the same one keeps it', () => {
+    const component = create({
+      recallId: '11111111-2222-3333-4444-555555555555',
+      patientId: '11111111-2222-3333-4444-555555555555',
+    });
+    expect(component.form.recallId).toBe('11111111-2222-3333-4444-555555555555');
+    component.selectPatient({
+      id: '11111111-2222-3333-4444-555555555555',
+      firstName: 'Awa',
+    } as PatientResponse);
+    expect(component.form.recallId).toBe('11111111-2222-3333-4444-555555555555');
+    component.selectPatient({ id: 'p-other', firstName: 'Issa' } as PatientResponse);
+    expect(component.form.recallId).toBeUndefined();
+  });
+
   it('QA D985: a refused recall is dropped, so the next submit books without it', () => {
     const component = create({ recallId: '11111111-2222-3333-4444-555555555555' });
     expect(component.form.recallId).toBe('11111111-2222-3333-4444-555555555555');

@@ -170,6 +170,12 @@ public final class PatientMatchKeys {
             return digitsOf(value);
         }
         String national = digitsOf(value);
+        // Written with its country code but no '+' ("226 70 00 10 02", a legacy
+        // "22670001002"): already international, never prefixed twice (review
+        // round 14). No national number is that long after the code.
+        if (national.startsWith(code) && national.length() - code.length() >= SUBSCRIBER_DIGITS) {
+            return national;
+        }
         if (national.startsWith("0") && !PhoneNumbers.DEFAULT_CALLING_CODE.equals(code)) {
             national = national.substring(1);
         }
@@ -203,6 +209,16 @@ public final class PatientMatchKeys {
         String n = foldName(needle);
         return h != null && n != null && h.contains(n);
     }
+
+    /**
+     * The SQL twin of {@link #escapeLike}: wraps a bound text so its LIKE
+     * wildcards ('%', '_') and the escape character are literal, for a query
+     * that builds its pattern in SQL (review round 14). The default LIKE escape
+     * is the backslash on PostgreSQL and H2.
+     */
+    public static final String LIKE_ESCAPE_SQL_OPEN = "REPLACE(REPLACE(REPLACE(";
+    /** Closes {@link #LIKE_ESCAPE_SQL_OPEN}. */
+    public static final String LIKE_ESCAPE_SQL_CLOSE = ", '\\', '\\\\'), '%', '\\%'), '_', '\\_')";
 
     private static String escapeLike(String value) {
         return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");

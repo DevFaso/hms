@@ -508,6 +508,11 @@ class FrontDeskRoundTripIT extends BaseIT {
             .extracting(Patient::getId).contains(aicha.getId());
         assertThat(patientRepository.findByFirstNameContainingIgnoreCaseOrLastNameContainingIgnoreCase("zzz", "KABORE"))
             .extracting(Patient::getId).contains(aicha.getId());
+        // Review round 14: '%' and '_' are literal, as the derived query escaped them.
+        assertThat(patientRepository.findByFirstNameContainingIgnoreCaseOrLastNameContainingIgnoreCase("%", "_"))
+            .extracting(Patient::getId).doesNotContain(aicha.getId());
+        assertThat(patientRepository.findByFirstNameContainingIgnoreCaseOrLastNameContainingIgnoreCase("a_cha", "zzz"))
+            .extracting(Patient::getId).doesNotContain(aicha.getId());
     }
 
     // ------------------------------------------- the other write endpoints

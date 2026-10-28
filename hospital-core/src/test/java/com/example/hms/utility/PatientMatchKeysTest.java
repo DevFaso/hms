@@ -82,4 +82,14 @@ class PatientMatchKeysTest {
         assertThat(PatientMatchKeys.samePhone("+225701234567", "07 01 23 45 67", "225")).isTrue();
         assertThat(PatientMatchKeys.samePhone("+22670001002", "70 00 10 02", "226")).isTrue();
     }
+
+    @Test
+    @DisplayName("review round 14: a number written with its country code but no '+' is not prefixed twice")
+    void aCountryCodeWithoutPlusIsInternational() {
+        assertThat(PatientMatchKeys.samePhone("22670001002", "+22670001002", "226")).isTrue();
+        assertThat(PatientMatchKeys.samePhone("226 70 00 10 02", "70001002", "226")).isTrue();
+        assertThat(PatientMatchKeys.samePhone("225701234567", "07 01 23 45 67", "225")).isTrue();
+        // Another country's code is still another subscriber.
+        assertThat(PatientMatchKeys.samePhone("22570001002", "+22670001002", "226")).isFalse();
+    }
 }

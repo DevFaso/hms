@@ -224,13 +224,16 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
      * QA D943: first name OR last name contains the typed text, accents and
      * case ignored on both sides (the EMPI matcher's name block and the audit
      * resource-name lookup). An empty text matches every name, as the derived
-     * query it replaces did.
+     * query it replaces did; a '%' or '_' in the text is a literal character,
+     * escaped as the derived query escaped it (review round 14).
      */
     @Query("SELECT p FROM Patient p WHERE "
         + FOLD_OPEN + "p.firstName" + FOLD_CLOSE + " LIKE CONCAT('%', "
-        + FOLD_OPEN + "CAST(:firstName AS string)" + FOLD_CLOSE + ", '%')"
+        + FOLD_OPEN + PatientMatchKeys.LIKE_ESCAPE_SQL_OPEN + "CAST(:firstName AS string)" + PatientMatchKeys.LIKE_ESCAPE_SQL_CLOSE
+        + FOLD_CLOSE + ", '%')"
         + " OR " + FOLD_OPEN + "p.lastName" + FOLD_CLOSE + " LIKE CONCAT('%', "
-        + FOLD_OPEN + "CAST(:lastName AS string)" + FOLD_CLOSE + ", '%')")
+        + FOLD_OPEN + PatientMatchKeys.LIKE_ESCAPE_SQL_OPEN + "CAST(:lastName AS string)" + PatientMatchKeys.LIKE_ESCAPE_SQL_CLOSE
+        + FOLD_CLOSE + ", '%')")
     List<Patient> findByFirstNameContainingIgnoreCaseOrLastNameContainingIgnoreCase(
         @Param("firstName") String firstName, @Param("lastName") String lastName);
 

@@ -183,8 +183,15 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
         return appointmentService.updateAppointment(appointment.getId(), updateDto, locale, username);
     }
 
-    /** The status a moved ANC visit lands on (QA D977 class). */
-    private static AppointmentStatus rescheduledStatus(AppointmentStatus current) {
+    /**
+     * The status a moved ANC visit lands on (QA D977 class). A tentative
+     * (PENDING) visit stays tentative: moving it is not confirming it, as on
+     * the portal (review round 14).
+     */
+    static AppointmentStatus rescheduledStatus(AppointmentStatus current) {
+        if (current == AppointmentStatus.PENDING) {
+            return AppointmentStatus.PENDING;
+        }
         return current == AppointmentStatus.NO_SHOW || current == AppointmentStatus.FAILED
             ? AppointmentStatus.RESCHEDULED
             : AppointmentStatus.SCHEDULED;

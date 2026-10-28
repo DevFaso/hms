@@ -368,6 +368,16 @@ class PrenatalSchedulingServiceImplTest {
     }
 
     @Test
+    void reviewRound14_aMovedTentativeVisitStaysTentative() {
+        assertThat(PrenatalSchedulingServiceImpl.rescheduledStatus(AppointmentStatus.PENDING))
+            .isEqualTo(AppointmentStatus.PENDING);
+        assertThat(PrenatalSchedulingServiceImpl.rescheduledStatus(AppointmentStatus.CONFIRMED))
+            .isEqualTo(AppointmentStatus.SCHEDULED);
+        assertThat(PrenatalSchedulingServiceImpl.rescheduledStatus(AppointmentStatus.NO_SHOW))
+            .isEqualTo(AppointmentStatus.RESCHEDULED);
+    }
+
+    @Test
     void d977_reschedulePrenatalAppointmentDelegatesToAppointmentService_fromAMissedVisit() {
         UUID appointmentId = UUID.randomUUID();
         UUID staffId = UUID.randomUUID();

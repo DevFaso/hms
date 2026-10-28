@@ -247,6 +247,11 @@ export class AppointmentFormComponent implements OnInit {
   }
 
   selectPatient(p: PatientResponse): void {
+    // QA D985 (review round 14): picking another patient drops the recall the
+    // form was opened for, as clearing the patient does; it was theirs.
+    if (this.form.patientId && this.form.patientId !== p.id) {
+      delete this.form.recallId;
+    }
     this.selectedPatient.set(p);
     this.form.patientId = p.id;
     delete this.form.patientEmail;
