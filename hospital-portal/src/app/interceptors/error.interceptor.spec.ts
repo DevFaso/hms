@@ -416,6 +416,46 @@ describe('errorInterceptor', () => {
     httpMock.expectNone('/frontend-audit');
   });
 
+  // QA D995/D933 guard: every encounter workflow action and discharge write is
+  // answered on the page that sent it. A new action URL must join the list.
+  const pageHandledClinicalActions: [string, string][] = [
+    ['POST', '/encounters/e1/triage'],
+    ['POST', '/encounters/e1/complete-triage'],
+    ['POST', '/encounters/e1/nursing-intake'],
+    ['POST', '/encounters/e1/notes'],
+    ['POST', '/encounters/e1/notes/addendums'],
+    ['POST', '/encounters/e1/notes/sign?noteId=n1'],
+    ['POST', '/encounters/e1/notes/cosign'],
+    ['POST', '/encounters/e1/checkout'],
+    ['POST', '/encounters/e1/close-unseen'],
+    ['POST', '/encounters/e1/start'],
+    ['POST', '/encounters/e1/complete-examination'],
+    ['POST', '/encounters/e1/ready-for-discharge'],
+    ['PUT', '/discharge-summaries/s1'],
+    ['DELETE', '/discharge-summaries/s1?deletedByProviderId=x'],
+    ['POST', '/discharge-summaries/s1/finalize'],
+    ['POST', '/discharge-approvals/a1/approve'],
+    ['POST', '/discharge-approvals/a1/reject'],
+    ['POST', '/discharge-approvals/a1/cancel'],
+  ];
+  for (const [method, url] of pageHandledClinicalActions) {
+    it(`QA D995: a refused ${method} ${url} stays on the page (no 403 page)`, () => {
+      let error: HttpErrorResponse | undefined;
+      http.request(method, url, { body: {} }).subscribe({ error: (e) => (error = e) });
+      httpMock
+        .expectOne(url)
+        .flush({ message: 'refused' }, { status: 403, statusText: 'Forbidden' });
+      expect(router.navigate).not.toHaveBeenCalled();
+      expect(error?.status).toBe(403);
+    });
+  }
+
+  it('QA D995: a refused encounter READ still goes to the 403 page', () => {
+    http.get('/encounters/e1').subscribe({ error: () => undefined });
+    httpMock.expectOne('/encounters/e1').flush(null, { status: 403, statusText: 'Forbidden' });
+    expect(router.navigate).toHaveBeenCalledWith(['/error/403']);
+  });
+
   it('QA D618: a refused discharge stays on the open form (no 403 page)', () => {
     let error: HttpErrorResponse | undefined;
     http.post('/admissions/adm-1/discharge', {}).subscribe({ error: (e) => (error = e) });

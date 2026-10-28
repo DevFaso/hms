@@ -676,6 +676,22 @@ export class EncountersComponent implements OnInit {
    *  passes the route guard sees the button; the backend arbitrates
    *  (author-only for sign, non-author DOCTOR at the hospital for co-sign)
    *  and its refusal is surfaced verbatim. */
+  /**
+   * QA D995: only the note's author signs it and only another clinician
+   * co-signs it (the server refuses the rest), so the buttons are offered
+   * accordingly instead of leading to a refusal. A note with no recorded
+   * author keeps both, and the server decides.
+   */
+  isNoteAuthor(note: EncounterNoteResponse | null): boolean {
+    const me = this.auth.getUserId();
+    return !note?.authorUserId || (!!me && note.authorUserId === me);
+  }
+
+  isOtherClinicianNote(note: EncounterNoteResponse | null): boolean {
+    const me = this.auth.getUserId();
+    return !note?.authorUserId || !me || note.authorUserId !== me;
+  }
+
   signNote(): void {
     const enc = this.selectedEncounter();
     const current = this.noteState();

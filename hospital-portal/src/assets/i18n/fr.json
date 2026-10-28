@@ -3026,6 +3026,7 @@
     "NOTE_SIGNED_AT": "Signée",
     "NOTE_SIGNED_PRE_V125": "Déclarée avant la cérémonie — invérifiable",
     "NOTE_SIGNING": "Signature…",
+    "NOTE_SIGN_AUTHOR_ONLY": "Seul l'auteur ({{name}}) peut signer cette note.",
     "NOTE_SIGN_FAILED": "Échec de la signature de la note",
     "NOTE_SIGN_SUCCESS": "Note signée",
     "NOTE_UNSIGNED": "Cette note n'est pas signée. La signature la verrouille — toute modification ultérieure passe par un addendum.",

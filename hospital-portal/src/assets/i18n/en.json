@@ -3026,6 +3026,7 @@
     "NOTE_SIGNED_AT": "Signed",
     "NOTE_SIGNED_PRE_V125": "Asserted before the ceremony — unverifiable",
     "NOTE_SIGNING": "Signing…",
+    "NOTE_SIGN_AUTHOR_ONLY": "Only the author ({{name}}) can sign this note.",
     "NOTE_SIGN_FAILED": "Failed to sign note",
     "NOTE_SIGN_SUCCESS": "Note signed",
     "NOTE_UNSIGNED": "This note has not been signed. Signing locks it — later changes go through addenda.",

@@ -3026,6 +3026,7 @@
     "NOTE_SIGNED_AT": "Firmada",
     "NOTE_SIGNED_PRE_V125": "Declarada antes de la ceremonia — no verificable",
     "NOTE_SIGNING": "Firmando…",
+    "NOTE_SIGN_AUTHOR_ONLY": "Solo el autor ({{name}}) puede firmar esta nota.",
     "NOTE_SIGN_FAILED": "Error al firmar la nota",
     "NOTE_SIGN_SUCCESS": "Nota firmada",
     "NOTE_UNSIGNED": "Esta nota no está firmada. La firma la bloquea — los cambios posteriores se hacen mediante adendas.",

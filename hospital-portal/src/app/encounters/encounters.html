@@ -390,7 +390,7 @@
                       <strong>{{ section.labelKey | translate }}</strong> {{ section.text }}
                     </p>
                   }
-                  @if (!view.entry.signedAt) {
+                  @if (!view.entry.signedAt && isNoteAuthor(view.entry)) {
                     <button
                       class="btn-secondary"
                       data-testid="sign-note-entry"
@@ -405,24 +405,28 @@
                         ) | translate
                       }}
                     </button>
-                  } @else if (view.entry.requiresCosign && !view.entry.cosignedAt) {
+                  } @else if (
+                    view.entry.signedAt && view.entry.requiresCosign && !view.entry.cosignedAt
+                  ) {
                     <span class="note-meta cosign-pending">
                       {{ 'ENCOUNTERS.NOTE_COSIGN_PENDING' | translate }}
                     </span>
-                    <button
-                      class="btn-secondary"
-                      data-testid="cosign-note-entry"
-                      (click)="cosignNoteEntry(view.entry)"
-                      [disabled]="cosigningEntryId() !== null"
-                    >
-                      <span class="material-symbols-outlined">approval</span>
-                      {{
-                        (cosigningEntryId() === view.entry.id
-                          ? 'ENCOUNTERS.NOTE_COSIGNING'
-                          : 'ENCOUNTERS.COSIGN_NOTE'
-                        ) | translate
-                      }}
-                    </button>
+                    @if (isOtherClinicianNote(view.entry)) {
+                      <button
+                        class="btn-secondary"
+                        data-testid="cosign-note-entry"
+                        (click)="cosignNoteEntry(view.entry)"
+                        [disabled]="cosigningEntryId() !== null"
+                      >
+                        <span class="material-symbols-outlined">approval</span>
+                        {{
+                          (cosigningEntryId() === view.entry.id
+                            ? 'ENCOUNTERS.NOTE_COSIGNING'
+                            : 'ENCOUNTERS.COSIGN_NOTE'
+                          ) | translate
+                        }}
+                      </button>
+                    }
                   }
                   <!-- #965 review: a signed earlier entry is corrected by an addendum filed under it. -->
                   @if (addendumOnEarlierEntry() && addendumTargetId() === view.entry.id) {
@@ -470,17 +474,24 @@
                 </p>
               } @else {
                 <p class="note-meta">{{ 'ENCOUNTERS.NOTE_UNSIGNED' | translate }}</p>
-                <button
-                  class="btn-primary"
-                  data-testid="sign-note"
-                  (click)="signNote()"
-                  [disabled]="signingNote()"
-                >
-                  <span class="material-symbols-outlined">draw</span>
-                  {{
-                    (signingNote() ? 'ENCOUNTERS.NOTE_SIGNING' : 'ENCOUNTERS.SIGN_NOTE') | translate
-                  }}
-                </button>
+                @if (isNoteAuthor(note)) {
+                  <button
+                    class="btn-primary"
+                    data-testid="sign-note"
+                    (click)="signNote()"
+                    [disabled]="signingNote()"
+                  >
+                    <span class="material-symbols-outlined">draw</span>
+                    {{
+                      (signingNote() ? 'ENCOUNTERS.NOTE_SIGNING' : 'ENCOUNTERS.SIGN_NOTE')
+                        | translate
+                    }}
+                  </button>
+                } @else {
+                  <p class="note-meta" data-testid="sign-note-author-only">
+                    {{ 'ENCOUNTERS.NOTE_SIGN_AUTHOR_ONLY' | translate: { name: note.authorName } }}
+                  </p>
+                }
               }
               @if (note.requiresCosign) {
                 @if (note.cosignedAt) {
@@ -495,7 +506,7 @@
                   <p class="note-meta cosign-pending" data-testid="note-cosign-pending">
                     {{ 'ENCOUNTERS.NOTE_COSIGN_PENDING' | translate }}
                   </p>
-                  @if (note.signedAt) {
+                  @if (note.signedAt && isOtherClinicianNote(note)) {
                     <button
                       class="btn-secondary"
                       data-testid="cosign-note"
