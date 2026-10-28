@@ -162,5 +162,6 @@ export function isMain(moduleUrl) {
 
 /** Printed under every failing gate: the standing rule for anyone fixing a D-numbered defect. */
 export const MANDATE =
-  'Fixing a QA defect? Read .claude/skills/defect-fix-mandate/SKILL.md: fix the CLASS, not the instance; ' +
+  'Fixing a QA defect? Read docs/qa/regression-guards.md ("How a fix PR uses these guards") and the ' +
+  'defect-fix-mandate skill (.claude/skills/defect-fix-mandate/SKILL.md): fix the CLASS, not the instance; ' +
   'an allowlist entry carries its defect id and the fix PR deletes it; a new site fails CI and is never pinned to pass.';

@@ -1,7 +1,8 @@
 {
   "$comment": [
-    "English sentences handed to a toast or a status signal from component code.",
-    "Empty on purpose: translate.instant('KEY') is the only way text reaches a toast."
+    "English sentences handed to a toast or a status signal from component code,",
+    "as they stand today. A site not listed fails the build; translate.instant('KEY')",
+    "is the only way text reaches a toast. Key a site, then delete its pin."
   ],
   "pinned": {
     "src/app/reset-password/reset-password.ts::signal::error Both fields are required.": {
@@ -19,6 +20,10 @@
     "src/app/reset-password/reset-password.ts::signal::error Passwords do not match.": {
       "count": 1,
       "why": "pre-existing English on the reset-password page (class D940); not yet a QA defect — key it"
+    },
+    "src/app/reset-password/reset-password.ts::signal::error This reset link is invalid or has expired. Please request a ": {
+      "count": 1,
+      "why": "pre-existing English on the reset-password page (class D940): the `?? '…'` fallback after err?.error?.message; not yet a QA defect — key it"
     }
   }
 }

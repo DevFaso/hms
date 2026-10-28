@@ -108,17 +108,19 @@ function name(expr) {
 /**
  * `{{ r.copayAmount }}` — an amount interpolated with no pipe at all prints
  * "150000" (the D621 shape). The whole interpolation must be the one field (a
- * `?? 0` fallback allowed). With no pipe to say "this is a number", only the
- * unambiguous money words count: `stats().paid`, `p.medsDue`, `boardTotal()`
- * and `daysUntilDue` are counts, so Due/Paid/Total/Net/Gross are left to the
- * pipe and toFixed rules.
+ * `?? 0` / `|| 0` fallback allowed). With no pipe to say "this is a number", a
+ * word that is money only by its suffix is a count as often as not:
+ * `stats().paid`, `p.medsDue`, `boardTotal()`, `daysUntilDue`. So the raw rule
+ * needs a money STEM somewhere in the identifier — `balanceDue`, `amountPaid`,
+ * `totalAmountDue`, `copayAmount` — and leaves bare Due/Paid/Total to the pipe
+ * and toFixed rules.
  */
 const RAW_RE = new RegExp(
-  String.raw`\{\{\s*([\w$.?!()\[\]]*?\w*${MONEY_TAIL}\w*(?:\(\))?)\s*(?:\?\?\s*0\s*)?\}\}`,
+  String.raw`\{\{\s*([\w$.?!()\[\]]*?\w*${MONEY_TAIL}\w*(?:\(\))?)\s*(?:(?:\?\?|\|\|)\s*0\s*)?\}\}`,
   'gi',
 );
-const RAW_MONEY_WORD =
-  /^(?:[a-z][A-Za-z0-9]*)?(?:Amount|Price|Balance|Copay|Copayment|Revenue|Subtotal|Fee|Fees|Cost|Charge|Charges|Payment|Discount|Refund|Tax|Vat)$|^(?:amount|price|balance|copay|copayment|revenue|subtotal|fee|fees|cost|charge|charges|payment|discount|refund|tax|vat)$/;
+const MONEY_STEM =
+  /amount|price|balance|copay|revenue|subtotal|fee|cost|charge|payment|discount|refund|tax|vat/i;
 
 /** Template rules: `pipe`, `fixed` and `raw`. */
 export function moneyTemplateFindings(html) {
@@ -128,7 +130,7 @@ export function moneyTemplateFindings(html) {
       .split(/\?\.|!\.|\./)
       .pop()
       .replace(/[!?()[\]'"]/g, '');
-    if (!RAW_MONEY_WORD.test(last) || NOT_MONEY.test(last)) continue;
+    if (!isMoney(m[1]) || !MONEY_STEM.test(last)) continue;
     out.push({
       line: lineAt(html, m.index),
       rule: 'raw',

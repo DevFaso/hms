@@ -15,40 +15,130 @@
  * is English in every language and visible to no gate. Two rules on `.ts`
  * sources (specs excluded):
  *
- *  toast   — `toast.success|error|info|warning(` whose first argument is a
- *            string literal (quoted or template) that is prose: it contains
- *            a space and two words of letters, and is not a translation key
+ *  toast   — `toast.success|error|info|warning|push(` whose ARGUMENT LIST holds a
+ *            string literal (quoted or template) that is prose — anywhere in it,
+ *            so `err?.error?.message ?? 'Could not save'` counts — where prose
+ *            means a space and two words of letters, and not a translation key
  *            (`SECTION.KEY_NAME`).
  *  signal  — `.set(` or `= ` on a field named error*, message*, notice*,
- *            hint*, banner*, warning*, statusMessage*, info* with such a
- *            literal.
+ *            hint*, banner*, warning*, statusMessage*, info* whose expression
+ *            holds such a literal (`signal('…')`, `e.message || '…'` included).
+ *
+ * Comments are blanked first, and the fallback of a `translate.instant(…)`
+ * call (`instant('KEY') || 'English'`) is not counted: instant returns the key
+ * when a translation is missing, so that literal never reaches the screen.
  *
  * Every toast in the tree already goes through translate.instant; the only
- * sites today are four English error strings in reset-password.ts, pinned in
- * scripts/ts-literals-baseline.json until they are keyed. A fifth fails.
+ * sites today are five English error strings in reset-password.ts, pinned in
+ * scripts/ts-literals-baseline.json until they are keyed. A sixth fails.
  */
 import { lineOf } from './html-tags.mjs';
 
 const PROSE_WORDS = /[A-Za-zÀ-ÿ]{2,}\s+[A-Za-zÀ-ÿ]{2,}/;
 const TRANSLATION_KEY = /^[A-Z0-9_]+(?:\.[A-Z0-9_]+)+$/;
 
-const LITERAL = String.raw`(?:'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|` + '`(?:[^`\\\\]|\\\\.)*`' + ')';
-// `toast.error('…')`, and `toast.push('error', '…')` whose message is the SECOND argument.
-const TOAST_CALL = new RegExp(
-  String.raw`\btoast\w*\.(?:(success|error|info|warning)\(\s*|(push)\(\s*['"]\w+['"]\s*,\s*)${LITERAL}`,
-  'g',
-);
-// `this.error.set('…')`, `this.error = '…'`, `error: string = '…'`, `readonly notice = signal('…')`.
-const SIGNAL_SET = new RegExp(
-  String.raw`\b((?:error|message|notice|hint|banner|warning|statusMessage|info)\w*)` +
-    String.raw`(?:\.set\(|\s*(?::\s*[\w<>|\[\]\s]+?)?\s*=\s*(?:signal(?:<[^>]*>)?\()?)\s*${LITERAL}`,
-  'g',
-);
+const TOAST_OPEN = /\btoast\w*\.(success|error|info|warning|push)\(/g;
+// `this.error.set(`, `this.error = `, `error: string = `, `readonly notice = `
+// (not `===`, and not an arrow parameter: `message => '…'` is a function, not an assignment)
+const SIGNAL_OPEN =
+  /\b((?:error|message|notice|hint|banner|warning|statusMessage|info)\w*)(?:\.set\(|\s*(?::\s*[\w<>|[\]\s]+?)?\s*=(?![=>])\s*)/g;
 
-/** The TRAILING literal of the match: `push('error', 'Could not …')` yields the message, not the type. */
-function literalOf(call) {
-  const m = /(['"`])((?:\\.|(?!\1)[^\\])*)\1\s*$/.exec(call);
-  return m ? m[2] : '';
+/**
+ * When `source[i]` opens a string literal or a comment, the index of its last
+ * character; otherwise -1. Comments count: an apostrophe in
+ * `// the backend's message` is not the start of a string.
+ */
+function endOfLiteralOrComment(source, i) {
+  const ch = source[i];
+  if (ch === "'" || ch === '"' || ch === '`') {
+    let j = i + 1;
+    for (; j < source.length && source[j] !== ch; j++) {
+      if (source[j] === '\\') j++;
+    }
+    return j;
+  }
+  if (ch === '/' && source[i + 1] === '/') {
+    const nl = source.indexOf('\n', i);
+    return nl < 0 ? source.length - 1 : nl;
+  }
+  if (ch === '/' && source[i + 1] === '*') {
+    const close = source.indexOf('*/', i + 2);
+    return close < 0 ? source.length - 1 : close + 1;
+  }
+  return -1;
+}
+
+/** The balanced `( … )` opened at `openParen`, strings and comments skipped. */
+function balancedArguments(source, openParen) {
+  let depth = 0;
+  for (let i = openParen; i < source.length; i++) {
+    const skipped = endOfLiteralOrComment(source, i);
+    if (skipped >= 0) {
+      i = skipped;
+      continue;
+    }
+    const ch = source[i];
+    if (ch === '(') depth++;
+    else if (ch === ')' && --depth === 0) return source.slice(openParen, i + 1);
+  }
+  return source.slice(openParen);
+}
+
+/**
+ * The expression after `=`: up to the `;` that ends the statement, outside
+ * strings, comments and brackets (a `computed(() => { a; b; })` body is part of
+ * the expression), or the bracket that closes the one the assignment sits in.
+ */
+function assignedExpression(source, from) {
+  let depth = 0;
+  for (let i = from; i < source.length; i++) {
+    const skipped = endOfLiteralOrComment(source, i);
+    if (skipped >= 0) {
+      i = skipped;
+      continue;
+    }
+    const ch = source[i];
+    if (ch === '(' || ch === '[' || ch === '{') depth++;
+    else if (ch === ')' || ch === ']' || ch === '}') {
+      if (--depth < 0) return source.slice(from, i);
+    } else if (ch === ';' && depth === 0) return source.slice(from, i);
+  }
+  return source.slice(from);
+}
+
+/**
+ * Whether the literal starting at `at` is the fallback of a `translate.instant(…)`
+ * call: `instant('KEY') || 'English'`. ngx-translate's instant returns the key
+ * itself when a translation is missing (no custom MissingTranslationHandler in
+ * this tree), so that fallback is never on screen.
+ */
+function isInstantFallback(text, at) {
+  const before = text.slice(0, at).trimEnd();
+  const op = /(?:\|\||\?\?)$/.exec(before);
+  if (!op) return false;
+  const call = before.slice(0, before.length - op[0].length).trimEnd();
+  if (!call.endsWith(')')) return false;
+  let depth = 0;
+  for (let i = call.length - 1; i >= 0; i--) {
+    if (call[i] === ')') depth++;
+    else if (call[i] === '(' && --depth === 0) return /\.instant\s*$/.test(call.slice(0, i));
+  }
+  return false;
+}
+
+/** Every string literal of `text` (comments skipped) that is prose and can reach the screen. */
+function proseLiteralsIn(text) {
+  const out = [];
+  for (let i = 0; i < text.length; i++) {
+    const end = endOfLiteralOrComment(text, i);
+    if (end < 0) continue;
+    if (text[i] !== '/') {
+      const literal = text.slice(i + 1, end);
+      if (isProseLiteral(literal) && !isInstantFallback(text, i)) out.push(literal);
+    }
+    i = end;
+  }
+  return out;
 }
 
 export function isProseLiteral(text) {
@@ -60,30 +150,55 @@ export function isProseLiteral(text) {
 const lineAt = lineOf;
 
 /**
- * @param {string} source a non-spec `.ts` file
+ * The source with every comment replaced by spaces (newlines kept, so line
+ * numbers hold): `// this.error = 'Old text'` is not a call site.
+ */
+function blankComments(source) {
+  let out = '';
+  for (let i = 0; i < source.length; i++) {
+    const end = endOfLiteralOrComment(source, i);
+    if (end < 0) {
+      out += source[i];
+      continue;
+    }
+    const piece = source.slice(i, end + 1);
+    out += source[i] === '/' ? piece.replace(/[^\n]/g, ' ') : piece;
+    i = end;
+  }
+  return out;
+}
+
+/**
+ * @param {string} rawSource a non-spec `.ts` file
  * @returns {{ line: number, rule: string, anchor: string, message: string }[]}
  */
-export function tsLiteralFindings(source) {
+export function tsLiteralFindings(rawSource) {
+  const source = blankComments(rawSource);
   const out = [];
-  for (const m of source.matchAll(TOAST_CALL)) {
-    const literal = literalOf(m[0]);
-    if (!isProseLiteral(literal)) continue;
-    out.push({
-      line: lineAt(source, m.index),
-      rule: 'toast',
-      anchor: literal.slice(0, 60),
-      message: `toast.${m[1] ?? m[2]}('${literal.slice(0, 60)}'): English on screen in every language — translate.instant('KEY')`,
-    });
+  for (const m of source.matchAll(TOAST_OPEN)) {
+    const args = balancedArguments(source, m.index + m[0].length - 1);
+    for (const literal of proseLiteralsIn(args)) {
+      out.push({
+        line: lineAt(source, m.index),
+        rule: 'toast',
+        anchor: literal.slice(0, 60),
+        message: `toast.${m[1]}('${literal.slice(0, 60)}'): English on screen in every language — translate.instant('KEY')`,
+      });
+    }
   }
-  for (const m of source.matchAll(SIGNAL_SET)) {
-    const literal = literalOf(m[0]);
-    if (!isProseLiteral(literal)) continue;
-    out.push({
-      line: lineAt(source, m.index),
-      rule: 'signal',
-      anchor: `${m[1]} ${literal.slice(0, 60)}`,
-      message: `${m[1]} set to '${literal.slice(0, 60)}': English on screen in every language — translate.instant('KEY')`,
-    });
+  for (const m of source.matchAll(SIGNAL_OPEN)) {
+    const end = m.index + m[0].length;
+    const expression = m[0].endsWith('(')
+      ? balancedArguments(source, end - 1)
+      : assignedExpression(source, end);
+    for (const literal of proseLiteralsIn(expression)) {
+      out.push({
+        line: lineAt(source, m.index),
+        rule: 'signal',
+        anchor: `${m[1]} ${literal.slice(0, 60)}`,
+        message: `${m[1]} set to '${literal.slice(0, 60)}': English on screen in every language — translate.instant('KEY')`,
+      });
+    }
   }
   return out;
 }

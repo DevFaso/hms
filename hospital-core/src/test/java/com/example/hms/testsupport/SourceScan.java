@@ -10,9 +10,14 @@ package com.example.hms.testsupport;
  */
 public final class SourceScan {
 
-    /** Appended to every guard's failure message: the standing rule for anyone fixing a D-numbered defect. */
+    /**
+     * Appended to every guard's failure message: the standing rule for anyone fixing a
+     * D-numbered defect, with the page that is in this tree first and the project skill
+     * (defect-fix-mandate, PR #974) that spells out the whole mandate second.
+     */
     public static final String MANDATE =
-        " — fixing a QA defect? Read .claude/skills/defect-fix-mandate/SKILL.md: fix the CLASS, not the instance;"
+        " — fixing a QA defect? Read docs/qa/regression-guards.md (\"How a fix PR uses these guards\") and the"
+            + " defect-fix-mandate skill (.claude/skills/defect-fix-mandate/SKILL.md): fix the CLASS, not the instance;"
             + " an allowlist entry carries its defect id and the fix PR deletes it; a new site fails CI and is never"
             + " allowlisted to pass";
 

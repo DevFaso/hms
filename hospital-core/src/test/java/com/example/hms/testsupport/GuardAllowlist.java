@@ -22,12 +22,27 @@ public final class GuardAllowlist {
     private GuardAllowlist() {
     }
 
-    /** {@code allow("site", 2, "QA D123: …", "other", 1, "…")}: triples of site, count, reason. */
+    /**
+     * {@code allow("site", 2, "QA D123: …", "other", 1, "…")}: triples of site, count,
+     * reason. A hand-edited list that lost an element fails here, naming the entry,
+     * rather than with a ClassCastException out of the guard's static initialiser.
+     */
     public static Map<String, Allowance> allow(Object... siteCountReason) {
+        if (siteCountReason.length % 3 != 0) {
+            throw new IllegalArgumentException("allow(...) takes site, count, reason triples; got "
+                + siteCountReason.length + " values, the last one: " + siteCountReason[siteCountReason.length - 1]);
+        }
         Map<String, Allowance> out = new TreeMap<>();
         for (int i = 0; i < siteCountReason.length; i += 3) {
-            out.put((String) siteCountReason[i],
-                new Allowance((Integer) siteCountReason[i + 1], (String) siteCountReason[i + 2]));
+            if (!(siteCountReason[i] instanceof String site) || !(siteCountReason[i + 1] instanceof Integer count)
+                || !(siteCountReason[i + 2] instanceof String reason)) {
+                throw new IllegalArgumentException("allow(...) entry " + (i / 3) + " is not (String site, int count,"
+                    + " String reason): " + siteCountReason[i] + ", " + siteCountReason[i + 1] + ", " + siteCountReason[i + 2]);
+            }
+            if (count < 1 || reason.isBlank()) {
+                throw new IllegalArgumentException("allow(...) entry for " + site + " needs a count >= 1 and a reason");
+            }
+            out.put(site, new Allowance(count, reason));
         }
         return out;
     }

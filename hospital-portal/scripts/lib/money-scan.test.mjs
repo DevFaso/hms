@@ -31,10 +31,15 @@ test('| cfa passes, and a rate, a count or a page total is not money', () => {
 
 test('D621: an amount interpolated with no pipe at all is unformatted money', () => {
   const html = `<dd>{{ r.copayAmount }} {{ r.copayCurrency }}</dd> <td>{{ invoice.totalAmount ?? 0 }}</td>
-    <span>{{ stats().total }}</span> <span>{{ line.net }}</span> <span>{{ x.amount | cfa }}</span>`;
+    <span>{{ stats().total }}</span> <span>{{ line.net }}</span> <span>{{ x.amount | cfa }}</span>
+    <b>{{ inv.balanceDue }}</b> <b>{{ inv.amountPaid || 0 }}</b> <i>{{ p.medsDue }}</i> <i>{{ boardTotal() }}</i> <i>{{ daysUntilDue }}</i>`;
+  // A money STEM makes the raw render money (balanceDue, amountPaid); a bare
+  // Due/Total suffix on a count does not (medsDue, boardTotal, daysUntilDue).
   assert.deepEqual(anchors(moneyTemplateFindings(html)), [
     'raw:r.copayAmount raw',
     'raw:invoice.totalAmount raw',
+    'raw:inv.balanceDue raw',
+    'raw:inv.amountPaid raw',
   ]);
 });
 

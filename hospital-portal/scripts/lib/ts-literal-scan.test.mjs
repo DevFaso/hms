@@ -17,12 +17,17 @@ test('an English sentence handed to a toast fails, in any quote style', () => {
   const source = `this.toast.error('Could not save the appointment');
     this.toastService.success("Appointment saved");
     this.toast.warning(\`Slot \${slot} is taken\`);
-    this.toast.push('error', 'Could not reach the server');`;
+    this.toast.push('error', 'Could not reach the server');
+    this.toast.error(err?.error?.message ?? 'Could not save the visit');
+    this.error.set(e.message || 'Something went wrong');`;
+  // The literal may sit anywhere in the argument: a `??`/`||` fallback is the usual spelling.
   assert.deepEqual(anchors(source), [
     'toast:Could not save the appointment',
     'toast:Appointment saved',
     'toast:Slot ${slot} is taken',
     'toast:Could not reach the server',
+    'toast:Could not save the visit',
+    'signal:error Something went wrong',
   ]);
 });
 
@@ -51,6 +56,36 @@ test('translated text, keys, variables and single tokens pass', () => {
     this.error.set(msg);
     this.message = 'ok';`;
   assert.deepEqual(anchors(source), []);
+});
+
+test('a comment is not code, and the fallback of translate.instant never reaches the screen', () => {
+  const source = `this.error =
+      // \`error\` is the reason phrase. The backend's message is translated.
+      err?.error?.message ?? this.translate.instant('LOGIN.FAILED');
+    // this.toast.error('Could not save the appointment');
+    this.toast.success(
+      this.translate.instant('PLATFORM.TOAST.STATUS_CHANGED', {
+        // interpolating the raw token produced "modifié en DECOMMISSIONED".
+        status: label,
+      }),
+    );
+    this.toast.success(this.translate.instant('checkout.success') || 'Patient checked out successfully');
+    this.toast.error(this.translate.instant('x.y', { n }) ?? 'Failed to acknowledge');
+    readonly info = computed(() => { const n = this.count(); return n ? 'Some items selected' : ''; });
+    const labels = rows.map(message => 'Shown nowhere at all');
+    if (warning === 'Not yet keyed here') { return; }`;
+  // The computed body is part of the assignment: its English still counts.
+  assert.deepEqual(anchors(source), ['signal:info Some items selected']);
+});
+
+test('the line of a finding below a block comment is the line it is on', () => {
+  const source = `/* one
+ two */
+this.toast.error('Could not save the appointment');`;
+  assert.deepEqual(
+    tsLiteralFindings(source).map((f) => f.line),
+    [3],
+  );
 });
 
 test('isProseLiteral: two words of letters, not a SECTION.KEY', () => {

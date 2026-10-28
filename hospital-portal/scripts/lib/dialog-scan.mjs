@@ -10,18 +10,21 @@
  *            role="dialog" / "alertdialog", and neither an ancestor nor a
  *            descendant does. Backdrops, headers, footers and buttons are
  *            not containers and are not matched.
- *  modal   — role="dialog" without aria-modal="true".
- *  label   — role="dialog" without aria-labelledby or aria-label.
- *  escape  — role="dialog" in a component with no Escape handler anywhere
- *            (template `(keydown.escape)`, a `document:keydown.escape`
- *            HostListener, an `'Escape'` key check, or the CDK dialog, which
- *            closes on Escape itself).
+ *  modal   — role="dialog" with no aria-modal, or aria-modal="false".
+ *  label   — role="dialog" without a non-empty aria-labelledby or aria-label.
+ *  escape  — role="dialog" with no `(keydown.escape)` on the dialog, an
+ *            ancestor or a descendant, in a component with no
+ *            `document:keydown.escape` HostListener and no CDK/Material
+ *            dialog (which closes on Escape itself).
+ *
+ * A native `<dialog>` has the role, the modality and Escape built in: only
+ * its name is checked.
  *
  * The anchor of a finding is the element's class (or role) plus the text of
  * the first heading inside it, so a pin survives the lines around it moving
  * and stops matching when the dialog is fixed or removed.
  */
-import { tags, innerHtml, hasAttr, attrValue, classTokens } from './html-tags.mjs';
+import { tags, innerHtml, attrValue, classTokens } from './html-tags.mjs';
 
 const CONTAINER_TOKEN =
   /^(?:[a-z0-9]+-)*(?:modal|dialog)(?:-(?:container|panel|card|box|window|wrapper|sheet|surface))?$/;
@@ -88,7 +91,8 @@ export function dialogFindings(html, componentSource = html, dialogSelectors = n
   const childDialog =
     dialogSelectors.size > 0
       ? new RegExp(
-          String.raw`<(?:${[...dialogSelectors].map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})\b`,
+          // `(?=[\s/>])`, not `\b`: `<app-order-set-picker-row>` is not `<app-order-set-picker>`.
+          String.raw`<(?:${[...dialogSelectors].map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})(?=[\s/>])`,
         )
       : null;
   tokens.forEach((tag, index) => {
@@ -112,7 +116,12 @@ export function dialogFindings(html, componentSource = html, dialogSelectors = n
     if (isDialog) {
       const inner = innerHtml(html, tokens, index);
       const a = anchor(tag, inner);
-      if (!nativeDialog && !hasAttr(tag, 'aria-modal')) {
+      // `aria-modal="false"` is not modal and `aria-label=""` names nothing: the VALUE counts.
+      const ariaModal = attrValue(tag, 'aria-modal');
+      if (
+        !nativeDialog &&
+        (ariaModal === undefined || ariaModal.replace(/['"]/g, '').trim() === 'false')
+      ) {
         out.push({
           line: tag.line,
           rule: 'modal',
@@ -120,7 +129,11 @@ export function dialogFindings(html, componentSource = html, dialogSelectors = n
           message: `role="${role}" without aria-modal="true": the page behind stays in the reading order`,
         });
       }
-      if (!hasAttr(tag, 'aria-labelledby') && !hasAttr(tag, 'aria-label')) {
+      const named = ['aria-labelledby', 'aria-label'].some((n) => {
+        const v = attrValue(tag, n);
+        return v !== undefined && v.trim() !== '';
+      });
+      if (!named) {
         out.push({
           line: tag.line,
           rule: 'label',

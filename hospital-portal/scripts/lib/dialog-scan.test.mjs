@@ -89,6 +89,13 @@ test('a container that only wraps a child component which is itself a dialog del
   assert.deepEqual(dialogFindings(bound), []);
 });
 
+test('an empty aria-label names nothing, aria-modal="false" is not modal, and a longer selector is another component', () => {
+  const placeholders = `<div class="modal" role="dialog" aria-modal="false" aria-label="" (keydown.escape)="c()"></div>`;
+  assert.deepEqual(rules(placeholders, placeholders), ['label', 'modal']);
+  const sibling = `<div class="modal"><app-order-set-picker-row></app-order-set-picker-row></div>`;
+  assert.deepEqual(rules(sibling, sibling, new Set(['app-order-set-picker'])), ['role']);
+});
+
 test('a native <dialog> has the role, the modality and Escape built in; only its name is checked', () => {
   const named = `<dialog class="modal" aria-labelledby="t" (keydown.escape)="close()"><h2 id="t">T</h2></dialog>`;
   assert.deepEqual(dialogFindings(named), []);

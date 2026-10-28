@@ -65,11 +65,11 @@ reason — and the two assertions every guard makes: `overAllowance`, `stale`).
 
 | Gate (`npm run …`) | Class it stops | Rules | QA defects | Pins today |
 |---|---|---|---|---|
-| `guard:a11y-dialogs` | A modal that is not a dialog to assistive technology. | `role` (class names it a modal, no `role="dialog"` on it, an ancestor or a descendant, including a child component that is itself a dialog), `modal` (no `aria-modal`), `label` (no `aria-labelledby`/`aria-label`), `escape` (no `(keydown.escape)` on the dialog, an ancestor or a descendant, no `document:keydown.escape` HostListener, no CDK/Material dialog — an Escape bound on a **sibling** backdrop never fires while focus is inside the dialog, and a focus trap or an `'Escape'` string elsewhere in the file is not a handler). A native `<dialog>` has the role, the modality (`showModal()`) and Escape built in: only its name is checked. | D976, D988, D1004, D968 (D173 earlier) | 190 (57 role, 104 label, 12 modal, 17 escape) |
-| `guard:a11y-names` | A control with no accessible name. | `icon-button` (a `<button>`, an `<a>` with `(click)`/`routerLink`/`href`, or `role="button"`/`"link"` whose content minus icons is empty and that has no `aria-label(ledby)`; `title` alone does not count), `field-label` (`<input>`/`<textarea>`/`<select>` with no `aria-label`, no `<label for>`, no enclosing `<label>`) | D988, D999, D1006, D993 (D173/D200 earlier) | 383 sites (232 icon buttons/links, 42 fields) |
+| `guard:a11y-dialogs` | A modal that is not a dialog to assistive technology. | `role` (class names it a modal, no `role="dialog"` on it, an ancestor or a descendant, including a child component that is itself a dialog), `modal` (no `aria-modal`, or `aria-modal="false"`), `label` (no non-empty `aria-labelledby`/`aria-label`), `escape` (no `(keydown.escape)` on the dialog, an ancestor or a descendant, no `document:keydown.escape` HostListener, no CDK/Material dialog — an Escape bound on a **sibling** backdrop never fires while focus is inside the dialog, and a focus trap or an `'Escape'` string elsewhere in the file is not a handler). A native `<dialog>` has the role, the modality (`showModal()`) and Escape built in: only its name is checked. | D976, D988, D1004, D968 (D173 earlier) | 190 (57 role, 104 label, 12 modal, 17 escape) |
+| `guard:a11y-names` | A control with no accessible name. | `icon-button` (a `<button>`, an `<a>` with `(click)`/`routerLink`/`href`, or `role="button"`/`"link"` whose content minus icons is empty and that has no `aria-label(ledby)`; `title` alone does not count), `field-label` (`<input>`/`<textarea>`/`<select>` with no `aria-label`, no `<label for>`, no enclosing `<label>`) | D988, D999, D1006, D993 (D173/D200 earlier) | 383 sites at 369 pins (328 icon buttons/links, 55 fields) |
 | `guard:patient-picker` | A hand-written patient picker (search input + own suggestion list with a `selectPatient(...)` handler) instead of `<app-patient-picker>`. | `hand-written-picker` | D947 (D943/D942 as seen from each copy) | 11 |
-| `guard:money-format` | Money printed without `formatCfa` / `\| cfa`. | `pipe` (`\| number` / `\| currency` on an amount-shaped field — the last identifier is a money word or ends in a capitalised one), `raw` (`{{ r.copayAmount }}` with no pipe at all; unambiguous money words only), `helper` (a component `formatCurrency/Money/Amount/Price` not delegating to `formatCfa`, or Intl currency formatting outside one), `fixed` (`.toFixed(` on an amount, through `?.`/`!.`/`(a * b)`) | D948, D1008, D621 | 7 (one of them, `eligibility-check-dialog:113`, found by the `raw` rule) |
-| `guard:ts-literals` | An English sentence handed to a toast or a status signal from component code — the layer the locale gates cannot see. | `toast`, `signal` | D940 class | 4 (all in `reset-password.ts`, pre-existing, not yet a QA defect) |
+| `guard:money-format` | Money printed without `formatCfa` / `\| cfa`. | `pipe` (`\| number` / `\| currency` on an amount-shaped field — the last identifier is a money word or ends in a capitalised one), `raw` (`{{ r.copayAmount }}` with no pipe at all, a `?? 0`/`|| 0` fallback allowed; the identifier must carry a money stem — `balanceDue`, `amountPaid` — so `medsDue`, `boardTotal()` and `daysUntilDue` stay counts), `helper` (a component `formatCurrency/Money/Amount/Price` not delegating to `formatCfa`, or Intl currency formatting outside one), `fixed` (`.toFixed(` on an amount, through `?.`/`!.`/`(a * b)`) | D948, D1008, D621 | 7 (one of them, `eligibility-check-dialog:113`, found by the `raw` rule) |
+| `guard:ts-literals` | An English sentence handed to a toast or a status signal from component code — the layer the locale gates cannot see. | `toast`, `signal` (the literal anywhere in the argument or the assigned expression, so a `?? '…'` fallback counts; comments and the dead fallback of `translate.instant(…) \|\| '…'` do not) | D940 class | 5 (all in `reset-password.ts`, pre-existing, not yet a QA defect) |
 | `guard:uuid-fragments` | A UUID fragment on screen (`id \| slice: 0 : 8`, `.substring(0, 8)`, through `?.`/`!.`; the last camelCase word decides whether a name is an id — `hospitalId` is, `isValid` is not). | `slice-pipe`, `slice-call` | D992 (D1009 for file names) | 7 (one of them, `scheduling.html:418`, found by the guard itself) |
 
 Each gate accepts `--report-only` (print, never fail) and `--write-baseline`
@@ -113,6 +113,18 @@ are excusing; `why` of existing pins is kept, new pins get `TODO`).
   `: "Capitalised"` ternary fallback shape is caught; a bare
   `setReason("Pending")` is indistinguishable from a code without a type
   model.
+- **English handed to a helper that stores it** (the call-graph gap of a
+  textual scan): `StoredTextProseGuardTest` sees a prose literal written
+  directly into a text sink (`.notes("…")`, `.append("…")`), not one passed to
+  a helper parameter the helper then stores — on develop today
+  `InventoryServiceImpl.recordStockTransaction(…, "Stock receipt: lot " + lot, …)`,
+  `ImagingReportServiceImpl.appendStatusHistory(…, "Report signed", …)`,
+  `TransfusionServiceImpl.stopInternal(administration, "Transfusion reaction: " + …)`,
+  `StockOutRoutingServiceImpl.endOrderOfEndedStay(prescription, "Partner no-show")`.
+  The same gap applies to a lazy chain inside a helper method called from a
+  post-commit lambda (`PostCommitLazyAssociationGuardTest`). A fix PR that
+  touches one of these helpers keys the text at the helper and adds the
+  helper's name to the guard's sink list.
 - **Comments are stripped** before every Java scan (`SourceScan.stripComments`),
   so a Javadoc that quotes an old English sentence or a `// was
   assignment.getRole().getCode()` note neither fails a guard nor keeps an

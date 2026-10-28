@@ -95,6 +95,10 @@ class PostCommitLazyAssociationGuardTest {
 
     /** {@code file, chain, count, reason} quadruples, keyed {@code "file chain"} for {@link GuardAllowlist}. */
     private static Map<String, Allowance> allow(Object... fileChainCountReason) {
+        if (fileChainCountReason.length % 4 != 0) {
+            throw new IllegalArgumentException("allow(...) takes file, chain, count, reason quadruples; got "
+                + fileChainCountReason.length + " values");
+        }
         Object[] triples = new Object[fileChainCountReason.length / 4 * 3];
         for (int i = 0, k = 0; i < fileChainCountReason.length; i += 4, k += 3) {
             triples[k] = fileChainCountReason[i] + " " + fileChainCountReason[i + 1];

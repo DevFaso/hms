@@ -53,10 +53,11 @@ class SaveThenRefreshGuardTest {
     static final Pattern REFRESH = Pattern.compile(
         "\\b(?:(?:entityManager|em)\\.refresh|refreshIfManaged|resync)\\(\\s*(\\w+)\\s*\\)");
 
-    /** A member method header at class-member indentation: the `{` that opens the method a save sits in. */
-    static final Pattern METHOD_HEADER = Pattern.compile(
-        "(?m)^ {4}(?:(?:public|private|protected|static|final|synchronized|default)\\s+)*[\\w<>\\[\\],.? ]+?\\s+\\w+\\s*\\([^;{)]*\\)"
-            + "\\s*(?:throws[^{;]*)?\\{");
+    /** The keyword before a `( … ) {` that opens a control block, not a method body. */
+    private static final Pattern CONTROL_KEYWORD = Pattern.compile(
+        "\\b(?:if|for|while|switch|catch|synchronized|try|else|do)\\s*$|->\\s*$|\\bnew\\s+[\\w.<>]+\\s*$");
+    /** A `return` statement inside the save's own block: what follows the block never runs after the save. */
+    private static final Pattern RETURN = Pattern.compile("\\breturn\\b");
     static final Pattern FLUSH = Pattern.compile("\\.(?:flush|saveAndFlush)\\(");
     static final Pattern IDENTIFIER = Pattern.compile("\\b[a-z]\\w*\\b");
 
@@ -81,7 +82,14 @@ class SaveThenRefreshGuardTest {
             // refresh is stepped over, and a save inside an `if` is still followed by the
             // refresh after it: a log line or a mapper call between the two changes
             // nothing about what the refresh discards.
-            String rest = source.substring(semicolon + 1, endOfEnclosingMethod(source, m.start(), semicolon + 1));
+            // …unless the save's own block returns: `if (isNew) { return repo.save(fresh); }`
+            // and a refresh after the block never run together, so only the block counts.
+            int blockEnd = endOfEnclosingBlock(source, semicolon + 1);
+            boolean leavesMethod =
+                RETURN.matcher(source.substring(SourceScan.statementStart(source, m.start()), semicolon)).find()
+                    || RETURN.matcher(source.substring(semicolon + 1, blockEnd)).find();
+            int windowEnd = leavesMethod ? blockEnd : endOfEnclosingMethod(source, m.start(), semicolon + 1);
+            String rest = source.substring(semicolon + 1, windowEnd);
             String saved = m.group(1);
             // Every refresh that follows is checked, not only the first: a refresh of
             // another row before the saved one does not clear the saved one.
@@ -113,21 +121,60 @@ class SaveThenRefreshGuardTest {
     }
 
     /**
-     * The index of the `}` that closes the member method containing {@code at}: the last
-     * method header before it, closed by balanced braces. Falls back to the enclosing
-     * block when no header is found (a fixture with no method around it).
+     * The index of the `}` that closes the method body containing {@code at}: the
+     * innermost brace pair around it whose `{` follows a `)` (or a `throws` clause)
+     * that is not an {@code if}/{@code for}/{@code try}/lambda/anonymous-class
+     * opener. Brace walking, not indentation, so a parameter list with its own
+     * parentheses or a nested class changes nothing. Falls back to the enclosing
+     * block when no method surrounds {@code at} (a fixture with no method).
      */
     static int endOfEnclosingMethod(String source, int at, int from) {
-        int bodyOpen = -1;
-        Matcher header = METHOD_HEADER.matcher(source);
-        while (header.find() && header.end() - 1 < at) {
-            bodyOpen = header.end() - 1;
+        int best = -1;
+        for (int i = 0; i < at; i++) {
+            int skipped = SourceScan.endOfLiteralOrComment(source, i);
+            if (skipped >= 0) {
+                i = skipped;
+                continue;
+            }
+            if (source.charAt(i) != '{') {
+                continue;
+            }
+            int close = SourceScan.closingBrace(source, i);
+            if (close <= at || !opensMethodBody(source, i)) {
+                continue;
+            }
+            // Innermost wins: later openers that still enclose `at` are nested deeper.
+            best = close;
         }
-        if (bodyOpen < 0) {
-            return endOfEnclosingBlock(source, from);
+        return best > from ? best : endOfEnclosingBlock(source, from);
+    }
+
+    /** Whether the `{` at {@code open} follows a parameter list (or `throws` clause) of a method, not a control block. */
+    static boolean opensMethodBody(String source, int open) {
+        String before = source.substring(Math.max(0, open - 400), open).stripTrailing();
+        String head = before.replaceFirst("\\bthrows\\s+[\\w.,\\s<>]+$", "").stripTrailing();
+        if (!head.endsWith(")")) {
+            return false;
         }
-        int end = SourceScan.closingBrace(source, bodyOpen);
-        return end > from ? end : endOfEnclosingBlock(source, from);
+        // The `(` that matches the final `)` — not the last `(`, which may belong to a
+        // nested call (`if (x.isNew())`) or an annotation (`@RequestBody(required = false)`).
+        int depth = 0;
+        int paren = -1;
+        for (int i = head.length() - 1; i >= 0; i--) {
+            char ch = head.charAt(i);
+            if (ch == ')') {
+                depth++;
+            } else if (ch == '(' && --depth == 0) {
+                paren = i;
+                break;
+            }
+        }
+        if (paren < 0) {
+            return false;
+        }
+        // The text before the parameter list: a method name, or a control keyword.
+        String owner = head.substring(0, paren).stripTrailing();
+        return !CONTROL_KEYWORD.matcher(owner).find() && owner.matches("(?s).*\\b\\w+$");
     }
 
     /** The index of the `}` that closes the block containing {@code from}; nested blocks are stepped over. */
@@ -260,8 +307,25 @@ class SaveThenRefreshGuardTest {
             inventoryItemRepository.save(item);
             item.refresh(view);
             """;
+        String returnInBranch = """
+                public Appointment upsert(AppointmentRequestDTO dto) {
+                    if (dto.isNew()) { return appointmentRepository.save(fresh); }
+                    Appointment fresh = load(dto);
+                    entityManager.refresh(fresh);
+                    return fresh;
+                }
+            """;
+        String parenParams = """
+                public Appointment update(@Valid @RequestBody(required = false) AppointmentRequestDTO d) throws IOException {
+                    if (changed(existing, d)) { appointmentRepository.save(existing); }
+                    entityManager.refresh(existing);
+                    return existing;
+                }
+            """;
         assertThat(offenders("x", saveInsideIf)).hasSize(1);
+        assertThat(offenders("x", parenParams)).hasSize(1);
         assertThat(offenders("x", domainRefresh)).isEmpty();
+        assertThat(offenders("x", returnInBranch)).isEmpty();
         assertThat(offenders("x", old)).hasSize(1);
         assertThat(offenders("x", plain)).hasSize(1);
         assertThat(offenders("x", expression)).hasSize(1);

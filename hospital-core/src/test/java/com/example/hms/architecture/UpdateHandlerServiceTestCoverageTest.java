@@ -236,22 +236,24 @@ class UpdateHandlerServiceTestCoverageTest {
                     names.add(m.group(1));
                 }
                 // The `service.method` pairs too: a generic name is covered only by its own
-                // pair — by the field name, or by the service TYPE the test file names (a
-                // service test calls `service.update(` on a mock typed AdvanceDirectiveService).
+                // pair — by the field name, or by the service TYPE of the receiver the test
+                // calls it on (`AdvanceDirectiveService service; … service.update(`). A type
+                // the file merely names (a @Mock dependency of another service's test) does
+                // not pair with the calls on other receivers.
                 Matcher pair = SERVICE_CALL.matcher(calls);
-                Set<String> methods = new TreeSet<>();
                 while (pair.find()) {
                     names.add(pair.group(1) + "." + pair.group(2));
-                    methods.add(pair.group(2));
                 }
-                Matcher type = SERVICE_TYPE.matcher(calls);
-                Set<String> types = new TreeSet<>();
-                while (type.find()) {
-                    types.add(type.group(1));
+                Map<String, String> typeOf = new TreeMap<>();
+                Matcher declared = TYPED_RECEIVER.matcher(calls);
+                while (declared.find()) {
+                    typeOf.put(declared.group(2), declared.group(1));
                 }
-                for (String t : types) {
-                    for (String method : methods) {
-                        names.add(t + "." + method);
+                Matcher call = RECEIVER_CALL.matcher(calls);
+                while (call.find()) {
+                    String type = typeOf.get(call.group(1));
+                    if (type != null) {
+                        names.add(type + "." + call.group(2));
                     }
                 }
             }
@@ -259,8 +261,10 @@ class UpdateHandlerServiceTestCoverageTest {
         return names;
     }
 
-    /** A service type a test file names: {@code AdvanceDirectiveService}, {@code AdvanceDirectiveServiceImpl}. */
-    private static final Pattern SERVICE_TYPE = Pattern.compile("\\b([A-Z]\\w*Service)(?:Impl)?\\b");
+    /** A receiver declared with a service type: {@code AdvanceDirectiveService service;}, {@code @Mock BarServiceImpl bar =}. */
+    private static final Pattern TYPED_RECEIVER = Pattern.compile("\\b([A-Z]\\w*Service)(?:Impl)?\\s+(\\w+)\\s*[;=]");
+    /** {@code receiver.method(} on any identifier. */
+    private static final Pattern RECEIVER_CALL = Pattern.compile("\\b(\\w+)\\s*\\.\\s*(\\w+)\\s*\\(");
 
     /**
      * A handler's delegation is exercised when a test calls the same {@code service.method}
@@ -293,7 +297,9 @@ class UpdateHandlerServiceTestCoverageTest {
         Set<String> handled = new TreeSet<>();
         try (Stream<Path> files = Files.walk(MAIN)) {
             for (Path p : files.filter(f -> f.toString().endsWith(".java")).toList()) {
-                String controller = p.getFileName().toString().replace(".java", "");
+                // Keyed by the controller/-relative path: two controllers of one simple name
+                // in different packages stay two controllers.
+                String controller = MAIN.relativize(p).toString().replace('\\', '/').replace(".java", "");
                 String source = SourceScan.stripComments(Files.readString(p, StandardCharsets.UTF_8));
                 mappings += countMappings(source);
                 for (Delegation d : delegations(controller, source)) {
