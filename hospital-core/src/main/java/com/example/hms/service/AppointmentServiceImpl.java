@@ -302,6 +302,10 @@ public class AppointmentServiceImpl implements AppointmentService {
             recallService.reopenRecallsOf(appointmentId);
         } else if (status == AppointmentStatus.COMPLETED) {
             recallService.completeRecallsOf(appointmentId);
+        } else if (status == AppointmentStatus.RESCHEDULED) {
+            // The only road out of NO_SHOW/FAILED: the visit is back, and so
+            // are the recalls it answered (review round 18).
+            recallService.rescheduleRecallsOf(appointmentId);
         }
     }
 

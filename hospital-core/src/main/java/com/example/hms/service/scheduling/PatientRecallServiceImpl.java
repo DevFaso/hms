@@ -218,8 +218,24 @@ public class PatientRecallServiceImpl implements PatientRecallService {
         }
         for (PatientRecall recall : recallRepository.findByLinkedAppointment_IdAndStatus(
                 appointmentId, RecallStatus.SCHEDULED)) {
-            recall.setLinkedAppointment(null);
+            // Open again, but still pointing at the visit (review round 18): if
+            // that visit is brought back (a missed one moved through
+            // RESCHEDULED), the recall follows it; a new booking for the recall
+            // replaces the link.
             recall.setStatus(RecallStatus.PENDING);
+            recallRepository.save(recall);
+        }
+    }
+
+    @Override
+    @Transactional
+    public void rescheduleRecallsOf(UUID appointmentId) {
+        if (appointmentId == null) {
+            return;
+        }
+        for (PatientRecall recall : recallRepository.findByLinkedAppointment_IdAndStatus(
+                appointmentId, RecallStatus.PENDING)) {
+            recall.setStatus(RecallStatus.SCHEDULED);
             recallRepository.save(recall);
         }
     }

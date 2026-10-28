@@ -2234,6 +2234,21 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   the recall the no-show reopened. (12) `PatientMatchKeys.samePhone` (full
   match) and `PhoneNumbers.isSameSubscriber` (last 8 digits) define "same
   subscriber" differently; one definition should serve both.
+  Remaining after round 18 (#972, bounded by the coordinator):
+  (13) The audit's phone-only PATIENT resolution (item 7) can attribute an
+  access row to the wrong holder of a shared number, possibly at another
+  hospital: resolve only a unique holder at the event's hospital, else leave
+  the resource unresolved. (14) Recall auto-linking (no recallId) takes any
+  open recall of the same department or clinician from 30 days before its
+  due date, so an unrelated visit there can close it on completion; decide
+  the targeting rule with the clinic. (15) PATCH identity fields (name, DOB,
+  sex) are open to every role the endpoint admits and change the shared row
+  for every hospital; gender is free text up to 10 characters (as the PUT).
+  (16) `appDialogFocus` closes the whole dialog on an Escape meant for a
+  suggestion list inside it (walk-in, recall). (17) The duplicate check's two
+  Page searches each run an unused COUNT; a Slice/List variant would drop
+  them. (18) The check-in copay receipt hard-codes the French "recu-" file
+  prefix.
 
 - **QA D899 residual (round 15): the stock check counts expired lots.**
   Stock routing now resolves a free-text order to the shelf by the dispense

@@ -362,7 +362,13 @@ class PatientRecallServiceImplTest {
             .thenReturn(List.of(reopened));
         service.reopenRecallsOf(appointmentId);
         assertThat(reopened.getStatus()).isEqualTo(RecallStatus.PENDING);
-        assertThat(reopened.getLinkedAppointment()).isNull();
+        // Review round 18: the link stays, so the recall can follow the visit back.
+        assertThat(reopened.getLinkedAppointment()).isNotNull();
+
+        when(recallRepository.findByLinkedAppointment_IdAndStatus(appointmentId, RecallStatus.PENDING))
+            .thenReturn(List.of(reopened));
+        service.rescheduleRecallsOf(appointmentId);
+        assertThat(reopened.getStatus()).isEqualTo(RecallStatus.SCHEDULED);
 
         PatientRecall fulfilled = existingRecall(RecallStatus.SCHEDULED);
         UUID done = UUID.randomUUID();

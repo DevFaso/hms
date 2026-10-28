@@ -245,7 +245,31 @@ class FrontDeskRoundTripIT extends BaseIT {
             .andExpect(status().isOk());
         PatientRecall reopened = recallRepository.findById(recall.getId()).orElseThrow();
         assertThat(reopened.getStatus()).isEqualTo(RecallStatus.PENDING);
-        assertThat(reopened.getLinkedAppointment()).isNull();
+        // Review round 18: still pointing at the visit, so it can follow it back.
+        assertThat(reopened.getLinkedAppointment().getId()).isEqualTo(appointmentId);
+    }
+
+    @Test
+    @DisplayName("D985 review round 18: a missed visit brought back schedules its recall again, and its completion closes it")
+    void aMissedVisitBroughtBackTakesItsRecallWithIt() throws Exception {
+        LocalDate day = LocalDate.now().minusDays(1);
+        Appointment visit = appointment(aicha, day, LocalTime.of(9, 0), AppointmentStatus.SCHEDULED);
+        PatientRecall recall = recallRepository.save(PatientRecall.builder()
+            .patient(aicha).hospital(hospital).department(department)
+            .dueDate(day).reason("Contrôle").status(RecallStatus.SCHEDULED).linkedAppointment(visit).build());
+
+        mockMvc.perform(put(API + "/appointments/{id}/status", visit.getId()).contextPath(API)
+                .param("action", "no_show").with(asReceptionist()))
+            .andExpect(status().isOk());
+        assertThat(recallRepository.findById(recall.getId()).orElseThrow().getStatus())
+            .isEqualTo(RecallStatus.PENDING);
+
+        // Its time is still free: the desk brings it back.
+        mockMvc.perform(put(API + "/appointments/{id}/status", visit.getId()).contextPath(API)
+                .param("action", "reschedule").with(asReceptionist()))
+            .andExpect(status().isOk());
+        assertThat(recallRepository.findById(recall.getId()).orElseThrow().getStatus())
+            .isEqualTo(RecallStatus.SCHEDULED);
     }
 
     @Test

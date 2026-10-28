@@ -53,4 +53,12 @@ public interface PatientRecallService {
      * reminder sweep chase the patient again.
      */
     void reopenRecallsOf(java.util.UUID appointmentId);
+
+    /**
+     * QA D985 (review round 18): a visit that was missed and is brought back
+     * (moved through RESCHEDULED) schedules again the recalls it had answered,
+     * which the no-show reopened; otherwise they would chase a patient who has
+     * a booking, and never close when that visit is completed.
+     */
+    void rescheduleRecallsOf(java.util.UUID appointmentId);
 }
