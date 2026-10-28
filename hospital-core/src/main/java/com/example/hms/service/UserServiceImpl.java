@@ -1559,6 +1559,14 @@ public class UserServiceImpl implements UserService {
         // inactive, and an administrator reactivates the ones still wanted.
         User user = userRepository.findById(id)
                 .orElseThrow(() -> userNotFound(id));
+        // QA D920 (review round 13): the deleted view is the super-admin's, so
+        // for anyone else every restore is refused like a missing id, live
+        // account or deleted one alike; a 409 for a live account against a
+        // restore of a deleted one told a hospital admin which ids were deleted.
+        if (!accountAccess.callerSeesDeletedAccounts()) {
+            recordRefusal(AuditEventType.USER_RESTORE, "restore", user.getId());
+            throw userNotFound(id);
+        }
         if (!accountAccess.canAdminister(user)) {
             throw refused(AuditEventType.USER_RESTORE, "restore", user);
         }
@@ -1995,8 +2003,8 @@ public class UserServiceImpl implements UserService {
      * --------------------------------
      */
     /**
-     * Activates the account behind an emailed link, its ROLE_PATIENT
-     * assignments and its Patient row, in ONE transaction (QA D921).
+     * Activates the account behind an emailed link and its ROLE_PATIENT
+     * assignments in ONE transaction (QA D921); the Patient row is not touched.
      * {@code AuthController#verifyEmail} used to do this itself: the account
      * save committed on its own, then the assignment loop read
      * {@code assignment.getRole()} with no session (open-in-view is off), so

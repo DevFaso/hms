@@ -1106,6 +1106,25 @@ class UserServiceImplTest {
     @DisplayName("restoreUser")
     class RestoreUser {
 
+        @org.junit.jupiter.api.BeforeEach
+        void asTheSuperAdmin() {
+            // The restore worklist is the super-admin's (QA D919/D920); these cases are theirs.
+            lenient().when(accountAccess.callerSeesDeletedAccounts()).thenReturn(true);
+        }
+
+        @Test
+        @DisplayName("QA D920 review round 13: for a hospital admin every restore is missing, live or deleted alike")
+        void aHospitalAdminCannotTellDeletedFromLiveThroughRestore() {
+            when(accountAccess.callerSeesDeletedAccounts()).thenReturn(false);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            for (boolean deleted : new boolean[] {true, false}) {
+                user.setDeleted(deleted);
+                assertThatThrownBy(() -> userService.restoreUser(userId))
+                    .isInstanceOf(ResourceNotFoundException.class);
+            }
+            verify(userRepository, never()).save(any(User.class));
+        }
+
         @Test
         @DisplayName("QA D327: restoring an account that is not deleted is refused and not audited")
         void restoreOfALiveAccountIsRefused() {
@@ -1844,6 +1863,7 @@ class UserServiceImplTest {
             when(userRepository.findById(userId)).thenReturn(Optional.of(target));
             when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
             when(staffRepository.findByUserId(userId)).thenReturn(List.of());
+            when(accountAccess.callerSeesDeletedAccounts()).thenReturn(true); // the super-admin's worklist
 
             userService.restoreUser(userId);
 
@@ -2262,6 +2282,8 @@ class UserServiceImplTest {
         void restoreByNonAdministratorIsRefusedAsMissing() {
             user.setDeleted(true);
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            // Sees the deleted worklist, but does not administer this account.
+            when(accountAccess.callerSeesDeletedAccounts()).thenReturn(true);
             refuseAdministration();
 
             assertThatThrownBy(() -> userService.restoreUser(userId))

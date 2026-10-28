@@ -2228,6 +2228,12 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   (9) Blob downloads revoke the object URL right after `click()` (billing,
   governance, the check-in receipt); a shared download helper that defers the
   revoke would cover every caller.
+  (10) Round 13: a phone the facility rule cannot normalise is stored as
+  typed (as on develop); refusing it at the desk is a product decision.
+  (11) A missed visit moved back into a slot-holding status does not re-link
+  the recall the no-show reopened. (12) `PatientMatchKeys.samePhone` (full
+  match) and `PhoneNumbers.isSameSubscriber` (last 8 digits) define "same
+  subscriber" differently; one definition should serve both.
 
 - **QA D899 residual (round 15): the stock check counts expired lots.**
   Stock routing now resolves a free-text order to the shelf by the dispense

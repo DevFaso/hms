@@ -494,6 +494,28 @@ class PatientPortalServiceImplPhase2Test {
         }
 
         @Test
+        @DisplayName("review round 13: a tentative (PENDING) booking moved by the patient stays tentative")
+        void reschedule_pendingStaysPending() {
+            stubPatientResolution();
+            UUID apptId = UUID.randomUUID();
+            Appointment appointment = buildAppointment(apptId, AppointmentStatus.PENDING);
+            when(appointmentRepository.findById(apptId)).thenReturn(Optional.of(appointment));
+            when(appointmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(appointmentMapper.toAppointmentResponseDTO(any()))
+                    .thenReturn(AppointmentResponseDTO.builder().id(apptId).build());
+
+            service.rescheduleMyAppointment(auth, RescheduleAppointmentRequestDTO.builder()
+                    .appointmentId(apptId)
+                    .newDate(RESCHEDULE_DATE)
+                    .newStartTime(LocalTime.of(14, 0))
+                    .newEndTime(LocalTime.of(14, 30))
+                    .build(), Locale.ENGLISH);
+
+            assertThat(appointment.getAppointmentDate()).isEqualTo(RESCHEDULE_DATE);
+            assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.PENDING);
+        }
+
+        @Test
         @DisplayName("should throw when appointment not found")
         void notFound_throws() {
             stubPatientResolution();

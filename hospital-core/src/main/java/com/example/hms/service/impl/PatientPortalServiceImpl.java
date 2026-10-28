@@ -837,8 +837,12 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         // QA D977: a moved appointment is booked at its new time, exactly as the
         // desk reschedule lands it (SCHEDULED). RESCHEDULED marks a superseded
         // booking; parking the moved one there hid its pre-check-in and its
-        // reminders' status checks treated it as a different state.
-        appointment.setStatus(AppointmentStatus.SCHEDULED);
+        // reminders' status checks treated it as a different state. A tentative
+        // booking (PENDING, the check-out follow-up of QA D526) stays tentative:
+        // moving it is not the clinic confirming it (review round 13).
+        if (appointment.getStatus() != AppointmentStatus.PENDING) {
+            appointment.setStatus(AppointmentStatus.SCHEDULED);
+        }
         if (dto.getReason() != null && !dto.getReason().isBlank()) {
             String existingNotes = appointment.getNotes() != null ? appointment.getNotes() : "";
             appointment.setNotes(existingNotes + (existingNotes.isEmpty() ? "" : " | ")
