@@ -60,6 +60,18 @@ test('a word that merely contains a money word is not money', () => {
   );
 });
 
+test('a null-guarded amount is still money; an ambiguous word inside arithmetic is a ratio', () => {
+  assert.deepEqual(
+    anchors(moneyTemplateFindings(`{{ (inv.balanceDue ?? 0) | number: '1.2-2' }}`)),
+    ['pipe:inv.balanceDue | number'],
+  );
+  assert.deepEqual(
+    moneyTemplateFindings(`{{ (done / total).toFixed(1) }}% {{ (a * net).toFixed(2) }}`),
+    [],
+  );
+  assert.deepEqual(anchors(moneyComponentFindings(`const pct = (done / total).toFixed(1);`)), []);
+});
+
 test('toFixed on an amount is hand formatting', () => {
   assert.deepEqual(anchors(moneyTemplateFindings(`{{ item.unitPrice.toFixed(2) }}`)), [
     'fixed:item.unitPrice.toFixed',

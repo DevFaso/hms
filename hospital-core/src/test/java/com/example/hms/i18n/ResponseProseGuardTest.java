@@ -49,20 +49,19 @@ class ResponseProseGuardTest {
     /** Response DTOs whose first constructor argument is the message shown to the user. */
     static final Pattern MESSAGE_DTO = Pattern.compile(
         "new\\s+(MessageResponse|EmailVerificationResponseDTO)\\s*\\(\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
-    /** A literal written straight into the body. */
-    static final Pattern BODY_LITERAL = Pattern.compile("\\.body\\(\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
-    /** A message-bearing entry of an ad hoc body map. */
-    static final Pattern MAP_MESSAGE = Pattern.compile(
-        "Map\\.of\\((?:[^()]*?,\\s*)?\"(?:message|error|detail|reason)\"\\s*,\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
+    /** A literal written straight into the body: {@code .body("…")} or {@code ResponseEntity.ok("…")}. */
+    static final Pattern BODY_LITERAL = Pattern.compile(
+        "(?:\\.body|ResponseEntity\\.ok)\\(\\s*\"((?:[^\"\\\\]|\\\\.)*)\"\\s*\\)");
+    /** The opening of an ad hoc body map; its message-bearing entries are read from the whole argument list. */
+    static final Pattern MAP_OF = Pattern.compile("\\bMap\\.of\\(");
+    static final Pattern MAP_MESSAGE_ENTRY = Pattern.compile(
+        "\"(?:message|error|detail|reason)\"\\s*,\\s*(?:\"((?:[^\"\\\\]|\\\\.)*)\"|([A-Z][A-Z0-9_]*))\\s*(?:[,)+]|$)");
 
-    /** The same shapes built from a constant declared in the file (see {@link ExceptionProseRatchetTest}). */
+    /** The same shapes built from a constant declared in the file (the shape {@link ExceptionProseRatchetTest} reads). */
     static final Pattern MESSAGE_DTO_CONSTANT = Pattern.compile(
         "new\\s+(?:MessageResponse|EmailVerificationResponseDTO)\\s*\\(\\s*([A-Z][A-Z0-9_]*)\\s*[,)]");
-    static final Pattern BODY_CONSTANT = Pattern.compile("\\.body\\(\\s*([A-Z][A-Z0-9_]*)\\s*\\)");
-    static final Pattern MAP_MESSAGE_CONSTANT = Pattern.compile(
-        "Map\\.of\\((?:[^()]*?,\\s*)?\"(?:message|error|detail|reason)\"\\s*,\\s*([A-Z][A-Z0-9_]*)\\s*[,)]");
-    static final Pattern STRING_CONSTANT = Pattern.compile(
-        "static\\s+final\\s+String\\s+([A-Z][A-Z0-9_]*)\\s*=\\s*\"((?:[^\"\\\\]|\\\\.)*)\"\\s*;");
+    static final Pattern BODY_CONSTANT = Pattern.compile("(?:\\.body|ResponseEntity\\.ok)\\(\\s*([A-Z][A-Z0-9_]*)\\s*\\)");
+    static final Pattern STRING_CONSTANT = ExceptionProseRatchetTest.STRING_CONSTANT;
 
     static boolean isProse(String literal) {
         if (literal.indexOf(' ') < 0) {
@@ -122,6 +121,7 @@ class ResponseProseGuardTest {
         "controller/FileUploadController.java::Photo attachments must not carry a duration", 1, PRE_EXISTING,
         "controller/FileUploadController.java::Failed to upload chat attachment", 1, PRE_EXISTING,
         "controller/InvoiceEmailController.java::Invalid email", 1, PRE_EXISTING,
+        "controller/InvoiceEmailController.java::Invalid email address: ", 1, PRE_EXISTING + " (concatenated with the address)",
         "controller/OrganizationController.java::Default security policies applied successfully", 1, PRE_EXISTING,
         "controller/OwnEmailChangeController.java::Not authenticated.", 1, PRE_EXISTING,
         "controller/PatientController.java::Allergy entry deactivated.", 1, PRE_EXISTING,
@@ -131,7 +131,12 @@ class ResponseProseGuardTest {
     static Map<String, Integer> sites(String file, String rawSource) {
         String source = SourceScan.stripComments(rawSource);
         Map<String, Integer> out = new TreeMap<>();
-        for (Pattern pattern : List.of(MESSAGE_DTO, BODY_LITERAL, MAP_MESSAGE)) {
+        Map<String, String> constants = new TreeMap<>();
+        Matcher c = STRING_CONSTANT.matcher(source);
+        while (c.find()) {
+            constants.put(c.group(1), c.group(2));
+        }
+        for (Pattern pattern : List.of(MESSAGE_DTO, BODY_LITERAL)) {
             Matcher m = pattern.matcher(source);
             while (m.find()) {
                 String literal = m.group(m.groupCount());
@@ -140,15 +145,24 @@ class ResponseProseGuardTest {
                 }
             }
         }
-        Map<String, String> constants = new TreeMap<>();
-        Matcher c = STRING_CONSTANT.matcher(source);
-        while (c.find()) {
-            constants.put(c.group(1), c.group(2));
-        }
-        for (Pattern pattern : List.of(MESSAGE_DTO_CONSTANT, BODY_CONSTANT, MAP_MESSAGE_CONSTANT)) {
+        for (Pattern pattern : List.of(MESSAGE_DTO_CONSTANT, BODY_CONSTANT)) {
             Matcher m = pattern.matcher(source);
             while (m.find()) {
                 String value = constants.get(m.group(1));
+                if (value != null && isProse(value)) {
+                    out.merge(file + "::" + value, 1, Integer::sum);
+                }
+            }
+        }
+        // Every message-bearing entry of a Map.of body, wherever it sits in the argument
+        // list (an earlier entry's `now()` must not hide it), as a literal or a constant.
+        Matcher map = MAP_OF.matcher(source);
+        while (map.find()) {
+            int open = map.end() - 1;
+            String arguments = source.substring(open + 1, SourceScan.closingParen(source, open));
+            Matcher entry = MAP_MESSAGE_ENTRY.matcher(arguments);
+            while (entry.find()) {
+                String value = entry.group(1) != null ? entry.group(1) : constants.get(entry.group(2));
                 if (value != null && isProse(value)) {
                     out.merge(file + "::" + value, 1, Integer::sum);
                 }
@@ -208,12 +222,17 @@ class ResponseProseGuardTest {
             private static final String KEY = "auth.refresh.invalid";
             return ResponseEntity.status(401).body(new MessageResponse(REFRESH_INVALID_MESSAGE));
             return ResponseEntity.status(401).body(new MessageResponse(KEY));
+            return ResponseEntity.ok(Map.of(STATUS, "FAILED", "sentAt", OffsetDateTime.now(), "error", "Failed to send email"));
+            return ResponseEntity.ok(Map.of("count", items.size(), "message", REFRESH_INVALID_MESSAGE));
+            return ResponseEntity.ok("Password changed successfully");
             """;
         assertThat(sites("x", source)).containsOnly(
             Map.entry("x::Logged out successfully.", 2),
             Map.entry("x::Mail service unavailable", 1),
+            Map.entry("x::Failed to send email", 1),
+            Map.entry("x::Password changed successfully", 1),
             Map.entry("x::Pre-check-in is available 1–7 days before your appointment.", 1),
-            Map.entry("x::Refresh token is invalid or has expired.", 1),
+            Map.entry("x::Refresh token is invalid or has expired.", 2),
             Map.entry("x::Verification code sent", 1));
     }
 }

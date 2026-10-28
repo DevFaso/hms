@@ -69,3 +69,20 @@ test('comments are skipped, and an attribute without a value is kept', () => {
   assert.equal(all[0].attrs.get('disabled'), null);
   assert.equal(all[0].attrs.get('aria-label'), 'Nom');
 });
+
+test('a < inside an interpolation is an operator, and the tag after it is still seen', () => {
+  const html = `<span>{{ count<10 ? 'few' : 'many' }}</span>
+<button (click)="del()"><span class="material-symbols-outlined">delete</span></button>`;
+  const all = tags(html);
+  assert.deepEqual(
+    all.map((t) => `${t.type}:${t.name}:${t.line}`),
+    [
+      'open:span:1',
+      'close:span:1',
+      'open:button:2',
+      'open:span:2',
+      'close:span:2',
+      'close:button:2',
+    ],
+  );
+});

@@ -42,10 +42,24 @@ const EXPR = String.raw`([\w$.?!()\[\]'"]*?\w*${MONEY_TAIL}\w*(?:\(\))?)`;
 // `[?!]?` — `inv.amount?.toFixed(2)` and `inv.amount!.toFixed(2)` are the same
 // hand formatting, and `(line.amount * rate).toFixed(2)` the same again.
 // `(?![\w.])` keeps the whole chain: `(total.amount).toFixed` names `total.amount`, not `total`.
+// `(inv.amount ?? 0) | number` is the same render with a null guard.
 const PIPE_RE = new RegExp(
-  String.raw`${EXPR}(?![\w.])\s*[?!]?\s*\)?\s*\|\s*(number|currency)\b`,
+  String.raw`${EXPR}(?![\w.])\s*[?!]?\s*(?:\?\?\s*0\s*)?\)?\s*\|\s*(number|currency)\b`,
   'gi',
 );
+/**
+ * `(done / total).toFixed(1)` is a ratio: an ambiguous word (total, net, gross)
+ * with an arithmetic operator just before it or inside the match is not money.
+ */
+function ratio(m) {
+  const last = name(m[1])
+    .split(/\?\.|!\.|\./)
+    .pop()
+    .replace(/[!?()[\]'"]/g, '');
+  if (!/^(?:total|net|gross)$/i.test(last)) return false;
+  const before = m.input.slice(Math.max(0, m.index - 4), m.index);
+  return /[/*%+-]\s*$/.test(before) || /[/*%+-]/.test(m[0]);
+}
 const FIXED_RE = new RegExp(
   String.raw`${EXPR}(?!\w)(?!\.(?!toFixed\b))\s*[?!]?\s*(?:[^()\n]*\))?\s*\.toFixed\(`,
   'gi',
@@ -102,7 +116,7 @@ export function moneyTemplateFindings(html) {
     });
   }
   for (const m of html.matchAll(PIPE_RE)) {
-    if (!isMoney(m[1])) continue;
+    if (!isMoney(m[1]) || ratio(m)) continue;
     out.push({
       line: lineAt(html, m.index),
       rule: 'pipe',
@@ -111,7 +125,7 @@ export function moneyTemplateFindings(html) {
     });
   }
   for (const m of html.matchAll(FIXED_RE)) {
-    if (!isMoney(m[1])) continue;
+    if (!isMoney(m[1]) || ratio(m)) continue;
     out.push({
       line: lineAt(html, m.index),
       rule: 'fixed',
@@ -169,7 +183,7 @@ export function moneyComponentFindings(source, isLocaleModule = false) {
     });
   }
   for (const m of source.matchAll(FIXED_RE)) {
-    if (!isMoney(m[1])) continue;
+    if (!isMoney(m[1]) || ratio(m)) continue;
     out.push({
       line: lineAt(source, m.index),
       rule: 'fixed',

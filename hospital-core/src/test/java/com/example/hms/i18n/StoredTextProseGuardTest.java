@@ -53,13 +53,24 @@ import static org.assertj.core.api.Assertions.assertThat;
 class StoredTextProseGuardTest {
 
     private static final Path MAIN = Paths.get("src/main/java/com/example/hms");
-    private static final Pattern SCANNED_DIR = Pattern.compile("^(service|mapper)/.*\\.java$");
+    /**
+     * Everything that can write a row: services and mappers, but also controllers
+     * (the HL7 inbound adapter composes {@code .notes("Imported via HL7v2 …")}), the
+     * HL7/FHIR/event/bootstrap packages. Only the exception and config packages are
+     * left out: nothing there reaches a text column.
+     */
+    private static final Pattern SCANNED_DIR = Pattern.compile(
+        "^(?!exception/|config/|bootstrap/DevSyntheticDataSeeder\\.java).*\\.java$");
 
-    /** Text-bearing setters and builder steps. */
+    /**
+     * Text-bearing setters and builder steps. {@code .body(} is a RESPONSE sink and
+     * belongs to {@link ResponseProseGuardTest}; {@code setBody(} (a notification or
+     * e-mail body) stays here.
+     */
     static final Pattern TEXT_SINK = Pattern.compile(
         "\\.(notes|setNotes|clinicalNotes|setClinicalNotes|reason|setReason|description|setDescription|title|setTitle"
             + "|chiefComplaint|setChiefComplaint|appointmentReason|setAppointmentReason|summary|setSummary|message"
-            + "|setMessage|body|setBody|comment|setComment|comments|setComments|instructions|setInstructions|append"
+            + "|setMessage|setBody|comment|setComment|comments|setComments|instructions|setInstructions|append"
             + "|label|setLabel|text|setText|content|setContent|subject|setSubject)\\s*\\(");
 
     /** {@code "[Word Word]"} or {@code "--- Word ---"}: a section header written into a note. */
@@ -107,6 +118,12 @@ class StoredTextProseGuardTest {
     private static final String D958 = "QA D958: timeline/in-basket title falls back to the English \"Lab result\"";
     private static final String D944 = "QA D944: the walk-in's reason falls back to the English \"Walk-in\" in the queue";
     private static final String PRE_EXISTING = "pre-existing English stored text (class of QA D952/D989); key it with the next touch";
+    private static final String CDS_CARD =
+        "QA D935/D953 class: CDS card text composed in English (the \"HMS PEDIATRIC DOSE CHECK\" source label shape); key it";
+    private static final String FHIR_DISPLAY =
+        "FHIR `display` text; English by the coding systems' convention, read by integrators not by clinicians — pinned, not a defect";
+    private static final String SEEDED_DESCRIPTION =
+        "QA D941 class: a description seeded in English and shown in the admin UI; a later migration re-keys it (never edit the applied one)";
 
     private static Map<String, Allowance> allow(Object... siteCountReason) {
         Map<String, Allowance> out = new TreeMap<>();
@@ -144,11 +161,33 @@ class StoredTextProseGuardTest {
         "service/pharmacy/DispenseServiceImpl.java::Dispense cancelled — stock returned for prescription ", 1, PRE_EXISTING,
         "service/pharmacy/PreparedFillVoider.java::Prepared fill cancelled — stock returned for prescription ", 1, PRE_EXISTING,
         "service/pharmacy/StockOutRoutingServiceImpl.java::Prescription printed for patient to fill at external pharmacy", 1, D1000,
-        "service/pharmacy/StockOutRoutingServiceImpl.java::Medication out of stock; placed on back order", 1, D1000);
+        "service/pharmacy/StockOutRoutingServiceImpl.java::Medication out of stock; placed on back order", 1, D1000,
+        "controller/Hl7InboundController.java::Imported via HL7v2 ORU^R01 inbound adapter.", 1, D952 + " class (HL7 inbound notes)",
+        "cdshooks/bpa/NewsScoreProtocolRule.java::At least one parameter scores 3 — urgent review per policy.", 1, CDS_CARD,
+        "cdshooks/bpa/NewsScoreProtocolRule.java::NEWS2: {0} ({1} risk) — vitals recorded {2}", 1, CDS_CARD,
+        "cdshooks/bpa/NewsScoreProtocolRule.java::⚠ Score is INCOMPLETE — not recorded: {0}. The true score can only be equal or higher.", 1, CDS_CARD,
+        "cdshooks/bpa/ObHemorrhageProtocolRule.java::Most recent triggering vitals at {0}: HR={1} bpm, sBP={2} mmHg.", 1, CDS_CARD,
+        "fhir/mapper/DiagnosticReportFhirMapper.java::Gram stain: ", 1, FHIR_DISPLAY,
+        "fhir/mapper/DiagnosticReportFhirMapper.java::Imaging report", 1, FHIR_DISPLAY,
+        "fhir/mapper/DiagnosticReportFhirMapper.java::Microbiology culture", 1, FHIR_DISPLAY,
+        "fhir/mapper/ObservationFhirMapper.java::Laboratory result", 1, FHIR_DISPLAY,
+        "seed/OrganizationSecuritySeeder.java::Audit all sensitive medical operations", 1, SEEDED_DESCRIPTION,
+        "seed/OrganizationSecuritySeeder.java::Controls access to administrative endpoints", 1, SEEDED_DESCRIPTION,
+        "seed/OrganizationSecuritySeeder.java::Controls access to patient data based on role", 1, SEEDED_DESCRIPTION,
+        "seed/OrganizationSecuritySeeder.java::Default access control rules for healthcare organizations", 1, SEEDED_DESCRIPTION,
+        "seed/OrganizationSecuritySeeder.java::Default audit logging requirements", 1, SEEDED_DESCRIPTION,
+        "seed/OrganizationSecuritySeeder.java::Default data protection and privacy rules", 1, SEEDED_DESCRIPTION,
+        "seed/OrganizationSecuritySeeder.java::Default organization for hospitals without specific organization assignment", 1, SEEDED_DESCRIPTION,
+        "seed/OrganizationSecuritySeeder.java::Default password strength requirements", 1, SEEDED_DESCRIPTION,
+        "seed/OrganizationSecuritySeeder.java::Default role assignment and management rules", 1, SEEDED_DESCRIPTION,
+        "seed/OrganizationSecuritySeeder.java::Default session management and timeout rules", 1, SEEDED_DESCRIPTION,
+        "seed/OrganizationSecuritySeeder.java::Minimum password length requirement", 1, SEEDED_DESCRIPTION,
+        "seed/OrganizationSecuritySeeder.java::Session timeout in minutes", 1, SEEDED_DESCRIPTION);
 
     /** {@code file::literal} → how many places write it: every English literal reaching a text sink, every section header. */
     static Map<String, Integer> sites(String file, String rawSource) {
         String source = SourceScan.stripComments(rawSource);
+        int[] starts = SourceScan.statementStarts(source);
         Map<String, Integer> out = new TreeMap<>();
         Matcher sink = TEXT_SINK.matcher(source);
         while (sink.find()) {
@@ -158,7 +197,7 @@ class StoredTextProseGuardTest {
             // The receiver chain of the sink — from the statement's real start (a `;`
             // inside a literal does not end a statement) to the sink itself — decides
             // the exemption; the argument does not.
-            String receiver = source.substring(SourceScan.statementStart(source, sink.start()), sink.start());
+            String receiver = source.substring(SourceScan.statementStartBefore(starts, sink.start()), sink.start());
             if (EXEMPT_RECEIVER.matcher(receiver).find()) {
                 continue;
             }

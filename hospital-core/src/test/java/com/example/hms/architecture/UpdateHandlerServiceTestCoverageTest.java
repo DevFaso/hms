@@ -123,29 +123,12 @@ class UpdateHandlerServiceTestCoverageTest {
 
     /**
      * From the end of the mapping annotation: past its own argument list and every
-     * further annotation (with or without arguments), to the first character of the
-     * signature. An {@code @Operation(description = "a public API ...")} is skipped
-     * whole, so its text cannot be read as the signature.
+     * further annotation, to the first character of the signature
+     * ({@link SourceScan#skipAnnotations}). An {@code @Operation(description = "a public
+     * API ...")} is skipped whole, so its text cannot be read as the signature.
      */
     static int skipAnnotations(String source, int from) {
-        int i = from;
-        while (i < source.length()) {
-            while (i < source.length() && Character.isWhitespace(source.charAt(i))) {
-                i++;
-            }
-            if (i < source.length() && source.charAt(i) == '(') {
-                i = SourceScan.closingParen(source, i) + 1;
-            } else if (i < source.length() && source.charAt(i) == '@') {
-                i++;
-                while (i < source.length() && (Character.isLetterOrDigit(source.charAt(i)) || source.charAt(i) == '.'
-                    || source.charAt(i) == '_')) {
-                    i++;
-                }
-            } else {
-                return i;
-            }
-        }
-        return i;
+        return SourceScan.skipAnnotations(source, from);
     }
 
     /** {@code name(} in test code: every method name some test under src/test/java calls. */
@@ -155,9 +138,54 @@ class UpdateHandlerServiceTestCoverageTest {
     private static final Pattern GUARD_TEST = Pattern.compile(".*(?:GuardTest|CoverageTest|RatchetTest)\\.java");
 
     /**
+     * A Mockito stub or verification: {@code when(service.update(…))}, {@code verify(service).update(…)},
+     * {@code given(…)}, {@code doReturn(x).when(service).update(…)}. The method named inside is
+     * mocked, not exercised — D923 had exactly such a slice test — so these regions are blanked
+     * before the names are collected.
+     */
+    private static final Pattern STUB_CALL = Pattern.compile("\\b(?:when|given|verify|verifyNoMoreInteractions|inOrder)\\(");
+    private static final Pattern STUB_CHAIN = Pattern.compile("\\.(?:when|given)\\([^)]*\\)\\s*\\.(\\w+)\\s*\\(");
+
+    static String withoutStubs(String source) {
+        StringBuilder out = new StringBuilder(source);
+        Matcher m = STUB_CALL.matcher(source);
+        while (m.find()) {
+            int open = m.end() - 1;
+            int close = SourceScan.closingParen(source, open);
+            for (int i = open + 1; i < close && i < out.length(); i++) {
+                if (out.charAt(i) != '\n') {
+                    out.setCharAt(i, ' ');
+                }
+            }
+            // verify(service).update(...): the method after the closing paren is the stubbed one.
+            int after = close + 1;
+            while (after < source.length() && Character.isWhitespace(source.charAt(after))) {
+                after++;
+            }
+            if (after < source.length() && source.charAt(after) == '.') {
+                int nameEnd = after + 1;
+                while (nameEnd < source.length() && Character.isLetterOrDigit(source.charAt(nameEnd))) {
+                    nameEnd++;
+                }
+                for (int i = after; i < nameEnd; i++) {
+                    out.setCharAt(i, ' ');
+                }
+            }
+        }
+        Matcher chain = STUB_CHAIN.matcher(source);
+        while (chain.find()) {
+            for (int i = chain.start(1); i < chain.end(1); i++) {
+                out.setCharAt(i, ' ');
+            }
+        }
+        return out.toString();
+    }
+
+    /**
      * The names every test calls, read once, so each handler is a set lookup. The
-     * guards' own fixtures and every comment are left out: a sentence in a Javadoc
-     * or a `save(` inside another guard's fixture string is not a test calling it.
+     * guards' own fixtures, every comment and every Mockito stub are left out: a
+     * sentence in a Javadoc, a `save(` inside another guard's fixture string, or a
+     * `when(service.updateFoo(…))` is not a test exercising the method.
      */
     private static Set<String> namesCalledByTests() throws IOException {
         Set<String> names = new TreeSet<>();
@@ -166,7 +194,7 @@ class UpdateHandlerServiceTestCoverageTest {
                 if (GUARD_TEST.matcher(p.getFileName().toString()).matches()) {
                     continue;
                 }
-                Matcher m = CALLED.matcher(SourceScan.stripComments(Files.readString(p, StandardCharsets.UTF_8)));
+                Matcher m = CALLED.matcher(withoutStubs(SourceScan.stripComments(Files.readString(p, StandardCharsets.UTF_8))));
                 while (m.find()) {
                     names.add(m.group(1));
                 }
@@ -291,5 +319,19 @@ class UpdateHandlerServiceTestCoverageTest {
         assertThat(countMappings(source)).isEqualTo(5);
         assertThat(delegations("X", "@PutMapping(\"/x\")\n    private final Foo foo;\n"))
             .extracting(Delegation::method).containsExactly("<unparsed>");
+    }
+
+    @Test
+    @DisplayName("a Mockito stub or verification does not count as a test calling the method")
+    void stubsAreNotCalls() {
+        String test = """
+            when(fooService.updateFoo(any(), any())).thenReturn(dto);
+            given(barService.updateBar(id)).willReturn(bar);
+            verify(fooService).updateFoo(id, request);
+            doReturn(x).when(bazService).updateBaz(id);
+            FooResponse saved = fooService.renameFoo(id, request);
+            """;
+        String kept = withoutStubs(test);
+        assertThat(kept).contains("renameFoo(").doesNotContain("updateFoo(", "updateBar(", "updateBaz(");
     }
 }

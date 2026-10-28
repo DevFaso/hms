@@ -61,6 +61,14 @@ export function tags(html) {
   while (i < html.length) {
     const lt = html.indexOf('<', i);
     if (lt < 0) break;
+    // A `<` inside an interpolation (`{{ count<10 ? … }}`) is an operator, not
+    // a tag; reading it as one swallowed the real tag that followed.
+    const interp = html.indexOf('{{', i);
+    if (interp >= 0 && interp < lt) {
+      const end = html.indexOf('}}', interp + 2);
+      i = end < 0 ? html.length : end + 2;
+      continue;
+    }
     for (let k = lineCountedTo; k < lt; k++) {
       if (html[k] === '\n') line++;
     }

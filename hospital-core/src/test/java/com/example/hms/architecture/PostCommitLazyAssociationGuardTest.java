@@ -138,14 +138,15 @@ class PostCommitLazyAssociationGuardTest {
         }
         Matcher listener = LISTENER_ANNOTATION.matcher(source);
         while (listener.find()) {
-            int at = listener.end();
-            while (at < source.length() && Character.isWhitespace(source.charAt(at))) {
-                at++;
+            // Past the listener's own arguments and every further annotation (a
+            // `@Retryable(include = {…})` holds a `{` that is not the body), then past
+            // the signature's parameter list to the body.
+            int at = SourceScan.skipAnnotations(source, listener.end());
+            int params = source.indexOf('(', at);
+            if (params < 0) {
+                continue;
             }
-            if (at < source.length() && source.charAt(at) == '(') {
-                at = SourceScan.closingParen(source, at) + 1;
-            }
-            int open = source.indexOf('{', at);
+            int open = source.indexOf('{', SourceScan.closingParen(source, params));
             if (open >= 0) {
                 report(file, source, open, SourceScan.closingBrace(source, open), out);
             }
@@ -158,9 +159,10 @@ class PostCommitLazyAssociationGuardTest {
                 report(file, source, open, SourceScan.closingBrace(source, open), out);
             }
         }
-        return out;
+        return out.stream().distinct().toList();
     }
 
+    /** One line per chain; an override nested in a scanned argument is the same chain, reported once. */
     private static void report(String file, String source, int open, int close, List<String> out) {
         Matcher c = ANY_CHAIN.matcher(source.substring(open, close));
         while (c.find()) {
@@ -276,7 +278,14 @@ class PostCommitLazyAssociationGuardTest {
                 TransactionCallbacks.afterCommit(() -> sms.send(referral.getReferringProvider().getPhone()));
                 TransactionCallbacks.afterCommit(() -> log.info(referral.getClass().getSimpleName()));
             }
+            @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+            @Retryable(include = {MailException.class})
+            public void onCreatedWithRetry(UserCreatedEvent event) {
+                mail.send(event.user().getHospital().getName());
+            }
             """;
+        // Eight distinct chains above plus the retryable listener's; the anonymous
+        // synchronization's chain is one site although two scans reach it.
         assertThat(postCommitChains("x", pr564)).hasSize(9);
     }
 }

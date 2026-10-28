@@ -178,6 +178,70 @@ public final class SourceScan {
         return -1;
     }
 
+    /**
+     * From {@code from}: past whitespace, past an annotation's argument list and
+     * every further annotation (with or without arguments), to the first character
+     * of what follows — the signature after {@code @PutMapping(...) @Operation(...)},
+     * the body after {@code @TransactionalEventListener(...) @Retryable(include = {...})}.
+     */
+    public static int skipAnnotations(String source, int from) {
+        int i = from;
+        while (i < source.length()) {
+            while (i < source.length() && Character.isWhitespace(source.charAt(i))) {
+                i++;
+            }
+            if (i < source.length() && source.charAt(i) == '(') {
+                i = closingParen(source, i) + 1;
+            } else if (i < source.length() && source.charAt(i) == '@') {
+                i++;
+                while (i < source.length() && (Character.isLetterOrDigit(source.charAt(i)) || source.charAt(i) == '.'
+                    || source.charAt(i) == '_')) {
+                    i++;
+                }
+            } else {
+                return i;
+            }
+        }
+        return i;
+    }
+
+    /**
+     * Every statement boundary of the source in one pass: the indexes just after
+     * each {@code ;}, {@code {} or {@code }} outside literals and comments, starting
+     * with 0. {@link #statementStart(String, int)} per sink is O(n) each; a scan with
+     * many sinks asks this once and looks its boundaries up.
+     */
+    public static int[] statementStarts(String source) {
+        java.util.List<Integer> starts = new java.util.ArrayList<>();
+        starts.add(0);
+        for (int i = 0; i < source.length(); i++) {
+            int skipped = endOfLiteralOrComment(source, i);
+            if (skipped >= 0) {
+                i = skipped;
+                continue;
+            }
+            char ch = source.charAt(i);
+            if (ch == ';' || ch == '{' || ch == '}') {
+                starts.add(i + 1);
+            }
+        }
+        int[] out = new int[starts.size()];
+        for (int k = 0; k < out.length; k++) {
+            out[k] = starts.get(k);
+        }
+        return out;
+    }
+
+    /** The statement start at or before {@code index}, from {@link #statementStarts(String)}. */
+    public static int statementStartBefore(int[] starts, int index) {
+        int at = java.util.Arrays.binarySearch(starts, index);
+        if (at >= 0) {
+            return starts[at];
+        }
+        int insertion = -at - 1;
+        return starts[Math.max(insertion - 1, 0)];
+    }
+
     /** 1-based line of {@code index} in {@code source}. */
     public static int lineOf(String source, int index) {
         return 1 + (int) source.chars().limit(index).filter(c -> c == '\n').count();

@@ -43,11 +43,16 @@ class SaveThenRefreshGuardTest {
 
     private static final Path MAIN = Paths.get("src/main/java/com/example/hms");
 
-    /** {@code [T saved =] repo.save(}: the `(` of the call. */
-    static final Pattern SAVE = Pattern.compile("(?:(\\w+)\\s*=\\s*)?\\w+\\.save\\(");
+    /** {@code [T saved =] repo.save(} or {@code this.repo.save(}: the `(` of the call. */
+    static final Pattern SAVE = Pattern.compile("(?:(\\w+)\\s*=\\s*)?[\\w.]+\\.save\\(");
 
-    /** A refresh of {@code x} within the statements that follow the save, before any flush. */
-    static final Pattern REFRESH = Pattern.compile("(?:entityManager|em)\\.refresh\\(\\s*(\\w+)\\s*\\)");
+    /**
+     * A refresh of {@code x} within the statements that follow the save, before any
+     * flush — through the entity manager or one of the house helpers that wrap it
+     * ({@code refreshIfManaged}, {@code resync}).
+     */
+    static final Pattern REFRESH = Pattern.compile(
+        "(?:(?:entityManager|em)\\.refresh|refreshIfManaged|resync)\\(\\s*(\\w+)\\s*\\)");
     static final Pattern FLUSH = Pattern.compile("\\.(?:flush|saveAndFlush)\\(");
 
     /** Sites the defect was reported on. Shrink only: the fix deletes the line here too. */
@@ -192,11 +197,22 @@ class SaveThenRefreshGuardTest {
             try { webhooks.publish(saved); } catch (RuntimeException ex) { log.warn("{}", ex.getMessage()); }
             entityManager.refresh(saved);
             """;
+        String qualifiedReceiver = """
+            Appointment saved = this.appointmentRepository.save(existing);
+            entityManager.refresh(saved);
+            """;
+        String throughHelper = """
+            Dispense saved = dispenseRepository.save(dispense);
+            dispense = resync(dispense);
+            refreshIfManaged(saved);
+            """;
         assertThat(offenders("x", old)).hasSize(1);
         assertThat(offenders("x", plain)).hasSize(1);
         assertThat(offenders("x", expression)).hasSize(1);
         assertThat(offenders("x", statementBetween)).hasSize(1);
         assertThat(offenders("x", nestedBlockBetween)).hasSize(1);
+        assertThat(offenders("x", qualifiedReceiver)).hasSize(1);
+        assertThat(offenders("x", throughHelper)).hasSize(1);
         assertThat(offenders("x", flushed)).isEmpty();
         assertThat(offenders("x", unrelated)).isEmpty();
         assertThat(offenders("x", commented)).isEmpty();
