@@ -3118,25 +3118,16 @@
                  stripComments="false"/>
     </changeSet>
 
-<<<<<<< HEAD
     <!-- V239 (round 16): a specimen can be rejected with a reason; the reason,
          the rejecting user and the time are stored on the specimen (QA D962).
          Plain statements, no DO block. Idempotent. -->
     <changeSet id="V239-lab-specimen-rejection" author="hms-team" runOnChange="false">
         <sqlFile path="V239__lab_specimen_rejection.sql"
-=======
-    <!-- V242 (round 16): discounts, waivers and credit notes on an issued
-         invoice, each with a mandatory reason (QA D974). Plain statements,
-         no DO block. Idempotent. -->
-    <changeSet id="V242-invoice-adjustments" author="hms-team" runOnChange="false">
-        <sqlFile path="V242__invoice_adjustments.sql"
->>>>>>> origin/fix/r16-portal-billing-chart
                  relativeToChangelogFile="true"
                  splitStatements="true"
                  stripComments="false"/>
     </changeSet>
 
-<<<<<<< HEAD
     <!-- =================================================================
          V240 (round 16, QA D971): the BPA protocol row for the
          hypertension-in-pregnancy advisory card, so an administrator can
@@ -3151,6 +3142,14 @@
                  stripComments="true"/>
     </changeSet>
 
-=======
->>>>>>> origin/fix/r16-portal-billing-chart
+    <!-- V242 (round 16): discounts, waivers and credit notes on an issued
+         invoice, each with a mandatory reason (QA D974). Plain statements,
+         no DO block. Idempotent. -->
+    <changeSet id="V242-invoice-adjustments" author="hms-team" runOnChange="false">
+        <sqlFile path="V242__invoice_adjustments.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>
