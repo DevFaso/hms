@@ -249,6 +249,25 @@ class MedicalCertificateServiceImplTest {
     }
 
     @Test
+    void pastedLineEndsAndTabsAreNotPrintedAsQuestionMarks() {
+        assertThat(MedicalCertificateServiceImpl.pdfSafe("Repos strict\r\n\tTraitement\rFin"))
+            .isEqualTo("Repos strict\n Traitement\nFin");
+    }
+
+    @Test
+    void aWordWiderThanThePageIsCutToFit() throws Exception {
+        var font = org.apache.pdfbox.pdmodel.font.PDType1Font.HELVETICA;
+        String reference = "REF-" + "0123456789".repeat(20);
+        java.util.List<String> lines = MedicalCertificateServiceImpl.wrap(reference, font, 11);
+        assertThat(lines).hasSizeGreaterThan(1);
+        float width = org.apache.pdfbox.pdmodel.common.PDRectangle.A4.getWidth() - 2 * 64f;
+        for (String line : lines) {
+            assertThat(font.getStringWidth(line) / 1000 * 11).isLessThanOrEqualTo(width);
+        }
+        assertThat(String.join("", lines)).isEqualTo(reference);
+    }
+
+    @Test
     void theFingerprintChangesWithWhatIsCertified() {
         Patient p = encounter.getPatient();
         LocalDateTime at = LocalDateTime.of(2026, 10, 27, 10, 0);

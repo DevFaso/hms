@@ -237,13 +237,15 @@
                     >
                       {{ 'COMMON.EDIT' | translate }}
                     </button>
-                    <button
-                      class="btn-primary btn-sm"
-                      (click)="openFinalize(s)"
-                      [title]="'DISCHARGE.FINALIZE' | translate"
-                    >
-                      {{ 'DISCHARGE.FINALIZE' | translate }}
-                    </button>
+                    @if (canFinalizeSummary(s)) {
+                      <button
+                        class="btn-primary btn-sm"
+                        (click)="openFinalize(s)"
+                        [title]="'DISCHARGE.FINALIZE' | translate"
+                      >
+                        {{ 'DISCHARGE.FINALIZE' | translate }}
+                      </button>
+                    }
                     <button
                       class="btn-danger btn-sm"
                       (click)="openDelete(s)"

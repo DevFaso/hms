@@ -75,6 +75,19 @@ export class DischargeComponent implements OnInit {
     if (this.isSuperAdmin && this.roleContext.globalView()) return true;
     return !!this.staffId && summary.dischargingProviderId === this.staffId;
   }
+  /**
+   * Review of #971 (D930): finalize is the discharging provider's only (the
+   * server's rule). A treating doctor who edits a nurse-held draft becomes its
+   * provider, and then sees Finalize.
+   */
+  canFinalizeSummary(summary: DischargeSummary): boolean {
+    return (
+      this.canWriteSummary(summary) &&
+      !!this.staffId &&
+      summary.dischargingProviderId === this.staffId
+    );
+  }
+
   /** Backend allows NURSE/MIDWIFE on by-hospital + pending-results (NOT unfinalized). */
   readonly canViewSummaries = this.roleContext.hasAnyActiveRole([
     'ROLE_DOCTOR',

@@ -258,33 +258,29 @@ public class MedicalCertificateServiceImpl implements MedicalCertificateService 
             // Review of #971: long remarks continue on a new page, so the
             // place, the doctor's name and the reference are always printed.
             try (PdfCursor out = new PdfCursor(doc)) {
-                out.line(PDType1Font.HELVETICA_BOLD, 13, pdfSafe(hospital.getName()));
+                out.wrapped(PDType1Font.HELVETICA_BOLD, 13, pdfSafe(hospital.getName()));
                 if (hospital.getCity() != null) {
-                    out.line(PDType1Font.HELVETICA, 10, pdfSafe(hospital.getCity()));
+                    out.wrapped(PDType1Font.HELVETICA, 10, pdfSafe(hospital.getCity()));
                 }
                 out.gap(28);
-                out.line(PDType1Font.HELVETICA_BOLD, 17,
+                out.wrapped(PDType1Font.HELVETICA_BOLD, 17,
                     pdfSafe(text(locale, "medicalCertificate.title." + c.type().name()).toUpperCase(locale)));
                 out.gap(18);
                 for (String paragraph : body) {
-                    for (String wrapped : wrap(pdfSafe(paragraph), PDType1Font.HELVETICA, 11)) {
-                        out.line(PDType1Font.HELVETICA, 11, wrapped);
-                    }
+                    out.wrapped(PDType1Font.HELVETICA, 11, pdfSafe(paragraph));
                     out.gap(8);
                 }
                 out.gap(16);
                 String place = hospital.getCity() != null ? hospital.getCity() : hospital.getName();
-                out.line(PDType1Font.HELVETICA, 11,
+                out.wrapped(PDType1Font.HELVETICA, 11,
                     pdfSafe(text(locale, "medicalCertificate.doneAt", place, date(signedAt.toLocalDate(), locale))));
                 out.gap(24);
-                out.line(PDType1Font.HELVETICA_BOLD, 11, pdfSafe(doctorName(doctor)));
+                out.wrapped(PDType1Font.HELVETICA_BOLD, 11, pdfSafe(doctorName(doctor)));
                 out.gap(30);
                 String signed = text(locale, "medicalCertificate.signature",
                     signedAt.format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT).withLocale(locale)),
                     fingerprint.substring(0, 16));
-                for (String wrapped : wrap(pdfSafe(signed), PDType1Font.HELVETICA_OBLIQUE, 8)) {
-                    out.line(PDType1Font.HELVETICA_OBLIQUE, 8, wrapped);
-                }
+                out.wrapped(PDType1Font.HELVETICA_OBLIQUE, 8, pdfSafe(signed));
             }
             try (ByteArrayOutputStream bytes = new ByteArrayOutputStream()) {
                 doc.save(bytes);
@@ -308,6 +304,13 @@ public class MedicalCertificateServiceImpl implements MedicalCertificateService 
 
         void gap(float points) {
             y -= points;
+        }
+
+        /** Writes {@code text} wrapped to the page width. */
+        void wrapped(PDFont font, float size, String text) throws IOException {
+            for (String piece : wrap(text, font, size)) {
+                line(font, size, piece);
+            }
         }
 
         void line(PDFont font, float size, String text) throws IOException {
@@ -344,7 +347,7 @@ public class MedicalCertificateServiceImpl implements MedicalCertificateService 
         List<String> out = new ArrayList<>();
         for (String para : text.split("\n")) {
             StringBuilder current = new StringBuilder();
-            for (String word : para.split(" ")) {
+            for (String word : splitLongWords(para.split(" "), font, size)) {
                 String candidate = current.isEmpty() ? word : current + " " + word;
                 if (font.getStringWidth(candidate) / 1000 * size > WIDTH && !current.isEmpty()) {
                     out.add(current.toString());
@@ -358,6 +361,27 @@ public class MedicalCertificateServiceImpl implements MedicalCertificateService 
         return out;
     }
 
+    /** Review of #971: a word wider than the page (a long reference, a URL) is cut into pieces that fit. */
+    private static List<String> splitLongWords(String[] words, PDFont font, float size) throws IOException {
+        List<String> out = new ArrayList<>();
+        for (String word : words) {
+            if (font.getStringWidth(word) / 1000 * size <= WIDTH) {
+                out.add(word);
+                continue;
+            }
+            StringBuilder piece = new StringBuilder();
+            for (char ch : word.toCharArray()) {
+                if (!piece.isEmpty() && font.getStringWidth(piece.toString() + ch) / 1000 * size > WIDTH) {
+                    out.add(piece.toString());
+                    piece.setLength(0);
+                }
+                piece.append(ch);
+            }
+            out.add(piece.toString());
+        }
+        return out;
+    }
+
     /** WinAnsi characters outside Latin-1 that the standard fonts draw (oe ligatures, quotes, dashes, ellipsis, euro). */
     private static final String WIN_ANSI_EXTRA = "\u0152\u0153\u0160\u0161\u0178\u017d\u017e\u0192\u02c6\u02dc\u2013\u2014\u2018\u2019\u201a\u201c\u201d\u201e\u2020\u2021\u2022\u2026\u2030\u2039\u203a\u20ac\u2122";
 
@@ -365,7 +389,11 @@ public class MedicalCertificateServiceImpl implements MedicalCertificateService 
     static String pdfSafe(String text) {
         if (text == null) return "";
         StringBuilder sb = new StringBuilder(text.length());
-        for (char ch : text.replace('\u202f', ' ').replace('\u00a0', ' ').toCharArray()) {
+        // Review of #971: Windows line ends and tabs pasted into the remarks are
+        // a new line and a space, not "?".
+        String normalised = text.replace("\r\n", "\n").replace('\r', '\n').replace('\t', ' ')
+            .replace('\u202f', ' ').replace('\u00a0', ' ');
+        for (char ch : normalised.toCharArray()) {
             boolean drawable = ch == '\n' || (ch >= 0x20 && ch <= 0x7e) || (ch >= 0xa0 && ch <= 0xff)
                 || WIN_ANSI_EXTRA.indexOf(ch) >= 0;
             sb.append(drawable ? ch : '?');

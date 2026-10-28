@@ -125,9 +125,10 @@ public class FhirTenantBoundary {
     private static final String DISCHARGE_SUMMARIES =
         "SELECT s.id FROM DischargeSummary s WHERE s.id IN :ids AND s.hospital.id = :hospitalId";
     // QA D961: a document another hospital issued (its medical certificate) never leaves here.
+    // The FK column itself is tested (no join), so an id whose hospital row is gone is
+    // still "issued elsewhere", never mistaken for the patient's own upload.
     private static final String UPLOADED_DOCUMENTS = "SELECT d.id FROM PatientUploadedDocument d "
-        + "LEFT JOIN d.issuingHospital ih "
-        + "WHERE d.id IN :ids AND (ih.id IS NULL OR ih.id = :hospitalId) "
+        + "WHERE d.id IN :ids AND (d.issuingHospital IS NULL OR d.issuingHospital.id = :hospitalId) "
         + "AND EXISTS (SELECT r.id FROM PatientHospitalRegistration r "
         + "WHERE r.patient = d.patient AND r.hospital.id = :hospitalId)";
 

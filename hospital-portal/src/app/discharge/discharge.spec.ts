@@ -84,5 +84,14 @@ describe('DischargeComponent — encounter picker label', () => {
     expect(
       component.canWriteSummary({ ...own, editableByCaller: false } as DischargeSummary),
     ).toBeFalse();
+    // Finalize stays the discharging provider's (the server's rule): the
+    // treating doctor may edit a nurse-held draft, and finalizes it once her
+    // edit has made her its provider.
+    expect(
+      component.canFinalizeSummary({ ...other, editableByCaller: true } as DischargeSummary),
+    ).toBeFalse();
+    expect(
+      component.canFinalizeSummary({ ...own, editableByCaller: true } as DischargeSummary),
+    ).toBeTrue();
   });
 });

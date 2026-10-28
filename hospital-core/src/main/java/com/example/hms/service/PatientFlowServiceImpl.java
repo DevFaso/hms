@@ -139,9 +139,18 @@ public class PatientFlowServiceImpl implements PatientFlowService {
     private long computeEncounterElapsedMinutes(Encounter enc) {
         // QA D990: the wait runs from the patient's arrival; a visit day's
         // midnight encounterDate showed "1128m" on the board.
-        LocalDateTime from = enc.getArrivalTimestamp() != null ? enc.getArrivalTimestamp() : enc.getEncounterDate();
+        // Review of #971: with no arrival (a clinician's own IN_PROGRESS visit),
+        // a visit entered after its day's midnight waits from its entry.
+        LocalDateTime from = enc.getArrivalTimestamp() != null ? enc.getArrivalTimestamp()
+            : laterOf(enc.getEncounterDate(), enc.getCreatedAt());
         if (from == null) return 0;
         return Math.max(ElapsedTime.minutesBetween(from, LocalDateTime.now(java.time.ZoneId.systemDefault())), 0);
+    }
+
+    private static LocalDateTime laterOf(LocalDateTime a, LocalDateTime b) {
+        if (a == null) return b;
+        if (b == null) return a;
+        return b.isAfter(a) ? b : a;
     }
 
     private long computeAdmissionElapsedMinutes(Admission adm) {

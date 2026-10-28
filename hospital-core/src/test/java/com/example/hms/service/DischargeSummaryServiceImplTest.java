@@ -357,6 +357,27 @@ class DischargeSummaryServiceImplTest {
         verify(dischargeSummaryRepository).delete(summary);
     }
 
+    @Test void qaD930_theTreatingDoctorWhoEditsANurseHeldDraftBecomesItsProviderAndCanFinalizeIt() {
+        // Review of #971: editing a nurse-held draft hands it to the doctor, so
+        // the finalize rule (discharging provider only) lets her sign it.
+        com.example.hms.model.User doctor = new com.example.hms.model.User();
+        doctor.setId(UUID.randomUUID());
+        Staff doctorStaff = new Staff();
+        doctorStaff.setId(UUID.randomUUID());
+        doctorStaff.setUser(doctor);
+        actAs(doctor);
+        when(roleValidator.getCurrentUserId()).thenReturn(doctor.getId());
+        org.mockito.Mockito.lenient().when(roleValidator.isDoctor(doctor.getId(), hospitalId)).thenReturn(true);
+        when(encounterNoteRepository.existsByEncounter_IdAndAuthor_Id(encounterId, doctor.getId())).thenReturn(true);
+        when(staffRepository.findByUserIdAndHospitalId(doctor.getId(), hospitalId)).thenReturn(Optional.of(doctorStaff));
+        when(dischargeSummaryRepository.findById(summaryId)).thenReturn(Optional.of(summary));
+        when(dischargeSummaryRepository.save(any(DischargeSummary.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.updateDischargeSummary(summaryId, buildRequest(), Locale.ENGLISH);
+
+        assertThat(summary.getDischargingProvider()).isEqualTo(doctorStaff);
+    }
+
     @Test void qaD930_aNurseWhoWroteANoteCannotDeleteAColleaguesNurseHeldDraft() {
         // Review of #971: the treating-clinician fallback is for physicians only.
         com.example.hms.model.User nurseB = new com.example.hms.model.User();

@@ -218,6 +218,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         if (Boolean.TRUE.equals(existing.getIsFinalized())) {
             throw new BusinessException("Cannot update a finalized discharge summary");
         }
+        takeOverFromNonPhysician(existing);
 
         // Update fields
         existing.setDischargeDate(request.getDischargeDate());
@@ -455,6 +456,30 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         }
         return isPhysician(provider.getUser().getId(),
             summary.getHospital() != null ? summary.getHospital().getId() : null);
+    }
+
+    /**
+     * Review of #971 (D930): the treating physician who edits a draft held by
+     * no one or by a non-physician (the nurse who opened the visit) becomes its
+     * discharging provider, so she can finalize what she wrote; finalize stays
+     * the discharging provider's. A super-admin's edit moves nothing.
+     */
+    private void takeOverFromNonPhysician(DischargeSummary summary) {
+        if (com.example.hms.security.CallerIdentity.isCaller(summary.getDischargingProvider())
+                || com.example.hms.security.CallerIdentity.isGlobalSuperAdmin()
+                || isPhysicianProvider(summary) || summary.getHospital() == null) {
+            return;
+        }
+        UUID callerId = roleValidator.getCurrentUserId();
+        UUID hospitalId = summary.getHospital().getId();
+        if (!isPhysician(callerId, hospitalId)) {
+            return;
+        }
+        staffRepository.findByUserIdAndHospitalId(callerId, hospitalId).ifPresent(staff -> {
+            summary.setDischargingProvider(staff);
+            assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(callerId, hospitalId)
+                .ifPresent(summary::setAssignment);
+        });
     }
 
     /** A doctor, physician or surgeon at the hospital: the same three roles {@code EncounterServiceImpl} counts as a doctor. */

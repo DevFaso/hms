@@ -2460,6 +2460,11 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   is completed again (before #971 checkout re-homed it every time; who owns
   a draft after a reassignment is a rule to decide, not re-homing that
   would undo a covering doctor's ownership).
+  (11) Review round 11 of #971: a treatment plan's author still cannot hand
+  it to a colleague (the D503 rule on develop already refused naming
+  someone else as author; #971 only stopped a colleague from taking a plan
+  over), so the plan form's author picker can only fail: hide it, or decide
+  a hand-over rule.
 
 ### Execution plan (2026-09-26)
 

@@ -181,6 +181,32 @@ class PatientFlowServiceImplTest {
     }
 
     @Test
+    void reviewOf971_aVisitWithNoArrivalWaitsFromItsEntryNotFromMidnight() {
+        UUID userId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        givenStaffFor(userId, stubStaff(staffId));
+        Patient patient = mock(Patient.class);
+        when(patient.getId()).thenReturn(UUID.randomUUID());
+        Encounter enc = mock(Encounter.class);
+        when(enc.getId()).thenReturn(UUID.randomUUID());
+        when(enc.getPatient()).thenReturn(patient);
+        org.mockito.Mockito.lenient().when(enc.getEncounterDate())
+            .thenReturn(java.time.LocalDate.now().atStartOfDay());
+        when(enc.getArrivalTimestamp()).thenReturn(null);
+        when(enc.getCreatedAt()).thenReturn(LocalDateTime.now().minusMinutes(5));
+        when(encounterRepository.findByStaff_IdAndStatus(eq(staffId), any(EncounterStatus.class)))
+                .thenReturn(Collections.emptyList());
+        when(encounterRepository.findByStaff_IdAndStatus(staffId, EncounterStatus.IN_PROGRESS))
+                .thenReturn(List.of(enc));
+
+        PatientFlowItemDTO item = service.getPatientFlow(userId).values().stream()
+            .flatMap(List::stream).findFirst().orElseThrow();
+
+        assertTrue(item.getElapsedMinutes() >= 4 && item.getElapsedMinutes() <= 6,
+            "waits from entry, not midnight: " + item.getElapsedMinutes());
+    }
+
+    @Test
     void getPatientFlow_skipsNullPatient() {
         UUID userId = UUID.randomUUID();
         UUID staffId = UUID.randomUUID();
