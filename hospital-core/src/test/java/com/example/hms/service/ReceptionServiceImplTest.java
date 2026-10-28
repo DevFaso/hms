@@ -893,7 +893,7 @@ class ReceptionServiceImplTest {
             when(patientRepo.searchPatientsExtended(any(), eq("%zongo fatimata%"), eq("1991-07-22"), isNull(), any(),
                     eq(hospitalId), eq(true), any()))
                     .thenReturn(new PageImpl<>(List.of(fatimata)));
-            when(patientRepo.findAllByPhoneSubscriber("%70161099")).thenReturn(List.of());
+            when(patientRepo.findAllByPhoneSubscriber(eq("%70161099"), any())).thenReturn(List.of());
 
             List<DuplicateCandidateDTO> result = service.getDuplicateCandidates(
                     "Zongo Fatimata", "1991-07-22", "+22670161099", hospitalId);
@@ -913,7 +913,7 @@ class ReceptionServiceImplTest {
             Patient elsewhere = registered("Aïcha", "Kaboré", LocalDate.of(1991, 7, 22), "70161099", false);
             when(patientRepo.searchPatientsExtended(any(), any(), any(), any(), any(), eq(hospitalId), eq(true), any()))
                     .thenReturn(new PageImpl<>(List.of()));
-            when(patientRepo.findAllByPhoneSubscriber("%70161099"))
+            when(patientRepo.findAllByPhoneSubscriber(eq("%70161099"), any()))
                     .thenReturn(List.of(same, sharedPhoneOnly, elsewhere));
 
             List<DuplicateCandidateDTO> result = service.getDuplicateCandidates(
@@ -929,7 +929,7 @@ class ReceptionServiceImplTest {
         @DisplayName("no name, no DOB and a short phone ask nothing")
         void nothingToAsk() {
             assertThat(service.getDuplicateCandidates(null, " ", "12", hospitalId)).isEmpty();
-            verify(patientRepo, never()).findAllByPhoneSubscriber(any());
+            verify(patientRepo, never()).findAllByPhoneSubscriber(any(), any());
         }
     }
 

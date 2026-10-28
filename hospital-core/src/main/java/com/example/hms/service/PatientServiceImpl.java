@@ -484,8 +484,9 @@ public class PatientServiceImpl implements PatientService {
             patient.setEmail(email);
             changedFields.add("email");
         }
-        updated |= !changedFields.isEmpty();
-        updated |= applyNullable(request.getEthnicity(), patient::setEthnicity);
+        if (applyNullable(request.getEthnicity(), patient::setEthnicity)) {
+            changedFields.add("ethnicity");
+        }
 
         boolean addressTouched = false;
         addressTouched |= applyNullable(request.getAddressLine1(), patient::setAddressLine1);
@@ -496,7 +497,7 @@ public class PatientServiceImpl implements PatientService {
         addressTouched |= applyNullable(request.getCountry(), patient::setCountry);
 
         if (addressTouched) {
-            updated = true;
+            changedFields.add("address");
             patient.setAddress(buildMailingAddress(
                 patient.getAddressLine1(),
                 patient.getAddressLine2(),
@@ -518,20 +519,24 @@ public class PatientServiceImpl implements PatientService {
         if (applyNullable(request.getEmergencyContactRelationship(), patient::setEmergencyContactRelationship)) {
             changedFields.add("emergencyContactRelationship");
         }
-        updated |= !changedFields.isEmpty();
-        updated |= applyNullable(request.getPreferredPharmacy(), patient::setPreferredPharmacy);
-        updated |= applyNullable(request.getCareTeamNotes(), patient::setCareTeamNotes);
+        if (applyNullable(request.getPreferredPharmacy(), patient::setPreferredPharmacy)) {
+            changedFields.add("preferredPharmacy");
+        }
+        if (applyNullable(request.getCareTeamNotes(), patient::setCareTeamNotes)) {
+            changedFields.add("careTeamNotes");
+        }
 
         if (request.getChronicConditions() != null) {
             patient.setChronicConditions(joinChronicConditions(request.getChronicConditions()));
-            updated = true;
+            changedFields.add("chronicConditions");
         }
 
+        // Every change is named in the audit (the controller opts out of the
+        // generic write audit on the strength of this row).
+        updated = !changedFields.isEmpty();
         if (updated) {
             patientRepository.save(patient);
-            if (!changedFields.isEmpty()) {
-                auditPatientUpdate(patient, "Patient demographics updated: " + String.join(", ", changedFields));
-            }
+            auditPatientUpdate(patient, "Patient demographics updated: " + String.join(", ", changedFields));
         }
 
         return buildPatientDto(patient, patient.getHospitalId());
@@ -930,7 +935,8 @@ public class PatientServiceImpl implements PatientService {
         String key = PatientMatchKeys.phoneKey(typed);
         if (PatientMatchKeys.isSubscriberKey(key)) {
             // The eight digits narrow the candidates; the full number decides.
-            return patientRepository.findAllByPhoneSubscriber("%" + key).stream()
+            return patientRepository.findAllByPhoneSubscriber("%" + key,
+                    PageRequest.of(0, PatientRepository.PHONE_SUBSCRIBER_CAP)).stream()
                 .filter(p -> PatientMatchKeys.samePhone(p.getPhoneNumberPrimary(), typed)
                     || PatientMatchKeys.samePhone(p.getPhoneNumberSecondary(), typed))
                 .toList();
@@ -939,8 +945,8 @@ public class PatientServiceImpl implements PatientService {
         if (exact == null || exact.isEmpty()) {
             return List.of();
         }
-        return patientRepository.findByPhoneNumberPrimary(exact)
-            .or(() -> patientRepository.findByPhoneNumberSecondary(exact))
+        return patientRepository.findFirstByPhoneNumberPrimary(exact)
+            .or(() -> patientRepository.findFirstByPhoneNumberSecondary(exact))
             .map(List::of)
             .orElse(List.of());
     }

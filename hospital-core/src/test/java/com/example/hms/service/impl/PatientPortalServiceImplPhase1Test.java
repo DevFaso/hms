@@ -393,10 +393,10 @@ class PatientPortalServiceImplPhase1Test {
         @DisplayName("D113 — another patient's primary phone is refused")
         void updateMyProfile_phoneOfAnotherPatientRefused() {
             stubPatientResolution();
-            Patient other = new Patient();
-            other.setId(java.util.UUID.randomUUID());
-            when(patientRepository.findByPhoneNumberPrimary("+22670202020"))
-                    .thenReturn(java.util.Optional.of(other));
+            // Never single-result: two records may already share a number (QA D926/D942).
+            when(patientRepository.existsByPhoneNumberPrimaryAndIdNot(
+                    org.mockito.ArgumentMatchers.eq("+22670202020"), org.mockito.ArgumentMatchers.any()))
+                    .thenReturn(true);
             PatientProfileUpdateDTO dto = PatientProfileUpdateDTO.builder().phoneNumberPrimary("70202020").build();
             assertThatThrownBy(() -> service.updateMyProfile(auth, dto))
                     .isInstanceOf(com.example.hms.exception.BusinessException.class);

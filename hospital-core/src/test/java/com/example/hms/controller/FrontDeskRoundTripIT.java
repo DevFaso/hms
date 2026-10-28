@@ -333,6 +333,24 @@ class FrontDeskRoundTripIT extends BaseIT {
     }
 
     @Test
+    @DisplayName("D926 review: an address-only correction is audited too, naming the field")
+    void anAddressOnlyCorrectionIsAudited() throws Exception {
+        mockMvc.perform(patch(API + "/patients/{id}", aicha.getId()).contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"city\":\"Koudougou\"}")
+                .with(asReceptionist()))
+            .andExpect(status().isOk());
+
+        var audit = applicationContext.getBean(com.example.hms.repository.AuditEventLogRepository.class).findAll()
+            .stream()
+            .filter(a -> a.getEventType() == com.example.hms.enums.AuditEventType.PATIENT_UPDATE
+                && aicha.getId().toString().equals(a.getResourceId())
+                && a.getEventDescription() != null && a.getEventDescription().startsWith("Patient demographics"))
+            .toList();
+        assertThat(audit).singleElement().satisfies(a ->
+            assertThat(a.getEventDescription()).contains("address").doesNotContain("Koudougou"));
+    }
+
+    @Test
     @DisplayName("D926: a required field sent blank is refused and nothing is changed")
     void blanksAreRefused() throws Exception {
         for (String body : List.of("{\"lastName\":\"  \"}", "{\"phoneNumberPrimary\":\" \"}",

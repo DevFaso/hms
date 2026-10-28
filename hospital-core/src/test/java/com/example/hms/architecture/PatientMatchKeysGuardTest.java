@@ -79,8 +79,8 @@ class PatientMatchKeysGuardTest {
             if (f.endsWith("PatientRepository.java")) {
                 continue;
             }
-            boolean exact = src.contains("findByPhoneNumberPrimary(") || src.contains("findByPhoneNumberSecondary(")
-                || src.contains("findAllByPhoneNumberPrimary(") || src.contains("findAllByPhoneNumberSecondary(");
+            boolean exact = src.contains("ByPhoneNumberPrimary(") || src.contains("ByPhoneNumberSecondary(")
+                || src.contains("ByPhoneNumberPrimaryAndIdNot(");
             if (exact) {
                 String key = MAIN.relativize(f).toString().replace('\\', '/');
                 assertThat(EXACT_PHONE_CALLERS).as(key + " matches a phone number exactly; use "

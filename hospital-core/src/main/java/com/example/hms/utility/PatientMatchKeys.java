@@ -127,9 +127,35 @@ public final class PatientMatchKeys {
         if (!isSubscriberKey(phoneKey(a)) || !isSubscriberKey(phoneKey(b))) {
             return false;
         }
+        boolean aInternational = isInternational(a);
+        boolean bInternational = isInternational(b);
+        if (aInternational != bInternational) {
+            // One side carries its country, the other is national: the national
+            // number (its trunk zero dropped, as PhoneNumbers.toE164 drops it
+            // outside Burkina Faso) ends the international one. A hospital in
+            // Côte d'Ivoire stores "07 01 23 45 67" as +225701234567; typed
+            // again nationally it is the same subscriber.
+            String international = digitsOf(aInternational ? a : b);
+            String national = digitsOf(aInternational ? b : a);
+            String withoutTrunk = national.startsWith("0") ? national.substring(1) : national;
+            return withoutTrunk.length() >= SUBSCRIBER_DIGITS
+                && (international.endsWith(national) || international.endsWith(withoutTrunk));
+        }
         String ca = PhoneNumbers.toInternationalDigits(a, PhoneNumbers.DEFAULT_CALLING_CODE);
         String cb = PhoneNumbers.toInternationalDigits(b, PhoneNumbers.DEFAULT_CALLING_CODE);
         return !ca.isEmpty() && ca.equals(cb);
+    }
+
+    /** Written with its country: a leading + or 00. */
+    private static boolean isInternational(String value) {
+        String trimmed = value.trim();
+        return trimmed.startsWith("+") || digitsOf(trimmed).startsWith("00");
+    }
+
+    /** Digits only, an international 00 dropped. */
+    private static String digitsOf(String value) {
+        String digits = NON_DIGITS.matcher(value).replaceAll("");
+        return digits.startsWith("00") ? digits.substring(2) : digits;
     }
 
     /**

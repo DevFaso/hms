@@ -361,7 +361,9 @@ class PrenatalSchedulingServiceImplTest {
         AppointmentRequestDTO dto = captor.getValue();
         assertThat(dto.getStartTime()).isEqualTo(LocalTime.of(11, 0));
         assertThat(dto.getEndTime()).isEqualTo(LocalTime.of(11, 20));
-        assertThat(dto.getStatus()).isEqualTo(AppointmentStatus.RESCHEDULED);
+        // QA D977 class: a moved visit is booked at its new time (SCHEDULED), as the
+        // desk and portal reschedules land it; RESCHEDULED is a superseded booking.
+        assertThat(dto.getStatus()).isEqualTo(AppointmentStatus.SCHEDULED);
         assertThat(dto.getNotes()).contains("Patient requested later morning slot");
     }
 

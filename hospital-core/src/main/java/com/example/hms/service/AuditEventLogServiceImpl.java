@@ -426,9 +426,10 @@ public class AuditEventLogServiceImpl implements AuditEventLogService {
     }
 
     private Patient findPatientByPhone(String resourceName) {
-        Patient patient = patientRepository.findByPhoneNumberPrimary(resourceName).orElse(null);
+        // A number may be shared: the first holder, never an exception.
+        Patient patient = patientRepository.findFirstByPhoneNumberPrimary(resourceName).orElse(null);
         if (patient == null) {
-            patient = patientRepository.findByPhoneNumberSecondary(resourceName).orElse(null);
+            patient = patientRepository.findFirstByPhoneNumberSecondary(resourceName).orElse(null);
         }
         return patient;
     }

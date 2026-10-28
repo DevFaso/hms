@@ -7304,7 +7304,7 @@
     "CLOSE_UNSEEN_DONE": "La visite a été clôturée sans consultation.",
     "CLOSE_UNSEEN_FAILED": "La visite n'a pas pu être clôturée. Réessayez.",
     "PAYMENT_REFERENCE": "Référence du paiement",
-    "PAYMENT_REFERENCE_PLACEHOLDER": "N° de transaction ou de police",
+    "PAYMENT_REFERENCE_PLACEHOLDER": "N° de transaction ou de prise en charge",
     "RECEIPT_FAILED": "Impossible de télécharger le reçu.",
     "UNSEEN_OUTCOME": {
       "LEFT_WITHOUT_BEING_SEEN": "Parti sans être vu",

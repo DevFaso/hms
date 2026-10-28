@@ -43,4 +43,24 @@ class PatientMatchKeysTest {
         assertThat(PatientMatchKeys.phoneKey("abc")).isNull();
         assertThat(PatientMatchKeys.phoneContainsPattern("70 00")).isEqualTo("%7000%");
     }
+
+    @Test
+    @DisplayName("review: the full number decides, whatever country, national or international")
+    void theFullNumberDecides() {
+        // Two Ivorian numbers that end alike are two subscribers.
+        assertThat(PatientMatchKeys.samePhone("+2250701234567", "+2250501234567")).isFalse();
+        // A national form typed at an Ivorian hospital matches its stored E.164 (trunk zero dropped).
+        assertThat(PatientMatchKeys.samePhone("+225701234567", "07 01 23 45 67")).isTrue();
+        assertThat(PatientMatchKeys.samePhone("0022670001002", "70 00 10 02")).isTrue();
+        assertThat(PatientMatchKeys.samePhone("+22670001002", "70001003")).isFalse();
+    }
+
+    @Test
+    @DisplayName("review: only phone-shaped identifiers are looked up as phones")
+    void phoneShaped() {
+        assertThat(PatientMatchKeys.looksLikePhone("+226 70 00 10 02")).isTrue();
+        assertThat(PatientMatchKeys.looksLikePhone("awa.70001002@gmail.com")).isFalse();
+        assertThat(PatientMatchKeys.looksLikePhone("CHW70001002")).isFalse();
+        assertThat(PatientMatchKeys.phoneContainsPattern("unknown")).isEqualTo("%unknown%");
+    }
 }

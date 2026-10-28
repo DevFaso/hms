@@ -32,16 +32,16 @@ class AppointmentSlotRulesTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = AppointmentStatus.class, names = {"CANCELLED", "NO_SHOW", "RESCHEDULED"})
-    @DisplayName("D937: a cancelled booking, a no-show or a superseded (RESCHEDULED) booking frees its slot")
+    @EnumSource(value = AppointmentStatus.class, names = {"CANCELLED", "NO_SHOW"})
+    @DisplayName("D937: a cancelled booking or a no-show frees its slot")
     void freedSlots(AppointmentStatus status) {
         assertThat(AppointmentSlotRules.overlapsHeldSlot(List.of(booked(status, 14)), null,
             LocalDateTime.of(DAY, LocalTime.of(14, 0)), LocalDateTime.of(DAY, LocalTime.of(14, 30)))).isFalse();
     }
 
     @ParameterizedTest
-    @EnumSource(value = AppointmentStatus.class, names = {"CANCELLED", "NO_SHOW", "RESCHEDULED"}, mode = EnumSource.Mode.EXCLUDE)
-    @DisplayName("every other status keeps its slot")
+    @EnumSource(value = AppointmentStatus.class, names = {"CANCELLED", "NO_SHOW"}, mode = EnumSource.Mode.EXCLUDE)
+    @DisplayName("every other status keeps its slot, RESCHEDULED (a live moved visit) included")
     void heldSlots(AppointmentStatus status) {
         assertThat(AppointmentSlotRules.overlapsHeldSlot(List.of(booked(status, 14)), null,
             LocalDateTime.of(DAY, LocalTime.of(14, 15)), LocalDateTime.of(DAY, LocalTime.of(14, 45)))).isTrue();

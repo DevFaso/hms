@@ -110,9 +110,15 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
   @Query("SELECT p FROM Patient p JOIN p.hospitalRegistrations r WHERE r.mrn = :mrn")
   List<Patient> findByMrn(@Param("mrn") String mrn);
 
-    Optional<Patient> findByPhoneNumberPrimary(String phoneNumberPrimary);
+    // QA D926/D942: a number may be shared (a child carries the mother's
+    // phone, and the database has no unique constraint), so no lookup by
+    // number is single-result: these return the first holder, never throw.
+    Optional<Patient> findFirstByPhoneNumberPrimary(String phoneNumberPrimary);
 
-    Optional<Patient> findByPhoneNumberSecondary(String phoneNumberSecondary);
+    Optional<Patient> findFirstByPhoneNumberSecondary(String phoneNumberSecondary);
+
+    /** Whether a patient other than {@code id} holds this primary number. */
+    boolean existsByPhoneNumberPrimaryAndIdNot(String phoneNumberPrimary, UUID id);
 
     /** Another patient already holds this e-mail, in any letter case (QA D113). */
     @Query("SELECT COUNT(p) > 0 FROM Patient p WHERE LOWER(p.email) = LOWER(:email) AND p.id <> :id")
@@ -228,7 +234,11 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
      */
     @Query("SELECT p FROM Patient p WHERE " + PRIMARY_PHONE_DIGITS + " LIKE :subscriberPattern"
         + " OR " + SECONDARY_PHONE_DIGITS + " LIKE :subscriberPattern")
-    List<Patient> findAllByPhoneSubscriber(@Param("subscriberPattern") String subscriberPattern);
+    List<Patient> findAllByPhoneSubscriber(@Param("subscriberPattern") String subscriberPattern,
+                                           Pageable pageable);
+
+    /** The candidate cap of {@link #findAllByPhoneSubscriber}: a shared number never loads a crowd. */
+    int PHONE_SUBSCRIBER_CAP = 50;
 
     /**
      * Retrieves all patients registered to a specific hospital with active registrations.

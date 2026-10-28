@@ -22,7 +22,12 @@ export class EmpiStatusService {
     if (!this.request$) {
       this.request$ = this.http.get<{ enabled: boolean }>('/empi/candidates/status').pipe(
         map((res) => res?.enabled === true),
-        catchError(() => of(false)),
+        // A failed read is "unknown", not "off": it is not kept, so the next
+        // navigation asks again instead of hiding the page for the session.
+        catchError(() => {
+          this.request$ = null;
+          return of(false);
+        }),
         shareReplay(1),
       );
       this.request$.subscribe((on) => this.enabled.set(on));

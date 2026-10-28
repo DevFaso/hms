@@ -33,7 +33,7 @@ public class PatientProfileUpdateRequestDTO {
     @jakarta.validation.constraints.PastOrPresent
     private java.time.LocalDate dateOfBirth;
 
-    @Size(max = 20)
+    @Size(max = 10)
     private String gender;
 
     @Size(max = 100)

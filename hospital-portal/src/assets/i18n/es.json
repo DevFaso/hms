@@ -7304,7 +7304,7 @@
     "CLOSE_UNSEEN_DONE": "La visita se cerró sin consulta.",
     "CLOSE_UNSEEN_FAILED": "No se pudo cerrar la visita. Inténtelo de nuevo.",
     "PAYMENT_REFERENCE": "Referencia del pago",
-    "PAYMENT_REFERENCE_PLACEHOLDER": "N.º de transacción o de póliza",
+    "PAYMENT_REFERENCE_PLACEHOLDER": "N.º de transacción o de autorización",
     "RECEIPT_FAILED": "No se pudo descargar el recibo.",
     "UNSEEN_OUTCOME": {
       "LEFT_WITHOUT_BEING_SEEN": "Se fue sin ser atendido",

@@ -167,7 +167,9 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
             .appointmentDate(request.getNewAppointmentDate())
             .startTime(request.getNewStartTime())
             .endTime(endTime)
-            .status(AppointmentStatus.RESCHEDULED)
+            // QA D977 class (branch C1): a moved visit is booked at its new
+            // time, SCHEDULED, as the desk and the portal reschedules land it.
+            .status(AppointmentStatus.SCHEDULED)
             .patientId(appointment.getPatient().getId())
             .staffId(resolveStaffForReschedule(request, appointment))
             .hospitalId(appointment.getHospital().getId())

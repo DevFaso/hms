@@ -609,7 +609,8 @@ public class ReceptionServiceImpl implements ReceptionService {
         }
         String phoneKey = PatientMatchKeys.phoneKey(phone);
         if (PatientMatchKeys.isSubscriberKey(phoneKey)) {
-            patientRepo.findAllByPhoneSubscriber("%" + phoneKey).stream()
+            patientRepo.findAllByPhoneSubscriber("%" + phoneKey,
+                    PageRequest.of(0, PatientRepository.PHONE_SUBSCRIBER_CAP)).stream()
                 .filter(Patient::isActive)
                 .filter(p -> registeredAt(p, hospitalId))
                 .forEach(p -> candidates.putIfAbsent(p.getId(), p));

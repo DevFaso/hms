@@ -2375,6 +2375,7 @@ public class EncounterServiceImpl implements EncounterService {
                         com.example.hms.enums.RecallStatus.SCHEDULED)) {
                 answered.setStatus(com.example.hms.enums.RecallStatus.CLOSED);
                 answered.setClosedAt(now);
+                answered.setClosedByUserId(roleValidator.getCurrentUserId());
                 patientRecallRepository.save(answered);
             }
         }
