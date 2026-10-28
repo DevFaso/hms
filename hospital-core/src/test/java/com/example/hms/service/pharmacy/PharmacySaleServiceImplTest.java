@@ -62,6 +62,8 @@ class PharmacySaleServiceImplTest {
     @Mock private PharmacySaleMapper mapper;
     @Mock private RoleValidator roleValidator;
 
+    /** QA D964: FEFO is followed unless a test says otherwise (null = no override recorded). */
+    @org.mockito.Mock private FefoLotPolicy fefoLotPolicy;
     @InjectMocks private PharmacySaleServiceImpl service;
 
     private final UUID hospitalId = UUID.randomUUID();
@@ -235,6 +237,33 @@ class PharmacySaleServiceImplTest {
         assertThatThrownBy(() -> service.createSale(dto))
                 .isInstanceOf(BusinessException.class)
                 .matches(e -> WholeUnitQuantity.DEFAULT_KEY.equals(((BusinessException) e).getMessageKey()));
+        verify(saleRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("QA D964: a counter sale line from a later-dated lot with no reason is refused, nothing is saved")
+    void rejectsALineSkippingTheShorterDatedLot() {
+        UUID stockLotId = UUID.randomUUID();
+        InventoryItem invItem = InventoryItem.builder().pharmacy(pharmacy).build();
+        StockLot lot = StockLot.builder().inventoryItem(invItem).build();
+        lot.setId(stockLotId);
+        SaleLineRequestDTO l = line(BigDecimal.ONE, BigDecimal.TEN);
+        l.setStockLotId(stockLotId);
+        PharmacySaleRequestDTO dto = request(List.of(l));
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(userId);
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(pharmacyRepository.findByIdAndHospital_Id(pharmacyId, hospitalId)).thenReturn(Optional.of(pharmacy));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(catalogItemRepository.findById(itemId)).thenReturn(Optional.of(item));
+        when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(lot));
+        when(fefoLotPolicy.requireFefoOrReason(lot, BigDecimal.ONE, null))
+                .thenThrow(new BusinessException("pharmacy.fefo.reasonRequired", "LOT-COURT", "1 déc. 2026"));
+
+        assertThatThrownBy(() -> service.createSale(dto))
+                .isInstanceOf(BusinessException.class)
+                .extracting("messageKey").isEqualTo("pharmacy.fefo.reasonRequired");
         verify(saleRepository, never()).save(any());
     }
 

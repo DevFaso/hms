@@ -180,6 +180,12 @@ export interface StockTransactionRequest {
   /** ISO date (YYYY-MM-DD). */
   expiryDate?: string;
   unitCost?: number;
+  /**
+   * QA D964: why the chosen lot is taken although a shorter-dated usable lot
+   * of the same item could serve this movement. Required by the server only
+   * then; recorded with the movement.
+   */
+  fefoOverrideReason?: string;
 }
 
 export interface StockTransactionResponse {
@@ -239,6 +245,12 @@ export interface DispenseRequest {
   substitution?: boolean;
   substitutionReason?: string;
   notes?: string;
+  /**
+   * QA D964: why the chosen lot is taken although a shorter-dated usable lot
+   * of the same item could serve this movement. Required by the server only
+   * then; recorded with the movement.
+   */
+  fefoOverrideReason?: string;
   /**
    * Roadmap row 4 / T-68 — optional client-supplied idempotency key the
    * offline-dispense queue mints when the user clicks Dispense. Allows the

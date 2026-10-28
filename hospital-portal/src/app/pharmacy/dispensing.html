@@ -137,6 +137,30 @@
               }
             </select>
           </div>
+          <!-- QA D964: first expired, first out. Taking a later-dated lot while a
+               shorter-dated one could serve the fill needs a reason. -->
+          @if (earlierLot(); as earlier) {
+            <div class="field fefo-field" data-testid="fefo-warning">
+              <label for="fefoReason">{{ 'PHARMACY.FEFO_REASON' | translate }} *</label>
+              <small class="field-hint" role="alert">{{
+                'PHARMACY.FEFO_WARNING'
+                  | translate
+                    : {
+                        lot: earlier.lotNumber,
+                        date: (earlier.expiryDate | serverTime | date: 'mediumDate'),
+                      }
+              }}</small>
+              <input
+                id="fefoReason"
+                type="text"
+                maxlength="300"
+                data-testid="fefo-reason"
+                [(ngModel)]="form.fefoOverrideReason"
+                name="fefoOverrideReason"
+                required
+              />
+            </div>
+          }
           <!-- QA D654: a controlled substance leaves the shelf in front of a witness -->
           @if (lotIsControlled()) {
             <div class="field">
@@ -255,7 +279,7 @@
           <button
             type="submit"
             class="btn-primary"
-            [disabled]="saving() || form.quantityDispensed <= 0 || !verifyAttested()"
+            [disabled]="saving() || form.quantityDispensed <= 0 || !verifyAttested() || fefoReasonMissing()"
           >
             @if (saving()) {
               <span class="spinner"></span>
@@ -269,7 +293,7 @@
               type="button"
               class="btn-secondary"
               data-testid="mark-ready"
-              [disabled]="saving() || form.quantityDispensed <= 0 || !verifyAttested()"
+              [disabled]="saving() || form.quantityDispensed <= 0 || !verifyAttested() || fefoReasonMissing()"
               (click)="submitReady()"
             >
               {{ 'PHARMACY.MARK_READY' | translate }}

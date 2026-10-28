@@ -68,6 +68,8 @@ public class StockTransactionServiceImpl implements StockTransactionService {
     private final ControlledStockWitness controlledStockWitness;
     /** Re-reads the lot and item after the atomic quantity UPDATEs (#825 round 5). */
     private final EntityManager entityManager;
+    /** QA D964: a transfer out follows first expired, first out. */
+    private final FefoLotPolicy fefoLotPolicy;
 
     @Override
     @Transactional
@@ -81,6 +83,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
                 : null;
 
         requireMovementIsAccountable(dto, item, lot);
+        requireFefoForTransfer(dto, lot);
         // QA D668 (returns), D779 (every movement): an item counted in whole
         // units never moves by a fraction, or its stock shows decimals.
         if (!correctsALegacyFraction(dto, item, lot)) {
@@ -232,6 +235,31 @@ public class StockTransactionServiceImpl implements StockTransactionService {
             throw new BusinessException(MessageUtil.resolve("stockTransaction.lot.required"));
         }
     }
+
+    /**
+     * QA D964: a transfer sends the shortest-dated usable lot unless a reason
+     * says otherwise; the reason is kept on the ledger row after the movement's
+     * own reason ("... | FEFO: ..."). A write-off (negative adjustment) names
+     * its lot on purpose (that lot is damaged or expiring) and is not FEFO.
+     */
+    private void requireFefoForTransfer(StockTransactionRequestDTO dto, StockLot lot) {
+        if (dto.getTransactionType() != StockTransactionType.TRANSFER || lot == null) {
+            return;
+        }
+        String reason = fefoLotPolicy.requireFefoOrReason(lot, dto.getQuantity(), dto.getFefoOverrideReason());
+        if (reason != null) {
+            String combined = dto.getReason().trim() + FEFO_LEDGER_SEPARATOR + reason;
+            if (combined.length() > 500) {
+                throw new BusinessException("pharmacy.fefo.reasonTooLong",
+                        String.valueOf(Math.max(0, 500 - dto.getReason().trim().length()
+                                - FEFO_LEDGER_SEPARATOR.length())));
+            }
+            dto.setReason(combined);
+        }
+    }
+
+    /** How a FEFO override follows a ledger reason; the ledger screen splits on it. */
+    static final String FEFO_LEDGER_SEPARATOR = " | FEFO: ";
 
     /** Movements that take stock off a lot or item, which a return may put back. */
     private static final Set<StockTransactionType> ISSUED_TYPES =

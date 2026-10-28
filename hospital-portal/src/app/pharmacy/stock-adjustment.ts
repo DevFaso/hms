@@ -105,6 +105,8 @@ export class StockAdjustmentComponent implements OnInit {
   receiptCostPerUnit?: number;
   transferDestinationPharmacyId = '';
   returnReference = '';
+  /** QA D964: why a transfer takes a later-dated lot than first-expired-first-out would. */
+  fefoReason = '';
 
   /** Convenience getters for the template's `@if` blocks. */
   readonly isReceipt = computed(() => this.txType() === 'RECEIPT');
@@ -218,6 +220,7 @@ export class StockAdjustmentComponent implements OnInit {
     this.receiptCostPerUnit = undefined;
     this.transferDestinationPharmacyId = '';
     this.returnReference = '';
+    this.fefoReason = '';
   }
 
   onItemChange(itemId: string): void {
@@ -226,9 +229,48 @@ export class StockAdjustmentComponent implements OnInit {
     this.itemLots.set([]);
     if (!itemId) return;
     this.svc.listLotsByInventoryItem(itemId, 0, 100).subscribe({
-      next: (res) => this.itemLots.set(res?.data?.content ?? []),
+      next: (res) => {
+        this.itemLots.set(res?.data?.content ?? []);
+        this.preselectTransferLot();
+      },
       error: () => this.itemLots.set([]),
     });
+  }
+
+  /** QA D964: the item's lots a movement can take stock from (stock left, not expired), shortest-dated first. */
+  private usableLots(): StockLotResponse[] {
+    const today = this.today();
+    return this.itemLots()
+      .filter((lot) => lot.remainingQuantity > 0 && !!lot.expiryDate && lot.expiryDate > today)
+      .sort((a, b) => a.expiryDate.localeCompare(b.expiryDate));
+  }
+
+  /**
+   * QA D964: a transfer sends first expired, first out. The shortest-dated
+   * usable lot that covers the quantity (else the shortest-dated one) is
+   * pre-selected; a write-off or a return names its own lot on purpose.
+   */
+  private preselectTransferLot(): void {
+    if (!this.isTransfer() || this.form.stockLotId) return;
+    const qty = Math.abs(Number(this.form.quantity) || 0);
+    const lots = this.usableLots();
+    const lot = lots.find((l) => l.remainingQuantity >= qty) ?? lots[0];
+    if (lot) this.form.stockLotId = lot.id;
+  }
+
+  /**
+   * QA D964: the shorter-dated lot that could serve this transfer instead of
+   * the chosen one (the server's FefoLotPolicy rule); while it exists the
+   * transfer needs a reason.
+   */
+  earlierTransferLot(): StockLotResponse | undefined {
+    if (!this.isTransfer() || !this.form.stockLotId) return undefined;
+    const chosen = this.itemLots().find((l) => l.id === this.form.stockLotId);
+    if (!chosen?.expiryDate) return undefined;
+    const qty = Math.abs(Number(this.form.quantity) || 0);
+    return this.usableLots().find(
+      (l) => l.id !== chosen.id && l.expiryDate < chosen.expiryDate && l.remainingQuantity >= qty,
+    );
   }
 
   /** ISO date (YYYY-MM-DD) of today in the browser's calendar. */
@@ -243,6 +285,7 @@ export class StockAdjustmentComponent implements OnInit {
     this.txType.set(t);
     this.form.transactionType = t;
     this.resetTypedForm();
+    this.preselectTransferLot();
   }
 
   /** Pharmacies available as transfer destinations (excludes the source). */
@@ -321,6 +364,9 @@ export class StockAdjustmentComponent implements OnInit {
     if (this.isTransfer() && !this.transferDestinationPharmacyId) {
       return 'PHARMACY.TRANSFER_DESTINATION_REQUIRED';
     }
+    if (this.earlierTransferLot() && !this.fefoReason.trim()) {
+      return 'PHARMACY.FEFO_REASON_REQUIRED';
+    }
     if (this.isReturn() && !this.returnReference?.trim()) {
       return 'PHARMACY.RETURN_REFERENCE_REQUIRED';
     }
@@ -357,6 +403,7 @@ export class StockAdjustmentComponent implements OnInit {
     this.form.expiryDate = undefined;
     this.form.unitCost = undefined;
     this.form.referenceId = undefined;
+    this.form.fefoOverrideReason = this.earlierTransferLot() ? this.fefoReason.trim() : undefined;
     if (!this.needsWitness()) {
       this.form.witnessedBy = undefined;
     }
@@ -420,8 +467,13 @@ export class StockAdjustmentComponent implements OnInit {
     if (/^Prepared fill cancelled\b/i.test(reason)) return t('LEDGER_REASON_PREPARED_CANCELLED');
     m = /^RETURN ref (.+)$/i.exec(reason);
     if (m) return t('LEDGER_REASON_RETURN', { ref: m[1] });
-    m = /^TRANSFER to (.+)$/i.exec(reason);
-    if (m) return t('LEDGER_REASON_TRANSFER', { dest: m[1] });
+    // QA D964: the server appends " | FEFO: <reason>" when a transfer skipped
+    // a shorter-dated lot (StockTransactionServiceImpl.FEFO_LEDGER_SEPARATOR).
+    m = /^TRANSFER to (.+?)(?: \| FEFO: ([\s\S]+))?$/i.exec(reason);
+    if (m) {
+      const label = t('LEDGER_REASON_TRANSFER', { dest: m[1] });
+      return m[2] ? `${label} · ${t('LEDGER_REASON_FEFO', { reason: m[2] })}` : label;
+    }
     m = /^([A-Z_]+)(?::\s*([\s\S]*))?$/.exec(reason);
     // QA D337: the API also takes the common spellings DAMAGED and EXPIRED
     // (scripts and older clients); they read as the form's own codes.

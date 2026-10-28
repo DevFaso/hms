@@ -65,6 +65,8 @@ class StockTransactionServiceImplTest {
     @Mock private com.example.hms.repository.UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock private com.example.hms.repository.pharmacy.DispenseRepository dispenseRepository;
 
+    /** QA D964: FEFO is followed unless a test says otherwise (null = no override recorded). */
+    @org.mockito.Mock private FefoLotPolicy fefoLotPolicy;
     @InjectMocks
     private StockTransactionServiceImpl service;
 
@@ -378,6 +380,37 @@ class StockTransactionServiceImplTest {
             assertThat(stockLot.getRemainingQuantity()).isEqualByComparingTo(new BigDecimal("35.00"));
             verify(stockLotRepository, never()).save(any(StockLot.class));
             verify(inventoryItemRepository, never()).save(any(InventoryItem.class));
+        }
+
+        @Test
+        @DisplayName("QA D964: a transfer out of a later-dated lot with no reason is refused; nothing moves")
+        void aTransferSkippingTheShorterDatedLotIsRefused() {
+            StockTransactionRequestDTO dto = buildRequest(StockTransactionType.TRANSFER, new BigDecimal("15"));
+            when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
+            stubHospitalScope();
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            when(fefoLotPolicy.requireFefoOrReason(eq(stockLot), any(), org.mockito.ArgumentMatchers.isNull()))
+                    .thenThrow(new BusinessException("pharmacy.fefo.reasonRequired", "LOT-COURT", "1 déc. 2026"));
+
+            assertThatThrownBy(() -> service.recordTransaction(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting("messageKey").isEqualTo("pharmacy.fefo.reasonRequired");
+            verify(stockTransactionRepository, never()).save(any());
+            verify(stockLotRepository, never()).decrementRemaining(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("QA D964: the reason for skipping the shorter-dated lot follows the transfer's own reason on the ledger")
+        void aTransferFefoOverrideIsKeptOnTheLedgerRow() {
+            StockTransactionRequestDTO dto = buildRequest(StockTransactionType.TRANSFER, new BigDecimal("15"));
+            dto.setFefoOverrideReason("lot court promis au CSPS");
+            stubCommonMocks(dto, true);
+            when(fefoLotPolicy.requireFefoOrReason(stockLot, new BigDecimal("15"), "lot court promis au CSPS"))
+                    .thenReturn("lot court promis au CSPS");
+
+            service.recordTransaction(dto);
+
+            assertThat(dto.getReason()).isEqualTo("Test reason | FEFO: lot court promis au CSPS");
         }
 
         @Test

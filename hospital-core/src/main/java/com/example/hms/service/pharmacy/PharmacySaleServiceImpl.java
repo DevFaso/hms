@@ -59,6 +59,8 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
     private final StockLotRepository stockLotRepository;
     private final PharmacySaleMapper mapper;
     private final RoleValidator roleValidator;
+    /** QA D964: a counter sale from a lot follows first expired, first out too. */
+    private final FefoLotPolicy fefoLotPolicy;
 
     @Override
     public PharmacySaleResponseDTO createSale(PharmacySaleRequestDTO dto) {
@@ -137,6 +139,17 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
             // fill: half a tablet of a counted item is refused here too.
             WholeUnitQuantity.require(lot.getInventoryItem(), lineDto.getQuantity());
         }
+        String lineNotes = lineDto.getNotes();
+        if (lot != null) {
+            // QA D964: a later-dated lot while a shorter-dated one could serve
+            // the line needs a reason, kept in the line's notes.
+            String fefoReason = fefoLotPolicy.requireFefoOrReason(lot, lineDto.getQuantity(),
+                    lineDto.getFefoOverrideReason());
+            if (fefoReason != null) {
+                lineNotes = (lineNotes == null || lineNotes.isBlank() ? "" : lineNotes.trim() + "\n")
+                        + "FEFO: " + fefoReason;
+            }
+        }
 
         BigDecimal lineTotal = lineDto.getQuantity()
                 .multiply(lineDto.getUnitPrice())
@@ -148,7 +161,7 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
                 .quantity(lineDto.getQuantity())
                 .unitPrice(lineDto.getUnitPrice())
                 .lineTotal(lineTotal)
-                .notes(lineDto.getNotes())
+                .notes(lineNotes)
                 .build();
     }
 

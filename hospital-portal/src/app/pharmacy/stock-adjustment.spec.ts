@@ -215,4 +215,55 @@ describe('StockAdjustmentComponent (D82 / D108)', () => {
     expect(toast.error).toHaveBeenCalledWith('PHARMACY.LOT_REQUIRED_FOR_MOVEMENT');
     expect(svc.recordTransaction).not.toHaveBeenCalled();
   });
+
+  describe('QA D964: a transfer sends first expired, first out', () => {
+    function withTwoLots(c: StockAdjustmentComponent): void {
+      svc.listLotsByInventoryItem.and.returnValue(
+        of({
+          data: {
+            content: [
+              { id: 'long', lotNumber: 'LONG', remainingQuantity: 200, expiryDate: '2099-06-30' },
+              { id: 'court', lotNumber: 'COURT', remainingQuantity: 100, expiryDate: '2098-01-31' },
+            ],
+          },
+        } as unknown as LotsPage),
+      );
+      c.openForm();
+      c.form.quantity = 20;
+      c.onTypeChange('TRANSFER');
+      c.onItemChange('item-1');
+      c.transferDestinationPharmacyId = 'ph-2';
+    }
+
+    it('pre-selects the shortest-dated lot', () => {
+      const c = create();
+      withTwoLots(c);
+      expect(c.form.stockLotId).toBe('court');
+      expect(c.earlierTransferLot()).toBeUndefined();
+    });
+
+    it('a later-dated lot needs a reason, which is sent with the transfer', () => {
+      const c = create();
+      withTwoLots(c);
+      c.form.stockLotId = 'long';
+
+      c.submitForm();
+      expect(toast.error).toHaveBeenCalledWith('PHARMACY.FEFO_REASON_REQUIRED');
+      expect(svc.recordTransaction).not.toHaveBeenCalled();
+
+      svc.recordTransaction.and.returnValue(NEVER);
+      c.fefoReason = ' lot court promis au CSPS ';
+      c.submitForm();
+      expect(svc.recordTransaction.calls.mostRecent().args[0].fefoOverrideReason).toBe(
+        'lot court promis au CSPS',
+      );
+    });
+
+    it('the ledger reads the FEFO override after the destination', () => {
+      const c = create();
+      expect(c.reasonLabel({ reason: 'TRANSFER to CSPS | FEFO: promis' } as never)).toBe(
+        'PHARMACY.LEDGER_REASON_TRANSFER · PHARMACY.LEDGER_REASON_FEFO',
+      );
+    });
+  });
 });

@@ -121,11 +121,34 @@
                 </option>
                 @for (lot of itemLots(); track lot.id) {
                   <option [ngValue]="lot.id">
-                    {{ lot.lotNumber }} ({{ lot.remainingQuantity }}, {{ lot.expiryDate }})
+                    {{ lot.lotNumber }} ({{ lot.remainingQuantity }},
+                    {{ lot.expiryDate | serverTime | date: 'mediumDate' }})
                   </option>
                 }
               </select>
             </div>
+            <!-- QA D964: a transfer sends first expired, first out, or says why not -->
+            @if (earlierTransferLot(); as earlier) {
+              <div class="field" data-testid="transfer-fefo-warning">
+                <label for="trFefo">{{ 'PHARMACY.FEFO_REASON' | translate }} *</label>
+                <small class="field-hint" role="alert">{{
+                  'PHARMACY.FEFO_WARNING'
+                    | translate
+                      : {
+                          lot: earlier.lotNumber,
+                          date: (earlier.expiryDate | serverTime | date: 'mediumDate'),
+                        }
+                }}</small>
+                <input
+                  id="trFefo"
+                  type="text"
+                  maxlength="300"
+                  [(ngModel)]="fefoReason"
+                  name="fefoReason"
+                  required
+                />
+              </div>
+            }
           </div>
         }
 

@@ -97,6 +97,8 @@ public class DispenseServiceImpl implements DispenseService {
     private final RoleValidator roleValidator;
     private final PharmacyServiceSupport support;
     private final DispenseVerificationService dispenseVerificationService;
+    /** QA D964: first expired, first out, on the one-step and the prepared fill. */
+    private final FefoLotPolicy fefoLotPolicy;
 
     /**
      * From config/TimeConfig. Server clock, injectable — a test that has to
@@ -861,6 +863,7 @@ public class DispenseServiceImpl implements DispenseService {
         if (stockLot == null && inventoryItemRepository.existsByPharmacyIdAndActiveTrue(pharmacy.getId())) {
             throw new BusinessException(MessageUtil.resolve("dispense.lot.required"));
         }
+        recordFefoOverride(dto, stockLot);
         DispenseVerificationResult verification =
                 dispenseVerificationService.verify(prescription, stockLot,
                         dto.getPatientScanValue(), dto.getProductScanValue());
@@ -906,6 +909,31 @@ public class DispenseServiceImpl implements DispenseService {
         }
         return second != null && !second.isBlank() ? second : null;
     }
+
+    /**
+     * QA D964: a fill from a later-dated lot while a shorter-dated one could
+     * serve it is refused without a reason; the reason is kept in the fill's
+     * notes ("FEFO: ..."), so the dispense record says why.
+     */
+    private void recordFefoOverride(DispenseRequestDTO dto, StockLot stockLot) {
+        String reason = fefoLotPolicy.requireFefoOrReason(stockLot, dto.getQuantityDispensed(),
+                dto.getFefoOverrideReason());
+        if (reason == null) {
+            return;
+        }
+        String existing = dto.getNotes() == null || dto.getNotes().isBlank() ? null : dto.getNotes().trim();
+        String note = FEFO_NOTE_PREFIX + reason;
+        String combined = existing == null ? note : existing + "\n" + note;
+        if (combined.length() > NOTES_MAX) {
+            throw new BusinessException("pharmacy.fefo.reasonTooLong",
+                    String.valueOf(Math.max(0, NOTES_MAX - (existing == null ? 0 : existing.length() + 1)
+                            - FEFO_NOTE_PREFIX.length())));
+        }
+        dto.setNotes(combined);
+    }
+
+    /** The marker of a FEFO override in a fill's notes (an acronym, the same in every language). */
+    static final String FEFO_NOTE_PREFIX = "FEFO: ";
 
     /** What {@link #validateFill} established, for the half that writes. */
     private record FillContext(Prescription prescription, Patient patient, Pharmacy pharmacy,

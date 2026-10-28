@@ -570,7 +570,9 @@ export class DispensingComponent implements OnInit, OnDestroy {
     this.svc.listDispensableLots(rxId, this.selectedPharmacyId).subscribe({
       next: (res) => {
         // A late answer for a prescription that is no longer open is dropped.
-        if (this.selectedPrescription?.id === rxId) this.stockLots.set(res?.data ?? []);
+        if (this.selectedPrescription?.id !== rxId) return;
+        this.stockLots.set(res?.data ?? []);
+        this.preselectFefoLot();
       },
       error: () => this.stockLots.set([]),
     });
@@ -587,6 +589,49 @@ export class DispensingComponent implements OnInit, OnDestroy {
       .filter((lot) => lot.remainingQuantity > 0 && !this.isExpired(lot))
       .sort((a, b) => a.expiryDate.localeCompare(b.expiryDate)),
   );
+
+  /**
+   * QA D964: first expired, first out. The shortest-dated usable lot that
+   * covers the fill, else the shortest-dated one; pre-selected when the lots
+   * arrive, unless the pharmacist already chose.
+   */
+  fefoLot(): StockLotResponse | undefined {
+    const lots = this.dispensableLots();
+    const qty = Number(this.form.quantityDispensed) || 0;
+    return lots.find((lot) => lot.remainingQuantity >= qty) ?? lots[0];
+  }
+
+  private preselectFefoLot(): void {
+    const lot = this.fefoLot();
+    if (lot && !this.form.stockLotId) {
+      this.form.stockLotId = lot.id;
+      this.onLotChange();
+    }
+  }
+
+  /**
+   * QA D964: the shorter-dated lot of the same item that could serve this
+   * fill instead of the chosen one (the server's FefoLotPolicy rule). While
+   * it exists the fill needs a reason. A method, not a computed: it reads the
+   * quantity typed in the form, which is not a signal.
+   */
+  earlierLot(): StockLotResponse | undefined {
+    const chosen = this.selectedLot();
+    if (!chosen) return undefined;
+    const qty = Number(this.form.quantityDispensed) || 0;
+    return this.dispensableLots().find(
+      (lot) =>
+        lot.id !== chosen.id &&
+        lot.inventoryItemId === chosen.inventoryItemId &&
+        lot.expiryDate < chosen.expiryDate &&
+        lot.remainingQuantity >= qty,
+    );
+  }
+
+  /** QA D964: a FEFO skip with no reason keeps Dispense and Ready disabled. */
+  fefoReasonMissing(): boolean {
+    return !!this.earlierLot() && !this.form.fefoOverrideReason?.trim();
+  }
 
   isExpired(lot: StockLotResponse): boolean {
     if (!lot?.expiryDate) return false;
@@ -809,6 +854,12 @@ export class DispensingComponent implements OnInit, OnDestroy {
     }
     if (this.verifyAttested()) {
       body.verifiedBy = this.form.dispensedBy;
+    }
+    // QA D964: the reason travels only when a shorter-dated lot was skipped.
+    if (this.earlierLot()) {
+      body.fefoOverrideReason = this.form.fefoOverrideReason?.trim();
+    } else {
+      delete body.fefoOverrideReason;
     }
     return body;
   }

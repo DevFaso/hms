@@ -331,7 +331,9 @@ describe('DispensingComponent', () => {
     component.selectPrescription(mockWorkQueue.data.content[0]);
     fixture.detectChanges();
     const el: HTMLElement = fixture.nativeElement;
-    expect(el.querySelector('#dispWitness')).toBeNull();
+    // QA D964: the shortest-dated lot is pre-selected, so the witness picker
+    // of a controlled lot shows as soon as the form opens.
+    expect(component.form.stockLotId).toBeTruthy();
 
     component.form.stockLotId = 'lot-fresh';
     component.onLotChange();
@@ -1643,6 +1645,61 @@ describe('DispensingComponent — work-queue claim (G13)', () => {
 
     expect(component.form.quantityRequested).toBe(10);
     expect(component.form.quantityDispensed).toBe(10);
+  });
+
+  describe('QA D964: first expired, first out', () => {
+    const lot = (id: string, expiryDate: string, remainingQuantity: number) => ({
+      id,
+      inventoryItemId: 'inv-1',
+      lotNumber: id.toUpperCase(),
+      expiryDate,
+      initialQuantity: 200,
+      remainingQuantity,
+      createdAt: '',
+      updatedAt: '',
+    });
+
+    async function openWithLots(): Promise<void> {
+      await render();
+      pharmacySvc.listDispensableLots.and.returnValue(
+        of({
+          data: [lot('long', '2099-06-30', 200), lot('court', '2098-01-31', 100)],
+        }) as never,
+      );
+      pharmacySvc.claimQueueRow.and.returnValue(
+        of({ data: { ...myClaim, renewed: false } }) as never,
+      );
+      click('rx-dispense-rx-1');
+      fixture.detectChanges();
+    }
+
+    it('pre-selects the shortest-dated lot that covers the fill', async () => {
+      await openWithLots();
+
+      expect(component.form.stockLotId).toBe('court');
+      expect(component.earlierLot()).toBeUndefined();
+      expect(exists('fefo-warning')).toBeFalse();
+    });
+
+    it('a later-dated lot needs a reason, which is sent with the fill', async () => {
+      await openWithLots();
+      component.form.stockLotId = 'long';
+      component.onLotChange();
+      component.verifyAttested.set(true);
+      fixture.detectChanges();
+
+      expect(exists('fefo-warning')).toBeTrue();
+      expect(component.fefoReasonMissing()).toBeTrue();
+
+      pharmacySvc.createDispense.and.returnValue(of({ data: {} }) as never);
+      component.form.fefoOverrideReason = '  lot court réservé aux urgences ';
+      expect(component.fefoReasonMissing()).toBeFalse();
+      component.submitDispense();
+
+      const body = pharmacySvc.createDispense.calls.mostRecent().args[0];
+      expect(body.stockLotId).toBe('long');
+      expect(body.fefoOverrideReason).toBe('lot court réservé aux urgences');
+    });
   });
 
   it('Dispense on a colleague’s row then Cancel keeps the open form and its claim', async () => {
