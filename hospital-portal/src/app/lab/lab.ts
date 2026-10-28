@@ -865,11 +865,16 @@ export class LabComponent implements OnInit {
     });
   }
 
-  /** QA D962: a specimen still on its way or in the laboratory can be refused. */
+  /**
+   * QA D962: a specimen still on its way or in the laboratory can be refused,
+   * while the order has no result yet (the server's
+   * LabOrderLifecycle.acceptsSpecimenRejection: not voided, resulted,
+   * verified or completed).
+   */
   canReject(specimen: LabSpecimen): boolean {
     return (
       this.canRejectSpecimens &&
-      this.specimensOrderAcceptsSpecimens() &&
+      this.specimensOrderAcceptsRejection() &&
       (specimen.status === 'COLLECTED' ||
         specimen.status === 'IN_TRANSIT' ||
         specimen.status === 'RECEIVED')
@@ -922,6 +927,16 @@ export class LabComponent implements OnInit {
    */
   specimensOrderAcceptsSpecimens(): boolean {
     return this.specimensOrder()?.status !== 'ENTERED_IN_ERROR';
+  }
+
+  specimensOrderAcceptsRejection(): boolean {
+    const status = this.specimensOrder()?.status;
+    return (
+      this.specimensOrderAcceptsSpecimens() &&
+      status !== 'RESULTED' &&
+      status !== 'VERIFIED' &&
+      status !== 'COMPLETED'
+    );
   }
 
   canReceive(specimen: LabSpecimen): boolean {

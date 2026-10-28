@@ -482,10 +482,15 @@ export class PrescriptionsComponent implements OnInit {
       .subscribe((items) => this.catalogOptions.set(items));
   }
 
-  /** The text a catalogue option puts in the medication field. */
+  /**
+   * The text a catalogue option puts in the medication field: name, strength
+   * and form, so a tablet and a syrup of the same name and strength (one of
+   * them perhaps controlled) read apart in the list.
+   */
   catalogLabel(item: MedicationCatalogItemResponse): string {
     const strength = [item.strength, item.strengthUnit].filter((v) => !!v).join(' ');
-    return strength ? `${item.nameFr} ${strength}` : item.nameFr;
+    const form = item.form ? this.translate.instant(`PHARMACY.FORM_OPTION.${item.form}`) : '';
+    return [item.nameFr, strength, form].filter((v) => !!v).join(' ');
   }
 
   /** The picked catalogue item, when the field holds one option's text exactly. */
@@ -493,7 +498,10 @@ export class PrescriptionsComponent implements OnInit {
 
   onMedicationNameChange(value: string): void {
     this.form.medicationName = value;
-    const picked = this.catalogOptions().find((o) => this.catalogLabel(o) === value) ?? null;
+    // Review of #975: two options reading the same must not resolve to the
+    // first one's id; the server then resolves (or refuses) the typed name.
+    const matches = this.catalogOptions().filter((o) => this.catalogLabel(o) === value);
+    const picked = matches.length === 1 ? matches[0] : null;
     this.pickedCatalogItem.set(picked);
     this.form.medicationCatalogItemId = picked ? picked.id : null;
     if (!picked) this.catalogSearch$.next((value ?? '').trim());

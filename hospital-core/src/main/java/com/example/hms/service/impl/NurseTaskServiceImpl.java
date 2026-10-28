@@ -327,7 +327,11 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         for (Prescription rx : prescriptions) {
             if (!onWardMar(rx, closedStays, stay)) continue;
 
-            String marStatus = resolveMarStatus(rx, now);
+            // Review of #975: the closed-dose history is read once per row and
+            // answers the due time, the status and the last outcome.
+            Optional<MedicationAdministrationRecord> lastClosed = lastClosedDose(rx);
+            LocalDateTime dueTime = computeMedicationDueTime(rx, now, lastClosed);
+            String marStatus = resolveMarStatus(dueTime, now);
             if (!isFilteredOut(statusFilter, marStatus)) {
                 if (allergies == null) {
                     allergies = patientAllergyRepository.findByPatient_Id(ctx.patientId());
@@ -340,9 +344,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                     .dose(buildDoseDisplay(rx))
                     .route(rx.getRoute())
                     .routeCode(com.example.hms.service.emar.MedicationRoutes.canonical(rx.getRoute()))
-                    .dueTime(computeMedicationDueTime(rx, now))
+                    .dueTime(dueTime)
                     .status(marStatus)
-                    .lastOutcome(lastRecordedOutcome(rx))
+                    .lastOutcome(lastClosed.map(r -> r.getStatus().name()).orElse(null))
                     .controlledSubstance(pharmacistVerificationService.isControlledSubstance(rx))
                     .requiresPharmacistVerification(
                         pharmacistVerificationService.requiresVerification(rx))
@@ -1151,7 +1155,10 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
     /** Determine MAR status from a Prescription's creation time (simplified schedule). */
     private String resolveMarStatus(Prescription rx, LocalDateTime now) {
-        LocalDateTime dueBy = computeMedicationDueTime(rx, now);
+        return resolveMarStatus(computeMedicationDueTime(rx, now), now);
+    }
+
+    private static String resolveMarStatus(LocalDateTime dueBy, LocalDateTime now) {
         if (dueBy == null) return STATUS_COMPLETED;
         // A dose may be given up to an hour either side of its slot (D154).
         if (dueBy.plus(EARLY_ADMINISTRATION_WINDOW).isBefore(now)) return STATUS_OVERDUE;
@@ -1167,13 +1174,11 @@ public class NurseTaskServiceImpl implements NurseTaskService {
      * dose is left; this says what happened to the last one, so a held or
      * refused dose is never read as given.
      */
-    private String lastRecordedOutcome(Prescription rx) {
-        if (rx.getId() == null) return null;
+    private Optional<MedicationAdministrationRecord> lastClosedDose(Prescription rx) {
+        if (rx.getId() == null) return Optional.empty();
         return marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId()).stream()
             .filter(r -> r.getStatus() != MedicationAdministrationStatus.PENDING)
-            .findFirst()
-            .map(r -> r.getStatus().name())
-            .orElse(null);
+            .findFirst();
     }
 
     /**
@@ -1189,16 +1194,16 @@ public class NurseTaskServiceImpl implements NurseTaskService {
      * same dose being recorded again.
      */
     private LocalDateTime computeMedicationDueTime(Prescription rx, LocalDateTime now) {
+        return computeMedicationDueTime(rx, now, lastClosedDose(rx));
+    }
+
+    private static LocalDateTime computeMedicationDueTime(Prescription rx, LocalDateTime now,
+                                                          Optional<MedicationAdministrationRecord> lastClosed) {
         // QA D154: the first dose is due when the order starts, which is its
         // signature (or, failing that, its creation), not four hours later.
         LocalDateTime start = rx.getSignedAt() != null ? rx.getSignedAt() : rx.getCreatedAt();
         LocalDateTime first = start != null ? start : now.plusHours(1);
-        if (rx.getId() == null) return first;
-        Optional<MedicationAdministrationRecord> lastClosed = marRepository
-            .findByPrescription_IdOrderByScheduledTimeDesc(rx.getId()).stream()
-            .filter(r -> r.getStatus() != MedicationAdministrationStatus.PENDING)
-            .findFirst();
-        if (lastClosed.isEmpty()) return first;
+        if (rx.getId() == null || lastClosed.isEmpty()) return first;
         Integer interval = MarDoseSchedule.intervalHours(rx.getFrequency());
         if (interval == null) return null;
         return lastClosed.get().getScheduledTime().plusHours(interval);

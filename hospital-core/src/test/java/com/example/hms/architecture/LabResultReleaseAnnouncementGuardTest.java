@@ -48,7 +48,13 @@ class LabResultReleaseAnnouncementGuardTest {
             .contains("com/example/hms/service/LabResultServiceImpl.java",
                 "com/example/hms/service/integration/impl/MllpInboundLabServiceImpl.java");
         List<String> silent = releasing.stream()
-            .filter(file -> !read(file).contains("releaseNotifier.patientResultReleased("))
+            .filter(file -> {
+                String source = read(file);
+                // The service's announce is the choke point (in-basket item + patient notice);
+                // a path outside the service calls it through LabResultService.announceReleasedResult.
+                return !source.contains("releaseNotifier.patientResultReleased(")
+                    && !source.contains("labResultService.announceReleasedResult(");
+            })
             .toList();
         assertThat(silent)
             .as("a class that releases a lab result must announce it (QA D938): call "

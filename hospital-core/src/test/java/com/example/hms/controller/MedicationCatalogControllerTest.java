@@ -177,6 +177,18 @@ class MedicationCatalogControllerTest {
     }
 
     @Test
+    void search_superAdminInGlobalView_searchesTheWholeCatalogue() throws Exception {
+        // Review of #975: the list served the super-admin's global view; the search refused it.
+        when(authUtils.hasAuthority(any(), eq("ROLE_SUPER_ADMIN"))).thenReturn(true);
+        when(catalogService.search(org.mockito.ArgumentMatchers.isNull(), eq("morph"), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(sampleResponse())));
+
+        mockMvc.perform(get("/medication-catalog/search").param("q", "morph"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].genericName").value("Paracetamol"));
+    }
+
+    @Test
     void update_returnsOk() throws Exception {
         MedicationCatalogItemRequestDTO request = MedicationCatalogItemRequestDTO.builder()
                 .nameFr("Paracétamol 1g")

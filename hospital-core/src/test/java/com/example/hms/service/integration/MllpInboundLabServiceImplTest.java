@@ -54,6 +54,8 @@ class MllpInboundLabServiceImplTest {
     @Mock private IntegrationMessageRecorder messageRecorder;
     @Mock private AuditEventLogService auditEventLogService;
     @Mock private com.example.hms.service.CriticalValueNotificationService criticalValueNotificationService;
+    /** Review of #975: the HL7 auto-release announces through the service's one choke point. */
+    @Mock private com.example.hms.service.LabResultService labResultService;
     // The real unit-matching rule, not a stub: the auto-release gate asks it.
     @org.mockito.Spy private com.example.hms.mapper.LabResultMapper labResultMapper =
         new com.example.hms.mapper.LabResultMapper();
@@ -394,6 +396,8 @@ class MllpInboundLabServiceImplTest {
     @DisplayName("B14 — auto-release on: a NORMAL observation is released as Autoverification, an abnormal one is not")
     void autoReleaseReleasesOnlyNormalRows() {
         ReflectionTestUtils.setField(service, "autoReleaseEnabled", true);
+        // @InjectMocks fills the constructor only; the announce collaborator is a field.
+        ReflectionTestUtils.setField(service, "labResultService", labResultService);
         when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
         when(labResultRepository.save(any(LabResult.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -412,6 +416,14 @@ class MllpInboundLabServiceImplTest {
         assertThat(saved.get(0).getReleasedByDisplay()).isEqualTo("Autoverification");
         assertThat(saved.get(1).isReleased()).isFalse();
         assertThat(saved.get(2).isReleased()).isFalse();
+
+        // Review of #975 (QA D178/D938 class): the released row is announced once,
+        // through the service, so the clinician's in-basket item is filed as a
+        // worklist release files it; the two unreleased rows are not.
+        // (identity, not equals: unsaved rows share a null id and compare equal)
+        ArgumentCaptor<LabResult> announced = ArgumentCaptor.forClass(LabResult.class);
+        verify(labResultService, times(1)).announceReleasedResult(announced.capture());
+        assertThat(announced.getValue()).isSameAs(saved.get(0));
 
         // The system release leaves its own audit row: 3 ingest events + 1 release, SYSTEM actor, no value.
         ArgumentCaptor<AuditEventRequestDTO> auditCaptor = ArgumentCaptor.forClass(AuditEventRequestDTO.class);

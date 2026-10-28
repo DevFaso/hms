@@ -58,6 +58,14 @@ public interface MedicationCatalogItemRepository extends JpaRepository<Medicatio
             @Param("search") String search,
             Pageable pageable);
 
+    /** Review of #975: the super-admin's global-view search, every tenant's active items. */
+    @Query("SELECT m FROM MedicationCatalogItem m WHERE m.active = true " +
+           "AND (LOWER(m.nameFr) LIKE LOWER(CONCAT('%', :search, '%')) " +
+           "OR LOWER(m.genericName) LIKE LOWER(CONCAT('%', :search, '%')) " +
+           "OR LOWER(m.brandName) LIKE LOWER(CONCAT('%', :search, '%')) " +
+           "OR LOWER(m.atcCode) LIKE LOWER(CONCAT('%', :search, '%')))")
+    Page<MedicationCatalogItem> searchAllActive(@Param("search") String search, Pageable pageable);
+
     Page<MedicationCatalogItem> findByHospital_IdAndCategoryAndActiveTrue(UUID hospitalId, String category, Pageable pageable);
 
     Optional<MedicationCatalogItem> findByIdAndHospital_Id(UUID id, UUID hospitalId);

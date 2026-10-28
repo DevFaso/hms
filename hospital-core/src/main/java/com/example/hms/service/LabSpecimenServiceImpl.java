@@ -190,8 +190,7 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
 
         // The order row is locked first, as every status writer here does, and
         // the decision is made on the committed status read under that lock.
-        labOrderRepository.findWithLockById(labOrder.getId());
-        LabOrderStatus committedStatus = labOrderRepository.findStatusById(labOrder.getId());
+        LabOrderStatus committedStatus = lockedStatusOf(labOrder.getId());
         if (committedStatus == LabOrderStatus.ENTERED_IN_ERROR) {
             throw new BusinessException("lab.order.enteredInError");
         }
@@ -208,7 +207,7 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
         // Back to awaiting collection, unless another specimen still stands
         // for the order (a second tube drawn at the same time).
         boolean anotherLive = labSpecimenRepository.findByLabOrder_Id(labOrder.getId()).stream()
-            .anyMatch(other -> other != saved && !java.util.Objects.equals(other.getId(), saved.getId())
+            .anyMatch(other -> !java.util.Objects.equals(other.getId(), saved.getId())
                 && LIVE.contains(other.getStatus()));
         LabOrderStatus moveTo = anotherLive ? null : LabOrderLifecycle.statusAfterSpecimenRejected(committedStatus);
         if (moveTo != null && labOrderRepository.updateStatusFrom(labOrder.getId(), committedStatus, moveTo) == 0) {
@@ -240,8 +239,7 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
         // concurrent move makes the update match nothing, and the only thing
         // that happened was a debug line — the order stays short of where
         // this specimen event should have put it, and nothing revisits it.
-        labOrderRepository.findWithLockById(labOrder.getId());
-        LabOrderStatus committedStatus = labOrderRepository.findStatusById(labOrder.getId());
+        LabOrderStatus committedStatus = lockedStatusOf(labOrder.getId());
         // QA D820: the void takes this same lock, so a void that committed
         // after the caller's status check is seen here. Refusing rolls back
         // the specimen write, and the receipt's outbox row is never queued.
@@ -280,4 +278,14 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
         }
         return sb.toString();
     }
+
+    /**
+     * The order's committed status, read under the order row lock (the lock is
+     * the point of the first read; its result is not needed).
+     */
+    private LabOrderStatus lockedStatusOf(UUID labOrderId) {
+        labOrderRepository.findWithLockById(labOrderId);
+        return labOrderRepository.findStatusById(labOrderId);
+    }
+
 }

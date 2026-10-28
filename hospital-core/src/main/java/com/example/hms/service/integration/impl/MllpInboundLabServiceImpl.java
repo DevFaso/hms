@@ -68,6 +68,16 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
     private com.example.hms.service.lab.LabResultReleaseNotifier releaseNotifier;
 
     /**
+     * Review of #975: the patient notice alone left the ordering clinician's
+     * in-basket empty for an analyzer-released result (D178), while a worklist
+     * release filed it. The service's announce is the one choke point; when it
+     * is wired (it is not in the positional-constructor unit tests) it does
+     * everything, the notifier field above being its fallback.
+     */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.example.hms.service.LabResultService labResultService;
+
+    /**
      * B14 — the switch PR #716 introduces for manual entry
      * ({@code hms.lab.auto-verification.enabled}, declared once in its
      * application.properties; read here by the same key so the merge is
@@ -273,8 +283,12 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
             // replay guard recognises the retransmission rather than
             // doubling the batch.
             criticalValueNotificationService.notifyIfCritical(savedResult);
-            if (releaseNotifier != null && savedResult.isReleased()) {
-                releaseNotifier.patientResultReleased(savedResult);
+            if (savedResult.isReleased()) {
+                if (labResultService != null) {
+                    labResultService.announceReleasedResult(savedResult);
+                } else if (releaseNotifier != null) {
+                    releaseNotifier.patientResultReleased(savedResult);
+                }
             }
         }
         return MllpInboundOutcome.ACCEPTED;

@@ -67,13 +67,7 @@ public class MedicationCatalogController {
             @RequestParam(required = false) UUID hospitalId,
             Pageable pageable,
             Authentication auth) {
-        // Same super-admin global-view pattern as PharmacyRegistryController.list
-        // and InBasketController (PR #292).
-        UUID resolved = authUtils.resolveHospitalScope(auth, hospitalId, false);
-        if (resolved == null && !authUtils.hasAuthority(auth, "ROLE_SUPER_ADMIN")) {
-            throw new BusinessException("pharmacy.hospitalContext.required");
-        }
-        return ResponseEntity.ok(catalogService.listByHospital(resolved, pageable));
+        return ResponseEntity.ok(catalogService.listByHospital(resolveCatalogScope(auth, hospitalId), pageable));
     }
 
     @GetMapping("/search")
@@ -89,13 +83,20 @@ public class MedicationCatalogController {
         // portal never sent hospitalId, so every search answered 400 (the
         // catalogue page's search box and the prescribing form's picker), and
         // a caller-supplied id was searched whatever tenant it named.
-        return ResponseEntity.ok(catalogService.search(requireCatalogScope(auth, hospitalId), q, pageable));
+        return ResponseEntity.ok(catalogService.search(resolveCatalogScope(auth, hospitalId), q, pageable));
     }
 
-    /** The hospital a catalogue read is scoped to; refuses when there is none. */
-    private UUID requireCatalogScope(Authentication auth, UUID requestedHospitalId) {
+    /**
+     * The hospital a catalogue read is scoped to. Same super-admin global-view
+     * pattern as PharmacyRegistryController.list and InBasketController (PR
+     * #292): {@code null} only for a verified super-admin with no hospital
+     * pinned (the whole platform catalogue); everyone else is refused without
+     * a scope. One rule for list, search and category (review of #975: the
+     * search refused the super-admin's global view the list served).
+     */
+    private UUID resolveCatalogScope(Authentication auth, UUID requestedHospitalId) {
         UUID resolved = authUtils.resolveHospitalScope(auth, requestedHospitalId, false);
-        if (resolved == null) {
+        if (resolved == null && !authUtils.hasAuthority(auth, "ROLE_SUPER_ADMIN")) {
             throw new BusinessException("pharmacy.hospitalContext.required");
         }
         return resolved;
@@ -109,7 +110,7 @@ public class MedicationCatalogController {
             @RequestParam(required = false) UUID hospitalId,
             Pageable pageable,
             Authentication auth) {
-        return ResponseEntity.ok(catalogService.listByCategory(requireCatalogScope(auth, hospitalId), category, pageable));
+        return ResponseEntity.ok(catalogService.listByCategory(resolveCatalogScope(auth, hospitalId), category, pageable));
     }
 
     @PutMapping("/{id}")

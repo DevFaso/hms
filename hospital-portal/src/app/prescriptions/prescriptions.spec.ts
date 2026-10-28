@@ -423,6 +423,22 @@ describe('PrescriptionsComponent — signing', () => {
     expect(component.form.medicationCatalogItemId).toBeNull();
   });
 
+  it('QA D922: two catalogue items reading the same send no id, and a form tells them apart', () => {
+    component.openCreate();
+    const tablet = { id: 'cat-t', nameFr: 'Codéine', strength: '30', strengthUnit: 'mg' } as never;
+    const syrup = { id: 'cat-s', nameFr: 'Codéine', strength: '30', strengthUnit: 'mg' } as never;
+    component.catalogOptions.set([tablet, syrup]);
+    component.onMedicationNameChange('Codéine 30 mg');
+    expect(component.form.medicationCatalogItemId).toBeNull();
+    expect(component.pickedCatalogItem()).toBeNull();
+
+    const tabletWithForm = { ...(tablet as object), form: 'TABLET' } as never;
+    component.catalogOptions.set([tabletWithForm, syrup]);
+    expect(component.catalogLabel(tabletWithForm)).not.toBe(component.catalogLabel(syrup));
+    component.onMedicationNameChange(component.catalogLabel(tabletWithForm));
+    expect(component.form.medicationCatalogItemId).toBe('cat-t');
+  });
+
   it('QA D922: the catalogue id of an order being edited is kept', () => {
     component.openEdit({
       ...rx('e1', 'DRAFT'),

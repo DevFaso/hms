@@ -134,8 +134,12 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
     @Override
     @Transactional(readOnly = true)
     public Page<MedicationCatalogItemResponseDTO> search(UUID hospitalId, String query, Pageable pageable) {
-        return catalogRepository.searchByHospital(hospitalId, query, pageable)
-                .map(mapper::toResponseDTO);
+        // A null scope is the verified super-admin's global view (the controller
+        // refuses it for everyone else), searched as the list endpoint lists.
+        Page<MedicationCatalogItem> page = hospitalId == null
+                ? catalogRepository.searchAllActive(query, pageable)
+                : catalogRepository.searchByHospital(hospitalId, query, pageable);
+        return page.map(mapper::toResponseDTO);
     }
 
     @Override

@@ -1415,6 +1415,13 @@ public class LabResultServiceImpl implements LabResultService {
      * that paged as critical already says it is a correction, so it is not
      * announced twice.
      */
+    @Override
+    public void announceReleasedResult(LabResult result) {
+        if (result != null && result.isReleased()) {
+            announceRelease(result, null);
+        }
+    }
+
     private void announceRelease(LabResult labResult, LabResult superseded) {
         fileInOrderingClinicianInBasketAfterCommit(labResult, superseded);
         if (releaseNotifier == null) {
