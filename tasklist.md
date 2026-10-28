@@ -2205,6 +2205,23 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 
 ## Standing platform debt — owed, not parity
 
+- **QA round 16 residuals (PR #972 review round 8), noted, not fixed there.**
+  (1) The slot inventory and the overlap rule disagree on RESCHEDULED: the
+  status action releases the inventory slot, while `holdsSlot()` keeps the
+  row's time held, so the picker can offer a time the booking then refuses
+  (pre-existing; decide which one is the truth). (2) The desk reschedule
+  modal sends SCHEDULED, which NO_SHOW cannot reach (its only exit is
+  RESCHEDULED), so a missed visit can be moved only through the API
+  (`PUT /appointments/{id}` with status RESCHEDULED). (3) A demographics PATCH
+  or PUT that renames the patient leaves the linked login account's
+  `User.firstName/lastName` unchanged. (4) The portal profile's phone
+  uniqueness (D113, `existsByPhoneNumberPrimaryAndIdNot`) compares the stored
+  string exactly, so a legacy national-format holder is not seen; the rule
+  itself is in question now that the desk records shared family numbers.
+  (5) `PatientServiceImpl#findByPhone` returns one holder for a number under
+  8 digits (no supported country issues those). (6) The phone match is a
+  sequential scan; a stored digits column with an index needs a migration.
+
 - **QA D899 residual (round 15): the stock check counts expired lots.**
   Stock routing now resolves a free-text order to the shelf by the dispense
   DRUG rule (`fix/qa-r15-clinical-pharmacy`), but its on-hand figure is still

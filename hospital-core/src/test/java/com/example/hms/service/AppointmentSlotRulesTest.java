@@ -99,11 +99,14 @@ class AppointmentSlotRulesTest {
         LocalDateTime early = LocalDateTime.of(DAY.plusDays(1), LocalTime.of(6, 30));
         LocalDateTime late = LocalDateTime.of(DAY.plusDays(1), LocalTime.of(18, 45));
         LocalDateTime night = LocalDateTime.of(DAY.plusDays(1), LocalTime.of(18, 0));
-        assertThatThrownBy(() -> AppointmentSlotRules.requirePatientBookable(early, early.plusMinutes(30), now))
+        LocalDateTime earlyEnd = early.plusMinutes(30);
+        LocalDateTime lateEnd = late.plusMinutes(30);
+        LocalDateTime nextMorning = night.plusHours(7);
+        assertThatThrownBy(() -> AppointmentSlotRules.requirePatientBookable(early, earlyEnd, now))
             .isInstanceOf(BusinessException.class);
-        assertThatThrownBy(() -> AppointmentSlotRules.requirePatientBookable(late, late.plusMinutes(30), now))
+        assertThatThrownBy(() -> AppointmentSlotRules.requirePatientBookable(late, lateEnd, now))
             .isInstanceOf(BusinessException.class);
-        assertThatThrownBy(() -> AppointmentSlotRules.requirePatientBookable(night, night.plusHours(7), now))
+        assertThatThrownBy(() -> AppointmentSlotRules.requirePatientBookable(night, nextMorning, now))
             .isInstanceOf(BusinessException.class);
     }
 }

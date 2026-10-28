@@ -351,6 +351,28 @@ class FrontDeskRoundTripIT extends BaseIT {
     }
 
     @Test
+    @DisplayName("D926 review round 8: a field resent with its stored value is not named, and a no-op PATCH writes no audit")
+    void onlyRealChangesAreAudited() throws Exception {
+        String body = "{\"lastName\":\"Kaboré\",\"city\":\"Koudougou\"}";
+        for (int i = 0; i < 2; i++) {
+            mockMvc.perform(patch(API + "/patients/{id}", aicha.getId()).contextPath(API)
+                    .contentType(MediaType.APPLICATION_JSON).content(body)
+                    .with(asReceptionist()))
+                .andExpect(status().isOk());
+        }
+
+        var audit = applicationContext.getBean(com.example.hms.repository.AuditEventLogRepository.class).findAll()
+            .stream()
+            .filter(a -> a.getEventType() == com.example.hms.enums.AuditEventType.PATIENT_UPDATE
+                && aicha.getId().toString().equals(a.getResourceId())
+                && a.getEventDescription() != null && a.getEventDescription().startsWith("Patient demographics"))
+            .toList();
+        // The first PATCH moved the city (lastName was already Kaboré); the second changed nothing.
+        assertThat(audit).singleElement().satisfies(a ->
+            assertThat(a.getEventDescription()).contains("address").doesNotContain("lastName"));
+    }
+
+    @Test
     @DisplayName("D926: a required field sent blank is refused and nothing is changed")
     void blanksAreRefused() throws Exception {
         for (String body : List.of("{\"lastName\":\"  \"}", "{\"phoneNumberPrimary\":\" \"}",
@@ -438,11 +460,25 @@ class FrontDeskRoundTripIT extends BaseIT {
         Patient other = patient("Karim", "Sanogo", LocalDate.of(1985, 1, 3), "76112244");
         appointment(other, day, LocalTime.of(9, 0), AppointmentStatus.SCHEDULED);
 
+        // Review round 8: parking it in RESCHEDULED AT ITS OWN TIME (the status
+        // action) would hold 09:00 next to the visit booked there: refused.
         mockMvc.perform(put(API + "/appointments/{id}/status", missed.getId()).contextPath(API)
                 .param("action", "reschedule").with(asReceptionist()))
-            .andExpect(status().isOk());
+            .andExpect(status().isBadRequest());
         assertThat(appointmentRepository.findById(missed.getId()).orElseThrow().getStatus())
-            .isEqualTo(AppointmentStatus.RESCHEDULED);
+            .isEqualTo(AppointmentStatus.NO_SHOW);
+
+        // Moving it on to a free time (the PUT, checked at the new time) works.
+        LocalDate newDay = LocalDate.now().plusDays(3);
+        mockMvc.perform(put(API + "/appointments/{id}", missed.getId()).contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(appointmentBody(aicha, newDay, "11:00", "11:30", "demo-r16")
+                    .replace("\"reason\"", "\"status\":\"RESCHEDULED\",\"reason\""))
+                .with(asReceptionist()))
+            .andExpect(status().isOk());
+        Appointment moved = appointmentRepository.findById(missed.getId()).orElseThrow();
+        assertThat(moved.getStatus()).isEqualTo(AppointmentStatus.RESCHEDULED);
+        assertThat(moved.getAppointmentDate()).isEqualTo(newDay);
     }
 
     @Test

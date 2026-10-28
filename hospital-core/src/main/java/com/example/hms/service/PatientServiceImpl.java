@@ -111,6 +111,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -439,29 +440,47 @@ public class PatientServiceImpl implements PatientService {
             ensurePatientRegistered(id, hospitalId);
         }
 
-        boolean updated = false;
         PatientAddressHistoryRecorder.AddressSnapshot before = addressHistoryRecorder.snapshot(patient);
         String country = countryFor(hospitalId != null ? hospitalId : patient.getHospitalId());
-        List<String> changedFields = new ArrayList<>();
+        Map<String, Object> stored = demographicsOf(patient);
 
-        // QA D926: the identity the desk corrects. A required field sent blank
-        // is refused rather than cleared.
-        if (applyRequired(request.getFirstName(), patient::setFirstName, "patient.r16.firstNameRequired")) {
-            changedFields.add("firstName");
+        patchIdentity(patient, request);
+        patchContacts(patient, request, country);
+        patchAddress(patient, request, before);
+        patchCareFields(patient, request, country);
+
+        // Every change is named in the audit (the controller opts out of the
+        // generic write audit on the strength of this row), and only a change:
+        // a field sent with the value it already had is not one (a client that
+        // resends the whole profile changed nothing).
+        Map<String, Object> now = demographicsOf(patient);
+        List<String> changedFields = stored.keySet().stream()
+            .filter(field -> !Objects.equals(stored.get(field), now.get(field)))
+            .toList();
+        if (!changedFields.isEmpty()) {
+            patientRepository.save(patient);
+            auditPatientUpdate(patient, "Patient demographics updated: " + String.join(", ", changedFields));
         }
-        if (applyRequired(request.getLastName(), patient::setLastName, "patient.r16.lastNameRequired")) {
-            changedFields.add("lastName");
-        }
-        if (applyNullable(request.getMiddleName(), patient::setMiddleName)) {
-            changedFields.add("middleName");
-        }
+
+        // The caller's hospital's view (its MRN, its sharing opt-out), not the
+        // patient's first hospital: the chart merges this answer.
+        return buildPatientDto(patient, hospitalId != null ? hospitalId : patient.getHospitalId());
+    }
+
+    /** QA D926: the identity the desk corrects. A required field sent blank is refused rather than cleared. */
+    private void patchIdentity(Patient patient, PatientProfileUpdateRequestDTO request) {
+        applyRequired(request.getFirstName(), patient::setFirstName, "patient.r16.firstNameRequired");
+        applyRequired(request.getLastName(), patient::setLastName, "patient.r16.lastNameRequired");
+        applyNullable(request.getMiddleName(), patient::setMiddleName);
         if (request.getDateOfBirth() != null) {
             patient.setDateOfBirth(request.getDateOfBirth());
-            changedFields.add("dateOfBirth");
         }
-        if (applyRequired(request.getGender(), patient::setGender, "patient.r16.genderRequired")) {
-            changedFields.add("gender");
-        }
+        applyRequired(request.getGender(), patient::setGender, "patient.r16.genderRequired");
+        applyNullable(request.getEthnicity(), patient::setEthnicity);
+    }
+
+    /** Phones (stored by the facility rule, QA D942) and the e-mail (unique to one record, D113). */
+    private void patchContacts(Patient patient, PatientProfileUpdateRequestDTO request, String country) {
         if (request.getPhoneNumberPrimary() != null) {
             String phone = normalizePhone(request.getPhoneNumberPrimary(), country);
             if (phone == null) {
@@ -470,24 +489,24 @@ public class PatientServiceImpl implements PatientService {
             // A number is not unique to one record: a child is registered with
             // the mother's phone (the database has no unique constraint on it).
             patient.setPhoneNumberPrimary(phone);
-            changedFields.add("phoneNumberPrimary");
         }
         if (request.getPhoneNumberSecondary() != null) {
             patient.setPhoneNumberSecondary(normalizePhone(request.getPhoneNumberSecondary(), country));
-            changedFields.add("phoneNumberSecondary");
         }
         if (request.getEmail() != null) {
             String email = trimToNull(request.getEmail());
-            if (email != null && patientRepository.existsEmailOnOtherPatient(email, patient.getId())) {
+            // Only a new address is checked: resending one's own is never a conflict.
+            if (email != null && !email.equals(patient.getEmail())
+                    && patientRepository.existsEmailOnOtherPatient(email, patient.getId())) {
                 throw new ConflictException(MessageUtil.resolve("patient.r16.emailTaken"));
             }
             patient.setEmail(email);
-            changedFields.add("email");
         }
-        if (applyNullable(request.getEthnicity(), patient::setEthnicity)) {
-            changedFields.add("ethnicity");
-        }
+    }
 
+    /** The address parts; any one sent rebuilds the mailing address and records a move. */
+    private void patchAddress(Patient patient, PatientProfileUpdateRequestDTO request,
+                              PatientAddressHistoryRecorder.AddressSnapshot before) {
         boolean addressTouched = false;
         addressTouched |= applyNullable(request.getAddressLine1(), patient::setAddressLine1);
         addressTouched |= applyNullable(request.getAddressLine2(), patient::setAddressLine2);
@@ -495,9 +514,7 @@ public class PatientServiceImpl implements PatientService {
         addressTouched |= applyNullable(request.getState(), patient::setState);
         addressTouched |= applyNullable(request.getPostalCode(), patient::setZipCode);
         addressTouched |= applyNullable(request.getCountry(), patient::setCountry);
-
         if (addressTouched) {
-            changedFields.add("address");
             patient.setAddress(buildMailingAddress(
                 patient.getAddressLine1(),
                 patient.getAddressLine2(),
@@ -508,40 +525,47 @@ public class PatientServiceImpl implements PatientService {
             ));
             addressHistoryRecorder.recordIfMoved(patient, before);
         }
+    }
 
-        if (applyNullable(request.getEmergencyContactName(), patient::setEmergencyContactName)) {
-            changedFields.add("emergencyContactName");
-        }
+    /** The guardian, the pharmacy, the care-team notes and the chronic conditions. */
+    private void patchCareFields(Patient patient, PatientProfileUpdateRequestDTO request, String country) {
+        applyNullable(request.getEmergencyContactName(), patient::setEmergencyContactName);
         if (request.getEmergencyContactPhone() != null) {
             patient.setEmergencyContactPhone(normalizePhone(request.getEmergencyContactPhone(), country));
-            changedFields.add("emergencyContactPhone");
         }
-        if (applyNullable(request.getEmergencyContactRelationship(), patient::setEmergencyContactRelationship)) {
-            changedFields.add("emergencyContactRelationship");
-        }
-        if (applyNullable(request.getPreferredPharmacy(), patient::setPreferredPharmacy)) {
-            changedFields.add("preferredPharmacy");
-        }
-        if (applyNullable(request.getCareTeamNotes(), patient::setCareTeamNotes)) {
-            changedFields.add("careTeamNotes");
-        }
-
+        applyNullable(request.getEmergencyContactRelationship(), patient::setEmergencyContactRelationship);
+        applyNullable(request.getPreferredPharmacy(), patient::setPreferredPharmacy);
+        applyNullable(request.getCareTeamNotes(), patient::setCareTeamNotes);
         if (request.getChronicConditions() != null) {
             patient.setChronicConditions(joinChronicConditions(request.getChronicConditions()));
-            changedFields.add("chronicConditions");
         }
+    }
 
-        // Every change is named in the audit (the controller opts out of the
-        // generic write audit on the strength of this row).
-        updated = !changedFields.isEmpty();
-        if (updated) {
-            patientRepository.save(patient);
-            auditPatientUpdate(patient, "Patient demographics updated: " + String.join(", ", changedFields));
-        }
-
-        // The caller's hospital's view (its MRN, its sharing opt-out), not the
-        // patient's first hospital: the chart merges this answer.
-        return buildPatientDto(patient, hospitalId != null ? hospitalId : patient.getHospitalId());
+    /**
+     * The demographics a PATCH may change, keyed by the field name its audit
+     * uses ("address" is the whole mailing address). Compared before and after
+     * the PATCH so the audit names real changes only.
+     */
+    private static Map<String, Object> demographicsOf(Patient p) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("firstName", p.getFirstName());
+        m.put("lastName", p.getLastName());
+        m.put("middleName", p.getMiddleName());
+        m.put("dateOfBirth", p.getDateOfBirth());
+        m.put("gender", p.getGender());
+        m.put("phoneNumberPrimary", p.getPhoneNumberPrimary());
+        m.put("phoneNumberSecondary", p.getPhoneNumberSecondary());
+        m.put("email", p.getEmail());
+        m.put("ethnicity", p.getEthnicity());
+        m.put("address", Arrays.asList(p.getAddressLine1(), p.getAddressLine2(), p.getCity(), p.getState(),
+            p.getZipCode(), p.getCountry(), p.getAddress()));
+        m.put("emergencyContactName", p.getEmergencyContactName());
+        m.put("emergencyContactPhone", p.getEmergencyContactPhone());
+        m.put("emergencyContactRelationship", p.getEmergencyContactRelationship());
+        m.put("preferredPharmacy", p.getPreferredPharmacy());
+        m.put("careTeamNotes", p.getCareTeamNotes());
+        m.put("chronicConditions", p.getChronicConditions());
+        return m;
     }
 
     /** Sets a required text field when one was sent; a blank one is refused (QA D926). */

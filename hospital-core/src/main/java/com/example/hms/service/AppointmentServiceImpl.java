@@ -220,6 +220,84 @@ public class AppointmentServiceImpl implements AppointmentService {
      * is checked, so ordinary edits — reason, notes, the date and time of a
      * reschedule — pass through untouched.
      */
+    /**
+     * COMPLETED and NO_SHOW only once the visit has started, on every write
+     * path (status action and PUT alike; review round 8: the PUT skipped it).
+     */
+    private static void requireStartedFor(AppointmentStatus status, LocalDateTime appointmentStart) {
+        if (REQUIRES_APPOINTMENT_STARTED.contains(status) && LocalDateTime.now().isBefore(appointmentStart)) {
+            throw new BusinessException("appointment.status.notStartedYet",
+                AppointmentStatus.labelOf(status),
+                appointmentStart.format(java.time.format.DateTimeFormatter
+                    .ofLocalizedDateTime(java.time.format.FormatStyle.SHORT)
+                    .withLocale(LocaleContextHolder.getLocale())));
+        }
+    }
+
+    /** A cancelled, missed or being-moved visit gives its inventory slot back (P3 #22, QA D937). */
+    private static boolean releasesSlotInventory(AppointmentStatus status) {
+        return status == AppointmentStatus.CANCELLED || status == AppointmentStatus.RESCHEDULED
+            || status == AppointmentStatus.NO_SHOW;
+    }
+
+    /** The ids, date and times a staff edit must carry. */
+    private static void requireCompleteEdit(AppointmentRequestDTO request) {
+        if (request.getPatientId() == null) {
+            throw new BusinessException("appointment.patient.required");
+        }
+        if (request.getStaffId() == null) {
+            throw new BusinessException("appointment.staff.required");
+        }
+        if (request.getHospitalId() == null) {
+            throw new BusinessException("appointment.hospital.required");
+        }
+        if (request.getAppointmentDate() == null) {
+            throw new BusinessException("Appointment date must not be null");
+        }
+        if (request.getStartTime() == null || request.getEndTime() == null) {
+            throw new BusinessException("Appointment start and end time must not be null");
+        }
+    }
+
+    /**
+     * QA D937 (review round 8): a freed booking (NO_SHOW) that a status action
+     * puts back into a slot-holding status (RESCHEDULED) holds its own time
+     * again. That time may have been rebooked since the slot was freed:
+     * refused then, so the clinician is never double-booked; the desk moves
+     * the visit to a new time instead (the PUT checks that time).
+     */
+    private void requireFreedSlotStillFree(Appointment appointment, AppointmentStatus currentStatus,
+                                           AppointmentStatus newStatus) {
+        if (AppointmentStatus.holdsSlot(currentStatus) || !newStatus.holdsSlot() || appointment.getStaff() == null) {
+            return;
+        }
+        LocalDate day = appointment.getAppointmentDate();
+        boolean taken = AppointmentSlotRules.overlapsHeldSlot(
+            appointmentRepository.findByStaff_IdAndAppointmentDate(appointment.getStaff().getId(), day),
+            appointment.getId(),
+            LocalDateTime.of(day, appointment.getStartTime()),
+            LocalDateTime.of(day, appointment.getEndTime()));
+        if (taken) {
+            throw new BusinessException("appointment.status.slotRebooked");
+        }
+    }
+
+    /**
+     * QA D985: a visit that will not happen reopens the recall it answered;
+     * one that took place fulfils it. The same rule on the status action and
+     * the edit form.
+     */
+    private void followUpRecalls(UUID appointmentId, AppointmentStatus status) {
+        if (recallService == null) {
+            return;
+        }
+        if (!AppointmentStatus.holdsSlot(status)) {
+            recallService.reopenRecallsOf(appointmentId);
+        } else if (status == AppointmentStatus.COMPLETED) {
+            recallService.completeRecallsOf(appointmentId);
+        }
+    }
+
     private void requireValidStatusChange(AppointmentStatus current, AppointmentStatus requested) {
         if (requested == null || requested == current) {
             return;
@@ -643,22 +721,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         Appointment existing = appointmentRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_KEY, id));
 
-        // Null checks for required IDs
-        if (request.getPatientId() == null) {
-            throw new BusinessException("appointment.patient.required");
-        }
-        if (request.getStaffId() == null) {
-            throw new BusinessException("appointment.staff.required");
-        }
-        if (request.getHospitalId() == null) {
-            throw new BusinessException("appointment.hospital.required");
-        }
-        if (request.getAppointmentDate() == null) {
-            throw new BusinessException("Appointment date must not be null");
-        }
-        if (request.getStartTime() == null || request.getEndTime() == null) {
-            throw new BusinessException("Appointment start and end time must not be null");
-        }
+        requireCompleteEdit(request);
 
         requireAppointmentVisible(currentUser, existing);
         // QA D727: a staff edit refuses an appointment that ends before it starts,
@@ -731,7 +794,13 @@ public class AppointmentServiceImpl implements AppointmentService {
         // status the state machine says must be passed through, reached by a
         // route that never consulted the state machine. A rule enforced on one
         // of two write paths is not a rule.
-        requireValidStatusChange(existing.getStatus(), request.getStatus());
+        AppointmentStatus statusBefore = existing.getStatus();
+        requireValidStatusChange(statusBefore, request.getStatus());
+        boolean statusMoved = request.getStatus() != null && request.getStatus() != statusBefore;
+        if (statusMoved) {
+            // The same temporal guard as the status action (review round 8).
+            requireStartedFor(request.getStatus(), requestedStart);
+        }
 
         appointmentMapper.updateAppointmentFromDto(request, existing, patient, staff, hospital);
         existing.setAssignment(assignment);
@@ -743,13 +812,14 @@ public class AppointmentServiceImpl implements AppointmentService {
         // the old date, time and notes, and nothing was written.
         Appointment saved = appointmentRepository.saveAndFlush(existing);
         entityManager.refresh(saved);
+        // A PUT that cancels, misses or parks the visit frees its inventory
+        // slot, as the status action does (review round 8).
+        if (statusMoved && releasesSlotInventory(saved.getStatus())) {
+            slotInventoryService.releaseForAppointment(saved.getId());
+        }
         // QA D985: an edit that cancels the visit reopens the recall it
         // answered; one that completes it closes the recall.
-        if (recallService != null && !AppointmentStatus.holdsSlot(saved.getStatus())) {
-            recallService.reopenRecallsOf(saved.getId());
-        } else if (recallService != null && saved.getStatus() == AppointmentStatus.COMPLETED) {
-            recallService.completeRecallsOf(saved.getId());
-        }
+        followUpRecalls(saved.getId(), saved.getStatus());
 
         // Outbound webhooks (Tier 2 item 45): a moved visit is a reschedule
         // regardless of which write path moved it.
@@ -838,39 +908,22 @@ public class AppointmentServiceImpl implements AppointmentService {
         requireVisitCompletedBeforeAppointment(appointment, newStatus);
 
         // ── Temporal guard: COMPLETED / NO_SHOW only after appointment start time ──
-        if (REQUIRES_APPOINTMENT_STARTED.contains(newStatus)) {
-            LocalDateTime appointmentStart = LocalDateTime.of(
-                appointment.getAppointmentDate(), appointment.getStartTime());
-            if (LocalDateTime.now().isBefore(appointmentStart)) {
-                throw new BusinessException("appointment.status.notStartedYet",
-                    AppointmentStatus.labelOf(newStatus),
-                    appointmentStart.format(java.time.format.DateTimeFormatter
-                        .ofLocalizedDateTime(java.time.format.FormatStyle.SHORT)
-                        .withLocale(LocaleContextHolder.getLocale())));
-            }
-        }
+        requireStartedFor(newStatus, LocalDateTime.of(appointment.getAppointmentDate(), appointment.getStartTime()));
 
-        // QA D937: no status action puts a freed booking back at its own time.
-        // CANCELLED has no exit and NO_SHOW's only one is RESCHEDULED, which
-        // marks a visit being moved; the move itself (PUT) is checked for
-        // overlaps at its new time.
+        requireFreedSlotStillFree(appointment, currentStatus, newStatus);
+
         appointment.setStatus(newStatus);
         appointmentRepository.save(appointment);
 
         // The appointment owns its slot (P3 #22): once the visit is cancelled
         // or moved, the slot goes back into circulation.
         // QA D937: a no-show frees its time like a cancel, in the inventory too.
-        if (newStatus == AppointmentStatus.CANCELLED || newStatus == AppointmentStatus.RESCHEDULED
-                || newStatus == AppointmentStatus.NO_SHOW) {
+        if (releasesSlotInventory(newStatus)) {
             slotInventoryService.releaseForAppointment(appointment.getId());
         }
         // QA D985: a recall scheduled with a visit that will not happen is open
         // again; one whose visit took place is fulfilled.
-        if (recallService != null && !newStatus.holdsSlot()) {
-            recallService.reopenRecallsOf(appointment.getId());
-        } else if (recallService != null && newStatus == AppointmentStatus.COMPLETED) {
-            recallService.completeRecallsOf(appointment.getId());
-        }
+        followUpRecalls(appointment.getId(), newStatus);
 
         // Outbound webhooks (Tier 2 item 45).
         if (newStatus == AppointmentStatus.CANCELLED) {

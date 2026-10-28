@@ -2877,8 +2877,8 @@ class UserServiceImplTest {
         @DisplayName("activates the account and its patient rows, and clears the lockout only then")
         void activatesAndClearsTheLockout() {
             User u = pending();
-            Role patientRole = Role.builder().code("ROLE_PATIENT").name("PATIENT").build();
-            UserRoleHospitalAssignment row = UserRoleHospitalAssignment.builder().role(patientRole).active(false).build();
+            Role pendingPatientRole = Role.builder().code("ROLE_PATIENT").name("PATIENT").build();
+            UserRoleHospitalAssignment row = UserRoleHospitalAssignment.builder().role(pendingPatientRole).active(false).build();
             when(assignmentRepository.findByUserId(u.getId())).thenReturn(List.of(row));
 
             assertThat(userService.verifyEmail("apatient@example.com", "tok-1")).isTrue();

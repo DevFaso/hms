@@ -577,6 +577,118 @@ class AppointmentStatusTransitionTest {
         verify(appointmentRepository, never()).save(any());
     }
 
+    // ── Review round 8 (QA D937/D946): freed slots and the PUT path ──
+
+    private Appointment rebookedAtTheSameTime() {
+        Appointment other = new Appointment();
+        other.setId(UUID.randomUUID());
+        other.setStaff(appointment.getStaff());
+        other.setAppointmentDate(appointment.getAppointmentDate());
+        other.setStartTime(LocalTime.of(9, 0));
+        other.setEndTime(LocalTime.of(10, 0));
+        other.setStatus(AppointmentStatus.SCHEDULED);
+        return other;
+    }
+
+    @Test
+    void round8_aMissedVisitWhoseTimeWasRebookedCannotBeParkedBackInIt() {
+        // A no-show frees its slot (D937); B is booked there; parking A in
+        // RESCHEDULED (a slot-holding status) would double-book the clinician.
+        givenAppointment(AppointmentStatus.NO_SHOW, LocalDate.now().minusDays(1));
+        when(appointmentRepository.findByStaff_IdAndAppointmentDate(
+                appointment.getStaff().getId(), appointment.getAppointmentDate()))
+            .thenReturn(java.util.List.of(appointment, rebookedAtTheSameTime()));
+
+        assertThatThrownBy(() ->
+            appointmentService.confirmOrCancelAppointment(appointmentId, "reschedule", null, "doctor_b"))
+            .isInstanceOf(BusinessException.class)
+            .satisfies(ex -> org.assertj.core.api.Assertions.assertThat(((BusinessException) ex).getMessageKey())
+                .isEqualTo("appointment.status.slotRebooked"));
+
+        verify(appointmentRepository, never()).save(any());
+        org.assertj.core.api.Assertions.assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.NO_SHOW);
+    }
+
+    @Test
+    void round8_aMissedVisitWhoseTimeIsStillFreeCanBeParked() {
+        givenAppointment(AppointmentStatus.NO_SHOW, LocalDate.now().minusDays(1));
+        when(appointmentRepository.findByStaff_IdAndAppointmentDate(
+                appointment.getStaff().getId(), appointment.getAppointmentDate()))
+            .thenReturn(java.util.List.of(appointment));
+        stubSaveAndMap();
+
+        appointmentService.confirmOrCancelAppointment(appointmentId, "reschedule", null, "doctor_b");
+
+        org.assertj.core.api.Assertions.assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.RESCHEDULED);
+    }
+
+    private com.example.hms.payload.dto.AppointmentRequestDTO editOf(AppointmentStatus status) {
+        Patient patient = appointment.getPatient();
+        Staff staff = appointment.getStaff();
+        when(patientRepository.findById(patient.getId())).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staff.getId())).thenReturn(Optional.of(staff));
+        when(hospitalRepository.findClinicalById(hospital.getId())).thenReturn(Optional.of(hospital));
+        when(assignmentRepository.findActiveStaffAssignment(any(), any()))
+            .thenReturn(Optional.of(appointment.getAssignment()));
+        when(staffAvailabilityService.isStaffAvailable(any(), any())).thenReturn(true);
+        com.example.hms.payload.dto.AppointmentRequestDTO edit = new com.example.hms.payload.dto.AppointmentRequestDTO();
+        edit.setPatientId(patient.getId());
+        edit.setStaffId(staff.getId());
+        edit.setHospitalId(hospital.getId());
+        edit.setAppointmentDate(appointment.getAppointmentDate());
+        edit.setStartTime(appointment.getStartTime());
+        edit.setEndTime(appointment.getEndTime());
+        edit.setStatus(status);
+        return edit;
+    }
+
+    @Test
+    void round8_thePutCannotMarkAVisitThatHasNotStartedANoShow() {
+        // SCHEDULED -> NO_SHOW is in the map (D946); the PUT used to skip the
+        // temporal guard the status action applies.
+        givenAppointment(AppointmentStatus.SCHEDULED, LocalDate.now().plusDays(7));
+        com.example.hms.payload.dto.AppointmentRequestDTO edit = editOf(AppointmentStatus.NO_SHOW);
+
+        assertThatThrownBy(() ->
+            appointmentService.updateAppointment(appointmentId, edit, java.util.Locale.ENGLISH, "doctor_b"))
+            .isInstanceOf(BusinessException.class)
+            .satisfies(ex -> org.assertj.core.api.Assertions.assertThat(((BusinessException) ex).getMessageKey())
+                .isEqualTo("appointment.status.notStartedYet"));
+
+        verify(appointmentRepository, never()).saveAndFlush(any());
+        org.assertj.core.api.Assertions.assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.SCHEDULED);
+    }
+
+    @Test
+    void round8_aPutThatCancelsReleasesTheInventorySlotLikeTheStatusAction() {
+        givenAppointment(AppointmentStatus.SCHEDULED, LocalDate.now().plusDays(7));
+        com.example.hms.payload.dto.AppointmentRequestDTO edit = editOf(AppointmentStatus.CANCELLED);
+        ReflectionTestUtils.setField(appointmentService, "entityManager",
+            org.mockito.Mockito.mock(jakarta.persistence.EntityManager.class));
+        org.mockito.Mockito.doAnswer(inv -> {
+            appointment.setStatus(AppointmentStatus.CANCELLED);
+            return null;
+        }).when(appointmentMapper).updateAppointmentFromDto(any(), any(), any(), any(), any());
+        when(appointmentRepository.saveAndFlush(any())).thenReturn(appointment);
+
+        appointmentService.updateAppointment(appointmentId, edit, java.util.Locale.ENGLISH, "doctor_b");
+
+        verify(slotInventoryService).releaseForAppointment(appointmentId);
+    }
+
+    @Test
+    void round8_aPutThatOnlyEditsTheNotesKeepsTheInventorySlot() {
+        givenAppointment(AppointmentStatus.SCHEDULED, LocalDate.now().plusDays(7));
+        com.example.hms.payload.dto.AppointmentRequestDTO edit = editOf(null);
+        ReflectionTestUtils.setField(appointmentService, "entityManager",
+            org.mockito.Mockito.mock(jakarta.persistence.EntityManager.class));
+        when(appointmentRepository.saveAndFlush(any())).thenReturn(appointment);
+
+        appointmentService.updateAppointment(appointmentId, edit, java.util.Locale.ENGLISH, "doctor_b");
+
+        verify(slotInventoryService, never()).releaseForAppointment(any());
+    }
+
     private static void refusedAsTransition(Throwable ex, AppointmentStatus from, AppointmentStatus to) {
         BusinessException refused = (BusinessException) ex;
         org.assertj.core.api.Assertions.assertThat(refused.getMessageKey())

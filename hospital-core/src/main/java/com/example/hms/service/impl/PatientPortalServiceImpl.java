@@ -125,6 +125,7 @@ import com.example.hms.utility.RoleNames;
 @Slf4j
 public class PatientPortalServiceImpl implements PatientPortalService {
     private static final String APPOINTMENT_NOT_FOUND_KEY = "appointment.notFound";
+    private static final String PROVIDER_UNAVAILABLE_KEY = "portal.booking.providerUnavailable";
     /** QA D717: the only states a patient may still cancel or reschedule from the portal. */
     private static final Set<AppointmentStatus> PATIENT_CHANGEABLE_STATUSES = java.util.EnumSet.of(
             AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED,
@@ -600,11 +601,11 @@ public class PatientPortalServiceImpl implements PatientPortalService {
 
         // QA D978: a patient books a future time within the patient booking day.
         com.example.hms.service.AppointmentSlotRules.requirePatientBookable(
-                requestedStart, requestedEnd, java.time.LocalDateTime.now(java.time.ZoneId.systemDefault()));
+                requestedStart, requestedEnd, nowAt(department.getHospital()));
 
         // Staff availability check
         if (!staffAvailabilityService.isStaffAvailable(staff.getId(), requestedStart)) {
-            throw new BusinessException(MessageUtil.resolve("portal.booking.providerUnavailable"));
+            throw new BusinessException(MessageUtil.resolve(PROVIDER_UNAVAILABLE_KEY));
         }
 
         // Overlap check. QA D937: a cancelled booking or a no-show frees its slot.
@@ -618,7 +619,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         // Resolve the staff's role assignment for this hospital
         UserRoleHospitalAssignment assignment = assignmentRepository
                 .findActiveStaffAssignment(staff.getUser().getId(), hospital.getId())
-                .orElseThrow(() -> new BusinessException(MessageUtil.resolve("portal.booking.providerUnavailable")));
+                .orElseThrow(() -> new BusinessException(MessageUtil.resolve(PROVIDER_UNAVAILABLE_KEY)));
 
         // Create the appointment
         Appointment appointment = new Appointment();
@@ -777,6 +778,17 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         return appointmentMapper.toAppointmentResponseDTO(appointment);
     }
 
+    /**
+     * The wall-clock time at the hospital (its organisation's zone, else the
+     * server's): a patient's "past" slot is judged on the hospital's clock,
+     * not the server's (QA D978, review round 8).
+     */
+    private static java.time.LocalDateTime nowAt(com.example.hms.model.Hospital hospital) {
+        java.time.Clock clock = java.time.Clock.systemDefaultZone();
+        return java.time.LocalDateTime.now(clock.withZone(
+            com.example.hms.utility.HospitalCalendar.zoneOf(hospital, clock)));
+    }
+
     // ── Reschedule own appointment ───────────────────────────────────────
 
     @Override
@@ -808,10 +820,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         java.time.LocalDateTime newStart = java.time.LocalDateTime.of(dto.getNewDate(), dto.getNewStartTime());
         java.time.LocalDateTime newEnd = java.time.LocalDateTime.of(dto.getNewDate(), dto.getNewEndTime());
         com.example.hms.service.AppointmentSlotRules.requirePatientBookable(
-                newStart, newEnd, java.time.LocalDateTime.now(java.time.ZoneId.systemDefault()));
+                newStart, newEnd, nowAt(appointment.getHospital()));
         if (appointment.getStaff() != null
                 && !staffAvailabilityService.isStaffAvailable(appointment.getStaff().getId(), newStart)) {
-            throw new BusinessException(MessageUtil.resolve("portal.booking.providerUnavailable"));
+            throw new BusinessException(MessageUtil.resolve(PROVIDER_UNAVAILABLE_KEY));
         }
         if (appointment.getStaff() != null && com.example.hms.service.AppointmentSlotRules.overlapsHeldSlot(
                 appointmentRepository.findByStaff_IdAndAppointmentDate(appointment.getStaff().getId(), dto.getNewDate()),

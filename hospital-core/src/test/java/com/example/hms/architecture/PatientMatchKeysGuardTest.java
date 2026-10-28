@@ -64,7 +64,10 @@ class PatientMatchKeysGuardTest {
         // A derived "...NameContainingIgnoreCase" finder is accent-sensitive
         // (the EMPI page's D943 gap, review round 4): it must carry a folded @Query.
         for (Method m : PatientRepository.class.getDeclaredMethods()) {
-            if (!m.getName().matches(".*(FirstName|LastName).*(Containing|Like|StartingWith).*")) {
+            String name = m.getName();
+            boolean nameColumn = name.contains("FirstName") || name.contains("LastName");
+            boolean partialMatch = name.contains("Containing") || name.contains("Like") || name.contains("StartingWith");
+            if (!nameColumn || !partialMatch) {
                 continue;
             }
             Query q = m.getAnnotation(Query.class);

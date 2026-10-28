@@ -894,6 +894,10 @@ class ReceptionServiceImplTest {
             when(patientRepo.searchPatientsExtended(any(), eq("%zongo fatimata%"), isNull(), isNull(), any(),
                     eq(hospitalId), eq(true), any()))
                     .thenReturn(new PageImpl<>(List.of(fatimata)));
+            // Round 8: the same-name-and-DOB source finds her too (counted once).
+            when(patientRepo.searchPatientsExtended(any(), eq("%zongo fatimata%"), eq("1991-07-22"), isNull(), any(),
+                    eq(hospitalId), eq(true), any()))
+                    .thenReturn(new PageImpl<>(List.of(fatimata)));
             when(patientRepo.findAllByPhoneSubscriberAtHospital(eq("%70161099"), any(), any())).thenReturn(List.of());
 
             List<DuplicateCandidateDTO> result = service.getDuplicateCandidates(
@@ -933,6 +937,10 @@ class ReceptionServiceImplTest {
             when(patientRepo.searchPatientsExtended(any(), eq("%aicha kabore%"), isNull(), isNull(), any(),
                     eq(hospitalId), eq(true), any()))
                     .thenReturn(new PageImpl<>(List.of(aicha)));
+            // The transposed date matches no one.
+            when(patientRepo.searchPatientsExtended(any(), eq("%aicha kabore%"), eq("2019-04-03"), isNull(), any(),
+                    eq(hospitalId), eq(true), any()))
+                    .thenReturn(new PageImpl<>(List.of()));
 
             List<DuplicateCandidateDTO> result = service.getDuplicateCandidates(
                     "Aicha Kabore", "2019-04-03", "76999999", hospitalId);
@@ -940,6 +948,31 @@ class ReceptionServiceImplTest {
             assertThat(result).singleElement().satisfies(c -> {
                 assertThat(c.getPatientId()).isEqualTo(aicha.getId());
                 assertThat(c.getConfidenceScore()).isEqualTo(50);
+            });
+        }
+
+        @Test
+        @DisplayName("review round 8: a common name does not push the same-name-and-DOB record out of the capped page")
+        void aCommonNameDoesNotHideTheSameBirthDate() {
+            Patient target = registered("Adama", "Ouedraogo", LocalDate.of(1990, 5, 1), "70000001", true);
+            List<Patient> namesakes = new java.util.ArrayList<>();
+            for (int i = 0; i < 20; i++) {
+                namesakes.add(registered("Adama", "Ouedraogo", LocalDate.of(1980, 1, 1).plusDays(i), "7100000" + (i % 10), true));
+            }
+            // The name-only page is full of namesakes born on other days.
+            when(patientRepo.searchPatientsExtended(any(), eq("%ouedraogo adama%"), isNull(), isNull(), any(),
+                    eq(hospitalId), eq(true), any()))
+                    .thenReturn(new PageImpl<>(namesakes));
+            when(patientRepo.searchPatientsExtended(any(), eq("%ouedraogo adama%"), eq("1990-05-01"), isNull(), any(),
+                    eq(hospitalId), eq(true), any()))
+                    .thenReturn(new PageImpl<>(List.of(target)));
+
+            List<DuplicateCandidateDTO> result = service.getDuplicateCandidates(
+                    "Ouedraogo Adama", "1990-05-01", "76999999", hospitalId);
+
+            assertThat(result).first().satisfies(c -> {
+                assertThat(c.getPatientId()).isEqualTo(target.getId());
+                assertThat(c.getConfidenceScore()).isEqualTo(80);
             });
         }
 

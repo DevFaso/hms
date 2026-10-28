@@ -608,6 +608,15 @@ public class ReceptionServiceImpl implements ReceptionService {
         // of birth must not hide a same-name record (the D924 class, one field
         // gating the others). The date only scores. A DOB alone (30) can never
         // reach the threshold, so it asks nothing on its own.
+        if (namePattern != null && dobValue != null) {
+            // Same name and same date of birth first (80, a duplicate whatever
+            // the phone): a common name must not push it out of the capped
+            // name-only page below (review round 8).
+            patientRepo.searchPatientsExtended(
+                    null, namePattern, dobValue, null, null, hospitalId, true,
+                    PageRequest.of(0, 20)).getContent()
+                .forEach(p -> candidates.putIfAbsent(p.getId(), p));
+        }
         if (namePattern != null) {
             patientRepo.searchPatientsExtended(
                     null, namePattern, null, null, null, hospitalId, true,

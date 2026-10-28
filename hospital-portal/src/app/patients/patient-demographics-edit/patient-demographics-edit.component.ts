@@ -83,9 +83,27 @@ export class PatientDemographicsEditComponent implements OnInit {
     const raw = p[key];
     // Older records keep the street in `address` only.
     if (key === 'addressLine1' && (raw === undefined || raw === null || raw === '')) {
-      return typeof p['address'] === 'string' ? (p['address'] as string) : '';
+      return typeof p['address'] === 'string' ? this.streetOf(p['address'] as string) : '';
     }
     return typeof raw === 'string' ? raw : '';
+  }
+
+  /**
+   * The street of a legacy composed address ("Secteur 15, Ouagadougou,
+   * Burkina Faso"): the trailing parts that repeat the record's own city,
+   * region, postal code or country are dropped, or an address edit would send
+   * them back as the street and the server would append them a second time
+   * (review round 8).
+   */
+  private streetOf(address: string): string {
+    const known = [this.patient.city, this.patient.state, this.patient.zipCode, this.patient.country]
+      .map((v) => (v ?? '').trim().toLowerCase())
+      .filter((v) => v !== '');
+    const parts = address.split(',').map((s) => s.trim());
+    while (parts.length > 1 && known.includes(parts[parts.length - 1].toLowerCase())) {
+      parts.pop();
+    }
+    return parts.join(', ');
   }
 
   /** Only what changed travels; an untouched field is left as it is. */

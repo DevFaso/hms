@@ -1660,16 +1660,14 @@ public class UserServiceImpl implements UserService {
         }
     }
 
-    @Override
-    @Transactional
-    public UserResponseDTO updateUser(UUID id, UpdateUserRequestDTO dto) {
-        User user = userRepository.findById(id)
-                .orElseThrow(() -> userNotFound(id));
-
-        // Editing your own account is the profile page: contact fields only,
-        // whoever you are. Anyone else's account needs an administrator of it
-        // (UserAccountAccess.canAdminister) and is otherwise refused exactly
-        // like a missing id, with a FAILURE row.
+    /**
+     * Who may edit this account, and whether it can be edited at all.
+     * Editing your own account is the profile page: contact fields only,
+     * whoever you are. Anyone else's account needs an administrator of it
+     * (UserAccountAccess.canAdminister) and is otherwise refused exactly like
+     * a missing id, with a FAILURE row.
+     */
+    private void requireEditableBy(User user, UpdateUserRequestDTO dto) {
         if (accountAccess.isSelf(user)) {
             requireSelfServiceChangesOnly(user, dto);
         } else if (!accountAccess.canAdminister(user)) {
@@ -1686,6 +1684,15 @@ public class UserServiceImpl implements UserService {
         if (user.isDeleted()) {
             throw new BusinessException(MessageUtil.resolve("user.update.deleted"));
         }
+    }
+
+    @Override
+    @Transactional
+    public UserResponseDTO updateUser(UUID id, UpdateUserRequestDTO dto) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> userNotFound(id));
+
+        requireEditableBy(user, dto);
         requireIdentifiersFree(user, dto);
         requireRolesUnchanged(user, dto);
 

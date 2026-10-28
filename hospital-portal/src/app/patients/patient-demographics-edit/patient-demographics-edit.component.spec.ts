@@ -104,4 +104,33 @@ describe('PatientDemographicsEditComponent (QA D926)', () => {
       addressLine1: 'Secteur 15',
     });
   });
+
+  it('review round 8: a legacy composed address sends only its street, never the city and country again', () => {
+    patients = jasmine.createSpyObj<PatientService>('PatientService', ['patchDemographics']);
+    toast = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error']);
+    TestBed.configureTestingModule({
+      imports: [PatientDemographicsEditComponent, TranslateModule.forRoot()],
+      providers: [
+        { provide: PatientService, useValue: patients },
+        { provide: ToastService, useValue: toast },
+      ],
+    });
+    const fixture = TestBed.createComponent(PatientDemographicsEditComponent);
+    fixture.componentInstance.patient = {
+      ...patient,
+      address: 'Secteur 15, Ouagadougou, Burkina Faso',
+      city: 'Ouagadougou',
+      country: 'Burkina Faso',
+    };
+    fixture.detectChanges();
+    const c = fixture.componentInstance;
+    expect(c.form.addressLine1).toBe('Secteur 15');
+    patients.patchDemographics.and.returnValue(of(patient));
+    c.form.city = 'Bobo-Dioulasso';
+    c.submit();
+    expect(patients.patchDemographics).toHaveBeenCalledWith('p-1', {
+      city: 'Bobo-Dioulasso',
+      addressLine1: 'Secteur 15',
+    });
+  });
 });
