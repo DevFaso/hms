@@ -114,6 +114,27 @@ describe('PatientTrackerComponent', () => {
     expect(component.averageWait()).toBe(15);
   });
 
+  it('QA D954: an arrived patient who left unseen is closed from the tracker', () => {
+    authSpy.hasAnyRole.and.callFake((roles: string[]) => roles.includes('ROLE_NURSE'));
+    fixture.detectChanges();
+    const btn = fixture.nativeElement.querySelector(
+      '[data-testid="tracker-lwbs"]',
+    ) as HTMLButtonElement;
+    expect(btn).withContext('LWBS action on the arrived card').toBeTruthy();
+    btn.click();
+    fixture.detectChanges();
+    expect(component.closeUnseenItem()?.encounterId).toBe('e1');
+    expect(fixture.nativeElement.querySelector('app-close-unseen-dialog')).toBeTruthy();
+    component.onUnseenVisitClosed();
+    expect(component.closeUnseenItem()).toBeNull();
+  });
+
+  it('QA D954: a role the endpoint refuses is not offered the LWBS action', () => {
+    authSpy.hasAnyRole.and.callFake((roles: string[]) => roles.includes('ROLE_LAB_TECHNICIAN'));
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="tracker-lwbs"]')).toBeNull();
+  });
+
   it('should set loading to false after load', () => {
     fixture.detectChanges();
     expect(component.loading()).toBeFalse();

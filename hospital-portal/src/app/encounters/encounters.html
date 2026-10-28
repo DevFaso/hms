@@ -228,6 +228,18 @@
           </button>
         </div>
         <div class="detail-body">
+          @if (canCloseUnseen() && isNeverSeen(enc.status)) {
+            <!-- QA D954: left without being seen, closed from the visit's detail. -->
+            <div class="detail-actions">
+              <button
+                class="btn btn-secondary"
+                data-testid="encounter-lwbs"
+                (click)="closeUnseenEncounter.set(enc)"
+              >
+                {{ 'NURSE.LEFT_WITHOUT_BEING_SEEN' | translate }}
+              </button>
+            </div>
+          }
           <div class="detail-grid">
             <div class="detail-field">
               <span class="field-label">{{ 'PATIENTS.PATIENT_NAME' | translate }}</span
@@ -998,5 +1010,15 @@
   <app-medical-certificate-dialog
     [encounter]="enc"
     (dismissed)="showCertificateDialog.set(false)"
+  />
+}
+
+<!-- QA D954: close a visit nobody has seen (left without being seen, or cancelled). -->
+@if (closeUnseenEncounter(); as target) {
+  <app-close-unseen-dialog
+    [encounterId]="target.id"
+    [patientName]="target.patientName"
+    (dismissed)="closeUnseenEncounter.set(null)"
+    (closed)="onUnseenVisitClosed()"
   />
 }

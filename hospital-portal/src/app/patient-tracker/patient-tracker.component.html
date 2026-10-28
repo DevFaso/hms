@@ -100,6 +100,16 @@
                     >
                       {{ 'TRACKER.COMPLETE_TRIAGE' | translate }}
                     </button>
+                    @if (canCloseUnseen) {
+                      <!-- QA D954: left without being seen, closed from the tracker. -->
+                      <button
+                        class="btn-complete-triage"
+                        data-testid="tracker-lwbs"
+                        (click)="openCloseUnseen(item)"
+                      >
+                        {{ 'NURSE.LEFT_WITHOUT_BEING_SEEN' | translate }}
+                      </button>
+                    }
                   }
                   @if (col.key === 'inProgress') {
                     <button
@@ -152,6 +162,15 @@
       (dismissed)="onTriageDismissed()"
       (triageCompleted)="onTriageCompleted()"
     ></app-triage-form>
+  }
+  <!-- QA D954: close a visit nobody has seen (left without being seen, or cancelled). -->
+  @if (closeUnseenItem(); as target) {
+    <app-close-unseen-dialog
+      [encounterId]="target.encounterId"
+      [patientName]="target.patientName"
+      (dismissed)="closeUnseenItem.set(null)"
+      (closed)="onUnseenVisitClosed()"
+    />
   }
   <!-- Check-Out Dialog (MVP 6) -->
   @if (showCheckoutDialog()) {

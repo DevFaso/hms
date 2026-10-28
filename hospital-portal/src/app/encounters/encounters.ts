@@ -40,6 +40,7 @@ import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospit
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { CheckoutDialogComponent } from '../checkout/checkout-dialog/checkout-dialog.component';
 import { actionRoles, SERVICE_RULE_ROLES } from '../core/action-permissions';
+import { CloseUnseenDialogComponent } from '../reception/close-unseen-dialog/close-unseen-dialog.component';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { serverLocalDate, toServerDateTime } from '../shared/date-utils';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
@@ -57,6 +58,7 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
     TranslateModule,
     EncounterNoteFormComponent,
     EligibilityCheckDialogComponent,
+    CloseUnseenDialogComponent,
     HospitalScopeChipComponent,
     EnumLabelPipe,
     CheckoutDialogComponent,
@@ -104,6 +106,31 @@ export class EncountersComponent implements OnInit {
   protected readonly canDeleteEncounter = computed(() =>
     this.roleContext.hasAnyActiveRole(actionRoles('encounterDelete')),
   );
+  /**
+   * QA D954: a visit nobody has seen (EncounterClosureRules.NEVER_SEEN) is
+   * closed as "left without being seen" from its detail too, by the roles the
+   * endpoint admits (the reception's close-unseen dialog, reused).
+   */
+  protected readonly canCloseUnseen = computed(() =>
+    this.roleContext.hasAnyActiveRole(actionRoles('encounterCloseUnseen')),
+  );
+  private static readonly NEVER_SEEN = new Set([
+    'SCHEDULED',
+    'ARRIVED',
+    'TRIAGE',
+    'WAITING_FOR_PHYSICIAN',
+  ]);
+  readonly closeUnseenEncounter = signal<EncounterResponse | null>(null);
+
+  isNeverSeen(status: string | null | undefined): boolean {
+    return !!status && EncountersComponent.NEVER_SEEN.has(status);
+  }
+
+  onUnseenVisitClosed(): void {
+    this.closeUnseenEncounter.set(null);
+    this.closeDetail();
+    this.loadEncounters();
+  }
   /** Non-null when the user is locked to a single hospital (all non-admin staff) */
   lockedHospitalId: string | null = null;
   /** Human-readable name of the locked hospital */

@@ -28,6 +28,8 @@ import {
 } from '../services/encounter.service';
 import { RovingFocusDirective } from '../shared/a11y/roving-focus.directive';
 import { TriageFormComponent } from '../nurse-station/triage-form/triage-form.component';
+import { CloseUnseenDialogComponent } from '../reception/close-unseen-dialog/close-unseen-dialog.component';
+import { actionRoles } from '../core/action-permissions';
 
 export interface TrackerColumn {
   key: keyof Pick<
@@ -58,6 +60,7 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
     RovingFocusDirective,
     TriageFormComponent,
     EnumLabelPipe,
+    CloseUnseenDialogComponent,
   ],
   templateUrl: './patient-tracker.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -71,6 +74,25 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
    * QA D788: a visit IN_PROGRESS is checked out by its clinician (it closes their
    * consultation); the desk waits until the examination is completed.
    */
+  /**
+   * QA D954: a patient who leaves before anyone sees them is closed from the
+   * tracker too (the reception's close-unseen dialog, reused), by the roles
+   * the endpoint admits.
+   */
+  get canCloseUnseen(): boolean {
+    return this.auth.hasAnyRole(actionRoles('encounterCloseUnseen'));
+  }
+  readonly closeUnseenItem = signal<PatientTrackerItem | null>(null);
+
+  openCloseUnseen(item: PatientTrackerItem): void {
+    this.closeUnseenItem.set(item);
+  }
+
+  onUnseenVisitClosed(): void {
+    this.closeUnseenItem.set(null);
+    this.refresh();
+  }
+
   get isClinician(): boolean {
     return this.auth.hasAnyRole(['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE']);
   }

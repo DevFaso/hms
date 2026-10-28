@@ -518,6 +518,27 @@ describe('EncountersComponent', () => {
     expect(component.showDeleteConfirm()).toBeFalse();
   });
 
+  it('QA D954: a nurse closes an arrived visit nobody saw from its detail', () => {
+    activeRoles = ['ROLE_NURSE'];
+    component.selectedEncounter.set(mockEncounter({ status: 'ARRIVED' }));
+    fixture.detectChanges();
+    const btn = fixture.nativeElement.querySelector(
+      '[data-testid="encounter-lwbs"]',
+    ) as HTMLButtonElement;
+    expect(btn).withContext('LWBS action in the visit detail').toBeTruthy();
+    btn.click();
+    fixture.detectChanges();
+    expect(component.closeUnseenEncounter()?.id).toBe('e1');
+    expect(fixture.nativeElement.querySelector('app-close-unseen-dialog')).toBeTruthy();
+  });
+
+  it('QA D954: a visit already seen offers no LWBS action', () => {
+    activeRoles = ['ROLE_NURSE'];
+    component.selectedEncounter.set(mockEncounter({ status: 'IN_PROGRESS' }));
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="encounter-lwbs"]')).toBeNull();
+  });
+
   it('addAddendum requires content', () => {
     component.selectedEncounter.set(mockEncounter());
     component.addendumContent = '   ';

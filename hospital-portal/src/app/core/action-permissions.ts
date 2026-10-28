@@ -142,6 +142,11 @@ export const ACTION_PERMISSIONS = {
     endpoint: 'EncounterController#startEncounter',
     roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR'],
   },
+  // QA D954: closing a visit nobody has seen (LWBS / cancelled).
+  encounterCloseUnseen: {
+    endpoint: 'EncounterController#closeUnseen',
+    roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_RECEPTIONIST'],
+  },
   // QA D961: a medical certificate is a doctor's act.
   encounterMedicalCertificate: {
     endpoint: 'EncounterController#issueMedicalCertificate',
