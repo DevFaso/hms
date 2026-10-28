@@ -140,7 +140,8 @@ class PharmacyRegistryControllerTest {
         mockMvc.perform(get("/pharmacy-registry"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value(
-                        org.hamcrest.Matchers.containsString("Hospital context is required")));
+                        org.hamcrest.Matchers.anyOf(org.hamcrest.Matchers.is("pharmacy.hospitalContext.required"),
+                                org.hamcrest.Matchers.startsWith("Select a hospital"))));
     }
 
     /**

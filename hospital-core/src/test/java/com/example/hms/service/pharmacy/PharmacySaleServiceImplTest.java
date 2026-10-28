@@ -117,7 +117,7 @@ class PharmacySaleServiceImplTest {
 
         assertThatThrownBy(() -> service.createSale(dto))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("active hospital context");
+                .extracting("messageKey").isEqualTo("pharmacy.sale.hospitalMismatch");
     }
 
     @Test
@@ -128,7 +128,7 @@ class PharmacySaleServiceImplTest {
 
         assertThatThrownBy(() -> service.createSale(dto))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("at least one line");
+                .extracting("messageKey").isEqualTo("pharmacy.sale.linesRequired");
     }
 
     @Test
@@ -210,7 +210,7 @@ class PharmacySaleServiceImplTest {
 
         assertThatThrownBy(() -> service.createSale(dto))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("does not belong to the selling pharmacy");
+                .extracting("messageKey").isEqualTo("pharmacy.sale.lotOtherPharmacy");
     }
 
     @Test
@@ -250,7 +250,7 @@ class PharmacySaleServiceImplTest {
 
         assertThatThrownBy(() -> service.createSale(dto))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("quantity must be greater than zero");
+                .extracting("messageKey").isEqualTo("pharmacy.sale.lineQuantityPositive");
     }
 
     @Test

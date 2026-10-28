@@ -9073,6 +9073,8 @@
     "LEDGER_REASON_RECEIPT_LOT": "Goods receipt: lot {{lot}}",
     "LEDGER_REASON_RECEIPT": "Goods receipt",
     "LEDGER_REASON_DISPENSE": "Dispensed for a prescription",
+    "LEDGER_REASON_DISPENSE_CANCELLED": "Dispense cancelled: stock put back",
+    "LEDGER_REASON_PREPARED_CANCELLED": "Prepared fill cancelled: stock put back",
     "LEDGER_REASON_RETURN": "Return, ref. {{ref}}",
     "LEDGER_REASON_TRANSFER": "Transfer to {{dest}}",
     "ADJ_REASON_DAMAGE": "Damage",

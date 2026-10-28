@@ -414,6 +414,10 @@ export class StockAdjustmentComponent implements OnInit {
     if (m) return t('LEDGER_REASON_RECEIPT_LOT', { lot: m[1] });
     if (/^RECEIPT$/i.test(reason)) return t('LEDGER_REASON_RECEIPT');
     if (/^Dispense for prescription\b/i.test(reason)) return t('LEDGER_REASON_DISPENSE');
+    // QA D1000: the two reversal shapes the server writes (DispenseServiceImpl,
+    // PreparedFillVoider), pinned by PharmacyUserFacingTextGuardTest.
+    if (/^Dispense cancelled\b/i.test(reason)) return t('LEDGER_REASON_DISPENSE_CANCELLED');
+    if (/^Prepared fill cancelled\b/i.test(reason)) return t('LEDGER_REASON_PREPARED_CANCELLED');
     m = /^RETURN ref (.+)$/i.exec(reason);
     if (m) return t('LEDGER_REASON_RETURN', { ref: m[1] });
     m = /^TRANSFER to (.+)$/i.exec(reason);

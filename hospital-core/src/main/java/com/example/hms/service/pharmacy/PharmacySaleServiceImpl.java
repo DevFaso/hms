@@ -64,10 +64,10 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
     public PharmacySaleResponseDTO createSale(PharmacySaleRequestDTO dto) {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
         if (!activeHospitalId.equals(dto.getHospitalId())) {
-            throw new BusinessException("Sale hospital does not match the active hospital context");
+            throw new BusinessException("pharmacy.sale.hospitalMismatch");
         }
         if (dto.getLines() == null || dto.getLines().isEmpty()) {
-            throw new BusinessException("Sale must include at least one line item");
+            throw new BusinessException("pharmacy.sale.linesRequired");
         }
 
         Hospital hospital = hospitalRepository.findById(dto.getHospitalId())
@@ -114,10 +114,10 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
 
     private SaleLine buildLine(SaleLineRequestDTO lineDto, Pharmacy pharmacy) {
         if (lineDto.getQuantity() == null || lineDto.getQuantity().signum() <= 0) {
-            throw new BusinessException("Sale line quantity must be greater than zero");
+            throw new BusinessException("pharmacy.sale.lineQuantityPositive");
         }
         if (lineDto.getUnitPrice() == null || lineDto.getUnitPrice().signum() < 0) {
-            throw new BusinessException("Sale line unit price cannot be negative");
+            throw new BusinessException("pharmacy.sale.linePriceNegative");
         }
 
         MedicationCatalogItem item = catalogItemRepository.findById(lineDto.getMedicationCatalogItemId())
@@ -131,7 +131,7 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
             if (lot.getInventoryItem() == null
                     || lot.getInventoryItem().getPharmacy() == null
                     || !pharmacy.getId().equals(lot.getInventoryItem().getPharmacy().getId())) {
-                throw new BusinessException("Stock lot does not belong to the selling pharmacy");
+                throw new BusinessException("pharmacy.sale.lotOtherPharmacy");
             }
             // QA D779: a counter sale from a lot is the same movement as a
             // fill: half a tablet of a counted item is refused here too.
@@ -170,7 +170,7 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
     public Page<PharmacySaleResponseDTO> listByHospital(UUID hospitalId, Pageable pageable) {
         UUID active = roleValidator.requireActiveHospitalId();
         if (!active.equals(hospitalId)) {
-            throw new BusinessException("Hospital ID does not match the active hospital context");
+            throw new BusinessException("pharmacy.sale.hospitalMismatch");
         }
         return saleRepository.findByHospital_Id(active, pageable).map(mapper::toResponseDTO);
     }
@@ -194,7 +194,7 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
     private User resolveCurrentUser() {
         UUID userId = roleValidator.getCurrentUserId();
         if (userId == null) {
-            throw new BusinessException("Unable to determine current user");
+            throw new BusinessException("pharmacy.currentUserUnknown");
         }
         return userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("user.current.notfound"));

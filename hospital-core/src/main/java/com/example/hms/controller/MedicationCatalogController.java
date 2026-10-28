@@ -70,8 +70,7 @@ public class MedicationCatalogController {
         // and InBasketController (PR #292).
         UUID resolved = authUtils.resolveHospitalScope(auth, hospitalId, false);
         if (resolved == null && !authUtils.hasAuthority(auth, "ROLE_SUPER_ADMIN")) {
-            throw new BusinessException("Hospital context is required. "
-                + "Pass hospitalId or ensure your token has a hospital scope.");
+            throw new BusinessException("pharmacy.hospitalContext.required");
         }
         return ResponseEntity.ok(catalogService.listByHospital(resolved, pageable));
     }

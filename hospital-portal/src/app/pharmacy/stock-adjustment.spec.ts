@@ -180,6 +180,14 @@ describe('StockAdjustmentComponent (D82 / D108)', () => {
       'PHARMACY.LEDGER_REASON_DISPENSE',
     );
     expect(label('RETURN ref QA-RET-001')).toBe('PHARMACY.LEDGER_REASON_RETURN');
+    // QA D1000: every ledger shape PharmacyUserFacingTextGuardTest#LEDGER_REASON_PREFIXES
+    // lets the server store is translated here.
+    expect(label('Dispense cancelled — stock returned for prescription 3105c0de')).toBe(
+      'PHARMACY.LEDGER_REASON_DISPENSE_CANCELLED',
+    );
+    expect(label('Prepared fill cancelled — stock returned for prescription unknown')).toBe(
+      'PHARMACY.LEDGER_REASON_PREPARED_CANCELLED',
+    );
     expect(label('CYCLE_COUNT_VARIANCE: recount')).toBe(
       'PHARMACY.ADJ_REASON_CYCLE_COUNT_VARIANCE : recount',
     );

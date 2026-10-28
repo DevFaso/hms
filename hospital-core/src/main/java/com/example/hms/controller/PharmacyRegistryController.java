@@ -80,8 +80,7 @@ public class PharmacyRegistryController {
         // on a clinical token is a misconfiguration, not a feature.
         UUID resolved = authUtils.resolveHospitalScope(auth, hospitalId, false);
         if (resolved == null && !authUtils.hasAuthority(auth, "ROLE_SUPER_ADMIN")) {
-            throw new BusinessException("Hospital context is required. "
-                + "Pass hospitalId or ensure your token has a hospital scope.");
+            throw new BusinessException("pharmacy.hospitalContext.required");
         }
         return ResponseEntity.ok(pharmacyService.listByHospital(resolved, pageable));
     }

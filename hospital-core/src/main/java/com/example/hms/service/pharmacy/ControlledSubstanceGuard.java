@@ -45,16 +45,16 @@ public class ControlledSubstanceGuard {
         // drug would otherwise be unsignable, as no two-factor step exists yet
         // (tasklist standing debt). Verification, chart, history and PDF do use it.
         if (prescription.isControlledSubstance() && prescription.getTwoFactorVerifiedAt() == null) {
-            throw new BusinessException(
-                "CONTROLLED_SUBSTANCE: a prescription flagged as a controlled substance cannot be "
-                    + "set to " + targetStatus + " until two-factor verification is complete.");
+            // QA D1000: a key resolved in the caller's language; the code
+            // (CONTROLLED_SUBSTANCE) stays in the key for log searches.
+            throw new BusinessException("prescription.safeguard.CONTROLLED_SUBSTANCE.status",
+                targetStatus.localizedLabel());
         }
 
         if (prescription.isRequiresCosign()
                 && (prescription.getCosignedAt() == null || prescription.getCosignedBy() == null)) {
-            throw new BusinessException(
-                "COSIGN_REQUIRED: a prescription that requires a co-signature cannot be set to "
-                    + targetStatus + " until a second prescriber co-signs it.");
+            throw new BusinessException("prescription.safeguard.COSIGN_REQUIRED.status",
+                targetStatus.localizedLabel());
         }
     }
 
@@ -67,17 +67,12 @@ public class ControlledSubstanceGuard {
      */
     public void requireDispensable(Prescription prescription) {
         if (prescription.isControlledSubstance() && prescription.getTwoFactorVerifiedAt() == null) {
-            throw new BusinessException(
-                "CONTROLLED_SUBSTANCE: this prescription is flagged as a controlled substance "
-                    + "and has no completed two-factor verification. It cannot be dispensed "
-                    + "until the prescriber verifies it.");
+            throw new BusinessException("prescription.safeguard.CONTROLLED_SUBSTANCE.dispense");
         }
 
         if (prescription.isRequiresCosign()
                 && (prescription.getCosignedAt() == null || prescription.getCosignedBy() == null)) {
-            throw new BusinessException(
-                "COSIGN_REQUIRED: this prescription requires a co-signature and has not been "
-                    + "co-signed. It cannot be dispensed until a second prescriber co-signs it.");
+            throw new BusinessException("prescription.safeguard.COSIGN_REQUIRED.dispense");
         }
     }
 }

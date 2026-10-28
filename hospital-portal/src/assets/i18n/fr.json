@@ -9073,6 +9073,8 @@
     "LEDGER_REASON_RECEIPT_LOT": "Réception : lot {{lot}}",
     "LEDGER_REASON_RECEIPT": "Réception",
     "LEDGER_REASON_DISPENSE": "Dispensation d’une ordonnance",
+    "LEDGER_REASON_DISPENSE_CANCELLED": "Délivrance annulée : stock remis en rayon",
+    "LEDGER_REASON_PREPARED_CANCELLED": "Préparation annulée : stock remis en rayon",
     "LEDGER_REASON_RETURN": "Retour, réf. {{ref}}",
     "LEDGER_REASON_TRANSFER": "Transfert vers {{dest}}",
     "ADJ_REASON_DAMAGE": "Dommage",

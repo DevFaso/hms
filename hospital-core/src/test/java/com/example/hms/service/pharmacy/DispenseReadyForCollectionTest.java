@@ -392,7 +392,7 @@ class DispenseReadyForCollectionTest {
             DispenseRequestDTO req = request();
             assertThatThrownBy(() -> service.markReadyForCollection(req))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("CONTROLLED_SUBSTANCE");
+                    .extracting("messageKey").isEqualTo("prescription.safeguard.CONTROLLED_SUBSTANCE.dispense");
             assertNothingPrepared();
         }
 
@@ -783,7 +783,7 @@ class DispenseReadyForCollectionTest {
 
             assertThatThrownBy(() -> service.handOver(dispenseId, null))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("CONTROLLED_SUBSTANCE");
+                    .extracting("messageKey").isEqualTo("prescription.safeguard.CONTROLLED_SUBSTANCE.dispense");
             verify(dispenseRepository, never()).completePreparedFill(any(), any(), any(), any(), any(), any());
         }
 
