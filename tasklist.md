@@ -2218,8 +2218,7 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   uniqueness (D113, `existsByPhoneNumberPrimaryAndIdNot`) compares the stored
   string exactly, so a legacy national-format holder is not seen; the rule
   itself is in question now that the desk records shared family numbers.
-  (5) `PatientServiceImpl#findByPhone` returns one holder for a number under
-  8 digits (no supported country issues those). (6) The phone match is a
+  (5) Fixed in #972 round 10 (a short number lists every holder). (6) The phone match is a
   sequential scan; a stored digits column with an index needs a migration.
   (7) Round 9: `AuditEventLogServiceImpl` resolves a phone-only PATIENT
   resource name to the first holder, across hospitals; with shared family
