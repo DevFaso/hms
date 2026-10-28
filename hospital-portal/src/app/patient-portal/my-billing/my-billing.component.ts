@@ -9,6 +9,7 @@ import {
 } from '../../services/patient-portal.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { CfaPipe } from '../../shared/pipes/cfa.pipe';
+import { DialogA11yDirective } from '../../shared/a11y/dialog-a11y.directive';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { formatCfa } from '../../shared/i18n/app-locale';
 
@@ -23,6 +24,7 @@ import { formatCfa } from '../../shared/i18n/app-locale';
     EnumLabelPipe,
     TranslateModule,
     CfaPipe,
+    DialogA11yDirective,
   ],
   templateUrl: './my-billing.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,

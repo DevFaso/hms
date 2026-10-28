@@ -106,25 +106,30 @@
   @if (payingInvoice()) {
     <div
       class="pay-overlay"
-      role="dialog"
-      aria-modal="true"
       (click)="closePayDialog()"
       (keydown.escape)="closePayDialog()"
       tabindex="-1"
     >
       <div
         class="pay-dialog"
-        role="document"
+        appDialogA11y
+        tabindex="-1"
+        aria-labelledby="pay-dialog-title-1"
+        (dialogClose)="closePayDialog()"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="closePayDialog()"
+        (keydown.escape)="$event.stopPropagation()"
       >
         <div class="pay-dialog-header">
-          <h3>
+          <h3 id="pay-dialog-title-1">
             <span class="material-symbols-outlined">payment</span>
             {{ 'PORTAL.BILLING.MAKE_PAYMENT' | translate }}
           </h3>
-          <button class="pay-dialog-close" (click)="closePayDialog()">
-            <span class="material-symbols-outlined">close</span>
+          <button
+            class="pay-dialog-close"
+            (click)="closePayDialog()"
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
           </button>
         </div>
 

@@ -1,4 +1,4 @@
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpParams, HttpResponse } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
 
@@ -55,6 +55,8 @@ export interface BillingInvoiceResponse {
   updatedAt: string;
   /** QA D428: the visit invoice a folded check-in copay was credited to. */
   creditedToInvoiceNumber?: string | null;
+  /** QA D936: a copay taken at check-in; credited to the visit invoice once one is issued. */
+  checkInCopay?: boolean;
 }
 
 export interface InvoiceItemResponse {
@@ -235,8 +237,12 @@ export class BillingService {
     return this.http.get<BillingInvoiceResponse[]>('/billing-invoices/overdue', { params });
   }
 
-  getInvoicePdf(id: string): Observable<Blob> {
-    return this.http.get(`/billing-invoices/${id}/pdf`, { responseType: 'blob' });
+  /** QA D1009: the whole response, so the file keeps the name the server gives it. */
+  getInvoicePdf(id: string): Observable<HttpResponse<Blob>> {
+    return this.http.get(`/billing-invoices/${id}/pdf`, {
+      responseType: 'blob',
+      observe: 'response',
+    });
   }
 
   getInvoiceItems(invoiceId: string): Observable<InvoiceItemResponse[]> {
@@ -311,9 +317,11 @@ export class BillingService {
     );
   }
 
-  getReceiptPdf(invoiceId: string, paymentId: string): Observable<Blob> {
+  /** QA D1009: each receipt has its own number ("…-R2"), carried in Content-Disposition. */
+  getReceiptPdf(invoiceId: string, paymentId: string): Observable<HttpResponse<Blob>> {
     return this.http.get(`/billing-invoices/${invoiceId}/payments/${paymentId}/receipt`, {
       responseType: 'blob',
+      observe: 'response',
     });
   }
 

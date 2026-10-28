@@ -24,6 +24,8 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { formatCfa } from '../shared/i18n/app-locale';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { DialogA11yDirective } from '../shared/a11y/dialog-a11y.directive';
+import { saveResponse } from '../shared/download-file';
 
 type BillingTab = 'all' | 'outstanding' | 'paid' | 'overdue';
 
@@ -37,6 +39,7 @@ type BillingTab = 'all' | 'outstanding' | 'paid' | 'overdue';
     TranslateModule,
     EnumLabelPipe,
     PatientPickerComponent,
+    DialogA11yDirective,
   ],
   templateUrl: './billing.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -62,16 +65,22 @@ export class BillingComponent implements OnInit {
     'View Billing Reports',
     'Manage Billing',
   );
-  /** SecurityConfig excludes RECEPTIONIST from POST /billing-invoices/**, so
-   *  payment recording 403s for receptionists despite the @PreAuthorize. */
+  /** QA D973: the front desk takes payments (the server admits the receptionist
+   *  on POST /billing-invoices/{id}/payments), so the button is not hidden from it. */
   readonly canRecordPayment = this.roleContext.hasAnyActiveRole([
     'ROLE_SUPER_ADMIN',
     'ROLE_HOSPITAL_ADMIN',
     'ROLE_BILLING_SPECIALIST',
     'ROLE_ACCOUNTANT',
+    'ROLE_RECEPTIONIST',
   ]);
   /** QA D142: the server reverses a payment for these roles only. */
-  readonly canReversePayment = this.canRecordPayment;
+  readonly canReversePayment = this.roleContext.hasAnyActiveRole([
+    'ROLE_SUPER_ADMIN',
+    'ROLE_HOSPITAL_ADMIN',
+    'ROLE_BILLING_SPECIALIST',
+    'ROLE_ACCOUNTANT',
+  ]);
 
   invoices = signal<BillingInvoiceResponse[]>([]);
   filtered = signal<BillingInvoiceResponse[]>([]);
@@ -105,6 +114,12 @@ export class BillingComponent implements OnInit {
   editingStatus = signal<InvoiceStatus>('DRAFT');
   /** With lines, the total is their sum and cannot be typed (QA D72). */
   editingHasLines = signal(false);
+  /**
+   * QA D936: the picked patient's paid check-in copays that no visit invoice
+   * has taken yet. Billing cannot open the encounter list, so the form names
+   * the visit each one was paid for and links it in one click.
+   */
+  openCopays = signal<BillingInvoiceResponse[]>([]);
 
   /* ── Invoice lines (detail panel) ── */
   items = signal<InvoiceItemResponse[]>([]);
@@ -201,6 +216,7 @@ export class BillingComponent implements OnInit {
     // One key per form: a double click or a retry creates one invoice (QA D94).
     this.form.clientRequestId = crypto.randomUUID();
     this.formPatient.set(null);
+    this.openCopays.set([]);
     this.editingHasLines.set(false);
     this.editing.set(false);
     this.editingId.set(null);
@@ -245,6 +261,29 @@ export class BillingComponent implements OnInit {
   onPatientPicked(p: PatientResponse | null): void {
     this.formPatient.set(p);
     this.form.patientId = p?.id ?? '';
+    this.loadOpenCopays(p?.id ?? null);
+  }
+
+  /** QA D936: the copays a new invoice for this patient should take. */
+  private loadOpenCopays(patientId: string | null): void {
+    this.openCopays.set([]);
+    if (!patientId || this.editing()) return;
+    this.billingService.searchInvoices({ patientId, statuses: ['PAID'] }, 0, 50).subscribe({
+      next: (res) => {
+        if (this.form.patientId !== patientId) return;
+        this.openCopays.set(
+          (res?.content ?? []).filter(
+            (inv) => inv.checkInCopay && !inv.creditedToInvoiceNumber && !!inv.encounterCode,
+          ),
+        );
+      },
+      error: () => this.openCopays.set([]),
+    });
+  }
+
+  /** QA D936: the visit the copay was paid for becomes this invoice's visit. */
+  linkCopayVisit(copay: BillingInvoiceResponse): void {
+    this.form.encounterReference = copay.encounterCode ?? undefined;
   }
 
   closeModal(): void {
@@ -632,32 +671,24 @@ ${this.translate.instant('BILLING.SUPPLEMENTARY_CONFIRM')}`)
     });
   }
 
+  /** QA D1009: each receipt keeps its own number ("…-R2") instead of sharing one name. */
   downloadReceipt(p: PaymentRow): void {
     const inv = this.selectedInvoice();
     if (!inv) return;
     this.billingService.getReceiptPdf(inv.id, p.id).subscribe({
-      next: (blob) => {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `receipt-${inv.invoiceNumber || inv.id}.pdf`;
-        a.click();
-        URL.revokeObjectURL(url);
-      },
+      next: (res) =>
+        saveResponse(
+          res,
+          `receipt-${inv.invoiceNumber}-${(p.paymentDate ?? '').substring(0, 10)}.pdf`,
+        ),
       error: () => this.toast.error(this.translate.instant('BILLING.PDF_FAILED')),
     });
   }
 
-  downloadPdf(id: string): void {
-    this.billingService.getInvoicePdf(id).subscribe({
-      next: (blob) => {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `invoice-${id}.pdf`;
-        a.click();
-        URL.revokeObjectURL(url);
-      },
+  /** QA D1009: the invoice PDF is named by its number, not its database id. */
+  downloadPdf(inv: BillingInvoiceResponse): void {
+    this.billingService.getInvoicePdf(inv.id).subscribe({
+      next: (res) => saveResponse(res, `invoice-${inv.invoiceNumber}.pdf`),
       error: () => this.toast.error(this.translate.instant('BILLING.PDF_FAILED')),
     });
   }

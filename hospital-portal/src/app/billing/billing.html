@@ -199,23 +199,26 @@
                     class="action-link view-link"
                     [title]="'BILLING.VIEW_DETAILS_TITLE' | translate"
                     (click)="viewInvoice(inv)"
+                    [attr.aria-label]="'BILLING.VIEW_DETAILS_TITLE' | translate"
                   >
-                    <span class="material-symbols-outlined">visibility</span>
+                    <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
                   </button>
                   <button
                     class="action-link"
                     [title]="'BILLING.DOWNLOAD_PDF' | translate"
-                    (click)="downloadPdf(inv.id)"
+                    (click)="downloadPdf(inv)"
+                    [attr.aria-label]="'BILLING.DOWNLOAD_PDF' | translate"
                   >
-                    <span class="material-symbols-outlined">picture_as_pdf</span>
+                    <span class="material-symbols-outlined" aria-hidden="true">picture_as_pdf</span>
                   </button>
                   @if (canPayInvoice(inv)) {
                     <button
                       class="action-link pay-link"
                       [title]="'BILLING.RECORD_PAYMENT' | translate"
                       (click)="openPayment(inv)"
+                      [attr.aria-label]="'BILLING.RECORD_PAYMENT' | translate"
                     >
-                      <span class="material-symbols-outlined">payments</span>
+                      <span class="material-symbols-outlined" aria-hidden="true">payments</span>
                     </button>
                   }
                   @if (canEmail && inv.status !== 'DRAFT' && inv.status !== 'CANCELLED') {
@@ -223,8 +226,9 @@
                       class="action-link"
                       [title]="'BILLING.EMAIL_INVOICE' | translate"
                       (click)="openEmail(inv)"
+                      [attr.aria-label]="'BILLING.EMAIL_INVOICE' | translate"
                     >
-                      <span class="material-symbols-outlined">email</span>
+                      <span class="material-symbols-outlined" aria-hidden="true">email</span>
                     </button>
                   }
                   @if (canEdit) {
@@ -232,8 +236,9 @@
                       class="action-link edit-link"
                       [title]="'COMMON.EDIT' | translate"
                       (click)="openEdit(inv)"
+                      [attr.aria-label]="'COMMON.EDIT' | translate"
                     >
-                      <span class="material-symbols-outlined">edit</span>
+                      <span class="material-symbols-outlined" aria-hidden="true">edit</span>
                     </button>
                   }
                   @if (canDelete && inv.status === 'DRAFT') {
@@ -241,8 +246,9 @@
                       class="action-link delete-link"
                       [title]="'COMMON.DELETE' | translate"
                       (click)="confirmDelete(inv)"
+                      [attr.aria-label]="'COMMON.DELETE' | translate"
                     >
-                      <span class="material-symbols-outlined">delete</span>
+                      <span class="material-symbols-outlined" aria-hidden="true">delete</span>
                     </button>
                   }
                 </div>
@@ -287,15 +293,24 @@
 
   @if (selectedInvoice(); as inv) {
     <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeDetail()">
-      <div class="detail-panel">
+      <div
+        class="detail-panel"
+        appDialogA11y
+        tabindex="-1"
+        aria-labelledby="bill-detail-title"
+        (dialogClose)="closeDetail()"
+      >
         <div class="panel-header">
-          <h2>{{ 'BILLING.INVOICE' | translate }} {{ inv.invoiceNumber }}</h2>
+          <h2 id="bill-detail-title">
+            {{ 'BILLING.INVOICE' | translate }} {{ inv.invoiceNumber }}
+          </h2>
           <button
             class="close-btn"
             [title]="'COMMON.CLOSE_DETAIL_PANEL' | translate"
             (click)="closeDetail()"
+            [attr.aria-label]="'COMMON.CLOSE_DETAIL_PANEL' | translate"
           >
-            <span class="material-symbols-outlined">close</span>
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
           </button>
         </div>
         <div class="panel-body">
@@ -565,18 +580,25 @@
   <div class="modal-backdrop" tabindex="-1" (click)="closeModal()" (keydown.escape)="closeModal()">
     <div
       class="modal modal-lg"
+      appDialogA11y
       tabindex="-1"
+      aria-labelledby="bill-form-title"
+      (dialogClose)="closeModal()"
       (click)="$event.stopPropagation()"
       (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="bill-form-title">
           {{
             editing() ? ('BILLING.EDIT_INVOICE' | translate) : ('BILLING.NEW_INVOICE' | translate)
           }}
         </h2>
-        <button class="modal-close" (click)="closeModal()">
-          <span class="material-symbols-outlined">close</span>
+        <button
+          class="modal-close"
+          (click)="closeModal()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -669,6 +691,40 @@
             [placeholder]="'BILLING.ENCOUNTER_REFERENCE_PLACEHOLDER' | translate"
           />
           <p class="field-hint">{{ 'BILLING.ENCOUNTER_REFERENCE_HINT' | translate }}</p>
+          @if (!editing() && openCopays().length > 0) {
+            <div class="copay-notice" role="status" data-testid="open-copays">
+              <p>{{ 'BILLING.OPEN_COPAYS_INTRO' | translate }}</p>
+              <ul>
+                @for (c of openCopays(); track c.id) {
+                  <li>
+                    {{
+                      'BILLING.OPEN_COPAY_LINE'
+                        | translate
+                          : {
+                              amount: formatCurrency(c.amountPaid),
+                              visit: c.encounterCode,
+                              invoice: c.invoiceNumber,
+                            }
+                    }}
+                    @if (form.encounterReference === c.encounterCode) {
+                      <span class="copay-linked">{{
+                        'BILLING.OPEN_COPAY_LINKED' | translate
+                      }}</span>
+                    } @else {
+                      <button
+                        type="button"
+                        class="btn-secondary btn-sm"
+                        [attr.data-testid]="'link-copay-' + c.encounterCode"
+                        (click)="linkCopayVisit(c)"
+                      >
+                        {{ 'BILLING.OPEN_COPAY_LINK' | translate }}
+                      </button>
+                    }
+                  </li>
+                }
+              </ul>
+            </div>
+          }
         </div>
         <div class="field">
           <label for="bill-notes">{{ 'BILLING.NOTES' | translate }}</label>
@@ -712,14 +768,21 @@
   >
     <div
       class="modal"
+      appDialogA11y
       tabindex="-1"
+      aria-labelledby="bill-delete-title"
+      (dialogClose)="cancelDelete()"
       (click)="$event.stopPropagation()"
       (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'BILLING.DELETE_INVOICE' | translate }}</h2>
-        <button class="modal-close" (click)="cancelDelete()">
-          <span class="material-symbols-outlined">close</span>
+        <h2 id="bill-delete-title">{{ 'BILLING.DELETE_INVOICE' | translate }}</h2>
+        <button
+          class="modal-close"
+          (click)="cancelDelete()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -744,16 +807,23 @@
   <div class="modal-backdrop" tabindex="-1" (click)="closeEmail()" (keydown.escape)="closeEmail()">
     <div
       class="modal"
-      role="dialog"
-      aria-modal="true"
+      appDialogA11y
       tabindex="-1"
+      aria-labelledby="bill-email-title"
+      (dialogClose)="closeEmail()"
       (click)="$event.stopPropagation()"
       (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'BILLING.EMAIL_TITLE' | translate: { invoice: inv.invoiceNumber } }}</h2>
-        <button class="modal-close" (click)="closeEmail()">
-          <span class="material-symbols-outlined">close</span>
+        <h2 id="bill-email-title">
+          {{ 'BILLING.EMAIL_TITLE' | translate: { invoice: inv.invoiceNumber } }}
+        </h2>
+        <button
+          class="modal-close"
+          (click)="closeEmail()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -817,16 +887,23 @@
   >
     <div
       class="modal"
-      role="dialog"
-      aria-modal="true"
+      appDialogA11y
       tabindex="-1"
+      aria-labelledby="bill-payment-title"
+      (dialogClose)="closePayment()"
       (click)="$event.stopPropagation()"
       (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'BILLING.PAYMENT_TITLE' | translate: { invoice: inv.invoiceNumber } }}</h2>
-        <button class="modal-close" (click)="closePayment()">
-          <span class="material-symbols-outlined">close</span>
+        <h2 id="bill-payment-title">
+          {{ 'BILLING.PAYMENT_TITLE' | translate: { invoice: inv.invoiceNumber } }}
+        </h2>
+        <button
+          class="modal-close"
+          (click)="closePayment()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -903,22 +980,27 @@
   >
     <div
       class="modal"
-      role="dialog"
-      aria-modal="true"
+      appDialogA11y
       tabindex="-1"
+      aria-labelledby="bill-reversal-title"
+      (dialogClose)="closeReversal()"
       (click)="$event.stopPropagation()"
       (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="bill-reversal-title">
           {{
             (reversalMode() === 'reverse' ? 'BILLING.REVERSE_PAYMENT' : 'BILLING.REJECT_PAYMENT')
               | translate
           }}
           — {{ formatCurrency(p.amount) }}
         </h2>
-        <button class="modal-close" (click)="closeReversal()">
-          <span class="material-symbols-outlined">close</span>
+        <button
+          class="modal-close"
+          (click)="closeReversal()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">

@@ -341,7 +341,8 @@ export class PatientDetailComponent implements OnInit {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `patient-record-${this.patientId}.pdf`;
+        // QA D1009: named by the MRN the user can read, not the patient's database id.
+        a.download = `patient-record-${this.patient()?.mrn || 'export'}.pdf`;
         a.click();
         URL.revokeObjectURL(url);
       },

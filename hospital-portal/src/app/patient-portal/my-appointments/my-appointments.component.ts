@@ -19,6 +19,7 @@ import {
   SchedulingProvider,
 } from '../../services/patient-portal.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
+import { DialogA11yDirective } from '../../shared/a11y/dialog-a11y.directive';
 import { localDateString } from '../../shared/date-utils';
 import { PreCheckinFormComponent } from './pre-checkin-form/pre-checkin-form.component';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
@@ -41,6 +42,7 @@ function visitKey(a: PortalAppointment): string {
     TranslateModule,
     FormsModule,
     PreCheckinFormComponent,
+    DialogA11yDirective,
   ],
   templateUrl: './my-appointments.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
