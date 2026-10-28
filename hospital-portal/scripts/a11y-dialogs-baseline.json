@@ -82,21 +82,21 @@
       "count": 1,
       "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
     },
-    "src/app/announcements/announcement-list.html::role::modal <{{ 'ANNOUNCEMENTS.DELETE_ANNOUNCEMENT' | translate }}>": {
+    "src/app/announcements/announcement-list.html::label::modal <{{ 'ANNOUNCEMENTS.DELETE_ANNOUNCEMENT' | translate }}>": {
       "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+      "why": "pre-existing (class D976/D988): dialog without a name; aria-labelledby pointing at its title"
     },
-    "src/app/announcements/announcement-list.html::role::modal <{{ editing() ? ('ANNOUNCEMENTS.EDIT_ANNOUNCEMENT' | translat>": {
+    "src/app/announcements/announcement-list.html::label::modal <{{ editing() ? ('ANNOUNCEMENTS.EDIT_ANNOUNCEMENT' | translat>": {
       "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+      "why": "pre-existing (class D976/D988): dialog without a name; aria-labelledby pointing at its title"
     },
-    "src/app/appointments/appointment-detail.html::role::modal <{{ 'APPOINTMENTS.RESCHEDULE_APPOINTMENT' | translate }}>": {
+    "src/app/appointments/appointment-detail.html::label::modal <{{ 'APPOINTMENTS.RESCHEDULE_APPOINTMENT' | translate }}>": {
       "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+      "why": "pre-existing (class D976/D988): dialog without a name; aria-labelledby pointing at its title"
     },
-    "src/app/appointments/appointment-detail.html::role::modal modal-confirm <{{ 'APPOINTMENTS.CANCEL_APPOINTMENT' | translate }}>": {
+    "src/app/appointments/appointment-detail.html::label::modal modal-confirm <{{ 'APPOINTMENTS.CANCEL_APPOINTMENT' | translate }}>": {
       "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+      "why": "pre-existing (class D976/D988): dialog without a name; aria-labelledby pointing at its title"
     },
     "src/app/bed-board/bed-board.html::escape::modal <{{ 'BED_BOARD.PRECAUTIONS_FOR' | translate: { name: precauti>": {
       "count": 1,
@@ -142,10 +142,6 @@
       "count": 1,
       "why": "D976: billing modals — Escape dead, focus stays behind, 4 lack a dialog role"
     },
-    "src/app/checkout/checkout-dialog/checkout-dialog.component.html::role::dialog-panel <{{ 'CHECKOUT.TITLE' | translate }}>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
     "src/app/consultations/consultations.html::role::modal <{{ 'CONSULTATIONS.CANCEL' | translate }}>": {
       "count": 1,
       "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
@@ -174,13 +170,13 @@
       "count": 1,
       "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
     },
-    "src/app/departments/department-list.html::role::modal <{{ 'DEPARTMENTS.DELETE' | translate }}>": {
+    "src/app/departments/department-list.html::label::modal <{{ 'DEPARTMENTS.DELETE' | translate }}>": {
       "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+      "why": "pre-existing (class D976/D988): dialog without a name; aria-labelledby pointing at its title"
     },
-    "src/app/departments/department-list.html::role::modal modal-lg <{{ editing() ? ('DEPARTMENTS.EDIT' | translate) : ('DEPARTME>": {
+    "src/app/departments/department-list.html::label::modal modal-lg <{{ editing() ? ('DEPARTMENTS.EDIT' | translate) : ('DEPARTME>": {
       "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+      "why": "pre-existing (class D976/D988): dialog without a name; aria-labelledby pointing at its title"
     },
     "src/app/digital-signatures/digital-signatures.html::escape::drawer <{{ 'SIGNATURES.DETAIL_TITLE' | translate }}>": {
       "count": 1,
@@ -258,10 +254,6 @@
       "count": 1,
       "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
     },
-    "src/app/encounters/eligibility-check-dialog/eligibility-check-dialog.component.html::role::elig-dialog <{{ 'ENCOUNTERS.ELIGIBILITY.TITLE' | translate }}>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
     "src/app/encounters/encounters.html::role::modal <{{ 'ENCOUNTERS.DELETE' | translate }}>": {
       "count": 1,
       "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
@@ -290,13 +282,13 @@
       "count": 1,
       "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
     },
-    "src/app/hospitals/hospital-list.html::role::modal <{{ 'HOSPITALS.DELETE' | translate }}>": {
+    "src/app/hospitals/hospital-list.html::label::modal <{{ 'HOSPITALS.DELETE' | translate }}>": {
       "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+      "why": "pre-existing (class D976/D988): dialog without a name; aria-labelledby pointing at its title"
     },
-    "src/app/hospitals/hospital-list.html::role::modal modal-lg <{{ editing() ? ('HOSPITALS.EDIT' | translate) : ('HOSPITALS.>": {
+    "src/app/hospitals/hospital-list.html::label::modal modal-lg <{{ editing() ? ('HOSPITALS.EDIT' | translate) : ('HOSPITALS.>": {
       "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+      "why": "pre-existing (class D976/D988): dialog without a name; aria-labelledby pointing at its title"
     },
     "src/app/imaging/imaging.html::role::modal <{{ 'IMAGING.CANCEL_ORDER' | translate }}>": {
       "count": 1,
@@ -486,13 +478,13 @@
       "count": 1,
       "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
     },
-    "src/app/organizations/organization-list.html::role::modal <{{ 'ORGANIZATIONS.DELETE' | translate }}>": {
+    "src/app/organizations/organization-list.html::label::modal <{{ 'ORGANIZATIONS.DELETE' | translate }}>": {
       "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+      "why": "pre-existing (class D976/D988): dialog without a name; aria-labelledby pointing at its title"
     },
-    "src/app/organizations/organization-list.html::role::modal <{{ editing() ? ('ORGANIZATIONS.EDIT' | translate) : ('ORGANI>": {
+    "src/app/organizations/organization-list.html::label::modal <{{ editing() ? ('ORGANIZATIONS.EDIT' | translate) : ('ORGANI>": {
       "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+      "why": "pre-existing (class D976/D988): dialog without a name; aria-labelledby pointing at its title"
     },
     "src/app/patient-education/patient-education.html::label::modal <{{ 'EDUCATION.ASSIGN_TITLE' | translate }}>": {
       "count": 1,
@@ -602,25 +594,25 @@
       "count": 1,
       "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
     },
-    "src/app/pharmacy/inventory-dashboard.html::role::modal modal-lg <{{ 'PHARMACY.ADD_ITEM' | translate }}>": {
+    "src/app/pharmacy/inventory-dashboard.html::label::modal modal-lg <{{ 'PHARMACY.ADD_ITEM' | translate }}>": {
       "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+      "why": "pre-existing (class D976/D988): dialog without a name; aria-labelledby pointing at its title"
     },
-    "src/app/pharmacy/medication-catalog.html::role::modal <{{ 'COMMON.DELETE' | translate }}>": {
+    "src/app/pharmacy/medication-catalog.html::label::modal <{{ 'COMMON.DELETE' | translate }}>": {
       "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+      "why": "pre-existing (class D976/D988): dialog without a name; aria-labelledby pointing at its title"
     },
-    "src/app/pharmacy/medication-catalog.html::role::modal modal-lg <{{ editing() ? ('PHARMACY.EDIT_MEDICATION' | translate) : ('>": {
+    "src/app/pharmacy/medication-catalog.html::label::modal modal-lg <{{ editing() ? ('PHARMACY.EDIT_MEDICATION' | translate) : ('>": {
       "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+      "why": "pre-existing (class D976/D988): dialog without a name; aria-labelledby pointing at its title"
     },
-    "src/app/pharmacy/pharmacy-registry.html::role::modal <{{ 'COMMON.DELETE' | translate }}>": {
+    "src/app/pharmacy/pharmacy-registry.html::label::modal <{{ 'COMMON.DELETE' | translate }}>": {
       "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+      "why": "pre-existing (class D976/D988): dialog without a name; aria-labelledby pointing at its title"
     },
-    "src/app/pharmacy/pharmacy-registry.html::role::modal modal-lg <{{ editing() ? ('PHARMACY.EDIT_PHARMACY' | translate) : ('PH>": {
+    "src/app/pharmacy/pharmacy-registry.html::label::modal modal-lg <{{ editing() ? ('PHARMACY.EDIT_PHARMACY' | translate) : ('PH>": {
       "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+      "why": "pre-existing (class D976/D988): dialog without a name; aria-labelledby pointing at its title"
     },
     "src/app/prescriptions/prescriptions.html::label::modal <{{ 'PRESCRIPTIONS.DISPATCH_SMS_TITLE' | translate }}>": {
       "count": 1,
@@ -714,29 +706,25 @@
       "count": 1,
       "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
     },
-    "src/app/roles/role-list.html::role::modal <{{ 'ROLES.DELETE_ROLE' | translate }}>": {
+    "src/app/roles/role-list.html::label::modal <{{ 'ROLES.DELETE_ROLE' | translate }}>": {
       "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+      "why": "pre-existing (class D976/D988): dialog without a name; aria-labelledby pointing at its title"
     },
-    "src/app/roles/role-list.html::role::modal <{{ editing() ? ('ROLES.EDIT_ROLE' | translate) : ('ROLES.CRE>": {
+    "src/app/roles/role-list.html::label::modal <{{ editing() ? ('ROLES.EDIT_ROLE' | translate) : ('ROLES.CRE>": {
       "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+      "why": "pre-existing (class D976/D988): dialog without a name; aria-labelledby pointing at its title"
     },
-    "src/app/roles/role-list.html::role::modal modal-lg <{{ 'ROLES.MANAGE_PERMISSIONS' | translate }} — {{ selectedRo>": {
+    "src/app/roles/role-list.html::label::modal modal-lg <{{ 'ROLES.MANAGE_PERMISSIONS' | translate }} — {{ selectedRo>": {
       "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+      "why": "pre-existing (class D976/D988): dialog without a name; aria-labelledby pointing at its title"
     },
-    "src/app/scheduling/scheduling.html::role::modal-panel <{{ 'SCHEDULING.BULK_SCHEDULE_SHIFTS' | translate }}>": {
+    "src/app/staff/staff-list.html::label::modal <{{ 'STAFF.DEACTIVATE_STAFF' | translate }}>": {
       "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+      "why": "pre-existing (class D976/D988): dialog without a name; aria-labelledby pointing at its title"
     },
-    "src/app/staff/staff-list.html::role::modal <{{ 'STAFF.DEACTIVATE_STAFF' | translate }}>": {
+    "src/app/staff/staff-list.html::label::modal modal-lg <{{ editing() ? ('STAFF.EDIT_STAFF' | translate) : ('STAFF.RE>": {
       "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/staff/staff-list.html::role::modal modal-lg <{{ editing() ? ('STAFF.EDIT_STAFF' | translate) : ('STAFF.RE>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+      "why": "pre-existing (class D976/D988): dialog without a name; aria-labelledby pointing at its title"
     },
     "src/app/transfusion/transfusion.html::role::modal <{{ 'TRANSFUSION.HANG' | translate }}>": {
       "count": 1,
@@ -766,17 +754,17 @@
       "count": 1,
       "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
     },
-    "src/app/users/user-list.html::role::modal <{{ 'USERS.CREDENTIALS_ONCE_TITLE' | translate }}>": {
+    "src/app/users/user-list.html::label::modal <{{ 'USERS.DELETE_USER' | translate }}>": {
       "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+      "why": "pre-existing (class D976/D988): dialog without a name; aria-labelledby pointing at its title"
     },
-    "src/app/users/user-list.html::role::modal <{{ 'USERS.DELETE_USER' | translate }}>": {
+    "src/app/users/user-list.html::label::modal <{{ editing() ? ('USERS.EDIT_USER' | translate) : ('USERS.REG>": {
       "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+      "why": "pre-existing (class D976/D988): dialog without a name; aria-labelledby pointing at its title"
     },
-    "src/app/users/user-list.html::role::modal <{{ editing() ? ('USERS.EDIT_USER' | translate) : ('USERS.REG>": {
+    "src/app/users/user-list.html::label::modal-content modal-md <{{ 'IMPERSONATION.MODAL_TITLE' | translate }}>": {
       "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+      "why": "pre-existing (class D976/D988): dialog without a name; aria-labelledby pointing at its title"
     }
   }
 }

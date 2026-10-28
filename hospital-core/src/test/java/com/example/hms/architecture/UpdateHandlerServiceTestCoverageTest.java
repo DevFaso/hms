@@ -85,16 +85,15 @@ class UpdateHandlerServiceTestCoverageTest {
     }
 
     /**
-     * Every handler of the controller source and the service calls in its body, one
-     * group per mapping annotation ({@code mapping} is the annotation's offset, so
-     * two overloads of one name stay two handlers).
+     * Every handler of the controller source (comments already stripped) and the
+     * service calls in its body, one group per mapping annotation ({@code mapping} is
+     * the annotation's offset, so two overloads of one name stay two handlers).
      */
-    static List<Delegation> delegations(String controller, String rawSource) {
-        String source = SourceScan.stripComments(rawSource);
+    static List<Delegation> delegations(String controller, String source) {
         List<Delegation> out = new ArrayList<>();
         Matcher mapping = MAPPING.matcher(source);
         while (mapping.find()) {
-            int at = skipAnnotations(source, mapping.end());
+            int at = SourceScan.skipAnnotations(source, mapping.end());
             Matcher signature = SIGNATURE.matcher(source).region(at, source.length());
             int params = signature.lookingAt() ? signature.end() - 1 : -1;
             int open = params < 0 ? -1 : source.indexOf('{', SourceScan.closingParen(source, params));
@@ -121,16 +120,6 @@ class UpdateHandlerServiceTestCoverageTest {
         return out;
     }
 
-    /**
-     * From the end of the mapping annotation: past its own argument list and every
-     * further annotation, to the first character of the signature
-     * ({@link SourceScan#skipAnnotations}). An {@code @Operation(description = "a public
-     * API ...")} is skipped whole, so its text cannot be read as the signature.
-     */
-    static int skipAnnotations(String source, int from) {
-        return SourceScan.skipAnnotations(source, from);
-    }
-
     /** {@code name(} in test code: every method name some test under src/test/java calls. */
     private static final Pattern CALLED = Pattern.compile("\\b(\\w+)\\s*\\(");
 
@@ -144,10 +133,22 @@ class UpdateHandlerServiceTestCoverageTest {
      * before the names are collected.
      */
     private static final Pattern STUB_CALL = Pattern.compile("\\b(?:when|given|verify|verifyNoMoreInteractions|inOrder)\\(");
-    private static final Pattern STUB_CHAIN = Pattern.compile("\\.(?:when|given)\\([^)]*\\)\\s*\\.(\\w+)\\s*\\(");
+
+    /**
+     * A method DECLARATION in test code ({@code @Test void updatePermission() {}}): the
+     * name is the test's, not a call to the service, and must not count as one.
+     */
+    private static final Pattern DECLARATION = Pattern.compile(
+        "(?m)^\\s*(?:(?:public|private|protected|static|final|default)\\s+)*(?:void|[\\w<>\\[\\],.? ]+?)\\s+(\\w+)\\s*\\([^;{)]*\\)\\s*(?:throws[^{;]*)?\\{");
 
     static String withoutStubs(String source) {
         StringBuilder out = new StringBuilder(source);
+        Matcher declaration = DECLARATION.matcher(source);
+        while (declaration.find()) {
+            for (int i = declaration.start(1); i < declaration.end(1); i++) {
+                out.setCharAt(i, ' ');
+            }
+        }
         Matcher m = STUB_CALL.matcher(source);
         while (m.find()) {
             int open = m.end() - 1;
@@ -170,12 +171,6 @@ class UpdateHandlerServiceTestCoverageTest {
                 for (int i = after; i < nameEnd; i++) {
                     out.setCharAt(i, ' ');
                 }
-            }
-        }
-        Matcher chain = STUB_CHAIN.matcher(source);
-        while (chain.find()) {
-            for (int i = chain.start(1); i < chain.end(1); i++) {
-                out.setCharAt(i, ' ');
             }
         }
         return out.toString();
@@ -203,9 +198,10 @@ class UpdateHandlerServiceTestCoverageTest {
         return names;
     }
 
-    private static int countMappings(String rawSource) {
+    /** The PUT/PATCH mapping annotations of a source whose comments are already stripped. */
+    private static int countMappings(String source) {
         int n = 0;
-        Matcher m = MAPPING.matcher(SourceScan.stripComments(rawSource));
+        Matcher m = MAPPING.matcher(source);
         while (m.find()) {
             n++;
         }
@@ -305,7 +301,7 @@ class UpdateHandlerServiceTestCoverageTest {
                 return ResponseEntity.ok(probeVisitService.getProbeVisit(id));
             }
             """;
-        List<Delegation> found = delegations("ProbeController", source);
+        List<Delegation> found = delegations("ProbeController", SourceScan.stripComments(source));
         assertThat(found).extracting(Delegation::key).containsExactlyInAnyOrder(
             "ProbeController#updateProbeVisit -> probeVisitService.updateProbeVisit",
             "ProbeController#patchProbeStatus -> probeAuditService.recordProbe",
@@ -316,7 +312,7 @@ class UpdateHandlerServiceTestCoverageTest {
         assertThat(found.stream().map(Delegation::mapping).distinct().count())
             .as("five mappings, the Javadoc mention not among them, the package-private handler among them")
             .isEqualTo(5);
-        assertThat(countMappings(source)).isEqualTo(5);
+        assertThat(countMappings(SourceScan.stripComments(source))).isEqualTo(5);
         assertThat(delegations("X", "@PutMapping(\"/x\")\n    private final Foo foo;\n"))
             .extracting(Delegation::method).containsExactly("<unparsed>");
     }
@@ -330,8 +326,13 @@ class UpdateHandlerServiceTestCoverageTest {
             verify(fooService).updateFoo(id, request);
             doReturn(x).when(bazService).updateBaz(id);
             FooResponse saved = fooService.renameFoo(id, request);
+            @Test
+            void updateQux() {
+                mockMvc.perform(put("/qux/1")).andExpect(status().isOk());
+            }
             """;
         String kept = withoutStubs(test);
-        assertThat(kept).contains("renameFoo(").doesNotContain("updateFoo(", "updateBar(", "updateBaz(");
+        assertThat(kept).contains("renameFoo(", "perform(")
+            .doesNotContain("updateFoo(", "updateBar(", "updateBaz(", "updateQux(");
     }
 }

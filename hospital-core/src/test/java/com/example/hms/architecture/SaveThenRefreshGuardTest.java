@@ -76,15 +76,20 @@ class SaveThenRefreshGuardTest {
             // the refresh is stepped over: a log line or a mapper call between the two
             // changes nothing about what the refresh discards.
             String rest = source.substring(semicolon + 1, endOfEnclosingBlock(source, semicolon + 1));
-            Matcher refresh = REFRESH.matcher(rest);
-            if (!refresh.find() || FLUSH.matcher(rest.substring(0, refresh.start())).find()) {
-                continue;
-            }
-            String refreshed = refresh.group(1);
             String saved = m.group(1);
-            if (refreshed.equals(argument) || refreshed.equals(saved)) {
-                out.add(file + ":" + SourceScan.lineOf(source, m.start()) + ": save(" + argument + ") then refresh("
-                    + refreshed + ") — the refresh re-reads the row and discards the pending update (QA D923)");
+            // Every refresh that follows is checked, not only the first: a refresh of
+            // another row before the saved one does not clear the saved one.
+            Matcher refresh = REFRESH.matcher(rest);
+            while (refresh.find()) {
+                if (FLUSH.matcher(rest.substring(0, refresh.start())).find()) {
+                    break;
+                }
+                String refreshed = refresh.group(1);
+                if (refreshed.equals(argument) || refreshed.equals(saved)) {
+                    out.add(file + ":" + SourceScan.lineOf(source, m.start()) + ": save(" + argument + ") then refresh("
+                        + refreshed + ") — the refresh re-reads the row and discards the pending update (QA D923)");
+                    break;
+                }
             }
         }
         return out;
@@ -211,8 +216,14 @@ class SaveThenRefreshGuardTest {
         assertThat(offenders("x", expression)).hasSize(1);
         assertThat(offenders("x", statementBetween)).hasSize(1);
         assertThat(offenders("x", nestedBlockBetween)).hasSize(1);
+        String otherRefreshFirst = """
+            Appointment saved = appointmentRepository.save(existing);
+            entityManager.refresh(lot);
+            entityManager.refresh(saved);
+            """;
         assertThat(offenders("x", qualifiedReceiver)).hasSize(1);
         assertThat(offenders("x", throughHelper)).hasSize(1);
+        assertThat(offenders("x", otherRefreshFirst)).hasSize(1);
         assertThat(offenders("x", flushed)).isEmpty();
         assertThat(offenders("x", unrelated)).isEmpty();
         assertThat(offenders("x", commented)).isEmpty();

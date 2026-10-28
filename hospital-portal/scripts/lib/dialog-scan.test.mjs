@@ -86,6 +86,15 @@ test('a container that only wraps a child component which is itself a dialog del
   assert.deepEqual(rules(html, html, new Set()), ['role']);
 });
 
+test('a native <dialog> has the role, the modality and Escape built in; only its name is checked', () => {
+  const named = `<dialog class="modal" aria-labelledby="t" (keydown.escape)="close()"><h2 id="t">T</h2></dialog>`;
+  assert.deepEqual(dialogFindings(named), []);
+  const unnamed = `<dialog class="modal"><h2>T</h2></dialog>`;
+  assert.deepEqual(rules(unnamed, unnamed), ['label']);
+  const wrapped = `<div class="modal-wrapper"><dialog aria-label="x"></dialog></div>`;
+  assert.deepEqual(dialogFindings(wrapped), []);
+});
+
 test('parts of a dialog (header, body, footer, backdrop, button) are not containers', () => {
   const html = `<div class="modal-backdrop"></div><div class="modal-header"></div>
     <div class="modal-body"></div><div class="modal-footer"></div><button class="modal-close"></button>

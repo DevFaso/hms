@@ -136,11 +136,24 @@ export function moneyTemplateFindings(html) {
   return out;
 }
 
+/** The balanced `{ … }` body opened at `openBraceIndex`; a brace inside a string or template literal is text. */
 function bodyAfter(source, openBraceIndex) {
   let depth = 0;
   for (let i = openBraceIndex; i < source.length; i++) {
-    if (source[i] === '{') depth++;
-    else if (source[i] === '}' && --depth === 0) return source.slice(openBraceIndex, i + 1);
+    const ch = source[i];
+    if (ch === "'" || ch === '"' || ch === '`') {
+      for (i++; i < source.length && source[i] !== ch; i++) {
+        if (source[i] === '\\') i++;
+      }
+      continue;
+    }
+    if (ch === '/' && source[i + 1] === '/') {
+      i = source.indexOf('\n', i);
+      if (i < 0) break;
+      continue;
+    }
+    if (ch === '{') depth++;
+    else if (ch === '}' && --depth === 0) return source.slice(openBraceIndex, i + 1);
   }
   return source.slice(openBraceIndex);
 }

@@ -49,9 +49,12 @@ class ResponseProseGuardTest {
     /** Response DTOs whose first constructor argument is the message shown to the user. */
     static final Pattern MESSAGE_DTO = Pattern.compile(
         "new\\s+(MessageResponse|EmailVerificationResponseDTO)\\s*\\(\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
-    /** A literal written straight into the body: {@code .body("…")} or {@code ResponseEntity.ok("…")}. */
+    /**
+     * A literal written straight into the body — {@code .body("…")}, {@code ResponseEntity.ok("…")}
+     * — alone or as the head of a concatenation ({@code .body("Invalid slot: " + slot)}).
+     */
     static final Pattern BODY_LITERAL = Pattern.compile(
-        "(?:\\.body|ResponseEntity\\.ok)\\(\\s*\"((?:[^\"\\\\]|\\\\.)*)\"\\s*\\)");
+        "(?:\\.body|ResponseEntity\\.ok)\\(\\s*\"((?:[^\"\\\\]|\\\\.)*)\"\\s*[+)]");
     /** The opening of an ad hoc body map; its message-bearing entries are read from the whole argument list. */
     static final Pattern MAP_OF = Pattern.compile("\\bMap\\.of\\(");
     static final Pattern MAP_MESSAGE_ENTRY = Pattern.compile(
@@ -225,11 +228,13 @@ class ResponseProseGuardTest {
             return ResponseEntity.ok(Map.of(STATUS, "FAILED", "sentAt", OffsetDateTime.now(), "error", "Failed to send email"));
             return ResponseEntity.ok(Map.of("count", items.size(), "message", REFRESH_INVALID_MESSAGE));
             return ResponseEntity.ok("Password changed successfully");
+            return ResponseEntity.badRequest().body("Invalid appointment slot: " + slot);
             """;
         assertThat(sites("x", source)).containsOnly(
             Map.entry("x::Logged out successfully.", 2),
             Map.entry("x::Mail service unavailable", 1),
             Map.entry("x::Failed to send email", 1),
+            Map.entry("x::Invalid appointment slot: ", 1),
             Map.entry("x::Password changed successfully", 1),
             Map.entry("x::Pre-check-in is available 1–7 days before your appointment.", 1),
             Map.entry("x::Refresh token is invalid or has expired.", 2),

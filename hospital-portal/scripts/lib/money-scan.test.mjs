@@ -100,6 +100,12 @@ test('D621: a component helper that formats money without formatCfa, or Intl cur
   assert.deepEqual(anchors(moneyComponentFindings(helper)), ['helper:formatCurrency']);
   const loose = `const label = new Intl.NumberFormat(locale, { style: 'currency', currency }).format(v);`;
   assert.deepEqual(anchors(moneyComponentFindings(loose)), ['helper:Intl currency']);
+  // A brace inside a string does not end the helper's body.
+  const braceInString = `formatMoney(v: number): string {
+    const unit = '}'; const open = "{";
+    return formatCfa(v) + unit;
+  }`;
+  assert.deepEqual(moneyComponentFindings(braceInString), []);
 });
 
 test('a helper that delegates francs to formatCfa may use Intl for another currency', () => {

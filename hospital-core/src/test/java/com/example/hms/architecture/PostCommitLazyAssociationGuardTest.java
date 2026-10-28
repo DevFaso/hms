@@ -151,20 +151,26 @@ class PostCommitLazyAssociationGuardTest {
                 report(file, source, open, SourceScan.closingBrace(source, open), out);
             }
         }
+        // An interceptor's afterCompletion(HttpServletRequest, …) also reads the servlet
+        // API (request.getUserPrincipal().getName()): only the entity getters count there.
         Matcher override = OVERRIDE.matcher(source);
         while (override.find()) {
             int params = override.end() - 1;
             int open = source.indexOf('{', SourceScan.closingParen(source, params));
             if (open >= 0) {
-                report(file, source, open, SourceScan.closingBrace(source, open), out);
+                report(file, source, open, SourceScan.closingBrace(source, open), out, CHAIN);
             }
         }
         return out.stream().distinct().toList();
     }
 
-    /** One line per chain; an override nested in a scanned argument is the same chain, reported once. */
     private static void report(String file, String source, int open, int close, List<String> out) {
-        Matcher c = ANY_CHAIN.matcher(source.substring(open, close));
+        report(file, source, open, close, out, ANY_CHAIN);
+    }
+
+    /** One line per chain; an override nested in a scanned argument is the same chain, reported once. */
+    private static void report(String file, String source, int open, int close, List<String> out, Pattern chain) {
+        Matcher c = chain.matcher(source.substring(open, close));
         while (c.find()) {
             out.add(file + ":" + SourceScan.lineOf(source, open + c.start()) + ": " + normalise(c.group())
                 + " in post-commit code (no session: pass ids)");
@@ -238,8 +244,9 @@ class PostCommitLazyAssociationGuardTest {
 
         String pr564 = """
             public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) {
+                String who = request.getUserPrincipal().getName();
                 String hospitalName = assignment.getHospital().getName();
-                audit.record(hospitalName);
+                audit.record(who, hospitalName, ex.getCause().getMessage());
             }
             private void auditAfterCommit(Assignment assignment) {
                 TransactionCallbacks.afterCommit(() -> {

@@ -213,9 +213,14 @@ class StoredTextProseGuardTest {
             }
         }
         // A header already counted through a sink (`.append("[Nursing Assessment]")`) is
-        // one site, not two; a header handed to a helper method is counted here.
+        // one site, not two; a header handed to a helper method is counted here. The
+        // same log/audit exemption applies: `log.info("[Scheduler Lock] " + name)` is a log line.
         Matcher header = SECTION_HEADER.matcher(source);
         while (header.find()) {
+            String receiver = source.substring(SourceScan.statementStartBefore(starts, header.start()), header.start());
+            if (EXEMPT_RECEIVER.matcher(receiver).find()) {
+                continue;
+            }
             String literal = header.group();
             out.putIfAbsent(file + "::" + literal.substring(1, literal.length() - 1), 1);
         }
@@ -278,6 +283,8 @@ class StoredTextProseGuardTest {
             audit.record(AuditEvent.builder().title("a; b").description("Patient merged into master record"));
             notification.setMessage(eventDescription + " is ready for review");
             notifier.toUser(user).about(eventDescription).message("Your result is ready for review");
+            log.info("[Scheduler Lock] " + name);
+            LOG.warn("--- Sweep aborted ---");
             // noteBuilder.append("Not a real section header") — a comment is not a site
             """;
         assertThat(sites("x", source)).containsOnly(

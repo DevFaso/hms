@@ -38,17 +38,18 @@ describe('formatCfa (QA D621)', () => {
 
   // QA D1008 (pinned): es-ES groups from five digits (minimumGroupingDigits 2),
   // so a 4-digit amount reads "4000 F CFA" while French reads "4 000 F CFA" —
-  // and the `\.?` above let both through. This asserts the CURRENT, wrong
-  // output on purpose: the fix (formatCfa with `useGrouping: 'always'`, on
-  // another branch) must flip these two expectations to '4.000 F CFA' /
-  // '1.500 F CFA' in the same PR, the way a guard's allowlist entry is deleted
-  // with its fix. docs/qa/regression-guards.md lists it.
-  // Like any pin, an ICU change that groups 4 digits in Spanish on its own
-  // makes this stale: flip it then too. The 5-digit case is only checked for
-  // having a separator, whatever glyph CLDR picks.
-  it('D1008 (pinned until fixed): a 4-digit amount in Spanish is still printed without grouping', () => {
-    expect(plain(formatCfa(4000, 'XOF', 'es-ES'))).toBe('4000 F CFA');
-    expect(plain(formatCfa(1500, 'XOF', 'es-ES'))).toBe('1500 F CFA');
+  // and the `\.?` above let both through. This pins the CURRENT behaviour on
+  // purpose — formatCfa leaves the grouping to Intl's locale default — in a
+  // way that does not depend on the browser's CLDR data: it compares with
+  // Intl's own default output. The fix (`useGrouping: 'always'`, on another
+  // branch) makes formatCfa differ from that default for es-ES and must flip
+  // this expectation in the same PR, the way a guard's allowlist entry is
+  // deleted with its fix. docs/qa/regression-guards.md lists it.
+  it("D1008 (pinned until fixed): formatCfa still leaves a 4-digit Spanish amount to Intl's default grouping", () => {
+    const intlDefault = (n: number) =>
+      `${new Intl.NumberFormat('es-ES', { maximumFractionDigits: 0 }).format(n)} F CFA`;
+    expect(plain(formatCfa(4000, 'XOF', 'es-ES'))).toBe(plain(intlDefault(4000)));
+    expect(plain(formatCfa(1500, 'XOF', 'es-ES'))).toBe(plain(intlDefault(1500)));
     expect(plain(formatCfa(15000, 'XOF', 'es-ES'))).toMatch(/^15[.\s]000 F CFA$/);
   });
 });

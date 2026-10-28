@@ -66,7 +66,13 @@ export function dialogComponentSelectors(ctx = {}) {
     } else {
       template = text;
     }
-    if (/\brole\s*=\s*["'](?:dialog|alertdialog)["']/.test(template)) {
+    // A child is a dialog when its template says so in any of the three ways: a
+    // role attribute, a bound role, or a native <dialog> element.
+    if (
+      /\brole\s*=\s*["'](?:dialog|alertdialog)["']|\[attr\.role\]\s*=\s*["']'(?:dialog|alertdialog)'["']|<dialog\b/.test(
+        template,
+      )
+    ) {
       selectors.add(selector[1].trim());
     }
   }

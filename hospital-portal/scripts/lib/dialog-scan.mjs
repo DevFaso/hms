@@ -102,13 +102,17 @@ export function dialogFindings(html, componentSource = html, dialogSelectors = n
       return;
     }
     const role = attrValue(tag, 'role');
-    const isDialog = role !== undefined && DIALOG_ROLES.has(role.replace(/['"]/g, '').trim());
+    // A native <dialog> has the implicit role, is modal when opened with
+    // showModal() and closes on Escape by itself: only its NAME is checked.
+    const nativeDialog = tag.name === 'dialog';
+    const isDialog =
+      nativeDialog || (role !== undefined && DIALOG_ROLES.has(role.replace(/['"]/g, '').trim()));
     // innerHtml walks forward to the matching close tag; only a dialog or a
     // container needs it, not every <td> of a worklist.
     if (isDialog) {
       const inner = innerHtml(html, tokens, index);
       const a = anchor(tag, inner);
-      if (!hasAttr(tag, 'aria-modal')) {
+      if (!nativeDialog && !hasAttr(tag, 'aria-modal')) {
         out.push({
           line: tag.line,
           rule: 'modal',
@@ -121,10 +125,11 @@ export function dialogFindings(html, componentSource = html, dialogSelectors = n
           line: tag.line,
           rule: 'label',
           anchor: a,
-          message: `role="${role}" with no name: add aria-labelledby pointing at its title`,
+          message: `${nativeDialog ? '<dialog>' : `role="${role}"`} with no name: add aria-labelledby pointing at its title`,
         });
       }
       const hasEscape =
+        nativeDialog ||
         componentEscape ||
         hasEscapeAttr(tag) ||
         hasKeydownEscape(tag, componentSource) ||
@@ -144,7 +149,7 @@ export function dialogFindings(html, componentSource = html, dialogSelectors = n
       const insideDialog = stack.some((s) => s.isDialog);
       const wrapsDialog =
         inner != null &&
-        (/\brole\s*=\s*["'](?:dialog|alertdialog)["']/.test(inner) ||
+        (/\brole\s*=\s*["'](?:dialog|alertdialog)["']|<dialog\b/.test(inner) ||
           (childDialog !== null && childDialog.test(inner)));
       if (!insideDialog && !wrapsDialog) {
         out.push({
