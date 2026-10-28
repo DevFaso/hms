@@ -59,3 +59,12 @@ test('an identifier that ENDS in Id is an id even when its last letters spell ri
     const a = orderId.substring(0, 8), b = bedId.slice(0, 8), c = recordId.slice(0, 8);`;
   assert.equal(anchors(text).length, 6);
 });
+
+test("the first UUID group (id.split('-')[0]) and a parenthesised id are the same fragment", () => {
+  const html = `{{ order.id.split('-')[0] }} {{ (row.patientId).slice(0, 8) }}
+    {{ name.split('-')[0] }} {{ isValid.split('-')[0] }}`;
+  assert.deepEqual(
+    uuidFragmentFindings(html).map((f) => `${f.rule}:${f.anchor}`),
+    ['slice-call:(row.patientId.slice', 'slice-call:order.id.split'],
+  );
+});

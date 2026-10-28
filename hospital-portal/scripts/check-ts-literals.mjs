@@ -6,7 +6,8 @@
  * The locale gates only see text that goes through ngx-translate. A toast or a
  * status signal written as an English sentence in a `.ts` file is visible to
  * none of them. Every toast in the tree is translated already; the five
- * English error strings of reset-password.ts are the only sites, pinned in
+ * English error strings of reset-password.ts and one `?? 'Already in use'`
+ * fallback in user-list.ts are the only sites, pinned in
  * scripts/ts-literals-baseline.json with that reason until they are keyed.
  *
  * Rules: lib/ts-literal-scan.mjs.

@@ -145,7 +145,9 @@ class PostCommitLazyAssociationGuardTest {
     /** Every chain inside a post-commit argument, a listener body or an override body. */
     static List<String> postCommitChains(String file, String rawSource) {
         String source = SourceScan.stripComments(rawSource);
-        List<String> out = new ArrayList<>();
+        // Keyed by offset: an anonymous synchronization reached by two scans is one chain,
+        // while two identical chains on one line stay two.
+        Map<Integer, String> out = new TreeMap<>();
         Matcher call = POST_COMMIT_CALL.matcher(source);
         while (call.find()) {
             int open = call.end() - 1;
@@ -180,10 +182,10 @@ class PostCommitLazyAssociationGuardTest {
                 report(file, source, open, SourceScan.closingBrace(source, open), out, servlet ? CHAIN : ANY_CHAIN);
             }
         }
-        return out.stream().distinct().toList();
+        return List.copyOf(out.values());
     }
 
-    private static void report(String file, String source, int open, int close, List<String> out) {
+    private static void report(String file, String source, int open, int close, Map<Integer, String> out) {
         report(file, source, open, close, out, ANY_CHAIN);
     }
 
@@ -191,10 +193,12 @@ class PostCommitLazyAssociationGuardTest {
      * One {@code "file:line chain"} per chain; an override nested in a scanned argument
      * is the same chain, reported once.
      */
-    private static void report(String file, String source, int open, int close, List<String> out, Pattern chain) {
+    private static void report(String file, String source, int open, int close, Map<Integer, String> out,
+                               Pattern chain) {
         Matcher c = chain.matcher(source.substring(open, close));
         while (c.find()) {
-            out.add(file + ":" + SourceScan.lineOf(source, open + c.start()) + " " + normalise(c.group()));
+            int at = open + c.start();
+            out.putIfAbsent(at, file + ":" + SourceScan.lineOf(source, at) + " " + normalise(c.group()));
         }
     }
 
@@ -337,5 +341,13 @@ class PostCommitLazyAssociationGuardTest {
             }
             """;
         assertThat(postCommitChains("x", namedSynchronization)).hasSize(2);
+
+        // Two identical chains on ONE line are two occurrences, so an allowance of 1
+        // cannot hide the second copy.
+        String twiceOnOneLine = """
+            TransactionCallbacks.afterCommit(() -> log(a.getHospital().getName(), b.getHospital().getName()));
+            """;
+        assertThat(postCommitChains("x", twiceOnOneLine)).containsExactly(
+            "x:1 .getHospital().getName(", "x:1 .getHospital().getName(");
     }
 }

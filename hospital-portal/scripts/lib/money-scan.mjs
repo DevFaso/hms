@@ -68,8 +68,12 @@ const FIXED_RE = new RegExp(
   'gi',
 );
 
+// A method helper — its parameters may hold one level of parens (`locale = currentLocale()`)
+// and any return type — or an arrow property (`formatMoney = (v: number) => …`).
 const HELPER_DECL =
-  /^\s*(?:private\s+|protected\s+|public\s+|readonly\s+)*(format(?:Currency|Money|Amount|Price|Fcfa|Cfa))\s*\([^)]*\)\s*(?::\s*string\s*)?\{/gm;
+  /^\s*(?:private\s+|protected\s+|public\s+|readonly\s+|static\s+)*(format(?:Currency|Money|Amount|Price|Fcfa|Cfa))\s*\((?:[^()]|\([^()]*\))*\)\s*(?::\s*[^{;=]+)?\{/gm;
+const HELPER_ARROW =
+  /^\s*(?:private\s+|protected\s+|public\s+|readonly\s+|static\s+|const\s+|let\s+)*(format(?:Currency|Money|Amount|Price|Fcfa|Cfa))\s*(?::[^=]+)?=\s*(?:\((?:[^()]|\([^()]*\))*\)|[\w$]+)\s*(?::\s*[^=;{]+)?=>\s*/gm;
 // Only the opener: the argument list is read balanced, so
 // `new Intl.NumberFormat(currentLocale(), { style: 'currency', … })` is seen whole.
 const INTL_CURRENCY = /new\s+Intl\.NumberFormat\(|\.toLocaleString\(/g;
@@ -156,9 +160,19 @@ export function moneyComponentFindings(source, isLocaleModule = false) {
   // A format* helper that delegates francs to formatCfa() may still use Intl
   // for another currency; its body is judged once, by the `helper` rule.
   const helperBodies = [];
-  for (const m of source.matchAll(HELPER_DECL)) {
-    const bodyStart = m.index + m[0].length - 1;
-    const body = bodyAfter(source, bodyStart);
+  const helpers = [
+    ...[...source.matchAll(HELPER_DECL)].map((m) => [m, m.index + m[0].length - 1]),
+    ...[...source.matchAll(HELPER_ARROW)].map((m) => [m, m.index + m[0].length]),
+  ];
+  for (const [m, bodyStart] of helpers) {
+    // A block body is read balanced; an expression body runs to the end of its statement.
+    const body =
+      source[bodyStart] === '{'
+        ? bodyAfter(source, bodyStart)
+        : source.slice(
+            bodyStart,
+            source.indexOf(';', bodyStart) < 0 ? undefined : source.indexOf(';', bodyStart),
+          );
     helperBodies.push([bodyStart, bodyStart + body.length]);
     if (/\bformatCfa\s*\(/.test(body)) continue;
     out.push({

@@ -25,6 +25,7 @@
  * and stops matching when the dialog is fixed or removed.
  */
 import { tags, innerHtml, attrValue, classTokens } from './html-tags.mjs';
+import { balanced } from './js-scan.mjs';
 
 const CONTAINER_TOKEN =
   /^(?:[a-z0-9]+-)*(?:modal|dialog)(?:-(?:container|panel|card|box|window|wrapper|sheet|surface))?$/;
@@ -49,11 +50,27 @@ function hasEscapeAttr(tag) {
   return [...tag.attrs.keys()].some((k) => ESCAPE_ATTR.test(k));
 }
 
-/** A `(keydown)="onKey($event)"` whose component reads `event.key === 'Escape'`. */
+/**
+ * A `(keydown)="onKey($event)"` whose OWN handler reads `'Escape'` — in the
+ * binding itself, or in the body of the method it calls. An `'Escape'` check
+ * elsewhere in the component (a typeahead's key handler) does not close this dialog.
+ */
 function hasKeydownEscape(tag, componentSource) {
-  return (
-    [...tag.attrs.keys()].some((k) => KEYDOWN_ATTR.test(k)) && ESCAPE_KEY.test(componentSource)
+  const key = [...tag.attrs.keys()].find((k) => KEYDOWN_ATTR.test(k));
+  if (key === undefined) return false;
+  const binding = tag.attrs.get(key) ?? '';
+  if (ESCAPE_KEY.test(binding)) return true;
+  const handler = /^\s*['"]?\s*(?:this\.)?([A-Za-z_$][\w$]*)\s*\(/.exec(binding)?.[1];
+  if (!handler) return false;
+  const declaration = new RegExp(
+    String.raw`(?:^|[\s;}])${handler.replace(/\$/g, '\\$')}\s*\([^)]*\)\s*(?::[^{;]+)?\{`,
+    'gm',
   );
+  for (const m of componentSource.matchAll(declaration)) {
+    const body = balanced(componentSource, m.index + m[0].length - 1, '{', '}');
+    if (ESCAPE_KEY.test(body)) return true;
+  }
+  return false;
 }
 
 function headingOf(inner) {

@@ -118,7 +118,19 @@ function propName(prop) {
 function literalText(node) {
   if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) return node.text;
   if (ts.isTemplateExpression(node)) {
-    return node.head.text + node.templateSpans.map((span) => ` ${span.literal.text}`).join('');
+    // Each `${…}` becomes a space plus the newlines it spans, so the lines below a
+    // multi-line substitution keep the numbers the `.ts` scan gives them (dedupe
+    // keys a site on id@line).
+    const text = node.getSourceFile().text;
+    const newlines = (span) =>
+      '\n'.repeat(
+        (text.slice(span.expression.getFullStart(), span.literal.getStart()).match(/\n/g) ?? [])
+          .length,
+      );
+    return (
+      node.head.text +
+      node.templateSpans.map((span) => ` ${newlines(span)}${span.literal.text}`).join('')
+    );
   }
   return null;
 }

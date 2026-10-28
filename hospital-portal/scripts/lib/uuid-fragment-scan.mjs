@@ -19,11 +19,16 @@ const ID_EXPR = String.raw`([\w$.?!()\[\]]*?(?:\w*(?:[iI]d|[uU]uid|Ref|[rR]efere
 // The first N characters (`slice: 0 : 8`) or the LAST N (`slice: -8`,
 // `.slice(-8)`, `.substring(id.length - 8)`): a UUID tail is as unreadable as its head.
 const SLICE_PIPE = new RegExp(
-  String.raw`${ID_EXPR}\s*[?!]?\s*\|\s*slice\s*:\s*(?:0\s*:\s*(\d{1,2})|-(\d{1,2}))\b`,
+  String.raw`${ID_EXPR}\)?\s*[?!]?\s*\|\s*slice\s*:\s*(?:0\s*:\s*(\d{1,2})|-(\d{1,2}))\b`,
   'g',
 );
 const SLICE_CALL = new RegExp(
-  String.raw`${ID_EXPR}\s*[?!]?\s*\.(slice|substring|substr)\(\s*(?:0\s*,\s*(\d{1,2})|-(\d{1,2})|[\w$.?!]+\.length\s*-\s*(\d{1,2}))\s*\)`,
+  String.raw`${ID_EXPR}\)?\s*[?!]?\s*\.(slice|substring|substr)\(\s*(?:0\s*,\s*(\d{1,2})|-(\d{1,2})|[\w$.?!]+\.length\s*-\s*(\d{1,2}))\s*\)`,
+  'g',
+);
+// `id.split('-')[0]`: the first UUID group, eight characters, the same fragment.
+const SPLIT_CALL = new RegExp(
+  String.raw`${ID_EXPR}\)?\s*[?!]?\s*\.split\(\s*(['"])-\2\s*\)\s*[?!]?\s*\[\s*0\s*\]`,
   'g',
 );
 const MAX_FRAGMENT = 12;
@@ -103,6 +108,15 @@ export function uuidFragmentFindings(text) {
       rule: 'slice-call',
       anchor: `${m[1]}.${m[2]}`,
       message: `${m[1]}.${m[2]}(…) (${n} characters): a UUID fragment on screen — show the human code (number, MRN, reference)`,
+    });
+  }
+  for (const m of text.matchAll(SPLIT_CALL)) {
+    if (!isId(m[1])) continue;
+    out.push({
+      line: lineAt(text, m.index),
+      rule: 'slice-call',
+      anchor: `${m[1]}.split`,
+      message: `${m[1]}.split('-')[0]: the first UUID group on screen — show the human code (number, MRN, reference)`,
     });
   }
   return out;

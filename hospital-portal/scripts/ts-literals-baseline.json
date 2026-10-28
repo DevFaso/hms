@@ -24,6 +24,10 @@
     "src/app/reset-password/reset-password.ts::signal::error This reset link is invalid or has expired. Please request a ": {
       "count": 1,
       "why": "pre-existing English on the reset-password page (class D940): the `?? '…'` fallback after err?.error?.message; not yet a QA defect — key it"
+    },
+    "src/app/users/user-list.ts::signal::fieldErrors Already in use": {
+      "count": 1,
+      "why": "pre-existing English (class D940): the ?? fallback of a 409 field error in fieldErrors.update(); not yet a QA defect — key it"
     }
   }
 }

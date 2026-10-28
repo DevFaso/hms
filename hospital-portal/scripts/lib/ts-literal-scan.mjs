@@ -20,7 +20,7 @@
  *            so `err?.error?.message ?? 'Could not save'` counts — where prose
  *            means a space and two words of letters, and not a translation key
  *            (`SECTION.KEY_NAME`).
- *  signal  — `.set(` or `= ` on a field named error*, message*, notice*,
+ *  signal  — `.set(`, `.update(` or `= ` on a field named error*, message*, notice*,
  *            hint*, banner*, warning*, statusMessage*, info* — or one whose
  *            name ends in Error/Message/Notice/Hint/Banner/Warning (`saveError`,
  *            `formMessage`) — whose expression holds such a literal
@@ -33,8 +33,9 @@
  * when a translation is missing, so that literal never reaches the screen.
  *
  * Every toast in the tree already goes through translate.instant; the only
- * sites today are five English error strings in reset-password.ts, pinned in
- * scripts/ts-literals-baseline.json until they are keyed. A sixth fails.
+ * sites today are five English error strings in reset-password.ts and one
+ * `?? 'Already in use'` field-error fallback in user-list.ts, pinned in
+ * scripts/ts-literals-baseline.json until they are keyed. A seventh fails.
  */
 import { lineOf } from './html-tags.mjs';
 import { endOfLiteralOrComment, balanced } from './js-scan.mjs';
@@ -49,7 +50,7 @@ const TOAST_OPEN = /\btoast\w*\.(success|error|info|warning|push)\(/g;
 // `Info` is left out, it names data (`patientInfo = { name: '…' }`).
 const STATUS_NAME = String.raw`(?:error|message|notice|hint|banner|warning|statusMessage|info)\w*|[a-z]\w*(?:Error|Message|Notice|Hint|Banner|Warning)\w*`;
 const SIGNAL_OPEN = new RegExp(
-  String.raw`\b(${STATUS_NAME})(?:\.set\(|\s*(?::\s*[\w<>|[\]\s]+?)?\s*=(?![=>])\s*)`,
+  String.raw`\b(${STATUS_NAME})(?:\.(?:set|update)\(|\s*(?::\s*[\w<>|[\]\s]+?)?\s*=(?![=>])\s*)`,
   'g',
 );
 // `state.set({ error: '…' })`, `state.update((s) => ({ ...s, saveError: '…' }))`, `patchState(store, { message: '…' })`
@@ -180,7 +181,7 @@ export function tsLiteralFindings(rawSource) {
   // A status key of an object handed to a state setter: `state.set({ error: '…' })`.
   // A key inside a `saveError.set({ … })` argument was read above, so it is skipped.
   for (const m of source.matchAll(STATE_CALL)) {
-    if (m[0] === '.set(' && STATUS_RECEIVER.test(source.slice(0, m.index))) {
+    if (m[0] !== 'patchState(' && STATUS_RECEIVER.test(source.slice(0, m.index))) {
       continue;
     }
     const args = balancedArguments(source, m.index + m[0].length - 1);

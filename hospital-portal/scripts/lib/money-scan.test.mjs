@@ -163,3 +163,14 @@ test('two copies of a site on ONE line stay two; only the second scan of an inli
   assert.equal(dedupe(found, found).length, 2);
   assert.equal(dedupe(found, [...found, found[0]]).length, 3);
 });
+
+test('an arrow helper and a helper with a default argument or another return type are helpers too', () => {
+  const source = `formatMoney = (v: number) => \`\${v} F\`;
+    formatAmount(v: number, locale = currentLocale()): string { return v + ' FCFA'; }
+    formatPrice = (v: number): string => formatCfa(v);
+    private formatCurrency(v: number): string | null { return formatCfa(v); }`;
+  assert.deepEqual(anchors(moneyComponentFindings(source)), [
+    'helper:formatAmount',
+    'helper:formatMoney',
+  ]);
+});

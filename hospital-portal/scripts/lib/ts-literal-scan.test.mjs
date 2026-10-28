@@ -96,11 +96,13 @@ test('a status name that ENDS in Error/Message and a status key handed to a stat
     this.saveError.set({ message: 'Reported only once' });
     const patientInfo = { name: 'Not a status text' };
     this.items.set([{ label: 'Not a status either' }]);
-    this.state.set({ error: this.translate.instant('A.B') || 'Dead fallback text' });`;
+    this.state.set({ error: this.translate.instant('A.B') || 'Dead fallback text' });
+    this.error.update(() => 'Something went wrong');`;
   assert.deepEqual(anchors(source), [
     'signal:saveError Could not save the visit',
     'signal:formMessage Please fill the form',
     'signal:saveError Reported only once',
+    'signal:error Something went wrong',
     'signal:error Could not load data',
     'signal:loadMessage Loading the records',
   ]);

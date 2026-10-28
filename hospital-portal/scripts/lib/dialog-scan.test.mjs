@@ -69,8 +69,21 @@ test('D976: an Escape handler on a SIBLING backdrop never fires while focus is i
   assert.deepEqual(dialogFindings(nested), []);
   const keydown = `<div class="modal" role="dialog" aria-modal="true" aria-label="x" (keydown)="onKey($event)"></div>`;
   assert.deepEqual(
-    dialogFindings(keydown, `${keydown}\nif (event.key === 'Escape') this.close();`),
+    dialogFindings(
+      keydown,
+      `${keydown}\nonKey(event: KeyboardEvent): void { if (event.key === 'Escape') this.close(); }`,
+    ),
     [],
+  );
+  // The (keydown) handler must itself read 'Escape': a typeahead's Escape check
+  // elsewhere in the component does not close this dialog.
+  assert.deepEqual(
+    rules(
+      keydown,
+      `${keydown}\nonKey(event: KeyboardEvent) { if (event.key === 'Enter') this.save(); }\n` +
+        `onTypeaheadKey(e: KeyboardEvent) { if (e.key === 'Escape') this.closeTypeahead(); }`,
+    ),
+    ['escape'],
   );
   // A focus trap or an 'Escape' string elsewhere in the file is not a handler on this dialog.
   const bare = `<div class="modal" role="dialog" aria-modal="true" aria-label="x"></div>`;
