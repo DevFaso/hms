@@ -88,8 +88,7 @@ public class MedicalCertificateServiceImpl implements MedicalCertificateService 
         }
         com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(hospital, NOT_FOUND, encounterId);
         if (EncounterClosureRules.isNeverSeen(encounter.getStatus())
-                || encounter.getStatus() == EncounterStatus.CANCELLED
-                || encounter.getStatus() == EncounterStatus.LEFT_WITHOUT_BEING_SEEN) {
+                || EncounterStatus.ENDED_UNSEEN.contains(encounter.getStatus())) {
             throw new BusinessException("medicalCertificate.visitNotSeen");
         }
         // The signer is the signed-in doctor at this hospital, never a name in the body.
@@ -122,7 +121,7 @@ public class MedicalCertificateServiceImpl implements MedicalCertificateService 
         try {
             stored = fileUploadService.storeGeneratedPatientDocument(pdf, baseName, doctor.getUser().getId());
         } catch (IOException e) {
-            throw new IllegalStateException("The certificate could not be stored", e);
+            throw new IllegalStateException("medicalCertificate.store.failed", e);
         }
         PatientUploadedDocument doc = PatientUploadedDocument.builder()
             .patient(patient)
@@ -221,7 +220,7 @@ public class MedicalCertificateServiceImpl implements MedicalCertificateService 
             byte[] hash = MessageDigest.getInstance("SHA-256").digest(canonical.getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(hash);
         } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 unavailable", e);
+            throw new IllegalStateException("medicalCertificate.fingerprint.failed", e);
         }
     }
 
@@ -265,7 +264,7 @@ public class MedicalCertificateServiceImpl implements MedicalCertificateService 
                 return out.toByteArray();
             }
         } catch (IOException e) {
-            throw new IllegalStateException("Failed to generate the certificate PDF", e);
+            throw new IllegalStateException("medicalCertificate.pdf.failed", e);
         }
     }
 
