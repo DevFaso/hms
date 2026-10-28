@@ -2682,10 +2682,59 @@ class EncounterServiceImplTest {
                     org.mockito.ArgumentMatchers.<Appointment>isNull(), any()))
                 .thenReturn(fresh);
             when(roleValidator.isDoctor(userId, hospitalId)).thenReturn(true);
+            actWithRole("ROLE_DOCTOR");
 
             service.createEncounter(request(null, LocalDateTime.now()), locale);
 
             assertThat(fresh.getStatus()).isEqualTo(EncounterStatus.IN_PROGRESS);
+        }
+
+        private void actWithRole(String role) {
+            org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken("someone", null,
+                    List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority(role))));
+        }
+
+        @org.junit.jupiter.api.AfterEach
+        void clearSecurityContext() {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+
+        @Test
+        void qaD990_aNurseCreatedVisitStartsArrivedAndWaitsFromNow() {
+            Encounter fresh = encounter();
+            fresh.setStatus(EncounterStatus.IN_PROGRESS); // the entity default
+            fresh.setArrivalTimestamp(null);
+            when(encounterMapper.mergeEncounter(any(com.example.hms.payload.dto.EncounterRequestDTO.class),
+                    isNull(), any(Patient.class), any(Staff.class), any(Hospital.class),
+                    org.mockito.ArgumentMatchers.<Appointment>isNull(), any()))
+                .thenReturn(fresh);
+            org.mockito.Mockito.lenient().when(roleValidator.isDoctor(userId, hospitalId)).thenReturn(true);
+            actWithRole("ROLE_NURSE");
+            LocalDateTime before = LocalDateTime.now().minusSeconds(1);
+
+            service.createEncounter(request(null, LocalDateTime.now()), locale);
+
+            assertThat(fresh.getStatus()).isEqualTo(EncounterStatus.ARRIVED);
+            assertThat(fresh.getArrivalTimestamp()).isAfter(before);
+        }
+
+        @Test
+        void qaD990_anEmergencyVisitGoesThroughTriageEvenWhenADoctorOpensIt() {
+            Encounter fresh = encounter();
+            fresh.setStatus(EncounterStatus.IN_PROGRESS);
+            when(encounterMapper.mergeEncounter(any(com.example.hms.payload.dto.EncounterRequestDTO.class),
+                    isNull(), any(Patient.class), any(Staff.class), any(Hospital.class),
+                    org.mockito.ArgumentMatchers.<Appointment>isNull(), any()))
+                .thenReturn(fresh);
+            org.mockito.Mockito.lenient().when(roleValidator.isDoctor(userId, hospitalId)).thenReturn(true);
+            actWithRole("ROLE_DOCTOR");
+            com.example.hms.payload.dto.EncounterRequestDTO request = request(null, LocalDateTime.now());
+            request.setEncounterType(com.example.hms.enums.EncounterType.EMERGENCY);
+
+            service.createEncounter(request, locale);
+
+            assertThat(fresh.getStatus()).isEqualTo(EncounterStatus.ARRIVED);
         }
 
         @Test

@@ -384,6 +384,12 @@ public class EncounterServiceImpl implements EncounterService {
         // was stored IN_PROGRESS and triage refused it. The request wins.
         if (request.getStatus() != null) {
             encounter.setStatus(request.getStatus());
+        } else {
+            encounter.setStatus(defaultInitialStatus(request.getEncounterType()));
+        }
+        // QA D990: an arrived patient waits from now, not from the visit day's midnight.
+        if (encounter.getStatus() == EncounterStatus.ARRIVED && encounter.getArrivalTimestamp() == null) {
+            encounter.setArrivalTimestamp(LocalDateTime.now());
         }
         ensureEncounterCode(encounter);
 
@@ -1088,6 +1094,31 @@ public class EncounterServiceImpl implements EncounterService {
         if (exists) {
             throw new BusinessException(messageSource.getMessage("encounter.duplicate", null, locale));
         }
+    }
+
+    /**
+     * QA D990: with no status asked for, an emergency visit, or one opened by
+     * someone who is not the treating doctor (a nurse, a midwife, the front
+     * desk), starts ARRIVED and goes through triage. Only a doctor's own visit
+     * starts IN_PROGRESS. A nurse-created urgences visit used to start
+     * IN_PROGRESS and never reached the triage queue.
+     */
+    static EncounterStatus defaultInitialStatus(com.example.hms.enums.EncounterType type) {
+        if (type == com.example.hms.enums.EncounterType.EMERGENCY || !callerIsDoctor()) {
+            return EncounterStatus.ARRIVED;
+        }
+        return EncounterStatus.IN_PROGRESS;
+    }
+
+    private static boolean callerIsDoctor() {
+        org.springframework.security.core.Authentication auth =
+            org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null) {
+            return false;
+        }
+        return auth.getAuthorities().stream()
+            .map(org.springframework.security.core.GrantedAuthority::getAuthority)
+            .anyMatch(a -> "ROLE_DOCTOR".equals(a) || "ROLE_SURGEON".equals(a) || "ROLE_PHYSICIAN".equals(a));
     }
 
     private void applyEncounterDefaults(Encounter encounter,

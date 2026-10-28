@@ -40,7 +40,7 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { CheckoutDialogComponent } from '../checkout/checkout-dialog/checkout-dialog.component';
 import { actionRoles, SERVICE_RULE_ROLES } from '../core/action-permissions';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
-import { serverLocalDate, toServerDateTime } from '../shared/date-utils';
+import { localDateString, serverLocalDate, toServerDateTime } from '../shared/date-utils';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
 
 @Component({
@@ -505,6 +505,11 @@ export class EncountersComponent implements OnInit {
       serverLocalDate(this.editingOriginalDate) === day
     ) {
       return this.editingOriginalDate;
+    }
+    // QA D990: a visit opened for today starts now. Midnight made the
+    // patient appear to have waited since 00:00 ("1128m") on every board.
+    if (day === localDateString(new Date())) {
+      return new Date().toISOString().slice(0, 19);
     }
     return toServerDateTime(`${day}T00:00`);
   }
