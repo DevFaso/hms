@@ -14,6 +14,7 @@ import {
   ProfileService,
   UserProfile,
 } from '../services/profile.service';
+import { PatientPortalService, PatientProfileDTO } from '../services/patient-portal.service';
 
 const profile = (email: string, firstName = 'Awa'): UserProfile => ({
   id: 'u1',
@@ -42,6 +43,7 @@ describe('ProfileComponent — editing the profile', () => {
   let auth: jasmine.SpyObj<AuthService>;
   let ssoAuthenticated: WritableSignal<boolean>;
   let stored: LoginUserProfile;
+  let portal: jasmine.SpyObj<PatientPortalService>;
 
   beforeEach(async () => {
     profiles = jasmine.createSpyObj<ProfileService>('ProfileService', [
@@ -81,6 +83,10 @@ describe('ProfileComponent — editing the profile', () => {
     auth.getRoles.and.returnValue([]);
     auth.hasAnyRole.and.returnValue(false);
     ssoAuthenticated = signal(false);
+    portal = jasmine.createSpyObj<PatientPortalService>('PatientPortalService', [
+      'updateMyProfile',
+    ]);
+    portal.updateMyProfile.and.returnValue(of({} as PatientProfileDTO));
 
     await TestBed.configureTestingModule({
       imports: [ProfileComponent, TranslateModule.forRoot()],
@@ -91,6 +97,7 @@ describe('ProfileComponent — editing the profile', () => {
         { provide: AuthService, useValue: auth },
         { provide: MfaService, useValue: {} },
         { provide: OidcAuthService, useValue: { authenticated: ssoAuthenticated } },
+        { provide: PatientPortalService, useValue: portal },
       ],
     }).compileComponents();
 
@@ -120,6 +127,49 @@ describe('ProfileComponent — editing the profile', () => {
         .withContext(role)
         .not.toBeNull();
     }
+  });
+
+  describe('patient phone (QA D939)', () => {
+    function asPatient(): ProfileComponent {
+      auth.getRoles.and.returnValue(['ROLE_PATIENT']);
+      const f = TestBed.createComponent(ProfileComponent);
+      f.detectChanges();
+      return f.componentInstance;
+    }
+
+    it('sends the new phone of a patient to the patient record too', () => {
+      profiles.updateProfile.and.callFake(() =>
+        of({ ...profile('old@example.test'), phoneNumber: '+22676112233' }),
+      );
+      const patient = asPatient();
+      patient.updateField('phoneNumber', '+22676112233');
+      patient.saveProfile();
+      expect(portal.updateMyProfile).toHaveBeenCalledWith({ phoneNumberPrimary: '+22676112233' });
+    });
+
+    it('a refused record update is said, not swallowed', () => {
+      profiles.updateProfile.and.callFake(() =>
+        of({ ...profile('old@example.test'), phoneNumber: '+22676112233' }),
+      );
+      portal.updateMyProfile.and.returnValue(throwError(() => ({ error: { message: 'taken' } })));
+      const patient = asPatient();
+      patient.updateField('phoneNumber', '+22676112233');
+      patient.saveProfile();
+      expect(toast.error).toHaveBeenCalledWith('taken');
+    });
+
+    it('a staff account phone stays the login contact only', () => {
+      component.updateField('phoneNumber', '+22676112233');
+      component.saveProfile();
+      expect(portal.updateMyProfile).not.toHaveBeenCalled();
+    });
+
+    it('a patient who changes only the name does not touch the record phone', () => {
+      const patient = asPatient();
+      patient.updateField('firstName', 'Rasmata');
+      patient.saveProfile();
+      expect(portal.updateMyProfile).not.toHaveBeenCalled();
+    });
   });
 
   it('saves names and phone through the profile PUT, sending the email back unchanged', () => {

@@ -5171,6 +5171,7 @@
       "GENERAL_VISIT": "General Visit",
       "GENERAL": "General",
       "BOOKING": {
+        "PRECHECKIN_OPENS_ON": "Online pre-check-in opens on {{date}}, 7 days before the appointment.",
         "TITLE": "Schedule Appointment",
         "FORM_TITLE": "Schedule a New Appointment",
         "SUCCESS": "Appointment scheduled successfully!",
@@ -7183,6 +7184,7 @@
     "PROFILE_PICTURE": "Profile Picture",
     "PUSH_NOTIFICATIONS": "Push Notifications",
     "RECENT_ACTIVITY": "Recent Activity",
+    "RECORD_PHONE_SYNC_FAILED": "Your account phone was saved, but your patient record could not be updated. Ask the reception desk to change it.",
     "RECOVERY_ADDED": "Recovery contact added.",
     "RECOVERY_CONTACT": "Recovery Contact",
     "RECOVERY_CONTACTS": "Recovery Contacts",

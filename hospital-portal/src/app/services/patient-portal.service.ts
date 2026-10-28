@@ -1067,6 +1067,17 @@ export class PatientPortalService {
       .pipe(map((r) => r.data));
   }
 
+  /**
+   * QA D939: the patient's own contact details on the patient record (PUT
+   * /me/patient/profile). The account phone (PUT /users/{id}) is the login
+   * contact only; the hospital calls the record's phone.
+   */
+  updateMyProfile(changes: { phoneNumberPrimary?: string }): Observable<PatientProfileDTO> {
+    return this.http
+      .put<ApiWrapper<PatientProfileDTO>>(`${this.base}/profile`, changes)
+      .pipe(map((r) => r.data));
+  }
+
   getHealthSummary(): Observable<HealthSummaryDTO> {
     return this.http
       .get<ApiWrapper<HealthSummaryRaw>>(`${this.base}/health-summary`)

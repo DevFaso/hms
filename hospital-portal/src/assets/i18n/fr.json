@@ -5171,6 +5171,7 @@
       "GENERAL_VISIT": "Visite générale",
       "GENERAL": "Général",
       "BOOKING": {
+        "PRECHECKIN_OPENS_ON": "Le pré-enregistrement en ligne ouvre le {{date}}, 7 jours avant le rendez-vous.",
         "TITLE": "Planifier un rendez-vous",
         "FORM_TITLE": "Planifier un nouveau rendez-vous",
         "SUCCESS": "Rendez-vous planifié avec succès !",
@@ -7183,6 +7184,7 @@
     "PROFILE_PICTURE": "Photo de Profil",
     "PUSH_NOTIFICATIONS": "Notifications push",
     "RECENT_ACTIVITY": "Activité récente",
+    "RECORD_PHONE_SYNC_FAILED": "Le téléphone de votre compte est enregistré, mais votre dossier patient n’a pas pu être mis à jour. Demandez à l’accueil de le modifier.",
     "RECOVERY_ADDED": "Contact de récupération ajouté.",
     "RECOVERY_CONTACT": "Contact de récupération",
     "RECOVERY_CONTACTS": "Contacts de récupération",

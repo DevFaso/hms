@@ -31,6 +31,7 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { currentLocale } from '../shared/i18n/app-locale';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 import { serverInstant } from '../shared/date-utils';
+import { PatientPortalService } from '../services/patient-portal.service';
 type ProfileTab = 'overview' | 'edit' | 'security' | 'activity';
 
 @Component({
@@ -51,6 +52,7 @@ export class ProfileComponent implements OnInit {
   private readonly translate = inject(TranslateService);
   private readonly oidcAuth = inject(OidcAuthService);
   private readonly auditDescriptions = inject(AuditDescriptionService);
+  private readonly patientPortal = inject(PatientPortalService);
 
   private static readonly VALID_TABS: readonly ProfileTab[] = [
     'overview',
@@ -698,12 +700,19 @@ export class ProfileComponent implements OnInit {
       (data.lastName ?? '') !== (u.lastName ?? '') ||
       (data.phoneNumber ?? '') !== (u.phoneNumber ?? '');
 
+    const phoneChanged = (data.phoneNumber ?? '') !== (u.phoneNumber ?? '');
+
     this.saving.set(true);
     if (detailsChanged) {
       this.profileService.updateProfile(u.id, { ...data, email: u.email }).subscribe({
         next: (updated) => {
           this.applySavedProfile(updated);
           this.toast.success(this.translate.instant('PROFILE.UPDATED'));
+          // QA D939: a patient's new phone reaches the patient record the
+          // hospital calls, not only the login account.
+          if (phoneChanged && this.isPatientOnly() && (updated.phoneNumber ?? '').trim()) {
+            this.syncPatientRecordPhone(updated.phoneNumber!.trim());
+          }
           if (emailChanged) {
             this.requestEmailChange(newEmail, password);
           } else {
@@ -720,6 +729,16 @@ export class ProfileComponent implements OnInit {
     } else {
       this.saving.set(false);
     }
+  }
+
+  /** QA D939: the record's primary phone follows the account phone; a refusal is said, not swallowed. */
+  private syncPatientRecordPhone(phone: string): void {
+    this.patientPortal.updateMyProfile({ phoneNumberPrimary: phone }).subscribe({
+      error: (err) =>
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('PROFILE.RECORD_PHONE_SYNC_FAILED'),
+        ),
+    });
   }
 
   /** Step 1 of an email change: the server sends a code to the new address. */

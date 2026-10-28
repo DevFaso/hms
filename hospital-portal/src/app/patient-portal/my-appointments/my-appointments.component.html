@@ -276,13 +276,23 @@
                     (appt.status === 'SCHEDULED' || appt.status === 'CONFIRMED') &&
                     !appt.preCheckedIn
                   ) {
-                    <button
-                      class="precheckin-btn"
-                      (click)="openPreCheckIn(appt); $event.stopPropagation()"
-                    >
-                      <span class="material-symbols-outlined">fact_check</span>
-                      {{ 'PORTAL.APPOINTMENTS.BOOKING.PRECHECKIN_BTN' | translate }}
-                    </button>
+                    @if (preCheckInOpen(appt)) {
+                      <button
+                        class="precheckin-btn"
+                        data-testid="precheckin-open"
+                        (click)="openPreCheckIn(appt); $event.stopPropagation()"
+                      >
+                        <span class="material-symbols-outlined" aria-hidden="true">fact_check</span>
+                        {{ 'PORTAL.APPOINTMENTS.BOOKING.PRECHECKIN_BTN' | translate }}
+                      </button>
+                    } @else if (preCheckInOpensOn(appt); as opensOn) {
+                      <span class="precheckin-later" data-testid="precheckin-later">
+                        {{
+                          'PORTAL.APPOINTMENTS.BOOKING.PRECHECKIN_OPENS_ON'
+                            | translate: { date: (opensOn | date: 'longDate') }
+                        }}
+                      </span>
+                    }
                   }
                   @if (appt.preCheckedIn) {
                     <span class="precheckin-done">

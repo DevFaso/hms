@@ -5171,6 +5171,7 @@
       "GENERAL_VISIT": "Visita general",
       "GENERAL": "General",
       "BOOKING": {
+        "PRECHECKIN_OPENS_ON": "El registro previo en línea se abre el {{date}}, 7 días antes de la cita.",
         "TITLE": "Programar cita",
         "FORM_TITLE": "Programar una nueva cita",
         "SUCCESS": "¡Cita programada con éxito!",
@@ -7183,6 +7184,7 @@
     "PROFILE_PICTURE": "Foto de perfil",
     "PUSH_NOTIFICATIONS": "Notificaciones push",
     "RECENT_ACTIVITY": "Actividad reciente",
+    "RECORD_PHONE_SYNC_FAILED": "El teléfono de su cuenta se guardó, pero no se pudo actualizar su expediente de paciente. Pida a recepción que lo cambie.",
     "RECOVERY_ADDED": "Contacto de recuperación añadido.",
     "RECOVERY_CONTACT": "Contacto de recuperación",
     "RECOVERY_CONTACTS": "Contactos de recuperación",
