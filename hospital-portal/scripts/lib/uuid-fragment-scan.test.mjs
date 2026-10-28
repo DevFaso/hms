@@ -37,6 +37,16 @@ test('the component spellings fail too', () => {
   assert.deepEqual(anchors(`{{ visit.id! | slice: 0 : 8 }}`), ['slice-pipe:visit.id | slice']);
 });
 
+test('the LAST characters of an id are the same fragment', () => {
+  const text = `Visite {{ encounter.id | slice: -8 }} {{ row.patientId.slice(-6) }}
+    const tail = order.id.substring(order.id.length - 8);`;
+  assert.deepEqual(anchors(text), [
+    'slice-pipe:encounter.id | slice',
+    'slice-call:row.patientId.slice',
+    'slice-call:order.id.substring',
+  ]);
+});
+
 test('human codes, long slices and words that merely end in "id" pass', () => {
   const text = `{{ encounter.encounterNumber }} {{ patient.mrn }} {{ invoice.invoiceNumber }}
     {{ note.text | slice: 0 : 80 }} {{ row.isValid.slice(0, 8) }} {{ s.paid | slice: 0 : 3 }}

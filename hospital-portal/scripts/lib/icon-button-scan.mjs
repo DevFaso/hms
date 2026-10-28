@@ -20,7 +20,7 @@
  * `<mat-icon>`, `<svg>`, `<i class="...">`, and an `<img>` with an EMPTY alt. An
  * `<img alt="Delete">` names the button and is kept as content.
  */
-import { tags, innerHtml, hasAttr, attrValue } from './html-tags.mjs';
+import { tags, innerHtml, attrValue } from './html-tags.mjs';
 
 const ICON_SPAN =
   /<span\b[^>]*class="[^"]*\bmaterial-(?:symbols-outlined|symbols-rounded|icons)\b[^"]*"[^>]*>[\s\S]*?<\/span>/g;
@@ -36,8 +36,9 @@ const CONTROL_FLOW =
   /@(?:if|else if|else|for|switch|case|default|empty|let|defer|placeholder|loading|error)\b[^{]*\{|\}/g;
 // Projected content and a child component (`<app-status-chip>`, `<app-avatar>`)
 // render text of their own: they are content, not an icon.
+// `<ng-container>`/`<ng-template>` are structural wrappers, not content.
 const PROJECTED_OR_CHILD =
-  /<ng-content\b[^>]*>(?:<\/ng-content>)?|<(?!mat-icon\b)[a-z]+-[a-z-]+\b[^>]*>/g;
+  /<ng-content\b[^>]*>(?:<\/ng-content>)?|<(?!mat-icon\b|ng-container\b|ng-template\b)[a-z]+-[a-z-]+\b[^>]*>/g;
 const ANY_TAG = /<\/?[A-Za-z][^>]*>/g;
 
 export function visibleText(inner) {
@@ -58,8 +59,13 @@ export function visibleText(inner) {
     .trim();
 }
 
+/** A name that is present AND not a literal empty string: `aria-label=""` names nothing. */
 function isNamed(tag) {
-  return hasAttr(tag, 'aria-label') || hasAttr(tag, 'aria-labelledby');
+  for (const name of ['aria-label', 'aria-labelledby']) {
+    const value = attrValue(tag, name);
+    if (value !== undefined && value.trim() !== '') return true;
+  }
+  return false;
 }
 
 /**

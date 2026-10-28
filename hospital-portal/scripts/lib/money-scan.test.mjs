@@ -66,6 +66,9 @@ test('a null-guarded amount is still money; an ambiguous word inside arithmetic 
     anchors(moneyTemplateFindings(`{{ (inv.balanceDue ?? 0) | number: '1.2-2' }}`)),
     ['pipe:inv.balanceDue | number'],
   );
+  assert.deepEqual(anchors(moneyTemplateFindings(`{{ (inv.amount || 0) | number }}`)), [
+    'pipe:inv.amount | number',
+  ]);
   assert.deepEqual(
     moneyTemplateFindings(`{{ (done / total).toFixed(1) }}% {{ (a * net).toFixed(2) }}`),
     [],

@@ -58,12 +58,16 @@ export function tags(html) {
   // made the tokenizer quadratic in the size of a worklist template.
   let line = 1;
   let lineCountedTo = 0;
+  // The next interpolation's offset, searched again only once `i` has passed it:
+  // a template with no `{{` after its header would otherwise rescan to the end
+  // of the file for every tag.
+  let interp = html.indexOf('{{');
   while (i < html.length) {
     const lt = html.indexOf('<', i);
     if (lt < 0) break;
     // A `<` inside an interpolation (`{{ count<10 ? … }}`) is an operator, not
     // a tag; reading it as one swallowed the real tag that followed.
-    const interp = html.indexOf('{{', i);
+    if (interp >= 0 && interp < i) interp = html.indexOf('{{', i);
     if (interp >= 0 && interp < lt) {
       const end = html.indexOf('}}', interp + 2);
       i = end < 0 ? html.length : end + 2;

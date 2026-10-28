@@ -16,15 +16,22 @@
 import { lineOf } from './html-tags.mjs';
 
 const ID_EXPR = String.raw`([\w$.?!()\[\]]*?(?:\w*(?:[iI]d|[uU]uid|Ref|[rR]eference)|\b(?:id|uuid)[A-Z]\w*)(?:\(\))?)`;
+// The first N characters (`slice: 0 : 8`) or the LAST N (`slice: -8`,
+// `.slice(-8)`, `.substring(id.length - 8)`): a UUID tail is as unreadable as its head.
 const SLICE_PIPE = new RegExp(
-  String.raw`${ID_EXPR}\s*[?!]?\s*\|\s*slice\s*:\s*0\s*:\s*(\d{1,2})\b`,
+  String.raw`${ID_EXPR}\s*[?!]?\s*\|\s*slice\s*:\s*(?:0\s*:\s*(\d{1,2})|-(\d{1,2}))\b`,
   'g',
 );
 const SLICE_CALL = new RegExp(
-  String.raw`${ID_EXPR}\s*[?!]?\s*\.(slice|substring|substr)\(\s*0\s*,\s*(\d{1,2})\s*\)`,
+  String.raw`${ID_EXPR}\s*[?!]?\s*\.(slice|substring|substr)\(\s*(?:0\s*,\s*(\d{1,2})|-(\d{1,2})|[\w$.?!]+\.length\s*-\s*(\d{1,2}))\s*\)`,
   'g',
 );
 const MAX_FRAGMENT = 12;
+
+/** The fragment length a match asks for, whichever spelling it used. */
+function fragmentLength(...groups) {
+  return Number(groups.find((g) => g !== undefined));
+}
 
 /**
  * Whole words that end in "id" but are not identifiers. Compared against the
@@ -79,21 +86,23 @@ function isId(expr) {
 export function uuidFragmentFindings(text) {
   const out = [];
   for (const m of text.matchAll(SLICE_PIPE)) {
-    if (!isId(m[1]) || Number(m[2]) > MAX_FRAGMENT) continue;
+    const n = fragmentLength(m[2], m[3]);
+    if (!isId(m[1]) || n > MAX_FRAGMENT) continue;
     out.push({
       line: lineAt(text, m.index),
       rule: 'slice-pipe',
       anchor: `${m[1]} | slice`,
-      message: `${m[1]} | slice: 0 : ${m[2]}: a UUID fragment on screen — show the human code (number, MRN, reference)`,
+      message: `${m[1]} | slice (${n} characters): a UUID fragment on screen — show the human code (number, MRN, reference)`,
     });
   }
   for (const m of text.matchAll(SLICE_CALL)) {
-    if (!isId(m[1]) || Number(m[3]) > MAX_FRAGMENT) continue;
+    const n = fragmentLength(m[3], m[4], m[5]);
+    if (!isId(m[1]) || n > MAX_FRAGMENT) continue;
     out.push({
       line: lineAt(text, m.index),
       rule: 'slice-call',
       anchor: `${m[1]}.${m[2]}`,
-      message: `${m[1]}.${m[2]}(0, ${m[3]}): a UUID fragment on screen — show the human code (number, MRN, reference)`,
+      message: `${m[1]}.${m[2]}(…) (${n} characters): a UUID fragment on screen — show the human code (number, MRN, reference)`,
     });
   }
   return out;

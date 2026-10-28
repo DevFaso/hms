@@ -44,9 +44,9 @@ const EXPR = String.raw`([\w$.?!()\[\]'"]*?\w*${MONEY_TAIL}\w*(?:\(\))?)`;
 // `[?!]?` — `inv.amount?.toFixed(2)` and `inv.amount!.toFixed(2)` are the same
 // hand formatting, and `(line.amount * rate).toFixed(2)` the same again.
 // `(?![\w.])` keeps the whole chain: `(total.amount).toFixed` names `total.amount`, not `total`.
-// `(inv.amount ?? 0) | number` is the same render with a null guard.
+// `(inv.amount ?? 0) | number` and `(inv.amount || 0) | number` are the same render with a null guard.
 const PIPE_RE = new RegExp(
-  String.raw`${EXPR}(?![\w.])\s*[?!]?\s*(?:\?\?\s*0\s*)?\)?\s*\|\s*(number|currency)\b`,
+  String.raw`${EXPR}(?![\w.])\s*[?!]?\s*(?:(?:\?\?|\|\|)\s*0\s*)?\)?\s*\|\s*(number|currency)\b`,
   'gi',
 );
 /**

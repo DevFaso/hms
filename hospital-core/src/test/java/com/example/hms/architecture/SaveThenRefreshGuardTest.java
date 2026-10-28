@@ -49,9 +49,14 @@ class SaveThenRefreshGuardTest {
     /** {@code [T saved =] repo.save(} or {@code this.repo.save(}: the `(` of the call. */
     static final Pattern SAVE = Pattern.compile("(?:(\\w+)\\s*=\\s*)?[\\w.]+\\.save\\(");
 
-    /** A refresh of {@code x}, through the entity manager or a house helper. */
+    /** A refresh of {@code x}, through the entity manager or a house helper ({@code item.refresh(view)} is neither). */
     static final Pattern REFRESH = Pattern.compile(
-        "(?:(?:entityManager|em)\\.refresh|refreshIfManaged|resync)\\(\\s*(\\w+)\\s*\\)");
+        "\\b(?:(?:entityManager|em)\\.refresh|refreshIfManaged|resync)\\(\\s*(\\w+)\\s*\\)");
+
+    /** A member method header at class-member indentation: the `{` that opens the method a save sits in. */
+    static final Pattern METHOD_HEADER = Pattern.compile(
+        "(?m)^ {4}(?:(?:public|private|protected|static|final|synchronized|default)\\s+)*[\\w<>\\[\\],.? ]+?\\s+\\w+\\s*\\([^;{)]*\\)"
+            + "\\s*(?:throws[^{;]*)?\\{");
     static final Pattern FLUSH = Pattern.compile("\\.(?:flush|saveAndFlush)\\(");
     static final Pattern IDENTIFIER = Pattern.compile("\\b[a-z]\\w*\\b");
 
@@ -72,10 +77,11 @@ class SaveThenRefreshGuardTest {
             if (semicolon < 0) {
                 continue;
             }
-            // The rest of the ENCLOSING block — an if/try/lambda between the save and
-            // the refresh is stepped over: a log line or a mapper call between the two
-            // changes nothing about what the refresh discards.
-            String rest = source.substring(semicolon + 1, endOfEnclosingBlock(source, semicolon + 1));
+            // The rest of the enclosing METHOD — an if/try/lambda between the save and the
+            // refresh is stepped over, and a save inside an `if` is still followed by the
+            // refresh after it: a log line or a mapper call between the two changes
+            // nothing about what the refresh discards.
+            String rest = source.substring(semicolon + 1, endOfEnclosingMethod(source, m.start(), semicolon + 1));
             String saved = m.group(1);
             // Every refresh that follows is checked, not only the first: a refresh of
             // another row before the saved one does not clear the saved one.
@@ -104,6 +110,24 @@ class SaveThenRefreshGuardTest {
             }
         }
         return false;
+    }
+
+    /**
+     * The index of the `}` that closes the member method containing {@code at}: the last
+     * method header before it, closed by balanced braces. Falls back to the enclosing
+     * block when no header is found (a fixture with no method around it).
+     */
+    static int endOfEnclosingMethod(String source, int at, int from) {
+        int bodyOpen = -1;
+        Matcher header = METHOD_HEADER.matcher(source);
+        while (header.find() && header.end() - 1 < at) {
+            bodyOpen = header.end() - 1;
+        }
+        if (bodyOpen < 0) {
+            return endOfEnclosingBlock(source, from);
+        }
+        int end = SourceScan.closingBrace(source, bodyOpen);
+        return end > from ? end : endOfEnclosingBlock(source, from);
     }
 
     /** The index of the `}` that closes the block containing {@code from}; nested blocks are stepped over. */
@@ -222,6 +246,22 @@ class SaveThenRefreshGuardTest {
             entityManager.refresh(lot);
             entityManager.refresh(saved);
             """;
+        String saveInsideIf = """
+                public Appointment update(UUID id, AppointmentRequestDTO request) {
+                    Appointment existing = load(id);
+                    if (changed(existing, request)) { appointmentRepository.save(existing); }
+                    entityManager.refresh(existing);
+                    return existing;
+                }
+
+                public void other() { entityManager.refresh(existing); }
+            """;
+        String domainRefresh = """
+            inventoryItemRepository.save(item);
+            item.refresh(view);
+            """;
+        assertThat(offenders("x", saveInsideIf)).hasSize(1);
+        assertThat(offenders("x", domainRefresh)).isEmpty();
         assertThat(offenders("x", old)).hasSize(1);
         assertThat(offenders("x", plain)).hasSize(1);
         assertThat(offenders("x", expression)).hasSize(1);

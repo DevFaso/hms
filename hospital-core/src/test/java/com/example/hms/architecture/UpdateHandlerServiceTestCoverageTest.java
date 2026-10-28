@@ -152,7 +152,14 @@ class UpdateHandlerServiceTestCoverageTest {
      * mocked, not exercised — D923 had exactly such a slice test — so these regions are blanked
      * before the names are collected.
      */
-    private static final Pattern STUB_CALL = Pattern.compile("\\b(?:when|given|verify|verifyNoMoreInteractions|inOrder)\\(");
+    private static final Pattern STUB_CALL = Pattern.compile(
+        "\\b(?:when|given|verify|verifyNoMoreInteractions|inOrder|then)\\(");
+
+    /**
+     * A call on the CONTROLLER itself in a slice test ({@code controller.updateBed(id, request)}
+     * with the service mocked) exercises no service method: its name is blanked too.
+     */
+    private static final Pattern CONTROLLER_CALL = Pattern.compile("\\b\\w*[cC]ontroller\\w*\\s*\\.\\s*(\\w+)\\s*\\(");
 
     /**
      * A method DECLARATION in test code ({@code @Test void updatePermission() {}}): the
@@ -178,12 +185,16 @@ class UpdateHandlerServiceTestCoverageTest {
                     out.setCharAt(i, ' ');
                 }
             }
-            // verify(service).update(...): the method after the closing paren is the stubbed one.
+            // verify(service).update(...), then(service).should().update(...): every method
+            // in the chain after the closing paren is the stubbed one, not a call.
             int after = close + 1;
-            while (after < source.length() && Character.isWhitespace(source.charAt(after))) {
-                after++;
-            }
-            if (after < source.length() && source.charAt(after) == '.') {
+            for (int hop = 0; hop < 3; hop++) {
+                while (after < source.length() && Character.isWhitespace(source.charAt(after))) {
+                    after++;
+                }
+                if (after >= source.length() || source.charAt(after) != '.') {
+                    break;
+                }
                 int nameEnd = after + 1;
                 while (nameEnd < source.length() && Character.isLetterOrDigit(source.charAt(nameEnd))) {
                     nameEnd++;
@@ -191,6 +202,16 @@ class UpdateHandlerServiceTestCoverageTest {
                 for (int i = after; i < nameEnd; i++) {
                     out.setCharAt(i, ' ');
                 }
+                after = nameEnd;
+                if (after < source.length() && source.charAt(after) == '(') {
+                    after = SourceScan.closingParen(source, after) + 1;
+                }
+            }
+        }
+        Matcher controllerCall = CONTROLLER_CALL.matcher(source);
+        while (controllerCall.find()) {
+            for (int i = controllerCall.start(1); i < controllerCall.end(1); i++) {
+                out.setCharAt(i, ' ');
             }
         }
         return out.toString();
@@ -369,6 +390,9 @@ class UpdateHandlerServiceTestCoverageTest {
             given(barService.updateBar(id)).willReturn(bar);
             verify(fooService).updateFoo(id, request);
             doReturn(x).when(bazService).updateBaz(id);
+            then(quuxService).should().updateQuux(id, request);
+            then(quuxService).should(times(2)).archiveQuux(id);
+            controller.updateBed(id, request);
             FooResponse saved = fooService.renameFoo(id, request);
             @Test
             void updateQux() {
@@ -377,7 +401,8 @@ class UpdateHandlerServiceTestCoverageTest {
             """;
         String kept = withoutStubs(test);
         assertThat(kept).contains("renameFoo(", "perform(")
-            .doesNotContain("updateFoo(", "updateBar(", "updateBaz(", "updateQux(");
+            .doesNotContain("updateFoo(", "updateBar(", "updateBaz(", "updateQux(", "updateQuux(", "archiveQuux(",
+                "updateBed(");
     }
 
     @Test

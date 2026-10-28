@@ -147,9 +147,13 @@ export function dialogFindings(html, componentSource = html, dialogSelectors = n
     } else if ([...classTokens(tag)].some((t) => CONTAINER_TOKEN.test(t))) {
       const inner = innerHtml(html, tokens, index);
       const insideDialog = stack.some((s) => s.isDialog);
+      // A plain role, a BOUND role (`[attr.role]="'dialog'"`), a native <dialog> or a
+      // child component that is itself a dialog all make the wrapper a wrapper.
       const wrapsDialog =
         inner != null &&
-        (/\brole\s*=\s*["'](?:dialog|alertdialog)["']|<dialog\b/.test(inner) ||
+        (/\brole\s*=\s*["'](?:dialog|alertdialog)["']|\[(?:attr\.)?role\]\s*=\s*["']'(?:dialog|alertdialog)'["']|<dialog\b/.test(
+          inner,
+        ) ||
           (childDialog !== null && childDialog.test(inner)));
       if (!insideDialog && !wrapsDialog) {
         out.push({

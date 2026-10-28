@@ -16,11 +16,16 @@ test('D999: an icon-only <button> with no aria-label is announced by the ligatur
   const html = `<button class="icon-btn" (click)="edit(a)" title="Modifier">
       <span class="material-symbols-outlined">edit</span>
     </button>
-    <button (click)="remove(a)"><span class="material-symbols-outlined">delete</span></button>`;
+    <button (click)="remove(a)"><span class="material-symbols-outlined">delete</span></button>
+    <button (click)="open(a)"><ng-container *ngIf="a"><span class="material-icons">edit</span></ng-container></button>
+    <button aria-label="" (click)="close()"><span class="material-icons">close</span></button>`;
   // The anchor carries the action, so two "delete" buttons on one page are two sites.
+  // An <ng-container> wrapper is not content, and aria-label="" names nothing.
   assert.deepEqual(rules(html), [
     'icon-button:button edit (click)=edit(a)',
     'icon-button:button delete (click)=remove(a)',
+    'icon-button:button edit (click)=open(a)',
+    'icon-button:button close (click)=close()',
   ]);
 });
 

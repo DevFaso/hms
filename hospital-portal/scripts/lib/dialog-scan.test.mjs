@@ -84,6 +84,9 @@ test('a container that only wraps a child component which is itself a dialog del
   const html = `<div class="modal"><app-order-set-picker (closed)="c()"></app-order-set-picker></div>`;
   assert.deepEqual(rules(html, html, new Set(['app-order-set-picker'])), []);
   assert.deepEqual(rules(html, html, new Set()), ['role']);
+  // A wrapper around a dialog whose role is BOUND is a wrapper too.
+  const bound = `<div class="modal"><div [attr.role]="'dialog'" aria-modal="true" aria-label="x" (keydown.escape)="c()"></div></div>`;
+  assert.deepEqual(dialogFindings(bound), []);
 });
 
 test('a native <dialog> has the role, the modality and Escape built in; only its name is checked', () => {
