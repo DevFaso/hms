@@ -50,9 +50,10 @@ class MedicalCertificateServiceImplTest {
     private final PatientLocaleResolver localeResolver = mock(PatientLocaleResolver.class);
     private final com.example.hms.repository.EncounterNoteRepository noteRepository =
         mock(com.example.hms.repository.EncounterNoteRepository.class);
+    private final com.example.hms.utility.RoleValidator roleValidator = mock(com.example.hms.utility.RoleValidator.class);
     private final MedicalCertificateServiceImpl service = new MedicalCertificateServiceImpl(
         encounterRepository, staffRepository, documentRepository, new PatientDocumentMapper(),
-        fileUploadService, localeResolver, new LocaleConfig().messageSource(), noteRepository);
+        fileUploadService, localeResolver, new LocaleConfig().messageSource(), noteRepository, roleValidator);
 
     private Hospital hospital;
     private Encounter encounter;
@@ -88,6 +89,7 @@ class MedicalCertificateServiceImplTest {
         CallerIdentityTestSupport.actAs(doctor, hospital);
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(staffRepository.findByUserIdAndHospitalId(user.getId(), hospital.getId())).thenReturn(Optional.of(doctor));
+        org.mockito.Mockito.lenient().when(roleValidator.isDoctor(user.getId(), hospital.getId())).thenReturn(true);
         when(localeResolver.resolve(any(), any())).thenReturn(java.util.Locale.FRENCH);
         when(fileUploadService.storeGeneratedPatientDocument(any(), anyString(), any())).thenAnswer(inv ->
             new FileUploadService.StoredFileDescriptor("/uploads/patient-documents/c.pdf", null,
@@ -265,6 +267,17 @@ class MedicalCertificateServiceImplTest {
             assertThat(font.getStringWidth(line) / 1000 * 11).isLessThanOrEqualTo(width);
         }
         assertThat(String.join("", lines)).isEqualTo(reference);
+    }
+
+    @Test
+    void aDoctorElsewhereWhoIsANurseHereCannotSign() {
+        // Her nurse record here is the visit's clinician of record; her doctor role is at another hospital.
+        when(roleValidator.isDoctor(doctor.getUser().getId(), hospital.getId())).thenReturn(false);
+        MedicalCertificateRequestDTO request = MedicalCertificateRequestDTO.builder()
+            .type(MedicalCertificateType.ATTENDANCE).build();
+        assertThatThrownBy(() -> service.issue(encounterId, request))
+            .isInstanceOf(ClientSafeAccessDeniedException.class);
+        verify(documentRepository, never()).save(any());
     }
 
     @Test

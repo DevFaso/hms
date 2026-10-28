@@ -365,6 +365,9 @@ class DischargeSummaryServiceImplTest {
         Staff doctorStaff = new Staff();
         doctorStaff.setId(UUID.randomUUID());
         doctorStaff.setUser(doctor);
+        com.example.hms.model.UserRoleHospitalAssignment doctorAssignment = new com.example.hms.model.UserRoleHospitalAssignment();
+        doctorAssignment.setId(UUID.randomUUID());
+        doctorStaff.setAssignment(doctorAssignment);
         actAs(doctor);
         when(roleValidator.getCurrentUserId()).thenReturn(doctor.getId());
         org.mockito.Mockito.lenient().when(roleValidator.isDoctor(doctor.getId(), hospitalId)).thenReturn(true);
@@ -376,6 +379,8 @@ class DischargeSummaryServiceImplTest {
         service.updateDischargeSummary(summaryId, buildRequest(), Locale.ENGLISH);
 
         assertThat(summary.getDischargingProvider()).isEqualTo(doctorStaff);
+        // Her doctor assignment, never another one she holds at the hospital.
+        assertThat(summary.getAssignment()).isSameAs(doctorAssignment);
     }
 
     @Test void qaD930_aNurseWhoWroteANoteCannotDeleteAColleaguesNurseHeldDraft() {

@@ -50,6 +50,14 @@ class PregnancyHypertensionProtocolRuleTest {
     }
 
     @Test
+    void anUndatedReadingNeverHidesTheLatestDatedOne() {
+        PatientVitalSign undated = PatientVitalSign.builder().systolicBpMmHg(150).diastolicBpMmHg(100).build();
+        assertThat(rule.evaluate(context(dueDateAtWeek(22), undated, bp(118, 76)))).isEmpty();
+        PatientVitalSign undatedNormal = PatientVitalSign.builder().systolicBpMmHg(118).diastolicBpMmHg(76).build();
+        assertThat(rule.evaluate(context(dueDateAtWeek(22), undatedNormal, bp(152, 102)))).hasSize(1);
+    }
+
+    @Test
     void theSevereRangeIsCritical() {
         when(repo.findByProtocolCode("PREGNANCY_HYPERTENSION")).thenReturn(Optional.empty());
         assertThat(rule.evaluate(context(dueDateAtWeek(30), bp(165, 100))).get(0).indicator())

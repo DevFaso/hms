@@ -1101,6 +1101,9 @@ class EncounterServiceImplTest {
         Staff doctor = new Staff();
         doctor.setId(UUID.randomUUID());
         doctor.setUser(doctorUser);
+        UserRoleHospitalAssignment doctorAssignment = new UserRoleHospitalAssignment();
+        doctorAssignment.setId(UUID.randomUUID());
+        doctor.setAssignment(doctorAssignment);
         org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
             new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(doctorUser, null,
                 List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_DOCTOR"))));
@@ -1120,6 +1123,8 @@ class EncounterServiceImplTest {
             org.mockito.ArgumentCaptor<DischargeSummary> saved = org.mockito.ArgumentCaptor.forClass(DischargeSummary.class);
             verify(dischargeSummaryRepository).save(saved.capture());
             assertThat(saved.getValue().getDischargingProvider()).isEqualTo(doctor);
+            // Review of #971: filed under her doctor assignment, not any assignment she holds.
+            assertThat(saved.getValue().getAssignment()).isSameAs(doctorAssignment);
         } finally {
             org.springframework.security.core.context.SecurityContextHolder.clearContext();
         }

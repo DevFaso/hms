@@ -2465,6 +2465,16 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   someone else as author; #971 only stopped a colleague from taking a plan
   over), so the plan form's author picker can only fail: hide it, or decide
   a hand-over rule.
+  (12) Review round 12 of #971, deferred: checkout still writes the visit's
+  closing fields (diagnoses, follow-up, summaries) into an existing draft
+  held by another doctor, as it did before #971 (it no longer changes the
+  draft's owner); whether checkout should leave another doctor's draft
+  alone, or append, is a workflow decision, and refusing it would break
+  checkout. A transcribed vaccine dose (D1003) records no staff member,
+  since `administered_by` was its only actor column; a `recorded_by`
+  column (new migration) would keep who entered it, beyond the write-audit
+  row. The certificate dialog's default start date is the browser's day of
+  the arrival, the server checks its own (the zone item in (10)).
 
 ### Execution plan (2026-09-26)
 

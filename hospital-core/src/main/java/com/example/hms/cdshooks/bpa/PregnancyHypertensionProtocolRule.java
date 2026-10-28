@@ -105,8 +105,9 @@ public class PregnancyHypertensionProtocolRule implements BpaRule {
         PatientVitalSign latest = null;
         for (PatientVitalSign v : vitals) {
             if (v.getSystolicBpMmHg() == null && v.getDiastolicBpMmHg() == null) continue;
-            if (latest == null || (v.getRecordedAt() != null && latest.getRecordedAt() != null
-                && v.getRecordedAt().isAfter(latest.getRecordedAt()))) {
+            // Review of #971: a reading with no time is older than any dated one.
+            if (latest == null || (v.getRecordedAt() != null && (latest.getRecordedAt() == null
+                || v.getRecordedAt().isAfter(latest.getRecordedAt())))) {
                 latest = v;
             }
         }

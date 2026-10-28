@@ -75,6 +75,7 @@ public class MedicalCertificateServiceImpl implements MedicalCertificateService 
     private final PatientLocaleResolver patientLocaleResolver;
     private final MessageSource messageSource;
     private final com.example.hms.repository.EncounterNoteRepository encounterNoteRepository;
+    private final com.example.hms.utility.RoleValidator roleValidator;
 
     @Override
     @Transactional
@@ -96,6 +97,12 @@ public class MedicalCertificateServiceImpl implements MedicalCertificateService 
         if (doctor == null || doctor.getUser() == null) {
             throw new com.example.hms.exception.ClientSafeAccessDeniedException(
                 com.example.hms.utility.MessageUtil.resolveOrRaw("identity.notCaller"));
+        }
+        // Review of #971: a doctor AT this hospital; a doctor elsewhere who is
+        // a nurse here does not sign with her nurse record.
+        if (!roleValidator.isDoctor(doctor.getUser().getId(), hospital.getId())) {
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("medicalCertificate.notTreating"));
         }
         // The certificate says "I examined the patient on that day": only a
         // clinician who treated the visit (its clinician of record or a note
