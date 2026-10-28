@@ -1442,6 +1442,21 @@ class BillingInvoiceServiceImplTest {
     }
 
     @Test
+    void aSecondCheckInOfTheSameVisitIsNotBilledAgain_D936() {
+        com.example.hms.model.Encounter encounter = new com.example.hms.model.Encounter();
+        encounter.setId(UUID.randomUUID());
+        BillingInvoice first = BillingInvoice.builder().encounter(encounter).checkInCopay(true)
+            .status(InvoiceStatus.PAID).build();
+        when(invoiceRepository.findByEncounter_IdAndStatusNot(encounter.getId(), InvoiceStatus.CANCELLED))
+            .thenReturn(List.of(first));
+
+        billingInvoiceService.recordCheckInCopay(encounter, new BigDecimal("1000"), UUID.randomUUID());
+
+        verify(invoiceRepository, never()).saveAndFlush(any());
+        verify(paymentTransactionRepository, never()).save(any());
+    }
+
+    @Test
     void checkInCopayBecomesAPaidInvoiceOnTheEncounter_D149() {
         Hospital hospital = new Hospital();
         hospital.setId(HOSPITAL_ID);

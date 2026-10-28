@@ -1389,6 +1389,14 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             return;
         }
         requireWholeAmount(amount);
+        // QA D936 (class): one copay per visit. A repeated or retried check-in
+        // of the same encounter does not bill the patient a second copay.
+        if (encounter.getId() != null && invoiceRepository
+                .findByEncounter_IdAndStatusNot(encounter.getId(), InvoiceStatus.CANCELLED).stream()
+                .anyMatch(BillingInvoice::isCheckInCopay)) {
+            LOG.info("Check-in copay already recorded for encounter {}; not billed again", encounter.getId());
+            return;
+        }
         Hospital hospital = encounter.getHospital();
         LocalDate today = LocalDate.now(java.time.ZoneId.systemDefault());
         BillingInvoice invoice = BillingInvoice.builder()
