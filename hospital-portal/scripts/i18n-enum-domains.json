@@ -140,7 +140,10 @@
     "enum": "hospital-core/src/main/java/com/example/hms/enums/StaffLeaveStatus.java"
   },
   "marTaskStatus": {
-    "reason": "no enum holds it: NurseTaskServiceImpl.resolveMarStatus DERIVES it from a prescription and the clock — COMPLETED when a GIVEN MAR row exists, else OVERDUE or DUE against a naive created-at-plus-four-hours window. nurse-station.html also guards on GIVEN, which resolveMarStatus never returns, so GIVEN is deliberately not keyed — keying a value nothing emits is how the phantom DISCHARGE_DISPOSITION vocabulary got here."
+    "reason": "no enum holds it: NurseTaskServiceImpl.resolveMarStatus DERIVES it from a prescription, its recorded doses and the clock: COMPLETED when no dose is left to give, UPCOMING when the next slot is beyond the early window (QA D949), else OVERDUE or DUE. Check by hand when resolveMarStatus changes."
+  },
+  "medicationAdministrationStatus": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/MedicationAdministrationStatus.java"
   },
   "mtmReviewStatus": {
     "enum": "hospital-core/src/main/java/com/example/hms/enums/MtmReviewStatus.java"

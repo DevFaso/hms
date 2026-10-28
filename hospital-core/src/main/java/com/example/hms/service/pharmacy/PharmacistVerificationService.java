@@ -83,6 +83,11 @@ public class PharmacistVerificationService {
         return controlledResolver != null ? controlledResolver.isControlled(p) : p.isControlledSubstance();
     }
 
+    /** QA D922: the same controlled answer, for the MAR row's "controlled substance" flag. */
+    public boolean isControlledSubstance(Prescription prescription) {
+        return prescription != null && controlled(prescription);
+    }
+
     /**
      * Whether this prescription may not be administered until a pharmacist
      * has verified it.

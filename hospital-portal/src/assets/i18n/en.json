@@ -4416,7 +4416,12 @@
     "OPEN_EMAR": "Open the eMAR to scan instead",
     "HANDOFF_RECIPIENT": "Handed over to",
     "HANDOFF_RECIPIENT_PLACEHOLDER": "Choose a colleague",
-    "HANDOFF_TO": "to"
+    "HANDOFF_TO": "to",
+    "LEFT_WITHOUT_BEING_SEEN": "Left without being seen",
+    "LAST_DOSE": "Last dose:",
+    "NOT_YET_DUE": "Not yet due",
+    "COURSE_ENDED": "Course ended",
+    "CONTROLLED_SUBSTANCE": "Controlled substance"
   },
   "ONBOARDING": {
     "ABILITIES_TITLE": "Your Abilities",
@@ -6286,9 +6291,10 @@
         "REFUSED": "Refused"
       },
       "MAR_TASK_STATUS": {
-        "COMPLETED": "Completed",
+        "COMPLETED": "Course ended",
         "DUE": "Due",
-        "OVERDUE": "Overdue"
+        "OVERDUE": "Overdue",
+        "UPCOMING": "Upcoming"
       },
       "PLATFORM_RELEASE_STATUS": {
         "CANCELLED": "Cancelled",
@@ -6802,6 +6808,13 @@
         "LEVEL_3_MAJOR": "Level 3 - major",
         "LEVEL_4_SEVERE": "Level 4 - severe",
         "LEVEL_5_CRITICAL": "Level 5 - critical"
+      },
+      "MEDICATION_ADMINISTRATION_STATUS": {
+        "GIVEN": "Given",
+        "HELD": "Held",
+        "MISSED": "Missed",
+        "PENDING": "Pending",
+        "REFUSED": "Refused"
       }
     },
     "DOCUMENTS": {
@@ -7097,7 +7110,8 @@
       "TOP": "Topical (TOP)",
       "INH": "Inhaled (INH)",
       "NEB": "Nebulised (NEB)"
-    }
+    },
+    "CONTROLLED_PICKED_HINT": "Controlled substance: the order needs a pharmacist's verification before it is given, and the patient cannot request a renewal."
   },
   "PROFILE": {
     "ACCOUNT_AGE": "Account Age",

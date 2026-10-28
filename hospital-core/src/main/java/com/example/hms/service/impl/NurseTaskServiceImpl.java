@@ -140,6 +140,11 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     static final Set<String> HANDOFF_DIRECTIONS = Set.of("SHIFT_CHANGE", "WARD_TRANSFER", ORDER_TYPE_PROCEDURE, "BREAK_COVER");
     private static final String STATUS_OVERDUE = "OVERDUE";
     private static final String STATUS_DUE = "DUE";
+    /**
+     * QA D949: the next dose exists but its slot is more than the early
+     * window away (tomorrow's dose of a daily order). Not due, not counted.
+     */
+    private static final String STATUS_UPCOMING = "UPCOMING";
     private static final String STATUS_COMPLETED = "COMPLETED";
     private static final String STATUS_PENDING = "PENDING";
     /** How far before now a new task may be dated (a shift's worth of back-entry). */
@@ -334,8 +339,11 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                     .medication(rx.getMedicationName())
                     .dose(buildDoseDisplay(rx))
                     .route(rx.getRoute())
+                    .routeCode(com.example.hms.service.emar.MedicationRoutes.canonical(rx.getRoute()))
                     .dueTime(computeMedicationDueTime(rx, now))
                     .status(marStatus)
+                    .lastOutcome(lastRecordedOutcome(rx))
+                    .controlledSubstance(pharmacistVerificationService.isControlledSubstance(rx))
                     .requiresPharmacistVerification(
                         pharmacistVerificationService.requiresVerification(rx))
                     .pharmacistVerified(pharmacistVerificationService.isVerified(rx))
@@ -401,6 +409,10 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     }
 
     /** Returns true when a status filter is active and the given status does not match it. */
+    private static boolean isDueStatus(String marStatus) {
+        return STATUS_DUE.equals(marStatus) || STATUS_OVERDUE.equals(marStatus);
+    }
+
     private boolean isFilteredOut(String statusFilter, String actualStatus) {
         if (statusFilter == null || statusFilter.isBlank()) return false;
         String wanted = statusFilter.trim().toUpperCase(Locale.ROOT);
@@ -469,6 +481,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                 .medication(marRecord.getMedicationName())
                 .dose(marRecord.getDose())
                 .route(marRecord.getRoute())
+                .routeCode(com.example.hms.service.emar.MedicationRoutes.canonical(marRecord.getRoute()))
                 .dueTime(marRecord.getScheduledTime())
                 .status(normalizedStatus)
                 .build();
@@ -645,6 +658,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .medication(task.getMedication())
             .dose(task.getDose())
             .route(task.getRoute())
+            .routeCode(task.getRouteCode())
             .dueTime(task.getDueTime())
             .status(status)
             .build();
@@ -1124,7 +1138,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                 switch (marStatus) {
                     case STATUS_DUE -> due++;
                     case STATUS_OVERDUE -> overdue++;
-                    default -> { /* COMPLETED — not counted */ }
+                    default -> { /* COMPLETED or UPCOMING — not counted (QA D949) */ }
                 }
             }
         }
@@ -1141,7 +1155,25 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         if (dueBy == null) return STATUS_COMPLETED;
         // A dose may be given up to an hour either side of its slot (D154).
         if (dueBy.plus(EARLY_ADMINISTRATION_WINDOW).isBefore(now)) return STATUS_OVERDUE;
+        // QA D949: a slot beyond the early window cannot be given yet (the
+        // administer call refuses it), so it is not "due".
+        if (dueBy.isAfter(now.plus(EARLY_ADMINISTRATION_WINDOW))) return STATUS_UPCOMING;
         return STATUS_DUE;
+    }
+
+    /**
+     * QA D929: the outcome of the last closed dose (GIVEN, HELD, REFUSED,
+     * MISSED), or null when none was recorded. A COMPLETED row only says no
+     * dose is left; this says what happened to the last one, so a held or
+     * refused dose is never read as given.
+     */
+    private String lastRecordedOutcome(Prescription rx) {
+        if (rx.getId() == null) return null;
+        return marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId()).stream()
+            .filter(r -> r.getStatus() != MedicationAdministrationStatus.PENDING)
+            .findFirst()
+            .map(r -> r.getStatus().name())
+            .orElse(null);
     }
 
     /**
@@ -1331,6 +1363,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .medication(rx.getMedicationName())
             .dose(buildDoseDisplay(rx))
             .route(rx.getRoute())
+            .routeCode(com.example.hms.service.emar.MedicationRoutes.canonical(rx.getRoute()))
             .dueTime(saved.getScheduledTime())
             .status(status.name())
             .build();
@@ -1359,6 +1392,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .medication(rx.getMedicationName())
             .dose(saved.getDose())
             .route(saved.getRoute())
+            .routeCode(com.example.hms.service.emar.MedicationRoutes.canonical(saved.getRoute()))
             .dueTime(saved.getScheduledTime())
             .status(status.name())
             .build();
@@ -1563,7 +1597,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .findByPatient_IdAndHospital_Id(patient.getId(), hospitalId)
             .stream()
             .filter(rx -> ACTIVE_RX_STATUSES.contains(rx.getStatus()))
-            .filter(rx -> !STATUS_COMPLETED.equals(resolveMarStatus(rx, now)))
+            // QA D949: due means DUE or OVERDUE, never a later slot or a finished course.
+            .filter(rx -> isDueStatus(resolveMarStatus(rx, now)))
             .count();
 
         Department department = JpaProxyUtils.safeInit(

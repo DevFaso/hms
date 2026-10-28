@@ -801,9 +801,19 @@ export class EnumLabelService implements OnDestroy {
 
     /* ── MAR task status ───────────────────────────────────── */
     marTaskStatus: {
-      COMPLETED: 'Completed',
+      COMPLETED: 'Course ended',
       DUE: 'Due',
       OVERDUE: 'Overdue',
+      UPCOMING: 'Upcoming',
+    },
+
+    /* ── MAR dose outcome (QA D929) ────────────────────────── */
+    medicationAdministrationStatus: {
+      GIVEN: 'Given',
+      HELD: 'Held',
+      MISSED: 'Missed',
+      PENDING: 'Pending',
+      REFUSED: 'Refused',
     },
 
     /* ── Newborn alert types ───────────────────────────────── */

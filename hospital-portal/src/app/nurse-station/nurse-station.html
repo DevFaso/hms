@@ -91,6 +91,17 @@
                 <span class="material-symbols-outlined">emergency</span>
                 {{ 'TRIAGE.TITLE' | translate }}
               </button>
+              <!-- QA D954: a patient who leaves before being seen is closed here,
+                   with a reason, instead of staying in the queue. -->
+              <button
+                class="action-btn action-lwbs"
+                data-testid="awaiting-triage-lwbs"
+                (click)="openCloseUnseen(e)"
+                [title]="'NURSE.LEFT_WITHOUT_BEING_SEEN' | translate"
+              >
+                <span class="material-symbols-outlined" aria-hidden="true">directions_walk</span>
+                {{ 'NURSE.LEFT_WITHOUT_BEING_SEEN' | translate }}
+              </button>
             </div>
           </div>
         }
@@ -284,6 +295,13 @@
                     </td>
                     <td>
                       <strong>{{ m.medication }}</strong>
+                      @if (m.controlledSubstance) {
+                        <span
+                          class="status-badge status-controlled"
+                          [attr.data-testid]="'med-controlled-' + m.id"
+                          >{{ 'NURSE.CONTROLLED_SUBSTANCE' | translate }}</span
+                        >
+                      }
                       @if (m.cdsAdvisories?.length) {
                         <span
                           class="status-badge status-advisory"
@@ -294,15 +312,30 @@
                       }
                     </td>
                     <td>{{ m.dose }}</td>
-                    <td>{{ m.route }}</td>
-                    <td>{{ m.dueTime | serverTime | date: 'shortTime' }}</td>
+                    <td>{{ m.route | medicationRoute }}</td>
+                    <!-- QA D949: a dose not due today shows its date. -->
+                    <td>
+                      {{
+                        m.dueTime
+                          | serverTime
+                          | date: (isDueToday(m.dueTime) ? 'shortTime' : 'short')
+                      }}
+                    </td>
                     <td>
                       <span class="status-badge status-{{ m.status | lowercase }}">{{
                         m.status | enumLabel: 'marTaskStatus'
                       }}</span>
+                      <!-- QA D929: what happened to the last dose, so a held or
+                           refused dose is never read as given. -->
+                      @if (m.lastOutcome) {
+                        <span class="last-outcome" [attr.data-testid]="'med-last-outcome-' + m.id"
+                          >{{ 'NURSE.LAST_DOSE' | translate }}
+                          {{ m.lastOutcome | enumLabel: 'medicationAdministrationStatus' }}</span
+                        >
+                      }
                     </td>
                     <td class="action-cell">
-                      @if (m.status !== 'COMPLETED' && m.status !== 'GIVEN') {
+                      @if (canRecordDose(m)) {
                         <button
                           class="action-btn action-give"
                           (click)="administerMedication(m.id)"
@@ -330,10 +363,15 @@
                           <span class="material-symbols-outlined">cancel</span>
                           {{ 'NURSE.REFUSE' | translate }}
                         </button>
+                      } @else if (m.status === 'UPCOMING') {
+                        <span class="action-upcoming">
+                          <span class="material-symbols-outlined" aria-hidden="true">schedule</span>
+                          {{ 'NURSE.NOT_YET_DUE' | translate }}
+                        </span>
                       } @else {
                         <span class="action-done">
-                          <span class="material-symbols-outlined">task_alt</span>
-                          {{ 'NURSE.DONE' | translate }}
+                          <span class="material-symbols-outlined" aria-hidden="true">task_alt</span>
+                          {{ 'NURSE.COURSE_ENDED' | translate }}
                         </span>
                       }
                     </td>
@@ -1044,7 +1082,10 @@
       } @else {
         <p>{{ 'NURSE.PROVIDE_REASON' | translate }}</p>
       }
+      <!-- QA D993: the reason box has a real label, not only a placeholder. -->
+      <label class="sr-only" for="mar-reason-input">{{ 'NURSE.ENTER_REASON' | translate }}</label>
       <textarea
+        id="mar-reason-input"
         class="reason-input"
         [ngModel]="reasonText()"
         (ngModelChange)="reasonText.set($event)"
@@ -1745,4 +1786,14 @@
     (dismissed)="intakeEncounter.set(null)"
     (intakeCompleted)="onIntakeCompleted()"
   ></app-nursing-intake-form>
+}
+
+<!-- QA D954: close a visit nobody has seen (left without being seen, or cancelled). -->
+@if (closeUnseenEncounter(); as target) {
+  <app-close-unseen-dialog
+    [encounterId]="target.id"
+    [patientName]="target.patientName ?? null"
+    (dismissed)="closeUnseenEncounter.set(null)"
+    (closed)="onUnseenVisitClosed()"
+  />
 }

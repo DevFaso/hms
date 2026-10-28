@@ -4416,7 +4416,12 @@
     "OPEN_EMAR": "Abrir el eMAR para escanear",
     "HANDOFF_RECIPIENT": "Entregado a",
     "HANDOFF_RECIPIENT_PLACEHOLDER": "Elija un colega",
-    "HANDOFF_TO": "a"
+    "HANDOFF_TO": "a",
+    "LEFT_WITHOUT_BEING_SEEN": "Se fue sin ser atendido",
+    "LAST_DOSE": "Última dosis:",
+    "NOT_YET_DUE": "Aún no corresponde",
+    "COURSE_ENDED": "Tratamiento terminado",
+    "CONTROLLED_SUBSTANCE": "Estupefaciente"
   },
   "ONBOARDING": {
     "ABILITIES_TITLE": "Sus capacidades",
@@ -6286,9 +6291,10 @@
         "REFUSED": "Rechazada"
       },
       "MAR_TASK_STATUS": {
-        "COMPLETED": "Administrada",
+        "COMPLETED": "Tratamiento terminado",
         "DUE": "Por administrar",
-        "OVERDUE": "Atrasada"
+        "OVERDUE": "Atrasada",
+        "UPCOMING": "Próxima"
       },
       "PLATFORM_RELEASE_STATUS": {
         "CANCELLED": "Cancelada",
@@ -6802,6 +6808,13 @@
         "LEVEL_3_MAJOR": "Nivel 3 - mayor",
         "LEVEL_4_SEVERE": "Nivel 4 - grave",
         "LEVEL_5_CRITICAL": "Nivel 5 - crítico"
+      },
+      "MEDICATION_ADMINISTRATION_STATUS": {
+        "GIVEN": "Administrada",
+        "HELD": "Suspendida",
+        "MISSED": "Omitida",
+        "PENDING": "Pendiente",
+        "REFUSED": "Rechazada"
       }
     },
     "DOCUMENTS": {
@@ -7097,7 +7110,8 @@
       "TOP": "Tópica (TOP)",
       "INH": "Inhalada (INH)",
       "NEB": "Nebulizada (NEB)"
-    }
+    },
+    "CONTROLLED_PICKED_HINT": "Estupefaciente: la receta debe ser verificada por un farmacéutico antes de administrarse, y el paciente no puede solicitar su renovación."
   },
   "PROFILE": {
     "ACCOUNT_AGE": "Antigüedad de la cuenta",
