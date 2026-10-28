@@ -2451,6 +2451,15 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   shows none of its own until `GET /nurse/notes` takes a date range.
   qSOFA scores the worst reading in its window for mentation, as it
   already did for RR and sBP (a rule-wide design, not changed here).
+  (10) Review round 10 of #971, deferred: the EMERGENCY "dated today"
+  test and the certificate's examination day compare the server's date
+  (UTC) with a form date sent as local midnight, so at a UTC+1 hospital a
+  visit for today reads as yesterday (Burkina Faso is UTC+0; the fix is a
+  zone per hospital, as in (7)); a discharge-summary draft keeps its
+  provider when the visit's clinician of record is reassigned and the visit
+  is completed again (before #971 checkout re-homed it every time; who owns
+  a draft after a reassignment is a rule to decide, not re-homing that
+  would undo a covering doctor's ownership).
 
 ### Execution plan (2026-09-26)
 

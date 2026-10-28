@@ -222,6 +222,33 @@ class MedicalCertificateServiceImplTest {
     }
 
     @Test
+    void longRemarksContinueOnANewPageAndTheSignatureIsStillPrinted() throws Exception {
+        String remarks = String.join("\n", java.util.Collections.nCopies(60, "Repos strict"));
+        service.issue(encounterId, MedicalCertificateRequestDTO.builder()
+            .type(MedicalCertificateType.GENERAL).remarks(remarks).build());
+        ArgumentCaptor<byte[]> pdf = ArgumentCaptor.forClass(byte[].class);
+        verify(fileUploadService).storeGeneratedPatientDocument(pdf.capture(), anyString(), any());
+        try (PDDocument doc = PDDocument.load(pdf.getValue())) {
+            assertThat(doc.getNumberOfPages()).isGreaterThan(1);
+            PDFTextStripper lastPage = new PDFTextStripper();
+            lastPage.setStartPage(doc.getNumberOfPages());
+            assertThat(lastPage.getText(doc)).contains("Fait à Ouagadougou")
+                .contains("Aminata Ouédraogo").contains("Établi électroniquement");
+        }
+    }
+
+    @Test
+    void aVisitScheduledForAnotherDayButSeenTodayCertifiesFromToday() {
+        LocalDate today = LocalDate.now();
+        encounter.setEncounterDate(today.plusDays(3).atStartOfDay());
+        encounter.setArrivalTimestamp(today.atTime(9, 0));
+        var c = MedicalCertificateServiceImpl.describe(encounter, MedicalCertificateRequestDTO.builder()
+            .type(MedicalCertificateType.SICK_LEAVE).days(2).startDate(today).build());
+        assertThat(c.visitDay()).isEqualTo(today);
+        assertThat(c.start()).isEqualTo(today);
+    }
+
+    @Test
     void theFingerprintChangesWithWhatIsCertified() {
         Patient p = encounter.getPatient();
         LocalDateTime at = LocalDateTime.of(2026, 10, 27, 10, 0);

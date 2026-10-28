@@ -271,9 +271,6 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         return immunizationMapper.toResponseDTO(updatedImmunization);
     }
 
-    /** Source codes the portal sends; anything else is kept as free text. */
-    public static final String SOURCE_GIVEN_HERE = "GIVEN_HERE";
-
     /**
      * QA D1003: the sources the immunization form writes for a dose that was
      * not given here (a vaccination card, another facility's record, the

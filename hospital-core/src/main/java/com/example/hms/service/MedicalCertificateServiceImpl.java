@@ -175,8 +175,12 @@ public class MedicalCertificateServiceImpl implements MedicalCertificateService 
     }
 
     static Certificate describe(Encounter encounter, MedicalCertificateRequestDTO request) {
-        LocalDate visitDay = encounter.getEncounterDate() != null
-            ? encounter.getEncounterDate().toLocalDate() : LocalDate.now(java.time.ZoneId.systemDefault());
+        // Review of #971: the day the patient came (arrival), as the dialog
+        // pre-fills it; a visit scheduled for another day but seen today was
+        // examined today.
+        LocalDateTime seen = encounter.getArrivalTimestamp() != null
+            ? encounter.getArrivalTimestamp() : encounter.getEncounterDate();
+        LocalDate visitDay = seen != null ? seen.toLocalDate() : LocalDate.now(java.time.ZoneId.systemDefault());
         String remarks = request.getRemarks() == null || request.getRemarks().isBlank()
             ? null : request.getRemarks().trim();
         return switch (request.getType()) {
@@ -251,54 +255,88 @@ public class MedicalCertificateServiceImpl implements MedicalCertificateService 
     private byte[] render(Locale locale, Hospital hospital, Certificate c, List<String> body, Staff doctor,
                           LocalDateTime signedAt, String fingerprint) {
         try (PDDocument doc = new PDDocument()) {
-            PDPage page = new PDPage(PDRectangle.A4);
-            doc.addPage(page);
-            float y = PDRectangle.A4.getHeight() - MARGIN;
-            try (PDPageContentStream cs = new PDPageContentStream(doc, page)) {
-                y = line(cs, PDType1Font.HELVETICA_BOLD, 13, y, pdfSafe(hospital.getName()));
+            // Review of #971: long remarks continue on a new page, so the
+            // place, the doctor's name and the reference are always printed.
+            try (PdfCursor out = new PdfCursor(doc)) {
+                out.line(PDType1Font.HELVETICA_BOLD, 13, pdfSafe(hospital.getName()));
                 if (hospital.getCity() != null) {
-                    y = line(cs, PDType1Font.HELVETICA, 10, y, pdfSafe(hospital.getCity()));
+                    out.line(PDType1Font.HELVETICA, 10, pdfSafe(hospital.getCity()));
                 }
-                y -= 28;
-                y = line(cs, PDType1Font.HELVETICA_BOLD, 17, y,
+                out.gap(28);
+                out.line(PDType1Font.HELVETICA_BOLD, 17,
                     pdfSafe(text(locale, "medicalCertificate.title." + c.type().name()).toUpperCase(locale)));
-                y -= 18;
+                out.gap(18);
                 for (String paragraph : body) {
                     for (String wrapped : wrap(pdfSafe(paragraph), PDType1Font.HELVETICA, 11)) {
-                        y = line(cs, PDType1Font.HELVETICA, 11, y, wrapped);
+                        out.line(PDType1Font.HELVETICA, 11, wrapped);
                     }
-                    y -= 8;
+                    out.gap(8);
                 }
-                y -= 16;
+                out.gap(16);
                 String place = hospital.getCity() != null ? hospital.getCity() : hospital.getName();
-                y = line(cs, PDType1Font.HELVETICA, 11, y,
+                out.line(PDType1Font.HELVETICA, 11,
                     pdfSafe(text(locale, "medicalCertificate.doneAt", place, date(signedAt.toLocalDate(), locale))));
-                y -= 24;
-                y = line(cs, PDType1Font.HELVETICA_BOLD, 11, y, pdfSafe(doctorName(doctor)));
-                y -= 30;
+                out.gap(24);
+                out.line(PDType1Font.HELVETICA_BOLD, 11, pdfSafe(doctorName(doctor)));
+                out.gap(30);
                 String signed = text(locale, "medicalCertificate.signature",
                     signedAt.format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT).withLocale(locale)),
                     fingerprint.substring(0, 16));
                 for (String wrapped : wrap(pdfSafe(signed), PDType1Font.HELVETICA_OBLIQUE, 8)) {
-                    y = line(cs, PDType1Font.HELVETICA_OBLIQUE, 8, y, wrapped);
+                    out.line(PDType1Font.HELVETICA_OBLIQUE, 8, wrapped);
                 }
             }
-            try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-                doc.save(out);
-                return out.toByteArray();
+            try (ByteArrayOutputStream bytes = new ByteArrayOutputStream()) {
+                doc.save(bytes);
+                return bytes.toByteArray();
             }
         } catch (IOException e) {
             throw new IllegalStateException("medicalCertificate.pdf.failed", e);
         }
     }
 
-    private static float line(PDPageContentStream cs, PDFont font, float size, float y, String text) throws IOException {
-        cs.beginText();
-        cs.setFont(font, size);
-        cs.newLineAtOffset(MARGIN, y);
-        cs.showText(text);
-        cs.endText();
-        return y - size * 1.45f;
+    /** Writes lines down A4 pages, starting a new page when the next line would cross the bottom margin. */
+    private static final class PdfCursor implements AutoCloseable {
+        private final PDDocument doc;
+        private PDPageContentStream cs;
+        private float y;
+
+        PdfCursor(PDDocument doc) throws IOException {
+            this.doc = doc;
+            newPage();
+        }
+
+        void gap(float points) {
+            y -= points;
+        }
+
+        void line(PDFont font, float size, String text) throws IOException {
+            float step = size * 1.45f;
+            if (y - step < MARGIN) {
+                newPage();
+            }
+            cs.beginText();
+            cs.setFont(font, size);
+            cs.newLineAtOffset(MARGIN, y);
+            cs.showText(text);
+            cs.endText();
+            y -= step;
+        }
+
+        private void newPage() throws IOException {
+            if (cs != null) {
+                cs.close();
+            }
+            PDPage page = new PDPage(PDRectangle.A4);
+            doc.addPage(page);
+            cs = new PDPageContentStream(doc, page);
+            y = PDRectangle.A4.getHeight() - MARGIN;
+        }
+
+        @Override
+        public void close() throws IOException {
+            cs.close();
+        }
     }
 
     /** Greedy word wrap to the page width. */
