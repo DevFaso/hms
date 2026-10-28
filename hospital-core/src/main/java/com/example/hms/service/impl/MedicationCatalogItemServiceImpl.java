@@ -165,6 +165,7 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
         existing.setCategory(dto.getCategory());
         existing.setEssentialList(dto.isEssentialList());
         existing.setControlled(dto.isControlled());
+        existing.setPediatricMaxDoseMgPerKg(dto.getPediatricMaxDoseMgPerKg());
         existing.setActive(dto.isActive());
         existing.setDescription(dto.getDescription());
 

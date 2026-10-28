@@ -9304,7 +9304,9 @@
     "ROUTING_RX_SELECTED": "Receta:",
     "ATC_PLACEHOLDER": "ej. J01CA04 (amoxicilina)",
     "STRENGTH_PLACEHOLDER": "ej. 500",
-    "CATEGORY_PLACEHOLDER": "ej. Antibiótico"
+    "CATEGORY_PLACEHOLDER": "ej. Antibiótico",
+    "PEDIATRIC_MAX_DOSE_MG_PER_KG": "Dosis pediátrica máxima (mg/kg por toma)",
+    "PEDIATRIC_MAX_DOSE_HINT": "Opcional. Introdúzcala solo desde la referencia de su establecimiento; el control de prescripción señala una dosis infantil superior."
   },
   "LAB_QC": {
     "TITLE": "Panel de control de calidad",

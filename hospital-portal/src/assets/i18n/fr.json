@@ -9304,7 +9304,9 @@
     "ROUTING_RX_SELECTED": "Ordonnance :",
     "ATC_PLACEHOLDER": "ex. J01CA04 (amoxicilline)",
     "STRENGTH_PLACEHOLDER": "ex. 500",
-    "CATEGORY_PLACEHOLDER": "ex. Antibiotique"
+    "CATEGORY_PLACEHOLDER": "ex. Antibiotique",
+    "PEDIATRIC_MAX_DOSE_MG_PER_KG": "Dose pédiatrique maximale (mg/kg par prise)",
+    "PEDIATRIC_MAX_DOSE_HINT": "Facultatif. À saisir uniquement depuis la référence de votre établissement ; le contrôle de prescription signale une dose d'enfant supérieure."
   },
   "LAB_QC": {
     "TITLE": "Tableau de bord du contrôle qualité",

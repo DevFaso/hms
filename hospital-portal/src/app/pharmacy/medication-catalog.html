@@ -328,6 +328,23 @@
               </div>
             </div>
 
+            <!-- QA D935: the ceiling the paediatric dose check compares a
+                 child's dose with (mg per kg per dose); optional. -->
+            <div class="field">
+              <label for="pediatricMaxDoseMgPerKg">{{
+                'PHARMACY.PEDIATRIC_MAX_DOSE_MG_PER_KG' | translate
+              }}</label>
+              <input
+                id="pediatricMaxDoseMgPerKg"
+                type="number"
+                min="0.001"
+                step="any"
+                name="pediatricMaxDoseMgPerKg"
+                [(ngModel)]="form.pediatricMaxDoseMgPerKg"
+              />
+              <small class="field-hint">{{ 'PHARMACY.PEDIATRIC_MAX_DOSE_HINT' | translate }}</small>
+            </div>
+
             <div class="field">
               <label for="description">{{ 'COMMON.DESCRIPTION' | translate }}</label>
               <textarea

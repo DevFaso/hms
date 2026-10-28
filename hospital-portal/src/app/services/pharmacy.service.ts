@@ -17,6 +17,8 @@ export interface MedicationCatalogItemRequest {
   category?: string;
   essentialList?: boolean;
   controlled?: boolean;
+  /** QA D935: the paediatric ceiling, mg per kg per dose; empty when none is known. */
+  pediatricMaxDoseMgPerKg?: number | null;
   description?: string;
 }
 
@@ -34,6 +36,8 @@ export interface MedicationCatalogItemResponse {
   category?: string;
   essentialList: boolean;
   controlled: boolean;
+  /** QA D935: mg per kg per dose, or null when the catalogue holds no ceiling. */
+  pediatricMaxDoseMgPerKg?: number | null;
   active: boolean;
   description?: string;
   hospitalId?: string;

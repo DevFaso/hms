@@ -62,6 +62,23 @@ describe('MedicationCatalogComponent (QA D50)', () => {
     expect(component.formLabel(null)).toBe('—');
   });
 
+  it('QA D935: the paediatric ceiling is carried into the edit form and starts empty on a new item', () => {
+    render(['ROLE_HOSPITAL_ADMIN']);
+    const component = TestBed.createComponent(MedicationCatalogComponent).componentInstance;
+    component.openEdit({
+      id: 'cat-1',
+      nameFr: 'Paracétamol sirop',
+      genericName: 'paracetamol',
+      essentialList: true,
+      controlled: false,
+      active: true,
+      pediatricMaxDoseMgPerKg: 15,
+    } as never);
+    expect(component.form.pediatricMaxDoseMgPerKg).toBe(15);
+    component.openCreate();
+    expect(component.form.pediatricMaxDoseMgPerKg).toBeNull();
+  });
+
   it('offers the hospital admin create, edit and delete', () => {
     const el = render(['ROLE_HOSPITAL_ADMIN']);
     expect(el.querySelector('.page-header .btn-primary')).not.toBeNull();

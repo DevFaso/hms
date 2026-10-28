@@ -9304,7 +9304,9 @@
     "ROUTING_RX_SELECTED": "Prescription:",
     "ATC_PLACEHOLDER": "e.g. J01CA04 (amoxicillin)",
     "STRENGTH_PLACEHOLDER": "e.g. 500",
-    "CATEGORY_PLACEHOLDER": "e.g. Antibiotic"
+    "CATEGORY_PLACEHOLDER": "e.g. Antibiotic",
+    "PEDIATRIC_MAX_DOSE_MG_PER_KG": "Paediatric maximum dose (mg/kg per dose)",
+    "PEDIATRIC_MAX_DOSE_HINT": "Optional. Enter it only from your hospital's reference; the prescription check flags a child's dose above it."
   },
   "LAB_QC": {
     "TITLE": "Quality Control Dashboard",
