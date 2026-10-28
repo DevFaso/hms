@@ -200,6 +200,9 @@ export class AppointmentFormComponent implements OnInit {
       .subscribe({
         next: (list) => {
           this.patientSuggestions.set(list.slice(0, 8));
+          // QA D947: a new list has no active option; Tab must not pick whoever
+          // now sits where the old highlight was (review round 11).
+          this.patientActive.set(-1);
           this.patientDropdownOpen.set(list.length > 0);
           this.patientSearchLoading.set(false);
         },
@@ -212,6 +215,9 @@ export class AppointmentFormComponent implements OnInit {
     if (q.length >= 1) this.patientSearch$.next(q);
     else {
       this.patientSuggestions.set([]);
+      // QA D947: a new list has no active option; Tab must not pick whoever
+      // now sits where the old highlight was (review round 11).
+      this.patientActive.set(-1);
       this.patientDropdownOpen.set(false);
     }
   }
@@ -306,6 +312,9 @@ export class AppointmentFormComponent implements OnInit {
               )
             : this.allStaff;
           this.staffSuggestions.set(filtered.slice(0, 8));
+          // QA D947: a new list has no active option; Tab must not pick whoever
+          // now sits where the old highlight was (review round 11).
+          this.staffActive.set(-1);
           this.staffDropdownOpen.set(filtered.length > 0);
           this.staffSearchLoading.set(false);
         },
@@ -318,6 +327,9 @@ export class AppointmentFormComponent implements OnInit {
     if (q.length >= 1) this.staffSearch$.next(q);
     else {
       this.staffSuggestions.set([]);
+      // QA D947: a new list has no active option; Tab must not pick whoever
+      // now sits where the old highlight was (review round 11).
+      this.staffActive.set(-1);
       this.staffDropdownOpen.set(false);
     }
   }

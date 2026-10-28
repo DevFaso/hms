@@ -33,7 +33,7 @@ public class CheckInRequestDTO {
 
     /**
      * QA D975: how the copay was paid. Null means cash, as before; Mobile
-     * Money and cards need {@link #copayReference}.
+     * Money, insurance and bank transfer need {@link #copayReference}.
      */
     private com.example.hms.enums.PaymentMethod copayMethod;
 

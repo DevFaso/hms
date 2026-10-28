@@ -83,7 +83,7 @@ public interface BillingInvoiceService {
 
     /**
      * QA D975: the check-in copay paid by {@code method} (cash when null),
-     * with its reference (required for Mobile Money and cards). Returns the
+     * with its reference (required for Mobile Money, insurance and bank transfer). Returns the
      * confirmed payment row, so the desk can print its receipt; null when
      * the amount is not positive.
      */

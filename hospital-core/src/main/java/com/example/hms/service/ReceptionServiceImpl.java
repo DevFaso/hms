@@ -656,7 +656,6 @@ public class ReceptionServiceImpl implements ReceptionService {
                             .confidenceScore(score)
                             .build();
                 })
-                .filter(c -> c.getConfidenceScore() >= 40)
                 .sorted(Comparator.comparingInt(DuplicateCandidateDTO::getConfidenceScore).reversed())
                 .toList();
     }

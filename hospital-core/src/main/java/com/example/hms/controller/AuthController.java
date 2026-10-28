@@ -531,8 +531,8 @@ public class AuthController {
 
     @PostMapping("/verify-email")
     public ResponseEntity<Object> verifyEmail(@Valid @RequestBody EmailVerificationRequestDTO dto) {
-        // QA D921: the account, its patient assignments and its Patient row are
-        // switched on in ONE transaction inside the service. This controller
+        // QA D921: the account and its patient assignments are switched on in
+        // ONE transaction inside the service (the Patient row is not touched). This controller
         // runs with no session (open-in-view is off): the account save used to
         // commit on its own, then the assignment loop's lazy getRole() threw,
         // so the link answered 500 with the account half activated.

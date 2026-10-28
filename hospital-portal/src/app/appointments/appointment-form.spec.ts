@@ -1,4 +1,4 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
@@ -150,6 +150,31 @@ describe('AppointmentFormComponent — prefill from the prenatal calendar', () =
     expect(component.form.patientId).toBe('p-mou');
     expect(component.patientDropdownOpen()).toBeFalse();
   });
+
+  it('QA D947 review round 11: a new list drops the highlight, so Tab never picks a stranger', fakeAsync(() => {
+    const component = create({});
+    const awa = { id: 'p-awa', firstName: 'Awa', lastName: 'Traoré' } as PatientResponse;
+    const moumouni = {
+      id: 'p-mou',
+      firstName: 'Moumouni',
+      lastName: 'Sawadogo',
+    } as PatientResponse;
+    const issa = { id: 'p-issa', firstName: 'Issa', lastName: 'Ouédraogo' } as PatientResponse;
+    component.patientSuggestions.set([awa, moumouni]);
+    component.patientDropdownOpen.set(true);
+    component.onPatientKeydown(new KeyboardEvent('keydown', { key: 'ArrowDown' }));
+    component.onPatientKeydown(new KeyboardEvent('keydown', { key: 'ArrowDown' }));
+    expect(component.patientActive()).toBe(1);
+
+    // She keeps typing: the list is replaced.
+    patients.list.and.returnValue(of([issa, awa]));
+    component.onPatientQueryChange('Oued');
+    tick(250);
+    expect(component.patientActive()).toBe(-1);
+
+    component.onPatientKeydown(new KeyboardEvent('keydown', { key: 'Tab' }));
+    expect(component.form.patientId).toBeUndefined();
+  }));
 
   it('QA D984: a refused date names the field and its reason, not the generic text', () => {
     const component = create({});
