@@ -220,6 +220,8 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
                 .quantityRequired(remaining)
                 .sufficient(sufficient)
                 .partnerPharmacies(partnerOptions)
+                .prescriptionStatus(prescription.getStatus() != null ? prescription.getStatus().name() : null)
+                .routable(ROUTABLE_STATUSES.contains(prescription.getStatus()))
                 .build();
     }
 

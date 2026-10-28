@@ -29,5 +29,12 @@ public class StockCheckResultDTO {
      */
     private BigDecimal quantityRequired;
     private boolean sufficient;
+    /**
+     * QA D966: the order's status, and whether a routing action (partner,
+     * print, back order) can still be taken on it. After a print the buttons
+     * stayed live and then failed; the page now offers the printed copy.
+     */
+    private String prescriptionStatus;
+    private boolean routable;
     private List<PartnerOptionDTO> partnerPharmacies;
 }

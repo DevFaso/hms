@@ -516,10 +516,14 @@ export interface StockCheckResult {
   /** Null when `quantityOnHand` is an aggregate across all hospital dispensaries. */
   pharmacyId: string | null;
   quantityOnHand: number;
-  /** QA D913: the order's quantity; absent from a server that predates it. */
+  /** QA D913: what is still owed on the order; absent from a server that predates it. */
   quantityRequired?: number | null;
   sufficient: boolean;
   partnerPharmacies: PartnerOption[];
+  /** QA D966: the order's status (PRINTED_FOR_PATIENT once printed). */
+  prescriptionStatus?: string;
+  /** QA D966: whether a routing action can still be taken; the buttons follow it. */
+  routable?: boolean;
 }
 
 export interface PartnerOption {
@@ -1079,6 +1083,22 @@ export class PharmacyService {
       '/pharmacy/routing/route-to-partner',
       req,
     );
+  }
+
+  /** QA D966: the printed copy the patient takes to an outside pharmacy (PDF). */
+  getPrintedPrescriptionCopy(prescriptionId: string): Observable<Blob> {
+    return this.http.get(`/pharmacy/routing/print-for-patient/${prescriptionId}/document`, {
+      responseType: 'blob',
+    });
+  }
+
+  /**
+   * QA D966: the lot label as an authenticated blob. The page opened the bare
+   * URL in a new tab, which skips the /api prefix and the token, so it landed
+   * on the login page and printed nothing.
+   */
+  getStockLotLabel(stockLotId: string): Observable<Blob> {
+    return this.http.get(`/pharmacy/stock-lots/${stockLotId}/label.pdf`, { responseType: 'blob' });
   }
 
   printForPatient(prescriptionId: string): Observable<ApiResponse<RoutingDecisionResponse>> {

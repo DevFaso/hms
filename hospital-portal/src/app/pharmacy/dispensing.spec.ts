@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { PrintLabelService } from '../services/print-label.service';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -1168,6 +1169,7 @@ describe('DispensingComponent — work-queue claim (G13)', () => {
       'claimQueueRow',
       'takeOverQueueRow',
       'releaseQueueRow',
+      'getStockLotLabel',
     ]);
     pharmacySvc.getDispenseSettings.and.returnValue(
       of({
@@ -1645,6 +1647,26 @@ describe('DispensingComponent — work-queue claim (G13)', () => {
 
     expect(component.form.quantityRequested).toBe(10);
     expect(component.form.quantityDispensed).toBe(10);
+  });
+
+  it('QA D966: the lot label is fetched with the session and opened for printing', async () => {
+    await render();
+    const printSvc = TestBed.inject(PrintLabelService);
+    const open = spyOn(printSvc, 'openForPrint');
+    const windowOpen = spyOn(window, 'open');
+    const blob = new Blob(['%PDF-1.4'], { type: 'application/pdf' });
+    pharmacySvc.getStockLotLabel.and.returnValue(of(blob) as never);
+    component.form.stockLotId = 'lot-9';
+
+    component.printLotLabel();
+
+    expect(pharmacySvc.getStockLotLabel).toHaveBeenCalledWith('lot-9');
+    expect(open).toHaveBeenCalledWith(blob);
+    expect(windowOpen).not.toHaveBeenCalledWith(
+      '/pharmacy/stock-lots/lot-9/label.pdf',
+      jasmine.anything(),
+      jasmine.anything(),
+    );
   });
 
   describe('QA D964: first expired, first out', () => {

@@ -5243,7 +5243,9 @@
       "NOT_REFILLABLE": "Cette ordonnance ne peut plus être renouvelée. Contactez votre équipe soignante pour une nouvelle ordonnance.",
       "READY_AT": "Prête à retirer à {{pharmacy}}",
       "READY_SINCE": "Depuis le {{date}}",
-      "NOT_REFILLABLE_CONTROLLED": "Ce médicament est un médicament contrôlé : il ne peut pas être renouvelé depuis le portail. Contactez votre équipe soignante pour une nouvelle ordonnance."
+      "NOT_REFILLABLE_CONTROLLED": "Ce médicament est un médicament contrôlé : il ne peut pas être renouvelé depuis le portail. Contactez votre équipe soignante pour une nouvelle ordonnance.",
+      "PRINTED_COPY": "Télécharger l’ordonnance imprimée",
+      "PRINTED_COPY_FAILED": "L’ordonnance imprimée n’a pas pu être ouverte."
     },
     "LAB_RESULTS": {
       "TITLE": "Résultats d’analyses",
@@ -9016,6 +9018,11 @@
     "PRESCRIPTION_ID": "ID de prescription",
     "PRINTED_FOR_PATIENT": "Prescription imprimée pour le patient",
     "PRINT_FOR_PATIENT": "Imprimer pour le patient",
+    "NOT_ROUTABLE_HINT": "Cette ordonnance ne peut plus être orientée (déjà délivrée, envoyée ou imprimée).",
+    "PRINT_COPY_FAILED": "La copie imprimée n’a pas pu être ouverte.",
+    "PRINT_LABEL_FAILED": "L’étiquette du lot n’a pas pu être ouverte.",
+    "PRINTED_COPY_HINT": "Cette ordonnance a été imprimée pour que le patient la fasse délivrer dans une pharmacie extérieure.",
+    "REPRINT_COPY": "Réimprimer la copie",
     "PRINT_LOT_LABEL": "Imprimer l’étiquette du lot",
     "PRODUCT_SCAN": "Étiquette de la boîte",
     "PRODUCT_SCAN_PLACEHOLDER": "Scanner l’étiquette du lot",

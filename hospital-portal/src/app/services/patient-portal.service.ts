@@ -1634,6 +1634,13 @@ export class PatientPortalService {
    * ownership-checked endpoint — the public /uploads mapping is gone,
    * and a bare href carries no bearer token.
    */
+  /** QA D966: the copy of a prescription the pharmacy printed for me (PDF, my own only). */
+  getMyPrintedPrescription(prescriptionId: string): Observable<Blob> {
+    return this.http.get(`${this.base}/prescriptions/${prescriptionId}/printed-copy`, {
+      responseType: 'blob',
+    });
+  }
+
   downloadDocumentBlob(documentId: string): Observable<Blob> {
     return this.http.get(`${this.base}/documents/${documentId}/download`, {
       responseType: 'blob',

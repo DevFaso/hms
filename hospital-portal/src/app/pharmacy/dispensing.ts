@@ -29,6 +29,7 @@ import {
   StockWitnessCandidate,
 } from '../services/pharmacy.service';
 import { AuthService } from '../auth/auth.service';
+import { PrintLabelService } from '../services/print-label.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { OfflineDispenseQueueService } from './offline-dispense-queue.service';
 import { PrescriptionClarificationComponent } from '../shared/prescription-clarification/prescription-clarification.component';
@@ -141,6 +142,8 @@ export const UNRECOGNISED_ATTENTION = {
 })
 export class DispensingComponent implements OnInit, OnDestroy {
   private readonly svc = inject(PharmacyService);
+  /** QA D966: opens a fetched PDF for printing. */
+  private readonly printService = inject(PrintLabelService);
   private readonly auth = inject(AuthService);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
@@ -673,7 +676,12 @@ export class DispensingComponent implements OnInit, OnDestroy {
   printLotLabel(): void {
     const lotId = this.form.stockLotId;
     if (!lotId) return;
-    window.open(`/pharmacy/stock-lots/${lotId}/label.pdf`, '_blank', 'noopener');
+    // QA D966: fetched with the session (the interceptors add /api and the
+    // token), then opened for printing; a refusal is said, not a blank tab.
+    this.svc.getStockLotLabel(lotId).subscribe({
+      next: (blob) => this.printService.openForPrint(blob),
+      error: () => this.toast.error(this.translate.instant('PHARMACY.PRINT_LABEL_FAILED')),
+    });
   }
 
   onPharmacyChange(): void {

@@ -5243,7 +5243,9 @@
       "NOT_REFILLABLE": "This prescription can no longer be refilled. Please contact your care team for a new prescription.",
       "READY_AT": "Ready for collection at {{pharmacy}}",
       "READY_SINCE": "Since {{date}}",
-      "NOT_REFILLABLE_CONTROLLED": "This is a controlled medicine: it cannot be renewed from the portal. Please contact your care team for a new prescription."
+      "NOT_REFILLABLE_CONTROLLED": "This is a controlled medicine: it cannot be renewed from the portal. Please contact your care team for a new prescription.",
+      "PRINTED_COPY": "Download the printed prescription",
+      "PRINTED_COPY_FAILED": "The printed prescription could not be opened."
     },
     "LAB_RESULTS": {
       "TITLE": "Test Results",
@@ -9016,6 +9018,11 @@
     "PRESCRIPTION_ID": "Prescription ID",
     "PRINTED_FOR_PATIENT": "Prescription printed for patient",
     "PRINT_FOR_PATIENT": "Print for Patient",
+    "NOT_ROUTABLE_HINT": "This order can no longer be routed (already dispensed, sent or printed).",
+    "PRINT_COPY_FAILED": "The printed copy could not be opened.",
+    "PRINT_LABEL_FAILED": "The lot label could not be opened.",
+    "PRINTED_COPY_HINT": "This prescription was printed for the patient to fill at an outside pharmacy.",
+    "REPRINT_COPY": "Print the copy again",
     "PRINT_LOT_LABEL": "Print lot label",
     "PRODUCT_SCAN": "Pack label",
     "PRODUCT_SCAN_PLACEHOLDER": "Scan the lot label",

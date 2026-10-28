@@ -107,6 +107,8 @@ public class PatientPortalController {
     private final NotificationService notificationService;
     private final PharmacyPaymentService pharmacyPaymentService;
     private final PharmacyClaimService pharmacyClaimService;
+    /** QA D966: the printed copy of a prescription the pharmacy printed for the patient. */
+    private final com.example.hms.service.pharmacy.PrescriptionCopyPdfService prescriptionCopyPdfService;
 
     // ── Profile ──────────────────────────────────────────────────────────
 
@@ -175,6 +177,21 @@ public class PatientPortalController {
         Locale locale = LocaleContextHolder.getLocale();
         List<PrescriptionResponseDTO> prescriptions = portalService.getMyPrescriptions(auth, locale);
         return ResponseEntity.ok(ApiResponseWrapper.success(prescriptions));
+    }
+
+    /**
+     * QA D966: the copy of a prescription the pharmacy printed for me, to take
+     * to an outside pharmacy. My own prescriptions only, and only once printed.
+     */
+    @Operation(summary = "Download the printed copy of my prescription")
+    @GetMapping(value = "/prescriptions/{prescriptionId}/printed-copy",
+            produces = org.springframework.http.MediaType.APPLICATION_PDF_VALUE)
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<byte[]> getMyPrintedPrescription(Authentication auth,
+                                                           @PathVariable UUID prescriptionId) {
+        UUID patientId = portalService.resolvePatientId(auth);
+        return com.example.hms.controller.pharmacy.StockOutRoutingController.printedCopyResponse(
+                prescriptionCopyPdfService.copyForPatient(prescriptionId, patientId), prescriptionId);
     }
 
     // ── Vital Signs ──────────────────────────────────────────────────────

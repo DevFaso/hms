@@ -5243,7 +5243,9 @@
       "NOT_REFILLABLE": "Esta receta ya no se puede renovar. Póngase en contacto con su equipo de atención para obtener una nueva receta.",
       "READY_AT": "Lista para recoger en {{pharmacy}}",
       "READY_SINCE": "Desde el {{date}}",
-      "NOT_REFILLABLE_CONTROLLED": "Este es un medicamento controlado: no se puede renovar desde el portal. Póngase en contacto con su equipo de atención para obtener una nueva receta."
+      "NOT_REFILLABLE_CONTROLLED": "Este es un medicamento controlado: no se puede renovar desde el portal. Póngase en contacto con su equipo de atención para obtener una nueva receta.",
+      "PRINTED_COPY": "Descargar la receta impresa",
+      "PRINTED_COPY_FAILED": "No se pudo abrir la receta impresa."
     },
     "LAB_RESULTS": {
       "TITLE": "Resultados de pruebas",
@@ -9016,6 +9018,11 @@
     "PRESCRIPTION_ID": "ID de la receta",
     "PRINTED_FOR_PATIENT": "Receta impresa para el paciente",
     "PRINT_FOR_PATIENT": "Imprimir para el paciente",
+    "NOT_ROUTABLE_HINT": "Esta receta ya no se puede derivar (ya dispensada, enviada o impresa).",
+    "PRINT_COPY_FAILED": "No se pudo abrir la copia impresa.",
+    "PRINT_LABEL_FAILED": "No se pudo abrir la etiqueta del lote.",
+    "PRINTED_COPY_HINT": "Esta receta se imprimió para que el paciente la dispense en una farmacia externa.",
+    "REPRINT_COPY": "Volver a imprimir la copia",
     "PRINT_LOT_LABEL": "Imprimir etiqueta del lote",
     "PRODUCT_SCAN": "Etiqueta del envase",
     "PRODUCT_SCAN_PLACEHOLDER": "Escanear la etiqueta del lote",
