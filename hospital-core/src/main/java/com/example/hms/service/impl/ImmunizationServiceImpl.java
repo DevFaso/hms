@@ -238,8 +238,7 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         if (requestDTO.getSourceOfRecord() == null || requestDTO.getSourceOfRecord().isBlank()) {
             requestDTO.setSourceOfRecord(existingImmunization.getSourceOfRecord());
         }
-        if (isTranscribed(requestDTO.getSourceOfRecord())
-                && !java.util.Objects.equals(requestDTO.getSourceOfRecord(), existingImmunization.getSourceOfRecord())) {
+        if (isTranscribed(requestDTO.getSourceOfRecord())) {
             // QA D1003: corrected to a historical dose, it keeps no vaccinator here.
             existingImmunization.setAdministeredBy(null);
             requestDTO.setAdministeredByStaffId(null);

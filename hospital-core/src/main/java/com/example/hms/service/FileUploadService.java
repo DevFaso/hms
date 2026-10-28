@@ -524,7 +524,7 @@ public class FileUploadService {
         }
         Path uploadPath = Paths.get(uploadDir, PATIENT_DOCUMENTS_PATH);
         Files.createDirectories(uploadPath);
-        String filename = buildAttachmentFilename(sanitizeBaseFilename(baseName + ".pdf"), ".pdf", authorId, "certificate");
+        String filename = buildAttachmentFilename(sanitizeBaseFilename(baseName), ".pdf", authorId, "certificate");
         Path filePath = uploadPath.resolve(filename).normalize();
         if (!filePath.startsWith(uploadPath)) {
             throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw(MSG_FILE_PATH_INVALID));

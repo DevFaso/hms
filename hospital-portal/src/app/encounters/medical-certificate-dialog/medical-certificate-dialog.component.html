@@ -76,6 +76,7 @@
         <div class="field">
           <label for="mc-language">{{ 'MEDICAL_CERTIFICATE.LANGUAGE' | translate }}</label>
           <select id="mc-language" name="language" [(ngModel)]="language">
+            <option value="">{{ 'MEDICAL_CERTIFICATE.LANG_PATIENT' | translate }}</option>
             @for (l of languages; track l) {
               <option [value]="l">{{ 'MEDICAL_CERTIFICATE.LANG_' + l | translate }}</option>
             }

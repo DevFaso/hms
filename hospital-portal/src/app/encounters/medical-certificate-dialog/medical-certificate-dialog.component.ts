@@ -20,7 +20,6 @@ import { PatientDocumentResponse } from '../../services/patient-portal.service';
 import { EncounterResponse } from '../../services/encounter.service';
 import { ToastService } from '../../core/toast.service';
 import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
-import { storedLang } from '../../shared/i18n/app-locale';
 import { serverLocalDate } from '../../shared/date-utils';
 import { refusalReason } from '../../shared/refusal-reason';
 
@@ -54,7 +53,8 @@ export class MedicalCertificateDialogComponent implements OnInit {
   startDate = '';
   days: number | null = 1;
   remarks = '';
-  language: 'fr' | 'en' | 'es' = this.defaultLanguage();
+  /** '' = the patient's language (the server resolves it); otherwise the doctor's pick. */
+  language: '' | 'fr' | 'en' | 'es' = '';
 
   readonly saving = signal(false);
   readonly result = signal<PatientDocumentResponse | null>(null);
@@ -87,7 +87,7 @@ export class MedicalCertificateDialogComponent implements OnInit {
         startDate: this.type === 'SICK_LEAVE' && this.startDate ? this.startDate : undefined,
         days: this.type === 'SICK_LEAVE' ? (this.days ?? undefined) : undefined,
         remarks: this.remarks.trim() || undefined,
-        language: this.language,
+        language: this.language || undefined,
       })
       .subscribe({
         next: (doc) => {
@@ -119,10 +119,5 @@ export class MedicalCertificateDialogComponent implements OnInit {
       },
       error: () => this.toast.error(this.translate.instant('MEDICAL_CERTIFICATE.DOWNLOAD_FAILED')),
     });
-  }
-
-  private defaultLanguage(): 'fr' | 'en' | 'es' {
-    const lang = storedLang();
-    return lang === 'en' || lang === 'es' ? lang : 'fr';
   }
 }

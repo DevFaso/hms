@@ -163,6 +163,25 @@ class ImmunizationServiceImplTest {
     }
 
     @Test
+    void qaD1003_anEditOfATranscribedDoseNeverCreditsTheEditor() {
+        PatientImmunization existing = new PatientImmunization();
+        existing.setId(immunizationId);
+        existing.setHospital(hospital);
+        existing.setSourceOfRecord("VACCINATION_CARD");
+        ImmunizationRequestDTO dto = new ImmunizationRequestDTO();
+        dto.setSourceOfRecord("VACCINATION_CARD");
+        dto.setAdministeredByStaffId(staffId); // an edit form resending the caller's id
+        when(immunizationRepository.findById(immunizationId)).thenReturn(Optional.of(existing));
+        when(immunizationRepository.save(existing)).thenReturn(existing);
+        when(immunizationMapper.toResponseDTO(existing)).thenReturn(new ImmunizationResponseDTO());
+
+        service.updateImmunization(immunizationId, dto);
+
+        assertThat(existing.getAdministeredBy()).isNull();
+        verify(staffRepository, org.mockito.Mockito.never()).findById(any());
+    }
+
+    @Test
     void qaD1003_onlyTheFormsTranscriptionCodesDropTheVaccinator() {
         assertThat(ImmunizationServiceImpl.isTranscribed("VACCINATION_CARD")).isTrue();
         assertThat(ImmunizationServiceImpl.isTranscribed("EXTERNAL_RECORD")).isTrue();

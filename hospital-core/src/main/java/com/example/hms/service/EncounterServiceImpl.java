@@ -472,7 +472,6 @@ public class EncounterServiceImpl implements EncounterService {
             try {
                 upsertDischargeSummaryForCheckout(saved, syntheticCheckout, saved.getCheckoutTimestamp());
                 notifyPatientAfterVisitSummary(saved);
-                publishCheckedOutOnCompletion(saved, previousStatus);
             } catch (RuntimeException ex) {
                 // Persistence of the summary must not abort the encounter update — log
                 // and fall back on the patient-portal backfill which will retry on
@@ -486,6 +485,9 @@ public class EncounterServiceImpl implements EncounterService {
                     saved.getHospital() != null ? saved.getHospital().getId() : null,
                     ex);
             }
+            // QA D972: billing hears of the completed visit even if the summary
+            // or the notification above failed (they are best effort).
+            publishCheckedOutOnCompletion(saved, previousStatus);
         }
 
         recordHistory(saved, "UPDATED", resolveHistoryActor(request.getUpdatedBy(), ctx.staff()), previousValues);

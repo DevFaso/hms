@@ -53,6 +53,15 @@ describe('MedicalCertificateDialogComponent (QA D961)', () => {
     expect(component.result()?.id).toBe('doc-1');
   });
 
+  it("leaves the language to the patient's own unless the doctor picks one", () => {
+    service.issue.and.returnValue(
+      of({ id: 'doc-2', patientId: 'p1', displayName: 'Présence.pdf' } as PatientDocumentResponse),
+    );
+    component.type = 'ATTENDANCE';
+    component.submit();
+    expect(service.issue.calls.mostRecent().args[1].language).toBeUndefined();
+  });
+
   it('holds a sick-leave note with no days and a general certificate with no text', () => {
     component.type = 'SICK_LEAVE';
     component.days = null;

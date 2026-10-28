@@ -11921,6 +11921,7 @@
     "ISSUE_FAILED": "Le certificat n'a pas pu être établi.",
     "ISSUING": "Établissement…",
     "LANGUAGE": "Langue du certificat",
+    "LANG_PATIENT": "Langue du patient",
     "LANG_en": "Anglais",
     "LANG_es": "Espagnol",
     "LANG_fr": "Français",

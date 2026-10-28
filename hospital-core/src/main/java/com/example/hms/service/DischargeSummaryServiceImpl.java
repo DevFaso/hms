@@ -426,12 +426,14 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
      * rule as finalize (QA D503), applied to the other two writes.
      */
     private void requireAuthor(DischargeSummary summary) {
-        // Review of #971: the discharging provider is the visit's clinician of
-        // record, who may be the nurse who opened it (or nobody); the doctor
-        // who treated the patient (a note author on the visit) keeps the draft.
+        // Review of #971: the draft is its discharging provider's (checkout
+        // names the doctor who closed the visit). Only a summary with no
+        // discharging provider at all falls back to the visit's treating
+        // clinician, so a consultant's addendum never opens a colleague's draft.
         if (com.example.hms.security.CallerIdentity.isCaller(summary.getDischargingProvider())
                 || com.example.hms.security.CallerIdentity.isGlobalSuperAdmin()
-                || TreatingClinician.isCaller(summary.getEncounter(), encounterNoteRepository)) {
+                || (summary.getDischargingProvider() == null
+                    && TreatingClinician.isCaller(summary.getEncounter(), encounterNoteRepository))) {
             return;
         }
         throw new com.example.hms.exception.ClientSafeAccessDeniedException(

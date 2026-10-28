@@ -40,10 +40,14 @@ class ClinicalDocumentAuthorGuardTest {
         "impl/ConsultationServiceImpl.java");
     private static final Pattern WRITE_METHOD = Pattern.compile(
         "\\n    public [A-Za-z<>.?, ]+ ((?:update|delete|cancel|finalize|amend|withdraw)\\w*)\\(");
-    /** Calls that decide who may act on an existing record. */
+    /**
+     * Calls that decide who may act on an existing record (review of #971:
+     * {@code CallerIdentity.requireAtHospital} is a hospital check, not an
+     * author check, so it does not count).
+     */
     private static final Pattern AUTHOR_CHECK = Pattern.compile(
-        "CallerIdentity\\.require\\w*\\(|requireAuthor\\(|requireCallerIsReferrer\\(|requireUpdater\\("
-            + "|requireRequesterOrSuperAdmin\\(|requireCallerUnlessSuperAdmin\\(");
+        "CallerIdentity\\.(?:requireCaller|requireCallerUnlessSuperAdmin|isCaller)\\(|requireAuthor\\("
+            + "|requireCallerIsReferrer\\(|requireUpdater\\(|requireRequesterOrSuperAdmin\\(");
     /** Writes the whole team may make, and why. */
     private static final Map<String, String> TEAM_OWNED = Map.of(
         "TreatmentPlanServiceImpl.updateFollowUp",
@@ -95,7 +99,7 @@ class ClinicalDocumentAuthorGuardTest {
             if (def.find()) {
                 int open = def.end();
                 String helper = src.substring(open, Math.min(src.length(), open + 1500));
-                if (AUTHOR_CHECK.matcher(helper).find() || helper.contains("getCurrentUserId()")) {
+                if (AUTHOR_CHECK.matcher(helper).find()) {
                     return true;
                 }
             }

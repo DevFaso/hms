@@ -314,9 +314,10 @@ class DischargeSummaryServiceImplTest {
         verify(dischargeSummaryRepository, never()).delete(any(DischargeSummary.class));
     }
 
-    @Test void qaD930_theDoctorWhoTreatedTheVisitKeepsTheDraftOpenedUnderANurse() {
-        // Review of #971: checkout names the visit's clinician of record (here a
-        // nurse) as discharging provider; the doctor who wrote the note edits it.
+    @Test void qaD930_aSummaryWithNoDischargingProviderIsTheTreatingDoctors() {
+        // Review of #971: a backfilled summary with no discharging provider is
+        // edited by the doctor who wrote the visit's note.
+        summary.setDischargingProvider(null);
         com.example.hms.model.User doctor = new com.example.hms.model.User();
         doctor.setId(UUID.randomUUID());
         actAs(doctor);
@@ -324,6 +325,19 @@ class DischargeSummaryServiceImplTest {
         when(dischargeSummaryRepository.findById(summaryId)).thenReturn(Optional.of(summary));
         service.deleteDischargeSummary(summaryId, null);
         verify(dischargeSummaryRepository).delete(summary);
+    }
+
+    @Test void qaD930_aConsultantsNoteDoesNotOpenAColleaguesDraft() {
+        // Review of #971: the treating-clinician fallback never overrides a named provider.
+        com.example.hms.model.User consultant = new com.example.hms.model.User();
+        consultant.setId(UUID.randomUUID());
+        actAs(consultant);
+        org.mockito.Mockito.lenient().when(encounterNoteRepository.existsByEncounter_IdAndAuthor_Id(encounterId, consultant.getId()))
+            .thenReturn(true);
+        when(dischargeSummaryRepository.findById(summaryId)).thenReturn(Optional.of(summary));
+        assertThatThrownBy(() -> service.deleteDischargeSummary(summaryId, null))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        verify(dischargeSummaryRepository, never()).delete(any(DischargeSummary.class));
     }
 
     @Test void qaD930_anotherDoctorCannotRewriteTheAuthorsDraft() {

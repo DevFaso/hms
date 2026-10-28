@@ -134,7 +134,8 @@ public class BpaRuleEngine {
             loadRecentVitals(patientId, hospitalId),
             loadActiveProblems(patientId, hospitalId),
             loadActivePrescriptions(patientId, hospitalId),
-            loadEstimatedDueDate(patientId, hospitalId)
+            com.example.hms.utility.ObstetricEligibility.isRecordedMale(patient) ? null
+                : loadEstimatedDueDate(patientId, hospitalId)
         );
     }
 

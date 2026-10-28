@@ -11921,6 +11921,7 @@
     "ISSUE_FAILED": "The certificate could not be issued.",
     "ISSUING": "Issuing…",
     "LANGUAGE": "Language of the certificate",
+    "LANG_PATIENT": "The patient's language",
     "LANG_en": "English",
     "LANG_es": "Spanish",
     "LANG_fr": "French",

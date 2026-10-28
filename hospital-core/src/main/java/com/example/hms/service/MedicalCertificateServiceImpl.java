@@ -123,6 +123,7 @@ public class MedicalCertificateServiceImpl implements MedicalCertificateService 
         } catch (IOException e) {
             throw new IllegalStateException("medicalCertificate.store.failed", e);
         }
+        removeFileIfRolledBack(stored.storageKey());
         PatientUploadedDocument doc = PatientUploadedDocument.builder()
             .patient(patient)
             .uploadedByUser(doctor.getUser())
@@ -143,6 +144,28 @@ public class MedicalCertificateServiceImpl implements MedicalCertificateService 
         log.info("Medical certificate {} ({}) issued for encounter {} by staff {}",
             saved.getId(), certificate.type(), encounterId, doctor.getId());
         return documentMapper.toDto(saved);
+    }
+
+    /** The PDF is written before the row; a transaction that rolls back must not leave PHI on disk. */
+    private void removeFileIfRolledBack(String storageKey) {
+        if (!org.springframework.transaction.support.TransactionSynchronizationManager.isSynchronizationActive()) {
+            return;
+        }
+        org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(
+            new org.springframework.transaction.support.TransactionSynchronization() {
+                @Override
+                public void afterCompletion(int status) {
+                    if (status != STATUS_ROLLED_BACK) {
+                        return;
+                    }
+                    try {
+                        java.nio.file.Files.deleteIfExists(
+                            fileUploadService.resolveStoredFile(storageKey, "patient-documents"));
+                    } catch (IOException | RuntimeException e) {
+                        log.warn("Rolled-back certificate file could not be removed: {}", e.getClass().getSimpleName());
+                    }
+                }
+            });
     }
 
     /** What the certificate attests, validated: the days of a sick leave, the doctor's words of a general one. */
