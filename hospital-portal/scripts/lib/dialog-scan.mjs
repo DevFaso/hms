@@ -63,7 +63,7 @@ function hasKeydownEscape(tag, componentSource) {
   const handler = /^\s*['"]?\s*(?:this\.)?([A-Za-z_$][\w$]*)\s*\(/.exec(binding)?.[1];
   if (!handler) return false;
   const declaration = new RegExp(
-    String.raw`(?:^|[\s;}])${handler.replace(/\$/g, '\\$')}\s*\([^)]*\)\s*(?::[^{;]+)?\{`,
+    String.raw`(?:^|[\s;}])${handler.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\s*\([^)]*\)\s*(?::[^{;]+)?\{`,
     'gm',
   );
   for (const m of componentSource.matchAll(declaration)) {
