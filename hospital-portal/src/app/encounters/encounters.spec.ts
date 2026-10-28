@@ -520,6 +520,8 @@ describe('EncountersComponent', () => {
 
   it('QA D954: a nurse closes an arrived visit nobody saw from its detail', () => {
     activeRoles = ['ROLE_NURSE'];
+    const fixture = TestBed.createComponent(EncountersComponent);
+    component = fixture.componentInstance;
     component.selectedEncounter.set(mockEncounter({ status: 'ARRIVED' }));
     fixture.detectChanges();
     const btn = fixture.nativeElement.querySelector(
@@ -534,6 +536,8 @@ describe('EncountersComponent', () => {
 
   it('QA D954: a visit already seen offers no LWBS action', () => {
     activeRoles = ['ROLE_NURSE'];
+    const fixture = TestBed.createComponent(EncountersComponent);
+    component = fixture.componentInstance;
     component.selectedEncounter.set(mockEncounter({ status: 'IN_PROGRESS' }));
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('[data-testid="encounter-lwbs"]')).toBeNull();
