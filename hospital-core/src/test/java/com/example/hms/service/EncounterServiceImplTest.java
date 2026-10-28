@@ -2108,6 +2108,68 @@ class EncounterServiceImplTest {
      * patient with a fresh email.
      */
     @Test
+    void qaD990_aScheduledVisitMarkedArrivedThroughPutWaitsFromNow() {
+        UUID encounterId = UUID.randomUUID();
+        Hospital hospital = new Hospital();
+        hospital.setId(UUID.randomUUID());
+        com.example.hms.model.Department department = new com.example.hms.model.Department();
+        department.setId(UUID.randomUUID());
+        department.setHospital(hospital);
+        hospital.setDepartments(java.util.Set.of(department));
+        Patient patient = new Patient();
+        patient.setId(UUID.randomUUID());
+        User user = new User();
+        user.setId(UUID.randomUUID());
+        Staff staff = new Staff();
+        staff.setId(UUID.randomUUID());
+        staff.setUser(user);
+        staff.setHospital(hospital);
+        UserRoleHospitalAssignment assignment = new UserRoleHospitalAssignment();
+        assignment.setId(UUID.randomUUID());
+        assignment.setHospital(hospital);
+        Encounter existing = new Encounter();
+        existing.setId(encounterId);
+        existing.setStatus(EncounterStatus.SCHEDULED);
+        existing.setHospital(hospital);
+        existing.setPatient(patient);
+        existing.setStaff(staff);
+        existing.setAssignment(assignment); // the request keeps the recorded attending
+        existing.setEncounterDate(java.time.LocalDate.now().atStartOfDay());
+        Encounter merged = new Encounter();
+        merged.setId(encounterId);
+        merged.setStatus(EncounterStatus.ARRIVED);
+        merged.setHospital(hospital);
+        merged.setPatient(patient);
+        merged.setStaff(staff);
+        merged.setDepartment(department);
+        merged.setEncounterDate(existing.getEncounterDate());
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(existing));
+        when(patientRepository.findByIdUnscoped(patient.getId())).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staff.getId())).thenReturn(Optional.of(staff));
+        when(hospitalRepository.findClinicalById(hospital.getId())).thenReturn(Optional.of(hospital));
+        lenient().when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patient.getId(), hospital.getId()))
+            .thenReturn(true);
+        lenient().when(departmentRepository.findById(department.getId())).thenReturn(Optional.of(department));
+        lenient().when(assignmentRepository.findFirstByUser_IdAndHospital_IdAndActiveTrue(user.getId(), hospital.getId()))
+            .thenReturn(Optional.of(assignment));
+        when(encounterMapper.mergeEncounter(any(com.example.hms.payload.dto.EncounterRequestDTO.class),
+                any(Encounter.class), any(Patient.class), any(Staff.class), any(Hospital.class),
+                org.mockito.ArgumentMatchers.<Appointment>isNull(), any(UserRoleHospitalAssignment.class)))
+            .thenReturn(merged);
+        when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
+        lenient().when(encounterMapper.toEncounterResponseDTO(any(Encounter.class))).thenReturn(new EncounterResponseDTO());
+        com.example.hms.payload.dto.EncounterRequestDTO request = com.example.hms.payload.dto.EncounterRequestDTO.builder()
+            .patientId(patient.getId()).staffId(staff.getId()).hospitalId(hospital.getId())
+            .departmentId(department.getId()).encounterType(com.example.hms.enums.EncounterType.OUTPATIENT)
+            .encounterDate(existing.getEncounterDate()).status(EncounterStatus.ARRIVED).build();
+        LocalDateTime before = LocalDateTime.now().minusSeconds(1);
+
+        service.updateEncounter(encounterId, request, Locale.ENGLISH, true, null);
+
+        assertThat(merged.getArrivalTimestamp()).isNotNull().isAfter(before);
+    }
+
+    @Test
     void updateEncounter_noTransitionToCompleted_doesNotPersistDischargeSummary() {
         UUID encounterId = UUID.randomUUID();
         UUID patientId = UUID.randomUUID();

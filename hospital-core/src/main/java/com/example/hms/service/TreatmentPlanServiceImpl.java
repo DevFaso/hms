@@ -229,9 +229,7 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
         boolean approves = requestDTO.getAction() == com.example.hms.enums.TreatmentPlanReviewAction.APPROVED
             || requestDTO.getAction() == com.example.hms.enums.TreatmentPlanReviewAction.SIGNED_OFF;
         if (approves && plan.getAuthor() != null && (java.util.Objects.equals(plan.getAuthor().getId(), reviewer.getId())
-                || (plan.getAuthor().getUser() != null && reviewer.getUser() != null
-                    && plan.getAuthor().getUser().getId() != null
-                    && plan.getAuthor().getUser().getId().equals(reviewer.getUser().getId())))) {
+                || com.example.hms.security.CallerIdentity.sameUser(plan.getAuthor(), reviewer))) {
             throw new com.example.hms.exception.ClientSafeAccessDeniedException(
                 com.example.hms.utility.MessageUtil.resolveOrRaw("treatmentPlan.review.notAuthor"));
         }

@@ -552,8 +552,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     }
 
     private static boolean sameUser(Staff a, Staff b) {
-        return a != null && b != null && a.getUser() != null && b.getUser() != null
-            && a.getUser().getId() != null && a.getUser().getId().equals(b.getUser().getId());
+        return com.example.hms.security.CallerIdentity.sameUser(a, b);
     }
 
     private GeneralReferral findReferral(UUID referralId) {

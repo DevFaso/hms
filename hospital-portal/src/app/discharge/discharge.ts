@@ -67,7 +67,12 @@ export class DischargeComponent implements OnInit {
    */
   canWriteSummary(summary: DischargeSummary): boolean {
     if (!this.canEditSummaries) return false;
-    if (this.isSuperAdmin) return true;
+    // The server says who may (the same rule its update and delete apply).
+    if (summary.editableByCaller !== undefined && summary.editableByCaller !== null) {
+      return summary.editableByCaller;
+    }
+    // An older server: the discharging provider, or a super-admin in global view.
+    if (this.isSuperAdmin && this.roleContext.globalView()) return true;
     return !!this.staffId && summary.dischargingProviderId === this.staffId;
   }
   /** Backend allows NURSE/MIDWIFE on by-hospital + pending-results (NOT unfinalized). */

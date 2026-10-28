@@ -76,5 +76,13 @@ describe('DischargeComponent — encounter picker label', () => {
     const other = { id: 's2', dischargingProviderId: 'staff-b' } as DischargeSummary;
     expect(component.canWriteSummary(own)).toBeTrue();
     expect(component.canWriteSummary(other)).toBeFalse();
+    // When the server says who may (review of #971), its answer wins: a
+    // nurse-held draft the treating doctor may finish, a colleague's it may not.
+    expect(
+      component.canWriteSummary({ ...other, editableByCaller: true } as DischargeSummary),
+    ).toBeTrue();
+    expect(
+      component.canWriteSummary({ ...own, editableByCaller: false } as DischargeSummary),
+    ).toBeFalse();
   });
 });

@@ -179,7 +179,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         DischargeSummary saved = dischargeSummaryRepository.save(dischargeSummary);
         log.info("Discharge summary created successfully with ID: {}", saved.getId());
 
-        return dischargeSummaryMapper.toResponseDTO(saved);
+        return toDto(saved);
     }
 
     private void addMedications(DischargeSummary summary, DischargeSummaryRequestDTO request) {
@@ -266,7 +266,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         DischargeSummary updated = dischargeSummaryRepository.save(existing);
         log.info("Discharge summary updated successfully: {}", summaryId);
 
-        return dischargeSummaryMapper.toResponseDTO(updated);
+        return toDto(updated);
     }
 
     @Override
@@ -299,7 +299,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         DischargeSummary finalized = dischargeSummaryRepository.save(dischargeSummary);
         log.info("Discharge summary finalized successfully: {}", summaryId);
 
-        return dischargeSummaryMapper.toResponseDTO(finalized);
+        return toDto(finalized);
     }
 
     @Override
@@ -310,7 +310,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
 
         enforceHospitalScope(dischargeSummary, summaryId);
 
-        return dischargeSummaryMapper.toResponseDTO(dischargeSummary);
+        return toDto(dischargeSummary);
     }
 
     @Override
@@ -321,7 +321,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
 
         enforceHospitalScope(dischargeSummary, dischargeSummary.getId());
 
-        return dischargeSummaryMapper.toResponseDTO(dischargeSummary);
+        return toDto(dischargeSummary);
     }
 
     @Override
@@ -342,7 +342,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
             summaries = dischargeSummaryRepository.findByPatient_IdOrderByDischargeDateDesc(patientId);
         }
         return summaries.stream()
-            .map(dischargeSummaryMapper::toResponseDTO)
+            .map(this::toDto)
             .toList();
     }
 
@@ -358,7 +358,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         UUID effectiveHospitalId = activeHospitalId != null ? activeHospitalId : hospitalId;
         List<DischargeSummary> summaries = dischargeSummaryRepository.findByHospitalAndDateRange(effectiveHospitalId, startDate, endDate);
         return summaries.stream()
-            .map(dischargeSummaryMapper::toResponseDTO)
+            .map(this::toDto)
             .toList();
     }
 
@@ -369,7 +369,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         UUID effectiveHospitalId = activeHospitalId != null ? activeHospitalId : hospitalId;
         List<DischargeSummary> summaries = dischargeSummaryRepository.findUnfinalizedByHospital(effectiveHospitalId);
         return summaries.stream()
-            .map(dischargeSummaryMapper::toResponseDTO)
+            .map(this::toDto)
             .toList();
     }
 
@@ -380,7 +380,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         UUID effectiveHospitalId = activeHospitalId != null ? activeHospitalId : hospitalId;
         List<DischargeSummary> summaries = dischargeSummaryRepository.findWithPendingTestResults(effectiveHospitalId);
         return summaries.stream()
-            .map(dischargeSummaryMapper::toResponseDTO)
+            .map(this::toDto)
             .toList();
     }
 
@@ -395,7 +395,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
             summaries = dischargeSummaryRepository.findByDischargingProvider_IdOrderByDischargeDateDesc(providerId);
         }
         return summaries.stream()
-            .map(dischargeSummaryMapper::toResponseDTO)
+            .map(this::toDto)
             .toList();
     }
 
@@ -430,9 +430,11 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         // names the doctor who closed the visit). Only a summary with no
         // discharging provider at all falls back to the visit's treating
         // clinician, so a consultant's addendum never opens a colleague's draft.
+        UUID hospitalId = summary.getHospital() != null ? summary.getHospital().getId() : null;
         if (com.example.hms.security.CallerIdentity.isCaller(summary.getDischargingProvider())
                 || com.example.hms.security.CallerIdentity.isGlobalSuperAdmin()
                 || (!isPhysicianProvider(summary)
+                    && isPhysician(roleValidator.getCurrentUserId(), hospitalId)
                     && TreatingClinician.isCaller(summary.getEncounter(), encounterNoteRepository))) {
             return;
         }
@@ -447,12 +449,42 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
      */
     private boolean isPhysicianProvider(DischargeSummary summary) {
         Staff provider = summary.getDischargingProvider();
-        if (provider == null || provider.getUser() == null || provider.getUser().getId() == null) {
+        if (provider == null || provider.getUser() == null) {
             return false;
         }
-        UUID hospitalId = summary.getHospital() != null ? summary.getHospital().getId() : null;
-        UUID userId = provider.getUser().getId();
-        return roleValidator.isDoctor(userId, hospitalId) || roleValidator.isPhysician(userId, hospitalId);
+        return isPhysician(provider.getUser().getId(),
+            summary.getHospital() != null ? summary.getHospital().getId() : null);
+    }
+
+    /** A doctor, physician or surgeon at the hospital: the same three roles {@code EncounterServiceImpl} counts as a doctor. */
+    private boolean isPhysician(UUID userId, UUID hospitalId) {
+        return userId != null && hospitalId != null && (roleValidator.isDoctor(userId, hospitalId)
+            || roleValidator.isPhysician(userId, hospitalId) || roleValidator.isSurgeon(userId, hospitalId));
+    }
+
+    /**
+     * Whether the signed-in user may update or delete the summary (the rule of
+     * {@link #requireAuthor}), so the portal shows the buttons the server
+     * accepts (review of #971).
+     */
+    private boolean editableByCaller(DischargeSummary summary) {
+        if (Boolean.TRUE.equals(summary.getIsFinalized())) {
+            return false;
+        }
+        try {
+            requireAuthor(summary);
+            return true;
+        } catch (com.example.hms.exception.ClientSafeAccessDeniedException refused) {
+            return false;
+        }
+    }
+
+    private DischargeSummaryResponseDTO toDto(DischargeSummary summary) {
+        DischargeSummaryResponseDTO dto = dischargeSummaryMapper.toResponseDTO(summary);
+        if (dto != null) {
+            dto.setEditableByCaller(editableByCaller(summary));
+        }
+        return dto;
     }
 
     private void enforceHospitalScope(DischargeSummary summary, UUID summaryId) {

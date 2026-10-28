@@ -262,7 +262,7 @@
       class="modal modal-lg"
       role="dialog"
       aria-modal="true"
-      aria-labelledby="admissions-dialog-1-title"
+      [attr.aria-label]="'ORDER_SETS.OPEN_PICKER' | translate"
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="$event.stopPropagation()"

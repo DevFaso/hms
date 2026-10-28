@@ -360,9 +360,9 @@ public class EncounterServiceImpl implements EncounterService {
         EncounterResolution ctx = resolveEncounterResolution(request, locale);
 
         LocalDateTime encounterDate = Optional.ofNullable(request.getEncounterDate()).orElse(LocalDateTime.now());
-        EncounterStatus status = Optional.ofNullable(request.getStatus()).orElse(EncounterStatus.ARRIVED);
-        // QA D761: a new encounter starts ARRIVED (a walk-in at the desk, who
-        // goes to triage next) or IN_PROGRESS (a clinician's own visit).
+        // QA D761: a new encounter is asked for as ARRIVED (a walk-in at the
+        // desk, who goes to triage next) or IN_PROGRESS (a clinician's own
+        // visit); with no status, defaultInitialStatus decides (QA D990).
         // Anything later is reached through its workflow step.
         if (request.getStatus() != null && !INITIAL_STATUSES.contains(request.getStatus())) {
             throw new BusinessException(messageSource.getMessage("encounter.status.initialInvalid",
@@ -380,10 +380,10 @@ public class EncounterServiceImpl implements EncounterService {
             ctx.appointment(),
             ctx.assignment());
 
-        applyEncounterDefaults(encounter, ctx.department(), encounterDate, status);
-        // QA D761: the entity defaults to IN_PROGRESS, so the defaults above
-        // never applied the requested status: the reception's ARRIVED walk-in
-        // was stored IN_PROGRESS and triage refused it. The request wins.
+        applyEncounterDefaults(encounter, ctx.department(), encounterDate, null);
+        // QA D761: the entity defaults to IN_PROGRESS, so applyEncounterDefaults
+        // never applies a status: the reception's ARRIVED walk-in was stored
+        // IN_PROGRESS and triage refused it. The request wins, else the default.
         if (request.getStatus() != null) {
             encounter.setStatus(request.getStatus());
         } else {
@@ -438,6 +438,11 @@ public class EncounterServiceImpl implements EncounterService {
         EncounterStatus fallbackStatus = existing.getStatus() != null ? existing.getStatus() : EncounterStatus.ARRIVED;
         applyEncounterDefaults(merged, ctx.department(), fallbackDate, fallbackStatus);
         ensureEncounterCode(merged);
+        // QA D990: a visit marked ARRIVED here (a scheduled patient shows up) waits from now.
+        if (merged.getStatus() == EncounterStatus.ARRIVED && previousStatus != EncounterStatus.ARRIVED
+                && merged.getArrivalTimestamp() == null) {
+            merged.setArrivalTimestamp(LocalDateTime.now());
+        }
 
         // QA D788: a status written here obeys the closing rules of the check-out.
         EncounterClosureRules.requireDirectTransition(previousStatus, merged.getStatus(),
@@ -487,7 +492,7 @@ public class EncounterServiceImpl implements EncounterService {
             }
             // QA D972: billing hears of the completed visit even if the summary
             // or the notification above failed (they are best effort).
-            publishCheckedOutOnCompletion(saved, previousStatus);
+            publishCheckedOutOnCompletion(saved);
         }
 
         recordHistory(saved, "UPDATED", resolveHistoryActor(request.getUpdatedBy(), ctx.staff()), previousValues);
@@ -2450,11 +2455,9 @@ public class EncounterServiceImpl implements EncounterService {
     }
 
     /** QA D972: a visit completed through PUT /encounters/{id} is handed to billing like a checkout. */
-    private void publishCheckedOutOnCompletion(Encounter encounter, EncounterStatus previousStatus) {
-        if (encounter.getStatus() == EncounterStatus.COMPLETED && previousStatus != EncounterStatus.COMPLETED) {
-            publishCheckedOut(encounter, encounter.getCheckoutTimestamp() != null
-                ? encounter.getCheckoutTimestamp() : LocalDateTime.now());
-        }
+    private void publishCheckedOutOnCompletion(Encounter encounter) {
+        publishCheckedOut(encounter, encounter.getCheckoutTimestamp() != null
+            ? encounter.getCheckoutTimestamp() : LocalDateTime.now());
     }
 
     /**
@@ -2740,7 +2743,8 @@ public class EncounterServiceImpl implements EncounterService {
         }
         UUID userId = staff.getUser().getId();
         UUID hospitalId = encounter.getHospital().getId();
-        return roleValidator.isDoctor(userId, hospitalId) || roleValidator.isPhysician(userId, hospitalId);
+        return roleValidator.isDoctor(userId, hospitalId) || roleValidator.isPhysician(userId, hospitalId)
+            || roleValidator.isSurgeon(userId, hospitalId);
     }
 
     /** The signed-in doctor's staff record at the visit's hospital, when the caller is a doctor who is not the clinician of record. */
