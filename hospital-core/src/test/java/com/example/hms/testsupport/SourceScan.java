@@ -90,10 +90,22 @@ public final class SourceScan {
         return source.length();
     }
 
-    /** The index of the closing quote of the char literal opened at {@code openQuote} ({@code '"'}, {@code '\\n'}). */
+    /**
+     * The index of the closing quote of the char literal opened at {@code openQuote}:
+     * {@code '"'}, {@code '\\n'}, {@code '\\u0041'}. An escape runs to the next quote
+     * (at most eight characters), so a unicode escape does not throw the walker out
+     * of step for the rest of the file.
+     */
     public static int endOfCharLiteral(String source, int openQuote) {
         int i = openQuote + 1;
         if (i < source.length() && source.charAt(i) == '\\') {
+            if (i + 1 < source.length() && source.charAt(i + 1) == '\'') {
+                return Math.min(i + 2, source.length() - 1); // '\''
+            }
+            int close = source.indexOf('\'', i + 2);
+            if (close > 0 && close - openQuote <= 9) {
+                return close;
+            }
             i++;
         }
         return Math.min(i + 1, source.length());

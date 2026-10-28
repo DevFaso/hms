@@ -18,31 +18,31 @@
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/admin-assignments/admin-assignments.html::icon-button::button block": {
+    "src/app/admin-assignments/admin-assignments.html::icon-button::button block (click)=deactivate(row)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/admin-assignments/admin-assignments.html::icon-button::button delete": {
+    "src/app/admin-assignments/admin-assignments.html::icon-button::button delete (click)=delete(row)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/admin-assignments/admin-assignments.html::icon-button::button edit": {
+    "src/app/admin-assignments/admin-assignments.html::icon-button::button edit (click)=openEdit(row)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/admin-assignments/admin-assignments.html::icon-button::button forward_to_inbox": {
+    "src/app/admin-assignments/admin-assignments.html::icon-button::button forward_to_inbox (click)=resendNotification(row)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/admin-assignments/admin-assignments.html::icon-button::button key": {
+    "src/app/admin-assignments/admin-assignments.html::icon-button::button key (click)=openRegen(row)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/admin-assignments/admin-assignments.html::icon-button::button visibility": {
+    "src/app/admin-assignments/admin-assignments.html::icon-button::button visibility (click)=openDetail(row)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/admin-governance/credentials-tab.html::icon-button::button visibility": {
+    "src/app/admin-governance/credentials-tab.html::icon-button::button visibility (click)=openDetail(row)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
@@ -66,27 +66,35 @@
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/admin-governance/matrix-tab.html::icon-button::button delete": {
+    "src/app/admin-governance/matrix-tab.html::icon-button::button delete (click)=removeRow($index)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/admin-governance/matrix-tab.html::icon-button::button visibility": {
+    "src/app/admin-governance/matrix-tab.html::icon-button::button visibility (click)=viewSnapshot(snap)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/admin-governance/policies-tab.html::icon-button::button add_moderator": {
+    "src/app/admin-governance/policies-tab.html::icon-button::button add_moderator (click)=openCreateRule(policy)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/admin-governance/policies-tab.html::icon-button::button delete": {
-      "count": 2,
+    "src/app/admin-governance/policies-tab.html::icon-button::button delete (click)=deletePolicy(policy)": {
+      "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/admin-governance/policies-tab.html::icon-button::button edit": {
-      "count": 2,
+    "src/app/admin-governance/policies-tab.html::icon-button::button delete (click)=deleteRule(policy, rule)": {
+      "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/admin-governance/policies-tab.html::icon-button::button icon": {
+    "src/app/admin-governance/policies-tab.html::icon-button::button edit (click)=openEditPolicy(policy)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/admin-governance/policies-tab.html::icon-button::button edit (click)=openEditRule(policy, rule)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/admin-governance/policies-tab.html::icon-button::button icon (click)=toggleExpand(policy.id)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
@@ -98,31 +106,47 @@
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/admissions/admissions.html::icon-button::button bed": {
+    "src/app/admissions/admissions.html::icon-button::button bed (click)=openBedAssign(a)": {
       "count": 1,
       "why": "D999: admissions row edit/delete icon buttons have no accessible name"
     },
-    "src/app/admissions/admissions.html::icon-button::button bed_off": {
+    "src/app/admissions/admissions.html::icon-button::button bed_off (click)=unassignBed(a)": {
       "count": 1,
       "why": "D999: admissions row edit/delete icon buttons have no accessible name"
     },
-    "src/app/admissions/admissions.html::icon-button::button close": {
-      "count": 5,
-      "why": "D999: admissions row edit/delete icon buttons have no accessible name"
-    },
-    "src/app/admissions/admissions.html::icon-button::button delete": {
+    "src/app/admissions/admissions.html::icon-button::button close (click)=cancelDelete()": {
       "count": 1,
       "why": "D999: admissions row edit/delete icon buttons have no accessible name"
     },
-    "src/app/admissions/admissions.html::icon-button::button edit": {
+    "src/app/admissions/admissions.html::icon-button::button close (click)=cancelDischarge()": {
       "count": 1,
       "why": "D999: admissions row edit/delete icon buttons have no accessible name"
     },
-    "src/app/admissions/admissions.html::icon-button::button exit_to_app": {
+    "src/app/admissions/admissions.html::icon-button::button close (click)=clearPatient()": {
       "count": 1,
       "why": "D999: admissions row edit/delete icon buttons have no accessible name"
     },
-    "src/app/admissions/admissions.html::icon-button::button playlist_add_check": {
+    "src/app/admissions/admissions.html::icon-button::button close (click)=closeBedAssign()": {
+      "count": 1,
+      "why": "D999: admissions row edit/delete icon buttons have no accessible name"
+    },
+    "src/app/admissions/admissions.html::icon-button::button close (click)=closeModal()": {
+      "count": 1,
+      "why": "D999: admissions row edit/delete icon buttons have no accessible name"
+    },
+    "src/app/admissions/admissions.html::icon-button::button delete (click)=confirmDelete(a)": {
+      "count": 1,
+      "why": "D999: admissions row edit/delete icon buttons have no accessible name"
+    },
+    "src/app/admissions/admissions.html::icon-button::button edit (click)=openEdit(a)": {
+      "count": 1,
+      "why": "D999: admissions row edit/delete icon buttons have no accessible name"
+    },
+    "src/app/admissions/admissions.html::icon-button::button exit_to_app (click)=confirmDischarge(a)": {
+      "count": 1,
+      "why": "D999: admissions row edit/delete icon buttons have no accessible name"
+    },
+    "src/app/admissions/admissions.html::icon-button::button playlist_add_check (click)=openOrderSetPicker(a)": {
       "count": 1,
       "why": "D999: admissions row edit/delete icon buttons have no accessible name"
     },
@@ -130,67 +154,127 @@
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/announcements/announcement-list.html::icon-button::button close": {
-      "count": 2,
+    "src/app/announcements/announcement-list.html::icon-button::button close (click)=cancelDelete()": {
+      "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/appointments/appointment-detail.html::icon-button::button close": {
-      "count": 2,
+    "src/app/announcements/announcement-list.html::icon-button::button close (click)=closeModal()": {
+      "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/appointments/appointment-form.html::icon-button::button close": {
-      "count": 2,
+    "src/app/appointments/appointment-detail.html::icon-button::button close (click)=closeCancelConfirm()": {
+      "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/appointments/appointment-list.html::icon-button::a arrow_forward": {
+    "src/app/appointments/appointment-detail.html::icon-button::button close (click)=closeReschedule()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/appointments/appointment-form.html::icon-button::button close (click)=clearPatient()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/appointments/appointment-form.html::icon-button::button close (click)=clearStaff()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/appointments/appointment-list.html::icon-button::a arrow_forward [routerLink]=['/appointments', appt.id]": {
       "count": 1,
       "why": "D173 class: icon-only link (routerLink/href) announced by its ligature text"
     },
-    "src/app/appointments/appointment-list.html::icon-button::button close": {
-      "count": 4,
+    "src/app/appointments/appointment-list.html::icon-button::button close (click)=onSearchChange('')": {
+      "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/bed-board/bed-board.html::icon-button::button close": {
-      "count": 2,
+    "src/app/appointments/appointment-list.html::icon-button::button close (click)=removeFilter('dateFrom')": {
+      "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/bed-management/bed-management.html::icon-button::button close": {
-      "count": 2,
+    "src/app/appointments/appointment-list.html::icon-button::button close (click)=removeFilter('dateTo')": {
+      "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/bed-management/bed-management.html::icon-button::button delete": {
-      "count": 2,
+    "src/app/appointments/appointment-list.html::icon-button::button close (click)=removeFilter('hospital')": {
+      "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/bed-management/bed-management.html::icon-button::button edit": {
-      "count": 2,
+    "src/app/bed-board/bed-board.html::icon-button::button close (click)=closePrecautions()": {
+      "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/billing/billing.html::icon-button::button close": {
-      "count": 6,
-      "why": "D1006: /billing icon buttons announced by icon names"
+    "src/app/bed-board/bed-board.html::icon-button::button close (click)=closeTransfer()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/billing/billing.html::icon-button::button delete": {
+    "src/app/bed-management/bed-management.html::icon-button::button close (click)=closeBedModal()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/bed-management/bed-management.html::icon-button::button close (click)=closeWardModal()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/bed-management/bed-management.html::icon-button::button delete (click)=deleteBed(b)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/bed-management/bed-management.html::icon-button::button delete (click)=deleteWard(w); $event.stopPropagation()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/bed-management/bed-management.html::icon-button::button edit (click)=openEditBed(b)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/bed-management/bed-management.html::icon-button::button edit (click)=openEditWard(w); $event.stopPropagation()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/billing/billing.html::icon-button::button close (click)=cancelDelete()": {
       "count": 1,
       "why": "D1006: /billing icon buttons announced by icon names"
     },
-    "src/app/billing/billing.html::icon-button::button edit": {
+    "src/app/billing/billing.html::icon-button::button close (click)=closeDetail()": {
       "count": 1,
       "why": "D1006: /billing icon buttons announced by icon names"
     },
-    "src/app/billing/billing.html::icon-button::button email": {
+    "src/app/billing/billing.html::icon-button::button close (click)=closeEmail()": {
       "count": 1,
       "why": "D1006: /billing icon buttons announced by icon names"
     },
-    "src/app/billing/billing.html::icon-button::button payments": {
+    "src/app/billing/billing.html::icon-button::button close (click)=closeModal()": {
       "count": 1,
       "why": "D1006: /billing icon buttons announced by icon names"
     },
-    "src/app/billing/billing.html::icon-button::button picture_as_pdf": {
+    "src/app/billing/billing.html::icon-button::button close (click)=closePayment()": {
       "count": 1,
       "why": "D1006: /billing icon buttons announced by icon names"
     },
-    "src/app/billing/billing.html::icon-button::button visibility": {
+    "src/app/billing/billing.html::icon-button::button close (click)=closeReversal()": {
+      "count": 1,
+      "why": "D1006: /billing icon buttons announced by icon names"
+    },
+    "src/app/billing/billing.html::icon-button::button delete (click)=confirmDelete(inv)": {
+      "count": 1,
+      "why": "D1006: /billing icon buttons announced by icon names"
+    },
+    "src/app/billing/billing.html::icon-button::button edit (click)=openEdit(inv)": {
+      "count": 1,
+      "why": "D1006: /billing icon buttons announced by icon names"
+    },
+    "src/app/billing/billing.html::icon-button::button email (click)=openEmail(inv)": {
+      "count": 1,
+      "why": "D1006: /billing icon buttons announced by icon names"
+    },
+    "src/app/billing/billing.html::icon-button::button payments (click)=openPayment(inv)": {
+      "count": 1,
+      "why": "D1006: /billing icon buttons announced by icon names"
+    },
+    "src/app/billing/billing.html::icon-button::button picture_as_pdf (click)=downloadPdf(inv.id)": {
+      "count": 1,
+      "why": "D1006: /billing icon buttons announced by icon names"
+    },
+    "src/app/billing/billing.html::icon-button::button visibility (click)=viewInvoice(inv)": {
       "count": 1,
       "why": "D1006: /billing icon buttons announced by icon names"
     },
@@ -202,23 +286,27 @@
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/chat/chat.html::icon-button::button close": {
+    "src/app/chat/chat.html::icon-button::button close (click)=closeNewConversation()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/chat/chat.html::icon-button::button edit_square": {
+    "src/app/chat/chat.html::icon-button::button edit_square (click)=openNewConversation()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/chat/chat.html::icon-button::button icon": {
-      "count": 2,
-      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
-    },
-    "src/app/chat/chat.html::icon-button::button refresh": {
+    "src/app/chat/chat.html::icon-button::button icon (click)=photoInput.click()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/chat/chat.html::icon-button::button send": {
+    "src/app/chat/chat.html::icon-button::button icon (click)=toggleVoiceMemo()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/chat/chat.html::icon-button::button refresh (click)=refreshMessages()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/chat/chat.html::icon-button::button send (click)=sendMessage()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
@@ -226,63 +314,63 @@
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/consultations/consultations.html::icon-button::button cancel": {
+    "src/app/consultations/consultations.html::icon-button::button cancel (click)=confirmCancel(c)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/consultations/consultations.html::icon-button::button check_circle": {
+    "src/app/consultations/consultations.html::icon-button::button check_circle (click)=acknowledgeConsultation(c)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/consultations/consultations.html::icon-button::button close": {
+    "src/app/consultations/consultations.html::icon-button::button close (click)=closeDetail()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/consultations/consultations.html::icon-button::button event": {
+    "src/app/consultations/consultations.html::icon-button::button event (click)=openSchedule(c)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/consultations/consultations.html::icon-button::button person_add": {
+    "src/app/consultations/consultations.html::icon-button::button person_add (click)=openAssign(c, false)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/consultations/consultations.html::icon-button::button person_search": {
+    "src/app/consultations/consultations.html::icon-button::button person_search (click)=openAssign(c, true)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/consultations/consultations.html::icon-button::button play_arrow": {
+    "src/app/consultations/consultations.html::icon-button::button play_arrow (click)=startConsultation(c)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/consultations/consultations.html::icon-button::button task_alt": {
+    "src/app/consultations/consultations.html::icon-button::button task_alt (click)=openComplete(c)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/consultations/consultations.html::icon-button::button thumb_down": {
+    "src/app/consultations/consultations.html::icon-button::button thumb_down (click)=openDecline(c)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/consultations/consultations.html::icon-button::button visibility": {
+    "src/app/consultations/consultations.html::icon-button::button visibility (click)=viewDetail(c)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/dashboard/dashboard.html::icon-button::a science": {
+    "src/app/dashboard/dashboard.html::icon-button::a science routerLink=/lab": {
       "count": 1,
       "why": "D173 class: icon-only link (routerLink/href) announced by its ligature text"
     },
-    "src/app/dashboard/dashboard.html::icon-button::a stethoscope": {
+    "src/app/dashboard/dashboard.html::icon-button::a stethoscope routerLink=/encounters": {
       "count": 1,
       "why": "D173 class: icon-only link (routerLink/href) announced by its ligature text"
     },
-    "src/app/dashboard/dashboard.html::icon-button::button refresh": {
+    "src/app/dashboard/dashboard.html::icon-button::button refresh (click)=refreshDashboard()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/dashboard/patient-snapshot-drawer/patient-snapshot-drawer.html::icon-button::button close": {
+    "src/app/dashboard/patient-snapshot-drawer/patient-snapshot-drawer.html::icon-button::button close (click)=close()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/dashboard/patient-snapshot-drawer/patient-snapshot-drawer.html::icon-button::div icon": {
+    "src/app/dashboard/patient-snapshot-drawer/patient-snapshot-drawer.html::icon-button::div icon (click)=close()": {
       "count": 2,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
@@ -294,15 +382,19 @@
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/departments/department-list.html::icon-button::button close": {
-      "count": 2,
-      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
-    },
-    "src/app/departments/department-list.html::icon-button::button delete": {
+    "src/app/departments/department-list.html::icon-button::button close (click)=cancelDelete()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/departments/department-list.html::icon-button::button edit": {
+    "src/app/departments/department-list.html::icon-button::button close (click)=closeModal()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/departments/department-list.html::icon-button::button delete (click)=confirmDelete(dept)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/departments/department-list.html::icon-button::button edit (click)=openEdit(dept)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
@@ -318,15 +410,31 @@
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/digital-signatures/digital-signatures.html::icon-button::button block": {
+    "src/app/digital-signatures/digital-signatures.html::icon-button::button block (click)=openRevoke(sig)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/digital-signatures/digital-signatures.html::icon-button::button close": {
-      "count": 5,
+    "src/app/digital-signatures/digital-signatures.html::icon-button::button close (click)=clearLookup()": {
+      "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/digital-signatures/digital-signatures.html::icon-button::button verified_user": {
+    "src/app/digital-signatures/digital-signatures.html::icon-button::button close (click)=closeDetail()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/digital-signatures/digital-signatures.html::icon-button::button close (click)=closeRevoke()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/digital-signatures/digital-signatures.html::icon-button::button close (click)=closeSign()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/digital-signatures/digital-signatures.html::icon-button::button close (click)=closeVerify()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/digital-signatures/digital-signatures.html::icon-button::button verified_user (click)=openVerify(sig)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
@@ -338,47 +446,71 @@
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/encounters/encounters.html::icon-button::button close": {
-      "count": 5,
-      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
-    },
-    "src/app/encounters/encounters.html::icon-button::button delete": {
+    "src/app/encounters/encounters.html::icon-button::button close (click)=cancelDelete()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/encounters/encounters.html::icon-button::button edit": {
+    "src/app/encounters/encounters.html::icon-button::button close (click)=clearPatient()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/encounters/encounters.html::icon-button::button visibility": {
+    "src/app/encounters/encounters.html::icon-button::button close (click)=closeAvs()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/feature-flags/feature-flags.html::icon-button::button close": {
+    "src/app/encounters/encounters.html::icon-button::button close (click)=closeDetail()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/feature-flags/feature-flags.html::icon-button::button delete_outline": {
+    "src/app/encounters/encounters.html::icon-button::button close (click)=closeModal()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/feature-flags/feature-flags.html::icon-button::button icon": {
-      "count": 2,
+    "src/app/encounters/encounters.html::icon-button::button delete (click)=confirmDelete(enc)": {
+      "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/hospitals/hospital-list.html::icon-button::a open_in_new": {
+    "src/app/encounters/encounters.html::icon-button::button edit (click)=openEdit(enc)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/encounters/encounters.html::icon-button::button visibility (click)=selectEncounter(enc)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/feature-flags/feature-flags.html::icon-button::button close (click)=closeCreate()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/feature-flags/feature-flags.html::icon-button::button delete_outline (click)=removeOverride(flag)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/feature-flags/feature-flags.html::icon-button::button icon (click)=newFlagEnabled.set(!newFlagEnabled())": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/feature-flags/feature-flags.html::icon-button::button icon (click)=toggleFlag(flag)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/hospitals/hospital-list.html::icon-button::a open_in_new [routerLink]=['/hospitals', h.id]": {
       "count": 1,
       "why": "D173 class: icon-only link (routerLink/href) announced by its ligature text"
     },
-    "src/app/hospitals/hospital-list.html::icon-button::button close": {
-      "count": 2,
-      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
-    },
-    "src/app/hospitals/hospital-list.html::icon-button::button delete": {
+    "src/app/hospitals/hospital-list.html::icon-button::button close (click)=cancelDelete()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/hospitals/hospital-list.html::icon-button::button edit": {
+    "src/app/hospitals/hospital-list.html::icon-button::button close (click)=closeModal()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/hospitals/hospital-list.html::icon-button::button delete (click)=confirmDelete(h)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/hospitals/hospital-list.html::icon-button::button edit (click)=openEdit(h)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
@@ -386,115 +518,151 @@
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/imaging/imaging.html::icon-button::button cancel": {
+    "src/app/imaging/imaging.html::icon-button::button cancel (click)=confirmCancel(o)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/imaging/imaging.html::icon-button::button close": {
-      "count": 2,
-      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
-    },
-    "src/app/imaging/imaging.html::icon-button::button description": {
+    "src/app/imaging/imaging.html::icon-button::button close (click)=closeDetail()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/imaging/imaging.html::icon-button::button edit": {
+    "src/app/imaging/imaging.html::icon-button::button close (click)=closeReport()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/imaging/imaging.html::icon-button::button edit_note": {
+    "src/app/imaging/imaging.html::icon-button::button description (click)=viewReportForOrder(o)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/imaging/imaging.html::icon-button::button notifications_active": {
+    "src/app/imaging/imaging.html::icon-button::button edit (click)=openEdit(o)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/imaging/imaging.html::icon-button::button sync_alt": {
+    "src/app/imaging/imaging.html::icon-button::button edit_note (click)=openAuthorReport(o, o.status === 'RESULTS_AVAILABLE')": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/imaging/imaging.html::icon-button::button visibility": {
-      "count": 2,
-      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
-    },
-    "src/app/lab/lab-approval-queue/lab-approval-queue.html::icon-button::button close": {
-      "count": 3,
-      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
-    },
-    "src/app/lab/lab-approval-queue/lab-approval-queue.html::icon-button::button delete": {
+    "src/app/imaging/imaging.html::icon-button::button notifications_active (click)=acknowledgeCritical(r)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/lab/lab-approval-queue/lab-approval-queue.html::icon-button::button visibility": {
+    "src/app/imaging/imaging.html::icon-button::button sync_alt (click)=openStatusUpdate(r)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/lab/lab-instruments/lab-instruments.html::icon-button::button delete": {
+    "src/app/imaging/imaging.html::icon-button::button visibility (click)=openReport(r)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/lab/lab-instruments/lab-instruments.html::icon-button::button edit": {
+    "src/app/imaging/imaging.html::icon-button::button visibility (click)=viewDetail(o)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/lab/lab-instruments/lab-instruments.html::icon-button::button refresh": {
+    "src/app/lab/lab-approval-queue/lab-approval-queue.html::icon-button::button close (click)=closeApprovalModal()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/lab/lab-inventory/lab-inventory.html::icon-button::button delete": {
+    "src/app/lab/lab-approval-queue/lab-approval-queue.html::icon-button::button close (click)=closeDetail()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/lab/lab-inventory/lab-inventory.html::icon-button::button edit": {
+    "src/app/lab/lab-approval-queue/lab-approval-queue.html::icon-button::button close (click)=closeStudyModal()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/lab/lab-inventory/lab-inventory.html::icon-button::button refresh": {
+    "src/app/lab/lab-approval-queue/lab-approval-queue.html::icon-button::button delete (click)=deleteStudy(study)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/lab/lab-outbox/lab-outbox.html::icon-button::button refresh": {
+    "src/app/lab/lab-approval-queue/lab-approval-queue.html::icon-button::button visibility (click)=viewDefinition(def)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/lab/lab-results/lab-results.html::icon-button::button close": {
-      "count": 6,
-      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
-    },
-    "src/app/lab/lab-results/lab-results.html::icon-button::button delete": {
+    "src/app/lab/lab-instruments/lab-instruments.html::icon-button::button delete (click)=deactivate(instr)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/lab/lab-results/lab-results.html::icon-button::button draw": {
+    "src/app/lab/lab-instruments/lab-instruments.html::icon-button::button edit (click)=openEdit(instr)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/lab/lab-results/lab-results.html::icon-button::button edit": {
+    "src/app/lab/lab-instruments/lab-instruments.html::icon-button::button refresh (click)=loadInstruments()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/lab/lab-results/lab-results.html::icon-button::button edit_note": {
+    "src/app/lab/lab-inventory/lab-inventory.html::icon-button::button delete (click)=deactivate(item)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/lab/lab-results/lab-results.html::icon-button::button record_voice_over": {
+    "src/app/lab/lab-inventory/lab-inventory.html::icon-button::button edit (click)=openEdit(item)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/lab/lab-results/lab-results.html::icon-button::button task_alt": {
+    "src/app/lab/lab-inventory/lab-inventory.html::icon-button::button refresh (click)=loadItems()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/lab/lab-results/lab-results.html::icon-button::button timeline": {
+    "src/app/lab/lab-outbox/lab-outbox.html::icon-button::button refresh (click)=load()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/lab/lab-results/lab-results.html::icon-button::button verified": {
+    "src/app/lab/lab-results/lab-results.html::icon-button::button close (click)=cancelDelete()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/lab/lab-results/lab-results.html::icon-button::button visibility": {
+    "src/app/lab/lab-results/lab-results.html::icon-button::button close (click)=cancelSelfRelease()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/lab/lab-results/lab-results.html::icon-button::button close (click)=closeCompare()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/lab/lab-results/lab-results.html::icon-button::button close (click)=closeDetail()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/lab/lab-results/lab-results.html::icon-button::button close (click)=closeModal()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/lab/lab-results/lab-results.html::icon-button::button close (click)=closeSign()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/lab/lab-results/lab-results.html::icon-button::button delete (click)=confirmDelete(r)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/lab/lab-results/lab-results.html::icon-button::button draw (click)=openSign(r)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/lab/lab-results/lab-results.html::icon-button::button edit (click)=openEdit(r)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/lab/lab-results/lab-results.html::icon-button::button edit_note (click)=openCorrection(r)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/lab/lab-results/lab-results.html::icon-button::button record_voice_over (click)=openReadBack(r)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/lab/lab-results/lab-results.html::icon-button::button task_alt (click)=acknowledge(r)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/lab/lab-results/lab-results.html::icon-button::button timeline (click)=openCompare(r)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/lab/lab-results/lab-results.html::icon-button::button verified (click)=releaseResult(r)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/lab/lab-results/lab-results.html::icon-button::button visibility (click)=viewResult(r)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
@@ -502,63 +670,95 @@
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/lab/lab-staff-list/lab-staff-list.html::icon-button::button check": {
+    "src/app/lab/lab-staff-list/lab-staff-list.html::icon-button::button check (click)=saveRole(member)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/lab/lab-staff-list/lab-staff-list.html::icon-button::button close": {
+    "src/app/lab/lab-staff-list/lab-staff-list.html::icon-button::button close (click)=cancelEdit()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/lab/lab-staff-list/lab-staff-list.html::icon-button::button edit": {
+    "src/app/lab/lab-staff-list/lab-staff-list.html::icon-button::button edit (click)=startEdit(member)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/lab/lab-staff-list/lab-staff-list.html::icon-button::button refresh": {
+    "src/app/lab/lab-staff-list/lab-staff-list.html::icon-button::button refresh (click)=loadLabStaff()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/lab/lab-test-config/lab-test-config.html::icon-button::button chevron_left": {
+    "src/app/lab/lab-test-config/lab-test-config.html::icon-button::button chevron_left (click)=prevPage()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/lab/lab-test-config/lab-test-config.html::icon-button::button chevron_right": {
+    "src/app/lab/lab-test-config/lab-test-config.html::icon-button::button chevron_right (click)=nextPage()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/lab/lab-test-config/lab-test-config.html::icon-button::button close": {
-      "count": 4,
-      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
-    },
-    "src/app/lab/lab-test-config/lab-test-config.html::icon-button::button delete": {
-      "count": 2,
-      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
-    },
-    "src/app/lab/lab-test-config/lab-test-config.html::icon-button::button edit": {
+    "src/app/lab/lab-test-config/lab-test-config.html::icon-button::button close (click)=cancelDeleteDef()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/lab/lab-test-config/lab-test-config.html::icon-button::button tune": {
+    "src/app/lab/lab-test-config/lab-test-config.html::icon-button::button close (click)=closeDefModal()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/lab/lab.html::icon-button::button close": {
-      "count": 5,
-      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
-    },
-    "src/app/lab/lab.html::icon-button::button delete": {
+    "src/app/lab/lab-test-config/lab-test-config.html::icon-button::button close (click)=closeRangeEditor()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/lab/lab.html::icon-button::button edit": {
+    "src/app/lab/lab-test-config/lab-test-config.html::icon-button::button close (click)=closeReflexRules()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/lab/lab.html::icon-button::button labs": {
+    "src/app/lab/lab-test-config/lab-test-config.html::icon-button::button delete (click)=confirmDeleteDef(def)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/lab/lab.html::icon-button::button visibility": {
+    "src/app/lab/lab-test-config/lab-test-config.html::icon-button::button delete (click)=removeRange(i)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/lab/lab-test-config/lab-test-config.html::icon-button::button edit (click)=openEditDef(def)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/lab/lab-test-config/lab-test-config.html::icon-button::button tune (click)=openRangeEditor(def)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/lab/lab.html::icon-button::button close (click)=cancelDelete()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/lab/lab.html::icon-button::button close (click)=clearPatient()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/lab/lab.html::icon-button::button close (click)=closeDetail()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/lab/lab.html::icon-button::button close (click)=closeModal()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/lab/lab.html::icon-button::button close (click)=closeSpecimens()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/lab/lab.html::icon-button::button delete (click)=confirmDelete(order)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/lab/lab.html::icon-button::button edit (click)=openEdit(order)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/lab/lab.html::icon-button::button labs (click)=openSpecimens(order)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/lab/lab.html::icon-button::button visibility (click)=viewOrder(order)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
@@ -566,91 +766,111 @@
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/login/login.html::icon-button::button icon": {
-      "count": 3,
-      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
-    },
-    "src/app/maternity/birth-plan-tab.html::icon-button::button approval": {
+    "src/app/login/login.html::icon-button::button icon (click)=closeForgotPassword()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/maternity/birth-plan-tab.html::icon-button::button chevron_left": {
+    "src/app/login/login.html::icon-button::button icon (click)=closeForgotUsername()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/maternity/birth-plan-tab.html::icon-button::button chevron_right": {
+    "src/app/login/login.html::icon-button::button icon (click)=closeResendActivation()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/maternity/birth-plan-tab.html::icon-button::button delete": {
+    "src/app/maternity/birth-plan-tab.html::icon-button::button approval (click)=openReview(p)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/maternity/birth-plan-tab.html::icon-button::button edit": {
+    "src/app/maternity/birth-plan-tab.html::icon-button::button chevron_left (click)=prev()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/maternity/birth-plan-tab.html::icon-button::button visibility": {
+    "src/app/maternity/birth-plan-tab.html::icon-button::button chevron_right (click)=next()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/maternity/maternity.html::icon-button::button calculate": {
+    "src/app/maternity/birth-plan-tab.html::icon-button::button delete (click)=confirmDelete(p)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/maternity/maternity.html::icon-button::button chevron_left": {
-      "count": 2,
-      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
-    },
-    "src/app/maternity/maternity.html::icon-button::button chevron_right": {
-      "count": 2,
-      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
-    },
-    "src/app/maternity/maternity.html::icon-button::button edit": {
+    "src/app/maternity/birth-plan-tab.html::icon-button::button edit (click)=openEditPlan(p)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/maternity/maternity.html::icon-button::button send": {
+    "src/app/maternity/birth-plan-tab.html::icon-button::button visibility (click)=openPlan(p)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/maternity/maternity.html::icon-button::button task_alt": {
+    "src/app/maternity/maternity.html::icon-button::button calculate (click)=calculateRisk(h)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/maternity/maternity.html::icon-button::button visibility": {
-      "count": 2,
-      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
-    },
-    "src/app/maternity/prenatal-tab.html::icon-button::button edit_calendar": {
+    "src/app/maternity/maternity.html::icon-button::button chevron_left (click)=boardPrev()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/maternity/prenatal-tab.html::icon-button::button notifications": {
+    "src/app/maternity/maternity.html::icon-button::button chevron_left (click)=referralPrev()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/maternity/ultrasound-tab.html::icon-button::button description": {
+    "src/app/maternity/maternity.html::icon-button::button chevron_right (click)=boardNext()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/maternity/ultrasound-tab.html::icon-button::button edit": {
+    "src/app/maternity/maternity.html::icon-button::button chevron_right (click)=referralNext()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/maternity/ultrasound-tab.html::icon-button::button notifications": {
+    "src/app/maternity/maternity.html::icon-button::button edit (click)=openEditHistory(h)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/maternity/ultrasound-tab.html::icon-button::button task_alt": {
+    "src/app/maternity/maternity.html::icon-button::button send (click)=sendMessage()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/maternity/ultrasound-tab.html::icon-button::button visibility": {
+    "src/app/maternity/maternity.html::icon-button::button task_alt (click)=markReviewed(h)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/medication-history/medication-history.html::icon-button::button edit": {
+    "src/app/maternity/maternity.html::icon-button::button visibility (click)=openHistoryDetail(h)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/maternity/maternity.html::icon-button::button visibility (click)=openReferral(r)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/maternity/prenatal-tab.html::icon-button::button edit_calendar (click)=openReschedule(a)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/maternity/prenatal-tab.html::icon-button::button notifications (click)=openReminder(a)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/maternity/ultrasound-tab.html::icon-button::button description (click)=openReport(o)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/maternity/ultrasound-tab.html::icon-button::button edit (click)=openEditOrder(o)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/maternity/ultrasound-tab.html::icon-button::button notifications (click)=notifyPatient(r)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/maternity/ultrasound-tab.html::icon-button::button task_alt (click)=reviewReport(r)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/maternity/ultrasound-tab.html::icon-button::button visibility (click)=openOrder(o)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/medication-history/medication-history.html::icon-button::button edit (click)=openEditFill(f)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
@@ -662,15 +882,19 @@
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/mortality/mortality.html::icon-button::button close": {
-      "count": 2,
-      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
-    },
-    "src/app/mortality/mortality.html::icon-button::button edit_note": {
+    "src/app/mortality/mortality.html::icon-button::button close (click)=closeDetail()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/mortality/mortality.html::icon-button::button visibility": {
+    "src/app/mortality/mortality.html::icon-button::button close (click)=dismissClosure()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/mortality/mortality.html::icon-button::button edit_note (click)=openAmend(d)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/mortality/mortality.html::icon-button::button visibility (click)=openDetail(d)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
@@ -682,11 +906,19 @@
       "count": 1,
       "why": "D993: MAR reason box and eMAR scan fields have no accessible label"
     },
-    "src/app/nurse-station/nurse-station.html::icon-button::button close": {
-      "count": 3,
+    "src/app/nurse-station/nurse-station.html::icon-button::button close (click)=closeCareNote()": {
+      "count": 1,
       "why": "D993: MAR reason box and eMAR scan fields have no accessible label"
     },
-    "src/app/nurse-station/nurse-station.html::icon-button::button refresh": {
+    "src/app/nurse-station/nurse-station.html::icon-button::button close (click)=closeHandoffCreate()": {
+      "count": 1,
+      "why": "D993: MAR reason box and eMAR scan fields have no accessible label"
+    },
+    "src/app/nurse-station/nurse-station.html::icon-button::button close (click)=closeTaskCreate()": {
+      "count": 1,
+      "why": "D993: MAR reason box and eMAR scan fields have no accessible label"
+    },
+    "src/app/nurse-station/nurse-station.html::icon-button::button refresh (click)=refresh()": {
       "count": 1,
       "why": "D993: MAR reason box and eMAR scan fields have no accessible label"
     },
@@ -722,27 +954,31 @@
       "count": 1,
       "why": "D993 class: intake row fields have no label"
     },
-    "src/app/on-call/on-call.html::icon-button::button refresh": {
+    "src/app/on-call/on-call.html::icon-button::button refresh (click)=load()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/organizations/organization-list.html::icon-button::button chevron_left": {
+    "src/app/organizations/organization-list.html::icon-button::button chevron_left (click)=goToPage(currentPage() - 1)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/organizations/organization-list.html::icon-button::button chevron_right": {
+    "src/app/organizations/organization-list.html::icon-button::button chevron_right (click)=goToPage(currentPage() + 1)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/organizations/organization-list.html::icon-button::button close": {
-      "count": 2,
-      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
-    },
-    "src/app/organizations/organization-list.html::icon-button::button delete": {
+    "src/app/organizations/organization-list.html::icon-button::button close (click)=cancelDelete()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/organizations/organization-list.html::icon-button::button edit": {
+    "src/app/organizations/organization-list.html::icon-button::button close (click)=closeCreate()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/organizations/organization-list.html::icon-button::button delete (click)=confirmDelete(org)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/organizations/organization-list.html::icon-button::button edit (click)=openEdit(org)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
@@ -754,19 +990,19 @@
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/patient-education/patient-education.html::icon-button::button delete": {
+    "src/app/patient-education/patient-education.html::icon-button::button delete (click)=confirmDelete(r)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/patient-education/patient-education.html::icon-button::button edit": {
+    "src/app/patient-education/patient-education.html::icon-button::button edit (click)=openEditResource(r)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/patient-education/patient-education.html::icon-button::button edit_note": {
+    "src/app/patient-education/patient-education.html::icon-button::button edit_note (click)=openProgressUpdate(p)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/patient-portal/my-billing/my-billing.component.html::icon-button::button close": {
+    "src/app/patient-portal/my-billing/my-billing.component.html::icon-button::button close (click)=closePayDialog()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
@@ -774,19 +1010,23 @@
       "count": 4,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/patients/coverage-tab/coverage-tab.component.html::icon-button::button delete": {
+    "src/app/patients/coverage-tab/coverage-tab.component.html::icon-button::button delete (click)=confirmDelete(i)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/patients/coverage-tab/coverage-tab.component.html::icon-button::button edit": {
+    "src/app/patients/coverage-tab/coverage-tab.component.html::icon-button::button edit (click)=openEdit(i)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/patients/medical-history-tab/medical-history-tab.component.html::icon-button::button edit": {
-      "count": 2,
+    "src/app/patients/medical-history-tab/medical-history-tab.component.html::icon-button::button edit (click)=openEditFamily(f)": {
+      "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/patients/medical-history-tab/medical-history-tab.component.html::icon-button::button notifications": {
+    "src/app/patients/medical-history-tab/medical-history-tab.component.html::icon-button::button edit (click)=openEditImmunization(im)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/patients/medical-history-tab/medical-history-tab.component.html::icon-button::button notifications (click)=markReminderSent(im)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
@@ -794,59 +1034,99 @@
       "count": 2,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/patients/patient-chart/patient-chart.component.html::icon-button::button block": {
+    "src/app/patients/patient-chart/patient-chart.component.html::icon-button::button block (click)=openDeactivateAllergy(a)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/patients/patient-chart/patient-chart.component.html::icon-button::button close": {
-      "count": 6,
-      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
-    },
-    "src/app/patients/patient-chart/patient-chart.component.html::icon-button::button delete": {
+    "src/app/patients/patient-chart/patient-chart.component.html::icon-button::button close (click)=closeAllergyModal()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/patients/patient-chart/patient-chart.component.html::icon-button::button edit": {
-      "count": 2,
+    "src/app/patients/patient-chart/patient-chart.component.html::icon-button::button close (click)=closeDeactivateAllergy()": {
+      "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/patients/patient-list.html::icon-button::a arrow_forward": {
+    "src/app/patients/patient-chart/patient-chart.component.html::icon-button::button close (click)=closeDeleteProblem()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/patients/patient-chart/patient-chart.component.html::icon-button::button close (click)=closeProblemModal()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/patients/patient-chart/patient-chart.component.html::icon-button::button close (click)=closeTimelineReason()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/patients/patient-chart/patient-chart.component.html::icon-button::button close (click)=closeUpdateModal()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/patients/patient-chart/patient-chart.component.html::icon-button::button delete (click)=openDeleteProblem(p)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/patients/patient-chart/patient-chart.component.html::icon-button::button edit (click)=openEditAllergy(a)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/patients/patient-chart/patient-chart.component.html::icon-button::button edit (click)=openEditProblem(p)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/patients/patient-list.html::icon-button::a arrow_forward [routerLink]=['/patients', patient.id]": {
       "count": 1,
       "why": "D173 class: icon-only link (routerLink/href) announced by its ligature text"
     },
-    "src/app/patients/patient-list.html::icon-button::button close": {
-      "count": 5,
-      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
-    },
-    "src/app/pharmacy/dispensing.html::icon-button::button cancel": {
+    "src/app/patients/patient-list.html::icon-button::button close (click)=onSearchChange('')": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/pharmacy/dispensing.html::icon-button::button chevron_left": {
+    "src/app/patients/patient-list.html::icon-button::button close (click)=removeFilter('bloodType')": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/pharmacy/dispensing.html::icon-button::button chevron_right": {
+    "src/app/patients/patient-list.html::icon-button::button close (click)=removeFilter('gender')": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/pharmacy/dispensing.html::icon-button::button close": {
+    "src/app/patients/patient-list.html::icon-button::button close (click)=removeFilter('hospital')": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/pharmacy/drug-interactions.html::icon-button::button refresh": {
+    "src/app/patients/patient-list.html::icon-button::button close (click)=removeFilter('status')": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/pharmacy/inventory-dashboard.html::icon-button::button chevron_left": {
+    "src/app/pharmacy/dispensing.html::icon-button::button cancel (click)=cancelDispense(d.id)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/pharmacy/inventory-dashboard.html::icon-button::button chevron_right": {
+    "src/app/pharmacy/dispensing.html::icon-button::button chevron_left (click)=prevPage()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/pharmacy/inventory-dashboard.html::icon-button::button close": {
+    "src/app/pharmacy/dispensing.html::icon-button::button chevron_right (click)=nextPage()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/pharmacy/dispensing.html::icon-button::button close (click)=closeForm()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/pharmacy/drug-interactions.html::icon-button::button refresh (click)=load()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/pharmacy/inventory-dashboard.html::icon-button::button chevron_left (click)=prevPage()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/pharmacy/inventory-dashboard.html::icon-button::button chevron_right (click)=nextPage()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/pharmacy/inventory-dashboard.html::icon-button::button close (click)=closeCreateModal()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
@@ -854,87 +1134,139 @@
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/pharmacy/medication-catalog.html::icon-button::button chevron_left": {
+    "src/app/pharmacy/medication-catalog.html::icon-button::button chevron_left (click)=prevPage()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/pharmacy/medication-catalog.html::icon-button::button chevron_right": {
+    "src/app/pharmacy/medication-catalog.html::icon-button::button chevron_right (click)=nextPage()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/pharmacy/medication-catalog.html::icon-button::button close": {
-      "count": 2,
-      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
-    },
-    "src/app/pharmacy/medication-catalog.html::icon-button::button delete": {
+    "src/app/pharmacy/medication-catalog.html::icon-button::button close (click)=cancelDelete()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/pharmacy/medication-catalog.html::icon-button::button edit": {
+    "src/app/pharmacy/medication-catalog.html::icon-button::button close (click)=closeModal()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/pharmacy/pharmacy-registry.html::icon-button::button chevron_left": {
+    "src/app/pharmacy/medication-catalog.html::icon-button::button delete (click)=confirmDelete(item)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/pharmacy/pharmacy-registry.html::icon-button::button chevron_right": {
+    "src/app/pharmacy/medication-catalog.html::icon-button::button edit (click)=openEdit(item)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/pharmacy/pharmacy-registry.html::icon-button::button close": {
-      "count": 2,
-      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
-    },
-    "src/app/pharmacy/pharmacy-registry.html::icon-button::button delete": {
+    "src/app/pharmacy/pharmacy-registry.html::icon-button::button chevron_left (click)=prevPage()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/pharmacy/pharmacy-registry.html::icon-button::button edit": {
+    "src/app/pharmacy/pharmacy-registry.html::icon-button::button chevron_right (click)=nextPage()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/platform/platform.html::icon-button::button check_circle": {
+    "src/app/pharmacy/pharmacy-registry.html::icon-button::button close (click)=cancelDelete()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/platform/platform.html::icon-button::button close": {
-      "count": 4,
-      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
-    },
-    "src/app/platform/platform.html::icon-button::button open_in_new": {
+    "src/app/pharmacy/pharmacy-registry.html::icon-button::button close (click)=closeModal()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/platform/platform.html::icon-button::button pause_circle": {
+    "src/app/pharmacy/pharmacy-registry.html::icon-button::button delete (click)=confirmDelete(p)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/platform/platform.html::icon-button::div icon": {
-      "count": 4,
-      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
-    },
-    "src/app/prescriptions/prescriptions.html::icon-button::button close": {
-      "count": 6,
-      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
-    },
-    "src/app/prescriptions/prescriptions.html::icon-button::button delete": {
+    "src/app/pharmacy/pharmacy-registry.html::icon-button::button edit (click)=openEdit(p)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/prescriptions/prescriptions.html::icon-button::button edit": {
+    "src/app/platform/platform.html::icon-button::button check_circle (click)=changeServiceStatus(svc, 'ACTIVE')": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/prescriptions/prescriptions.html::icon-button::button sms": {
+    "src/app/platform/platform.html::icon-button::button close (click)=closeCatalogDetail()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/prescriptions/prescriptions.html::icon-button::button visibility": {
+    "src/app/platform/platform.html::icon-button::button close (click)=closeRegisterDrawer()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/procedure-orders/procedure-orders.html::icon-button::button visibility": {
+    "src/app/platform/platform.html::icon-button::button close (click)=closeReleaseForm()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/platform/platform.html::icon-button::button close (click)=closeServiceDrawer()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/platform/platform.html::icon-button::button open_in_new (click)=openServiceDetail(svc)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/platform/platform.html::icon-button::button pause_circle (click)=changeServiceStatus(svc, 'INACTIVE')": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/platform/platform.html::icon-button::div icon (click)=closeCatalogDetail()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/platform/platform.html::icon-button::div icon (click)=closeRegisterDrawer()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/platform/platform.html::icon-button::div icon (click)=closeReleaseForm()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/platform/platform.html::icon-button::div icon (click)=closeServiceDrawer()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/prescriptions/prescriptions.html::icon-button::button close (click)=cancelDelete()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/prescriptions/prescriptions.html::icon-button::button close (click)=clearPatient()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/prescriptions/prescriptions.html::icon-button::button close (click)=closeDetail()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/prescriptions/prescriptions.html::icon-button::button close (click)=closeDispatchModal()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/prescriptions/prescriptions.html::icon-button::button close (click)=closeModal()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/prescriptions/prescriptions.html::icon-button::button close (click)=closeVerifyModal()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/prescriptions/prescriptions.html::icon-button::button delete (click)=confirmDelete(p)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/prescriptions/prescriptions.html::icon-button::button edit (click)=openEdit(p)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/prescriptions/prescriptions.html::icon-button::button sms (click)=openDispatchModal(p)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/prescriptions/prescriptions.html::icon-button::button visibility (click)=viewDetail(p)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/procedure-orders/procedure-orders.html::icon-button::button visibility (click)=openOrder(o)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
@@ -942,163 +1274,211 @@
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/profile/profile.html::icon-button::button delete": {
+    "src/app/profile/profile.html::icon-button::button delete (click)=removeRecoveryContact(rc)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/reception/insurance-issues-panel/insurance-issues-panel.component.html::icon-button::button person_search": {
+    "src/app/reception/insurance-issues-panel/insurance-issues-panel.component.html::icon-button::button person_search (click)=patientClicked.emit(issue.patientId)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/reception/payment-pending-panel/payment-pending-panel.component.html::icon-button::button close": {
+    "src/app/reception/payment-pending-panel/payment-pending-panel.component.html::icon-button::button close (click)=closePayDialog()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/reception/reception-cockpit/reception-cockpit.component.html::icon-button::button person_search": {
+    "src/app/reception/reception-cockpit/reception-cockpit.component.html::icon-button::button person_search (click)=openSnapshot(item.patientId)": {
       "count": 1,
       "why": "D988: queue icon buttons named \"person_search\""
     },
-    "src/app/reception/waitlist-panel/waitlist-panel.component.html::icon-button::div icon": {
+    "src/app/reception/waitlist-panel/waitlist-panel.component.html::icon-button::div icon (click)=showAddForm.set(false)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/reception/walkin-dialog/walkin-dialog.component.html::icon-button::button close": {
-      "count": 2,
+    "src/app/reception/walkin-dialog/walkin-dialog.component.html::icon-button::button close (click)=selectedPatient.set(null); patientQuery.set('')": {
+      "count": 1,
       "why": "D988: queue icon buttons named \"person_search\""
     },
-    "src/app/referrals/referrals.html::icon-button::button block": {
+    "src/app/reception/walkin-dialog/walkin-dialog.component.html::icon-button::button close (click)=selectedStaff.set(null); staffQuery.set('')": {
+      "count": 1,
+      "why": "D988: queue icon buttons named \"person_search\""
+    },
+    "src/app/referrals/referrals.html::icon-button::button block (click)=openReject(r)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/referrals/referrals.html::icon-button::button cancel": {
+    "src/app/referrals/referrals.html::icon-button::button cancel (click)=confirmCancel(r)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/referrals/referrals.html::icon-button::button check_circle": {
+    "src/app/referrals/referrals.html::icon-button::button check_circle (click)=openComplete(r)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/referrals/referrals.html::icon-button::button close": {
+    "src/app/referrals/referrals.html::icon-button::button close (click)=closeDetail()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/referrals/referrals.html::icon-button::button event": {
+    "src/app/referrals/referrals.html::icon-button::button event (click)=openSchedule(r)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/referrals/referrals.html::icon-button::button play_circle": {
+    "src/app/referrals/referrals.html::icon-button::button play_circle (click)=startReferral(r)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/referrals/referrals.html::icon-button::button send": {
+    "src/app/referrals/referrals.html::icon-button::button send (click)=submitReferral(r)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/referrals/referrals.html::icon-button::button task_alt": {
+    "src/app/referrals/referrals.html::icon-button::button task_alt (click)=openAcknowledge(r)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/referrals/referrals.html::icon-button::button visibility": {
+    "src/app/referrals/referrals.html::icon-button::button visibility (click)=viewDetail(r)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/registrations/registrations.html::icon-button::button delete_forever": {
+    "src/app/registrations/registrations.html::icon-button::button delete_forever (click)=confirmDelete(r)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/registrations/registrations.html::icon-button::button edit": {
+    "src/app/registrations/registrations.html::icon-button::button edit (click)=openEdit(r)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/registrations/registrations.html::icon-button::button person_off": {
+    "src/app/registrations/registrations.html::icon-button::button person_off (click)=deactivate(r)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/roles/role-list.html::icon-button::button close": {
-      "count": 3,
-      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
-    },
-    "src/app/roles/role-list.html::icon-button::button delete": {
+    "src/app/roles/role-list.html::icon-button::button close (click)=cancelDelete()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/roles/role-list.html::icon-button::button edit": {
+    "src/app/roles/role-list.html::icon-button::button close (click)=closeCreate()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/roles/role-list.html::icon-button::button settings": {
+    "src/app/roles/role-list.html::icon-button::button close (click)=closePermissions()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/shared/patient-picker/patient-picker.component.html::icon-button::button close": {
+    "src/app/roles/role-list.html::icon-button::button delete (click)=confirmDelete(role)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/staff/staff-list.html::icon-button::button close": {
-      "count": 6,
-      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
-    },
-    "src/app/staff/staff-list.html::icon-button::button edit": {
+    "src/app/roles/role-list.html::icon-button::button edit (click)=openEdit(role)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/staff/staff-list.html::icon-button::button person_off": {
+    "src/app/roles/role-list.html::icon-button::button settings (click)=openPermissions(role)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/transfusion/transfusion.html::icon-button::button cancel": {
+    "src/app/shared/patient-picker/patient-picker.component.html::icon-button::button close (click)=clear()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/transfusion/transfusion.html::icon-button::button close": {
+    "src/app/staff/staff-list.html::icon-button::button close (click)=cancelDelete()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/transfusion/transfusion.html::icon-button::button delete": {
+    "src/app/staff/staff-list.html::icon-button::button close (click)=closeModal()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/transfusion/transfusion.html::icon-button::button visibility": {
+    "src/app/staff/staff-list.html::icon-button::button close (click)=deptFilter = ''; applyFilter()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/treatment-plans/treatment-plans.html::icon-button::button close": {
-      "count": 2,
-      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
-    },
-    "src/app/treatment-plans/treatment-plans.html::icon-button::button edit": {
+    "src/app/staff/staff-list.html::icon-button::button close (click)=employmentTypeFilter = ''; applyFilter()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/treatment-plans/treatment-plans.html::icon-button::button visibility": {
+    "src/app/staff/staff-list.html::icon-button::button close (click)=jobTitleFilter = ''; applyFilter()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/users/user-list.html::icon-button::button chevron_left": {
+    "src/app/staff/staff-list.html::icon-button::button close (click)=searchTerm = ''; applyFilter()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/users/user-list.html::icon-button::button chevron_right": {
+    "src/app/staff/staff-list.html::icon-button::button edit (click)=openEdit(member)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/users/user-list.html::icon-button::button close": {
-      "count": 4,
-      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
-    },
-    "src/app/users/user-list.html::icon-button::button delete": {
+    "src/app/staff/staff-list.html::icon-button::button person_off (click)=confirmDelete(member)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/users/user-list.html::icon-button::button edit": {
+    "src/app/transfusion/transfusion.html::icon-button::button cancel (click)=cancelRequest(r)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/users/user-list.html::icon-button::button restore": {
+    "src/app/transfusion/transfusion.html::icon-button::button close (click)=closeRequest()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/users/user-list.html::icon-button::button switch_account": {
+    "src/app/transfusion/transfusion.html::icon-button::button delete (click)=discardUnit(u)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/transfusion/transfusion.html::icon-button::button visibility (click)=openRequest(r)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/treatment-plans/treatment-plans.html::icon-button::button close (click)=clearPatient()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/treatment-plans/treatment-plans.html::icon-button::button close (click)=closeDetail()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/treatment-plans/treatment-plans.html::icon-button::button edit (click)=openEdit(p)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/treatment-plans/treatment-plans.html::icon-button::button visibility (click)=viewDetail(p)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/users/user-list.html::icon-button::button chevron_left (click)=goToPage(currentPage() - 1)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/users/user-list.html::icon-button::button chevron_right (click)=goToPage(currentPage() + 1)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/users/user-list.html::icon-button::button close (click)=cancelDelete()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/users/user-list.html::icon-button::button close (click)=closeCreate()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/users/user-list.html::icon-button::button close (click)=closeImpersonate()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/users/user-list.html::icon-button::button close (click)=searchTerm = ''; onSearchChange()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/users/user-list.html::icon-button::button delete (click)=confirmDelete(user)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/users/user-list.html::icon-button::button edit (click)=openEdit(user)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/users/user-list.html::icon-button::button restore (click)=restoreUser(user)": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/users/user-list.html::icon-button::button switch_account (click)=openImpersonate(user)": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     }

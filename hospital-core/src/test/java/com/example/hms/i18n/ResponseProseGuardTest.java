@@ -12,9 +12,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.TreeMap;
-import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -30,15 +28,18 @@ import static org.assertj.core.api.Assertions.assertThat;
  * ratchet sees {@code throw new BusinessException("…")}; it cannot see a
  * sentence the controller writes straight into the body:
  * {@code new MessageResponse("Logged out successfully.")},
- * {@code ResponseEntity.badRequest().body("…")}, {@code Map.of("message", "…")}.
- * The global handler never touches those, so they are read in English by
- * every French and Spanish user.
+ * {@code ResponseEntity.badRequest().body("…")}, {@code Map.of("message", "…")}
+ * — as a literal, or through a {@code static final String} constant of the
+ * same file. The global handler never touches those, so they are read in
+ * English by every French and Spanish user.
  *
  * <p>Unlike the per-file count of the exception ratchet, this list is per
- * SITE: a file may not swap one English sentence for another. Each entry is
- * {@code file::literal}; a sentence not listed fails the build — resolve a
+ * SITE: each entry is {@code file::sentence} with the number of places the
+ * sentence is written, so a file may not swap one English sentence for
+ * another, nor add a second copy of an allowed one. A sentence not listed, or
+ * listed fewer times than it occurs, fails the build — resolve a
  * {@code messages*.properties} key with {@code MessageUtil} instead. When a
- * site is converted, delete its line.
+ * site is converted, lower its count (delete the line at zero).
  */
 @DisplayName("Client-facing response prose is keyed, not written in English")
 class ResponseProseGuardTest {
@@ -54,12 +55,7 @@ class ResponseProseGuardTest {
     static final Pattern MAP_MESSAGE = Pattern.compile(
         "Map\\.of\\((?:[^()]*?,\\s*)?\"(?:message|error|detail|reason)\"\\s*,\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
 
-    /**
-     * The same shapes built from a constant ({@code new MessageResponse(REFRESH_INVALID_MESSAGE)}),
-     * resolved against the {@code static final String} declared in the same file — the
-     * way {@link ExceptionProseRatchetTest} does, so hoisting a sentence into a constant
-     * is not a way around the guard.
-     */
+    /** The same shapes built from a constant declared in the file (see {@link ExceptionProseRatchetTest}). */
     static final Pattern MESSAGE_DTO_CONSTANT = Pattern.compile(
         "new\\s+(?:MessageResponse|EmailVerificationResponseDTO)\\s*\\(\\s*([A-Z][A-Z0-9_]*)\\s*[,)]");
     static final Pattern BODY_CONSTANT = Pattern.compile("\\.body\\(\\s*([A-Z][A-Z0-9_]*)\\s*\\)");
@@ -81,56 +77,66 @@ class ResponseProseGuardTest {
         return words >= 2;
     }
 
+    private record Allowance(int count, String reason) { }
+
     private static final String PRE_EXISTING = "pre-existing English response (class of QA D940/D977); key it with the next touch";
-    private static final String D921 = "QA D921 path: verifyEmail's success body";
+    private static final String D921 = "QA D921 path: verifyEmail's bodies";
 
-    /** Sites as they stand, with why each is tolerated. Shrink only. */
-    private static final Map<String, String> ALLOWED = new TreeMap<>(Map.ofEntries(
-        Map.entry("controller/AuthController.java::Public self-registration is no longer available.", PRE_EXISTING),
-        Map.entry("controller/AuthController.java::Email verified successfully.", D921),
-        Map.entry("controller/AuthController.java::Email verification failed.", D921 + " (EMAIL_VERIFICATION_FAILED constant)"),
-        Map.entry("controller/AuthController.java::Refresh token is invalid or has expired. Please log in again.",
-            PRE_EXISTING + " (REFRESH_INVALID_MESSAGE constant, 4 sites)"),
-        Map.entry("controller/AuthController.java::This session was just refreshed by another tab or request. Retry with the latest token.",
-            PRE_EXISTING + " (REFRESH_SUPERSEDED_MESSAGE constant)"),
-        Map.entry("controller/FileUploadController.java::User not found", PRE_EXISTING + " (USER_NOT_FOUND_MESSAGE constant, 5 sites)"),
-        Map.entry("controller/AuthController.java::If the email is registered, a new verification link has been sent.", PRE_EXISTING),
-        Map.entry("controller/AuthController.java::Account is already verified. You can log in.", PRE_EXISTING),
-        Map.entry("controller/AuthController.java::If the number is registered, a new activation code has been sent.", PRE_EXISTING),
-        Map.entry("controller/AuthController.java::Logged out successfully.", PRE_EXISTING),
-        Map.entry("controller/AuthController.java::Refresh token has already been used. Please log in again.", PRE_EXISTING),
-        Map.entry("controller/AuthController.java::Refresh token is required.", PRE_EXISTING),
-        Map.entry("controller/AuthController.java::User account not found or inactive.", PRE_EXISTING),
-        Map.entry("controller/AuthController.java::Active support-impersonation session — call /super-admin/impersonation/stop before refreshing.", PRE_EXISTING),
-        Map.entry("controller/AuthController.java::Session timed out due to inactivity. Please log in again.", PRE_EXISTING),
-        Map.entry("controller/AuthController.java::Cannot verify password for a different user.", PRE_EXISTING),
-        Map.entry("controller/AuthController.java::Password verified.", PRE_EXISTING),
-        Map.entry("controller/AuthController.java::Missing or invalid Authorization header", PRE_EXISTING),
-        Map.entry("controller/AuthController.java::Verification code sent", PRE_EXISTING),
-        Map.entry("controller/BillingInvoiceController.java::Mail service unavailable", PRE_EXISTING),
-        Map.entry("controller/FileUploadController.java::Failed to upload profile image", PRE_EXISTING),
-        Map.entry("controller/FileUploadController.java::Failed to delete profile image", PRE_EXISTING),
-        Map.entry("controller/FileUploadController.java::Failed to upload referral attachment", PRE_EXISTING),
-        Map.entry("controller/FileUploadController.java::Failed to upload chart attachment", PRE_EXISTING),
-        Map.entry("controller/FileUploadController.java::Voice memo duration must be between 1 and 90 seconds", PRE_EXISTING),
-        Map.entry("controller/FileUploadController.java::Photo attachments must not carry a duration", PRE_EXISTING),
-        Map.entry("controller/FileUploadController.java::Failed to upload chat attachment", PRE_EXISTING),
-        Map.entry("controller/InvoiceEmailController.java::Invalid email", PRE_EXISTING),
-        Map.entry("controller/OrganizationController.java::Default security policies applied successfully", PRE_EXISTING),
-        Map.entry("controller/OwnEmailChangeController.java::Not authenticated.", PRE_EXISTING),
-        Map.entry("controller/PatientController.java::Allergy entry deactivated.", PRE_EXISTING),
-        Map.entry("controller/PatientController.java::Diagnosis removed successfully.", PRE_EXISTING)));
+    private static Map<String, Allowance> allow(Object... siteCountReason) {
+        Map<String, Allowance> out = new TreeMap<>();
+        for (int i = 0; i < siteCountReason.length; i += 3) {
+            out.put((String) siteCountReason[i], new Allowance((Integer) siteCountReason[i + 1], (String) siteCountReason[i + 2]));
+        }
+        return out;
+    }
 
-    /** {@code file::literal} for every English response literal in the source (comments stripped). */
-    static Set<String> sites(String file, String rawSource) {
+    /** Sites as they stand: {@code file::sentence}, how many times it is written, why it is tolerated. Shrink only. */
+    private static final Map<String, Allowance> ALLOWED = allow(
+        "controller/AuthController.java::Public self-registration is no longer available.", 1, PRE_EXISTING,
+        "controller/AuthController.java::Email verified successfully.", 1, D921,
+        "controller/AuthController.java::Email verification failed.", 3, D921 + " (EMAIL_VERIFICATION_FAILED constant)",
+        "controller/AuthController.java::If the email is registered, a new verification link has been sent.", 2, PRE_EXISTING,
+        "controller/AuthController.java::Account is already verified. You can log in.", 1, PRE_EXISTING,
+        "controller/AuthController.java::If the number is registered, a new activation code has been sent.", 1, PRE_EXISTING,
+        "controller/AuthController.java::Logged out successfully.", 1, PRE_EXISTING,
+        "controller/AuthController.java::Refresh token has already been used. Please log in again.", 1, PRE_EXISTING,
+        "controller/AuthController.java::Refresh token is required.", 1, PRE_EXISTING,
+        "controller/AuthController.java::Refresh token is invalid or has expired. Please log in again.", 4,
+            PRE_EXISTING + " (REFRESH_INVALID_MESSAGE constant)",
+        "controller/AuthController.java::This session was just refreshed by another tab or request. Retry with the latest token.", 1,
+            PRE_EXISTING + " (REFRESH_SUPERSEDED_MESSAGE constant)",
+        "controller/AuthController.java::User account not found or inactive.", 1, PRE_EXISTING,
+        "controller/AuthController.java::Active support-impersonation session — call /super-admin/impersonation/stop before refreshing.", 1, PRE_EXISTING,
+        "controller/AuthController.java::Session timed out due to inactivity. Please log in again.", 1, PRE_EXISTING,
+        "controller/AuthController.java::Cannot verify password for a different user.", 1, PRE_EXISTING,
+        "controller/AuthController.java::Password verified.", 1, PRE_EXISTING,
+        "controller/AuthController.java::Missing or invalid Authorization header", 1, PRE_EXISTING,
+        "controller/AuthController.java::Verification code sent", 1, PRE_EXISTING,
+        "controller/BillingInvoiceController.java::Mail service unavailable", 1, PRE_EXISTING,
+        "controller/FileUploadController.java::User not found", 5, PRE_EXISTING + " (USER_NOT_FOUND_MESSAGE constant)",
+        "controller/FileUploadController.java::Failed to upload profile image", 1, PRE_EXISTING,
+        "controller/FileUploadController.java::Failed to delete profile image", 1, PRE_EXISTING,
+        "controller/FileUploadController.java::Failed to upload referral attachment", 1, PRE_EXISTING,
+        "controller/FileUploadController.java::Failed to upload chart attachment", 1, PRE_EXISTING,
+        "controller/FileUploadController.java::Voice memo duration must be between 1 and 90 seconds", 1, PRE_EXISTING,
+        "controller/FileUploadController.java::Photo attachments must not carry a duration", 1, PRE_EXISTING,
+        "controller/FileUploadController.java::Failed to upload chat attachment", 1, PRE_EXISTING,
+        "controller/InvoiceEmailController.java::Invalid email", 1, PRE_EXISTING,
+        "controller/OrganizationController.java::Default security policies applied successfully", 1, PRE_EXISTING,
+        "controller/OwnEmailChangeController.java::Not authenticated.", 1, PRE_EXISTING,
+        "controller/PatientController.java::Allergy entry deactivated.", 1, PRE_EXISTING,
+        "controller/PatientController.java::Diagnosis removed successfully.", 1, PRE_EXISTING);
+
+    /** {@code file::sentence} → how many places write it (comments stripped). */
+    static Map<String, Integer> sites(String file, String rawSource) {
         String source = SourceScan.stripComments(rawSource);
-        Set<String> out = new TreeSet<>();
+        Map<String, Integer> out = new TreeMap<>();
         for (Pattern pattern : List.of(MESSAGE_DTO, BODY_LITERAL, MAP_MESSAGE)) {
             Matcher m = pattern.matcher(source);
             while (m.find()) {
                 String literal = m.group(m.groupCount());
                 if (isProse(literal)) {
-                    out.add(file + "::" + literal);
+                    out.merge(file + "::" + literal, 1, Integer::sum);
                 }
             }
         }
@@ -144,7 +150,7 @@ class ResponseProseGuardTest {
             while (m.find()) {
                 String value = constants.get(m.group(1));
                 if (value != null && isProse(value)) {
-                    out.add(file + "::" + value);
+                    out.merge(file + "::" + value, 1, Integer::sum);
                 }
             }
         }
@@ -154,40 +160,43 @@ class ResponseProseGuardTest {
     @Test
     @DisplayName("no controller writes an English sentence into a response body beyond the listed sites")
     void responseBodiesAreKeyed() throws IOException {
-        Set<String> actual = new TreeSet<>();
+        Map<String, Integer> actual = new TreeMap<>();
         try (Stream<Path> files = Files.walk(MAIN)) {
             for (Path p : files.filter(f -> f.toString().endsWith(".java")).toList()) {
                 String rel = MAIN.relativize(p).toString().replace('\\', '/');
-                actual.addAll(sites(rel, Files.readString(p, StandardCharsets.UTF_8)));
+                actual.putAll(sites(rel, Files.readString(p, StandardCharsets.UTF_8)));
             }
         }
         List<String> fresh = new ArrayList<>();
-        for (String site : actual) {
-            if (!ALLOWED.containsKey(site)) {
-                fresh.add(site);
+        actual.forEach((site, n) -> {
+            int allowed = ALLOWED.containsKey(site) ? ALLOWED.get(site).count() : 0;
+            if (n > allowed) {
+                fresh.add(site + " ×" + n + " (allowed " + allowed + ")");
             }
-        }
+        });
         assertThat(fresh)
             .as("resolve a messages*.properties key (MessageUtil.resolve) instead of an English sentence in the body"
                 + SourceScan.MANDATE)
             .isEmpty();
 
         List<String> stale = new ArrayList<>();
-        for (String site : ALLOWED.keySet()) {
-            if (!actual.contains(site)) {
-                stale.add(site);
+        ALLOWED.forEach((site, allowance) -> {
+            int n = actual.getOrDefault(site, 0);
+            if (n < allowance.count()) {
+                stale.add(site + ": " + n + " left, " + allowance.count() + " allowed — lower it");
             }
-        }
+        });
         assertThat(stale)
-            .as("the site was keyed: delete its line so the gain cannot be spent again" + SourceScan.MANDATE)
+            .as("a site was keyed: lower its count so the gain cannot be spent again" + SourceScan.MANDATE)
             .isEmpty();
     }
 
     @Test
-    @DisplayName("the scan catches every body shape QA has reported, and not a key, a code or a comment")
+    @DisplayName("the scan catches every body shape QA has reported, per site, and not a key, a code or a comment")
     void theScanCatchesTheShapes() {
         String source = """
             // was: new MessageResponse("Signed out, see you soon.") — a comment is not a site
+            return ResponseEntity.ok(new MessageResponse("Logged out successfully."));
             return ResponseEntity.ok(new MessageResponse("Logged out successfully."));
             return ResponseEntity.badRequest().body("Pre-check-in is available 1–7 days before your appointment.");
             return ResponseEntity.status(503).body(Map.of("error", "Mail service unavailable"));
@@ -200,11 +209,11 @@ class ResponseProseGuardTest {
             return ResponseEntity.status(401).body(new MessageResponse(REFRESH_INVALID_MESSAGE));
             return ResponseEntity.status(401).body(new MessageResponse(KEY));
             """;
-        assertThat(sites("x", source)).containsExactly(
-            "x::Logged out successfully.",
-            "x::Mail service unavailable",
-            "x::Pre-check-in is available 1–7 days before your appointment.",
-            "x::Refresh token is invalid or has expired.",
-            "x::Verification code sent");
+        assertThat(sites("x", source)).containsOnly(
+            Map.entry("x::Logged out successfully.", 2),
+            Map.entry("x::Mail service unavailable", 1),
+            Map.entry("x::Pre-check-in is available 1–7 days before your appointment.", 1),
+            Map.entry("x::Refresh token is invalid or has expired.", 1),
+            Map.entry("x::Verification code sent", 1));
     }
 }

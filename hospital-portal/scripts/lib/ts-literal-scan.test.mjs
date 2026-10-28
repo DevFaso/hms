@@ -16,22 +16,30 @@ const anchors = (source) => tsLiteralFindings(source).map((f) => `${f.rule}:${f.
 test('an English sentence handed to a toast fails, in any quote style', () => {
   const source = `this.toast.error('Could not save the appointment');
     this.toastService.success("Appointment saved");
-    this.toast.warning(\`Slot \${slot} is taken\`);`;
+    this.toast.warning(\`Slot \${slot} is taken\`);
+    this.toast.push('error', 'Could not reach the server');`;
   assert.deepEqual(anchors(source), [
     'toast:Could not save the appointment',
     'toast:Appointment saved',
     'toast:Slot ${slot} is taken',
+    'toast:Could not reach the server',
   ]);
 });
 
-test('a status signal or field set to an English sentence fails', () => {
+test('a status signal or field set to an English sentence fails, however it is declared', () => {
   const source = `this.error.set('Something went wrong');
     this.errorMessage = 'Both fields are required.';
-    this.hint.set("Pick a date first");`;
+    this.hint.set("Pick a date first");
+    readonly notice = signal('Nothing selected yet');
+    message: string = 'Please wait a moment';
+    private banner = signal<string | null>('Service is down');`;
   assert.deepEqual(anchors(source), [
     'signal:error Something went wrong',
     'signal:errorMessage Both fields are required.',
     'signal:hint Pick a date first',
+    'signal:notice Nothing selected yet',
+    'signal:message Please wait a moment',
+    'signal:banner Service is down',
   ]);
 });
 

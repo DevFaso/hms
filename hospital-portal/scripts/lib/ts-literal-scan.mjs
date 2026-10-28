@@ -32,13 +32,22 @@ import { lineOf } from './html-tags.mjs';
 const PROSE_WORDS = /[A-Za-zÀ-ÿ]{2,}\s+[A-Za-zÀ-ÿ]{2,}/;
 const TRANSLATION_KEY = /^[A-Z0-9_]+(?:\.[A-Z0-9_]+)+$/;
 
-const TOAST_CALL =
-  /\btoast\w*\.(success|error|info|warning|push)\(\s*(?:'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|`(?:[^`\\]|\\.)*`)/g;
-const SIGNAL_SET =
-  /\b((?:error|message|notice|hint|banner|warning|statusMessage|info)\w*)(?:\.set\(|\s*=)\s*(?:'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|`(?:[^`\\]|\\.)*`)/g;
+const LITERAL = String.raw`(?:'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|` + '`(?:[^`\\\\]|\\\\.)*`' + ')';
+// `toast.error('…')`, and `toast.push('error', '…')` whose message is the SECOND argument.
+const TOAST_CALL = new RegExp(
+  String.raw`\btoast\w*\.(?:(success|error|info|warning)\(\s*|(push)\(\s*['"]\w+['"]\s*,\s*)${LITERAL}`,
+  'g',
+);
+// `this.error.set('…')`, `this.error = '…'`, `error: string = '…'`, `readonly notice = signal('…')`.
+const SIGNAL_SET = new RegExp(
+  String.raw`\b((?:error|message|notice|hint|banner|warning|statusMessage|info)\w*)` +
+    String.raw`(?:\.set\(|\s*(?::\s*[\w<>|\[\]\s]+?)?\s*=\s*(?:signal(?:<[^>]*>)?\()?)\s*${LITERAL}`,
+  'g',
+);
 
+/** The TRAILING literal of the match: `push('error', 'Could not …')` yields the message, not the type. */
 function literalOf(call) {
-  const m = /(['"`])([\s\S]*)\1\s*$/.exec(call);
+  const m = /(['"`])((?:\\.|(?!\1)[^\\])*)\1\s*$/.exec(call);
   return m ? m[2] : '';
 }
 
@@ -63,7 +72,7 @@ export function tsLiteralFindings(source) {
       line: lineAt(source, m.index),
       rule: 'toast',
       anchor: literal.slice(0, 60),
-      message: `toast.${m[1]}('${literal.slice(0, 60)}'): English on screen in every language — translate.instant('KEY')`,
+      message: `toast.${m[1] ?? m[2]}('${literal.slice(0, 60)}'): English on screen in every language — translate.instant('KEY')`,
     });
   }
   for (const m of source.matchAll(SIGNAL_SET)) {

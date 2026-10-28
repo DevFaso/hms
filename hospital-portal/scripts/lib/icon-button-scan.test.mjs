@@ -17,7 +17,11 @@ test('D999: an icon-only <button> with no aria-label is announced by the ligatur
       <span class="material-symbols-outlined">edit</span>
     </button>
     <button (click)="remove(a)"><span class="material-symbols-outlined">delete</span></button>`;
-  assert.deepEqual(rules(html), ['icon-button:button edit', 'icon-button:button delete']);
+  // The anchor carries the action, so two "delete" buttons on one page are two sites.
+  assert.deepEqual(rules(html), [
+    'icon-button:button edit (click)=edit(a)',
+    'icon-button:button delete (click)=remove(a)',
+  ]);
 });
 
 test('aria-label, [attr.aria-label] or aria-labelledby names the button', () => {
@@ -44,11 +48,11 @@ test('an <a (click)>, <a routerLink>, <a href> or role="button" element is a con
     <a routerLink="/x" [attr.aria-label]="'X' | translate"><span class="material-symbols-outlined">x</span></a>
     <a class="plain">text link</a>`;
   assert.deepEqual(rules(html), [
-    'icon-button:a open_in_new',
-    'icon-button:div icon',
-    'icon-button:a payments',
-    'icon-button:a science',
-    'icon-button:a help',
+    'icon-button:a open_in_new (click)=open()',
+    'icon-button:div icon (click)=x()',
+    'icon-button:a payments routerLink=/billing',
+    "icon-button:a science [routerLink]=['/lab']",
+    'icon-button:a help href=/help',
   ]);
 });
 

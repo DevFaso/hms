@@ -70,9 +70,37 @@ function name(expr) {
   return expr.replace(/^[(\s]+/, '');
 }
 
-/** Template rules: `pipe` and `fixed`. */
+/**
+ * `{{ r.copayAmount }}` — an amount interpolated with no pipe at all prints
+ * "150000" (the D621 shape). The whole interpolation must be the one field (a
+ * `?? 0` fallback allowed). With no pipe to say "this is a number", only the
+ * unambiguous money words count: `stats().paid`, `p.medsDue`, `boardTotal()`
+ * and `daysUntilDue` are counts, so Due/Paid/Total/Net/Gross are left to the
+ * pipe and toFixed rules.
+ */
+const RAW_RE = new RegExp(
+  String.raw`\{\{\s*([\w$.?!()\[\]]*?\w*${MONEY_TAIL}\w*(?:\(\))?)\s*(?:\?\?\s*0\s*)?\}\}`,
+  'gi',
+);
+const RAW_MONEY_WORD =
+  /^(?:[a-z][A-Za-z0-9]*)?(?:Amount|Price|Balance|Copay|Copayment|Revenue|Subtotal|Fee|Fees|Cost|Charge|Charges|Payment|Discount|Refund|Tax|Vat)$|^(?:amount|price|balance|copay|copayment|revenue|subtotal|fee|fees|cost|charge|charges|payment|discount|refund|tax|vat)$/;
+
+/** Template rules: `pipe`, `fixed` and `raw`. */
 export function moneyTemplateFindings(html) {
   const out = [];
+  for (const m of html.matchAll(RAW_RE)) {
+    const last = name(m[1])
+      .split(/\?\.|!\.|\./)
+      .pop()
+      .replace(/[!?()[\]'"]/g, '');
+    if (!RAW_MONEY_WORD.test(last) || NOT_MONEY.test(last)) continue;
+    out.push({
+      line: lineAt(html, m.index),
+      rule: 'raw',
+      anchor: `${name(m[1])} raw`,
+      message: `{{ ${name(m[1])} }}: an amount with no format at all — use | cfa`,
+    });
+  }
   for (const m of html.matchAll(PIPE_RE)) {
     if (!isMoney(m[1])) continue;
     out.push({

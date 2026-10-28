@@ -67,10 +67,10 @@ class SaveThenRefreshGuardTest {
             if (semicolon < 0) {
                 continue;
             }
-            // The rest of the enclosing block: a log line or a mapper call between the
-            // save and the refresh changes nothing about what the refresh discards.
-            int blockEnd = SourceScan.indexOfOutsideLiterals(source, '}', semicolon);
-            String rest = source.substring(semicolon + 1, blockEnd < 0 ? source.length() : blockEnd);
+            // The rest of the ENCLOSING block — an if/try/lambda between the save and
+            // the refresh is stepped over: a log line or a mapper call between the two
+            // changes nothing about what the refresh discards.
+            String rest = source.substring(semicolon + 1, endOfEnclosingBlock(source, semicolon + 1));
             Matcher refresh = REFRESH.matcher(rest);
             if (!refresh.find() || FLUSH.matcher(rest.substring(0, refresh.start())).find()) {
                 continue;
@@ -83,6 +83,25 @@ class SaveThenRefreshGuardTest {
             }
         }
         return out;
+    }
+
+    /** The index of the `}` that closes the block containing {@code from}; nested blocks are stepped over. */
+    static int endOfEnclosingBlock(String source, int from) {
+        int depth = 0;
+        for (int i = from; i < source.length(); i++) {
+            int skipped = SourceScan.endOfLiteralOrComment(source, i);
+            if (skipped >= 0) {
+                i = skipped;
+                continue;
+            }
+            char ch = source.charAt(i);
+            if (ch == '{') {
+                depth++;
+            } else if (ch == '}' && depth-- == 0) {
+                return i;
+            }
+        }
+        return source.length();
     }
 
     @Test
@@ -167,10 +186,17 @@ class SaveThenRefreshGuardTest {
             void a() { Appointment saved = appointmentRepository.save(existing); }
             void b(Appointment saved) { entityManager.refresh(saved); }
             """;
+        String nestedBlockBetween = """
+            Appointment saved = appointmentRepository.save(existing);
+            if (notify) { mailer.send(saved.getId()); }
+            try { webhooks.publish(saved); } catch (RuntimeException ex) { log.warn("{}", ex.getMessage()); }
+            entityManager.refresh(saved);
+            """;
         assertThat(offenders("x", old)).hasSize(1);
         assertThat(offenders("x", plain)).hasSize(1);
         assertThat(offenders("x", expression)).hasSize(1);
         assertThat(offenders("x", statementBetween)).hasSize(1);
+        assertThat(offenders("x", nestedBlockBetween)).hasSize(1);
         assertThat(offenders("x", flushed)).isEmpty();
         assertThat(offenders("x", unrelated)).isEmpty();
         assertThat(offenders("x", commented)).isEmpty();

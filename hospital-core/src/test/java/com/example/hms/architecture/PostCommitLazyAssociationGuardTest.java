@@ -64,6 +64,16 @@ class PostCommitLazyAssociationGuardTest {
             + "|getCreatedBy|getProvider|getOrganization|getParent|getPrimaryHospital|getRequestedBy"
             + "|getPhysician|getNurse|getDoctor|getAuthor)\\(\\)\\s*\\.\\s*get\\w+\\(");
 
+    /**
+     * In post-commit code ANY two-step getter chain is suspect, not only the
+     * {@link #CHAIN} list the controllers are measured against: the entity model
+     * declares some two hundred associations and the lambda must stay at zero
+     * whatever their names. {@code getClass().getSimpleName()} and friends are the
+     * one chain that reads no row.
+     */
+    static final Pattern ANY_CHAIN = Pattern.compile(
+        "\\.(?!getClass\\(\\))get[A-Z]\\w*\\(\\)\\s*\\.\\s*get\\w+\\(");
+
     /** A post-commit callback handed to any wrapper: the `(` of the call. */
     private static final Pattern POST_COMMIT_CALL = Pattern.compile("\\b(?:afterCommit|registerSynchronization)\\(");
 
@@ -152,7 +162,7 @@ class PostCommitLazyAssociationGuardTest {
     }
 
     private static void report(String file, String source, int open, int close, List<String> out) {
-        Matcher c = CHAIN.matcher(source.substring(open, close));
+        Matcher c = ANY_CHAIN.matcher(source.substring(open, close));
         while (c.find()) {
             out.add(file + ":" + SourceScan.lineOf(source, open + c.start()) + ": " + normalise(c.group())
                 + " in post-commit code (no session: pass ids)");
@@ -262,7 +272,11 @@ class PostCommitLazyAssociationGuardTest {
                     }
                 });
             }
+            private void unlistedAssociation(Referral referral) {
+                TransactionCallbacks.afterCommit(() -> sms.send(referral.getReferringProvider().getPhone()));
+                TransactionCallbacks.afterCommit(() -> log.info(referral.getClass().getSimpleName()));
+            }
             """;
-        assertThat(postCommitChains("x", pr564)).hasSize(8);
+        assertThat(postCommitChains("x", pr564)).hasSize(9);
     }
 }

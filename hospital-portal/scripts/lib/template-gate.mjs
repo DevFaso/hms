@@ -43,7 +43,7 @@ export function componentSourceFor(file, text, sources = new Map()) {
  */
 export function loadTemplates(components = []) {
   const sources = new Map(components.map((c) => [resolve(PORTAL_DIR, c.file), c.text]));
-  return templatesIn(SRC_DIR).map(({ file, text, lineOffset }) => ({
+  return templatesIn(SRC_DIR, sources).map(({ file, text, lineOffset }) => ({
     file,
     rel: relative(PORTAL_DIR, file).replaceAll('\\', '/'),
     text,

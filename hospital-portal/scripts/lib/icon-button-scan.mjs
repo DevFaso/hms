@@ -113,10 +113,18 @@ export function nameFindings(html) {
       const inner = innerHtml(html, tokens, index);
       if (inner != null && visibleText(inner) === '') {
         const icon = iconSummary(inner);
+        // The anchor names WHAT the control does, so a fixed "delete" button
+        // cannot lend its pin to a new unnamed "delete" button on the same page.
+        const action = [...tag.attrs.entries()].find(([k]) =>
+          /^\((?:click|keydown\S*)\)$|routerLink|^\[?href\]?$/.test(k),
+        );
+        const does = action
+          ? `${action[0]}=${(action[1] ?? '').replace(/\s+/g, ' ').slice(0, 60)}`
+          : '';
         out.push({
           line: tag.line,
           rule: 'icon-button',
-          anchor: `${tag.name} ${icon}`,
+          anchor: `${tag.name} ${icon} ${does}`.trim(),
           message: `icon-only <${tag.name}> (${icon}) with no aria-label: announced by the icon's ligature text`,
         });
       }

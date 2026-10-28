@@ -52,8 +52,11 @@ class UpdateHandlerServiceTestCoverageTest {
     /** A PUT or PATCH mapping annotation, imported or fully qualified. Comments are stripped first. */
     static final Pattern MAPPING = Pattern.compile("@(?:[\\w.]+\\.)?(?:PutMapping|PatchMapping)\\b");
 
-    /** The handler signature once the annotations after the mapping are skipped: {@code public <type> name(}. */
-    static final Pattern SIGNATURE = Pattern.compile("public\\s+[^;{()]*?\\s+(\\w+)\\s*\\(");
+    /**
+     * The handler signature once the annotations after the mapping are skipped:
+     * {@code [public|protected] <type> name(} — a package-private handler is a handler too.
+     */
+    static final Pattern SIGNATURE = Pattern.compile("(?:(?:public|protected)\\s+)?[^;{()]*?\\s+(\\w+)\\s*\\(");
 
     /** {@code something[sS]ervice.method(} inside the handler body. */
     static final Pattern SERVICE_CALL = Pattern.compile("\\b(\\w*[sS]ervice\\w*)\\s*\\.\\s*(\\w+)\\s*\\(");
@@ -93,12 +96,13 @@ class UpdateHandlerServiceTestCoverageTest {
         while (mapping.find()) {
             int at = skipAnnotations(source, mapping.end());
             Matcher signature = SIGNATURE.matcher(source).region(at, source.length());
-            if (!signature.lookingAt()) {
-                continue;
-            }
-            int params = signature.end() - 1;
-            int open = source.indexOf('{', SourceScan.closingParen(source, params));
+            int params = signature.lookingAt() ? signature.end() - 1 : -1;
+            int open = params < 0 ? -1 : source.indexOf('{', SourceScan.closingParen(source, params));
             if (open < 0) {
+                // Reported, not skipped: the assertion names the controller and line
+                // instead of two integers that disagree.
+                String where = controller + ":" + SourceScan.lineOf(source, mapping.start());
+                out.add(new Delegation(mapping.start(), where, "<unparsed>", "<unparsed>"));
                 continue;
             }
             String handler = controller + "#" + signature.group(1);
@@ -185,6 +189,7 @@ class UpdateHandlerServiceTestCoverageTest {
     void updateHandlersAreExercised() throws IOException {
         Set<String> called = namesCalledByTests();
         Set<String> dark = new TreeSet<>();
+        List<String> unparsed = new ArrayList<>();
         int mappings = 0;
         Set<String> handled = new TreeSet<>();
         try (Stream<Path> files = Files.walk(MAIN)) {
@@ -194,13 +199,16 @@ class UpdateHandlerServiceTestCoverageTest {
                 mappings += countMappings(source);
                 for (Delegation d : delegations(controller, source)) {
                     handled.add(controller + "@" + d.mapping());
-                    if (d.method().equals("<none>") || !called.contains(d.method())) {
+                    if (d.method().equals("<unparsed>")) {
+                        unparsed.add(d.handler());
+                    } else if (d.method().equals("<none>") || !called.contains(d.method())) {
                         dark.add(d.key());
                     }
                 }
             }
         }
         // Every mapping annotation found its handler: the signature scan skipped none.
+        assertThat(unparsed).as("PUT/PATCH mappings whose handler signature the scan could not read").isEmpty();
         assertThat(handled).as("one handler per PUT/PATCH mapping").hasSize(mappings);
 
         List<String> fresh = new ArrayList<>();
@@ -258,6 +266,12 @@ class UpdateHandlerServiceTestCoverageTest {
                 probeOwnerService.reassignProbe(id, sub);
             }
 
+            @PatchMapping("/{id}/close")
+            ResponseEntity<Void> closeProbe(@PathVariable UUID id) {
+                probeCloseService.closeProbe(id);
+                return ResponseEntity.noContent().build();
+            }
+
             @GetMapping("/{id}")
             public ResponseEntity<AppointmentResponseDTO> get(@PathVariable UUID id) {
                 return ResponseEntity.ok(probeVisitService.getProbeVisit(id));
@@ -269,10 +283,13 @@ class UpdateHandlerServiceTestCoverageTest {
             "ProbeController#patchProbeStatus -> probeAuditService.recordProbe",
             "ProbeController#patchProbeStatus -> probeWorkflowService.transitionProbe",
             "ProbeController#reassignProbe -> <none>.<none>",
-            "ProbeController#reassignProbe -> probeOwnerService.reassignProbe");
+            "ProbeController#reassignProbe -> probeOwnerService.reassignProbe",
+            "ProbeController#closeProbe -> probeCloseService.closeProbe");
         assertThat(found.stream().map(Delegation::mapping).distinct().count())
-            .as("four mappings, the Javadoc mention not among them")
-            .isEqualTo(4);
-        assertThat(countMappings(source)).isEqualTo(4);
+            .as("five mappings, the Javadoc mention not among them, the package-private handler among them")
+            .isEqualTo(5);
+        assertThat(countMappings(source)).isEqualTo(5);
+        assertThat(delegations("X", "@PutMapping(\"/x\")\n    private final Foo foo;\n"))
+            .extracting(Delegation::method).containsExactly("<unparsed>");
     }
 }

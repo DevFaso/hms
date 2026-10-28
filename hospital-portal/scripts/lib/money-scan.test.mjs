@@ -28,6 +28,15 @@ test('| cfa passes, and a rate, a count or a page total is not money', () => {
   assert.deepEqual(moneyTemplateFindings(html), []);
 });
 
+test('D621: an amount interpolated with no pipe at all is unformatted money', () => {
+  const html = `<dd>{{ r.copayAmount }} {{ r.copayCurrency }}</dd> <td>{{ invoice.totalAmount ?? 0 }}</td>
+    <span>{{ stats().total }}</span> <span>{{ line.net }}</span> <span>{{ x.amount | cfa }}</span>`;
+  assert.deepEqual(anchors(moneyTemplateFindings(html)), [
+    'raw:r.copayAmount raw',
+    'raw:invoice.totalAmount raw',
+  ]);
+});
+
 test('a word that merely contains a money word is not money', () => {
   const html = `{{ feedbackScore | number: '1.1-1' }} {{ overdueInvoices | number }}
     {{ unpaidVisits | number }} {{ costCenterCode | number }} {{ row.paidAt | number }}`;
