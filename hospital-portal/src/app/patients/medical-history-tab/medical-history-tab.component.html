@@ -301,6 +301,11 @@
                       ? (im.administrationDate | serverTime | date: 'mediumDate')
                       : '—'
                   }}
+                  @if (im.sourceOfRecord && im.sourceOfRecord !== 'GIVEN_HERE') {
+                    <span class="flag-badge" data-testid="immunization-source">{{
+                      'MED_HISTORY.SOURCE.' + im.sourceOfRecord | translate
+                    }}</span>
+                  }
                 </td>
                 <td>{{ doseLabel(im) }}</td>
                 <td>{{ (im.status | enumLabel: 'immunizationStatus') || '—' }}</td>
@@ -699,18 +704,45 @@
       <div class="modal-body">
         <div class="form-row">
           <div class="field">
-            <label for="im-code">{{ 'MED_HISTORY.VACCINE_CODE' | translate }} *</label>
-            <input id="im-code" type="text" [(ngModel)]="immunizationForm.vaccineCode" />
+            <label for="im-display">{{ 'MED_HISTORY.VACCINE' | translate }} *</label>
+            <input
+              id="im-display"
+              type="text"
+              list="im-pev-vaccines"
+              [(ngModel)]="immunizationForm.vaccineDisplay"
+            />
+            <datalist id="im-pev-vaccines">
+              @for (v of pevVaccines; track v) {
+                <option [value]="'MED_HISTORY.PEV.' + v | translate"></option>
+              }
+            </datalist>
           </div>
           <div class="field">
-            <label for="im-display">{{ 'MED_HISTORY.VACCINE' | translate }} *</label>
-            <input id="im-display" type="text" [(ngModel)]="immunizationForm.vaccineDisplay" />
+            <label for="im-code">{{ 'MED_HISTORY.VACCINE_CODE_OPTIONAL' | translate }}</label>
+            <input id="im-code" type="text" [(ngModel)]="immunizationForm.vaccineCode" />
           </div>
         </div>
         <div class="form-row">
           <div class="field">
             <label for="im-date">{{ 'MED_HISTORY.ADMINISTERED' | translate }} *</label>
-            <input id="im-date" type="date" [(ngModel)]="immunizationForm.administrationDate" />
+            <input
+              id="im-date"
+              type="date"
+              [ngModel]="immunizationForm.administrationDate"
+              (ngModelChange)="onImmunizationDateChange($event)"
+            />
+          </div>
+          <div class="field">
+            <label for="im-source">{{ 'MED_HISTORY.SOURCE_OF_RECORD' | translate }} *</label>
+            <select
+              id="im-source"
+              [ngModel]="immunizationForm.sourceOfRecord"
+              (ngModelChange)="onImmunizationSourceChange($event)"
+            >
+              @for (src of immunizationSources; track src) {
+                <option [value]="src">{{ 'MED_HISTORY.SOURCE.' + src | translate }}</option>
+              }
+            </select>
           </div>
           <div class="field">
             <label for="im-status">{{ 'COMMON.STATUS' | translate }} *</label>

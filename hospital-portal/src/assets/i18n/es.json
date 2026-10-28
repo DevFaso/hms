@@ -9649,6 +9649,7 @@
     "PAGE_OF": "Página {{page}} de {{total}}"
   },
   "MED_HISTORY": {
+    "SOURCE_OF_RECORD": "Fuente",
     "TAB": "Historial",
     "TAB_TITLE": "Historial médico estructurado",
     "SOCIAL_TAB": "Social",
@@ -9689,6 +9690,7 @@
     "ABUSE_HISTORY": "Antecedentes de abuso",
     "MENTAL_HEALTH_SUPPORT": "Apoyo de salud mental",
     "STRESS": "Nivel de estrés",
+    "VACCINE_CODE_OPTIONAL": "Código CVX (si se conoce)",
     "VERSIONS": "versiones",
     "NOTES": "Notas",
     "FAMILY_LOAD_ERROR": "Error al cargar el historial familiar",
@@ -9716,7 +9718,7 @@
     "ADD_IMMUNIZATION": "Agregar vacuna",
     "EDIT_IMMUNIZATION": "Editar vacuna",
     "NO_IMMUNIZATIONS": "Sin vacunas registradas.",
-    "IMMUNIZATION_REQUIRED_FIELDS": "El código, el nombre de la vacuna y la fecha de administración son obligatorios",
+    "IMMUNIZATION_REQUIRED_FIELDS": "La vacuna y la fecha de administración son obligatorias",
     "IMMUNIZATION_CREATED": "Vacuna registrada",
     "IMMUNIZATION_UPDATED": "Vacuna actualizada",
     "IMMUNIZATION_SAVE_ERROR": "Error al guardar la vacuna",
@@ -9749,6 +9751,26 @@
       "bm": "Bambara",
       "dyu": "Dioula",
       "mos": "Mooré"
+    },
+    "SOURCE": {
+      "EXTERNAL_RECORD": "Registro de otro establecimiento",
+      "GIVEN_HERE": "Administrada aquí",
+      "PATIENT_REPORT": "Declarada por el paciente o la familia",
+      "VACCINATION_CARD": "Cartilla de vacunación"
+    },
+    "PEV": {
+      "BCG": "BCG (tuberculosis)",
+      "HPV": "VPH (virus del papiloma humano)",
+      "MALARIA": "Vacuna contra la malaria",
+      "MENA": "Meningitis A (MenAfriVac)",
+      "PCV": "Neumococo conjugada (PCV)",
+      "PENTA": "Pentavalente (DTP-HepB-Hib)",
+      "ROTA": "Rotavirus",
+      "RR": "SR (sarampión-rubéola)",
+      "TD": "Td (tétanos-difteria)",
+      "VAA": "Fiebre amarilla",
+      "VPI": "VPI (polio inactivada)",
+      "VPO": "VPO (polio oral)"
     }
   },
   "MATERNITY": {

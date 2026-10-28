@@ -120,6 +120,41 @@ class ImmunizationServiceImplTest {
     }
 
     @Test
+    void qaD1003_aDoseFromTheVaccinationCardIsNotCreditedToTheRecordingClinician() {
+        ImmunizationRequestDTO dto = new ImmunizationRequestDTO();
+        dto.setPatientId(patientId);
+        dto.setHospitalId(hospitalId);
+        dto.setAdministrationDate(java.time.LocalDate.of(2021, 3, 10));
+        dto.setSourceOfRecord("VACCINATION_CARD");
+        dto.setAdministeredByStaffId(staffId); // the portal used to send the caller's own id
+        PatientImmunization entity = new PatientImmunization();
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(immunizationMapper.toEntity(any(), eq(patient), eq(hospital), isNull(), isNull())).thenReturn(entity);
+        when(immunizationRepository.save(entity)).thenReturn(entity);
+        when(immunizationMapper.toResponseDTO(entity)).thenReturn(new ImmunizationResponseDTO());
+
+        service.createImmunization(dto);
+
+        verify(immunizationMapper).toEntity(any(), eq(patient), eq(hospital), isNull(), isNull());
+        verify(staffRepository, org.mockito.Mockito.never()).findById(any());
+    }
+
+    @Test
+    void qaD1003_aPastDoseWithNoStatedSourceIsRecordedAsATranscription() {
+        ImmunizationRequestDTO dto = new ImmunizationRequestDTO();
+        dto.setAdministrationDate(java.time.LocalDate.now().minusYears(3));
+        ImmunizationServiceImpl.normalizeSource(dto);
+        assertThat(dto.getSourceOfRecord()).isEqualTo("EXTERNAL_RECORD");
+        assertThat(ImmunizationServiceImpl.isGivenHere(dto)).isFalse();
+
+        ImmunizationRequestDTO today = new ImmunizationRequestDTO();
+        today.setAdministrationDate(java.time.LocalDate.now());
+        ImmunizationServiceImpl.normalizeSource(today);
+        assertThat(ImmunizationServiceImpl.isGivenHere(today)).isTrue();
+    }
+
+    @Test
     void createImmunization_patientNotFound() {
         ImmunizationRequestDTO dto = new ImmunizationRequestDTO();
         dto.setPatientId(patientId);

@@ -9649,6 +9649,7 @@
     "PAGE_OF": "Page {{page}} sur {{total}}"
   },
   "MED_HISTORY": {
+    "SOURCE_OF_RECORD": "Source",
     "TAB": "Historique",
     "TAB_TITLE": "Historique médical structuré",
     "SOCIAL_TAB": "Social",
@@ -9689,6 +9690,7 @@
     "ABUSE_HISTORY": "Antécédents d'abus",
     "MENTAL_HEALTH_SUPPORT": "Soutien en santé mentale",
     "STRESS": "Niveau de stress",
+    "VACCINE_CODE_OPTIONAL": "Code CVX (si connu)",
     "VERSIONS": "versions",
     "NOTES": "Notes",
     "FAMILY_LOAD_ERROR": "Échec du chargement de l'historique familial",
@@ -9716,7 +9718,7 @@
     "ADD_IMMUNIZATION": "Ajouter une vaccination",
     "EDIT_IMMUNIZATION": "Modifier la vaccination",
     "NO_IMMUNIZATIONS": "Aucune vaccination enregistrée.",
-    "IMMUNIZATION_REQUIRED_FIELDS": "Le code, le nom du vaccin et la date d'administration sont requis",
+    "IMMUNIZATION_REQUIRED_FIELDS": "Le vaccin et la date d'administration sont requis",
     "IMMUNIZATION_CREATED": "Vaccination enregistrée",
     "IMMUNIZATION_UPDATED": "Vaccination mise à jour",
     "IMMUNIZATION_SAVE_ERROR": "Échec de l'enregistrement de la vaccination",
@@ -9749,6 +9751,26 @@
       "bm": "Bambara",
       "dyu": "Dioula",
       "mos": "Mooré"
+    },
+    "SOURCE": {
+      "EXTERNAL_RECORD": "Dossier d'un autre établissement",
+      "GIVEN_HERE": "Administré ici",
+      "PATIENT_REPORT": "Déclaré par le patient ou la famille",
+      "VACCINATION_CARD": "Carnet de vaccination"
+    },
+    "PEV": {
+      "BCG": "BCG (tuberculose)",
+      "HPV": "HPV (papillomavirus)",
+      "MALARIA": "Vaccin antipaludique",
+      "MENA": "Méningite A (MenAfriVac)",
+      "PCV": "Pneumocoque conjugué (PCV)",
+      "PENTA": "Pentavalent (DTC-HepB-Hib)",
+      "ROTA": "Rotavirus",
+      "RR": "RR (rougeole-rubéole)",
+      "TD": "Td (tétanos-diphtérie)",
+      "VAA": "VAA (fièvre jaune)",
+      "VPI": "VPI (polio injectable)",
+      "VPO": "VPO (polio oral)"
     }
   },
   "MATERNITY": {

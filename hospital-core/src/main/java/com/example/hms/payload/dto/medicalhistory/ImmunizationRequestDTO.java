@@ -35,9 +35,10 @@ public class ImmunizationRequestDTO {
     private UUID encounterId;
 
     // Vaccine Information
-    @NotBlank(message = "{immunization.vaccineCode.required}")
+    // QA D1003: optional. A PEV vaccine is chosen by name; the CVX code is
+    // added when known (the FHIR mapper falls back to the name without one).
     @Size(max = 50)
-    @Schema(description = "Vaccine CVX code", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(description = "Vaccine CVX code, when known")
     private String vaccineCode;
 
     @NotBlank(message = "{immunization.vaccineDisplay.required}")

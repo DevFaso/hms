@@ -64,7 +64,13 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
 
         // QA D503 class: the vaccinator is the caller, not a colleague named in the body.
-        Staff administeredBy = com.example.hms.security.CallerIdentity.resolveActor(staffRepository, requestDTO.getAdministeredByStaffId(), hospital.getId());
+        // QA D1003: a dose transcribed from a vaccination card or another
+        // facility's record was not given by the clinician who records it;
+        // it has no vaccinator here rather than a false one.
+        normalizeSource(requestDTO);
+        Staff administeredBy = isGivenHere(requestDTO)
+                ? com.example.hms.security.CallerIdentity.resolveActor(staffRepository, requestDTO.getAdministeredByStaffId(), hospital.getId())
+                : null;
 
         Encounter encounter = null;
         if (requestDTO.getEncounterId() != null) {
@@ -227,6 +233,12 @@ public class ImmunizationServiceImpl implements ImmunizationService {
                 .orElseThrow(() -> new ResourceNotFoundException(IMMUNIZATION_NOT_FOUND_KEY, id));
         com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(existingImmunization.getHospital(), IMMUNIZATION_NOT_FOUND_KEY, id);
 
+        normalizeSource(requestDTO);
+        if (!isGivenHere(requestDTO)) {
+            // QA D1003: corrected to a historical dose, it keeps no vaccinator here.
+            existingImmunization.setAdministeredBy(null);
+            requestDTO.setAdministeredByStaffId(null);
+        }
         // Update staff if changed
         if (requestDTO.getAdministeredByStaffId() != null && 
             (existingImmunization.getAdministeredBy() == null || 
@@ -252,6 +264,26 @@ public class ImmunizationServiceImpl implements ImmunizationService {
 
         log.info("Immunization updated successfully: {}", id);
         return immunizationMapper.toResponseDTO(updatedImmunization);
+    }
+
+    /** Source codes the portal sends; anything else is kept as free text. */
+    public static final String SOURCE_GIVEN_HERE = "GIVEN_HERE";
+
+    /**
+     * QA D1003: a record with no stated source is "given here" only when it is
+     * dated today; an earlier dose with no source is a transcription and is
+     * recorded as such rather than credited to the clinician entering it.
+     */
+    static void normalizeSource(ImmunizationRequestDTO dto) {
+        if (dto.getSourceOfRecord() == null || dto.getSourceOfRecord().isBlank()) {
+            boolean today = dto.getAdministrationDate() == null
+                || !dto.getAdministrationDate().isBefore(java.time.LocalDate.now());
+            dto.setSourceOfRecord(today ? SOURCE_GIVEN_HERE : "EXTERNAL_RECORD");
+        }
+    }
+
+    static boolean isGivenHere(ImmunizationRequestDTO dto) {
+        return SOURCE_GIVEN_HERE.equalsIgnoreCase(dto.getSourceOfRecord());
     }
 
     @Override

@@ -332,6 +332,48 @@ export class MedicalHistoryTabComponent implements OnInit {
     return immunization.nextDoseDueDate < this.todayIso();
   }
 
+  /**
+   * QA D1003: the Burkina Faso EPI (PEV) vaccines, offered by name so the
+   * vaccine is chosen rather than typed. Labels only: the CVX code stays an
+   * optional field, filled when known.
+   */
+  readonly pevVaccines = [
+    'BCG',
+    'VPO',
+    'VPI',
+    'PENTA',
+    'PCV',
+    'ROTA',
+    'RR',
+    'VAA',
+    'MENA',
+    'TD',
+    'HPV',
+    'MALARIA',
+  ];
+  readonly immunizationSources = [
+    'GIVEN_HERE',
+    'VACCINATION_CARD',
+    'EXTERNAL_RECORD',
+    'PATIENT_REPORT',
+  ];
+
+  /** A dose dated before today is a transcription unless the clinician says otherwise. */
+  onImmunizationDateChange(date: string): void {
+    this.immunizationForm.administrationDate = date;
+    if (!this.immunizationSourceTouched) {
+      this.immunizationForm.sourceOfRecord =
+        date && date < this.todayIso() ? 'VACCINATION_CARD' : 'GIVEN_HERE';
+    }
+  }
+
+  onImmunizationSourceChange(source: string): void {
+    this.immunizationSourceTouched = true;
+    this.immunizationForm.sourceOfRecord = source;
+  }
+
+  private immunizationSourceTouched = false;
+
   emptyImmunizationForm(): ImmunizationRequest {
     return {
       patientId: '',
@@ -341,6 +383,7 @@ export class MedicalHistoryTabComponent implements OnInit {
       administrationDate: this.todayIso(),
       // Uppercase COMPLETED is load-bearing for backend reminders/exports.
       status: 'COMPLETED',
+      sourceOfRecord: 'GIVEN_HERE',
     };
   }
 
@@ -350,6 +393,7 @@ export class MedicalHistoryTabComponent implements OnInit {
       patientId: this.patientId,
       hospitalId: this.hospitalId(),
     };
+    this.immunizationSourceTouched = false;
     this.editingImmunizationId.set(null);
     this.showImmunizationModal.set(true);
   }
@@ -364,7 +408,9 @@ export class MedicalHistoryTabComponent implements OnInit {
       vaccineDisplay: immunization.vaccineDisplay ?? '',
       administrationDate: immunization.administrationDate ?? this.todayIso(),
       status: immunization.status ?? 'COMPLETED',
+      sourceOfRecord: immunization.sourceOfRecord ?? 'GIVEN_HERE',
     };
+    this.immunizationSourceTouched = true;
     this.editingImmunizationId.set(immunization.id);
     this.showImmunizationModal.set(true);
   }
@@ -375,11 +421,15 @@ export class MedicalHistoryTabComponent implements OnInit {
 
   submitImmunization(): void {
     const form = this.immunizationForm;
-    if (!form.vaccineCode.trim() || !form.vaccineDisplay.trim() || !form.administrationDate) {
+    if (!form.vaccineDisplay.trim() || !form.administrationDate) {
       this.toast.error(this.translate.instant('MED_HISTORY.IMMUNIZATION_REQUIRED_FIELDS'));
       return;
     }
-    form.administeredByStaffId = this.auth.getUserProfile()?.staffId ?? form.administeredByStaffId;
+    // QA D1003: only a dose given here is credited to the clinician recording it.
+    form.administeredByStaffId =
+      form.sourceOfRecord === 'GIVEN_HERE'
+        ? (this.auth.getUserProfile()?.staffId ?? form.administeredByStaffId)
+        : undefined;
     this.immunizationSaving.set(true);
     const editingId = this.editingImmunizationId();
     const op = editingId
