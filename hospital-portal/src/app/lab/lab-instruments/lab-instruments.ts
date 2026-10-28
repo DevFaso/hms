@@ -1,3 +1,4 @@
+import { CdkTrapFocus } from '@angular/cdk/a11y';
 import {
   Component,
   computed,
@@ -22,7 +23,7 @@ import { refusalReason } from '../../shared/refusal-reason';
 @Component({
   selector: 'app-lab-instruments',
   standalone: true,
-  imports: [RouterModule, FormsModule, TranslateModule],
+  imports: [CdkTrapFocus, RouterModule, FormsModule, TranslateModule],
   templateUrl: './lab-instruments.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lab-instruments.scss',

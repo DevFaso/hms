@@ -1,3 +1,4 @@
+import { CdkTrapFocus } from '@angular/cdk/a11y';
 import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -18,7 +19,7 @@ import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 @Component({
   selector: 'app-lab-test-config',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [CdkTrapFocus, CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './lab-test-config.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lab-test-config.scss',

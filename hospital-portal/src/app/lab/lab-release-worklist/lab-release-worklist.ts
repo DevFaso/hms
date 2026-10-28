@@ -1,3 +1,4 @@
+import { CdkTrapFocus } from '@angular/cdk/a11y';
 import {
   Component,
   OnInit,
@@ -46,7 +47,7 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 @Component({
   selector: 'app-lab-release-worklist',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, TranslateModule],
+  imports: [CdkTrapFocus, ServerTimePipe, CommonModule, TranslateModule],
   templateUrl: './lab-release-worklist.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrl: './lab-release-worklist.scss',

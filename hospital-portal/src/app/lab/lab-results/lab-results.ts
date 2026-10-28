@@ -1,3 +1,4 @@
+import { CdkTrapFocus } from '@angular/cdk/a11y';
 import {
   Component,
   inject,
@@ -49,6 +50,7 @@ export { toServerDateTime, toLocalInputValue };
   selector: 'app-lab-results',
   standalone: true,
   imports: [
+    CdkTrapFocus,
     ServerTimePipe,
     CommonModule,
     FormsModule,

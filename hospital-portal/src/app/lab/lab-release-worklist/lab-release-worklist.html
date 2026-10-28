@@ -211,9 +211,11 @@
         class="form-card"
         role="dialog"
         aria-modal="true"
+        cdkTrapFocus
+        [cdkTrapFocusAutoCapture]="true"
+        (keydown.escape)="cancelRelease(); $event.stopPropagation()"
         [attr.aria-label]="'LAB_RELEASE.CONFIRM_TITLE' | translate"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="$event.stopPropagation()"
         tabindex="-1"
       >
         <h2>{{ 'LAB_RELEASE.CONFIRM_TITLE' | translate }}</h2>

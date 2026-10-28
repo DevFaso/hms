@@ -1,3 +1,4 @@
+import { CdkTrapFocus } from '@angular/cdk/a11y';
 import {
   Component,
   computed,
@@ -40,6 +41,7 @@ import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
   selector: 'app-lab',
   standalone: true,
   imports: [
+    CdkTrapFocus,
     PatientSublinePipe,
     ServerTimePipe,
     CommonModule,

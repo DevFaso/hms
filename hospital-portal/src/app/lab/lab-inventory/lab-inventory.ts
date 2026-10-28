@@ -1,3 +1,4 @@
+import { CdkTrapFocus } from '@angular/cdk/a11y';
 import {
   Component,
   computed,
@@ -21,7 +22,7 @@ import { ToastService } from '../../core/toast.service';
 @Component({
   selector: 'app-lab-inventory',
   standalone: true,
-  imports: [RouterModule, FormsModule, TranslateModule],
+  imports: [CdkTrapFocus, RouterModule, FormsModule, TranslateModule],
   templateUrl: './lab-inventory.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lab-inventory.scss',

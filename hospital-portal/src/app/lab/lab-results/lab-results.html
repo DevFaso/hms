@@ -313,9 +313,17 @@
   <!-- ═══ DETAIL PANEL ═══ -->
   @if (selectedResult(); as r) {
     <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeDetail()">
-      <div class="detail-panel">
+      <div
+        class="detail-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="lab-results-dialog-title-1"
+        cdkTrapFocus
+        [cdkTrapFocusAutoCapture]="true"
+        (keydown.escape)="closeDetail(); $event.stopPropagation()"
+      >
         <div class="panel-header">
-          <h2>
+          <h2 id="lab-results-dialog-title-1">
             {{ 'LAB_RESULTS.DETAIL_TITLE' | translate }} — {{ shortOrderCode(r.labOrderCode) }}
           </h2>
           <button
@@ -516,12 +524,17 @@
   <div class="modal-backdrop" tabindex="-1" (click)="closeModal()" (keydown.escape)="closeModal()">
     <div
       class="modal modal-lg"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="lab-results-dialog-title-2"
+      cdkTrapFocus
+      [cdkTrapFocusAutoCapture]="true"
+      (keydown.escape)="closeModal(); $event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="closeModal()"
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="lab-results-dialog-title-2">
           {{
             editing()
               ? ('LAB_RESULTS.EDIT_RESULT' | translate)
@@ -652,10 +665,12 @@
       class="modal"
       role="dialog"
       aria-modal="true"
+      cdkTrapFocus
+      [cdkTrapFocusAutoCapture]="true"
+      (keydown.escape)="cancelSelfRelease(); $event.stopPropagation()"
       [attr.aria-label]="'LAB_RESULTS.SELF_RELEASE_TITLE' | translate"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="cancelSelfRelease()"
       data-testid="self-release-modal"
     >
       <div class="modal-header">
@@ -699,12 +714,17 @@
   >
     <div
       class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="lab-results-dialog-title-3"
+      cdkTrapFocus
+      [cdkTrapFocusAutoCapture]="true"
+      (keydown.escape)="cancelDelete(); $event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="cancelDelete()"
     >
       <div class="modal-header">
-        <h2>{{ 'LAB_RESULTS.DELETE_TITLE' | translate }}</h2>
+        <h2 id="lab-results-dialog-title-3">{{ 'LAB_RESULTS.DELETE_TITLE' | translate }}</h2>
         <button class="modal-close" (click)="cancelDelete()">
           <span class="material-symbols-outlined">close</span>
         </button>
@@ -738,12 +758,17 @@
   <div class="modal-backdrop" tabindex="-1" (click)="closeSign()" (keydown.escape)="closeSign()">
     <div
       class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="lab-results-dialog-title-4"
+      cdkTrapFocus
+      [cdkTrapFocusAutoCapture]="true"
+      (keydown.escape)="closeSign(); $event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="lab-results-dialog-title-4">
           {{ 'LAB_RESULTS.SIGN_TITLE' | translate }} —
           {{ shortOrderCode(signTarget()?.labOrderCode) }}
         </h2>
@@ -788,12 +813,19 @@
   >
     <div
       class="modal modal-lg"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="lab-results-dialog-title-5"
+      cdkTrapFocus
+      [cdkTrapFocusAutoCapture]="true"
+      (keydown.escape)="closeCompare(); $event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'LAB_RESULTS.COMPARE_TITLE' | translate }} — {{ cmp.testName }}</h2>
+        <h2 id="lab-results-dialog-title-5">
+          {{ 'LAB_RESULTS.COMPARE_TITLE' | translate }} — {{ cmp.testName }}
+        </h2>
         <button class="modal-close" (click)="closeCompare()">
           <span class="material-symbols-outlined">close</span>
         </button>
@@ -891,12 +923,15 @@
       class="modal"
       role="dialog"
       aria-modal="true"
+      aria-labelledby="lab-results-dialog-title-6"
+      cdkTrapFocus
+      [cdkTrapFocusAutoCapture]="true"
+      (keydown.escape)="closeReadBack(); $event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'LAB_RESULTS.READ_BACK' | translate }}</h2>
+        <h2 id="lab-results-dialog-title-6">{{ 'LAB_RESULTS.READ_BACK' | translate }}</h2>
         <button
           type="button"
           class="modal-close"
