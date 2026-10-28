@@ -390,7 +390,9 @@ export class ImagingComponent implements OnInit {
         },
         error: (err: unknown) => {
           // QA D930 class: "only the ordering provider or a radiologist" is the reason.
-          this.toast.error(refusalReason(err) ?? this.translate.instant('IMAGING.ORDER_CANCEL_ERROR'));
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('IMAGING.ORDER_CANCEL_ERROR'),
+          );
           this.deleting.set(false);
         },
       });
@@ -772,7 +774,9 @@ export class ImagingComponent implements OnInit {
           this.loadReports();
         },
         error: (err: unknown) => {
-          this.toast.error(refusalReason(err) ?? this.translate.instant('IMAGING.STATUS_UPDATE_ERROR'));
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('IMAGING.STATUS_UPDATE_ERROR'),
+          );
           this.statusSubmitting.set(false);
         },
       });

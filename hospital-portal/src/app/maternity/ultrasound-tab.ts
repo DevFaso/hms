@@ -268,7 +268,9 @@ export class UltrasoundTabComponent implements OnInit {
         this.load();
       },
       error: (err: unknown) => {
-        this.toast.error(refusalReason(err) ?? this.translate.instant('ULTRASOUND.ORDER_SAVE_ERROR'));
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('ULTRASOUND.ORDER_SAVE_ERROR'),
+        );
         this.orderSaving.set(false);
       },
     });

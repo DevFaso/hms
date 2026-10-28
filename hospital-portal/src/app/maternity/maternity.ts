@@ -942,7 +942,9 @@ export class MaternityComponent implements OnInit {
 
   private referralActionError(err?: unknown): void {
     // QA D930 class: a cancel refused to anyone but the referring midwife says so.
-    this.toast.error(refusalReason(err) ?? this.translate.instant('MATERNITY.REFERRAL_ACTION_ERROR'));
+    this.toast.error(
+      refusalReason(err) ?? this.translate.instant('MATERNITY.REFERRAL_ACTION_ERROR'),
+    );
     this.referralActionBusy.set(false);
   }
 }
