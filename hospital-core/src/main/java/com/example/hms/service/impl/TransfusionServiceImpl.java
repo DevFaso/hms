@@ -344,6 +344,13 @@ public class TransfusionServiceImpl implements TransfusionService {
         if (request.isTerminal()) {
             throw new BusinessException("transfusion.request.closed");
         }
+        // QA D930 class: a transfusion request is cancelled by the clinician who
+        // asked for it (or a verified super-admin in global view); a request
+        // written with no requester keeps the old rule. The request was
+        // resolved in the caller's hospital first, so the refusal leaks nothing.
+        if (request.getRequestedBy() != null) {
+            com.example.hms.security.CallerIdentity.requireCallerUnlessSuperAdmin(request.getRequestedBy());
+        }
         // Release anything held for this patient rather than stranding it.
         for (BloodUnit unit : unitRepository.findByRequest_IdOrderByUnitNumberAsc(requestId)) {
             if (unit.getStatus() == BloodUnitStatus.CROSSMATCHED || unit.getStatus() == BloodUnitStatus.ISSUED) {

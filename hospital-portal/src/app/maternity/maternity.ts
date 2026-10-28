@@ -31,7 +31,7 @@ import { PatientService, PatientResponse } from '../services/patient.service';
 import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
-import { labelledRefusalReason } from '../shared/refusal-reason';
+import { labelledRefusalReason, refusalReason } from '../shared/refusal-reason';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import {
   localInputInstant,
@@ -903,7 +903,7 @@ export class MaternityComponent implements OnInit {
     this.referralActionBusy.set(true);
     this.referralService.start(referral.id).subscribe({
       next: (updated) => this.afterReferralAction(updated, 'MATERNITY.REFERRAL_STARTED'),
-      error: () => this.referralActionError(),
+      error: (err: unknown) => this.referralActionError(err),
     });
   }
 
@@ -927,7 +927,7 @@ export class MaternityComponent implements OnInit {
           : 'MATERNITY.REFERRAL_CANCELLED';
     op.subscribe({
       next: (updated) => this.afterReferralAction(updated, successKey),
-      error: () => this.referralActionError(),
+      error: (err: unknown) => this.referralActionError(err),
     });
   }
 
@@ -940,8 +940,9 @@ export class MaternityComponent implements OnInit {
     this.loadSummary();
   }
 
-  private referralActionError(): void {
-    this.toast.error(this.translate.instant('MATERNITY.REFERRAL_ACTION_ERROR'));
+  private referralActionError(err?: unknown): void {
+    // QA D930 class: a cancel refused to anyone but the referring midwife says so.
+    this.toast.error(refusalReason(err) ?? this.translate.instant('MATERNITY.REFERRAL_ACTION_ERROR'));
     this.referralActionBusy.set(false);
   }
 }

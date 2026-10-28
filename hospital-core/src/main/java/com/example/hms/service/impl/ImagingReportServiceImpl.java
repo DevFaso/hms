@@ -149,6 +149,8 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         }
 
         ImagingReport report = loadReportScoped(reportId);
+        // QA D930 class: a draft read is its author's to revise.
+        requireReportAuthor(report);
 
         // Signing closes the report. Revisions are new versions, which is what
         // report_version / is_latest_version have modelled since V1 — editing
@@ -195,6 +197,8 @@ public class ImagingReportServiceImpl implements ImagingReportService {
     @Override
     public ImagingReportResponseDTO signReport(UUID reportId) {
         ImagingReport report = loadReportScoped(reportId);
+        // QA D930 class: a colleague does not sign another clinician's read.
+        requireReportAuthor(report);
 
         if (report.isSigned()) {
             throw new BusinessException(
@@ -290,6 +294,8 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         }
 
         ImagingReport report = loadReportScoped(reportId);
+        // QA D930 class: cancelling or voiding a draft read is its author's call.
+        requireReportAuthor(report);
         if (report.isSigned()) {
             throw new BusinessException(
                 "A signed report cannot be voided. Supersede it with a corrected report against the "
@@ -593,6 +599,33 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         } else if (report.getInterpretingProvider() == null) {
             report.setInterpretingProvider(currentStaff(hospital));
         }
+    }
+
+    /**
+     * QA D930 class: who may revise, sign, cancel or void a report. Its
+     * interpreting provider, or the clinician who filed it ({@code createdBy}):
+     * a resident who files a draft and names the attending as interpreting
+     * provider hands the attending the signature, which is the supervision
+     * path. A verified super-admin in global view keeps the old reach. A
+     * report with neither recorded keeps the old rule (any clinician in
+     * scope). Anyone else gets 403; the report was resolved in scope first.
+     */
+    private void requireReportAuthor(ImagingReport report) {
+        Staff interpreter = report.getInterpretingProvider();
+        UUID interpreterUserId = interpreter != null && interpreter.getUser() != null
+            ? interpreter.getUser().getId()
+            : null;
+        UUID filedBy = report.getCreatedBy();
+        if ((interpreterUserId == null && filedBy == null)
+                || com.example.hms.security.CallerIdentity.isGlobalSuperAdmin()) {
+            return;
+        }
+        UUID caller = roleValidator.getCurrentUserId();
+        if (caller != null && (caller.equals(interpreterUserId) || caller.equals(filedBy))) {
+            return;
+        }
+        throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+            com.example.hms.utility.MessageUtil.resolveOrRaw("imaging.report.authorOnly"));
     }
 
     /** The authenticated caller's staff profile AT THIS HOSPITAL, or null. */

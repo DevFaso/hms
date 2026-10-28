@@ -5192,4 +5192,26 @@ class PrescriptionServiceImplTest {
         verify(staffRepository, never()).findByUserIdAndHospitalId(any(), any());
     }
 
+    // ═══════════════ QA D930 class (round 16 siblings): draft author ═══════════════
+
+    @Test
+    void d930_anotherDoctorCannotRewriteAColleaguesDraft() {
+        UUID authorUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(authorUserId);
+        UUID rxHospitalId = rx.getHospital().getId();
+        UUID colleagueUserId = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(rxHospitalId);
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(rx.getId(), rxHospitalId))
+            .thenReturn(Optional.of(rx));
+        when(roleValidator.getCurrentUserId()).thenReturn(colleagueUserId);
+        when(roleValidator.draftsForPhysicianSignature(authorUserId, rxHospitalId)).thenReturn(false);
+
+        UUID rxId = rx.getId();
+        PrescriptionRequestDTO edit = new PrescriptionRequestDTO();
+        edit.setMedicationName("Ciprofloxacin");
+        assertThatThrownBy(() -> prescriptionService.updatePrescription(rxId, edit, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(rx.getMedicationName()).isEqualTo("Amoxicillin");
+        verify(prescriptionRepository, never()).save(any());
+    }
 }

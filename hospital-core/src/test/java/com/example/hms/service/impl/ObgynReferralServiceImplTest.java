@@ -241,6 +241,7 @@ class ObgynReferralServiceImplTest {
     }
 
     @Test void cancelReferral_success() {
+        signInAs(user);
         ObgynReferralCancelRequestDTO req = new ObgynReferralCancelRequestDTO();
         req.setReason("Patient transferred");
         when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
@@ -250,6 +251,7 @@ class ObgynReferralServiceImplTest {
     }
 
     @Test void cancelReferral_alreadyClosed_throws() {
+        signInAs(user);
         referral.setStatus(ObgynReferralStatus.COMPLETED);
         ObgynReferralCancelRequestDTO req = new ObgynReferralCancelRequestDTO();
         when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
@@ -297,6 +299,24 @@ class ObgynReferralServiceImplTest {
     @AfterEach
     void clearHospitalContext() {
         HospitalContextHolder.clear();
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
+    }
+
+    /** QA D930 class: a cancel is the referring midwife's own act, so these tests sign in as her. */
+    private static void signInAs(User who) {
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(who, null, java.util.List.of()));
+    }
+
+    @Test void d930_aColleagueCannotCancelTheReferringMidwifesReferral() {
+        User colleague = new User(); colleague.setId(UUID.randomUUID());
+        signInAs(colleague);
+        ObgynReferralCancelRequestDTO req = new ObgynReferralCancelRequestDTO();
+        req.setReason("Not mine to cancel");
+        when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
+        assertThatThrownBy(() -> service.cancelReferral(referralId, req, "colleague"))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(referral.getStatus()).isEqualTo(ObgynReferralStatus.SUBMITTED);
     }
 
     @Test void getReferralsForPatientFollowThePatientWhenActingInAHospital() {

@@ -20,6 +20,7 @@ import { ToastService } from '../core/toast.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { localDateString } from '../shared/date-utils';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { refusalReason } from '../shared/refusal-reason';
 
 type UltrasoundWorklist = 'all' | 'pending' | 'high-risk' | 'follow-up' | 'anomalies';
 
@@ -266,8 +267,8 @@ export class UltrasoundTabComponent implements OnInit {
         this.closeOrderModal();
         this.load();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('ULTRASOUND.ORDER_SAVE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('ULTRASOUND.ORDER_SAVE_ERROR'));
         this.orderSaving.set(false);
       },
     });
@@ -306,8 +307,9 @@ export class UltrasoundTabComponent implements OnInit {
             : list.map((o) => (o.id === updated.id ? updated : o)),
         );
       },
-      error: () => {
-        this.toast.error(this.translate.instant('ULTRASOUND.CANCEL_ERROR'));
+      error: (err: unknown) => {
+        // QA D930 class: the server says only the ordering clinician may cancel.
+        this.toast.error(refusalReason(err) ?? this.translate.instant('ULTRASOUND.CANCEL_ERROR'));
         this.cancelBusy.set(false);
       },
     });

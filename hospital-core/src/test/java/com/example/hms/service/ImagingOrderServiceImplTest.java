@@ -1038,4 +1038,102 @@ class ImagingOrderServiceImplTest {
                 () -> imagingOrderService.captureProviderSignature(orderId, new ImagingOrderSignatureRequestDTO(), null))
             .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
     }
+
+    // ═══════════════ QA D930 class (round 16 siblings): cancel and sign ═══════════════
+
+    private ImagingOrderResponseDTO cancelAs(UUID sessionUserId, ImagingOrder order) {
+        com.example.hms.model.User sessionUser = new com.example.hms.model.User();
+        sessionUser.setId(sessionUserId);
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(sessionUser, null, List.of()));
+        try {
+            return imagingOrderService.updateOrderStatus(order.getId(), ImagingOrderStatusUpdateRequestDTO.builder()
+                .status(ImagingOrderStatus.CANCELLED).cancellationReason("Not needed").build());
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+    }
+
+    @Test
+    void d930_anotherDoctorCannotCancelAColleaguesOrder() {
+        ImagingOrder order = orderAt(hospital);
+        order.setStatus(ImagingOrderStatus.ORDERED);
+        order.setOrderingProviderUserId(UUID.randomUUID());
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        UUID colleague = UUID.randomUUID();
+        when(roleValidator.hasRole(colleague, hospitalId, "RADIOLOGIST")).thenReturn(false);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> cancelAs(colleague, order))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.ORDERED);
+        verify(imagingOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void d930_theOrderingProviderCancelsHerOrder() {
+        ImagingOrder order = orderAt(hospital);
+        order.setStatus(ImagingOrderStatus.ORDERED);
+        UUID provider = UUID.randomUUID();
+        order.setOrderingProviderUserId(provider);
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(imagingOrderRepository.save(order)).thenReturn(order);
+
+        cancelAs(provider, order);
+
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.CANCELLED);
+    }
+
+    /** Declared exception: the imaging department (a radiologist of the hospital) calls an exam off. */
+    @Test
+    void d930_aRadiologistCancelsAnOrderSheDidNotPlace() {
+        ImagingOrder order = orderAt(hospital);
+        order.setStatus(ImagingOrderStatus.ORDERED);
+        order.setOrderingProviderUserId(UUID.randomUUID());
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(imagingOrderRepository.save(order)).thenReturn(order);
+        UUID radiologist = UUID.randomUUID();
+        when(roleValidator.hasRole(radiologist, hospitalId, "RADIOLOGIST")).thenReturn(true);
+
+        cancelAs(radiologist, order);
+
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.CANCELLED);
+    }
+
+    @Test
+    void d930_anotherDoctorCannotSignAColleaguesUnsignedOrder() {
+        ImagingOrder order = orderAt(hospital);
+        UUID author = UUID.randomUUID();
+        order.setOrderingProviderUserId(author);
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        UUID colleague = UUID.randomUUID();
+        signer(colleague, "Doc", "Two");
+        when(roleValidator.draftsForPhysicianSignature(author, hospitalId)).thenReturn(false);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.captureProviderSignature(
+                orderId, ImagingOrderSignatureRequestDTO.builder().signatureStatement("Signed").build(), colleague))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(order.getOrderingProviderUserId()).isEqualTo(author);
+        assertThat(order.getProviderSignedAt()).isNull();
+        verify(imagingOrderRepository, never()).save(any());
+    }
+
+    /** Declared exception: a nurse's or midwife's draft is signed by a physician of the hospital (QA D934 rule). */
+    @Test
+    void d930_aDoctorOfTheHospitalSignsANursesDraftOrder() {
+        ImagingOrder order = orderAt(hospital);
+        UUID nurse = UUID.randomUUID();
+        order.setOrderingProviderUserId(nurse);
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(imagingOrderRepository.save(order)).thenReturn(order);
+        UUID doctor = UUID.randomUUID();
+        signer(doctor, "Doc", "One");
+        when(roleValidator.draftsForPhysicianSignature(nurse, hospitalId)).thenReturn(true);
+        when(roleValidator.isSigningPhysician(doctor, hospitalId)).thenReturn(true);
+
+        imagingOrderService.captureProviderSignature(
+            orderId, ImagingOrderSignatureRequestDTO.builder().signatureStatement("Signed").build(), doctor);
+
+        assertThat(order.getProviderSignedAt()).isNotNull();
+        assertThat(order.getOrderingProviderUserId()).isEqualTo(doctor);
+    }
 }

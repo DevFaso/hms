@@ -438,6 +438,16 @@ describe('errorInterceptor', () => {
     ['POST', '/discharge-approvals/a1/approve'],
     ['POST', '/discharge-approvals/a1/reject'],
     ['POST', '/discharge-approvals/a1/cancel'],
+    // QA D930 class (round 16 siblings): author checks on orders and draft reads.
+    ['PUT', '/imaging/orders/o1/status'],
+    ['POST', '/imaging/orders/o1/signature'],
+    ['PUT', '/imaging/results/r1'],
+    ['POST', '/imaging/results/r1/sign'],
+    ['PUT', '/imaging/results/r1/status'],
+    ['PUT', '/ultrasound/orders/u1'],
+    ['POST', '/ultrasound/orders/u1/cancel?cancellationReason=x'],
+    ['POST', '/referrals/obgyn/f1/cancel'],
+    ['POST', '/transfusions/requests/t1/cancel'],
   ];
   for (const [method, url] of pageHandledClinicalActions) {
     it(`QA D995: a refused ${method} ${url} stays on the page (no 403 page)`, () => {

@@ -1604,4 +1604,54 @@ class TransfusionServiceImplTest {
         assertThatThrownBy(() -> service.recordCrossmatch(requestId, verdict))
             .isInstanceOf(BusinessException.class);
     }
+
+    // ── QA D930 class (round 16 siblings): the requester cancels ────────
+
+    private static Staff requester(UUID userId) {
+        com.example.hms.model.User user = new com.example.hms.model.User();
+        user.setId(userId);
+        Staff staff = new Staff();
+        staff.setId(UUID.randomUUID());
+        staff.setUser(user);
+        return staff;
+    }
+
+    private static void signInAs(UUID userId) {
+        com.example.hms.model.User user = new com.example.hms.model.User();
+        user.setId(userId);
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(user, null, List.of()));
+    }
+
+    @Test
+    void d930_aColleagueCannotCancelAnotherCliniciansRequest() {
+        TransfusionRequest req = request(group(AboGroup.O, RhFactor.NEGATIVE, AntibodyScreenResult.NEGATIVE),
+            TransfusionUrgency.ROUTINE);
+        req.setRequestedBy(requester(UUID.randomUUID()));
+        UUID requestId = req.getId();
+        signInAs(UUID.randomUUID());
+        try {
+            assertThatThrownBy(() -> service.cancelRequest(requestId, "Not mine"))
+                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+        assertThat(req.getStatus()).isEqualTo(TransfusionRequestStatus.REQUESTED);
+        verify(requestRepository, never()).save(any());
+    }
+
+    @Test
+    void d930_theRequesterCancelsHerRequest() {
+        TransfusionRequest req = request(group(AboGroup.O, RhFactor.NEGATIVE, AntibodyScreenResult.NEGATIVE),
+            TransfusionUrgency.ROUTINE);
+        UUID me = UUID.randomUUID();
+        req.setRequestedBy(requester(me));
+        signInAs(me);
+        try {
+            service.cancelRequest(req.getId(), "Patient stabilised");
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+        assertThat(req.getStatus()).isEqualTo(TransfusionRequestStatus.CANCELLED);
+    }
 }

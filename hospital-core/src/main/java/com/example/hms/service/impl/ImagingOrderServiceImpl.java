@@ -149,6 +149,12 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
     @Override
     public ImagingOrderResponseDTO updateOrderStatus(UUID orderId, ImagingOrderStatusUpdateRequestDTO request) {
         ImagingOrder order = getOrderInScope(orderId);
+        // QA D930 class: a cancel ends the order for the patient; it is the
+        // ordering provider's or the imaging department's decision.
+        if (request.getStatus() == ImagingOrderStatus.CANCELLED
+                && order.getStatus() != ImagingOrderStatus.CANCELLED) {
+            requireCancelAuthor(order);
+        }
 
         requireNotInThePast(request.getScheduledDate(), order.getScheduledDate());
         order.setStatus(request.getStatus());
@@ -194,6 +200,52 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
             throw new com.example.hms.exception.ClientSafeAccessDeniedException(
                 com.example.hms.utility.MessageUtil.resolveOrRaw("imaging.order.notOrderingProvider"));
         }
+    }
+
+    /**
+     * QA D930 class: who may cancel an imaging order. Its ordering provider, a
+     * radiologist of the order's hospital (the department declines or calls
+     * off an exam), or a verified super-admin in global view. An order with no
+     * recorded provider (written before D302) keeps the old rule, as on edit
+     * ({@link #requireEditableBy}). Any other doctor in scope gets 403.
+     */
+    private void requireCancelAuthor(ImagingOrder order) {
+        UUID orderingProvider = order.getOrderingProviderUserId();
+        if (orderingProvider == null || com.example.hms.security.CallerIdentity.isGlobalSuperAdmin()) {
+            return;
+        }
+        UUID caller = com.example.hms.security.CallerIdentity.currentUserId();
+        if (orderingProvider.equals(caller)) {
+            return;
+        }
+        UUID hospitalId = order.getHospital() != null ? order.getHospital().getId() : null;
+        if (caller != null && hospitalId != null && roleValidator.hasRole(caller, hospitalId, "RADIOLOGIST")) {
+            return;
+        }
+        throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+            com.example.hms.utility.MessageUtil.resolveOrRaw("imaging.order.cancelForbidden"));
+    }
+
+    /**
+     * QA D930 class: who may sign an unsigned order. Its ordering provider; a
+     * signing physician of the order's hospital when the provider is a nurse
+     * or midwife who drafts for a physician's signature (as on prescriptions,
+     * QA D934); a verified super-admin in global view; anyone in scope when no
+     * provider is recorded (written before D302).
+     */
+    private void requireSignatureAuthor(ImagingOrder order, UUID signerUserId) {
+        UUID orderingProvider = order.getOrderingProviderUserId();
+        if (orderingProvider == null || orderingProvider.equals(signerUserId)
+                || com.example.hms.security.CallerIdentity.isGlobalSuperAdmin()) {
+            return;
+        }
+        UUID hospitalId = order.getHospital() != null ? order.getHospital().getId() : null;
+        if (hospitalId != null && roleValidator.draftsForPhysicianSignature(orderingProvider, hospitalId)
+                && roleValidator.isSigningPhysician(signerUserId, hospitalId)) {
+            return;
+        }
+        throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+            com.example.hms.utility.MessageUtil.resolveOrRaw("imaging.order.notOrderingProvider"));
     }
 
     /**
@@ -248,6 +300,11 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
             throw new com.example.hms.exception.ClientSafeAccessDeniedException(
                 com.example.hms.utility.MessageUtil.resolveOrRaw("imaging.signature.alreadySigned"));
         }
+        // QA D930 class: signing an unsigned order made the signer its ordering
+        // provider, so any doctor in scope could take a colleague's draft. The
+        // ordering provider signs; a nurse's or midwife's draft is signed by a
+        // physician of the order's hospital (the prescription rule, QA D934).
+        requireSignatureAuthor(order, signer.getId());
         order.setOrderingProviderName(displayName(signer));
         order.setOrderingProviderNpi(request.getProviderNpi());
         order.setOrderingProviderUserId(signer.getId());

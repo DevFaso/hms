@@ -77,9 +77,17 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         UltrasoundOrder entity = ultrasoundMapper.toOrderEntity(request, patient, hospital);
         entity.setStatus(UltrasoundOrderStatus.ORDERED);
 
-        // Set ordered by information
-        if (orderedByUserId != null) {
-            Staff orderedByStaff = staffRepository.findByUserIdAndHospitalId(orderedByUserId, hospital.getId()).orElse(null);
+        // Set ordered by information. QA D930 class: the id decides who may
+        // change or cancel the order; the name is for display. The session
+        // decides it: the controller's id parses the username as a UUID,
+        // which is null for every real account.
+        UUID authorId = com.example.hms.security.CallerIdentity.currentUserId();
+        if (authorId == null) {
+            authorId = orderedByUserId;
+        }
+        entity.setOrderedByUserId(authorId);
+        if (authorId != null) {
+            Staff orderedByStaff = staffRepository.findByUserIdAndHospitalId(authorId, hospital.getId()).orElse(null);
             if (orderedByStaff != null) {
                 String name = orderedByStaff.getName();
                 if (name == null && orderedByStaff.getUser() != null) {
@@ -96,6 +104,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     @Override
     public UltrasoundOrderResponseDTO updateOrder(UUID orderId, UltrasoundOrderRequestDTO request) {
         UltrasoundOrder order = getOrderInScope(orderId);
+        requireOrderAuthor(order);
 
         // Prevent modification of completed orders
         if (order.getStatus() == UltrasoundOrderStatus.COMPLETED) {
@@ -127,6 +136,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     @Override
     public UltrasoundOrderResponseDTO cancelOrder(UUID orderId, String cancellationReason) {
         UltrasoundOrder order = getOrderInScope(orderId);
+        requireOrderAuthor(order);
 
         if (order.getStatus() == UltrasoundOrderStatus.CANCELLED) {
             throw new BusinessException("Order is already cancelled");
@@ -141,6 +151,24 @@ public class UltrasoundServiceImpl implements UltrasoundService {
 
         UltrasoundOrder saved = orderRepository.save(order);
         return ultrasoundMapper.toOrderResponseDTO(saved);
+    }
+
+    /**
+     * QA D930 class: an ultrasound order is changed or cancelled by the
+     * clinician who placed it, or a verified super-admin in global view. An
+     * order written before V243 has no recorded author and keeps the old rule
+     * (any doctor or midwife in scope). Anyone else gets 403; the order was
+     * resolved in the caller's scope first.
+     */
+    private void requireOrderAuthor(UltrasoundOrder order) {
+        UUID author = order.getOrderedByUserId();
+        if (author == null || com.example.hms.security.CallerIdentity.isGlobalSuperAdmin()) {
+            return;
+        }
+        if (!author.equals(com.example.hms.security.CallerIdentity.currentUserId())) {
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("ultrasound.order.authorOnly"));
+        }
     }
 
     @Override

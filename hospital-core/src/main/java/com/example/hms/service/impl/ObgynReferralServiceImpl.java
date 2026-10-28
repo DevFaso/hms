@@ -211,6 +211,7 @@ public class ObgynReferralServiceImpl implements ObgynReferralService {
         String username
     ) {
         ObgynReferral referral = findReferral(referralId);
+        requireReferringMidwife(referral);
         referral.cancel(request.getReason());
         referral.setUpdatedBy(username);
 
@@ -295,6 +296,24 @@ public class ObgynReferralServiceImpl implements ObgynReferralService {
         // hospital's referral answers as unknown, for every write and the by-id read.
         com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(referral.getHospital(), REFERRAL_NOT_FOUND_WITH_ID, referralId);
         return referral;
+    }
+
+    /**
+     * QA D930 class: a referral is cancelled by the midwife who wrote it (or a
+     * verified super-admin in global view), never by any colleague at the
+     * hospital. The referral was resolved in the caller's hospital first, so
+     * the refusal discloses nothing.
+     */
+    private void requireReferringMidwife(ObgynReferral referral) {
+        if (com.example.hms.security.CallerIdentity.isGlobalSuperAdmin()) {
+            return;
+        }
+        java.util.UUID caller = com.example.hms.security.CallerIdentity.currentUserId();
+        User midwife = referral.getMidwife();
+        if (caller == null || midwife == null || !caller.equals(midwife.getId())) {
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("generalReferral.cancel.referrerOnly"));
+        }
     }
 
     private User resolveUserByUsername(String username) {

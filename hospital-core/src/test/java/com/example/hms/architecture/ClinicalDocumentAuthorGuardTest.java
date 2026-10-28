@@ -27,6 +27,18 @@ import static org.assertj.core.api.Assertions.assertThat;
  * / finalize method must either call an author check or be listed in
  * {@link #TEAM_OWNED} with the reason it is the team's to change. A new write
  * method in one of these services fails here until it decides.
+ *
+ * <p>Round 16 siblings: the class reached clinical orders too (a colleague
+ * rewrote an unsigned prescription, signed, revised or voided another
+ * clinician's imaging read, cancelled or signed another doctor's imaging
+ * order, rewrote or cancelled an ultrasound order, cancelled a midwife's
+ * OB/GYN referral or another clinician's transfusion request). Judged team-
+ * owned on purpose, and left out of this list: procedure orders, admissions,
+ * transfers, isolation precautions, problems, allergies, family and social
+ * history, birth plans (the patient's own) and high-risk care plans (the
+ * ward or the pregnancy's team acts on them); digital signatures (each is the
+ * signer's own row and alters no record); a death record amendment (a
+ * reasoned, audited correction).
  */
 class ClinicalDocumentAuthorGuardTest {
 
@@ -37,9 +49,19 @@ class ClinicalDocumentAuthorGuardTest {
         "impl/MaternalHistoryServiceImpl.java",
         "impl/GeneralReferralServiceImpl.java",
         "DischargeApprovalServiceImpl.java",
-        "impl/ConsultationServiceImpl.java");
+        "impl/ConsultationServiceImpl.java",
+        // Round 16 siblings (QA D930 class): clinical orders and drafts.
+        "PrescriptionServiceImpl.java",
+        "LabOrderServiceImpl.java",
+        "impl/ImagingReportServiceImpl.java",
+        "impl/ImagingOrderServiceImpl.java",
+        "impl/UltrasoundServiceImpl.java",
+        "impl/ObgynReferralServiceImpl.java",
+        "impl/TransfusionServiceImpl.java");
+    /** Round 16 siblings: sign, void and an order's signature capture are writes on the author's record too. */
     private static final Pattern WRITE_METHOD = Pattern.compile(
-        "\\n    public [A-Za-z<>.?, ]+ ((?:update|delete|cancel|finalize|amend|withdraw)\\w*)\\(");
+        "\\n    public [A-Za-z<>.?, ]+ ((?:update|delete|cancel|finalize|amend|withdraw|sign|void"
+            + "|capture\\w*Signature)\\w*)\\(");
     /**
      * Calls that decide who may act on an existing record (review of #971:
      * {@code CallerIdentity.requireAtHospital} is a hospital check, not an
@@ -47,18 +69,59 @@ class ClinicalDocumentAuthorGuardTest {
      */
     private static final Pattern AUTHOR_CHECK = Pattern.compile(
         "CallerIdentity\\.(?:requireCaller|requireCallerUnlessSuperAdmin|isCaller)\\(|requireAuthor\\("
-            + "|requireCallerIsReferrer\\(|requireUpdater\\(|requireRequesterOrSuperAdmin\\(");
-    /** Writes the whole team may make, and why. */
-    private static final Map<String, String> TEAM_OWNED = Map.of(
-        "TreatmentPlanServiceImpl.updateFollowUp",
-            "a follow-up is done and edited by the staff it is assigned to, not only the plan's author",
-        "MaternalHistoryServiceImpl.updateMaternalHistory",
+            + "|requireCallerIsReferrer\\(|requireUpdater\\(|requireRequesterOrSuperAdmin\\("
+            // Round 16 siblings: each helper below compares the caller with the
+            // record's author (prescriber, ordering clinician, interpreting
+            // provider, referring midwife) and documents its own declared
+            // exceptions (the physician who signs a nurse's draft, a lab
+            // manager, a radiologist, a super-admin in global view).
+            + "|requireDraftAuthor\\(|resolveSigningPrescriber\\(|requireMayWithdrawSigned\\("
+            + "|requireReportAuthor\\(|requireEditableBy\\(|requireCancelAuthor\\("
+            + "|requireSignatureAuthor\\(|requireOrderAuthor\\(|requireReferringMidwife\\(");
+    /** Writes the whole team may make (or a supervisor role decides), and why. */
+    private static final Map<String, String> TEAM_OWNED = Map.ofEntries(
+        Map.entry("TreatmentPlanServiceImpl.updateFollowUp",
+            "a follow-up is done and edited by the staff it is assigned to, not only the plan's author"),
+        Map.entry("MaternalHistoryServiceImpl.updateMaternalHistory",
             "an update writes a new version (the previous one is kept), as the midwives and doctors "
-                + "following the pregnancy add what they learn");
+                + "following the pregnancy add what they learn"),
+        Map.entry("LabOrderServiceImpl.updateLabOrder",
+            "an edit keeps the ordering clinician (a nurse corrects a doctor's order, keptOrderingStaff); "
+                + "naming another clinician goes through the placing rule, which requires the caller"),
+        Map.entry("LabOrderServiceImpl.voidLabOrder",
+            "supervisor path: entered-in-error is a lab manager's or director's decision "
+                + "(requireOrderDecisionAuthority), whoever ordered it"));
+    /**
+     * Administrative hard deletes no clinician can reach: the controller admits
+     * administrators only, so there is no colleague to refuse. Checked below
+     * against the controller's {@code @PreAuthorize}: the day a clinical role
+     * is admitted, the write must gain an author check.
+     */
+    private static final Map<String, String> ADMIN_ONLY = Map.of(
+        "PrescriptionServiceImpl.deletePrescription", "PrescriptionController.java",
+        "LabOrderServiceImpl.deleteLabOrder", "LabOrderController.java");
+    private static final Pattern CLINICAL_ROLE = Pattern.compile(
+        "DOCTOR|PHYSICIAN|SURGEON|NURSE|MIDWIFE|RADIOLOGIST|LAB_|PHARMACIST|ANESTH");
+
+    @Test
+    void adminOnlyDeletesStayAdminOnly() throws IOException {
+        for (Map.Entry<String, String> entry : ADMIN_ONLY.entrySet()) {
+            String method = entry.getKey().substring(entry.getKey().indexOf('.') + 1);
+            String src = Files.readString(Path.of("src/main/java/com/example/hms/controller").resolve(entry.getValue()));
+            int call = src.indexOf("." + method + "(");
+            assertThat(call).as(entry.getKey() + " is called from " + entry.getValue()).isPositive();
+            int annotation = src.lastIndexOf("@PreAuthorize(", call);
+            String rule = src.substring(annotation, src.indexOf('\n', annotation));
+            assertThat(CLINICAL_ROLE.matcher(rule).find())
+                .as(entry.getKey() + " admits a clinical role (" + rule.trim() + "): add an author check")
+                .isFalse();
+        }
+    }
 
     @Test
     void everyDocumentWriteChecksWhoActs() throws IOException {
         Map<String, String> unguarded = new TreeMap<>();
+        java.util.Set<String> found = new java.util.TreeSet<>();
         int checked = 0;
         for (String relative : DOCUMENT_SERVICES) {
             Path file = SERVICES.resolve(relative);
@@ -74,7 +137,8 @@ class ClinicalDocumentAuthorGuardTest {
             for (int i = 0; i < names.size(); i++) {
                 String key = service + "." + names.get(i);
                 checked++;
-                if (TEAM_OWNED.containsKey(key)) {
+                found.add(key);
+                if (TEAM_OWNED.containsKey(key) || ADMIN_ONLY.containsKey(key)) {
                     continue;
                 }
                 int end = i + 1 < starts.size() ? starts.get(i + 1) : src.length();
@@ -84,7 +148,10 @@ class ClinicalDocumentAuthorGuardTest {
                 }
             }
         }
-        assertThat(checked).as("document write methods found").isGreaterThanOrEqualTo(10);
+        assertThat(checked).as("document write methods found").isGreaterThanOrEqualTo(25);
+        assertThat(found).as("every team-owned entry names a write that still exists (delete a stale line)")
+            .containsAll(TEAM_OWNED.keySet())
+            .containsAll(ADMIN_ONLY.keySet());
         assertThat(unguarded).as("document writes open to any colleague").isEmpty();
     }
 

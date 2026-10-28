@@ -90,6 +90,15 @@ const PAGE_HANDLED_403_ACTION_PATTERNS = [
   /\/encounters\/[^/?]+\/(triage|complete-triage|nursing-intake|notes|notes\/addendums|notes\/sign|notes\/cosign|checkout|close-unseen|start|complete-examination|ready-for-discharge|medical-certificate)(\?|$)/,
   /\/discharge-summaries\/[^/?]+(\/finalize)?(\?|$)/,
   /\/discharge-approvals\/[^/?]+\/(approve|reject|cancel)(\?|$)/,
+  // QA D930 class (round 16 siblings): an author check on an order or a draft
+  // read (imaging order cancel or signature, imaging report revise/sign/void,
+  // ultrasound order edit or cancel, OB/GYN referral cancel, transfusion
+  // request cancel) is answered in the page's toast with the server's reason.
+  /\/imaging\/orders\/[^/?]+\/(status|signature)(\?|$)/,
+  /\/imaging\/results\/[^/?]+(\/sign|\/status)?(\?|$)/,
+  /\/ultrasound\/orders\/[^/?]+(\/cancel)?(\?|$)/,
+  /\/referrals\/obgyn\/[^/?]+\/cancel(\?|$)/,
+  /\/transfusions\/requests\/[^/?]+\/cancel(\?|$)/,
 ];
 
 const SILENT_401_PATTERNS = [/\/chat\/mark-read\//];

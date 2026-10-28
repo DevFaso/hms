@@ -29,6 +29,7 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { actionRoles } from '../core/action-permissions';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { refusalReason } from '../shared/refusal-reason';
 
 type ImagingForm = Omit<ImagingOrderRequest, 'laterality'> & {
   laterality?: ImagingLaterality | '';
@@ -387,8 +388,9 @@ export class ImagingComponent implements OnInit {
           this.deleting.set(false);
           this.load();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('IMAGING.ORDER_CANCEL_ERROR'));
+        error: (err: unknown) => {
+          // QA D930 class: "only the ordering provider or a radiologist" is the reason.
+          this.toast.error(refusalReason(err) ?? this.translate.instant('IMAGING.ORDER_CANCEL_ERROR'));
           this.deleting.set(false);
         },
       });
@@ -712,8 +714,8 @@ export class ImagingComponent implements OnInit {
         this.selectedReport.set(signed);
         this.loadReports();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('IMAGING.REPORT_SIGN_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('IMAGING.REPORT_SIGN_ERROR'));
         this.signing.set(false);
       },
     });
@@ -769,8 +771,8 @@ export class ImagingComponent implements OnInit {
           }
           this.loadReports();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('IMAGING.STATUS_UPDATE_ERROR'));
+        error: (err: unknown) => {
+          this.toast.error(refusalReason(err) ?? this.translate.instant('IMAGING.STATUS_UPDATE_ERROR'));
           this.statusSubmitting.set(false);
         },
       });

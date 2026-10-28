@@ -613,6 +613,37 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     }
 
     /**
+     * QA D930 class: who may rewrite or delete an unsigned prescription. The
+     * same people who may sign it ({@link #resolveSigningPrescriber}): its
+     * prescriber, or - for a nurse's or midwife's draft (QA D934) - a signing
+     * physician of the order's hospital, who corrects what she will sign. A
+     * verified super-admin in global view keeps the old reach. A row with no
+     * prescriber keeps the old rule (any prescriber in scope). Any other
+     * colleague gets 403; the row was already resolved in the caller's scope.
+     */
+    private void requireDraftAuthor(Prescription prescription) {
+        Staff prescriber = prescription.getStaff();
+        UUID prescriberUserId = prescriber != null && prescriber.getUser() != null
+            ? prescriber.getUser().getId()
+            : null;
+        if (prescriberUserId == null || com.example.hms.security.CallerIdentity.isGlobalSuperAdmin()) {
+            return;
+        }
+        UUID currentUserId = roleValidator.getCurrentUserId();
+        if (prescriberUserId.equals(currentUserId)) {
+            return;
+        }
+        UUID rxHospitalId = prescription.getHospital() != null ? prescription.getHospital().getId() : null;
+        if (currentUserId != null && rxHospitalId != null
+                && roleValidator.draftsForPhysicianSignature(prescriberUserId, rxHospitalId)
+                && roleValidator.isSigningPhysician(currentUserId, rxHospitalId)) {
+            return;
+        }
+        throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+            com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.draft.authorOnly"));
+    }
+
+    /**
      * The content the signature attests to.
      *
      * <p>Field order and the separator are part of the contract: a digest is
@@ -1026,6 +1057,11 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         if (existing.getStatus() != null && existing.getStatus().isWithdrawn()) {
             rejectAnyEditOfWithdrawn(request);
         }
+        // QA D930 class: an unsigned prescription is its prescriber's work in
+        // progress; a colleague at the same hospital reads it but does not
+        // rewrite it. Checked after the hospital scope (404) and before the
+        // status checks (400), so a stranger learns nothing about the row.
+        requireDraftAuthor(existing);
         rejectStatusChangeOnUpdate(existing, request);
         rejectSafeguardWithdrawal(existing, request);
 

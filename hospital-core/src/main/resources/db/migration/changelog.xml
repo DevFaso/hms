@@ -3152,4 +3152,15 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- V243 (round 16, sibling fixes): the ordering user's id on an
+         ultrasound order, so update and cancel can be refused to anyone but
+         its author (QA D930 class). Nullable, plain statement, no DO block.
+         Idempotent. -->
+    <changeSet id="V243-ultrasound-order-author" author="hms-team" runOnChange="false">
+        <sqlFile path="V243__ultrasound_order_author.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>
