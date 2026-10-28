@@ -742,6 +742,16 @@ describe('BillingComponent', () => {
     });
   });
 
+  it('an invoice settled by a waiver can be cancelled (QA D974)', () => {
+    component.openEdit(
+      mockInvoice({ status: 'PAID', amountPaid: 0, totalAmount: 0, balanceDue: 0 }),
+    );
+    expect(component.statusOptions()).toEqual(['PAID', 'CANCELLED']);
+    expect(component.statusLocked()).toBeFalse();
+    component.openEdit(mockInvoice({ status: 'PAID', amountPaid: 1000 }));
+    expect(component.statusOptions()).toEqual(['PAID']);
+  });
+
   describe('receptionist (QA D973)', () => {
     it('may record a payment but not reverse one', async () => {
       TestBed.resetTestingModule();

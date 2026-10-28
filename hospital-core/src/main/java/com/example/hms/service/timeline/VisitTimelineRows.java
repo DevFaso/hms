@@ -99,7 +99,8 @@ public class VisitTimelineRows {
         }
         if (wanted(categoryFilters, CATEGORY_IMAGING)) {
             imagingOrderRepository.findByPatient_IdAndHospital_Id(patientId, actingHospitalId).stream()
-                .filter(order -> order.getStatus() != ImagingOrderStatus.DRAFT)
+                .filter(order -> order.getStatus() != ImagingOrderStatus.DRAFT
+                    && order.getStatus() != ImagingOrderStatus.CANCELLED)
                 .forEach(order -> rows.add(imagingOrderRow(order, actingHospitalId,
                     order.getEncounterId() != null ? visitsHere.get(order.getEncounterId()) : null)));
         }
@@ -254,9 +255,6 @@ public class VisitTimelineRows {
         return filters == null || filters.isEmpty() || filters.contains(category);
     }
 
-    private static boolean isLocal(Hospital hospital, UUID acting) {
-        return hospital != null && hospital.getId() != null && hospital.getId().equals(acting);
-    }
 
     private static String staffName(Staff staff) {
         if (staff == null) {

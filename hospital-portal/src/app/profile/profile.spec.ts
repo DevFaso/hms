@@ -147,13 +147,17 @@ describe('ProfileComponent — editing the profile', () => {
       expect(portal.updateMyProfile).toHaveBeenCalledWith({ phoneNumberPrimary: '+22676112233' });
     });
 
-    it('a refused record update is said, and the account keeps its phone too', () => {
+    it('a refused record update is said, and the account gets its old phone back', () => {
+      profiles.updateProfile.and.callFake((_id, data) =>
+        of({ ...profile('old@example.test'), phoneNumber: data.phoneNumber ?? '' }),
+      );
       portal.updateMyProfile.and.returnValue(throwError(() => ({ error: { message: 'taken' } })));
       const patient = asPatient();
       patient.updateField('phoneNumber', '+22676112233');
       patient.saveProfile();
       expect(toast.error).toHaveBeenCalledWith('taken');
-      expect(profiles.updateProfile).not.toHaveBeenCalled();
+      expect(profiles.updateProfile).toHaveBeenCalledTimes(2);
+      expect(profiles.updateProfile.calls.mostRecent().args[1].phoneNumber).toBe('+22670000000');
     });
 
     it('a staff account phone stays the login contact only', () => {

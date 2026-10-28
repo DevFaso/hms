@@ -2169,6 +2169,34 @@ class BillingInvoiceServiceImplTest {
     }
 
     @Test
+    void anInvoiceAWaiverSettledCanStillBeCancelled_D974() {
+        // Settled by a waiver: PAID, no money received. A mistyped waiver is undone by cancelling.
+        InvoiceStatus next = org.springframework.test.util.ReflectionTestUtils.invokeMethod(BillingInvoiceServiceImpl.class,
+            "requestedStatusOnUpdate", InvoiceStatus.PAID, InvoiceStatus.CANCELLED, false);
+        assertEquals(InvoiceStatus.CANCELLED, next);
+        assertThrows(com.example.hms.exception.BusinessException.class,
+            () -> org.springframework.test.util.ReflectionTestUtils.invokeMethod(BillingInvoiceServiceImpl.class,
+                "requestedStatusOnUpdate", InvoiceStatus.PAID, InvoiceStatus.CANCELLED, true));
+    }
+
+    @Test
+    void addAdjustment_aLineDiscountWithoutAnAmountIsRefusedNot500_D974() {
+        adjustments();
+        BillingInvoice invoice = issued("6000", "0");
+        com.example.hms.model.InvoiceItem line = new com.example.hms.model.InvoiceItem();
+        line.setId(UUID.randomUUID());
+        line.setBillingInvoice(invoice);
+        line.setTotalPrice(new BigDecimal("3000"));
+        when(invoiceItemRepository.findById(line.getId())).thenReturn(Optional.of(line));
+
+        com.example.hms.exception.BusinessException refused = assertThrows(com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.addAdjustment(invoice.getId(),
+                adjustment(com.example.hms.enums.InvoiceAdjustmentType.DISCOUNT, null, "Remise", line.getId()),
+                UUID.randomUUID(), Locale.FRENCH));
+        assertEquals("billing.adjustment.amountPositive", refused.getMessageKey());
+    }
+
+    @Test
     void addAdjustment_aDiscountOnALineIsHeldAgainstThatLine_D974() {
         com.example.hms.repository.InvoiceAdjustmentRepository repo = adjustments();
         BillingInvoice invoice = issued("6000", "0");

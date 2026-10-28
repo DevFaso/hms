@@ -75,12 +75,22 @@ public class DisclosureAccountingServiceImpl implements DisclosureAccountingServ
     @Transactional(readOnly = true)
     public DisclosureAccountingDTO getAccountingAsPatientSees(UUID patientId, LocalDateTime from,
                                                               LocalDateTime to, Pageable pageable) {
-        DisclosureAccountingDTO accounting = getAccounting(patientId, from, to, pageable);
+        Set<AuditEventType> accountable = DisclosureCategory.accountableEventTypes();
+        Map<DisclosureCategory, Long> counts = countByCategory(patientId, accountable, from, to);
         Page<AccessLogEntryDTO> folded = getEntriesAsPatientSees(patientId, from, to, pageable);
-        accounting.setEntries(folded.getContent());
-        accounting.setTotalPages(folded.getTotalPages());
-        accounting.setPage(folded.getNumber());
-        return accounting;
+        return DisclosureAccountingDTO.builder()
+            .from(from)
+            .to(to)
+            .countsByCategory(counts)
+            .totalEvents(counts.values().stream().mapToLong(Long::longValue).sum())
+            .externalDisclosures(counts.entrySet().stream()
+                .filter(e -> e.getKey().isExternalDisclosure())
+                .mapToLong(Map.Entry::getValue)
+                .sum())
+            .entries(folded.getContent())
+            .totalPages(folded.getTotalPages())
+            .page(folded.getNumber())
+            .build();
     }
 
     @Override
@@ -92,14 +102,31 @@ public class DisclosureAccountingServiceImpl implements DisclosureAccountingServ
         org.springframework.data.domain.Sort sort = pageable.getSort().isSorted()
             ? pageable.getSort()
             : org.springframework.data.domain.Sort.unsorted();
-        List<AccessLogEntryDTO> folded = foldRepeats(getEntries(patientId, from, to,
-            org.springframework.data.domain.PageRequest.of(0, PATIENT_FOLD_WINDOW, sort)).getContent());
+        Page<AccessLogEntryDTO> window = getEntries(patientId, from, to,
+            org.springframework.data.domain.PageRequest.of(0, PATIENT_FOLD_WINDOW, sort));
+        List<AccessLogEntryDTO> lines = new java.util.ArrayList<>(foldRepeats(window.getContent()));
+        // A record read more than PATIENT_FOLD_WINDOW times: the older rows follow, as they are.
+        long older = Math.max(0, window.getTotalElements() - window.getContent().size());
         if (pageable.isUnpaged()) {
-            return new org.springframework.data.domain.PageImpl<>(folded);
+            if (older > 0) {
+                lines.addAll(getEntries(patientId, from, to,
+                    org.springframework.data.domain.PageRequest.of(1, PATIENT_FOLD_WINDOW, sort)).getContent());
+            }
+            return new org.springframework.data.domain.PageImpl<>(lines);
         }
-        int start = (int) Math.min((long) pageable.getPageNumber() * pageable.getPageSize(), folded.size());
-        int end = Math.min(start + pageable.getPageSize(), folded.size());
-        return new org.springframework.data.domain.PageImpl<>(folded.subList(start, end), pageable, folded.size());
+        long total = lines.size() + older;
+        long start = (long) pageable.getPageNumber() * pageable.getPageSize();
+        List<AccessLogEntryDTO> content = new java.util.ArrayList<>();
+        for (long i = start; i < Math.min(start + pageable.getPageSize(), total); i++) {
+            if (i < lines.size()) {
+                content.add(lines.get((int) i));
+            } else {
+                long olderIndex = PATIENT_FOLD_WINDOW + (i - lines.size());
+                getEntries(patientId, from, to, org.springframework.data.domain.PageRequest.of(
+                        (int) olderIndex, 1, sort)).getContent().forEach(content::add);
+            }
+        }
+        return new org.springframework.data.domain.PageImpl<>(content, pageable, total);
     }
 
     /** QA D979: the most recent audit rows folded for the patient's list (older ones are in the staff accounting). */

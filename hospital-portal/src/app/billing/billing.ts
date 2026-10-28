@@ -121,6 +121,8 @@ export class BillingComponent implements OnInit {
   editingNumber = signal('');
   /** The status the edited invoice has now; a paid status follows payments (QA D91). */
   editingStatus = signal<InvoiceStatus>('DRAFT');
+  /** QA D974: what the edited invoice has received (a waiver can settle it with none). */
+  editingPaid = signal(0);
   /** With lines, the total is their sum and cannot be typed (QA D72). */
   editingHasLines = signal(false);
   /**
@@ -272,6 +274,8 @@ export class BillingComponent implements OnInit {
   statusOptions(): InvoiceStatus[] {
     if (!this.editing()) return ['DRAFT', 'SENT'];
     const current = this.editingStatus();
+    // QA D974: settled by a waiver with no money received: a mistaken waiver is undone by cancelling.
+    if (current === 'PAID' && this.editingPaid() === 0) return ['PAID', 'CANCELLED'];
     if (current === 'PAID' || current === 'PARTIALLY_PAID') return [current];
     return ['DRAFT', 'SENT', 'CANCELLED'];
   }
@@ -293,7 +297,10 @@ export class BillingComponent implements OnInit {
 
   statusLocked(): boolean {
     const current = this.editingStatus();
-    return this.editing() && (current === 'PAID' || current === 'PARTIALLY_PAID');
+    return (
+      this.editing() &&
+      (current === 'PARTIALLY_PAID' || (current === 'PAID' && this.editingPaid() > 0))
+    );
   }
 
   openCreate(): void {
@@ -333,6 +340,7 @@ export class BillingComponent implements OnInit {
     );
     this.editingNumber.set(inv.invoiceNumber ?? '');
     this.editingStatus.set(inv.status ?? 'DRAFT');
+    this.editingPaid.set(Number(inv.amountPaid ?? 0));
     this.editingHasLines.set(false);
     this.billingService.getInvoiceItems(inv.id).subscribe({
       next: (lines) => this.editingHasLines.set((lines ?? []).length > 0),

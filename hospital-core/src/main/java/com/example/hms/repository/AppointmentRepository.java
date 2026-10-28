@@ -158,4 +158,9 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID>,
     /** E8 #48 — appointments of this patient here inside the lookback/lookahead window. */
     List<Appointment> findByPatient_IdAndHospital_IdAndAppointmentDateBetween(
         UUID patientId, UUID hospitalId, LocalDate from, LocalDate to);
+
+    /** QA D936: serialises two check-ins of one appointment (row lock until the transaction ends). */
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.Query("SELECT a.id FROM Appointment a WHERE a.id = :id")
+    java.util.Optional<java.util.UUID> lockById(@org.springframework.data.repository.query.Param("id") java.util.UUID id);
 }

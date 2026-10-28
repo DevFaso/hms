@@ -223,7 +223,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             dto.setProfileCompletionUrl(profileCompletionUrl(assignment));
             dto.setAssignerConfirmationUrl(assignerConfirmationUrl(assignment));
         }
-        dto.setProfileChecklist(buildRoleProfileChecklist(assignment.getRole()));
+        dto.setProfileChecklist(localizedProfileChecklist(assignment.getRole()));
         dto.setConfirmationVerified(assignment.getConfirmationVerifiedAt() != null);
         return dto;
     }
@@ -2581,7 +2581,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     /** QA D941: each checklist line in the caller's language, the English line when a key is missing. */
     private List<String> localizedProfileChecklist(Role role) {
         String owner = checklistKey(role);
-        List<String> english = owner.equals("DEFAULT") ? DEFAULT_PROFILE_CHECKLIST : ROLE_PROFILE_CHECKLISTS.get(owner);
+        List<String> english = buildRoleProfileChecklist(role);
         Locale locale = LocaleContextHolder.getLocale();
         List<String> out = new java.util.ArrayList<>(english.size());
         for (int i = 0; i < english.size(); i++) {
@@ -2605,25 +2605,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     }
 
     private List<String> buildRoleProfileChecklist(Role role) {
-        if (role == null) {
-            return DEFAULT_PROFILE_CHECKLIST;
-        }
-        String code = getRoleCode(role);
-        if (code == null || code.isBlank()) {
-            return DEFAULT_PROFILE_CHECKLIST;
-        }
-        String normalized = code.trim().toUpperCase(Locale.ROOT);
-        List<String> checklist = ROLE_PROFILE_CHECKLISTS.get(normalized);
-        if (checklist != null) {
-            return checklist;
-        }
-        if (!normalized.startsWith(ROLE_PREFIX)) {
-            checklist = ROLE_PROFILE_CHECKLISTS.get(ROLE_PREFIX + normalized);
-            if (checklist != null) {
-                return checklist;
-            }
-        }
-        return DEFAULT_PROFILE_CHECKLIST;
+        String key = checklistKey(role);
+        return "DEFAULT".equals(key) ? DEFAULT_PROFILE_CHECKLIST : ROLE_PROFILE_CHECKLISTS.get(key);
     }
 
     @Override

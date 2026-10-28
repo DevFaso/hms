@@ -698,24 +698,7 @@ export class ProfileComponent implements OnInit {
     const phoneChanged = (data.phoneNumber ?? '') !== (u.phoneNumber ?? '');
 
     this.saving.set(true);
-    // QA D939: a patient's phone lives on the patient record the hospital calls.
-    // The record takes it first; a refusal there (another patient's phone)
-    // leaves both numbers as they were instead of splitting them.
-    if (phoneChanged && this.isPatientOnly() && (data.phoneNumber ?? '').trim()) {
-      this.patientPortal
-        .updateMyProfile({ phoneNumberPrimary: data.phoneNumber!.trim() })
-        .subscribe({
-          next: () => this.saveAccount(u, data, emailChanged, newEmail, password),
-          error: (err) => {
-            this.saving.set(false);
-            this.toast.error(
-              err?.error?.message ?? this.translate.instant('PROFILE.RECORD_PHONE_SYNC_FAILED'),
-            );
-          },
-        });
-      return;
-    }
-    this.saveAccount(u, data, emailChanged, newEmail, password);
+    this.saveAccount(u, data, emailChanged, newEmail, password, phoneChanged);
   }
 
   /** The account part of {@link saveProfile}: names and phone, then the e-mail step. */
@@ -725,6 +708,7 @@ export class ProfileComponent implements OnInit {
     emailChanged: boolean,
     newEmail: string,
     password: string,
+    phoneChanged = false,
   ): void {
     const detailsChanged =
       (data.firstName ?? '') !== (u.firstName ?? '') ||
@@ -733,6 +717,13 @@ export class ProfileComponent implements OnInit {
     if (detailsChanged) {
       this.profileService.updateProfile(u.id, { ...data, email: u.email }).subscribe({
         next: (updated) => {
+          // QA D939: a patient's phone also lives on the record the hospital
+          // calls. The record follows the account; if it refuses (another
+          // patient's phone) the account phone is put back, so the two never differ.
+          if (phoneChanged && this.isPatientOnly() && (updated.phoneNumber ?? '').trim()) {
+            this.syncRecordPhone(u, updated, emailChanged, newEmail, password);
+            return;
+          }
           this.applySavedProfile(updated);
           this.toast.success(this.translate.instant('PROFILE.UPDATED'));
           if (emailChanged) {
@@ -751,6 +742,52 @@ export class ProfileComponent implements OnInit {
     } else {
       this.saving.set(false);
     }
+  }
+
+  /** QA D939: the record takes the account's new phone, or the account gets its old one back. */
+  private syncRecordPhone(
+    before: UserProfile,
+    updated: UserProfile,
+    emailChanged: boolean,
+    newEmail: string,
+    password: string,
+  ): void {
+    this.patientPortal
+      .updateMyProfile({ phoneNumberPrimary: updated.phoneNumber!.trim() })
+      .subscribe({
+        next: () => {
+          this.applySavedProfile(updated);
+          this.toast.success(this.translate.instant('PROFILE.UPDATED'));
+          if (emailChanged) {
+            this.requestEmailChange(newEmail, password);
+          } else {
+            this.saving.set(false);
+          }
+        },
+        error: (err) => {
+          const refusal =
+            err?.error?.message ?? this.translate.instant('PROFILE.RECORD_PHONE_SYNC_FAILED');
+          this.profileService
+            .updateProfile(before.id, {
+              firstName: updated.firstName,
+              lastName: updated.lastName,
+              phoneNumber: before.phoneNumber,
+              email: before.email,
+            })
+            .subscribe({
+              next: (restored) => {
+                this.applySavedProfile(restored);
+                this.saving.set(false);
+                this.toast.error(refusal);
+              },
+              error: () => {
+                this.applySavedProfile(updated);
+                this.saving.set(false);
+                this.toast.error(this.translate.instant('PROFILE.RECORD_PHONE_SYNC_FAILED'));
+              },
+            });
+        },
+      });
   }
 
   /** Step 1 of an email change: the server sends a code to the new address. */

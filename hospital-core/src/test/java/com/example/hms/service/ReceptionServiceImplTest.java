@@ -1586,6 +1586,10 @@ class ReceptionServiceImplTest {
             verify(appointmentRepo).save(any(Appointment.class));
             verify(encounterRepo).save(any(Encounter.class));
             verify(auditEventLogService).logEvent(any());
+            // QA D936: the appointment row is locked before it is read.
+            org.mockito.InOrder lockThenRead = org.mockito.Mockito.inOrder(appointmentRepo);
+            lockThenRead.verify(appointmentRepo).lockById(appointmentId);
+            lockThenRead.verify(appointmentRepo).findById(appointmentId);
             // No consent fields on the request — nothing recorded (P3 #21).
             verify(treatmentConsentService, org.mockito.Mockito.never())
                 .record(any(), any(), any(), any(), any());

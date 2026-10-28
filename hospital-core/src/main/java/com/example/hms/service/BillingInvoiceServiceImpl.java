@@ -492,7 +492,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             if (amount == null && creditNote) {
                 amount = left.min(total);
             }
-            if (amount.compareTo(left) > 0) {
+            if (amount != null && amount.compareTo(left) > 0) {
                 throw new BusinessException("billing.adjustment.moreThanLine", formatFrancs(left));
             }
         }
@@ -551,10 +551,12 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         java.util.Objects.requireNonNull(adjustmentRepository, "adjustmentRepository");
     }
 
-    /** "4 000", the way the refusals print francs CFA. */
+    /** Whole francs grouped as the reader writes them ("4 000", "4,000", "4.000"). */
     private static String formatFrancs(BigDecimal amount) {
-        return String.format(java.util.Locale.FRANCE, "%,d", amount.setScale(0, java.math.RoundingMode.HALF_UP)
-            .longValueExact()).replace('\u00a0', ' ').replace('\u202f', ' ');
+        java.text.NumberFormat format = java.text.NumberFormat.getIntegerInstance(LocaleContextHolder.getLocale());
+        format.setGroupingUsed(true);
+        return format.format(amount.setScale(0, java.math.RoundingMode.HALF_UP).longValueExact())
+            .replace('\u00a0', ' ').replace('\u202f', ' ');
     }
 
     /** QA D974: who lowered which invoice and how (ids and the kind only, as the payment audit: no amount, no reason text). */
@@ -898,7 +900,11 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         }
         // QA D142: a paid or partly paid invoice is cancelled or re-drafted
         // only once its payments are reversed; the message says so.
-        if (hasPayments || current == InvoiceStatus.PAID || current == InvoiceStatus.PARTIALLY_PAID) {
+        // QA D974: an invoice a waiver settled took no money; it may still be
+        // cancelled (and re-issued) when the waiver was a mistake.
+        boolean settledWithoutMoney = current == InvoiceStatus.PAID && !hasPayments;
+        if (hasPayments || (current == InvoiceStatus.PAID && !settledWithoutMoney)
+                || current == InvoiceStatus.PARTIALLY_PAID) {
             throw new BusinessException("billing.invoice.statusLockedByPayments");
         }
         return requested;
@@ -1514,12 +1520,9 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             return;
         }
         requireWholeAmount(amount);
-        // QA D936 (class): one copay per visit. A repeated or retried check-in
-        // of the same encounter does not bill the patient a second copay; the
-        // encounter row is locked so two concurrent calls cannot both pass.
-        if (encounter.getId() != null) {
-            encounterRepository.lockById(encounter.getId());
-        }
+        // QA D936 (class): one copay per visit. A copay re-recorded on the same
+        // encounter is not billed again; two check-ins of one appointment are
+        // serialised by the appointment lock in ReceptionServiceImpl.checkInPatient.
         if (encounter.getId() != null && invoiceRepository
                 .findByEncounter_IdAndStatusNot(encounter.getId(), InvoiceStatus.DRAFT).stream()
                 .anyMatch(existing -> existing.isCheckInCopay()
