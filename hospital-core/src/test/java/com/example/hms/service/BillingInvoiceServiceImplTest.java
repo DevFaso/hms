@@ -1506,7 +1506,9 @@ class BillingInvoiceServiceImplTest {
         com.example.hms.exception.BusinessException refused = assertThrows(
             com.example.hms.exception.BusinessException.class,
             () -> billingInvoiceService.searchInvoices(request, PageRequest.of(0, 20), Locale.ENGLISH));
-        assertEquals("billing.invoice.hospitalMismatch", refused.getMessageKey());
+        // QA D1011: a search names the search, not an invoice's hospital.
+        assertEquals("billing.search.otherHospital", refused.getMessageKey());
+        assertTrue(rendered(refused, Locale.FRENCH).contains("rechercher"));
     }
 
     @Test
@@ -2084,6 +2086,92 @@ class BillingInvoiceServiceImplTest {
             .supplementary(true).build(), Locale.ENGLISH);
 
         verify(invoiceRepository).saveAndFlush(any(BillingInvoice.class));
+    }
+
+    // =========================================================================
+    // QA D936: the visit code left empty still takes the check-in copay
+    // =========================================================================
+
+    private com.example.hms.model.Encounter unstubbedVisitOf(Patient owner) {
+        Hospital acting = new Hospital();
+        acting.setId(HOSPITAL_ID);
+        com.example.hms.model.Encounter encounter = new com.example.hms.model.Encounter();
+        encounter.setId(UUID.randomUUID());
+        encounter.setCode("ENC-20261027-25DB1D");
+        encounter.setHospital(acting);
+        encounter.setPatient(owner);
+        return encounter;
+    }
+
+    private BillingInvoice paidCopay(Patient patient, com.example.hms.model.Encounter visit, String amount) {
+        BillingInvoice copay = BillingInvoice.builder().patient(patient).encounter(visit)
+            .totalAmount(new BigDecimal(amount)).amountPaid(new BigDecimal(amount))
+            .status(InvoiceStatus.PAID).checkInCopay(true).build();
+        copay.setId(UUID.randomUUID());
+        return copay;
+    }
+
+    @Test
+    void createInvoice_withoutVisitCode_takesThePatientsOnlyOpenCopay_D936() {
+        pinnedHospital();
+        Patient patient = registeredPatient();
+        com.example.hms.model.Encounter visit = unstubbedVisitOf(patient);
+        BillingInvoice copay = paidCopay(patient, visit, "1000");
+        when(invoiceRepository.findByPatient_IdAndHospital_IdAndCheckInCopayTrueAndStatus(
+            patient.getId(), HOSPITAL_ID, InvoiceStatus.PAID)).thenReturn(List.of(copay));
+        when(invoiceRepository.findByEncounter_IdAndStatusNot(visit.getId(), InvoiceStatus.CANCELLED))
+            .thenReturn(List.of(copay));
+        when(invoiceRepository.findByEncounter_IdAndCheckInCopayTrueAndStatus(visit.getId(), InvoiceStatus.PAID))
+            .thenReturn(List.of(copay));
+        when(invoiceRepository.findById(copay.getId())).thenReturn(Optional.of(copay));
+        when(paymentTransactionRepository.findByInvoice_IdOrderByCreatedAtAsc(copay.getId())).thenReturn(List.of());
+        when(invoiceRepository.save(any(BillingInvoice.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        BillingInvoiceResponseDTO consultation = billingInvoiceService.createInvoice(
+            requestFor(patient).totalAmount(new BigDecimal("3000")).status(InvoiceStatus.SENT).build(),
+            Locale.FRENCH);
+
+        assertEquals("ENC-20261027-25DB1D", consultation.getEncounterCode());
+        assertEquals(0, new BigDecimal("2000").compareTo(consultation.getBalanceDue()));
+        assertEquals(InvoiceStatus.CANCELLED, copay.getStatus());
+    }
+
+    @Test
+    void createInvoice_withoutVisitCode_doesNotGuessBetweenTwoOpenCopays_D936() {
+        pinnedHospital();
+        Patient patient = registeredPatient();
+        when(invoiceRepository.findByPatient_IdAndHospital_IdAndCheckInCopayTrueAndStatus(
+            patient.getId(), HOSPITAL_ID, InvoiceStatus.PAID)).thenReturn(List.of(
+                paidCopay(patient, unstubbedVisitOf(patient), "1000"),
+                paidCopay(patient, unstubbedVisitOf(patient), "1000")));
+
+        BillingInvoiceResponseDTO consultation = billingInvoiceService.createInvoice(
+            requestFor(patient).totalAmount(new BigDecimal("3000")).status(InvoiceStatus.SENT).build(),
+            Locale.FRENCH);
+
+        assertNull(consultation.getEncounterCode());
+        assertEquals(0, new BigDecimal("3000").compareTo(consultation.getBalanceDue()));
+    }
+
+    @Test
+    void createInvoice_withoutVisitCode_leavesAnAlreadyInvoicedVisitAlone_D936() {
+        pinnedHospital();
+        Patient patient = registeredPatient();
+        com.example.hms.model.Encounter visit = unstubbedVisitOf(patient);
+        BillingInvoice copay = paidCopay(patient, visit, "1000");
+        BillingInvoice visitInvoice = BillingInvoice.builder().patient(patient).encounter(visit)
+            .totalAmount(new BigDecimal("500")).status(InvoiceStatus.SENT).build();
+        when(invoiceRepository.findByPatient_IdAndHospital_IdAndCheckInCopayTrueAndStatus(
+            patient.getId(), HOSPITAL_ID, InvoiceStatus.PAID)).thenReturn(List.of(copay));
+        when(invoiceRepository.findByEncounter_IdAndStatusNot(visit.getId(), InvoiceStatus.CANCELLED))
+            .thenReturn(List.of(copay, visitInvoice));
+
+        BillingInvoiceResponseDTO pharmacy = billingInvoiceService.createInvoice(
+            requestFor(patient).totalAmount(new BigDecimal("3000")).status(InvoiceStatus.SENT).build(),
+            Locale.FRENCH);
+
+        assertNull(pharmacy.getEncounterCode());
+        assertEquals(InvoiceStatus.PAID, copay.getStatus());
     }
 
     @Test

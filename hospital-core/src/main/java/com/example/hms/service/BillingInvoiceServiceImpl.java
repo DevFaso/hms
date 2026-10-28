@@ -166,6 +166,9 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         requireCoherentDates(dto.getInvoiceDate(), dto.getDueDate(), null, hospital);
         Patient patient = resolvePatient(dto, hospitalId);
         Encounter encounter = resolveEncounter(dto, hospitalId);
+        if (encounter == null && !Boolean.TRUE.equals(dto.getSupplementary())) {
+            encounter = soleOpenCopayVisit(patient, hospitalId);
+        }
         // QA D403: the visit billed must be this patient's visit.
         rejectEncounterOfOtherPatient(encounter, patient);
         rejectUnconfirmedSecondInvoice(encounter, dto);
@@ -365,6 +368,29 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         if (!java.util.Objects.equals(encounter.getPatient().getId(), patient.getId())) {
             throw new BusinessException("billing.encounter.otherPatient");
         }
+    }
+
+    /**
+     * QA D936: an invoice raised with the visit code left empty never took the
+     * copay paid at check-in, so the patient paid it twice. When the patient
+     * has exactly one paid copay at this hospital that no invoice has taken,
+     * and its visit is not invoiced yet, the new invoice is that visit's.
+     * With two or more the visit is not guessed; the form lists them instead.
+     */
+    private Encounter soleOpenCopayVisit(Patient patient, UUID hospitalId) {
+        List<BillingInvoice> open = invoiceRepository
+            .findByPatient_IdAndHospital_IdAndCheckInCopayTrueAndStatus(patient.getId(), hospitalId, InvoiceStatus.PAID);
+        if (open == null || open.size() != 1) {
+            return null;
+        }
+        Encounter visit = open.get(0).getEncounter();
+        if (visit == null || visit.getId() == null || visit.getHospital() == null
+                || !hospitalId.equals(visit.getHospital().getId())) {
+            return null;
+        }
+        boolean invoiced = invoiceRepository.findByEncounter_IdAndStatusNot(visit.getId(), InvoiceStatus.CANCELLED)
+            .stream().anyMatch(existing -> !existing.isCheckInCopay());
+        return invoiced ? null : visit;
     }
 
     /** The encounter named by code, only when it belongs to the invoicing hospital. */
@@ -825,8 +851,9 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         UUID effectiveHospitalId = (searchRequest != null ? searchRequest.getHospitalId() : null);
         if (activeHospitalId != null) {
             // QA D230: another hospital named in the body is refused, not rewritten.
+            // QA D1011: with a search message, not the invoice-create one.
             if (effectiveHospitalId != null && !effectiveHospitalId.equals(activeHospitalId)) {
-                throw new BusinessException("billing.invoice.hospitalMismatch");
+                throw new BusinessException("billing.search.otherHospital");
             }
             effectiveHospitalId = activeHospitalId;
         }
