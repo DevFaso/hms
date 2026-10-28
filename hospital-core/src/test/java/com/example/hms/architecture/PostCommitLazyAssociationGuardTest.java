@@ -79,7 +79,8 @@ class PostCommitLazyAssociationGuardTest {
 
     /**
      * Post-commit chains a reviewer looked at and found to read no row (a DTO, an
-     * exception, a date) — {@code "file:line chain", count, reason}. Empty today: the
+     * exception, a date) — {@code "file chain", count, reason} (no line number, so the
+     * entry survives edits above it). Empty today: the
      * lambdas pass ids. A chain on an entity is never pinned, it is fixed.
      */
     private static final Map<String, Allowance> ALLOWED_POST_COMMIT = GuardAllowlist.allow();
@@ -207,8 +208,19 @@ class PostCommitLazyAssociationGuardTest {
                 offenders.addAll(postCommitChains(rel, Files.readString(p, StandardCharsets.UTF_8)));
             }
         }
-        Map<String, Integer> actual = GuardAllowlist.counts(offenders);
-        assertThat(GuardAllowlist.overAllowance(actual, ALLOWED_POST_COMMIT))
+        // Keyed "file chain" — never the line, so a pinned chain does not go stale (and
+        // then fail as over allowance) when an unrelated line is inserted above it; the
+        // lines are kept for the message.
+        Map<String, Integer> actual = new TreeMap<>();
+        Map<String, String> where = new TreeMap<>();
+        for (String offender : offenders) {
+            String key = offender.replaceFirst(":\\d+ ", " ");
+            actual.merge(key, 1, Integer::sum);
+            where.merge(key, offender, (a, b) -> a + ", " + b);
+        }
+        assertThat(GuardAllowlist.overAllowance(actual, ALLOWED_POST_COMMIT).stream()
+                .map(over -> over + " — " + where.get(over.substring(0, over.indexOf(" ×"))))
+                .toList())
             .as("post-commit code runs with no persistence context: pass ids to the REQUIRES_NEW service (#564, D921);"
                 + " a chain on a DTO or an exception a reviewer checked goes in ALLOWED_POST_COMMIT with the reason"
                 + SourceScan.MANDATE)

@@ -10,7 +10,21 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { moneyTemplateFindings, moneyComponentFindings } from './money-scan.mjs';
-import { dedupe } from './baseline.mjs';
+import { dedupe, invalidPins } from './baseline.mjs';
+
+test('a pin with a TODO or empty reason, or a count below 1, is invalid (the GuardAllowlist rule)', () => {
+  const pinned = {
+    'a::pipe::x': { count: 1, why: 'QA D948: payment panel' },
+    'b::pipe::y': { count: 2, why: 'TODO: defect id or reason' },
+    'c::pipe::z': { count: 0, why: 'QA D948' },
+    'd::pipe::w': { count: 1, why: '  ' },
+  };
+  assert.deepEqual(invalidPins({ pinned }), [
+    'b::pipe::y: "why" must be a QA defect id or a reason',
+    'c::pipe::z: count must be a whole number >= 1',
+    'd::pipe::w: "why" must be a QA defect id or a reason',
+  ]);
+});
 
 const anchors = (findings) => findings.map((f) => `${f.rule}:${f.anchor}`);
 

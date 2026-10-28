@@ -37,6 +37,7 @@
  * scripts/ts-literals-baseline.json until they are keyed. A sixth fails.
  */
 import { lineOf } from './html-tags.mjs';
+import { endOfLiteralOrComment, balanced } from './js-scan.mjs';
 
 const PROSE_WORDS = /[A-Za-zÀ-ÿ]{2,}\s+[A-Za-zÀ-ÿ]{2,}/;
 const TRANSLATION_KEY = /^[A-Z0-9_]+(?:\.[A-Z0-9_]+)+$/;
@@ -57,46 +58,8 @@ const STATUS_KEY = new RegExp(String.raw`(?:^|[{,\s])(${STATUS_NAME})\s*:\s*(?=[
 // The receiver of a setter is itself a status field: its whole argument was read by SIGNAL_OPEN.
 const STATUS_RECEIVER = new RegExp(String.raw`\b(?:${STATUS_NAME})$`);
 
-/**
- * When `source[i]` opens a string literal or a comment, the index of its last
- * character; otherwise -1. Comments count: an apostrophe in
- * `// the backend's message` is not the start of a string.
- */
-function endOfLiteralOrComment(source, i) {
-  const ch = source[i];
-  if (ch === "'" || ch === '"' || ch === '`') {
-    let j = i + 1;
-    for (; j < source.length && source[j] !== ch; j++) {
-      if (source[j] === '\\') j++;
-    }
-    return j;
-  }
-  if (ch === '/' && source[i + 1] === '/') {
-    const nl = source.indexOf('\n', i);
-    return nl < 0 ? source.length - 1 : nl;
-  }
-  if (ch === '/' && source[i + 1] === '*') {
-    const close = source.indexOf('*/', i + 2);
-    return close < 0 ? source.length - 1 : close + 1;
-  }
-  return -1;
-}
-
 /** The balanced `( … )` opened at `openParen`, strings and comments skipped. */
-function balancedArguments(source, openParen) {
-  let depth = 0;
-  for (let i = openParen; i < source.length; i++) {
-    const skipped = endOfLiteralOrComment(source, i);
-    if (skipped >= 0) {
-      i = skipped;
-      continue;
-    }
-    const ch = source[i];
-    if (ch === '(') depth++;
-    else if (ch === ')' && --depth === 0) return source.slice(openParen, i + 1);
-  }
-  return source.slice(openParen);
-}
+const balancedArguments = (source, openParen) => balanced(source, openParen);
 
 /**
  * The expression after `=`: up to the `;` that ends the statement, outside

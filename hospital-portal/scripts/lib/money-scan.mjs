@@ -21,6 +21,7 @@
  *            component.
  */
 import { lineOf } from './html-tags.mjs';
+import { balanced } from './js-scan.mjs';
 
 const MONEY_TAIL =
   '(?:amount|price|balance|copay|copayment|revenue|subtotal|fee|fees|cost|paid|due|charge|charges|payment|discount|refund|' +
@@ -73,22 +74,8 @@ const HELPER_DECL =
 // `new Intl.NumberFormat(currentLocale(), { style: 'currency', … })` is seen whole.
 const INTL_CURRENCY = /new\s+Intl\.NumberFormat\(|\.toLocaleString\(/g;
 
-/** The balanced `( … )` argument list opened at `openParenIndex`, strings skipped. */
-function argumentsAfter(source, openParenIndex) {
-  let depth = 0;
-  for (let i = openParenIndex; i < source.length; i++) {
-    const ch = source[i];
-    if (ch === "'" || ch === '"' || ch === '`') {
-      for (i++; i < source.length && source[i] !== ch; i++) {
-        if (source[i] === '\\') i++;
-      }
-      continue;
-    }
-    if (ch === '(') depth++;
-    else if (ch === ')' && --depth === 0) return source.slice(openParenIndex, i + 1);
-  }
-  return source.slice(openParenIndex);
-}
+/** The balanced `( … )` argument list opened at `openParenIndex`, strings and comments skipped. */
+const argumentsAfter = (source, openParenIndex) => balanced(source, openParenIndex, '(', ')');
 
 const lineAt = lineOf;
 
@@ -159,27 +146,8 @@ export function moneyTemplateFindings(html) {
   return out;
 }
 
-/** The balanced `{ … }` body opened at `openBraceIndex`; a brace inside a string or template literal is text. */
-function bodyAfter(source, openBraceIndex) {
-  let depth = 0;
-  for (let i = openBraceIndex; i < source.length; i++) {
-    const ch = source[i];
-    if (ch === "'" || ch === '"' || ch === '`') {
-      for (i++; i < source.length && source[i] !== ch; i++) {
-        if (source[i] === '\\') i++;
-      }
-      continue;
-    }
-    if (ch === '/' && source[i + 1] === '/') {
-      i = source.indexOf('\n', i);
-      if (i < 0) break;
-      continue;
-    }
-    if (ch === '{') depth++;
-    else if (ch === '}' && --depth === 0) return source.slice(openBraceIndex, i + 1);
-  }
-  return source.slice(openBraceIndex);
-}
+/** The balanced `{ … }` body opened at `openBraceIndex`; a brace inside a literal or a comment is text. */
+const bodyAfter = (source, openBraceIndex) => balanced(source, openBraceIndex, '{', '}');
 
 /** Component rules: `helper` and `fixed`. `isLocaleModule` exempts app-locale.ts itself. */
 export function moneyComponentFindings(source, isLocaleModule = false) {

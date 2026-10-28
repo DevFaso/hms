@@ -12,12 +12,13 @@ public final class SourceScan {
 
     /**
      * Appended to every guard's failure message: the standing rule for anyone fixing a
-     * D-numbered defect, with the page that is in this tree first and the project skill
-     * (defect-fix-mandate, PR #974) that spells out the whole mandate second.
+     * D-numbered defect. It names only the page that is in this tree; that page
+     * summarises the defect-fix-mandate skill and links it, so the message never points
+     * at a file a branch may not carry yet.
      */
     public static final String MANDATE =
-        " — fixing a QA defect? Read docs/qa/regression-guards.md (\"How a fix PR uses these guards\") and the"
-            + " defect-fix-mandate skill (.claude/skills/defect-fix-mandate/SKILL.md): fix the CLASS, not the instance;"
+        " — fixing a QA defect? Read docs/qa/regression-guards.md (\"How a fix PR uses these guards\", the"
+            + " defect-fix-mandate rule): fix the CLASS, not the instance;"
             + " an allowlist entry carries its defect id and the fix PR deletes it; a new site fails CI and is never"
             + " allowlisted to pass";
 

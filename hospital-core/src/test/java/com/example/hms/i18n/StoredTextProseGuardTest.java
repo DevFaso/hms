@@ -104,7 +104,7 @@ class StoredTextProseGuardTest {
      * or an audit builder.
      */
     static boolean exempt(String source, int statementStart, int at) {
-        if (EXEMPT_RECEIVER.matcher(chainBefore(source, statementStart, at)).find()) {
+        if (EXEMPT_RECEIVER.matcher(withoutArguments(chainBefore(source, statementStart, at))).find()) {
             return true;
         }
         int depth = 0;
@@ -116,7 +116,7 @@ class StoredTextProseGuardTest {
                 depth++;
             } else if (ch == '(' && depth-- == 0) {
                 depth = 0;
-                if (EXEMPT_RECEIVER.matcher(chainBefore(source, statementStart, i) + "(").find()) {
+                if (EXEMPT_RECEIVER.matcher(withoutArguments(chainBefore(source, statementStart, i)) + "(").find()) {
                     return true;
                 }
             }
@@ -149,6 +149,32 @@ class StoredTextProseGuardTest {
             }
         }
         return source.substring(Math.max(i + 1, statementStart), end);
+    }
+
+    /**
+     * The chain with every argument list emptied: {@code Notification.forEvent(AuditEventType.X)}
+     * → {@code Notification.forEvent()}. Only the calls of the chain decide the exemption,
+     * not a token passed to one of them.
+     */
+    static String withoutArguments(String chain) {
+        StringBuilder out = new StringBuilder();
+        int depth = 0;
+        for (int i = 0; i < chain.length(); i++) {
+            int skipped = SourceScan.endOfLiteralOrComment(chain, i);
+            if (skipped >= 0) {
+                i = skipped;
+                continue;
+            }
+            char ch = chain.charAt(i);
+            if (ch == '(' && depth++ == 0) {
+                out.append(ch);
+            } else if (ch == ')' && --depth == 0) {
+                out.append(ch);
+            } else if (depth == 0) {
+                out.append(ch);
+            }
+        }
+        return out.toString();
     }
 
     /** The index of the quote that opens the literal whose closing quote is at {@code close}. */
@@ -340,6 +366,7 @@ class StoredTextProseGuardTest {
             log.info("[Scheduler Lock] " + name);
             LOG.warn("--- Sweep aborted ---");
             notificationService.create(AuditEventType.LAB_RESULT, Notification.builder().title("Result ready for the clinician").build());
+            Notification.forEvent(AuditEventType.LAB_RESULT).title("Result ready for review");
             log.info("Rebuilt note {}", noteBuilder.append("Rebuilt from the archive"));
             appendSectionIfPresent(noteBuilder, "[Nursing Assessment]", other);
             // noteBuilder.append("Not a real section header") — a comment is not a site
@@ -351,6 +378,7 @@ class StoredTextProseGuardTest {
             Map.entry("x::Medication out of stock; placed on back order", 2),
             Map.entry("x::Pain scale: ", 1),
             Map.entry("x::Result ready for the clinician", 1),
+            Map.entry("x::Result ready for review", 1),
             Map.entry("x::Walk-in", 1),
             Map.entry("x::Your result is ready for review", 1),
             Map.entry("x::[Medication Reconciliation] ", 1),

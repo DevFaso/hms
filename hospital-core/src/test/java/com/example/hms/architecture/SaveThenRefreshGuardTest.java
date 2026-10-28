@@ -106,9 +106,16 @@ class SaveThenRefreshGuardTest {
             // A flush clears the pending update only when it always runs before the
             // refresh: one inside an `if (audit) { em.flush(); }` does not.
             int flush = unconditional(rest, FLUSH, false);
+            // `if (dirty) { save(x); } else { refresh(x); }`: the else chain of the save's
+            // own `if` never runs after the save.
+            int[] exclusive = elseChain(source, blockEnd);
             while (refresh.find()) {
                 if (flush >= 0 && flush < refresh.start()) {
                     break;
+                }
+                int absolute = semicolon + 1 + refresh.start();
+                if (exclusive != null && absolute > exclusive[0] && absolute < exclusive[1]) {
+                    continue;
                 }
                 String refreshed = refresh.group(1);
                 if (refreshed.equals(saved) || namesIdentifier(argument, refreshed)) {
@@ -119,6 +126,53 @@ class SaveThenRefreshGuardTest {
             }
         }
         return out;
+    }
+
+    /**
+     * When the block closed at {@code blockEnd} is followed by {@code else} (an
+     * {@code else if} chain included, braced or not): the range from that {@code else}
+     * to the end of the chain. {@code null} otherwise. A {@code catch} is not
+     * exclusive — the save may have run before the exception.
+     */
+    static int[] elseChain(String source, int blockEnd) {
+        if (blockEnd >= source.length() || source.charAt(blockEnd) != '}') {
+            return null;
+        }
+        int start = skipSpace(source, blockEnd + 1);
+        if (!startsWord(source, start, "else")) {
+            return null;
+        }
+        int end = start;
+        int at = start;
+        while (startsWord(source, at, "else")) {
+            at = skipSpace(source, at + 4);
+            if (startsWord(source, at, "if")) {
+                int paren = source.indexOf('(', at);
+                at = skipSpace(source, SourceScan.closingParen(source, paren) + 1);
+            }
+            if (at < source.length() && source.charAt(at) == '{') {
+                end = SourceScan.closingBrace(source, at);
+            } else {
+                end = SourceScan.indexOfOutsideLiterals(source, ';', at);
+            }
+            if (end < 0) {
+                return null;
+            }
+            at = skipSpace(source, end + 1);
+        }
+        return new int[] {start, end};
+    }
+
+    private static int skipSpace(String source, int at) {
+        while (at < source.length() && Character.isWhitespace(source.charAt(at))) {
+            at++;
+        }
+        return at;
+    }
+
+    private static boolean startsWord(String source, int at, String word) {
+        return source.startsWith(word, at)
+            && (at + word.length() >= source.length() || !Character.isJavaIdentifierPart(source.charAt(at + word.length())));
     }
 
     /**
@@ -429,6 +483,23 @@ class SaveThenRefreshGuardTest {
                 if (audit) { entityManager.flush(); }
                 entityManager.refresh(saved);
             """;
+        // The else chain of the save's own `if` never runs after the save; a refresh
+        // after the whole if/else still does.
+        String elseBranch = """
+                public void sync(Appointment existing) {
+                    if (dirty) { appointmentRepository.save(existing); }
+                    else if (stale) entityManager.refresh(existing);
+                    else { entityManager.refresh(existing); }
+                }
+            """;
+        String afterTheElse = """
+                public void sync(Appointment existing) {
+                    if (dirty) { appointmentRepository.save(existing); } else { log.debug("clean"); }
+                    entityManager.refresh(existing);
+                }
+            """;
+        assertThat(offenders("x", elseBranch)).isEmpty();
+        assertThat(offenders("x", afterTheElse)).hasSize(1);
         assertThat(offenders("x", nestedReturn)).hasSize(1);
         assertThat(offenders("x", bracelessReturn)).hasSize(1);
         assertThat(offenders("x", writerFlush)).hasSize(1);

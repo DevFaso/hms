@@ -143,8 +143,34 @@ class UpdateHandlerServiceTestCoverageTest {
     /** {@code name(} in test code: every method name some test under src/test/java calls. */
     private static final Pattern CALLED = Pattern.compile("\\b(\\w+)\\s*\\(");
 
-    /** The source-scanning guards: their fixtures spell method names that no test calls. */
-    private static final Pattern GUARD_TEST = Pattern.compile(".*(?:GuardTest|CoverageTest|RatchetTest)\\.java");
+    /**
+     * The test source with the CONTENT of every string literal and text block blanked
+     * (delimiters and newlines kept). A source-scanning guard spells method names in its
+     * fixtures ({@code """ … service.update(…) … """}) that no test calls; blanking the
+     * literals drops exactly those, so no file has to be left out by its name — a
+     * behaviour test named {@code AdmissionCreationGuardTest}, or a service test that
+     * also reads one source file, still counts for the calls it makes in code.
+     */
+    static String withoutLiterals(String source) {
+        StringBuilder out = new StringBuilder(source.length());
+        for (int i = 0; i < source.length(); i++) {
+            int end = SourceScan.endOfLiteralOrComment(source, i);
+            char ch = source.charAt(i);
+            if (end < 0 || ch == '/') {
+                out.append(ch);
+                continue;
+            }
+            int last = Math.min(end, source.length() - 1);
+            int delimiter = source.startsWith("\"\"\"", i) ? 3 : 1;
+            for (int k = i; k <= last; k++) {
+                boolean edge = k < i + delimiter || k > last - delimiter;
+                char c = source.charAt(k);
+                out.append(edge || c == '\n' ? c : ' ');
+            }
+            i = last;
+        }
+        return out.toString();
+    }
 
     /**
      * A Mockito stub or verification: {@code when(service.update(…))}, {@code verify(service).update(…)},
@@ -218,19 +244,18 @@ class UpdateHandlerServiceTestCoverageTest {
     }
 
     /**
-     * The names every test calls, read once, so each handler is a set lookup. The
-     * guards' own fixtures, every comment and every Mockito stub are left out: a
-     * sentence in a Javadoc, a `save(` inside another guard's fixture string, or a
+     * The names every test calls, read once, so each handler is a set lookup. Every
+     * string literal and text block (the guards' fixtures), every comment and every
+     * Mockito stub are left out: a sentence in a Javadoc, a `save(` inside a guard's
+     * fixture string, or a
      * `when(service.updateFoo(…))` is not a test exercising the method.
      */
     private static Set<String> namesCalledByTests() throws IOException {
         Set<String> names = new TreeSet<>();
         try (Stream<Path> files = Files.walk(TESTS)) {
             for (Path p : files.filter(f -> f.toString().endsWith(".java")).toList()) {
-                if (GUARD_TEST.matcher(p.getFileName().toString()).matches()) {
-                    continue;
-                }
-                String calls = withoutStubs(SourceScan.stripComments(Files.readString(p, StandardCharsets.UTF_8)));
+                String calls = withoutStubs(withoutLiterals(
+                    SourceScan.stripComments(Files.readString(p, StandardCharsets.UTF_8))));
                 Matcher m = CALLED.matcher(calls);
                 while (m.find()) {
                     names.add(m.group(1));
@@ -409,6 +434,22 @@ class UpdateHandlerServiceTestCoverageTest {
         assertThat(kept).contains("renameFoo(", "perform(")
             .doesNotContain("updateFoo(", "updateBar(", "updateBaz(", "updateQux(", "updateQuux(", "archiveQuux(",
                 "updateBed(");
+    }
+
+    @Test
+    @DisplayName("a method named inside a fixture literal is not a call; one called in code is, whatever the file's name")
+    void fixtureLiteralsAreNotCalls() {
+        String tq = "\"\"\"";
+        // A source-scanning guard: its fixture spells the handler's service call.
+        String guard = "String fixture = " + tq + "\n    advanceDirectiveService.update(id, request);\n    " + tq + ";\n"
+            + "String one = \"wardService.renameWard(id)\";\n";
+        // A behaviour test that also reads one production file still calls the service in code.
+        String behaviour = "String src = Files.readString(Path.of(\"src/main/java/A.java\"));\n"
+            + "service.pause(auth, refillId, null);\n";
+        String blanked = withoutLiterals(guard);
+        assertThat(blanked).doesNotContain("update(", "renameWard(").contains(tq).contains("\n");
+        assertThat(blanked).hasSameSizeAs(guard);
+        assertThat(withoutLiterals(behaviour)).contains("service.pause(").doesNotContain("src/main");
     }
 
     @Test

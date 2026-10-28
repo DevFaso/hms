@@ -89,6 +89,24 @@ export function compare(findings, baseline) {
   return { fresh, stale };
 }
 
+/**
+ * Pins that excuse nothing a reviewer can check: a count that is not a whole
+ * number of at least 1, or a `why` that is empty or still the `TODO` that
+ * `--write-baseline` writes. The same rule as the Java GuardAllowlist.allow():
+ * `--write-baseline` can list what changed, it cannot make CI green on its own.
+ */
+export function invalidPins(baseline) {
+  const bad = [];
+  for (const [id, pin] of Object.entries(baseline.pinned)) {
+    const count = pin?.count;
+    const why = typeof pin?.why === 'string' ? pin.why.trim() : '';
+    if (!Number.isInteger(count) || count < 1) bad.push(`${id}: count must be a whole number >= 1`);
+    if (why === '' || /^TODO\b/i.test(why))
+      bad.push(`${id}: "why" must be a QA defect id or a reason`);
+  }
+  return bad;
+}
+
 export function writeBaseline(path, findings, comment, previous = { pinned: {} }) {
   const pinned = {};
   for (const [id, { count }] of [...tally(findings)].sort(([a], [b]) => a.localeCompare(b))) {
@@ -136,13 +154,17 @@ export function evaluateGate({ name, baselinePath, findings, comment, hint }, ar
   for (const s of stale) {
     console.error(`stale pin: ${s} — lower or delete it in ${baselinePath}`);
   }
-  if (fresh.length > 0 || stale.length > 0) console.error(`\n${MANDATE}`);
+  const invalid = invalidPins(baseline);
+  for (const s of invalid) {
+    console.error(`invalid pin: ${s} (${baselinePath})`);
+  }
+  if (fresh.length > 0 || stale.length > 0 || invalid.length > 0) console.error(`\n${MANDATE}`);
   const pinnedTotal = Object.values(baseline.pinned).reduce((n, p) => n + p.count, 0);
   console.log(
     `${name}: ${findings.length} site(s) found, ${pinnedTotal} pinned, ` +
       `${fresh.length} new, ${stale.length} stale pin(s)`,
   );
-  return reportOnly || (fresh.length === 0 && stale.length === 0);
+  return reportOnly || (fresh.length === 0 && stale.length === 0 && invalid.length === 0);
 }
 
 /** A gate run on its own (`node scripts/check-x.mjs`): evaluate, exit 1 on failure. */
@@ -169,8 +191,12 @@ export function isMain(moduleUrl) {
   return real(process.argv[1]) === real(fileURLToPath(moduleUrl));
 }
 
-/** Printed under every failing gate: the standing rule for anyone fixing a D-numbered defect. */
+/**
+ * Printed under every failing gate: the standing rule for anyone fixing a
+ * D-numbered defect. It names only the page that is in this tree, which
+ * summarises the defect-fix-mandate skill and links it.
+ */
 export const MANDATE =
-  'Fixing a QA defect? Read docs/qa/regression-guards.md ("How a fix PR uses these guards") and the ' +
-  'defect-fix-mandate skill (.claude/skills/defect-fix-mandate/SKILL.md): fix the CLASS, not the instance; ' +
+  'Fixing a QA defect? Read docs/qa/regression-guards.md ("How a fix PR uses these guards", the ' +
+  'defect-fix-mandate rule): fix the CLASS, not the instance; ' +
   'an allowlist entry carries its defect id and the fix PR deletes it; a new site fails CI and is never pinned to pass.';

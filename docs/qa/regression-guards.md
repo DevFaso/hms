@@ -43,7 +43,9 @@ reverted (PR body of the guard PR records the runs).
 
 1. Fix the site (key the sentence, drop the refresh, pass ids, …).
 2. Run the guard: it fails with `the site was fixed: delete its line`.
-3. Delete that `Map.entry(...)` (or lower the `Allowance` count) in the test.
+3. Delete that entry — the `"site", count, "reason"` triple of the guard's
+   `GuardAllowlist.allow(...)` list (`PostCommitLazyAssociationGuardTest`'s
+   controller list takes `"file", "chain", count, "reason"`) — or lower its count.
 4. Never add a line to make a build green without the defect id or a reason
    a reviewer can check.
 
@@ -84,7 +86,7 @@ are excusing; `why` of existing pins is kept, new pins get `TODO`).
 | `i18n:parity`, `i18n:referenced`, `i18n:translated`, `i18n:enums`, `i18n:placeholders` | Locale file completeness (see memory note "French completeness layers"). |
 | `rbac:inline-roles` | Inline `'ROLE_…'` lists. |
 | `scripts/lib/shell-a11y.test.mjs` | The shell's own icons/links/search boxes (D173/D200) — now generalised by `guard:a11y-names`. |
-| `src/app/shared/i18n/app-locale.spec.ts` | `formatCfa`. **D1008 is a pending spec there (`xit`)**: flip it to `it` in the PR that passes `useGrouping: 'always'`. |
+| `src/app/shared/i18n/app-locale.spec.ts` | `formatCfa`. **D1008 is pinned there as a live `it`** ("D1008 (pinned until fixed)") that asserts today's wrong Spanish 4-digit grouping by comparing with Intl's own default: the PR that passes `useGrouping: 'always'` makes it fail and must invert the expectation (4-digit amounts grouped) in the same commit — the spec form of deleting an allowlist entry. |
 
 ### How a fix branch shrinks a portal baseline
 
@@ -94,7 +96,9 @@ are excusing; `why` of existing pins is kept, new pins get `TODO`).
    N-1)`.
 3. Lower `count` or delete the entry in `scripts/<gate>-baseline.json`.
 4. A pin's `why` must be a QA defect id or a reason a reviewer can check;
-   `--write-baseline` is for reading what changed, not for making CI green.
+   `--write-baseline` is for reading what changed, not for making CI green —
+   the gate fails on any pin whose `why` is empty or still the `TODO` it
+   writes, or whose `count` is below 1 (the Java `GuardAllowlist.allow()` rule).
 
 ---
 
@@ -136,8 +140,9 @@ are excusing; `why` of existing pins is kept, new pins get `TODO`).
 ## How a fix PR uses these guards
 
 The user's standing order for every D-numbered defect is the project skill
-`.claude/skills/defect-fix-mandate/SKILL.md` (lands with PR #974; until it
-merges, the rule is summarised here and in every guard's failure message) —
+`.claude/skills/defect-fix-mandate/SKILL.md` (lands with PR #974; the rule is
+summarised here, and every guard's failure message points at this section, not
+at the skill file, so the pointer holds whichever PR merges first) —
 fix the **class**, not the instance; prove it with a codebase-wide guard;
 prove it on the running app; a PR without the class table is not a fix. These guards are the "guard the
 class" step for the classes round 16 named. The contract between a fix PR and
@@ -148,14 +153,15 @@ a guard:
    D-xxx, and it is not fixed yet*.
 2. **A fix PR removes its entries.** When the site is fixed the guard fails
    with *"the site was fixed: delete its line"* / *"stale pin"*; the PR
-   deletes the `Map.entry(...)` or lowers the pin's `count` in the same
-   commit. The allowlist only ever shrinks.
+   deletes the entry (the `GuardAllowlist.allow(...)` triple, or the
+   baseline JSON pin) or lowers its `count` in the same commit. The
+   allowlist only ever shrinks.
 3. **A new violation fails CI** and is never pinned to make the build green.
    Pinning is for sites that exist on `develop` today, each with its id. A
    reviewer rejects a pin without one.
 4. **A guard that misses an instance is a guard bug**: extend the scan and its
    self-test (`.test.mjs` / "the scan catches the old shapes") in the fix PR.
-5. Every failure message of these guards ends with a pointer to that skill.
+5. Every failure message of these guards ends with a pointer to this section.
 
 The round-16 fix PRs and the allowlists each is expected to shrink (by area;
 the fix PR's class table is the authority):
