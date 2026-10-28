@@ -331,6 +331,8 @@ class DischargeSummaryServiceImplTest {
         // Review of #971: the treating-clinician fallback never overrides a named provider.
         com.example.hms.model.User consultant = new com.example.hms.model.User();
         consultant.setId(UUID.randomUUID());
+        // The draft's provider is a doctor.
+        org.mockito.Mockito.lenient().when(roleValidator.isDoctor(staff.getUser().getId(), hospitalId)).thenReturn(true);
         actAs(consultant);
         org.mockito.Mockito.lenient().when(encounterNoteRepository.existsByEncounter_IdAndAuthor_Id(encounterId, consultant.getId()))
             .thenReturn(true);
@@ -338,6 +340,17 @@ class DischargeSummaryServiceImplTest {
         assertThatThrownBy(() -> service.deleteDischargeSummary(summaryId, null))
             .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
         verify(dischargeSummaryRepository, never()).delete(any(DischargeSummary.class));
+    }
+
+    @Test void qaD930_aDraftHeldByTheNurseWhoOpenedTheVisitIsTheTreatingDoctors() {
+        // Review of #971: a nurse-held draft is not stuck; the doctor who wrote the note finishes it.
+        com.example.hms.model.User doctor = new com.example.hms.model.User();
+        doctor.setId(UUID.randomUUID());
+        actAs(doctor);
+        when(encounterNoteRepository.existsByEncounter_IdAndAuthor_Id(encounterId, doctor.getId())).thenReturn(true);
+        when(dischargeSummaryRepository.findById(summaryId)).thenReturn(Optional.of(summary));
+        service.deleteDischargeSummary(summaryId, null);
+        verify(dischargeSummaryRepository).delete(summary);
     }
 
     @Test void qaD930_anotherDoctorCannotRewriteTheAuthorsDraft() {

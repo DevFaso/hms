@@ -220,6 +220,15 @@ describe('NursingIntakeFormComponent — carried-in chart data (QA D951/D992)', 
     expect(component.chiefComplaint()).toBe('Douleur thoracique');
   });
 
+  it("takes the next encounter's complaint when the form is reused (review of #971)", () => {
+    component.encounter = {
+      id: 'enc-10',
+      patientId: 'p2',
+      chiefComplaint: 'Toux',
+    } as EncounterResponse;
+    expect(component.chiefComplaint()).toBe('Toux');
+  });
+
   it('lists the active documented allergies and the current prescriptions', () => {
     expect(patientService.listAllergies).toHaveBeenCalledWith('p1', 'h1');
     expect(component.documentedAllergies().map((a) => a.allergenDisplay)).toEqual(['Pénicilline']);

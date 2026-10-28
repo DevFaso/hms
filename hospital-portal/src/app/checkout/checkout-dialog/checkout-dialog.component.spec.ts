@@ -282,6 +282,7 @@ describe('CheckoutDialogComponent — prefilled from the visit (QA D960)', () =>
           status: 'SIGNED',
         },
         { id: 'r2', encounterId: 'enc-9', medicationName: 'Annulé', status: 'CANCELLED' },
+        { id: 'r4', encounterId: 'enc-9', medicationName: 'Brouillon', status: 'DRAFT' },
         { id: 'r3', encounterId: 'other', medicationName: 'Autre visite', status: 'SIGNED' },
       ] as PrescriptionResponse[]),
     );

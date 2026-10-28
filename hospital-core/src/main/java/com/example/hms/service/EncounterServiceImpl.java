@@ -2733,6 +2733,16 @@ public class EncounterServiceImpl implements EncounterService {
             .build());
     }
 
+    /** Whether a staff record belongs to a physician at the visit's hospital (a covering doctor never takes another doctor's summary). */
+    private boolean isPhysicianAt(Staff staff, Encounter encounter) {
+        if (staff == null || staff.getUser() == null || encounter.getHospital() == null) {
+            return false;
+        }
+        UUID userId = staff.getUser().getId();
+        UUID hospitalId = encounter.getHospital().getId();
+        return roleValidator.isDoctor(userId, hospitalId) || roleValidator.isPhysician(userId, hospitalId);
+    }
+
     /** The signed-in doctor's staff record at the visit's hospital, when the caller is a doctor who is not the clinician of record. */
     private Staff closingDoctorAt(Encounter encounter) {
         if (encounter.getHospital() == null || !callerIsDoctor()
@@ -2763,7 +2773,8 @@ public class EncounterServiceImpl implements EncounterService {
         // the visit when that is not its clinician of record (a nurse may
         // have opened it); otherwise to the clinician of record, as before.
         Staff closingDoctor = closingDoctorAt(encounter);
-        if (closingDoctor != null && summary.getId() == null) {
+        Staff current = summary.getDischargingProvider() != null ? summary.getDischargingProvider() : encounter.getStaff();
+        if (closingDoctor != null && !isPhysicianAt(current, encounter)) {
             summary.setDischargingProvider(closingDoctor);
             summary.setAssignment(assignmentRepository
                 .findFirstByUser_IdAndHospital_IdAndActiveTrue(closingDoctor.getUser().getId(), encounter.getHospital().getId())

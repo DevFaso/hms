@@ -68,7 +68,14 @@ export class CheckoutDialogComponent {
 
   /** Roles all three reads admit (diagnoses, prescriptions, referrals by patient). */
   private static readonly PREFILL_ROLES = ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'];
-  private static readonly WITHDRAWN_RX = new Set(['CANCELLED', 'DISCONTINUED', 'PARTNER_REJECTED']);
+  /** Not prescribed (unsigned) or taken back: never on the patient's summary. */
+  private static readonly WITHDRAWN_RX = new Set([
+    'DRAFT',
+    'PENDING_SIGNATURE',
+    'CANCELLED',
+    'DISCONTINUED',
+    'PARTNER_REJECTED',
+  ]);
   private static readonly CLOSED_REFERRAL = new Set(['CANCELLED', 'REJECTED']);
 
   /* ── Form fields ──────────────────────── */
@@ -191,7 +198,15 @@ export class CheckoutDialogComponent {
           this.referralSummary,
           referrals
             .filter((r) => !CheckoutDialogComponent.CLOSED_REFERRAL.has(r.status))
-            .filter((r) => !!visitDay && serverLocalDate(r.createdAt) >= visitDay)
+            .filter((r) => {
+              const day = serverLocalDate(r.createdAt);
+              // The visit's day; any day since admission for a stay.
+              return (
+                !!visitDay &&
+                day >= visitDay &&
+                (enc.encounterType === 'INPATIENT' || day === visitDay)
+              );
+            })
             .map((r) =>
               [r.targetDepartmentName || r.targetSpecialty, r.referralReason]
                 .filter((x) => !!x && String(x).trim())

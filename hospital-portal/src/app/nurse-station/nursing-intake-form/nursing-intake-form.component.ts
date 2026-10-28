@@ -42,7 +42,9 @@ export class NursingIntakeFormComponent {
   @Input() set encounter(value: EncounterResponse | null) {
     const changed = value?.id !== this._encounter?.id;
     this._encounter = value;
-    if (value?.chiefComplaint && !this.chiefComplaint()) {
+    if (changed) {
+      this.chiefComplaint.set(value?.chiefComplaint ?? '');
+    } else if (value?.chiefComplaint && !this.chiefComplaint()) {
       this.chiefComplaint.set(value.chiefComplaint);
     }
     if (changed && value?.patientId) {

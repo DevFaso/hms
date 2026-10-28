@@ -127,6 +127,7 @@ public class MedicalCertificateServiceImpl implements MedicalCertificateService 
         PatientUploadedDocument doc = PatientUploadedDocument.builder()
             .patient(patient)
             .uploadedByUser(doctor.getUser())
+            .issuingHospital(hospital)
             .documentType(PatientDocumentType.MEDICAL_CERTIFICATE)
             .displayName(stored.displayName())
             .filePath(stored.storageKey())

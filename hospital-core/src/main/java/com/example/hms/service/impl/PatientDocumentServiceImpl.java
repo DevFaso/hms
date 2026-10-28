@@ -181,10 +181,26 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
                                                            PatientDocumentType documentType, Pageable pageable) {
         StaffReach reach = requireRegisteredAt(hospitalId, patientId);
         auditBreakGlassRead(hospitalId, patientId, reach, null);
-        Page<PatientUploadedDocument> page = documentType == null
-                ? documentRepository.findByPatient_IdAndDeletedAtIsNull(patientId, pageable)
-                : documentRepository.findByPatient_IdAndDocumentTypeAndDeletedAtIsNull(patientId, documentType, pageable);
+        Page<PatientUploadedDocument> page;
+        if (hospitalId == null) {
+            page = documentType == null
+                    ? documentRepository.findByPatient_IdAndDeletedAtIsNull(patientId, pageable)
+                    : documentRepository.findByPatient_IdAndDocumentTypeAndDeletedAtIsNull(patientId, documentType, pageable);
+        } else {
+            // QA D961: another hospital's certificate is not listed here.
+            page = documentType == null
+                    ? documentRepository.findForStaff(patientId, hospitalId, pageable)
+                    : documentRepository.findForStaffByType(patientId, hospitalId, documentType, pageable);
+        }
         return page.map(documentMapper::toDto);
+    }
+
+    /** QA D961: a document another hospital issued reads as missing here. */
+    private static void requireIssuedHereOrUploaded(PatientUploadedDocument doc, UUID hospitalId, UUID documentId) {
+        if (hospitalId != null && doc.getIssuingHospital() != null
+                && !hospitalId.equals(doc.getIssuingHospital().getId())) {
+            throw new ResourceNotFoundException("patientDocument.notFound", documentId);
+        }
     }
 
     @Override
@@ -192,6 +208,7 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
     public PatientDocumentResponseDTO getForPatient(UUID hospitalId, UUID patientId, UUID documentId) {
         StaffReach reach = requireRegisteredAt(hospitalId, patientId);
         PatientUploadedDocument doc = requireOwnDocument(patientId, documentId);
+        requireIssuedHereOrUploaded(doc, hospitalId, documentId);
         auditBreakGlassRead(hospitalId, patientId, reach, doc);
         return documentMapper.toDto(doc);
     }
@@ -201,6 +218,7 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
     public DocumentPayload downloadForPatient(UUID hospitalId, UUID patientId, UUID documentId) {
         StaffReach reach = requireRegisteredAt(hospitalId, patientId);
         PatientUploadedDocument doc = requireOwnDocument(patientId, documentId);
+        requireIssuedHereOrUploaded(doc, hospitalId, documentId);
         java.nio.file.Path path = fileUploadService.resolveStoredFile(doc.getFilePath(), "patient-documents");
         auditStaffDownload(hospitalId, patientId, reach, doc);
         String contentType = doc.getMimeType() != null ? doc.getMimeType() : "application/octet-stream";

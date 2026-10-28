@@ -21,3 +21,9 @@ VALUES (
     TRUE
 )
 ON CONFLICT (protocol_code) DO NOTHING;
+
+-- QA D961: the hospital that issued a generated document (a medical
+-- certificate). Null for the patient's own uploads, which keep following the
+-- patient; staff of another hospital do not read an issued document.
+ALTER TABLE clinical.patient_uploaded_documents
+    ADD COLUMN IF NOT EXISTS issuing_hospital_id UUID;

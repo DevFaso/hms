@@ -432,12 +432,27 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         // clinician, so a consultant's addendum never opens a colleague's draft.
         if (com.example.hms.security.CallerIdentity.isCaller(summary.getDischargingProvider())
                 || com.example.hms.security.CallerIdentity.isGlobalSuperAdmin()
-                || (summary.getDischargingProvider() == null
+                || (!isPhysicianProvider(summary)
                     && TreatingClinician.isCaller(summary.getEncounter(), encounterNoteRepository))) {
             return;
         }
         throw new com.example.hms.exception.ClientSafeAccessDeniedException(
             com.example.hms.utility.MessageUtil.resolveOrRaw("identity.notCaller"));
+    }
+
+    /**
+     * Whether the summary belongs to a physician. A draft held by nobody, or
+     * by the nurse or midwife who opened the visit (QA D930 review), is the
+     * treating doctor's to finish; one held by a doctor is that doctor's alone.
+     */
+    private boolean isPhysicianProvider(DischargeSummary summary) {
+        Staff provider = summary.getDischargingProvider();
+        if (provider == null || provider.getUser() == null || provider.getUser().getId() == null) {
+            return false;
+        }
+        UUID hospitalId = summary.getHospital() != null ? summary.getHospital().getId() : null;
+        UUID userId = provider.getUser().getId();
+        return roleValidator.isDoctor(userId, hospitalId) || roleValidator.isPhysician(userId, hospitalId);
     }
 
     private void enforceHospitalScope(DischargeSummary summary, UUID summaryId) {

@@ -448,7 +448,7 @@ class PatientDocumentServiceImplTest {
                     .hasMessageContaining("active hospital is required");
             assertThatThrownBy(() -> service.downloadForPatient(null, patientId, docId))
                     .isInstanceOf(BusinessException.class);
-            verify(documentRepository, never()).findByPatient_IdAndDeletedAtIsNull(any(), any());
+            verify(documentRepository, never()).findForStaff(any(), any(), any());
         }
 
         @Test
@@ -490,7 +490,7 @@ class PatientDocumentServiceImplTest {
             when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(b));
             Pageable pageable = PageRequest.of(0, 20);
             PatientUploadedDocument doc = PatientUploadedDocument.builder().patient(patient).build();
-            when(documentRepository.findByPatient_IdAndDeletedAtIsNull(patientId, pageable))
+            when(documentRepository.findForStaff(patientId, hospitalId, pageable))
                     .thenReturn(new PageImpl<>(List.of(doc)));
             when(documentRepository.findByIdAndPatient_IdAndDeletedAtIsNull(docId, patientId))
                     .thenReturn(Optional.of(doc));
@@ -527,8 +527,24 @@ class PatientDocumentServiceImplTest {
                             com.example.hms.enums.RecordAccessPosture.TREATMENT_PRESUMED));
             assertThatThrownBy(() -> service.getForPatient(hospitalId, patientId, docId))
                     .isInstanceOf(com.example.hms.exception.ChartRestrictedException.class);
-            verify(documentRepository, never()).findByPatient_IdAndDeletedAtIsNull(any(), any());
+            verify(documentRepository, never()).findForStaff(any(), any(), any());
             verify(auditEventLogService, never()).logEvent(any());
+        }
+
+        @Test
+        @DisplayName("QA D961: another hospital's certificate reads as missing here")
+        void qaD961_anotherHospitalsCertificateIsNotReadHere() {
+            registered();
+            Hospital other = new Hospital();
+            other.setId(UUID.randomUUID());
+            PatientUploadedDocument doc = PatientUploadedDocument.builder().patient(patient)
+                    .documentType(PatientDocumentType.MEDICAL_CERTIFICATE).issuingHospital(other).build();
+            when(documentRepository.findByIdAndPatient_IdAndDeletedAtIsNull(docId, patientId))
+                    .thenReturn(Optional.of(doc));
+            assertThatThrownBy(() -> service.getForPatient(hospitalId, patientId, docId))
+                    .isInstanceOf(ResourceNotFoundException.class);
+            assertThatThrownBy(() -> service.downloadForPatient(hospitalId, patientId, docId))
+                    .isInstanceOf(ResourceNotFoundException.class);
         }
 
         @Test
@@ -538,10 +554,10 @@ class PatientDocumentServiceImplTest {
             Pageable pageable = PageRequest.of(0, 20);
             PatientUploadedDocument doc = PatientUploadedDocument.builder().patient(patient).build();
             PatientDocumentResponseDTO dto = new PatientDocumentResponseDTO();
-            when(documentRepository.findByPatient_IdAndDeletedAtIsNull(patientId, pageable))
+            when(documentRepository.findForStaff(patientId, hospitalId, pageable))
                     .thenReturn(new PageImpl<>(List.of(doc)));
-            when(documentRepository.findByPatient_IdAndDocumentTypeAndDeletedAtIsNull(
-                    patientId, PatientDocumentType.REFERRAL_LETTER, pageable))
+            when(documentRepository.findForStaffByType(
+                    patientId, hospitalId, PatientDocumentType.REFERRAL_LETTER, pageable))
                     .thenReturn(new PageImpl<>(List.of(doc, doc)));
             when(documentMapper.toDto(doc)).thenReturn(dto);
 

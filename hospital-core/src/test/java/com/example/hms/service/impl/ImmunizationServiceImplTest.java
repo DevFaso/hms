@@ -127,6 +127,9 @@ class ImmunizationServiceImplTest {
         dto.setAdministrationDate(java.time.LocalDate.of(2021, 3, 10));
         dto.setSourceOfRecord("VACCINATION_CARD");
         dto.setAdministeredByStaffId(staffId); // the portal used to send the caller's own id
+        Staff caller = new Staff(); caller.setId(staffId); caller.setHospital(hospital);
+        com.example.hms.security.CallerIdentityTestSupport.actAs(caller, hospital);
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(caller));
         PatientImmunization entity = new PatientImmunization();
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
@@ -136,8 +139,8 @@ class ImmunizationServiceImplTest {
 
         service.createImmunization(dto);
 
+        // The claim is still checked (it is the caller), but no vaccinator is kept.
         verify(immunizationMapper).toEntity(any(), eq(patient), eq(hospital), isNull(), isNull());
-        verify(staffRepository, org.mockito.Mockito.never()).findById(any());
     }
 
     @Test

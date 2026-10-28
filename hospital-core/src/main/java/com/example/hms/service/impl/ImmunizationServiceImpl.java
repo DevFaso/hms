@@ -67,9 +67,10 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         // QA D1003: a dose transcribed from a vaccination card or another
         // facility's record was not given by the clinician who records it;
         // it has no vaccinator here rather than a false one.
-        Staff administeredBy = !isTranscribed(requestDTO.getSourceOfRecord())
-                ? com.example.hms.security.CallerIdentity.resolveActor(staffRepository, requestDTO.getAdministeredByStaffId(), hospital.getId())
-                : null;
+        // The identity claim is checked either way (a colleague's id is refused);
+        // a transcribed dose then keeps no vaccinator here.
+        Staff actor = com.example.hms.security.CallerIdentity.resolveActor(staffRepository, requestDTO.getAdministeredByStaffId(), hospital.getId());
+        Staff administeredBy = isTranscribed(requestDTO.getSourceOfRecord()) ? null : actor;
 
         Encounter encounter = null;
         if (requestDTO.getEncounterId() != null) {
