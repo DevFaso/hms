@@ -28,7 +28,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 class PrescriptionCatalogResolutionGuardTest {
 
     private static final Path MAIN = Path.of("src", "main", "java");
-    private static final Pattern BUILDS_ENTITY = Pattern.compile("new Prescription\\(\\)|Prescription\\.builder\\(\\)");
+    private static final Pattern BUILDS_ENTITY = Pattern.compile(
+        "new (com\\.example\\.hms\\.model\\.)?Prescription\\(\\)|\\bPrescription\\.builder\\(\\)");
     private static final Pattern WRITER = Pattern.compile("prescriptionMapper\\.(toEntity|updateEntity)\\(");
 
     @Test

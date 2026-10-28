@@ -4949,7 +4949,7 @@ class PrescriptionServiceImplTest {
         when(prescriptionRepository.findById(rx.getId())).thenReturn(Optional.of(rx));
         when(roleValidator.requireActiveHospitalId()).thenReturn(rxHospitalId);
         when(roleValidator.getCurrentUserId()).thenReturn(doctorUserId);
-        when(roleValidator.isDoctor(any(), eq(rxHospitalId))).thenReturn(true);
+        lenient().when(roleValidator.isDoctor(any(), eq(rxHospitalId))).thenReturn(true);
 
         UUID rxId = rx.getId();
         assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, Locale.ENGLISH))
