@@ -4,6 +4,7 @@ import { of, throwError } from 'rxjs';
 import { MyNotificationsComponent } from './my-notifications.component';
 import { PatientPortalService } from '../../services/patient-portal.service';
 import { ToastService } from '../../core/toast.service';
+import { Router, provideRouter } from '@angular/router';
 
 const makeNotification = (id: string, read: boolean) => ({
   id,
@@ -42,6 +43,7 @@ describe('MyNotificationsComponent', () => {
     await TestBed.configureTestingModule({
       imports: [MyNotificationsComponent, TranslateModule.forRoot()],
       providers: [
+        provideRouter([]),
         { provide: PatientPortalService, useValue: portalService },
         { provide: ToastService, useValue: toastService },
       ],
@@ -54,6 +56,28 @@ describe('MyNotificationsComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  describe('opening a notification (QA D983)', () => {
+    it('opens the conversation of a chat notification and marks it read', () => {
+      const navigate = spyOn(TestBed.inject(Router), 'navigate').and.resolveTo(true);
+      component.open({ ...makeNotification('c1', false), type: 'CHAT_MESSAGE' });
+      expect(portalService.markNotificationRead).toHaveBeenCalledWith('c1');
+      expect(navigate).toHaveBeenCalledWith(['/chat'], { queryParams: { open: 'unread' } });
+    });
+
+    it('opens the appointments for a reminder', () => {
+      const navigate = spyOn(TestBed.inject(Router), 'navigate').and.resolveTo(true);
+      component.open(makeNotification('n2', true));
+      expect(navigate).toHaveBeenCalledWith(['/my-appointments'], { queryParams: undefined });
+    });
+
+    it('stays on the page for a notification about nothing in particular', () => {
+      const navigate = spyOn(TestBed.inject(Router), 'navigate').and.resolveTo(true);
+      component.open({ ...makeNotification('a1', false), type: 'ANNOUNCEMENT' });
+      expect(navigate).not.toHaveBeenCalled();
+      expect(portalService.markNotificationRead).toHaveBeenCalledWith('a1');
+    });
   });
 
   it('should load notifications on init', () => {

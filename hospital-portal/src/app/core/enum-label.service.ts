@@ -796,8 +796,12 @@ export class EnumLabelService implements OnDestroy {
 
     /* ── Notification types (Notification.type, a String column) ─── */
     notificationType: {
+      ADMIN_MESSAGE: 'Message from the administration',
+      ANNOUNCEMENT: 'Announcement',
       APPOINTMENT_REMINDER: 'Appointment Reminder',
       BREAK_GLASS_OPT_OUT_OVERRIDE: 'Emergency access to your record',
+      CHAT_MESSAGE: 'New message',
+      CONSULTATION_UPDATE: 'Specialist consultation',
       CRITICAL_IMAGING_FINDING: 'Critical Imaging Finding',
       CRITICAL_IMAGING_FINDING_ESCALATION: 'Critical Imaging Finding Escalation',
       CRITICAL_LAB_RESULT: 'Critical Lab Result',
@@ -805,12 +809,14 @@ export class EnumLabelService implements OnDestroy {
       DISCHARGE_SUMMARY: 'Discharge Summary',
       LAB_ORDER_RECEIVED: 'Lab Order Received',
       LICENSE_EXPIRY: 'License Expiry',
+      MATERNITY_ALERT: 'Maternity alert',
       MEDICATION_REFILL: 'Medication Refill',
       NEWS2_ESCALATION: 'NEWS2 Escalation',
       OBSTETRIC_ALERT: 'Urgent Obstetric Alert',
       OBSTETRIC_ALERT_ESCALATION: 'Urgent Obstetric Alert Escalation',
       PHARMACY_EVENT: 'Pharmacy Update',
       POSITIVE_CULTURE_RESULT: 'Positive Culture Result',
+      PRENATAL_REMINDER: 'Antenatal visit reminder',
       PRO_CRITICAL_ITEM: 'Critical PRO Item',
       PRO_CRITICAL_ITEM_ESCALATION: 'Critical PRO Item Escalation',
       PRO_SCREEN_POSITIVE: 'Positive PRO Screen',
