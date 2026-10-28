@@ -724,6 +724,69 @@ class AppointmentStatusTransitionTest {
         verify(appointmentRepository, never()).saveAndFlush(any());
     }
 
+    @Test
+    void round15_onePutCannotMoveAFutureVisitIntoThePastAndMarkItANoShow() {
+        givenAppointment(AppointmentStatus.SCHEDULED, LocalDate.now().plusDays(1));
+        com.example.hms.payload.dto.AppointmentRequestDTO edit = editOf(AppointmentStatus.NO_SHOW);
+        edit.setAppointmentDate(LocalDate.now().minusDays(1));
+
+        assertThatThrownBy(() ->
+            appointmentService.updateAppointment(appointmentId, edit, java.util.Locale.ENGLISH, "doctor_b"))
+            .isInstanceOf(BusinessException.class)
+            .satisfies(ex -> org.assertj.core.api.Assertions.assertThat(((BusinessException) ex).getMessageKey())
+                .isEqualTo("appointment.status.notStartedYet"));
+        verify(appointmentRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void round15_aFailedVisitReopensTheRecallItAnswered() {
+        com.example.hms.service.scheduling.PatientRecallService recalls =
+            mock(com.example.hms.service.scheduling.PatientRecallService.class);
+        appointmentService.setRecallService(recalls);
+        givenAppointment(AppointmentStatus.IN_PROGRESS, LocalDate.now().minusDays(1));
+        stubSaveAndMap();
+
+        appointmentService.confirmOrCancelAppointment(appointmentId, "fail", null, "doctor_b");
+
+        verify(recalls).reopenRecallsOf(appointmentId);
+        verify(recalls, never()).completeRecallsOf(any());
+    }
+
+    @Test
+    void round15_aNoteOnACompletedVisitDoesNotReCloseItsRecall() {
+        com.example.hms.service.scheduling.PatientRecallService recalls =
+            mock(com.example.hms.service.scheduling.PatientRecallService.class);
+        appointmentService.setRecallService(recalls);
+        givenAppointment(AppointmentStatus.COMPLETED, LocalDate.now().minusDays(1));
+        com.example.hms.payload.dto.AppointmentRequestDTO edit = editOf(null);
+        ReflectionTestUtils.setField(appointmentService, "entityManager", mock(jakarta.persistence.EntityManager.class));
+        when(appointmentRepository.saveAndFlush(any())).thenReturn(appointment);
+
+        appointmentService.updateAppointment(appointmentId, edit, java.util.Locale.ENGLISH, "doctor_b");
+
+        org.mockito.Mockito.verifyNoInteractions(recalls);
+    }
+
+    @Test
+    void round15_theStartIsJudgedOnTheHospitalsClock() {
+        // A hospital 14 hours ahead of UTC: its visit started an hour ago on
+        // its own clock, which on any server clock behind it is still "later".
+        com.example.hms.model.Organization organization = new com.example.hms.model.Organization();
+        organization.setDefaultTimezone("Pacific/Kiritimati");
+        hospital.setOrganization(organization);
+        java.time.LocalDateTime startedThere =
+            java.time.LocalDateTime.now(java.time.ZoneId.of("Pacific/Kiritimati")).minusHours(1);
+        appointment.setStatus(AppointmentStatus.CONFIRMED);
+        appointment.setAppointmentDate(startedThere.toLocalDate());
+        appointment.setStartTime(startedThere.toLocalTime());
+        appointment.setEndTime(startedThere.toLocalTime().plusMinutes(1));
+        stubSaveAndMap();
+
+        appointmentService.confirmOrCancelAppointment(appointmentId, "no_show", null, "doctor_b");
+
+        org.assertj.core.api.Assertions.assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.NO_SHOW);
+    }
+
     private static void refusedAsTransition(Throwable ex, AppointmentStatus from, AppointmentStatus to) {
         BusinessException refused = (BusinessException) ex;
         org.assertj.core.api.Assertions.assertThat(refused.getMessageKey())

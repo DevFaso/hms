@@ -212,11 +212,15 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     /**
      * COMPLETED and NO_SHOW only once the visit has started, on every write
-     * path (status action and PUT alike; review round 8: the PUT skipped it).
+     * path (status action and PUT alike; review round 8: the PUT skipped it),
+     * judged on the hospital's clock as the portal booking is (review round 15).
      */
-    private static void requireStartedFor(AppointmentStatus status, LocalDateTime appointmentStart) {
-        if (REQUIRES_APPOINTMENT_STARTED.contains(status)
-                && LocalDateTime.now(java.time.ZoneId.systemDefault()).isBefore(appointmentStart)) {
+    private static void requireStartedFor(AppointmentStatus status, LocalDateTime appointmentStart,
+                                          Hospital hospital) {
+        java.time.Clock clock = java.time.Clock.systemDefaultZone();
+        LocalDateTime now = LocalDateTime.now(
+            clock.withZone(com.example.hms.utility.HospitalCalendar.zoneOf(hospital, clock)));
+        if (REQUIRES_APPOINTMENT_STARTED.contains(status) && now.isBefore(appointmentStart)) {
             throw new BusinessException("appointment.status.notStartedYet",
                 AppointmentStatus.labelOf(status),
                 appointmentStart.format(java.time.format.DateTimeFormatter
@@ -274,15 +278,29 @@ public class AppointmentServiceImpl implements AppointmentService {
     }
 
     /**
-     * QA D985: a visit that will not happen reopens the recall it answered;
-     * one that took place fulfils it. The same rule on the status action and
-     * the edit form.
+     * What an edit (PUT) that changed the status sets off, as the status
+     * action does: a cancelled, missed or parked visit frees its inventory slot
+     * (review round 8), and the recall it answered is reopened or closed (QA
+     * D985). Only a status change: a note on a completed visit must not
+     * re-close its recall (review round 15).
+     */
+    private void afterEditMovedStatus(Appointment saved) {
+        if (releasesSlotInventory(saved.getStatus())) {
+            slotInventoryService.releaseForAppointment(saved.getId());
+        }
+        followUpRecalls(saved.getId(), saved.getStatus());
+    }
+
+    /**
+     * QA D985: a visit that will not happen reopens the recall it answered
+     * (cancelled, missed, or started and FAILED: review round 15); one that
+     * took place fulfils it. The same rule on the status action and the edit form.
      */
     private void followUpRecalls(UUID appointmentId, AppointmentStatus status) {
         if (recallService == null) {
             return;
         }
-        if (!AppointmentStatus.holdsSlot(status)) {
+        if (!AppointmentStatus.holdsSlot(status) || status == AppointmentStatus.FAILED) {
             recallService.reopenRecallsOf(appointmentId);
         } else if (status == AppointmentStatus.COMPLETED) {
             recallService.completeRecallsOf(appointmentId);
@@ -804,7 +822,12 @@ public class AppointmentServiceImpl implements AppointmentService {
         boolean statusMoved = request.getStatus() != null && request.getStatus() != statusBefore;
         if (statusMoved) {
             // The same temporal guard as the status action (review round 8).
-            requireStartedFor(request.getStatus(), requestedStart);
+            // Both the visit's own time and the time it is moved to must have
+            // started: one PUT cannot move a future visit into the past and mark
+            // it a no-show in the same breath (review round 15).
+            requireStartedFor(request.getStatus(),
+                LocalDateTime.of(existing.getAppointmentDate(), existing.getStartTime()), hospital);
+            requireStartedFor(request.getStatus(), requestedStart, hospital);
         }
 
         appointmentMapper.updateAppointmentFromDto(request, existing, patient, staff, hospital);
@@ -817,14 +840,9 @@ public class AppointmentServiceImpl implements AppointmentService {
         // the old date, time and notes, and nothing was written.
         Appointment saved = appointmentRepository.saveAndFlush(existing);
         entityManager.refresh(saved);
-        // A PUT that cancels, misses or parks the visit frees its inventory
-        // slot, as the status action does (review round 8).
-        if (statusMoved && releasesSlotInventory(saved.getStatus())) {
-            slotInventoryService.releaseForAppointment(saved.getId());
+        if (statusMoved) {
+            afterEditMovedStatus(saved);
         }
-        // QA D985: an edit that cancels the visit reopens the recall it
-        // answered; one that completes it closes the recall.
-        followUpRecalls(saved.getId(), saved.getStatus());
 
         // Outbound webhooks (Tier 2 item 45): a moved visit is a reschedule
         // regardless of which write path moved it.
@@ -913,7 +931,8 @@ public class AppointmentServiceImpl implements AppointmentService {
         requireVisitCompletedBeforeAppointment(appointment, newStatus);
 
         // ── Temporal guard: COMPLETED / NO_SHOW only after appointment start time ──
-        requireStartedFor(newStatus, LocalDateTime.of(appointment.getAppointmentDate(), appointment.getStartTime()));
+        requireStartedFor(newStatus, LocalDateTime.of(appointment.getAppointmentDate(), appointment.getStartTime()),
+            appointment.getHospital());
 
         requireFreedSlotStillFree(appointment, currentStatus, newStatus);
 
