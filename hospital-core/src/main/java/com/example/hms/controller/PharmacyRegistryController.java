@@ -63,7 +63,9 @@ public class PharmacyRegistryController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_STORE_MANAGER','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_BILLING_SPECIALIST','ROLE_SUPER_ADMIN')")
+    // QA D965: the inventory pages (inventory clerk) and the dispensing page
+    // (pharmacy verifier) load their pharmacy picker from here; both 403'd.
+    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_STORE_MANAGER','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_BILLING_SPECIALIST','ROLE_INVENTORY_CLERK','ROLE_PHARMACY_VERIFIER','ROLE_SUPER_ADMIN')")
     @Operation(summary = "List active pharmacies",
         description = "Returns active pharmacies for the resolved hospital scope. "
             + "Super-admins in global view (no JWT scope, no hospitalId param) "
@@ -86,7 +88,8 @@ public class PharmacyRegistryController {
     }
 
     @GetMapping("/search")
-    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_STORE_MANAGER','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+    // QA D965: the registry page's search box, offered to the super-admin the list admits.
+    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_STORE_MANAGER','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Search pharmacies by name or city")
     public ResponseEntity<Page<PharmacyResponseDTO>> search(
             @RequestParam UUID hospitalId,

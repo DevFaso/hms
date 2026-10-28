@@ -129,3 +129,41 @@ describe('InventoryDashboardComponent price column (QA D835)', () => {
     ).toContain('30');
   });
 });
+
+describe('InventoryDashboardComponent reorder trigger (QA D965)', () => {
+  function create(role: string) {
+    const svc = jasmine.createSpyObj<PharmacyService>('PharmacyService', [
+      'listPharmacies',
+      'getReorderAlertsByPharmacy',
+    ]);
+    svc.listPharmacies.and.returnValue(of({ content: [] }) as never);
+    svc.getReorderAlertsByPharmacy.and.returnValue(of({ data: [] }) as never);
+    TestBed.configureTestingModule({
+      imports: [InventoryDashboardComponent, TranslateModule.forRoot()],
+      providers: [
+        { provide: PharmacyService, useValue: svc },
+        { provide: ToastService, useValue: jasmine.createSpyObj('ToastService', ['success', 'error']) },
+        {
+          provide: RoleContextService,
+          useValue: { hasAnyActiveRoleExactly: (roles: string[]) => roles.includes(role) },
+        },
+      ],
+    });
+    const fixture = TestBed.createComponent(InventoryDashboardComponent);
+    fixture.componentInstance.activeTab.set('alerts');
+    fixture.detectChanges();
+    return fixture;
+  }
+
+  it('hides "Trigger alerts" from the pharmacist, whom the endpoint refuses', () => {
+    const fixture = create('ROLE_PHARMACIST');
+    expect(fixture.nativeElement.querySelector('[data-testid="trigger-reorder-alerts"]')).toBeNull();
+  });
+
+  it('offers it to the store manager', () => {
+    const fixture = create('ROLE_STORE_MANAGER');
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="trigger-reorder-alerts"]'),
+    ).not.toBeNull();
+  });
+});

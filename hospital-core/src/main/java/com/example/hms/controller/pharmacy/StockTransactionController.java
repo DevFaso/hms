@@ -51,7 +51,8 @@ public class StockTransactionController {
     }
 
     @GetMapping("/witness-candidates")
-    @PreAuthorize("hasAnyRole('PHARMACIST', 'INVENTORY_CLERK', 'STORE_MANAGER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
+    // QA D965: the dispensing page (pharmacy verifier) needs the witness of a controlled fill.
+    @PreAuthorize("hasAnyRole('PHARMACIST', 'PHARMACY_VERIFIER', 'INVENTORY_CLERK', 'STORE_MANAGER', 'HOSPITAL_ADMIN', 'SUPER_ADMIN')")
     @Operation(summary = "List witness candidates",
             description = "Colleagues of the active hospital who may witness a controlled-substance movement")
     @ApiResponse(responseCode = "200", description = "Candidates retrieved")

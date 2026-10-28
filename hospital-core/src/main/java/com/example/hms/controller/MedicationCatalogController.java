@@ -57,7 +57,8 @@ public class MedicationCatalogController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_STORE_MANAGER','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_SUPER_ADMIN')")
+    // QA D965: the inventory page's "Add item" lists the catalogue for the inventory clerk too.
+    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_STORE_MANAGER','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_INVENTORY_CLERK','ROLE_SUPER_ADMIN')")
     @Operation(summary = "List active medications",
         description = "Returns active medications for the resolved hospital scope. "
             + "Super-admins in global view (no JWT scope, no hospitalId param) "
@@ -76,7 +77,8 @@ public class MedicationCatalogController {
     }
 
     @GetMapping("/search")
-    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_STORE_MANAGER','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+    // QA D965: the catalogue page's search box, offered to the super-admin the list admits.
+    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_STORE_MANAGER','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Search medications by name, ATC code, or brand")
     public ResponseEntity<Page<MedicationCatalogItemResponseDTO>> search(
             @RequestParam UUID hospitalId,
