@@ -48,7 +48,8 @@ class FefoLotPolicyTest {
 
     @Test
     void takingTheLaterLotWhileTheShorterOneCanServeNeedsAReasonAndNamesTheLotToTake() {
-        assertThatThrownBy(() -> policy.requireFefoOrReason(longDated, new BigDecimal("20"), "  "))
+        BigDecimal twenty = new BigDecimal("20");
+        assertThatThrownBy(() -> policy.requireFefoOrReason(longDated, twenty, "  "))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(e -> {
                     assertThat(((BusinessException) e).getMessageKey()).isEqualTo("pharmacy.fefo.reasonRequired");
@@ -74,7 +75,8 @@ class FefoLotPolicyTest {
 
     @Test
     void anOverlongReasonIsRefused() {
-        assertThatThrownBy(() -> policy.requireFefoOrReason(longDated, BigDecimal.ONE, "x".repeat(301)))
+        String overlong = "x".repeat(301);
+        assertThatThrownBy(() -> policy.requireFefoOrReason(longDated, BigDecimal.ONE, overlong))
                 .isInstanceOf(BusinessException.class)
                 .extracting("messageKey").isEqualTo("pharmacy.fefo.reasonTooLong");
     }

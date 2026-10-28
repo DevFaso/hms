@@ -360,8 +360,6 @@ public class LabResultServiceImpl implements LabResultService {
         LabResult supersededOnRelease = null;
         if (saved.isReleased()) {
             supersededOnRelease = linkCorrectionOnRelease(saved, lockedOrder, currentUserId);
-        }
-        if (saved.isReleased()) {
             completeOrderIfAllReleased(lockedOrder);
         }
         triggerReflexOrders(saved);

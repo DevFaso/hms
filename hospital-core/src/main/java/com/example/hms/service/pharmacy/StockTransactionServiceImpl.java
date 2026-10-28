@@ -206,37 +206,12 @@ public class StockTransactionServiceImpl implements StockTransactionService {
             UUID inventoryItemId, UUID stockLotId) {
         InventoryItem item = resolveInventoryItem(inventoryItemId);
         enforceHospitalScope(item.getPharmacy());
-        List<com.example.hms.model.pharmacy.Dispense> fills;
-        if (stockLotId != null) {
-            StockLot lot = stockLotRepository.findById(stockLotId)
-                    .orElseThrow(() -> new ResourceNotFoundException("stockLot.notFound", stockLotId));
-            if (lot.getInventoryItem() == null || !item.getId().equals(lot.getInventoryItem().getId())) {
-                throw new BusinessException(MessageUtil.resolve("stockTransaction.lot.wrongItem"));
-            }
-            fills = dispenseRepository.findTop50ByStockLot_IdAndStatusInOrderByCreatedAtDesc(stockLotId,
-                    RETURNABLE_FILL_STATES);
-        } else if (item.getMedicationCatalogItem() != null && item.getPharmacy() != null) {
-            fills = dispenseRepository
-                    .findTop50ByPharmacy_IdAndMedicationCatalogItem_IdAndStockLotIsNullAndStatusInOrderByCreatedAtDesc(
-                            item.getPharmacy().getId(), item.getMedicationCatalogItem().getId(),
-                            RETURNABLE_FILL_STATES);
-        } else {
-            fills = List.of();
-        }
+        List<com.example.hms.model.pharmacy.Dispense> fills = returnableFills(item, stockLotId);
         if (fills == null || fills.isEmpty()) {
             return List.of();
         }
         List<com.example.hms.model.pharmacy.Dispense> recent = fills.stream().limit(RETURNABLE_LIST_MAX).toList();
-        Map<UUID, BigDecimal> returned = new java.util.HashMap<>();
-        List<Object[]> rows = stockTransactionRepository.sumQuantityByReferences(
-                recent.stream().map(com.example.hms.model.pharmacy.Dispense::getId).toList(), RETURNED_TYPES);
-        if (rows != null) {
-            for (Object[] row : rows) {
-                if (row != null && row.length == 2 && row[0] instanceof UUID id && row[1] instanceof BigDecimal sum) {
-                    returned.put(id, sum);
-                }
-            }
-        }
+        Map<UUID, BigDecimal> returned = returnedSoFar(recent);
         // Review of #975 (minimum necessary): the patient's name is for the
         // roles that dispense; an inventory clerk picks the fill by its date,
         // quantity and lot.
@@ -260,6 +235,42 @@ public class StockTransactionServiceImpl implements StockTransactionService {
                     d.getStockLot() != null ? d.getStockLot().getLotNumber() : null));
         }
         return out;
+    }
+
+    /** The latest fills of the item (of the lot, when one is named) a return may be booked against. */
+    private List<com.example.hms.model.pharmacy.Dispense> returnableFills(InventoryItem item, UUID stockLotId) {
+        if (stockLotId != null) {
+            StockLot lot = stockLotRepository.findById(stockLotId)
+                    .orElseThrow(() -> new ResourceNotFoundException("stockLot.notFound", stockLotId));
+            if (lot.getInventoryItem() == null || !item.getId().equals(lot.getInventoryItem().getId())) {
+                throw new BusinessException(MessageUtil.resolve("stockTransaction.lot.wrongItem"));
+            }
+            return dispenseRepository.findTop50ByStockLot_IdAndStatusInOrderByCreatedAtDesc(stockLotId,
+                    RETURNABLE_FILL_STATES);
+        }
+        if (item.getMedicationCatalogItem() == null || item.getPharmacy() == null) {
+            return List.of();
+        }
+        return dispenseRepository
+                .findTop50ByPharmacy_IdAndMedicationCatalogItem_IdAndStockLotIsNullAndStatusInOrderByCreatedAtDesc(
+                        item.getPharmacy().getId(), item.getMedicationCatalogItem().getId(),
+                        RETURNABLE_FILL_STATES);
+    }
+
+    /** What has already been returned against each fill, in one query. */
+    private Map<UUID, BigDecimal> returnedSoFar(List<com.example.hms.model.pharmacy.Dispense> fills) {
+        Map<UUID, BigDecimal> returned = new java.util.HashMap<>();
+        List<Object[]> rows = stockTransactionRepository.sumQuantityByReferences(
+                fills.stream().map(com.example.hms.model.pharmacy.Dispense::getId).toList(), RETURNED_TYPES);
+        if (rows == null) {
+            return returned;
+        }
+        for (Object[] row : rows) {
+            if (row != null && row.length == 2 && row[0] instanceof UUID id && row[1] instanceof BigDecimal sum) {
+                returned.put(id, sum);
+            }
+        }
+        return returned;
     }
 
     private static String patientName(com.example.hms.model.Patient patient) {

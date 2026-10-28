@@ -118,7 +118,8 @@ class LabSpecimenRejectionTest {
         assertThatThrownBy(() -> service.rejectSpecimen(id, "   ", Locale.FRENCH))
             .isInstanceOf(BusinessException.class)
             .hasFieldOrPropertyWithValue("messageKey", "lab.specimen.rejectReasonRequired");
-        assertThatThrownBy(() -> service.rejectSpecimen(id, "x".repeat(501), Locale.FRENCH))
+        String overlong = "x".repeat(501);
+        assertThatThrownBy(() -> service.rejectSpecimen(id, overlong, Locale.FRENCH))
             .isInstanceOf(BusinessException.class)
             .hasFieldOrPropertyWithValue("messageKey", "lab.specimen.rejectReasonTooLong");
         verify(labSpecimenRepository, never()).save(any());

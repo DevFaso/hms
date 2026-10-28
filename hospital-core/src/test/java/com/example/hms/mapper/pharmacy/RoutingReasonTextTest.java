@@ -75,6 +75,21 @@ class RoutingReasonTextTest {
     }
 
     @Test
+    void aLongTypedNoteIsReadInOnePassAndAMarkerInsideTypedWordsIsNotTranslated() {
+        String longNote = "a.".repeat(50_000);
+        String stored = "Dispatched by SMS to COMMUNITY_PHARMACY Pharmacie X. Note: " + longNote;
+        assertThat(RoutingReasonText.readable(stored, Locale.FRENCH))
+                .contains("Note : " + longNote)
+                .doesNotContain("Dispatched", "COMMUNITY_PHARMACY");
+        // "Superseded: ..." not opening a sentence is the pharmacist's words.
+        String typed = "voir xSuperseded: re-dispatched by SMS to Y";
+        assertThat(RoutingReasonText.readable(typed, Locale.FRENCH)).isEqualTo(typed);
+        // A marker with nothing after it is shown as stored.
+        assertThat(RoutingReasonText.readable("Dispatched by SMS to PARTNER_PHARMACY . Note: z", Locale.FRENCH))
+                .startsWith("Dispatched by SMS to PARTNER_PHARMACY ");
+    }
+
+    @Test
     void thePharmaciststOwnWordsAreShownAsTyped() {
         assertThat(RoutingReasonText.readable("Le patient préfère cette pharmacie", Locale.FRENCH))
                 .isEqualTo("Le patient préfère cette pharmacie");

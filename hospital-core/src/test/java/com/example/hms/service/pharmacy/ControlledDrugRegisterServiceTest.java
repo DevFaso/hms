@@ -172,23 +172,28 @@ class ControlledDrugRegisterServiceTest {
     void anotherHospitalsPharmacyIsNotFoundAndItsLedgerIsNeverRead() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
 
-        assertThatThrownBy(() -> service.register(pharmacy.getId(), null, from, to))
+        UUID pharmacyId = pharmacy.getId();
+        assertThatThrownBy(() -> service.register(pharmacyId, null, from, to))
                 .isInstanceOf(ResourceNotFoundException.class);
         verify(ledger, never()).findRegisterRows(any(), any(), any(), any());
     }
 
     @Test
     void aDrugThatIsNotControlledHasNoRegister() {
-        assertThatThrownBy(() -> service.register(pharmacy.getId(), paracetamol.getId(), from, to))
+        UUID pharmacyId = pharmacy.getId();
+        UUID itemId = paracetamol.getId();
+        assertThatThrownBy(() -> service.register(pharmacyId, itemId, from, to))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
     @Test
     void aBackwardsOrOverlongPeriodIsRefused() {
-        assertThatThrownBy(() -> service.register(pharmacy.getId(), null, to, from))
+        UUID pharmacyId = pharmacy.getId();
+        LocalDate overlong = from.plusDays(400);
+        assertThatThrownBy(() -> service.register(pharmacyId, null, to, from))
                 .isInstanceOf(BusinessException.class)
                 .extracting("messageKey").isEqualTo("pharmacy.register.periodInvalid");
-        assertThatThrownBy(() -> service.register(pharmacy.getId(), null, from, from.plusDays(400)))
+        assertThatThrownBy(() -> service.register(pharmacyId, null, from, overlong))
                 .isInstanceOf(BusinessException.class)
                 .extracting("messageKey").isEqualTo("pharmacy.register.periodTooLong");
     }
@@ -200,8 +205,8 @@ class ControlledDrugRegisterServiceTest {
         String csv = new String(service.exportCsv(pharmacy.getId(), null, from, to), StandardCharsets.UTF_8);
 
         assertThat(csv).startsWith("﻿Médicament;Date et heure;Mouvement;Quantité;Lot;Solde;Patient;"
-                + "Prescripteur;Saisi par;Témoin;Motif");
-        assertThat(csv).contains("Morphine 10 mg;;Solde d'ouverture;;;70")
+                + "Prescripteur;Saisi par;Témoin;Motif")
+                .contains("Morphine 10 mg;;Solde d'ouverture;;;70")
                 .contains(";Délivrance;-2;R16-MOR-01;88;Awa Sanou;Issa Kaboré;Mariam Traoré;Paul Zongo;");
         assertThat(csv.split("\r\n")).hasSize(5);
     }

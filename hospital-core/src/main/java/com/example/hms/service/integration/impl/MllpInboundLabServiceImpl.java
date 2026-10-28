@@ -61,10 +61,9 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
 
     /**
      * QA D938: an observation auto-released here tells the patient, as a
-     * release from the worklist does. Field-injected, like the switch below,
-     * so the positional constructor calls in the tests stay as they are.
+     * release from the worklist does. Setter-injected (optional), so the
+     * positional constructor calls in the tests stay as they are.
      */
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.example.hms.service.lab.LabResultReleaseNotifier releaseNotifier;
 
     /**
@@ -74,8 +73,17 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
      * is wired (it is not in the positional-constructor unit tests) it does
      * everything, the notifier field above being its fallback.
      */
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.example.hms.service.LabResultService labResultService;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setReleaseNotifier(com.example.hms.service.lab.LabResultReleaseNotifier releaseNotifier) {
+        this.releaseNotifier = releaseNotifier;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setLabResultService(com.example.hms.service.LabResultService labResultService) {
+        this.labResultService = labResultService;
+    }
 
     /**
      * B14 — the switch PR #716 introduces for manual entry

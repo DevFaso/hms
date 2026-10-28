@@ -32,6 +32,7 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
 
     private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyyMMdd");
     private static final java.security.SecureRandom SECURE_RNG = new java.security.SecureRandom();
+    private static final String SPECIMEN_NOT_FOUND = "labspecimen.notfound";
 
     private final LabSpecimenRepository labSpecimenRepository;
     private final LabOrderRepository labOrderRepository;
@@ -112,10 +113,10 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
     @Transactional(readOnly = true)
     public LabSpecimenResponseDTO getSpecimenById(UUID specimenId, Locale locale) {
         LabSpecimen specimen = labSpecimenRepository.findById(specimenId)
-            .orElseThrow(() -> new ResourceNotFoundException("labspecimen.notfound", specimenId));
+            .orElseThrow(() -> new ResourceNotFoundException(SPECIMEN_NOT_FOUND, specimenId));
 
         if (!specimen.getLabOrder().isHandledBy(roleValidator.requireActiveHospitalId())) {
-            throw new ResourceNotFoundException("labspecimen.notfound", specimenId);
+            throw new ResourceNotFoundException(SPECIMEN_NOT_FOUND, specimenId);
         }
         return labSpecimenMapper.toResponseDTO(specimen);
     }
@@ -139,10 +140,10 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
     @Transactional
     public LabSpecimenResponseDTO receiveSpecimen(UUID specimenId, Locale locale) {
         LabSpecimen specimen = labSpecimenRepository.findById(specimenId)
-            .orElseThrow(() -> new ResourceNotFoundException("labspecimen.notfound", specimenId));
+            .orElseThrow(() -> new ResourceNotFoundException(SPECIMEN_NOT_FOUND, specimenId));
 
         if (!specimen.getLabOrder().isHandledBy(roleValidator.requireActiveHospitalId())) {
-            throw new ResourceNotFoundException("labspecimen.notfound", specimenId);
+            throw new ResourceNotFoundException(SPECIMEN_NOT_FOUND, specimenId);
         }
         // QA D820: a specimen collected before its order was voided is not
         // received either - the receipt would queue an analyzer work order
@@ -169,10 +170,10 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
     @Transactional
     public LabSpecimenResponseDTO rejectSpecimen(UUID specimenId, String reason, Locale locale) {
         LabSpecimen specimen = labSpecimenRepository.findById(specimenId)
-            .orElseThrow(() -> new ResourceNotFoundException("labspecimen.notfound", specimenId));
+            .orElseThrow(() -> new ResourceNotFoundException(SPECIMEN_NOT_FOUND, specimenId));
         LabOrder labOrder = specimen.getLabOrder();
         if (!labOrder.isHandledBy(roleValidator.requireActiveHospitalId())) {
-            throw new ResourceNotFoundException("labspecimen.notfound", specimenId);
+            throw new ResourceNotFoundException(SPECIMEN_NOT_FOUND, specimenId);
         }
         String trimmed = reason == null ? "" : reason.trim();
         if (trimmed.isEmpty()) {

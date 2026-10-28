@@ -124,20 +124,24 @@ class PrescriptionCopyPdfServiceTest {
     @Test
     void thePatientGetsTheirOwnCopyAndNobodyElses() throws Exception {
         assertThat(textOf(service.copyForPatient(rx.getId(), patientId))).contains("Awa Sanou");
-        assertThatThrownBy(() -> service.copyForPatient(rx.getId(), UUID.randomUUID()))
+        UUID rxId = rx.getId();
+        UUID someoneElse = UUID.randomUUID();
+        assertThatThrownBy(() -> service.copyForPatient(rxId, someoneElse))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
     @Test
     void anotherHospitalsPrescriptionIsNotFound() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
-        assertThatThrownBy(() -> service.copyForStaff(rx.getId())).isInstanceOf(ResourceNotFoundException.class);
+        UUID rxId = rx.getId();
+        assertThatThrownBy(() -> service.copyForStaff(rxId)).isInstanceOf(ResourceNotFoundException.class);
     }
 
     @Test
     void aPrescriptionThatWasNotPrintedHasNoCopy() {
         rx.setStatus(PrescriptionStatus.SIGNED);
-        assertThatThrownBy(() -> service.copyForStaff(rx.getId()))
+        UUID rxId = rx.getId();
+        assertThatThrownBy(() -> service.copyForStaff(rxId))
                 .isInstanceOf(BusinessException.class)
                 .extracting("messageKey").isEqualTo("pharmacy.rxCopy.notPrinted");
     }

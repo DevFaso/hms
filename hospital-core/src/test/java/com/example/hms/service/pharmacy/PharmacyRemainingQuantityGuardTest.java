@@ -24,9 +24,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 class PharmacyRemainingQuantityGuardTest {
 
     private static final Path PHARMACY = Path.of("..", "hospital-portal", "src", "app", "pharmacy");
-    /** {@code this.form.quantityDispensed = rx.quantity ...}: a form quantity fed the prescribed amount. */
+    /**
+     * {@code this.form.quantityDispensed = rx.quantity ...}: a form quantity fed the prescribed amount.
+     * The assigned field is captured whole (possessive, no backtracking) and
+     * checked for "quantity" in code.
+     */
     private static final Pattern PRESCRIBED_PREFILL = Pattern.compile(
-            "\\.\\w*[Qq]uantity\\w*\\s*=\\s*\\w+\\??\\.quantity\\b");
+            "\\.(\\w++)\\s*+=\\s*+\\w++\\??\\.quantity\\b");
 
     @Test
     void noPharmacyFormPreFillsThePrescribedQuantity() throws IOException {
@@ -37,6 +41,9 @@ class PharmacyRemainingQuantityGuardTest {
                 String source = Files.readString(ts, StandardCharsets.UTF_8);
                 Matcher m = PRESCRIBED_PREFILL.matcher(source);
                 while (m.find()) {
+                    if (!m.group(1).toLowerCase(java.util.Locale.ROOT).contains("quantity")) {
+                        continue;
+                    }
                     prefills.add(ts.getFileName() + ": " + m.group());
                 }
             }

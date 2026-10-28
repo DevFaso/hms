@@ -130,40 +130,8 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
         MedicationCatalogItem item = catalogItemRepository.findById(lineDto.getMedicationCatalogItemId())
                 .orElseThrow(() -> new ResourceNotFoundException("medication.catalog.notfound"));
 
-        StockLot lot = null;
-        if (lineDto.getStockLotId() != null) {
-            lot = stockLotRepository.findById(lineDto.getStockLotId())
-                    .orElseThrow(() -> new ResourceNotFoundException("stocklot.notfound"));
-            // Lot must belong to the selling pharmacy — prevents cross-pharmacy traceability bugs.
-            if (lot.getInventoryItem() == null
-                    || lot.getInventoryItem().getPharmacy() == null
-                    || !pharmacy.getId().equals(lot.getInventoryItem().getPharmacy().getId())) {
-                throw new BusinessException("pharmacy.sale.lotOtherPharmacy");
-            }
-            // QA D779: a counter sale from a lot is the same movement as a
-            // fill: half a tablet of a counted item is refused here too.
-            WholeUnitQuantity.require(lot.getInventoryItem(), lineDto.getQuantity());
-        }
-        String lineNotes = lineDto.getNotes();
-        if (lot != null) {
-            // QA D964: a later-dated lot while a shorter-dated one could serve
-            // the line needs a reason, kept in the line's notes.
-            String fefoReason = fefoLotPolicy.requireFefoOrReason(lot, lineDto.getQuantity(),
-                    lineDto.getFefoOverrideReason());
-            if (fefoReason != null) {
-                String existing = lineNotes == null || lineNotes.isBlank() ? null : lineNotes.trim();
-                String combined = (existing == null ? "" : existing + "\n") + FEFO_NOTE_PREFIX + fefoReason;
-                // Review of #975: SaleLine.notes is 500 characters; refused up
-                // front with what still fits, as the dispense path does, instead
-                // of a constraint violation at flush.
-                if (combined.length() > LINE_NOTES_MAX) {
-                    throw new BusinessException("pharmacy.fefo.reasonTooLong",
-                            String.valueOf(Math.max(0, LINE_NOTES_MAX
-                                    - (existing == null ? 0 : existing.length() + 1) - FEFO_NOTE_PREFIX.length())));
-                }
-                lineNotes = combined;
-            }
-        }
+        StockLot lot = lineDto.getStockLotId() == null ? null : sellingLot(lineDto, pharmacy);
+        String lineNotes = lot == null ? lineDto.getNotes() : notesWithFefoReason(lineDto, lot);
 
         BigDecimal lineTotal = lineDto.getQuantity()
                 .multiply(lineDto.getUnitPrice())
@@ -177,6 +145,46 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
                 .lineTotal(lineTotal)
                 .notes(lineNotes)
                 .build();
+    }
+
+    /** The lot a line is sold from: of the selling pharmacy, and a whole number of a counted item. */
+    private StockLot sellingLot(SaleLineRequestDTO lineDto, Pharmacy pharmacy) {
+        StockLot lot = stockLotRepository.findById(lineDto.getStockLotId())
+                .orElseThrow(() -> new ResourceNotFoundException("stocklot.notfound"));
+        // Lot must belong to the selling pharmacy — prevents cross-pharmacy traceability bugs.
+        if (lot.getInventoryItem() == null
+                || lot.getInventoryItem().getPharmacy() == null
+                || !pharmacy.getId().equals(lot.getInventoryItem().getPharmacy().getId())) {
+            throw new BusinessException("pharmacy.sale.lotOtherPharmacy");
+        }
+        // QA D779: a counter sale from a lot is the same movement as a
+        // fill: half a tablet of a counted item is refused here too.
+        WholeUnitQuantity.require(lot.getInventoryItem(), lineDto.getQuantity());
+        return lot;
+    }
+
+    /**
+     * QA D964: a later-dated lot while a shorter-dated one could serve the
+     * line needs a reason, kept in the line's notes after the line's own note.
+     */
+    private String notesWithFefoReason(SaleLineRequestDTO lineDto, StockLot lot) {
+        String lineNotes = lineDto.getNotes();
+        String fefoReason = fefoLotPolicy.requireFefoOrReason(lot, lineDto.getQuantity(),
+                lineDto.getFefoOverrideReason());
+        if (fefoReason == null) {
+            return lineNotes;
+        }
+        String existing = lineNotes == null || lineNotes.isBlank() ? null : lineNotes.trim();
+        String prefix = existing == null ? "" : existing + "\n";
+        String combined = prefix + FEFO_NOTE_PREFIX + fefoReason;
+        // Review of #975: SaleLine.notes is 500 characters; refused up
+        // front with what still fits, as the dispense path does, instead
+        // of a constraint violation at flush.
+        if (combined.length() > LINE_NOTES_MAX) {
+            throw new BusinessException("pharmacy.fefo.reasonTooLong",
+                    String.valueOf(Math.max(0, LINE_NOTES_MAX - prefix.length() - FEFO_NOTE_PREFIX.length())));
+        }
+        return combined;
     }
 
     @Override

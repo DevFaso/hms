@@ -63,6 +63,17 @@ public class LabSpecimenRejectionNotifier {
             ? patient.getFullName()
             : NotificationLocalizer.key("patient.fallback.generic");
 
+        CreateInBasketItemRequest item = inBasketItem(order, specimenId, reason, testName, clinician);
+
+        String username = clinician.getUsername();
+        Object[] args = {testName, patientName, reason};
+        TransactionCallbacks.afterCommit(() -> deliver(item, username, args, specimenId));
+    }
+
+    /** The urgent in-basket item for the ordering clinician, built inside the rejecting transaction. */
+    private static CreateInBasketItemRequest inBasketItem(LabOrder order, UUID specimenId, String reason,
+                                                          Object testName, User clinician) {
+        Patient patient = order.getPatient();
         CreateInBasketItemRequest item = new CreateInBasketItemRequest();
         item.setRecipientUserId(clinician.getId());
         item.setHospitalId(order.getHospital().getId());
@@ -77,29 +88,29 @@ public class LabSpecimenRejectionNotifier {
         item.setPatientId(patient != null ? patient.getId() : null);
         item.setPatientName(patient != null ? patient.getFullName() : null);
         item.setEncounterId(order.getEncounter() != null ? order.getEncounter().getId() : null);
+        return item;
+    }
 
-        String username = clinician.getUsername();
-        Object[] args = {testName, patientName, reason};
-        TransactionCallbacks.afterCommit(() -> {
-            try {
-                inBasketService.createItemInNewTransaction(item);
-            } catch (RuntimeException ex) {
-                log.warn("In-basket item not filed for rejected specimen {}: {}", specimenId,
-                    ex.getClass().getSimpleName());
-            }
-            if (username == null || username.isBlank()) {
-                return;
-            }
-            try {
-                TransactionTemplate own = new TransactionTemplate(transactionManager);
-                own.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-                own.executeWithoutResult(status ->
-                    notificationService.createNotification(MESSAGE_KEY, args, username, NOTIFICATION_TYPE, specimenId));
-            } catch (RuntimeException ex) {
-                log.warn("Notification not written for rejected specimen {}: {}", specimenId,
-                    ex.getClass().getSimpleName());
-            }
-        });
+    /** After the commit: the in-basket item and the notification, each on its own, neither failing the other. */
+    private void deliver(CreateInBasketItemRequest item, String username, Object[] args, UUID specimenId) {
+        try {
+            inBasketService.createItemInNewTransaction(item);
+        } catch (RuntimeException ex) {
+            log.warn("In-basket item not filed for rejected specimen {}: {}", specimenId,
+                ex.getClass().getSimpleName());
+        }
+        if (username == null || username.isBlank()) {
+            return;
+        }
+        try {
+            TransactionTemplate own = new TransactionTemplate(transactionManager);
+            own.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+            own.executeWithoutResult(status ->
+                notificationService.createNotification(MESSAGE_KEY, args, username, NOTIFICATION_TYPE, specimenId));
+        } catch (RuntimeException ex) {
+            log.warn("Notification not written for rejected specimen {}: {}", specimenId,
+                ex.getClass().getSimpleName());
+        }
     }
 
     private static Object testNameOf(LabOrder order) {

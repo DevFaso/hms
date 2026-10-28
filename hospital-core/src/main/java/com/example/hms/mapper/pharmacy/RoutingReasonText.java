@@ -5,8 +5,6 @@ import org.springframework.context.i18n.LocaleContextHolder;
 
 import java.util.List;
 import java.util.Locale;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * QA D1000: a routing decision's reason in the reader's language.
@@ -44,22 +42,27 @@ public final class RoutingReasonText {
             "Superseded: re-dispatched by SMS to ",
             "Not delivered: the SMS to the pharmacy failed");
 
+    private static final String DISPATCHED_PREFIX = "Dispatched by SMS to ";
+    private static final List<String> PHARMACY_TYPES =
+            List.of("HOSPITAL_DISPENSARY", "PARTNER_PHARMACY", "COMMUNITY_PHARMACY");
+    private static final String SUPERSEDED_PREFIX = "Superseded: re-dispatched by SMS to ";
+    private static final String NOTE_PREFIX = ". Note: ";
+
     /**
-     * A fragment up to the next ". Note: " / ". Superseded: " / ". Not delivered: "
-     * or the end. Written as "any non-period, or a period not starting a
-     * separator" rather than a lazy {@code (.+?)} with a lookahead: the two
-     * branches cannot match the same character, so a pharmacist's long typed
-     * reason is read in one pass (CodeQL polynomial-ReDoS on #975).
+     * The separators a typed fragment runs up to. Found by index, not by a
+     * regex: an alternation inside a repetition backtracks on a long typed
+     * reason (CodeQL polynomial ReDoS) and recurses once per character
+     * (Sonar S5998, stack overflow), both on #975.
      */
-    private static final String UNTIL_ANY_SEPARATOR =
-            "((?:[^.]|\\.(?! (?:Note: |Superseded: |Not delivered: )))+)";
-    private static final String UNTIL_SUPERSEDED_OR_FAILED =
-            "((?:[^.]|\\.(?! (?:Superseded: |Not delivered: )))+)";
-    private static final Pattern DISPATCHED = Pattern.compile(
-            "^Dispatched by SMS to (HOSPITAL_DISPENSARY|PARTNER_PHARMACY|COMMUNITY_PHARMACY) " + UNTIL_ANY_SEPARATOR);
-    private static final Pattern NOTE = Pattern.compile("\\. Note: " + UNTIL_SUPERSEDED_OR_FAILED);
-    private static final Pattern SUPERSEDED = Pattern.compile(
-            "(^|\\. )Superseded: re-dispatched by SMS to " + UNTIL_ANY_SEPARATOR);
+    private static final List<String> ANY_SEPARATOR = List.of(". Note: ", ". Superseded: ", ". Not delivered: ");
+    private static final List<String> SUPERSEDED_OR_FAILED = List.of(". Superseded: ", ". Not delivered: ");
+
+    /** A recognised part of a stored reason: its marker at {@code start}, its typed fragment up to {@code end}. */
+    private record Part(int start, int fragmentStart, int end) {
+        String fragment(String text) {
+            return text.substring(fragmentStart, end);
+        }
+    }
 
     private RoutingReasonText() {
     }
@@ -80,25 +83,75 @@ public final class RoutingReasonText {
         for (String[] legacy : LEGACY_SENTENCES) {
             text = replaceSentence(text, legacy[0], legacy[1], locale);
         }
-        Matcher dispatched = DISPATCHED.matcher(text);
-        if (dispatched.find()) {
-            String type = MessageUtil.resolveOrNull(locale, "stock.routing.pharmacyType." + dispatched.group(1));
-            text = dispatched.replaceFirst(Matcher.quoteReplacement(
-                    message(locale, "stock.routing.reason.smsDispatched", dispatched.group(0),
-                            orStored(type, dispatched.group(1)), dispatched.group(2))));
-        }
-        Matcher superseded = SUPERSEDED.matcher(text);
-        if (superseded.find()) {
-            text = superseded.replaceFirst(Matcher.quoteReplacement(superseded.group(1)
+        text = dispatched(text, locale);
+        Part superseded = firstPart(text, SUPERSEDED_PREFIX, true, ANY_SEPARATOR);
+        if (superseded != null) {
+            text = text.substring(0, superseded.start())
                     + message(locale, "stock.routing.reason.smsSuperseded",
-                            superseded.group(0).substring(superseded.group(1).length()), superseded.group(2))));
+                            text.substring(superseded.start(), superseded.end()), superseded.fragment(text))
+                    + text.substring(superseded.end());
         }
-        Matcher note = NOTE.matcher(text);
-        if (note.find()) {
-            text = note.replaceFirst(Matcher.quoteReplacement(". "
-                    + message(locale, "stock.routing.reason.note", note.group(0).substring(2), note.group(1))));
+        Part note = firstPart(text, NOTE_PREFIX, false, SUPERSEDED_OR_FAILED);
+        if (note != null) {
+            // The ". " before "Note: " stays; "Note: <fragment>" is what is translated.
+            int noteStart = note.start() + 2;
+            text = text.substring(0, noteStart)
+                    + message(locale, "stock.routing.reason.note", text.substring(noteStart, note.end()),
+                            note.fragment(text))
+                    + text.substring(note.end());
         }
         return text;
+    }
+
+    /** "Dispatched by SMS to &lt;TYPE&gt; &lt;pharmacy&gt;" at the very start of the reason, translated. */
+    private static String dispatched(String text, Locale locale) {
+        if (!text.startsWith(DISPATCHED_PREFIX)) {
+            return text;
+        }
+        for (String type : PHARMACY_TYPES) {
+            String head = DISPATCHED_PREFIX + type + " ";
+            if (text.startsWith(head)) {
+                int end = fragmentEnd(text, head.length(), ANY_SEPARATOR);
+                if (end == head.length()) {
+                    return text;
+                }
+                String label = MessageUtil.resolveOrNull(locale, "stock.routing.pharmacyType." + type);
+                return message(locale, "stock.routing.reason.smsDispatched", text.substring(0, end),
+                        orStored(label, type), text.substring(head.length(), end)) + text.substring(end);
+            }
+        }
+        return text;
+    }
+
+    /**
+     * The first {@code marker} followed by a non-empty fragment; with
+     * {@code atSentenceStart}, only a marker that opens the reason or follows
+     * ". ".
+     */
+    private static Part firstPart(String text, String marker, boolean atSentenceStart, List<String> separators) {
+        int at = text.indexOf(marker);
+        while (at >= 0) {
+            boolean boundary = !atSentenceStart || at == 0 || (at >= 2 && text.startsWith(". ", at - 2));
+            int fragmentStart = at + marker.length();
+            int end = fragmentEnd(text, fragmentStart, separators);
+            if (boundary && end > fragmentStart) {
+                return new Part(at, fragmentStart, end);
+            }
+            at = text.indexOf(marker, at + 1);
+        }
+        return null;
+    }
+
+    /** Where the fragment starting at {@code from} ends: the first separator after it, or the end. */
+    private static int fragmentEnd(String text, int from, List<String> separators) {
+        int end = text.length();
+        for (String separator : separators) {
+            int at = text.indexOf(separator, from);
+            if (at >= 0 && at < end) {
+                end = at;
+            }
+        }
+        return end;
     }
 
     private static String replaceSentence(String text, String sentence, String key, Locale locale) {

@@ -65,7 +65,7 @@ class PharmacyPageEndpointRolesTest {
     private static final Pattern PAGE_IMPORT = Pattern.compile("import\\('\\./pharmacy/([\\w-]+)'\\)");
     private static final Pattern ROLES = Pattern.compile("roles:\\s*\\[([^\\]]*)]");
     private static final Pattern QUOTED_ROLE = Pattern.compile("'(ROLE_[A-Z_]+)'");
-    private static final Pattern SERVICE_FIELD = Pattern.compile("(\\w+)\\s*=\\s*inject\\(PharmacyService\\)");
+    private static final Pattern SERVICE_FIELD = Pattern.compile("\\b(\\w++)\\s*+=\\s*+inject\\(PharmacyService\\)");
     private static final Pattern METHOD_START = Pattern.compile("(?m)^  (\\w+)\\(");
     private static final Pattern HTTP_CALL = Pattern.compile(
             "this\\.http\\.(get|post|put|patch|delete)(?:<[^(]*?>)?\\(\\s*(['`])(.*?)\\2", Pattern.DOTALL);

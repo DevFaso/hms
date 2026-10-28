@@ -928,6 +928,43 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     }
 
     /**
+     * Review of #975: an edit that names the same drug but sends neither id
+     * nor code keeps the item the order was written from, BEFORE any
+     * resolution runs (the mapper would write the null over the link,
+     * dropping the controlled flag and the paediatric ceiling it carries).
+     * An edit of a legacy, unlinked order keeping its name is resolved
+     * leniently by {@code applyCatalogPick}: one match links it, several
+     * leave it as it was. Returns whether the edit names the same drug.
+     */
+    private static boolean keepCatalogLinkBeforeResolution(Prescription existing, PrescriptionRequestDTO request) {
+        boolean sameDrugEdit = !textDiffers(request.getMedicationName(), existing.getMedicationName());
+        if (existing.getMedicationCatalogItemId() != null && sameDrugEdit
+                && request.getMedicationCatalogItemId() == null && isBlank(request.getMedicationCode())) {
+            request.setMedicationCatalogItemId(existing.getMedicationCatalogItemId());
+        }
+        return sameDrugEdit;
+    }
+
+    /**
+     * Review of #975: a code that resolves to nothing, then several name
+     * matches, must not unlink a same-drug edit either: whatever path left
+     * the request without an id after {@code applyCatalogPick}, the order
+     * keeps the item it had.
+     */
+    private com.example.hms.model.medication.MedicationCatalogItem keepCatalogLinkAfterResolution(
+            Prescription existing, PrescriptionRequestDTO request, UUID hospitalId, boolean sameDrugEdit,
+            com.example.hms.model.medication.MedicationCatalogItem resolved) {
+        UUID linkedItemId = existing.getMedicationCatalogItemId();
+        if (linkedItemId == null || !sameDrugEdit || request.getMedicationCatalogItemId() != null) {
+            return resolved;
+        }
+        request.setMedicationCatalogItemId(linkedItemId);
+        return medicationCatalogItemRepository == null ? resolved : medicationCatalogItemRepository
+            .findByIdAndHospital_Id(linkedItemId, hospitalId)
+            .orElse(resolved);
+    }
+
+    /**
      * QA D706: a controlled substance states how much may be handed over,
      * on every path that creates one (the form, order sets), because
      * the pharmacy caps the dispense at it and refuses one without it.
@@ -1012,29 +1049,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // DECISION SUPPORT: Check allergies before updating prescription
         String allergyOverride = checkAllergyConflicts(patient, request);
 
-        // Review of #975: an edit that names the same drug but sends neither
-        // id nor code keeps the item the order was written from, BEFORE any
-        // resolution runs (the mapper would write the null over the link,
-        // dropping the controlled flag and the paediatric ceiling it carries).
-        // An edit of a legacy, unlinked order keeping its name is resolved
-        // leniently: one match links it, several leave it as it was.
-        boolean sameDrugEdit = !textDiffers(request.getMedicationName(), existing.getMedicationName());
-        if (request.getMedicationCatalogItemId() == null && isBlank(request.getMedicationCode())
-                && existing.getMedicationCatalogItemId() != null && sameDrugEdit) {
-            request.setMedicationCatalogItemId(existing.getMedicationCatalogItemId());
-        }
-        com.example.hms.model.medication.MedicationCatalogItem catalogItem =
-            applyCatalogPick(request, hospitalId, sameDrugEdit);
-        // Review of #975: a code that resolves to nothing, then several name
-        // matches, must not unlink a same-drug edit either: whatever path left
-        // the request without an id, the order keeps the item it had.
-        if (request.getMedicationCatalogItemId() == null && existing.getMedicationCatalogItemId() != null
-                && sameDrugEdit) {
-            request.setMedicationCatalogItemId(existing.getMedicationCatalogItemId());
-            catalogItem = medicationCatalogItemRepository == null ? catalogItem : medicationCatalogItemRepository
-                .findByIdAndHospital_Id(existing.getMedicationCatalogItemId(), hospitalId)
-                .orElse(catalogItem);
-        }
+        boolean sameDrugEdit = keepCatalogLinkBeforeResolution(existing, request);
+        com.example.hms.model.medication.MedicationCatalogItem catalogItem = keepCatalogLinkAfterResolution(
+            existing, request, hospitalId, sameDrugEdit, applyCatalogPick(request, hospitalId, sameDrugEdit));
 
         // CDS rule engine: drug-drug, duplicate-order, pediatric-dose. QA D970:
         // the order being edited is not a duplicate of itself.

@@ -88,8 +88,14 @@ class PharmacyPrintActionsGuardTest {
     void theScanSeesASilentPrint() {
         String source = "  printForPatient(): void {\n    this.svc.printForPatient(id).subscribe();\n  }\n";
         assertThat(reachesADocument(source, "printForPatient")).isFalse();
-        String fixed = "  printForPatient(): void {\n    this.openCopy(id);\n  }\n"
-                + "  private openCopy(id: string): void {\n    this.printService.openForPrint(blob);\n  }\n";
+        String fixed = """
+                  printForPatient(): void {
+                    this.openCopy(id);
+                  }
+                  private openCopy(id: string): void {
+                    this.printService.openForPrint(blob);
+                  }
+                """;
         assertThat(reachesADocument(fixed, "printForPatient")).isTrue();
     }
 

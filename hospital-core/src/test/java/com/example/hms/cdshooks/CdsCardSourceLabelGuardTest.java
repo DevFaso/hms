@@ -26,7 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class CdsCardSourceLabelGuardTest {
 
-    private static final Pattern SOURCE_CTOR = Pattern.compile("(?:new Source|CdsHookDtos\\.Source)\\(\\s*([^,]+),");
+    private static final Pattern SOURCE_CTOR = Pattern.compile("(?:new Source|CdsHookDtos\\.Source)\\(\\s*+([^,]++),");
     private static final Pattern KEY = Pattern.compile("text\\.get\\(\"(cds\\.[A-Za-z0-9_.]+)\"");
 
     @Test

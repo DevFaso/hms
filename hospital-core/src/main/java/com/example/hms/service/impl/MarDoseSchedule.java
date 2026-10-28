@@ -15,10 +15,15 @@ public final class MarDoseSchedule {
     private static final Pattern Q_HOURS = Pattern.compile("\\bQ\\s*(\\d{1,2})\\s*H\\b");
     private static final Pattern EVERY_HOURS =
         Pattern.compile("\\b(?:EVERY|TOUTES LES|CADA)\\s+(\\d{1,2})\\s*(?:H|HR|HRS|HOURS|HEURES|HORAS)\\b");
-    private static final Pattern TIMES_DAILY =
-        Pattern.compile("\\b(\\d)\\s*(?:X|FOIS|VECES|VEZ|TIMES)\\s*"
-            + "(?:/\\s*J|/\\s*D|PAR JOUR|PAR 24 ?H|AL DIA|AL DÍA|POR DIA|POR DÍA|DAILY|A DAY|PER DAY)\\b",
-            Pattern.CANON_EQ);
+    /** "3 x", "2 fois", "dos veces", "3 times": a count of doses, read with {@link #PER_DAY} after it. */
+    private static final Pattern TIMES = Pattern.compile("\\b(\\d)\\s*(?:X|FOIS|VECES|VEZ|TIMES)\\s*");
+    /**
+     * "/j", "par jour", "par 24 h", "al día", "por día", "daily", "a day",
+     * "per day", right after {@link #TIMES}. Two patterns rather than one, so
+     * each stays simple enough to read (Sonar S5843).
+     */
+    private static final Pattern PER_DAY = Pattern.compile(
+        "(?:/\\s*[JD]|PAR JOUR|PAR 24 ?H|AL DIA|AL DÍA|POR DIA|POR DÍA|DAILY|A DAY|PER DAY)\\b", Pattern.CANON_EQ);
 
     /**
      * QA D928: a count written as a word ("une fois par jour", "dos veces al
@@ -26,9 +31,7 @@ public final class MarDoseSchedule {
      * above, so "Une fois par jour" repeats like "1 fois par jour" instead of
      * reading as a single dose that ends the course after its first outcome.
      */
-    private static final Pattern COUNT_WORD = Pattern.compile(
-        "\\b(UNE|UN|UNA|UNO|ONE|DEUX|DOS|TWO|TROIS|TRES|THREE|QUATRE|CUATRO|FOUR|SIX|SEIS)"
-            + "(?=\\s*(?:FOIS|VECES|VEZ|TIMES)\\b)");
+    private static final Pattern COUNT_WORD = Pattern.compile("\\b([A-Z]+)(?=\\s*(?:FOIS|VECES|VEZ|TIMES)\\b)");
 
     private MarDoseSchedule() {
     }
@@ -69,10 +72,12 @@ public final class MarDoseSchedule {
         if (m.find()) {
             return positive(Integer.parseInt(m.group(1)));
         }
-        m = TIMES_DAILY.matcher(f);
-        if (m.find()) {
-            int perDay = Integer.parseInt(m.group(1));
-            return perDay > 0 && 24 % perDay == 0 ? 24 / perDay : null;
+        m = TIMES.matcher(f);
+        while (m.find()) {
+            if (PER_DAY.matcher(f).region(m.end(), f.length()).lookingAt()) {
+                int perDay = Integer.parseInt(m.group(1));
+                return perDay > 0 && 24 % perDay == 0 ? 24 / perDay : null;
+            }
         }
         String compact = f.replace(" ", "");
         return switch (compact) {
@@ -98,7 +103,8 @@ public final class MarDoseSchedule {
         Matcher m = COUNT_WORD.matcher(upper);
         StringBuilder out = new StringBuilder();
         while (m.find()) {
-            m.appendReplacement(out, digitOf(m.group(1)));
+            String digit = digitOf(m.group(1));
+            m.appendReplacement(out, digit != null ? digit : m.group(1));
         }
         m.appendTail(out);
         return out.toString();
@@ -110,7 +116,9 @@ public final class MarDoseSchedule {
             case "DEUX", "DOS", "TWO" -> "2";
             case "TROIS", "TRES", "THREE" -> "3";
             case "QUATRE", "CUATRO", "FOUR" -> "4";
-            default -> "6";
+            case "SIX", "SEIS" -> "6";
+            // Any other word before "fois" or "times" is kept as written.
+            default -> null;
         };
     }
 

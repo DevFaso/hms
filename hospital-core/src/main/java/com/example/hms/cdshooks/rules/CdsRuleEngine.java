@@ -266,11 +266,6 @@ public class CdsRuleEngine {
     }
 
     /**
-     * Parse leading number from a dosage string into mg. Accepts "500 mg",
-     * "0,25 g" (returns 250), "12.5 mg". Returns null when the string
-     * cannot be parsed — rules then degrade gracefully.
-     */
-    /**
      * QA D935: {@link #parseDoseMg(String)}, except that a weight-based dose
      * ("15 mg/kg") is the number times the patient's weight, and is unknown
      * (null) when no weight is on file. Read as plain milligrams it made a
@@ -286,12 +281,18 @@ public class CdsRuleEngine {
 
     /** "mg/kg", "mg / kg", "g/kg" right after the leading number. */
     private static final Pattern PER_KG = Pattern.compile(
-        // The unit, when present, owns the spaces after it: no two adjacent
-        // \s* for a typed run of spaces to be split between (CodeQL ReDoS).
-        "^\\s*\\d+[\\.,]?\\d*\\s*(?:(?:mg|g)\\s*)?/\\s*kg\\b",
+        // Decimals only after their separator, and the unit, when present,
+        // owning the spaces after it: no two adjacent quantifiers can share
+        // a typed run of digits or spaces (CodeQL polynomial ReDoS).
+        "^\\s*\\d+(?:[.,]\\d*)?\\s*(?:(?:mg|g)\\s*)?/\\s*kg\\b",
         Pattern.CASE_INSENSITIVE
     );
 
+    /**
+     * Parse leading number from a dosage string into mg. Accepts "500 mg",
+     * "0,25 g" (returns 250), "12.5 mg". Returns null when the string
+     * cannot be parsed — rules then degrade gracefully.
+     */
     static Double parseDoseMg(String dosage) {
         if (dosage == null || dosage.isBlank()) return null;
         Matcher m = DOSE_NUMBER.matcher(dosage);

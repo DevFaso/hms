@@ -84,6 +84,11 @@ public class ControlledDrugRegisterService {
 
     @Transactional(readOnly = true)
     public ControlledRegisterDTO register(UUID pharmacyId, UUID inventoryItemId, LocalDate from, LocalDate to) {
+        return buildRegister(pharmacyId, inventoryItemId, from, to);
+    }
+
+    /** The register itself; the exports call it directly, inside their own read-only transaction. */
+    private ControlledRegisterDTO buildRegister(UUID pharmacyId, UUID inventoryItemId, LocalDate from, LocalDate to) {
         if (from == null || to == null || to.isBefore(from)) {
             throw new BusinessException("pharmacy.register.periodInvalid");
         }
@@ -109,16 +114,7 @@ public class ControlledDrugRegisterService {
         LocalDateTime start = from.atStartOfDay();
         LocalDateTime end = to.plusDays(1).atStartOfDay();
 
-        Map<UUID, BigDecimal> opening = new HashMap<>();
-        List<Object[]> sums = stockTransactionRepository.sumByItemAndTypeBefore(itemIds, start);
-        if (sums != null) {
-            for (Object[] row : sums) {
-                if (row != null && row.length == 3 && row[0] instanceof UUID id
-                        && row[1] instanceof StockTransactionType type && row[2] instanceof BigDecimal total) {
-                    opening.merge(id, signed(type, total), BigDecimal::add);
-                }
-            }
-        }
+        Map<UUID, BigDecimal> opening = openingBalances(itemIds, start);
         List<StockTransaction> rows = stockTransactionRepository.findRegisterRows(itemIds, start, end,
                 PageRequest.of(0, MAX_ROWS + 1));
         boolean truncated = rows.size() > MAX_ROWS;
@@ -127,8 +123,43 @@ public class ControlledDrugRegisterService {
         }
         People people = people(rows, pharmacy.getHospital() != null ? pharmacy.getHospital().getId() : null);
 
-        Map<UUID, List<ControlledRegisterEntryDTO>> entries = new LinkedHashMap<>();
         Map<UUID, BigDecimal> balance = new HashMap<>(opening);
+        Map<UUID, List<ControlledRegisterEntryDTO>> entries = entriesByItem(rows, people, balance);
+        // Review of #975: the shelf count is today's; it is only comparable
+        // with a closing balance carried to today, and a truncated register
+        // has no closing balance at all (its last row is not the period's).
+        boolean coversToday = !to.isBefore(LocalDate.now(java.time.ZoneId.systemDefault()));
+        List<ControlledRegisterDrugDTO> out = new ArrayList<>();
+        for (InventoryItem item : drugs) {
+            BigDecimal open = opening.getOrDefault(item.getId(), BigDecimal.ZERO);
+            out.add(new ControlledRegisterDrugDTO(item.getId(), drugName(item), item.getUnit(), open,
+                    truncated ? null : balance.getOrDefault(item.getId(), open),
+                    coversToday && !truncated ? item.getQuantityOnHand() : null,
+                    entries.getOrDefault(item.getId(), List.of())));
+        }
+        return new ControlledRegisterDTO(pharmacy.getId(), pharmacy.getName(), from, to, truncated, out);
+    }
+
+    /** Each drug's balance before the period: every earlier movement, signed. */
+    private Map<UUID, BigDecimal> openingBalances(List<UUID> itemIds, LocalDateTime start) {
+        Map<UUID, BigDecimal> opening = new HashMap<>();
+        List<Object[]> sums = stockTransactionRepository.sumByItemAndTypeBefore(itemIds, start);
+        if (sums == null) {
+            return opening;
+        }
+        for (Object[] row : sums) {
+            if (row != null && row.length == 3 && row[0] instanceof UUID id
+                    && row[1] instanceof StockTransactionType type && row[2] instanceof BigDecimal total) {
+                opening.merge(id, signed(type, total), BigDecimal::add);
+            }
+        }
+        return opening;
+    }
+
+    /** The period's rows per drug, oldest first, each with the balance after it ({@code balance} is carried). */
+    private static Map<UUID, List<ControlledRegisterEntryDTO>> entriesByItem(List<StockTransaction> rows,
+            People people, Map<UUID, BigDecimal> balance) {
+        Map<UUID, List<ControlledRegisterEntryDTO>> entries = new LinkedHashMap<>();
         for (StockTransaction tx : rows) {
             UUID itemId = tx.getInventoryItem().getId();
             BigDecimal moved = signed(tx.getTransactionType(), tx.getQuantity());
@@ -148,28 +179,16 @@ public class ControlledDrugRegisterService {
                     userName(tx.getWitnessedByUser()),
                     reasonText(LocaleContextHolder.getLocale(), tx.getReason())));
         }
-        // Review of #975: the shelf count is today's; it is only comparable
-        // with a closing balance carried to today, and a truncated register
-        // has no closing balance at all (its last row is not the period's).
-        boolean coversToday = !to.isBefore(LocalDate.now(java.time.ZoneId.systemDefault()));
-        List<ControlledRegisterDrugDTO> out = new ArrayList<>();
-        for (InventoryItem item : drugs) {
-            BigDecimal open = opening.getOrDefault(item.getId(), BigDecimal.ZERO);
-            out.add(new ControlledRegisterDrugDTO(item.getId(), drugName(item), item.getUnit(), open,
-                    truncated ? null : balance.getOrDefault(item.getId(), open),
-                    coversToday && !truncated ? item.getQuantityOnHand() : null,
-                    entries.getOrDefault(item.getId(), List.of())));
-        }
-        return new ControlledRegisterDTO(pharmacy.getId(), pharmacy.getName(), from, to, truncated, out);
+        return entries;
     }
 
     /** The register as CSV (';' separated, UTF-8 with BOM so a spreadsheet reads the accents). */
     @Transactional(readOnly = true)
     public byte[] exportCsv(UUID pharmacyId, UUID inventoryItemId, LocalDate from, LocalDate to) {
-        ControlledRegisterDTO register = register(pharmacyId, inventoryItemId, from, to);
+        ControlledRegisterDTO register = buildRegister(pharmacyId, inventoryItemId, from, to);
         Locale locale = LocaleContextHolder.getLocale();
         DateTimeFormatter when = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
-        StringBuilder csv = new StringBuilder("﻿");
+        StringBuilder csv = new StringBuilder("\uFEFF");
         csv.append(String.join(";", headers(locale))).append("\r\n");
         for (ControlledRegisterDrugDTO drug : register.drugs()) {
             csv.append(cells(drug.medicationName(), "", label(locale, "pharmacy.register.opening"), "", "",
@@ -188,7 +207,7 @@ public class ControlledDrugRegisterService {
     /** The register as a landscape PDF, one table per drug, for inspection. */
     @Transactional(readOnly = true)
     public byte[] exportPdf(UUID pharmacyId, UUID inventoryItemId, LocalDate from, LocalDate to) {
-        ControlledRegisterDTO register = register(pharmacyId, inventoryItemId, from, to);
+        ControlledRegisterDTO register = buildRegister(pharmacyId, inventoryItemId, from, to);
         Locale locale = LocaleContextHolder.getLocale();
         DateTimeFormatter day = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(locale);
         DateTimeFormatter when = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT).withLocale(locale);
@@ -347,9 +366,11 @@ public class ControlledDrugRegisterService {
     }
 
     /** Adjustment codes the ledger stores (the form's and the API's spellings) and their label key. */
+    private static final String DAMAGE = "DAMAGE";
+    private static final String EXPIRY_WRITE_OFF = "EXPIRY_WRITE_OFF";
     private static final Map<String, String> ADJUSTMENT_CODES = Map.of(
-            "DAMAGE", "DAMAGE", "DAMAGED", "DAMAGE",
-            "EXPIRY_WRITE_OFF", "EXPIRY_WRITE_OFF", "EXPIRED", "EXPIRY_WRITE_OFF", "EXPIRY", "EXPIRY_WRITE_OFF",
+            DAMAGE, DAMAGE, "DAMAGED", DAMAGE,
+            EXPIRY_WRITE_OFF, EXPIRY_WRITE_OFF, "EXPIRED", EXPIRY_WRITE_OFF, "EXPIRY", EXPIRY_WRITE_OFF,
             "CYCLE_COUNT_VARIANCE", "CYCLE_COUNT_VARIANCE",
             "CONTROLLED_DISCREPANCY", "CONTROLLED_DISCREPANCY");
     private static final Pattern ADJUSTMENT_REASON = Pattern.compile("^([A-Z_]+)(?::\\s*(.*))?$", Pattern.DOTALL);
@@ -443,8 +464,11 @@ public class ControlledDrugRegisterService {
             return null;
         }
         String name = med.getNameFr() != null && !med.getNameFr().isBlank() ? med.getNameFr() : med.getGenericName();
-        String strength = med.getStrength() == null ? "" : " " + med.getStrength()
-                + (med.getStrengthUnit() == null ? "" : " " + med.getStrengthUnit());
+        String strength = "";
+        if (med.getStrength() != null) {
+            String unit = med.getStrengthUnit() == null ? "" : " " + med.getStrengthUnit();
+            strength = " " + med.getStrength() + unit;
+        }
         return (Objects.toString(name, "") + strength).trim();
     }
 

@@ -22,7 +22,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.math.BigDecimal;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -97,38 +96,11 @@ public class PrescriptionCopyPdfService {
                     ? Objects.toString(rx.getHospital().getName(), "") : "");
             pdf.rule();
             pdf.space(4f);
-            Patient patient = rx.getPatient();
-            pdf.field(label(locale, "pdf.rxcopy.patient"), patient == null ? null
-                    : join(patient.getFirstName(), patient.getLastName()), 11f);
-            if (patient != null && patient.getDateOfBirth() != null) {
-                pdf.field(label(locale, "pdf.rxcopy.birthDate"), date.format(patient.getDateOfBirth()), 11f);
-            }
-            pdf.field(label(locale, "pdf.rxcopy.prescriber"), prescriberName(rx.getStaff()), 11f);
-            pdf.field(label(locale, "pdf.rxcopy.prescribedOn"), rx.getCreatedAt() == null ? null
-                    : date.format(rx.getCreatedAt().toLocalDate()), 11f);
+            writeWhoAndWhen(pdf, rx, locale, date);
             pdf.space(6f);
             pdf.rule();
             pdf.space(4f);
-            pdf.field(label(locale, "pdf.rxcopy.medication"), firstNonBlank(rx.getMedicationDisplayName(),
-                    rx.getMedicationName()), 12f);
-            pdf.field(label(locale, "pdf.rxcopy.dosage"), join(rx.getDosage(), rx.getDoseUnit()), 11f);
-            pdf.field(label(locale, "pdf.rxcopy.route"), rx.getRoute(), 11f);
-            pdf.field(label(locale, "pdf.rxcopy.frequency"), rx.getFrequency(), 11f);
-            pdf.field(label(locale, "pdf.rxcopy.duration"), rx.getDuration(), 11f);
-            pdf.field(label(locale, "pdf.rxcopy.quantityToDispense"),
-                    FillAccounting.remainingLabel(remaining, rx.getQuantityUnit()), 12f);
-            BigDecimal perFill = FillAccounting.perFillQuantity(rx);
-            if (remaining != null && perFill != null && remaining.compareTo(FillAccounting.expectedLifetimeQuantity(rx)) < 0) {
-                pdf.paragraph(PharmacyPdfWriter.REGULAR, 10f, label(locale, "pdf.rxcopy.partlyDispensed",
-                        FillAccounting.remainingLabel(FillAccounting.expectedLifetimeQuantity(rx), rx.getQuantityUnit())));
-            }
-            if (rx.getInstructions() != null && !rx.getInstructions().isBlank()) {
-                pdf.field(label(locale, "pdf.rxcopy.instructions"), rx.getInstructions(), 11f);
-            }
-            if (rx.isControlledSubstance()) {
-                pdf.space(4f);
-                pdf.paragraph(PharmacyPdfWriter.BOLD, 10f, label(locale, "pdf.rxcopy.controlled"));
-            }
+            writeMedication(pdf, rx, remaining, locale);
             pdf.space(10f);
             pdf.rule();
             LocalDateTime printedAt = print != null && print.getDecidedAt() != null
@@ -140,6 +112,45 @@ public class PrescriptionCopyPdfService {
             return pdf.finish();
         } catch (IOException e) {
             throw new UncheckedIOException("Prescription copy rendering failed", e);
+        }
+    }
+
+    /** The patient, the prescriber and the date of the prescription. */
+    private static void writeWhoAndWhen(PharmacyPdfWriter pdf, Prescription rx, Locale locale,
+                                        DateTimeFormatter date) throws IOException {
+        Patient patient = rx.getPatient();
+        pdf.field(label(locale, "pdf.rxcopy.patient"), patient == null ? null
+                : join(patient.getFirstName(), patient.getLastName()), 11f);
+        if (patient != null && patient.getDateOfBirth() != null) {
+            pdf.field(label(locale, "pdf.rxcopy.birthDate"), date.format(patient.getDateOfBirth()), 11f);
+        }
+        pdf.field(label(locale, "pdf.rxcopy.prescriber"), prescriberName(rx.getStaff()), 11f);
+        pdf.field(label(locale, "pdf.rxcopy.prescribedOn"), rx.getCreatedAt() == null ? null
+                : date.format(rx.getCreatedAt().toLocalDate()), 11f);
+    }
+
+    /** The medicine as prescribed, and what is still to be dispensed of it. */
+    private static void writeMedication(PharmacyPdfWriter pdf, Prescription rx, BigDecimal remaining,
+                                        Locale locale) throws IOException {
+        pdf.field(label(locale, "pdf.rxcopy.medication"), firstNonBlank(rx.getMedicationDisplayName(),
+                rx.getMedicationName()), 12f);
+        pdf.field(label(locale, "pdf.rxcopy.dosage"), join(rx.getDosage(), rx.getDoseUnit()), 11f);
+        pdf.field(label(locale, "pdf.rxcopy.route"), rx.getRoute(), 11f);
+        pdf.field(label(locale, "pdf.rxcopy.frequency"), rx.getFrequency(), 11f);
+        pdf.field(label(locale, "pdf.rxcopy.duration"), rx.getDuration(), 11f);
+        pdf.field(label(locale, "pdf.rxcopy.quantityToDispense"),
+                FillAccounting.remainingLabel(remaining, rx.getQuantityUnit()), 12f);
+        BigDecimal perFill = FillAccounting.perFillQuantity(rx);
+        if (remaining != null && perFill != null && remaining.compareTo(FillAccounting.expectedLifetimeQuantity(rx)) < 0) {
+            pdf.paragraph(PharmacyPdfWriter.REGULAR, 10f, label(locale, "pdf.rxcopy.partlyDispensed",
+                    FillAccounting.remainingLabel(FillAccounting.expectedLifetimeQuantity(rx), rx.getQuantityUnit())));
+        }
+        if (rx.getInstructions() != null && !rx.getInstructions().isBlank()) {
+            pdf.field(label(locale, "pdf.rxcopy.instructions"), rx.getInstructions(), 11f);
+        }
+        if (rx.isControlledSubstance()) {
+            pdf.space(4f);
+            pdf.paragraph(PharmacyPdfWriter.BOLD, 10f, label(locale, "pdf.rxcopy.controlled"));
         }
     }
 
