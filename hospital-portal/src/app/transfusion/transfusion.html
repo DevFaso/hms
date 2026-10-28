@@ -127,6 +127,7 @@
                       class="action-link"
                       (click)="openRequest(r)"
                       [title]="'COMMON.VIEW' | translate"
+                      [attr.aria-label]="'COMMON.VIEW' | translate"
                     >
                       <span class="material-symbols-outlined">visibility</span>
                     </button>
@@ -135,6 +136,7 @@
                         class="action-link delete"
                         (click)="cancelRequest(r)"
                         [title]="'COMMON.CANCEL' | translate"
+                        [attr.aria-label]="'COMMON.CANCEL' | translate"
                       >
                         <span class="material-symbols-outlined">cancel</span>
                       </button>
@@ -201,6 +203,7 @@
                       class="action-link delete"
                       (click)="discardUnit(u)"
                       [title]="'TRANSFUSION.DISCARD' | translate"
+                      [attr.aria-label]="'TRANSFUSION.DISCARD' | translate"
                     >
                       <span class="material-symbols-outlined">delete</span>
                     </button>
@@ -220,7 +223,12 @@
       <div class="detail-panel">
         <div class="detail-header">
           <h2>{{ req.patientName }} — {{ req.productType | enumLabel: 'bloodProductType' }}</h2>
-          <button class="btn-close" (click)="closeRequest()" [title]="'COMMON.CLOSE' | translate">
+          <button
+            class="btn-close"
+            (click)="closeRequest()"
+            [title]="'COMMON.CLOSE' | translate"
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>

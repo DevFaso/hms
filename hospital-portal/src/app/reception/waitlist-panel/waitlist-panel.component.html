@@ -121,6 +121,7 @@
 <!-- Add to Waitlist Modal -->
 @if (showAddForm()) {
   <div
+    [attr.aria-label]="'COMMON.CLOSE' | translate"
     class="modal-backdrop"
     (click)="showAddForm.set(false)"
     (keydown.enter)="showAddForm.set(false)"

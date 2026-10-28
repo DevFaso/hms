@@ -149,6 +149,7 @@
         [disabled]="page() + 1 >= totalPages()"
         (click)="next()"
         [title]="'COMMON.NEXT' | translate"
+        [attr.aria-label]="'COMMON.NEXT' | translate"
       >
         <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
       </button>

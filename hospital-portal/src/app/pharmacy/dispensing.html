@@ -64,7 +64,11 @@
           <span class="material-symbols-outlined">medication</span>
           {{ 'PHARMACY.DISPENSE_MEDICATION' | translate }}
         </h3>
-        <button class="btn-text" (click)="closeForm()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="btn-text"
+          (click)="closeForm()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -740,11 +744,21 @@
 
       <!-- Pagination -->
       <div class="pagination">
-        <button class="btn-text" [disabled]="queuePage === 0" (click)="prevPage()">
+        <button
+          [attr.aria-label]="'COMMON.PREVIOUS' | translate"
+          class="btn-text"
+          [disabled]="queuePage === 0"
+          (click)="prevPage()"
+        >
           <span class="material-symbols-outlined">chevron_left</span>
         </button>
         <span class="page-info">{{ queuePage + 1 }} / {{ queueTotalPages || 1 }}</span>
-        <button class="btn-text" [disabled]="queuePage >= queueTotalPages - 1" (click)="nextPage()">
+        <button
+          [attr.aria-label]="'COMMON.NEXT' | translate"
+          class="btn-text"
+          [disabled]="queuePage >= queueTotalPages - 1"
+          (click)="nextPage()"
+        >
           <span class="material-symbols-outlined">chevron_right</span>
         </button>
       </div>
@@ -845,7 +859,11 @@
                   <!-- G15: a PENDING row is a prepared fill; it is cancelled
                        from the work queue (stock back, patient told). -->
                   @if (d.status !== 'CANCELLED' && d.status !== 'PENDING') {
-                    <button class="btn-action danger" (click)="cancelDispense(d.id)">
+                    <button
+                      [attr.aria-label]="'PHARMACY.CANCEL_DISPENSE' | translate"
+                      class="btn-action danger"
+                      (click)="cancelDispense(d.id)"
+                    >
                       <span class="material-symbols-outlined">cancel</span>
                     </button>
                   }

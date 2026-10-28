@@ -33,6 +33,7 @@
               class="btn-icon"
               (click)="patientClicked.emit(issue.patientId)"
               [title]="'RECEPTION.VIEW_PATIENT' | translate"
+              [attr.aria-label]="'RECEPTION.VIEW_PATIENT' | translate"
             >
               <span class="material-symbols-outlined">person_search</span>
             </button>

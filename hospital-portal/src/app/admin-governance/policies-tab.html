@@ -26,7 +26,13 @@
     @for (policy of policies(); track policy.id) {
       <div class="policy-card">
         <div class="policy-head">
-          <button type="button" class="expand-btn" (click)="toggleExpand(policy.id)">
+          <button
+            [attr.aria-label]="'COMMON.SHOW_DETAILS' | translate"
+            [attr.aria-expanded]="expanded().has(policy.id)"
+            type="button"
+            class="expand-btn"
+            (click)="toggleExpand(policy.id)"
+          >
             <span class="material-symbols-outlined">
               {{ expanded().has(policy.id) ? 'expand_less' : 'expand_more' }}
             </span>
@@ -57,6 +63,7 @@
               class="icon-btn"
               (click)="openCreateRule(policy)"
               [title]="'ADMIN_GOV.NEW_RULE' | translate"
+              [attr.aria-label]="'ADMIN_GOV.NEW_RULE' | translate"
             >
               <span class="material-symbols-outlined">add_moderator</span>
             </button>
@@ -65,6 +72,7 @@
               class="icon-btn"
               (click)="openEditPolicy(policy)"
               [title]="'COMMON.EDIT' | translate"
+              [attr.aria-label]="'COMMON.EDIT' | translate"
             >
               <span class="material-symbols-outlined">edit</span>
             </button>
@@ -73,6 +81,7 @@
               class="icon-btn danger"
               (click)="deletePolicy(policy)"
               [title]="'COMMON.DELETE' | translate"
+              [attr.aria-label]="'COMMON.DELETE' | translate"
             >
               <span class="material-symbols-outlined">delete</span>
             </button>
@@ -124,6 +133,7 @@
                           class="icon-btn"
                           (click)="openEditRule(policy, rule)"
                           [title]="'COMMON.EDIT' | translate"
+                          [attr.aria-label]="'COMMON.EDIT' | translate"
                         >
                           <span class="material-symbols-outlined">edit</span>
                         </button>
@@ -132,6 +142,7 @@
                           class="icon-btn danger"
                           (click)="deleteRule(policy, rule)"
                           [title]="'COMMON.DELETE' | translate"
+                          [attr.aria-label]="'COMMON.DELETE' | translate"
                         >
                           <span class="material-symbols-outlined">delete</span>
                         </button>

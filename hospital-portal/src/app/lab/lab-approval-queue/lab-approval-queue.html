@@ -112,6 +112,7 @@
                   <button
                     class="btn-action btn-view"
                     [title]="'LAB_APPROVAL.ACTION.VIEW_TITLE' | translate"
+                    [attr.aria-label]="'LAB_APPROVAL.ACTION.VIEW_TITLE' | translate"
                     (click)="viewDefinition(def)"
                   >
                     <span class="material-symbols-outlined">visibility</span>
@@ -260,6 +261,7 @@
         <button
           class="close-btn"
           [title]="'LAB_APPROVAL.ACTION.CLOSE_TITLE' | translate"
+          [attr.aria-label]="'LAB_APPROVAL.ACTION.CLOSE_TITLE' | translate"
           (click)="closeDetail()"
         >
           <span class="material-symbols-outlined">close</span>
@@ -335,6 +337,7 @@
                   <button
                     class="btn-icon delete-btn"
                     [title]="'LAB_APPROVAL.STUDIES.DELETE_TITLE' | translate"
+                    [attr.aria-label]="'LAB_APPROVAL.STUDIES.DELETE_TITLE' | translate"
                     (click)="deleteStudy(study)"
                   >
                     <span class="material-symbols-outlined">delete</span>
@@ -612,7 +615,11 @@
     >
       <div class="modal-header">
         <h2 id="lab-approval-dialog-title-2">{{ 'LAB_APPROVAL.STUDY_FORM.TITLE' | translate }}</h2>
-        <button class="modal-close" (click)="closeStudyModal()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="modal-close"
+          (click)="closeStudyModal()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -759,7 +766,11 @@
             }
           }
         </h2>
-        <button class="modal-close" (click)="closeApprovalModal()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="modal-close"
+          (click)="closeApprovalModal()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>

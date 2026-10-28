@@ -47,7 +47,12 @@
           <span class="muted">{{ 'MORTALITY.CLOSURE_NOTHING' | translate }}</span>
         }
       </div>
-      <button class="btn-close" (click)="dismissClosure()" [title]="'COMMON.CLOSE' | translate">
+      <button
+        class="btn-close"
+        (click)="dismissClosure()"
+        [title]="'COMMON.CLOSE' | translate"
+        [attr.aria-label]="'COMMON.CLOSE' | translate"
+      >
         <span class="material-symbols-outlined">close</span>
       </button>
     </div>
@@ -152,6 +157,7 @@
                       class="action-link"
                       (click)="openDetail(d)"
                       [title]="'COMMON.VIEW' | translate"
+                      [attr.aria-label]="'COMMON.VIEW' | translate"
                     >
                       <span class="material-symbols-outlined">visibility</span>
                     </button>
@@ -160,6 +166,7 @@
                         class="action-link"
                         (click)="openAmend(d)"
                         [title]="'MORTALITY.AMEND' | translate"
+                        [attr.aria-label]="'MORTALITY.AMEND' | translate"
                       >
                         <span class="material-symbols-outlined">edit_note</span>
                       </button>
@@ -180,7 +187,12 @@
       <div class="detail-panel">
         <div class="detail-header">
           <h2>{{ rec.patientName }}</h2>
-          <button class="btn-close" (click)="closeDetail()" [title]="'COMMON.CLOSE' | translate">
+          <button
+            class="btn-close"
+            (click)="closeDetail()"
+            [title]="'COMMON.CLOSE' | translate"
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>

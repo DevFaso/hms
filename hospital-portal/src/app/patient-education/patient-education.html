@@ -160,6 +160,7 @@
                       type="button"
                       class="btn-secondary btn-sm"
                       [title]="'COMMON.EDIT' | translate"
+                      [attr.aria-label]="'COMMON.EDIT' | translate"
                       (click)="openEditResource(r)"
                     >
                       <span class="material-symbols-outlined">edit</span>
@@ -170,6 +171,7 @@
                       type="button"
                       class="btn-secondary btn-sm danger"
                       [title]="'COMMON.DELETE' | translate"
+                      [attr.aria-label]="'COMMON.DELETE' | translate"
                       (click)="confirmDelete(r)"
                     >
                       <span class="material-symbols-outlined">delete</span>
@@ -264,6 +266,7 @@
                     type="button"
                     class="btn-secondary btn-sm"
                     [title]="'EDUCATION.UPDATE_PROGRESS' | translate"
+                    [attr.aria-label]="'EDUCATION.UPDATE_PROGRESS' | translate"
                     (click)="openProgressUpdate(p)"
                   >
                     <span class="material-symbols-outlined">edit_note</span>

@@ -155,6 +155,7 @@
                       class="action-link"
                       (click)="viewDetail(o)"
                       [title]="'IMAGING.VIEW_DETAILS' | translate"
+                      [attr.aria-label]="'IMAGING.VIEW_DETAILS' | translate"
                     >
                       <span class="material-symbols-outlined">visibility</span>
                     </button>
@@ -163,6 +164,7 @@
                         class="action-link"
                         (click)="viewReportForOrder(o)"
                         [title]="'IMAGING.VIEW_REPORT' | translate"
+                        [attr.aria-label]="'IMAGING.VIEW_REPORT' | translate"
                       >
                         <span class="material-symbols-outlined">description</span>
                       </button>
@@ -172,6 +174,7 @@
                         class="action-link"
                         (click)="openAuthorReport(o, o.status === 'RESULTS_AVAILABLE')"
                         [title]="'IMAGING.AUTHOR_REPORT' | translate"
+                        [attr.aria-label]="'IMAGING.AUTHOR_REPORT' | translate"
                       >
                         <span class="material-symbols-outlined">edit_note</span>
                       </button>
@@ -182,6 +185,7 @@
                           class="action-link"
                           (click)="openEdit(o)"
                           [title]="'IMAGING.EDIT_ORDER' | translate"
+                          [attr.aria-label]="'IMAGING.EDIT_ORDER' | translate"
                         >
                           <span class="material-symbols-outlined">edit</span>
                         </button>
@@ -191,6 +195,7 @@
                           class="action-link delete"
                           (click)="confirmCancel(o)"
                           [title]="'IMAGING.CANCEL_ORDER' | translate"
+                          [attr.aria-label]="'IMAGING.CANCEL_ORDER' | translate"
                         >
                           <span class="material-symbols-outlined">cancel</span>
                         </button>
@@ -294,6 +299,7 @@
                       class="action-link"
                       (click)="openReport(r)"
                       [title]="'IMAGING.VIEW_REPORT' | translate"
+                      [attr.aria-label]="'IMAGING.VIEW_REPORT' | translate"
                     >
                       <span class="material-symbols-outlined">visibility</span>
                     </button>
@@ -303,6 +309,7 @@
                         (click)="acknowledgeCritical(r)"
                         [disabled]="acknowledging()"
                         [title]="'IMAGING.ACK_CRITICAL' | translate"
+                        [attr.aria-label]="'IMAGING.ACK_CRITICAL' | translate"
                       >
                         <span class="material-symbols-outlined">notifications_active</span>
                       </button>
@@ -312,6 +319,7 @@
                         class="action-link"
                         (click)="openStatusUpdate(r)"
                         [title]="'IMAGING.UPDATE_STATUS' | translate"
+                        [attr.aria-label]="'IMAGING.UPDATE_STATUS' | translate"
                       >
                         <span class="material-symbols-outlined">sync_alt</span>
                       </button>
@@ -343,7 +351,12 @@
                 {{ 'IMAGING.SIGN_REPORT' | translate }}
               </button>
             }
-            <button class="btn-close" (click)="closeReport()" [title]="'COMMON.CLOSE' | translate">
+            <button
+              class="btn-close"
+              (click)="closeReport()"
+              [title]="'COMMON.CLOSE' | translate"
+              [attr.aria-label]="'COMMON.CLOSE' | translate"
+            >
               <span class="material-symbols-outlined">close</span>
             </button>
           </div>
@@ -680,6 +693,7 @@
             class="btn-close"
             (click)="closeDetail()"
             [title]="'IMAGING.CLOSE_DETAIL' | translate"
+            [attr.aria-label]="'IMAGING.CLOSE_DETAIL' | translate"
           >
             <span class="material-symbols-outlined">close</span>
           </button>

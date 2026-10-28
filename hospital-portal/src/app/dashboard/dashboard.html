@@ -150,6 +150,7 @@
         class="hero-btn hero-btn-ghost"
         (click)="refreshDashboard()"
         [title]="'DASHBOARD.REFRESH' | translate"
+        [attr.aria-label]="'DASHBOARD.REFRESH' | translate"
       >
         <span class="material-symbols-outlined" [class.spin]="loading()">refresh</span>
       </button>
@@ -1445,6 +1446,7 @@
                       class="row-action-btn"
                       routerLink="/encounters"
                       [title]="'DASHBOARD.NEW_ENCOUNTER' | translate"
+                      [attr.aria-label]="'DASHBOARD.NEW_ENCOUNTER' | translate"
                     >
                       <span class="material-symbols-outlined">stethoscope</span>
                     </a>
@@ -1452,6 +1454,7 @@
                       class="row-action-btn"
                       routerLink="/lab"
                       [title]="'DASHBOARD.VIEW_RESULTS' | translate"
+                      [attr.aria-label]="'DASHBOARD.VIEW_RESULTS' | translate"
                     >
                       <span class="material-symbols-outlined">science</span>
                     </a>

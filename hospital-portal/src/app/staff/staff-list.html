@@ -33,6 +33,7 @@
         <button
           class="search-clear"
           [title]="'COMMON.CLEAR_SEARCH' | translate"
+          [attr.aria-label]="'COMMON.CLEAR_SEARCH' | translate"
           (click)="searchTerm = ''; applyFilter()"
         >
           <span class="material-symbols-outlined">close</span>
@@ -121,7 +122,11 @@
       @if (deptFilter) {
         <span class="filter-chip">
           {{ deptFilter }}
-          <button class="chip-remove" (click)="deptFilter = ''; applyFilter()">
+          <button
+            [attr.aria-label]="'COMMON.REMOVE_FILTER' | translate"
+            class="chip-remove"
+            (click)="deptFilter = ''; applyFilter()"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </span>
@@ -129,7 +134,11 @@
       @if (employmentTypeFilter) {
         <span class="filter-chip">
           {{ employmentTypeFilter | enumLabel: 'employmentType' }}
-          <button class="chip-remove" (click)="employmentTypeFilter = ''; applyFilter()">
+          <button
+            [attr.aria-label]="'COMMON.REMOVE_FILTER' | translate"
+            class="chip-remove"
+            (click)="employmentTypeFilter = ''; applyFilter()"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </span>
@@ -137,7 +146,11 @@
       @if (jobTitleFilter) {
         <span class="filter-chip">
           {{ jobTitleFilter | enumLabel: 'jobTitle' }}
-          <button class="chip-remove" (click)="jobTitleFilter = ''; applyFilter()">
+          <button
+            [attr.aria-label]="'COMMON.REMOVE_FILTER' | translate"
+            class="chip-remove"
+            (click)="jobTitleFilter = ''; applyFilter()"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </span>
@@ -179,6 +192,7 @@
                 <button
                   class="action-link"
                   [title]="'COMMON.EDIT' | translate"
+                  [attr.aria-label]="'COMMON.EDIT' | translate"
                   (click)="openEdit(member)"
                 >
                   <span class="material-symbols-outlined">edit</span>
@@ -188,6 +202,7 @@
                     class="action-link danger"
                     data-test="staff-deactivate"
                     [title]="'STAFF.DEACTIVATE' | translate"
+                    [attr.aria-label]="'STAFF.DEACTIVATE' | translate"
                     (click)="confirmDelete(member)"
                   >
                     <span class="material-symbols-outlined">person_off</span>
@@ -239,7 +254,11 @@
               editing() ? ('STAFF.EDIT_STAFF' | translate) : ('STAFF.REGISTER_STAFF' | translate)
             }}
           </h2>
-          <button class="modal-close" (click)="closeModal()">
+          <button
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+            class="modal-close"
+            (click)="closeModal()"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -399,7 +418,11 @@
       >
         <div class="modal-header">
           <h2>{{ 'STAFF.DEACTIVATE_STAFF' | translate }}</h2>
-          <button class="modal-close" (click)="cancelDelete()">
+          <button
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+            class="modal-close"
+            (click)="cancelDelete()"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>

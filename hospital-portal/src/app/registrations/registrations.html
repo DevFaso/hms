@@ -157,6 +157,7 @@
                     type="button"
                     class="btn-secondary btn-sm"
                     [title]="'COMMON.EDIT' | translate"
+                    [attr.aria-label]="'COMMON.EDIT' | translate"
                     (click)="openEdit(r)"
                   >
                     <span class="material-symbols-outlined">edit</span>
@@ -166,6 +167,7 @@
                       type="button"
                       class="btn-secondary btn-sm"
                       [title]="'REGISTRATIONS.DEACTIVATE' | translate"
+                      [attr.aria-label]="'REGISTRATIONS.DEACTIVATE' | translate"
                       (click)="deactivate(r)"
                     >
                       <span class="material-symbols-outlined">person_off</span>
@@ -175,6 +177,7 @@
                     type="button"
                     class="btn-secondary btn-sm danger"
                     [title]="'COMMON.DELETE' | translate"
+                    [attr.aria-label]="'COMMON.DELETE' | translate"
                     (click)="confirmDelete(r)"
                   >
                     <span class="material-symbols-outlined">delete_forever</span>

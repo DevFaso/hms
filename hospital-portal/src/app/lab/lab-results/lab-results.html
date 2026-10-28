@@ -197,6 +197,7 @@
                   <button
                     class="action-link view-link"
                     [title]="'LAB_RESULTS.VIEW_DETAILS' | translate"
+                    [attr.aria-label]="'LAB_RESULTS.VIEW_DETAILS' | translate"
                     (click)="viewResult(r)"
                   >
                     <span class="material-symbols-outlined">visibility</span>
@@ -205,6 +206,7 @@
                     <button
                       class="action-link edit-link"
                       [title]="'COMMON.EDIT' | translate"
+                      [attr.aria-label]="'COMMON.EDIT' | translate"
                       (click)="openEdit(r)"
                     >
                       <span class="material-symbols-outlined">edit</span>
@@ -215,6 +217,7 @@
                       class="action-link edit-link"
                       [attr.data-testid]="'correct-' + r.id"
                       [title]="'LAB_RESULTS.ENTER_CORRECTION' | translate"
+                      [attr.aria-label]="'LAB_RESULTS.ENTER_CORRECTION' | translate"
                       (click)="openCorrection(r)"
                     >
                       <span class="material-symbols-outlined">edit_note</span>
@@ -224,6 +227,7 @@
                     <button
                       class="action-link release-link"
                       [title]="'LAB_RESULTS.RELEASE' | translate"
+                      [attr.aria-label]="'LAB_RESULTS.RELEASE' | translate"
                       (click)="releaseResult(r)"
                     >
                       <span class="material-symbols-outlined">verified</span>
@@ -233,6 +237,7 @@
                     <button
                       class="action-link sign-link"
                       [title]="'LAB_RESULTS.SIGN' | translate"
+                      [attr.aria-label]="'LAB_RESULTS.SIGN' | translate"
                       (click)="openSign(r)"
                     >
                       <span class="material-symbols-outlined">draw</span>
@@ -251,6 +256,7 @@
                       class="action-link ack-link"
                       [attr.data-testid]="'read-back-' + r.id"
                       [title]="'LAB_RESULTS.READ_BACK' | translate"
+                      [attr.aria-label]="'LAB_RESULTS.READ_BACK' | translate"
                       (click)="openReadBack(r)"
                     >
                       <span class="material-symbols-outlined">record_voice_over</span>
@@ -259,6 +265,7 @@
                     <button
                       class="action-link ack-link"
                       [title]="'LAB_RESULTS.ACKNOWLEDGE' | translate"
+                      [attr.aria-label]="'LAB_RESULTS.ACKNOWLEDGE' | translate"
                       (click)="acknowledge(r)"
                     >
                       <span class="material-symbols-outlined">task_alt</span>
@@ -267,6 +274,7 @@
                   <button
                     class="action-link compare-link"
                     [title]="'LAB_RESULTS.COMPARE' | translate"
+                    [attr.aria-label]="'LAB_RESULTS.COMPARE' | translate"
                     (click)="openCompare(r)"
                   >
                     <span class="material-symbols-outlined">timeline</span>
@@ -275,6 +283,7 @@
                     <button
                       class="action-link delete-link"
                       [title]="'COMMON.DELETE' | translate"
+                      [attr.aria-label]="'COMMON.DELETE' | translate"
                       (click)="confirmDelete(r)"
                     >
                       <span class="material-symbols-outlined">delete</span>
@@ -326,6 +335,7 @@
           <button
             class="close-btn"
             [title]="'COMMON.CLOSE_DETAIL_PANEL' | translate"
+            [attr.aria-label]="'COMMON.CLOSE_DETAIL_PANEL' | translate"
             (click)="closeDetail()"
           >
             <span class="material-symbols-outlined">close</span>
@@ -540,7 +550,11 @@
                 : ('LAB_RESULTS.NEW_RESULT' | translate)
           }}
         </h2>
-        <button class="modal-close" (click)="closeModal()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="modal-close"
+          (click)="closeModal()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -675,7 +689,11 @@
     >
       <div class="modal-header">
         <h2>{{ 'LAB_RESULTS.SELF_RELEASE_TITLE' | translate }}</h2>
-        <button class="modal-close" (click)="cancelSelfRelease()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="modal-close"
+          (click)="cancelSelfRelease()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -725,7 +743,11 @@
     >
       <div class="modal-header">
         <h2 id="lab-results-dialog-title-3">{{ 'LAB_RESULTS.DELETE_TITLE' | translate }}</h2>
-        <button class="modal-close" (click)="cancelDelete()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="modal-close"
+          (click)="cancelDelete()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -772,7 +794,11 @@
           {{ 'LAB_RESULTS.SIGN_TITLE' | translate }} —
           {{ shortOrderCode(signTarget()?.labOrderCode) }}
         </h2>
-        <button class="modal-close" (click)="closeSign()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="modal-close"
+          (click)="closeSign()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -826,7 +852,11 @@
         <h2 id="lab-results-dialog-title-5">
           {{ 'LAB_RESULTS.COMPARE_TITLE' | translate }} — {{ cmp.testName }}
         </h2>
-        <button class="modal-close" (click)="closeCompare()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="modal-close"
+          (click)="closeCompare()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>

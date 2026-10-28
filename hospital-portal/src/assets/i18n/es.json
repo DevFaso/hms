@@ -2191,7 +2191,8 @@
     "VOICE_MEMO_NOT_SUPPORTED": "Este navegador no admite la grabación de notas de voz.",
     "VOICE_MEMO_UPLOAD_FAILED": "Fallo al subir la nota de voz.",
     "ATTACHMENT": "Archivo adjunto",
-    "SUBTITLE_PATIENT": "Escriba a su equipo de atención"
+    "SUBTITLE_PATIENT": "Escriba a su equipo de atención",
+    "SEND": "Enviar el mensaje"
   },
   "COMMON": {
     "ACTION": "Acción",
@@ -2297,7 +2298,9 @@
     "MINUTES_SHORT": "{{count}} min",
     "COPYRIGHT_FOOTER": "© {{year}} e-Keneya — Sistema de gestión hospitalaria",
     "PATIENT_PICKER_NO_MATCH": "Ningún paciente coincide con esta búsqueda.",
-    "MISSING_REQUIRED_FIELDS": "Faltan campos obligatorios: {{fields}}"
+    "MISSING_REQUIRED_FIELDS": "Faltan campos obligatorios: {{fields}}",
+    "REMOVE_FILTER": "Quitar el filtro",
+    "SHOW_DETAILS": "Mostrar u ocultar los detalles"
   },
   "CONSULTATIONS": {
     "ACKNOWLEDGE": "Acusar recibo",
@@ -9375,7 +9378,8 @@
     "STRENGTH_PLACEHOLDER": "ej. 500",
     "CATEGORY_PLACEHOLDER": "ej. Antibiótico",
     "PEDIATRIC_MAX_DOSE_MG_PER_KG": "Dosis pediátrica máxima (mg/kg por toma)",
-    "PEDIATRIC_MAX_DOSE_HINT": "Opcional. Introdúzcala solo desde la referencia de su establecimiento; el control de prescripción señala una dosis infantil superior."
+    "PEDIATRIC_MAX_DOSE_HINT": "Opcional. Introdúzcala solo desde la referencia de su establecimiento; el control de prescripción señala una dosis infantil superior.",
+    "CANCEL_DISPENSE": "Anular la dispensación"
   },
   "LAB_QC": {
     "TITLE": "Panel de control de calidad",

@@ -105,7 +105,11 @@
                 : ('ANNOUNCEMENTS.CREATE_ANNOUNCEMENT' | translate)
             }}
           </h2>
-          <button class="modal-close" (click)="closeModal()">
+          <button
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+            class="modal-close"
+            (click)="closeModal()"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -159,7 +163,11 @@
       >
         <div class="modal-header">
           <h2>{{ 'ANNOUNCEMENTS.DELETE_ANNOUNCEMENT' | translate }}</h2>
-          <button class="modal-close" (click)="cancelDelete()">
+          <button
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+            class="modal-close"
+            (click)="cancelDelete()"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>

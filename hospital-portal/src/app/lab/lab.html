@@ -158,6 +158,7 @@
                   <button
                     class="action-link view-link"
                     [title]="'LAB.VIEW_DETAILS' | translate"
+                    [attr.aria-label]="'LAB.VIEW_DETAILS' | translate"
                     (click)="viewOrder(order)"
                   >
                     <span class="material-symbols-outlined">visibility</span>
@@ -166,6 +167,7 @@
                     <button
                       class="action-link edit-link"
                       [title]="'COMMON.EDIT' | translate"
+                      [attr.aria-label]="'COMMON.EDIT' | translate"
                       (click)="openEdit(order)"
                     >
                       <span class="material-symbols-outlined">edit</span>
@@ -175,6 +177,7 @@
                     <button
                       class="action-link specimen-link"
                       [title]="'LAB.SPECIMENS' | translate"
+                      [attr.aria-label]="'LAB.SPECIMENS' | translate"
                       (click)="openSpecimens(order)"
                     >
                       <span class="material-symbols-outlined">labs</span>
@@ -195,6 +198,7 @@
                     <button
                       class="action-link delete-link"
                       [title]="'COMMON.DELETE' | translate"
+                      [attr.aria-label]="'COMMON.DELETE' | translate"
                       (click)="confirmDelete(order)"
                     >
                       <span class="material-symbols-outlined">delete</span>
@@ -237,6 +241,7 @@
           <button
             class="close-btn"
             [title]="'COMMON.CLOSE_DETAIL_PANEL' | translate"
+            [attr.aria-label]="'COMMON.CLOSE_DETAIL_PANEL' | translate"
             (click)="closeDetail()"
           >
             <span class="material-symbols-outlined">close</span>
@@ -354,7 +359,11 @@
         <h2 id="lab-dialog-title-2">
           {{ editing() ? ('LAB.EDIT_ORDER' | translate) : ('LAB.NEW_ORDER' | translate) }}
         </h2>
-        <button class="modal-close" (click)="closeModal()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="modal-close"
+          (click)="closeModal()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -378,6 +387,7 @@
                   class="chip-clear"
                   (click)="clearPatient()"
                   [title]="'COMMON.CHANGE_PATIENT' | translate"
+                  [attr.aria-label]="'COMMON.CHANGE_PATIENT' | translate"
                 >
                   <span class="material-symbols-outlined">close</span>
                 </button>
@@ -694,7 +704,11 @@
     >
       <div class="modal-header">
         <h2 id="lab-dialog-title-3">{{ 'LAB.DELETE_TITLE' | translate }}</h2>
-        <button class="modal-close" (click)="cancelDelete()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="modal-close"
+          (click)="cancelDelete()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -740,7 +754,11 @@
         <h2 id="lab-dialog-title-4">
           {{ 'LAB.SPECIMENS' | translate }} — {{ shortOrderCode(specimensOrder()?.labOrderCode) }}
         </h2>
-        <button class="modal-close" (click)="closeSpecimens()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="modal-close"
+          (click)="closeSpecimens()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>

@@ -2191,7 +2191,8 @@
     "VOICE_MEMO_NOT_SUPPORTED": "Voice memo recording is not supported in this browser.",
     "VOICE_MEMO_UPLOAD_FAILED": "Failed to upload voice memo.",
     "ATTACHMENT": "Chat attachment",
-    "SUBTITLE_PATIENT": "Write to your care team"
+    "SUBTITLE_PATIENT": "Write to your care team",
+    "SEND": "Send message"
   },
   "COMMON": {
     "ACTION": "Action",
@@ -2297,7 +2298,9 @@
     "MINUTES_SHORT": "{{count}} min",
     "COPYRIGHT_FOOTER": "© {{year}} e-Keneya — Hospital Management System",
     "PATIENT_PICKER_NO_MATCH": "No patient matches this search.",
-    "MISSING_REQUIRED_FIELDS": "Required fields missing: {{fields}}"
+    "MISSING_REQUIRED_FIELDS": "Required fields missing: {{fields}}",
+    "REMOVE_FILTER": "Remove filter",
+    "SHOW_DETAILS": "Show or hide details"
   },
   "CONSULTATIONS": {
     "ACKNOWLEDGE": "Acknowledge",
@@ -9375,7 +9378,8 @@
     "STRENGTH_PLACEHOLDER": "e.g. 500",
     "CATEGORY_PLACEHOLDER": "e.g. Antibiotic",
     "PEDIATRIC_MAX_DOSE_MG_PER_KG": "Paediatric maximum dose (mg/kg per dose)",
-    "PEDIATRIC_MAX_DOSE_HINT": "Optional. Enter it only from your hospital's reference; the prescription check flags a child's dose above it."
+    "PEDIATRIC_MAX_DOSE_HINT": "Optional. Enter it only from your hospital's reference; the prescription check flags a child's dose above it.",
+    "CANCEL_DISPENSE": "Cancel dispense"
   },
   "LAB_QC": {
     "TITLE": "Quality Control Dashboard",

@@ -82,6 +82,7 @@
                     <button
                       class="action-link"
                       [title]="'COMMON.EDIT' | translate"
+                      [attr.aria-label]="'COMMON.EDIT' | translate"
                       data-test="catalog-edit"
                       (click)="openEdit(item)"
                     >
@@ -90,6 +91,7 @@
                     <button
                       class="action-link danger"
                       [title]="'COMMON.DELETE' | translate"
+                      [attr.aria-label]="'COMMON.DELETE' | translate"
                       data-test="catalog-delete"
                       (click)="confirmDelete(item)"
                     >
@@ -106,11 +108,17 @@
 
     @if (totalPages > 1) {
       <div class="pagination">
-        <button class="btn-secondary btn-sm" [disabled]="currentPage === 0" (click)="prevPage()">
+        <button
+          [attr.aria-label]="'COMMON.PREVIOUS' | translate"
+          class="btn-secondary btn-sm"
+          [disabled]="currentPage === 0"
+          (click)="prevPage()"
+        >
           <span class="material-symbols-outlined">chevron_left</span>
         </button>
         <span class="page-info">{{ currentPage + 1 }} / {{ totalPages }}</span>
         <button
+          [attr.aria-label]="'COMMON.NEXT' | translate"
           class="btn-secondary btn-sm"
           [disabled]="currentPage >= totalPages - 1"
           (click)="nextPage()"
@@ -159,7 +167,11 @@
                 : ('PHARMACY.NEW_MEDICATION' | translate)
             }}
           </h2>
-          <button class="modal-close" (click)="closeModal()">
+          <button
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+            class="modal-close"
+            (click)="closeModal()"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -394,7 +406,11 @@
       >
         <div class="modal-header">
           <h2>{{ 'COMMON.DELETE' | translate }}</h2>
-          <button class="modal-close" (click)="cancelDelete()">
+          <button
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+            class="modal-close"
+            (click)="cancelDelete()"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>

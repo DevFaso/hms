@@ -296,7 +296,12 @@
           'BED_BOARD.PRECAUTIONS_FOR' | translate: { name: precautionTarget()?.patientName ?? '' }
         }}
       </h2>
-      <button class="btn-close" (click)="closePrecautions()" [title]="'COMMON.CLOSE' | translate">
+      <button
+        class="btn-close"
+        (click)="closePrecautions()"
+        [title]="'COMMON.CLOSE' | translate"
+        [attr.aria-label]="'COMMON.CLOSE' | translate"
+      >
         <span class="material-symbols-outlined">close</span>
       </button>
     </header>
@@ -402,7 +407,12 @@
       <h2>
         {{ 'BED_BOARD.TRANSFER_FOR' | translate: { name: transferTarget()?.patientName ?? '' } }}
       </h2>
-      <button class="btn-close" (click)="closeTransfer()" [title]="'COMMON.CLOSE' | translate">
+      <button
+        class="btn-close"
+        (click)="closeTransfer()"
+        [title]="'COMMON.CLOSE' | translate"
+        [attr.aria-label]="'COMMON.CLOSE' | translate"
+      >
         <span class="material-symbols-outlined">close</span>
       </button>
     </header>

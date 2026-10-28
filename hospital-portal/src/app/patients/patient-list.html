@@ -34,6 +34,7 @@
         <button
           class="search-clear"
           [title]="'COMMON.CLEAR_SEARCH' | translate"
+          [attr.aria-label]="'COMMON.CLEAR_SEARCH' | translate"
           (click)="onSearchChange('')"
         >
           <span class="material-symbols-outlined">close</span>
@@ -142,7 +143,11 @@
       @if (genderFilter) {
         <span class="filter-chip">
           {{ 'PATIENTS.GENDER' | translate }}: {{ genderFilter | enumLabel: 'gender' }}
-          <button class="chip-remove" (click)="removeFilter('gender')">
+          <button
+            [attr.aria-label]="'COMMON.REMOVE_FILTER' | translate"
+            class="chip-remove"
+            (click)="removeFilter('gender')"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </span>
@@ -151,7 +156,11 @@
         <span class="filter-chip">
           {{ 'COMMON.STATUS' | translate }}:
           {{ (statusFilter === 'active' ? 'COMMON.ACTIVE' : 'COMMON.INACTIVE') | translate }}
-          <button class="chip-remove" (click)="removeFilter('status')">
+          <button
+            [attr.aria-label]="'COMMON.REMOVE_FILTER' | translate"
+            class="chip-remove"
+            (click)="removeFilter('status')"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </span>
@@ -159,7 +168,11 @@
       @if (bloodTypeFilter) {
         <span class="filter-chip">
           {{ 'PATIENTS.BLOOD' | translate }}: {{ bloodTypeFilter }}
-          <button class="chip-remove" (click)="removeFilter('bloodType')">
+          <button
+            [attr.aria-label]="'COMMON.REMOVE_FILTER' | translate"
+            class="chip-remove"
+            (click)="removeFilter('bloodType')"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </span>
@@ -167,7 +180,11 @@
       @if (hospitalFilter) {
         <span class="filter-chip">
           {{ 'ENCOUNTERS.HOSPITAL' | translate }}: {{ hospitalName(hospitalFilter) }}
-          <button class="chip-remove" (click)="removeFilter('hospital')">
+          <button
+            [attr.aria-label]="'COMMON.REMOVE_FILTER' | translate"
+            class="chip-remove"
+            (click)="removeFilter('hospital')"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </span>
@@ -299,6 +316,7 @@
                   [routerLink]="['/patients', patient.id]"
                   class="action-link"
                   [title]="'PATIENTS.VIEW' | translate"
+                  [attr.aria-label]="'PATIENTS.VIEW' | translate"
                 >
                   <span class="material-symbols-outlined">arrow_forward</span>
                 </a>

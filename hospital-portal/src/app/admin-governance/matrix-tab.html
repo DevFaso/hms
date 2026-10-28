@@ -115,6 +115,7 @@
                   class="icon-btn"
                   (click)="viewSnapshot(snap)"
                   [title]="'COMMON.VIEW' | translate"
+                  [attr.aria-label]="'COMMON.VIEW' | translate"
                 >
                   <span class="material-symbols-outlined">visibility</span>
                 </button>
@@ -304,6 +305,7 @@
                 class="icon-btn danger"
                 (click)="removeRow($index)"
                 [title]="'COMMON.DELETE' | translate"
+                [attr.aria-label]="'COMMON.DELETE' | translate"
               >
                 <span class="material-symbols-outlined">delete</span>
               </button>

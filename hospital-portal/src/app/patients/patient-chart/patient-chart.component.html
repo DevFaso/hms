@@ -119,6 +119,7 @@
                           class="action-link"
                           (click)="openEditAllergy(a)"
                           [title]="'COMMON.EDIT' | translate"
+                          [attr.aria-label]="'COMMON.EDIT' | translate"
                         >
                           <span class="material-symbols-outlined">edit</span>
                         </button>
@@ -128,6 +129,7 @@
                             class="action-link delete-link"
                             (click)="openDeactivateAllergy(a)"
                             [title]="'CHART.DEACTIVATE' | translate"
+                            [attr.aria-label]="'CHART.DEACTIVATE' | translate"
                           >
                             <span class="material-symbols-outlined">block</span>
                           </button>
@@ -215,6 +217,7 @@
                         class="action-link"
                         (click)="openEditProblem(p)"
                         [title]="'COMMON.EDIT' | translate"
+                        [attr.aria-label]="'COMMON.EDIT' | translate"
                       >
                         <span class="material-symbols-outlined">edit</span>
                       </button>
@@ -223,6 +226,7 @@
                         class="action-link delete-link"
                         (click)="openDeleteProblem(p)"
                         [title]="'COMMON.DELETE' | translate"
+                        [attr.aria-label]="'COMMON.DELETE' | translate"
                       >
                         <span class="material-symbols-outlined">delete</span>
                       </button>
@@ -654,7 +658,12 @@
         <h2>
           {{ (editingAllergyId() ? 'CHART.EDIT_ALLERGY' : 'CHART.ADD_ALLERGY') | translate }}
         </h2>
-        <button type="button" class="modal-close" (click)="closeAllergyModal()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          type="button"
+          class="modal-close"
+          (click)="closeAllergyModal()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -738,7 +747,12 @@
     >
       <div class="modal-header">
         <h2>{{ 'CHART.DEACTIVATE_ALLERGY' | translate }}</h2>
-        <button type="button" class="modal-close" (click)="closeDeactivateAllergy()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          type="button"
+          class="modal-close"
+          (click)="closeDeactivateAllergy()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -781,7 +795,12 @@
         <h2>
           {{ (editingProblemId() ? 'CHART.EDIT_PROBLEM' : 'CHART.ADD_PROBLEM') | translate }}
         </h2>
-        <button type="button" class="modal-close" (click)="closeProblemModal()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          type="button"
+          class="modal-close"
+          (click)="closeProblemModal()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -865,7 +884,12 @@
     >
       <div class="modal-header">
         <h2>{{ 'CHART.DELETE_PROBLEM' | translate }}</h2>
-        <button type="button" class="modal-close" (click)="closeDeleteProblem()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          type="button"
+          class="modal-close"
+          (click)="closeDeleteProblem()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -910,7 +934,12 @@
     >
       <div class="modal-header">
         <h2>{{ 'CHART.NEW_UPDATE' | translate }}</h2>
-        <button type="button" class="modal-close" (click)="closeUpdateModal()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          type="button"
+          class="modal-close"
+          (click)="closeUpdateModal()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -1001,7 +1030,12 @@
     >
       <div class="modal-header">
         <h2>{{ 'CHART.TIMELINE_ACCESS' | translate }}</h2>
-        <button type="button" class="modal-close" (click)="closeTimelineReason()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          type="button"
+          class="modal-close"
+          (click)="closeTimelineReason()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>

@@ -202,6 +202,7 @@
                     class="action-link"
                     (click)="viewDetail(c)"
                     [title]="'CONSULTATIONS.VIEW_DETAILS' | translate"
+                    [attr.aria-label]="'CONSULTATIONS.VIEW_DETAILS' | translate"
                   >
                     <span class="material-symbols-outlined">visibility</span>
                   </button>
@@ -210,6 +211,7 @@
                       class="action-link assign"
                       (click)="openAssign(c, false)"
                       [title]="'CONSULTATIONS.ASSIGN_CONSULTANT' | translate"
+                      [attr.aria-label]="'CONSULTATIONS.ASSIGN_CONSULTANT' | translate"
                     >
                       <span class="material-symbols-outlined">person_add</span>
                     </button>
@@ -221,6 +223,7 @@
                       class="action-link assign reassign-btn"
                       (click)="openAssign(c, true)"
                       [title]="'CONSULTATIONS.REASSIGN_CONSULTANT' | translate"
+                      [attr.aria-label]="'CONSULTATIONS.REASSIGN_CONSULTANT' | translate"
                     >
                       <span class="material-symbols-outlined">person_search</span>
                     </button>
@@ -230,6 +233,7 @@
                       class="action-link"
                       (click)="acknowledgeConsultation(c)"
                       [title]="'CONSULTATIONS.ACKNOWLEDGE' | translate"
+                      [attr.aria-label]="'CONSULTATIONS.ACKNOWLEDGE' | translate"
                     >
                       <span class="material-symbols-outlined">check_circle</span>
                     </button>
@@ -239,6 +243,7 @@
                       class="action-link"
                       (click)="openSchedule(c)"
                       [title]="'CONSULTATIONS.SCHEDULE' | translate"
+                      [attr.aria-label]="'CONSULTATIONS.SCHEDULE' | translate"
                     >
                       <span class="material-symbols-outlined">event</span>
                     </button>
@@ -248,6 +253,7 @@
                       class="action-link"
                       (click)="startConsultation(c)"
                       [title]="'CONSULTATIONS.START' | translate"
+                      [attr.aria-label]="'CONSULTATIONS.START' | translate"
                     >
                       <span class="material-symbols-outlined">play_arrow</span>
                     </button>
@@ -257,6 +263,7 @@
                       class="action-link complete"
                       (click)="openComplete(c)"
                       [title]="'CONSULTATIONS.COMPLETE' | translate"
+                      [attr.aria-label]="'CONSULTATIONS.COMPLETE' | translate"
                     >
                       <span class="material-symbols-outlined">task_alt</span>
                     </button>
@@ -268,6 +275,7 @@
                       class="action-link decline"
                       (click)="openDecline(c)"
                       [title]="'CONSULTATIONS.DECLINE' | translate"
+                      [attr.aria-label]="'CONSULTATIONS.DECLINE' | translate"
                     >
                       <span class="material-symbols-outlined">thumb_down</span>
                     </button>
@@ -277,6 +285,7 @@
                       class="action-link delete"
                       (click)="confirmCancel(c)"
                       [title]="'CONSULTATIONS.CANCEL' | translate"
+                      [attr.aria-label]="'CONSULTATIONS.CANCEL' | translate"
                     >
                       <span class="material-symbols-outlined">cancel</span>
                     </button>
@@ -294,7 +303,12 @@
       <div class="detail-panel">
         <div class="detail-header">
           <h2>{{ 'CONSULTATIONS.DETAILS' | translate }}</h2>
-          <button class="btn-close" (click)="closeDetail()" [title]="'COMMON.CLOSE' | translate">
+          <button
+            class="btn-close"
+            (click)="closeDetail()"
+            [title]="'COMMON.CLOSE' | translate"
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>

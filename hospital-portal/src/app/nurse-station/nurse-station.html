@@ -12,7 +12,12 @@
           {{ lastRefreshed() | serverTime | date: 'shortTime' }}</span
         >
       }
-      <button class="refresh-btn" (click)="refresh()" [title]="'COMMON.REFRESH' | translate">
+      <button
+        class="refresh-btn"
+        (click)="refresh()"
+        [title]="'COMMON.REFRESH' | translate"
+        [attr.aria-label]="'COMMON.REFRESH' | translate"
+      >
         <span class="material-symbols-outlined">refresh</span>
       </button>
     </div>
@@ -1357,7 +1362,11 @@
     >
       <div class="modal-header">
         <h3>{{ 'NURSE.CREATE_TASK' | translate }}</h3>
-        <button class="modal-close" (click)="closeTaskCreate()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="modal-close"
+          (click)="closeTaskCreate()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -1472,7 +1481,11 @@
     >
       <div class="modal-header">
         <h3>{{ 'NURSE.NEW_HANDOFF' | translate }}</h3>
-        <button class="modal-close" (click)="closeHandoffCreate()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="modal-close"
+          (click)="closeHandoffCreate()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -1604,7 +1617,11 @@
     >
       <div class="modal-header">
         <h3>{{ 'NURSE.CARE_NOTE' | translate }} — {{ careNoteFor()!.patientName }}</h3>
-        <button class="modal-close" (click)="closeCareNote()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="modal-close"
+          (click)="closeCareNote()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>

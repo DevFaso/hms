@@ -2191,7 +2191,8 @@
     "VOICE_MEMO_NOT_SUPPORTED": "L'enregistrement de mémo vocal n'est pas pris en charge dans ce navigateur.",
     "VOICE_MEMO_UPLOAD_FAILED": "Échec de l'envoi du mémo vocal.",
     "ATTACHMENT": "Pièce jointe",
-    "SUBTITLE_PATIENT": "Écrire à votre équipe soignante"
+    "SUBTITLE_PATIENT": "Écrire à votre équipe soignante",
+    "SEND": "Envoyer le message"
   },
   "COMMON": {
     "ACTION": "Action",
@@ -2297,7 +2298,9 @@
     "MINUTES_SHORT": "{{count}} min",
     "COPYRIGHT_FOOTER": "© {{year}} e-Keneya — Système de gestion hospitalière",
     "PATIENT_PICKER_NO_MATCH": "Aucun patient ne correspond à cette recherche.",
-    "MISSING_REQUIRED_FIELDS": "Champs obligatoires manquants : {{fields}}"
+    "MISSING_REQUIRED_FIELDS": "Champs obligatoires manquants : {{fields}}",
+    "REMOVE_FILTER": "Retirer le filtre",
+    "SHOW_DETAILS": "Afficher ou masquer les détails"
   },
   "CONSULTATIONS": {
     "ACKNOWLEDGE": "Accuser Réception",
@@ -9375,7 +9378,8 @@
     "STRENGTH_PLACEHOLDER": "ex. 500",
     "CATEGORY_PLACEHOLDER": "ex. Antibiotique",
     "PEDIATRIC_MAX_DOSE_MG_PER_KG": "Dose pédiatrique maximale (mg/kg par prise)",
-    "PEDIATRIC_MAX_DOSE_HINT": "Facultatif. À saisir uniquement depuis la référence de votre établissement ; le contrôle de prescription signale une dose d'enfant supérieure."
+    "PEDIATRIC_MAX_DOSE_HINT": "Facultatif. À saisir uniquement depuis la référence de votre établissement ; le contrôle de prescription signale une dose d'enfant supérieure.",
+    "CANCEL_DISPENSE": "Annuler la dispensation"
   },
   "LAB_QC": {
     "TITLE": "Tableau de bord du contrôle qualité",

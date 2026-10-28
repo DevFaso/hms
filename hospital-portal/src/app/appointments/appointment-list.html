@@ -37,6 +37,7 @@
         <button
           class="search-clear"
           [title]="'COMMON.CLEAR_SEARCH' | translate"
+          [attr.aria-label]="'COMMON.CLEAR_SEARCH' | translate"
           (click)="onSearchChange('')"
         >
           <span class="material-symbols-outlined">close</span>
@@ -190,7 +191,11 @@
       @if (dateFrom) {
         <span class="filter-chip">
           {{ 'APPOINTMENTS.FROM' | translate }}: {{ dateFrom }}
-          <button class="chip-remove" (click)="removeFilter('dateFrom')">
+          <button
+            [attr.aria-label]="'COMMON.REMOVE_FILTER' | translate"
+            class="chip-remove"
+            (click)="removeFilter('dateFrom')"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </span>
@@ -198,7 +203,11 @@
       @if (dateTo) {
         <span class="filter-chip">
           {{ 'APPOINTMENTS.TO' | translate }}: {{ dateTo }}
-          <button class="chip-remove" (click)="removeFilter('dateTo')">
+          <button
+            [attr.aria-label]="'COMMON.REMOVE_FILTER' | translate"
+            class="chip-remove"
+            (click)="removeFilter('dateTo')"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </span>
@@ -206,7 +215,11 @@
       @if (hospitalFilter) {
         <span class="filter-chip">
           {{ hospitalName(hospitalFilter) }}
-          <button class="chip-remove" (click)="removeFilter('hospital')">
+          <button
+            [attr.aria-label]="'COMMON.REMOVE_FILTER' | translate"
+            class="chip-remove"
+            (click)="removeFilter('hospital')"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </span>
@@ -321,6 +334,7 @@
                   [routerLink]="['/appointments', appt.id]"
                   class="action-link"
                   [title]="'APPOINTMENTS.VIEW' | translate"
+                  [attr.aria-label]="'APPOINTMENTS.VIEW' | translate"
                 >
                   <span class="material-symbols-outlined">arrow_forward</span>
                 </a>

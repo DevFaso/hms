@@ -17,7 +17,12 @@
           {{ 'LAB_INSTRUMENTS.ADD' | translate }}
         </button>
       }
-      <button class="btn-refresh" (click)="loadInstruments()" [disabled]="loading()">
+      <button
+        [attr.aria-label]="'COMMON.REFRESH' | translate"
+        class="btn-refresh"
+        (click)="loadInstruments()"
+        [disabled]="loading()"
+      >
         <span class="material-symbols-outlined" [class.spin]="loading()">refresh</span>
       </button>
     </div>
@@ -178,6 +183,7 @@
                     class="btn-icon"
                     (click)="openEdit(instr)"
                     title="{{ 'COMMON.EDIT' | translate }}"
+                    [attr.aria-label]="'COMMON.EDIT' | translate"
                   >
                     <span class="material-symbols-outlined">edit</span>
                   </button>
@@ -185,6 +191,7 @@
                     class="btn-icon danger"
                     (click)="deactivate(instr)"
                     title="{{ 'COMMON.DELETE' | translate }}"
+                    [attr.aria-label]="'COMMON.DELETE' | translate"
                   >
                     <span class="material-symbols-outlined">delete</span>
                   </button>

@@ -20,7 +20,12 @@
           {{ 'LAB_OUTBOX.ERROR_COUNT' | translate: { count: p.errorCount } }}
         </span>
       }
-      <button class="btn-refresh" (click)="load()" [disabled]="loading()">
+      <button
+        [attr.aria-label]="'COMMON.REFRESH' | translate"
+        class="btn-refresh"
+        (click)="load()"
+        [disabled]="loading()"
+      >
         <span class="material-symbols-outlined" [class.spin]="loading()">refresh</span>
       </button>
     </div>

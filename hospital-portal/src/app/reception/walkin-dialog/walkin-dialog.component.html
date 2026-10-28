@@ -69,7 +69,11 @@
           @if (selectedPatient() | patientSubline; as sub) {
             <span class="result-meta">{{ sub }}</span>
           }
-          <button class="clear-btn" (click)="selectedPatient.set(null); patientQuery.set('')">
+          <button
+            [attr.aria-label]="'COMMON.CLEAR' | translate"
+            class="clear-btn"
+            (click)="selectedPatient.set(null); patientQuery.set('')"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -116,7 +120,11 @@
           @if (selectedStaff()!.departmentName) {
             <span class="result-meta">— {{ selectedStaff()!.departmentName }}</span>
           }
-          <button class="clear-btn" (click)="selectedStaff.set(null); staffQuery.set('')">
+          <button
+            [attr.aria-label]="'COMMON.CLEAR' | translate"
+            class="clear-btn"
+            (click)="selectedStaff.set(null); staffQuery.set('')"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>

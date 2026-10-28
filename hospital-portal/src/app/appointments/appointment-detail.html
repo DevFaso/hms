@@ -235,7 +235,11 @@
     >
       <div class="modal-header">
         <h2>{{ 'APPOINTMENTS.RESCHEDULE_APPOINTMENT' | translate }}</h2>
-        <button class="modal-close" (click)="closeReschedule()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="modal-close"
+          (click)="closeReschedule()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -318,7 +322,11 @@
     >
       <div class="modal-header">
         <h2>{{ 'APPOINTMENTS.CANCEL_APPOINTMENT' | translate }}</h2>
-        <button class="modal-close" (click)="closeCancelConfirm()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="modal-close"
+          (click)="closeCancelConfirm()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>

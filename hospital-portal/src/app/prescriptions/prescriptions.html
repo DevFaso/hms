@@ -183,6 +183,7 @@
                     class="action-link view-link"
                     (click)="viewDetail(p)"
                     [title]="'PRESCRIPTIONS.VIEW_DETAILS' | translate"
+                    [attr.aria-label]="'PRESCRIPTIONS.VIEW_DETAILS' | translate"
                   >
                     <span class="material-symbols-outlined">visibility</span>
                   </button>
@@ -191,6 +192,7 @@
                       class="action-link edit-link"
                       (click)="openEdit(p)"
                       [title]="'COMMON.EDIT' | translate"
+                      [attr.aria-label]="'COMMON.EDIT' | translate"
                     >
                       <span class="material-symbols-outlined">edit</span>
                     </button>
@@ -247,6 +249,7 @@
                       class="action-link"
                       (click)="openDispatchModal(p)"
                       [title]="'PRESCRIPTIONS.DISPATCH_SMS' | translate"
+                      [attr.aria-label]="'PRESCRIPTIONS.DISPATCH_SMS' | translate"
                       [attr.data-testid]="'rx-dispatch-sms-' + p.id"
                     >
                       <span class="material-symbols-outlined">sms</span>
@@ -257,6 +260,7 @@
                       class="action-link delete-link"
                       (click)="confirmDelete(p)"
                       [title]="'COMMON.DELETE' | translate"
+                      [attr.aria-label]="'COMMON.DELETE' | translate"
                     >
                       <span class="material-symbols-outlined">delete</span>
                     </button>
@@ -278,6 +282,7 @@
             class="btn-close"
             (click)="closeDetail()"
             [title]="'COMMON.CLOSE_DETAIL_PANEL' | translate"
+            [attr.aria-label]="'COMMON.CLOSE_DETAIL_PANEL' | translate"
           >
             <span class="material-symbols-outlined">close</span>
           </button>
@@ -738,7 +743,11 @@
         <h2>
           {{ editing() ? ('PRESCRIPTIONS.EDIT' | translate) : ('PRESCRIPTIONS.NEW' | translate) }}
         </h2>
-        <button class="modal-close" (click)="closeModal()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="modal-close"
+          (click)="closeModal()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -769,6 +778,7 @@
                     class="chip-clear"
                     (click)="clearPatient()"
                     [title]="'COMMON.CHANGE_PATIENT' | translate"
+                    [attr.aria-label]="'COMMON.CHANGE_PATIENT' | translate"
                   >
                     <span class="material-symbols-outlined">close</span>
                   </button>
@@ -1115,7 +1125,11 @@
     >
       <div class="modal-header">
         <h2>{{ 'PRESCRIPTIONS.DELETE_TITLE' | translate }}</h2>
-        <button class="modal-close" (click)="cancelDelete()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="modal-close"
+          (click)="cancelDelete()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -1161,6 +1175,7 @@
           class="btn-close"
           (click)="closeDispatchModal()"
           [title]="'COMMON.CANCEL' | translate"
+          [attr.aria-label]="'COMMON.CANCEL' | translate"
         >
           <span class="material-symbols-outlined">close</span>
         </button>
@@ -1252,6 +1267,7 @@
           class="btn-close"
           (click)="closeVerifyModal()"
           [title]="'COMMON.CANCEL' | translate"
+          [attr.aria-label]="'COMMON.CANCEL' | translate"
         >
           <span class="material-symbols-outlined">close</span>
         </button>

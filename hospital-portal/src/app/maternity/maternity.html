@@ -264,6 +264,7 @@
             [disabled]="boardPage() + 1 >= boardTotalPages()"
             (click)="boardNext()"
             [title]="'COMMON.NEXT' | translate"
+            [attr.aria-label]="'COMMON.NEXT' | translate"
           >
             <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
           </button>
@@ -426,6 +427,7 @@
             [disabled]="referralPage() + 1 >= referralTotalPages()"
             (click)="referralNext()"
             [title]="'COMMON.NEXT' | translate"
+            [attr.aria-label]="'COMMON.NEXT' | translate"
           >
             <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
           </button>
