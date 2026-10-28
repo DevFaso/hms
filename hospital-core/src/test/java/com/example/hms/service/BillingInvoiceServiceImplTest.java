@@ -2236,6 +2236,74 @@ class BillingInvoiceServiceImplTest {
         verify(invoiceRepository).findByEncounter_IdAndCheckInCopayTrueAndStatus(visit.getId(), InvoiceStatus.PAID);
     }
 
+    /** A SENT 20 000 visit invoice, nothing paid, its 5 000 check-in copay still standing (PAID). */
+    private BillingInvoice[] adjustableVisitWithCopay() {
+        adjustments();
+        BillingInvoice invoice = issued("20000", "0");
+        com.example.hms.model.Encounter visit = new com.example.hms.model.Encounter();
+        visit.setId(UUID.randomUUID());
+        invoice.setEncounter(visit);
+        BillingInvoice copay = BillingInvoice.builder().patient(invoice.getPatient()).encounter(visit)
+            .totalAmount(new BigDecimal("5000")).amountPaid(new BigDecimal("5000"))
+            .status(InvoiceStatus.PAID).checkInCopay(true).build();
+        copay.setId(UUID.randomUUID());
+        when(invoiceRepository.findByEncounter_IdAndCheckInCopayTrueAndStatus(visit.getId(), InvoiceStatus.PAID))
+            .thenReturn(List.of(copay));
+        when(invoiceRepository.findLockedById(copay.getId())).thenReturn(Optional.of(copay));
+        when(paymentTransactionRepository.findByInvoice_IdOrderByCreatedAtAsc(copay.getId())).thenReturn(List.of());
+        return new BillingInvoice[] {invoice, copay};
+    }
+
+    @Test
+    void addAdjustment_creditsTheVisitsCopayWhenItFits_D936() {
+        BillingInvoice[] pair = adjustableVisitWithCopay();
+
+        billingInvoiceService.addAdjustment(pair[0].getId(),
+            adjustment(com.example.hms.enums.InvoiceAdjustmentType.DISCOUNT, "2000", "Remise", null),
+            UUID.randomUUID(), Locale.FRENCH);
+
+        assertEquals(0, new BigDecimal("5000").compareTo(pair[0].getAmountPaid()));
+        assertEquals(InvoiceStatus.CANCELLED, pair[1].getStatus());
+    }
+
+    @Test
+    void addAdjustment_neverCreditsTheCopayOverADeclaredPayment_D724() {
+        // 18 000 left after the discount; 15 000 declared by mobile money and not yet confirmed:
+        // moving the 5 000 copay would leave 13 000, and the declaration could never be confirmed.
+        BillingInvoice[] pair = adjustableVisitWithCopay();
+        when(paymentTransactionRepository.sumAmountByInvoiceAndStatus(pair[0].getId(), com.example.hms.enums.PaymentStatus.PENDING))
+            .thenReturn(new BigDecimal("15000"));
+
+        billingInvoiceService.addAdjustment(pair[0].getId(),
+            adjustment(com.example.hms.enums.InvoiceAdjustmentType.DISCOUNT, "2000", "Remise", null),
+            UUID.randomUUID(), Locale.FRENCH);
+
+        assertEquals(0, BigDecimal.ZERO.compareTo(pair[0].getAmountPaid()));
+        assertEquals(InvoiceStatus.PAID, pair[1].getStatus());
+        assertEquals(0, new BigDecimal("18000").compareTo(pair[0].getTotalAmount()));
+    }
+
+    @Test
+    void theCopayIsReReadUnderItsLock_aCopayAnotherInvoiceTookMeanwhileIsNotCreditedTwice_D936() {
+        BillingInvoice[] pair = adjustableVisitWithCopay();
+        jakarta.persistence.EntityManager em = mock(jakarta.persistence.EntityManager.class);
+        // While this request waited for the lock, another invoice took the copay and committed.
+        org.mockito.Mockito.doAnswer(inv -> {
+            BillingInvoice c = inv.getArgument(0);
+            c.setStatus(InvoiceStatus.CANCELLED);
+            c.setAmountPaid(BigDecimal.ZERO);
+            return null;
+        }).when(em).refresh(pair[1]);
+        billingInvoiceService.setEntityManager(em);
+
+        billingInvoiceService.addAdjustment(pair[0].getId(),
+            adjustment(com.example.hms.enums.InvoiceAdjustmentType.DISCOUNT, "2000", "Remise", null),
+            UUID.randomUUID(), Locale.FRENCH);
+
+        verify(em).refresh(pair[1]);
+        assertEquals(0, BigDecimal.ZERO.compareTo(pair[0].getAmountPaid()));
+    }
+
     @Test
     void addAdjustment_aLineDiscountWithoutAnAmountIsRefusedNot500_D974() {
         adjustments();

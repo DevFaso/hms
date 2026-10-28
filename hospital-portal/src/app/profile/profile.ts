@@ -706,20 +706,48 @@ export class ProfileComponent implements OnInit {
       !(u.phoneNumber ?? '').trim() &&
       (data.phoneNumber ?? '').trim()
     ) {
-      this.patientPortal
-        .updateMyProfile({ phoneNumberPrimary: data.phoneNumber!.trim() })
-        .subscribe({
-          next: () => this.saveAccount(u, data, emailChanged, newEmail, password),
-          error: (err) => {
-            this.saving.set(false);
-            this.toast.error(
-              err?.error?.message ?? this.translate.instant('PROFILE.RECORD_PHONE_SYNC_FAILED'),
-            );
-          },
-        });
+      // The record's phone is read first, so a refused account save can give it back.
+      this.patientPortal.getMyProfile().subscribe({
+        next: (record) =>
+          this.saveRecordThenAccount(u, data, emailChanged, newEmail, password, record?.phone),
+        error: () => this.saveRecordThenAccount(u, data, emailChanged, newEmail, password),
+      });
       return;
     }
     this.saveAccount(u, data, emailChanged, newEmail, password, phoneChanged);
+  }
+
+  /**
+   * QA D939, an account with no phone: the record takes the phone, then the
+   * account; if the account refuses it (another account's phone), the record
+   * gets its previous phone back, so the two never differ.
+   */
+  private saveRecordThenAccount(
+    u: UserProfile,
+    data: ProfileUpdateRequest,
+    emailChanged: boolean,
+    newEmail: string,
+    password: string,
+    recordPhoneBefore?: string | null,
+  ): void {
+    const previous = (recordPhoneBefore ?? '').trim();
+    this.patientPortal.updateMyProfile({ phoneNumberPrimary: data.phoneNumber!.trim() }).subscribe({
+      next: () =>
+        this.saveAccount(u, data, emailChanged, newEmail, password, false, () => {
+          if (previous) {
+            this.patientPortal.updateMyProfile({ phoneNumberPrimary: previous }).subscribe({
+              error: () =>
+                this.toast.error(this.translate.instant('PROFILE.RECORD_PHONE_SYNC_FAILED')),
+            });
+          }
+        }),
+      error: (err) => {
+        this.saving.set(false);
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('PROFILE.RECORD_PHONE_SYNC_FAILED'),
+        );
+      },
+    });
   }
 
   /** The account part of {@link saveProfile}: names and phone, then the e-mail step. */
@@ -730,6 +758,7 @@ export class ProfileComponent implements OnInit {
     newEmail: string,
     password: string,
     phoneChanged = false,
+    undoRecordPhone?: () => void,
   ): void {
     const detailsChanged =
       (data.firstName ?? '') !== (u.firstName ?? '') ||
@@ -755,6 +784,7 @@ export class ProfileComponent implements OnInit {
           }
         },
         error: (err) => {
+          undoRecordPhone?.();
           this.saving.set(false);
           this.toast.error(err?.error?.message ?? this.translate.instant('PROFILE.UPDATE_FAILED'));
         },

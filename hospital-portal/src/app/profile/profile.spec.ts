@@ -85,8 +85,10 @@ describe('ProfileComponent — editing the profile', () => {
     ssoAuthenticated = signal(false);
     portal = jasmine.createSpyObj<PatientPortalService>('PatientPortalService', [
       'updateMyProfile',
+      'getMyProfile',
     ]);
     portal.updateMyProfile.and.returnValue(of({} as PatientProfileDTO));
+    portal.getMyProfile.and.returnValue(of({ phone: '+22670111111' } as PatientProfileDTO));
 
     await TestBed.configureTestingModule({
       imports: [ProfileComponent, TranslateModule.forRoot()],
@@ -170,6 +172,23 @@ describe('ProfileComponent — editing the profile', () => {
       patient.saveProfile();
       expect(toast.error).toHaveBeenCalledWith('taken');
       expect(profiles.updateProfile).not.toHaveBeenCalled();
+    });
+
+    it('an account with no phone before: a refused account save gives the record its phone back', () => {
+      profiles.getUserProfile.and.returnValue(
+        of({ ...profile('old@example.test'), phoneNumber: '' }),
+      );
+      profiles.updateProfile.and.returnValue(
+        throwError(() => ({ error: { message: 'phone used' } })),
+      );
+      const patient = asPatient();
+      patient.updateField('phoneNumber', '+22676112233');
+      patient.saveProfile();
+      expect(toast.error).toHaveBeenCalledWith('phone used');
+      expect(portal.updateMyProfile.calls.allArgs()).toEqual([
+        [{ phoneNumberPrimary: '+22676112233' }],
+        [{ phoneNumberPrimary: '+22670111111' }],
+      ]);
     });
 
     it('a staff account phone stays the login contact only', () => {

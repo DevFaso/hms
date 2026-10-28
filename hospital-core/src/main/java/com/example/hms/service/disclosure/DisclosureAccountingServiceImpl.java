@@ -175,16 +175,20 @@ public class DisclosureAccountingServiceImpl implements DisclosureAccountingServ
         Map<String, LocalDateTime> lastKept = new java.util.HashMap<>();
         for (AccessLogEntryDTO entry : entries) {
             String key = foldKey(entry);
+            if (key != null && isRepeat(lastKept.get(key), entry.getTimestamp())) {
+                continue;
+            }
             if (key != null) {
-                LocalDateTime previous = lastKept.get(key);
-                if (previous != null && withinRepeatWindow(entry.getTimestamp(), previous)) {
-                    continue;
-                }
                 lastKept.put(key, entry.getTimestamp());
             }
             kept.add(entry);
         }
         return kept;
+    }
+
+    /** A row within the repeat window of the line kept for its key (none kept yet: not a repeat). */
+    private static boolean isRepeat(LocalDateTime lastKeptAt, LocalDateTime when) {
+        return lastKeptAt != null && withinRepeatWindow(when, lastKeptAt);
     }
 
     /** What a repeat is a repeat of; null for a row that is never folded. */

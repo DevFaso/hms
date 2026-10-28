@@ -203,6 +203,15 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
      * A copay larger than what the invoice still owes stays where it is.
      */
     private void creditCheckInCopays(BillingInvoice target) {
+        creditCheckInCopays(target, BigDecimal.ZERO);
+    }
+
+    /**
+     * As above, keeping {@code reserved} of what is owed free: a payment the
+     * patient declared and the cashier has not confirmed yet (QA D724) must
+     * still fit once the copay is moved, or it could never be confirmed.
+     */
+    private void creditCheckInCopays(BillingInvoice target, BigDecimal reserved) {
         if (target.getEncounter() == null || target.getEncounter().getId() == null
                 || target.isCheckInCopay() || !COPAY_CREDITABLE.contains(target.getStatus())) {
             return;
@@ -213,7 +222,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             return;
         }
         for (BillingInvoice candidate : copays) {
-            BillingInvoice copay = lockCreditableCopay(candidate, target);
+            BillingInvoice copay = lockCreditableCopay(candidate, target, reserved);
             if (copay != null) {
                 moveCopayOnto(copay, target);
             }
@@ -221,19 +230,25 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     }
 
     /** The copay, locked and re-read, when it may be credited to the target; else null. */
-    private BillingInvoice lockCreditableCopay(BillingInvoice candidate, BillingInvoice target) {
+    private BillingInvoice lockCreditableCopay(BillingInvoice candidate, BillingInvoice target, BigDecimal reserved) {
         if (candidate.getId() == null || candidate.getId().equals(target.getId())) {
             return null;
         }
         // Locked and re-read: two invoices issued at once must not both take the same copay.
         BillingInvoice copay = invoiceRepository.findLockedById(candidate.getId()).orElse(null);
+        if (copay != null && entityManager != null) {
+            // The list read above put the copay in the session; a locking query hands that
+            // instance back as it was before the wait, so it is re-read under the lock.
+            entityManager.refresh(copay);
+        }
         if (copay == null || copay.getStatus() != InvoiceStatus.PAID || copay.getPatient() == null
                 || target.getPatient() == null || !copay.getPatient().getId().equals(target.getPatient().getId())) {
             return null;
         }
         BigDecimal credit = copayCredit(copay);
         BigDecimal paid = target.getAmountPaid() != null ? target.getAmountPaid() : BigDecimal.ZERO;
-        BigDecimal owed = (target.getTotalAmount() != null ? target.getTotalAmount() : BigDecimal.ZERO).subtract(paid);
+        BigDecimal owed = (target.getTotalAmount() != null ? target.getTotalAmount() : BigDecimal.ZERO).subtract(paid)
+            .subtract(reserved);
         return credit.signum() <= 0 || credit.compareTo(owed) > 0 ? null : copay;
     }
 
@@ -448,6 +463,14 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
 
     private com.example.hms.mapper.InvoiceItemMapper invoiceItemMapper;
 
+    /** Re-reads a copay under its row lock (see lockCreditableCopay). Setter-injected; absent in unit tests. */
+    private jakarta.persistence.EntityManager entityManager;
+
+    @jakarta.persistence.PersistenceContext
+    void setEntityManager(jakarta.persistence.EntityManager entityManager) {
+        this.entityManager = entityManager;
+    }
+
     /** QA D974: the adjustments ledger. Setter-injected, like the other late additions. */
     private com.example.hms.repository.InvoiceAdjustmentRepository adjustmentRepository;
 
@@ -513,8 +536,9 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         }
         BillingInvoice saved = invoiceRepository.save(invoice);
         // QA D936: like a payment (D272), an adjustment is a moment the copay paid at
-        // check-in after the invoice was issued is taken, when it still fits what is owed.
-        creditCheckInCopays(saved);
+        // check-in after the invoice was issued is taken, when it still fits what is owed
+        // beside the payments the patient declared and the cashier has not confirmed (D724).
+        creditCheckInCopays(saved, pending);
         auditAdjustmentAfterCommit(staffId, saved, request.getType());
         return toPortalResponse(saved);
     }
