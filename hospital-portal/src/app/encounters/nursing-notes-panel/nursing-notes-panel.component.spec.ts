@@ -25,7 +25,7 @@ describe('NursingNotesPanelComponent (QA D927)', () => {
     documentedAt: '2026-09-01T09:00:00',
   };
 
-  function render(since: string | null) {
+  function render(since: string | null, until: string | null = null) {
     TestBed.configureTestingModule({
       imports: [NursingNotesPanelComponent, TranslateModule.forRoot()],
       providers: [{ provide: NursingNoteService, useValue: service }],
@@ -34,6 +34,7 @@ describe('NursingNotesPanelComponent (QA D927)', () => {
     fixture.componentInstance.patientId = 'p1';
     fixture.componentInstance.hospitalId = 'h1';
     fixture.componentInstance.since = since;
+    fixture.componentInstance.until = until;
     fixture.componentInstance.ngOnChanges();
     fixture.detectChanges();
     return fixture;
@@ -53,6 +54,20 @@ describe('NursingNotesPanelComponent (QA D927)', () => {
     expect(text).toContain('Awa Traoré');
     // A note from an earlier visit is not this visit's.
     expect(text).not.toContain('Visite précédente');
+  });
+
+  it("a closed visit does not list a later visit's notes, and reads further back (review of #971)", () => {
+    const later: NursingNote = {
+      id: 'n2',
+      patientId: 'p1',
+      template: 'SOAPIE',
+      narrative: 'Visite suivante',
+      documentedAt: '2026-11-15T09:00:00',
+    };
+    service.listRecent.and.returnValue(of([later, dar, older]));
+    const fixture = render('2026-10-27T08:00:00', '2026-10-27T16:00:00');
+    expect(service.listRecent).toHaveBeenCalledWith('p1', 'h1', 50);
+    expect(fixture.componentInstance.notes().map((n) => n.id)).toEqual(['n1']);
   });
 
   it('lists every note newest first when no visit start is given', () => {

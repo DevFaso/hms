@@ -2437,6 +2437,20 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   is computed in `EncounterServiceImpl.isPhysicianAt`,
   `DischargeSummaryServiceImpl.isPhysician` and the token-based
   `callerIsDoctor`, which should share one helper.
+  (9) Review round 9 of #971, deferred: `issuing_hospital_id` (V240) has
+  no foreign key or index, so a removed hospital would leave a dangling id
+  and a 500 on the document read; V240 may already have run on dev from an
+  integration branch, so the FK needs its own migration (next free number)
+  rather than an edit; the certificate endpoint admits ROLE_DOCTOR only,
+  while checkout ownership counts physicians and surgeons as doctors
+  (whether surgeons and physicians sign certificates is a product call);
+  the maternity screens show a gestational age up to 44 weeks while the
+  pregnancy-hypertension card stops at the due date + 14 days (42 weeks);
+  the nursing-notes panel on a closed visit reads the 50 newest notes and
+  keeps the visit's days, so a visit followed by more than 50 later notes
+  shows none of its own until `GET /nurse/notes` takes a date range.
+  qSOFA scores the worst reading in its window for mentation, as it
+  already did for RR and sBP (a rule-wide design, not changed here).
 
 ### Execution plan (2026-09-26)
 

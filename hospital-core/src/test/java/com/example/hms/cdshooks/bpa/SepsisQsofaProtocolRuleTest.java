@@ -84,6 +84,14 @@ class SepsisQsofaProtocolRuleTest {
         assertThat(rule.scoreQsofa(List.of(v), List.of(problem("Altération de la conscience"))).ams()).isTrue();
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {
+        "alteration de la conscience", "ENCEPHALOPATHIE hepatique", "encefalopatia", "Confusion aigue"})
+    void qaD953_aProblemTypedWithoutAccentsStillCounts(String entry) {
+        PatientVitalSign v = vitals(28, 130, LocalDateTime.now().minusMinutes(20));
+        assertThat(rule.scoreQsofa(List.of(v), List.of(problem(entry))).ams()).isTrue();
+    }
+
     @Test
     void firesWhenRrAndSbpBothMeetCriteriaInWindow() {
         when(repo.findByProtocolCodeAndActiveTrue("SEPSIS_QSOFA"))

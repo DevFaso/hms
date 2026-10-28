@@ -57,7 +57,7 @@ public class SepsisQsofaProtocolRule implements BpaRule {
         // QA D953: the problem list is written in French or Spanish here.
         "altération de la conscience", "trouble de la conscience", "troubles de la conscience",
         "conscience altérée", "délire", "encéphalopathie", "obnubilation",
-        "confusional", "alteración de la conciencia", "conciencia alterada", "encefalopatía", "delirio"
+        "alteración de la conciencia", "conciencia alterada", "encefalopatía", "delirio"
     );
 
     private final BpaProtocolRepository protocolRepository;
@@ -143,8 +143,15 @@ public class SepsisQsofaProtocolRule implements BpaRule {
 
     private static boolean matchesAny(String value, List<String> hints) {
         if (value == null || value.isBlank()) return false;
-        String lower = value.toLowerCase(Locale.ROOT);
-        return hints.stream().anyMatch(lower::contains);
+        // QA D953: "alteration de la conscience" typed without accents is the same entry.
+        String plain = foldAccents(value);
+        return hints.stream().anyMatch(h -> plain.contains(foldAccents(h)));
+    }
+
+    /** Lower case without diacritics ("Encéphalopathie" and "encephalopathie" read alike). */
+    static String foldAccents(String value) {
+        return java.text.Normalizer.normalize(value.toLowerCase(Locale.ROOT), java.text.Normalizer.Form.NFD)
+            .replaceAll("\\p{M}", "");
     }
 
     private CdsCard buildCard(BpaProtocol protocol, QsofaScore score) {

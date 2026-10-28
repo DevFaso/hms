@@ -39,6 +39,14 @@ export class NursingNotesPanelComponent implements OnChanges {
   @Input() hospitalId?: string | null;
   /** The visit's start (server local time); notes documented before it are another visit's. */
   @Input() since?: string | null;
+  /**
+   * The visit's end (its checkout, server local time), when it is closed.
+   * Notes documented after that day are a later visit's (review of #971).
+   */
+  @Input() until?: string | null;
+
+  /** The server's maximum page (NursingNoteController.MAX_LIMIT). */
+  private static readonly CLOSED_VISIT_LIMIT = 50;
 
   private readonly service = inject(NursingNoteService);
   private readonly destroyRef = inject(DestroyRef);
@@ -59,7 +67,12 @@ export class NursingNotesPanelComponent implements OnChanges {
     this.loading.set(true);
     this.failed.set(false);
     this.request = this.service
-      .listRecent(this.patientId, this.hospitalId ?? undefined)
+      // A closed visit reads further back: the newest notes may all be a later visit's.
+      .listRecent(
+        this.patientId,
+        this.hospitalId ?? undefined,
+        ...(this.until ? [NursingNotesPanelComponent.CLOSED_VISIT_LIMIT] : []),
+      )
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (list) => {
@@ -100,10 +113,18 @@ export class NursingNotesPanelComponent implements OnChanges {
 
   private withinVisit(list: NursingNote[]): NursingNote[] {
     const sorted = [...list].sort((a, b) => stamp(b) - stamp(a));
-    if (!this.since) return sorted;
-    // The visit's day, from its start: a note from earlier that day still belongs.
-    const from = new Date(`${serverLocalDate(this.since)}T00:00:00`).getTime();
-    return Number.isNaN(from) ? sorted : sorted.filter((n) => stamp(n) >= from);
+    // The visit's days, from the start of its first to the end of its last:
+    // a note from earlier on the arrival day, or charted late on the checkout
+    // day, still belongs; one from a later day is another visit's.
+    const from = this.since
+      ? new Date(`${serverLocalDate(this.since)}T00:00:00`).getTime()
+      : Number.NaN;
+    const to = this.until
+      ? new Date(`${serverLocalDate(this.until)}T23:59:59.999`).getTime()
+      : Number.NaN;
+    return sorted.filter(
+      (n) => (Number.isNaN(from) || stamp(n) >= from) && (Number.isNaN(to) || stamp(n) <= to),
+    );
   }
 }
 
