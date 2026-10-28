@@ -638,9 +638,13 @@ public class AppointmentServiceImpl implements AppointmentService {
             return ownPatientRecord(currentUser, request.getPatientUsername());
         }
         if (request.getPatientEmail() != null) {
+            // QA round 16 residual #13 (class): a family can share an email, so the
+            // first match may be a relative's record; only the caller's own counts.
             Patient named = patientRepository.findByEmailContainingIgnoreCase(request.getPatientEmail())
-                .stream().findFirst().orElse(null);
-            if (named == null || named.getUser() == null || !currentUser.getId().equals(named.getUser().getId())) {
+                .stream()
+                .filter(p -> p.getUser() != null && currentUser.getId().equals(p.getUser().getId()))
+                .findFirst().orElse(null);
+            if (named == null) {
                 throw new ResourceNotFoundException("patient.notFoundByIdentifier", request.getPatientEmail());
             }
             return named;

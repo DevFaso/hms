@@ -134,6 +134,27 @@ class AppointmentBookingOwnershipTest {
     }
 
     @Test
+    @DisplayName("residual #13: an email a relative also holds still finds the caller's own record, not the first match")
+    void sharedEmailFindsTheCallersOwnRecord() {
+        Patient relative = new Patient();
+        relative.setId(UUID.randomUUID());
+        relative.setUser(user("relative", "ROLE_PATIENT"));
+        Patient own = new Patient();
+        own.setId(UUID.randomUUID());
+        own.setUser(patientUser);
+        when(patientRepository.findByEmailContainingIgnoreCase("family@y.test")).thenReturn(List.of(relative, own));
+        AppointmentRequestDTO request = new AppointmentRequestDTO();
+        request.setPatientEmail("family@y.test");
+        request.setHospitalId(UUID.randomUUID());
+        when(hospitalRepository.findById(request.getHospitalId())).thenReturn(Optional.empty());
+
+        // Past the patient step: the booking stops only at the (missing) hospital.
+        assertThat(refusal(request, patientUser).getMessage())
+            .isEqualTo(new ResourceNotFoundException("hospital.notfound", request.getHospitalId()).getMessage());
+        verify(appointmentRepository, never()).save(any());
+    }
+
+    @Test
     @DisplayName("their own id passes the patient step (the booking goes on to the hospital)")
     void ownPatientIdProceeds() {
         Patient own = new Patient();

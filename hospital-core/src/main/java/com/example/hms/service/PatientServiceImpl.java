@@ -917,9 +917,12 @@ public class PatientServiceImpl implements PatientService {
                 results = phoneHits;
             } else {
                 // Exact email match — see the email branch above for why no substring.
-                Optional<Patient> emailResult = patientRepository.findAllByEmailIgnoreCase(normIdentifier).stream().findFirst();
-                if (emailResult.isPresent()) {
-                    results = List.of(emailResult.get());
+                // Every holder, as the email branch: relatives share an address, and the
+                // first one may be registered only at another hospital, which the scope
+                // filter below drops, hiding this hospital's patient (residual #13 class).
+                List<Patient> emailHits = patientRepository.findAllByEmailIgnoreCase(normIdentifier);
+                if (!emailHits.isEmpty()) {
+                    results = emailHits;
                 } else {
                     results = patientRepository.findByUserUsername(normIdentifier).map(List::of).orElse(List.of());
                 }

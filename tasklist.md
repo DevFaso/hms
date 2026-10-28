@@ -2220,9 +2220,7 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   itself is in question now that the desk records shared family numbers.
   (5) Fixed in #972 round 10 (a short number lists every holder). (6) The phone match is a
   sequential scan; a stored digits column with an index needs a migration.
-  (7) Round 9: `AuditEventLogServiceImpl` resolves a phone-only PATIENT
-  resource name to the first holder, across hospitals; with shared family
-  numbers it should resolve within the event's hospital or not at all.
+  (7) Fixed on qa/r16-combined with (13) below.
   (8) The D919 "scoped onlyDeleted is an empty page" rule lives in both
   `UserController` and `UserServiceImpl`; keep it in the service only.
   (9) Blob downloads revoke the object URL right after `click()` (billing,
@@ -2235,10 +2233,14 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   match) and `PhoneNumbers.isSameSubscriber` (last 8 digits) define "same
   subscriber" differently; one definition should serve both.
   Remaining after round 18 (#972, bounded by the coordinator):
-  (13) The audit's phone-only PATIENT resolution (item 7) can attribute an
-  access row to the wrong holder of a shared number, possibly at another
-  hospital: resolve only a unique holder at the event's hospital, else leave
-  the resource unresolved. (14) Recall auto-linking (no recallId) takes any
+  (13) ✅ FIXED on qa/r16-combined (2026-10-28): the audit's PATIENT
+  resource name (phone, email, full name, MRN) resolves by the request's
+  patient id, else only among patients actively registered at the event's
+  hospital, and only when exactly one matches; no hospital or two holders
+  leaves it unresolved. Same class fixed in the patient's own booking by
+  email (first match → the caller's own record) and the identifier lookup's
+  email branch (first holder → every holder, then the hospital filter);
+  guarded codebase-wide by `PatientFirstMatchGuardTest`. (14) Recall auto-linking (no recallId) takes any
   open recall of the same department or clinician from 30 days before its
   due date, so an unrelated visit there can close it on completion; decide
   the targeting rule with the clinic. (15) PATCH identity fields (name, DOB,

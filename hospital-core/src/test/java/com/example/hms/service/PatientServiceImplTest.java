@@ -394,6 +394,24 @@ class PatientServiceImplTest {
         verify(patientMapper, never()).toPatientDTO(patient, hospitalId);
     }
 
+    // Residual #13 class: an email held by a patient of another hospital first must not hide
+    // this hospital's holder of the same address.
+    @Test
+    void lookupPatientsByIdentifierEmailKeepsEveryHolderBeforeTheScopeFilter() {
+        Patient elsewhere = new Patient();
+        elsewhere.setId(UUID.randomUUID());
+        PatientResponseDTO scoped = PatientResponseDTO.builder().id(patientId).build();
+        when(patientRepository.findAllByEmailIgnoreCase("family@example.com")).thenReturn(List.of(elsewhere, patient));
+        when(registrationRepository.existsByPatientIdAndHospitalId(elsewhere.getId(), hospitalId)).thenReturn(false);
+        when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
+        when(patientMapper.toPatientDTO(patient, hospitalId)).thenReturn(scoped);
+        when(patientVitalSignService.getLatestSnapshot(patientId, hospitalId)).thenReturn(Optional.empty());
+
+        assertThat(patientService.lookupPatients("family@example.com", null, null, null, null, hospitalId, Locale.ENGLISH))
+            .extracting(PatientResponseDTO::getId)
+            .containsExactly(patientId);
+    }
+
     @Test
     void lookupPatientsWithoutHospitalScopeIsRefusedForStaff() {
         when(patientRepository.findByMrn("MRN-A1")).thenReturn(List.of(patient));
