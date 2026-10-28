@@ -87,7 +87,7 @@ public class DrugDrugInteractionRule implements CdsRule {
             summary,
             detail,
             mapIndicator(di.getSeverity()),
-            new Source(SOURCE_LABEL, null, null),
+            new Source(text.get("cds.source.drugInteraction", SOURCE_LABEL), null, null),
             null, null, null, UUID.randomUUID().toString()
         );
     }

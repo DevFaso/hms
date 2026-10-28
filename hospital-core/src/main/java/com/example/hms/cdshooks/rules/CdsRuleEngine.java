@@ -91,16 +91,43 @@ public class CdsRuleEngine {
                                        String proposedMedicationName,
                                        String proposedMedicationCode,
                                        String proposedDosage) {
-        MedicationCatalogItem catalogItem = resolveCatalogItem(hospitalId, proposedMedicationCode);
+        return buildContext(patient, hospitalId, proposedMedicationName, proposedMedicationCode,
+            proposedDosage, null, null);
+    }
+
+    /**
+     * QA D922/D935/D970: the context for an order whose catalogue item the
+     * caller already resolved (by id, or by name at the hospital), and which
+     * may be an edit of an existing prescription.
+     *
+     * @param proposedCatalogItem the item the order was written from; when
+     *        {@code null} the item is resolved from the code, as before
+     * @param excludedPrescriptionId the prescription being edited, which is
+     *        not "another active order" of itself (D970); {@code null} on create
+     */
+    public CdsRuleContext buildContext(Patient patient, UUID hospitalId,
+                                       String proposedMedicationName,
+                                       String proposedMedicationCode,
+                                       String proposedDosage,
+                                       MedicationCatalogItem proposedCatalogItem,
+                                       UUID excludedPrescriptionId) {
+        MedicationCatalogItem catalogItem = proposedCatalogItem != null
+            ? proposedCatalogItem
+            : resolveCatalogItem(hospitalId, proposedMedicationCode);
         String rxnorm = catalogItem == null ? null : catalogItem.getRxnormCode();
 
         List<Prescription> active = patient == null
             ? List.of()
             : loadActivePrescriptions(patient.getId(), hospitalId);
+        if (excludedPrescriptionId != null) {
+            active = active.stream()
+                .filter(p -> !excludedPrescriptionId.equals(p.getId()))
+                .toList();
+        }
         List<String> activeRxnorms = mapRxnorms(active, hospitalId);
 
         Double weight = patient == null ? null : loadLatestWeight(patient.getId(), hospitalId);
-        Double doseMg = parseDoseMg(proposedDosage);
+        Double doseMg = parseDoseMg(proposedDosage, weight);
 
         return new CdsRuleContext(
             patient,
@@ -141,6 +168,17 @@ public class CdsRuleEngine {
                                                        String proposedDosage) {
         return evaluate(buildContext(patient, hospitalId,
             proposedMedicationName, proposedMedicationCode, proposedDosage));
+    }
+
+    /** Convenience: build context (with a resolved item and an edited order) + evaluate. */
+    public List<CdsCard> evaluateProposedPrescription(Patient patient, UUID hospitalId,
+                                                       String proposedMedicationName,
+                                                       String proposedMedicationCode,
+                                                       String proposedDosage,
+                                                       MedicationCatalogItem proposedCatalogItem,
+                                                       UUID excludedPrescriptionId) {
+        return evaluate(buildContext(patient, hospitalId, proposedMedicationName, proposedMedicationCode,
+            proposedDosage, proposedCatalogItem, excludedPrescriptionId));
     }
 
     /* =====================================================================
@@ -232,6 +270,26 @@ public class CdsRuleEngine {
      * "0,25 g" (returns 250), "12.5 mg". Returns null when the string
      * cannot be parsed — rules then degrade gracefully.
      */
+    /**
+     * QA D935: {@link #parseDoseMg(String)}, except that a weight-based dose
+     * ("15 mg/kg") is the number times the patient's weight, and is unknown
+     * (null) when no weight is on file. Read as plain milligrams it made a
+     * 15 mg/kg order look like 15 mg.
+     */
+    static Double parseDoseMg(String dosage, Double weightKg) {
+        if (dosage != null && PER_KG.matcher(dosage).find()) {
+            Double perKg = parseDoseMg(dosage);
+            return perKg == null || weightKg == null || weightKg <= 0d ? null : perKg * weightKg;
+        }
+        return parseDoseMg(dosage);
+    }
+
+    /** "mg/kg", "mg / kg", "g/kg" right after the leading number. */
+    private static final Pattern PER_KG = Pattern.compile(
+        "^\\s*\\d+[\\.,]?\\d*\\s*(mg|g)?\\s*/\\s*kg\\b",
+        Pattern.CASE_INSENSITIVE
+    );
+
     static Double parseDoseMg(String dosage) {
         if (dosage == null || dosage.isBlank()) return null;
         Matcher m = DOSE_NUMBER.matcher(dosage);

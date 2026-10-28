@@ -22,6 +22,7 @@ import {
 } from '../services/prescription.service';
 import {
   DispenseResponse,
+  MedicationCatalogItemResponse,
   PharmacyService,
   RoutingDecisionResponse,
 } from '../services/pharmacy.service';
@@ -48,6 +49,7 @@ import { actionRoles } from '../core/action-permissions';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { serverInstant } from '../shared/date-utils';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
+import { canonicalRoute } from '../shared/pipes/medication-route.pipe';
 
 /**
  * The prescriber's list tabs (gap G10).
@@ -323,6 +325,7 @@ export class PrescriptionsComponent implements OnInit {
     this.load();
     this.loadPrescribers();
     this.initPatientSearch();
+    this.initCatalogSearch();
     this.initPharmacyHistory();
 
     const params = this.route.snapshot.queryParamMap;
@@ -453,6 +456,49 @@ export class PrescriptionsComponent implements OnInit {
     };
   }
 
+  /**
+   * QA D922/D935: the hospital's catalogue items matching the typed name. A
+   * pick sends its id, so the catalogue's controlled flag and paediatric
+   * ceiling apply to the order (the server resolves a typed name too).
+   */
+  readonly catalogOptions = signal<MedicationCatalogItemResponse[]>([]);
+  private readonly catalogSearch$ = new Subject<string>();
+
+  initCatalogSearch(): void {
+    this.catalogSearch$
+      .pipe(
+        debounceTime(250),
+        distinctUntilChanged(),
+        switchMap((q) =>
+          q.length < 2
+            ? of([] as MedicationCatalogItemResponse[])
+            : this.pharmacyService.searchMedications(q, 0, 15).pipe(
+                map((page) => page.content ?? []),
+                catchError(() => of([] as MedicationCatalogItemResponse[])),
+              ),
+        ),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((items) => this.catalogOptions.set(items));
+  }
+
+  /** The text a catalogue option puts in the medication field. */
+  catalogLabel(item: MedicationCatalogItemResponse): string {
+    const strength = [item.strength, item.strengthUnit].filter((v) => !!v).join(' ');
+    return strength ? `${item.nameFr} ${strength}` : item.nameFr;
+  }
+
+  /** The picked catalogue item, when the field holds one option's text exactly. */
+  readonly pickedCatalogItem = signal<MedicationCatalogItemResponse | null>(null);
+
+  onMedicationNameChange(value: string): void {
+    this.form.medicationName = value;
+    const picked = this.catalogOptions().find((o) => this.catalogLabel(o) === value) ?? null;
+    this.pickedCatalogItem.set(picked);
+    this.form.medicationCatalogItemId = picked ? picked.id : null;
+    if (!picked) this.catalogSearch$.next((value ?? '').trim());
+  }
+
   initPatientSearch(): void {
     this.patientSearch$
       .pipe(
@@ -577,13 +623,15 @@ export class PrescriptionsComponent implements OnInit {
       medicationName: p.medicationName ?? '',
       dosage: p.dosage ?? '',
       frequency: p.frequency ?? '',
-      route: p.route ?? '',
+      // QA D950: a stored "ORAL" opens on the form's own PO option.
+      route: canonicalRoute(p.route) ?? p.route ?? '',
       duration: p.duration ?? '',
       quantity: p.quantity ?? null,
       quantityUnit: p.quantityUnit ?? '',
       notes: p.notes ?? '',
       status: (p.status as PrescriptionRequest['status']) ?? 'DRAFT',
       takeHome: !!p.takeHome,
+      medicationCatalogItemId: p.medicationCatalogItemId ?? null,
     };
     this.selectedPatient.set({
       id: p.patientId ?? '',
@@ -773,7 +821,10 @@ export class PrescriptionsComponent implements OnInit {
    * — so this is presentation only: it hides a button that would 403.
    */
   canSign(p: PrescriptionResponse): boolean {
-    if (!this.canSignRole() || this.isOtherPrescriber(p)) return false;
+    // QA D934: a nurse's or midwife's draft is signed by a doctor of the hospital.
+    if (!this.canSignRole() || (this.isOtherPrescriber(p) && !p.awaitingPhysicianSignature)) {
+      return false;
+    }
     return p.status === 'DRAFT' || p.status === 'PENDING_SIGNATURE';
   }
 

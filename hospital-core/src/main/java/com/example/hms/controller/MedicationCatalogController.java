@@ -81,10 +81,24 @@ public class MedicationCatalogController {
     @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_STORE_MANAGER','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Search medications by name, ATC code, or brand")
     public ResponseEntity<Page<MedicationCatalogItemResponseDTO>> search(
-            @RequestParam UUID hospitalId,
+            @RequestParam(required = false) UUID hospitalId,
             @RequestParam String q,
-            Pageable pageable) {
-        return ResponseEntity.ok(catalogService.search(hospitalId, q, pageable));
+            Pageable pageable,
+            Authentication auth) {
+        // QA D922: the hospital is the caller's acting scope, as on list. The
+        // portal never sent hospitalId, so every search answered 400 (the
+        // catalogue page's search box and the prescribing form's picker), and
+        // a caller-supplied id was searched whatever tenant it named.
+        return ResponseEntity.ok(catalogService.search(requireCatalogScope(auth, hospitalId), q, pageable));
+    }
+
+    /** The hospital a catalogue read is scoped to; refuses when there is none. */
+    private UUID requireCatalogScope(Authentication auth, UUID requestedHospitalId) {
+        UUID resolved = authUtils.resolveHospitalScope(auth, requestedHospitalId, false);
+        if (resolved == null) {
+            throw new BusinessException("pharmacy.hospitalContext.required");
+        }
+        return resolved;
     }
 
     @GetMapping("/category/{category}")
@@ -92,9 +106,10 @@ public class MedicationCatalogController {
     @Operation(summary = "List medications by category")
     public ResponseEntity<Page<MedicationCatalogItemResponseDTO>> listByCategory(
             @PathVariable String category,
-            @RequestParam UUID hospitalId,
-            Pageable pageable) {
-        return ResponseEntity.ok(catalogService.listByCategory(hospitalId, category, pageable));
+            @RequestParam(required = false) UUID hospitalId,
+            Pageable pageable,
+            Authentication auth) {
+        return ResponseEntity.ok(catalogService.listByCategory(requireCatalogScope(auth, hospitalId), category, pageable));
     }
 
     @PutMapping("/{id}")

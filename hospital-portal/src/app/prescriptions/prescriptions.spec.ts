@@ -387,6 +387,54 @@ describe('PrescriptionsComponent — signing', () => {
     fixture.detectChanges();
   });
 
+  it('QA D934: a doctor is offered Sign on a nurse or midwife draft, not on a colleague doctor draft', () => {
+    spyOn(component, 'ownPrescriberStaffId').and.returnValue('me');
+    const colleague = {
+      ...rx('c1', 'PENDING_SIGNATURE'),
+      staffId: 'other',
+    } as PrescriptionResponse;
+    const midwifeDraft = {
+      ...rx('c2', 'PENDING_SIGNATURE'),
+      staffId: 'midwife',
+      awaitingPhysicianSignature: true,
+    } as PrescriptionResponse;
+    expect(component.canSign(colleague)).toBeFalse();
+    expect(component.canSign(midwifeDraft)).toBeTrue();
+    expect(
+      component.canSign({ ...midwifeDraft, status: 'SIGNED' } as PrescriptionResponse),
+    ).toBeFalse();
+  });
+
+  it('QA D922: picking a catalogue item sends its id; typing over it clears the id', () => {
+    component.openCreate();
+    const morphine = {
+      id: 'cat-1',
+      nameFr: 'Morphine',
+      genericName: 'morphine',
+      strength: '10',
+      strengthUnit: 'mg/ml',
+      controlled: true,
+    } as never;
+    component.catalogOptions.set([morphine]);
+    component.onMedicationNameChange('Morphine 10 mg/ml');
+    expect(component.form.medicationCatalogItemId).toBe('cat-1');
+    expect(component.pickedCatalogItem()?.controlled).toBeTrue();
+    component.onMedicationNameChange('Morphine 10 mg/ml retard');
+    expect(component.form.medicationCatalogItemId).toBeNull();
+  });
+
+  it('QA D922: the catalogue id of an order being edited is kept', () => {
+    component.openEdit({
+      ...rx('e1', 'DRAFT'),
+      medicationName: 'Morphine',
+      medicationCatalogItemId: 'cat-1',
+      route: 'INTRAVENOUS',
+    } as PrescriptionResponse);
+    expect(component.form.medicationCatalogItemId).toBe('cat-1');
+    // QA D950: a stored English word opens on the form's own option.
+    expect(component.form.route).toBe('IV');
+  });
+
   it('QA D706: a new prescription without a quantity to dispense is not sent', () => {
     component.openCreate();
     component.form.medicationName = 'Morphine 10 mg';
