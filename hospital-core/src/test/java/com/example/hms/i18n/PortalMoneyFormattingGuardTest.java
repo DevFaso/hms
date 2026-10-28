@@ -28,9 +28,14 @@ class PortalMoneyFormattingGuardTest {
 
     private static final Path APP = Path.of("..", "hospital-portal", "src", "app");
 
-    /** A money-like expression piped through a generic number or currency pipe. */
+    /**
+     * A money-like expression piped through a generic number or currency pipe.
+     * Round 16 (QA D967): a controlled-drug register's opening and closing
+     * balances are counts of units, formatted as numbers, never as francs (the
+     * portal's money-scan exempts the same two names).
+     */
     private static final Pattern MONEY_THROUGH_NUMBER = Pattern.compile(
-        "(?i)(amount|balance|price|total|cost|paid|due|fee|copay|charge)\\w*+\\s*+\\)?+\\s*+\\|\\s*+(number|decimal|currency)\\b");
+        "(?i)(?<!opening|closing)(amount|balance|price|total|cost|paid|due|fee|copay|charge)\\w*+\\s*+\\)?+\\s*+\\|\\s*+(number|decimal|currency)\\b");
 
     /** A component's own Intl currency formatter (formatCfa is the one place that may). */
     private static final Pattern OWN_CURRENCY_FORMAT = Pattern.compile("style:\\s*'currency'");

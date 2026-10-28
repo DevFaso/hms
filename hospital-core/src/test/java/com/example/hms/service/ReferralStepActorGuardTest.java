@@ -29,7 +29,9 @@ class ReferralStepActorGuardTest {
 
     @Test
     void everyReferralStepChecksTheActor() throws Exception {
-        String src = Files.readString(SOURCE);
+        // Line endings normalised: a Windows checkout (core.autocrlf) has CRLF,
+        // and the helper extraction below looks for a LF-terminated closing brace.
+        String src = Files.readString(SOURCE).replace("\r\n", "\n");
         Matcher m = STEP.matcher(src);
         List<Integer> starts = new ArrayList<>();
         List<String> names = new ArrayList<>();
