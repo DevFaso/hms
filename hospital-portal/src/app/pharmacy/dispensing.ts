@@ -827,7 +827,9 @@ export class DispensingComponent implements OnInit, OnDestroy {
 
   /** QA D1001: true when part of the order was already dispensed, so the queue shows both figures. */
   isPartlyDispensed(rx: WorkQueuePrescription): boolean {
-    return rx.remainingQuantity != null && rx.quantity != null && rx.remainingQuantity < rx.quantity;
+    return (
+      rx.remainingQuantity != null && rx.quantity != null && rx.remainingQuantity < rx.quantity
+    );
   }
 
   private openForm(rx: WorkQueuePrescription): void {

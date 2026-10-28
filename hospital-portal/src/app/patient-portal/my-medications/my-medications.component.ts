@@ -67,7 +67,8 @@ export class MyMedicationsComponent implements OnInit {
         window.open(url, '_blank');
         setTimeout(() => URL.revokeObjectURL(url), 60_000);
       },
-      error: () => this.toast.error(this.translate.instant('PORTAL.MEDICATIONS.PRINTED_COPY_FAILED')),
+      error: () =>
+        this.toast.error(this.translate.instant('PORTAL.MEDICATIONS.PRINTED_COPY_FAILED')),
     });
   }
 

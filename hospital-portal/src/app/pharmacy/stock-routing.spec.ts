@@ -674,7 +674,7 @@ describe('StockRoutingComponent', () => {
           provideHttpClientTesting(),
           { provide: PharmacyService, useValue: pharmacySvc },
           { provide: ToastService, useValue: toastSvc },
-        { provide: PrintLabelService, useValue: printSvc },
+          { provide: PrintLabelService, useValue: printSvc },
           { provide: RoleContextService, useValue: roleContextStub },
           {
             provide: ActivatedRoute,

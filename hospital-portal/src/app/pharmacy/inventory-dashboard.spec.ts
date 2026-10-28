@@ -142,7 +142,10 @@ describe('InventoryDashboardComponent reorder trigger (QA D965)', () => {
       imports: [InventoryDashboardComponent, TranslateModule.forRoot()],
       providers: [
         { provide: PharmacyService, useValue: svc },
-        { provide: ToastService, useValue: jasmine.createSpyObj('ToastService', ['success', 'error']) },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj('ToastService', ['success', 'error']),
+        },
         {
           provide: RoleContextService,
           useValue: { hasAnyActiveRoleExactly: (roles: string[]) => roles.includes(role) },
@@ -157,7 +160,9 @@ describe('InventoryDashboardComponent reorder trigger (QA D965)', () => {
 
   it('hides "Trigger alerts" from the pharmacist, whom the endpoint refuses', () => {
     const fixture = create('ROLE_PHARMACIST');
-    expect(fixture.nativeElement.querySelector('[data-testid="trigger-reorder-alerts"]')).toBeNull();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="trigger-reorder-alerts"]'),
+    ).toBeNull();
   });
 
   it('offers it to the store manager', () => {

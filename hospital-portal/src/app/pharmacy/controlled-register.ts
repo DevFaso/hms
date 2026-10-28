@@ -128,7 +128,9 @@ export class ControlledRegisterComponent implements OnInit {
 
   /** The shelf differs from what the register carries out: for the inspector to see. */
   hasDiscrepancy(drug: ControlledRegisterDrug): boolean {
-    return drug.quantityOnHand != null && Number(drug.quantityOnHand) !== Number(drug.closingBalance);
+    return (
+      drug.quantityOnHand != null && Number(drug.quantityOnHand) !== Number(drug.closingBalance)
+    );
   }
 
   signed(quantity: number): string {

@@ -164,6 +164,7 @@
     "src/app/patients/patient-list.html::patient.bloodType",
     "src/app/patients/storyboard-banner/storyboard-banner.component.html::a.reaction",
     "src/app/patients/storyboard-banner/storyboard-banner.component.html::d.directiveType",
+    "src/app/pharmacy/controlled-register.html::e.reason",
     "src/app/pharmacy/dispensing.html::d.verificationOverrideReason",
     "src/app/pharmacy/dispensing.html::selectedPrescription?.frequency",
     "src/app/pharmacy/pharmacy-checkout.html::r.paymentMethod",

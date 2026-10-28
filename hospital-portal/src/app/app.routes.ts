@@ -1376,7 +1376,12 @@ export const routes: Routes = [
         path: 'pharmacy/controlled-register',
         canActivate: [RoleGuard],
         data: {
-          roles: ['ROLE_PHARMACIST', 'ROLE_STORE_MANAGER', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+          roles: [
+            'ROLE_PHARMACIST',
+            'ROLE_STORE_MANAGER',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
         },
         loadComponent: () =>
           import('./pharmacy/controlled-register').then((m) => m.ControlledRegisterComponent),

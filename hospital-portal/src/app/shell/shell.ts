@@ -1070,7 +1070,12 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           label: 'Controlled-Drug Register',
           translationKey: 'NAV.CONTROLLED_REGISTER',
           route: '/pharmacy/controlled-register',
-          roles: ['ROLE_PHARMACIST', 'ROLE_STORE_MANAGER', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
+          roles: [
+            'ROLE_PHARMACIST',
+            'ROLE_STORE_MANAGER',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
         },
         {
           icon: 'medication',
