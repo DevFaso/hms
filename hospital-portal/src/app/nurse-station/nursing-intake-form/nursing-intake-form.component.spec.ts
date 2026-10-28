@@ -9,7 +9,7 @@ import {
   NursingIntakeResponse,
 } from '../../services/encounter.service';
 import { ToastService } from '../../core/toast.service';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import { PatientAllergy, PatientService } from '../../services/patient.service';
 import { PrescriptionResponse, PrescriptionService } from '../../services/prescription.service';
 
@@ -227,6 +227,28 @@ describe('NursingIntakeFormComponent — carried-in chart data (QA D951/D992)', 
       chiefComplaint: 'Toux',
     } as EncounterResponse;
     expect(component.chiefComplaint()).toBe('Toux');
+  });
+
+  it('never shows a late answer for the previous patient under the next one (review of #971)', () => {
+    const lateRx = new Subject<PrescriptionResponse[]>();
+    const lateAllergies = new Subject<{ items: PatientAllergy[]; withheld: boolean }>();
+    prescriptionService.list.and.returnValue(lateRx);
+    patientService.listAllergies.and.returnValue(lateAllergies);
+    component.encounter = { id: 'enc-a', patientId: 'pA' } as EncounterResponse;
+    prescriptionService.list.and.returnValue(of([]));
+    patientService.listAllergies.and.returnValue(of({ items: [], withheld: false }));
+    component.encounter = { id: 'enc-b', patientId: 'pB' } as EncounterResponse;
+
+    lateRx.next([{ id: 'rxA', medicationName: 'Medicine of A' } as PrescriptionResponse]);
+    lateAllergies.next({
+      items: [
+        { id: 'aA', patientId: 'pA', allergenDisplay: 'Allergy of A', active: true },
+      ] as PatientAllergy[],
+      withheld: false,
+    });
+
+    expect(component.documentedMedications()).toEqual([]);
+    expect(component.documentedAllergies()).toEqual([]);
   });
 
   it('lists the active documented allergies and the current prescriptions', () => {

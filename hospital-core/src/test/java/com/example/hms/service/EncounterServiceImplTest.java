@@ -1108,6 +1108,8 @@ class EncounterServiceImplTest {
             when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
             when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
             when(staffRepository.findByUserIdAndHospitalId(doctorUser.getId(), hospital.getId())).thenReturn(Optional.of(doctor));
+            // Review of #971: the closing doctor is a doctor at the visit's hospital.
+            when(roleValidator.isDoctor(doctorUser.getId(), hospital.getId())).thenReturn(true);
             lenient().when(checkOutMapper.toAfterVisitSummary(any(Encounter.class), any(CheckOutRequestDTO.class), any()))
                 .thenReturn(AfterVisitSummaryDTO.builder().encounterId(encounterId).build());
             lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.FRENCH);
@@ -1118,6 +1120,53 @@ class EncounterServiceImplTest {
             org.mockito.ArgumentCaptor<DischargeSummary> saved = org.mockito.ArgumentCaptor.forClass(DischargeSummary.class);
             verify(dischargeSummaryRepository).save(saved.capture());
             assertThat(saved.getValue().getDischargingProvider()).isEqualTo(doctor);
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+    }
+
+    @Test
+    void qaD930_aDoctorElsewhereWhoIsANurseHereDoesNotTakeTheSummary() {
+        UUID encounterId = UUID.randomUUID();
+        Hospital hospital = new Hospital();
+        hospital.setId(UUID.randomUUID());
+        Patient patient = new Patient();
+        patient.setId(UUID.randomUUID());
+        Staff nurse = new Staff();
+        nurse.setId(UUID.randomUUID());
+        User nurseUser = new User();
+        nurseUser.setId(UUID.randomUUID());
+        nurse.setUser(nurseUser);
+        Encounter encounter = new Encounter();
+        encounter.setId(encounterId);
+        encounter.setStatus(EncounterStatus.IN_PROGRESS);
+        encounter.setHospital(hospital);
+        encounter.setPatient(patient);
+        encounter.setStaff(nurse);
+        User doctorUser = new User();
+        doctorUser.setId(UUID.randomUUID());
+        Staff doctor = new Staff();
+        doctor.setId(UUID.randomUUID());
+        doctor.setUser(doctorUser);
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(doctorUser, null,
+                List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_DOCTOR"))));
+        try {
+            when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+            when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(staffRepository.findByUserIdAndHospitalId(doctorUser.getId(), hospital.getId())).thenReturn(Optional.of(doctor));
+            lenient().when(checkOutMapper.toAfterVisitSummary(any(Encounter.class), any(CheckOutRequestDTO.class), any()))
+                .thenReturn(AfterVisitSummaryDTO.builder().encounterId(encounterId).build());
+            lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.FRENCH);
+            lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("ok");
+
+            service.checkOut(encounterId, CheckOutRequestDTO.builder().build(), "doctor1", true, null);
+
+            org.mockito.ArgumentCaptor<DischargeSummary> saved = org.mockito.ArgumentCaptor.forClass(DischargeSummary.class);
+            verify(dischargeSummaryRepository).save(saved.capture());
+            // Her token says doctor (another hospital); here she is not one, so the
+            // summary stays with the visit's clinician of record.
+            assertThat(saved.getValue().getDischargingProvider()).isEqualTo(nurse);
         } finally {
             org.springframework.security.core.context.SecurityContextHolder.clearContext();
         }

@@ -9,6 +9,7 @@ import {
   DestroyRef,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Subscription } from 'rxjs';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -47,8 +48,8 @@ export class NursingIntakeFormComponent {
     } else if (value?.chiefComplaint && !this.chiefComplaint()) {
       this.chiefComplaint.set(value.chiefComplaint);
     }
-    if (changed && value?.patientId) {
-      this.loadDocumented(value.patientId, value.hospitalId);
+    if (changed) {
+      this.loadDocumented(value?.patientId, value?.hospitalId);
     }
   }
   get encounter(): EncounterResponse | null {
@@ -170,26 +171,37 @@ export class NursingIntakeFormComponent {
     return this.medications().some((m) => (m.medicationName ?? '').trim().toLowerCase() === name);
   }
 
-  private loadDocumented(patientId: string, hospitalId?: string): void {
+  /** The previous patient's chart reads: cancelled when the encounter changes (review of #971). */
+  private documentedLoads = new Subscription();
+
+  private loadDocumented(patientId: string | undefined, hospitalId?: string): void {
+    // A late answer for the previous patient never lands under the next one.
+    this.documentedLoads.unsubscribe();
+    this.documentedLoads = new Subscription();
     this.documentedAllergies.set([]);
     this.documentedMedications.set([]);
-    this.patientService
-      .listAllergies(patientId, hospitalId || undefined)
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (res) => this.documentedAllergies.set(res.items.filter((a) => a.active !== false)),
-        error: () => this.documentedAllergies.set([]),
-      });
-    this.prescriptionService
-      .list({
-        patientId,
-        statuses: NursingIntakeFormComponent.CURRENT_PRESCRIPTION_STATUSES,
-      })
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (list) => this.documentedMedications.set(list),
-        error: () => this.documentedMedications.set([]),
-      });
+    if (!patientId) return;
+    this.documentedLoads.add(
+      this.patientService
+        .listAllergies(patientId, hospitalId || undefined)
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe({
+          next: (res) => this.documentedAllergies.set(res.items.filter((a) => a.active !== false)),
+          error: () => this.documentedAllergies.set([]),
+        }),
+    );
+    this.documentedLoads.add(
+      this.prescriptionService
+        .list({
+          patientId,
+          statuses: NursingIntakeFormComponent.CURRENT_PRESCRIPTION_STATUSES,
+        })
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe({
+          next: (list) => this.documentedMedications.set(list),
+          error: () => this.documentedMedications.set([]),
+        }),
+    );
   }
 
   removeMedication(index: number): void {

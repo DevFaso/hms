@@ -2421,6 +2421,22 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   provider. (7) D961: the certificate's examination date is the visit's
   date on the server clock (UTC); right for UTC+0 hospitals, a day early
   for a past-day visit at a UTC+1 hospital until hospitals carry a zone.
+  (8) Review round 7 of #971, deferred (not logic or security breaks):
+  the certificate button is offered to every doctor on a seen visit while
+  the server lets only the treating clinician sign (the refusal is readable
+  in the dialog; an exact gate needs a server-computed flag on the
+  encounter); a sick-leave start date has no upper bound (the maximum
+  offset after the visit is a clinical policy for the user to set); the
+  checkout diagnosis prefill takes problems reviewed on or after the visit
+  day with no upper bound (problems carry no encounter link; the prefill is
+  editable); efficiency: `DischargeSummaryServiceImpl.toDto` runs the
+  author rule per list row (role lookups and an exists query per draft),
+  `publishCheckedOut` runs three id queries with no listener yet, and
+  `BpaRuleEngine.buildContext` loads the due date for every non-male
+  patient even when no BP reading is hypertensive; "who is a physician"
+  is computed in `EncounterServiceImpl.isPhysicianAt`,
+  `DischargeSummaryServiceImpl.isPhysician` and the token-based
+  `callerIsDoctor`, which should share one helper.
 
 ### Execution plan (2026-09-26)
 

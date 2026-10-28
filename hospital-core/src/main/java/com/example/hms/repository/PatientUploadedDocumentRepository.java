@@ -53,6 +53,20 @@ public interface PatientUploadedDocumentRepository extends JpaRepository<Patient
         @org.springframework.data.repository.query.Param("documentType") PatientDocumentType documentType,
         Pageable pageable);
 
+    /**
+     * QA D961 (review of #971): the FHIR read paths (DocumentReference search,
+     * Patient/$everything) at a hospital: the {@link #findForStaff} rows, newest
+     * first, with the mapper-walked associations fetched in the page query.
+     */
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"patient", "uploadedByUser"})
+    @org.springframework.data.jpa.repository.Query(
+        "select d from PatientUploadedDocument d where d.patient.id = :patientId and d.deletedAt is null"
+            + " and (d.issuingHospital is null or d.issuingHospital.id = :hospitalId) order by d.createdAt desc")
+    Page<PatientUploadedDocument> findForStaffNewestFirst(
+        @org.springframework.data.repository.query.Param("patientId") UUID patientId,
+        @org.springframework.data.repository.query.Param("hospitalId") UUID hospitalId,
+        Pageable pageable);
+
     /** Fetch a single document only if it belongs to the patient and is not deleted. */
     Optional<PatientUploadedDocument> findByIdAndPatient_IdAndDeletedAtIsNull(UUID id, UUID patientId);
 }

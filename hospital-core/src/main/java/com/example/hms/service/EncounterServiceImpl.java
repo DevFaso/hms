@@ -2757,8 +2757,10 @@ public class EncounterServiceImpl implements EncounterService {
         if (caller == null) {
             return null;
         }
+        // Review of #971: a physician AT this hospital; a doctor elsewhere who
+        // is a nurse here does not take the summary with her nurse record.
         return staffRepository.findByUserIdAndHospitalId(caller, encounter.getHospital().getId())
-            .filter(s -> s.getUser() != null)
+            .filter(s -> isPhysicianAt(s, encounter))
             .orElse(null);
     }
 
