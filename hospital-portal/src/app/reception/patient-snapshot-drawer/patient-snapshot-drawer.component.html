@@ -177,7 +177,7 @@
         <div class="snap-field">
           <span class="field-label">{{ 'RECEPTION.TOTAL_BALANCE_DUE' | translate }}</span>
           <span class="field-val" [class.balance-due]="s.billing.totalBalanceDue > 0">
-            {{ s.billing.totalBalanceDue | number: '1.2-2' }}
+            {{ s.billing.totalBalanceDue | cfa }}
           </span>
         </div>
       </div>
