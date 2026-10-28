@@ -723,6 +723,84 @@ class EncounterServiceImplTest {
 
     // ---------- submitNursingIntake ----------
 
+    /** A mock message source that answers from the real bundles, in French. */
+    private void answerFromTheRealFrenchBundles() {
+        org.springframework.context.MessageSource real = new com.example.hms.config.LocaleConfig().messageSource();
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(Locale.FRENCH);
+        lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class)))
+            .thenAnswer(inv -> real.getMessage(inv.getArgument(0), inv.getArgument(1), inv.getArgument(2)));
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void resetLocale() {
+        org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+    }
+
+    @Test
+    void qaD952_theIntakeNoteHeadersAreWrittenInTheCliniciansLanguage() {
+        answerFromTheRealFrenchBundles();
+        UUID encounterId = UUID.randomUUID();
+        Hospital hospital = new Hospital();
+        hospital.setId(UUID.randomUUID());
+        Patient patient = new Patient();
+        patient.setId(UUID.randomUUID());
+        Encounter encounter = new Encounter();
+        encounter.setId(encounterId);
+        encounter.setStatus(EncounterStatus.WAITING_FOR_PHYSICIAN);
+        encounter.setHospital(hospital);
+        encounter.setPatient(patient);
+        encounter.setNotes("Motif : céphalées");
+
+        NursingIntakeRequestDTO request = NursingIntakeRequestDTO.builder()
+                .nursingAssessmentNotes("Conscient, orienté")
+                .painAssessment("EVA 6/10")
+                .fallRiskDetail("Morse 25")
+                .medications(List.of(NursingIntakeRequestDTO.MedicationReconciliationEntry.builder()
+                        .medicationName("Paracétamol").stillTaking(false).build()))
+                .build();
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.submitNursingIntake(encounterId, request, null, true, null);
+
+        assertThat(encounter.getNotes())
+            .contains("--- Admission infirmière ---")
+            .contains("[Évaluation infirmière]")
+            .contains("[Évaluation de la douleur]")
+            .contains("[Risque de chute]")
+            .contains("[Réconciliation médicamenteuse] 1 médicament déclaré :")
+            .contains("Paracétamol (arrêté)")
+            .doesNotContain("Nursing")
+            .doesNotContain("medication(s)")
+            .doesNotContain("DISCONTINUED");
+    }
+
+    @Test
+    void qaD989_theTriagePainScoreIsStoredInTheCliniciansLanguage() {
+        answerFromTheRealFrenchBundles();
+        UUID encounterId = UUID.randomUUID();
+        Hospital hospital = new Hospital();
+        hospital.setId(UUID.randomUUID());
+        Patient patient = new Patient();
+        patient.setId(UUID.randomUUID());
+        Encounter encounter = new Encounter();
+        encounter.setId(encounterId);
+        encounter.setStatus(EncounterStatus.ARRIVED);
+        encounter.setHospital(hospital);
+        encounter.setPatient(patient);
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        org.mockito.ArgumentCaptor<PatientVitalSign> vital = org.mockito.ArgumentCaptor.forClass(PatientVitalSign.class);
+        PatientVitalSign saved = new PatientVitalSign();
+        saved.setId(UUID.randomUUID());
+        when(patientVitalSignRepository.save(vital.capture())).thenReturn(saved);
+        when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.submitTriage(encounterId, TriageSubmissionRequestDTO.builder().esiScore(3).painScale(8).build(),
+            null, true, null);
+
+        assertThat(vital.getValue().getNotes()).isEqualTo("Douleur : 8/10");
+    }
+
     @Test
     void submitNursingIntake_happyPath_succeeds() {
         UUID encounterId = UUID.randomUUID();
@@ -953,7 +1031,7 @@ class EncounterServiceImplTest {
         verify(encounterRepository).save(encounter);
         verify(dischargeSummaryRepository).save(any(DischargeSummary.class));
         verify(notificationService).created(anyString(), org.mockito.ArgumentMatchers.eq("patient1"), org.mockito.ArgumentMatchers.eq("DISCHARGE_SUMMARY"));
-        verify(emailService).sendHtml(org.mockito.ArgumentMatchers.eq(List.of("patient@example.com")), org.mockito.ArgumentMatchers.eq(List.of()), org.mockito.ArgumentMatchers.eq(List.of()), org.mockito.ArgumentMatchers.eq("Your After-Visit Summary is Ready"), anyString());
+        verify(emailService).sendHtml(org.mockito.ArgumentMatchers.eq(List.of("patient@example.com")), org.mockito.ArgumentMatchers.eq(List.of()), org.mockito.ArgumentMatchers.eq(List.of()), org.mockito.ArgumentMatchers.argThat((String subject) -> !"Your After-Visit Summary is Ready".equals(subject)), anyString());
     }
 
     @Test
@@ -1071,7 +1149,7 @@ class EncounterServiceImplTest {
         doThrow(new RuntimeException("ws down")).when(notificationService)
             .created(anyString(), org.mockito.ArgumentMatchers.eq("patient1"), org.mockito.ArgumentMatchers.eq("DISCHARGE_SUMMARY"));
         doThrow(new RuntimeException("smtp down")).when(emailService)
-            .sendHtml(org.mockito.ArgumentMatchers.eq(List.of("patient.user@example.com")), org.mockito.ArgumentMatchers.eq(List.of()), org.mockito.ArgumentMatchers.eq(List.of()), org.mockito.ArgumentMatchers.eq("Your After-Visit Summary is Ready"), anyString());
+            .sendHtml(org.mockito.ArgumentMatchers.eq(List.of("patient.user@example.com")), org.mockito.ArgumentMatchers.eq(List.of()), org.mockito.ArgumentMatchers.eq(List.of()), org.mockito.ArgumentMatchers.argThat((String subject) -> !"Your After-Visit Summary is Ready".equals(subject)), anyString());
 
         // The after-visit summary bell entry is rendered through the message
         // source in the patient's language; lenient, since not every path notifies.
@@ -1083,7 +1161,7 @@ class EncounterServiceImplTest {
         assertThat(result.getEncounterId()).isEqualTo(encounterId);
         assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.COMPLETED);
         verify(dischargeSummaryRepository).save(any(DischargeSummary.class));
-        verify(emailService).sendHtml(org.mockito.ArgumentMatchers.eq(List.of("patient.user@example.com")), org.mockito.ArgumentMatchers.eq(List.of()), org.mockito.ArgumentMatchers.eq(List.of()), org.mockito.ArgumentMatchers.eq("Your After-Visit Summary is Ready"), anyString());
+        verify(emailService).sendHtml(org.mockito.ArgumentMatchers.eq(List.of("patient.user@example.com")), org.mockito.ArgumentMatchers.eq(List.of()), org.mockito.ArgumentMatchers.eq(List.of()), org.mockito.ArgumentMatchers.argThat((String subject) -> !"Your After-Visit Summary is Ready".equals(subject)), anyString());
     }
 
     @Test
@@ -1198,7 +1276,8 @@ class EncounterServiceImplTest {
             org.mockito.ArgumentCaptor.forClass(com.example.hms.model.scheduling.PatientRecall.class);
         verify(patientRecallRepository).save(captor.capture());
         assertThat(captor.getValue().getDueDate()).isEqualTo(preferred);
-        assertThat(captor.getValue().getReason()).isEqualTo("Follow-up after visit");
+        // QA D952 class: the default recall reason comes from the bundle, not an English literal.
+        assertThat(captor.getValue().getReason()).isEqualTo("ok");
     }
 
     @Test
@@ -1924,7 +2003,7 @@ class EncounterServiceImplTest {
             org.mockito.ArgumentMatchers.eq(List.of("patient@example.com")),
             org.mockito.ArgumentMatchers.eq(List.of()),
             org.mockito.ArgumentMatchers.eq(List.of()),
-            org.mockito.ArgumentMatchers.eq("Your After-Visit Summary is Ready"),
+            org.mockito.ArgumentMatchers.argThat((String subject) -> !"Your After-Visit Summary is Ready".equals(subject)),
             anyString());
     }
 

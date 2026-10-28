@@ -2134,7 +2134,9 @@ public class EncounterServiceImpl implements EncounterService {
                 .heightCm(req.getHeightCm())
                 .onOxygen(req.getOnOxygen())
                 .consciousnessLevel(req.getConsciousnessLevel())
-                .notes(req.getPainScale() != null ? "Pain scale: " + req.getPainScale() : null)
+                // QA D989: stored chart text is written in the clinician's
+                // language, never an English label ("Pain scale: 8").
+                .notes(req.getPainScale() != null ? storedText("triage.vitals.painScale", req.getPainScale()) : null)
                 .build();
     }
 
@@ -2253,9 +2255,15 @@ public class EncounterServiceImpl implements EncounterService {
 
         StringBuilder noteBuilder = new StringBuilder();
 
-        appendSectionIfPresent(noteBuilder, "[Nursing Assessment]", request.getNursingAssessmentNotes());
-        appendSectionIfPresent(noteBuilder, "[Pain Assessment]", request.getPainAssessment());
-        appendSectionIfPresent(noteBuilder, "[Fall Risk]", request.getFallRiskDetail());
+        // QA D952: the section headers are written into the encounter notes,
+        // which the doctor reads, so they come from the bundle in the
+        // clinician's language rather than English literals.
+        appendSectionIfPresent(noteBuilder, storedText("encounter.intake.note.nursingAssessment"),
+                request.getNursingAssessmentNotes());
+        appendSectionIfPresent(noteBuilder, storedText("encounter.intake.note.painAssessment"),
+                request.getPainAssessment());
+        appendSectionIfPresent(noteBuilder, storedText("encounter.intake.note.fallRisk"),
+                request.getFallRiskDetail());
         appendMedicationReconciliation(noteBuilder, request.getMedications(), medicationCount);
 
         if (noteBuilder.isEmpty()) {
@@ -2282,7 +2290,7 @@ public class EncounterServiceImpl implements EncounterService {
         if (medications == null || medications.isEmpty()) {
             return;
         }
-        noteBuilder.append("[Medication Reconciliation] ").append(medicationCount).append(" medication(s) reported:\n");
+        noteBuilder.append(storedText("encounter.intake.note.medications", medicationCount)).append("\n");
         for (com.example.hms.payload.dto.NursingIntakeRequestDTO.MedicationReconciliationEntry med : medications) {
             appendMedicationLine(noteBuilder, med);
         }
@@ -2294,10 +2302,11 @@ public class EncounterServiceImpl implements EncounterService {
             StringBuilder noteBuilder,
             com.example.hms.payload.dto.NursingIntakeRequestDTO.MedicationReconciliationEntry med) {
 
-        noteBuilder.append("- ").append(med.getMedicationName() != null ? med.getMedicationName() : "Unknown");
+        noteBuilder.append("- ").append(med.getMedicationName() != null
+                ? med.getMedicationName() : storedText("encounter.intake.note.medicationUnknown"));
         if (med.getDosage() != null) noteBuilder.append(" ").append(med.getDosage());
         if (med.getFrequency() != null) noteBuilder.append(" ").append(med.getFrequency());
-        if (!med.isStillTaking()) noteBuilder.append(" (DISCONTINUED)");
+        if (!med.isStillTaking()) noteBuilder.append(" ").append(storedText("encounter.intake.note.medicationStopped"));
         if (med.getNotes() != null) noteBuilder.append(" — ").append(med.getNotes());
         noteBuilder.append("\n");
     }
@@ -2307,7 +2316,8 @@ public class EncounterServiceImpl implements EncounterService {
         String existingNotes = encounter.getNotes() != null ? encounter.getNotes() : "";
         String combined = existingNotes.isBlank()
                 ? noteBuilder.toString().trim()
-                : existingNotes + "\n\n--- Nursing Intake ---\n" + noteBuilder.toString().trim();
+                : existingNotes + "\n\n" + storedText("encounter.intake.note.separator") + "\n"
+                    + noteBuilder.toString().trim();
 
         if (combined.length() > 2048) {
             combined = combined.substring(0, 2048);
@@ -2589,10 +2599,21 @@ public class EncounterServiceImpl implements EncounterService {
         return dueDate;
     }
 
-    private static String checkoutFollowUpReason(
+    private String checkoutFollowUpReason(
             com.example.hms.payload.dto.clinical.CheckOutRequestDTO.FollowUpAppointmentRequest followUp) {
         return followUp.getReason() != null && !followUp.getReason().isBlank()
-                ? followUp.getReason().trim() : "Follow-up after visit";
+                ? followUp.getReason().trim() : storedText("encounter.checkout.followUp.defaultReason");
+    }
+
+    /**
+     * Text the server writes into a stored clinical record (encounter notes,
+     * vitals notes, recall reasons). It is read by the hospital's clinicians,
+     * so it is rendered in the writing clinician's language from the bundle,
+     * never from an English literal (QA D952/D989 class).
+     * {@code StoredClinicalTextLiteralGuardTest} keeps literals out.
+     */
+    private String storedText(String key, Object... args) {
+        return messageSource.getMessage(key, args, org.springframework.context.i18n.LocaleContextHolder.getLocale());
     }
 
     /**
@@ -2601,7 +2622,7 @@ public class EncounterServiceImpl implements EncounterService {
      * discharge view and the patient portal read — carried no follow-up, so
      * the request looked dropped. It is now written there too, once.
      */
-    private static void addCheckoutFollowUp(
+    private void addCheckoutFollowUp(
             DischargeSummary summary,
             Encounter encounter,
             com.example.hms.payload.dto.clinical.CheckOutRequestDTO request) {
@@ -2738,16 +2759,27 @@ public class EncounterServiceImpl implements EncounterService {
             return;
         }
 
+        // Read by the patient: their language, never English literals.
+        Locale patientLocale = patientLocaleResolver.resolve(patient, NotificationLocales.PATIENT_FALLBACK);
         String patientName = joinName(patient.getFirstName(), patient.getLastName());
-        String providerName = encounter.getStaff() != null ? encounter.getStaff().getName() : "your care team";
-        String subject = "Your After-Visit Summary is Ready";
-        String body = """
-            <h2>After-Visit Summary Available</h2>
-            <p>Dear %s,</p>
-            <p>Your visit summary for your recent encounter at <strong>%s</strong> is now available in the patient portal.</p>
-            <p><strong>Provider:</strong> %s</p>
-            <p>Please sign in to review your discharge instructions and follow-up details.</p>
-            """.formatted(patientName.isBlank() ? "Patient" : patientName, hospitalName, providerName);
+        String providerName = encounter.getStaff() != null && encounter.getStaff().getName() != null
+            ? encounter.getStaff().getName()
+            : messageSource.getMessage("encounter.visitSummary.email.careTeamFallback", null, patientLocale);
+        String hospitalLabel = encounter.getHospital() != null && encounter.getHospital().getName() != null
+            ? encounter.getHospital().getName()
+            : messageSource.getMessage("encounter.visitSummary.hospitalFallback", null, patientLocale);
+        String greetingName = patientName.isBlank()
+            ? messageSource.getMessage("encounter.visitSummary.email.patientFallback", null, patientLocale)
+            : patientName;
+        String subject = messageSource.getMessage("encounter.visitSummary.email.subject", null, patientLocale);
+        String body = "<h2>" + messageSource.getMessage("encounter.visitSummary.email.title", null, patientLocale)
+            + "</h2><p>" + org.springframework.web.util.HtmlUtils.htmlEscape(messageSource.getMessage("encounter.visitSummary.email.greeting",
+                new Object[]{greetingName}, patientLocale))
+            + "</p><p>" + messageSource.getMessage("encounter.visitSummary.email.body",
+                new Object[]{org.springframework.web.util.HtmlUtils.htmlEscape(hospitalLabel)}, patientLocale)
+            + "</p><p><strong>" + messageSource.getMessage("encounter.visitSummary.email.provider", null, patientLocale)
+            + "</strong> " + org.springframework.web.util.HtmlUtils.htmlEscape(providerName) + "</p><p>"
+            + messageSource.getMessage("encounter.visitSummary.email.closing", null, patientLocale) + "</p>";
 
         try {
             emailService.sendHtml(List.of(patientEmail), List.of(), List.of(), subject, body);
