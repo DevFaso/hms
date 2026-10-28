@@ -23,6 +23,7 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.mockito.Mockito.lenient;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -54,7 +55,7 @@ class LabSpecimenServiceImplPerformingHospitalTest {
     void setUp() {
         // Review of #975: the committed status read under the order lock is
         // the entity's own unless a test says otherwise (no concurrent write).
-        org.mockito.Mockito.lenient().when(labSpecimenRepository.findStatusById(org.mockito.ArgumentMatchers.any()))
+        lenient().when(labSpecimenRepository.findStatusById(any()))
             .thenAnswer(inv -> labSpecimenRepository.findById(inv.getArgument(0))
                 .map(com.example.hms.model.LabSpecimen::getStatus).orElse(null));
         ordering = hospital();

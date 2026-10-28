@@ -32,6 +32,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -61,7 +62,7 @@ class LabSpecimenRejectionTest {
     void setUp() {
         // Review of #975: the committed status read under the order lock is
         // the entity's own unless a test says otherwise (no concurrent write).
-        org.mockito.Mockito.lenient().when(labSpecimenRepository.findStatusById(org.mockito.ArgumentMatchers.any()))
+        lenient().when(labSpecimenRepository.findStatusById(any()))
             .thenAnswer(inv -> labSpecimenRepository.findById(inv.getArgument(0))
                 .map(com.example.hms.model.LabSpecimen::getStatus).orElse(null));
         hospitalId = UUID.randomUUID();
@@ -174,7 +175,7 @@ class LabSpecimenRejectionTest {
     void aSpecimenChangedSinceItWasReadIsNotWrittenOver() {
         specimen.setStatus(LabSpecimenStatus.COLLECTED);
         // Received by a colleague between this request's read and its lock.
-        org.mockito.Mockito.doReturn(LabSpecimenStatus.RECEIVED).when(labSpecimenRepository).findStatusById(specimen.getId());
+        doReturn(LabSpecimenStatus.RECEIVED).when(labSpecimenRepository).findStatusById(specimen.getId());
         UUID id = specimen.getId();
 
         assertThatThrownBy(() -> service.rejectSpecimen(id, "Hémolysé", Locale.FRENCH))
@@ -190,7 +191,7 @@ class LabSpecimenRejectionTest {
     @DisplayName("Review of #975 — a specimen rejected since it was read is not received, and no work order is queued")
     void aSpecimenRejectedSinceItWasReadIsNotReceived() {
         specimen.setStatus(LabSpecimenStatus.COLLECTED);
-        org.mockito.Mockito.doReturn(LabSpecimenStatus.REJECTED).when(labSpecimenRepository).findStatusById(specimen.getId());
+        doReturn(LabSpecimenStatus.REJECTED).when(labSpecimenRepository).findStatusById(specimen.getId());
         UUID id = specimen.getId();
 
         assertThatThrownBy(() -> service.receiveSpecimen(id, Locale.FRENCH))
