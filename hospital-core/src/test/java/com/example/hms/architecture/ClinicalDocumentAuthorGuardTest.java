@@ -125,13 +125,14 @@ class ClinicalDocumentAuthorGuardTest {
         int checked = 0;
         for (String relative : DOCUMENT_SERVICES) {
             Path file = SERVICES.resolve(relative);
-            String src = Files.readString(file);
+            // Comments blanked, so a Javadoc that names a check is not one.
+            String src = com.example.hms.testsupport.SourceScan.stripComments(Files.readString(file));
             String service = file.getFileName().toString().replace(".java", "");
             Matcher m = WRITE_METHOD.matcher(src);
             List<Integer> starts = new ArrayList<>();
             List<String> names = new ArrayList<>();
             while (m.find()) {
-                starts.add(m.start());
+                starts.add(m.end() - 1);
                 names.add(m.group(1));
             }
             for (int i = 0; i < names.size(); i++) {
@@ -141,8 +142,11 @@ class ClinicalDocumentAuthorGuardTest {
                 if (TEAM_OWNED.containsKey(key) || ADMIN_ONLY.containsKey(key)) {
                     continue;
                 }
-                int end = i + 1 < starts.size() ? starts.get(i + 1) : src.length();
-                String body = src.substring(starts.get(i), end);
+                // Round 16 siblings: the method's own body (balanced braces).
+                // The old window ran to the next write method, so a helper's
+                // definition below a write (or at the end of the file) counted
+                // as the write's check: falsifying an author check went green.
+                String body = methodBody(src, starts.get(i));
                 if (!AUTHOR_CHECK.matcher(body).find() && !callsCheckedHelper(src, body)) {
                     unguarded.put(key, "no author check");
                 }
@@ -159,13 +163,19 @@ class ClinicalDocumentAuthorGuardTest {
      * A write may delegate the check to a private helper of the same class
      * (cancelConsultation, for one); follow one level of private calls.
      */
+    /** The body of the method whose parameter list opens at {@code paren}: from its {@code {} to the matching {@code }}. */
+    private static String methodBody(String src, int paren) {
+        int open = src.indexOf('{', com.example.hms.testsupport.SourceScan.closingParen(src, paren));
+        return src.substring(open, com.example.hms.testsupport.SourceScan.closingBrace(src, open));
+    }
+
     private static boolean callsCheckedHelper(String src, String body) {
         Matcher call = Pattern.compile("\\b(require\\w+)\\(").matcher(body);
         while (call.find()) {
             Matcher def = Pattern.compile("private [\\w<>.]+ " + call.group(1) + "\\([^)]*\\)\\s*\\{").matcher(src);
             if (def.find()) {
-                int open = def.end();
-                String helper = src.substring(open, Math.min(src.length(), open + 1500));
+                int open = def.end() - 1;
+                String helper = src.substring(open, com.example.hms.testsupport.SourceScan.closingBrace(src, open));
                 if (AUTHOR_CHECK.matcher(helper).find()) {
                     return true;
                 }
