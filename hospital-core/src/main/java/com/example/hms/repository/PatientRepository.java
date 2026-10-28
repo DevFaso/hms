@@ -117,6 +117,11 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
 
     Optional<Patient> findFirstByPhoneNumberSecondary(String phoneNumberSecondary);
 
+    /** Every holder of a number stored exactly so (a short or legacy value; review round 10). */
+    List<Patient> findAllByPhoneNumberPrimary(String phoneNumberPrimary);
+
+    List<Patient> findAllByPhoneNumberSecondary(String phoneNumberSecondary);
+
     /** Whether a patient other than {@code id} holds this primary number. */
     boolean existsByPhoneNumberPrimaryAndIdNot(String phoneNumberPrimary, UUID id);
 

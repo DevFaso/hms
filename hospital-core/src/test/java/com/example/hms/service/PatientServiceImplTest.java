@@ -1571,6 +1571,26 @@ class PatientServiceImplTest {
     }
 
     @Test
+    void reviewRound10_aShortNumberSharedByTwoRecordsMatchesBoth() {
+        // Too short to name a subscriber, so matched exactly as stored; a
+        // shared number lists every holder, as develop's match did.
+        patient.setPhoneNumberPrimary("700010");
+        Patient sibling = new Patient();
+        sibling.setId(UUID.randomUUID());
+        sibling.setFirstName("Awa");
+        sibling.setLastName("Doe");
+        sibling.setPhoneNumberSecondary("700010");
+        sibling.setHospitalRegistrations(new java.util.HashSet<>());
+        when(patientRepository.findAllByPhoneNumberPrimary("700010")).thenReturn(List.of(patient));
+        when(patientRepository.findAllByPhoneNumberSecondary("700010")).thenReturn(List.of(sibling, patient));
+
+        var matches = patientService.findRegistrationMatches(null, "700010", hospitalId);
+
+        assertThat(matches).extracting(com.example.hms.payload.dto.RegistrationMatchDTO::getPatientId)
+            .containsExactly(patientId, sibling.getId());
+    }
+
+    @Test
     void findRegistrationMatchesDedupesPhoneAndEmailHitsPreferringPhone() {
         patient.setPhoneNumberPrimary("+22670707070");
         patient.setEmail("jane@example.com");

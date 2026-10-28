@@ -979,10 +979,13 @@ public class PatientServiceImpl implements PatientService {
         if (exact == null || exact.isEmpty()) {
             return List.of();
         }
-        return patientRepository.findFirstByPhoneNumberPrimary(exact)
-            .or(() -> patientRepository.findFirstByPhoneNumberSecondary(exact))
-            .map(List::of)
-            .orElse(List.of());
+        // Every holder, as the subscriber branch returns: a number may be
+        // shared, and the match used to list them all (review round 10).
+        Map<UUID, Patient> holders = new LinkedHashMap<>();
+        Stream.concat(patientRepository.findAllByPhoneNumberPrimary(exact).stream(),
+                patientRepository.findAllByPhoneNumberSecondary(exact).stream())
+            .forEach(p -> holders.putIfAbsent(p.getId(), p));
+        return List.copyOf(holders.values());
     }
 
     private RegistrationMatchDTO toRegistrationMatch(Patient patient, UUID hospitalId, String matchedOn) {

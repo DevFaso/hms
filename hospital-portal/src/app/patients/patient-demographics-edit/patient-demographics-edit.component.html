@@ -61,12 +61,15 @@
           />
         </div>
         <div class="field-group">
-          <label for="demoDob">{{ 'PATIENTS.DOB' | translate }}</label>
+          <label for="demoDob"
+            >{{ 'PATIENTS.DOB' | translate }} <span class="required">*</span></label
+          >
           <input
             id="demoDob"
             name="dateOfBirth"
             type="date"
             class="form-control"
+            required
             [max]="today"
             [(ngModel)]="form.dateOfBirth"
           />

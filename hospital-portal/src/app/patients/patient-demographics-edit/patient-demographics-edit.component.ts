@@ -137,9 +137,13 @@ export class PatientDemographicsEditComponent implements OnInit {
   }
 
   submit(): void {
+    // The date of birth is required too (NOT NULL on the record): a cleared
+    // one would be sent as "" and kept by the server, while the dialog said
+    // "saved" (review round 10).
     const required: (keyof PatientDemographicsPatch)[] = [
       'firstName',
       'lastName',
+      'dateOfBirth',
       'gender',
       'phoneNumberPrimary',
     ];

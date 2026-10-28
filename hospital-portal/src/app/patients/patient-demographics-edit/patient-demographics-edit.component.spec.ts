@@ -105,6 +105,14 @@ describe('PatientDemographicsEditComponent (QA D926)', () => {
     });
   });
 
+  it('review round 10: a cleared date of birth is refused, never sent as a silent no-op', () => {
+    const c = create().componentInstance;
+    c.form.dateOfBirth = '';
+    c.submit();
+    expect(patients.patchDemographics).not.toHaveBeenCalled();
+    expect(c.error()).toBe('PATIENTS.EDIT_REQUIRED_MISSING');
+  });
+
   it('review round 8: a legacy composed address sends only its street, never the city and country again', () => {
     patients = jasmine.createSpyObj<PatientService>('PatientService', ['patchDemographics']);
     toast = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error']);
