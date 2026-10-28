@@ -80,6 +80,15 @@ public interface BillingInvoiceService {
      * check-in transaction.
      */
     void recordCheckInCopay(com.example.hms.model.Encounter encounter, java.math.BigDecimal amount, UUID recordedBy);
+
+    /**
+     * QA D975: the check-in copay paid by {@code method} (cash when null),
+     * with its reference (required for Mobile Money and cards). Returns the
+     * confirmed payment row, so the desk can print its receipt; null when
+     * the amount is not positive.
+     */
+    com.example.hms.model.PaymentTransaction recordCheckInCopay(com.example.hms.model.Encounter encounter,
+        java.math.BigDecimal amount, com.example.hms.enums.PaymentMethod method, String reference, UUID recordedBy);
     /** QA D209: KPI totals over every invoice in the caller's scope. */
     com.example.hms.payload.dto.BillingSummaryDTO summarize(Locale locale);
 }

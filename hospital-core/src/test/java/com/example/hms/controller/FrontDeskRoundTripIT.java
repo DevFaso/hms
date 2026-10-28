@@ -108,6 +108,7 @@ class FrontDeskRoundTripIT extends BaseIT {
     @Autowired private AppointmentRepository appointmentRepository;
     @Autowired private PatientInsuranceRepository insuranceRepository;
     @Autowired private PatientRecallRepository recallRepository;
+    @Autowired private com.example.hms.repository.EncounterRepository encounterRepository;
 
     private Organization organization;
     private Hospital hospital;
@@ -157,6 +158,11 @@ class FrontDeskRoundTripIT extends BaseIT {
     private void cleanUp() {
         recallRepository.deleteAll();
         insuranceRepository.deleteAll();
+        // The flow-board round trip writes an encounter (and its history).
+        org.springframework.jdbc.core.JdbcTemplate jdbc =
+            applicationContext.getBean(org.springframework.jdbc.core.JdbcTemplate.class);
+        jdbc.update("DELETE FROM clinical.encounter_history");
+        encounterRepository.deleteAll();
         appointmentRepository.deleteAll();
         // D926 corrects the address, which files an address-history row.
         applicationContext.getBean(com.example.hms.repository.PatientAddressHistoryRepository.class).deleteAll();
@@ -350,6 +356,99 @@ class FrontDeskRoundTripIT extends BaseIT {
             .andExpect(jsonPath("$[*].id", hasItem(aicha.getId().toString())));
     }
 
+    // ------------------------------------------- the other write endpoints
+
+    @Test
+    @DisplayName("PUT /patients/{id} round trip: the replaced fields are stored, the phone in E.164")
+    void aPatientPutPersists() throws Exception {
+        mockMvc.perform(put(API + "/patients/{id}", aicha.getId()).contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"firstName":"Aïcha","lastName":"Kaboré","dateOfBirth":"1991-07-22","gender":"F",
+                     "phoneNumberPrimary":"70 16 10 99","city":"Koudougou","country":"Burkina Faso",
+                     "emergencyContactName":"Adjaratou Kaboré","emergencyContactRelationship":"Mère",
+                     "userId":"%s","hospitalId":"%s"}
+                    """.formatted(aicha.getUser().getId(), hospital.getId()))
+                .with(asReceptionist()))
+            .andExpect(status().isOk());
+
+        Patient stored = patientRepository.findById(aicha.getId()).orElseThrow();
+        assertThat(stored.getCity()).isEqualTo("Koudougou");
+        assertThat(stored.getEmergencyContactRelationship()).isEqualTo("Mère");
+        assertThat(stored.getPhoneNumberPrimary()).isEqualTo("+22670161099");
+    }
+
+    @Test
+    @DisplayName("PUT /patient-insurances/{id} and /{id}/link round trips: the edit and the primary flag are stored")
+    void insuranceEditsPersist() throws Exception {
+        mockMvc.perform(put(API + "/patient-insurances/link").contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"patientId":"%s","hospitalId":"%s","payerCode":"CNAMU","policyNumber":"AMU-1"}
+                    """.formatted(aicha.getId(), hospital.getId()))
+                .with(asReceptionist()))
+            .andExpect(status().isOk());
+        UUID insuranceId = insuranceRepository.findAll().get(0).getId();
+
+        mockMvc.perform(put(API + "/patient-insurances/{id}", insuranceId).contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"patientId":"%s","providerName":"Caisse Nationale AMU","policyNumber":"AMU-2"}
+                    """.formatted(aicha.getId()))
+                .with(asReceptionist()))
+            .andExpect(status().isOk());
+        mockMvc.perform(put(API + "/patient-insurances/{id}/link", insuranceId).contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"patientId":"%s","hospitalId":"%s","primary":true}
+                    """.formatted(aicha.getId(), hospital.getId()))
+                .with(asReceptionist()))
+            .andExpect(status().isOk());
+
+        var stored = insuranceRepository.findById(insuranceId).orElseThrow();
+        assertThat(stored.getProviderName()).isEqualTo("Caisse Nationale AMU");
+        assertThat(stored.getPolicyNumber()).isEqualTo("AMU-2");
+    }
+
+    @Test
+    @DisplayName("PUT /assignments/{id} round trip: the hospital admin's edit is stored")
+    void anAssignmentEditPersists() throws Exception {
+        User admin = userRepository.save(user("hadm"));
+        assignmentRepository.save(assignment(admin, role("ROLE_HOSPITAL_ADMIN")));
+        User nurse = userRepository.save(user("nur"));
+        UserRoleHospitalAssignment nurseRow = assignmentRepository.save(assignment(nurse, role("ROLE_NURSE")));
+        LocalDate start = LocalDate.now().minusDays(3);
+
+        mockMvc.perform(put(API + "/assignments/{id}", nurseRow.getId()).contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {"userId":"%s","hospitalId":"%s","roleId":"%s","startDate":"%s"}
+                    """.formatted(nurse.getId(), hospital.getId(), nurseRow.getRole().getId(), start))
+                .with(as(admin, "ROLE_HOSPITAL_ADMIN")))
+            .andExpect(status().isOk());
+
+        assertThat(assignmentRepository.findById(nurseRow.getId()).orElseThrow().getStartDate()).isEqualTo(start);
+    }
+
+    @Test
+    @DisplayName("PATCH /reception/encounters/{id}/status round trip: the desk's move is stored")
+    void aFlowBoardMovePersists() throws Exception {
+        com.example.hms.model.Encounter visit = encounterRepository.save(com.example.hms.model.Encounter.builder()
+            .patient(aicha).staff(doctor).hospital(hospital).assignment(doctorAssignment).department(department)
+            .encounterType(com.example.hms.enums.EncounterType.CONSULTATION)
+            .encounterDate(LocalDateTime.now()).status(com.example.hms.enums.EncounterStatus.ARRIVED)
+            .code("R16ENC-" + nextId()).build());
+
+        mockMvc.perform(patch(API + "/reception/encounters/{id}/status", visit.getId()).contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"status\":\"WAITING_FOR_PHYSICIAN\"}")
+                .with(asReceptionist()))
+            .andExpect(status().isNoContent());
+
+        assertThat(encounterRepository.findById(visit.getId()).orElseThrow().getStatus())
+            .isEqualTo(com.example.hms.enums.EncounterStatus.WAITING_FOR_PHYSICIAN);
+    }
+
     // ------------------------------------------------------------------ helpers
 
     private String appointmentBody(Patient patient, LocalDate date, String start, String end, String notes) {
@@ -412,16 +511,20 @@ class FrontDeskRoundTripIT extends BaseIT {
     }
 
     private RequestPostProcessor asReceptionist() {
-        Collection<GrantedAuthority> authorities = List.of(new SimpleGrantedAuthority(ROLE_RECEPTIONIST));
-        CustomUserDetails principal = new CustomUserDetails(receptionist.getId(), receptionist.getUsername(),
-            receptionist.getPasswordHash(), true, authorities);
-        Authentication auth = new UsernamePasswordAuthenticationToken(principal, receptionist.getPasswordHash(),
+        return as(receptionist, ROLE_RECEPTIONIST);
+    }
+
+    private RequestPostProcessor as(User caller, String roleCode) {
+        Collection<GrantedAuthority> authorities = List.of(new SimpleGrantedAuthority(roleCode));
+        CustomUserDetails principal = new CustomUserDetails(caller.getId(), caller.getUsername(),
+            caller.getPasswordHash(), true, authorities);
+        Authentication auth = new UsernamePasswordAuthenticationToken(principal, caller.getPasswordHash(),
             authorities);
         return request -> {
             SecurityContextHolder.getContext().setAuthentication(auth);
             HospitalContextHolder.setContext(HospitalContext.builder()
-                .principalUserId(receptionist.getId())
-                .principalUsername(receptionist.getUsername())
+                .principalUserId(caller.getId())
+                .principalUsername(caller.getUsername())
                 .activeOrganizationId(organization.getId())
                 .activeHospitalId(hospital.getId())
                 .permittedOrganizationIds(Set.of(organization.getId()))

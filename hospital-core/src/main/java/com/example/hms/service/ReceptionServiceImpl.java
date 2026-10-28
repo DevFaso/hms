@@ -1043,9 +1043,12 @@ public class ReceptionServiceImpl implements ReceptionService {
 
         // 3c. QA D149: the copay collected at the desk becomes a paid invoice
         // on this encounter, with its cash payment in the ledger.
+        // QA D975: in the method the desk chose, with its reference.
+        com.example.hms.model.PaymentTransaction copayPayment = null;
         if (copay != null && copay.signum() > 0) {
             UUID actorUserId = userRepo.findByUsername(actorUsername).map(u -> u.getId()).orElse(null);
-            billingInvoiceService.recordCheckInCopay(encounter, copay, actorUserId);
+            copayPayment = billingInvoiceService.recordCheckInCopay(encounter, copay,
+                request.getCopayMethod(), request.getCopayReference(), actorUserId);
         }
 
         // 4. Audit trail
@@ -1076,6 +1079,9 @@ public class ReceptionServiceImpl implements ReceptionService {
                 .patientName(patientName)
                 .arrivalTimestamp(encounter.getArrivalTimestamp())
                 .chiefComplaint(encounter.getChiefComplaint())
+                .copayInvoiceId(copayPayment != null && copayPayment.getInvoice() != null
+                        ? copayPayment.getInvoice().getId() : null)
+                .copayPaymentId(copayPayment != null ? copayPayment.getId() : null)
                 .message(messageSource.getMessage("reception.r7.checkedIn", new Object[] {patientName},
                         org.springframework.context.i18n.LocaleContextHolder.getLocale()))
                 .build();

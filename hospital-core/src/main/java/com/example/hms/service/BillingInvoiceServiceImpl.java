@@ -1292,8 +1292,20 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     @Override
     @Transactional
     public void recordCheckInCopay(Encounter encounter, BigDecimal amount, UUID recordedBy) {
+        recordCheckInCopay(encounter, amount, PaymentMethod.CASH, null, recordedBy);
+    }
+
+    @Override
+    @Transactional
+    public PaymentTransaction recordCheckInCopay(Encounter encounter, BigDecimal amount, PaymentMethod method,
+                                                 String reference, UUID recordedBy) {
         if (amount == null || amount.signum() <= 0) {
-            return;
+            return null;
+        }
+        // QA D975: every copay used to be recorded as cash with no reference.
+        PaymentMethod copayMethod = method == null ? PaymentMethod.CASH : method;
+        if (REFERENCE_REQUIRED.contains(copayMethod) && (reference == null || reference.isBlank())) {
+            throw new BusinessException("billing.payment.referenceRequired");
         }
         requireWholeAmount(amount);
         Hospital hospital = encounter.getHospital();
@@ -1313,8 +1325,9 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             .build();
         BillingInvoice saved = invoiceRepository.saveAndFlush(invoice);
         BillingInvoice settled = settle(saved, amount);
-        PaymentTransaction row = savePaymentRow(settled, amount, PaymentMethod.CASH, null, null, recordedBy,
+        PaymentTransaction row = savePaymentRow(settled, amount, copayMethod, reference, null, recordedBy,
             PaymentStatus.CONFIRMED);
         auditPaymentAfterCommit(AuditEventType.PAYMENT_POSTED, recordedBy, settled, row.getId(), "Check-in copay recorded");
+        return row;
     }
 }

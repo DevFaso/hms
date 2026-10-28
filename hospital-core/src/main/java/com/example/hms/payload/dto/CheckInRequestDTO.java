@@ -31,6 +31,16 @@ public class CheckInRequestDTO {
     /** Co-pay amount collected at check-in (nullable — not all visits have a co-pay). */
     private BigDecimal copayAmount;
 
+    /**
+     * QA D975: how the copay was paid. Null means cash, as before; Mobile
+     * Money and cards need {@link #copayReference}.
+     */
+    private com.example.hms.enums.PaymentMethod copayMethod;
+
+    /** QA D975: the operator or terminal reference of a non-cash copay. */
+    @jakarta.validation.constraints.Size(max = 100)
+    private String copayReference;
+
     /** Whether the receptionist confirmed patient identity (photo ID, DOB, etc.). */
     @Builder.Default
     private boolean identityConfirmed = false;

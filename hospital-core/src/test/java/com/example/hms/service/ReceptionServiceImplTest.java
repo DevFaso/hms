@@ -1497,8 +1497,33 @@ class ReceptionServiceImplTest {
 
             org.mockito.ArgumentCaptor<Encounter> encounter = org.mockito.ArgumentCaptor.forClass(Encounter.class);
             verify(billingInvoiceService).recordCheckInCopay(encounter.capture(),
-                eq(new java.math.BigDecimal("2000")), any());
+                eq(new java.math.BigDecimal("2000")), any(), any(), any());
             assertThat(encounter.getValue().getId()).isEqualTo(response.getEncounterId());
+        }
+
+        @Test
+        @DisplayName("QA D975: the copay is recorded in the method and with the reference the desk chose, and the receipt ids come back")
+        void copayKeepsItsMethodAndReference_D975() {
+            Appointment appointment = scheduledAppointment();
+            CheckInRequestDTO request = CheckInRequestDTO.builder()
+                    .appointmentId(appointment.getId())
+                    .copayAmount(new java.math.BigDecimal("1500"))
+                    .copayMethod(com.example.hms.enums.PaymentMethod.MOBILE_MONEY)
+                    .copayReference("OM-778812")
+                    .identityConfirmed(true)
+                    .build();
+            com.example.hms.model.BillingInvoice invoice = new com.example.hms.model.BillingInvoice();
+            invoice.setId(UUID.randomUUID());
+            com.example.hms.model.PaymentTransaction row = new com.example.hms.model.PaymentTransaction();
+            row.setId(UUID.randomUUID());
+            row.setInvoice(invoice);
+            when(billingInvoiceService.recordCheckInCopay(any(), any(),
+                eq(com.example.hms.enums.PaymentMethod.MOBILE_MONEY), eq("OM-778812"), any())).thenReturn(row);
+
+            CheckInResponseDTO response = service.checkInPatient(request, hospitalId, "receptionist1");
+
+            assertThat(response.getCopayPaymentId()).isEqualTo(row.getId());
+            assertThat(response.getCopayInvoiceId()).isEqualTo(invoice.getId());
         }
 
         @Test
@@ -1529,7 +1554,7 @@ class ReceptionServiceImplTest {
 
             service.checkInPatient(request, hospitalId, "receptionist1");
 
-            verify(billingInvoiceService, never()).recordCheckInCopay(any(), any(), any());
+            verify(billingInvoiceService, never()).recordCheckInCopay(any(), any(), any(), any(), any());
         }
 
         @Test
