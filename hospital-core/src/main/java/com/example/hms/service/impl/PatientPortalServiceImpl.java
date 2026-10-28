@@ -778,6 +778,11 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         return appointmentMapper.toAppointmentResponseDTO(appointment);
     }
 
+    /** The status a visit the patient moves lands on: SCHEDULED, a tentative PENDING one staying PENDING. */
+    private static AppointmentStatus movedStatus(AppointmentStatus current) {
+        return current == AppointmentStatus.PENDING ? AppointmentStatus.PENDING : AppointmentStatus.SCHEDULED;
+    }
+
     /**
      * The wall-clock time at the hospital (its organisation's zone, else the
      * server's): a patient's "past" slot is judged on the hospital's clock,
@@ -838,9 +843,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         // reminders' status checks treated it as a different state. A tentative
         // booking (PENDING, the check-out follow-up of QA D526) stays tentative:
         // moving it is not the clinic confirming it (review round 13).
-        if (appointment.getStatus() != AppointmentStatus.PENDING) {
-            appointment.setStatus(AppointmentStatus.SCHEDULED);
-        }
+        appointment.setStatus(movedStatus(appointment.getStatus()));
         if (dto.getReason() != null && !dto.getReason().isBlank()) {
             String existingNotes = appointment.getNotes() != null ? appointment.getNotes() : "";
             appointment.setNotes(existingNotes + (existingNotes.isEmpty() ? "" : " | ")
