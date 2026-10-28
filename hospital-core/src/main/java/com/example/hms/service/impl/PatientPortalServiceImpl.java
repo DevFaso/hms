@@ -1967,17 +1967,16 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         // Only allow pre-check-in for upcoming SCHEDULED/CONFIRMED appointments
         if (appointment.getStatus() != com.example.hms.enums.AppointmentStatus.SCHEDULED
                 && appointment.getStatus() != com.example.hms.enums.AppointmentStatus.CONFIRMED) {
-            throw new IllegalStateException(
-                    "Pre-check-in is only available for SCHEDULED or CONFIRMED appointments. Current: "
-                            + appointment.getStatus());
+            // QA D940: in the patient's language, not a hard-coded English string.
+            throw new BusinessException("portal.precheckin.status");
         }
 
-        // Validate timing: 1-7 days before appointment
+        // Validate timing: from 7 days before the appointment to the day itself
         java.time.LocalDate today = java.time.LocalDate.now();
         java.time.LocalDate apptDate = appointment.getAppointmentDate();
         long daysUntil = java.time.temporal.ChronoUnit.DAYS.between(today, apptDate);
         if (daysUntil < 0 || daysUntil > 7) {
-            throw new BusinessException("Pre-check-in is available 1–7 days before your appointment.");
+            throw new BusinessException("portal.precheckin.window");
         }
 
         // 1) Update demographics if provided
