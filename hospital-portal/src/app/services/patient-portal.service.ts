@@ -427,6 +427,8 @@ interface EncounterApiResponse {
   departmentName: string;
   hospitalName: string;
   appointmentReason: string;
+  /** QA D981: the reason the visit or stay was opened (an admission's reason too). */
+  chiefComplaint?: string;
   notes: string;
   status: string;
   note?: {
@@ -1185,7 +1187,10 @@ export class PatientPortalService {
           type: e.encounterType ?? '',
           providerName: e.staffName ?? e.staffFullName ?? '',
           department: e.departmentName ?? '',
-          chiefComplaint: e.note?.chiefComplaint ?? '',
+          // QA D981: the note's complaint, else the visit's own reason (an
+          // admission's reason lives there), else the booking reason.
+          chiefComplaint: e.note?.chiefComplaint || e.chiefComplaint || e.appointmentReason || '',
+          // The doctor's assessment, labelled as such (it is not a coded diagnosis).
           diagnosisSummary: e.note?.assessment ?? '',
           status: e.status ?? '',
           notes: e.notes ?? '',

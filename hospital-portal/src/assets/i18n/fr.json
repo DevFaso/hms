@@ -5137,6 +5137,8 @@
   },
   "PORTAL": {
     "VITALS": {
+      "ABOVE_NORMAL": "Au-dessus de la normale",
+      "BELOW_NORMAL": "En dessous de la normale",
       "TITLE": "Mes signes vitaux",
       "LOADING": "Chargement des signes vitaux…",
       "EMPTY_TITLE": "Aucun signe vital enregistré",
@@ -5272,6 +5274,7 @@
       "PENDING_INTERPRETATION": "Analyse en cours — votre résultat s’affichera ici dès que le laboratoire l’aura validé."
     },
     "VISITS": {
+      "ASSESSMENT": "Évaluation du médecin",
       "TITLE": "Historique des visites",
       "LOADING": "Chargement de l’historique…",
       "EMPTY_TITLE": "Aucune visite enregistrée",
@@ -5280,8 +5283,7 @@
       "DATE": "Date",
       "PROVIDER": "Praticien",
       "DEPARTMENT": "Service",
-      "CHIEF_COMPLAINT": "Motif principal",
-      "DIAGNOSIS": "Diagnostic",
+      "CHIEF_COMPLAINT": "Motif de la venue",
       "STATUS": "Statut",
       "NOT_ASSIGNED": "Non assigné",
       "GENERAL": "Général",
@@ -6270,8 +6272,12 @@
         "SCHEDULED": "Planifié"
       },
       "NOTIFICATION_TYPE": {
+        "ADMIN_MESSAGE": "Message de l’administration",
+        "ANNOUNCEMENT": "Annonce",
         "APPOINTMENT_REMINDER": "Rappel de rendez-vous",
         "BREAK_GLASS_OPT_OUT_OVERRIDE": "Accès d’urgence à votre dossier",
+        "CHAT_MESSAGE": "Nouveau message",
+        "CONSULTATION_UPDATE": "Avis spécialisé",
         "CRITICAL_IMAGING_FINDING": "Découverte d'imagerie critique",
         "CRITICAL_IMAGING_FINDING_ESCALATION": "Escalade — découverte d'imagerie critique",
         "CRITICAL_LAB_RESULT": "Résultat de laboratoire critique",
@@ -6279,12 +6285,14 @@
         "DISCHARGE_SUMMARY": "Compte rendu de sortie",
         "LAB_ORDER_RECEIVED": "Demande d’analyse reçue",
         "LICENSE_EXPIRY": "Expiration de licence",
+        "MATERNITY_ALERT": "Alerte de maternité",
         "MEDICATION_REFILL": "Renouvellement d'ordonnance",
         "NEWS2_ESCALATION": "Escalade NEWS2",
         "OBSTETRIC_ALERT": "Alerte obstétricale urgente",
         "OBSTETRIC_ALERT_ESCALATION": "Escalade d’alerte obstétricale urgente",
         "PHARMACY_EVENT": "Information de la pharmacie",
         "POSITIVE_CULTURE_RESULT": "Culture positive",
+        "PRENATAL_REMINDER": "Rappel de consultation prénatale",
         "PRO_CRITICAL_ITEM": "Élément PRO critique",
         "PRO_CRITICAL_ITEM_ESCALATION": "Escalade — élément PRO critique",
         "PRO_SCREEN_POSITIVE": "Dépistage PRO positif",

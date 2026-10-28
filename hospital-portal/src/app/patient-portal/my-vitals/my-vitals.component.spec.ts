@@ -28,6 +28,39 @@ describe('MyVitalsComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  describe('out-of-range readings (QA D980)', () => {
+    const reading = (type: string, value: string) =>
+      ({
+        id: type,
+        type,
+        value,
+        unit: '',
+        recordedAt: '2026-10-27T08:00:00',
+        source: 'NURSE',
+      }) as never;
+
+    it('flags 142/90 as above normal', () => {
+      expect(component.rangeFlag(reading('BLOOD_PRESSURE', '142/90'))).toBe('HIGH');
+      expect(component.rangeFlag(reading('BLOOD_PRESSURE', '118/76'))).toBeNull();
+      expect(component.rangeFlag(reading('BLOOD_PRESSURE', '85/55'))).toBe('LOW');
+    });
+
+    it('flags the other readings against the range printed under them', () => {
+      expect(component.rangeFlag(reading('TEMPERATURE', '39,2'))).toBe('HIGH');
+      expect(component.rangeFlag(reading('OXYGEN_SATURATION', '91'))).toBe('LOW');
+      expect(component.rangeFlag(reading('HEART_RATE', '72'))).toBeNull();
+      expect(component.rangeFlag(reading('WEIGHT', '72'))).toBeNull();
+    });
+
+    it('says it in words on the card', () => {
+      component.vitals.set([reading('BLOOD_PRESSURE', '142/90')]);
+      component.expandedGroupId.set(component.groupedVitals()[0].id);
+      fixture.detectChanges();
+      const flag = fixture.nativeElement.querySelector('[data-testid="flag-BLOOD_PRESSURE"]');
+      expect(flag?.getAttribute('data-flag')).toBe('HIGH');
+    });
+  });
+
   it('should show empty state when no vitals', () => {
     expect(component.vitals().length).toBe(0);
     expect(component.loading()).toBe(false);

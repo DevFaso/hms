@@ -5137,6 +5137,8 @@
   },
   "PORTAL": {
     "VITALS": {
+      "ABOVE_NORMAL": "Above normal",
+      "BELOW_NORMAL": "Below normal",
       "TITLE": "My Vitals",
       "LOADING": "Loading vitals...",
       "EMPTY_TITLE": "No vital signs recorded",
@@ -5272,6 +5274,7 @@
       "PENDING_INTERPRETATION": "In progress — your result will appear here once the laboratory has released it."
     },
     "VISITS": {
+      "ASSESSMENT": "Doctor's assessment",
       "TITLE": "Visit History",
       "LOADING": "Loading visit history...",
       "EMPTY_TITLE": "No visit records",
@@ -5280,8 +5283,7 @@
       "DATE": "Date",
       "PROVIDER": "Provider",
       "DEPARTMENT": "Department",
-      "CHIEF_COMPLAINT": "Chief Complaint",
-      "DIAGNOSIS": "Diagnosis",
+      "CHIEF_COMPLAINT": "Reason for the visit",
       "STATUS": "Status",
       "NOT_ASSIGNED": "Not assigned",
       "GENERAL": "General",
@@ -6304,8 +6306,12 @@
         "SCHEDULED": "Scheduled"
       },
       "NOTIFICATION_TYPE": {
+        "ADMIN_MESSAGE": "Message from the administration",
+        "ANNOUNCEMENT": "Announcement",
         "APPOINTMENT_REMINDER": "Appointment Reminder",
         "BREAK_GLASS_OPT_OUT_OVERRIDE": "Emergency access to your record",
+        "CHAT_MESSAGE": "New message",
+        "CONSULTATION_UPDATE": "Specialist consultation",
         "CRITICAL_IMAGING_FINDING": "Critical Imaging Finding",
         "CRITICAL_IMAGING_FINDING_ESCALATION": "Critical Imaging Finding Escalation",
         "CRITICAL_LAB_RESULT": "Critical Lab Result",
@@ -6313,12 +6319,14 @@
         "DISCHARGE_SUMMARY": "Discharge Summary",
         "LAB_ORDER_RECEIVED": "Lab order received",
         "LICENSE_EXPIRY": "License Expiry",
+        "MATERNITY_ALERT": "Maternity alert",
         "MEDICATION_REFILL": "Medication Refill",
         "NEWS2_ESCALATION": "NEWS2 escalation",
         "OBSTETRIC_ALERT": "Urgent Obstetric Alert",
         "OBSTETRIC_ALERT_ESCALATION": "Urgent Obstetric Alert Escalation",
         "PHARMACY_EVENT": "Pharmacy update",
         "POSITIVE_CULTURE_RESULT": "Positive Culture Result",
+        "PRENATAL_REMINDER": "Antenatal visit reminder",
         "PRO_CRITICAL_ITEM": "Critical PRO Item",
         "PRO_CRITICAL_ITEM_ESCALATION": "Critical PRO Item Escalation",
         "PRO_SCREEN_POSITIVE": "Positive PRO Screen",
