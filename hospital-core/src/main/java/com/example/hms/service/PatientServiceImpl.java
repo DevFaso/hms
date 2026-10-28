@@ -419,6 +419,9 @@ public class PatientServiceImpl implements PatientService {
             : hospitalRepository.findById(phoneHospitalId).orElse(null));
         addressHistoryRecorder.recordIfMoved(patient, before);
         Patient updatedPatient = patientRepository.save(patient);
+        // QA D926: the full replace is audited like the PATCH (the controller
+        // opts out of the generic write audit on the strength of this row).
+        auditPatientUpdate(updatedPatient, "Patient demographics replaced");
 
         return buildPatientDto(updatedPatient, dto.getHospitalId());
     }
@@ -526,7 +529,7 @@ public class PatientServiceImpl implements PatientService {
         if (updated) {
             patientRepository.save(patient);
             if (!changedFields.isEmpty()) {
-                auditPatientUpdate(patient, changedFields);
+                auditPatientUpdate(patient, "Patient demographics updated: " + String.join(", ", changedFields));
             }
         }
 
@@ -593,7 +596,7 @@ public class PatientServiceImpl implements PatientService {
      * QA D926: a demographics correction is audited like every other patient
      * write. The description names the fields changed, never their values.
      */
-    private void auditPatientUpdate(Patient patient, List<String> changedFields) {
+    private void auditPatientUpdate(Patient patient, String description) {
         try {
             auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                 .eventType(AuditEventType.PATIENT_UPDATE)
@@ -603,7 +606,7 @@ public class PatientServiceImpl implements PatientService {
                 .patientId(patient.getId())
                 .userId(roleValidator.getCurrentUserId())
                 .userName(SecurityUtils.getCurrentUsername())
-                .eventDescription("Patient demographics updated: " + String.join(", ", changedFields))
+                .eventDescription(description)
                 .build());
         } catch (RuntimeException ex) {
             log.warn("Failed to emit demographics audit for patient {}: {}", patient.getId(), ex.getMessage());

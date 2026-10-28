@@ -1503,6 +1503,8 @@
     "WRITE_DELETE": "Suppression : {{entity}}",
     "WRITE_ENTITY_UNKNOWN": "enregistrement",
     "DESC": {
+      "PATIENT_DEMOGRAPHICS_REPLACED": "Informations du patient remplacées",
+      "PATIENT_DEMOGRAPHICS_UPDATED": "Informations du patient corrigées : {{fields}}",
       "PATIENT_RECORD_VIEWED": "Dossier patient consulté",
       "USER_PROFILE_UPDATED": "Profil utilisateur mis à jour",
       "USER_CREATED": "Nouveau compte utilisateur créé",

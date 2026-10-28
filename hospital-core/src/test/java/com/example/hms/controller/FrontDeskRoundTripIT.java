@@ -296,6 +296,15 @@ class FrontDeskRoundTripIT extends BaseIT {
         assertThat(stored.getEmergencyContactName()).isEqualTo("Mariam Ouattara");
         assertThat(stored.getEmergencyContactPhone()).isEqualTo("+22670001014");
         assertThat(stored.getEmergencyContactRelationship()).isEqualTo("Mère");
+        // The correction is audited, naming the fields and never their values.
+        var audit = applicationContext.getBean(com.example.hms.repository.AuditEventLogRepository.class).findAll()
+            .stream()
+            .filter(a -> a.getEventType() == com.example.hms.enums.AuditEventType.PATIENT_UPDATE
+                && aicha.getId().toString().equals(a.getResourceId())
+                && a.getEventDescription() != null && a.getEventDescription().startsWith("Patient demographics"))
+            .toList();
+        assertThat(audit).hasSize(1);
+        assertThat(audit.get(0).getEventDescription()).contains("firstName").doesNotContain("Aïchatou");
     }
 
     @Test

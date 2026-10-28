@@ -956,6 +956,8 @@ class UserServiceImplTest {
             user.setActive(false);
             user.setActivatedBeforeDelete(true);
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            // The super-admin, who sees deleted accounts, gets the actionable answer.
+            when(accountAccess.callerSeesDeletedAccounts()).thenReturn(true);
 
             assertThatThrownBy(() -> userService.deleteUser(userId))
                 .isInstanceOf(com.example.hms.exception.ConflictException.class);
@@ -1123,6 +1125,7 @@ class UserServiceImplTest {
             user.setDeleted(true);
             user.setActive(false);
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(accountAccess.callerSeesDeletedAccounts()).thenReturn(true);
 
             assertThatThrownBy(() -> userService.deleteUser(userId))
                 .isInstanceOf(com.example.hms.exception.ConflictException.class);
@@ -1527,12 +1530,29 @@ class UserServiceImplTest {
         @DisplayName("a deleted account cannot be edited (D126)")
         void deletedAccountIsNotEditable() {
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(accountAccess.callerSeesDeletedAccounts()).thenReturn(true);
             user.setDeleted(true);
             UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
             dto.setFirstName("Ghost");
 
             assertThatThrownBy(() -> userService.updateUser(userId, dto))
                     .isInstanceOf(BusinessException.class);
+            verify(userRepository, never()).save(any(User.class));
+        }
+
+        @Test
+        @DisplayName("QA D920: for anyone but the super-admin a deleted account is missing, on PUT and DELETE alike")
+        void deletedAccountIsMissingForAHospitalAdmin() {
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(accountAccess.callerSeesDeletedAccounts()).thenReturn(false);
+            user.setDeleted(true);
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setFirstName("Ghost");
+
+            assertThatThrownBy(() -> userService.updateUser(userId, dto))
+                    .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+            assertThatThrownBy(() -> userService.deleteUser(userId))
+                    .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
             verify(userRepository, never()).save(any(User.class));
         }
 
