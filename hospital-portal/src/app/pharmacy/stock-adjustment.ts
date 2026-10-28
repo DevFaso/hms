@@ -287,6 +287,19 @@ export class StockAdjustmentComponent implements OnInit {
     });
   }
 
+  /**
+   * QA D992 class: the ledger reference of the chosen fill, as a person reads
+   * it on the shelf and in the ledger: its lot and the minute it was given
+   * ("lot R16-MOR-01 2026-10-27 09:00"). Empty when no fill is chosen.
+   */
+  private returnFillReference(): string {
+    const fill = this.selectedReturnDispense();
+    if (!fill) return '';
+    const when = fill.dispensedAt ? fill.dispensedAt.replace('T', ' ').substring(0, 16) : '';
+    const ref = [fill.lotNumber ? `lot ${fill.lotNumber}` : '', when].filter(Boolean).join(' ');
+    return ref || (fill.medicationName ?? '');
+  }
+
   /** QA D932: the fill the return is booked against, if one is chosen. */
   selectedReturnDispense(): ReturnableDispense | undefined {
     return this.returnableDispenses().find((d) => d.dispenseId === this.returnDispenseId);
@@ -489,12 +502,10 @@ export class StockAdjustmentComponent implements OnInit {
     } else if (this.isReturn()) {
       // QA D932: the dispense IS a UUID; the server books the return against
       // it and caps it at what that fill delivered and did not get back. The
-      // ledger reason carries the typed reference, else a short dispense ref
-      // (never the patient's name).
+      // ledger reason carries the typed reference, else the fill's lot and
+      // time (never the patient's name, never a slice of the id: QA D992).
       this.form.referenceId = this.returnDispenseId || undefined;
-      const ref =
-        this.returnReference.trim() ||
-        (this.returnDispenseId ? `D-${this.returnDispenseId.slice(0, 8)}` : '');
+      const ref = this.returnReference.trim() || this.returnFillReference();
       this.form.reason = `RETURN ref ${ref}`;
     }
   }

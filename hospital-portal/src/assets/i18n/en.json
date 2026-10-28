@@ -939,7 +939,8 @@
     "SIGN_OFF": "Sign off",
     "SUBTITLE": "Every emergency-access session at this hospital, to be signed off by an administrator.",
     "TITLE": "Break-glass review",
-    "MRN": "MRN"
+    "MRN": "MRN",
+    "PATIENT_UNNAMED": "Patient (no name on file)"
   },
   "STORYBOARD": {
     "ARIA_LABEL": "Patient storyboard banner",
@@ -11986,7 +11987,8 @@
       "ACCEPTED": "Accepted",
       "REJECTED": "Rejected",
       "PAID": "Paid"
-    }
+    },
+    "PATIENT_UNNAMED": "Patient (no name on file)"
   },
   "PHARMACY_CHECKOUT": {
     "TITLE": "Pharmacy checkout",

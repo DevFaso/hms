@@ -939,7 +939,8 @@
     "SIGN_OFF": "Firmar",
     "SUBTITLE": "Cada sesión de acceso de emergencia de este hospital, pendiente de la firma de un administrador.",
     "TITLE": "Revisión de accesos de emergencia",
-    "MRN": "N.º de historia"
+    "MRN": "N.º de historia",
+    "PATIENT_UNNAMED": "Paciente (sin nombre en el expediente)"
   },
   "STORYBOARD": {
     "ARIA_LABEL": "Banner de resumen del paciente",
@@ -11986,7 +11987,8 @@
       "ACCEPTED": "Aceptada",
       "REJECTED": "Rechazada",
       "PAID": "Pagada"
-    }
+    },
+    "PATIENT_UNNAMED": "Paciente (sin nombre en el expediente)"
   },
   "PHARMACY_CHECKOUT": {
     "TITLE": "Cobro en farmacia",

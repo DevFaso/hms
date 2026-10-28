@@ -672,6 +672,8 @@ export interface PharmacyClaimResponse {
   id: string;
   dispenseId: string;
   patientId: string;
+  /** QA D992 class: shown instead of a slice of the patient id. */
+  patientName?: string | null;
   hospitalId: string;
   coverageReference?: string;
   claimStatus: PharmacyClaimStatus;

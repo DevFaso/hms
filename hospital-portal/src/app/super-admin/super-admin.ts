@@ -60,7 +60,10 @@ interface ActivityTab {
 }
 
 interface ActivityRow {
+  /** The record's id: the row's identity for tracking, never shown (QA D992). */
   id: string;
+  /** The human code the record carries (encounter, order or invoice number, MRN…), or ''. */
+  code: string;
   summary: string;
   timestamp: string | null;
 }
@@ -547,9 +550,29 @@ export class SuperAdminComponent implements OnInit {
     referrals: ['patientName', 'receivingHospitalName', 'referralType', 'status'],
   };
 
+  /** Human codes a recent-activity record may carry, most specific first. */
+  private static readonly ACTIVITY_CODE_FIELDS = [
+    'labOrderCode',
+    'encounterNumber',
+    'orderNumber',
+    'accessionNumber',
+    'invoiceNumber',
+    'referralNumber',
+    'prescriptionNumber',
+    'admissionNumber',
+    'mrn',
+    'patientMrn',
+    'labTestCode',
+  ];
+
   private toActivityRow(item: SuperAdminRecentItem, tab: ActivityKey): ActivityRow {
-    const idValue = typeof item['id'] === 'string' ? (item['id'] as string) : '';
-    const id = idValue ? idValue.slice(0, 8) : '';
+    // QA D992 class: the column showed the first 8 characters of the UUID.
+    // It now shows the human code the record carries, or nothing.
+    const id = typeof item['id'] === 'string' ? (item['id'] as string) : '';
+    const code =
+      SuperAdminComponent.ACTIVITY_CODE_FIELDS.map((field) => item[field]).find(
+        (v): v is string => typeof v === 'string' && v.trim().length > 0,
+      ) ?? '';
     const ordered = SuperAdminComponent.ACTIVITY_FIELDS[tab] ?? [];
     const stringFields = ordered
       .map((field) => item[field])
@@ -588,6 +611,7 @@ export class SuperAdminComponent implements OnInit {
       null;
     return {
       id,
+      code,
       summary: stringFields.join(' · '),
       timestamp,
     };

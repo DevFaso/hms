@@ -265,7 +265,8 @@ describe('StockAdjustmentComponent (D82 / D108)', () => {
       expect(body.transactionType).toBe('RETURN');
       expect(body.referenceId).toBe(fill.dispenseId);
       expect(body.stockLotId).toBe('lot-1');
-      expect(body.reason).toBe('RETURN ref D-3105c0de');
+      // QA D992 class: the fill's lot and time, not a slice of its id (was 'RETURN ref D-3105c0de').
+      expect(body.reason).toBe('RETURN ref lot R16-MOR-01 2026-10-27 09:00');
     });
 
     it('asks for the dispense when one exists and none is chosen, and caps the quantity', () => {

@@ -939,7 +939,8 @@
     "SIGN_OFF": "Valider",
     "SUBTITLE": "Chaque session d'accès d'urgence de cet hôpital, à valider par un administrateur.",
     "TITLE": "Revue des accès d'urgence",
-    "MRN": "N° de dossier"
+    "MRN": "N° de dossier",
+    "PATIENT_UNNAMED": "Patient (sans nom au dossier)"
   },
   "STORYBOARD": {
     "ARIA_LABEL": "Bandeau récapitulatif du patient",
@@ -11986,7 +11987,8 @@
       "ACCEPTED": "Accepté",
       "REJECTED": "Rejeté",
       "PAID": "Payé"
-    }
+    },
+    "PATIENT_UNNAMED": "Patient (sans nom au dossier)"
   },
   "PHARMACY_CHECKOUT": {
     "TITLE": "Encaissement pharmacie",

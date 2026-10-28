@@ -84,7 +84,8 @@
                   @if (s.patientName) {
                     {{ s.patientName }}
                   } @else {
-                    {{ s.patientId | slice: 0 : 8 }}…
+                    <!-- QA D992 class: the MRN below identifies the patient; never a slice of the id. -->
+                    {{ 'BREAK_GLASS_REVIEW.PATIENT_UNNAMED' | translate }}
                   }
                 </a>
                 @if (s.patientMrn) {
