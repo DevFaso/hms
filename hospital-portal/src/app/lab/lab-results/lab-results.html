@@ -167,6 +167,15 @@
                       >{{ 'LAB_RESULTS.SUPERSEDED' | translate }}</span
                     >
                   }
+                  @if (r.supersedesResultId) {
+                    <!-- QA D931: a released correction stays marked as one. -->
+                    <span
+                      class="status-badge status-correction"
+                      [title]="'LAB_RESULTS.CORRECTED_HINT' | translate"
+                      [attr.data-testid]="'corrected-' + r.id"
+                      >{{ 'LAB_RESULTS.CORRECTED' | translate }}</span
+                    >
+                  }
                   @if (r.selfReleased) {
                     <span
                       class="status-badge status-self-released"
@@ -361,6 +370,12 @@
                 r.released ? ('COMMON.YES' | translate) : ('COMMON.NO' | translate)
               }}</span>
             </div>
+            @if (r.supersedesResultId) {
+              <div class="detail-field" data-testid="detail-corrected">
+                <span class="field-label">{{ 'LAB_RESULTS.CORRECTED' | translate }}</span>
+                <span class="field-value">{{ 'LAB_RESULTS.CORRECTED_HINT' | translate }}</span>
+              </div>
+            }
             @if (r.releasedAt) {
               <div class="detail-field">
                 <span class="field-label">{{ 'LAB_RESULTS.RELEASED_AT' | translate }}</span>

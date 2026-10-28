@@ -209,6 +209,20 @@ describe('LabResultsComponent', () => {
       expect(host.querySelector('[data-testid="superseded-result-1"]')).not.toBeNull();
       expect(host.querySelector('[data-testid="correct-result-1"]')).toBeNull();
     });
+
+    it('QA D931: keeps a released correction marked "Corrected", in the list and the detail', () => {
+      fixture.detectChanges();
+      flushInit([mockResult({ released: true, supersedesResultId: 'result-0' })]);
+      fixture.detectChanges();
+
+      const host = fixture.nativeElement as HTMLElement;
+      expect(host.querySelector('[data-testid="corrected-result-1"]')?.textContent).toContain(
+        'LAB_RESULTS.CORRECTED',
+      );
+      component.viewResult(component.results()[0]);
+      fixture.detectChanges();
+      expect(host.querySelector('[data-testid="detail-corrected"]')).not.toBeNull();
+    });
   });
 
   it('should open create modal', () => {

@@ -60,6 +60,14 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
     private final com.example.hms.mapper.LabResultMapper labResultMapper;
 
     /**
+     * QA D938: an observation auto-released here tells the patient, as a
+     * release from the worklist does. Field-injected, like the switch below,
+     * so the positional constructor calls in the tests stay as they are.
+     */
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.example.hms.service.lab.LabResultReleaseNotifier releaseNotifier;
+
+    /**
      * B14 — the switch PR #716 introduces for manual entry
      * ({@code hms.lab.auto-verification.enabled}, declared once in its
      * application.properties; read here by the same key so the merge is
@@ -265,6 +273,9 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
             // replay guard recognises the retransmission rather than
             // doubling the batch.
             criticalValueNotificationService.notifyIfCritical(savedResult);
+            if (releaseNotifier != null && savedResult.isReleased()) {
+                releaseNotifier.patientResultReleased(savedResult);
+            }
         }
         return MllpInboundOutcome.ACCEPTED;
     }

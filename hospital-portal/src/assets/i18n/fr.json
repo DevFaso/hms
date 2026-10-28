@@ -3626,6 +3626,8 @@
     "EXPECTED_RESULT_SHORT": "Attendu : {{value}}"
   },
   "LAB_RESULTS": {
+    "CORRECTED": "Corrigé",
+    "CORRECTED_HINT": "Ce résultat corrige un résultat validé auparavant ; l’ancienne valeur reste au dossier, marquée remplacée.",
     "TITLE": "Résultats de laboratoire",
     "SUBTITLE": "Gérer les résultats des analyses de laboratoire",
     "LOADING": "Chargement des résultats…",
@@ -6259,6 +6261,7 @@
         "CRITICAL_LAB_RESULT_ESCALATION": "Escalade — résultat de laboratoire critique",
         "DISCHARGE_SUMMARY": "Compte rendu de sortie",
         "LAB_ORDER_RECEIVED": "Demande d’analyse reçue",
+        "LAB_RESULT": "Résultat d’analyse",
         "LICENSE_EXPIRY": "Expiration de licence",
         "MEDICATION_REFILL": "Renouvellement d'ordonnance",
         "NEWS2_ESCALATION": "Escalade NEWS2",

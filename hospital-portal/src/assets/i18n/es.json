@@ -3626,6 +3626,8 @@
     "EXPECTED_RESULT_SHORT": "Esperado: {{value}}"
   },
   "LAB_RESULTS": {
+    "CORRECTED": "Corregido",
+    "CORRECTED_HINT": "Este resultado corrige un resultado validado anteriormente; el valor anterior se conserva en el expediente, marcado como sustituido.",
     "TITLE": "Resultados de laboratorio",
     "SUBTITLE": "Gestionar los resultados de pruebas de laboratorio",
     "LOADING": "Cargando resultados…",
@@ -6293,6 +6295,7 @@
         "CRITICAL_LAB_RESULT_ESCALATION": "Escalamiento — resultado de laboratorio crítico",
         "DISCHARGE_SUMMARY": "Informe de alta",
         "LAB_ORDER_RECEIVED": "Solicitud de laboratorio recibida",
+        "LAB_RESULT": "Resultado de laboratorio",
         "LICENSE_EXPIRY": "Vencimiento de licencia",
         "MEDICATION_REFILL": "Renovación de medicamento",
         "NEWS2_ESCALATION": "Escalamiento NEWS2",

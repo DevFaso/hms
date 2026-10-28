@@ -3626,6 +3626,8 @@
     "EXPECTED_RESULT_SHORT": "Expected: {{value}}"
   },
   "LAB_RESULTS": {
+    "CORRECTED": "Corrected",
+    "CORRECTED_HINT": "This result corrects a result released earlier; the earlier value stays on record, marked superseded.",
     "TITLE": "Lab Results",
     "SUBTITLE": "Manage laboratory test results",
     "LOADING": "Loading lab results…",
@@ -6293,6 +6295,7 @@
         "CRITICAL_LAB_RESULT_ESCALATION": "Critical Lab Result Escalation",
         "DISCHARGE_SUMMARY": "Discharge Summary",
         "LAB_ORDER_RECEIVED": "Lab order received",
+        "LAB_RESULT": "Lab result",
         "LICENSE_EXPIRY": "License Expiry",
         "MEDICATION_REFILL": "Medication Refill",
         "NEWS2_ESCALATION": "NEWS2 escalation",

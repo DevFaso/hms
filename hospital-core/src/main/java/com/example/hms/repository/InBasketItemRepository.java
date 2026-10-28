@@ -101,6 +101,20 @@ public interface InBasketItemRepository extends JpaRepository<InBasketItem, UUID
         @Param("referenceType") String referenceType,
         @Param("excludedUserId") UUID excludedUserId);
 
+    /**
+     * QA D931: deletes the not-yet-acknowledged items filed for a reference
+     * (every recipient). Acknowledged items are kept as the review record.
+     */
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("""
+        DELETE FROM InBasketItem i
+        WHERE i.referenceId = :referenceId AND i.referenceType = :referenceType
+          AND i.status <> com.example.hms.enums.InBasketItemStatus.ACKNOWLEDGED
+        """)
+    int deleteOpenByReference(
+        @Param("referenceId") UUID referenceId,
+        @Param("referenceType") String referenceType);
+
     /** Check if a duplicate in-basket item already exists for a reference. */
     boolean existsByReferenceIdAndReferenceTypeAndRecipientUser_Id(
         UUID referenceId, String referenceType, UUID recipientUserId);
