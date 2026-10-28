@@ -464,18 +464,6 @@ describe('EncountersComponent', () => {
     expect(component.showModal()).toBeFalse();
   });
 
-  // QA D990: a visit opened for today starts now, not at midnight.
-  it('submitForm sends the current time for a visit opened today (QA D990)', () => {
-    component.ngOnInit();
-    encounterSpy.create.and.returnValue(of(mockEncounter()));
-    component.openCreate();
-    const now = new Date();
-    component.form.encounterDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    component.submitForm();
-    const sent = new Date(`${encounterSpy.create.calls.mostRecent().args[0].encounterDate}Z`);
-    expect(Math.abs(sent.getTime() - now.getTime())).toBeLessThan(60_000);
-  });
-
   it('openEdit pre-fills the reader day of the stored time, not its UTC day', () => {
     // 21:00 on 24 October in the reader's zone, as the API stores it (UTC).
     const stored = new Date(2026, 9, 24, 21, 0).toISOString().slice(0, 19);

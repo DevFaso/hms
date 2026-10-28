@@ -67,8 +67,7 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         // QA D1003: a dose transcribed from a vaccination card or another
         // facility's record was not given by the clinician who records it;
         // it has no vaccinator here rather than a false one.
-        normalizeSource(requestDTO);
-        Staff administeredBy = isGivenHere(requestDTO)
+        Staff administeredBy = !isTranscribed(requestDTO.getSourceOfRecord())
                 ? com.example.hms.security.CallerIdentity.resolveActor(staffRepository, requestDTO.getAdministeredByStaffId(), hospital.getId())
                 : null;
 
@@ -239,7 +238,8 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         if (requestDTO.getSourceOfRecord() == null || requestDTO.getSourceOfRecord().isBlank()) {
             requestDTO.setSourceOfRecord(existingImmunization.getSourceOfRecord());
         }
-        if (requestDTO.getSourceOfRecord() != null && !isGivenHere(requestDTO)) {
+        if (isTranscribed(requestDTO.getSourceOfRecord())
+                && !java.util.Objects.equals(requestDTO.getSourceOfRecord(), existingImmunization.getSourceOfRecord())) {
             // QA D1003: corrected to a historical dose, it keeps no vaccinator here.
             existingImmunization.setAdministeredBy(null);
             requestDTO.setAdministeredByStaffId(null);
@@ -275,22 +275,16 @@ public class ImmunizationServiceImpl implements ImmunizationService {
     public static final String SOURCE_GIVEN_HERE = "GIVEN_HERE";
 
     /**
-     * QA D1003: a record with no stated source is "given here" only when it is
-     * dated today; an earlier dose with no source is a transcription and is
-     * recorded as such rather than credited to the clinician entering it.
+     * QA D1003: the sources the immunization form writes for a dose that was
+     * not given here (a vaccination card, another facility's record, the
+     * family's report). Only these drop the vaccinator; a missing or legacy
+     * free-text source keeps the previous behaviour (review of #971).
      */
-    static void normalizeSource(ImmunizationRequestDTO dto) {
-        if (dto.getSourceOfRecord() == null || dto.getSourceOfRecord().isBlank()) {
-            boolean today = dto.getAdministrationDate() == null
-                || !dto.getAdministrationDate().isBefore(java.time.LocalDate.now());
-            dto.setSourceOfRecord(today ? SOURCE_GIVEN_HERE : "EXTERNAL_RECORD");
-        }
-    }
+    static final java.util.Set<String> TRANSCRIBED_SOURCES =
+        java.util.Set.of("VACCINATION_CARD", "EXTERNAL_RECORD", "PATIENT_REPORT");
 
-    /** GIVEN_HERE, or a legacy free-text "Given here" / "given_here". */
-    static boolean isGivenHere(ImmunizationRequestDTO dto) {
-        String source = dto.getSourceOfRecord();
-        return source != null && SOURCE_GIVEN_HERE.equalsIgnoreCase(source.trim().replace(' ', '_'));
+    static boolean isTranscribed(String source) {
+        return source != null && TRANSCRIBED_SOURCES.contains(source);
     }
 
     @Override

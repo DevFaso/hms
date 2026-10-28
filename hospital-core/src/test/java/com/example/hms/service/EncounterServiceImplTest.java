@@ -1082,6 +1082,51 @@ class EncounterServiceImplTest {
     }
 
     @Test
+    void qaD930_theDoctorWhoChecksOutAVisitANurseOpenedOwnsItsSummary() {
+        UUID encounterId = UUID.randomUUID();
+        Hospital hospital = new Hospital();
+        hospital.setId(UUID.randomUUID());
+        Patient patient = new Patient();
+        patient.setId(UUID.randomUUID());
+        Staff nurse = new Staff();
+        nurse.setId(UUID.randomUUID());
+        User nurseUser = new User();
+        nurseUser.setId(UUID.randomUUID());
+        nurse.setUser(nurseUser);
+        Encounter encounter = new Encounter();
+        encounter.setId(encounterId);
+        encounter.setStatus(EncounterStatus.IN_PROGRESS);
+        encounter.setHospital(hospital);
+        encounter.setPatient(patient);
+        encounter.setStaff(nurse);
+        User doctorUser = new User();
+        doctorUser.setId(UUID.randomUUID());
+        Staff doctor = new Staff();
+        doctor.setId(UUID.randomUUID());
+        doctor.setUser(doctorUser);
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(doctorUser, null,
+                List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_DOCTOR"))));
+        try {
+            when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+            when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(staffRepository.findByUserIdAndHospitalId(doctorUser.getId(), hospital.getId())).thenReturn(Optional.of(doctor));
+            lenient().when(checkOutMapper.toAfterVisitSummary(any(Encounter.class), any(CheckOutRequestDTO.class), any()))
+                .thenReturn(AfterVisitSummaryDTO.builder().encounterId(encounterId).build());
+            lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.FRENCH);
+            lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("ok");
+
+            service.checkOut(encounterId, CheckOutRequestDTO.builder().build(), "doctor1", true, null);
+
+            org.mockito.ArgumentCaptor<DischargeSummary> saved = org.mockito.ArgumentCaptor.forClass(DischargeSummary.class);
+            verify(dischargeSummaryRepository).save(saved.capture());
+            assertThat(saved.getValue().getDischargingProvider()).isEqualTo(doctor);
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+    }
+
+    @Test
     void checkOut_keepsThePrescriptionSummaryAndEducationOnTheDischargeSummary_D224() {
         UUID encounterId = UUID.randomUUID();
         Hospital hospital = new Hospital();
@@ -2748,7 +2793,7 @@ class EncounterServiceImplTest {
         }
 
         @Test
-        void qaD990_aNurseCreatedVisitStartsArrivedAndWaitsFromNow() {
+        void qaD990_aNurseCreatedUrgencesVisitStartsArrivedAndWaitsFromNow() {
             Encounter fresh = encounter();
             fresh.setStatus(EncounterStatus.IN_PROGRESS); // the entity default
             fresh.setArrivalTimestamp(null);
@@ -2759,11 +2804,29 @@ class EncounterServiceImplTest {
             org.mockito.Mockito.lenient().when(roleValidator.isDoctor(userId, hospitalId)).thenReturn(true);
             actWithRole("ROLE_NURSE");
             LocalDateTime before = LocalDateTime.now().minusSeconds(1);
+            com.example.hms.payload.dto.EncounterRequestDTO request = request(null, LocalDate.now().atStartOfDay());
+            request.setEncounterType(com.example.hms.enums.EncounterType.EMERGENCY);
 
-            service.createEncounter(request(null, LocalDateTime.now()), locale);
+            service.createEncounter(request, locale);
 
             assertThat(fresh.getStatus()).isEqualTo(EncounterStatus.ARRIVED);
             assertThat(fresh.getArrivalTimestamp()).isAfter(before);
+        }
+
+        @Test
+        void qaD990_aMidwifeLedConsultationKeepsItsInProgressDefault() {
+            // Review of #971: a nurse/midwife-led visit stays one she can check out.
+            Encounter fresh = encounter();
+            when(encounterMapper.mergeEncounter(any(com.example.hms.payload.dto.EncounterRequestDTO.class),
+                    isNull(), any(Patient.class), any(Staff.class), any(Hospital.class),
+                    org.mockito.ArgumentMatchers.<Appointment>isNull(), any()))
+                .thenReturn(fresh);
+            org.mockito.Mockito.lenient().when(roleValidator.isDoctor(userId, hospitalId)).thenReturn(true);
+            actWithRole("ROLE_MIDWIFE");
+
+            service.createEncounter(request(null, LocalDateTime.now()), locale);
+
+            assertThat(fresh.getStatus()).isEqualTo(EncounterStatus.IN_PROGRESS);
         }
 
         @Test
@@ -2779,7 +2842,9 @@ class EncounterServiceImplTest {
             org.mockito.Mockito.lenient().when(roleValidator.isDoctor(userId, hospitalId)).thenReturn(true);
             actWithRole("ROLE_NURSE");
 
-            service.createEncounter(request(null, LocalDateTime.now().minusDays(7)), locale);
+            com.example.hms.payload.dto.EncounterRequestDTO past = request(null, LocalDateTime.now().minusDays(7));
+            past.setEncounterType(com.example.hms.enums.EncounterType.EMERGENCY);
+            service.createEncounter(past, locale);
 
             assertThat(fresh.getStatus()).isEqualTo(EncounterStatus.IN_PROGRESS);
             assertThat(fresh.getArrivalTimestamp()).isNull();

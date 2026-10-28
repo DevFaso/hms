@@ -163,17 +163,14 @@ class ImmunizationServiceImplTest {
     }
 
     @Test
-    void qaD1003_aPastDoseWithNoStatedSourceIsRecordedAsATranscription() {
-        ImmunizationRequestDTO dto = new ImmunizationRequestDTO();
-        dto.setAdministrationDate(java.time.LocalDate.now().minusYears(3));
-        ImmunizationServiceImpl.normalizeSource(dto);
-        assertThat(dto.getSourceOfRecord()).isEqualTo("EXTERNAL_RECORD");
-        assertThat(ImmunizationServiceImpl.isGivenHere(dto)).isFalse();
-
-        ImmunizationRequestDTO today = new ImmunizationRequestDTO();
-        today.setAdministrationDate(java.time.LocalDate.now());
-        ImmunizationServiceImpl.normalizeSource(today);
-        assertThat(ImmunizationServiceImpl.isGivenHere(today)).isTrue();
+    void qaD1003_onlyTheFormsTranscriptionCodesDropTheVaccinator() {
+        assertThat(ImmunizationServiceImpl.isTranscribed("VACCINATION_CARD")).isTrue();
+        assertThat(ImmunizationServiceImpl.isTranscribed("EXTERNAL_RECORD")).isTrue();
+        assertThat(ImmunizationServiceImpl.isTranscribed("PATIENT_REPORT")).isTrue();
+        // A missing, GIVEN_HERE or legacy free-text source keeps the previous behaviour.
+        assertThat(ImmunizationServiceImpl.isTranscribed(null)).isFalse();
+        assertThat(ImmunizationServiceImpl.isTranscribed("GIVEN_HERE")).isFalse();
+        assertThat(ImmunizationServiceImpl.isTranscribed("Administered at clinic")).isFalse();
     }
 
     @Test

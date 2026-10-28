@@ -81,6 +81,24 @@ class PregnancyHypertensionProtocolRuleTest {
     }
 
     @Test
+    void aBirthRecordedSinceThePregnancyBeganEndsIt() {
+        com.example.hms.repository.MaternalHistoryRepository histories =
+            mock(com.example.hms.repository.MaternalHistoryRepository.class);
+        com.example.hms.repository.DeliveryRecordRepository deliveries =
+            mock(com.example.hms.repository.DeliveryRecordRepository.class);
+        BpaRuleEngine engine = new BpaRuleEngine(List.of(), null, null, null, histories, deliveries);
+        UUID patientId = UUID.randomUUID();
+        MaternalHistory h = new MaternalHistory();
+        h.setEstimatedDueDate(dueDateAtWeek(38));
+        when(histories.findCurrentByPatientId(patientId)).thenReturn(Optional.of(h));
+
+        assertThat(engine.loadEstimatedDueDate(patientId, null)).isEqualTo(h.getEstimatedDueDate());
+        when(deliveries.existsByPatient_IdAndBirthDateTimeGreaterThanEqual(org.mockito.ArgumentMatchers.eq(patientId),
+            org.mockito.ArgumentMatchers.any())).thenReturn(true);
+        assertThat(engine.loadEstimatedDueDate(patientId, null)).isNull();
+    }
+
+    @Test
     void theEngineReadsTheDueDateUltrasoundFirstThenRecordedThenLmp() {
         MaternalHistory h = new MaternalHistory();
         h.setLastMenstrualPeriod(LocalDate.of(2026, 5, 20));

@@ -163,7 +163,11 @@ export class CheckoutDialogComponent {
         if (this._encounter?.id !== enc.id) return;
         const diagnoses = problems
           .filter((p) => p.status !== 'RESOLVED' && p.status !== 'INACTIVE')
-          .filter((p) => !!visitDay && !!p.onsetDate && serverLocalDate(p.onsetDate) >= visitDay)
+          // Recorded or reviewed during the visit (not the illness's onset).
+          .filter(
+            (p) =>
+              !!visitDay && !!p.lastReviewedAt && serverLocalDate(p.lastReviewedAt) >= visitDay,
+          )
           .map((p) =>
             p.problemCode ? `${p.problemDisplay} (${p.problemCode})` : p.problemDisplay,
           );

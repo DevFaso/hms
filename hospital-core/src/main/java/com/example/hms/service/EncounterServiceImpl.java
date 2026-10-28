@@ -472,6 +472,7 @@ public class EncounterServiceImpl implements EncounterService {
             try {
                 upsertDischargeSummaryForCheckout(saved, syntheticCheckout, saved.getCheckoutTimestamp());
                 notifyPatientAfterVisitSummary(saved);
+                publishCheckedOutOnCompletion(saved, previousStatus);
             } catch (RuntimeException ex) {
                 // Persistence of the summary must not abort the encounter update — log
                 // and fall back on the patient-portal backfill which will retry on
@@ -1099,23 +1100,22 @@ public class EncounterServiceImpl implements EncounterService {
     }
 
     /**
-     * QA D990: with no status asked for, an emergency visit, or one opened by
-     * someone who is not the treating doctor (a nurse, a midwife, the front
-     * desk), starts ARRIVED and goes through triage. Only a doctor's own visit
-     * starts IN_PROGRESS. A nurse-created urgences visit used to start
-     * IN_PROGRESS and never reached the triage queue.
+     * QA D990: with no status asked for, an emergency (urgences) visit dated
+     * today starts ARRIVED and goes through triage; it used to start
+     * IN_PROGRESS and never reached the triage queue. Every other visit keeps
+     * the IN_PROGRESS default (review of #971): a nurse- or midwife-led
+     * consultation must stay one she can check out herself, and a visit
+     * entered for another day is not an arrival now.
      */
     static EncounterStatus defaultInitialStatus(com.example.hms.enums.EncounterType type, LocalDateTime encounterDate) {
-        // Review of #971: a visit entered for another day (a past visit
-        // recorded late, or one booked ahead) is not an arrival now and keeps
-        // the previous default; only today's visit goes to the triage queue.
         boolean today = encounterDate == null || encounterDate.toLocalDate().equals(java.time.LocalDate.now());
-        if (today && (type == com.example.hms.enums.EncounterType.EMERGENCY || !callerIsDoctor())) {
+        if (today && type == com.example.hms.enums.EncounterType.EMERGENCY) {
             return EncounterStatus.ARRIVED;
         }
         return EncounterStatus.IN_PROGRESS;
     }
 
+    /** True when the signed-in user holds a physician role. */
     private static boolean callerIsDoctor() {
         org.springframework.security.core.Authentication auth =
             org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
@@ -2447,6 +2447,14 @@ public class EncounterServiceImpl implements EncounterService {
         return avs;
     }
 
+    /** QA D972: a visit completed through PUT /encounters/{id} is handed to billing like a checkout. */
+    private void publishCheckedOutOnCompletion(Encounter encounter, EncounterStatus previousStatus) {
+        if (encounter.getStatus() == EncounterStatus.COMPLETED && previousStatus != EncounterStatus.COMPLETED) {
+            publishCheckedOut(encounter, encounter.getCheckoutTimestamp() != null
+                ? encounter.getCheckoutTimestamp() : LocalDateTime.now());
+        }
+    }
+
     /**
      * QA D972 hand-off (prepared in round 16): the clinic tells billing that a
      * visit is complete, with its billable items, through an event billing
@@ -2723,6 +2731,21 @@ public class EncounterServiceImpl implements EncounterService {
             .build());
     }
 
+    /** The signed-in doctor's staff record at the visit's hospital, when the caller is a doctor who is not the clinician of record. */
+    private Staff closingDoctorAt(Encounter encounter) {
+        if (encounter.getHospital() == null || !callerIsDoctor()
+                || com.example.hms.security.CallerIdentity.isCaller(encounter.getStaff())) {
+            return null;
+        }
+        UUID caller = com.example.hms.security.CallerIdentity.currentUserId();
+        if (caller == null) {
+            return null;
+        }
+        return staffRepository.findByUserIdAndHospitalId(caller, encounter.getHospital().getId())
+            .filter(s -> s.getUser() != null)
+            .orElse(null);
+    }
+
     private void upsertDischargeSummaryForCheckout(
         Encounter encounter,
         com.example.hms.payload.dto.clinical.CheckOutRequestDTO request,
@@ -2734,8 +2757,19 @@ public class EncounterServiceImpl implements EncounterService {
         summary.setEncounter(encounter);
         summary.setPatient(encounter.getPatient());
         summary.setHospital(encounter.getHospital());
-        summary.setDischargingProvider(encounter.getStaff());
-        summary.setAssignment(encounter.getAssignment());
+        // Review of #971 (D930): the summary belongs to the doctor who closes
+        // the visit when that is not its clinician of record (a nurse may
+        // have opened it); otherwise to the clinician of record, as before.
+        Staff closingDoctor = closingDoctorAt(encounter);
+        if (closingDoctor != null && summary.getId() == null) {
+            summary.setDischargingProvider(closingDoctor);
+            summary.setAssignment(assignmentRepository
+                .findFirstByUser_IdAndHospital_IdAndActiveTrue(closingDoctor.getUser().getId(), encounter.getHospital().getId())
+                .orElse(encounter.getAssignment()));
+        } else if (summary.getDischargingProvider() == null) {
+            summary.setDischargingProvider(encounter.getStaff());
+            summary.setAssignment(encounter.getAssignment());
+        }
         summary.setDischargeDate(checkoutTime.toLocalDate());
         summary.setDischargeTime(checkoutTime);
         summary.setDisposition(DischargeDisposition.HOME);

@@ -171,7 +171,7 @@ class MedicalCertificateServiceImplTest {
         other.setId(UUID.randomUUID());
         other.setHospital(hospital);
         encounter.setStaff(other);
-        when(noteRepository.findByEncounter_IdOrderByCreatedAtAscIdAsc(encounterId)).thenReturn(java.util.List.of());
+        when(noteRepository.existsByEncounter_IdAndAuthor_Id(encounterId, doctor.getUser().getId())).thenReturn(false);
         assertThatThrownBy(() -> service.issue(encounterId, MedicalCertificateRequestDTO.builder()
             .type(MedicalCertificateType.SICK_LEAVE).days(30).build()))
             .isInstanceOf(ClientSafeAccessDeniedException.class);
@@ -183,9 +183,7 @@ class MedicalCertificateServiceImplTest {
         Staff other = new Staff();
         other.setId(UUID.randomUUID());
         encounter.setStaff(other);
-        com.example.hms.model.encounter.EncounterNote note = new com.example.hms.model.encounter.EncounterNote();
-        note.setAuthor(doctor.getUser());
-        when(noteRepository.findByEncounter_IdOrderByCreatedAtAscIdAsc(encounterId)).thenReturn(java.util.List.of(note));
+        when(noteRepository.existsByEncounter_IdAndAuthor_Id(encounterId, doctor.getUser().getId())).thenReturn(true);
         service.issue(encounterId, MedicalCertificateRequestDTO.builder().type(MedicalCertificateType.ATTENDANCE).build());
         verify(documentRepository).save(any(PatientUploadedDocument.class));
     }

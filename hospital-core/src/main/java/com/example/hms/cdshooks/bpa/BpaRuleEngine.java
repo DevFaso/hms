@@ -93,6 +93,8 @@ public class BpaRuleEngine {
     private final PrescriptionRepository prescriptionRepository;
     /** QA D971: the current pregnancy's due date; null outside Spring (no pregnancy is assumed). */
     private final MaternalHistoryRepository maternalHistoryRepository;
+    /** A delivery recorded during the pregnancy ends it (review of #971). */
+    private final com.example.hms.repository.DeliveryRecordRepository deliveryRecordRepository;
 
     public BpaRuleEngine(
         List<BpaRule> rules,
@@ -100,7 +102,7 @@ public class BpaRuleEngine {
         PatientProblemRepository problemRepository,
         PrescriptionRepository prescriptionRepository
     ) {
-        this(rules, vitalSignRepository, problemRepository, prescriptionRepository, null);
+        this(rules, vitalSignRepository, problemRepository, prescriptionRepository, null, null);
     }
 
     @org.springframework.beans.factory.annotation.Autowired
@@ -109,13 +111,15 @@ public class BpaRuleEngine {
         PatientVitalSignRepository vitalSignRepository,
         PatientProblemRepository problemRepository,
         PrescriptionRepository prescriptionRepository,
-        MaternalHistoryRepository maternalHistoryRepository
+        MaternalHistoryRepository maternalHistoryRepository,
+        com.example.hms.repository.DeliveryRecordRepository deliveryRecordRepository
     ) {
         this.rules = List.copyOf(rules);
         this.vitalSignRepository = vitalSignRepository;
         this.problemRepository = problemRepository;
         this.prescriptionRepository = prescriptionRepository;
         this.maternalHistoryRepository = maternalHistoryRepository;
+        this.deliveryRecordRepository = deliveryRecordRepository;
     }
 
     /** Build a context for the given patient; never null. */
@@ -202,7 +206,15 @@ public class BpaRuleEngine {
             ? maternalHistoryRepository.findFirstByPatient_IdAndHospital_IdInOrderByVersionNumberDescRecordedDateDesc(
                 patientId, List.of(hospitalId))
             : maternalHistoryRepository.findCurrentByPatientId(patientId);
-        return current.map(BpaRuleEngine::dueDateOf).orElse(null);
+        LocalDate dueDate = current.map(BpaRuleEngine::dueDateOf).orElse(null);
+        // A birth recorded since the pregnancy began ends it: a postpartum
+        // reading is not "at N weeks of pregnancy" (review of #971).
+        if (dueDate != null && deliveryRecordRepository != null && deliveryRecordRepository
+                .existsByPatient_IdAndBirthDateTimeGreaterThanEqual(patientId,
+                    dueDate.minusDays(PregnancyHypertensionProtocolRule.PREGNANCY_DAYS).atStartOfDay())) {
+            return null;
+        }
+        return dueDate;
     }
 
     static LocalDate dueDateOf(MaternalHistory history) {

@@ -253,7 +253,9 @@ describe('CheckoutDialogComponent — prefilled from the visit (QA D960)', () =>
             problemDisplay: 'Paludisme simple',
             problemCode: 'B54',
             status: 'ACTIVE',
-            onsetDate: '2026-10-27',
+            // Onset three days before the visit, recorded during it.
+            onsetDate: '2026-10-24',
+            lastReviewedAt: '2026-10-27T10:15:00',
           },
           {
             id: 'd0',
@@ -261,6 +263,7 @@ describe('CheckoutDialogComponent — prefilled from the visit (QA D960)', () =>
             problemDisplay: 'HTA',
             status: 'ACTIVE',
             onsetDate: '2020-01-01',
+            lastReviewedAt: '2025-03-01T09:00:00',
           },
         ] as PatientProblem[],
         withheld: false,

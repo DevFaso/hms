@@ -320,9 +320,7 @@ class DischargeSummaryServiceImplTest {
         com.example.hms.model.User doctor = new com.example.hms.model.User();
         doctor.setId(UUID.randomUUID());
         actAs(doctor);
-        com.example.hms.model.encounter.EncounterNote note = new com.example.hms.model.encounter.EncounterNote();
-        note.setAuthor(doctor);
-        when(encounterNoteRepository.findByEncounter_IdOrderByCreatedAtAscIdAsc(encounterId)).thenReturn(List.of(note));
+        when(encounterNoteRepository.existsByEncounter_IdAndAuthor_Id(encounterId, doctor.getId())).thenReturn(true);
         when(dischargeSummaryRepository.findById(summaryId)).thenReturn(Optional.of(summary));
         service.deleteDischargeSummary(summaryId, null);
         verify(dischargeSummaryRepository).delete(summary);

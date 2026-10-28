@@ -2,9 +2,10 @@
 -- "hypertension in pregnancy" advisory card (PregnancyHypertensionProtocolRule).
 --
 -- WHAT: one row in clinical.bpa_protocols, code PREGNANCY_HYPERTENSION.
--- WHY: the rule fires without a row (the card is written from the bundle),
--- but an administrator can only switch a protocol off, or edit its text,
--- through its row (review of PR #971). Seeded active.
+-- WHY: the rule fires without a row (the card is written from the bundle,
+-- as every BPA card is: the bundle text wins over the row's), but an
+-- administrator switches a protocol off through its row (review of PR #971).
+-- Seeded active.
 -- The cutoffs (SBP >= 140 or DBP >= 90 mmHg, severe >= 160/110) are the ones
 -- LaborServiceImpl already uses; the summary is the bundle's English text.
 -- IDEMPOTENT: ON CONFLICT DO NOTHING, so a re-run never overwrites an

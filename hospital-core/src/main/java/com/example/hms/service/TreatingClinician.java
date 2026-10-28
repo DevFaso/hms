@@ -1,7 +1,6 @@
 package com.example.hms.service;
 
 import com.example.hms.model.Encounter;
-import com.example.hms.model.encounter.EncounterNote;
 import com.example.hms.repository.EncounterNoteRepository;
 import com.example.hms.security.CallerIdentity;
 
@@ -33,11 +32,6 @@ public final class TreatingClinician {
         if (caller == null || encounter.getId() == null || notes == null) {
             return false;
         }
-        for (EncounterNote note : notes.findByEncounter_IdOrderByCreatedAtAscIdAsc(encounter.getId())) {
-            if (note.getAuthor() != null && caller.equals(note.getAuthor().getId())) {
-                return true;
-            }
-        }
-        return false;
+        return notes.existsByEncounter_IdAndAuthor_Id(encounter.getId(), caller);
     }
 }
