@@ -69,7 +69,7 @@ class PortalDownloadNameGuardTest {
         java.util.regex.Matcher call = SAVE_CALL.matcher(source);
         while (call.find()) {
             int end = source.indexOf(';', call.end());
-            end = end < 0 ? Math.min(source.length(), call.end() + CALL_REACH) : Math.min(end, call.end() + CALL_REACH);
+            end = Math.min(end < 0 ? source.length() : end, call.end() + CALL_REACH);
             java.util.regex.Matcher m = EXPRESSION.matcher(source);
             m.region(call.end(), end);
             while (m.find()) {
