@@ -166,7 +166,9 @@
                       <li [attr.data-testid]="'payment-' + p.id">
                         <span>{{ p.amount | cfa }}</span>
                         @if (p.paymentMethod) {
-                          <span>· {{ p.paymentMethod | enumLabel: 'paymentMethod' }}</span>
+                          <span
+                            >· {{ 'BILLING.PAYMENT_METHODS.' + p.paymentMethod | translate }}</span
+                          >
                         }
                         <span class="pli-status" [attr.data-status]="p.status">{{
                           'BILLING.PAYMENT_STATUSES.' + p.status | translate
