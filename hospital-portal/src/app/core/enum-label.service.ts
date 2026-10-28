@@ -274,6 +274,33 @@ export class EnumLabelService implements OnDestroy {
     },
 
     /* ── Phase 2 — Lab / admin / referrals / signatures ───── */
+    /** QA D963: LabOrderServiceImpl.LAB_PRIORITIES. */
+    labOrderPriority: {
+      ROUTINE: 'Routine',
+      URGENT: 'Urgent',
+      STAT: 'STAT (immediate)',
+    },
+    /** QA D963: LabOrderChannel. */
+    labOrderChannel: {
+      ELECTRONIC: 'Electronic',
+      PORTAL: 'Portal',
+      PHONE: 'Phone',
+      FAX: 'Fax',
+      EMAIL: 'Email',
+      WRITTEN: 'Written',
+      WALK_IN: 'Walk-In',
+      OTHER: 'Other',
+    },
+    /** QA D963 / D962: LabSpecimenStatus. */
+    labSpecimenStatus: {
+      PENDING: 'Pending',
+      COLLECTED: 'Collected',
+      IN_TRANSIT: 'In transit',
+      RECEIVED: 'Received',
+      PROCESSING: 'Processing',
+      COMPLETED: 'Completed',
+      REJECTED: 'Rejected',
+    },
     labOrderStatus: {
       ORDERED: 'Ordered',
       PENDING: 'Pending',
@@ -800,6 +827,8 @@ export class EnumLabelService implements OnDestroy {
       CRITICAL_LAB_RESULT_ESCALATION: 'Critical Lab Result Escalation',
       DISCHARGE_SUMMARY: 'Discharge Summary',
       LAB_ORDER_RECEIVED: 'Lab Order Received',
+      LAB_RESULT: 'Lab result',
+      LAB_SPECIMEN_REJECTED: 'Specimen rejected',
       LICENSE_EXPIRY: 'License Expiry',
       MEDICATION_REFILL: 'Medication Refill',
       NEWS2_ESCALATION: 'NEWS2 Escalation',

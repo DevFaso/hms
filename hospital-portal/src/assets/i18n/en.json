@@ -2185,6 +2185,7 @@
     "CLEAR_SEARCH": "Clear search",
     "CLOSE": "Close",
     "CLOSE_DETAIL_PANEL": "Close detail panel",
+    "COLON": ":",
     "COMPLETED": "Completed",
     "CONFIRM": "Confirm",
     "CREATE": "Create",
@@ -3403,16 +3404,6 @@
     "ORDERED_BY": "Ordered By",
     "ORDERED_DATE": "Ordered Date",
     "ORDER_CHANNEL": "Order Channel",
-    "ORDER_CHANNEL_OPTION": {
-      "ELECTRONIC": "Electronic",
-      "EMAIL": "Email",
-      "FAX": "Fax",
-      "OTHER": "Other",
-      "PHONE": "Phone",
-      "PORTAL": "Portal",
-      "WALK_IN": "Walk-In",
-      "WRITTEN": "Written"
-    },
     "ORDER_CODE": "Order Code",
     "ORDER_DATE": "Order Date",
     "PATIENT": "Patient",
@@ -3440,13 +3431,6 @@
     "SELECT_TEST": "Select test",
     "SENT_TO": "Sent to",
     "SPECIMENS": "Specimens",
-    "SPECIMEN_STATUS_COLLECTED": "Collected",
-    "SPECIMEN_STATUS_COMPLETED": "Completed",
-    "SPECIMEN_STATUS_IN_TRANSIT": "In transit",
-    "SPECIMEN_STATUS_PENDING": "Pending",
-    "SPECIMEN_STATUS_PROCESSING": "Processing",
-    "SPECIMEN_STATUS_RECEIVED": "Received",
-    "SPECIMEN_STATUS_REJECTED": "Rejected",
     "SPECIMEN_TYPE": "Specimen type",
     "SPECIMEN_TYPE_PLACEHOLDER": "e.g. Whole blood, Urine, Swab",
     "STATUS_FILTER": "Status",
@@ -3492,6 +3476,18 @@
       "CONFIRM": "Mark as entered in error",
       "DONE": "The order is marked as entered in error.",
       "FAILED": "The order could not be marked as entered in error."
+    },
+    "REJECT_SPECIMEN": {
+      "ACTION": "Reject",
+      "CONFIRM": "Reject the specimen",
+      "DONE": "Specimen rejected. The order is back to awaiting collection and the ordering clinician has been notified.",
+      "EXPLAIN": "The specimen is refused and the order goes back to awaiting a new collection. The ordering clinician is told the reason. Specimen:",
+      "FAILED": "The specimen could not be rejected.",
+      "REASON": "Reason for rejection",
+      "REASON_PLACEHOLDER": "e.g. haemolysed, wrong tube, insufficient volume, unlabelled",
+      "REASON_VALUE": "Reason: {{reason}}",
+      "REJECTED_ON_ORDER": "Specimen rejected by the laboratory: a new sample is needed",
+      "TITLE": "Reject the specimen"
     }
   },
   "LAB_STAFF": {
@@ -3573,6 +3569,8 @@
     "REFLEX_ACTIVATE": "Activate",
     "REFLEX_ADD": "Add rule",
     "REFLEX_CONDITION": "Condition",
+    "REFLEX_CONDITION_SEVERITY": "Severity = {{flag}}",
+    "REFLEX_CONDITION_THRESHOLD": "Value {{operator}} {{value}}",
     "REFLEX_COND_SEVERITY": "Severity flag",
     "REFLEX_COND_THRESHOLD": "Numeric threshold",
     "REFLEX_CREATED": "Reflex rule created",
@@ -3626,6 +3624,9 @@
     "EXPECTED_RESULT_SHORT": "Expected: {{value}}"
   },
   "LAB_RESULTS": {
+    "ALL_AGES": "All ages",
+    "CORRECTED": "Corrected",
+    "CORRECTED_HINT": "This result corrects a result released earlier; the earlier value stays on record, marked superseded.",
     "TITLE": "Lab Results",
     "SUBTITLE": "Manage laboratory test results",
     "LOADING": "Loading lab results…",
@@ -3714,6 +3715,7 @@
     "EXPECTED_RESULT": "Expected result"
   },
   "LAB_RELEASE": {
+    "FLAG_ABNORMAL": "Abnormal",
     "TITLE": "Release Worklist",
     "SUBTITLE": "Results waiting for the laboratory to release them",
     "AWAITING_COUNT": "{{count}} awaiting release",
@@ -5246,6 +5248,7 @@
       "NOT_REFILLABLE_CONTROLLED": "This is a controlled medicine: it cannot be renewed from the portal. Please contact your care team for a new prescription."
     },
     "LAB_RESULTS": {
+      "RESULT_PREFIX": "Result:",
       "TITLE": "Test Results",
       "LOADING": "Loading test results...",
       "EMPTY_TITLE": "No test results",
@@ -5567,6 +5570,30 @@
       "PRINT": "Print Summary"
     },
     "ENUM": {
+      "LAB_ORDER_CHANNEL": {
+        "ELECTRONIC": "Electronic",
+        "EMAIL": "Email",
+        "FAX": "Fax",
+        "OTHER": "Other",
+        "PHONE": "Phone",
+        "PORTAL": "Portal",
+        "WALK_IN": "Walk-In",
+        "WRITTEN": "Written"
+      },
+      "LAB_ORDER_PRIORITY": {
+        "ROUTINE": "Routine",
+        "STAT": "STAT (immediate)",
+        "URGENT": "Urgent"
+      },
+      "LAB_SPECIMEN_STATUS": {
+        "COLLECTED": "Collected",
+        "COMPLETED": "Completed",
+        "IN_TRANSIT": "In transit",
+        "PENDING": "Pending",
+        "PROCESSING": "Processing",
+        "RECEIVED": "Received",
+        "REJECTED": "Rejected"
+      },
       "VITAL_TYPE": {
         "BLOOD_PRESSURE": "Blood Pressure",
         "HEART_RATE": "Heart Rate",
@@ -6293,6 +6320,8 @@
         "CRITICAL_LAB_RESULT_ESCALATION": "Critical Lab Result Escalation",
         "DISCHARGE_SUMMARY": "Discharge Summary",
         "LAB_ORDER_RECEIVED": "Lab order received",
+        "LAB_RESULT": "Lab result",
+        "LAB_SPECIMEN_REJECTED": "Specimen rejected",
         "LICENSE_EXPIRY": "License Expiry",
         "MEDICATION_REFILL": "Medication Refill",
         "NEWS2_ESCALATION": "NEWS2 escalation",

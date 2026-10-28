@@ -1,3 +1,4 @@
+import { CdkTrapFocus } from '@angular/cdk/a11y';
 import {
   Component,
   inject,
@@ -35,6 +36,8 @@ import {
   serverInstant,
 } from '../../shared/date-utils';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { labSeverityFlag, labSeverityTone } from '../shared/lab-severity';
+import { LabValuePipe, formatLabNumber } from '../shared/lab-value.pipe';
 
 /**
  * D49: the order code the API sends is the order's UUID. Readers get its first
@@ -49,6 +52,8 @@ export { toServerDateTime, toLocalInputValue };
   selector: 'app-lab-results',
   standalone: true,
   imports: [
+    CdkTrapFocus,
+    LabValuePipe,
     ServerTimePipe,
     CommonModule,
     FormsModule,
@@ -621,14 +626,15 @@ export class LabResultsComponent implements OnInit {
     const max = range.maxValue;
     const unit = range.unit ? ` ${range.unit}` : '';
 
+    // QA D1002: the limits in the reader's number format ("0,7 – 1,1 g/L").
     if (min != null && max != null) {
-      return `${min} – ${max}${unit}`;
+      return `${formatLabNumber(min)} – ${formatLabNumber(max)}${unit}`;
     }
     if (min != null) {
-      return `≥ ${min}${unit}`;
+      return `≥ ${formatLabNumber(min)}${unit}`;
     }
     if (max != null) {
-      return `≤ ${max}${unit}`;
+      return `≤ ${formatLabNumber(max)}${unit}`;
     }
     return '—';
   }
@@ -639,7 +645,7 @@ export class LabResultsComponent implements OnInit {
     if (ageMin != null && ageMax != null) return `${ageMin}–${ageMax}`;
     if (ageMin != null) return `${ageMin}+`;
     if (ageMax != null) return `0–${ageMax}`;
-    return 'All ages';
+    return this.translate.instant('LAB_RESULTS.ALL_AGES');
   }
 
   formatTrendDelta(sortedHistory: LabResultTrendPoint[], index: number): string {
@@ -706,7 +712,9 @@ export class LabResultsComponent implements OnInit {
    * that always failed for exactly the results that matter most.
    */
   isCritical(r: LabResultResponse): boolean {
-    return !!r.criticalNotifiedAt || (r.severityFlag ?? '').toUpperCase() === 'CRITICAL';
+    return (
+      !!r.criticalNotifiedAt || labSeverityFlag({ severityFlag: r.severityFlag }) === 'CRITICAL'
+    );
   }
 
   openReadBack(r: LabResultResponse): void {
@@ -798,15 +806,14 @@ export class LabResultsComponent implements OnInit {
     }
   }
 
+  /** QA D969: drawn from the one grade reading every lab screen shares (lab-severity.ts). */
   getSeverityClass(flag: string): string {
-    switch (flag?.toUpperCase()) {
-      case 'CRITICAL':
+    switch (labSeverityTone(labSeverityFlag({ severityFlag: flag }))) {
+      case 'critical':
         return 'severity-badge severity-critical';
-      case 'HIGH':
-      case 'LOW':
-      case 'ABNORMAL':
+      case 'abnormal':
         return 'severity-badge severity-high';
-      case 'NORMAL':
+      case 'normal':
         return 'severity-badge severity-normal';
       default:
         return 'severity-badge';

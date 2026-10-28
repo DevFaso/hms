@@ -2185,6 +2185,7 @@
     "CLEAR_SEARCH": "Borrar búsqueda",
     "CLOSE": "Cerrar",
     "CLOSE_DETAIL_PANEL": "Cerrar panel de detalles",
+    "COLON": ":",
     "COMPLETED": "Completado",
     "CONFIRM": "Confirmar",
     "CREATE": "Crear",
@@ -3403,16 +3404,6 @@
     "ORDERED_BY": "Ordenado por",
     "ORDERED_DATE": "Fecha de la orden",
     "ORDER_CHANNEL": "Canal de la orden",
-    "ORDER_CHANNEL_OPTION": {
-      "ELECTRONIC": "Electrónico",
-      "EMAIL": "Correo electrónico",
-      "FAX": "Fax",
-      "OTHER": "Otro",
-      "PHONE": "Teléfono",
-      "PORTAL": "Portal",
-      "WALK_IN": "Sin cita previa",
-      "WRITTEN": "Escrito"
-    },
     "ORDER_CODE": "Código de orden",
     "ORDER_DATE": "Fecha de la orden",
     "PATIENT": "Paciente",
@@ -3440,13 +3431,6 @@
     "SELECT_TEST": "Seleccionar prueba",
     "SENT_TO": "Enviado a",
     "SPECIMENS": "Muestras",
-    "SPECIMEN_STATUS_COLLECTED": "Recolectada",
-    "SPECIMEN_STATUS_COMPLETED": "Completada",
-    "SPECIMEN_STATUS_IN_TRANSIT": "En tránsito",
-    "SPECIMEN_STATUS_PENDING": "Pendiente",
-    "SPECIMEN_STATUS_PROCESSING": "En proceso",
-    "SPECIMEN_STATUS_RECEIVED": "Recibida",
-    "SPECIMEN_STATUS_REJECTED": "Rechazada",
     "SPECIMEN_TYPE": "Tipo de muestra",
     "SPECIMEN_TYPE_PLACEHOLDER": "p. ej. Sangre total, Orina, Hisopo",
     "STATUS_FILTER": "Estado",
@@ -3492,6 +3476,18 @@
       "CONFIRM": "Marcar como registrada por error",
       "DONE": "La orden está marcada como registrada por error.",
       "FAILED": "No se pudo marcar la orden como registrada por error."
+    },
+    "REJECT_SPECIMEN": {
+      "ACTION": "Rechazar",
+      "CONFIRM": "Rechazar la muestra",
+      "DONE": "Muestra rechazada. La solicitud vuelve a esperar una toma y se ha avisado al prescriptor.",
+      "EXPLAIN": "La muestra se rechaza y la solicitud vuelve a esperar una nueva toma. Se informa del motivo al prescriptor. Muestra:",
+      "FAILED": "No se pudo rechazar la muestra.",
+      "REASON": "Motivo del rechazo",
+      "REASON_PLACEHOLDER": "p. ej. hemolizada, tubo inadecuado, volumen insuficiente, sin etiqueta",
+      "REASON_VALUE": "Motivo: {{reason}}",
+      "REJECTED_ON_ORDER": "Muestra rechazada por el laboratorio: se necesita una nueva toma",
+      "TITLE": "Rechazar la muestra"
     }
   },
   "LAB_STAFF": {
@@ -3573,6 +3569,8 @@
     "REFLEX_ACTIVATE": "Activar",
     "REFLEX_ADD": "Agregar regla",
     "REFLEX_CONDITION": "Condición",
+    "REFLEX_CONDITION_SEVERITY": "Gravedad = {{flag}}",
+    "REFLEX_CONDITION_THRESHOLD": "Valor {{operator}} {{value}}",
     "REFLEX_COND_SEVERITY": "Indicador de severidad",
     "REFLEX_COND_THRESHOLD": "Umbral numérico",
     "REFLEX_CREATED": "Regla refleja creada",
@@ -3626,6 +3624,9 @@
     "EXPECTED_RESULT_SHORT": "Esperado: {{value}}"
   },
   "LAB_RESULTS": {
+    "ALL_AGES": "Todas las edades",
+    "CORRECTED": "Corregido",
+    "CORRECTED_HINT": "Este resultado corrige un resultado validado anteriormente; el valor anterior se conserva en el expediente, marcado como sustituido.",
     "TITLE": "Resultados de laboratorio",
     "SUBTITLE": "Gestionar los resultados de pruebas de laboratorio",
     "LOADING": "Cargando resultados…",
@@ -3714,6 +3715,7 @@
     "EXPECTED_RESULT": "Resultado esperado"
   },
   "LAB_RELEASE": {
+    "FLAG_ABNORMAL": "Anormal",
     "TITLE": "Lista de validación",
     "SUBTITLE": "Resultados pendientes de validación por el laboratorio",
     "AWAITING_COUNT": "{{count}} pendientes de validación",
@@ -5246,6 +5248,7 @@
       "NOT_REFILLABLE_CONTROLLED": "Este es un medicamento controlado: no se puede renovar desde el portal. Póngase en contacto con su equipo de atención para obtener una nueva receta."
     },
     "LAB_RESULTS": {
+      "RESULT_PREFIX": "Resultado:",
       "TITLE": "Resultados de pruebas",
       "LOADING": "Cargando resultados…",
       "EMPTY_TITLE": "Sin resultados de pruebas",
@@ -5567,6 +5570,30 @@
       "PRINT": "Imprimir resumen"
     },
     "ENUM": {
+      "LAB_ORDER_CHANNEL": {
+        "ELECTRONIC": "Electrónico",
+        "EMAIL": "Correo electrónico",
+        "FAX": "Fax",
+        "OTHER": "Otro",
+        "PHONE": "Teléfono",
+        "PORTAL": "Portal",
+        "WALK_IN": "Sin cita previa",
+        "WRITTEN": "Escrito"
+      },
+      "LAB_ORDER_PRIORITY": {
+        "ROUTINE": "Rutina",
+        "STAT": "Inmediato (STAT)",
+        "URGENT": "Urgente"
+      },
+      "LAB_SPECIMEN_STATUS": {
+        "COLLECTED": "Recolectada",
+        "COMPLETED": "Completada",
+        "IN_TRANSIT": "En tránsito",
+        "PENDING": "Pendiente",
+        "PROCESSING": "En proceso",
+        "RECEIVED": "Recibida",
+        "REJECTED": "Rechazada"
+      },
       "VITAL_TYPE": {
         "BLOOD_PRESSURE": "Presión arterial",
         "HEART_RATE": "Frecuencia cardíaca",
@@ -6293,6 +6320,8 @@
         "CRITICAL_LAB_RESULT_ESCALATION": "Escalamiento — resultado de laboratorio crítico",
         "DISCHARGE_SUMMARY": "Informe de alta",
         "LAB_ORDER_RECEIVED": "Solicitud de laboratorio recibida",
+        "LAB_RESULT": "Resultado de laboratorio",
+        "LAB_SPECIMEN_REJECTED": "Muestra rechazada",
         "LICENSE_EXPIRY": "Vencimiento de licencia",
         "MEDICATION_REFILL": "Renovación de medicamento",
         "NEWS2_ESCALATION": "Escalamiento NEWS2",

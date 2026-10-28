@@ -25,4 +25,12 @@ public interface LabSpecimenService {
      * Mark a specimen as received at the lab, recording the receiving user and timestamp.
      */
     LabSpecimenResponseDTO receiveSpecimen(UUID specimenId, Locale locale);
+
+    /**
+     * QA D962: reject a collected, in-transit or received specimen with a
+     * mandatory reason. The specimen becomes REJECTED (reason, who, when), the
+     * order goes back to awaiting collection when no other live specimen
+     * remains, and the ordering clinician is told.
+     */
+    LabSpecimenResponseDTO rejectSpecimen(UUID specimenId, String reason, Locale locale);
 }

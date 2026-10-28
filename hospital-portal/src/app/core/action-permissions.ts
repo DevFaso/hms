@@ -71,6 +71,17 @@ export const ACTION_PERMISSIONS = {
       'ROLE_SUPER_ADMIN',
     ],
   },
+  labSpecimenReject: {
+    endpoint: 'LabSpecimenController#rejectSpecimen',
+    roles: [
+      'ROLE_LAB_TECHNICIAN',
+      'ROLE_LAB_SCIENTIST',
+      'ROLE_LAB_MANAGER',
+      'ROLE_LAB_DIRECTOR',
+      'ROLE_QUALITY_MANAGER',
+      'ROLE_SUPER_ADMIN',
+    ],
+  },
   imagingReportsByHospital: {
     endpoint: 'ImagingResultController#getReportsByHospital',
     roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_RADIOLOGIST'],
