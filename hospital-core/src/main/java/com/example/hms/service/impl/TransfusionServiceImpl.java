@@ -348,8 +348,13 @@ public class TransfusionServiceImpl implements TransfusionService {
         // asked for it (or a verified super-admin in global view); a request
         // written with no requester keeps the old rule. The request was
         // resolved in the caller's hospital first, so the refusal leaks nothing.
-        if (request.getRequestedBy() != null) {
-            com.example.hms.security.CallerIdentity.requireCallerUnlessSuperAdmin(request.getRequestedBy());
+        // The refusal states the rule (requester only), not the generic "act
+        // in your own name" of an identity mismatch.
+        if (request.getRequestedBy() != null
+                && !com.example.hms.security.CallerIdentity.isGlobalSuperAdmin()
+                && !com.example.hms.security.CallerIdentity.isCaller(request.getRequestedBy())) {
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("transfusion.request.cancel.requesterOnly"));
         }
         // Release anything held for this patient rather than stranding it.
         for (BloodUnit unit : unitRepository.findByRequest_IdOrderByUnitNumberAsc(requestId)) {

@@ -1631,8 +1631,13 @@ class TransfusionServiceImplTest {
         UUID requestId = req.getId();
         signInAs(UUID.randomUUID());
         try {
+            // Review of #976: the refusal states the requester-only rule (its
+            // own key), not the generic identity.notCaller message.
             assertThatThrownBy(() -> service.cancelRequest(requestId, "Not mine"))
-                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class)
+                .extracting(Throwable::getMessage)
+                .isIn("transfusion.request.cancel.requesterOnly",
+                    "Only the clinician who requested this transfusion can cancel it.");
         } finally {
             org.springframework.security.core.context.SecurityContextHolder.clearContext();
         }
