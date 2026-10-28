@@ -261,8 +261,10 @@ public class EncounterController {
     // ----------------------------------------------------------
     // MVP 2 — Triage Submission
     // ----------------------------------------------------------
+    // QA D933: the midwife triages her own ANC patients (BP, weight), as the
+    // tracker already offers her; vitals elsewhere admit ROLE_MIDWIFE too.
     @PostMapping(value = "/{encounterId}/triage", consumes = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_NURSE','ROLE_DOCTOR')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR')")
     @Operation(
         summary = "Submit triage data for an encounter (MVP 2)",
         description = "Atomically records vitals, chief complaint, ESI acuity, room assignment, "
@@ -306,7 +308,7 @@ public class EncounterController {
     // Complete Triage — Nurse advances TRIAGE → WAITING_FOR_PHYSICIAN
     // ----------------------------------------------------------
     @PostMapping("/{encounterId}/complete-triage")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_NURSE','ROLE_DOCTOR','ROLE_RECEPTIONIST')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_RECEPTIONIST')")
     @Operation(
         summary = "Complete triage (advance to waiting for physician)",
         description = "Transitions an ARRIVED or TRIAGE encounter to WAITING_FOR_PHYSICIAN."
