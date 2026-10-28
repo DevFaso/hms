@@ -92,6 +92,7 @@ public class EncounterController {
     private final EncounterService encounterService;
     private final ControllerAuthUtils authUtils;
     private final RecordsWithheldHeaders recordsWithheld;
+    private final com.example.hms.service.MedicalCertificateService medicalCertificateService;
 
     // ----------------------------------------------------------
     // Create (Receptionist can check-in → default ARRIVED)
@@ -282,6 +283,26 @@ public class EncounterController {
         TriageSubmissionResponseDTO response =
             encounterService.submitTriage(encounterId, request, username, isSuperAdmin, hospitalId);
         return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED).body(response);
+    }
+
+    // ----------------------------------------------------------
+    // QA D961 — Medical certificate / sick-leave note from a visit
+    // ----------------------------------------------------------
+    @PostMapping(value = "/{encounterId}/medical-certificate", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR')")
+    @Operation(
+        summary = "Issue a medical certificate or sick-leave note for a visit",
+        description = "Generates a dated, signed PDF in FR/EN/ES from the visit, files it in the "
+            + "patient's documents (staff chart and patient portal) and returns the document."
+    )
+    public ResponseEntity<com.example.hms.payload.dto.portal.PatientDocumentResponseDTO> issueMedicalCertificate(
+        @PathVariable UUID encounterId,
+        @Valid @RequestBody com.example.hms.payload.dto.clinical.MedicalCertificateRequestDTO request
+    ) {
+        // The scope is the one resolver's (the service checks the visit's
+        // hospital against the acting hospital); the signer is the caller.
+        return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED)
+            .body(medicalCertificateService.issue(encounterId, request));
     }
 
     // ----------------------------------------------------------

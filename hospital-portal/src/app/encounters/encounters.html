@@ -564,6 +564,17 @@
                 {{ 'ENCOUNTERS.ADD_NOTE' | translate }}
               </button>
             }
+            <!-- QA D961: a dated, signed certificate or sick-leave note from the visit. -->
+            @if (canIssueCertificate(enc)) {
+              <button
+                class="btn-secondary"
+                data-testid="open-medical-certificate"
+                (click)="showCertificateDialog.set(true)"
+              >
+                <span class="material-symbols-outlined" aria-hidden="true">description</span>
+                {{ 'MEDICAL_CERTIFICATE.OPEN' | translate }}
+              </button>
+            }
             <button
               class="btn-secondary"
               [title]="'ENCOUNTERS.ELIGIBILITY_CHECK_HINT' | translate"
@@ -973,5 +984,13 @@
     [encounter]="checkoutEncounter()"
     (dismissed)="onCheckoutDismissed()"
     (checkoutCompleted)="onCheckoutCompleted()"
+  />
+}
+
+<!-- ═══ MEDICAL CERTIFICATE (QA D961) ═══ -->
+@if (showCertificateDialog() && selectedEncounter(); as enc) {
+  <app-medical-certificate-dialog
+    [encounter]="enc"
+    (dismissed)="showCertificateDialog.set(false)"
   />
 }

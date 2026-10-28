@@ -6776,6 +6776,7 @@
     },
     "DOCUMENTS": {
       "TITLE": "Mis Documentos",
+      "TYPE_MEDICAL_CERTIFICATE": "Certificado médico",
       "UPLOAD": "Subir Documento",
       "CANCEL": "Cancelar",
       "SELECT_FILE": "Seleccionar Archivo",
@@ -11908,5 +11909,29 @@
     "RESPONSE": "Respuesta:",
     "SUBJECTIVE": "Subjetivo:",
     "TITLE": "Notas de cuidados de enfermería"
+  },
+  "MEDICAL_CERTIFICATE": {
+    "DAYS": "Días de baja",
+    "DAYS_REQUIRED": "Indique el número de días de baja (1 a 365).",
+    "DOWNLOAD": "Descargar el PDF",
+    "DOWNLOAD_FAILED": "No se pudo descargar el certificado.",
+    "ISSUE": "Emitir y firmar",
+    "ISSUED": "Certificado emitido y archivado en los documentos del paciente.",
+    "ISSUED_HINT": "El certificado firmado está en los documentos del paciente y en su portal del paciente.",
+    "ISSUE_FAILED": "No se pudo emitir el certificado.",
+    "ISSUING": "Emitiendo…",
+    "LANGUAGE": "Idioma del certificado",
+    "LANG_en": "Inglés",
+    "LANG_es": "Español",
+    "LANG_fr": "Francés",
+    "OPEN": "Certificado médico",
+    "REMARKS": "Texto / observaciones",
+    "REMARKS_REQUIRED": "Redacte lo que certifica.",
+    "START": "Primer día de baja",
+    "TITLE": "Certificado médico",
+    "TYPE": "Tipo de certificado",
+    "TYPE_ATTENDANCE": "Certificado de asistencia",
+    "TYPE_GENERAL": "Certificado médico",
+    "TYPE_SICK_LEAVE": "Baja laboral"
   }
 }

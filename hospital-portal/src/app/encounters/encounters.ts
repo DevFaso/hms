@@ -30,6 +30,7 @@ import { ToastService } from '../core/toast.service';
 import { AuthService } from '../auth/auth.service';
 import { NursingNotesPanelComponent } from './nursing-notes-panel/nursing-notes-panel.component';
 import { NursingNoteService } from '../services/nursing-note.service';
+import { MedicalCertificateDialogComponent } from './medical-certificate-dialog/medical-certificate-dialog.component';
 import { RoleContextService } from '../core/role-context.service';
 import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -58,6 +59,7 @@ import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
     EnumLabelPipe,
     CheckoutDialogComponent,
     NursingNotesPanelComponent,
+    MedicalCertificateDialogComponent,
   ],
   templateUrl: './encounters.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -690,6 +692,25 @@ export class EncountersComponent implements OnInit {
    * accordingly instead of leading to a refusal. A note with no recorded
    * author keeps both, and the server decides.
    */
+  /** QA D961: the certificate dialog. */
+  readonly showCertificateDialog = signal(false);
+
+  /**
+   * QA D961: a doctor issues a certificate from a visit the patient was seen
+   * in (the server refuses a visit closed unseen, cancelled or not started).
+   */
+  canIssueCertificate(enc: EncounterResponse): boolean {
+    const unseen = [
+      'SCHEDULED',
+      'ARRIVED',
+      'TRIAGE',
+      'WAITING_FOR_PHYSICIAN',
+      'CANCELLED',
+      'LEFT_WITHOUT_BEING_SEEN',
+    ];
+    return this.auth.hasAnyRole(['ROLE_DOCTOR']) && !!enc.status && !unseen.includes(enc.status);
+  }
+
   /** QA D927: only the roles `GET /nurse/notes` admits load the panel (a refused read would leave the page). */
   get canReadNursingNotes(): boolean {
     return this.auth.hasAnyRole(NursingNoteService.READER_ROLES);

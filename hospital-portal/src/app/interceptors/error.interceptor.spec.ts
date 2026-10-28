@@ -431,6 +431,7 @@ describe('errorInterceptor', () => {
     ['POST', '/encounters/e1/start'],
     ['POST', '/encounters/e1/complete-examination'],
     ['POST', '/encounters/e1/ready-for-discharge'],
+    ['POST', '/encounters/e1/medical-certificate'],
     ['PUT', '/discharge-summaries/s1'],
     ['DELETE', '/discharge-summaries/s1?deletedByProviderId=x'],
     ['POST', '/discharge-summaries/s1/finalize'],

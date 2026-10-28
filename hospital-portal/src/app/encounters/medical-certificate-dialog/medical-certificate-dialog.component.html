@@ -1,0 +1,103 @@
+<div
+  class="modal-backdrop"
+  tabindex="-1"
+  (click)="dismissed.emit()"
+  (keydown.escape)="dismissed.emit()"
+>
+  <div
+    class="modal"
+    appModalDialog
+    aria-labelledby="medical-certificate-title"
+    tabindex="-1"
+    (escaped)="dismissed.emit()"
+    (click)="$event.stopPropagation()"
+    (keydown)="$event.stopPropagation()"
+  >
+    <div class="modal-header">
+      <h2 id="medical-certificate-title">{{ 'MEDICAL_CERTIFICATE.TITLE' | translate }}</h2>
+      <button
+        type="button"
+        class="modal-close"
+        [attr.aria-label]="'COMMON.CLOSE' | translate"
+        (click)="dismissed.emit()"
+      >
+        <span class="material-symbols-outlined" aria-hidden="true">close</span>
+      </button>
+    </div>
+
+    @if (result(); as doc) {
+      <div class="modal-body" data-testid="certificate-issued">
+        <p>{{ 'MEDICAL_CERTIFICATE.ISSUED_HINT' | translate }}</p>
+        <p class="certificate-name">{{ doc.displayName }}</p>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" (click)="dismissed.emit()">
+          {{ 'COMMON.CLOSE' | translate }}
+        </button>
+        <button type="button" class="btn-primary" (click)="download()">
+          <span class="material-symbols-outlined" aria-hidden="true">download</span>
+          {{ 'MEDICAL_CERTIFICATE.DOWNLOAD' | translate }}
+        </button>
+      </div>
+    } @else {
+      <form class="modal-body" (ngSubmit)="submit()">
+        <div class="field">
+          <label for="mc-type">{{ 'MEDICAL_CERTIFICATE.TYPE' | translate }} *</label>
+          <select id="mc-type" name="type" [(ngModel)]="type">
+            @for (t of types; track t) {
+              <option [value]="t">{{ 'MEDICAL_CERTIFICATE.TYPE_' + t | translate }}</option>
+            }
+          </select>
+        </div>
+        @if (type === 'SICK_LEAVE') {
+          <div class="form-row">
+            <div class="field">
+              <label for="mc-start">{{ 'MEDICAL_CERTIFICATE.START' | translate }}</label>
+              <input id="mc-start" name="startDate" type="date" [(ngModel)]="startDate" />
+            </div>
+            <div class="field">
+              <label for="mc-days">{{ 'MEDICAL_CERTIFICATE.DAYS' | translate }} *</label>
+              <input id="mc-days" name="days" type="number" min="1" max="365" [(ngModel)]="days" />
+            </div>
+          </div>
+        }
+        <div class="field">
+          <label for="mc-remarks">
+            {{ 'MEDICAL_CERTIFICATE.REMARKS' | translate }}{{ type === 'GENERAL' ? ' *' : '' }}
+          </label>
+          <textarea
+            id="mc-remarks"
+            name="remarks"
+            rows="3"
+            maxlength="1000"
+            [(ngModel)]="remarks"
+          ></textarea>
+        </div>
+        <div class="field">
+          <label for="mc-language">{{ 'MEDICAL_CERTIFICATE.LANGUAGE' | translate }}</label>
+          <select id="mc-language" name="language" [(ngModel)]="language">
+            @for (l of languages; track l) {
+              <option [value]="l">{{ 'MEDICAL_CERTIFICATE.LANG_' + l | translate }}</option>
+            }
+          </select>
+        </div>
+        @if (missing(); as key) {
+          <p class="form-hint" role="status">{{ key | translate }}</p>
+        }
+        @if (error(); as message) {
+          <p class="form-error" role="alert">{{ message }}</p>
+        }
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" (click)="dismissed.emit()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button type="submit" class="btn-primary" [disabled]="saving() || !!missing()">
+            {{
+              (saving() ? 'MEDICAL_CERTIFICATE.ISSUING' : 'MEDICAL_CERTIFICATE.ISSUE') | translate
+            }}
+          </button>
+        </div>
+      </form>
+    }
+  </div>
+</div>

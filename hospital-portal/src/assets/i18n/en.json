@@ -6776,6 +6776,7 @@
     },
     "DOCUMENTS": {
       "TITLE": "My Documents",
+      "TYPE_MEDICAL_CERTIFICATE": "Medical certificate",
       "UPLOAD": "Upload Document",
       "CANCEL": "Cancel",
       "SELECT_FILE": "Select File",
@@ -11908,5 +11909,29 @@
     "RESPONSE": "Response:",
     "SUBJECTIVE": "Subjective:",
     "TITLE": "Nursing care notes"
+  },
+  "MEDICAL_CERTIFICATE": {
+    "DAYS": "Days off work",
+    "DAYS_REQUIRED": "Enter the number of days off (1 to 365).",
+    "DOWNLOAD": "Download the PDF",
+    "DOWNLOAD_FAILED": "The certificate could not be downloaded.",
+    "ISSUE": "Issue and sign",
+    "ISSUED": "Certificate issued and filed in the patient's documents.",
+    "ISSUED_HINT": "The signed certificate is in the patient's documents and in their patient portal.",
+    "ISSUE_FAILED": "The certificate could not be issued.",
+    "ISSUING": "Issuing…",
+    "LANGUAGE": "Language of the certificate",
+    "LANG_en": "English",
+    "LANG_es": "Spanish",
+    "LANG_fr": "French",
+    "OPEN": "Medical certificate",
+    "REMARKS": "Statement / remarks",
+    "REMARKS_REQUIRED": "Write what you certify.",
+    "START": "First day off",
+    "TITLE": "Medical certificate",
+    "TYPE": "Kind of certificate",
+    "TYPE_ATTENDANCE": "Certificate of attendance",
+    "TYPE_GENERAL": "Medical certificate",
+    "TYPE_SICK_LEAVE": "Sick leave (arrêt de travail)"
   }
 }

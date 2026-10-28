@@ -6742,6 +6742,7 @@
     },
     "DOCUMENTS": {
       "TITLE": "Mes Documents",
+      "TYPE_MEDICAL_CERTIFICATE": "Certificat médical",
       "UPLOAD": "Téléverser un document",
       "CANCEL": "Annuler",
       "SELECT_FILE": "Sélectionner un fichier",
@@ -11908,5 +11909,29 @@
     "RESPONSE": "Réponse :",
     "SUBJECTIVE": "Subjectif :",
     "TITLE": "Notes de soins infirmiers"
+  },
+  "MEDICAL_CERTIFICATE": {
+    "DAYS": "Jours d'arrêt",
+    "DAYS_REQUIRED": "Indiquez le nombre de jours d'arrêt (1 à 365).",
+    "DOWNLOAD": "Télécharger le PDF",
+    "DOWNLOAD_FAILED": "Le certificat n'a pas pu être téléchargé.",
+    "ISSUE": "Établir et signer",
+    "ISSUED": "Certificat établi et classé dans les documents du patient.",
+    "ISSUED_HINT": "Le certificat signé est dans les documents du patient et sur son portail patient.",
+    "ISSUE_FAILED": "Le certificat n'a pas pu être établi.",
+    "ISSUING": "Établissement…",
+    "LANGUAGE": "Langue du certificat",
+    "LANG_en": "Anglais",
+    "LANG_es": "Espagnol",
+    "LANG_fr": "Français",
+    "OPEN": "Certificat médical",
+    "REMARKS": "Texte / remarques",
+    "REMARKS_REQUIRED": "Rédigez ce que vous certifiez.",
+    "START": "Premier jour d'arrêt",
+    "TITLE": "Certificat médical",
+    "TYPE": "Type de certificat",
+    "TYPE_ATTENDANCE": "Certificat de présence",
+    "TYPE_GENERAL": "Certificat médical",
+    "TYPE_SICK_LEAVE": "Arrêt de travail"
   }
 }

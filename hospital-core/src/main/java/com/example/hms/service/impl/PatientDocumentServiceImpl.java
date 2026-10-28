@@ -143,6 +143,12 @@ public class PatientDocumentServiceImpl implements PatientDocumentService {
     public void deleteDocument(Authentication auth, UUID documentId) {
         UUID patientId = resolvePatientId(auth);
         PatientUploadedDocument doc = requireOwnDocument(patientId, documentId);
+        // QA D961: a certificate the doctor issued is part of the record; the
+        // patient downloads it but cannot remove it from the chart.
+        if (doc.getDocumentType() == com.example.hms.enums.PatientDocumentType.MEDICAL_CERTIFICATE) {
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("medicalCertificate.patientCannotDelete"));
+        }
         doc.setDeletedAt(LocalDateTime.now());
         documentRepository.save(doc);
         log.info("Patient {} soft-deleted document {}", patientId, documentId);

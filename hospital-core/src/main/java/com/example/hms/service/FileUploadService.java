@@ -512,6 +512,31 @@ public class FileUploadService {
         );
     }
 
+    /**
+     * QA D961: store a document the server generated (a medical certificate
+     * PDF) beside the patient's documents, under a server-built name, so the
+     * staff chart and the patient portal list and download it like any other.
+     */
+    public StoredFileDescriptor storeGeneratedPatientDocument(byte[] content, String baseName, UUID authorId)
+            throws IOException {
+        if (content == null || content.length == 0) {
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw(MSG_FILE_EMPTY));
+        }
+        Path uploadPath = Paths.get(uploadDir, PATIENT_DOCUMENTS_PATH);
+        Files.createDirectories(uploadPath);
+        String filename = buildAttachmentFilename(sanitizeBaseFilename(baseName + ".pdf"), ".pdf", authorId, "certificate");
+        Path filePath = uploadPath.resolve(filename).normalize();
+        if (!filePath.startsWith(uploadPath)) {
+            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw(MSG_FILE_PATH_INVALID));
+        }
+        Files.write(filePath, content);
+        MessageDigest digest = createSha256Digest();
+        String checksum = HexFormat.of().formatHex(digest.digest(content));
+        String relativePath = patientDocumentUrlPrefix + "/" + PATIENT_DOCUMENTS_PATH + "/" + filename;
+        return new StoredFileDescriptor(relativePath, buildPublicUrl(relativePath), baseName + ".pdf",
+            "application/pdf", content.length, checksum);
+    }
+
     private void validatePatientDocumentFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw(MSG_FILE_EMPTY));
