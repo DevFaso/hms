@@ -234,4 +234,31 @@ class DisclosureAccountingServiceImplTest {
         assertThat(out.getExternalDisclosures()).isZero();
         assertThat(out.getEntries()).isEmpty();
     }
+
+    @Test
+    @DisplayName("QA D979: the same person sharing the record again within 30 minutes shows once")
+    void repeatsFoldIntoOneLine() {
+        LocalDateTime now = LocalDateTime.now();
+        List<AuditEventLog> rows = new java.util.ArrayList<>();
+        for (int i = 0; i < 5; i++) {
+            AuditEventLog share = row(AuditEventType.RECORD_SHARE, "PATIENT", "Joséphine Hien");
+            share.setEventTimestamp(now.minusSeconds(10L * i));
+            rows.add(share);
+        }
+        AuditEventLog later = row(AuditEventType.RECORD_SHARE, "PATIENT", "Joséphine Hien");
+        later.setEventTimestamp(now.minusHours(2));
+        rows.add(later);
+        AuditEventLog emergency1 = row(AuditEventType.BREAK_GLASS_ACCESS, "BREAK_GLASS_SESSION", "Dr X");
+        AuditEventLog emergency2 = row(AuditEventType.BREAK_GLASS_ACCESS, "BREAK_GLASS_SESSION", "Dr X");
+        rows.add(emergency1);
+        rows.add(emergency2);
+        when(auditRepository.findDisclosuresForPatient(any(), any(), any(), any(), any()))
+            .thenReturn(new PageImpl<>(rows));
+
+        List<AccessLogEntryDTO> shown = service.getEntries(patientId, null, null, pageable).getContent();
+
+        assertThat(shown).filteredOn(e -> e.getCategory() == DisclosureCategory.SHARED_WITH_PROVIDER).hasSize(2);
+        // Every emergency access stays a line of its own.
+        assertThat(shown).filteredOn(e -> e.getCategory() == DisclosureCategory.EMERGENCY_ACCESS).hasSize(2);
+    }
 }

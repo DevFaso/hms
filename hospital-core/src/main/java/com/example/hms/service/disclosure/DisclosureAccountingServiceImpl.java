@@ -66,9 +66,47 @@ public class DisclosureAccountingServiceImpl implements DisclosureAccountingServ
     private Page<AccessLogEntryDTO> queryEntries(UUID patientId, Set<AuditEventType> accountable,
                                                  LocalDateTime from, LocalDateTime to,
                                                  Pageable pageable) {
-        return auditRepository
+        Page<AccessLogEntryDTO> page = auditRepository
             .findDisclosuresForPatient(patientId, accountable, from, to, pageable)
             .map(this::toEntry);
+        return new org.springframework.data.domain.PageImpl<>(foldRepeats(page.getContent()),
+            page.getPageable(), page.getTotalElements());
+    }
+
+    /** QA D979: the window in which the same person reading the same way again shows once. */
+    private static final java.time.Duration REPEAT_WINDOW = java.time.Duration.ofMinutes(30);
+
+    /** QA D979: the categories a repeat of folds into one line; every emergency, copy or insurer row stays. */
+    private static final Set<DisclosureCategory> FOLDABLE =
+        java.util.EnumSet.of(DisclosureCategory.TREATMENT_ACCESS, DisclosureCategory.SHARED_WITH_PROVIDER);
+
+    /**
+     * QA D979: Joséphine Hien appeared five times in 40 seconds as "shared
+     * with a provider" (every chart and timeline read writes a RECORD_SHARE),
+     * although the page says repeat views during one visit show once. The
+     * audit keeps every row and the counts still add them all up; only the
+     * list the patient reads folds a repeat, by the same person, of the same
+     * kind, from the same hospital, within 30 minutes of the line kept.
+     */
+    static List<AccessLogEntryDTO> foldRepeats(List<AccessLogEntryDTO> entries) {
+        List<AccessLogEntryDTO> kept = new java.util.ArrayList<>(entries.size());
+        Map<String, LocalDateTime> lastKept = new java.util.HashMap<>();
+        for (AccessLogEntryDTO entry : entries) {
+            if (entry.getCategory() == null || !FOLDABLE.contains(entry.getCategory()) || entry.getTimestamp() == null) {
+                kept.add(entry);
+                continue;
+            }
+            String key = entry.getCategory() + "|" + entry.getActor() + "|" + entry.getHospitalName()
+                + "|" + entry.getDescription();
+            LocalDateTime previous = lastKept.get(key);
+            if (previous != null
+                    && java.time.Duration.between(entry.getTimestamp(), previous).abs().compareTo(REPEAT_WINDOW) <= 0) {
+                continue;
+            }
+            lastKept.put(key, entry.getTimestamp());
+            kept.add(entry);
+        }
+        return kept;
     }
 
     /**
