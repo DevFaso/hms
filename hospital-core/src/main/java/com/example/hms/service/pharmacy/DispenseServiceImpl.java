@@ -1505,6 +1505,7 @@ public class DispenseServiceImpl implements DispenseService {
         Set<UUID> outstandingBackOrders = outstandingBackOrdersFor(rows);
         Map<UUID, LocalDateTime> lastActions = lastPharmacyActionsFor(rows, latestDecisions);
         Map<UUID, Dispense> preparedFills = openPreparationsFor(rows);
+        Map<UUID, BigDecimal> committed = committedQuantitiesFor(rows);
         LocalDateTime uncollectedBefore = LocalDateTime.now(clock).minus(uncollectedAfter);
         return page.map(p -> {
             Dispense prepared = preparedFills.get(p.getId());
@@ -1512,6 +1513,8 @@ public class DispenseServiceImpl implements DispenseService {
                     latestDecisions.get(p.getId()), lastActions.get(p.getId()),
                     outstandingBackOrders.contains(p.getId()));
             dto.setClaim(claims.get(p.getId()));
+            // QA D1001: the same remainder requireWithinPrescribedQuantity caps a fill at.
+            dto.setRemainingQuantity(FillAccounting.remaining(p, committed.getOrDefault(p.getId(), BigDecimal.ZERO)));
             if (prepared != null) {
                 dto.setReadyForCollection(toReadyForCollection(prepared));
                 // G15 AC-11: the lowest-precedence reason. A status or an
@@ -1548,6 +1551,24 @@ public class DispenseServiceImpl implements DispenseService {
                     queueClaimService.activeAfter(), pageable);
             case ALL -> prescriptionRepository.findWorkQueue(hospitalId, statuses, pageable);
         };
+    }
+
+    /** QA D1001: what each order on the page has committed (fills not cancelled), one query. */
+    private Map<UUID, BigDecimal> committedQuantitiesFor(List<Prescription> prescriptions) {
+        if (prescriptions.isEmpty()) {
+            return Map.of();
+        }
+        List<UUID> ids = prescriptions.stream().map(Prescription::getId).toList();
+        Map<UUID, BigDecimal> committed = new HashMap<>();
+        List<Object[]> rows = dispenseRepository.sumQuantityCommittedByPrescriptionIds(ids);
+        if (rows != null) {
+            for (Object[] row : rows) {
+                if (row != null && row.length == 2 && row[0] instanceof UUID id && row[1] instanceof BigDecimal sum) {
+                    committed.put(id, sum);
+                }
+            }
+        }
+        return committed;
     }
 
     /** G15: the open preparation of each order on the page, one query. */

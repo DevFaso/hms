@@ -370,7 +370,16 @@
                   {{ d.routingType | enumLabel: 'routingType' }}
                 </span>
               </td>
-              <td>{{ d.targetPharmacyName || '—' }}</td>
+              <td>
+                {{ d.targetPharmacyName || '—' }}
+                <!-- QA D1001: how much this decision routed, printed or back-ordered
+                     (the remainder at the time, never the full prescribed amount). -->
+                @if (d.remainingQuantity != null) {
+                  <span class="cell-sub" [attr.data-testid]="'routing-qty-' + d.id">{{
+                    'PHARMACY.ROUTED_QUANTITY' | translate: { qty: d.remainingQuantity }
+                  }}</span>
+                }
+              </td>
               <td>
                 <span class="badge" [ngClass]="statusBadgeClass(d.status)">
                   {{ d.status | enumLabel: 'status' }}

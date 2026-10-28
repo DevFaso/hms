@@ -9020,6 +9020,8 @@
     "QTY_ON_HAND": "Qty: {{qty}}",
     "QTY_RECEIVED_LABEL": "Qty Received",
     "QTY_REQUESTED": "Qty Requested",
+    "QTY_REMAINING": "{{qty}} still to dispense",
+    "ROUTED_QUANTITY": "Quantity: {{qty}}",
     "QUANTITY": "Quantity",
     "QUANTITY_RECEIVED": "Quantity Received",
     "REASON": "Reason",

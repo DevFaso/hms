@@ -482,7 +482,15 @@
                 <td>{{ rx.patient?.firstName }} {{ rx.patient?.lastName }}</td>
                 <td>{{ rx.medicationName }}</td>
                 <td>{{ rx.dosage }}</td>
-                <td>{{ rx.quantity }} {{ rx.quantityUnit }}</td>
+                <td>
+                  {{ rx.quantity }} {{ rx.quantityUnit }}
+                  <!-- QA D1001: a partly filled order says what is still owed -->
+                  @if (isPartlyDispensed(rx)) {
+                    <span class="cell-sub" [attr.data-testid]="'rx-remaining-' + rx.id">{{
+                      'PHARMACY.QTY_REMAINING' | translate: { qty: rx.remainingQuantity }
+                    }}</span>
+                  }
+                </td>
                 <td>
                   <span class="badge badge-info">{{
                     rx.status | enumLabel: 'prescriptionStatus'

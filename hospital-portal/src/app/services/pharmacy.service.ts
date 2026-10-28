@@ -398,6 +398,12 @@ export interface WorkQueuePrescription {
   dosage?: string;
   frequency?: string;
   quantity?: number;
+  /**
+   * QA D1001: what may still be dispensed on this order (the server's own
+   * ceiling: every fill owed minus the fills not cancelled). Absent when the
+   * order carries no quantity.
+   */
+  remainingQuantity?: number;
   quantityUnit?: string;
   status: string;
   createdAt?: string;

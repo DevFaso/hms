@@ -767,6 +767,16 @@ export class DispensingComponent implements OnInit, OnDestroy {
     });
   }
 
+  /** QA D1001: what is still owed on the order; the prescribed amount only when the server sent none. */
+  remainingQuantity(rx: WorkQueuePrescription): number {
+    return rx.remainingQuantity ?? rx.quantity ?? 0;
+  }
+
+  /** QA D1001: true when part of the order was already dispensed, so the queue shows both figures. */
+  isPartlyDispensed(rx: WorkQueuePrescription): boolean {
+    return rx.remainingQuantity != null && rx.quantity != null && rx.remainingQuantity < rx.quantity;
+  }
+
   private openForm(rx: WorkQueuePrescription): void {
     this.selectedPrescription = rx;
     this.form = this.emptyForm();
@@ -774,10 +784,12 @@ export class DispensingComponent implements OnInit, OnDestroy {
     this.form.patientId = rx.patient?.id ?? '';
     this.form.pharmacyId = this.selectedPharmacyId;
     this.form.medicationName = rx.medicationName ?? '';
-    this.form.quantityRequested = rx.quantity ?? 0;
-    // QA D432: the fill starts at what was prescribed, not at 0 (which kept
-    // Dispense disabled until the pharmacist retyped the quantity).
-    this.form.quantityDispensed = rx.quantity ?? 0;
+    // QA D432 then D1001: the fill starts at what is still owed on the order
+    // (the server's ceiling), not at 0 and not at the full prescribed amount,
+    // which a partly filled order refuses ("il reste au plus 10").
+    const owed = this.remainingQuantity(rx);
+    this.form.quantityRequested = owed;
+    this.form.quantityDispensed = owed;
     this.form.dispensedBy = this.auth.currentProfile()?.id ?? '';
     this.verifyAttested.set(false);
     this.showForm.set(true);

@@ -355,6 +355,30 @@ class DispenseServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D1001: each row carries what remains to dispense (prescribed minus fills not cancelled), one query")
+        void queueRowsCarryTheRemainingQuantity() {
+            Pageable pageable = PageRequest.of(0, 20);
+            prescription.setQuantity(new BigDecimal("20"));
+            Prescription untouched = new Prescription();
+            untouched.setId(UUID.randomUUID());
+            untouched.setStatus(PrescriptionStatus.SIGNED);
+            untouched.setQuantity(new BigDecimal("40"));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findWorkQueue(eq(hospitalId), any(), eq(pageable)))
+                    .thenReturn(new PageImpl<>(List.of(prescription, untouched)));
+            when(dispenseRepository.sumQuantityCommittedByPrescriptionIds(any()))
+                    .thenReturn(List.<Object[]>of(new Object[] {prescriptionId, new BigDecimal("10")}));
+
+            List<com.example.hms.payload.dto.pharmacy.WorkQueuePrescriptionDTO> rows =
+                    service.getWorkQueue(pageable, com.example.hms.enums.QueueClaimFilter.ALL).getContent();
+
+            verify(dispenseRepository, times(1)).sumQuantityCommittedByPrescriptionIds(any());
+            assertThat(rows.get(0).getQuantity()).isEqualByComparingTo("20");
+            assertThat(rows.get(0).getRemainingQuantity()).isEqualByComparingTo("10");
+            assertThat(rows.get(1).getRemainingQuantity()).isEqualByComparingTo("40");
+        }
+
+        @Test
         @DisplayName("AC-13: MINE pages the caller's active claims, with the clock's activeAfter")
         void mineUsesItsOwnQuery() {
             Pageable pageable = PageRequest.of(0, 20);

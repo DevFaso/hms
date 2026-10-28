@@ -1633,6 +1633,18 @@ describe('DispensingComponent — work-queue claim (G13)', () => {
     expect(component.form.quantityDispensed).toBe(30);
   });
 
+  it('QA D1001: a partly filled order starts at what remains, and the queue says so', async () => {
+    await render({ remainingQuantity: 10 });
+    pharmacySvc.claimQueueRow.and.returnValue(
+      of({ data: { ...myClaim, renewed: false } }) as never,
+    );
+    expect(exists('rx-remaining-rx-1')).toBeTrue();
+    click('rx-dispense-rx-1');
+
+    expect(component.form.quantityRequested).toBe(10);
+    expect(component.form.quantityDispensed).toBe(10);
+  });
+
   it('Dispense on a colleague’s row then Cancel keeps the open form and its claim', async () => {
     await render();
     twoRows();
