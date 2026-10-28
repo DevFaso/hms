@@ -975,7 +975,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             .assignmentCode(assignment.getAssignmentCode())
             .roleName(role != null ? role.getName() : null)
             .roleCode(role != null ? getRoleCode(role) : null)
-            .roleDescription(role != null ? role.getDescription() : null)
+            .roleDescription(localizedRoleDescription(role))
             .hospitalName(hospital != null ? hospital.getName() : null)
             .hospitalCode(hospital != null ? hospital.getCode() : null)
             .hospitalAddress(hospital != null ? hospital.getAddress() : null)
@@ -983,7 +983,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             .confirmationVerified(assignment.getConfirmationVerifiedAt() != null)
             .confirmationVerifiedAt(assignment.getConfirmationVerifiedAt())
             .profileCompletionUrl(profileCompletionUrl(assignment))
-            .profileChecklist(buildRoleProfileChecklist(role))
+            .profileChecklist(localizedProfileChecklist(role))
             .build();
     }
 
@@ -1125,7 +1125,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             .assignmentCode(assignment.getAssignmentCode())
             .roleName(role != null ? role.getName() : null)
             .roleCode(role != null ? getRoleCode(role) : null)
-            .roleDescription(role != null ? role.getDescription() : null)
+            .roleDescription(localizedRoleDescription(role))
             .hospitalName(hospital != null ? hospital.getName() : null)
             .hospitalCode(hospital != null ? hospital.getCode() : null)
             .hospitalAddress(hospital != null ? hospital.getAddress() : null)
@@ -1133,7 +1133,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             .confirmationVerified(assignment.getConfirmationVerifiedAt() != null)
             .confirmationVerifiedAt(assignment.getConfirmationVerifiedAt())
             .profileCompletionUrl(profileCompletionUrl(assignment))
-            .profileChecklist(buildRoleProfileChecklist(role))
+            .profileChecklist(localizedProfileChecklist(role))
             .tempUsername(tempUsername)
             .tempPassword(tempPassword)
             .build();
@@ -2553,6 +2553,46 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         } catch (RuntimeException ex) {
             log.warn("⚠️ Failed to record assignment confirmation audit for assignment '{}': {}", assignment.getId(), ex.getMessage());
         }
+    }
+
+    /**
+     * QA D941: the welcome page read the seeded English role description in a
+     * French session. A seeded role reads {@code role.description.<CODE>} in
+     * the caller's language; a role an administrator created keeps its own text.
+     */
+    private String localizedRoleDescription(Role role) {
+        if (role == null) {
+            return null;
+        }
+        String code = getRoleCode(role);
+        if (code == null || code.isBlank()) {
+            return role.getDescription();
+        }
+        String normalized = code.trim().toUpperCase(Locale.ROOT);
+        String key = "role.description." + (normalized.startsWith(ROLE_PREFIX) ? normalized : ROLE_PREFIX + normalized);
+        return messageSource.getMessage(key, null, role.getDescription(), LocaleContextHolder.getLocale());
+    }
+
+    /** QA D941: each checklist line in the caller's language, the English line when a key is missing. */
+    private List<String> localizedProfileChecklist(Role role) {
+        List<String> english = buildRoleProfileChecklist(role);
+        String owner = checklistOwner(english);
+        Locale locale = LocaleContextHolder.getLocale();
+        List<String> out = new java.util.ArrayList<>(english.size());
+        for (int i = 0; i < english.size(); i++) {
+            out.add(messageSource.getMessage("onboarding.checklist." + owner + "." + (i + 1), null, english.get(i), locale));
+        }
+        return out;
+    }
+
+    /** The key segment of a checklist: its role, or DEFAULT. */
+    private static String checklistOwner(List<String> checklist) {
+        for (Map.Entry<String, List<String>> entry : ROLE_PROFILE_CHECKLISTS.entrySet()) {
+            if (entry.getValue() == checklist) {
+                return entry.getKey();
+            }
+        }
+        return "DEFAULT";
     }
 
     private List<String> buildRoleProfileChecklist(Role role) {
