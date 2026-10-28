@@ -1492,6 +1492,41 @@ class BillingInvoiceServiceImplTest {
         assertEquals(receptionist, row.getValue().getRecordedBy());
     }
 
+    @Test
+    void recordCheckInCopay_keepsTheMethodAndReference_andRefusesMobileMoneyWithoutOne_D975() {
+        Hospital hospital = new Hospital();
+        hospital.setId(UUID.randomUUID());
+        Patient patient = new Patient();
+        patient.setId(UUID.randomUUID());
+        com.example.hms.model.Encounter encounter = new com.example.hms.model.Encounter();
+        encounter.setId(UUID.randomUUID());
+        encounter.setHospital(hospital);
+        encounter.setPatient(patient);
+
+        assertThrows(com.example.hms.exception.BusinessException.class, () -> billingInvoiceService.recordCheckInCopay(
+            encounter, new BigDecimal("1500"), com.example.hms.enums.PaymentMethod.MOBILE_MONEY, " ", UUID.randomUUID()));
+        verify(invoiceRepository, never()).saveAndFlush(any(BillingInvoice.class));
+
+        when(invoiceNumberAllocator.next(any(), any())).thenReturn("GH-2026-000043");
+        when(invoiceRepository.saveAndFlush(any(BillingInvoice.class))).thenAnswer(inv -> {
+            BillingInvoice b = inv.getArgument(0);
+            b.setId(UUID.randomUUID());
+            return b;
+        });
+        when(invoiceRepository.save(any(BillingInvoice.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(paymentTransactionRepository.save(any(com.example.hms.model.PaymentTransaction.class)))
+            .thenAnswer(inv -> inv.getArgument(0));
+
+        billingInvoiceService.recordCheckInCopay(encounter, new BigDecimal("1500"),
+            com.example.hms.enums.PaymentMethod.MOBILE_MONEY, "OM-778812", UUID.randomUUID());
+
+        ArgumentCaptor<com.example.hms.model.PaymentTransaction> row =
+            ArgumentCaptor.forClass(com.example.hms.model.PaymentTransaction.class);
+        verify(paymentTransactionRepository).save(row.capture());
+        assertEquals(com.example.hms.enums.PaymentMethod.MOBILE_MONEY, row.getValue().getPaymentMethod());
+        assertEquals("OM-778812", row.getValue().getReferenceNumber());
+    }
+
     // ---- QA round 4 (billing) ----
 
     @Test

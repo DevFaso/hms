@@ -51,6 +51,7 @@ import { serverDateOrInstant } from '../shared/date-utils';
 import { ClockTimePipe } from '../shared/pipes/clock-time.pipe';
 import { NursingNotesPanelComponent } from '../encounters/nursing-notes-panel/nursing-notes-panel.component';
 import { NursingNoteService } from '../services/nursing-note.service';
+import { PatientDemographicsEditComponent } from './patient-demographics-edit/patient-demographics-edit.component';
 
 type TabKey =
   | 'overview'
@@ -94,6 +95,7 @@ type TabKey =
     ChartReviewComponent,
     BreakGlassBannerComponent,
     EnumLabelPipe,
+    PatientDemographicsEditComponent,
   ],
   templateUrl: './patient-detail.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -426,6 +428,28 @@ export class PatientDetailComponent implements OnInit {
         this.toast.error(this.translate.instant('PATIENTS.WRISTBAND_FAILED'));
       },
     });
+  }
+
+  /** QA D926: the demographics edit dialog is open. */
+  editingDemographics = signal(false);
+
+  /** QA D926: mirrors PATCH /patients/{id}'s @PreAuthorize list. */
+  canEditDemographics(): boolean {
+    return this.roleContext.hasAnyActiveRole([
+      'ROLE_HOSPITAL_ADMIN',
+      'ROLE_RECEPTIONIST',
+      'ROLE_NURSE',
+      'ROLE_MIDWIFE',
+      'ROLE_DOCTOR',
+      'ROLE_SUPER_ADMIN',
+    ]);
+  }
+
+  /** QA D926: the corrected chart replaces the shown one. */
+  onDemographicsSaved(updated: PatientResponse): void {
+    const current = this.patient();
+    this.patient.set(current ? { ...current, ...updated } : updated);
+    this.editingDemographics.set(false);
   }
 
   /** Mirrors PatientPhotoController.WRITE_ROLES exactly (P3 #21). */

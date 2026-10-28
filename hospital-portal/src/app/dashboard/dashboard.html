@@ -124,21 +124,22 @@
       <!-- Shortcuts only where no Quick Actions strip already carries them
            (hasQuickActionsStrip), so Start Encounter is never on the page twice. -->
       @if (!hasQuickActionsStrip()) {
-        @if (permissions.hasPermission('Create Appointments')) {
+        <!-- QA D997: offered for the role the user is acting in, not every role held. -->
+        @if (permissions.hasActivePermission('Create Appointments')) {
           <a class="hero-btn hero-btn-primary" routerLink="/appointments/new">
             <span class="material-symbols-outlined">calendar_add_on</span>
             {{ 'DASHBOARD.NEW_APPOINTMENT' | translate }}
           </a>
         }
-        @if (permissions.hasPermission('Create Encounters')) {
+        @if (permissions.hasActivePermission('Create Encounters')) {
           <a class="hero-btn hero-btn-secondary" routerLink="/encounters">
             <span class="material-symbols-outlined">stethoscope</span>
             {{ 'DASHBOARD.START_ENCOUNTER' | translate }}
           </a>
         }
         @if (
-          permissions.hasPermission('Register Patients') &&
-          !permissions.hasPermission('Create Encounters')
+          permissions.hasActivePermission('Register Patients') &&
+          !permissions.hasActivePermission('Create Encounters')
         ) {
           <a class="hero-btn hero-btn-secondary" routerLink="/patients/new">
             <span class="material-symbols-outlined">person_add</span>
@@ -1870,7 +1871,8 @@
           <span class="material-symbols-outlined stat-icon">how_to_reg</span>
         </div>
         <div class="stat-body">
-          <span class="stat-value">{{ completedToday() }}</span
+          <!-- QA D945: the tile says "checked in", so it counts the checked-in visits. -->
+          <span class="stat-value">{{ checkedInToday() }}</span
           ><span class="stat-label">{{ 'DASHBOARD.CHECKED_IN' | translate }}</span>
         </div>
       </a>

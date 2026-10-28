@@ -140,3 +140,19 @@ test('round 16: an element with a shared dialog directive is a dialog; its Escap
     ['label'],
   );
 });
+
+test('appDialogFocus closes on Escape when (dialogDismiss) is bound, but does not make its host a dialog', () => {
+  const bound = `<div class="dialog-box" role="dialog" aria-modal="true" aria-labelledby="t" appDialogFocus (dialogDismiss)="close()"><h2 id="t">x</h2></div>`;
+  assert.deepEqual(dialogFindings(bound), []);
+  const unbound = `<div class="dialog-box" role="dialog" aria-modal="true" aria-labelledby="t" appDialogFocus><h2 id="t">x</h2></div>`;
+  assert.deepEqual(
+    dialogFindings(unbound).map((f) => f.rule),
+    ['escape'],
+  );
+  // No role: the directive supplies none, so the container is still reported.
+  const noRole = `<div class="dialog-box" aria-labelledby="t" appDialogFocus (dialogDismiss)="close()"><h2 id="t">x</h2></div>`;
+  assert.deepEqual(
+    dialogFindings(noRole).map((f) => f.rule),
+    ['role'],
+  );
+});

@@ -200,6 +200,8 @@
     role="dialog"
     aria-modal="true"
     [attr.aria-label]="'RECEPTION.ATTEST_ELIGIBILITY' | translate"
+    appDialogFocus
+    (dialogDismiss)="showAttestModal.set(false)"
   >
     <div class="attest-header">
       <h3>{{ 'RECEPTION.ATTEST_ELIGIBILITY' | translate }}</h3>

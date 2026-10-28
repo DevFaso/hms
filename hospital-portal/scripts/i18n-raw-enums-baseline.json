@@ -162,6 +162,7 @@
     "src/app/patients/patient-detail.html::appt.reason",
     "src/app/patients/patient-detail.html::p.bloodType",
     "src/app/patients/patient-detail.html::p.chartRestrictionReason",
+    "src/app/patients/patient-detail.html::p.emergencyContactRelationship",
     "src/app/patients/patient-detail.html::p.state",
     "src/app/patients/patient-list.html::<option>bt",
     "src/app/patients/patient-list.html::patient.bloodType",

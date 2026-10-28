@@ -1,3 +1,4 @@
+import { DialogFocusDirective } from '../../shared/a11y/dialog-focus.directive';
 import {
   Component,
   Input,
@@ -20,7 +21,14 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 @Component({
   selector: 'app-patient-snapshot-drawer',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, CfaPipe],
+  imports: [
+    DialogFocusDirective,
+    ServerTimePipe,
+    CfaPipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+  ],
   templateUrl: './patient-snapshot-drawer.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './patient-snapshot-drawer.component.scss',

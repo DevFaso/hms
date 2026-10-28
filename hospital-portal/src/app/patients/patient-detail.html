@@ -85,6 +85,18 @@
           }
         </div>
       </div>
+      @if (canEditDemographics()) {
+        <!-- QA D926: the desk corrects the identity, contact and guardian. -->
+        <button
+          type="button"
+          class="btn-secondary wristband-btn"
+          data-testid="edit-demographics"
+          (click)="editingDemographics.set(true)"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+          {{ 'PATIENTS.EDIT_BUTTON' | translate }}
+        </button>
+      }
       @if (canDownloadRecord()) {
         <button
           type="button"
@@ -471,6 +483,37 @@
             </div>
           }
         </div>
+        <!-- QA D926: the parent or contact to call, captured at registration, shown on the chart. -->
+        <div class="info-card" data-testid="guardian-card">
+          <h3>
+            <span class="material-symbols-outlined" aria-hidden="true">family_restroom</span>
+            {{ 'PATIENTS.GUARDIAN_CARD' | translate }}
+          </h3>
+          @if (p.emergencyContactName || p.emergencyContactPhone) {
+            <div class="info-rows">
+              <div class="info-row">
+                <span class="label">{{ 'PATIENTS.EC_NAME' | translate }}</span
+                ><span class="value">{{ p.emergencyContactName || '—' }}</span>
+              </div>
+              <div class="info-row">
+                <span class="label">{{ 'PATIENTS.EC_RELATIONSHIP' | translate }}</span
+                ><span class="value">{{ p.emergencyContactRelationship || '—' }}</span>
+              </div>
+              <div class="info-row">
+                <span class="label">{{ 'PATIENTS.EC_PHONE' | translate }}</span
+                ><span class="value">
+                  @if (p.emergencyContactPhone) {
+                    <a [href]="'tel:' + p.emergencyContactPhone">{{ p.emergencyContactPhone }}</a>
+                  } @else {
+                    —
+                  }
+                </span>
+              </div>
+            </div>
+          } @else {
+            <p class="address-history-empty">{{ 'PATIENTS.EC_NONE' | translate }}</p>
+          }
+        </div>
         <div class="info-card">
           <h3>
             <span class="material-symbols-outlined">local_hospital</span>
@@ -821,5 +864,12 @@
         </div>
       }
     }
+  }
+  @if (editingDemographics() && patient(); as current) {
+    <app-patient-demographics-edit
+      [patient]="current"
+      (dismissed)="editingDemographics.set(false)"
+      (saved)="onDemographicsSaved($event)"
+    />
   }
 </div>

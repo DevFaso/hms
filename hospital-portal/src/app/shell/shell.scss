@@ -333,10 +333,12 @@ $sidebar-active-text: #23b79c; // 6.2:1 on the active row
   text-overflow: ellipsis;
 }
 
+// QA D1010: no text-transform. The role label is a translated sentence-case
+// label ("Spécialiste de la facturation", "Patient(e)"); capitalize turned it
+// into "Spécialiste De La Facturation" and "Patient(E)".
 .user-role-mini {
   font-size: 0.6875rem;
   color: $sidebar-text-dim;
-  text-transform: capitalize;
 }
 
 // ---------- Main Area ----------
@@ -813,7 +815,6 @@ $sidebar-active-text: #23b79c; // 6.2:1 on the active row
   margin: 0;
   font-size: 0.75rem;
   color: #64748b;
-  text-transform: capitalize;
 }
 
 .profile-menu hr {

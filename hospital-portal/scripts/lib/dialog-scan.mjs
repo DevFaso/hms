@@ -45,6 +45,22 @@ const DIRECTIVE_DIALOGS = new Map([
   ['appModalDialog', '(escaped)'],
 ]);
 
+/**
+ * A keyboard-contract directive that does NOT make its host a dialog (no host
+ * role/aria-modal), but does close it on Escape from a host keydown listener:
+ * shared/a11y/dialog-focus.directive.ts (`appDialogFocus`) emits
+ * `dialogDismiss`. Its host still needs role="dialog", aria-modal and a name;
+ * only its Escape counts, and only when that output is bound.
+ */
+const ESCAPE_DIRECTIVES = new Map([['appDialogFocus', '(dialogDismiss)']]);
+
+function directiveEscape(tag) {
+  for (const [directive, output] of ESCAPE_DIRECTIVES) {
+    if (tag.attrs.has(directive) && (tag.attrs.get(output) ?? '').trim() !== '') return true;
+  }
+  return false;
+}
+
 function directiveDialog(tag) {
   for (const [directive, output] of DIRECTIVE_DIALOGS) {
     if (tag.attrs.has(directive)) return { escape: (tag.attrs.get(output) ?? '').trim() !== '' };
@@ -182,6 +198,7 @@ export function dialogFindings(html, componentSource = html, dialogSelectors = n
       const hasEscape =
         nativeDialog ||
         directive?.escape === true ||
+        directiveEscape(tag) ||
         componentEscape ||
         hasEscapeAttr(tag) ||
         hasKeydownEscape(tag, componentSource) ||

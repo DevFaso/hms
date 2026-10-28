@@ -426,38 +426,6 @@
       "count": 1,
       "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
     },
-    "src/app/reception/checkin-dialog/checkin-dialog.component.html::role::checkin-dialog <{{ 'RECEPTION.CHECKIN_TITLE' | translate }}>": {
-      "count": 1,
-      "why": "D988: check-in dialog is not a modal"
-    },
-    "src/app/reception/close-unseen-dialog/close-unseen-dialog.component.html::escape::dialog-box <{{ 'RECEPTION.CLOSE_UNSEEN_TITLE' | translate }}>": {
-      "count": 1,
-      "why": "D976 class: (keydown.escape) sits on a SIBLING backdrop, which never receives the key while focus is inside the dialog"
-    },
-    "src/app/reception/patient-snapshot-drawer/patient-snapshot-drawer.component.html::escape::attest-modal <{{ 'RECEPTION.ATTEST_ELIGIBILITY' | translate }}>": {
-      "count": 1,
-      "why": "D976 class: (keydown.escape) sits on a SIBLING backdrop, which never receives the key while focus is inside the dialog"
-    },
-    "src/app/reception/payment-pending-panel/payment-pending-panel.component.html::role::modal-box <{{ 'RECEPTION.COLLECT_PAYMENT' | translate }} — {{ payingIte>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/reception/recalls-panel/recalls-panel.component.html::escape::modal-panel <{{ 'RECEPTION.ADD_RECALL' | translate }}>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/reception/waitlist-panel/waitlist-panel.component.html::escape::modal-panel <{{ 'RECEPTION.ADD_TO_WAITLIST' | translate }}>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/reception/waitlist-panel/waitlist-panel.component.html::escape::modal-panel <{{ 'RECEPTION.OFFER_SLOT_TO' | translate: { name: entry.pati>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/reception/walkin-dialog/walkin-dialog.component.html::escape::dialog-box <{{ 'RECEPTION.REGISTER_WALKIN' | translate }}>": {
-      "count": 1,
-      "why": "D976 class: (keydown.escape) sits on a SIBLING backdrop, which never receives the key while focus is inside the dialog"
-    },
     "src/app/registrations/registrations.html::label::modal <{{ 'REGISTRATIONS.DELETE_TITLE' | translate }}>": {
       "count": 1,
       "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"

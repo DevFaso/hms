@@ -56,6 +56,19 @@ export class PatientFormComponent implements OnInit {
 
   // ── Cross-hospital existing-patient match (link instead of duplicate) ───
   registrationMatches: RegistrationMatch[] = [];
+
+  /**
+   * QA D986: the match card said "exists in another hospital" next to a
+   * "Déjà enregistré dans cet hôpital" badge. The sentence now says where the
+   * matched records are: here, elsewhere, or both.
+   */
+  matchDescriptionKey(): string {
+    const here = this.registrationMatches.filter((m) => m.alreadyRegisteredHere).length;
+    if (here === 0) return 'PATIENTS.EXISTING_MATCH_DESC';
+    return here === this.registrationMatches.length
+      ? 'PATIENTS.EXISTING_MATCH_DESC_HERE'
+      : 'PATIENTS.EXISTING_MATCH_DESC_MIXED';
+  }
   /** Staff confirmed "not the same person" — allows a fresh registration. */
   matchDismissed = false;
   linking = false;

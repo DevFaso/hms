@@ -3,6 +3,7 @@ import {
   Input,
   Output,
   EventEmitter,
+  computed,
   inject,
   signal,
   ChangeDetectionStrategy,
@@ -14,6 +15,8 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { ReceptionQueueItem, ReceptionService } from '../reception.service';
 import { ToastService } from '../../core/toast.service';
+import { DialogFocusDirective } from '../../shared/a11y/dialog-focus.directive';
+import { DESK_PAYMENT_METHODS, deskMethodNeedsReference } from '../desk-payment-methods';
 
 interface OpenInvoice {
   id: string;
@@ -22,12 +25,13 @@ interface OpenInvoice {
   amountPaid: number;
   balanceDue: number;
   status: string;
+  currency?: string | null;
 }
 
 @Component({
   selector: 'app-payment-pending-panel',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, CfaPipe],
+  imports: [CommonModule, FormsModule, TranslateModule, CfaPipe, DialogFocusDirective],
   templateUrl: './payment-pending-panel.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './payment-pending-panel.component.scss',
@@ -47,6 +51,14 @@ export class PaymentPendingPanelComponent {
   selectedInvoiceId = signal<string | null>(null);
   payAmount = signal<number | null>(null);
   payMethod = signal<string>('CASH');
+  /** QA D948: the operator or policy reference of a Mobile Money or insurance payment. */
+  payReference = signal('');
+  readonly methods = DESK_PAYMENT_METHODS;
+  readonly needsReference = computed(() => deskMethodNeedsReference(this.payMethod()));
+  /** The selected invoice's currency (francs CFA unless the invoice says otherwise). */
+  readonly selectedCurrency = computed(
+    () => this.openInvoices().find((inv) => inv.id === this.selectedInvoiceId())?.currency ?? null,
+  );
   paying = signal(false);
   loadingInvoices = signal(false);
 
@@ -54,6 +66,7 @@ export class PaymentPendingPanelComponent {
     this.payingItem.set(item);
     this.payAmount.set(null);
     this.payMethod.set('CASH');
+    this.payReference.set('');
     this.selectedInvoiceId.set(null);
     this.openInvoices.set([]);
     this.loadInvoices(item.patientId);
@@ -89,6 +102,11 @@ export class PaymentPendingPanelComponent {
       });
   }
 
+  /** The amount still due on an invoice. */
+  balanceOf(inv: OpenInvoice): number {
+    return inv.balanceDue ?? inv.totalAmount - (inv.amountPaid ?? 0);
+  }
+
   closePayDialog(): void {
     this.payingItem.set(null);
   }
@@ -97,21 +115,25 @@ export class PaymentPendingPanelComponent {
     const invoiceId = this.selectedInvoiceId();
     const amount = this.payAmount();
     const method = this.payMethod();
+    const reference = this.payReference().trim();
     if (!invoiceId || !amount || amount <= 0) return;
+    if (this.needsReference() && !reference) return;
 
     this.paying.set(true);
-    this.receptionService.recordPayment(invoiceId, amount, method).subscribe({
-      next: () => {
-        this.paying.set(false);
-        this.closePayDialog();
-        this.paymentCollected.emit();
-        this.toast.success(this.translate.instant('RECEPTION.PAYMENT_RECORDED'));
-      },
-      error: (err) => {
-        this.paying.set(false);
-        const msg = err?.error?.message ?? this.translate.instant('RECEPTION.PAYMENT_FAILED');
-        this.toast.error(msg);
-      },
-    });
+    this.receptionService
+      .recordPayment(invoiceId, amount, method, reference || undefined)
+      .subscribe({
+        next: () => {
+          this.paying.set(false);
+          this.closePayDialog();
+          this.paymentCollected.emit();
+          this.toast.success(this.translate.instant('RECEPTION.PAYMENT_RECORDED'));
+        },
+        error: (err) => {
+          this.paying.set(false);
+          const msg = err?.error?.message ?? this.translate.instant('RECEPTION.PAYMENT_FAILED');
+          this.toast.error(msg);
+        },
+      });
   }
 }

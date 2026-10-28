@@ -145,7 +145,13 @@
                 </td>
                 <td>{{ item.providerName ?? '—' }}</td>
                 <td>{{ item.departmentName ?? '—' }}</td>
-                <td class="reason-cell">{{ item.appointmentReason ?? '—' }}</td>
+                <td class="reason-cell">
+                  <!-- QA D944: a walk-in with no reason typed reads "Sans rendez-vous", never English. -->
+                  {{
+                    item.appointmentReason ??
+                      (item.appointmentId ? '—' : ('RECEPTION.WALKIN' | translate))
+                  }}
+                </td>
                 <td>
                   <span [ngClass]="statusClass(item.status)">
                     {{ 'RECEPTION.' + item.status | translate }}
@@ -170,12 +176,13 @@
                 </td>
                 <td>
                   <button
+                    type="button"
                     class="btn-icon"
                     (click)="openSnapshot(item.patientId)"
                     [title]="'RECEPTION.PATIENT_SNAPSHOT' | translate"
                     [attr.aria-label]="'RECEPTION.PATIENT_SNAPSHOT' | translate"
                   >
-                    <span class="material-symbols-outlined">person_search</span>
+                    <span class="material-symbols-outlined" aria-hidden="true">person_search</span>
                   </button>
                   @if (canCheckIn(item)) {
                     <button

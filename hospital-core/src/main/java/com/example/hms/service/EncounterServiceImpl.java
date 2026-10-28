@@ -306,6 +306,18 @@ public class EncounterServiceImpl implements EncounterService {
     private final PatientTrackerEventPublisher trackerEventPublisher;
     private final com.example.hms.service.vitals.News2EscalationService news2EscalationService;
     private final com.example.hms.repository.scheduling.PatientRecallRepository patientRecallRepository;
+
+    /**
+     * QA D985 (branch C1): check-out closes the recall its visit answered.
+     * Setter-injected so the unit tests that build this service by
+     * constructor keep compiling; null there, and then nothing is closed.
+     */
+    private com.example.hms.service.scheduling.PatientRecallService recallService;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setRecallService(com.example.hms.service.scheduling.PatientRecallService recallService) {
+        this.recallService = recallService;
+    }
     /** QA D795: the stay's own department, which a transfer moves (BedAssignmentService, QA D237). */
     private final com.example.hms.repository.AdmissionRepository admissionRepository;
     /** QA D972 hand-off: publishes {@link com.example.hms.event.EncounterCheckedOutEvent} at checkout. */
@@ -2419,6 +2431,11 @@ public class EncounterServiceImpl implements EncounterService {
                 && appointment.getStatus() != com.example.hms.enums.AppointmentStatus.CANCELLED) {
             appointment.setStatus(com.example.hms.enums.AppointmentStatus.COMPLETED);
             appointmentRepository.save(appointment);
+            // QA D985 (branch C1): the recall this visit answered is fulfilled,
+            // by the one rule the status action uses.
+            if (recallService != null) {
+                recallService.completeRecallsOf(appointment.getId());
+            }
         }
 
         // (c2) Feed the follow-up request into the recall worklist (P3 #22).
@@ -2543,6 +2560,10 @@ public class EncounterServiceImpl implements EncounterService {
                 && appointment.getStatus() != com.example.hms.enums.AppointmentStatus.CANCELLED) {
             appointment.setStatus(com.example.hms.enums.AppointmentStatus.CANCELLED);
             appointmentRepository.save(appointment);
+            // QA D985 (branch C1): the recall this visit answered is open again.
+            if (recallService != null) {
+                recallService.reopenRecallsOf(appointment.getId());
+            }
         }
 
         recordHistory(saved, "CLOSED_UNSEEN", actorUsername, previousValues);
@@ -2661,14 +2682,16 @@ public class EncounterServiceImpl implements EncounterService {
      * would fail the whole checkout); null when the day is full.
      */
     private java.time.LocalTime freeFollowUpSlot(UUID staffId, java.time.LocalDate date) {
-        java.util.Set<java.time.LocalTime> taken = new java.util.HashSet<>();
-        if (staffId != null) {
-            appointmentRepository.findByStaff_IdAndAppointmentDate(staffId, date)
-                    .forEach(a -> taken.add(a.getStartTime()));
-        }
+        // QA D937 class (branch C1): the same overlap rule as every booking
+        // path. A cancelled or missed booking frees its time, and a held one
+        // blocks any half-hour it overlaps, not only one starting at its minute.
+        java.util.List<Appointment> sameDay = staffId == null ? java.util.List.of()
+            : appointmentRepository.findByStaff_IdAndAppointmentDate(staffId, date);
         for (java.time.LocalTime t = FOLLOW_UP_PLACEHOLDER_START; !t.isAfter(FOLLOW_UP_PLACEHOLDER_LAST);
                 t = t.plusMinutes(FOLLOW_UP_SLOT_MINUTES)) {
-            if (!taken.contains(t)) {
+            java.time.LocalDateTime start = java.time.LocalDateTime.of(date, t);
+            if (!AppointmentSlotRules.overlapsHeldSlot(sameDay, null, start,
+                    start.plusMinutes(FOLLOW_UP_SLOT_MINUTES))) {
                 return t;
             }
         }

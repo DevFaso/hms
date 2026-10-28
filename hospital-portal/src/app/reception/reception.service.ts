@@ -197,6 +197,9 @@ export interface CheckInRequest {
   patientId?: string | null;
   chiefComplaint?: string | null;
   copayAmount?: number | null;
+  /** QA D975: how the copay was paid (cash when absent) and its reference. */
+  copayMethod?: string | null;
+  copayReference?: string | null;
   identityConfirmed?: boolean;
   insuranceVerified?: boolean;
   notes?: string | null;
@@ -218,6 +221,9 @@ export interface CheckInResponse {
   arrivalTimestamp: string;
   chiefComplaint: string | null;
   message: string;
+  /** QA D975: the copay's invoice and payment, for its receipt. */
+  copayInvoiceId?: string | null;
+  copayPaymentId?: string | null;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -268,8 +274,17 @@ export class ReceptionService {
     return this.http.get<FlowBoard>(`${this.base}/flow-board`, { params });
   }
 
-  recordPayment(invoiceId: string, amount: number, method = 'CASH'): Observable<unknown> {
-    return this.http.post(`/billing-invoices/${invoiceId}/payments`, { amount, method });
+  recordPayment(
+    invoiceId: string,
+    amount: number,
+    method = 'CASH',
+    reference?: string,
+  ): Observable<unknown> {
+    return this.http.post(`/billing-invoices/${invoiceId}/payments`, {
+      amount,
+      method,
+      ...(reference ? { reference } : {}),
+    });
   }
 
   // ── MVP 11: Duplicate candidate detection ──────────────────────────────────

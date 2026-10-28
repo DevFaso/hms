@@ -12,6 +12,8 @@
   role="dialog"
   aria-modal="true"
   [attr.aria-label]="'RECEPTION.REGISTER_WALKIN' | translate"
+  appDialogFocus
+  (dialogDismiss)="dismissed.emit()"
 >
   <div class="dialog-header">
     <span class="material-symbols-outlined header-icon">person_add</span>
@@ -70,11 +72,12 @@
             <span class="result-meta">{{ sub }}</span>
           }
           <button
-            [attr.aria-label]="'COMMON.CLEAR' | translate"
+            type="button"
             class="clear-btn"
             (click)="selectedPatient.set(null); patientQuery.set('')"
+            [attr.aria-label]="'RECEPTION.CLEAR_PATIENT' | translate"
           >
-            <span class="material-symbols-outlined">close</span>
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
           </button>
         </div>
       }
@@ -121,11 +124,12 @@
             <span class="result-meta">— {{ selectedStaff()!.departmentName }}</span>
           }
           <button
-            [attr.aria-label]="'COMMON.CLEAR' | translate"
+            type="button"
             class="clear-btn"
             (click)="selectedStaff.set(null); staffQuery.set('')"
+            [attr.aria-label]="'RECEPTION.CLEAR_PROVIDER' | translate"
           >
-            <span class="material-symbols-outlined">close</span>
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
           </button>
         </div>
       }

@@ -1,3 +1,5 @@
+import { RouterLink } from '@angular/router';
+import { DialogFocusDirective } from '../../shared/a11y/dialog-focus.directive';
 import {
   Component,
   inject,
@@ -36,7 +38,15 @@ type RecallFilter = 'ALL' | RecallStatus;
 @Component({
   selector: 'app-recalls-panel',
   standalone: true,
-  imports: [PatientSublinePipe, ServerTimePipe, CommonModule, FormsModule, TranslateModule],
+  imports: [
+    DialogFocusDirective,
+    PatientSublinePipe,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    RouterLink,
+  ],
   templateUrl: './recalls-panel.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './recalls-panel.component.scss',
