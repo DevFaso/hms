@@ -43,7 +43,12 @@ import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.
 import { PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { fromServerDateTime, localDateString, toServerDateTime } from '../shared/date-utils';
+import {
+  fromServerDateTime,
+  isServerTimeToday,
+  localDateString,
+  toServerDateTime,
+} from '../shared/date-utils';
 import {
   EncounterService,
   EncounterResponse,
@@ -1003,15 +1008,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
    * 23:04 never reads as a time to give today.
    */
   isDueToday(dueTime: string | null | undefined): boolean {
-    if (!dueTime) return true;
-    const due = fromServerDateTime(dueTime);
-    if (!due) return true;
-    const now = new Date();
-    return (
-      due.getFullYear() === now.getFullYear() &&
-      due.getMonth() === now.getMonth() &&
-      due.getDate() === now.getDate()
-    );
+    return isServerTimeToday(dueTime);
   }
 
   /** QA D929/D949: Give/Hold/Refuse only on a dose that can be recorded now. */

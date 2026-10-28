@@ -231,7 +231,13 @@
                       }
                     </td>
                     <td>{{ v.type | enumLabel: 'vitalTaskType' }}</td>
-                    <td>{{ v.dueTime | serverTime | date: 'shortTime' }}</td>
+                    <td>
+                      {{
+                        v.dueTime
+                          | serverTime
+                          | date: (isDueToday(v.dueTime) ? 'shortTime' : 'short')
+                      }}
+                    </td>
                     <td>
                       @if (v.overdue) {
                         <span class="badge-overdue">{{ 'NURSE.OVERDUE' | translate }}</span>
@@ -422,7 +428,13 @@
                         o.priority | enumLabel: 'taskPriority'
                       }}</span>
                     </td>
-                    <td>{{ o.dueTime | serverTime | date: 'shortTime' }}</td>
+                    <td>
+                      {{
+                        o.dueTime
+                          | serverTime
+                          | date: (isDueToday(o.dueTime) ? 'shortTime' : 'short')
+                      }}
+                    </td>
                   </tr>
                 }
               </tbody>
@@ -936,7 +948,11 @@
                   @if (task.dueAt) {
                     <span class="task-due" [class.overdue-text]="task.overdue">
                       {{ 'NURSE.DUE_LABEL' | translate }}
-                      {{ task.dueAt | serverTime | date: 'shortTime' }}
+                      {{
+                        task.dueAt
+                          | serverTime
+                          | date: (isDueToday(task.dueAt) ? 'shortTime' : 'short')
+                      }}
                       @if (task.overdue) {
                         <span class="overdue-badge">{{ 'NURSE.OVERDUE_BADGE' | translate }}</span>
                       }

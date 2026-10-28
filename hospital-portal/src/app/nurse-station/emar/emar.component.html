@@ -50,7 +50,9 @@
                 }
                 <span class="emar__queue-meta">
                   {{ task.dose }} · {{ task.route | medicationRoute }} ·
-                  {{ task.dueTime | serverTime | date: 'HH:mm' }}
+                  {{
+                    task.dueTime | serverTime | date: (isDueToday(task.dueTime) ? 'HH:mm' : 'short')
+                  }}
                 </span>
                 <!-- Marked in the queue, not only in the detail: a nurse
                      planning a round needs to see which doses they cannot give
