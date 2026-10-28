@@ -239,6 +239,9 @@ export class StockAdjustmentComponent implements OnInit {
     this.form.inventoryItemId = itemId;
     this.form.stockLotId = undefined;
     this.itemLots.set([]);
+    // QA D932: another item's fills are not this return's; choose again.
+    this.returnDispenseId = '';
+    this.returnableDispenses.set([]);
     if (!itemId) return;
     this.svc.listLotsByInventoryItem(itemId, 0, 100).subscribe({
       next: (res) => {

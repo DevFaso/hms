@@ -238,6 +238,14 @@ describe('StockAdjustmentComponent (D82 / D108)', () => {
       c.form.quantity = 2;
     }
 
+    it('forgets the chosen dispense when the item changes', () => {
+      const c = create();
+      openReturn(c);
+      c.returnDispenseId = fill.dispenseId;
+      c.onItemChange('item-2');
+      expect(c.returnDispenseId).toBe('');
+    });
+
     it('lists the fills of the chosen item and lot', () => {
       const c = create();
       openReturn(c);
