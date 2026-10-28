@@ -58,7 +58,10 @@ class ReferralStepActorGuardTest {
         // The receiving-side check itself refuses the referrer.
         int at = src.indexOf("private UUID requireReceivingSide(");
         String helper = src.substring(at, src.indexOf("\n    }\n", at));
+        // The refusal names the not-referrer key, through its constant (whose value is checked too).
         assertThat(helper).as("requireReceivingSide must refuse the referrer (QA D955)")
-            .contains("getReferringProvider()").contains("generalReferral.receiver.notReferrer");
+            .contains("getReferringProvider()").contains("RECEIVER_NOT_REFERRER");
+        assertThat(src).as("the not-referrer constant holds the not-referrer key")
+            .contains("RECEIVER_NOT_REFERRER = \"generalReferral.receiver.notReferrer\"");
     }
 }

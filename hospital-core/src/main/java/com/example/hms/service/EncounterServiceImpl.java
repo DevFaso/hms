@@ -438,11 +438,7 @@ public class EncounterServiceImpl implements EncounterService {
         EncounterStatus fallbackStatus = existing.getStatus() != null ? existing.getStatus() : EncounterStatus.ARRIVED;
         applyEncounterDefaults(merged, ctx.department(), fallbackDate, fallbackStatus);
         ensureEncounterCode(merged);
-        // QA D990: a visit marked ARRIVED here (a scheduled patient shows up) waits from now.
-        if (merged.getStatus() == EncounterStatus.ARRIVED && previousStatus != EncounterStatus.ARRIVED
-                && merged.getArrivalTimestamp() == null) {
-            merged.setArrivalTimestamp(LocalDateTime.now(java.time.ZoneId.systemDefault()));
-        }
+        stampArrivalWhenMarkedArrived(merged, previousStatus);
 
         // QA D788: a status written here obeys the closing rules of the check-out.
         EncounterClosureRules.requireDirectTransition(previousStatus, merged.getStatus(),
@@ -2452,6 +2448,14 @@ public class EncounterServiceImpl implements EncounterService {
         });
         publishCheckedOut(encounter, now);
         return avs;
+    }
+
+    /** QA D990: a visit marked ARRIVED through PUT (a scheduled patient shows up) waits from now. */
+    private static void stampArrivalWhenMarkedArrived(Encounter merged, EncounterStatus previousStatus) {
+        if (merged.getStatus() == EncounterStatus.ARRIVED && previousStatus != EncounterStatus.ARRIVED
+                && merged.getArrivalTimestamp() == null) {
+            merged.setArrivalTimestamp(LocalDateTime.now(java.time.ZoneId.systemDefault()));
+        }
     }
 
     /** QA D972: a visit completed through PUT /encounters/{id} is handed to billing like a checkout. */

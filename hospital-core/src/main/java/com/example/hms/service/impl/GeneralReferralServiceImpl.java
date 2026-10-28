@@ -540,9 +540,8 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         Staff referrer = referral.getReferringProvider();
         if (callerId != null && referrer != null && referrer.getUser() != null
                 && callerId.equals(referrer.getUser().getId())) {
-            // The key stays literal here: ReferralStepActorGuardTest reads it in this method.
             throw new com.example.hms.exception.ClientSafeAccessDeniedException(
-                com.example.hms.utility.MessageUtil.resolveOrRaw("generalReferral.receiver.notReferrer"));
+                com.example.hms.utility.MessageUtil.resolveOrRaw(RECEIVER_NOT_REFERRER));
         }
         return targetId;
     }
