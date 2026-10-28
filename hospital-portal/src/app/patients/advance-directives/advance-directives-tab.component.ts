@@ -19,6 +19,7 @@ import {
 } from '../../services/advance-directive.service';
 import { ToastService } from '../../core/toast.service';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 
 /**
  * Advance-directives tab on the patient chart (P2 #13).
@@ -32,7 +33,7 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 @Component({
   selector: 'app-advance-directives-tab',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule],
+  imports: [ModalDialogDirective, ServerTimePipe, CommonModule, FormsModule, TranslateModule],
   templateUrl: './advance-directives-tab.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './advance-directives-tab.component.scss',

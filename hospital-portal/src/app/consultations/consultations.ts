@@ -35,6 +35,7 @@ import { serverInstant, toServerDateTime } from '../shared/date-utils';
 import { missingRequiredMessage } from '../shared/required-fields';
 import { labelledRefusalReason } from '../shared/refusal-reason';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 /** Mirrors the @PreAuthorize on GET /consultations/mine. Update both together. */
 const CONSULTANT_TAB_ROLES = ['ROLE_DOCTOR', 'ROLE_SUPER_ADMIN'];
@@ -43,6 +44,7 @@ const CONSULTANT_TAB_ROLES = ['ROLE_DOCTOR', 'ROLE_SUPER_ADMIN'];
   selector: 'app-consultations',
   standalone: true,
   imports: [
+    ModalDialogDirective,
     PatientSublinePipe,
     ServerTimePipe,
     CommonModule,

@@ -36,6 +36,7 @@ import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { localDateString, nowLocalDatetime, toServerDateTime } from '../shared/date-utils';
 import { refusalReason } from '../shared/refusal-reason';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 type Tab = 'requests' | 'units';
 
@@ -51,6 +52,7 @@ type Tab = 'requests' | 'units';
   selector: 'app-transfusion',
   standalone: true,
   imports: [
+    ModalDialogDirective,
     ServerTimePipe,
     CommonModule,
     FormsModule,

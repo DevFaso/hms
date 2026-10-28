@@ -184,9 +184,14 @@
   <!-- ══ Detail ══ -->
   @if (selected(); as rec) {
     <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeDetail()">
-      <div class="detail-panel">
+      <div
+        appModalDialog
+        aria-labelledby="mortality-panel-1-title"
+        (escaped)="closeDetail()"
+        class="detail-panel"
+      >
         <div class="detail-header">
-          <h2>{{ rec.patientName }}</h2>
+          <h2 id="mortality-panel-1-title">{{ rec.patientName }}</h2>
           <button
             class="btn-close"
             (click)="closeDetail()"

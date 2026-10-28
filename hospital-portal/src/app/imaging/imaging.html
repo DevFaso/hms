@@ -337,9 +337,16 @@
   <!-- ══ Report detail overlay ══ -->
   @if (selectedReport(); as rep) {
     <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeReport()">
-      <div class="detail-panel">
+      <div
+        appModalDialog
+        aria-labelledby="imaging-panel-1-title"
+        (escaped)="closeReport()"
+        class="detail-panel"
+      >
         <div class="detail-header">
-          <h2>{{ rep.reportTitle || rep.reportNumber || ('IMAGING.REPORT' | translate) }}</h2>
+          <h2 id="imaging-panel-1-title">
+            {{ rep.reportTitle || rep.reportNumber || ('IMAGING.REPORT' | translate) }}
+          </h2>
           <div class="header-actions">
             @if (canAuthorReports && !rep.signed) {
               <button class="btn-secondary" (click)="openEditReport(rep)">
@@ -686,9 +693,14 @@
   }
   @if (selectedOrder(); as ord) {
     <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeDetail()">
-      <div class="detail-panel">
+      <div
+        appModalDialog
+        aria-labelledby="imaging-panel-2-title"
+        (escaped)="closeDetail()"
+        class="detail-panel"
+      >
         <div class="detail-header">
-          <h2>{{ 'IMAGING.ORDER_DETAILS' | translate }}</h2>
+          <h2 id="imaging-panel-2-title">{{ 'IMAGING.ORDER_DETAILS' | translate }}</h2>
           <button
             class="btn-close"
             (click)="closeDetail()"

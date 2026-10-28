@@ -220,9 +220,16 @@
   <!-- ══ Request detail ══ -->
   @if (selectedRequest(); as req) {
     <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeRequest()">
-      <div class="detail-panel">
+      <div
+        appModalDialog
+        aria-labelledby="transfusion-panel-1-title"
+        (escaped)="closeRequest()"
+        class="detail-panel"
+      >
         <div class="detail-header">
-          <h2>{{ req.patientName }} — {{ req.productType | enumLabel: 'bloodProductType' }}</h2>
+          <h2 id="transfusion-panel-1-title">
+            {{ req.patientName }} — {{ req.productType | enumLabel: 'bloodProductType' }}
+          </h2>
           <button
             class="btn-close"
             (click)="closeRequest()"

@@ -177,9 +177,14 @@
   }
   @if (selectedPlan(); as plan) {
     <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeDetail()">
-      <div class="detail-panel">
+      <div
+        appModalDialog
+        aria-labelledby="treatment-plans-panel-1-title"
+        (escaped)="closeDetail()"
+        class="detail-panel"
+      >
         <div class="detail-header">
-          <h2>{{ 'TREATMENT.TREATMENT_PLAN' | translate }}</h2>
+          <h2 id="treatment-plans-panel-1-title">{{ 'TREATMENT.TREATMENT_PLAN' | translate }}</h2>
           <button
             class="btn-close"
             (click)="closeDetail()"

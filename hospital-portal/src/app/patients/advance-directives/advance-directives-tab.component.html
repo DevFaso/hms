@@ -111,12 +111,15 @@
       data-testid="directive-modal"
     >
       <div
+        appModalDialog
+        aria-labelledby="advance-directives-tab-panel-1-title"
+        (escaped)="closeModal()"
         class="form-card"
         (click)="$event.stopPropagation()"
         (keydown.escape)="$event.stopPropagation()"
         tabindex="-1"
       >
-        <h2>
+        <h2 id="advance-directives-tab-panel-1-title">
           {{ (editingId() ? 'DIRECTIVES.EDIT_TITLE' : 'DIRECTIVES.ADD_TITLE') | translate }}
         </h2>
         <form (ngSubmit)="submit()">
@@ -227,12 +230,17 @@
       data-testid="directive-revoke-modal"
     >
       <div
+        appModalDialog
+        aria-labelledby="advance-directives-tab-panel-2-title"
+        (escaped)="cancelRevoke()"
         class="form-card confirm-card"
         (click)="$event.stopPropagation()"
         (keydown.escape)="$event.stopPropagation()"
         tabindex="-1"
       >
-        <h2>{{ 'DIRECTIVES.REVOKE_TITLE' | translate }}</h2>
+        <h2 id="advance-directives-tab-panel-2-title">
+          {{ 'DIRECTIVES.REVOKE_TITLE' | translate }}
+        </h2>
         <p>
           <strong>{{ 'DIRECTIVES.TYPE_' + target.directiveType | translate }}</strong>
         </p>

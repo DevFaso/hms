@@ -35,11 +35,13 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { missingRequiredMessage } from '../shared/required-fields';
 import { labelledRefusalReason } from '../shared/refusal-reason';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 @Component({
   selector: 'app-referrals',
   standalone: true,
   imports: [
+    ModalDialogDirective,
     PatientSublinePipe,
     ServerTimePipe,
     CommonModule,

@@ -33,6 +33,26 @@ const CONTAINER_TOKEN =
 const DIALOG_ROLES = new Set(['dialog', 'alertdialog']);
 
 /**
+ * Round 16: the shared dialog directives set role="dialog" and
+ * aria-modal="true" from their host bindings, trap focus, and emit on Escape
+ * (shared/a11y/dialog-a11y.directive.ts emits `dialogClose`,
+ * shared/a11y/modal-dialog.directive.ts emits `escaped`). An element carrying
+ * one IS a dialog to assistive technology; its Escape counts only when that
+ * output is bound to something, and its name is still checked.
+ */
+const DIRECTIVE_DIALOGS = new Map([
+  ['appDialogA11y', '(dialogClose)'],
+  ['appModalDialog', '(escaped)'],
+]);
+
+function directiveDialog(tag) {
+  for (const [directive, output] of DIRECTIVE_DIALOGS) {
+    if (tag.attrs.has(directive)) return { escape: (tag.attrs.get(output) ?? '').trim() !== '' };
+  }
+  return null;
+}
+
+/**
  * An Escape handler that belongs to the whole component: a document/window
  * HostListener, or the CDK/Material dialog service, which closes on Escape
  * itself. A `(keydown.escape)` must sit on the dialog element, an ancestor or
@@ -122,7 +142,8 @@ export function dialogFindings(html, componentSource = html, dialogSelectors = n
       }
       return;
     }
-    const role = attrValue(tag, 'role');
+    const directive = directiveDialog(tag);
+    const role = attrValue(tag, 'role') ?? (directive ? 'dialog' : undefined);
     // A native <dialog> has the implicit role, is modal when opened with
     // showModal() and closes on Escape by itself: only its NAME is checked.
     const nativeDialog = tag.name === 'dialog';
@@ -134,7 +155,7 @@ export function dialogFindings(html, componentSource = html, dialogSelectors = n
       const inner = innerHtml(html, tokens, index);
       const a = anchor(tag, inner);
       // `aria-modal="false"` is not modal and `aria-label=""` names nothing: the VALUE counts.
-      const ariaModal = attrValue(tag, 'aria-modal');
+      const ariaModal = directive ? 'true' : attrValue(tag, 'aria-modal');
       if (
         !nativeDialog &&
         (ariaModal === undefined || ariaModal.replace(/['"]/g, '').trim() === 'false')
@@ -160,6 +181,7 @@ export function dialogFindings(html, componentSource = html, dialogSelectors = n
       }
       const hasEscape =
         nativeDialog ||
+        directive?.escape === true ||
         componentEscape ||
         hasEscapeAttr(tag) ||
         hasKeydownEscape(tag, componentSource) ||
@@ -181,7 +203,7 @@ export function dialogFindings(html, componentSource = html, dialogSelectors = n
       // child component that is itself a dialog all make the wrapper a wrapper.
       const wrapsDialog =
         inner != null &&
-        (/\brole\s*=\s*["'](?:dialog|alertdialog)["']|\[(?:attr\.)?role\]\s*=\s*["']'(?:dialog|alertdialog)'["']|<dialog\b/.test(
+        (/\bappDialogA11y\b|\bappModalDialog\b|\brole\s*=\s*["'](?:dialog|alertdialog)["']|\[(?:attr\.)?role\]\s*=\s*["']'(?:dialog|alertdialog)'["']|<dialog\b/.test(
           inner,
         ) ||
           (childDialog !== null && childDialog.test(inner)));

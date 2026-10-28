@@ -20,6 +20,7 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { toServerDateTime } from '../shared/date-utils';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 /**
  * The mortality register (Tier 2 item 29) — the first and only caller of every
@@ -33,6 +34,7 @@ import { toServerDateTime } from '../shared/date-utils';
   selector: 'app-mortality',
   standalone: true,
   imports: [
+    ModalDialogDirective,
     ServerTimePipe,
     CommonModule,
     FormsModule,

@@ -43,11 +43,13 @@ import { actionRoles, SERVICE_RULE_ROLES } from '../core/action-permissions';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { serverLocalDate, toServerDateTime } from '../shared/date-utils';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 @Component({
   selector: 'app-encounters',
   standalone: true,
   imports: [
+    ModalDialogDirective,
     PatientSublinePipe,
     ServerTimePipe,
     CommonModule,

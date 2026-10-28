@@ -30,6 +30,7 @@ import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.
 import { actionRoles } from '../core/action-permissions';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { refusalReason } from '../shared/refusal-reason';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 type ImagingForm = Omit<ImagingOrderRequest, 'laterality'> & {
   laterality?: ImagingLaterality | '';
@@ -68,6 +69,7 @@ interface ReportForm {
   selector: 'app-imaging',
   standalone: true,
   imports: [
+    ModalDialogDirective,
     ServerTimePipe,
     CommonModule,
     FormsModule,

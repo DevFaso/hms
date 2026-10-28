@@ -257,9 +257,14 @@
   }
   @if (selectedReferral(); as ref) {
     <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeDetail()">
-      <div class="detail-panel">
+      <div
+        appModalDialog
+        aria-labelledby="referrals-panel-1-title"
+        (escaped)="closeDetail()"
+        class="detail-panel"
+      >
         <div class="detail-header">
-          <h2>{{ 'REFERRALS.DETAILS' | translate }}</h2>
+          <h2 id="referrals-panel-1-title">{{ 'REFERRALS.DETAILS' | translate }}</h2>
           <button
             [attr.aria-label]="'COMMON.CLOSE' | translate"
             class="btn-close"
@@ -511,6 +516,7 @@
       role="dialog"
       aria-modal="true"
       aria-labelledby="referrals-dialog-1-title"
+      (keydown.escape)="closeModal()"
     >
       <div class="modal-header">
         <h2 id="referrals-dialog-1-title">{{ 'REFERRALS.NEW' | translate }}</h2>
@@ -760,7 +766,13 @@
       (click)="cancelDeleteAction()"
       (keydown.escape)="cancelDeleteAction()"
     ></div>
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="referrals-dialog-2-title">
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="referrals-dialog-2-title"
+      (keydown.escape)="cancelDeleteAction()"
+    >
       <div class="modal-header">
         <h2 id="referrals-dialog-2-title">{{ 'REFERRALS.CANCEL_REFERRAL' | translate }}</h2>
         <button
@@ -812,7 +824,13 @@
       (click)="closeAcknowledgeModal()"
       (keydown.escape)="closeAcknowledgeModal()"
     ></div>
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="referrals-dialog-3-title">
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="referrals-dialog-3-title"
+      (keydown.escape)="closeAcknowledgeModal()"
+    >
       <div class="modal-header">
         <h2 id="referrals-dialog-3-title">{{ 'REFERRALS.ACKNOWLEDGE_REFERRAL' | translate }}</h2>
         <button
@@ -871,7 +889,13 @@
       (click)="closeScheduleModal()"
       (keydown.escape)="closeScheduleModal()"
     ></div>
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="referrals-dialog-4-title">
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="referrals-dialog-4-title"
+      (keydown.escape)="closeScheduleModal()"
+    >
       <div class="modal-header">
         <h2 id="referrals-dialog-4-title">{{ 'REFERRALS.SCHEDULE_REFERRAL' | translate }}</h2>
         <button
@@ -935,7 +959,13 @@
       (click)="closeRejectModal()"
       (keydown.escape)="closeRejectModal()"
     ></div>
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="referrals-dialog-5-title">
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="referrals-dialog-5-title"
+      (keydown.escape)="closeRejectModal()"
+    >
       <div class="modal-header">
         <h2 id="referrals-dialog-5-title">{{ 'REFERRALS.REJECT_REFERRAL' | translate }}</h2>
         <button
@@ -995,7 +1025,13 @@
       (click)="closeCompleteModal()"
       (keydown.escape)="closeCompleteModal()"
     ></div>
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="referrals-dialog-6-title">
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="referrals-dialog-6-title"
+      (keydown.escape)="closeCompleteModal()"
+    >
       <div class="modal-header">
         <h2 id="referrals-dialog-6-title">{{ 'REFERRALS.COMPLETE_REFERRAL' | translate }}</h2>
         <button

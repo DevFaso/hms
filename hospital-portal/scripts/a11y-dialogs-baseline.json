@@ -62,26 +62,6 @@
       "count": 1,
       "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
     },
-    "src/app/admissions/admissions.html::role::modal <{{ 'ADMISSIONS.ASSIGN_BED' | translate }}>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/admissions/admissions.html::role::modal <{{ 'ADMISSIONS.DELETE_TITLE' | translate }}>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/admissions/admissions.html::role::modal modal-lg": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/admissions/admissions.html::role::modal modal-lg <{{ editing() ? ('ADMISSIONS.EDIT' | translate) : ('ADMISSION>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/admissions/admissions.html::role::modal modal-lg <exit_to_app {{ 'ADMISSIONS.DISCHARGE_MODAL_TITLE' | translat>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
     "src/app/announcements/announcement-list.html::label::modal <{{ 'ANNOUNCEMENTS.DELETE_ANNOUNCEMENT' | translate }}>": {
       "count": 1,
       "why": "pre-existing (class D976/D988): dialog without a name; aria-labelledby pointing at its title"
@@ -121,26 +101,6 @@
     "src/app/bed-management/bed-management.html::modal::modal-card <{{ (editingWardId() ? 'BEDS.EDIT_WARD' : 'BEDS.NEW_WARD') | >": {
       "count": 1,
       "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/billing/billing.html::label::modal <{{ 'BILLING.EMAIL_TITLE' | translate: { invoice: inv.invoice>": {
-      "count": 1,
-      "why": "D976: billing modals — Escape dead, focus stays behind, 4 lack a dialog role"
-    },
-    "src/app/billing/billing.html::label::modal <{{ 'BILLING.PAYMENT_TITLE' | translate: { invoice: inv.invoi>": {
-      "count": 1,
-      "why": "D976: billing modals — Escape dead, focus stays behind, 4 lack a dialog role"
-    },
-    "src/app/billing/billing.html::label::modal <{{ (reversalMode() === 'reverse' ? 'BILLING.REVERSE_PAYMENT'>": {
-      "count": 1,
-      "why": "D976: billing modals — Escape dead, focus stays behind, 4 lack a dialog role"
-    },
-    "src/app/billing/billing.html::role::modal <{{ 'BILLING.DELETE_INVOICE' | translate }}>": {
-      "count": 1,
-      "why": "D976: billing modals — Escape dead, focus stays behind, 4 lack a dialog role"
-    },
-    "src/app/billing/billing.html::role::modal modal-lg <{{ editing() ? ('BILLING.EDIT_INVOICE' | translate) : ('BILL>": {
-      "count": 1,
-      "why": "D976: billing modals — Escape dead, focus stays behind, 4 lack a dialog role"
     },
     "src/app/consultations/consultations.html::role::modal <{{ 'CONSULTATIONS.CANCEL' | translate }}>": {
       "count": 1,
@@ -226,46 +186,6 @@
       "count": 1,
       "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
     },
-    "src/app/discharge/discharge.html::label::modal <{{ 'DISCHARGE.CANCEL_TITLE' | translate }}>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/discharge/discharge.html::label::modal <{{ 'DISCHARGE.DELETE_TITLE' | translate }}>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/discharge/discharge.html::label::modal <{{ 'DISCHARGE.FINALIZE_TITLE' | translate }}>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/discharge/discharge.html::label::modal <{{ 'DISCHARGE.REQUEST_TITLE' | translate }}>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/discharge/discharge.html::label::modal <{{ (decisionMode() === 'approve' ? 'DISCHARGE.APPROVE_TITLE'>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/discharge/discharge.html::label::modal modal-lg <{{ 'DISCHARGE.SUMMARY_FOR' | translate }} {{ s.patientName }>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/discharge/discharge.html::label::modal modal-lg <{{ (editingSummaryId() ? 'DISCHARGE.EDIT_SUMMARY' : 'DISCHAR>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/encounters/encounters.html::role::modal <{{ 'ENCOUNTERS.DELETE' | translate }}>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/encounters/encounters.html::role::modal modal-lg <{{ 'ENCOUNTERS.AVS_TITLE' | translate }} — {{ summary.patien>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/encounters/encounters.html::role::modal modal-lg <{{ editing() ? ('ENCOUNTERS.EDIT' | translate) : ('ENCOUNTER>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
     "src/app/feature-flags/feature-flags.html::escape::modal-content <{{ 'FLAGS.CREATE_TITLE' | translate }}>": {
       "count": 1,
       "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
@@ -303,114 +223,6 @@
       "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
     },
     "src/app/imaging/imaging.html::role::modal modal-wide <{{ (reportEditId() ? 'IMAGING.EDIT_REPORT' : 'IMAGING.AUTHOR>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/lab/lab-approval-queue/lab-approval-queue.html::role::modal <{{ 'LAB_APPROVAL.STUDY_FORM.TITLE' | translate }}>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/lab/lab-approval-queue/lab-approval-queue.html::role::modal <@switch (approvalAction()) { @case ('SUBMIT_FOR_QA') { {{ 'L>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/lab/lab-results/lab-results.html::label::modal <{{ 'LAB_RESULTS.READ_BACK' | translate }}>": {
-      "count": 1,
-      "why": "D968: lab result detail panel is a keyboard trap"
-    },
-    "src/app/lab/lab-results/lab-results.html::role::modal <{{ 'LAB_RESULTS.DELETE_TITLE' | translate }}>": {
-      "count": 1,
-      "why": "D968: lab result detail panel is a keyboard trap"
-    },
-    "src/app/lab/lab-results/lab-results.html::role::modal <{{ 'LAB_RESULTS.SIGN_TITLE' | translate }} — {{ shortOrderCo>": {
-      "count": 1,
-      "why": "D968: lab result detail panel is a keyboard trap"
-    },
-    "src/app/lab/lab-results/lab-results.html::role::modal modal-lg <{{ 'LAB_RESULTS.COMPARE_TITLE' | translate }} — {{ cmp.testN>": {
-      "count": 1,
-      "why": "D968: lab result detail panel is a keyboard trap"
-    },
-    "src/app/lab/lab-results/lab-results.html::role::modal modal-lg <{{ editing() ? ('LAB_RESULTS.EDIT_RESULT' | translate) : cor>": {
-      "count": 1,
-      "why": "D968: lab result detail panel is a keyboard trap"
-    },
-    "src/app/lab/lab.html::role::modal <{{ 'LAB.DELETE_TITLE' | translate }}>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/lab/lab.html::role::modal modal-lg <{{ 'LAB.SPECIMENS' | translate }} — {{ shortOrderCode(specim>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/lab/lab.html::role::modal modal-lg <{{ editing() ? ('LAB.EDIT_ORDER' | translate) : ('LAB.NEW_OR>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/maternity/birth-plan-tab.html::label::modal <{{ 'BIRTH_PLAN.DELETE_TITLE' | translate }}>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/maternity/birth-plan-tab.html::label::modal <{{ 'BIRTH_PLAN.REVIEW_TITLE' | translate }}>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/maternity/birth-plan-tab.html::label::modal modal-lg <{{ (editingPlanId() ? 'BIRTH_PLAN.EDIT' : 'BIRTH_PLAN.NEW') >": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/maternity/birth-plan-tab.html::label::modal modal-lg <{{ p.introduction?.patientName }} — {{ 'BIRTH_PLAN.TITLE' | >": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/maternity/labor-tab.html::label::modal modal-lg <{{ 'LABOR.NEW_ENTRY' | translate }}>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/maternity/labor-tab.html::label::modal modal-lg <{{ 'LABOR.RECORD_DELIVERY' | translate }}>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/maternity/maternity.html::label::modal modal-lg <{{ 'MATERNITY.NEW_REFERRAL' | translate }}>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/maternity/maternity.html::label::modal modal-lg <{{ (editingHistoryId() ? 'MATERNITY.EDIT_HISTORY' : 'MATERNI>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/maternity/maternity.html::label::modal modal-lg <{{ patientDisplay(r) }} {{ 'MATERNITY.STATUS_' + r.status | >": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/maternity/maternity.html::label::modal modal-lg <{{ patientName(h.patientId) }} — {{ 'MATERNITY.HISTORY_TITLE>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/maternity/postpartum-tab.html::label::modal modal-lg <{{ 'POSTPARTUM.NEW_ASSESSMENT' | translate }}>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/maternity/postpartum-tab.html::label::modal modal-lg <{{ 'POSTPARTUM.NEW_OBSERVATION' | translate }}>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/maternity/prenatal-tab.html::label::modal <{{ 'PRENATAL.RESCHEDULE' | translate }}>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/maternity/prenatal-tab.html::label::modal <{{ 'PRENATAL.SEND_REMINDER' | translate }}>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/maternity/ultrasound-tab.html::label::modal modal-lg <{{ 'ULTRASOUND.RECORD_REPORT' | translate }} — {{ order.pati>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/maternity/ultrasound-tab.html::label::modal modal-lg <{{ (editingOrderId() ? 'ULTRASOUND.EDIT_ORDER' : 'ULTRASOUND>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/maternity/ultrasound-tab.html::label::modal modal-lg <{{ o.patientDisplayName || ('MATERNITY.PATIENT' | translate)>": {
       "count": 1,
       "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
     },
@@ -462,14 +274,6 @@
       "count": 1,
       "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
     },
-    "src/app/nurse-station/nursing-intake-form/nursing-intake-form.component.html::role::intake-dialog <{{ 'INTAKE.TITLE' | translate }}>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/nurse-station/triage-form/triage-form.component.html::role::triage-dialog <{{ 'TRIAGE.TITLE' | translate }}>": {
-      "count": 1,
-      "why": "D1004: outpatient triage dialog has no dialog semantics"
-    },
     "src/app/organizations/organization-detail.html::label::modal <{{ cfg.titleKey | translate }}>": {
       "count": 1,
       "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
@@ -495,10 +299,6 @@
       "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
     },
     "src/app/patient-education/patient-education.html::label::modal modal-lg <{{ (editingResourceId() ? 'EDUCATION.EDIT_RESOURCE' : 'EDUCA>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/patient-portal/my-billing/my-billing.component.html::label::pay-overlay <payment {{ 'PORTAL.BILLING.MAKE_PAYMENT' | translate }}>": {
       "count": 1,
       "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
     },
@@ -535,18 +335,6 @@
       "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
     },
     "src/app/patients/fluid-balance/fluid-balance-tab.component.html::label::modal <{{ 'FLUID_BALANCE.MODAL_TITLE' | translate }}>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/patients/medical-history-tab/medical-history-tab.component.html::label::modal modal-lg <{{ 'MED_HISTORY.NEW_SOCIAL_VERSION' | translate }}>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/patients/medical-history-tab/medical-history-tab.component.html::label::modal modal-lg <{{ (editingFamilyId() ? 'MED_HISTORY.EDIT_FAMILY' : 'MED_HIS>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/patients/medical-history-tab/medical-history-tab.component.html::label::modal modal-lg <{{ (editingImmunizationId() ? 'MED_HISTORY.EDIT_IMMUNIZATION>": {
       "count": 1,
       "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
     },
@@ -669,30 +457,6 @@
     "src/app/reception/walkin-dialog/walkin-dialog.component.html::escape::dialog-box <{{ 'RECEPTION.REGISTER_WALKIN' | translate }}>": {
       "count": 1,
       "why": "D976 class: (keydown.escape) sits on a SIBLING backdrop, which never receives the key while focus is inside the dialog"
-    },
-    "src/app/referrals/referrals.html::role::modal <{{ 'REFERRALS.ACKNOWLEDGE_REFERRAL' | translate }}>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/referrals/referrals.html::role::modal <{{ 'REFERRALS.CANCEL_REFERRAL' | translate }}>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/referrals/referrals.html::role::modal <{{ 'REFERRALS.COMPLETE_REFERRAL' | translate }}>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/referrals/referrals.html::role::modal <{{ 'REFERRALS.REJECT_REFERRAL' | translate }}>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/referrals/referrals.html::role::modal <{{ 'REFERRALS.SCHEDULE_REFERRAL' | translate }}>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/referrals/referrals.html::role::modal modal-lg <{{ 'REFERRALS.NEW' | translate }}>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
     },
     "src/app/registrations/registrations.html::label::modal <{{ 'REGISTRATIONS.DELETE_TITLE' | translate }}>": {
       "count": 1,

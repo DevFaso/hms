@@ -210,9 +210,14 @@
 
   @if (selectedEncounter(); as enc) {
     <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeDetail()">
-      <div class="detail-panel">
+      <div
+        appModalDialog
+        aria-labelledby="encounters-panel-1-title"
+        (escaped)="closeDetail()"
+        class="detail-panel"
+      >
         <div class="detail-header">
-          <h2>{{ 'ENCOUNTERS.DETAILS' | translate }}</h2>
+          <h2 id="encounters-panel-1-title">{{ 'ENCOUNTERS.DETAILS' | translate }}</h2>
           <button
             [attr.aria-label]="'COMMON.CLOSE' | translate"
             class="btn-icon"

@@ -50,6 +50,7 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { serverInstant } from '../shared/date-utils';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
 import { canonicalRoute } from '../shared/pipes/medication-route.pipe';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 /**
  * The prescriber's list tabs (gap G10).
@@ -145,6 +146,7 @@ export const PRESCRIPTION_TABS: readonly { id: PrescriptionTab; labelKey: string
   selector: 'app-prescriptions',
   standalone: true,
   imports: [
+    ModalDialogDirective,
     PatientSublinePipe,
     ServerTimePipe,
     CommonModule,

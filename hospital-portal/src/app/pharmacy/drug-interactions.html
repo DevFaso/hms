@@ -185,12 +185,15 @@
       data-testid="ddi-modal"
     >
       <div
+        appModalDialog
+        aria-labelledby="drug-interactions-panel-1-title"
+        (escaped)="closeModal()"
         class="form-card"
         (click)="$event.stopPropagation()"
         (keydown.escape)="$event.stopPropagation()"
         tabindex="-1"
       >
-        <h2>
+        <h2 id="drug-interactions-panel-1-title">
           {{
             (editingId() ? 'DRUG_INTERACTIONS.EDIT_TITLE' : 'DRUG_INTERACTIONS.ADD_TITLE')
               | translate
@@ -387,12 +390,17 @@
       data-testid="ddi-deactivate-modal"
     >
       <div
+        appModalDialog
+        aria-labelledby="drug-interactions-panel-2-title"
+        (escaped)="cancelDeactivate()"
         class="form-card confirm-card"
         (click)="$event.stopPropagation()"
         (keydown.escape)="$event.stopPropagation()"
         tabindex="-1"
       >
-        <h2>{{ 'DRUG_INTERACTIONS.DEACTIVATE_TITLE' | translate }}</h2>
+        <h2 id="drug-interactions-panel-2-title">
+          {{ 'DRUG_INTERACTIONS.DEACTIVATE_TITLE' | translate }}
+        </h2>
         <p>
           <strong>{{ target.drug1Name }} + {{ target.drug2Name }}</strong>
           <span [class]="severityClass(target.severity)">

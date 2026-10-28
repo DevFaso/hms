@@ -300,9 +300,14 @@
   }
   @if (selectedConsult(); as con) {
     <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeDetail()">
-      <div class="detail-panel">
+      <div
+        appModalDialog
+        aria-labelledby="consultations-panel-1-title"
+        (escaped)="closeDetail()"
+        class="detail-panel"
+      >
         <div class="detail-header">
-          <h2>{{ 'CONSULTATIONS.DETAILS' | translate }}</h2>
+          <h2 id="consultations-panel-1-title">{{ 'CONSULTATIONS.DETAILS' | translate }}</h2>
           <button
             class="btn-close"
             (click)="closeDetail()"

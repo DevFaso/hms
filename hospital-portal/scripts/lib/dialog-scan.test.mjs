@@ -124,3 +124,19 @@ test('parts of a dialog (header, body, footer, backdrop, button) are not contain
     <div class="dialog-overlay"></div>`;
   assert.deepEqual(dialogFindings(html), []);
 });
+
+test('round 16: an element with a shared dialog directive is a dialog; its Escape counts when the output is bound', () => {
+  const bound = `<div class="modal" appDialogA11y aria-labelledby="t" (dialogClose)="close()"><h2 id="t">x</h2></div>
+    <div class="x-dialog" appModalDialog aria-labelledby="u" (escaped)="close()"><h2 id="u">y</h2></div>`;
+  assert.deepEqual(dialogFindings(bound), []);
+  const unbound = `<div class="modal" appModalDialog aria-labelledby="t"><h2 id="t">x</h2></div>`;
+  assert.deepEqual(
+    dialogFindings(unbound).map((f) => f.rule),
+    ['escape'],
+  );
+  const unnamed = `<div class="modal" appDialogA11y (dialogClose)="close()"></div>`;
+  assert.deepEqual(
+    dialogFindings(unnamed).map((f) => f.rule),
+    ['label'],
+  );
+});
