@@ -8,6 +8,7 @@ import {
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { CfaPipe } from '../../shared/pipes/cfa.pipe';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
@@ -26,7 +27,7 @@ interface OpenInvoice {
 @Component({
   selector: 'app-payment-pending-panel',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [CommonModule, FormsModule, TranslateModule, CfaPipe],
   templateUrl: './payment-pending-panel.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './payment-pending-panel.component.scss',

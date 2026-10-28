@@ -11,6 +11,7 @@ import {
   untracked,
 } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
+import { CfaPipe } from '../shared/pipes/cfa.pipe';
 import { Router, RouterLink, Routes } from '@angular/router';
 import { AuthService } from '../auth/auth.service';
 import { HospitalService } from '../services/hospital.service';
@@ -152,6 +153,7 @@ export { currentMedications };
     InBasketPanelComponent,
     EnumLabelPipe,
     CredentialRenewalComponent,
+    CfaPipe,
   ],
   templateUrl: './dashboard.html',
   styleUrl: './dashboard.scss',

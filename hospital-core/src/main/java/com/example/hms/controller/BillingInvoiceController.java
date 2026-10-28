@@ -177,6 +177,27 @@ public class BillingInvoiceController {
         return ResponseEntity.ok(invoiceService.recordStaffPayment(invoiceId, request, recordedBy, locale));
     }
 
+    /** QA D974: billing lowers an issued invoice with a reason; the front desk cannot. */
+    @PostMapping("/{invoiceId}/adjustments")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST')")
+    @Operation(summary = "Discount, waive or credit part of an issued invoice")
+    public ResponseEntity<BillingInvoiceResponseDTO> addAdjustment(
+        @PathVariable UUID invoiceId,
+        @Valid @RequestBody com.example.hms.payload.dto.InvoiceAdjustmentRequestDTO request,
+        @RequestHeader(name = "Accept-Language", required = false) Locale locale,
+        org.springframework.security.core.Authentication authentication) {
+        UUID staffId = authUtils.resolveUserId(authentication).orElse(null);
+        return ResponseEntity.ok(invoiceService.addAdjustment(invoiceId, request, staffId, locale));
+    }
+
+    @GetMapping("/{invoiceId}/adjustments")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT','ROLE_RECEPTIONIST')")
+    @Operation(summary = "List the discounts, waivers and credit notes of an invoice")
+    public ResponseEntity<java.util.List<com.example.hms.payload.dto.InvoiceAdjustmentResponseDTO>> listAdjustments(
+        @PathVariable UUID invoiceId) {
+        return ResponseEntity.ok(invoiceService.listAdjustments(invoiceId));
+    }
+
     @GetMapping("/{invoiceId}/payments")
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT','ROLE_RECEPTIONIST')")
     @Operation(summary = "List the payments recorded on an invoice")

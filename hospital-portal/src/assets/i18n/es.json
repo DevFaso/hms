@@ -1502,6 +1502,7 @@
     "WRITE_DELETE": "Eliminación: {{entity}}",
     "WRITE_ENTITY_UNKNOWN": "registro",
     "DESC": {
+      "INVOICE_ADJUSTMENT": "{{kind}} en la factura {{invoice}}",
       "PATIENT_RECORD_VIEWED": "Expediente del paciente consultado",
       "USER_PROFILE_UPDATED": "Perfil de usuario actualizado",
       "USER_CREATED": "Nueva cuenta de usuario creada",
@@ -1983,9 +1984,25 @@
       "EMERGENCY_FORCE_LOGOUT_ALL": "Cierre de sesión de emergencia de todos",
       "EMERGENCY_FORCE_MFA_REENROL": "Restablecimiento de emergencia del doble factor",
       "EMERGENCY_KILL_FEATURE": "Desactivación de emergencia de una función"
+    },
+    "INVOICE_ADJUSTMENT": {
+      "CREDIT_NOTE": "Nota de crédito",
+      "DISCOUNT": "Descuento",
+      "WAIVER": "Exención"
     }
   },
   "BILLING": {
+    "ADJUSTMENTS": "Descuentos, exenciones y notas de crédito",
+    "ADJUSTMENT_AMOUNT": "Importe (F CFA)",
+    "ADJUSTMENT_AMOUNT_HINT": "Déjelo vacío para acreditar todo lo que queda en la línea.",
+    "ADJUSTMENT_FAILED": "No se pudo guardar el ajuste.",
+    "ADJUSTMENT_LINE": "Línea anulada",
+    "ADJUSTMENT_LINE_REQUIRED": "Elija la línea que anula la nota de crédito.",
+    "ADJUSTMENT_REASON": "Motivo",
+    "ADJUSTMENT_REASON_REQUIRED": "Indique el motivo del descuento, la exención o la nota de crédito.",
+    "ADJUSTMENT_SAVED": "Factura ajustada.",
+    "ADJUSTMENT_SUBMIT": "Aplicar",
+    "ADJUSTMENT_TYPE": "Tipo",
     "ALL_STATUSES": "Todos los estados",
     "AMOUNT": "Importe",
     "AMOUNT_PAID": "Importe pagado",
@@ -2026,7 +2043,12 @@
     "NEW_INVOICE": "Nueva factura",
     "NOTES": "Notas",
     "NOTES_PLACEHOLDER": "Notas de la factura…",
+    "NO_ADJUSTMENTS": "Ningún descuento, exención ni nota de crédito.",
     "NO_INVOICES": "No se encontraron facturas",
+    "OPEN_COPAYS_INTRO": "Este paciente pagó un copago en la admisión que ninguna factura ha recogido todavía. Vincule su visita para que se descuente y el paciente no pague dos veces:",
+    "OPEN_COPAY_LINE": "{{amount}} por la visita {{visit}} (factura {{invoice}})",
+    "OPEN_COPAY_LINK": "Vincular esta visita",
+    "OPEN_COPAY_LINKED": "Vinculada: el copago se descontará",
     "OUTSTANDING": "Pendiente",
     "OUTSTANDING_COUNT": "Pendientes de pago",
     "OVERDUE": "Vencida",
@@ -2039,6 +2061,7 @@
     "PAYMENT_METHOD": "Método de pago",
     "PAYMENT_NOTE": "Los pagos se aplican a facturas emitidas o parcialmente pagadas, hasta el saldo pendiente, en francos enteros.",
     "PAYMENT_RECORDED": "Pago registrado",
+    "PAYMENT_REFERENCE_REQUIRED": "Indique la referencia de la transacción para un pago con dinero móvil, transferencia o seguro.",
     "PAYMENT_TITLE": "Registrar pago — {{invoice}}",
     "PDF_FAILED": "Error al descargar el PDF",
     "PENDING": "Pendiente",
@@ -2118,7 +2141,12 @@
       "REVERSED": "Revertido"
     },
     "PAYMENT_PENDING_DECLARED": "Un pago de {{amount}} declarado por el paciente está pendiente de confirmación. Confírmelo o rechácelo antes de cobrar ese importe de nuevo.",
-    "PATIENT_LOCKED_ISSUED": "Esta factura ya fue emitida: no se puede cambiar su paciente. Anúlela y emita una nueva factura."
+    "PATIENT_LOCKED_ISSUED": "Esta factura ya fue emitida: no se puede cambiar su paciente. Anúlela y emita una nueva factura.",
+    "ADJUSTMENT_TYPES": {
+      "CREDIT_NOTE": "Nota de crédito",
+      "DISCOUNT": "Descuento",
+      "WAIVER": "Exención (gratuidad)"
+    }
   },
   "CHAT": {
     "ACCESS_DENIED": "No tiene permiso para acceder a la mensajería.",
@@ -5142,6 +5170,8 @@
   },
   "PORTAL": {
     "VITALS": {
+      "ABOVE_NORMAL": "Por encima de lo normal",
+      "BELOW_NORMAL": "Por debajo de lo normal",
       "TITLE": "Mis signos vitales",
       "LOADING": "Cargando signos vitales...",
       "EMPTY_TITLE": "No hay signos vitales registrados",
@@ -5177,6 +5207,7 @@
       "GENERAL_VISIT": "Visita general",
       "GENERAL": "General",
       "BOOKING": {
+        "PRECHECKIN_OPENS_ON": "El registro previo en línea se abre el {{date}}, 7 días antes de la cita.",
         "TITLE": "Programar cita",
         "FORM_TITLE": "Programar una nueva cita",
         "SUCCESS": "¡Cita programada con éxito!",
@@ -5279,6 +5310,7 @@
       "PENDING_INTERPRETATION": "Análisis en curso: su resultado aparecerá aquí en cuanto el laboratorio lo valide."
     },
     "VISITS": {
+      "ASSESSMENT": "Valoración del médico",
       "TITLE": "Historial de visitas",
       "LOADING": "Cargando historial de visitas…",
       "EMPTY_TITLE": "Sin visitas registradas",
@@ -5287,14 +5319,27 @@
       "DATE": "Fecha",
       "PROVIDER": "Profesional",
       "DEPARTMENT": "Servicio",
-      "CHIEF_COMPLAINT": "Motivo principal",
-      "DIAGNOSIS": "Diagnóstico",
+      "CHIEF_COMPLAINT": "Motivo de la visita",
       "STATUS": "Estado",
       "NOT_ASSIGNED": "No asignado",
       "GENERAL": "General",
       "HOSPITAL_NAME_LABEL": "Hospital"
     },
     "BILLING": {
+      "DETAIL_FAILED": "No se pudo cargar la factura. Inténtelo de nuevo.",
+      "DOWNLOAD_FAILED": "No se pudo descargar el archivo. Inténtelo de nuevo.",
+      "DOWNLOAD_INVOICE": "Descargar la factura (PDF)",
+      "DOWNLOAD_RECEIPT": "Recibo (PDF)",
+      "HIDE_DETAIL": "Ocultar el detalle",
+      "LINES": "Lo facturado",
+      "LINE_DESCRIPTION": "Servicio",
+      "LINE_QUANTITY": "Cant.",
+      "LINE_TOTAL": "Total de la línea",
+      "LINE_UNIT_PRICE": "Precio unitario",
+      "NO_LINES": "Esta factura no tiene líneas detalladas.",
+      "NO_PAYMENTS": "Todavía no hay pagos.",
+      "PAYMENTS": "Pagos",
+      "SHOW_DETAIL": "Ver el detalle",
       "TITLE": "Facturación y pagos",
       "LOADING": "Cargando información de facturación…",
       "EMPTY_TITLE": "Sin estados de cuenta",
@@ -5309,7 +5354,7 @@
       "MAKE_PAYMENT": "Realizar un pago",
       "AMOUNT": "Importe",
       "PAYMENT_METHOD": "Método de pago",
-      "REFERENCE": "Referencia / ID de transacción (opcional)",
+      "REFERENCE": "Referencia / ID de transacción",
       "REFERENCE_PLACEHOLDER": "p. ej. TXN-123456",
       "REFERENCE_REQUIRED": "Indique la referencia del pago con tarjeta, transferencia o dinero móvil.",
       "ENTER_AMOUNT": "Introducir importe",
@@ -6323,8 +6368,12 @@
         "SCHEDULED": "Programada"
       },
       "NOTIFICATION_TYPE": {
+        "ADMIN_MESSAGE": "Mensaje de la administración",
+        "ANNOUNCEMENT": "Anuncio",
         "APPOINTMENT_REMINDER": "Recordatorio de cita",
         "BREAK_GLASS_OPT_OUT_OVERRIDE": "Acceso de emergencia a su historial",
+        "CHAT_MESSAGE": "Nuevo mensaje",
+        "CONSULTATION_UPDATE": "Interconsulta",
         "CRITICAL_IMAGING_FINDING": "Hallazgo de imagen crítico",
         "CRITICAL_IMAGING_FINDING_ESCALATION": "Escalamiento — hallazgo de imagen crítico",
         "CRITICAL_LAB_RESULT": "Resultado de laboratorio crítico",
@@ -6334,12 +6383,14 @@
         "LAB_RESULT": "Resultado de laboratorio",
         "LAB_SPECIMEN_REJECTED": "Muestra rechazada",
         "LICENSE_EXPIRY": "Vencimiento de licencia",
+        "MATERNITY_ALERT": "Alerta de maternidad",
         "MEDICATION_REFILL": "Renovación de medicamento",
         "NEWS2_ESCALATION": "Escalamiento NEWS2",
         "OBSTETRIC_ALERT": "Alerta obstétrica urgente",
         "OBSTETRIC_ALERT_ESCALATION": "Escalamiento de alerta obstétrica urgente",
         "PHARMACY_EVENT": "Aviso de farmacia",
         "POSITIVE_CULTURE_RESULT": "Cultivo positivo",
+        "PRENATAL_REMINDER": "Recordatorio de control prenatal",
         "PRO_CRITICAL_ITEM": "Ítem PRO crítico",
         "PRO_CRITICAL_ITEM_ESCALATION": "Escalamiento — ítem PRO crítico",
         "PRO_SCREEN_POSITIVE": "Cribado PRO positivo",
@@ -6734,11 +6785,15 @@
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Alergia",
+        "DIAGNOSIS": "Diagnóstico",
         "ENCOUNTER": "Consulta",
         "IMAGING": "Imagenología",
+        "LAB_ORDER": "Análisis solicitado",
         "LAB_RESULT": "Resultado de laboratorio",
+        "NOTE": "Nota clínica",
         "PRESCRIPTION": "Receta",
-        "PROCEDURE": "Procedimiento"
+        "PROCEDURE": "Procedimiento",
+        "REFERRAL": "Derivación"
       },
       "SPECIMEN_TYPE": {
         "BLOOD": "Sangre",
@@ -7228,6 +7283,7 @@
     "PROFILE_PICTURE": "Foto de perfil",
     "PUSH_NOTIFICATIONS": "Notificaciones push",
     "RECENT_ACTIVITY": "Actividad reciente",
+    "RECORD_PHONE_SYNC_FAILED": "El teléfono de su cuenta se guardó, pero no se pudo actualizar su expediente de paciente. Pida a recepción que lo cambie.",
     "RECOVERY_ADDED": "Contacto de recuperación añadido.",
     "RECOVERY_CONTACT": "Contacto de recuperación",
     "RECOVERY_CONTACTS": "Contactos de recuperación",

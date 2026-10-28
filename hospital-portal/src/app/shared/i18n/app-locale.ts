@@ -133,7 +133,7 @@ export function switchLanguage(lang: string, translate: TranslateService): boole
 
 /**
  * QA D621: an amount in francs CFA, read the same way in every language:
- * "4 000 F CFA" in French, "4,000 F CFA" in English, "4000 F CFA" in Spanish.
+ * "4 000 F CFA" in French, "4,000 F CFA" in English, "4.000 F CFA" in Spanish.
  * `Intl`'s own XOF currency printed "XOF" in Spanish and "F CFA4,000" in
  * English. Another currency keeps `Intl`'s formatting.
  */
@@ -151,6 +151,11 @@ export function formatCfa(
       maximumFractionDigits: 0,
     }).format(value);
   }
-  const digits = new Intl.NumberFormat(locale, { maximumFractionDigits: 0 }).format(value);
+  // QA D1008: Spanish groups only from five digits by default ("8225" next to
+  // "19.875"); an explicit true means "always" (ECMA-402 NumberFormat v3).
+  const digits = new Intl.NumberFormat(locale, {
+    maximumFractionDigits: 0,
+    useGrouping: true,
+  }).format(value);
   return `${digits}\u00a0F\u00a0CFA`;
 }

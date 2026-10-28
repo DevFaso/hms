@@ -243,6 +243,41 @@ public class PatientPortalController {
         return ResponseEntity.ok(ApiResponseWrapper.success(invoices));
     }
 
+    @Operation(summary = "One of my invoices with its lines and payments (QA D982)")
+    @GetMapping("/billing/invoices/{invoiceId}")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<com.example.hms.payload.dto.portal.PortalInvoiceDetailDTO>> getMyInvoiceDetail(
+            Authentication auth, @PathVariable UUID invoiceId) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(portalService.getMyInvoiceDetail(auth, invoiceId)));
+    }
+
+    @Operation(summary = "Download my invoice as PDF (QA D982)")
+    @GetMapping("/billing/invoices/{invoiceId}/pdf")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<byte[]> downloadMyInvoicePdf(Authentication auth, @PathVariable UUID invoiceId) {
+        var pdf = portalService.getMyInvoicePdf(auth, invoiceId, LocaleContextHolder.getLocale());
+        return pdfAttachment(pdf.content(), "invoice-" + pdf.suggestedFilename() + ".pdf");
+    }
+
+    @Operation(summary = "Download the receipt of one of my payments (QA D982)")
+    @GetMapping("/billing/invoices/{invoiceId}/payments/{paymentId}/receipt")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<byte[]> downloadMyReceiptPdf(Authentication auth, @PathVariable UUID invoiceId,
+                                                       @PathVariable UUID paymentId) {
+        var pdf = portalService.getMyReceiptPdf(auth, invoiceId, paymentId, LocaleContextHolder.getLocale());
+        return pdfAttachment(pdf.content(), pdf.suggestedFilename() + ".pdf");
+    }
+
+    private static ResponseEntity<byte[]> pdfAttachment(byte[] content, String filename) {
+        return ResponseEntity.ok()
+            .contentType(MediaType.APPLICATION_PDF)
+            .cacheControl(org.springframework.http.CacheControl.noCache())
+            .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+                org.springframework.http.ContentDisposition.attachment().filename(filename).build().toString())
+            .contentLength(content.length)
+            .body(content);
+    }
+
     @Operation(summary = "Pay an invoice",
             description = "Make a payment towards an outstanding invoice. The invoice must be in SENT or PARTIALLY_PAID status.")
     @PostMapping("/billing/invoices/{invoiceId}/pay")

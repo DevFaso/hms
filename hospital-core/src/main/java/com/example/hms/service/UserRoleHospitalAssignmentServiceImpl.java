@@ -144,6 +144,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     /** QA D915: a key, so the refusal reads in the caller's language. */
     private static final String DEFAULT_ACTIVATION_THROUGH_CODE = "assignment.activation.throughCode";
     private static final long CONFIRMATION_CODE_EXPIRY_HOURS = 48;
+    /** The checklist of a role with no checklist of its own (its bundle key segment). */
+    private static final String DEFAULT_CHECKLIST_KEY = "DEFAULT";
     private static final List<String> DEFAULT_PROFILE_CHECKLIST = List.of(
         "Review and confirm your personal information",
         "Add at least one emergency contact",
@@ -223,7 +225,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             dto.setProfileCompletionUrl(profileCompletionUrl(assignment));
             dto.setAssignerConfirmationUrl(assignerConfirmationUrl(assignment));
         }
-        dto.setProfileChecklist(buildRoleProfileChecklist(assignment.getRole()));
+        dto.setProfileChecklist(localizedProfileChecklist(assignment.getRole()));
         dto.setConfirmationVerified(assignment.getConfirmationVerifiedAt() != null);
         return dto;
     }
@@ -975,7 +977,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             .assignmentCode(assignment.getAssignmentCode())
             .roleName(role != null ? role.getName() : null)
             .roleCode(role != null ? getRoleCode(role) : null)
-            .roleDescription(role != null ? role.getDescription() : null)
+            .roleDescription(localizedRoleDescription(role))
             .hospitalName(hospital != null ? hospital.getName() : null)
             .hospitalCode(hospital != null ? hospital.getCode() : null)
             .hospitalAddress(hospital != null ? hospital.getAddress() : null)
@@ -983,7 +985,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             .confirmationVerified(assignment.getConfirmationVerifiedAt() != null)
             .confirmationVerifiedAt(assignment.getConfirmationVerifiedAt())
             .profileCompletionUrl(profileCompletionUrl(assignment))
-            .profileChecklist(buildRoleProfileChecklist(role))
+            .profileChecklist(localizedProfileChecklist(role))
             .build();
     }
 
@@ -1125,7 +1127,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             .assignmentCode(assignment.getAssignmentCode())
             .roleName(role != null ? role.getName() : null)
             .roleCode(role != null ? getRoleCode(role) : null)
-            .roleDescription(role != null ? role.getDescription() : null)
+            .roleDescription(localizedRoleDescription(role))
             .hospitalName(hospital != null ? hospital.getName() : null)
             .hospitalCode(hospital != null ? hospital.getCode() : null)
             .hospitalAddress(hospital != null ? hospital.getAddress() : null)
@@ -1133,7 +1135,7 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             .confirmationVerified(assignment.getConfirmationVerifiedAt() != null)
             .confirmationVerifiedAt(assignment.getConfirmationVerifiedAt())
             .profileCompletionUrl(profileCompletionUrl(assignment))
-            .profileChecklist(buildRoleProfileChecklist(role))
+            .profileChecklist(localizedProfileChecklist(role))
             .tempUsername(tempUsername)
             .tempPassword(tempPassword)
             .build();
@@ -2555,26 +2557,58 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         }
     }
 
-    private List<String> buildRoleProfileChecklist(Role role) {
+    /**
+     * QA D941: the welcome page read the seeded English role description in a
+     * French session. A seeded role reads {@code role.description.<CODE>} in
+     * the caller's language; a role an administrator created keeps its own text.
+     */
+    private String localizedRoleDescription(Role role) {
         if (role == null) {
-            return DEFAULT_PROFILE_CHECKLIST;
+            return null;
         }
         String code = getRoleCode(role);
         if (code == null || code.isBlank()) {
-            return DEFAULT_PROFILE_CHECKLIST;
+            return role.getDescription();
         }
         String normalized = code.trim().toUpperCase(Locale.ROOT);
-        List<String> checklist = ROLE_PROFILE_CHECKLISTS.get(normalized);
-        if (checklist != null) {
-            return checklist;
+        String key = "role.description." + (normalized.startsWith(ROLE_PREFIX) ? normalized : ROLE_PREFIX + normalized);
+        // A description an administrator rewrote is theirs; only the seeded text is translated.
+        String seeded = messageSource.getMessage(key, null, null, Locale.ENGLISH);
+        if (seeded == null || (role.getDescription() != null && !role.getDescription().trim().equals(seeded.trim()))) {
+            return role.getDescription();
         }
-        if (!normalized.startsWith(ROLE_PREFIX)) {
-            checklist = ROLE_PROFILE_CHECKLISTS.get(ROLE_PREFIX + normalized);
-            if (checklist != null) {
-                return checklist;
-            }
+        return messageSource.getMessage(key, null, role.getDescription(), LocaleContextHolder.getLocale());
+    }
+
+    /** QA D941: each checklist line in the caller's language, the English line when a key is missing. */
+    private List<String> localizedProfileChecklist(Role role) {
+        String owner = checklistKey(role);
+        List<String> english = buildRoleProfileChecklist(role);
+        Locale locale = LocaleContextHolder.getLocale();
+        List<String> out = new java.util.ArrayList<>(english.size());
+        for (int i = 0; i < english.size(); i++) {
+            out.add(messageSource.getMessage("onboarding.checklist." + owner + "." + (i + 1), null, english.get(i), locale));
         }
-        return DEFAULT_PROFILE_CHECKLIST;
+        return out;
+    }
+
+    /** The checklist's key: the role code it is listed under (with or without ROLE_), else DEFAULT. */
+    private String checklistKey(Role role) {
+        String code = role != null ? getRoleCode(role) : null;
+        if (code == null || code.isBlank()) {
+            return DEFAULT_CHECKLIST_KEY;
+        }
+        String normalized = code.trim().toUpperCase(Locale.ROOT);
+        if (ROLE_PROFILE_CHECKLISTS.containsKey(normalized)) {
+            return normalized;
+        }
+        String prefixed = normalized.startsWith(ROLE_PREFIX) ? normalized : ROLE_PREFIX + normalized;
+        return ROLE_PROFILE_CHECKLISTS.containsKey(prefixed) ? prefixed : DEFAULT_CHECKLIST_KEY;
+    }
+
+    private List<String> buildRoleProfileChecklist(Role role) {
+        String key = checklistKey(role);
+        return DEFAULT_CHECKLIST_KEY.equals(key) ? DEFAULT_PROFILE_CHECKLIST : ROLE_PROFILE_CHECKLISTS.get(key);
     }
 
     @Override

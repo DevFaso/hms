@@ -76,7 +76,11 @@ class PatientSubjectReadCoverageTest {
         entry("PatientPortalController#getMyPrintedPrescription", "PrescriptionCopyPdfService.copyForPatient: 404 unless the caller's own (QA D966)"),
         entry("PatientPortalController#myScreeningInstrument", "an instrument definition by code, not patient data"),
         entry("PatientPortalController#getDepartments", "booking directory of a hospital, not patient data"),
-        entry("PatientPortalController#getProviders", "booking directory of a hospital, not patient data"));
+        entry("PatientPortalController#getProviders", "booking directory of a hospital, not patient data"),
+        // QA D982: another patient's invoice (or a draft) answers exactly as a missing one.
+        entry("PatientPortalController#getMyInvoiceDetail", "BillingInvoiceServiceImpl.requirePortalVisible(caller's patient id)"),
+        entry("PatientPortalController#downloadMyInvoicePdf", "BillingInvoiceServiceImpl.requirePortalVisible(caller's patient id)"),
+        entry("PatientPortalController#downloadMyReceiptPdf", "BillingInvoiceServiceImpl.requirePortalVisible(caller's patient id)"));
 
     @Test
     @DisplayName("every GET a patient can reach by path variable is guarded or owned elsewhere, with a reason")

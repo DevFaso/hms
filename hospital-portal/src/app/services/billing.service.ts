@@ -1,4 +1,4 @@
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpParams, HttpResponse } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
 
@@ -55,6 +55,8 @@ export interface BillingInvoiceResponse {
   updatedAt: string;
   /** QA D428: the visit invoice a folded check-in copay was credited to. */
   creditedToInvoiceNumber?: string | null;
+  /** QA D936: a copay taken at check-in; credited to the visit invoice once one is issued. */
+  checkInCopay?: boolean;
 }
 
 export interface InvoiceItemResponse {
@@ -143,6 +145,32 @@ export interface PaymentRow {
   status: PaymentStatus;
   reversalReason?: string | null;
   reversedAt?: string | null;
+  createdAt?: string | null;
+}
+
+/** QA D974: how an issued invoice was lowered. */
+export type InvoiceAdjustmentType = 'DISCOUNT' | 'WAIVER' | 'CREDIT_NOTE';
+export const INVOICE_ADJUSTMENT_TYPES: InvoiceAdjustmentType[] = [
+  'DISCOUNT',
+  'WAIVER',
+  'CREDIT_NOTE',
+];
+
+export interface InvoiceAdjustmentRequest {
+  type: InvoiceAdjustmentType;
+  /** Whole francs; may be left out for a credit note (the line's remainder). */
+  amount?: number | null;
+  reason: string;
+  invoiceItemId?: string | null;
+}
+
+export interface InvoiceAdjustmentRow {
+  id: string;
+  type: InvoiceAdjustmentType;
+  amount: number;
+  reason: string;
+  invoiceItemId?: string | null;
+  invoiceItemDescription?: string | null;
   createdAt?: string | null;
 }
 
@@ -235,8 +263,12 @@ export class BillingService {
     return this.http.get<BillingInvoiceResponse[]>('/billing-invoices/overdue', { params });
   }
 
-  getInvoicePdf(id: string): Observable<Blob> {
-    return this.http.get(`/billing-invoices/${id}/pdf`, { responseType: 'blob' });
+  /** QA D1009: the whole response, so the file keeps the name the server gives it. */
+  getInvoicePdf(id: string): Observable<HttpResponse<Blob>> {
+    return this.http.get(`/billing-invoices/${id}/pdf`, {
+      responseType: 'blob',
+      observe: 'response',
+    });
   }
 
   getInvoiceItems(invoiceId: string): Observable<InvoiceItemResponse[]> {
@@ -311,9 +343,26 @@ export class BillingService {
     );
   }
 
-  getReceiptPdf(invoiceId: string, paymentId: string): Observable<Blob> {
+  /** QA D974: discount, waive or credit part of an issued invoice, with a reason. */
+  addAdjustment(
+    invoiceId: string,
+    req: InvoiceAdjustmentRequest,
+  ): Observable<BillingInvoiceResponse> {
+    return this.http.post<BillingInvoiceResponse>(
+      `/billing-invoices/${invoiceId}/adjustments`,
+      req,
+    );
+  }
+
+  listAdjustments(invoiceId: string): Observable<InvoiceAdjustmentRow[]> {
+    return this.http.get<InvoiceAdjustmentRow[]>(`/billing-invoices/${invoiceId}/adjustments`);
+  }
+
+  /** QA D1009: each receipt has its own number ("…-R2"), carried in Content-Disposition. */
+  getReceiptPdf(invoiceId: string, paymentId: string): Observable<HttpResponse<Blob>> {
     return this.http.get(`/billing-invoices/${invoiceId}/payments/${paymentId}/receipt`, {
       responseType: 'blob',
+      observe: 'response',
     });
   }
 

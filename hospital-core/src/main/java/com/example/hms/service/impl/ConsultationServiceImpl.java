@@ -497,7 +497,7 @@ public class ConsultationServiceImpl implements ConsultationService {
                     : NotificationLocalizer.key("patient.fallback.yours");
                 notificationService.createNotification("consultation.completed.notification",
                     new Object[]{patientName, consultation.getSpecialtyRequested(), consultantName},
-                    requesterUsername, null);
+                    requesterUsername, "CONSULTATION_UPDATE");
             }
         } catch (Exception e) {
             log.warn("Failed to send completion notification for consultation {}: {}", consultationId, e.getMessage());
@@ -632,7 +632,7 @@ public class ConsultationServiceImpl implements ConsultationService {
                 : NotificationLocalizer.key("patient.fallback.indefinite");
             notificationService.createNotification("consultation.assigned.notification",
                 new Object[]{patientName, consultation.getSpecialtyRequested(), consultation.getUrgency()},
-                consultantUsername, null);
+                consultantUsername, "CONSULTATION_UPDATE");
         } catch (Exception e) {
             log.warn("Failed to send assignment notification for consultation {}: {}", consultationId, e.getMessage());
         }
