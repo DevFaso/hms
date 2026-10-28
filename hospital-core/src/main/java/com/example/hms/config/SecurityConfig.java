@@ -794,8 +794,9 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.DELETE, API_BILLING_INVOICES_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN)
 
+                // QA D973: the receptionist who opens an invoice reads its lines.
                 .requestMatchers(HttpMethod.GET, API_INVOICE_ITEMS_PATTERN)
-                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST, ROLE_ACCOUNTANT)
+                .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST, ROLE_ACCOUNTANT, ROLE_RECEPTIONIST)
 
                 .requestMatchers(HttpMethod.POST, API_INVOICE_ITEMS_PATTERN)
                 .hasAnyAuthority(ROLE_SUPER_ADMIN, ROLE_HOSPITAL_ADMIN, ROLE_BILLING_SPECIALIST)
