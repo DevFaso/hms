@@ -1397,7 +1397,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // 'reception/empi-candidates'.
     // QA D987: and only while the matcher is switched on; it answers 404 off.
     if (
-      this.empiStatus.enabled() === true &&
+      (this.empiStatus.enabled() === true || this.empiStatus.failed()) &&
       this.hasAnyRole([
         'ROLE_RECEPTIONIST',
         'ROLE_NURSE',

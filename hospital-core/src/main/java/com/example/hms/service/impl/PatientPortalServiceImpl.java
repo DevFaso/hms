@@ -784,9 +784,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
      * not the server's (QA D978, review round 8).
      */
     private static java.time.LocalDateTime nowAt(com.example.hms.model.Hospital hospital) {
-        java.time.Clock clock = java.time.Clock.systemDefaultZone();
-        return java.time.LocalDateTime.now(clock.withZone(
-            com.example.hms.utility.HospitalCalendar.zoneOf(hospital, clock)));
+        return com.example.hms.utility.HospitalCalendar.now(hospital);
     }
 
     // ── Reschedule own appointment ───────────────────────────────────────

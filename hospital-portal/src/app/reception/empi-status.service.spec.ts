@@ -34,8 +34,11 @@ describe('EmpiStatusService (QA D987)', () => {
       .flush('down', { status: 502, statusText: 'Bad Gateway' });
     // A failed read is "unknown" (null), not "off", and is not kept.
     expect(service.enabled()).toBeNull();
+    // Review round 16: and it is flagged, so the menu still offers the entry.
+    expect(service.failed()).toBeTrue();
     service.load().subscribe();
     http.expectOne('/empi/candidates/status').flush({ enabled: true });
     expect(service.enabled()).toBeTrue();
+    expect(service.failed()).toBeFalse();
   });
 });

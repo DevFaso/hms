@@ -217,10 +217,8 @@ public class AppointmentServiceImpl implements AppointmentService {
      */
     private static void requireStartedFor(AppointmentStatus status, LocalDateTime appointmentStart,
                                           Hospital hospital) {
-        java.time.Clock clock = java.time.Clock.systemDefaultZone();
-        LocalDateTime now = LocalDateTime.now(
-            clock.withZone(com.example.hms.utility.HospitalCalendar.zoneOf(hospital, clock)));
-        if (REQUIRES_APPOINTMENT_STARTED.contains(status) && now.isBefore(appointmentStart)) {
+        if (REQUIRES_APPOINTMENT_STARTED.contains(status)
+                && com.example.hms.utility.HospitalCalendar.now(hospital).isBefore(appointmentStart)) {
             throw new BusinessException("appointment.status.notStartedYet",
                 AppointmentStatus.labelOf(status),
                 appointmentStart.format(java.time.format.DateTimeFormatter

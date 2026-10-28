@@ -589,10 +589,13 @@ public class ReceptionServiceImpl implements ReceptionService {
      * QA D924: the phone number used to be ANDed with the name and the date of
      * birth, and the phone is mandatory on the form, so only a patient with the
      * same number was ever offered, and a second chart was created for
-     * everyone else. Candidates are now the patients matching the name and
-     * date of birth OR the same subscriber number, all folded by
-     * {@link PatientMatchKeys} (accents, phone formatting); the phone only adds
-     * to the score.
+     * everyone else. Candidates are now the patients whose name matches (a
+     * name + date-of-birth query first, then the name alone) OR who hold the
+     * same subscriber number, all folded by {@link PatientMatchKeys} (accents,
+     * phone formatting). The name scores 50, the date of birth 30 and the
+     * phone 20, with 40 to be offered: a same-name record is offered even with
+     * another date of birth (a transposed date must not hide it), and a shared
+     * family number alone is not.
      */
     @Override
     public List<DuplicateCandidateDTO> getDuplicateCandidates(String name, String dob, String phone,

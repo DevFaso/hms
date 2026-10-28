@@ -555,6 +555,39 @@ class PatientServiceImplTest {
     }
 
     @Test
+    void reviewRound16_anIvorianVerifiedNumberIsStampedThoughItIsStoredInE164() {
+        UUID userId = UUID.randomUUID();
+        UUID challengeId = UUID.randomUUID();
+        PatientRequestDTO request = PatientRequestDTO.builder()
+            .userId(userId)
+            .hospitalId(hospitalId)
+            .phoneVerificationId(challengeId)
+            .build();
+        User user = new User();
+        user.setId(userId);
+        user.setActive(true);
+        hospital.setCountry("CI");
+        patient.setPhoneNumberPrimary("07 01 23 45 67");
+
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(patientMapper.toPatient(request, user)).thenReturn(patient);
+        when(patientRepository.save(patient)).thenReturn(patient);
+        // The challenge holds the number as the desk typed it.
+        when(phoneVerificationService.consumeVerifiedChallenge(challengeId, "07 01 23 45 67")).thenReturn(true);
+        when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId))
+            .thenReturn(Optional.of(new PatientHospitalRegistration()));
+        when(patientMapper.toPatientDTO(patient, hospitalId))
+            .thenReturn(PatientResponseDTO.builder().id(patientId).build());
+        when(patientVitalSignService.getLatestSnapshot(patientId, hospitalId)).thenReturn(Optional.empty());
+
+        patientService.createPatientByStaff(request, Locale.ENGLISH);
+
+        assertThat(patient.getPhoneNumberPrimary()).isEqualTo("+225701234567");
+        assertThat(patient.getPhoneVerifiedAt()).isNotNull();
+    }
+
+    @Test
     void createPatientByStaffLeavesPhoneUnverifiedWhenChallengeRejected() {
         UUID userId = UUID.randomUUID();
         PatientRequestDTO request = PatientRequestDTO.builder()

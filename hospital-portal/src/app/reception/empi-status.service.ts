@@ -16,6 +16,12 @@ export class EmpiStatusService {
 
   /** null until the first answer; false when off or unknown. */
   readonly enabled = signal<boolean | null>(null);
+  /**
+   * The last read failed (review round 16): the state is unknown, and the
+   * menu offers the entry as the route guard opens the page, rather than
+   * hiding it for the session after one transient error.
+   */
+  readonly failed = signal(false);
   private request$: Observable<boolean | null> | null = null;
 
   /** Asks once per session; later calls share the answer. null: not known (a failed read). */
@@ -36,7 +42,10 @@ export class EmpiStatusService {
           }),
           shareReplay(1),
         );
-      this.request$.subscribe((on) => this.enabled.set(on));
+      this.request$.subscribe((on) => {
+        this.enabled.set(on);
+        this.failed.set(on === null);
+      });
     }
     return this.request$;
   }

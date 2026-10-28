@@ -50,7 +50,9 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     /** When set, hasPermission answers from this list instead of the wildcard. */
     permissions?: string[];
     /** QA D987: whether the EMPI matcher is on (default on). */
-    empiEnabled?: boolean;
+    empiEnabled?: boolean | null;
+    /** Review round 16: the status read failed. */
+    empiFailed?: boolean;
   }): { items: NavItem[]; component: ShellComponent } {
     const authStub = jasmine.createSpyObj<AuthService>('AuthService', [
       'getUserProfile',
@@ -110,7 +112,13 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
         { provide: IdleService, useValue: idleStub },
         {
           provide: EmpiStatusService,
-          useValue: { enabled: signal(opts.empiEnabled ?? true), load: () => of(true) },
+          useValue: {
+            enabled: signal<boolean | null>(
+              opts.empiEnabled === undefined ? true : opts.empiEnabled,
+            ),
+            failed: signal(opts.empiFailed ?? false),
+            load: () => of(true),
+          },
         },
       ],
     });
@@ -317,6 +325,18 @@ describe('ShellComponent — MVP-5 nav role filter', () => {
     });
 
     expect(items.map((i) => i.route)).not.toContain('/reception/empi-candidates');
+  });
+
+  it('review round 16: a failed status read still offers the panel (the guard decides)', () => {
+    const { items } = createComponent({
+      activeRole: 'ROLE_RECEPTIONIST',
+      roles: ['ROLE_RECEPTIONIST'],
+      wildcardPermission: false,
+      empiEnabled: null,
+      empiFailed: true,
+    });
+
+    expect(items.map((i) => i.route)).toContain('/reception/empi-candidates');
   });
 
   it('hides the duplicate-patient panel from roles outside its route guard', () => {

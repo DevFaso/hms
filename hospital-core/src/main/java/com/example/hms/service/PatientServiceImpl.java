@@ -812,6 +812,10 @@ public class PatientServiceImpl implements PatientService {
         // the existing record through POST /registrations.
         accountLinkGuard.requireLinkable(user, null);
         Patient mapped = patientMapper.toPatient(dto, user);
+        // The SMS challenge was normalised from the number as typed; compare
+        // it with that, not with the hospital's E.164 form stored below, which
+        // differs outside Burkina Faso (trunk zero dropped; review round 16).
+        String typedPrimaryPhone = mapped.getPhoneNumberPrimary();
         normalizePhones(mapped, hospital);
         Patient patient = patientRepository.save(mapped);
 
@@ -821,7 +825,7 @@ public class PatientServiceImpl implements PatientService {
         if (dto.getPhoneVerificationId() != null
             && patient.getPhoneVerifiedAt() == null
             && phoneVerificationService.consumeVerifiedChallenge(
-                dto.getPhoneVerificationId(), patient.getPhoneNumberPrimary())) {
+                dto.getPhoneVerificationId(), typedPrimaryPhone)) {
             patient.setPhoneVerifiedAt(LocalDateTime.now());
             patientRepository.save(patient);
         }
