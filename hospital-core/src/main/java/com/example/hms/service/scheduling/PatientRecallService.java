@@ -28,4 +28,19 @@ public interface PatientRecallService {
 
     /** An appointment was booked for this recall: mark SCHEDULED and link it. */
     RecallResponseDTO linkAppointment(UUID recallId, UUID hospitalId, UUID appointmentId);
+
+    /**
+     * QA D985: booking the visit a recall asks for schedules the recall. The
+     * open recall (pending or notified) of the appointment's patient at its
+     * hospital, in its department or in none, due soonest, is linked to the
+     * appointment and moves to SCHEDULED. Nothing happens when there is none.
+     */
+    void scheduleOpenRecallFor(com.example.hms.model.Appointment appointment);
+
+    /**
+     * QA D985: the appointment a recall was scheduled with was cancelled or
+     * missed; the recall goes back to PENDING, unlinked, so the desk and the
+     * reminder sweep chase the patient again.
+     */
+    void reopenRecallsOf(java.util.UUID appointmentId);
 }

@@ -103,6 +103,10 @@ import com.example.hms.i18n.TestMessageSources;
 @SuppressWarnings({"java:S100", "java:S1192"})
 class PatientPortalServiceImplPhase2Test {
 
+    /** QA D978: a patient books in the future only, so the fixture dates move with the clock. */
+    private static final LocalDate RESCHEDULE_DATE = LocalDate.now().plusDays(20);
+    private static final LocalDate BOOKING_DATE = LocalDate.now().plusDays(30);
+
     @Mock private PatientRepository patientRepository;
     @Mock private ControllerAuthUtils authUtils;
     @Mock private PatientLabResultService labResultService;
@@ -368,7 +372,7 @@ class PatientPortalServiceImplPhase2Test {
             when(appointmentRepository.findById(apptId)).thenReturn(Optional.of(appointment));
             RescheduleAppointmentRequestDTO dto = RescheduleAppointmentRequestDTO.builder()
                     .appointmentId(apptId)
-                    .newDate(LocalDate.of(2026, 5, 20))
+                    .newDate(RESCHEDULE_DATE)
                     .newStartTime(LocalTime.of(14, 0))
                     .newEndTime(LocalTime.of(14, 30))
                     .build();
@@ -446,7 +450,7 @@ class PatientPortalServiceImplPhase2Test {
 
             service.rescheduleMyAppointment(auth, RescheduleAppointmentRequestDTO.builder()
                     .appointmentId(apptId)
-                    .newDate(LocalDate.of(2026, 5, 20))
+                    .newDate(RESCHEDULE_DATE)
                     .newStartTime(LocalTime.of(14, 0))
                     .newEndTime(LocalTime.of(14, 30))
                     .build(), Locale.ENGLISH);
@@ -471,7 +475,7 @@ class PatientPortalServiceImplPhase2Test {
 
             RescheduleAppointmentRequestDTO dto = RescheduleAppointmentRequestDTO.builder()
                     .appointmentId(apptId)
-                    .newDate(LocalDate.of(2026, 5, 20))
+                    .newDate(RESCHEDULE_DATE)
                     .newStartTime(LocalTime.of(14, 0))
                     .newEndTime(LocalTime.of(14, 30))
                     .reason("Need afternoon slot")
@@ -480,10 +484,11 @@ class PatientPortalServiceImplPhase2Test {
             AppointmentResponseDTO result = service.rescheduleMyAppointment(auth, dto, Locale.ENGLISH);
 
             assertThat(result).isNotNull();
-            assertThat(appointment.getAppointmentDate()).isEqualTo(LocalDate.of(2026, 5, 20));
+            assertThat(appointment.getAppointmentDate()).isEqualTo(RESCHEDULE_DATE);
             assertThat(appointment.getStartTime()).isEqualTo(LocalTime.of(14, 0));
             assertThat(appointment.getEndTime()).isEqualTo(LocalTime.of(14, 30));
-            assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.RESCHEDULED);
+            // QA D977: a moved appointment is booked at its new time, as the desk lands it.
+            assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.SCHEDULED);
             assertThat(appointment.getNotes()).contains("Patient rescheduled: Need afternoon slot");
             verify(appointmentRepository).save(appointment);
         }
@@ -497,7 +502,7 @@ class PatientPortalServiceImplPhase2Test {
 
             RescheduleAppointmentRequestDTO dto = RescheduleAppointmentRequestDTO.builder()
                     .appointmentId(apptId)
-                    .newDate(LocalDate.of(2026, 5, 20))
+                    .newDate(RESCHEDULE_DATE)
                     .newStartTime(LocalTime.of(14, 0))
                     .newEndTime(LocalTime.of(14, 30))
                     .build();
@@ -521,7 +526,7 @@ class PatientPortalServiceImplPhase2Test {
 
             RescheduleAppointmentRequestDTO dto = RescheduleAppointmentRequestDTO.builder()
                     .appointmentId(apptId)
-                    .newDate(LocalDate.of(2026, 5, 20))
+                    .newDate(RESCHEDULE_DATE)
                     .newStartTime(LocalTime.of(14, 0))
                     .newEndTime(LocalTime.of(14, 30))
                     .build();
@@ -545,7 +550,7 @@ class PatientPortalServiceImplPhase2Test {
 
             RescheduleAppointmentRequestDTO dto = RescheduleAppointmentRequestDTO.builder()
                     .appointmentId(apptId)
-                    .newDate(LocalDate.of(2026, 5, 20))
+                    .newDate(RESCHEDULE_DATE)
                     .newStartTime(LocalTime.of(14, 0))
                     .newEndTime(LocalTime.of(14, 30))
                     .build();
@@ -566,7 +571,7 @@ class PatientPortalServiceImplPhase2Test {
 
             RescheduleAppointmentRequestDTO dto = RescheduleAppointmentRequestDTO.builder()
                     .appointmentId(apptId)
-                    .newDate(LocalDate.of(2026, 5, 20))
+                    .newDate(RESCHEDULE_DATE)
                     .newStartTime(LocalTime.of(14, 0))
                     .newEndTime(LocalTime.of(14, 30))
                     .build();
@@ -587,7 +592,7 @@ class PatientPortalServiceImplPhase2Test {
 
             RescheduleAppointmentRequestDTO dto = RescheduleAppointmentRequestDTO.builder()
                     .appointmentId(apptId)
-                    .newDate(LocalDate.of(2026, 5, 20))
+                    .newDate(RESCHEDULE_DATE)
                     .newStartTime(LocalTime.of(14, 30))
                     .newEndTime(LocalTime.of(14, 0))
                     .build();
@@ -1585,7 +1590,7 @@ class PatientPortalServiceImplPhase2Test {
                     .hospitalId(hospitalId)
                     .departmentId(departmentId)
                     .staffId(staffId)
-                    .date(LocalDate.of(2026, 6, 15))
+                    .date(BOOKING_DATE)
                     .startTime(LocalTime.of(10, 0))
                     .reason("Annual checkup")
                     .notes("First visit")
@@ -1625,7 +1630,7 @@ class PatientPortalServiceImplPhase2Test {
                     .hospitalId(hospitalId)
                     .departmentId(departmentId)
                     .staffId(null)
-                    .date(LocalDate.of(2026, 6, 15))
+                    .date(BOOKING_DATE)
                     .startTime(LocalTime.of(10, 0))
                     .build();
 
@@ -1653,7 +1658,7 @@ class PatientPortalServiceImplPhase2Test {
                     .hospitalId(hospitalId)
                     .departmentId(departmentId)
                     .staffId(staffId)
-                    .date(LocalDate.of(2026, 6, 15))
+                    .date(BOOKING_DATE)
                     .startTime(LocalTime.of(14, 0))
                     .endTime(null) // should default to 14:30
                     .build();
@@ -1677,7 +1682,7 @@ class PatientPortalServiceImplPhase2Test {
                     .hospitalId(hospitalId)
                     .departmentId(departmentId)
                     .staffId(staffId)
-                    .date(LocalDate.of(2026, 6, 15))
+                    .date(BOOKING_DATE)
                     .startTime(LocalTime.of(10, 0))
                     .build();
 
@@ -1699,7 +1704,7 @@ class PatientPortalServiceImplPhase2Test {
                     .hospitalId(hospitalId)
                     .departmentId(departmentId)
                     .staffId(staffId)
-                    .date(LocalDate.of(2026, 6, 15))
+                    .date(BOOKING_DATE)
                     .startTime(LocalTime.of(10, 0))
                     .build();
 
@@ -1723,7 +1728,7 @@ class PatientPortalServiceImplPhase2Test {
                     .hospitalId(hospitalId)
                     .departmentId(departmentId)
                     .staffId(staffId)
-                    .date(LocalDate.of(2026, 6, 15))
+                    .date(BOOKING_DATE)
                     .startTime(LocalTime.of(10, 0))
                     .build();
 
@@ -1744,7 +1749,7 @@ class PatientPortalServiceImplPhase2Test {
                     .hospitalId(hospitalId)
                     .departmentId(departmentId)
                     .staffId(staffId)
-                    .date(LocalDate.of(2026, 6, 15))
+                    .date(BOOKING_DATE)
                     .startTime(LocalTime.of(10, 0))
                     .build();
 
@@ -1763,7 +1768,7 @@ class PatientPortalServiceImplPhase2Test {
 
             // Create existing appointment at 10:00-10:30 that overlaps the request
             Appointment existing = new Appointment();
-            existing.setAppointmentDate(LocalDate.of(2026, 6, 15));
+            existing.setAppointmentDate(BOOKING_DATE);
             existing.setStartTime(LocalTime.of(10, 0));
             existing.setEndTime(LocalTime.of(10, 30));
             when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any()))
@@ -1773,7 +1778,7 @@ class PatientPortalServiceImplPhase2Test {
                     .hospitalId(hospitalId)
                     .departmentId(departmentId)
                     .staffId(staffId)
-                    .date(LocalDate.of(2026, 6, 15))
+                    .date(BOOKING_DATE)
                     .startTime(LocalTime.of(10, 15))
                     .build();
 
@@ -1794,7 +1799,7 @@ class PatientPortalServiceImplPhase2Test {
                     .hospitalId(hospitalId)
                     .departmentId(departmentId)
                     .staffId(null)
-                    .date(LocalDate.of(2026, 6, 15))
+                    .date(BOOKING_DATE)
                     .startTime(LocalTime.of(10, 0))
                     .build();
 
@@ -1812,7 +1817,7 @@ class PatientPortalServiceImplPhase2Test {
                     .hospitalId(hospitalId)
                     .departmentId(departmentId)
                     .staffId(staffId)
-                    .date(LocalDate.of(2026, 6, 15))
+                    .date(BOOKING_DATE)
                     .startTime(LocalTime.of(10, 0))
                     .endTime(LocalTime.of(10, 0)) // same as start — invalid
                     .build();

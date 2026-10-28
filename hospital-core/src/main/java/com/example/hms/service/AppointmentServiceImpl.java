@@ -137,6 +137,18 @@ public class AppointmentServiceImpl implements AppointmentService {
     @PersistenceContext
     private EntityManager entityManager;
 
+    /**
+     * QA D985: booking or cancelling the visit a recall asks for moves the
+     * recall. Setter-injected so the many unit tests that build this service
+     * by constructor keep compiling; null there, and then nothing is linked.
+     */
+    private com.example.hms.service.scheduling.PatientRecallService recallService;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setRecallService(com.example.hms.service.scheduling.PatientRecallService recallService) {
+        this.recallService = recallService;
+    }
+
     private static final Logger log = LoggerFactory.getLogger(AppointmentServiceImpl.class);
     private static final String USER_NOT_FOUND_PREFIX = "User not found: ";
     // Sonar S1192 (Pattern 5 of docs/SonarQubeInstructions.md): this
@@ -172,7 +184,10 @@ public class AppointmentServiceImpl implements AppointmentService {
         // SCHEDULED is reachable from CONFIRMED because moving a confirmed
         // appointment to a new time invalidates the confirmation — the patient
         // agreed to a DIFFERENT slot, and being asked again is the point.
-        m.put(AppointmentStatus.SCHEDULED,   EnumSet.of(AppointmentStatus.CONFIRMED, AppointmentStatus.CHECKED_IN, AppointmentStatus.CANCELLED, AppointmentStatus.RESCHEDULED));
+        // QA D946: a SCHEDULED appointment whose time has passed is marked
+        // NO_SHOW directly (the temporal guard still applies); the desk used to
+        // record a confirmation the patient never gave just to reach it.
+        m.put(AppointmentStatus.SCHEDULED,   EnumSet.of(AppointmentStatus.CONFIRMED, AppointmentStatus.CHECKED_IN, AppointmentStatus.CANCELLED, AppointmentStatus.RESCHEDULED, AppointmentStatus.NO_SHOW));
         m.put(AppointmentStatus.CONFIRMED,   EnumSet.of(AppointmentStatus.SCHEDULED, AppointmentStatus.CHECKED_IN, AppointmentStatus.IN_PROGRESS, AppointmentStatus.CANCELLED, AppointmentStatus.RESCHEDULED, AppointmentStatus.COMPLETED, AppointmentStatus.NO_SHOW));
         // CHECKED_IN had NO entry at all. ReceptionServiceImpl.checkInPatient
         // sets it directly on the entity, bypassing this map, so check-in
@@ -381,14 +396,10 @@ public class AppointmentServiceImpl implements AppointmentService {
         }
 
         // overlap check
-        boolean hasConflict = appointmentRepository
-            .findByStaff_IdAndAppointmentDate(staff.getId(), request.getAppointmentDate())
-            .stream()
-            .anyMatch(existing -> {
-                LocalDateTime es = LocalDateTime.of(existing.getAppointmentDate(), existing.getStartTime());
-                LocalDateTime ee = LocalDateTime.of(existing.getAppointmentDate(), existing.getEndTime());
-                return requestedStart.isBefore(ee) && es.isBefore(requestedEnd);
-            });
+        // QA D937: a cancelled booking or a no-show frees its slot.
+        boolean hasConflict = AppointmentSlotRules.overlapsHeldSlot(
+            appointmentRepository.findByStaff_IdAndAppointmentDate(staff.getId(), request.getAppointmentDate()),
+            null, requestedStart, requestedEnd);
         if (hasConflict) {
             throw new BusinessException(messageSource.getMessage(
                 "appointment.staff.unavailable",
@@ -413,6 +424,10 @@ public class AppointmentServiceImpl implements AppointmentService {
         appointment.setAssignment(assignment);
 
         Appointment saved = appointmentRepository.save(appointment);
+        // QA D985: the recall this visit answers is now scheduled.
+        if (recallService != null && AppointmentStatus.holdsSlot(saved.getStatus())) {
+            recallService.scheduleOpenRecallFor(saved);
+        }
 
         // Outbound webhooks (Tier 2 item 45): thin id-reference only. The
         // publisher defers to AFTER COMMIT and enqueues in its own
@@ -690,14 +705,11 @@ public class AppointmentServiceImpl implements AppointmentService {
             ));
         }
 
-        boolean hasConflict = appointmentRepository
-            .findByStaff_IdAndAppointmentDate(staff.getId(), request.getAppointmentDate()).stream()
-            .filter(a -> !a.getId().equals(id))
-            .anyMatch(existingAppointment -> {
-                LocalDateTime es = LocalDateTime.of(existingAppointment.getAppointmentDate(), existingAppointment.getStartTime());
-                LocalDateTime ee = LocalDateTime.of(existingAppointment.getAppointmentDate(), existingAppointment.getEndTime());
-                return requestedStart.isBefore(ee) && es.isBefore(requestedEnd);
-            });
+        // QA D937: the appointment being moved, a cancelled booking and a
+        // no-show never conflict.
+        boolean hasConflict = AppointmentSlotRules.overlapsHeldSlot(
+            appointmentRepository.findByStaff_IdAndAppointmentDate(staff.getId(), request.getAppointmentDate()),
+            id, requestedStart, requestedEnd);
 
         if (hasConflict) {
             throw new BusinessException(messageSource.getMessage(
@@ -725,8 +737,16 @@ public class AppointmentServiceImpl implements AppointmentService {
         existing.setAssignment(assignment);
         existing.setUpdatedAt(LocalDateTime.now());
 
-        Appointment saved = appointmentRepository.save(existing);
+        // QA D923: flush BEFORE the refresh. refresh() reloads the row from the
+        // database, so refreshing an entity whose edits were still only in the
+        // persistence context threw every edit away: the PUT answered 200 with
+        // the old date, time and notes, and nothing was written.
+        Appointment saved = appointmentRepository.saveAndFlush(existing);
         entityManager.refresh(saved);
+        // QA D985: an edit that cancels the visit reopens the recall it answered.
+        if (recallService != null && !AppointmentStatus.holdsSlot(saved.getStatus())) {
+            recallService.reopenRecallsOf(saved.getId());
+        }
 
         // Outbound webhooks (Tier 2 item 45): a moved visit is a reschedule
         // regardless of which write path moved it.
@@ -834,6 +854,10 @@ public class AppointmentServiceImpl implements AppointmentService {
         // or moved, the slot goes back into circulation.
         if (newStatus == AppointmentStatus.CANCELLED || newStatus == AppointmentStatus.RESCHEDULED) {
             slotInventoryService.releaseForAppointment(appointment.getId());
+        }
+        // QA D985: a recall scheduled with a visit that will not happen is open again.
+        if (recallService != null && !newStatus.holdsSlot()) {
+            recallService.reopenRecallsOf(appointment.getId());
         }
 
         // Outbound webhooks (Tier 2 item 45).

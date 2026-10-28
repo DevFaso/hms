@@ -135,6 +135,40 @@ public class PatientRecallServiceImpl implements PatientRecallService {
         return toDto(recallRepository.save(recall), hospitalId);
     }
 
+    @Override
+    @Transactional
+    public void scheduleOpenRecallFor(Appointment appointment) {
+        if (appointment == null || appointment.getPatient() == null || appointment.getHospital() == null) {
+            return;
+        }
+        UUID hospitalId = appointment.getHospital().getId();
+        UUID departmentId = appointment.getDepartment() != null ? appointment.getDepartment().getId() : null;
+        recallRepository.findByPatient_IdAndStatusIn(appointment.getPatient().getId(), OPEN_STATUSES).stream()
+            .filter(r -> r.getHospital() != null && hospitalId.equals(r.getHospital().getId()))
+            .filter(r -> r.getDepartment() == null || r.getDepartment().getId().equals(departmentId))
+            .min(java.util.Comparator.comparing(PatientRecall::getDueDate,
+                java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())))
+            .ifPresent(recall -> {
+                recall.setLinkedAppointment(appointment);
+                recall.setStatus(RecallStatus.SCHEDULED);
+                recallRepository.save(recall);
+            });
+    }
+
+    @Override
+    @Transactional
+    public void reopenRecallsOf(UUID appointmentId) {
+        if (appointmentId == null) {
+            return;
+        }
+        for (PatientRecall recall : recallRepository.findByLinkedAppointment_IdAndStatus(
+                appointmentId, RecallStatus.SCHEDULED)) {
+            recall.setLinkedAppointment(null);
+            recall.setStatus(RecallStatus.PENDING);
+            recallRepository.save(recall);
+        }
+    }
+
     /* ---------------- helpers ---------------- */
 
     private PatientRecall finish(PatientRecall recall, RecallStatus status) {
