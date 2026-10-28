@@ -28,6 +28,8 @@ import { PatientService, PatientResponse } from '../services/patient.service';
 import { DepartmentLookupService, DepartmentOption } from '../services/department-lookup.service';
 import { ToastService } from '../core/toast.service';
 import { AuthService } from '../auth/auth.service';
+import { NursingNotesPanelComponent } from './nursing-notes-panel/nursing-notes-panel.component';
+import { NursingNoteService } from '../services/nursing-note.service';
 import { RoleContextService } from '../core/role-context.service';
 import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -55,6 +57,7 @@ import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
     HospitalScopeChipComponent,
     EnumLabelPipe,
     CheckoutDialogComponent,
+    NursingNotesPanelComponent,
   ],
   templateUrl: './encounters.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -682,6 +685,11 @@ export class EncountersComponent implements OnInit {
    * accordingly instead of leading to a refusal. A note with no recorded
    * author keeps both, and the server decides.
    */
+  /** QA D927: only the roles `GET /nurse/notes` admits load the panel (a refused read would leave the page). */
+  get canReadNursingNotes(): boolean {
+    return this.auth.hasAnyRole(NursingNoteService.READER_ROLES);
+  }
+
   isNoteAuthor(note: EncounterNoteResponse | null): boolean {
     const me = this.auth.getUserId();
     return !note?.authorUserId || (!!me && note.authorUserId === me);

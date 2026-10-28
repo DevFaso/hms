@@ -11863,5 +11863,23 @@
     "RANGE": "{{field}} : la valeur doit être comprise entre {{min}} et {{max}}.",
     "MIN": "{{field}} : la valeur doit être supérieure ou égale à {{min}}.",
     "FIELD_REASON": "{{field}} : {{reason}}"
+  },
+  "NURSING_NOTES": {
+    "ACTION": "Action :",
+    "ASSESSMENT": "Évaluation :",
+    "DATA": "Données :",
+    "EDUCATION": "Éducation :",
+    "EMPTY": "Aucune note de soins pour cette visite.",
+    "EVALUATION": "Résultat :",
+    "IMPLEMENTATION": "Interventions :",
+    "LATE_ENTRY": "saisie tardive",
+    "LOADING": "Chargement des notes de soins…",
+    "LOAD_FAILED": "Les notes de soins n'ont pas pu être chargées.",
+    "NARRATIVE": "Note :",
+    "OBJECTIVE": "Objectif :",
+    "PLAN": "Plan :",
+    "RESPONSE": "Réponse :",
+    "SUBJECTIVE": "Subjectif :",
+    "TITLE": "Notes de soins infirmiers"
   }
 }

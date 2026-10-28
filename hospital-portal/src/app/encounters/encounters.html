@@ -525,6 +525,17 @@
             </div>
           }
 
+          <!-- QA D927: the nursing care notes, for the doctor and the next shift. -->
+          @if (canReadNursingNotes && enc.patientId) {
+            <div class="detail-section">
+              <app-nursing-notes-panel
+                [patientId]="enc.patientId"
+                [hospitalId]="enc.hospitalId"
+                [since]="enc.arrivalTimestamp || enc.encounterDate"
+              />
+            </div>
+          }
+
           @if (enc.appointmentReason) {
             <div class="detail-section">
               <h3>{{ 'ENCOUNTERS.APPOINTMENT' | translate }}</h3>

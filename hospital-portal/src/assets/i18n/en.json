@@ -11863,5 +11863,23 @@
     "RANGE": "{{field}}: the value must be between {{min}} and {{max}}.",
     "MIN": "{{field}}: the value must be at least {{min}}.",
     "FIELD_REASON": "{{field}}: {{reason}}"
+  },
+  "NURSING_NOTES": {
+    "ACTION": "Action:",
+    "ASSESSMENT": "Assessment:",
+    "DATA": "Data:",
+    "EDUCATION": "Education:",
+    "EMPTY": "No nursing note for this visit yet.",
+    "EVALUATION": "Evaluation:",
+    "IMPLEMENTATION": "Implementation:",
+    "LATE_ENTRY": "late entry",
+    "LOADING": "Loading nursing notes…",
+    "LOAD_FAILED": "The nursing notes could not be loaded.",
+    "NARRATIVE": "Note:",
+    "OBJECTIVE": "Objective:",
+    "PLAN": "Plan:",
+    "RESPONSE": "Response:",
+    "SUBJECTIVE": "Subjective:",
+    "TITLE": "Nursing care notes"
   }
 }

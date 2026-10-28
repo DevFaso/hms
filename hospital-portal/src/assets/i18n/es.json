@@ -11863,5 +11863,23 @@
     "RANGE": "{{field}}: el valor debe estar entre {{min}} y {{max}}.",
     "MIN": "{{field}}: el valor debe ser como mínimo {{min}}.",
     "FIELD_REASON": "{{field}}: {{reason}}"
+  },
+  "NURSING_NOTES": {
+    "ACTION": "Acción:",
+    "ASSESSMENT": "Valoración:",
+    "DATA": "Datos:",
+    "EDUCATION": "Educación:",
+    "EMPTY": "Aún no hay notas de enfermería para esta visita.",
+    "EVALUATION": "Evaluación:",
+    "IMPLEMENTATION": "Intervenciones:",
+    "LATE_ENTRY": "registro tardío",
+    "LOADING": "Cargando notas de enfermería…",
+    "LOAD_FAILED": "No se pudieron cargar las notas de enfermería.",
+    "NARRATIVE": "Nota:",
+    "OBJECTIVE": "Objetivo:",
+    "PLAN": "Plan:",
+    "RESPONSE": "Respuesta:",
+    "SUBJECTIVE": "Subjetivo:",
+    "TITLE": "Notas de cuidados de enfermería"
   }
 }
