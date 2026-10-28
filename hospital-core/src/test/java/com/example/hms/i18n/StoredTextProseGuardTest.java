@@ -210,9 +210,6 @@ class StoredTextProseGuardTest {
     }
 
     private static final String D952 = "QA D952: nursing intake written into encounter notes with English headers";
-    private static final String D989 = "QA D989: triage pain score stored as English \"Pain scale: 8\"";
-    private static final String D1000 = "QA D1000: English routing reasons in the FR/ES pharmacy UI";
-    private static final String D958 = "QA D958: timeline/in-basket title falls back to the English \"Lab result\"";
     private static final String D944 = "QA D944: the walk-in's reason falls back to the English \"Walk-in\" in the queue";
     private static final String PRE_EXISTING = "pre-existing English stored text (class of QA D952/D989); key it with the next touch";
     private static final String CDS_CARD =
@@ -229,15 +226,6 @@ class StoredTextProseGuardTest {
         "service/ClinicalDashboardServiceImpl.java::Active Patients", 1, PRE_EXISTING,
         "service/ClinicalDashboardServiceImpl.java::Refill Requests", 1, PRE_EXISTING,
         "service/DepartmentServiceImpl.java::Auto-provisioned hospital admin assignment for department creation", 1, PRE_EXISTING,
-        "service/EncounterServiceImpl.java::Pain scale: ", 1, D989,
-        "service/EncounterServiceImpl.java::[Nursing Assessment]", 1, D952,
-        "service/EncounterServiceImpl.java::[Pain Assessment]", 1, D952,
-        "service/EncounterServiceImpl.java::[Fall Risk]", 1, D952,
-        "service/EncounterServiceImpl.java::[Medication Reconciliation] ", 1, D952,
-        "service/EncounterServiceImpl.java:: medication(s) reported:\\n", 1, D952,
-        "service/EncounterServiceImpl.java::\\n\\n--- Nursing Intake ---\\n", 1, D952,
-        "service/EncounterServiceImpl.java::Unknown", 1, D952 + " (medication name fallback)",
-        "service/LabResultServiceImpl.java::Lab result", 1, D958,
         "service/ReceptionServiceImpl.java::Walk-in", 1, D944,
         "service/SecurityPolicyGovernanceServiceImpl.java::Security baseline", 1, PRE_EXISTING,
         "service/impl/PatientPortalServiceImpl.java::Patient cancelled: ", 1, PRE_EXISTING,
@@ -249,8 +237,6 @@ class StoredTextProseGuardTest {
         "service/pharmacy/DispenseServiceImpl.java::Dispense for prescription ", 1, PRE_EXISTING,
         "service/pharmacy/DispenseServiceImpl.java::Dispense cancelled — stock returned for prescription ", 1, PRE_EXISTING,
         "service/pharmacy/PreparedFillVoider.java::Prepared fill cancelled — stock returned for prescription ", 1, PRE_EXISTING,
-        "service/pharmacy/StockOutRoutingServiceImpl.java::Prescription printed for patient to fill at external pharmacy", 1, D1000,
-        "service/pharmacy/StockOutRoutingServiceImpl.java::Medication out of stock; placed on back order", 1, D1000,
         "controller/Hl7InboundController.java::Imported via HL7v2 ORU^R01 inbound adapter.", 1, D952 + " class (HL7 inbound notes)",
         "cdshooks/bpa/NewsScoreProtocolRule.java::At least one parameter scores 3 — urgent review per policy.", 1, CDS_CARD,
         "cdshooks/bpa/NewsScoreProtocolRule.java::NEWS2: {0} ({1} risk) — vitals recorded {2}", 1, CDS_CARD,
