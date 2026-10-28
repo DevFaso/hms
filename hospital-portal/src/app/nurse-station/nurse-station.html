@@ -1792,7 +1792,7 @@
 @if (closeUnseenEncounter(); as target) {
   <app-close-unseen-dialog
     [encounterId]="target.id"
-    [patientName]="target.patientName ?? null"
+    [patientName]="target.patientName"
     (dismissed)="closeUnseenEncounter.set(null)"
     (closed)="onUnseenVisitClosed()"
   />
