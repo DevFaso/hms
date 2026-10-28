@@ -48,6 +48,21 @@ const where = (p, text, index) =>
 const ICON = /<span\b[^>]*material-symbols[^>]*>[\s\S]*?<\/span>/g;
 const ICON_TAG = /<span\b([^>]*material-symbols[^>]*)>/g;
 
+/**
+ * The words a button shows once tags and control-flow braces are dropped.
+ * This reads our own templates (it is not a sanitizer); the tag pass repeats
+ * until nothing changes so a nested or split tag cannot leave markup behind.
+ */
+function visibleText(fragment) {
+  let text = fragment;
+  let previous;
+  do {
+    previous = text;
+    text = text.replace(/<[^<>]*>/g, '');
+  } while (text !== previous);
+  return text.replace(/@if[^{]*\{|@else|[{}<>]/g, '').trim();
+}
+
 test('the scan finds the clinical workflow templates', () => {
   assert.ok(templates.length >= 15, `only ${templates.length} templates found`);
 });
@@ -59,11 +74,7 @@ test('D999: every icon-only button has an accessible name, and its icon is aria-
     const html = readFileSync(p, 'utf8');
     for (const m of html.matchAll(/<button\b([^>]*)>([\s\S]*?)<\/button>/g)) {
       const [, attrs, inner] = m;
-      const text = inner
-        .replace(ICON, '')
-        .replace(/<[^>]+>/g, '')
-        .replace(/@if[^{]*\{|@else|[{}]/g, '')
-        .trim();
+      const text = visibleText(inner.replace(ICON, ''));
       if (!text && !attrs.includes('aria-label')) unnamed.push(where(p, html, m.index));
       for (const t of inner.matchAll(ICON_TAG)) {
         if (!t[1].includes('aria-hidden')) {
