@@ -26,14 +26,50 @@ const SLICE_CALL = new RegExp(
 );
 const MAX_FRAGMENT = 12;
 
-/** Fields that end in "id" but are not identifiers. */
-const NOT_AN_ID =
-  /(?:valid|paid|void|rapid|fluid|acid|grid|mid|hybrid|solid|liquid|invalid|avoid|bid|lid|kid|hid|did|rid|said|aid|raid|android)(?:\(\))?$/i;
+/**
+ * Whole words that end in "id" but are not identifiers. Compared against the
+ * LAST identifier of the expression exactly, never as a tail: a tail match of
+ * `rid`/`did`/`lid` once excused `encounterId`, `userId` and `hospitalId`.
+ */
+const NOT_AN_ID = new Set([
+  'valid',
+  'invalid',
+  'paid',
+  'unpaid',
+  'void',
+  'rapid',
+  'fluid',
+  'acid',
+  'grid',
+  'mid',
+  'hybrid',
+  'solid',
+  'liquid',
+  'avoid',
+  'bid',
+  'lid',
+  'kid',
+  'hid',
+  'did',
+  'rid',
+  'said',
+  'aid',
+  'raid',
+  'android',
+]);
 
 const lineAt = lineOf;
 
 function isId(expr) {
-  return !NOT_AN_ID.test(expr);
+  const last = expr
+    .replace(/[!?]/g, '')
+    .split('.')
+    .pop()
+    .replace(/[()[\]]/g, '');
+  // The last camelCase word decides: `isValid` → "valid" (not an id),
+  // `hospitalId` → "id" (an id), `unpaid` → "unpaid" (not an id).
+  const lastWord = last.split(/(?=[A-Z])/).pop();
+  return !NOT_AN_ID.has(lastWord.toLowerCase());
 }
 
 /**

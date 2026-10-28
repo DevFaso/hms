@@ -43,3 +43,9 @@ test('human codes, long slices and words that merely end in "id" pass', () => {
     const fullId = row.id.slice(0, 36);`;
   assert.deepEqual(anchors(text), []);
 });
+
+test('an identifier that ENDS in Id is an id even when its last letters spell rid/did/lid', () => {
+  const text = `{{ encounterId | slice: 0 : 8 }} {{ row.userId.slice(0, 8) }} {{ selectedStaff()!.hospitalId | slice: 0 : 8 }}
+    const a = orderId.substring(0, 8), b = bedId.slice(0, 8), c = recordId.slice(0, 8);`;
+  assert.equal(anchors(text).length, 6);
+});

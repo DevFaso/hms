@@ -34,8 +34,9 @@ const MONEY_TAIL =
  */
 const MONEY_WORD =
   /^(?:[a-z][A-Za-z0-9]*)?(?:Amount|Price|Balance|Copay|Copayment|Revenue|Subtotal|Fee|Fees|Cost|Paid|Due|Charge|Charges|Payment|Discount|Refund|Total)$|^(?:amount|price|balance|copay|copayment|revenue|subtotal|fee|fees|cost|paid|due|charge|charges|payment|discount|refund)$/;
+// Case-sensitive camelCase suffixes: `discount` is money, `lineCount` is not.
 const NOT_MONEY =
-  /(?:rate|percent|pct|ratio|count|days|hours|minutes|index|number|share|code|score|invoices|visits|items|length|at|on|date|by)$/i;
+  /[a-z0-9](?:Rate|Percent|Pct|Ratio|Count|Days|Hours|Minutes|Index|Number|Share|Code|Score|Invoices|Visits|Items|Length|At|On|Date|By)$/;
 
 const EXPR = String.raw`([\w$.?!()\[\]'"]*?\w*${MONEY_TAIL}\w*(?:\(\))?)`;
 // `[?!]?` — `inv.amount?.toFixed(2)` and `inv.amount!.toFixed(2)` are the same

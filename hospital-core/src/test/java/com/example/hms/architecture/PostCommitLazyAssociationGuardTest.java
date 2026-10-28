@@ -23,25 +23,30 @@ import static org.assertj.core.api.Assertions.assertThat;
  * QA D921 (and #564 before it) guard: code that runs with no persistence
  * context must not walk a lazy association.
  *
- * <p>A controller method is not transactional; a {@code TransactionCallbacks.afterCommit}
- * lambda, a {@code @TransactionalEventListener} and an interceptor's
- * {@code afterCompletion} run after the session closed. In each, the first
- * {@code entity.getHospital().getName()} on an entity loaded earlier is a
- * {@code LazyInitializationException}: #564 lost every hospital-scoped write
- * audit for a week that way, and D921 turned every emailed activation link into
- * a 500 that left the account half-activated. Pass ids; let the REQUIRES_NEW
- * service load what it needs (docs: memory note "out-of-session lazy proxies").
+ * <p>A controller method is not transactional; a lambda handed to any
+ * {@code afterCommit(...)} (the {@code TransactionCallbacks} helper or a
+ * service's own wrapper), a {@code registerSynchronization(...)} argument, a
+ * {@code @TransactionalEventListener} and an interceptor's or synchronization's
+ * {@code afterCompletion}/{@code afterCommit} override all run after the
+ * session closed. In each, the first {@code entity.getHospital().getName()} on
+ * an entity loaded earlier is a {@code LazyInitializationException}: #564 lost
+ * every hospital-scoped write audit for a week that way, and D921 turned every
+ * emailed activation link into a 500 that left the account half-activated.
+ * Pass ids; let the REQUIRES_NEW service load what it needs (memory note
+ * "out-of-session lazy proxies").
  *
  * <p>The scan looks for a two-step getter chain through an association
  * ({@code .getRole().getCode()}, {@code .getHospital().getId()}, ...) in
  * <ul>
- *   <li>every file under {@code controller/};</li>
- *   <li>the body of every {@code TransactionCallbacks.afterCommit(() -> { ... })};</li>
- *   <li>the body of every {@code @TransactionalEventListener} method and
- *       every {@code afterCompletion(...)} method.</li>
+ *   <li>every file under {@code controller/} (comments stripped);</li>
+ *   <li>the whole argument of every {@code afterCommit(} and
+ *       {@code registerSynchronization(} call;</li>
+ *   <li>the body of every {@code @TransactionalEventListener} method (whatever
+ *       its modifier, however many lines the annotation spans) and of every
+ *       {@code afterCompletion(...)}/{@code afterCommit(...)} method.</li>
  * </ul>
- * The post-commit bodies hold none today and must stay at none. The
- * controller sites that exist are listed with their reason and may only shrink;
+ * The post-commit code holds none today and must stay at none. The controller
+ * sites that exist are listed with their reason and may only shrink;
  * {@code .getX().getId()} on a row the same method just loaded by id is
  * usually safe (the proxy is initialised by the load), which is why most of
  * them are tolerated rather than fixed — but D921's two are not.
@@ -59,21 +64,14 @@ class PostCommitLazyAssociationGuardTest {
             + "|getCreatedBy|getProvider|getOrganization|getParent|getPrimaryHospital|getRequestedBy"
             + "|getPhysician|getNurse|getDoctor|getAuthor)\\(\\)\\s*\\.\\s*get\\w+\\(");
 
-    /**
-     * {@code TransactionCallbacks.afterCommit(}: the whole argument is scanned, so a
-     * block lambda, an expression lambda and a multi-line builder chain are all
-     * read (#564's shape fits in one expression lambda).
-     */
-    private static final Pattern AFTER_COMMIT = Pattern.compile("TransactionCallbacks\\.afterCommit\\(");
+    /** A post-commit callback handed to any wrapper: the `(` of the call. */
+    private static final Pattern POST_COMMIT_CALL = Pattern.compile("\\b(?:afterCommit|registerSynchronization)\\(");
 
-    /**
-     * A @TransactionalEventListener method, an afterCompletion override (interceptor or
-     * TransactionSynchronization) or an anonymous TransactionSynchronization's
-     * afterCommit(): the `{` that opens its body.
-     */
-    private static final Pattern LISTENER = Pattern.compile(
-        "(?:@TransactionalEventListener[^\\n]*\\n(?:\\s*@\\w+[^\\n]*\\n)*\\s*(?:public|protected|private)[^{;]*"
-            + "|(?:public|protected)\\s+void\\s+(?:afterCompletion|afterCommit)\\s*\\([^)]*\\)[^{;]*)\\{");
+    /** A listener annotation; its arguments (if any) are skipped by balanced parens before the body is found. */
+    private static final Pattern LISTENER_ANNOTATION = Pattern.compile("@TransactionalEventListener\\b");
+
+    /** An interceptor's or TransactionSynchronization's override: the `(` of its parameter list. */
+    private static final Pattern OVERRIDE = Pattern.compile("\\bvoid\\s+(?:afterCompletion|afterCommit)\\s*\\(");
 
     private record Allowance(int count, String reason) { }
 
@@ -106,9 +104,9 @@ class PostCommitLazyAssociationGuardTest {
         "controller/ReportController.java", ".getHospital().getId(", 1, LOADED_HERE,
         "controller/integration/Dhis2ExportController.java", ".getHospital().getId(", 3, LOADED_HERE);
 
-    static Map<String, Integer> controllerChains(String source) {
+    static Map<String, Integer> controllerChains(String rawSource) {
         Map<String, Integer> counts = new TreeMap<>();
-        Matcher m = CHAIN.matcher(source);
+        Matcher m = CHAIN.matcher(SourceScan.stripComments(rawSource));
         while (m.find()) {
             counts.merge(normalise(m.group()), 1, Integer::sum);
         }
@@ -119,18 +117,36 @@ class PostCommitLazyAssociationGuardTest {
         return chain.replaceAll("\\s+", "");
     }
 
-    /** Every chain inside an afterCommit argument, a @TransactionalEventListener or an afterCompletion body. */
-    static List<String> postCommitChains(String file, String source) {
+    /** Every chain inside a post-commit argument, a listener body or an override body. */
+    static List<String> postCommitChains(String file, String rawSource) {
+        String source = SourceScan.stripComments(rawSource);
         List<String> out = new ArrayList<>();
-        Matcher after = AFTER_COMMIT.matcher(source);
-        while (after.find()) {
-            int open = after.end() - 1;
+        Matcher call = POST_COMMIT_CALL.matcher(source);
+        while (call.find()) {
+            int open = call.end() - 1;
             report(file, source, open, SourceScan.closingParen(source, open), out);
         }
-        Matcher listener = LISTENER.matcher(source);
+        Matcher listener = LISTENER_ANNOTATION.matcher(source);
         while (listener.find()) {
-            int open = listener.end() - 1;
-            report(file, source, open, SourceScan.closingBrace(source, open), out);
+            int at = listener.end();
+            while (at < source.length() && Character.isWhitespace(source.charAt(at))) {
+                at++;
+            }
+            if (at < source.length() && source.charAt(at) == '(') {
+                at = SourceScan.closingParen(source, at) + 1;
+            }
+            int open = source.indexOf('{', at);
+            if (open >= 0) {
+                report(file, source, open, SourceScan.closingBrace(source, open), out);
+            }
+        }
+        Matcher override = OVERRIDE.matcher(source);
+        while (override.find()) {
+            int params = override.end() - 1;
+            int open = source.indexOf('{', SourceScan.closingParen(source, params));
+            if (open >= 0) {
+                report(file, source, open, SourceScan.closingBrace(source, open), out);
+            }
         }
         return out;
     }
@@ -144,7 +160,7 @@ class PostCommitLazyAssociationGuardTest {
     }
 
     @Test
-    @DisplayName("no afterCommit lambda, transactional event listener or afterCompletion walks an association")
+    @DisplayName("no post-commit callback, transactional event listener or afterCompletion walks an association")
     void postCommitCodePassesIds() throws IOException {
         List<String> offenders = new ArrayList<>();
         try (Stream<Path> files = Files.walk(MAIN)) {
@@ -154,7 +170,8 @@ class PostCommitLazyAssociationGuardTest {
             }
         }
         assertThat(offenders)
-            .as("post-commit code runs with no persistence context: pass ids to the REQUIRES_NEW service (#564, D921)")
+            .as("post-commit code runs with no persistence context: pass ids to the REQUIRES_NEW service (#564, D921)"
+                + SourceScan.MANDATE)
             .isEmpty();
     }
 
@@ -180,7 +197,8 @@ class PostCommitLazyAssociationGuardTest {
             }
         });
         assertThat(fresh)
-            .as("a controller walked an association: return a DTO from the service, or pass ids (QA D921)")
+            .as("a controller walked an association: return a DTO from the service, or pass ids (QA D921)"
+                + SourceScan.MANDATE)
             .isEmpty();
 
         List<String> stale = new ArrayList<>();
@@ -190,19 +208,21 @@ class PostCommitLazyAssociationGuardTest {
                 stale.add(site + ": " + n + " left, " + allowance.count() + " allowed — lower it");
             }
         });
-        assertThat(stale).as("a site was fixed: shrink its allowance in the same change").isEmpty();
+        assertThat(stale).as("a site was fixed: shrink its allowance in the same change" + SourceScan.MANDATE).isEmpty();
     }
 
     @Test
-    @DisplayName("the scan catches the D921 and #564 shapes")
+    @DisplayName("the scan catches the D921 and #564 shapes, through wrappers and multi-line annotations, not comments")
     void theScanCatchesTheOldShapes() {
         String d921 = """
             userRepository.save(user);
+            // was: assignment.getRole().getCode() — a comment is not a chain
             for (var assignment : assignmentRepository.findByUserId(user.getId())) {
                 if ("ROLE_PATIENT".equalsIgnoreCase(assignment.getRole().getCode())
                         && !isClosed(assignment.getHospital().getLifecycleState())) {
             """;
-        assertThat(controllerChains(d921)).containsOnlyKeys(".getRole().getCode(", ".getHospital().getLifecycleState(");
+        assertThat(controllerChains(d921)).containsOnly(
+            Map.entry(".getRole().getCode(", 1), Map.entry(".getHospital().getLifecycleState(", 1));
 
         String pr564 = """
             public void afterCompletion(HttpServletRequest request, HttpServletResponse response, Object handler, Exception ex) {
@@ -218,6 +238,12 @@ class PostCommitLazyAssociationGuardTest {
             public void onCreated(UserCreatedEvent event) {
                 mail.send(event.user().getHospital().getName());
             }
+            @TransactionalEventListener(
+                phase = TransactionPhase.AFTER_COMMIT,
+                fallbackExecution = true)
+            void onArchived(ArchivedEvent event) {
+                mail.send(event.row().getHospital().getName());
+            }
             private void fine(Assignment assignment) {
                 UUID hospitalId = assignment.getHospital().getId();
                 TransactionCallbacks.afterCommit(() -> audit.record(hospitalId));
@@ -225,11 +251,8 @@ class PostCommitLazyAssociationGuardTest {
             private void expressionLambda(Assignment assignment) {
                 TransactionCallbacks.afterCommit(() -> mail.send(assignment.getHospital().getName()));
             }
-            private void builderChain(Assignment assignment) {
-                TransactionCallbacks.afterCommit(
-                    () -> auditEventLogService.logEvent(AuditEventRequestDTO.builder()
-                        .hospitalId(assignment.getHospital().getId())
-                        .build()));
+            private void ownWrapper(Prescription rx) {
+                afterCommit(rx.getId(), "sms", () -> writer.write(rx.getPatient().getId(), event));
             }
             private void synchronization(Dispense saved) {
                 TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
@@ -240,6 +263,6 @@ class PostCommitLazyAssociationGuardTest {
                 });
             }
             """;
-        assertThat(postCommitChains("x", pr564)).hasSize(6);
+        assertThat(postCommitChains("x", pr564)).hasSize(8);
     }
 }

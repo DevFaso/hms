@@ -29,9 +29,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  * appointment for every reschedule, three rounds in a row, with a service
  * test that mocked both calls and so could not see it.
  *
- * <p>Fails on any {@code save(x)} followed — on the next statement — by
- * {@code entityManager.refresh(x)} or {@code refresh(<result of the save>)}
- * without a {@code flush()} between them. The pattern never has a legitimate
+ * <p>Fails on any {@code save(...)} whose next statement is
+ * {@code entityManager.refresh(x)} where {@code x} is the saved result or the
+ * bare variable that was saved — whatever the save's argument looks like
+ * ({@code save(existing)}, {@code save(mapper.apply(existing, request))}), and
+ * whatever comments sit between the two. The pattern never has a legitimate
  * use: either drop the refresh, or {@code saveAndFlush} first when a
  * database-side default must be read back. The allowance below names the one
  * site the defect was reported on; it goes with the fix.
@@ -41,31 +43,38 @@ class SaveThenRefreshGuardTest {
 
     private static final Path MAIN = Paths.get("src/main/java/com/example/hms");
 
-    /**
-     * {@code [T saved =] repo.save(x);} then, after optional comment lines,
-     * {@code entityManager.refresh(saved|x);}. The variable names are captured
-     * so the message can say which one.
-     */
-    static final Pattern SAVE_THEN_REFRESH = Pattern.compile(
-        "(?:(\\w+)\\s*=\\s*)?\\w+\\.save\\(\\s*(\\w+)\\s*\\)\\s*;"
-            + "(?:\\s*//[^\\n]*)*\\s*"
-            + "(?:entityManager|em)\\.refresh\\(\\s*(\\w+)\\s*\\)");
+    /** {@code [T saved =] repo.save(}: the `(` of the call. */
+    static final Pattern SAVE = Pattern.compile("(?:(\\w+)\\s*=\\s*)?\\w+\\.save\\(");
+
+    /** The statement that follows: {@code entityManager.refresh(x)}. */
+    static final Pattern REFRESH = Pattern.compile("^\\s*(?:entityManager|em)\\.refresh\\(\\s*(\\w+)\\s*\\)");
 
     /** Sites the defect was reported on. Shrink only: the fix deletes the line here too. */
     private static final Map<String, String> ALLOWED = Map.of(
         "service/AppointmentServiceImpl.java",
         "QA D923: updateAppointment refreshes the saved appointment before the flush; every PUT edit is discarded");
 
-    static List<String> offenders(String file, String source) {
+    static List<String> offenders(String file, String rawSource) {
+        String source = SourceScan.stripComments(rawSource);
         List<String> out = new ArrayList<>();
-        Matcher m = SAVE_THEN_REFRESH.matcher(source);
+        Matcher m = SAVE.matcher(source);
         while (m.find()) {
+            int open = m.end() - 1;
+            int close = SourceScan.closingParen(source, open);
+            String argument = source.substring(open + 1, close).strip();
+            int semicolon = source.indexOf(';', close);
+            if (semicolon < 0) {
+                continue;
+            }
+            Matcher refresh = REFRESH.matcher(source).region(semicolon + 1, source.length());
+            if (!refresh.lookingAt()) {
+                continue;
+            }
+            String refreshed = refresh.group(1);
             String saved = m.group(1);
-            String argument = m.group(2);
-            String refreshed = m.group(3);
             if (refreshed.equals(argument) || refreshed.equals(saved)) {
-                out.add(file + ":" + SourceScan.lineOf(source, m.start()) + ": save(" + argument + ") then refresh(" + refreshed
-                    + ") — the refresh re-reads the row and discards the pending update (QA D923)");
+                out.add(file + ":" + SourceScan.lineOf(source, m.start()) + ": save(" + argument + ") then refresh("
+                    + refreshed + ") — the refresh re-reads the row and discards the pending update (QA D923)");
             }
         }
         return out;
@@ -93,7 +102,8 @@ class SaveThenRefreshGuardTest {
             }
         });
         assertThat(fresh)
-            .as("drop the refresh, or saveAndFlush() before it when a database default must be read back")
+            .as("drop the refresh, or saveAndFlush() before it when a database default must be read back"
+                + SourceScan.MANDATE)
             .isEmpty();
 
         List<String> stale = new ArrayList<>();
@@ -102,11 +112,13 @@ class SaveThenRefreshGuardTest {
                 stale.add(file + " (" + reason + ")");
             }
         });
-        assertThat(stale).as("the site was fixed: delete its allowance so the pattern cannot return").isEmpty();
+        assertThat(stale)
+            .as("the site was fixed: delete its allowance so the pattern cannot return" + SourceScan.MANDATE)
+            .isEmpty();
     }
 
     @Test
-    @DisplayName("the scan catches the shapes the D923 site had, and not a flush in between")
+    @DisplayName("the scan catches the D923 shapes — bare and expression arguments, comments between — not a flush")
     void theScanCatchesTheOldShape() {
         String old = """
             Appointment saved = appointmentRepository.save(existing);
@@ -115,7 +127,12 @@ class SaveThenRefreshGuardTest {
         String plain = """
             appointmentRepository.save(existing);
             // reload defaults
+            /* and the trigger's columns */
             entityManager.refresh(existing);
+            """;
+        String expression = """
+            Appointment saved = appointmentRepository.save(mapper.apply(existing, request));
+            entityManager.refresh(saved);
             """;
         String flushed = """
             Appointment saved = appointmentRepository.saveAndFlush(existing);
@@ -125,9 +142,16 @@ class SaveThenRefreshGuardTest {
             Appointment saved = appointmentRepository.save(existing);
             entityManager.refresh(lot);
             """;
+        String commented = """
+            Appointment saved = appointmentRepository.save(existing);
+            // entityManager.refresh(saved);
+            return saved;
+            """;
         assertThat(offenders("x", old)).hasSize(1);
         assertThat(offenders("x", plain)).hasSize(1);
+        assertThat(offenders("x", expression)).hasSize(1);
         assertThat(offenders("x", flushed)).isEmpty();
         assertThat(offenders("x", unrelated)).isEmpty();
+        assertThat(offenders("x", commented)).isEmpty();
     }
 }

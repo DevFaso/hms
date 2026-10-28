@@ -10,6 +10,12 @@ package com.example.hms.testsupport;
  */
 public final class SourceScan {
 
+    /** Appended to every guard's failure message: the standing rule for anyone fixing a D-numbered defect. */
+    public static final String MANDATE =
+        " — fixing a QA defect? Read .claude/skills/defect-fix-mandate/SKILL.md: fix the CLASS, not the instance;"
+            + " an allowlist entry carries its defect id and the fix PR deletes it; a new site fails CI and is never"
+            + " allowlisted to pass";
+
     private SourceScan() {
     }
 

@@ -111,37 +111,127 @@ are excusing; `why` of existing pins is kept, new pins get `TODO`).
   `: "Capitalised"` ternary fallback shape is caught; a bare
   `setReason("Pending")` is indistinguishable from a code without a type
   model.
-- **Textual scans read comments too**: a Javadoc that spells
-  `new MessageResponse("Logged out successfully.")` fails the response guard.
-  This matches the exception ratchet's behaviour and is accepted; reword the
-  comment.
+- **Comments are stripped** before every Java scan (`SourceScan.stripComments`),
+  so a Javadoc that quotes an old English sentence or a `// was
+  assignment.getRole().getCode()` note neither fails a guard nor keeps an
+  allowance alive. (The older `ExceptionProseRatchetTest` still reads
+  comments.)
+
+---
+
+## How a fix PR uses these guards
+
+The user's standing order for every D-numbered defect is the project skill
+`.claude/skills/defect-fix-mandate/SKILL.md` — fix the **class**, not the
+instance; prove it with a codebase-wide guard; prove it on the running app;
+a PR without the class table is not a fix. These guards are the "guard the
+class" step for the classes round 16 named. The contract between a fix PR and
+a guard:
+
+1. **Every allowlist entry carries a defect id** (or a one-line reason a
+   reviewer can check). The entry says *this site is known, it belongs to
+   D-xxx, and it is not fixed yet*.
+2. **A fix PR removes its entries.** When the site is fixed the guard fails
+   with *"the site was fixed: delete its line"* / *"stale pin"*; the PR
+   deletes the `Map.entry(...)` or lowers the pin's `count` in the same
+   commit. The allowlist only ever shrinks.
+3. **A new violation fails CI** and is never pinned to make the build green.
+   Pinning is for sites that exist on `develop` today, each with its id. A
+   reviewer rejects a pin without one.
+4. **A guard that misses an instance is a guard bug**: extend the scan and its
+   self-test (`.test.mjs` / "the scan catches the old shapes") in the fix PR.
+5. Every failure message of these guards ends with a pointer to that skill.
+
+The round-16 fix PRs and the allowlists each is expected to shrink (by area;
+the fix PR's class table is the authority):
+
+| Fix PR | Area | Allowlists it shrinks |
+|---|---|---|
+| #971 | encounters (nursing intake, triage, notes, timeline) | `StoredTextProseGuardTest` (D952, D989, D958 entries), `guard:uuid-fragments` (D992 pins), `guard:a11y-dialogs` / `guard:a11y-names` (triage-form, nurse-station, emar pins: D1004, D993) |
+| #972 | front office (reception, appointments, registration) | `SaveThenRefreshGuardTest` (the D923 allowance — the guard then has none), `StoredTextProseGuardTest` (D944 "Walk-in"), `guard:patient-picker` (D947 pin), `guard:money-format` (D948 pins), `guard:a11y-dialogs` / `guard:a11y-names` (checkin-dialog, reception-cockpit, walkin-dialog pins: D988) |
+| #973 | portal / billing (activation, pre-check-in, billing modals) | `PostCommitLazyAssociationGuardTest` (the two D921 chains), `ResponseProseGuardTest` (AuthController's D921 body, D940-class literals), `guard:a11y-dialogs` / `guard:a11y-names` (billing.html pins: D976, D1006), `app-locale.spec.ts` D1008 pinned expectation |
+| orders / meds / lab (pending) | prescriptions, MAR, lab results, pharmacy | `StoredTextProseGuardTest` (D1000 stock-out reasons, D958 "Lab result"), `i18n:raw-enums` (D950 `m.route`/`task.route`, D963 `lab.html::<option>p`, `o.orderChannel` pins), `guard:a11y-dialogs` (lab-results pins: D968) |
+
+Entries tagged "pre-existing (class …)" belong to no fix PR yet; they shrink
+as pages are touched, and never grow.
 
 ---
 
 ## Regression pack for every future QA round
 
 A round that re-tests only the defect list re-finds the class on the screens
-the list did not name. From round 17 on, **every round re-runs every area
-script, not only the defects under re-test**:
+the list did not name. From round 17 on, a round is called clean only when the
+**whole pack** below has been re-run in full on the build under test — the
+listed defect ids are the smallest part of it.
 
-```text
-C:\dev\hms-qa\scripts\r16\preflight\pre.js
-C:\dev\hms-qa\scripts\r16\patient-portal\*.js
-C:\dev\hms-qa\scripts\r16\reception-frontdesk\*.js
-C:\dev\hms-qa\scripts\r16\nurse-triage-inpatient\*.js
-C:\dev\hms-qa\scripts\r16\doctor-outpatient\*.js
-C:\dev\hms-qa\scripts\r16\lab-pharmacy\*.js
-C:\dev\hms-qa\scripts\r16\maternity-pediatrics\*.js
-C:\dev\hms-qa\scripts\r16\billing-cashier\*.js
-```
-
-and, before the round starts, the whole static pack on the build under test:
+### 1. The static guards, before any tester signs in
 
 ```bash
-cd hospital-core && ../gradlew test --tests 'com.example.hms.architecture.*' --tests 'com.example.hms.i18n.*'
-cd hospital-portal && npm run guards && npm run i18n:raw-enums && npm run i18n:translated
+cd hospital-core && ../gradlew test --tests 'com.example.hms.architecture.*' --tests 'com.example.hms.i18n.*' --tests 'com.example.hms.security.tenant.*'
+cd hospital-portal && npm run guards && npm run i18n:raw-enums && npm run i18n:translated && npm run i18n:enums && npm run rbac:inline-roles
 ```
 
-A defect found by a round that one of these guards *should* have caught is a
-guard bug: extend the scan (and its `.test.mjs` / "the scan catches the old
-shapes" self-test) in the same fix PR, so the class cannot slip past it again.
+### 2. Every area pack under `C:\dev\hms-qa\scripts\<round>\<area>`
+
+The round-16 packs (one per tester role; `preflight\pre.js` first):
+
+```text
+C:\dev\hms-qa\scripts\r16\preflight
+C:\dev\hms-qa\scripts\r16\patient-portal
+C:\dev\hms-qa\scripts\r16\reception-frontdesk
+C:\dev\hms-qa\scripts\r16\nurse-triage-inpatient
+C:\dev\hms-qa\scripts\r16\doctor-outpatient
+C:\dev\hms-qa\scripts\r16\lab-pharmacy
+C:\dev\hms-qa\scripts\r16\maternity-pediatrics
+C:\dev\hms-qa\scripts\r16\billing-cashier
+```
+
+and the earlier packs, which cover areas round 16 did not re-walk (super-admin,
+hospital admin, security, multi-hospital, modules, i18n/a11y crawls):
+
+```text
+C:\dev\hms-qa\scripts\setup, setup-r13            (accounts, hospitals, catalogue — run first on a wiped dev)
+C:\dev\hms-qa\scripts\patient-portal
+C:\dev\hms-qa\scripts\journey-outpatient
+C:\dev\hms-qa\scripts\journey-inpatient
+C:\dev\hms-qa\scripts\journey-maternity
+C:\dev\hms-qa\scripts\journey-multi-hospital
+C:\dev\hms-qa\scripts\clinical-roles
+C:\dev\hms-qa\scripts\lab-pharmacy
+C:\dev\hms-qa\scripts\billing
+C:\dev\hms-qa\scripts\hospital-admin
+C:\dev\hms-qa\scripts\super-admin
+C:\dev\hms-qa\scripts\security
+C:\dev\hms-qa\scripts\i18n-a11y                     (crawl.js + a11y.js over every route, FR/ES/EN)
+C:\dev\hms-qa\scripts\modules\*                     (blood-pharmacy, clinical-extras, hospital-ops, integrations,
+                                                     lab-modules, platform-commercial, platform-safety-governance,
+                                                     reports-analytics)
+C:\dev\hms-qa\scripts\smoke-956, walk-956
+C:\dev\hms-qa\scripts\r9-retest … r15-retest4        (the per-round re-test packs: each holds the scripts that
+                                                     proved a fix; a fix that no longer passes its own script is
+                                                     a regression)
+```
+
+Each pack's `r<N>` sub-folder is that round's variant; the newest variant of a
+script supersedes the older one, but a script with no newer variant is still
+part of the pack.
+
+### 3. Every "What went well" list
+
+Each report in `docs/qa/dev-qa-run-*.md` ends its verdict with a
+**"What went well"** (round 2 onwards; "What worked" in round 1) list: the
+flows that passed that day. Those lists are the regression baseline — a flow
+on any of them that no longer works is a regression even if no defect id
+names it. A re-test walks every item of every round's list, not only the
+current round's.
+
+### 4. The sibling paths named in the fix PRs' class tables
+
+The defect-fix mandate requires every fix PR to list the sibling instances it
+found (the "Instances found" column). Those paths are part of the next
+round's pack by definition: the class was fixed there without a tester ever
+having seen it.
+
+A defect found by a round that one of the static guards *should* have caught
+is a guard bug: extend the scan and its self-test in the fix PR, so the class
+cannot slip past it again.

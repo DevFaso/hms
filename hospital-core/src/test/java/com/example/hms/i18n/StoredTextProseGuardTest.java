@@ -131,8 +131,9 @@ class StoredTextProseGuardTest {
         Map.entry("service/pharmacy/StockOutRoutingServiceImpl.java::Prescription printed for patient to fill at external pharmacy", D1000),
         Map.entry("service/pharmacy/StockOutRoutingServiceImpl.java::Medication out of stock; placed on back order", D1000)));
 
-    /** {@code file::literal} for every English literal that reaches a text sink or is a section header. */
-    static Set<String> sites(String file, String source) {
+    /** {@code file::literal} for every English literal that reaches a text sink or is a section header (comments stripped). */
+    static Set<String> sites(String file, String rawSource) {
+        String source = SourceScan.stripComments(rawSource);
         Set<String> out = new TreeSet<>();
         Matcher sink = TEXT_SINK.matcher(source);
         while (sink.find()) {
@@ -189,7 +190,8 @@ class StoredTextProseGuardTest {
             }
         }
         assertThat(fresh)
-            .as("stored text is read in English for good: resolve a key (MessageUtil) or store a code the portal labels")
+            .as("stored text is read in English for good: resolve a key (MessageUtil) or store a code the portal labels"
+                + SourceScan.MANDATE)
             .isEmpty();
 
         List<String> stale = new ArrayList<>();
@@ -198,7 +200,9 @@ class StoredTextProseGuardTest {
                 stale.add(site);
             }
         }
-        assertThat(stale).as("the site was keyed: delete its line so the gain cannot be spent again").isEmpty();
+        assertThat(stale)
+            .as("the site was keyed: delete its line so the gain cannot be spent again" + SourceScan.MANDATE)
+            .isEmpty();
     }
 
     @Test

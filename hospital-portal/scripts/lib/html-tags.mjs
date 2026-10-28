@@ -54,9 +54,17 @@ const ATTR_END = /[\s=>]/;
 export function tags(html) {
   const out = [];
   let i = 0;
+  // Line numbers are kept incrementally: counting from offset 0 for every tag
+  // made the tokenizer quadratic in the size of a worklist template.
+  let line = 1;
+  let lineCountedTo = 0;
   while (i < html.length) {
     const lt = html.indexOf('<', i);
     if (lt < 0) break;
+    for (let k = lineCountedTo; k < lt; k++) {
+      if (html[k] === '\n') line++;
+    }
+    lineCountedTo = lt;
     if (html.startsWith('<!--', lt)) {
       const close = html.indexOf('-->', lt + 4);
       i = close < 0 ? html.length : close + 3;
@@ -133,7 +141,7 @@ export function tags(html) {
       start: lt,
       end: j,
       selfClosing: selfClosing || (!isClose && VOID_ELEMENTS.has(name)),
-      line: lineOf(html, lt),
+      line,
     });
     i = j;
   }

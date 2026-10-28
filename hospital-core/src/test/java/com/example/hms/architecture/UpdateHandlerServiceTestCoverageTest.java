@@ -145,17 +145,24 @@ class UpdateHandlerServiceTestCoverageTest {
         return i;
     }
 
-    private static String otherTestSources() throws IOException {
-        StringBuilder all = new StringBuilder();
+    /** {@code name(} in test code: every method name some test under src/test/java calls. */
+    private static final Pattern CALLED = Pattern.compile("\\b(\\w+)\\s*\\(");
+
+    /** The names every test (other than this one) calls, read once, so each handler is a set lookup. */
+    private static Set<String> namesCalledByTests() throws IOException {
+        Set<String> names = new TreeSet<>();
         try (Stream<Path> files = Files.walk(TESTS)) {
             for (Path p : files.filter(f -> f.toString().endsWith(".java")).toList()) {
                 if (p.getFileName().toString().equals(SELF)) {
                     continue;
                 }
-                all.append(Files.readString(p, StandardCharsets.UTF_8)).append('\n');
+                Matcher m = CALLED.matcher(Files.readString(p, StandardCharsets.UTF_8));
+                while (m.find()) {
+                    names.add(m.group(1));
+                }
             }
         }
-        return all.toString();
+        return names;
     }
 
     private static int countMappings(String rawSource) {
@@ -170,19 +177,18 @@ class UpdateHandlerServiceTestCoverageTest {
     @Test
     @DisplayName("no PUT/PATCH handler delegates to a service method no test names, beyond the listed ones")
     void updateHandlersAreExercised() throws IOException {
-        String tests = otherTestSources();
+        Set<String> called = namesCalledByTests();
         Set<String> dark = new TreeSet<>();
         int mappings = 0;
         Set<String> handled = new TreeSet<>();
         try (Stream<Path> files = Files.walk(MAIN)) {
             for (Path p : files.filter(f -> f.toString().endsWith(".java")).toList()) {
                 String controller = p.getFileName().toString().replace(".java", "");
-                String source = Files.readString(p, StandardCharsets.UTF_8);
+                String source = SourceScan.stripComments(Files.readString(p, StandardCharsets.UTF_8));
                 mappings += countMappings(source);
                 for (Delegation d : delegations(controller, source)) {
                     handled.add(controller + "@" + d.mapping());
-                    if (d.method().equals("<none>")
-                        || !Pattern.compile("\\b" + Pattern.quote(d.method()) + "\\s*\\(").matcher(tests).find()) {
+                    if (d.method().equals("<none>") || !called.contains(d.method())) {
                         dark.add(d.key());
                     }
                 }
@@ -198,7 +204,8 @@ class UpdateHandlerServiceTestCoverageTest {
             }
         }
         assertThat(fresh)
-            .as("an update endpoint no test exercises: add a test that reads the row back after the update (QA D923 class)")
+            .as("an update endpoint no test exercises: add a test that reads the row back after the update (QA D923 class)"
+                + SourceScan.MANDATE)
             .isEmpty();
 
         List<String> stale = new ArrayList<>();
@@ -207,7 +214,7 @@ class UpdateHandlerServiceTestCoverageTest {
                 stale.add(key);
             }
         }
-        assertThat(stale).as("the handler is now tested: delete its line").isEmpty();
+        assertThat(stale).as("the handler is now tested: delete its line" + SourceScan.MANDATE).isEmpty();
     }
 
     @Test

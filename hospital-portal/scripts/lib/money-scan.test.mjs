@@ -36,6 +36,19 @@ test('a word that merely contains a money word is not money', () => {
     anchors(moneyTemplateFindings(`{{ row.totalAmount | number }} {{ x.grandTotal | number }}`)),
     ['pipe:row.totalAmount | number', 'pipe:x.grandTotal | number'],
   );
+  // `discount` ends in "count" and is money all the same; `lineCount` is a count.
+  assert.deepEqual(
+    anchors(
+      moneyTemplateFindings(
+        `{{ inv.discount | number: '1.0-0' }} {{ inv.totalDiscount | currency }} {{ line.discount.toFixed(2) }} {{ lineCount | number }}`,
+      ),
+    ),
+    [
+      'pipe:inv.discount | number',
+      'pipe:inv.totalDiscount | currency',
+      'fixed:line.discount.toFixed',
+    ],
+  );
 });
 
 test('toFixed on an amount is hand formatting', () => {

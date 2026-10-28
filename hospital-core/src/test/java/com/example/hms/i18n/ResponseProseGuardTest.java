@@ -1,5 +1,6 @@
 package com.example.hms.i18n;
 
+import com.example.hms.testsupport.SourceScan;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -100,8 +101,9 @@ class ResponseProseGuardTest {
         Map.entry("controller/PatientController.java::Allergy entry deactivated.", PRE_EXISTING),
         Map.entry("controller/PatientController.java::Diagnosis removed successfully.", PRE_EXISTING)));
 
-    /** {@code file::literal} for every English response literal in the source. */
-    static Set<String> sites(String file, String source) {
+    /** {@code file::literal} for every English response literal in the source (comments stripped). */
+    static Set<String> sites(String file, String rawSource) {
+        String source = SourceScan.stripComments(rawSource);
         Set<String> out = new TreeSet<>();
         for (Pattern pattern : List.of(MESSAGE_DTO, BODY_LITERAL, MAP_MESSAGE)) {
             Matcher m = pattern.matcher(source);
@@ -132,7 +134,8 @@ class ResponseProseGuardTest {
             }
         }
         assertThat(fresh)
-            .as("resolve a messages*.properties key (MessageUtil.resolve) instead of an English sentence in the body")
+            .as("resolve a messages*.properties key (MessageUtil.resolve) instead of an English sentence in the body"
+                + SourceScan.MANDATE)
             .isEmpty();
 
         List<String> stale = new ArrayList<>();
@@ -141,13 +144,16 @@ class ResponseProseGuardTest {
                 stale.add(site);
             }
         }
-        assertThat(stale).as("the site was keyed: delete its line so the gain cannot be spent again").isEmpty();
+        assertThat(stale)
+            .as("the site was keyed: delete its line so the gain cannot be spent again" + SourceScan.MANDATE)
+            .isEmpty();
     }
 
     @Test
-    @DisplayName("the scan catches every body shape QA has reported, and not a key or a code")
+    @DisplayName("the scan catches every body shape QA has reported, and not a key, a code or a comment")
     void theScanCatchesTheShapes() {
         String source = """
+            // was: new MessageResponse("Signed out, see you soon.") — a comment is not a site
             return ResponseEntity.ok(new MessageResponse("Logged out successfully."));
             return ResponseEntity.badRequest().body("Pre-check-in is available 1–7 days before your appointment.");
             return ResponseEntity.status(503).body(Map.of("error", "Mail service unavailable"));

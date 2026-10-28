@@ -20,7 +20,7 @@
  *   "pinned": { "<id>": { "count": 2, "why": "D976" }, ... }
  * }
  */
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -127,6 +127,7 @@ export function evaluateGate({ name, baselinePath, findings, comment, hint }, ar
   for (const s of stale) {
     console.error(`stale pin: ${s} — lower or delete it in ${baselinePath}`);
   }
+  if (fresh.length > 0 || stale.length > 0) console.error(`\n${MANDATE}`);
   const pinnedTotal = Object.values(baseline.pinned).reduce((n, p) => n + p.count, 0);
   console.log(
     `${name}: ${findings.length} site(s) found, ${pinnedTotal} pinned, ` +
@@ -143,8 +144,23 @@ export function runGate(gate) {
 /**
  * Whether `moduleUrl` (a script's `import.meta.url`) is the file node was asked
  * to run — so a gate module can be imported by scripts/check-guards.mjs without
- * running itself.
+ * running itself. Both sides are resolved through the file system, so a
+ * junction, a symlink or a drive-letter spelling cannot make the check false
+ * and leave a gate silently unrun.
  */
 export function isMain(moduleUrl) {
-  return process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(moduleUrl);
+  if (process.argv[1] === undefined) return false;
+  const real = (p) => {
+    try {
+      return realpathSync.native(p).toLowerCase();
+    } catch {
+      return resolve(p).toLowerCase();
+    }
+  };
+  return real(process.argv[1]) === real(fileURLToPath(moduleUrl));
 }
+
+/** Printed under every failing gate: the standing rule for anyone fixing a D-numbered defect. */
+export const MANDATE =
+  'Fixing a QA defect? Read .claude/skills/defect-fix-mandate/SKILL.md: fix the CLASS, not the instance; ' +
+  'an allowlist entry carries its defect id and the fix PR deletes it; a new site fails CI and is never pinned to pass.';

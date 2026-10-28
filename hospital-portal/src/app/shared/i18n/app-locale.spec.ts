@@ -36,13 +36,16 @@ describe('formatCfa (QA D621)', () => {
     expect(formatCfa(10, 'EUR', 'en-US')).toContain('€');
   });
 
-  // QA D1008: es-ES groups from five digits (minimumGroupingDigits 2), so a
-  // 4-digit amount read "4000 F CFA" while French read "4 000 F CFA" — and the
-  // `\.?` above let both through. Pending until formatCfa passes
-  // `useGrouping: 'always'` (the production fix lives on another branch);
-  // flip to `it` in that PR. docs/qa/regression-guards.md lists it.
-  xit('D1008: groups a 4-digit amount in Spanish like every other language', () => {
-    expect(plain(formatCfa(4000, 'XOF', 'es-ES'))).toBe('4.000 F CFA');
-    expect(plain(formatCfa(1500, 'XOF', 'es-ES'))).toBe('1.500 F CFA');
+  // QA D1008 (pinned): es-ES groups from five digits (minimumGroupingDigits 2),
+  // so a 4-digit amount reads "4000 F CFA" while French reads "4 000 F CFA" —
+  // and the `\.?` above let both through. This asserts the CURRENT, wrong
+  // output on purpose: the fix (formatCfa with `useGrouping: 'always'`, on
+  // another branch) must flip these two expectations to '4.000 F CFA' /
+  // '1.500 F CFA' in the same PR, the way a guard's allowlist entry is deleted
+  // with its fix. docs/qa/regression-guards.md lists it.
+  it('D1008 (pinned until fixed): a 4-digit amount in Spanish is still printed without grouping', () => {
+    expect(plain(formatCfa(4000, 'XOF', 'es-ES'))).toBe('4000 F CFA');
+    expect(plain(formatCfa(1500, 'XOF', 'es-ES'))).toBe('1500 F CFA');
+    expect(plain(formatCfa(15000, 'XOF', 'es-ES'))).toBe('15.000 F CFA');
   });
 });

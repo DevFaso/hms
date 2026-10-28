@@ -25,6 +25,10 @@
       "count": 1,
       "why": "pre-existing (class D992): UUID fragment on screen; show the human code"
     },
+    "src/app/scheduling/scheduling.html::slice-pipe::selectedStaff()!.hospitalId | slice": {
+      "count": 1,
+      "why": "pre-existing (class D992): UUID fragment on screen; show the human code"
+    },
     "src/app/super-admin/super-admin.ts::slice-call::idValue.slice": {
       "count": 1,
       "why": "pre-existing (class D992): UUID fragment on screen; show the human code"
