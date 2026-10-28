@@ -2221,6 +2221,14 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   (5) `PatientServiceImpl#findByPhone` returns one holder for a number under
   8 digits (no supported country issues those). (6) The phone match is a
   sequential scan; a stored digits column with an index needs a migration.
+  (7) Round 9: `AuditEventLogServiceImpl` resolves a phone-only PATIENT
+  resource name to the first holder, across hospitals; with shared family
+  numbers it should resolve within the event's hospital or not at all.
+  (8) The D919 "scoped onlyDeleted is an empty page" rule lives in both
+  `UserController` and `UserServiceImpl`; keep it in the service only.
+  (9) Blob downloads revoke the object URL right after `click()` (billing,
+  governance, the check-in receipt); a shared download helper that defers the
+  revoke would cover every caller.
 
 - **QA D899 residual (round 15): the stock check counts expired lots.**
   Stock routing now resolves a free-text order to the shelf by the dispense

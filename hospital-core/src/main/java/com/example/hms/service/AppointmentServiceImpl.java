@@ -769,10 +769,14 @@ public class AppointmentServiceImpl implements AppointmentService {
         }
 
         // QA D937: the appointment being moved, a cancelled booking and a
-        // no-show never conflict.
-        boolean hasConflict = AppointmentSlotRules.overlapsHeldSlot(
-            appointmentRepository.findByStaff_IdAndAppointmentDate(staff.getId(), request.getAppointmentDate()),
-            id, requestedStart, requestedEnd);
+        // no-show never conflict. Nor does the edit itself when the visit
+        // ends up not holding its slot (review round 9): a missed or cancelled
+        // visit whose freed time was rebooked can still take a note or a cancel.
+        AppointmentStatus resultingStatus = request.getStatus() != null ? request.getStatus() : existing.getStatus();
+        boolean hasConflict = AppointmentStatus.holdsSlot(resultingStatus)
+            && AppointmentSlotRules.overlapsHeldSlot(
+                appointmentRepository.findByStaff_IdAndAppointmentDate(staff.getId(), request.getAppointmentDate()),
+                id, requestedStart, requestedEnd);
 
         if (hasConflict) {
             throw new BusinessException(messageSource.getMessage(

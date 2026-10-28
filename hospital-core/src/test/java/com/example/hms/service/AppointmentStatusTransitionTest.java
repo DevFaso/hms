@@ -689,6 +689,40 @@ class AppointmentStatusTransitionTest {
         verify(slotInventoryService, never()).releaseForAppointment(any());
     }
 
+    @Test
+    void round9_aMissedVisitWhoseTimeWasRebookedCanStillBeEdited() {
+        // The no-show freed 09:00 and B was booked there. A note on A (status
+        // unchanged, NO_SHOW) is not a conflict: A does not hold the slot.
+        givenAppointment(AppointmentStatus.NO_SHOW, LocalDate.now().minusDays(1));
+        com.example.hms.payload.dto.AppointmentRequestDTO edit = editOf(null);
+        org.mockito.Mockito.lenient().when(appointmentRepository.findByStaff_IdAndAppointmentDate(
+                appointment.getStaff().getId(), appointment.getAppointmentDate()))
+            .thenReturn(java.util.List.of(appointment, rebookedAtTheSameTime()));
+        ReflectionTestUtils.setField(appointmentService, "entityManager",
+            org.mockito.Mockito.mock(jakarta.persistence.EntityManager.class));
+        when(appointmentRepository.saveAndFlush(any())).thenReturn(appointment);
+
+        appointmentService.updateAppointment(appointmentId, edit, java.util.Locale.ENGLISH, "doctor_b");
+
+        verify(appointmentRepository).saveAndFlush(appointment);
+    }
+
+    @Test
+    void round9_anEditThatKeepsTheVisitLiveStillRefusesARebookedTime() {
+        givenAppointment(AppointmentStatus.SCHEDULED, LocalDate.now().plusDays(7));
+        com.example.hms.payload.dto.AppointmentRequestDTO edit = editOf(null);
+        when(appointmentRepository.findByStaff_IdAndAppointmentDate(
+                appointment.getStaff().getId(), appointment.getAppointmentDate()))
+            .thenReturn(java.util.List.of(appointment, rebookedAtTheSameTime()));
+        org.mockito.Mockito.lenient().when(messageSource.getMessage(any(), any(), any(java.util.Locale.class)))
+            .thenReturn("busy");
+
+        assertThatThrownBy(() ->
+            appointmentService.updateAppointment(appointmentId, edit, java.util.Locale.ENGLISH, "doctor_b"))
+            .isInstanceOf(BusinessException.class);
+        verify(appointmentRepository, never()).saveAndFlush(any());
+    }
+
     private static void refusedAsTransition(Throwable ex, AppointmentStatus from, AppointmentStatus to) {
         BusinessException refused = (BusinessException) ex;
         org.assertj.core.api.Assertions.assertThat(refused.getMessageKey())
