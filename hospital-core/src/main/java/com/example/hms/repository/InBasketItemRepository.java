@@ -102,16 +102,18 @@ public interface InBasketItemRepository extends JpaRepository<InBasketItem, UUID
         @Param("excludedUserId") UUID excludedUserId);
 
     /**
-     * QA D931: deletes the UNREAD items filed for a reference (every
-     * recipient): nobody has seen them, and opening one would land on a
-     * superseded result. READ and ACKNOWLEDGED items are kept as the record
-     * that a clinician saw the old value (review of #975).
+     * QA D931: deletes the items filed for a reference (every recipient)
+     * that nobody has acknowledged: opening one lands on a superseded result,
+     * which a clinician can no longer read (404) - the defect itself. An
+     * ACKNOWLEDGED item stays as the review record; that a clinician opened
+     * the old value is kept by the read audit, not by an item that no longer
+     * opens (review of #975, round 6: READ items are deleted again).
      */
     @org.springframework.data.jpa.repository.Modifying
     @Query("""
         DELETE FROM InBasketItem i
         WHERE i.referenceId = :referenceId AND i.referenceType = :referenceType
-          AND i.status = com.example.hms.enums.InBasketItemStatus.UNREAD
+          AND i.status <> com.example.hms.enums.InBasketItemStatus.ACKNOWLEDGED
         """)
     int deleteOpenByReference(
         @Param("referenceId") UUID referenceId,

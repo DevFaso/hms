@@ -95,15 +95,15 @@
           </h2>
           <div class="balances">
             <span
-              >{{ 'PHARMACY.REGISTER_OPENING' | translate }} :
+              >{{ 'PHARMACY.REGISTER_OPENING' | translate }}{{ 'COMMON.COLON' | translate }}
               <strong>{{ drug.openingBalance }}</strong></span
             >
             <span
-              >{{ 'PHARMACY.REGISTER_CLOSING' | translate }} :
+              >{{ 'PHARMACY.REGISTER_CLOSING' | translate }}{{ 'COMMON.COLON' | translate }}
               <strong>{{ drug.closingBalance }}</strong></span
             >
             <span [class.discrepancy]="hasDiscrepancy(drug)"
-              >{{ 'PHARMACY.REGISTER_ON_SHELF' | translate }} :
+              >{{ 'PHARMACY.REGISTER_ON_SHELF' | translate }}{{ 'COMMON.COLON' | translate }}
               <strong>{{ drug.quantityOnHand ?? '—' }}</strong>
               @if (hasDiscrepancy(drug)) {
                 <span [attr.data-testid]="'register-discrepancy-' + drug.inventoryItemId">

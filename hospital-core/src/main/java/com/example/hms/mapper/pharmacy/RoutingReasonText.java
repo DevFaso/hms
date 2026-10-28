@@ -30,23 +30,23 @@ public final class RoutingReasonText {
             new String[] {"Medication out of stock; placed on back order", BACK_ORDER_KEY},
             new String[] {"Not delivered: the SMS to the pharmacy failed", "stock.routing.reason.smsFailed"});
 
+    private static final String DISPATCHED_PREFIX = "Dispatched by SMS to ";
+    private static final String SUPERSEDED_PREFIX = "Superseded: re-dispatched by SMS to ";
+    private static final String NOTE_PREFIX = ". Note: ";
+    private static final List<String> PHARMACY_TYPES =
+            List.of("HOSPITAL_DISPENSARY", "PARTNER_PHARMACY", "COMMUNITY_PHARMACY");
+
     /**
      * The English fragments {@code PrescriptionSmsDispatchServiceImpl} composes
      * a reason from. {@code PharmacyUserFacingTextGuardTest} fails when that
      * service stores a fragment this list does not name.
      */
     public static final List<String> DISPATCH_FRAGMENTS = List.of(
-            "Dispatched by SMS to ",
+            DISPATCHED_PREFIX,
             ". ",
-            ". Note: ",
-            "Superseded: re-dispatched by SMS to ",
+            NOTE_PREFIX,
+            SUPERSEDED_PREFIX,
             "Not delivered: the SMS to the pharmacy failed");
-
-    private static final String DISPATCHED_PREFIX = "Dispatched by SMS to ";
-    private static final List<String> PHARMACY_TYPES =
-            List.of("HOSPITAL_DISPENSARY", "PARTNER_PHARMACY", "COMMUNITY_PHARMACY");
-    private static final String SUPERSEDED_PREFIX = "Superseded: re-dispatched by SMS to ";
-    private static final String NOTE_PREFIX = ". Note: ";
 
     /**
      * The separators a typed fragment runs up to. Found by index, not by a
@@ -54,7 +54,7 @@ public final class RoutingReasonText {
      * reason (CodeQL polynomial ReDoS) and recurses once per character
      * (Sonar S5998, stack overflow), both on #975.
      */
-    private static final List<String> ANY_SEPARATOR = List.of(". Note: ", ". Superseded: ", ". Not delivered: ");
+    private static final List<String> ANY_SEPARATOR = List.of(NOTE_PREFIX, ". Superseded: ", ". Not delivered: ");
     private static final List<String> SUPERSEDED_OR_FAILED = List.of(". Superseded: ", ". Not delivered: ");
 
     /** A recognised part of a stored reason: its marker at {@code start}, its typed fragment up to {@code end}. */

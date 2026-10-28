@@ -9087,6 +9087,7 @@
     "REGISTER_NO_MOVEMENT": "No movement in this period.",
     "REGISTER_ON_SHELF": "On the shelf now",
     "REGISTER_OPENING": "Opening balance",
+    "REGISTER_FILE_STEM": "controlled-drug-register",
     "REGISTER_PERIOD_INVALID": "Choose a period whose end is not before its start.",
     "REGISTER_SHOW": "Show",
     "REGISTER_SUBTITLE": "Every movement of the controlled drugs, with the running balance, patient, prescriber and witness.",

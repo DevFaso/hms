@@ -59,6 +59,12 @@ class LabSpecimenServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        // Review of #975: the committed status read under the order lock is
+        // the entity's own (no concurrent write). The specimens here are built
+        // without an id and found under specimenId, so that is where it is read.
+        org.mockito.Mockito.lenient().when(labSpecimenRepository.findStatusById(org.mockito.ArgumentMatchers.any()))
+            .thenAnswer(inv -> labSpecimenRepository.findById(specimenId)
+                .map(com.example.hms.model.LabSpecimen::getStatus).orElse(null));
         hospitalId  = UUID.randomUUID();
         labOrderId  = UUID.randomUUID();
         specimenId  = UUID.randomUUID();

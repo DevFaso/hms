@@ -258,13 +258,44 @@ class PharmacySaleServiceImplTest {
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(catalogItemRepository.findById(itemId)).thenReturn(Optional.of(item));
         when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(lot));
-        when(fefoLotPolicy.requireFefoOrReason(lot, BigDecimal.ONE, null))
+        when(fefoLotPolicy.requireFefoOrReason(lot, BigDecimal.ONE, null, java.util.Map.of()))
                 .thenThrow(new BusinessException("pharmacy.fefo.reasonRequired", "LOT-COURT", "1 déc. 2026"));
 
         assertThatThrownBy(() -> service.createSale(dto))
                 .isInstanceOf(BusinessException.class)
                 .extracting("messageKey").isEqualTo("pharmacy.fefo.reasonRequired");
         verify(saleRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("review of #975: a later line is judged on what the earlier lines of the same sale leave on each lot")
+    void aSaleSplitAcrossLotsTellsTheRuleWhatEarlierLinesTake() {
+        InventoryItem invItem = InventoryItem.builder().pharmacy(pharmacy).build();
+        StockLot shortLot = StockLot.builder().inventoryItem(invItem).build();
+        shortLot.setId(UUID.randomUUID());
+        StockLot longLot = StockLot.builder().inventoryItem(invItem).build();
+        longLot.setId(UUID.randomUUID());
+        SaleLineRequestDTO first = line(BigDecimal.TEN, BigDecimal.ONE);
+        first.setStockLotId(shortLot.getId());
+        SaleLineRequestDTO second = line(new BigDecimal("5"), BigDecimal.ONE);
+        second.setStockLotId(longLot.getId());
+        PharmacySaleRequestDTO dto = request(List.of(first, second));
+
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(userId);
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(pharmacyRepository.findByIdAndHospital_Id(pharmacyId, hospitalId)).thenReturn(Optional.of(pharmacy));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(catalogItemRepository.findById(itemId)).thenReturn(Optional.of(item));
+        when(stockLotRepository.findById(shortLot.getId())).thenReturn(Optional.of(shortLot));
+        when(stockLotRepository.findById(longLot.getId())).thenReturn(Optional.of(longLot));
+        when(saleRepository.save(any(PharmacySale.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.createSale(dto);
+
+        verify(fefoLotPolicy).requireFefoOrReason(shortLot, BigDecimal.TEN, null, java.util.Map.of());
+        verify(fefoLotPolicy).requireFefoOrReason(longLot, new BigDecimal("5"), null,
+                java.util.Map.of(shortLot.getId(), BigDecimal.TEN));
     }
 
     @Test
@@ -287,7 +318,7 @@ class PharmacySaleServiceImplTest {
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(catalogItemRepository.findById(itemId)).thenReturn(Optional.of(item));
         when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(lot));
-        when(fefoLotPolicy.requireFefoOrReason(lot, BigDecimal.ONE, "r".repeat(150))).thenReturn("r".repeat(150));
+        when(fefoLotPolicy.requireFefoOrReason(lot, BigDecimal.ONE, "r".repeat(150), java.util.Map.of())).thenReturn("r".repeat(150));
 
         assertThatThrownBy(() -> service.createSale(dto))
                 .isInstanceOf(BusinessException.class)

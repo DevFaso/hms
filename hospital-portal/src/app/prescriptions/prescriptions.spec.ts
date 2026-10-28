@@ -423,6 +423,28 @@ describe('PrescriptionsComponent — signing', () => {
     expect(component.form.medicationCatalogItemId).toBeNull();
   });
 
+  it('review of #975: a catalogue pick (and its controlled hint) does not carry into the next order', () => {
+    component.openCreate();
+    const morphine = {
+      id: 'cat-1',
+      nameFr: 'Morphine',
+      strength: '10',
+      strengthUnit: 'mg/ml',
+      controlled: true,
+    } as never;
+    component.catalogOptions.set([morphine]);
+    component.onMedicationNameChange('Morphine 10 mg/ml');
+    expect(component.pickedCatalogItem()?.controlled).toBeTrue();
+
+    component.closeModal();
+    expect(component.pickedCatalogItem()).toBeNull();
+
+    component.onMedicationNameChange('Morphine 10 mg/ml');
+    component.openCreate();
+    expect(component.pickedCatalogItem()).toBeNull();
+    expect(component.form.medicationCatalogItemId).toBeFalsy();
+  });
+
   it('QA D922: two catalogue items reading the same send no id, and a form tells them apart', () => {
     component.openCreate();
     const tablet = { id: 'cat-t', nameFr: 'Codéine', strength: '30', strengthUnit: 'mg' } as never;

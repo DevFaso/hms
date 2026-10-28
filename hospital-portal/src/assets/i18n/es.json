@@ -9087,6 +9087,7 @@
     "REGISTER_NO_MOVEMENT": "Ningún movimiento en este periodo.",
     "REGISTER_ON_SHELF": "En estante ahora",
     "REGISTER_OPENING": "Saldo inicial",
+    "REGISTER_FILE_STEM": "registro-estupefacientes",
     "REGISTER_PERIOD_INVALID": "Elija un periodo cuyo fin no sea anterior a su inicio.",
     "REGISTER_SHOW": "Mostrar",
     "REGISTER_SUBTITLE": "Todos los movimientos de los estupefacientes, con el saldo, el paciente, el prescriptor y el testigo.",

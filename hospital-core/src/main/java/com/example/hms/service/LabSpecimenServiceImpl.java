@@ -156,6 +156,10 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
                 && specimen.getStatus() != LabSpecimenStatus.IN_TRANSIT) {
             throw new BusinessException("lab.specimen.notReceivable", specimen.getStatus().name());
         }
+        // Review of #975: a rejection that committed after this specimen was
+        // read is seen here, under the order lock, instead of being written
+        // over with RECEIVED and a work order queued for a refused tube.
+        requireUnchangedUnderLock(specimen);
 
         specimen.setReceivedAt(LocalDateTime.now());
         specimen.setReceivedById(roleValidator.getCurrentUserId());
@@ -191,7 +195,10 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
 
         // The order row is locked first, as every status writer here does, and
         // the decision is made on the committed status read under that lock.
-        LabOrderStatus committedStatus = lockedStatusOf(labOrder.getId());
+        // Review of #975: the specimen too - a receipt or a second rejection
+        // that committed after it was read must not be written over.
+        requireUnchangedUnderLock(specimen);
+        LabOrderStatus committedStatus = labOrderRepository.findStatusById(labOrder.getId());
         if (committedStatus == LabOrderStatus.ENTERED_IN_ERROR) {
             throw new BusinessException("lab.order.enteredInError");
         }
@@ -287,6 +294,20 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
     private LabOrderStatus lockedStatusOf(UUID labOrderId) {
         labOrderRepository.findWithLockById(labOrderId);
         return labOrderRepository.findStatusById(labOrderId);
+    }
+
+    /**
+     * Takes the order lock (every specimen writer takes it) and refuses when
+     * the specimen's committed status is no longer the one it was read with:
+     * the entity is saved whole, so a stale copy would write a concurrent
+     * receipt or rejection back out (review of #975).
+     */
+    private void requireUnchangedUnderLock(LabSpecimen specimen) {
+        labOrderRepository.findWithLockById(specimen.getLabOrder().getId());
+        LabSpecimenStatus committed = labSpecimenRepository.findStatusById(specimen.getId());
+        if (committed != specimen.getStatus()) {
+            throw new BusinessException("lab.specimen.changedConcurrently");
+        }
     }
 
 }

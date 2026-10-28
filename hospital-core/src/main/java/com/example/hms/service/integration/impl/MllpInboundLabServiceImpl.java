@@ -231,6 +231,16 @@ public class MllpInboundLabServiceImpl implements MllpInboundLabService {
                     IntegrationMessageStatus.FAILED, "order entered in error");
                 return MllpInboundOutcome.REJECTED_INVALID;
             }
+            if (specimen.get().getStatus() == com.example.hms.enums.LabSpecimenStatus.REJECTED) {
+                // QA D962 (review of #975): the lab refused this tube and the
+                // order went back to collection; the analyser that still ran it
+                // is told so (AE) instead of resulting - and releasing to the
+                // patient - a value from a sample nobody accepted.
+                log.warn("MLLP ORU^R01 placer={} maps to a rejected specimen", quotedPlacer);
+                recordInboundMessage(integrationId, organizationId, rawMessageBody,
+                    IntegrationMessageStatus.FAILED, "specimen rejected");
+                return MllpInboundOutcome.REJECTED_INVALID;
+            }
             ordersByPlacer.put(placer, order);
         }
 

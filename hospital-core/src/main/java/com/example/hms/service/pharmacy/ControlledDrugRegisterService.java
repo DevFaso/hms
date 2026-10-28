@@ -92,7 +92,8 @@ public class ControlledDrugRegisterService {
         if (from == null || to == null || to.isBefore(from)) {
             throw new BusinessException("pharmacy.register.periodInvalid");
         }
-        if (java.time.temporal.ChronoUnit.DAYS.between(from, to) > MAX_DAYS) {
+        // Both ends are included: a period of MAX_DAYS days at most (review of #975).
+        if (java.time.temporal.ChronoUnit.DAYS.between(from, to) + 1 > MAX_DAYS) {
             throw new BusinessException("pharmacy.register.periodTooLong", String.valueOf(MAX_DAYS));
         }
         Pharmacy pharmacy = pharmacyInScope(pharmacyId);
@@ -288,23 +289,35 @@ public class ControlledDrugRegisterService {
                 dispenseIds.add(tx.getReferenceId());
             }
         }
-        Map<UUID, Prescription> byDispense = new HashMap<>();
-        if (!dispenseIds.isEmpty()) {
-            for (Dispense d : dispenseRepository.findAllById(dispenseIds)) {
-                if (d.getPrescription() != null && atHospital(d.getPrescription(), hospitalId)) {
-                    byDispense.put(d.getId(), d.getPrescription());
-                }
-            }
-        }
+        return new People(prescriptionsById(prescriptionIds, hospitalId), prescriptionsByDispense(dispenseIds, hospitalId));
+    }
+
+    /** The prescriptions named by id, those of {@code hospitalId} only. */
+    private Map<UUID, Prescription> prescriptionsById(Set<UUID> prescriptionIds, UUID hospitalId) {
         Map<UUID, Prescription> byId = new HashMap<>();
-        if (!prescriptionIds.isEmpty()) {
-            for (Prescription p : prescriptionRepository.findAllById(prescriptionIds)) {
-                if (atHospital(p, hospitalId)) {
-                    byId.put(p.getId(), p);
-                }
+        if (prescriptionIds.isEmpty()) {
+            return byId;
+        }
+        for (Prescription p : prescriptionRepository.findAllById(prescriptionIds)) {
+            if (atHospital(p, hospitalId)) {
+                byId.put(p.getId(), p);
             }
         }
-        return new People(byId, byDispense);
+        return byId;
+    }
+
+    /** The prescription behind each dispense, those of {@code hospitalId} only. */
+    private Map<UUID, Prescription> prescriptionsByDispense(Set<UUID> dispenseIds, UUID hospitalId) {
+        Map<UUID, Prescription> byDispense = new HashMap<>();
+        if (dispenseIds.isEmpty()) {
+            return byDispense;
+        }
+        for (Dispense d : dispenseRepository.findAllById(dispenseIds)) {
+            if (d.getPrescription() != null && atHospital(d.getPrescription(), hospitalId)) {
+                byDispense.put(d.getId(), d.getPrescription());
+            }
+        }
+        return byDispense;
     }
 
     /**

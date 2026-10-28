@@ -50,10 +50,11 @@ public interface InBasketService {
     InBasketItemDTO createItemInNewTransaction(CreateInBasketItemRequest request);
 
     /**
-     * QA D931: removes every item filed for {@code referenceId} that nobody has
-     * acknowledged yet, in the caller's transaction (a released lab result that
-     * a correction has just superseded: its items would open on a 404).
-     * Acknowledged items stay, as the record of who reviewed the old value.
+     * QA D931: removes every item filed for {@code referenceId} that nobody
+     * has acknowledged, in the caller's transaction (a released lab result
+     * that a correction has just superseded: its items would open on a 404).
+     * ACKNOWLEDGED items stay, as the record of who reviewed the old value;
+     * that someone merely opened it is in the read audit.
      * Returns how many were removed.
      */
     int removeOpenItemsForReference(java.util.UUID referenceId, String referenceType);

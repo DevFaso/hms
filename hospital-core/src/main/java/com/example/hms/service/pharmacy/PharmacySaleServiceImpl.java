@@ -106,8 +106,14 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
                 .build();
 
         BigDecimal runningTotal = BigDecimal.ZERO;
+        // What the lines before this one take off each lot (nothing moves
+        // until the sale is saved), so FEFO judges each line on what is left.
+        java.util.Map<java.util.UUID, BigDecimal> takenByLot = new java.util.HashMap<>();
         for (SaleLineRequestDTO lineDto : dto.getLines()) {
-            SaleLine line = buildLine(lineDto, pharmacy);
+            SaleLine line = buildLine(lineDto, pharmacy, java.util.Map.copyOf(takenByLot));
+            if (line.getStockLot() != null && line.getStockLot().getId() != null) {
+                takenByLot.merge(line.getStockLot().getId(), line.getQuantity(), BigDecimal::add);
+            }
             sale.addLine(line);
             runningTotal = runningTotal.add(line.getLineTotal());
         }
@@ -119,7 +125,8 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
         return mapper.toResponseDTO(saved);
     }
 
-    private SaleLine buildLine(SaleLineRequestDTO lineDto, Pharmacy pharmacy) {
+    private SaleLine buildLine(SaleLineRequestDTO lineDto, Pharmacy pharmacy,
+                               java.util.Map<java.util.UUID, BigDecimal> takenByLot) {
         if (lineDto.getQuantity() == null || lineDto.getQuantity().signum() <= 0) {
             throw new BusinessException("pharmacy.sale.lineQuantityPositive");
         }
@@ -131,7 +138,7 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
                 .orElseThrow(() -> new ResourceNotFoundException("medication.catalog.notfound"));
 
         StockLot lot = lineDto.getStockLotId() == null ? null : sellingLot(lineDto, pharmacy);
-        String lineNotes = lot == null ? lineDto.getNotes() : notesWithFefoReason(lineDto, lot);
+        String lineNotes = lot == null ? lineDto.getNotes() : notesWithFefoReason(lineDto, lot, takenByLot);
 
         BigDecimal lineTotal = lineDto.getQuantity()
                 .multiply(lineDto.getUnitPrice())
@@ -167,10 +174,11 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
      * QA D964: a later-dated lot while a shorter-dated one could serve the
      * line needs a reason, kept in the line's notes after the line's own note.
      */
-    private String notesWithFefoReason(SaleLineRequestDTO lineDto, StockLot lot) {
+    private String notesWithFefoReason(SaleLineRequestDTO lineDto, StockLot lot,
+                                       java.util.Map<java.util.UUID, BigDecimal> takenByLot) {
         String lineNotes = lineDto.getNotes();
         String fefoReason = fefoLotPolicy.requireFefoOrReason(lot, lineDto.getQuantity(),
-                lineDto.getFefoOverrideReason());
+                lineDto.getFefoOverrideReason(), takenByLot);
         if (fefoReason == null) {
             return lineNotes;
         }

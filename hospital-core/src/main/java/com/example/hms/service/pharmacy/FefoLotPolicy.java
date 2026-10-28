@@ -39,6 +39,18 @@ public class FefoLotPolicy {
      * first).
      */
     public Optional<StockLot> earlierLot(StockLot chosen, BigDecimal quantity) {
+        return earlierLot(chosen, quantity, java.util.Map.of());
+    }
+
+    /**
+     * {@link #earlierLot(StockLot, BigDecimal)}, less what earlier lines of
+     * the same movement already take off each lot ({@code alreadyTaken}, by
+     * lot id): a counter sale is built line by line before any stock moves,
+     * so 10 from the shorter lot then 5 from the next is FEFO, not a skip
+     * (review of #975).
+     */
+    public Optional<StockLot> earlierLot(StockLot chosen, BigDecimal quantity,
+                                         java.util.Map<java.util.UUID, BigDecimal> alreadyTaken) {
         if (chosen == null || chosen.getInventoryItem() == null || chosen.getExpiryDate() == null) {
             return Optional.empty();
         }
@@ -50,7 +62,8 @@ public class FefoLotPolicy {
         return usable.stream()
                 .filter(lot -> lot.getId() != null && !lot.getId().equals(chosen.getId()))
                 .filter(lot -> lot.getExpiryDate() != null && lot.getExpiryDate().isBefore(chosen.getExpiryDate()))
-                .filter(lot -> lot.getRemainingQuantity() != null && lot.getRemainingQuantity().compareTo(needed) >= 0)
+                .filter(lot -> lot.getRemainingQuantity() != null && lot.getRemainingQuantity()
+                        .subtract(alreadyTaken.getOrDefault(lot.getId(), BigDecimal.ZERO)).compareTo(needed) >= 0)
                 .findFirst();
     }
 
@@ -60,7 +73,13 @@ public class FefoLotPolicy {
      * null when FEFO was followed (a reason sent then is not recorded).
      */
     public String requireFefoOrReason(StockLot chosen, BigDecimal quantity, String overrideReason) {
-        Optional<StockLot> earlier = earlierLot(chosen, quantity);
+        return requireFefoOrReason(chosen, quantity, overrideReason, java.util.Map.of());
+    }
+
+    /** {@link #requireFefoOrReason(StockLot, BigDecimal, String)} with what earlier lines already take. */
+    public String requireFefoOrReason(StockLot chosen, BigDecimal quantity, String overrideReason,
+                                      java.util.Map<java.util.UUID, BigDecimal> alreadyTaken) {
+        Optional<StockLot> earlier = earlierLot(chosen, quantity, alreadyTaken);
         if (earlier.isEmpty()) {
             return null;
         }

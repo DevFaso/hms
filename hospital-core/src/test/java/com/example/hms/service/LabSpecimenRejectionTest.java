@@ -58,6 +58,11 @@ class LabSpecimenRejectionTest {
 
     @BeforeEach
     void setUp() {
+        // Review of #975: the committed status read under the order lock is
+        // the entity's own unless a test says otherwise (no concurrent write).
+        org.mockito.Mockito.lenient().when(labSpecimenRepository.findStatusById(org.mockito.ArgumentMatchers.any()))
+            .thenAnswer(inv -> labSpecimenRepository.findById(inv.getArgument(0))
+                .map(com.example.hms.model.LabSpecimen::getStatus).orElse(null));
         hospitalId = UUID.randomUUID();
         actorId = UUID.randomUUID();
         Hospital hospital = Hospital.builder().build();
@@ -161,5 +166,36 @@ class LabSpecimenRejectionTest {
         assertThatThrownBy(() -> service.rejectSpecimen(id, "Hémolysé", Locale.FRENCH))
             .isInstanceOf(ResourceNotFoundException.class);
         verify(labSpecimenRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("Review of #975 — a receipt or rejection that committed after the specimen was read is not written over")
+    void aSpecimenChangedSinceItWasReadIsNotWrittenOver() {
+        specimen.setStatus(LabSpecimenStatus.COLLECTED);
+        // Received by a colleague between this request's read and its lock.
+        org.mockito.Mockito.doReturn(LabSpecimenStatus.RECEIVED).when(labSpecimenRepository).findStatusById(specimen.getId());
+        UUID id = specimen.getId();
+
+        assertThatThrownBy(() -> service.rejectSpecimen(id, "Hémolysé", Locale.FRENCH))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "lab.specimen.changedConcurrently");
+        verify(labOrderRepository).findWithLockById(labOrder.getId());
+        verify(labSpecimenRepository, never()).save(any());
+        verify(labOrderRepository, never()).updateStatusFrom(any(), any(), any());
+        verify(rejectionNotifier, never()).specimenRejected(any());
+    }
+
+    @Test
+    @DisplayName("Review of #975 — a specimen rejected since it was read is not received, and no work order is queued")
+    void aSpecimenRejectedSinceItWasReadIsNotReceived() {
+        specimen.setStatus(LabSpecimenStatus.COLLECTED);
+        org.mockito.Mockito.doReturn(LabSpecimenStatus.REJECTED).when(labSpecimenRepository).findStatusById(specimen.getId());
+        UUID id = specimen.getId();
+
+        assertThatThrownBy(() -> service.receiveSpecimen(id, Locale.FRENCH))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "lab.specimen.changedConcurrently");
+        verify(labSpecimenRepository, never()).save(any());
+        verify(instrumentOutboxService, never()).enqueueSpecimenReceived(any());
     }
 }

@@ -607,6 +607,7 @@ export class PrescriptionsComponent implements OnInit {
 
   openCreate(): void {
     this.form = this.emptyForm();
+    this.resetCatalogPick();
     // QA D123: a clinician prescribing opens the form with THEMSELVES as the
     // prescriber, instead of an empty choice in a list of colleagues.
     this.form.staffId = this.ownPrescriberStaffId();
@@ -624,6 +625,7 @@ export class PrescriptionsComponent implements OnInit {
     // QA D660: a withdrawn order is read-only, every field; the server
     // refuses any edit of it, so no form is opened on one.
     if (isWithdrawnStatus(p.status)) return;
+    this.resetCatalogPick();
     this.form = {
       patientId: p.patientId ?? '',
       staffId: p.staffId ?? '',
@@ -678,6 +680,17 @@ export class PrescriptionsComponent implements OnInit {
     this.showModal.set(false);
     this.formError.set('');
     this.resetCdsState();
+    this.resetCatalogPick();
+  }
+
+  /**
+   * Review of #975: the previous form's catalogue pick (and its "controlled"
+   * hint) is not carried into the next order opened. The options stay: the
+   * search skips a repeated query, so clearing them would leave a re-typed
+   * name with nothing to pick.
+   */
+  private resetCatalogPick(): void {
+    this.pickedCatalogItem.set(null);
   }
 
   /**

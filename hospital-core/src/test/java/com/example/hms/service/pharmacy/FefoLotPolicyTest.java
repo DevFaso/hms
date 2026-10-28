@@ -68,6 +68,22 @@ class FefoLotPolicyTest {
         assertThat(policy.requireFefoOrReason(shortDated, new BigDecimal("20"), "rien")).isNull();
     }
 
+    /**
+     * Review of #975: a counter sale is built line by line before any stock
+     * moves; 100 already taken off the short lot by an earlier line leaves it
+     * nothing, so the next line from the long lot follows FEFO.
+     */
+    @Test
+    void whatEarlierLinesTakeIsNotCountedAsStillOnTheShorterLot() {
+        java.util.Map<UUID, BigDecimal> taken = java.util.Map.of(shortDated.getId(), new BigDecimal("100"));
+        assertThat(policy.requireFefoOrReason(longDated, new BigDecimal("5"), null, taken)).isNull();
+        java.util.Map<UUID, BigDecimal> partly = java.util.Map.of(shortDated.getId(), new BigDecimal("90"));
+        BigDecimal five = new BigDecimal("5");
+        assertThatThrownBy(() -> policy.requireFefoOrReason(longDated, five, null, partly))
+                .isInstanceOf(BusinessException.class)
+                .extracting("messageKey").isEqualTo("pharmacy.fefo.reasonRequired");
+    }
+
     @Test
     void aShorterDatedLotThatCannotCoverTheMovementDoesNotCount() {
         assertThat(policy.requireFefoOrReason(longDated, new BigDecimal("150"), null)).isNull();

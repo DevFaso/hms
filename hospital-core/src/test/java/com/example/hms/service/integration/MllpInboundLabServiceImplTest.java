@@ -319,6 +319,23 @@ class MllpInboundLabServiceImplTest {
     }
 
     @Test
+    @DisplayName("QA D962 — a tube the lab rejected takes no result from the analyser that still ran it")
+    void rejectedWhenTheSpecimenWasRejected() {
+        specimen.setStatus(com.example.hms.enums.LabSpecimenStatus.REJECTED);
+        when(specimenRepository.findByAccessionNumber("ACC-1")).thenReturn(Optional.of(specimen));
+
+        MllpInboundOutcome outcome = service.processOruR01(
+            List.of(observation("ACC-1", "5.4")), hospital, "APP", "FAC",
+            "MSG-CTRL-REJ", "MSH|...\r");
+
+        assertThat(outcome).isEqualTo(MllpInboundOutcome.REJECTED_INVALID);
+        verify(labResultRepository, never()).save(any());
+        verify(messageRecorder).recordMessage(
+            any(), any(), any(), any(), any(),
+            eq(IntegrationMessageStatus.FAILED), eq("specimen rejected"));
+    }
+
+    @Test
     @DisplayName("QA D820 — an order voided as entered in error takes no result from the analyser")
     void rejectedWhenTheOrderWasVoided() {
         labOrder.setStatus(com.example.hms.enums.LabOrderStatus.ENTERED_IN_ERROR);

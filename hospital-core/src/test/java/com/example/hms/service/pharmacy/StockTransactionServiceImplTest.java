@@ -957,7 +957,7 @@ class StockTransactionServiceImplTest {
 
             assertThatThrownBy(() -> service.listReturnableDispenses(inventoryItemId, stockLotId))
                     .isInstanceOf(ResourceNotFoundException.class);
-            verify(dispenseRepository, never()).findByStockLot_IdAndStatusInOrderByCreatedAtDesc(any(), any());
+            verify(dispenseRepository, never()).findTop50ByStockLot_IdAndStatusInOrderByCreatedAtDesc(any(), any());
         }
 
         @Test

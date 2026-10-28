@@ -531,9 +531,17 @@ export class LabTestConfigComponent implements OnInit {
         });
       }
       if (cond.thresholdOperator) {
+        // Review of #975: a value that is not a number is shown as stored, never as "NaN".
+        const threshold = Number(cond.thresholdValue);
         return this.translate.instant('LAB_TEST_CONFIG.REFLEX_CONDITION_THRESHOLD', {
           operator: cond.thresholdOperator,
-          value: new Intl.NumberFormat(currentLocale()).format(Number(cond.thresholdValue)),
+          value:
+            cond.thresholdValue !== null &&
+            cond.thresholdValue !== undefined &&
+            cond.thresholdValue !== '' &&
+            Number.isFinite(threshold)
+              ? new Intl.NumberFormat(currentLocale()).format(threshold)
+              : String(cond.thresholdValue ?? ''),
         });
       }
     } catch {

@@ -415,6 +415,12 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         }
 
         Staff signer = resolveSigningPrescriber(prescription);
+        // Review of #975 (D934): a doctor may now sign a nurse's or a
+        // midwife's draft, so the clinician who co-signed it must not also be
+        // the one who signs it - two signatures, one judgment.
+        if (sameClinician(prescription.getCosignedBy(), signer)) {
+            throw new BusinessException("prescription.sign.ownCosign");
+        }
 
         // Checked against the status we are about to move to, not the one the
         // row still holds — a controlled substance must not become signable
@@ -936,6 +942,18 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      * leniently by {@code applyCatalogPick}: one match links it, several
      * leave it as it was. Returns whether the edit names the same drug.
      */
+    /** The same person: the same staff row, or two staff rows of one user account. */
+    private static boolean sameClinician(Staff a, Staff b) {
+        if (a == null || b == null) {
+            return false;
+        }
+        if (a.getId() != null && a.getId().equals(b.getId())) {
+            return true;
+        }
+        return a.getUser() != null && b.getUser() != null && a.getUser().getId() != null
+            && a.getUser().getId().equals(b.getUser().getId());
+    }
+
     private static boolean keepCatalogLinkBeforeResolution(Prescription existing, PrescriptionRequestDTO request) {
         boolean sameDrugEdit = !textDiffers(request.getMedicationName(), existing.getMedicationName());
         if (existing.getMedicationCatalogItemId() != null && sameDrugEdit

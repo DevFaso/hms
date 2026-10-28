@@ -1629,11 +1629,6 @@ export class PatientPortalService {
       .pipe(map(() => void 0));
   }
 
-  /**
-   * Document bytes stream only through this authenticated,
-   * ownership-checked endpoint — the public /uploads mapping is gone,
-   * and a bare href carries no bearer token.
-   */
   /** QA D966: the copy of a prescription the pharmacy printed for me (PDF, my own only). */
   getMyPrintedPrescription(prescriptionId: string): Observable<Blob> {
     return this.http.get(`${this.base}/prescriptions/${prescriptionId}/printed-copy`, {
@@ -1641,6 +1636,11 @@ export class PatientPortalService {
     });
   }
 
+  /**
+   * Document bytes stream only through this authenticated,
+   * ownership-checked endpoint — the public /uploads mapping is gone,
+   * and a bare href carries no bearer token.
+   */
   downloadDocumentBlob(documentId: string): Observable<Blob> {
     return this.http.get(`${this.base}/documents/${documentId}/download`, {
       responseType: 'blob',

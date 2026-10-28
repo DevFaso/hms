@@ -5118,6 +5118,37 @@ class PrescriptionServiceImplTest {
         assertThat(rx.getStaff().getUser().getId()).isEqualTo(midwifeUserId);
     }
 
+    /**
+     * Review of #975: once a doctor may sign a midwife's draft, the doctor
+     * who co-signed it must not sign it too - one judgment would carry both
+     * signatures to the pharmacy.
+     */
+    @Test
+    void d934_theCoSignerOfANursesDraftCannotAlsoSignIt() {
+        UUID midwifeUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(midwifeUserId);
+        UUID rxHospitalId = rx.getHospital().getId();
+        UUID doctorUserId = UUID.randomUUID();
+        com.example.hms.model.Staff doctor = com.example.hms.model.Staff.builder().build();
+        doctor.setId(UUID.randomUUID());
+        rx.setRequiresCosign(true);
+        rx.setCosignedBy(doctor);
+        rx.setCosignedAt(java.time.LocalDateTime.now());
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(Optional.of(rx));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(rxHospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(doctorUserId);
+        when(roleValidator.draftsForPhysicianSignature(midwifeUserId, rxHospitalId)).thenReturn(true);
+        when(roleValidator.isSigningPhysician(doctorUserId, rxHospitalId)).thenReturn(true);
+        when(staffRepository.findByUserIdAndHospitalId(doctorUserId, rxHospitalId)).thenReturn(Optional.of(doctor));
+
+        UUID rxId = rx.getId();
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .extracting("messageKey").isEqualTo("prescription.sign.ownCosign");
+        assertThat(rx.getSignatureValue()).isNull();
+        verify(prescriptionRepository, never()).save(any());
+    }
+
     @Test
     void d934_aDoctorStillCannotSignAnotherDoctorsDraft() {
         UUID otherDoctorUserId = UUID.randomUUID();

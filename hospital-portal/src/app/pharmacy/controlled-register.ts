@@ -154,7 +154,10 @@ export class ControlledRegisterComponent implements OnInit {
       .subscribe({
         next: (blob) => {
           this.exporting.set(false);
-          this.download(blob, `registre-stupefiants-${this.from}-${this.to}.${format}`);
+          this.download(
+            blob,
+            `${this.translate.instant('PHARMACY.REGISTER_FILE_STEM')}-${this.from}-${this.to}.${format}`,
+          );
         },
         error: () => {
           this.exporting.set(false);

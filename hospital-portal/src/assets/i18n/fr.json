@@ -9087,6 +9087,7 @@
     "REGISTER_NO_MOVEMENT": "Aucun mouvement sur la période.",
     "REGISTER_ON_SHELF": "En stock actuellement",
     "REGISTER_OPENING": "Solde d’ouverture",
+    "REGISTER_FILE_STEM": "registre-stupefiants",
     "REGISTER_PERIOD_INVALID": "Choisissez une période dont la fin n’est pas avant le début.",
     "REGISTER_SHOW": "Afficher",
     "REGISTER_SUBTITLE": "Tous les mouvements des stupéfiants, avec le solde courant, le patient, le prescripteur et le témoin.",

@@ -52,6 +52,11 @@ class LabSpecimenServiceImplPerformingHospitalTest {
 
     @BeforeEach
     void setUp() {
+        // Review of #975: the committed status read under the order lock is
+        // the entity's own unless a test says otherwise (no concurrent write).
+        org.mockito.Mockito.lenient().when(labSpecimenRepository.findStatusById(org.mockito.ArgumentMatchers.any()))
+            .thenAnswer(inv -> labSpecimenRepository.findById(inv.getArgument(0))
+                .map(com.example.hms.model.LabSpecimen::getStatus).orElse(null));
         ordering = hospital();
         performing = hospital();
         third = hospital();

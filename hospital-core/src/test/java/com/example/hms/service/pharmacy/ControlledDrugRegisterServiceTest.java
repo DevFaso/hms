@@ -196,6 +196,11 @@ class ControlledDrugRegisterServiceTest {
         assertThatThrownBy(() -> service.register(pharmacyId, null, from, overlong))
                 .isInstanceOf(BusinessException.class)
                 .extracting("messageKey").isEqualTo("pharmacy.register.periodTooLong");
+        // Both ends count: 366 days is the longest period, 367 is refused.
+        LocalDate day367 = from.plusDays(366);
+        assertThatThrownBy(() -> service.register(pharmacyId, null, from, day367))
+                .isInstanceOf(BusinessException.class)
+                .extracting("messageKey").isEqualTo("pharmacy.register.periodTooLong");
     }
 
     @Test
@@ -254,7 +259,7 @@ class ControlledDrugRegisterServiceTest {
 
         ControlledRegisterDrugDTO drug = service.register(pharmacy.getId(), null, from, to).drugs().get(0);
 
-        assertThat(drug.entries()).allSatisfy(e -> {
+        assertThat(drug.entries()).isNotEmpty().allSatisfy(e -> {
             assertThat(e.patientName()).isNull();
             assertThat(e.prescriberName()).isNull();
         });
