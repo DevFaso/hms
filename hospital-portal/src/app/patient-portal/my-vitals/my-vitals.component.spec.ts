@@ -52,6 +52,21 @@ describe('MyVitalsComponent', () => {
       expect(component.rangeFlag(reading('WEIGHT', '72'))).toBeNull();
     });
 
+    it('does not compare a reading that is not in the unit of the range', () => {
+      const r = (type: string, value: string, unit: string) =>
+        ({
+          id: type,
+          type,
+          value,
+          unit,
+          recordedAt: '2026-10-27T08:00:00',
+          source: 'NURSE',
+        }) as never;
+      expect(component.rangeFlag(r('TEMPERATURE', '98.6', '°F'))).toBeNull();
+      expect(component.rangeFlag(r('BLOOD_GLUCOSE', '5.5', 'mmol/L'))).toBeNull();
+      expect(component.rangeFlag(r('TEMPERATURE', '39.2', '°C'))).toBe('HIGH');
+    });
+
     it('says it in words on the card', () => {
       component.vitals.set([reading('BLOOD_PRESSURE', '142/90')]);
       component.expandedGroupId.set(component.groupedVitals()[0].id);

@@ -5314,6 +5314,7 @@
     },
     "BILLING": {
       "DETAIL_FAILED": "No se pudo cargar la factura. Inténtelo de nuevo.",
+      "DOWNLOAD_FAILED": "No se pudo descargar el archivo. Inténtelo de nuevo.",
       "DOWNLOAD_INVOICE": "Descargar la factura (PDF)",
       "DOWNLOAD_RECEIPT": "Recibo (PDF)",
       "HIDE_DETAIL": "Ocultar el detalle",

@@ -48,6 +48,8 @@ export class MyBillingComponent implements OnInit {
   detail = signal<PortalInvoiceDetail | null>(null);
   detailLoading = signal(false);
   detailError = signal(false);
+  /** A failed PDF download, shown beside the detail instead of replacing it. */
+  downloadError = signal(false);
 
   toggleDetail(inv: PortalInvoice): void {
     if (this.openDetailId() === inv.id) {
@@ -75,19 +77,24 @@ export class MyBillingComponent implements OnInit {
 
   downloadInvoice(inv: PortalInvoice): void {
     this.portal.getMyInvoicePdf(inv.id).subscribe({
-      next: (res) => saveResponse(res, `invoice-${inv.invoiceNumber}.pdf`),
-      error: () => this.detailError.set(true),
+      next: (res) => {
+        this.downloadError.set(false);
+        saveResponse(res, `invoice-${inv.invoiceNumber}.pdf`);
+      },
+      error: () => this.downloadError.set(true),
     });
   }
 
   downloadReceipt(inv: PortalInvoice, p: PortalInvoicePayment): void {
     this.portal.getMyReceiptPdf(inv.id, p.id).subscribe({
-      next: (res) =>
+      next: (res) => {
+        this.downloadError.set(false);
         saveResponse(
           res,
           `receipt-${inv.invoiceNumber}-${(p.paymentDate ?? '').substring(0, 10)}.pdf`,
-        ),
-      error: () => this.detailError.set(true),
+        );
+      },
+      error: () => this.downloadError.set(true),
     });
   }
 

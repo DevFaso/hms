@@ -352,6 +352,19 @@ describe('MyBillingComponent', () => {
       expect(saved).toEqual(['invoice-001.pdf', '001-R1.pdf']);
     });
 
+    it('keeps the detail when a download fails', () => {
+      portal.getMyInvoiceDetail.and.returnValue(of(detail));
+      portal.getMyInvoicePdf.and.returnValue(throwError(() => new Error('down')));
+      create([invoice()]);
+      component.toggleDetail(component.invoices()[0]);
+      component.downloadInvoice(component.invoices()[0]);
+      fixture.detectChanges();
+      expect(host().querySelector('[data-testid="download-error"]')).not.toBeNull();
+      expect(host().querySelector('[data-testid="invoice-detail-inv1"]')?.textContent).toContain(
+        'Consultation',
+      );
+    });
+
     it('says so when the invoice cannot be loaded', () => {
       portal.getMyInvoiceDetail.and.returnValue(throwError(() => new Error('down')));
       create([invoice()]);

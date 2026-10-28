@@ -636,6 +636,9 @@ describe('BillingComponent', () => {
         statuses: ['PAID'],
       });
       expect(component.openCopays().map((c) => c.id)).toEqual(['cp-5']);
+      // The only open copay is proposed; the clerk clears it, then links it again in one click.
+      expect(component.form.encounterReference).toBe('ENC-20261027-25DB1D');
+      component.form = { ...component.form, encounterReference: undefined };
 
       fixture.detectChanges();
       const notice: HTMLElement = fixture.nativeElement.querySelector(
@@ -645,6 +648,14 @@ describe('BillingComponent', () => {
       notice
         .querySelector<HTMLButtonElement>('[data-testid="link-copay-ENC-20261027-25DB1D"]')!
         .click();
+      expect(component.form.encounterReference).toBe('ENC-20261027-25DB1D');
+    });
+
+    it('proposes the visit of the only open copay, which the clerk may clear', () => {
+      fixture.detectChanges();
+      component.openCreate();
+      billingSpy.searchInvoices.and.returnValue(of(mockPage([copay])));
+      component.onPatientPicked({ id: 'pat-1' } as never);
       expect(component.form.encounterReference).toBe('ENC-20261027-25DB1D');
     });
 

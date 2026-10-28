@@ -358,4 +358,9 @@ public interface EncounterRepository
 
     /** E8 #48 — every encounter of this patient here; the resolver applies the status/decay rule. */
     List<Encounter> findByPatient_IdAndHospital_Id(UUID patientId, UUID hospitalId);
+
+    /** QA D936: serialises two check-ins of one encounter (row lock until the transaction ends). */
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @org.springframework.data.jpa.repository.Query("SELECT e.id FROM Encounter e WHERE e.id = :id")
+    java.util.Optional<java.util.UUID> lockById(@org.springframework.data.repository.query.Param("id") java.util.UUID id);
 }

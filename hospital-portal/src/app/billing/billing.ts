@@ -354,11 +354,14 @@ export class BillingComponent implements OnInit {
     this.billingService.searchInvoices({ patientId, statuses: ['PAID'] }, 0, 50).subscribe({
       next: (res) => {
         if (this.form.patientId !== patientId) return;
-        this.openCopays.set(
-          (res?.content ?? []).filter(
-            (inv) => inv.checkInCopay && !inv.creditedToInvoiceNumber && !!inv.encounterCode,
-          ),
+        const open = (res?.content ?? []).filter(
+          (inv) => inv.checkInCopay && !inv.creditedToInvoiceNumber && !!inv.encounterCode,
         );
+        this.openCopays.set(open);
+        // QA D936: one open copay is proposed as the visit; the clerk sees it and may clear it.
+        if (open.length === 1 && !this.form.encounterReference) {
+          this.form.encounterReference = open[0].encounterCode ?? undefined;
+        }
       },
       error: () => this.openCopays.set([]),
     });

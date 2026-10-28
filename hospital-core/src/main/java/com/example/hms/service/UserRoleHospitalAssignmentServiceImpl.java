@@ -2570,6 +2570,11 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         }
         String normalized = code.trim().toUpperCase(Locale.ROOT);
         String key = "role.description." + (normalized.startsWith(ROLE_PREFIX) ? normalized : ROLE_PREFIX + normalized);
+        // A description an administrator rewrote is theirs; only the seeded text is translated.
+        String seeded = messageSource.getMessage(key, null, null, Locale.ENGLISH);
+        if (seeded == null || (role.getDescription() != null && !role.getDescription().trim().equals(seeded.trim()))) {
+            return role.getDescription();
+        }
         return messageSource.getMessage(key, null, role.getDescription(), LocaleContextHolder.getLocale());
     }
 

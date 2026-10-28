@@ -29,7 +29,7 @@ const PATIENT_WRITE = /^\/?patients\/([0-9a-fA-F-]{36})\/([^?]+)/;
 
 /** Reads sent as a POST (the reason travels in the body): no chart changed. */
 const READ_ONLY_POSTS =
-  /(^|\/)(doctor-timeline|search|filter|lookup|query|preview|validate|check)$/;
+  /(^|\/)(doctor-timeline|doctor-record|search|filter|lookup|query|preview|validate|check)$/;
 
 export const patientChartChangeInterceptor: HttpInterceptorFn = (req, next) => {
   if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') {

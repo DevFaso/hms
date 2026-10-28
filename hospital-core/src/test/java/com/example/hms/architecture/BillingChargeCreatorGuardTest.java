@@ -36,10 +36,10 @@ class BillingChargeCreatorGuardTest {
     private static final Map<String, String> RULES = Map.of(
         "mapper/BillingInvoiceMapper.java#toBillingInvoice",
         "createInvoice: one invoice per clientRequestId (QA D94), a second live invoice on a visit only when "
-            + "confirmed as supplementary (QA D529), and the visit's paid copay credited even with the code left "
-            + "empty (QA D936) — BillingInvoiceServiceImplTest *_D94, *_D529, *_D936",
+            + "confirmed as supplementary (QA D529), and the form proposing the visit of the patient's open copay "
+            + "so it is credited (QA D936) — BillingInvoiceServiceImplTest *_D94, *_D529, billing.spec D936",
         "service/BillingInvoiceServiceImpl.java#recordCheckInCopay",
-        "one live check-in copay per encounter (QA D936) — "
+        "one check-in copay per encounter, live or folded, under a row lock on the encounter (QA D936) — "
             + "BillingInvoiceServiceImplTest.aSecondCheckInOfTheSameVisitIsNotBilledAgain_D936",
         "service/DeliveryChargeService.java#chargeDelivery",
         "one delivery per labour episode: LaborServiceImpl refuses a second one (maternity.delivery.alreadyRecorded) "

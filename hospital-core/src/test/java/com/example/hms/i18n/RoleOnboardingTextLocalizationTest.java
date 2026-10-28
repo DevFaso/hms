@@ -126,4 +126,18 @@ class RoleOnboardingTextLocalizationTest {
 
         assertThat(description).isEqualTo("Agent de santé communautaire");
     }
+
+    @Test
+    void anAdministratorsRewriteOfASeededRoleIsKept() {
+        UserRoleHospitalAssignmentServiceImpl service =
+            mock(UserRoleHospitalAssignmentServiceImpl.class, CALLS_REAL_METHODS);
+        ReflectionTestUtils.setField(service, "messageSource", BUNDLES);
+        Role nurse = Role.builder().code("ROLE_NURSE").name("ROLE_NURSE")
+            .description("Infirmier du service de nuit, CHU QA").build();
+        LocaleContextHolder.setLocale(ES);
+
+        String description = ReflectionTestUtils.invokeMethod(service, "localizedRoleDescription", nurse);
+
+        assertThat(description).isEqualTo("Infirmier du service de nuit, CHU QA");
+    }
 }

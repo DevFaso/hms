@@ -166,9 +166,6 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         requireCoherentDates(dto.getInvoiceDate(), dto.getDueDate(), null, hospital);
         Patient patient = resolvePatient(dto, hospitalId);
         Encounter encounter = resolveEncounter(dto, hospitalId);
-        if (encounter == null && !Boolean.TRUE.equals(dto.getSupplementary())) {
-            encounter = soleOpenCopayVisit(patient, hospitalId);
-        }
         // QA D403: the visit billed must be this patient's visit.
         rejectEncounterOfOtherPatient(encounter, patient);
         rejectUnconfirmedSecondInvoice(encounter, dto);
@@ -370,37 +367,6 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         }
     }
 
-    /**
-     * QA D936: an invoice raised with the visit code left empty never took the
-     * copay paid at check-in, so the patient paid it twice. When the patient
-     * has exactly one paid copay at this hospital that no invoice has taken,
-     * and its visit is not invoiced yet, the new invoice is that visit's.
-     * With two or more the visit is not guessed; the form lists them instead.
-     */
-    private static final long COPAY_LINK_WINDOW_DAYS = 30;
-
-    private Encounter soleOpenCopayVisit(Patient patient, UUID hospitalId) {
-        List<BillingInvoice> open = invoiceRepository
-            .findByPatient_IdAndHospital_IdAndCheckInCopayTrueAndStatus(patient.getId(), hospitalId, InvoiceStatus.PAID);
-        if (open == null || open.size() != 1) {
-            return null;
-        }
-        BillingInvoice copay = open.get(0);
-        // An old copay is not today's visit: past 30 days the clerk picks the visit from the form.
-        if (copay.getInvoiceDate() != null && copay.getInvoiceDate()
-                .isBefore(LocalDate.now(java.time.ZoneId.systemDefault()).minusDays(COPAY_LINK_WINDOW_DAYS))) {
-            return null;
-        }
-        Encounter visit = copay.getEncounter();
-        if (visit == null || visit.getId() == null || visit.getHospital() == null
-                || !hospitalId.equals(visit.getHospital().getId())) {
-            return null;
-        }
-        boolean invoiced = invoiceRepository.findByEncounter_IdAndStatusNot(visit.getId(), InvoiceStatus.CANCELLED)
-            .stream().anyMatch(existing -> !existing.isCheckInCopay());
-        return invoiced ? null : visit;
-    }
-
     /** The encounter named by code, only when it belongs to the invoicing hospital. */
     private Encounter resolveEncounter(BillingInvoiceRequestDTO dto, UUID hospitalId) {
         if (dto.getEncounterReference() == null || dto.getEncounterReference().isBlank()) {
@@ -532,6 +498,10 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         }
         requireWholeAmount(amount);
         BigDecimal total = invoice.getTotalAmount() != null ? invoice.getTotalAmount() : BigDecimal.ZERO;
+        // Earlier discounts may already have lowered the total under the line.
+        if (amount.compareTo(total) > 0) {
+            throw new BusinessException("billing.adjustment.moreThanTotal", formatFrancs(total));
+        }
         BigDecimal paid = invoice.getAmountPaid() != null ? invoice.getAmountPaid() : BigDecimal.ZERO;
         BigDecimal newTotal = total.subtract(amount);
         // Money already received is never written off silently: reverse the payment first.
@@ -639,9 +609,9 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         List<PaymentTransactionResponseDTO> payments = paymentTransactionRepository
             .findByInvoice_IdOrderByCreatedAtAsc(invoiceId).stream()
             .map(PaymentTransactionResponseDTO::from)
-            // The cashier's notes stay with the cashier.
+            // The cashier's notes and reversal reasons stay with the cashier.
             .map(row -> new PaymentTransactionResponseDTO(row.id(), row.amount(), row.paymentDate(),
-                row.paymentMethod(), row.referenceNumber(), null, row.status(), row.reversalReason(),
+                row.paymentMethod(), row.referenceNumber(), null, row.status(), null,
                 row.reversedAt(), row.createdAt()))
             .toList();
         List<com.example.hms.payload.dto.InvoiceAdjustmentResponseDTO> adjustments = adjustmentRepository == null
@@ -940,11 +910,6 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             .orElseThrow(() -> new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, invoiceId));
         BigDecimal sum = invoiceRepository.sumItemsByInvoiceId(invoiceId);
         BigDecimal total = sum != null ? sum : BigDecimal.ZERO;
-        // QA D974: what was discounted, waived or credited stays off the total.
-        if (adjustmentRepository != null) {
-            BigDecimal adjusted = adjustmentRepository.sumByInvoiceId(invoiceId);
-            total = total.subtract(adjusted != null ? adjusted : BigDecimal.ZERO).max(BigDecimal.ZERO);
-        }
         BigDecimal paid = invoice.getAmountPaid() != null ? invoice.getAmountPaid() : BigDecimal.ZERO;
         if (total.compareTo(paid) < 0) {
             throw new BusinessException("billing.invoice.totalBelowPaid");
@@ -1549,7 +1514,11 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         }
         requireWholeAmount(amount);
         // QA D936 (class): one copay per visit. A repeated or retried check-in
-        // of the same encounter does not bill the patient a second copay.
+        // of the same encounter does not bill the patient a second copay; the
+        // encounter row is locked so two concurrent calls cannot both pass.
+        if (encounter.getId() != null) {
+            encounterRepository.lockById(encounter.getId());
+        }
         if (encounter.getId() != null && invoiceRepository
                 .findByEncounter_IdAndStatusNot(encounter.getId(), InvoiceStatus.DRAFT).stream()
                 .anyMatch(existing -> existing.isCheckInCopay()

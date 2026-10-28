@@ -133,6 +133,17 @@ export class MyVitalsComponent implements OnInit {
    */
   rangeFlag(v: VitalSignSummary): 'HIGH' | 'LOW' | null {
     const type = v.type?.toUpperCase();
+    // The range printed is in one unit; a reading in another is not compared.
+    const unit = (v.unit ?? '').trim().toLowerCase();
+    const expected: Record<string, string[]> = {
+      BLOOD_PRESSURE: ['mmhg', ''],
+      HEART_RATE: ['bpm', '/min', ''],
+      TEMPERATURE: ['°c', 'c', ''],
+      OXYGEN_SATURATION: ['%', ''],
+      RESPIRATORY_RATE: ['breaths/min', '/min', ''],
+      BMI: ['kg/m²', 'kg/m2', ''],
+    };
+    if (!expected[type]?.includes(unit)) return null;
     const numbers = (v.value ?? '')
       .split('/')
       .map((part) => Number.parseFloat(part.replace(',', '.')))
@@ -150,7 +161,6 @@ export class MyVitalsComponent implements OnInit {
       OXYGEN_SATURATION: [95, 100],
       RESPIRATORY_RATE: [12, 20],
       BMI: [18.5, 24.9],
-      BLOOD_GLUCOSE: [70, 100],
     };
     const range = bounds[type];
     if (!range || numbers.length !== 1) return null;
