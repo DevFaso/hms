@@ -703,7 +703,11 @@ export class EncountersComponent implements OnInit {
       'CANCELLED',
       'LEFT_WITHOUT_BEING_SEEN',
     ];
-    return this.auth.hasAnyRole(actionRoles('encounterMedicalCertificate')) && !!enc.status && !unseen.includes(enc.status);
+    return (
+      this.auth.hasAnyRole(actionRoles('encounterMedicalCertificate')) &&
+      !!enc.status &&
+      !unseen.includes(enc.status)
+    );
   }
 
   /** QA D927: only the roles `GET /nurse/notes` admits load the panel (a refused read would leave the page). */
