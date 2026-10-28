@@ -160,6 +160,57 @@ class ClinicalDocumentAuthorGuardTest {
     }
 
     /**
+     * Review of #976 (QA D930 class): the imaging order checked the cancel
+     * author only on the move INTO CANCELLED, but stamped who cancelled it,
+     * when and why on every request that said CANCELLED, so a colleague who
+     * re-sent CANCELLED rewrote the author's stamp. A cancellation / void /
+     * withdrawal stamp keyed on a single status equality (the shape of that
+     * bug) is refused anywhere under {@code service/}: the stamp belongs to the
+     * transition ({@code requested == X && current != X}), or to a method that
+     * has already refused a record in that state. What this scan cannot see,
+     * the way back out of CANCELLED, is pinned by the per-service unit tests
+     * (ImagingOrderServiceImplTest review976_*).
+     */
+    @Test
+    void cancellationStampIsWrittenOnTheTransitionOnly() throws IOException {
+        Pattern ifOpen = Pattern.compile("\\bif\\s*\\(");
+        Pattern singleStatusTest = Pattern.compile(
+            "^[\\w.()]+\\.getStatus\\(\\)\\s*==\\s*\\w+\\.(?:CANCELLED|CANCELED|VOIDED|VOID|DISCONTINUED"
+                + "|WITHDRAWN|REVOKED|ENTERED_IN_ERROR|ERROR)$");
+        Pattern stamp = Pattern.compile("\\.set(?:Cancel|Void|Withdraw|Revok|Discontinu)\\w*\\(");
+        List<String> offenders = new ArrayList<>();
+        int scanned = 0;
+        List<Path> files;
+        try (java.util.stream.Stream<Path> walk = Files.walk(SERVICES)) {
+            files = walk.filter(f -> f.toString().endsWith(".java")).sorted().toList();
+        }
+        for (Path file : files) {
+            String src = com.example.hms.testsupport.SourceScan.stripComments(Files.readString(file));
+            scanned++;
+            Matcher m = ifOpen.matcher(src);
+            while (m.find()) {
+                int open = m.end() - 1;
+                int close = com.example.hms.testsupport.SourceScan.closingParen(src, open);
+                String condition = src.substring(open + 1, Math.min(close, src.length())).replaceAll("\\s+", " ").trim();
+                if (!singleStatusTest.matcher(condition).matches()) {
+                    continue;
+                }
+                int brace = src.indexOf('{', close);
+                if (brace < 0 || !src.substring(close + 1, brace).isBlank()) {
+                    continue;
+                }
+                String body = src.substring(brace, com.example.hms.testsupport.SourceScan.closingBrace(src, brace));
+                if (stamp.matcher(body).find()) {
+                    offenders.add(SERVICES.relativize(file) + ":" + com.example.hms.testsupport.SourceScan.lineOf(src, open)
+                        + " if (" + condition + ")");
+                }
+            }
+        }
+        assertThat(scanned).as("service sources scanned").isGreaterThan(100);
+        assertThat(offenders).as("cancellation stamps written on every request that carries the status").isEmpty();
+    }
+
+    /**
      * A write may delegate the check to a private helper of the same class
      * (cancelConsultation, for one); follow one level of private calls.
      */

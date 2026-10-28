@@ -1136,4 +1136,86 @@ class ImagingOrderServiceImplTest {
         assertThat(order.getProviderSignedAt()).isNotNull();
         assertThat(order.getOrderingProviderUserId()).isEqualTo(doctor);
     }
+
+    // ═══ Review of #976 (QA D930 class): the cancel stamp and the way back out ═══
+
+    private ImagingOrderResponseDTO statusAs(UUID sessionUserId, ImagingOrder order, ImagingOrderStatus status) {
+        com.example.hms.model.User sessionUser = new com.example.hms.model.User();
+        sessionUser.setId(sessionUserId);
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(sessionUser, null, List.of()));
+        try {
+            return imagingOrderService.updateOrderStatus(order.getId(), ImagingOrderStatusUpdateRequestDTO.builder()
+                .status(status).cancellationReason("Rewritten reason").build());
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+    }
+
+    private static final LocalDateTime ORIGINAL_CANCELLED_AT = LocalDateTime.of(2026, 1, 5, 9, 30);
+
+    private ImagingOrder cancelledBy(UUID author) {
+        ImagingOrder order = orderAt(hospital);
+        order.setOrderingProviderUserId(author);
+        order.setStatus(ImagingOrderStatus.CANCELLED);
+        order.setCancellationReason("Original reason");
+        order.setCancelledAt(ORIGINAL_CANCELLED_AT);
+        order.setCancelledByUserId(author);
+        order.setCancelledByName("Original Author");
+        return order;
+    }
+
+    @Test
+    void review976_reCancellingByAColleagueKeepsTheOriginalStamp() {
+        UUID author = UUID.randomUUID();
+        ImagingOrder order = cancelledBy(author);
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(imagingOrderRepository.save(order)).thenReturn(order);
+
+        statusAs(UUID.randomUUID(), order, ImagingOrderStatus.CANCELLED);
+
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.CANCELLED);
+        assertThat(order.getCancellationReason()).isEqualTo("Original reason");
+        assertThat(order.getCancelledAt()).isEqualTo(ORIGINAL_CANCELLED_AT);
+        assertThat(order.getCancelledByUserId()).isEqualTo(author);
+        assertThat(order.getCancelledByName()).isEqualTo("Original Author");
+    }
+
+    @Test
+    void review976_aColleagueCannotReopenTheAuthorsCancelledOrder() {
+        ImagingOrder order = cancelledBy(UUID.randomUUID());
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        UUID colleague = UUID.randomUUID();
+        when(roleValidator.hasRole(colleague, hospitalId, "RADIOLOGIST")).thenReturn(false);
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> statusAs(colleague, order, ImagingOrderStatus.ORDERED))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.CANCELLED);
+        verify(imagingOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void review976_theOrderingProviderReopensHerCancelledOrder() {
+        UUID author = UUID.randomUUID();
+        ImagingOrder order = cancelledBy(author);
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(imagingOrderRepository.save(order)).thenReturn(order);
+
+        statusAs(author, order, ImagingOrderStatus.ORDERED);
+
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.ORDERED);
+    }
+
+    @Test
+    void review976_aRadiologistReopensACancelledOrderSheDidNotPlace() {
+        ImagingOrder order = cancelledBy(UUID.randomUUID());
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(imagingOrderRepository.save(order)).thenReturn(order);
+        UUID radiologist = UUID.randomUUID();
+        when(roleValidator.hasRole(radiologist, hospitalId, "RADIOLOGIST")).thenReturn(true);
+
+        statusAs(radiologist, order, ImagingOrderStatus.ORDERED);
+
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.ORDERED);
+    }
 }

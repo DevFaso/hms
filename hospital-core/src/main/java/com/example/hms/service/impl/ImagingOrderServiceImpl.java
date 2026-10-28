@@ -150,9 +150,14 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
     public ImagingOrderResponseDTO updateOrderStatus(UUID orderId, ImagingOrderStatusUpdateRequestDTO request) {
         ImagingOrder order = getOrderInScope(orderId);
         // QA D930 class: a cancel ends the order for the patient; it is the
-        // ordering provider's or the imaging department's decision.
-        if (request.getStatus() == ImagingOrderStatus.CANCELLED
-                && order.getStatus() != ImagingOrderStatus.CANCELLED) {
+        // ordering provider's or the imaging department's decision. Review of
+        // #976: so is undoing one, or a colleague could reopen the author's
+        // cancelled order; and the stamp below is written on the transition
+        // only, or re-sending CANCELLED rewrote who cancelled it, when and why.
+        boolean wasCancelled = order.getStatus() == ImagingOrderStatus.CANCELLED;
+        boolean cancelling = request.getStatus() == ImagingOrderStatus.CANCELLED && !wasCancelled;
+        boolean reopening = wasCancelled && request.getStatus() != ImagingOrderStatus.CANCELLED;
+        if (cancelling || reopening) {
             requireCancelAuthor(order);
         }
 
@@ -171,7 +176,7 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         order.setStatusUpdatedAt(LocalDateTime.now());
         order.setStatusUpdatedBy(actorId);
 
-        if (request.getStatus() == ImagingOrderStatus.CANCELLED) {
+        if (cancelling) {
             order.setCancellationReason(request.getCancellationReason());
             order.setCancelledAt(LocalDateTime.now());
             order.setCancelledByUserId(actorId);
@@ -207,7 +212,8 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
      * radiologist of the order's hospital (the department declines or calls
      * off an exam), or a verified super-admin in global view. An order with no
      * recorded provider (written before D302) keeps the old rule, as on edit
-     * ({@link #requireEditableBy}). Any other doctor in scope gets 403.
+     * ({@link #requireEditableBy}). Any other doctor in scope gets 403. The
+     * same people reopen a cancelled order (review of #976).
      */
     private void requireCancelAuthor(ImagingOrder order) {
         UUID orderingProvider = order.getOrderingProviderUserId();
