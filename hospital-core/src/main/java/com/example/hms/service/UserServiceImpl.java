@@ -1966,17 +1966,34 @@ public class UserServiceImpl implements UserService {
      * Email Verification
      * --------------------------------
      */
+    /**
+     * Activates the account behind an emailed link, its ROLE_PATIENT
+     * assignments and its Patient row, in ONE transaction (QA D921).
+     * {@code AuthController#verifyEmail} used to do this itself: the account
+     * save committed on its own, then the assignment loop read
+     * {@code assignment.getRole()} with no session (open-in-view is off), so
+     * every link answered 500 and left the account active with its patient
+     * role still off and the token consumed. Here the lazy reads run inside
+     * the transaction, and a failure rolls the whole activation back, token
+     * included, so the link still works on the next try.
+     *
+     * @return false when the address is unknown, the token does not match or
+     *         has expired, or an administrator switched the account off
+     */
     @Override
     @Transactional
     public boolean verifyEmail(String email, String token) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new ResourceNotFoundException("user.notFoundByEmail", email));
+        User user = userRepository.findByEmail(email).orElse(null);
+        if (user == null) {
+            return false;
+        }
 
         if (user.getActivationToken() == null
+                || token == null
                 || !token.equals(user.getActivationToken())
                 || user.getActivationTokenExpiresAt() == null
                 || user.getActivationTokenExpiresAt().isBefore(LocalDateTime.now())) {
-            log.warn("⚠️ Invalid or expired activation token for: {}", email);
+            log.warn("⚠️ Invalid or expired activation token for user {}", user.getId());
             return false;
         }
 
@@ -1991,17 +2008,30 @@ public class UserServiceImpl implements UserService {
         user.setActivationToken(null);
         user.setActivationTokenExpiresAt(null);
         userRepository.save(user);
-        // NOTE: this method has no caller in main — AuthController#verifyEmail
-        // implements verification itself and is the path that runs. The reset
-        // is kept, and deferred like every other one, so wiring this method up
-        // later cannot reintroduce the bug the rest of this class just fixed:
-        // the patient activation below writes after this point, and a rollback
-        // there would otherwise leave the counter cleared for an account that
-        // stayed inactive. (Note for whoever wires it up: unlike
-        // AuthController#verifyEmail this method does NOT activate the user's
-        // ROLE_PATIENT assignments — it only flips the Patient row.)
+        // Refusals collected while the account was inactive must not outlive
+        // the activation: the disabled arm of /auth/login counts toward the
+        // lockout, so five attempts before verifying would otherwise leave the
+        // holder locked out at the moment the link finally works. Deferred to
+        // the commit, so a rollback below cannot leave the counter cleared for
+        // an account that stayed inactive.
         final UUID verifiedId = user.getId();
         TransactionCallbacks.afterCommit(() -> loginAttemptService.resetAttempts(verifiedId));
+
+        int activated = 0;
+        for (UserRoleHospitalAssignment assignment : assignmentRepository.findByUserId(user.getId())) {
+            // QA D789: a patient row at a hospital archived since stays off;
+            // the account itself is still verified.
+            if (assignment.getRole() != null
+                    && "ROLE_PATIENT".equalsIgnoreCase(assignment.getRole().getCode())
+                    && !Boolean.TRUE.equals(assignment.getActive())
+                    && (assignment.getHospital() == null
+                        || !com.example.hms.security.provider.FacilityAssignmentGuard
+                            .isClosed(assignment.getHospital().getLifecycleState()))) {
+                assignment.setActive(true);
+                assignmentRepository.save(assignment);
+                activated++;
+            }
+        }
 
         // Activate the Patient entity to match the now-verified User
         patientRepository.findByUserId(user.getId()).ifPresent(patient -> {
@@ -2011,7 +2041,7 @@ public class UserServiceImpl implements UserService {
             }
         });
 
-        log.info("✅ Email verified: {}", user.getEmail());
+        log.info("✅ Email verified for user {}. Activated {} patient assignment(s).", user.getId(), activated);
         return true;
     }
 
