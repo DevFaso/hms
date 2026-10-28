@@ -9,6 +9,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { Subscription } from 'rxjs';
 import { TranslateModule } from '@ngx-translate/core';
 import { NursingNote, NursingNoteService } from '../../services/nursing-note.service';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
@@ -46,11 +47,18 @@ export class NursingNotesPanelComponent implements OnChanges {
   readonly loading = signal(false);
   readonly failed = signal(false);
 
+  private request?: Subscription;
+
   ngOnChanges(): void {
     if (!this.patientId) return;
+    // Review of #971: the panel is reused when another visit is opened; the
+    // previous patient's request is dropped so its late answer cannot put
+    // that patient's notes under this visit.
+    this.request?.unsubscribe();
+    this.notes.set([]);
     this.loading.set(true);
     this.failed.set(false);
-    this.service
+    this.request = this.service
       .listRecent(this.patientId, this.hospitalId ?? undefined)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({

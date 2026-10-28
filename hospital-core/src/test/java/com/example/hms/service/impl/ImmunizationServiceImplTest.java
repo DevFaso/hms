@@ -141,6 +141,28 @@ class ImmunizationServiceImplTest {
     }
 
     @Test
+    void qaD1003_anEditThatSendsNoSourceKeepsTheStoredSourceAndVaccinator() {
+        Staff vaccinator = new Staff(); vaccinator.setId(staffId);
+        PatientImmunization existing = new PatientImmunization();
+        existing.setId(immunizationId);
+        existing.setHospital(hospital);
+        existing.setAdministeredBy(vaccinator);
+        existing.setSourceOfRecord("Given here"); // a legacy free-text value
+        existing.setAdministrationDate(java.time.LocalDate.now().minusWeeks(1));
+        ImmunizationRequestDTO dto = new ImmunizationRequestDTO();
+        dto.setAdministrationDate(existing.getAdministrationDate());
+        dto.setLotNumber("LOT-2");
+        when(immunizationRepository.findById(immunizationId)).thenReturn(Optional.of(existing));
+        when(immunizationRepository.save(existing)).thenReturn(existing);
+        when(immunizationMapper.toResponseDTO(existing)).thenReturn(new ImmunizationResponseDTO());
+
+        service.updateImmunization(immunizationId, dto);
+
+        assertThat(existing.getAdministeredBy()).isEqualTo(vaccinator);
+        assertThat(dto.getSourceOfRecord()).isEqualTo("Given here");
+    }
+
+    @Test
     void qaD1003_aPastDoseWithNoStatedSourceIsRecordedAsATranscription() {
         ImmunizationRequestDTO dto = new ImmunizationRequestDTO();
         dto.setAdministrationDate(java.time.LocalDate.now().minusYears(3));

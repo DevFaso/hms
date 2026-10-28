@@ -408,7 +408,9 @@ export class MedicalHistoryTabComponent implements OnInit {
       vaccineDisplay: immunization.vaccineDisplay ?? '',
       administrationDate: immunization.administrationDate ?? this.todayIso(),
       status: immunization.status ?? 'COMPLETED',
-      sourceOfRecord: immunization.sourceOfRecord ?? 'GIVEN_HERE',
+      // Review of #971: a dose recorded with no source stays without one (the
+      // server then keeps what is stored); it is never presumed given here.
+      sourceOfRecord: immunization.sourceOfRecord ?? '',
     };
     this.immunizationSourceTouched = true;
     this.editingImmunizationId.set(immunization.id);
@@ -425,11 +427,16 @@ export class MedicalHistoryTabComponent implements OnInit {
       this.toast.error(this.translate.instant('MED_HISTORY.IMMUNIZATION_REQUIRED_FIELDS'));
       return;
     }
-    // QA D1003: only a dose given here is credited to the clinician recording it.
-    form.administeredByStaffId =
-      form.sourceOfRecord === 'GIVEN_HERE'
-        ? (this.auth.getUserProfile()?.staffId ?? form.administeredByStaffId)
-        : undefined;
+    // QA D1003: only a dose given here is credited to the clinician recording
+    // it, and only when it is recorded: an edit keeps the dose's vaccinator.
+    if (form.sourceOfRecord && form.sourceOfRecord !== 'GIVEN_HERE') {
+      form.administeredByStaffId = undefined;
+    } else if (!this.editingImmunizationId() && form.sourceOfRecord === 'GIVEN_HERE') {
+      form.administeredByStaffId = this.auth.getUserProfile()?.staffId ?? undefined;
+    }
+    if (!form.sourceOfRecord) {
+      form.sourceOfRecord = undefined;
+    }
     this.immunizationSaving.set(true);
     const editingId = this.editingImmunizationId();
     const op = editingId

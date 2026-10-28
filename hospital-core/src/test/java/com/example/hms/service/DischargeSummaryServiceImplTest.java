@@ -63,6 +63,7 @@ class DischargeSummaryServiceImplTest {
     @Mock private PrescriptionRepository prescriptionRepository;
     @Mock private com.example.hms.utility.RoleValidator roleValidator;
     @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
+    @Mock private com.example.hms.repository.EncounterNoteRepository encounterNoteRepository;
     @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
     /** Real registry so the portal-fetch tests can assert counter values. */
     @Spy private MeterRegistry meterRegistry = new SimpleMeterRegistry();
@@ -311,6 +312,20 @@ class DischargeSummaryServiceImplTest {
         assertThatThrownBy(() -> service.deleteDischargeSummary(summaryId, doctorTwoStaffId))
             .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
         verify(dischargeSummaryRepository, never()).delete(any(DischargeSummary.class));
+    }
+
+    @Test void qaD930_theDoctorWhoTreatedTheVisitKeepsTheDraftOpenedUnderANurse() {
+        // Review of #971: checkout names the visit's clinician of record (here a
+        // nurse) as discharging provider; the doctor who wrote the note edits it.
+        com.example.hms.model.User doctor = new com.example.hms.model.User();
+        doctor.setId(UUID.randomUUID());
+        actAs(doctor);
+        com.example.hms.model.encounter.EncounterNote note = new com.example.hms.model.encounter.EncounterNote();
+        note.setAuthor(doctor);
+        when(encounterNoteRepository.findByEncounter_IdOrderByCreatedAtAscIdAsc(encounterId)).thenReturn(List.of(note));
+        when(dischargeSummaryRepository.findById(summaryId)).thenReturn(Optional.of(summary));
+        service.deleteDischargeSummary(summaryId, null);
+        verify(dischargeSummaryRepository).delete(summary);
     }
 
     @Test void qaD930_anotherDoctorCannotRewriteTheAuthorsDraft() {

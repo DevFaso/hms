@@ -121,6 +121,38 @@ export class TriageFormComponent {
       .subscribe(() => (this.esiOptionsCache = this.buildEsiOptions()));
   }
 
+  /**
+   * Review of #971: Escape closes the dialog only while nothing has been
+   * typed; once vitals are entered it would throw them away, so it is ignored
+   * (the Close button still closes).
+   */
+  onEscape(): void {
+    if (!this.hasEntries()) this.dismissed.emit();
+  }
+
+  hasEntries(): boolean {
+    const vitals = [
+      this.temperatureCelsius(),
+      this.heartRateBpm(),
+      this.respiratoryRateBpm(),
+      this.systolicBpMmHg(),
+      this.diastolicBpMmHg(),
+      this.spo2Percent(),
+      this.weightKg(),
+      this.heightCm(),
+      this.painScale(),
+      this.fallRiskScore(),
+    ];
+    return (
+      vitals.some((v) => v !== null) ||
+      !!this.consciousnessLevel() ||
+      this.onOxygen() ||
+      this.fallRisk() ||
+      !!this.roomAssignment().trim() ||
+      this.chiefComplaint().trim() !== (this.encounter?.chiefComplaint ?? '').trim()
+    );
+  }
+
   get canSubmit(): boolean {
     return !!this.encounter?.id && this.esiScore() >= 1 && this.esiScore() <= 5 && !this.saving();
   }

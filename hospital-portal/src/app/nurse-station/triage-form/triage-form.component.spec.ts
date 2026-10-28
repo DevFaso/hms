@@ -84,6 +84,13 @@ describe('TriageFormComponent', () => {
     expect(closed).toHaveBeenCalled();
   });
 
+  it('Escape never throws away typed vitals (review of #971)', () => {
+    const closed = spyOn(component.dismissed, 'emit');
+    component.systolicBpMmHg.set(152);
+    component.onEscape();
+    expect(closed).not.toHaveBeenCalled();
+  });
+
   it('should create', () => {
     expect(component).toBeTruthy();
   });

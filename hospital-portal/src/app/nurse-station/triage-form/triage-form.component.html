@@ -8,7 +8,7 @@
     class="triage-dialog"
     appModalDialog
     aria-labelledby="triage-dialog-title"
-    (escaped)="dismissed.emit()"
+    (escaped)="onEscape()"
     (click)="$event.stopPropagation()"
     (keydown)="$event.stopPropagation()"
     tabindex="-1"

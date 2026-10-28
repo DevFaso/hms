@@ -74,6 +74,7 @@ public class MedicalCertificateServiceImpl implements MedicalCertificateService 
     private final FileUploadService fileUploadService;
     private final PatientLocaleResolver patientLocaleResolver;
     private final MessageSource messageSource;
+    private final com.example.hms.repository.EncounterNoteRepository encounterNoteRepository;
 
     @Override
     @Transactional
@@ -96,6 +97,13 @@ public class MedicalCertificateServiceImpl implements MedicalCertificateService 
         if (doctor == null || doctor.getUser() == null) {
             throw new com.example.hms.exception.ClientSafeAccessDeniedException(
                 com.example.hms.utility.MessageUtil.resolveOrRaw("identity.notCaller"));
+        }
+        // The certificate says "I examined the patient on that day": only a
+        // clinician who treated the visit (its clinician of record or a note
+        // author on it) may sign it, not any doctor of the hospital.
+        if (!TreatingClinician.isCaller(encounter, encounterNoteRepository)) {
+            throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("medicalCertificate.notTreating"));
         }
         Patient patient = encounter.getPatient();
         Certificate certificate = describe(encounter, request);
@@ -127,7 +135,10 @@ public class MedicalCertificateServiceImpl implements MedicalCertificateService 
             .fileSizeBytes(stored.sizeBytes())
             .checksumSha256(stored.sha256())
             .collectionDate(signedAt.toLocalDate())
-            .notes(summary(certificate, locale))
+            // The reference printed on the PDF is kept with the record, so the
+            // hospital can check a presented copy against what it issued.
+            .notes(summary(certificate, locale) + " - " + text(locale, "medicalCertificate.reference",
+                fingerprint.substring(0, 16)))
             .build();
         PatientUploadedDocument saved = documentRepository.save(doc);
         log.info("Medical certificate {} ({}) issued for encounter {} by staff {}",
@@ -195,7 +206,12 @@ public class MedicalCertificateServiceImpl implements MedicalCertificateService 
         };
     }
 
-    /** SHA-256 over what the certificate says and who signed it when: printed on it, so a copy can be checked. */
+    /**
+     * SHA-256 over what the certificate says and who issued it when. Its first
+     * 16 characters are printed on the PDF as the document reference and kept
+     * in the stored record (with the PDF's own checksum), which is what a
+     * presented copy is checked against; it is not a cryptographic signature.
+     */
     static String fingerprint(Certificate c, Patient patient, Staff doctor, Hospital hospital, LocalDateTime signedAt) {
         String canonical = String.join("|", c.type().name(), String.valueOf(patient.getId()),
             String.valueOf(doctor.getId()), String.valueOf(hospital.getId()), String.valueOf(c.start()),

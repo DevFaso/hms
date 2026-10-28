@@ -233,8 +233,13 @@ public class ImmunizationServiceImpl implements ImmunizationService {
                 .orElseThrow(() -> new ResourceNotFoundException(IMMUNIZATION_NOT_FOUND_KEY, id));
         com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(existingImmunization.getHospital(), IMMUNIZATION_NOT_FOUND_KEY, id);
 
-        normalizeSource(requestDTO);
-        if (!isGivenHere(requestDTO)) {
+        // Review of #971: an edit that does not send a source keeps the stored
+        // one (and its vaccinator); only an explicit change to a transcribed
+        // source drops the vaccinator here.
+        if (requestDTO.getSourceOfRecord() == null || requestDTO.getSourceOfRecord().isBlank()) {
+            requestDTO.setSourceOfRecord(existingImmunization.getSourceOfRecord());
+        }
+        if (requestDTO.getSourceOfRecord() != null && !isGivenHere(requestDTO)) {
             // QA D1003: corrected to a historical dose, it keeps no vaccinator here.
             existingImmunization.setAdministeredBy(null);
             requestDTO.setAdministeredByStaffId(null);
@@ -282,8 +287,10 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         }
     }
 
+    /** GIVEN_HERE, or a legacy free-text "Given here" / "given_here". */
     static boolean isGivenHere(ImmunizationRequestDTO dto) {
-        return SOURCE_GIVEN_HERE.equalsIgnoreCase(dto.getSourceOfRecord());
+        String source = dto.getSourceOfRecord();
+        return source != null && SOURCE_GIVEN_HERE.equalsIgnoreCase(source.trim().replace(' ', '_'));
     }
 
     @Override

@@ -739,6 +739,9 @@
               [ngModel]="immunizationForm.sourceOfRecord"
               (ngModelChange)="onImmunizationSourceChange($event)"
             >
+              @if (!immunizationForm.sourceOfRecord) {
+                <option value="">{{ 'MED_HISTORY.SOURCE_UNKNOWN' | translate }}</option>
+              }
               @for (src of immunizationSources; track src) {
                 <option [value]="src">{{ 'MED_HISTORY.SOURCE.' + src | translate }}</option>
               }

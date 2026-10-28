@@ -69,6 +69,24 @@ describe('MedicalHistoryTabComponent — past PEV doses (QA D1003)', () => {
     expect(sent.administeredByStaffId).toBe('staff-me');
   });
 
+  it('editing an older dose with no recorded source never credits the editor', () => {
+    history.updateImmunization.and.returnValue(of({ id: 'im9', patientId: 'p1' }));
+    component.openEditImmunization({
+      id: 'im9',
+      patientId: 'p1',
+      vaccineDisplay: 'BCG',
+      administrationDate: '2025-01-10',
+      administeredByStaffId: 'staff-original',
+    } as never);
+    expect(component.immunizationForm.sourceOfRecord).toBe('');
+
+    component.submitImmunization();
+
+    const sent = history.updateImmunization.calls.mostRecent().args[1];
+    expect(sent.administeredByStaffId).toBe('staff-original');
+    expect(sent.sourceOfRecord).toBeUndefined();
+  });
+
   it('a source chosen by hand is kept when the date changes', () => {
     component.openCreateImmunization();
     component.onImmunizationSourceChange('PATIENT_REPORT');

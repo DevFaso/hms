@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import { NursingNotesPanelComponent } from './nursing-notes-panel.component';
 import { NursingNote, NursingNoteService } from '../../services/nursing-note.service';
 
@@ -59,6 +59,16 @@ describe('NursingNotesPanelComponent (QA D927)', () => {
     service.listRecent.and.returnValue(of([older, dar]));
     const fixture = render(null);
     expect(fixture.componentInstance.notes().map((n) => n.id)).toEqual(['n1', 'n0']);
+  });
+
+  it('a late answer for the previous patient never shows under the next one', () => {
+    const first = new Subject<NursingNote[]>();
+    service.listRecent.and.returnValues(first, of([dar]));
+    const fixture = render(null);
+    fixture.componentInstance.patientId = 'p2';
+    fixture.componentInstance.ngOnChanges();
+    first.next([older]);
+    expect(fixture.componentInstance.notes().map((n) => n.id)).toEqual(['n1']);
   });
 
   it('says so when the notes cannot be loaded', () => {

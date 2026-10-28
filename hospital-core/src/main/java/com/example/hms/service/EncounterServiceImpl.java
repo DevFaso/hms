@@ -2453,12 +2453,11 @@ public class EncounterServiceImpl implements EncounterService {
             return;
         }
         UUID encounterId = encounter.getId();
-        org.springframework.data.domain.Page<Prescription> prescriptions = prescriptionRepository
-            .findByEncounter_Id(encounterId, org.springframework.data.domain.Pageable.unpaged());
-        List<UUID> prescriptionIds = prescriptions == null ? List.of() : prescriptions.getContent().stream()
-            .filter(rx -> rx.getStatus() == null || !rx.getStatus().isWithdrawn())
-            .map(Prescription::getId)
-            .toList();
+        // Id projections only, withdrawn / cancelled orders left out: billing
+        // must never charge an order the clinician took back.
+        List<UUID> prescriptionIds = prescriptionRepository.findIdsByEncounterIdAndStatusNotIn(encounterId,
+            java.util.EnumSet.of(com.example.hms.enums.PrescriptionStatus.CANCELLED,
+                com.example.hms.enums.PrescriptionStatus.DISCONTINUED));
         eventPublisher.publishEvent(new com.example.hms.event.EncounterCheckedOutEvent(
             encounterId,
             encounter.getCode(),
@@ -2469,8 +2468,11 @@ public class EncounterServiceImpl implements EncounterService {
             encounter.getEncounterType() != null ? encounter.getEncounterType().name() : null,
             checkedOutAt,
             prescriptionIds,
-            labOrderRepository.findIdsByEncounterId(encounterId),
-            procedureOrderRepository.findIdsByEncounterId(encounterId)));
+            labOrderRepository.findIdsByEncounterIdAndStatusNotIn(encounterId,
+                java.util.EnumSet.of(com.example.hms.enums.LabOrderStatus.CANCELLED,
+                    com.example.hms.enums.LabOrderStatus.ENTERED_IN_ERROR)),
+            procedureOrderRepository.findIdsByEncounterIdAndStatusNotIn(encounterId,
+                java.util.EnumSet.of(com.example.hms.enums.ProcedureOrderStatus.CANCELLED))));
     }
 
     @Override

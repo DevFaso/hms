@@ -9651,6 +9651,7 @@
   },
   "MED_HISTORY": {
     "SOURCE_OF_RECORD": "Source",
+    "SOURCE_UNKNOWN": "Not recorded",
     "TAB": "History",
     "TAB_TITLE": "Structured medical history",
     "SOCIAL_TAB": "Social",

@@ -49,9 +49,11 @@ class MedicalCertificateServiceImplTest {
     private final PatientUploadedDocumentRepository documentRepository = mock(PatientUploadedDocumentRepository.class);
     private final FileUploadService fileUploadService = mock(FileUploadService.class);
     private final PatientLocaleResolver localeResolver = mock(PatientLocaleResolver.class);
+    private final com.example.hms.repository.EncounterNoteRepository noteRepository =
+        mock(com.example.hms.repository.EncounterNoteRepository.class);
     private final MedicalCertificateServiceImpl service = new MedicalCertificateServiceImpl(
         encounterRepository, staffRepository, documentRepository, new PatientDocumentMapper(),
-        fileUploadService, localeResolver, new LocaleConfig().messageSource());
+        fileUploadService, localeResolver, new LocaleConfig().messageSource(), noteRepository);
 
     private Hospital hospital;
     private Encounter encounter;
@@ -83,6 +85,7 @@ class MedicalCertificateServiceImplTest {
         user.setFirstName("Aminata");
         user.setLastName("Ouédraogo");
         doctor.setUser(user);
+        encounter.setStaff(doctor); // the visit's clinician of record
         CallerIdentityTestSupport.actAs(doctor, hospital);
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(staffRepository.findByUserIdAndHospitalId(user.getId(), hospital.getId())).thenReturn(Optional.of(doctor));
@@ -115,7 +118,7 @@ class MedicalCertificateServiceImplTest {
         verify(documentRepository).save(saved.capture());
         assertThat(saved.getValue().getDocumentType()).isEqualTo(PatientDocumentType.MEDICAL_CERTIFICATE);
         assertThat(saved.getValue().getUploadedByUser()).isEqualTo(doctor.getUser());
-        assertThat(saved.getValue().getNotes()).startsWith("Arrêt de travail : 3 jours");
+        assertThat(saved.getValue().getNotes()).startsWith("Arrêt de travail : 3 jours").contains("référence ");
         assertThat(result.getDocumentType()).isEqualTo(PatientDocumentType.MEDICAL_CERTIFICATE);
 
         String text = pdfText();
@@ -123,7 +126,7 @@ class MedicalCertificateServiceImplTest {
             .contains("Fatimata Zongo")
             .contains("arrêt de travail de 3 jours")
             .contains("Aminata Ouédraogo")
-            .contains("Signé électroniquement")
+            .contains("Établi électroniquement")
             .contains("Fait à Ouagadougou");
     }
 
@@ -160,6 +163,31 @@ class MedicalCertificateServiceImplTest {
         assertThatThrownBy(() -> service.issue(encounterId, MedicalCertificateRequestDTO.builder()
             .type(MedicalCertificateType.ATTENDANCE).build()))
             .isInstanceOf(ClientSafeAccessDeniedException.class);
+    }
+
+    @Test
+    void aDoctorWhoDidNotTreatTheVisitCannotCertifyHavingExaminedThePatient() {
+        Staff other = new Staff();
+        other.setId(UUID.randomUUID());
+        other.setHospital(hospital);
+        encounter.setStaff(other);
+        when(noteRepository.findByEncounter_IdOrderByCreatedAtAscIdAsc(encounterId)).thenReturn(java.util.List.of());
+        assertThatThrownBy(() -> service.issue(encounterId, MedicalCertificateRequestDTO.builder()
+            .type(MedicalCertificateType.SICK_LEAVE).days(30).build()))
+            .isInstanceOf(ClientSafeAccessDeniedException.class);
+        verify(documentRepository, never()).save(any());
+    }
+
+    @Test
+    void aDoctorWhoWroteTheVisitsNoteMaySignIt() {
+        Staff other = new Staff();
+        other.setId(UUID.randomUUID());
+        encounter.setStaff(other);
+        com.example.hms.model.encounter.EncounterNote note = new com.example.hms.model.encounter.EncounterNote();
+        note.setAuthor(doctor.getUser());
+        when(noteRepository.findByEncounter_IdOrderByCreatedAtAscIdAsc(encounterId)).thenReturn(java.util.List.of(note));
+        service.issue(encounterId, MedicalCertificateRequestDTO.builder().type(MedicalCertificateType.ATTENDANCE).build());
+        verify(documentRepository).save(any(PatientUploadedDocument.class));
     }
 
     @Test

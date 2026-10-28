@@ -41,7 +41,12 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { CheckoutDialogComponent } from '../checkout/checkout-dialog/checkout-dialog.component';
 import { actionRoles, SERVICE_RULE_ROLES } from '../core/action-permissions';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
-import { localDateString, serverLocalDate, toServerDateTime } from '../shared/date-utils';
+import {
+  localDateString,
+  nowLocalDatetime,
+  serverLocalDate,
+  toServerDateTime,
+} from '../shared/date-utils';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
 
 @Component({
@@ -511,7 +516,7 @@ export class EncountersComponent implements OnInit {
     // QA D990: a visit opened for today starts now. Midnight made the
     // patient appear to have waited since 00:00 ("1128m") on every board.
     if (day === localDateString(new Date())) {
-      return new Date().toISOString().slice(0, 19);
+      return toServerDateTime(nowLocalDatetime());
     }
     return toServerDateTime(`${day}T00:00`);
   }
@@ -682,16 +687,6 @@ export class EncountersComponent implements OnInit {
 
   /* ── Note sign/co-sign ceremony (P3 #20) ── */
 
-  /** No client-side role gate, matching the prescriptions pattern: whoever
-   *  passes the route guard sees the button; the backend arbitrates
-   *  (author-only for sign, non-author DOCTOR at the hospital for co-sign)
-   *  and its refusal is surfaced verbatim. */
-  /**
-   * QA D995: only the note's author signs it and only another clinician
-   * co-signs it (the server refuses the rest), so the buttons are offered
-   * accordingly instead of leading to a refusal. A note with no recorded
-   * author keeps both, and the server decides.
-   */
   /** QA D961: the certificate dialog. */
   readonly showCertificateDialog = signal(false);
 
@@ -716,6 +711,12 @@ export class EncountersComponent implements OnInit {
     return this.auth.hasAnyRole(NursingNoteService.READER_ROLES);
   }
 
+  /**
+   * QA D995: only the note's author signs it and only another clinician
+   * co-signs it (the server refuses the rest), so the buttons are offered
+   * accordingly instead of leading to a refusal. A note with no recorded
+   * author keeps both, and the server decides.
+   */
   isNoteAuthor(note: EncounterNoteResponse | null): boolean {
     const me = this.auth.getUserId();
     return !note?.authorUserId || (!!me && note.authorUserId === me);
@@ -726,6 +727,10 @@ export class EncountersComponent implements OnInit {
     return !note?.authorUserId || !me || note.authorUserId !== me;
   }
 
+  /** Matching the prescriptions pattern, the backend arbitrates; whoever
+   *  is offered the button (see isNoteAuthor) has it checked again there
+   *  (author-only for sign, non-author DOCTOR at the hospital for co-sign)
+   *  and its refusal is surfaced verbatim. */
   signNote(): void {
     const enc = this.selectedEncounter();
     const current = this.noteState();

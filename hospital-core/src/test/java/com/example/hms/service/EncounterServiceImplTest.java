@@ -1060,10 +1060,13 @@ class EncounterServiceImplTest {
         com.example.hms.model.Prescription cancelled = new com.example.hms.model.Prescription();
         cancelled.setId(UUID.randomUUID());
         cancelled.setStatus(com.example.hms.enums.PrescriptionStatus.CANCELLED);
-        lenient().when(prescriptionRepository.findByEncounter_Id(eq(encounterId), any()))
-            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(signed, cancelled)));
+        when(prescriptionRepository.findIdsByEncounterIdAndStatusNotIn(eq(encounterId),
+                org.mockito.ArgumentMatchers.argThat(excluded -> excluded.contains(com.example.hms.enums.PrescriptionStatus.CANCELLED))))
+            .thenReturn(List.of(signed.getId()));
         UUID labOrderId = UUID.randomUUID();
-        when(labOrderRepository.findIdsByEncounterId(encounterId)).thenReturn(List.of(labOrderId));
+        when(labOrderRepository.findIdsByEncounterIdAndStatusNotIn(eq(encounterId),
+                org.mockito.ArgumentMatchers.argThat(excluded -> excluded.contains(com.example.hms.enums.LabOrderStatus.CANCELLED))))
+            .thenReturn(List.of(labOrderId));
 
         service.checkOut(encounterId, CheckOutRequestDTO.builder().build(), "doctor1", true, null);
 

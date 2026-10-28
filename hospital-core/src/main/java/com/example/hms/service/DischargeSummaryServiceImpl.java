@@ -73,6 +73,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
     private final PrescriptionRepository prescriptionRepository;
     private final RoleValidator roleValidator;
     private final RecordAccessPolicy recordAccessPolicy;
+    private final com.example.hms.repository.EncounterNoteRepository encounterNoteRepository;
     private final CrossHospitalReachRecorder reachRecorder;
 
     /**
@@ -424,8 +425,17 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
      * only the author (or a verified super-admin in global view) may. Same
      * rule as finalize (QA D503), applied to the other two writes.
      */
-    private static void requireAuthor(DischargeSummary summary) {
-        com.example.hms.security.CallerIdentity.requireCallerUnlessSuperAdmin(summary.getDischargingProvider());
+    private void requireAuthor(DischargeSummary summary) {
+        // Review of #971: the discharging provider is the visit's clinician of
+        // record, who may be the nurse who opened it (or nobody); the doctor
+        // who treated the patient (a note author on the visit) keeps the draft.
+        if (com.example.hms.security.CallerIdentity.isCaller(summary.getDischargingProvider())
+                || com.example.hms.security.CallerIdentity.isGlobalSuperAdmin()
+                || TreatingClinician.isCaller(summary.getEncounter(), encounterNoteRepository)) {
+            return;
+        }
+        throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+            com.example.hms.utility.MessageUtil.resolveOrRaw("identity.notCaller"));
     }
 
     private void enforceHospitalScope(DischargeSummary summary, UUID summaryId) {

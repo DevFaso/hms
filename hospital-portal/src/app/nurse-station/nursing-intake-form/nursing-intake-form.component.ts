@@ -100,6 +100,22 @@ export class NursingIntakeFormComponent {
   /* ── UI state ───────────────────────────── */
   saving = signal(false);
 
+  /** Review of #971: Escape closes the intake only while nothing has been typed. */
+  onEscape(): void {
+    if (!this.hasEntries()) this.dismissed.emit();
+  }
+
+  hasEntries(): boolean {
+    return (
+      this.allergies().length > 0 ||
+      this.medications().length > 0 ||
+      !!this.nursingAssessmentNotes().trim() ||
+      !!this.painAssessment().trim() ||
+      !!this.fallRiskDetail().trim() ||
+      this.chiefComplaint().trim() !== (this.encounter?.chiefComplaint ?? '').trim()
+    );
+  }
+
   get canSubmit(): boolean {
     return !!this.encounter?.id && !this.saving();
   }
