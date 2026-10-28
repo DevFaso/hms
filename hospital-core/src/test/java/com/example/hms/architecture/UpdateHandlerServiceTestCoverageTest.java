@@ -48,7 +48,6 @@ class UpdateHandlerServiceTestCoverageTest {
 
     private static final Path MAIN = Paths.get("src/main/java/com/example/hms/controller");
     private static final Path TESTS = Paths.get("src/test/java");
-    private static final String SELF = UpdateHandlerServiceTestCoverageTest.class.getSimpleName() + ".java";
 
     /** A PUT or PATCH mapping annotation, imported or fully qualified. Comments are stripped first. */
     static final Pattern MAPPING = Pattern.compile("@(?:[\\w.]+\\.)?(?:PutMapping|PatchMapping)\\b");
@@ -148,15 +147,22 @@ class UpdateHandlerServiceTestCoverageTest {
     /** {@code name(} in test code: every method name some test under src/test/java calls. */
     private static final Pattern CALLED = Pattern.compile("\\b(\\w+)\\s*\\(");
 
-    /** The names every test (other than this one) calls, read once, so each handler is a set lookup. */
+    /** The source-scanning guards: their fixtures spell method names that no test calls. */
+    private static final Pattern GUARD_TEST = Pattern.compile(".*(?:GuardTest|CoverageTest|RatchetTest)\\.java");
+
+    /**
+     * The names every test calls, read once, so each handler is a set lookup. The
+     * guards' own fixtures and every comment are left out: a sentence in a Javadoc
+     * or a `save(` inside another guard's fixture string is not a test calling it.
+     */
     private static Set<String> namesCalledByTests() throws IOException {
         Set<String> names = new TreeSet<>();
         try (Stream<Path> files = Files.walk(TESTS)) {
             for (Path p : files.filter(f -> f.toString().endsWith(".java")).toList()) {
-                if (p.getFileName().toString().equals(SELF)) {
+                if (GUARD_TEST.matcher(p.getFileName().toString()).matches()) {
                     continue;
                 }
-                Matcher m = CALLED.matcher(Files.readString(p, StandardCharsets.UTF_8));
+                Matcher m = CALLED.matcher(SourceScan.stripComments(Files.readString(p, StandardCharsets.UTF_8)));
                 while (m.find()) {
                     names.add(m.group(1));
                 }

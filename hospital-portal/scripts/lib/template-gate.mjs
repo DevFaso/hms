@@ -17,12 +17,19 @@ import { templatesIn } from './inline-templates.mjs';
 export const PORTAL_DIR = resolve(import.meta.dirname, '..', '..');
 export const SRC_DIR = resolve(PORTAL_DIR, 'src', 'app');
 
-export function componentSourceFor(file, text) {
+/**
+ * @param {string} file the template's path (`.html`, or the `.ts` of an inline template)
+ * @param {string} text the template text
+ * @param {Map<string, string>} [sources] `.ts` texts by absolute path, when the
+ *   caller already read them (scripts/check-guards.mjs); read from disk otherwise
+ */
+export function componentSourceFor(file, text, sources = new Map()) {
+  const read = (p) => sources.get(p) ?? (existsSync(p) ? readFileSync(p, 'utf8') : undefined);
   // An inline template's `text` is the markup alone; the Escape handler of such
   // a component lives in the class around it, so hand back the whole `.ts`.
-  if (!file.endsWith('.html')) return readFileSync(file, 'utf8');
-  const ts = file.replace(/\.html$/, '.ts');
-  return existsSync(ts) ? `${text}\n${readFileSync(ts, 'utf8')}` : text;
+  if (!file.endsWith('.html')) return read(file) ?? text;
+  const ts = read(file.replace(/\.html$/, '.ts'));
+  return ts === undefined ? text : `${text}\n${ts}`;
 }
 
 /**
@@ -30,15 +37,18 @@ export function componentSourceFor(file, text) {
  * scripts/check-guards.mjs builds this once and hands it to all six gates; a
  * gate run on its own builds it for itself.
  *
+ * @param {{ file: string, text: string }[]} [components] the `.ts` sources already
+ *   read (lib/component-sources.mjs), so a sibling `.ts` is not read again
  * @returns {{ file: string, rel: string, text: string, lineOffset: number, componentSource: string }[]}
  */
-export function loadTemplates() {
+export function loadTemplates(components = []) {
+  const sources = new Map(components.map((c) => [resolve(PORTAL_DIR, c.file), c.text]));
   return templatesIn(SRC_DIR).map(({ file, text, lineOffset }) => ({
     file,
     rel: relative(PORTAL_DIR, file).replaceAll('\\', '/'),
     text,
     lineOffset,
-    componentSource: componentSourceFor(file, text),
+    componentSource: componentSourceFor(file, text, sources),
   }));
 }
 

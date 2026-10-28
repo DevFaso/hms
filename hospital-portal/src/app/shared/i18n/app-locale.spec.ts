@@ -43,9 +43,12 @@ describe('formatCfa (QA D621)', () => {
   // another branch) must flip these two expectations to '4.000 F CFA' /
   // '1.500 F CFA' in the same PR, the way a guard's allowlist entry is deleted
   // with its fix. docs/qa/regression-guards.md lists it.
+  // Like any pin, an ICU change that groups 4 digits in Spanish on its own
+  // makes this stale: flip it then too. The 5-digit case is only checked for
+  // having a separator, whatever glyph CLDR picks.
   it('D1008 (pinned until fixed): a 4-digit amount in Spanish is still printed without grouping', () => {
     expect(plain(formatCfa(4000, 'XOF', 'es-ES'))).toBe('4000 F CFA');
     expect(plain(formatCfa(1500, 'XOF', 'es-ES'))).toBe('1500 F CFA');
-    expect(plain(formatCfa(15000, 'XOF', 'es-ES'))).toBe('15.000 F CFA');
+    expect(plain(formatCfa(15000, 'XOF', 'es-ES'))).toMatch(/^15[.\s]000 F CFA$/);
   });
 });

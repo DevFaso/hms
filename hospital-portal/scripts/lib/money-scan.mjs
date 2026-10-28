@@ -24,7 +24,7 @@ import { lineOf } from './html-tags.mjs';
 
 const MONEY_TAIL =
   '(?:amount|price|balance|copay|copayment|revenue|subtotal|fee|fees|cost|paid|due|charge|charges|payment|discount|refund|' +
-  'totalAmount|totalDue|totalPaid|unitPrice|lineTotal|grandTotal|amountDue|balanceDue)';
+  'total|tax|vat|net|gross|totalAmount|totalDue|totalPaid|unitPrice|lineTotal|grandTotal|amountDue|balanceDue)';
 /**
  * The last identifier of the expression must BE a money word (`amount`,
  * `balanceDue`) or END in a capitalised one (`totalAmount`, `copayDue`): a
@@ -33,7 +33,7 @@ const MONEY_TAIL =
  * in a count, a rate, a code or a date.
  */
 const MONEY_WORD =
-  /^(?:[a-z][A-Za-z0-9]*)?(?:Amount|Price|Balance|Copay|Copayment|Revenue|Subtotal|Fee|Fees|Cost|Paid|Due|Charge|Charges|Payment|Discount|Refund|Total)$|^(?:amount|price|balance|copay|copayment|revenue|subtotal|fee|fees|cost|paid|due|charge|charges|payment|discount|refund)$/;
+  /^(?:[a-z][A-Za-z0-9]*)?(?:Amount|Price|Balance|Copay|Copayment|Revenue|Subtotal|Fee|Fees|Cost|Paid|Due|Charge|Charges|Payment|Discount|Refund|Total|Tax|Vat|Net|Gross)$|^(?:amount|price|balance|copay|copayment|revenue|subtotal|fee|fees|cost|paid|due|charge|charges|payment|discount|refund|total|tax|vat|net|gross)$/;
 // Case-sensitive camelCase suffixes: `discount` is money, `lineCount` is not.
 const NOT_MONEY =
   /[a-z0-9](?:Rate|Percent|Pct|Ratio|Count|Days|Hours|Minutes|Index|Number|Share|Code|Score|Invoices|Visits|Items|Length|At|On|Date|By)$/;
@@ -41,8 +41,15 @@ const NOT_MONEY =
 const EXPR = String.raw`([\w$.?!()\[\]'"]*?\w*${MONEY_TAIL}\w*(?:\(\))?)`;
 // `[?!]?` — `inv.amount?.toFixed(2)` and `inv.amount!.toFixed(2)` are the same
 // hand formatting, and `(line.amount * rate).toFixed(2)` the same again.
-const PIPE_RE = new RegExp(String.raw`${EXPR}\s*[?!]?\s*\)?\s*\|\s*(number|currency)\b`, 'gi');
-const FIXED_RE = new RegExp(String.raw`${EXPR}\s*[?!]?\s*(?:[^()\n]*\))?\s*\.toFixed\(`, 'gi');
+// `(?![\w.])` keeps the whole chain: `(total.amount).toFixed` names `total.amount`, not `total`.
+const PIPE_RE = new RegExp(
+  String.raw`${EXPR}(?![\w.])\s*[?!]?\s*\)?\s*\|\s*(number|currency)\b`,
+  'gi',
+);
+const FIXED_RE = new RegExp(
+  String.raw`${EXPR}(?!\w)(?!\.(?!toFixed\b))\s*[?!]?\s*(?:[^()\n]*\))?\s*\.toFixed\(`,
+  'gi',
+);
 
 const HELPER_DECL =
   /^\s*(?:private\s+|protected\s+|public\s+|readonly\s+)*(format(?:Currency|Money|Amount|Price|Fcfa|Cfa))\s*\([^)]*\)\s*(?::\s*string\s*)?\{/gm;

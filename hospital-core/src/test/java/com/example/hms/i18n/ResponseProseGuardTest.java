@@ -54,6 +54,20 @@ class ResponseProseGuardTest {
     static final Pattern MAP_MESSAGE = Pattern.compile(
         "Map\\.of\\((?:[^()]*?,\\s*)?\"(?:message|error|detail|reason)\"\\s*,\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
 
+    /**
+     * The same shapes built from a constant ({@code new MessageResponse(REFRESH_INVALID_MESSAGE)}),
+     * resolved against the {@code static final String} declared in the same file — the
+     * way {@link ExceptionProseRatchetTest} does, so hoisting a sentence into a constant
+     * is not a way around the guard.
+     */
+    static final Pattern MESSAGE_DTO_CONSTANT = Pattern.compile(
+        "new\\s+(?:MessageResponse|EmailVerificationResponseDTO)\\s*\\(\\s*([A-Z][A-Z0-9_]*)\\s*[,)]");
+    static final Pattern BODY_CONSTANT = Pattern.compile("\\.body\\(\\s*([A-Z][A-Z0-9_]*)\\s*\\)");
+    static final Pattern MAP_MESSAGE_CONSTANT = Pattern.compile(
+        "Map\\.of\\((?:[^()]*?,\\s*)?\"(?:message|error|detail|reason)\"\\s*,\\s*([A-Z][A-Z0-9_]*)\\s*[,)]");
+    static final Pattern STRING_CONSTANT = Pattern.compile(
+        "static\\s+final\\s+String\\s+([A-Z][A-Z0-9_]*)\\s*=\\s*\"((?:[^\"\\\\]|\\\\.)*)\"\\s*;");
+
     static boolean isProse(String literal) {
         if (literal.indexOf(' ') < 0) {
             return false;
@@ -74,6 +88,12 @@ class ResponseProseGuardTest {
     private static final Map<String, String> ALLOWED = new TreeMap<>(Map.ofEntries(
         Map.entry("controller/AuthController.java::Public self-registration is no longer available.", PRE_EXISTING),
         Map.entry("controller/AuthController.java::Email verified successfully.", D921),
+        Map.entry("controller/AuthController.java::Email verification failed.", D921 + " (EMAIL_VERIFICATION_FAILED constant)"),
+        Map.entry("controller/AuthController.java::Refresh token is invalid or has expired. Please log in again.",
+            PRE_EXISTING + " (REFRESH_INVALID_MESSAGE constant, 4 sites)"),
+        Map.entry("controller/AuthController.java::This session was just refreshed by another tab or request. Retry with the latest token.",
+            PRE_EXISTING + " (REFRESH_SUPERSEDED_MESSAGE constant)"),
+        Map.entry("controller/FileUploadController.java::User not found", PRE_EXISTING + " (USER_NOT_FOUND_MESSAGE constant, 5 sites)"),
         Map.entry("controller/AuthController.java::If the email is registered, a new verification link has been sent.", PRE_EXISTING),
         Map.entry("controller/AuthController.java::Account is already verified. You can log in.", PRE_EXISTING),
         Map.entry("controller/AuthController.java::If the number is registered, a new activation code has been sent.", PRE_EXISTING),
@@ -111,6 +131,20 @@ class ResponseProseGuardTest {
                 String literal = m.group(m.groupCount());
                 if (isProse(literal)) {
                     out.add(file + "::" + literal);
+                }
+            }
+        }
+        Map<String, String> constants = new TreeMap<>();
+        Matcher c = STRING_CONSTANT.matcher(source);
+        while (c.find()) {
+            constants.put(c.group(1), c.group(2));
+        }
+        for (Pattern pattern : List.of(MESSAGE_DTO_CONSTANT, BODY_CONSTANT, MAP_MESSAGE_CONSTANT)) {
+            Matcher m = pattern.matcher(source);
+            while (m.find()) {
+                String value = constants.get(m.group(1));
+                if (value != null && isProse(value)) {
+                    out.add(file + "::" + value);
                 }
             }
         }
@@ -161,11 +195,16 @@ class ResponseProseGuardTest {
             return ResponseEntity.ok(new MessageResponse(MessageUtil.resolve(locale, "auth.logout.ok")));
             return ResponseEntity.ok(new MessageResponse("auth.logout.ok"));
             return ResponseEntity.ok().body("OK");
+            private static final String REFRESH_INVALID_MESSAGE = "Refresh token is invalid or has expired.";
+            private static final String KEY = "auth.refresh.invalid";
+            return ResponseEntity.status(401).body(new MessageResponse(REFRESH_INVALID_MESSAGE));
+            return ResponseEntity.status(401).body(new MessageResponse(KEY));
             """;
         assertThat(sites("x", source)).containsExactly(
             "x::Logged out successfully.",
             "x::Mail service unavailable",
             "x::Pre-check-in is available 1–7 days before your appointment.",
+            "x::Refresh token is invalid or has expired.",
             "x::Verification code sent");
     }
 }

@@ -25,7 +25,10 @@ import { gate as literals } from './check-ts-literals.mjs';
 import { gate as fragments } from './check-uuid-fragments.mjs';
 
 const argv = process.argv.slice(2);
-const ctx = { templates: loadTemplates(), components: componentSources() };
+// The `.ts` sources are read once and handed to the template loader, so a
+// sibling `.ts` (an inline template's class, an .html's component) is never read twice.
+const components = componentSources();
+const ctx = { components, templates: loadTemplates(components) };
 
 let failed = 0;
 for (const gate of [dialogs, names, picker, money, literals, fragments]) {

@@ -148,6 +148,24 @@ public final class SourceScan {
         return start;
     }
 
+    /**
+     * The first {@code ch} at or after {@code from} that is outside any literal or
+     * comment, or {@code -1}: a {@code }} inside {@code "rescheduled {}"} is text.
+     */
+    public static int indexOfOutsideLiterals(String source, char ch, int from) {
+        for (int i = Math.max(from, 0); i < source.length(); i++) {
+            int skipped = endOfLiteralOrComment(source, i);
+            if (skipped >= 0) {
+                i = skipped;
+                continue;
+            }
+            if (source.charAt(i) == ch) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
     /** 1-based line of {@code index} in {@code source}. */
     public static int lineOf(String source, int index) {
         return 1 + (int) source.chars().limit(index).filter(c -> c == '\n').count();

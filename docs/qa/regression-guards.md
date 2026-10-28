@@ -26,7 +26,7 @@ reverted (PR body of the guard PR records the runs).
 | `architecture/SaveThenRefreshGuardTest` | `repository.save(x)` followed by `entityManager.refresh(x)` before the flush — the refresh re-reads the row and **discards the pending update** while the endpoint returns 200. | D923 | 1 file (`AppointmentServiceImpl`, the D923 site) |
 | `architecture/PostCommitLazyAssociationGuardTest` | Walking a lazy association (`.getRole().getCode()`, `.getHospital().getName()`) where there is no persistence context: a controller method, a `TransactionCallbacks.afterCommit` lambda, a `@TransactionalEventListener`, an interceptor's `afterCompletion`. | D921, #564 | post-commit code: **0** (must stay 0); controllers: 16 chains in 7 files, the two D921 chains tagged |
 | `architecture/UpdateHandlerServiceTestCoverageTest` | A `@PutMapping`/`@PatchMapping` handler whose service method no test names at all — an update nobody has watched round-trip — or that calls no `*Service` at all (`-> <none>`: it writes through a repository, so only a controller IT can cover it). (Weak on purpose: D923 *had* a mock test. The real guard for an endpoint is a round-trip IT; this makes sure none is completely dark.) The scan asserts it found one handler per mapping annotation, so a new annotation shape cannot hide a handler. | D923 class | see the `ALLOWED` map in the test |
-| `i18n/ResponseProseGuardTest` | An English sentence written straight into a response body: `new MessageResponse("…")`, `ResponseEntity….body("…")`, `Map.of("message", "…")`. The global handler never touches these, so they are English in every language. Per **site** (a file cannot swap one sentence for another), the complement of the per-file exception ratchet. | D940, D977, D934, D1000 class (25 reports) | 28 literals in 7 controllers |
+| `i18n/ResponseProseGuardTest` | An English sentence written straight into a response body: `new MessageResponse("…")`, `ResponseEntity….body("…")`, `Map.of("message", "…")` — as a literal or through a `static final String` constant declared in the file. The global handler never touches these, so they are English in every language. Per **site** (a file cannot swap one sentence for another), the complement of the per-file exception ratchet. | D940, D977, D934, D1000 class (25 reports) | 32 literals in 7 controllers |
 | `i18n/StoredTextProseGuardTest` | English literals composed into text the backend **stores** or returns as data: `.notes("Pain scale: " + …)`, `.append("[Medication Reconciliation] ")`, `--- Nursing Intake ---`, `.reason("Medication out of stock…")`, a `: "Walk-in"` fallback, the `"Lab result"` title fallback. Persisted, so read in English for good. Audit descriptions and log lines are exempt (house decision: the audit log is English). | D952, D989, D944, D1000, D958 | 27 literals in 12 services |
 
 ### Already in place before round 16 (extend these, do not duplicate)
@@ -68,7 +68,7 @@ text-block literals and comments, statement start, line numbers).
 | `guard:patient-picker` | A hand-written patient picker (search input + own suggestion list with a `selectPatient(...)` handler) instead of `<app-patient-picker>`. | `hand-written-picker` | D947 (D943/D942 as seen from each copy) | 11 |
 | `guard:money-format` | Money printed without `formatCfa` / `\| cfa`. | `pipe` (`\| number` / `\| currency` on an amount-shaped field), `helper` (a component `formatCurrency/Money/Amount/Price` not delegating to `formatCfa`, or Intl currency formatting outside one), `fixed` (`.toFixed(` on an amount) | D948, D1008, D621 | 6 |
 | `guard:ts-literals` | An English sentence handed to a toast or a status signal from component code — the layer the locale gates cannot see. | `toast`, `signal` | D940 class | 4 (all in `reset-password.ts`, pre-existing, not yet a QA defect) |
-| `guard:uuid-fragments` | A UUID fragment on screen (`id \| slice: 0 : 8`, `.substring(0, 8)`). | `slice-pipe`, `slice-call` | D992 (D1009 for file names) | 6 |
+| `guard:uuid-fragments` | A UUID fragment on screen (`id \| slice: 0 : 8`, `.substring(0, 8)`, through `?.`/`!.`; the last camelCase word decides whether a name is an id — `hospitalId` is, `isValid` is not). | `slice-pipe`, `slice-call` | D992 (D1009 for file names) | 7 (one of them, `scheduling.html:418`, found by the guard itself) |
 
 Each gate accepts `--report-only` (print, never fail) and `--write-baseline`
 (rewrite the pins from the tree — **read the diff**, it is the list of what you
@@ -122,9 +122,10 @@ are excusing; `why` of existing pins is kept, new pins get `TODO`).
 ## How a fix PR uses these guards
 
 The user's standing order for every D-numbered defect is the project skill
-`.claude/skills/defect-fix-mandate/SKILL.md` — fix the **class**, not the
-instance; prove it with a codebase-wide guard; prove it on the running app;
-a PR without the class table is not a fix. These guards are the "guard the
+`.claude/skills/defect-fix-mandate/SKILL.md` (lands with PR #974; until it
+merges, the rule is summarised here and in every guard's failure message) —
+fix the **class**, not the instance; prove it with a codebase-wide guard;
+prove it on the running app; a PR without the class table is not a fix. These guards are the "guard the
 class" step for the classes round 16 named. The contract between a fix PR and
 a guard:
 

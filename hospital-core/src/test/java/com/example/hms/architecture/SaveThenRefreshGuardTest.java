@@ -46,8 +46,9 @@ class SaveThenRefreshGuardTest {
     /** {@code [T saved =] repo.save(}: the `(` of the call. */
     static final Pattern SAVE = Pattern.compile("(?:(\\w+)\\s*=\\s*)?\\w+\\.save\\(");
 
-    /** The statement that follows: {@code entityManager.refresh(x)}. */
-    static final Pattern REFRESH = Pattern.compile("^\\s*(?:entityManager|em)\\.refresh\\(\\s*(\\w+)\\s*\\)");
+    /** A refresh of {@code x} within the statements that follow the save, before any flush. */
+    static final Pattern REFRESH = Pattern.compile("(?:entityManager|em)\\.refresh\\(\\s*(\\w+)\\s*\\)");
+    static final Pattern FLUSH = Pattern.compile("\\.(?:flush|saveAndFlush)\\(");
 
     /** Sites the defect was reported on. Shrink only: the fix deletes the line here too. */
     private static final Map<String, String> ALLOWED = Map.of(
@@ -62,12 +63,16 @@ class SaveThenRefreshGuardTest {
             int open = m.end() - 1;
             int close = SourceScan.closingParen(source, open);
             String argument = source.substring(open + 1, close).strip();
-            int semicolon = source.indexOf(';', close);
+            int semicolon = SourceScan.indexOfOutsideLiterals(source, ';', close);
             if (semicolon < 0) {
                 continue;
             }
-            Matcher refresh = REFRESH.matcher(source).region(semicolon + 1, source.length());
-            if (!refresh.lookingAt()) {
+            // The rest of the enclosing block: a log line or a mapper call between the
+            // save and the refresh changes nothing about what the refresh discards.
+            int blockEnd = SourceScan.indexOfOutsideLiterals(source, '}', semicolon);
+            String rest = source.substring(semicolon + 1, blockEnd < 0 ? source.length() : blockEnd);
+            Matcher refresh = REFRESH.matcher(rest);
+            if (!refresh.find() || FLUSH.matcher(rest.substring(0, refresh.start())).find()) {
                 continue;
             }
             String refreshed = refresh.group(1);
@@ -147,11 +152,29 @@ class SaveThenRefreshGuardTest {
             // entityManager.refresh(saved);
             return saved;
             """;
+        String statementBetween = """
+            Appointment saved = appointmentRepository.save(existing);
+            log.debug("rescheduled {}", id);
+            webhooks.publish(saved.getId());
+            entityManager.refresh(saved);
+            """;
+        String flushBetween = """
+            Appointment saved = appointmentRepository.save(existing);
+            entityManager.flush();
+            entityManager.refresh(saved);
+            """;
+        String nextBlock = """
+            void a() { Appointment saved = appointmentRepository.save(existing); }
+            void b(Appointment saved) { entityManager.refresh(saved); }
+            """;
         assertThat(offenders("x", old)).hasSize(1);
         assertThat(offenders("x", plain)).hasSize(1);
         assertThat(offenders("x", expression)).hasSize(1);
+        assertThat(offenders("x", statementBetween)).hasSize(1);
         assertThat(offenders("x", flushed)).isEmpty();
         assertThat(offenders("x", unrelated)).isEmpty();
         assertThat(offenders("x", commented)).isEmpty();
+        assertThat(offenders("x", flushBetween)).isEmpty();
+        assertThat(offenders("x", nextBlock)).isEmpty();
     }
 }
