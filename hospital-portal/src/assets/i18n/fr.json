@@ -4916,7 +4916,8 @@
     "WRISTBAND_FAILED": "Échec de la génération du bracelet",
     "ZIP_CODE": "Code postal",
     "AGE_YEARS": "{{count}} ans",
-    "AGE_YEAR": "{{count}} an"
+    "AGE_YEAR": "{{count}} an",
+    "CHART_UNAVAILABLE_TITLE": "Ce dossier ne peut pas être ouvert ici"
   },
   "PLATFORM": {
     "ACCESS_LOGS": "Journaux d'accès",

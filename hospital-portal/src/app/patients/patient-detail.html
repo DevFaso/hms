@@ -11,6 +11,14 @@
     </div>
   }
 
+  @if (!loading() && unavailable()) {
+    <section class="restricted-state" data-testid="chart-unavailable" role="alert">
+      <span class="material-symbols-outlined">person_off</span>
+      <h2>{{ 'PATIENTS.CHART_UNAVAILABLE_TITLE' | translate }}</h2>
+      <p>{{ 'REFERRALS.CHART_UNAVAILABLE' | translate }}</p>
+    </section>
+  }
+
   @if (!loading() && restricted()) {
     <section class="restricted-state" data-testid="restricted-chart" role="alert">
       <span class="material-symbols-outlined">lock</span>

@@ -4916,7 +4916,8 @@
     "WRISTBAND_FAILED": "Error al generar la pulsera",
     "ZIP_CODE": "Código postal",
     "AGE_YEARS": "{{count}} años",
-    "AGE_YEAR": "{{count}} año"
+    "AGE_YEAR": "{{count}} año",
+    "CHART_UNAVAILABLE_TITLE": "Este expediente no se puede abrir aquí"
   },
   "PLATFORM": {
     "ACCESS_LOGS": "Registros de acceso",

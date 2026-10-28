@@ -4916,7 +4916,8 @@
     "WRISTBAND_FAILED": "Failed to generate the wristband",
     "ZIP_CODE": "Zip Code",
     "AGE_YEARS": "{{count}} years",
-    "AGE_YEAR": "{{count}} year"
+    "AGE_YEAR": "{{count}} year",
+    "CHART_UNAVAILABLE_TITLE": "This chart cannot be opened here"
   },
   "PLATFORM": {
     "ACCESS_LOGS": "Access Logs",

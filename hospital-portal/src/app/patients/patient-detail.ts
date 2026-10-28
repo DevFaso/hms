@@ -180,10 +180,18 @@ export class PatientDetailComponent implements OnInit {
 
   /** E8 #54 — the chart is restricted and the caller holds no live session: the page shows the declaration prompt. */
   readonly restricted = signal(false);
+  /**
+   * QA D998: a chart that does not open here (not registered at this
+   * hospital, or no longer there) is explained on this page. A toast followed
+   * by a redirect to the list was lost with the navigation, so the user saw
+   * the list with no word on why.
+   */
+  readonly unavailable = signal(false);
 
   loadPatient(id: string): void {
     this.loading.set(true);
     this.restricted.set(false);
+    this.unavailable.set(false);
     const hospitalId = this.scopedHospitalId() ?? undefined;
     this.patientService.getById(id, hospitalId).subscribe({
       next: (p) => {
@@ -197,8 +205,7 @@ export class PatientDetailComponent implements OnInit {
           this.restricted.set(true);
           return;
         }
-        this.toast.error(this.translate.instant('PATIENTS.NOT_FOUND'));
-        this.router.navigate(['/patients']);
+        this.unavailable.set(true);
       },
     });
   }
