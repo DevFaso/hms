@@ -306,6 +306,18 @@ public class EncounterServiceImpl implements EncounterService {
     private final PatientTrackerEventPublisher trackerEventPublisher;
     private final com.example.hms.service.vitals.News2EscalationService news2EscalationService;
     private final com.example.hms.repository.scheduling.PatientRecallRepository patientRecallRepository;
+
+    /**
+     * QA D985 (branch C1): check-out closes the recall its visit answered.
+     * Setter-injected so the unit tests that build this service by
+     * constructor keep compiling; null there, and then nothing is closed.
+     */
+    private com.example.hms.service.scheduling.PatientRecallService recallService;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setRecallService(com.example.hms.service.scheduling.PatientRecallService recallService) {
+        this.recallService = recallService;
+    }
     /** QA D795: the stay's own department, which a transfer moves (BedAssignmentService, QA D237). */
     private final com.example.hms.repository.AdmissionRepository admissionRepository;
 
@@ -2369,14 +2381,10 @@ public class EncounterServiceImpl implements EncounterService {
                 && appointment.getStatus() != com.example.hms.enums.AppointmentStatus.CANCELLED) {
             appointment.setStatus(com.example.hms.enums.AppointmentStatus.COMPLETED);
             appointmentRepository.save(appointment);
-            // QA D985 (branch C1): the recall this visit answered is fulfilled.
-            for (com.example.hms.model.scheduling.PatientRecall answered : patientRecallRepository
-                    .findByLinkedAppointment_IdAndStatus(appointment.getId(),
-                        com.example.hms.enums.RecallStatus.SCHEDULED)) {
-                answered.setStatus(com.example.hms.enums.RecallStatus.CLOSED);
-                answered.setClosedAt(now);
-                answered.setClosedByUserId(roleValidator.getCurrentUserId());
-                patientRecallRepository.save(answered);
+            // QA D985 (branch C1): the recall this visit answered is fulfilled,
+            // by the one rule the status action uses.
+            if (recallService != null) {
+                recallService.completeRecallsOf(appointment.getId());
             }
         }
 

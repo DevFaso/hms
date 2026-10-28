@@ -63,4 +63,11 @@ class PatientMatchKeysTest {
         assertThat(PatientMatchKeys.looksLikePhone("CHW70001002")).isFalse();
         assertThat(PatientMatchKeys.phoneContainsPattern("unknown")).isEqualTo("%unknown%");
     }
+
+    @Test
+    @DisplayName("review: a letter outside the fold stays as typed on both sides")
+    void lettersOutsideTheFoldStay() {
+        assertThat(PatientMatchKeys.foldName("Şahin")).isEqualTo("şahin");
+        assertThat(PatientMatchKeys.nameContainsPattern("ŞAHIN")).isEqualTo("%şahin%");
+    }
 }

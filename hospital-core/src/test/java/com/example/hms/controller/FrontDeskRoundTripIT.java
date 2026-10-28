@@ -406,6 +406,62 @@ class FrontDeskRoundTripIT extends BaseIT {
             .andExpect(jsonPath("$[*].id", hasItem(aicha.getId().toString())));
     }
 
+    @Test
+    @DisplayName("D926 review: a child may carry the mother's number; both are stored in E.164")
+    void aSharedFamilyNumberIsAllowed() throws Exception {
+        Patient child = patient("Ibrahim", "Ouattara", LocalDate.of(2020, 3, 1), "76112233");
+        mockMvc.perform(patch(API + "/patients/{id}", child.getId()).contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"phoneNumberPrimary\":\"70 16 10 99\"}")
+                .with(asReceptionist()))
+            .andExpect(status().isOk());
+        mockMvc.perform(patch(API + "/patients/{id}", aicha.getId()).contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"phoneNumberPrimary\":\"+22670161099\"}")
+                .with(asReceptionist()))
+            .andExpect(status().isOk());
+
+        assertThat(patientRepository.findById(child.getId()).orElseThrow().getPhoneNumberPrimary())
+            .isEqualTo("+22670161099");
+        assertThat(patientRepository.findById(aicha.getId()).orElseThrow().getPhoneNumberPrimary())
+            .isEqualTo("+22670161099");
+        // Both are found by the number, however it is typed.
+        mockMvc.perform(get(API + "/patients/registration-match").contextPath(API)
+                .param("phone", "70161099").with(asReceptionist()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$", hasSize(2)));
+    }
+
+    @Test
+    @DisplayName("D937 review: a no-show cannot take its freed slot back once someone else holds it")
+    void aFreedSlotIsNotTakenBack() throws Exception {
+        LocalDate day = LocalDate.now().minusDays(1);
+        Appointment missed = appointment(aicha, day, LocalTime.of(9, 0), AppointmentStatus.NO_SHOW);
+        Patient other = patient("Karim", "Sanogo", LocalDate.of(1985, 1, 3), "76112244");
+        appointment(other, day, LocalTime.of(9, 0), AppointmentStatus.SCHEDULED);
+
+        mockMvc.perform(put(API + "/appointments/{id}/status", missed.getId()).contextPath(API)
+                .param("action", "reschedule").with(asReceptionist()))
+            .andExpect(status().isBadRequest());
+        assertThat(appointmentRepository.findById(missed.getId()).orElseThrow().getStatus())
+            .isEqualTo(AppointmentStatus.NO_SHOW);
+    }
+
+    @Test
+    @DisplayName("D942 review: appointments looked up by phone find a number stored in E.164, typed any way")
+    void appointmentsByPhoneFoldTheFormat() throws Exception {
+        mockMvc.perform(patch(API + "/patients/{id}", aicha.getId()).contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"phoneNumberPrimary\":\"70 16 10 99\"}")
+                .with(asReceptionist()))
+            .andExpect(status().isOk());
+        appointment(aicha, LocalDate.now().plusDays(2), LocalTime.of(10, 0), AppointmentStatus.SCHEDULED);
+
+        for (String typed : List.of("70161099", "70 16 10 99", "+22670161099")) {
+            mockMvc.perform(get(API + "/lookup/appointment/patient/phone/{phone}", typed).contextPath(API)
+                    .with(asReceptionist()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)));
+        }
+    }
+
     // ------------------------------------------- the other write endpoints
 
     @Test

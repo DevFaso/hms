@@ -609,7 +609,7 @@ public class ReceptionServiceImpl implements ReceptionService {
         }
         String phoneKey = PatientMatchKeys.phoneKey(phone);
         if (PatientMatchKeys.isSubscriberKey(phoneKey)) {
-            patientRepo.findAllByPhoneSubscriber("%" + phoneKey,
+            patientRepo.findAllByPhoneSubscriberAtHospital("%" + phoneKey, hospitalId,
                     PageRequest.of(0, PatientRepository.PHONE_SUBSCRIBER_CAP)).stream()
                 .filter(Patient::isActive)
                 .filter(p -> registeredAt(p, hospitalId))

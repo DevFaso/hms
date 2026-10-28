@@ -36,11 +36,21 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID>,
     @Query("SELECT a FROM Appointment a WHERE LOWER(a.patient.email) = LOWER(:email) AND a.hospital.id = :hospitalId")
     List<Appointment> findByPatientEmailAndHospitalId(@Param("email") String email, @Param("hospitalId") UUID hospitalId);
 
-    @Query("SELECT a FROM Appointment a WHERE a.patient.phoneNumberPrimary = :phone")
-    List<Appointment> findByPatientPhoneNumber(@Param("phone") String phone);
+    /**
+     * QA D942: the patient's primary number reduced to its digits, so a number
+     * stored in E.164 ("+22670001002") is found whatever form is typed. The
+     * caller binds {@code :phonePattern} from PatientMatchKeys.
+     */
+    String PATIENT_PHONE_DIGITS = "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE("
+        + "a.patient.phoneNumberPrimary, ' ', ''), '+', ''), '-', ''), '.', ''), '(', ''), ')', ''), '/', '')";
 
-    @Query("SELECT a FROM Appointment a WHERE a.patient.phoneNumberPrimary = :phone AND a.hospital.id = :hospitalId")
-    List<Appointment> findByPatientPhoneNumberAndHospitalId(@Param("phone") String phone, @Param("hospitalId") UUID hospitalId);
+    @Query("SELECT a FROM Appointment a WHERE " + PATIENT_PHONE_DIGITS + " LIKE :phonePattern")
+    List<Appointment> findByPatientPhoneNumber(@Param("phonePattern") String phonePattern);
+
+    @Query("SELECT a FROM Appointment a WHERE " + PATIENT_PHONE_DIGITS + " LIKE :phonePattern"
+        + " AND a.hospital.id = :hospitalId")
+    List<Appointment> findByPatientPhoneNumberAndHospitalId(@Param("phonePattern") String phonePattern,
+                                                            @Param("hospitalId") UUID hospitalId);
 
     @Query("SELECT a FROM Appointment a JOIN a.patient.hospitalRegistrations r WHERE r.mrn = :mrn")
     List<Appointment> findByPatientMrn(@Param("mrn") String mrn);

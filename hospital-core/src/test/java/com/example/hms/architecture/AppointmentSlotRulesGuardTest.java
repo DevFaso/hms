@@ -40,7 +40,8 @@ class AppointmentSlotRulesGuardTest {
     @Test
     void everyBookingPathUsesTheRules() {
         String staff = read(MAIN.resolve("service/AppointmentServiceImpl.java"));
-        assertThat(count(staff, "AppointmentSlotRules.overlapsHeldSlot(")).as("staff create + edit").isEqualTo(2);
+        assertThat(count(staff, "AppointmentSlotRules.overlapsHeldSlot(")).as("staff create + edit + status re-entry")
+            .isEqualTo(3);
 
         String portal = read(MAIN.resolve("service/impl/PatientPortalServiceImpl.java"));
         assertThat(count(portal, "AppointmentSlotRules.overlapsHeldSlot(")).as("portal book + reschedule").isEqualTo(2);

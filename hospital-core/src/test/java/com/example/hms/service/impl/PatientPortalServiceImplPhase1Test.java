@@ -390,6 +390,21 @@ class PatientPortalServiceImplPhase1Test {
         }
 
         @Test
+        @DisplayName("QA D926 review: saving one's own unchanged number is never refused, even when a child shares it")
+        void updateMyProfile_unchangedSharedPhoneIsKept() {
+            stubPatientResolution();
+            patient.setPhoneNumberPrimary("+22670202020");
+            PatientProfileUpdateDTO dto = PatientProfileUpdateDTO.builder()
+                    .phoneNumberPrimary("70202020").build();
+            org.mockito.Mockito.lenient().when(patientRepository.existsByPhoneNumberPrimaryAndIdNot(
+                    org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())).thenReturn(true);
+            org.mockito.Mockito.lenient().when(patientRepository.save(org.mockito.ArgumentMatchers.any()))
+                    .thenAnswer(inv -> inv.getArgument(0));
+            org.assertj.core.api.Assertions.assertThatCode(() -> service.updateMyProfile(auth, dto))
+                    .doesNotThrowAnyException();
+        }
+
+        @Test
         @DisplayName("D113 — another patient's primary phone is refused")
         void updateMyProfile_phoneOfAnotherPatientRefused() {
             stubPatientResolution();

@@ -42,7 +42,6 @@ public final class PatientMatchKeys {
     /** A value with no digit at all is not a phone search. */
     private static final int MIN_PHONE_DIGITS = 1;
 
-    private static final Pattern MARKS = Pattern.compile("\\p{M}+");
     private static final Pattern SPACES = Pattern.compile("\\s+");
     private static final Pattern NON_DIGITS = Pattern.compile("\\D");
     private static final Pattern PHONE_SHAPED = Pattern.compile("\\+?[\\d\\s().\\-/]{6,}");
@@ -58,9 +57,17 @@ public final class PatientMatchKeys {
         if (value == null || value.isBlank()) {
             return null;
         }
-        String decomposed = Normalizer.normalize(value.trim(), Normalizer.Form.NFD);
-        String plain = MARKS.matcher(decomposed).replaceAll("");
-        return SPACES.matcher(plain.toLowerCase(Locale.ROOT)).replaceAll(" ");
+        // Exactly the letters the SQL TRANSLATE folds, and no others: a name
+        // with another accented letter ("Şahin") stays as typed on both
+        // sides, so it is still found as written.
+        String lower = Normalizer.normalize(value.trim(), Normalizer.Form.NFC).toLowerCase(Locale.ROOT);
+        StringBuilder out = new StringBuilder(lower.length());
+        for (int i = 0; i < lower.length(); i++) {
+            char c = lower.charAt(i);
+            int at = NAME_FOLD_FROM.indexOf(c);
+            out.append(at >= 0 ? NAME_FOLD_TO.charAt(at) : c);
+        }
+        return SPACES.matcher(out).replaceAll(" ");
     }
 
     /**

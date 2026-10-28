@@ -743,9 +743,12 @@ public class AppointmentServiceImpl implements AppointmentService {
         // the old date, time and notes, and nothing was written.
         Appointment saved = appointmentRepository.saveAndFlush(existing);
         entityManager.refresh(saved);
-        // QA D985: an edit that cancels the visit reopens the recall it answered.
+        // QA D985: an edit that cancels the visit reopens the recall it
+        // answered; one that completes it closes the recall.
         if (recallService != null && !AppointmentStatus.holdsSlot(saved.getStatus())) {
             recallService.reopenRecallsOf(saved.getId());
+        } else if (recallService != null && saved.getStatus() == AppointmentStatus.COMPLETED) {
+            recallService.completeRecallsOf(saved.getId());
         }
 
         // Outbound webhooks (Tier 2 item 45): a moved visit is a reschedule
@@ -847,6 +850,23 @@ public class AppointmentServiceImpl implements AppointmentService {
             }
         }
 
+        // QA D937: a cancelled booking or a no-show freed its time; moving it
+        // back into a status that holds a slot must find that time still free.
+        if (!AppointmentStatus.holdsSlot(appointment.getStatus()) && newStatus.holdsSlot()
+                && appointment.getStaff() != null && appointment.getAppointmentDate() != null
+                && appointment.getStartTime() != null && appointment.getEndTime() != null
+                && AppointmentSlotRules.overlapsHeldSlot(
+                    appointmentRepository.findByStaff_IdAndAppointmentDate(
+                        appointment.getStaff().getId(), appointment.getAppointmentDate()),
+                    appointment.getId(),
+                    LocalDateTime.of(appointment.getAppointmentDate(), appointment.getStartTime()),
+                    LocalDateTime.of(appointment.getAppointmentDate(), appointment.getEndTime()))) {
+            throw new BusinessException(messageSource.getMessage(
+                "appointment.staff.unavailable",
+                new Object[]{appointment.getStaff().getId(), appointment.getAppointmentDate(),
+                    appointment.getStartTime(), appointment.getEndTime()},
+                locale));
+        }
         appointment.setStatus(newStatus);
         appointmentRepository.save(appointment);
 

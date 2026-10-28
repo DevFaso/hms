@@ -30,7 +30,8 @@ public class PatientProfileUpdateRequestDTO {
     @Size(max = 100)
     private String lastName;
 
-    @jakarta.validation.constraints.PastOrPresent
+    /** Same rule as the entity ({@code @Past}), so a refusal is a field 400, never a 500 at flush. */
+    @jakarta.validation.constraints.Past
     private java.time.LocalDate dateOfBirth;
 
     @Size(max = 10)

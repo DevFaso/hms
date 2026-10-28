@@ -237,6 +237,20 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
     List<Patient> findAllByPhoneSubscriber(@Param("subscriberPattern") String subscriberPattern,
                                            Pageable pageable);
 
+    /**
+     * {@link #findAllByPhoneSubscriber} at one hospital (an active
+     * registration there): the duplicate check's candidates, so a number
+     * shared across the country cannot crowd this hospital's patient out of
+     * the capped page.
+     */
+    @Query("SELECT DISTINCT p FROM Patient p JOIN p.hospitalRegistrations r"
+        + " WHERE r.hospital.id = :hospitalId AND r.active = true"
+        + " AND (" + PRIMARY_PHONE_DIGITS + " LIKE :subscriberPattern"
+        + " OR " + SECONDARY_PHONE_DIGITS + " LIKE :subscriberPattern)")
+    List<Patient> findAllByPhoneSubscriberAtHospital(@Param("subscriberPattern") String subscriberPattern,
+                                                     @Param("hospitalId") UUID hospitalId,
+                                                     Pageable pageable);
+
     /** The candidate cap of {@link #findAllByPhoneSubscriber}: a shared number never loads a crowd. */
     int PHONE_SUBSCRIBER_CAP = 50;
 

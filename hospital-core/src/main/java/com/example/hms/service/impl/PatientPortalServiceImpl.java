@@ -292,8 +292,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 throw new BusinessException(MessageUtil.resolve("patient.phoneNumberPrimary.required"));
             }
             UUID selfId = patient.getId();
-            // Never single-result: two records may already share the number.
-            if (patientRepository.existsByPhoneNumberPrimaryAndIdNot(primary, selfId)) {
+            // Never single-result: two records may already share the number,
+            // and keeping one's own (unchanged) number is never a conflict.
+            if (!primary.equals(patient.getPhoneNumberPrimary())
+                    && patientRepository.existsByPhoneNumberPrimaryAndIdNot(primary, selfId)) {
                 throw new BusinessException(MessageUtil.resolve("patient.profile.phone.taken"));
             }
             patient.setPhoneNumberPrimary(primary);

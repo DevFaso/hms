@@ -69,13 +69,21 @@ public class LookupController {
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<List<AppointmentSummaryDTO>> getAppointmentsByPatientPhone(@PathVariable String phone) {
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
-        List<Appointment> appointments;
-        if (activeHospitalId != null) {
-            appointments = appointmentRepository.findByPatientPhoneNumberAndHospitalId(phone, activeHospitalId);
-        } else {
-            appointments = appointmentRepository.findByPatientPhoneNumber(phone);
+        // QA D942: numbers are stored in E.164 now; the subscriber digits
+        // narrow the rows and the full number decides, as for every patient match.
+        String key = com.example.hms.utility.PatientMatchKeys.phoneKey(phone);
+        if (key == null) {
+            return ResponseEntity.ok(List.of());
         }
-        return ResponseEntity.ok(appointments.stream().map(this::toAppointmentSummaryDTO).toList());
+        boolean subscriber = com.example.hms.utility.PatientMatchKeys.isSubscriberKey(key);
+        String pattern = subscriber ? "%" + key : key;
+        List<Appointment> appointments = activeHospitalId != null
+            ? appointmentRepository.findByPatientPhoneNumberAndHospitalId(pattern, activeHospitalId)
+            : appointmentRepository.findByPatientPhoneNumber(pattern);
+        return ResponseEntity.ok(appointments.stream()
+            .filter(a -> !subscriber || a.getPatient() == null
+                || com.example.hms.utility.PatientMatchKeys.samePhone(a.getPatient().getPhoneNumberPrimary(), phone))
+            .map(this::toAppointmentSummaryDTO).toList());
     }
 
     // Lookup appointments by patient MRN
