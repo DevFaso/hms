@@ -28,10 +28,10 @@ export const gate = {
   baselinePath: resolve(PORTAL_DIR, 'scripts', 'uuid-fragments-baseline.json'),
   // An inline template is seen by both scans; dedupe keeps one finding per site.
   findings: (ctx) =>
-    dedupe([
-      ...scanTemplates((html) => uuidFragmentFindings(html), {}, ctx),
-      ...scanComponents((source) => uuidFragmentFindings(source), ctx),
-    ]),
+    dedupe(
+      scanTemplates((html) => uuidFragmentFindings(html), {}, ctx),
+      scanComponents((source) => uuidFragmentFindings(source), ctx),
+    ),
   comment: [
     'UUID fragments shown on screen, as they stand today.',
     'Each key is "file::rule::anchor"; "why" is the QA defect id or the reason.',

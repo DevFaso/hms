@@ -31,18 +31,27 @@ export function loadBaseline(path) {
 }
 
 /**
- * One finding per site: a gate that scans both the templates (which include
- * the inline `template:` of a component) and the `.ts` sources sees an inline
- * template's site twice, at the same file and line.
+ * The template scan's findings plus those of the `.ts` scan that it has not
+ * already reported. A gate that scans both the templates (which include the
+ * inline `template:` of a component) and the `.ts` sources sees an inline
+ * template's site twice, at the same file and line — once per scan. Only that
+ * cross-scan copy is dropped (a multiset difference): two genuine copies of a
+ * site on one line stay two findings, so a pin of 1 cannot hide the second.
  */
-export function dedupe(findings) {
-  const seen = new Set();
-  return findings.filter((f) => {
+export function dedupe(templateFindings, sourceFindings = []) {
+  const unmatched = new Map();
+  for (const f of templateFindings) {
     const key = `${f.id}@${f.line}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
+    unmatched.set(key, (unmatched.get(key) ?? 0) + 1);
+  }
+  const extra = sourceFindings.filter((f) => {
+    const key = `${f.id}@${f.line}`;
+    const left = unmatched.get(key) ?? 0;
+    if (left === 0) return true;
+    unmatched.set(key, left - 1);
+    return false;
   });
+  return [...templateFindings, ...extra];
 }
 
 /** Group findings by id, in document order. */

@@ -58,12 +58,18 @@ class SaveThenRefreshGuardTest {
         "\\b(?:if|for|while|switch|catch|synchronized|try|else|do)\\s*$|->\\s*$|\\bnew\\s+[\\w.<>]+\\s*$");
     /** A `return` statement inside the save's own block: what follows the block never runs after the save. */
     private static final Pattern RETURN = Pattern.compile("\\breturn\\b");
-    static final Pattern FLUSH = Pattern.compile("\\.(?:flush|saveAndFlush)\\(");
+    /** A flush of the persistence context: the entity manager's, a repository's, or saveAndFlush — not a Writer's. */
+    static final Pattern FLUSH = Pattern.compile(
+        "\\b(?:(?:entityManager|em|\\w*[Rr]epository|\\w*Repo)\\s*\\.\\s*flush\\(|\\w+\\s*\\.\\s*saveAndFlush\\()");
     static final Pattern IDENTIFIER = Pattern.compile("\\b[a-z]\\w*\\b");
 
-    /** Sites the defect was reported on, per file. Shrink only: the fix deletes the line here too. */
+    /**
+     * Sites the defect was reported on, keyed {@code "file save(argument) refresh(name)"}
+     * — per SITE, not per file, so fixing D923 and adding another save-then-refresh in
+     * the same file in one PR still fails. Shrink only: the fix deletes the line here too.
+     */
     private static final Map<String, Allowance> ALLOWED = GuardAllowlist.allow(
-        "service/AppointmentServiceImpl.java", 1,
+        "service/AppointmentServiceImpl.java save(existing) refresh(saved)", 1,
         "QA D923: updateAppointment refreshes the saved appointment before the flush; every PUT edit is discarded");
 
     static List<String> offenders(String file, String rawSource) {
@@ -85,17 +91,23 @@ class SaveThenRefreshGuardTest {
             // …unless the save's own block returns: `if (isNew) { return repo.save(fresh); }`
             // and a refresh after the block never run together, so only the block counts.
             int blockEnd = endOfEnclosingBlock(source, semicolon + 1);
+            // Only a `return` that always runs counts: one at the block's own level that
+            // starts a statement, not one inside a nested `if { … }`, a lambda or a
+            // brace-less `if (x) return y;`.
             boolean leavesMethod =
                 RETURN.matcher(source.substring(SourceScan.statementStart(source, m.start()), semicolon)).find()
-                    || RETURN.matcher(source.substring(semicolon + 1, blockEnd)).find();
+                    || unconditional(source.substring(semicolon + 1, blockEnd), RETURN, true) >= 0;
             int windowEnd = leavesMethod ? blockEnd : endOfEnclosingMethod(source, m.start(), semicolon + 1);
             String rest = source.substring(semicolon + 1, windowEnd);
             String saved = m.group(1);
             // Every refresh that follows is checked, not only the first: a refresh of
             // another row before the saved one does not clear the saved one.
             Matcher refresh = REFRESH.matcher(rest);
+            // A flush clears the pending update only when it always runs before the
+            // refresh: one inside an `if (audit) { em.flush(); }` does not.
+            int flush = unconditional(rest, FLUSH, false);
             while (refresh.find()) {
-                if (FLUSH.matcher(rest.substring(0, refresh.start())).find()) {
+                if (flush >= 0 && flush < refresh.start()) {
                     break;
                 }
                 String refreshed = refresh.group(1);
@@ -108,6 +120,71 @@ class SaveThenRefreshGuardTest {
         }
         return out;
     }
+
+    /**
+     * The offset of the first match of {@code pattern} in {@code text} that runs every
+     * time {@code text} runs from its start: outside literals and comments, at the
+     * lowest brace/paren depth reached so far (not inside a block, a lambda or an
+     * argument opened after the start). With {@code statementStart}, the match must
+     * also begin a statement (after `;`, `{`, `}` or the start), which rules out
+     * `if (x) return y;` and `else return y;`. {@code -1} when there is none.
+     */
+    static int unconditional(String text, Pattern pattern, boolean statementStart) {
+        int[] depthAt = new int[text.length()];
+        int[] minBefore = new int[text.length()];
+        boolean[] code = new boolean[text.length()];
+        int depth = 0;
+        int min = 0;
+        for (int i = 0; i < text.length(); i++) {
+            int skipped = SourceScan.endOfLiteralOrComment(text, i);
+            if (skipped >= 0) {
+                int last = Math.min(skipped, text.length() - 1);
+                for (int k = i; k <= last; k++) {
+                    depthAt[k] = depth;
+                    minBefore[k] = min;
+                }
+                i = last;
+                continue;
+            }
+            char ch = text.charAt(i);
+            if (ch == '}' || ch == ')') {
+                depth--;
+                min = Math.min(min, depth);
+            }
+            depthAt[i] = depth;
+            minBefore[i] = min;
+            code[i] = true;
+            if (ch == '{' || ch == '(') {
+                depth++;
+            }
+        }
+        Matcher m = pattern.matcher(text);
+        while (m.find()) {
+            int at = m.start();
+            if (!code[at] || depthAt[at] != minBefore[at]) {
+                continue;
+            }
+            if (statementStart) {
+                String before = text.substring(0, at).stripTrailing();
+                if (!before.isEmpty() && "{};".indexOf(before.charAt(before.length() - 1)) < 0) {
+                    continue;
+                }
+            }
+            return at;
+        }
+        return -1;
+    }
+
+    /** {@code "file:12: save(existing) then refresh(saved) — …"} → {@code "file save(existing) refresh(saved)"}. */
+    static String siteKey(String hit) {
+        Matcher m = HIT.matcher(hit);
+        if (!m.find()) {
+            throw new IllegalStateException("unparseable hit: " + hit);
+        }
+        return m.group(1) + " save(" + m.group(2) + ") refresh(" + m.group(3) + ")";
+    }
+
+    private static final Pattern HIT = Pattern.compile("^(.+?):\\d+: save\\((.*)\\) then refresh\\((\\w+)\\) — ");
 
     /** Whether {@code argument} is {@code name} or names it: {@code mapper.apply(existing, request)} names {@code existing}. */
     static boolean namesIdentifier(String argument, String name) {
@@ -199,27 +276,27 @@ class SaveThenRefreshGuardTest {
     @Test
     @DisplayName("no service saves an entity and refreshes it before the update is flushed")
     void noSaveThenRefresh() throws IOException {
-        Map<String, Integer> perFile = new TreeMap<>();
+        Map<String, Integer> perSite = new TreeMap<>();
         Map<String, String> lastHit = new TreeMap<>();
         try (Stream<Path> files = Files.walk(MAIN)) {
             for (Path p : files.filter(f -> f.toString().endsWith(".java")).toList()) {
                 String rel = MAIN.relativize(p).toString().replace('\\', '/');
-                List<String> hits = offenders(rel, Files.readString(p, StandardCharsets.UTF_8));
-                if (!hits.isEmpty()) {
-                    perFile.put(rel, hits.size());
-                    lastHit.put(rel, hits.get(hits.size() - 1));
+                for (String hit : offenders(rel, Files.readString(p, StandardCharsets.UTF_8))) {
+                    String site = siteKey(hit);
+                    perSite.merge(site, 1, Integer::sum);
+                    lastHit.put(site, hit);
                 }
             }
         }
         List<String> fresh = new ArrayList<>();
-        for (String over : GuardAllowlist.overAllowance(perFile, ALLOWED)) {
+        for (String over : GuardAllowlist.overAllowance(perSite, ALLOWED)) {
             fresh.add(over + " — " + lastHit.get(over.substring(0, over.indexOf(" ×"))));
         }
         assertThat(fresh)
             .as("drop the refresh, or saveAndFlush() before it when a database default must be read back"
                 + SourceScan.MANDATE)
             .isEmpty();
-        assertThat(GuardAllowlist.stale(perFile, ALLOWED))
+        assertThat(GuardAllowlist.stale(perSite, ALLOWED))
             .as("the site was fixed: delete its allowance so the pattern cannot return" + SourceScan.MANDATE)
             .isEmpty();
     }
@@ -326,6 +403,38 @@ class SaveThenRefreshGuardTest {
         assertThat(offenders("x", parenParams)).hasSize(1);
         assertThat(offenders("x", domainRefresh)).isEmpty();
         assertThat(offenders("x", returnInBranch)).isEmpty();
+        // A return that only SOMETIMES runs does not end the window; neither does a
+        // flush that only sometimes runs, nor a Writer's flush.
+        String nestedReturn = """
+                public AppointmentResponseDTO update(AppointmentRequestDTO d) {
+                    if (changed) { appointmentRepository.save(existing); if (notify) { mailer.send(); return dto; } }
+                    entityManager.refresh(existing);
+                    return dto;
+                }
+            """;
+        String bracelessReturn = """
+                public AppointmentResponseDTO update(AppointmentRequestDTO d) {
+                    if (changed) { appointmentRepository.save(existing); if (notify) return dto; }
+                    entityManager.refresh(existing);
+                    return dto;
+                }
+            """;
+        String writerFlush = """
+                Appointment saved = appointmentRepository.save(existing);
+                csvWriter.flush();
+                entityManager.refresh(saved);
+            """;
+        String conditionalFlush = """
+                Appointment saved = appointmentRepository.save(existing);
+                if (audit) { entityManager.flush(); }
+                entityManager.refresh(saved);
+            """;
+        assertThat(offenders("x", nestedReturn)).hasSize(1);
+        assertThat(offenders("x", bracelessReturn)).hasSize(1);
+        assertThat(offenders("x", writerFlush)).hasSize(1);
+        assertThat(offenders("x", conditionalFlush)).hasSize(1);
+        assertThat(siteKey(offenders("service/A.java", writerFlush).get(0)))
+            .isEqualTo("service/A.java save(existing) refresh(saved)");
         assertThat(offenders("x", old)).hasSize(1);
         assertThat(offenders("x", plain)).hasSize(1);
         assertThat(offenders("x", expression)).hasSize(1);

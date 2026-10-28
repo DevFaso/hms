@@ -97,6 +97,77 @@ class StoredTextProseGuardTest {
     private static final Pattern EXEMPT_RECEIVER = Pattern.compile(
         "\\b(?:log|LOG|logger)\\.|\\bAuditEvent\\w*\\b|\\.(?:eventDescription|auditDescription)\\(");
 
+    /**
+     * Whether the expression at {@code at} is a log line or an audit description: the
+     * call chain that ends at {@code at} (the sink's receiver), or the chain of any call
+     * whose argument list encloses {@code at} back to the statement start, is a log call
+     * or an audit builder.
+     */
+    static boolean exempt(String source, int statementStart, int at) {
+        if (EXEMPT_RECEIVER.matcher(chainBefore(source, statementStart, at)).find()) {
+            return true;
+        }
+        int depth = 0;
+        for (int i = at - 1; i >= statementStart; i--) {
+            char ch = source.charAt(i);
+            if (ch == '"' || ch == '\'') {
+                i = openingQuote(source, statementStart, i);
+            } else if (ch == ')') {
+                depth++;
+            } else if (ch == '(' && depth-- == 0) {
+                depth = 0;
+                if (EXEMPT_RECEIVER.matcher(chainBefore(source, statementStart, i) + "(").find()) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /** The call chain ({@code a.b(x).c}) that ends right before {@code end}, balanced parens stepped over. */
+    static String chainBefore(String source, int statementStart, int end) {
+        int i = end - 1;
+        while (i >= statementStart) {
+            char ch = source.charAt(i);
+            if (ch == ')') {
+                int depth = 0;
+                for (; i >= statementStart; i--) {
+                    char c = source.charAt(i);
+                    if (c == '"' || c == '\'') {
+                        i = openingQuote(source, statementStart, i);
+                    } else if (c == ')') {
+                        depth++;
+                    } else if (c == '(' && --depth == 0) {
+                        break;
+                    }
+                }
+                i--;
+            } else if (Character.isJavaIdentifierPart(ch) || ch == '.' || Character.isWhitespace(ch)) {
+                i--;
+            } else {
+                break;
+            }
+        }
+        return source.substring(Math.max(i + 1, statementStart), end);
+    }
+
+    /** The index of the quote that opens the literal whose closing quote is at {@code close}. */
+    private static int openingQuote(String source, int floor, int close) {
+        char quote = source.charAt(close);
+        for (int j = close - 1; j >= floor; j--) {
+            if (source.charAt(j) == quote) {
+                int backslashes = 0;
+                for (int k = j - 1; k >= floor && source.charAt(k) == '\\'; k--) {
+                    backslashes++;
+                }
+                if (backslashes % 2 == 0) {
+                    return j;
+                }
+            }
+        }
+        return floor;
+    }
+
     static boolean isProse(String literal) {
         if (literal.indexOf(' ') < 0 || literal.startsWith("<") || literal.contains("style=")) {
             return false;
@@ -188,11 +259,11 @@ class StoredTextProseGuardTest {
             int close = SourceScan.closingParen(source, open);
             String argument = source.substring(open + 1, close);
             sinkArguments.add(new int[] {open, close});
-            // The receiver chain of the sink — from the statement's real start (a `;`
-            // inside a literal does not end a statement) to the sink itself — decides
-            // the exemption; the argument does not.
-            String receiver = source.substring(SourceScan.statementStartBefore(starts, sink.start()), sink.start());
-            if (EXEMPT_RECEIVER.matcher(receiver).find()) {
+            // The sink's own receiver chain and the calls that enclose it decide the
+            // exemption — not every token of the statement: in
+            // `notify(AuditEventType.X, Notification.builder().title("…"))` the audit type
+            // is a sibling argument and the title is still stored text.
+            if (exempt(source, SourceScan.statementStartBefore(starts, sink.start()), sink.start())) {
                 continue;
             }
             Matcher literal = LITERAL.matcher(argument);
@@ -215,8 +286,7 @@ class StoredTextProseGuardTest {
             if (sinkArguments.stream().anyMatch(range -> at > range[0] && at < range[1])) {
                 continue;
             }
-            String receiver = source.substring(SourceScan.statementStartBefore(starts, at), at);
-            if (EXEMPT_RECEIVER.matcher(receiver).find()) {
+            if (exempt(source, SourceScan.statementStartBefore(starts, at), at)) {
                 continue;
             }
             String literal = header.group();
@@ -269,6 +339,8 @@ class StoredTextProseGuardTest {
             notifier.toUser(user).about(eventDescription).message("Your result is ready for review");
             log.info("[Scheduler Lock] " + name);
             LOG.warn("--- Sweep aborted ---");
+            notificationService.create(AuditEventType.LAB_RESULT, Notification.builder().title("Result ready for the clinician").build());
+            log.info("Rebuilt note {}", noteBuilder.append("Rebuilt from the archive"));
             appendSectionIfPresent(noteBuilder, "[Nursing Assessment]", other);
             // noteBuilder.append("Not a real section header") — a comment is not a site
             """;
@@ -278,6 +350,7 @@ class StoredTextProseGuardTest {
             Map.entry("x::Lab result ready", 1),
             Map.entry("x::Medication out of stock; placed on back order", 2),
             Map.entry("x::Pain scale: ", 1),
+            Map.entry("x::Result ready for the clinician", 1),
             Map.entry("x::Walk-in", 1),
             Map.entry("x::Your result is ready for review", 1),
             Map.entry("x::[Medication Reconciliation] ", 1),

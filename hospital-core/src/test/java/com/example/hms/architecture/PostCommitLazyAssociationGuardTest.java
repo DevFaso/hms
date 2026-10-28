@@ -165,14 +165,18 @@ class PostCommitLazyAssociationGuardTest {
                 report(file, source, open, SourceScan.closingBrace(source, open), out);
             }
         }
-        // An interceptor's afterCompletion(HttpServletRequest, …) also reads the servlet
-        // API (request.getUserPrincipal().getName()): only the entity getters count there.
+        // A TransactionSynchronization's afterCommit()/afterCompletion(int) gets the broad
+        // rule, like a lambda. Only an interceptor's afterCompletion(HttpServletRequest, …),
+        // which also reads the servlet API (request.getUserPrincipal().getName()), is
+        // narrowed to the entity getters.
         Matcher override = OVERRIDE.matcher(source);
         while (override.find()) {
             int params = override.end() - 1;
-            int open = source.indexOf('{', SourceScan.closingParen(source, params));
+            int paramsEnd = SourceScan.closingParen(source, params);
+            int open = source.indexOf('{', paramsEnd);
             if (open >= 0) {
-                report(file, source, open, SourceScan.closingBrace(source, open), out, CHAIN);
+                boolean servlet = source.substring(params, paramsEnd).contains("HttpServletRequest");
+                report(file, source, open, SourceScan.closingBrace(source, open), out, servlet ? CHAIN : ANY_CHAIN);
             }
         }
         return out.stream().distinct().toList();
@@ -304,5 +308,22 @@ class PostCommitLazyAssociationGuardTest {
         // Eight distinct chains above plus the retryable listener's; the anonymous
         // synchronization's chain is one site although two scans reach it.
         assertThat(postCommitChains("x", pr564)).hasSize(9);
+
+        // A NAMED synchronization class is outside any registerSynchronization( argument:
+        // its afterCommit() gets the broad rule (an unlisted association counts), while an
+        // interceptor's afterCompletion keeps the entity-getter rule for the servlet API.
+        String namedSynchronization = """
+            class ReferralSms implements TransactionSynchronization {
+                @Override
+                public void afterCommit() {
+                    sms.send(saved.getReferringProvider().getPhone());
+                }
+                @Override
+                public void afterCompletion(int status) {
+                    log.info(saved.getReferringProvider().getName());
+                }
+            }
+            """;
+        assertThat(postCommitChains("x", namedSynchronization)).hasSize(2);
     }
 }

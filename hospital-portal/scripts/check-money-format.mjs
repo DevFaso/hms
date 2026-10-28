@@ -30,13 +30,10 @@ export const gate = {
   baselinePath: resolve(PORTAL_DIR, 'scripts', 'money-format-baseline.json'),
   // An inline template's `.toFixed(` is seen by both scans; dedupe keeps one finding per site.
   findings: (ctx) =>
-    dedupe([
-      ...scanTemplates(moneyTemplateFindings, {}, ctx),
-      ...scanComponents(
-        (source, file) => moneyComponentFindings(source, file === LOCALE_MODULE),
-        ctx,
-      ),
-    ]),
+    dedupe(
+      scanTemplates(moneyTemplateFindings, {}, ctx),
+      scanComponents((source, file) => moneyComponentFindings(source, file === LOCALE_MODULE), ctx),
+    ),
   comment: [
     'Amounts printed without formatCfa / | cfa, as they stand today.',
     'Each key is "file::rule::anchor"; "why" is the QA defect id or the reason.',

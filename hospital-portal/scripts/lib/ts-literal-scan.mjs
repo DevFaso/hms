@@ -21,8 +21,12 @@
  *            means a space and two words of letters, and not a translation key
  *            (`SECTION.KEY_NAME`).
  *  signal  — `.set(` or `= ` on a field named error*, message*, notice*,
- *            hint*, banner*, warning*, statusMessage*, info* whose expression
- *            holds such a literal (`signal('…')`, `e.message || '…'` included).
+ *            hint*, banner*, warning*, statusMessage*, info* — or one whose
+ *            name ends in Error/Message/Notice/Hint/Banner/Warning (`saveError`,
+ *            `formMessage`) — whose expression holds such a literal
+ *            (`signal('…')`, `e.message || '…'` included); and a key of that
+ *            name in an object handed to `.set(` / `.update(` / `patchState(`
+ *            (`state.set({ error: '…' })`).
  *
  * Comments are blanked first, and the fallback of a `translate.instant(…)`
  * call (`instant('KEY') || 'English'`) is not counted: instant returns the key
@@ -39,9 +43,19 @@ const TRANSLATION_KEY = /^[A-Z0-9_]+(?:\.[A-Z0-9_]+)+$/;
 
 const TOAST_OPEN = /\btoast\w*\.(success|error|info|warning|push)\(/g;
 // `this.error.set(`, `this.error = `, `error: string = `, `readonly notice = `
-// (not `===`, and not an arrow parameter: `message => '…'` is a function, not an assignment)
-const SIGNAL_OPEN =
-  /\b((?:error|message|notice|hint|banner|warning|statusMessage|info)\w*)(?:\.set\(|\s*(?::\s*[\w<>|[\]\s]+?)?\s*=(?![=>])\s*)/g;
+// (not `===`, and not an arrow parameter: `message => '…'` is a function, not an assignment).
+// The name may also END in the status word (`saveError`, `formMessage`); a trailing
+// `Info` is left out, it names data (`patientInfo = { name: '…' }`).
+const STATUS_NAME = String.raw`(?:error|message|notice|hint|banner|warning|statusMessage|info)\w*|[a-z]\w*(?:Error|Message|Notice|Hint|Banner|Warning)\w*`;
+const SIGNAL_OPEN = new RegExp(
+  String.raw`\b(${STATUS_NAME})(?:\.set\(|\s*(?::\s*[\w<>|[\]\s]+?)?\s*=(?![=>])\s*)`,
+  'g',
+);
+// `state.set({ error: '…' })`, `state.update((s) => ({ ...s, saveError: '…' }))`, `patchState(store, { message: '…' })`
+const STATE_CALL = /(?:\.(?:set|update)|\bpatchState)\(/g;
+const STATUS_KEY = new RegExp(String.raw`(?:^|[{,\s])(${STATUS_NAME})\s*:\s*(?=['"\x60])`, 'g');
+// The receiver of a setter is itself a status field: its whole argument was read by SIGNAL_OPEN.
+const STATUS_RECEIVER = new RegExp(String.raw`\b(?:${STATUS_NAME})$`);
 
 /**
  * When `source[i]` opens a string literal or a comment, the index of its last
@@ -197,6 +211,26 @@ export function tsLiteralFindings(rawSource) {
         rule: 'signal',
         anchor: `${m[1]} ${literal.slice(0, 60)}`,
         message: `${m[1]} set to '${literal.slice(0, 60)}': English on screen in every language — translate.instant('KEY')`,
+      });
+    }
+  }
+  // A status key of an object handed to a state setter: `state.set({ error: '…' })`.
+  // A key inside a `saveError.set({ … })` argument was read above, so it is skipped.
+  for (const m of source.matchAll(STATE_CALL)) {
+    if (m[0] === '.set(' && STATUS_RECEIVER.test(source.slice(0, m.index))) {
+      continue;
+    }
+    const args = balancedArguments(source, m.index + m[0].length - 1);
+    for (const key of args.matchAll(STATUS_KEY)) {
+      const at = key.index + key[0].length;
+      const end = endOfLiteralOrComment(args, at);
+      const literal = args.slice(at + 1, end);
+      if (!isProseLiteral(literal) || isInstantFallback(args, at)) continue;
+      out.push({
+        line: lineAt(source, m.index + m[0].length - 1 + at),
+        rule: 'signal',
+        anchor: `${key[1]} ${literal.slice(0, 60)}`,
+        message: `${key[1]}: '${literal.slice(0, 60)}' handed to a state setter: English on screen in every language — translate.instant('KEY')`,
       });
     }
   }

@@ -88,6 +88,24 @@ this.toast.error('Could not save the appointment');`;
   );
 });
 
+test('a status name that ENDS in Error/Message and a status key handed to a state setter count', () => {
+  const source = `this.saveError.set('Could not save the visit');
+    this.formMessage = 'Please fill the form';
+    this.state.set({ error: 'Could not load data' });
+    this.state.update((s) => ({ ...s, loadMessage: 'Loading the records' }));
+    this.saveError.set({ message: 'Reported only once' });
+    const patientInfo = { name: 'Not a status text' };
+    this.items.set([{ label: 'Not a status either' }]);
+    this.state.set({ error: this.translate.instant('A.B') || 'Dead fallback text' });`;
+  assert.deepEqual(anchors(source), [
+    'signal:saveError Could not save the visit',
+    'signal:formMessage Please fill the form',
+    'signal:saveError Reported only once',
+    'signal:error Could not load data',
+    'signal:loadMessage Loading the records',
+  ]);
+});
+
 test('isProseLiteral: two words of letters, not a SECTION.KEY', () => {
   assert.ok(isProseLiteral('Passwords do not match.'));
   assert.ok(isProseLiteral('Le mot de passe'));

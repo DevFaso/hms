@@ -10,6 +10,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { moneyTemplateFindings, moneyComponentFindings } from './money-scan.mjs';
+import { dedupe } from './baseline.mjs';
 
 const anchors = (findings) => findings.map((f) => `${f.rule}:${f.anchor}`);
 
@@ -137,4 +138,14 @@ test('a helper that delegates francs to formatCfa may use Intl for another curre
     moneyComponentFindings(`new Intl.NumberFormat(l, { style: 'currency', currency: c })`, true),
     [],
   );
+});
+
+test('two copies of a site on ONE line stay two; only the second scan of an inline template is dropped', () => {
+  const html = `<td>{{ inv.balanceDue | number }} / {{ inv.balanceDue | number }}</td>`;
+  const found = moneyTemplateFindings(html).map((f) => ({ ...f, id: `x::${f.rule}::${f.anchor}` }));
+  assert.equal(found.length, 2);
+  assert.equal(dedupe(found).length, 2);
+  // The .ts scan of the same inline template reports the same two: dropped, once each.
+  assert.equal(dedupe(found, found).length, 2);
+  assert.equal(dedupe(found, [...found, found[0]]).length, 3);
 });
