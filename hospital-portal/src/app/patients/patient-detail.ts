@@ -49,6 +49,8 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { serverDateOrInstant } from '../shared/date-utils';
 import { ClockTimePipe } from '../shared/pipes/clock-time.pipe';
+import { NursingNotesPanelComponent } from '../encounters/nursing-notes-panel/nursing-notes-panel.component';
+import { NursingNoteService } from '../services/nursing-note.service';
 
 type TabKey =
   | 'overview'
@@ -70,6 +72,7 @@ type TabKey =
   selector: 'app-patient-detail',
   standalone: true,
   imports: [
+    NursingNotesPanelComponent,
     ClockTimePipe,
     ServerTimePipe,
     CommonModule,
@@ -273,6 +276,11 @@ export class PatientDetailComponent implements OnInit {
 
   /** Mirrors EncounterController's list READ gate — likewise not the
    *  'Create Encounters' write permission it used to check. */
+  /** QA D927: only the roles `GET /nurse/notes` admits load the panel (a refused read would leave the page). */
+  canReadNursingNotes(): boolean {
+    return this.roleContext.hasAnyActiveRole(NursingNoteService.READER_ROLES);
+  }
+
   canViewEncounters(): boolean {
     return this.roleContext.hasAnyActiveRole(ENCOUNTER_VIEW_ROLES);
   }

@@ -766,6 +766,11 @@
           <p>{{ 'PATIENTS.NO_ENCOUNTERS_DESC' | translate }}</p>
         </div>
       }
+      <!-- QA D927: the nursing care notes, readable from the chart by the next
+           shift and the doctor (the encounter detail's panel, reused). -->
+      @if (canReadNursingNotes()) {
+        <app-nursing-notes-panel [patientId]="patientId" [hospitalId]="scopedHospitalId()" />
+      }
     }
 
     <!-- ═══ Appointments Tab ═══ -->

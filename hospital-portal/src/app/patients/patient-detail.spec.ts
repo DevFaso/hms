@@ -274,6 +274,26 @@ describe('PatientDetailComponent', () => {
     ).not.toBeNull();
   });
 
+  it('QA D927: the chart shows the nursing care notes to the roles that may read them', () => {
+    roleContextSpy.hasAnyActiveRole.and.callFake((roles: string[]) => roles.includes('ROLE_NURSE'));
+    fixture.detectChanges();
+    component.setTab('encounters');
+    fixture.detectChanges();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="nursing-notes-panel"]'),
+    ).not.toBeNull();
+  });
+
+  it('QA D927: a radiologist (encounters yes, GET /nurse/notes no) gets no nursing notes panel', () => {
+    roleContextSpy.hasAnyActiveRole.and.callFake((roles: string[]) =>
+      roles.includes('ROLE_RADIOLOGIST'),
+    );
+    fixture.detectChanges();
+    component.setTab('encounters');
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="nursing-notes-panel"]')).toBeNull();
+  });
+
   it('QA D504: a complete vitals or encounters list shows no withheld note', () => {
     roleContextSpy.hasAnyActiveRole.and.returnValue(true);
     fixture.detectChanges();
