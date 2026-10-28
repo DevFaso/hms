@@ -41,8 +41,8 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID>,
      * stored in E.164 ("+22670001002") is found whatever form is typed. The
      * caller binds {@code :phonePattern} from PatientMatchKeys.
      */
-    String PATIENT_PHONE_DIGITS = "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE("
-        + "a.patient.phoneNumberPrimary, ' ', ''), '+', ''), '-', ''), '.', ''), '(', ''), ')', ''), '/', '')";
+    String PATIENT_PHONE_DIGITS = com.example.hms.utility.PatientMatchKeys.DIGITS_SQL_OPEN
+        + "a.patient.phoneNumberPrimary" + com.example.hms.utility.PatientMatchKeys.DIGITS_SQL_CLOSE;
 
     @Query("SELECT a FROM Appointment a WHERE " + PATIENT_PHONE_DIGITS + " LIKE :phonePattern")
     List<Appointment> findByPatientPhoneNumber(@Param("phonePattern") String phonePattern);

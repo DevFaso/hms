@@ -40,11 +40,11 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
         + " OR LOWER(r.mrn) LIKE :namePattern)";
 
     /** {@code p.phoneNumberPrimary} reduced to its digits ("+226 70-00.10/02" becomes "22670001002"). */
-    String PRIMARY_PHONE_DIGITS = "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE("
-        + "p.phoneNumberPrimary, ' ', ''), '+', ''), '-', ''), '.', ''), '(', ''), ')', ''), '/', '')";
+    String PRIMARY_PHONE_DIGITS =
+        PatientMatchKeys.DIGITS_SQL_OPEN + "p.phoneNumberPrimary" + PatientMatchKeys.DIGITS_SQL_CLOSE;
     /** {@code p.phoneNumberSecondary} reduced to its digits. */
-    String SECONDARY_PHONE_DIGITS = "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE("
-        + "p.phoneNumberSecondary, ' ', ''), '+', ''), '-', ''), '.', ''), '(', ''), ')', ''), '/', '')";
+    String SECONDARY_PHONE_DIGITS =
+        PatientMatchKeys.DIGITS_SQL_OPEN + "p.phoneNumberSecondary" + PatientMatchKeys.DIGITS_SQL_CLOSE;
 
     /**
      * {@code :phonePattern} (built by {@link PatientMatchKeys#phoneContainsPattern})
@@ -215,7 +215,19 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
 
   List<Patient> findByActive(boolean active);
 
-    List<Patient> findByFirstNameContainingIgnoreCaseOrLastNameContainingIgnoreCase(String firstName, String lastName);
+    /**
+     * QA D943: first name OR last name contains the typed text, accents and
+     * case ignored on both sides (the EMPI matcher's name block and the audit
+     * resource-name lookup). An empty text matches every name, as the derived
+     * query it replaces did.
+     */
+    @Query("SELECT p FROM Patient p WHERE "
+        + FOLD_OPEN + "p.firstName" + FOLD_CLOSE + " LIKE CONCAT('%', "
+        + FOLD_OPEN + "CAST(:firstName AS string)" + FOLD_CLOSE + ", '%')"
+        + " OR " + FOLD_OPEN + "p.lastName" + FOLD_CLOSE + " LIKE CONCAT('%', "
+        + FOLD_OPEN + "CAST(:lastName AS string)" + FOLD_CLOSE + ", '%')")
+    List<Patient> findByFirstNameContainingIgnoreCaseOrLastNameContainingIgnoreCase(
+        @Param("firstName") String firstName, @Param("lastName") String lastName);
 
     List<Patient> findByEmailContainingIgnoreCase(String email);
 

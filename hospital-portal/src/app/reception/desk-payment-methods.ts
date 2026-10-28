@@ -1,9 +1,10 @@
 /**
  * QA D948/D975: the ways a patient pays at the front desk, one list for the
  * check-in copay and the pending-payments dialog. Mobile Money is how most
- * patients pay; a method whose `needsReference` is true needs the operator or
- * policy reference (the server refuses it without one:
- * `billing.payment.referenceRequired`).
+ * patients pay; a method whose `needsReference` is true needs the operator's
+ * transaction number or the insurer's claim/authorization number (never the
+ * policy number: a reference is single-use, `billing.payment.duplicateReference`).
+ * The server refuses it without one: `billing.payment.referenceRequired`.
  */
 export interface DeskPaymentMethod {
   value: 'CASH' | 'MOBILE_MONEY' | 'CARD' | 'INSURANCE' | 'OTHER';

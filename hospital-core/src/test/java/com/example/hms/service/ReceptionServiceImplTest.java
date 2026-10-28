@@ -910,11 +910,11 @@ class ReceptionServiceImplTest {
         void theSameSubscriberScores() {
             Patient same = registered("Aïcha", "Kaboré", LocalDate.of(1991, 7, 22), "70 16 10 99", true);
             Patient sharedPhoneOnly = registered("Issa", "Kaboré", LocalDate.of(2015, 1, 1), "70161099", true);
-            Patient elsewhere = registered("Aïcha", "Kaboré", LocalDate.of(1991, 7, 22), "70161099", false);
+            // A patient registered elsewhere is excluded by the hospital-scoped query itself.
             when(patientRepo.searchPatientsExtended(any(), any(), any(), any(), any(), eq(hospitalId), eq(true), any()))
                     .thenReturn(new PageImpl<>(List.of()));
-            when(patientRepo.findAllByPhoneSubscriberAtHospital(eq("%70161099"), any(), any()))
-                    .thenReturn(List.of(same, sharedPhoneOnly, elsewhere));
+            when(patientRepo.findAllByPhoneSubscriberAtHospital(eq("%70161099"), eq(hospitalId), any()))
+                    .thenReturn(List.of(same, sharedPhoneOnly));
 
             List<DuplicateCandidateDTO> result = service.getDuplicateCandidates(
                     "Aicha Kabore", "1991-07-22", "+22670161099", hospitalId);
@@ -923,6 +923,13 @@ class ReceptionServiceImplTest {
                 assertThat(c.getPatientId()).isEqualTo(same.getId());
                 assertThat(c.getConfidenceScore()).isEqualTo(100);
             });
+        }
+
+        @Test
+        @DisplayName("review: no hospital, no scope: the duplicate check asks nothing")
+        void noHospitalNoCheck() {
+            assertThat(service.getDuplicateCandidates("Aicha", "1991-07-22", "+22670161099", null)).isEmpty();
+            verify(patientRepo, never()).findAllByPhoneSubscriberAtHospital(any(), any(), any());
         }
 
         @Test

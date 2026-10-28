@@ -60,6 +60,34 @@ class PatientMatchKeysGuardTest {
     }
 
     @Test
+    void noNameFinderIsDerived_andEveryNameQueryFolds() {
+        // A derived "...NameContainingIgnoreCase" finder is accent-sensitive
+        // (the EMPI page's D943 gap, review round 4): it must carry a folded @Query.
+        for (Method m : PatientRepository.class.getDeclaredMethods()) {
+            if (!m.getName().matches(".*(FirstName|LastName).*(Containing|Like|StartingWith).*")) {
+                continue;
+            }
+            Query q = m.getAnnotation(Query.class);
+            assertThat(q).as(m.getName() + " is a derived name search: give it a folded @Query").isNotNull();
+            assertThat(q.value()).as(m.getName() + " compares names without the accent fold").contains("TRANSLATE(LOWER(");
+        }
+    }
+
+    @Test
+    void everyRepositoryFoldsPhonesWithTheSharedSql() throws IOException {
+        // One SQL digits fold (PatientMatchKeys.DIGITS_SQL_OPEN/CLOSE): a hand-copied
+        // REPLACE chain drifts from the others (review round 4).
+        for (Path f : javaFiles()) {
+            String src = read(f);
+            if (f.endsWith("PatientMatchKeys.java")) {
+                continue;
+            }
+            assertThat(src).as(f + " hand-writes a phone REPLACE chain; use PatientMatchKeys.DIGITS_SQL_OPEN/CLOSE")
+                .doesNotContain("REPLACE(REPLACE(REPLACE(");
+        }
+    }
+
+    @Test
     void everyPatientSearchCallerUsesTheSharedKeys() throws IOException {
         List<Path> callers = javaFiles().stream()
             .filter(f -> read(f).contains("searchPatientsExtended("))

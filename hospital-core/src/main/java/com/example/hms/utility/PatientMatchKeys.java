@@ -36,6 +36,17 @@ public final class PatientMatchKeys {
     /** The plain letter of each character of {@link #NAME_FOLD_FROM}, in order. */
     public static final String NAME_FOLD_TO = "aaaaaaaeeeeeiiiiioooooouuuuuyycn";
 
+    /**
+     * The SQL that reduces a phone column to its digits:
+     * {@code DIGITS_SQL_OPEN + "p.phoneNumberPrimary" + DIGITS_SQL_CLOSE}.
+     * One definition, so every repository folds the same separators.
+     */
+    public static final String DIGITS_SQL_OPEN = "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(";
+
+    /** Closes {@link #DIGITS_SQL_OPEN}. */
+    public static final String DIGITS_SQL_CLOSE =
+        ", ' ', ''), '+', ''), '-', ''), '.', ''), '(', ''), ')', ''), '/', '')";
+
     /** National subscriber numbers are eight digits in the deployment country. */
     public static final int SUBSCRIBER_DIGITS = 8;
 

@@ -40,8 +40,7 @@ class AppointmentSlotRulesGuardTest {
     @Test
     void everyBookingPathUsesTheRules() {
         String staff = read(MAIN.resolve("service/AppointmentServiceImpl.java"));
-        assertThat(count(staff, "AppointmentSlotRules.overlapsHeldSlot(")).as("staff create + edit + status re-entry")
-            .isEqualTo(3);
+        assertThat(count(staff, "AppointmentSlotRules.overlapsHeldSlot(")).as("staff create + edit").isEqualTo(2);
 
         String portal = read(MAIN.resolve("service/impl/PatientPortalServiceImpl.java"));
         assertThat(count(portal, "AppointmentSlotRules.overlapsHeldSlot(")).as("portal book + reschedule").isEqualTo(2);
@@ -49,6 +48,11 @@ class AppointmentSlotRulesGuardTest {
             .isEqualTo(2);
         // QA D977: a moved appointment is booked at its new time, never parked in RESCHEDULED.
         assertThat(portal).doesNotContain("appointment.setStatus(AppointmentStatus.RESCHEDULED)");
+
+        // The check-out follow-up placeholder books a time too (review round 4).
+        String encounters = read(MAIN.resolve("service/EncounterServiceImpl.java"));
+        assertThat(count(encounters, "AppointmentSlotRules.overlapsHeldSlot(")).as("check-out follow-up placeholder")
+            .isGreaterThanOrEqualTo(1);
     }
 
     private static int count(String src, String needle) {

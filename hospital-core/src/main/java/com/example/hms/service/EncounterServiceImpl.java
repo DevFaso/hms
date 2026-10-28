@@ -2577,14 +2577,16 @@ public class EncounterServiceImpl implements EncounterService {
      * would fail the whole checkout); null when the day is full.
      */
     private java.time.LocalTime freeFollowUpSlot(UUID staffId, java.time.LocalDate date) {
-        java.util.Set<java.time.LocalTime> taken = new java.util.HashSet<>();
-        if (staffId != null) {
-            appointmentRepository.findByStaff_IdAndAppointmentDate(staffId, date)
-                    .forEach(a -> taken.add(a.getStartTime()));
-        }
+        // QA D937 class (branch C1): the same overlap rule as every booking
+        // path. A cancelled or missed booking frees its time, and a held one
+        // blocks any half-hour it overlaps, not only one starting at its minute.
+        java.util.List<Appointment> sameDay = staffId == null ? java.util.List.of()
+            : appointmentRepository.findByStaff_IdAndAppointmentDate(staffId, date);
         for (java.time.LocalTime t = FOLLOW_UP_PLACEHOLDER_START; !t.isAfter(FOLLOW_UP_PLACEHOLDER_LAST);
                 t = t.plusMinutes(FOLLOW_UP_SLOT_MINUTES)) {
-            if (!taken.contains(t)) {
+            java.time.LocalDateTime start = java.time.LocalDateTime.of(date, t);
+            if (!AppointmentSlotRules.overlapsHeldSlot(sameDay, null, start,
+                    start.plusMinutes(FOLLOW_UP_SLOT_MINUTES))) {
                 return t;
             }
         }

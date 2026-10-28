@@ -97,6 +97,19 @@ export class PatientDemographicsEditComponent implements OnInit {
         out[key] = now;
       }
     }
+    // The server rebuilds the mailing address from its components. A legacy
+    // record kept the street in `address` only, so any address change also
+    // sends the street shown in the form, or the rebuild would drop it.
+    const addressKeys: (keyof PatientDemographicsPatch)[] = [
+      'addressLine1',
+      'addressLine2',
+      'city',
+      'state',
+      'country',
+    ];
+    if (!this.patient.addressLine1 && addressKeys.some((k) => k in out)) {
+      out.addressLine1 = (this.form.addressLine1 ?? '').trim();
+    }
     return out;
   }
 

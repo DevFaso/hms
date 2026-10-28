@@ -93,4 +93,15 @@ describe('PatientDemographicsEditComponent (QA D926)', () => {
     expect(dialog?.getAttribute('aria-modal')).toBe('true');
     expect(dialog?.hasAttribute('appdialogfocus')).toBeTrue();
   });
+
+  it('review: a legacy address-only record keeps its street when the city is edited', () => {
+    const c = create().componentInstance;
+    patients.patchDemographics.and.returnValue(of(patient));
+    c.form.city = 'Koudougou';
+    c.submit();
+    expect(patients.patchDemographics).toHaveBeenCalledWith('p-1', {
+      city: 'Koudougou',
+      addressLine1: 'Secteur 15',
+    });
+  });
 });

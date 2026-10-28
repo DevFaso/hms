@@ -598,6 +598,10 @@ public class ReceptionServiceImpl implements ReceptionService {
     @Override
     public List<DuplicateCandidateDTO> getDuplicateCandidates(String name, String dob, String phone,
                                                                UUID hospitalId) {
+        if (hospitalId == null) {
+            // No hospital, no scope: a duplicate check never crosses tenants.
+            return List.of();
+        }
         String namePattern = PatientMatchKeys.nameContainsPattern(name);
         String dobValue = (dob != null && !dob.isBlank()) ? dob.trim() : null;
         Map<UUID, Patient> candidates = new java.util.LinkedHashMap<>();
@@ -612,11 +616,13 @@ public class ReceptionServiceImpl implements ReceptionService {
             patientRepo.findAllByPhoneSubscriberAtHospital("%" + phoneKey, hospitalId,
                     PageRequest.of(0, PatientRepository.PHONE_SUBSCRIBER_CAP)).stream()
                 .filter(Patient::isActive)
-                .filter(p -> registeredAt(p, hospitalId))
                 .forEach(p -> candidates.putIfAbsent(p.getId(), p));
         }
 
+        // Scored first: a shared family number alone (20) is dropped before
+        // anyone's registrations are read for an MRN.
         return candidates.values().stream()
+                .filter(p -> computeConfidenceScore(p, name, dobValue, phone) >= 40)
                 .map(p -> {
                     int score = computeConfidenceScore(p, name, dobValue, phone);
                     String mrn = p.getHospitalRegistrations().stream()
@@ -636,12 +642,6 @@ public class ReceptionServiceImpl implements ReceptionService {
                 .filter(c -> c.getConfidenceScore() >= 40)
                 .sorted(Comparator.comparingInt(DuplicateCandidateDTO::getConfidenceScore).reversed())
                 .toList();
-    }
-
-    private static boolean registeredAt(Patient patient, UUID hospitalId) {
-        return hospitalId == null || (patient.getHospitalRegistrations() != null
-            && patient.getHospitalRegistrations().stream()
-                .anyMatch(r -> r.isActive() && r.getHospital() != null && hospitalId.equals(r.getHospital().getId())));
     }
 
     /**

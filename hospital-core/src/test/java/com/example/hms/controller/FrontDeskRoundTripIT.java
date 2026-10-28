@@ -431,8 +431,8 @@ class FrontDeskRoundTripIT extends BaseIT {
     }
 
     @Test
-    @DisplayName("D937 review: a no-show cannot take its freed slot back once someone else holds it")
-    void aFreedSlotIsNotTakenBack() throws Exception {
+    @DisplayName("D937 review: a no-show whose freed time was rebooked can still be moved on")
+    void aMissedVisitWhoseTimeWasRebookedCanBeMovedOn() throws Exception {
         LocalDate day = LocalDate.now().minusDays(1);
         Appointment missed = appointment(aicha, day, LocalTime.of(9, 0), AppointmentStatus.NO_SHOW);
         Patient other = patient("Karim", "Sanogo", LocalDate.of(1985, 1, 3), "76112244");
@@ -440,9 +440,9 @@ class FrontDeskRoundTripIT extends BaseIT {
 
         mockMvc.perform(put(API + "/appointments/{id}/status", missed.getId()).contextPath(API)
                 .param("action", "reschedule").with(asReceptionist()))
-            .andExpect(status().isBadRequest());
+            .andExpect(status().isOk());
         assertThat(appointmentRepository.findById(missed.getId()).orElseThrow().getStatus())
-            .isEqualTo(AppointmentStatus.NO_SHOW);
+            .isEqualTo(AppointmentStatus.RESCHEDULED);
     }
 
     @Test
@@ -460,6 +460,15 @@ class FrontDeskRoundTripIT extends BaseIT {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(1)));
         }
+    }
+
+    @Test
+    @DisplayName("D943 review: the EMPI and audit name lookup ignores accents too")
+    void theEmpiNameLookupFoldsAccents() {
+        assertThat(patientRepository.findByFirstNameContainingIgnoreCaseOrLastNameContainingIgnoreCase("aicha", "zzz"))
+            .extracting(Patient::getId).contains(aicha.getId());
+        assertThat(patientRepository.findByFirstNameContainingIgnoreCaseOrLastNameContainingIgnoreCase("zzz", "KABORE"))
+            .extracting(Patient::getId).contains(aicha.getId());
     }
 
     // ------------------------------------------- the other write endpoints

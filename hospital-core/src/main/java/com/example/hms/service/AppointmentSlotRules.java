@@ -45,10 +45,16 @@ public final class AppointmentSlotRules {
         return sameDayBookings.stream()
             .filter(a -> excludeId == null || !excludeId.equals(a.getId()))
             .filter(a -> AppointmentStatus.holdsSlot(a.getStatus()))
-            .filter(a -> a.getAppointmentDate() != null && a.getStartTime() != null && a.getEndTime() != null)
+            .filter(a -> a.getStartTime() != null)
             .anyMatch(a -> {
-                LocalDateTime existingStart = LocalDateTime.of(a.getAppointmentDate(), a.getStartTime());
-                LocalDateTime existingEnd = LocalDateTime.of(a.getAppointmentDate(), a.getEndTime());
+                // The rows are one day's bookings (callers query by date); a row
+                // with no date is on that day, and one with no end still holds
+                // its start minute.
+                java.time.LocalDate day = a.getAppointmentDate() != null ? a.getAppointmentDate() : start.toLocalDate();
+                LocalDateTime existingStart = LocalDateTime.of(day, a.getStartTime());
+                LocalDateTime existingEnd = a.getEndTime() != null
+                    ? LocalDateTime.of(day, a.getEndTime())
+                    : existingStart.plusMinutes(1);
                 return start.isBefore(existingEnd) && existingStart.isBefore(end);
             });
     }

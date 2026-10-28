@@ -850,23 +850,10 @@ public class AppointmentServiceImpl implements AppointmentService {
             }
         }
 
-        // QA D937: a cancelled booking or a no-show freed its time; moving it
-        // back into a status that holds a slot must find that time still free.
-        if (!AppointmentStatus.holdsSlot(appointment.getStatus()) && newStatus.holdsSlot()
-                && appointment.getStaff() != null && appointment.getAppointmentDate() != null
-                && appointment.getStartTime() != null && appointment.getEndTime() != null
-                && AppointmentSlotRules.overlapsHeldSlot(
-                    appointmentRepository.findByStaff_IdAndAppointmentDate(
-                        appointment.getStaff().getId(), appointment.getAppointmentDate()),
-                    appointment.getId(),
-                    LocalDateTime.of(appointment.getAppointmentDate(), appointment.getStartTime()),
-                    LocalDateTime.of(appointment.getAppointmentDate(), appointment.getEndTime()))) {
-            throw new BusinessException(messageSource.getMessage(
-                "appointment.staff.unavailable",
-                new Object[]{appointment.getStaff().getId(), appointment.getAppointmentDate(),
-                    appointment.getStartTime(), appointment.getEndTime()},
-                locale));
-        }
+        // QA D937: no status action puts a freed booking back at its own time.
+        // CANCELLED has no exit and NO_SHOW's only one is RESCHEDULED, which
+        // marks a visit being moved; the move itself (PUT) is checked for
+        // overlaps at its new time.
         appointment.setStatus(newStatus);
         appointmentRepository.save(appointment);
 
