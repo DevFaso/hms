@@ -157,6 +157,14 @@ public class UserAccountAccess {
         return Optional.ofNullable(roleValidator.getCurrentUserId());
     }
 
+    /**
+     * QA D919/D920: deleted accounts are the super-admin's. Anyone else is
+     * answered about a deleted account exactly as about a missing one.
+     */
+    public boolean callerSeesDeletedAccounts() {
+        return roleValidator.isSuperAdminFromJwtClaim();
+    }
+
     public boolean isSelf(User target) {
         return target != null && currentUserId().map(target.getId()::equals).orElse(false);
     }

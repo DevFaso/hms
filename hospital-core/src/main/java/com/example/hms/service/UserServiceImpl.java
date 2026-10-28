@@ -1498,6 +1498,12 @@ public class UserServiceImpl implements UserService {
         if (!accountAccess.canDelete(user)) {
             throw refused(AuditEventType.USER_DELETE, "delete", user);
         }
+        // QA D920: GET answers a deleted account as missing for everyone but
+        // the super-admin, so delete does too; "already deleted" told a
+        // hospital admin about an account they cannot see.
+        if (user.isDeleted() && !accountAccess.callerSeesDeletedAccounts()) {
+            throw refused(AuditEventType.USER_DELETE, "delete", user);
+        }
         // QA D327: a second delete of a deleted account changed nothing yet
         // answered success and wrote a second USER_DELETE audit row.
         if (user.isDeleted()) {
@@ -1658,6 +1664,12 @@ public class UserServiceImpl implements UserService {
         if (accountAccess.isSelf(user)) {
             requireSelfServiceChangesOnly(user, dto);
         } else if (!accountAccess.canAdminister(user)) {
+            throw refused(AuditEventType.USER_UPDATE, "update", user);
+        }
+        // QA D920: a deleted account is missing for everyone but the
+        // super-admin, as GET answers; "restore it first" pointed a hospital
+        // admin at a restore they are not offered.
+        if (user.isDeleted() && !accountAccess.callerSeesDeletedAccounts()) {
             throw refused(AuditEventType.USER_UPDATE, "update", user);
         }
         // A deleted account is restored first, then edited: an edit would
