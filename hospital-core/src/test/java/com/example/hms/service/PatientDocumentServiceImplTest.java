@@ -311,6 +311,22 @@ class PatientDocumentServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D961: a certificate the doctor issued cannot be deleted by the patient")
+        void qaD961_aDoctorIssuedCertificateStays() {
+            UUID docId = UUID.randomUUID();
+            PatientUploadedDocument doc = PatientUploadedDocument.builder()
+                    .documentType(PatientDocumentType.MEDICAL_CERTIFICATE).build();
+            doc.setId(docId);
+            when(patientRepository.findByUserId(userId)).thenReturn(Optional.of(patient));
+            when(documentRepository.findByIdAndPatient_IdAndDeletedAtIsNull(docId, patientId))
+                    .thenReturn(Optional.of(doc));
+
+            assertThatThrownBy(() -> service.deleteDocument(auth, docId))
+                    .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+            assertThat(doc.getDeletedAt()).isNull();
+        }
+
+        @Test
         @DisplayName("throws ResourceNotFoundException when document not found")
         void throwsWhenNotFound() {
             UUID docId = UUID.randomUUID();
