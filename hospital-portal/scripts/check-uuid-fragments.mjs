@@ -21,15 +21,16 @@ import { resolve } from 'node:path';
 import { uuidFragmentFindings } from './lib/uuid-fragment-scan.mjs';
 import { scanTemplates, PORTAL_DIR } from './lib/template-gate.mjs';
 import { scanComponents } from './lib/component-sources.mjs';
-import { runGate } from './lib/baseline.mjs';
+import { runGate, dedupe } from './lib/baseline.mjs';
 
 runGate({
   name: 'uuid fragments',
   baselinePath: resolve(PORTAL_DIR, 'scripts', 'uuid-fragments-baseline.json'),
-  findings: [
+  // An inline template is seen by both scans; dedupe keeps one finding per site.
+  findings: dedupe([
     ...scanTemplates((html) => uuidFragmentFindings(html)),
     ...scanComponents((source) => uuidFragmentFindings(source)),
-  ],
+  ]),
   comment: [
     'UUID fragments shown on screen, as they stand today.',
     'Each key is "file::rule::anchor"; "why" is the QA defect id or the reason.',

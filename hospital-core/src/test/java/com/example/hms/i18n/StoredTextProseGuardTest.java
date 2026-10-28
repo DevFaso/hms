@@ -1,5 +1,6 @@
 package com.example.hms.i18n;
 
+import com.example.hms.testsupport.SourceScan;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -71,9 +72,13 @@ class StoredTextProseGuardTest {
 
     static final Pattern LITERAL = Pattern.compile("\"((?:[^\"\\\\]|\\\\.)*)\"");
 
-    /** A statement that is a log line, an audit row or a notification payload: exempt. */
+    /**
+     * A statement that is a log line or an audit row: exempt (the audit log is
+     * English by house decision). A notification's title or message is user-facing
+     * stored text and is NOT exempt.
+     */
     private static final Pattern EXEMPT_STATEMENT = Pattern.compile(
-        "\\b(?:log|LOG|logger)\\.|AuditEvent|eventDescription|auditDescription|Notification");
+        "\\b(?:log|LOG|logger)\\.|AuditEvent|eventDescription|auditDescription");
 
     static boolean isProse(String literal) {
         if (literal.indexOf(' ') < 0 || literal.startsWith("<") || literal.contains("style=")) {
@@ -158,33 +163,7 @@ class StoredTextProseGuardTest {
     }
 
     private static int closingParen(String source, int open) {
-        int depth = 0;
-        for (int i = open; i < source.length(); i++) {
-            char ch = source.charAt(i);
-            if (ch == '"') {
-                i = skipLiteral(source, i);
-            } else if (ch == '\'') {
-                // A char literal such as '"' or '(' must not be read as a quote or a paren.
-                i = source.charAt(i + 1) == '\\' ? i + 3 : i + 2;
-            } else if (ch == '(') {
-                depth++;
-            } else if (ch == ')' && --depth == 0) {
-                return i;
-            }
-        }
-        return source.length();
-    }
-
-    private static int skipLiteral(String source, int openQuote) {
-        for (int i = openQuote + 1; i < source.length(); i++) {
-            char ch = source.charAt(i);
-            if (ch == '\\') {
-                i++;
-            } else if (ch == '"') {
-                return i;
-            }
-        }
-        return source.length();
+        return SourceScan.closingParen(source, open);
     }
 
     @Test
@@ -232,9 +211,12 @@ class StoredTextProseGuardTest {
             .eventDescription("Correction: result " + correctionId + " supersedes released result " + supersededId)
             log.warn("Correction audit not written for result {}: {}", supersededId, ex.getMessage());
             builder.append(", ").append(name);
+            notificationRepository.save(Notification.builder().title("Lab result ready").build());
+            json.append('"').append(name).append('"');
             """;
         assertThat(sites("x", source)).containsExactly(
             "x:: medication(s) reported:\\n",
+            "x::Lab result ready",
             "x::Medication out of stock; placed on back order",
             "x::Pain scale: ",
             "x::Walk-in",

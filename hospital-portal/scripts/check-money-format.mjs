@@ -21,17 +21,18 @@ import { resolve } from 'node:path';
 import { moneyTemplateFindings, moneyComponentFindings } from './lib/money-scan.mjs';
 import { scanTemplates, PORTAL_DIR } from './lib/template-gate.mjs';
 import { scanComponents } from './lib/component-sources.mjs';
-import { runGate } from './lib/baseline.mjs';
+import { runGate, dedupe } from './lib/baseline.mjs';
 
 const LOCALE_MODULE = 'src/app/shared/i18n/app-locale.ts';
 
 runGate({
   name: 'money format',
   baselinePath: resolve(PORTAL_DIR, 'scripts', 'money-format-baseline.json'),
-  findings: [
+  // An inline template's `.toFixed(` is seen by both scans; dedupe keeps one finding per site.
+  findings: dedupe([
     ...scanTemplates(moneyTemplateFindings),
     ...scanComponents((source, file) => moneyComponentFindings(source, file === LOCALE_MODULE)),
-  ],
+  ]),
   comment: [
     'Amounts printed without formatCfa / | cfa, as they stand today.',
     'Each key is "file::rule::anchor"; "why" is the QA defect id or the reason.',

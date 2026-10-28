@@ -23,8 +23,11 @@
  *            hint*, banner*, warning*, statusMessage*, info* with such a
  *            literal.
  *
- * The tree holds none today, so the baseline is empty: the first one fails.
+ * Every toast in the tree already goes through translate.instant; the only
+ * sites today are four English error strings in reset-password.ts, pinned in
+ * scripts/ts-literals-baseline.json until they are keyed. A fifth fails.
  */
+import { lineOf } from './html-tags.mjs';
 
 const PROSE_WORDS = /[A-Za-zÀ-ÿ]{2,}\s+[A-Za-zÀ-ÿ]{2,}/;
 const TRANSLATION_KEY = /^[A-Z0-9_]+(?:\.[A-Z0-9_]+)+$/;
@@ -45,9 +48,7 @@ export function isProseLiteral(text) {
   return PROSE_WORDS.test(plain);
 }
 
-function lineAt(text, index) {
-  return text.slice(0, index).split('\n').length;
-}
+const lineAt = lineOf;
 
 /**
  * @param {string} source a non-spec `.ts` file

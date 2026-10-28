@@ -28,6 +28,21 @@ export function loadBaseline(path) {
   return { pinned: doc.pinned ?? {} };
 }
 
+/**
+ * One finding per site: a gate that scans both the templates (which include
+ * the inline `template:` of a component) and the `.ts` sources sees an inline
+ * template's site twice, at the same file and line.
+ */
+export function dedupe(findings) {
+  const seen = new Set();
+  return findings.filter((f) => {
+    const key = `${f.id}@${f.line}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 /** Group findings by id, in document order. */
 export function tally(findings) {
   const byId = new Map();

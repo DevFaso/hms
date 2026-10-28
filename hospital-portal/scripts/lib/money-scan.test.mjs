@@ -35,6 +35,18 @@ test('toFixed on an amount is hand formatting', () => {
   assert.deepEqual(anchors(moneyComponentFindings(`const s = (total.amount).toFixed(2);`)), [
     'fixed:total.amount.toFixed',
   ]);
+  // Optional chaining, a non-null assertion and an arithmetic group are the same hand formatting.
+  assert.deepEqual(
+    anchors(
+      moneyComponentFindings(
+        `a = inv.amount?.toFixed(2); b = inv.amount!.toFixed(2); c = (line.amount * rate).toFixed(2);`,
+      ),
+    ),
+    ['fixed:inv.amount.toFixed', 'fixed:inv.amount.toFixed', 'fixed:line.amount.toFixed'],
+  );
+  assert.deepEqual(anchors(moneyTemplateFindings(`{{ inv.balanceDue! | number }}`)), [
+    'pipe:inv.balanceDue | number',
+  ]);
 });
 
 test('D621: a component helper that formats money without formatCfa, or Intl currency outside one', () => {

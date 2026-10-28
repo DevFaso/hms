@@ -20,6 +20,7 @@
  *  fixed   — `.toFixed(` on a money-shaped expression in a template or a
  *            component.
  */
+import { lineOf } from './html-tags.mjs';
 
 const MONEY_TAIL =
   '(?:amount|price|balance|copay|copayment|revenue|subtotal|fee|fees|cost|paid|due|charge|charges|payment|discount|refund|' +
@@ -28,16 +29,16 @@ const NOT_MONEY =
   /(?:rate|percent|pct|ratio|count|days|hours|minutes|index|number|share)\s*(?:\(\))?\s*$/i;
 
 const EXPR = String.raw`([\w$.?!()\[\]'"]*?\w*${MONEY_TAIL}\w*(?:\(\))?)`;
-const PIPE_RE = new RegExp(String.raw`${EXPR}\s*\|\s*(number|currency)\b`, 'gi');
-const FIXED_RE = new RegExp(String.raw`${EXPR}\s*\)?\s*\.toFixed\(`, 'gi');
+// `[?!]?` — `inv.amount?.toFixed(2)` and `inv.amount!.toFixed(2)` are the same
+// hand formatting, and `(line.amount * rate).toFixed(2)` the same again.
+const PIPE_RE = new RegExp(String.raw`${EXPR}\s*[?!]?\s*\)?\s*\|\s*(number|currency)\b`, 'gi');
+const FIXED_RE = new RegExp(String.raw`${EXPR}\s*[?!]?\s*(?:[^()\n]*\))?\s*\.toFixed\(`, 'gi');
 
 const HELPER_DECL =
   /^\s*(?:private\s+|protected\s+|public\s+|readonly\s+)*(format(?:Currency|Money|Amount|Price|Fcfa|Cfa))\s*\([^)]*\)\s*(?::\s*string\s*)?\{/gm;
 const INTL_CURRENCY = /new\s+Intl\.NumberFormat\([^)]*\)|toLocaleString\(\s*[^)]*\)/g;
 
-function lineAt(text, index) {
-  return text.slice(0, index).split('\n').length;
-}
+const lineAt = lineOf;
 
 function isMoney(expr) {
   return !NOT_MONEY.test(expr);

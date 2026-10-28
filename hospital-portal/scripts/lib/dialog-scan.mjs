@@ -81,8 +81,10 @@ export function dialogFindings(html, componentSource = html, dialogSelectors = n
     }
     const role = attrValue(tag, 'role');
     const isDialog = role !== undefined && DIALOG_ROLES.has(role.replace(/['"]/g, '').trim());
-    const inner = innerHtml(html, tokens, index);
+    // innerHtml walks forward to the matching close tag; only a dialog or a
+    // container needs it, not every <td> of a worklist.
     if (isDialog) {
+      const inner = innerHtml(html, tokens, index);
       const a = anchor(tag, inner);
       if (!hasAttr(tag, 'aria-modal')) {
         out.push({
@@ -110,6 +112,7 @@ export function dialogFindings(html, componentSource = html, dialogSelectors = n
         });
       }
     } else if ([...classTokens(tag)].some((t) => CONTAINER_TOKEN.test(t))) {
+      const inner = innerHtml(html, tokens, index);
       const insideDialog = stack.some((s) => s.isDialog);
       const wrapsDialog =
         inner != null &&

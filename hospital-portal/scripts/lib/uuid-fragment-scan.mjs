@@ -10,13 +10,18 @@
  *  slice-pipe  — `| slice: 0 : N` (N ≤ 12) applied to an id-shaped expression
  *                (…id, …Id, …uuid, …Uuid, …Ref, …reference, idValue…) in a template.
  *  slice-call  — `.slice(0, N)`, `.substring(0, N)`, `.substr(0, N)` (N ≤ 12)
- *                on an id-shaped expression in a template or a component.
+ *                on an id-shaped expression in a template or a component,
+ *                through `?.` and `!.` as well (`row.id?.slice(0, 8)`).
  */
+import { lineOf } from './html-tags.mjs';
 
 const ID_EXPR = String.raw`([\w$.?!()\[\]]*?(?:\w*(?:[iI]d|[uU]uid|Ref|[rR]eference)|\b(?:id|uuid)[A-Z]\w*)(?:\(\))?)`;
-const SLICE_PIPE = new RegExp(String.raw`${ID_EXPR}\s*\|\s*slice\s*:\s*0\s*:\s*(\d{1,2})\b`, 'g');
+const SLICE_PIPE = new RegExp(
+  String.raw`${ID_EXPR}\s*[?!]?\s*\|\s*slice\s*:\s*0\s*:\s*(\d{1,2})\b`,
+  'g',
+);
 const SLICE_CALL = new RegExp(
-  String.raw`${ID_EXPR}\s*\.(slice|substring|substr)\(\s*0\s*,\s*(\d{1,2})\s*\)`,
+  String.raw`${ID_EXPR}\s*[?!]?\s*\.(slice|substring|substr)\(\s*0\s*,\s*(\d{1,2})\s*\)`,
   'g',
 );
 const MAX_FRAGMENT = 12;
@@ -25,9 +30,7 @@ const MAX_FRAGMENT = 12;
 const NOT_AN_ID =
   /(?:valid|paid|void|rapid|fluid|acid|grid|mid|hybrid|solid|liquid|invalid|avoid|bid|lid|kid|hid|did|rid|said|aid|raid|android)(?:\(\))?$/i;
 
-function lineAt(text, index) {
-  return text.slice(0, index).split('\n').length;
-}
+const lineAt = lineOf;
 
 function isId(expr) {
   return !NOT_AN_ID.test(expr);

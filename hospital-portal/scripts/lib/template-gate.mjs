@@ -18,7 +18,9 @@ export const PORTAL_DIR = resolve(import.meta.dirname, '..', '..');
 export const SRC_DIR = resolve(PORTAL_DIR, 'src', 'app');
 
 export function componentSourceFor(file, text) {
-  if (!file.endsWith('.html')) return text;
+  // An inline template's `text` is the markup alone; the Escape handler of such
+  // a component lives in the class around it, so hand back the whole `.ts`.
+  if (!file.endsWith('.html')) return readFileSync(file, 'utf8');
   const ts = file.replace(/\.html$/, '.ts');
   return existsSync(ts) ? `${text}\n${readFileSync(ts, 'utf8')}` : text;
 }

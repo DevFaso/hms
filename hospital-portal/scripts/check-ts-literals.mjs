@@ -5,14 +5,16 @@
  *
  * The locale gates only see text that goes through ngx-translate. A toast or a
  * status signal written as an English sentence in a `.ts` file is visible to
- * none of them. The tree holds none today; this gate keeps it that way.
+ * none of them. Every toast in the tree is translated already; the four
+ * English error strings of reset-password.ts are the only sites, pinned in
+ * scripts/ts-literals-baseline.json with that reason until they are keyed.
  *
- * Rules: lib/ts-literal-scan.mjs. The baseline (scripts/ts-literals-baseline.json)
- * is empty on purpose.
+ * Rules: lib/ts-literal-scan.mjs.
  *
  * Usage:
  *   node scripts/check-ts-literals.mjs
  *   node scripts/check-ts-literals.mjs --report-only
+ *   node scripts/check-ts-literals.mjs --write-baseline   # READ THE DIFF
  */
 import { resolve } from 'node:path';
 
@@ -26,8 +28,9 @@ runGate({
   baselinePath: resolve(PORTAL_DIR, 'scripts', 'ts-literals-baseline.json'),
   findings: scanComponents((source) => tsLiteralFindings(source)),
   comment: [
-    'English sentences handed to a toast or a status signal from component code.',
-    "Empty on purpose: translate.instant('KEY') is the only way text reaches a toast.",
+    'English sentences handed to a toast or a status signal from component code,',
+    "as they stand today. A site not listed fails the build; translate.instant('KEY')",
+    'is the only way text reaches a toast. Key a site, then delete its pin.',
   ],
   hint: "Put the sentence in the three locale files and pass translate.instant('SECTION.KEY').",
 });

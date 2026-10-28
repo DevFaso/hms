@@ -23,7 +23,7 @@
  * The anchor is the list's iterable, so a pin outlives line moves and dies
  * with the list. shared/patient-picker itself is skipped.
  */
-import { tags } from './html-tags.mjs';
+import { tags, lineOf } from './html-tags.mjs';
 
 export const PICKER_COMPONENT = 'src/app/shared/patient-picker/';
 
@@ -64,9 +64,8 @@ export function pickerFindings(html) {
     // does not match the handler shape.
     const window = html.slice(m.index, m.index + 1500);
     if (!SELECT_HANDLER.test(window)) continue;
-    const line = html.slice(0, m.index).split('\n').length;
     out.push({
-      line,
+      line: lineOf(html, m.index),
       rule: 'hand-written-picker',
       anchor: m[1],
       message: `patient search input + suggestion list over ${m[1]}: use <app-patient-picker> (shared/patient-picker)`,

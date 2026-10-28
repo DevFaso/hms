@@ -1,5 +1,6 @@
 package com.example.hms.architecture;
 
+import com.example.hms.testsupport.SourceScan;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -58,13 +59,21 @@ class PostCommitLazyAssociationGuardTest {
             + "|getCreatedBy|getProvider|getOrganization|getParent|getPrimaryHospital|getRequestedBy"
             + "|getPhysician|getNurse|getDoctor|getAuthor)\\(\\)\\s*\\.\\s*get\\w+\\(");
 
-    private static final Pattern AFTER_COMMIT = Pattern.compile(
-        "TransactionCallbacks\\.afterCommit\\(\\s*\\(\\)\\s*->\\s*\\{");
+    /**
+     * {@code TransactionCallbacks.afterCommit(}: the whole argument is scanned, so a
+     * block lambda, an expression lambda and a multi-line builder chain are all
+     * read (#564's shape fits in one expression lambda).
+     */
+    private static final Pattern AFTER_COMMIT = Pattern.compile("TransactionCallbacks\\.afterCommit\\(");
 
-    /** A @TransactionalEventListener method, or an afterCompletion override: the `{` that opens its body. */
+    /**
+     * A @TransactionalEventListener method, an afterCompletion override (interceptor or
+     * TransactionSynchronization) or an anonymous TransactionSynchronization's
+     * afterCommit(): the `{` that opens its body.
+     */
     private static final Pattern LISTENER = Pattern.compile(
         "(?:@TransactionalEventListener[^\\n]*\\n(?:\\s*@\\w+[^\\n]*\\n)*\\s*(?:public|protected|private)[^{;]*"
-            + "|(?:public|protected)\\s+void\\s+afterCompletion\\s*\\([^)]*\\)[^{;]*)\\{");
+            + "|(?:public|protected)\\s+void\\s+(?:afterCompletion|afterCommit)\\s*\\([^)]*\\)[^{;]*)\\{");
 
     private record Allowance(int count, String reason) { }
 
@@ -110,36 +119,28 @@ class PostCommitLazyAssociationGuardTest {
         return chain.replaceAll("\\s+", "");
     }
 
-    /** Every chain inside an afterCommit lambda, a @TransactionalEventListener or an afterCompletion body. */
+    /** Every chain inside an afterCommit argument, a @TransactionalEventListener or an afterCompletion body. */
     static List<String> postCommitChains(String file, String source) {
         List<String> out = new ArrayList<>();
-        for (Pattern opener : List.of(AFTER_COMMIT, LISTENER)) {
-            Matcher m = opener.matcher(source);
-            while (m.find()) {
-                int open = m.end() - 1;
-                int close = closingBrace(source, open);
-                String body = source.substring(open, close);
-                Matcher c = CHAIN.matcher(body);
-                while (c.find()) {
-                    int line = 1 + (int) source.chars().limit(open + c.start()).filter(ch -> ch == '\n').count();
-                    out.add(file + ":" + line + ": " + normalise(c.group()) + " in post-commit code (no session: pass ids)");
-                }
-            }
+        Matcher after = AFTER_COMMIT.matcher(source);
+        while (after.find()) {
+            int open = after.end() - 1;
+            report(file, source, open, SourceScan.closingParen(source, open), out);
+        }
+        Matcher listener = LISTENER.matcher(source);
+        while (listener.find()) {
+            int open = listener.end() - 1;
+            report(file, source, open, SourceScan.closingBrace(source, open), out);
         }
         return out;
     }
 
-    private static int closingBrace(String source, int open) {
-        int depth = 0;
-        for (int i = open; i < source.length(); i++) {
-            char ch = source.charAt(i);
-            if (ch == '{') {
-                depth++;
-            } else if (ch == '}' && --depth == 0) {
-                return i;
-            }
+    private static void report(String file, String source, int open, int close, List<String> out) {
+        Matcher c = CHAIN.matcher(source.substring(open, close));
+        while (c.find()) {
+            out.add(file + ":" + SourceScan.lineOf(source, open + c.start()) + ": " + normalise(c.group())
+                + " in post-commit code (no session: pass ids)");
         }
-        return source.length();
     }
 
     @Test
@@ -221,7 +222,24 @@ class PostCommitLazyAssociationGuardTest {
                 UUID hospitalId = assignment.getHospital().getId();
                 TransactionCallbacks.afterCommit(() -> audit.record(hospitalId));
             }
+            private void expressionLambda(Assignment assignment) {
+                TransactionCallbacks.afterCommit(() -> mail.send(assignment.getHospital().getName()));
+            }
+            private void builderChain(Assignment assignment) {
+                TransactionCallbacks.afterCommit(
+                    () -> auditEventLogService.logEvent(AuditEventRequestDTO.builder()
+                        .hospitalId(assignment.getHospital().getId())
+                        .build()));
+            }
+            private void synchronization(Dispense saved) {
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        postDeliveryCharge(saved.getPrescription().getId());
+                    }
+                });
+            }
             """;
-        assertThat(postCommitChains("x", pr564)).hasSize(3);
+        assertThat(postCommitChains("x", pr564)).hasSize(6);
     }
 }

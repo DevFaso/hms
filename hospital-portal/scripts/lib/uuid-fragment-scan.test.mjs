@@ -25,12 +25,16 @@ test('D992: encounter.id | slice: 0 : 8 is a UUID fragment on screen', () => {
 test('the component spellings fail too', () => {
   const ts = `return this.names.get(patientId) || \`\${patientId.substring(0, 8)}…\`;
     const short = idValue ? idValue.slice(0, 8) : '';
-    label = order.orderRef.substr(0, 6);`;
+    label = order.orderRef.substr(0, 6);
+    short = visit.id?.slice(0, 8); other = encounter.id!.substring(0, 8);`;
   assert.deepEqual(anchors(ts), [
     'slice-call:patientId.substring',
     'slice-call:idValue.slice',
     'slice-call:order.orderRef.substr',
+    'slice-call:visit.id.slice',
+    'slice-call:encounter.id.substring',
   ]);
+  assert.deepEqual(anchors(`{{ visit.id! | slice: 0 : 8 }}`), ['slice-pipe:visit.id | slice']);
 });
 
 test('human codes, long slices and words that merely end in "id" pass', () => {
