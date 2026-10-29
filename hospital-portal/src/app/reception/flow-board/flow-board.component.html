@@ -31,6 +31,9 @@
               tabindex="0"
               (click)="patientClicked.emit(item.patientId)"
               (keydown.enter)="patientClicked.emit(item.patientId)"
+              aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight"
+              (keydown.alt.arrowright)="moveCard(item, col.key, 1, $event)"
+              (keydown.alt.arrowleft)="moveCard(item, col.key, -1, $event)"
             >
               <div
                 class="card-drag-handle"
@@ -74,6 +77,20 @@
                 </div>
               }
             </div>
+            @if (canCloseUnseen(item)) {
+              <!-- QA D1023: the non-drag way to close a visit nobody has seen.
+                   Beside the card, not inside it: the card is itself a button. -->
+              <button
+                type="button"
+                class="card-action"
+                data-testid="flow-close-unseen"
+                [attr.aria-label]="('RECEPTION.CLOSE_UNSEEN_TITLE' | translate) + ' — ' + item.patientName"
+                (click)="requestCloseUnseen(item, $event)"
+              >
+                <span class="material-symbols-outlined" aria-hidden="true">directions_walk</span>
+                {{ 'RECEPTION.CLOSE_UNSEEN_TITLE' | translate }}
+              </button>
+            }
           }
         </div>
       </div>

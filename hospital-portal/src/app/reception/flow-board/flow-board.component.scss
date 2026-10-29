@@ -198,3 +198,28 @@
   font-size: 0.65rem;
   opacity: 0.4;
 }
+
+/* QA D1023: the keyboard and button path to "left without being seen". */
+.card-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 2px 8px;
+  border: 1px solid var(--border, #d0d7de);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+
+  .material-symbols-outlined {
+    font-size: 16px;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--primary, #0e7c6b);
+    outline-offset: 2px;
+  }
+}

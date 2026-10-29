@@ -1,8 +1,9 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { PaymentPendingPanelComponent } from './payment-pending-panel.component';
+import { PaymentPendingPanelComponent, newestPayment } from './payment-pending-panel.component';
+import { BillingService, PaymentRow } from '../../services/billing.service';
 import { TranslateModule } from '@ngx-translate/core';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { provideHttpClient, withXhr } from '@angular/common/http';
+import { HttpResponse, provideHttpClient, withXhr } from '@angular/common/http';
 import { ReceptionService } from '../reception.service';
 import { ToastService } from '../../core/toast.service';
 import { of } from 'rxjs';
@@ -100,5 +101,36 @@ describe('PaymentPendingPanelComponent', () => {
     const text = (fixture.nativeElement as HTMLElement).textContent ?? '';
     expect(text).toContain('F\u00a0CFA');
     expect(text).not.toContain('1 500,00');
+  });
+
+  it('QA D1022: a collected payment hands over the receipt of that payment', () => {
+    const billing = TestBed.inject(BillingService);
+    spyOn(billing, 'listPayments').and.returnValue(
+      of([
+        { id: 'pay-old', amount: 500, paymentDate: '2026-10-28', paymentMethod: 'CASH', status: 'COMPLETED', createdAt: '2026-10-28T09:00:00' },
+        { id: 'pay-new', amount: 2000, paymentDate: '2026-10-29', paymentMethod: 'MOBILE_MONEY', status: 'COMPLETED', createdAt: '2026-10-29T10:15:00' },
+      ] as PaymentRow[]),
+    );
+    const receipt = spyOn(billing, 'getReceiptPdf').and.returnValue(
+      of(new HttpResponse<Blob>({ body: new Blob(['%PDF']) })),
+    );
+    component.payingItem.set({ patientId: 'p1', patientName: 'Boukaré' } as any);
+    component.selectedInvoiceId.set('inv-16');
+    component.payAmount.set(2000);
+    component.payMethod.set('CASH');
+
+    component.submitPayment();
+
+    expect(receipt).toHaveBeenCalledWith('inv-16', 'pay-new');
+  });
+
+  it('newestPayment picks the last recorded payment', () => {
+    expect(newestPayment([])).toBeNull();
+    expect(
+      newestPayment([
+        { id: 'a', paymentDate: '2026-10-29', createdAt: '2026-10-29T08:00:00' },
+        { id: 'b', paymentDate: '2026-10-29', createdAt: '2026-10-29T11:00:00' },
+      ] as PaymentRow[])?.id,
+    ).toBe('b');
   });
 });

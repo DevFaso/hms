@@ -17,6 +17,8 @@ import { ReceptionQueueItem, ReceptionService } from '../reception.service';
 import { ToastService } from '../../core/toast.service';
 import { DialogFocusDirective } from '../../shared/a11y/dialog-focus.directive';
 import { DESK_PAYMENT_METHODS, deskMethodNeedsReference } from '../desk-payment-methods';
+import { BillingService, PaymentRow } from '../../services/billing.service';
+import { saveResponse } from '../../shared/download-file';
 
 interface OpenInvoice {
   id: string;
@@ -45,6 +47,7 @@ export class PaymentPendingPanelComponent {
   private readonly http = inject(HttpClient);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly billing = inject(BillingService);
 
   payingItem = signal<ReceptionQueueItem | null>(null);
   openInvoices = signal<OpenInvoice[]>([]);
@@ -128,6 +131,7 @@ export class PaymentPendingPanelComponent {
           this.closePayDialog();
           this.paymentCollected.emit();
           this.toast.success(this.translate.instant('RECEPTION.PAYMENT_RECORDED'));
+          this.downloadReceipt(invoiceId);
         },
         error: (err) => {
           this.paying.set(false);
@@ -136,4 +140,29 @@ export class PaymentPendingPanelComponent {
         },
       });
   }
+
+  /**
+   * QA D1022: the receipt of the payment just taken, handed to the patient as
+   * at check-in (D975). The payment endpoint answers with the invoice, so the
+   * newest payment on it is the one recorded here.
+   */
+  private downloadReceipt(invoiceId: string): void {
+    this.billing.listPayments(invoiceId).subscribe({
+      next: (payments) => {
+        const latest = newestPayment(payments);
+        if (!latest) return;
+        this.billing.getReceiptPdf(invoiceId, latest.id).subscribe({
+          next: (res) => saveResponse(res, 'recu.pdf'),
+          error: () => this.toast.error(this.translate.instant('RECEPTION.RECEIPT_FAILED')),
+        });
+      },
+      error: () => this.toast.error(this.translate.instant('RECEPTION.RECEIPT_FAILED')),
+    });
+  }
+}
+
+/** The payment recorded last (its creation time, else its payment date). */
+export function newestPayment(payments: PaymentRow[]): PaymentRow | null {
+  const when = (p: PaymentRow) => p.createdAt ?? p.paymentDate ?? '';
+  return [...payments].sort((a, b) => when(b).localeCompare(when(a)))[0] ?? null;
 }
