@@ -1,3 +1,4 @@
+import { textMatches } from '../shared/person-search';
 import {
   Component,
   computed,
@@ -1183,9 +1184,9 @@ export class PrescriptionsComponent implements OnInit {
     if (term) {
       list = list.filter(
         (p) =>
-          (p.patientFullName ?? '').toLowerCase().includes(term) ||
+          textMatches(p.patientFullName, term) ||
           (p.medicationName ?? '').toLowerCase().includes(term) ||
-          (p.staffFullName ?? '').toLowerCase().includes(term),
+          textMatches(p.staffFullName, term),
       );
     }
     this.filtered.set(list);

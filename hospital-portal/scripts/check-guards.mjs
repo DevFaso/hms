@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * The six round-16 regression gates in one process (`npm run guards`).
+ * The round-16 regression gates (and the round-17 person-search gate) in one
+ * process (`npm run guards`).
  *
  * Each gate can run on its own (`node scripts/check-a11y-dialogs.mjs`), but CI
  * runs them together: the templates (every `.html` plus every inline
@@ -23,6 +24,7 @@ import { gate as picker } from './check-patient-picker.mjs';
 import { gate as money } from './check-money-format.mjs';
 import { gate as literals } from './check-ts-literals.mjs';
 import { gate as fragments } from './check-uuid-fragments.mjs';
+import { gate as personSearch } from './check-person-search.mjs';
 
 const argv = process.argv.slice(2);
 // The `.ts` sources are read once and handed to the template loader, so a
@@ -31,7 +33,7 @@ const components = componentSources();
 const ctx = { components, templates: loadTemplates(components) };
 
 let failed = 0;
-for (const gate of [dialogs, names, picker, money, literals, fragments]) {
+for (const gate of [dialogs, names, picker, money, literals, fragments, personSearch]) {
   if (!evaluateGate(gate, argv, ctx)) failed++;
 }
 if (failed > 0) {

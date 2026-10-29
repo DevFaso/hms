@@ -183,12 +183,20 @@ public class PatientController {
             // first patients of the hospital were offered whatever was typed and
             // the wrong patient was admitted. Same matching as /patients/search
             // (name or MRN), and, like the unfiltered list, inactive records too.
-            PatientSearchCriteria criteria = PatientSearchCriteria.builder()
-                .name(search.trim())
+            // QA D1019: a typed phone number ("65112233", "65 11 22 33",
+            // "+226 65 11 22 33") is searched as a number, folded like the
+            // duplicate check; it used to be matched against names only, so
+            // the appointment and walk-in pickers never found a patient by phone.
+            String term = search.trim();
+            PatientSearchCriteria.PatientSearchCriteriaBuilder criteria = PatientSearchCriteria.builder()
                 .hospitalId(resolvedHospitalId)
-                .includeInactive(true)
-                .build();
-            return ResponseEntity.ok(patientService.searchPatients(criteria, 0, LIST_SEARCH_LIMIT, locale));
+                .includeInactive(true);
+            if (com.example.hms.utility.PatientMatchKeys.looksLikePhone(term)) {
+                criteria.phone(term);
+            } else {
+                criteria.name(term);
+            }
+            return ResponseEntity.ok(patientService.searchPatients(criteria.build(), 0, LIST_SEARCH_LIMIT, locale));
         }
         return ResponseEntity.ok(patientService.getAllPatients(resolvedHospitalId, locale));
     }
@@ -367,11 +375,14 @@ public class PatientController {
     ) {
         Locale locale = parseLocale(lang);
         UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, hospitalId, false);
+        // QA D1019 (sibling): a number typed into the name box is a phone search.
+        boolean nameIsPhone = (phone == null || phone.isBlank())
+            && com.example.hms.utility.PatientMatchKeys.looksLikePhone(name);
         PatientSearchCriteria criteria = PatientSearchCriteria.builder()
             .mrn(mrn)
-            .name(name)
+            .name(nameIsPhone ? null : name)
             .dateOfBirth(dob)
-            .phone(phone)
+            .phone(nameIsPhone ? name : phone)
             .email(email)
             .hospitalId(resolvedHospitalId)
             .active(active)

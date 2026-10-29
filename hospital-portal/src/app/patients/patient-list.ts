@@ -1,3 +1,4 @@
+import { personNameMatches, phoneMatches, textMatches } from '../shared/person-search';
 import {
   Component,
   inject,
@@ -138,15 +139,17 @@ export class PatientListComponent implements OnInit, OnDestroy {
   applyFilter(): void {
     let result = this.patients();
 
-    const term = this.searchTerm.toLowerCase().trim();
+    // QA D1019 / D1020: accents, the full name and every written phone
+    // format are folded, like the server's patient search.
+    const term = this.searchTerm.trim();
     if (term) {
       result = result.filter(
         (p) =>
-          p.firstName.toLowerCase().includes(term) ||
-          p.lastName.toLowerCase().includes(term) ||
-          (p.email?.toLowerCase().includes(term) ?? false) ||
-          (p.mrn?.toLowerCase().includes(term) ?? false) ||
-          (p.phoneNumberPrimary?.includes(term) ?? false),
+          personNameMatches(p, term) ||
+          textMatches(p.email, term) ||
+          textMatches(p.mrn, term) ||
+          phoneMatches(p.phoneNumberPrimary, term) ||
+          phoneMatches(p.phoneNumberSecondary, term),
       );
     }
     if (this.genderFilter) {

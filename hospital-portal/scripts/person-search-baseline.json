@@ -1,0 +1,8 @@
+{
+  "$comment": [
+    "People filtered by a raw toLowerCase().includes(), as they stand today.",
+    "Each key is \"file::rule::anchor\"; \"why\" is the QA defect id or the reason.",
+    "A site not listed fails the build; use shared/person-search, then delete its pin."
+  ],
+  "pinned": {}
+}

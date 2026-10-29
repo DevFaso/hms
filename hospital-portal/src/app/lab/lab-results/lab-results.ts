@@ -1,3 +1,4 @@
+import { textMatches } from '../../shared/person-search';
 import { CdkTrapFocus } from '@angular/cdk/a11y';
 import {
   Component,
@@ -589,7 +590,7 @@ export class LabResultsComponent implements OnInit {
       list = list.filter(
         (r) =>
           (r.labOrderCode ?? '').toLowerCase().includes(term) ||
-          (r.patientFullName ?? '').toLowerCase().includes(term) ||
+          textMatches(r.patientFullName, term) ||
           (r.labTestName ?? '').toLowerCase().includes(term) ||
           (r.resultValue ?? '').toLowerCase().includes(term),
       );

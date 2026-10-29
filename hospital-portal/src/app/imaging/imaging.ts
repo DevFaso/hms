@@ -1,3 +1,4 @@
+import { textMatches } from '../shared/person-search';
 import {
   Component,
   computed,
@@ -432,7 +433,7 @@ export class ImagingComponent implements OnInit {
     if (term) {
       list = list.filter(
         (o) =>
-          (o.patientDisplayName ?? '').toLowerCase().includes(term) ||
+          textMatches(o.patientDisplayName, term) ||
           (o.studyType ?? '').toLowerCase().includes(term) ||
           (o.bodyRegion ?? '').toLowerCase().includes(term) ||
           (o.modality ?? '').toLowerCase().includes(term),
