@@ -125,6 +125,18 @@ public interface EncounterRepository
     List<Encounter> findWalkInsForHospitalAndPeriod(@Param("hospitalId") UUID hospitalId, @Param("from") LocalDateTime from, @Param("to") LocalDateTime to);
 
     /**
+     * QA D1021: the visits of a hospital still open ({@code open}) that began
+     * before {@code before}, walk-ins and booked ones alike. A visit that
+     * arrived at 23:57 stays on the desk's queue after midnight until it is
+     * seen, closed or marked left-without-being-seen.
+     */
+    @Query("SELECT e FROM Encounter e WHERE e.hospital.id = :hospitalId AND e.encounterDate < :before"
+        + " AND e.status IN :open AND " + NOT_PRESCRIPTION_ANCHOR)
+    List<Encounter> findOpenStartedBefore(@Param("hospitalId") UUID hospitalId,
+                                          @Param("before") LocalDateTime before,
+                                          @Param("open") Collection<EncounterStatus> open);
+
+    /**
      * Fetch all encounters for a hospital within a date range, eagerly loading
      * patient, staff (with user), department, and appointment to avoid N+1 (MVP 5 tracker board).
      * QA D791: a prescription's anchor is not on the board (it read as a completed visit).

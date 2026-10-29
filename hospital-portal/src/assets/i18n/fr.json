@@ -11234,7 +11234,7 @@
     "DEPARTMENT": "Service",
     "FROM": "Du",
     "GENERATE": "Générer",
-    "GENERATED": "{{count}} créneaux générés",
+    "GENERATED": "{{created}} créneaux générés à partir de {{templates}} modèles ({{skipped}} déjà existants)",
     "GENERATE_ERROR": "Impossible de générer les créneaux.",
     "GENERATE_HINT": "Les créneaux sont créés à partir des modèles actifs pour la période choisie. Les créneaux existants ne sont pas modifiés.",
     "GENERATE_TITLE": "Générer des créneaux",

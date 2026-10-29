@@ -1,0 +1,8 @@
+{
+  "$comment": [
+    "Translate calls that leave a placeholder of the value unfilled, as they stand today.",
+    "Each key is \"file::rule::anchor\"; \"why\" is the QA defect id or the reason.",
+    "A site not listed fails the build; pass the parameter (or fix the value), then delete its pin."
+  ],
+  "pinned": {}
+}

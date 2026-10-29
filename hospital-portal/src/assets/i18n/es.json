@@ -11234,7 +11234,7 @@
     "DEPARTMENT": "Servicio",
     "FROM": "Desde",
     "GENERATE": "Generar",
-    "GENERATED": "{{count}} espacios generados",
+    "GENERATED": "{{created}} espacios generados a partir de {{templates}} plantillas ({{skipped}} ya existentes)",
     "GENERATE_ERROR": "No se pudieron generar los espacios.",
     "GENERATE_HINT": "Los espacios se crean a partir de las plantillas activas para el rango elegido. Los espacios existentes no se modifican.",
     "GENERATE_TITLE": "Generar espacios",
