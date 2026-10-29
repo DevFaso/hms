@@ -33,7 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * clinician's imaging read, cancelled or signed another doctor's imaging
  * order, rewrote or cancelled an ultrasound order, cancelled a midwife's
  * OB/GYN referral or another clinician's transfusion request). Judged team-
- * owned on purpose, and left out of this list: procedure orders, admissions,
+ * owned on purpose, and left out of this list: admissions,
  * transfers, isolation precautions, problems, allergies, family and social
  * history, birth plans (the patient's own) and high-risk care plans (the
  * ward or the pregnancy's team acts on them); digital signatures (each is the
@@ -57,7 +57,13 @@ class ClinicalDocumentAuthorGuardTest {
         "impl/ImagingOrderServiceImpl.java",
         "impl/UltrasoundServiceImpl.java",
         "impl/ObgynReferralServiceImpl.java",
-        "impl/TransfusionServiceImpl.java");
+        "impl/TransfusionServiceImpl.java",
+        // Product decision 2026-10-28: a procedure order belongs to the
+        // clinician who placed it (it was listed as team-owned until then).
+        // Ending it (POST /cancel, or CANCELLED sent through the update) is
+        // the ordering clinician's, or a physician's for a nurse's or
+        // midwife's order; recording its execution stays with the team.
+        "impl/ProcedureOrderServiceImpl.java");
     /** Round 16 siblings: sign, void and an order's signature capture are writes on the author's record too. */
     private static final Pattern WRITE_METHOD = Pattern.compile(
         "\\n    public [A-Za-z<>.?, ]+ ((?:update|delete|cancel|finalize|amend|withdraw|sign|void"

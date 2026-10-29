@@ -99,6 +99,11 @@ const PAGE_HANDLED_403_ACTION_PATTERNS = [
   /\/ultrasound\/orders\/[^/?]+(\/cancel)?(\?|$)/,
   /\/referrals\/obgyn\/[^/?]+\/cancel(\?|$)/,
   /\/transfusions\/requests\/[^/?]+\/cancel(\?|$)/,
+  // Product decision 2026-10-28 (QA D930 class): a procedure order is ended
+  // by the clinician who placed it (or a physician, for a nurse's or a
+  // midwife's order); the refusal of a cancel, or of CANCELLED sent through
+  // the update, is shown in the procedure page's toast.
+  /\/procedure-orders\/[^/?]+(\/cancel)?(\?|$)/,
 ];
 
 const SILENT_401_PATTERNS = [/\/chat\/mark-read\//];

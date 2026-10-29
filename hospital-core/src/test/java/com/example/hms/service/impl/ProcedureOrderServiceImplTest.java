@@ -453,4 +453,211 @@ class ProcedureOrderServiceImplTest {
 
         assertThat(service.getPendingConsentOrders(hospitalId)).isEmpty();
     }
+
+    // ── Product decision 2026-10-28: a procedure order belongs to the clinician who placed it ──
+
+    /** The ordering clinician: a staff record with its own user. */
+    private Staff orderer() {
+        com.example.hms.model.User user = new com.example.hms.model.User();
+        user.setId(UUID.randomUUID());
+        staff.setUser(user);
+        staff.setHospital(hospital);
+        return staff;
+    }
+
+    /** Another clinician of the same hospital, signed in. */
+    private Staff signInAsColleague() {
+        Staff colleague = new Staff();
+        colleague.setId(UUID.randomUUID());
+        com.example.hms.security.CallerIdentityTestSupport.actAs(colleague, hospital);
+        return colleague;
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void signOut() {
+        com.example.hms.security.CallerIdentityTestSupport.clear();
+        com.example.hms.security.context.HospitalContextHolder.clear();
+        com.example.hms.utility.MessageUtil.setMessageSource(null);
+        org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+    }
+
+    @Test void decision20261028_theOrderingClinicianCancelsTheirOwnOrder() {
+        Staff author = orderer();
+        com.example.hms.security.CallerIdentityTestSupport.actAs(author, hospital);
+        when(procedureOrderRepository.findById(orderId)).thenReturn(Optional.of(buildOrder(ProcedureOrderStatus.SCHEDULED)));
+        when(procedureOrderRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        ProcedureOrderResponseDTO r = service.cancelProcedureOrder(orderId, "Patient declined");
+
+        assertThat(r.getStatus()).isEqualTo(ProcedureOrderStatus.CANCELLED);
+        assertThat(r.getCancelledAt()).isNotNull();
+        assertThat(r.getCancellationReason()).isEqualTo("Patient declined");
+    }
+
+    @Test void decision20261028_aColleagueDoctorCannotCancelAnotherDoctorsOrder() {
+        Staff author = orderer();
+        Staff colleague = signInAsColleague();
+        ProcedureOrder order = buildOrder(ProcedureOrderStatus.SCHEDULED);
+        when(procedureOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(roleValidator.draftsForPhysicianSignature(author.getUser().getId(), hospitalId)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.cancelProcedureOrder(orderId, "r"))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(order.getStatus()).isEqualTo(ProcedureOrderStatus.SCHEDULED);
+        assertThat(order.getCancelledAt()).isNull();
+        verify(procedureOrderRepository, never()).save(any());
+        verify(roleValidator, never()).isSigningPhysician(eq(colleague.getUser().getId()), any());
+    }
+
+    @Test void decision20261028_aPhysicianOfTheHospitalCancelsANursesOrMidwifesOrder() {
+        Staff author = orderer();
+        Staff physician = signInAsColleague();
+        when(procedureOrderRepository.findById(orderId)).thenReturn(Optional.of(buildOrder(ProcedureOrderStatus.ORDERED)));
+        when(procedureOrderRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        when(roleValidator.draftsForPhysicianSignature(author.getUser().getId(), hospitalId)).thenReturn(true);
+        when(roleValidator.isSigningPhysician(physician.getUser().getId(), hospitalId)).thenReturn(true);
+
+        assertThat(service.cancelProcedureOrder(orderId, "Condition improved").getStatus())
+            .isEqualTo(ProcedureOrderStatus.CANCELLED);
+    }
+
+    @Test void decision20261028_aNurseCannotCancelAColleagueNursesOrder() {
+        Staff author = orderer();
+        Staff nurse = signInAsColleague();
+        when(procedureOrderRepository.findById(orderId)).thenReturn(Optional.of(buildOrder(ProcedureOrderStatus.ORDERED)));
+        when(roleValidator.draftsForPhysicianSignature(author.getUser().getId(), hospitalId)).thenReturn(true);
+        when(roleValidator.isSigningPhysician(nurse.getUser().getId(), hospitalId)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.cancelProcedureOrder(orderId, "r"))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        verify(procedureOrderRepository, never()).save(any());
+    }
+
+    @Test void decision20261028_aSuperAdminInGlobalViewCancelsAnyOrder() {
+        orderer();
+        Staff admin = signInAsColleague();
+        com.example.hms.security.tenant.ActingScopeTestSupport.globalSuperAdmin(admin.getUser().getId());
+        when(procedureOrderRepository.findById(orderId)).thenReturn(Optional.of(buildOrder(ProcedureOrderStatus.ORDERED)));
+        when(procedureOrderRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+        assertThat(service.cancelProcedureOrder(orderId, "Entered for the wrong patient").getStatus())
+            .isEqualTo(ProcedureOrderStatus.CANCELLED);
+    }
+
+    /** The refusal is a translated 403 in every locale the portal speaks, never the key or English in fr/es. */
+    @Test void decision20261028_theRefusalIsTranslated() {
+        Staff author = orderer();
+        signInAsColleague();
+        when(procedureOrderRepository.findById(orderId)).thenReturn(Optional.of(buildOrder(ProcedureOrderStatus.ORDERED)));
+        when(roleValidator.draftsForPhysicianSignature(author.getUser().getId(), hospitalId)).thenReturn(false);
+        org.springframework.context.MessageSource bundles = com.example.hms.i18n.TestMessageSources.bundles();
+        com.example.hms.utility.MessageUtil.setMessageSource(bundles);
+        String english = bundles.getMessage("procedureOrder.cancelForbidden", null, java.util.Locale.ENGLISH);
+        for (String tag : List.of("en", "fr", "es")) {
+            java.util.Locale locale = java.util.Locale.forLanguageTag(tag);
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(locale);
+            String expected = bundles.getMessage("procedureOrder.cancelForbidden", null, locale);
+            assertThat(expected).as(tag).doesNotContain("procedureOrder.");
+            if (!"en".equals(tag)) {
+                assertThat(expected).as(tag + " is not the English text").isNotEqualTo(english);
+            }
+            assertThatThrownBy(() -> service.cancelProcedureOrder(orderId, "r"))
+                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class)
+                .hasMessage(expected);
+        }
+    }
+
+    /** CANCELLED sent through the update is the same decision as POST /cancel: refused for a colleague, nothing applied. */
+    @Test void decision20261028_aColleagueCannotCancelThroughTheUpdateEither() {
+        Staff author = orderer();
+        signInAsColleague();
+        ProcedureOrder order = buildOrder(ProcedureOrderStatus.SCHEDULED);
+        when(procedureOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(roleValidator.draftsForPhysicianSignature(author.getUser().getId(), hospitalId)).thenReturn(false);
+        ProcedureOrderUpdateDTO u = new ProcedureOrderUpdateDTO();
+        u.setStatus(ProcedureOrderStatus.CANCELLED);
+        u.setSiteMarked(true);
+
+        assertThatThrownBy(() -> service.updateProcedureOrder(orderId, u))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(order.getStatus()).isEqualTo(ProcedureOrderStatus.SCHEDULED);
+        assertThat(order.getSiteMarked()).isFalse();
+        verify(procedureOrderRepository, never()).save(any());
+    }
+
+    @Test void decision20261028_theAuthorsCancelThroughTheUpdateIsStampedLikePostCancel() {
+        Staff author = orderer();
+        com.example.hms.security.CallerIdentityTestSupport.actAs(author, hospital);
+        when(procedureOrderRepository.findById(orderId)).thenReturn(Optional.of(buildOrder(ProcedureOrderStatus.SCHEDULED)));
+        when(procedureOrderRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        ProcedureOrderUpdateDTO u = new ProcedureOrderUpdateDTO();
+        u.setStatus(ProcedureOrderStatus.CANCELLED);
+        u.setCancellationReason("Patient declined");
+
+        ProcedureOrderResponseDTO r = service.updateProcedureOrder(orderId, u);
+
+        assertThat(r.getStatus()).isEqualTo(ProcedureOrderStatus.CANCELLED);
+        assertThat(r.getCancelledAt()).isNotNull();
+        assertThat(r.getCancellationReason()).isEqualTo("Patient declined");
+    }
+
+    /**
+     * The care team records execution on a colleague's order: plan it, start
+     * it, complete it, postpone it, capture consent, mark the site. No author
+     * check is consulted on any of these.
+     */
+    @Test void decision20261028_theCareTeamRecordsExecutionOnAColleaguesOrder() {
+        orderer();
+        signInAsColleague();
+        when(procedureOrderRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+        List<ProcedureOrderUpdateDTO> steps = List.of(
+            ProcedureOrderUpdateDTO.builder().scheduledDatetime(LocalDateTime.now().plusDays(1)).build(),
+            ProcedureOrderUpdateDTO.builder().consentObtained(true).consentObtainedBy("Witness")
+                .consentObtainedAt(LocalDateTime.now()).build(),
+            ProcedureOrderUpdateDTO.builder().siteMarked(true).build(),
+            ProcedureOrderUpdateDTO.builder().status(ProcedureOrderStatus.PRE_OP_CLEARANCE_PENDING).build(),
+            ProcedureOrderUpdateDTO.builder().status(ProcedureOrderStatus.READY_FOR_PROCEDURE).build(),
+            ProcedureOrderUpdateDTO.builder().status(ProcedureOrderStatus.IN_PROGRESS).build(),
+            ProcedureOrderUpdateDTO.builder().status(ProcedureOrderStatus.POSTPONED).build(),
+            ProcedureOrderUpdateDTO.builder().status(ProcedureOrderStatus.COMPLETED).build());
+        for (ProcedureOrderUpdateDTO step : steps) {
+            when(procedureOrderRepository.findById(orderId)).thenReturn(Optional.of(buildOrder(ProcedureOrderStatus.ORDERED)));
+            ProcedureOrderResponseDTO r = service.updateProcedureOrder(orderId, step);
+            assertThat(r).as(step.toString()).isNotNull();
+            if (step.getStatus() != null) {
+                assertThat(r.getStatus()).as(step.toString()).isEqualTo(step.getStatus());
+            }
+        }
+        verify(roleValidator, never()).draftsForPhysicianSignature(any(), any());
+        verify(roleValidator, never()).isSigningPhysician(any(), any());
+    }
+
+    /**
+     * A cancelled order keeps its first cancellation stamp: re-cancelling is
+     * refused for everyone (its author included), and there is no way back
+     * out of CANCELLED through the update, so nobody can reopen it.
+     */
+    @Test void decision20261028_aCancelledOrderKeepsItsFirstStampAndCannotBeReopened() {
+        Staff author = orderer();
+        com.example.hms.security.CallerIdentityTestSupport.actAs(author, hospital);
+        ProcedureOrder cancelled = buildOrder(ProcedureOrderStatus.CANCELLED);
+        LocalDateTime firstStamp = LocalDateTime.now().minusDays(1);
+        cancelled.setCancelledAt(firstStamp);
+        cancelled.setCancellationReason("Patient declined");
+        when(procedureOrderRepository.findById(orderId)).thenReturn(Optional.of(cancelled));
+
+        assertThatThrownBy(() -> service.cancelProcedureOrder(orderId, "Rewritten")).isInstanceOf(BusinessException.class);
+        ProcedureOrderUpdateDTO recancel = new ProcedureOrderUpdateDTO();
+        recancel.setStatus(ProcedureOrderStatus.CANCELLED);
+        recancel.setCancellationReason("Rewritten");
+        assertThatThrownBy(() -> service.updateProcedureOrder(orderId, recancel)).isInstanceOf(BusinessException.class);
+        ProcedureOrderUpdateDTO reopen = new ProcedureOrderUpdateDTO();
+        reopen.setStatus(ProcedureOrderStatus.SCHEDULED);
+        assertThatThrownBy(() -> service.updateProcedureOrder(orderId, reopen)).isInstanceOf(BusinessException.class);
+
+        assertThat(cancelled.getStatus()).isEqualTo(ProcedureOrderStatus.CANCELLED);
+        assertThat(cancelled.getCancelledAt()).isEqualTo(firstStamp);
+        assertThat(cancelled.getCancellationReason()).isEqualTo("Patient declined");
+        verify(procedureOrderRepository, never()).save(any());
+    }
 }

@@ -2453,10 +2453,21 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   (`LabOrderServiceImpl.deleteLabOrder`), an imaging report draft can be
   edited, signed or voided by any clinician (`ImagingReportServiceImpl`), an
   imaging order can be cancelled through `updateOrderStatus` by anyone in
-  scope, and an ultrasound order update has no author check. Procedure
-  orders, admissions, problems, allergies and family/social history are left
-  team-owned on purpose (the surgical/ward team acts on them); that is a
-  product decision to confirm, not an oversight. (5) D1003: the CVX code
+  scope, and an ultrasound order update has no author check. Admissions,
+  problems, allergies and family/social history are left team-owned on
+  purpose (the ward team acts on them). Procedure orders: DECIDED by the user
+  2026-10-28 ("as it works in real hospitals"), applied on
+  fix/r17-review-976: an order belongs to the clinician who placed it.
+  Cancelling it (POST /cancel, or CANCELLED through the update) is the
+  ordering clinician's, a physician's of that hospital for a nurse's or
+  midwife's order, or a super-admin's in global view (translated 403
+  `procedureOrder.cancelForbidden` otherwise); the care team still records
+  execution (schedule, pre-op steps, start, complete, postpone, consent,
+  site marking); a cancelled order stays locked with its first stamp. The
+  order has no clinical-content edit and no signature step today, so there
+  is nothing else to gate; the portal's cancel button is role-level only
+  (the response carries the ordering staff id, not a user id, so an exact
+  author gate needs a server-computed flag). (5) D1003: the CVX code
   stays a required typed field because the DHIS2 ADX export counts doses by
   it; the PEV vaccine list offers names only. A vetted PEV-vaccine to CVX
   table (supplied by the user, never invented) would let the form fill the

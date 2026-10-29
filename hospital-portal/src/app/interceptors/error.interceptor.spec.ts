@@ -448,6 +448,9 @@ describe('errorInterceptor', () => {
     ['POST', '/ultrasound/orders/u1/cancel?cancellationReason=x'],
     ['POST', '/referrals/obgyn/f1/cancel'],
     ['POST', '/transfusions/requests/t1/cancel'],
+    // Product decision 2026-10-28: procedure orders are author-owned for cancel.
+    ['POST', '/procedure-orders/p1/cancel?cancellationReason=x'],
+    ['PUT', '/procedure-orders/p1'],
   ];
   for (const [method, url] of pageHandledClinicalActions) {
     it(`QA D995: a refused ${method} ${url} stays on the page (no 403 page)`, () => {
