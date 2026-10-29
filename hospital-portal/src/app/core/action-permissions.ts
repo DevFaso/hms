@@ -147,10 +147,18 @@ export const ACTION_PERMISSIONS = {
     endpoint: 'EncounterController#closeUnseen',
     roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_RECEPTIONIST'],
   },
-  // QA D961: a medical certificate is a doctor's act.
+  // QA D961: a medical certificate is a physician's act. Product decision
+  // 2026-10-28: any licensed physician (general practitioner, physician,
+  // surgeon, anaesthesiologist, radiologist); never a nurse or a midwife.
   encounterMedicalCertificate: {
     endpoint: 'EncounterController#issueMedicalCertificate',
-    roles: ['ROLE_DOCTOR'],
+    roles: [
+      'ROLE_DOCTOR',
+      'ROLE_PHYSICIAN',
+      'ROLE_SURGEON',
+      'ROLE_ANESTHESIOLOGIST',
+      'ROLE_RADIOLOGIST',
+    ],
   },
   referralCreate: {
     endpoint: 'GeneralReferralController#createReferral',

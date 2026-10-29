@@ -25,6 +25,7 @@ import { ToastService } from '../core/toast.service';
 import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
 import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
+import { expandRoleEquivalents } from '../core/role-equivalence';
 
 function mockEncounter(overrides: Partial<EncounterResponse> = {}): EncounterResponse {
   return {
@@ -911,5 +912,49 @@ describe('EncountersComponent', () => {
     expect(component.form.patientId).toBe('p9');
     component.clearPatient();
     expect(component.form.patientId).toBe('');
+  });
+
+  // Product decision 2026-10-28: the certificate button matches the server:
+  // any licensed physician sees it on a seen visit, nobody else does. The
+  // auth stub answers as AuthService.hasAnyRole does (doctor equivalence).
+  describe('certificate button by role (decision 2026-10-28)', () => {
+    function signInAs(role: string): void {
+      const auth = TestBed.inject(AuthService) as jasmine.SpyObj<AuthService>;
+      auth.hasAnyRole.and.callFake((expected: string[]) =>
+        expandRoleEquivalents([role]).some((r) => expected.includes(r)),
+      );
+    }
+
+    for (const role of [
+      'ROLE_DOCTOR',
+      'ROLE_PHYSICIAN',
+      'ROLE_SURGEON',
+      'ROLE_ANESTHESIOLOGIST',
+      'ROLE_RADIOLOGIST',
+    ]) {
+      it(`${role} is offered the certificate on a seen visit`, () => {
+        signInAs(role);
+        expect(component.canIssueCertificate(mockEncounter({ status: 'IN_PROGRESS' }))).toBeTrue();
+      });
+    }
+
+    for (const role of [
+      'ROLE_NURSE',
+      'ROLE_MIDWIFE',
+      'ROLE_RECEPTIONIST',
+      'ROLE_HOSPITAL_ADMIN',
+      'ROLE_ADMIN',
+      'ROLE_PHARMACIST',
+    ]) {
+      it(`${role} is not offered the certificate`, () => {
+        signInAs(role);
+        expect(component.canIssueCertificate(mockEncounter({ status: 'IN_PROGRESS' }))).toBeFalse();
+      });
+    }
+
+    it('a physician is still not offered it on a visit nobody saw', () => {
+      signInAs('ROLE_SURGEON');
+      expect(component.canIssueCertificate(mockEncounter({ status: 'ARRIVED' }))).toBeFalse();
+    });
   });
 });

@@ -177,7 +177,7 @@ class GuardDriftRatchetTest {
         listed.put("DispenseController.listByPrescription", DISPENSECONTROLLER_REASON);
         listed.put("EncounterController.cosignEncounterNote", ENCOUNTERCONTROLLER_REASON);
         listed.put("EncounterController.issueMedicalCertificate",
-            "QA D961: a medical certificate or sick-leave note is signed by the doctor who examined the patient");
+            "QA D961: a medical certificate or sick-leave note is signed by the licensed physician who examined the patient");
         listed.put("EncounterController.startEncounter", ENCOUNTERCONTROLLER_REASON);
         listed.put("GeneralReferralController.acknowledgeReferral", GENERALREFERRALCONTROLLER_REASON);
         listed.put("GeneralReferralController.cancelReferral", GENERALREFERRALCONTROLLER_REASON);

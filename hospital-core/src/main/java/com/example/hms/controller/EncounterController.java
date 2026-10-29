@@ -291,7 +291,10 @@ public class EncounterController {
     // QA D961 — Medical certificate / sick-leave note from a visit
     // ----------------------------------------------------------
     @PostMapping(value = "/{encounterId}/medical-certificate", consumes = MediaType.APPLICATION_JSON_VALUE)
-    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR')")
+    // Product decision 2026-10-28: any licensed physician (RoleValidator.
+    // LICENSED_PHYSICIAN_ROLE_CODES); the service also requires the role at
+    // the visit's hospital and that the caller treated the visit.
+    @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR','ROLE_PHYSICIAN','ROLE_SURGEON','ROLE_ANESTHESIOLOGIST','ROLE_RADIOLOGIST')")
     @Operation(
         summary = "Issue a medical certificate or sick-leave note for a visit",
         description = "Generates a dated, signed PDF in FR/EN/ES from the visit, files it in the "

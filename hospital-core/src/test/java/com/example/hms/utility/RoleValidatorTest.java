@@ -364,4 +364,41 @@ class RoleValidatorTest {
         assertThat(RoleValidator.isLabOrderingRole(assignmentInRole(null))).isFalse();
         assertThat(RoleValidator.isLabOrderingRole(new com.example.hms.model.UserRoleHospitalAssignment())).isFalse();
     }
+
+    /**
+     * Product decision 2026-10-28: a medical certificate is signed by any
+     * licensed physician at the visit's hospital - the doctor, physician and
+     * the specialist physicians this codebase seeds - and by no one else.
+     * The role is held at THAT hospital: the query is keyed on it.
+     */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {
+        "ROLE_DOCTOR", "ROLE_PHYSICIAN", "ROLE_SURGEON", "ROLE_ANESTHESIOLOGIST", "ROLE_RADIOLOGIST"})
+    void isLicensedPhysician_admitsEveryPhysicianRole(String heldRole) {
+        UUID userId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+            eq(userId), eq(hospitalId), anySet()))
+            .thenAnswer(i -> i.<java.util.Set<String>>getArgument(2).contains(heldRole));
+        assertThat(roleValidator.isLicensedPhysician(userId, hospitalId)).isTrue();
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {
+        "ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_RECEPTIONIST", "ROLE_HOSPITAL_ADMIN", "ROLE_ADMIN",
+        "ROLE_SUPER_ADMIN", "ROLE_PHARMACIST", "ROLE_LAB_SCIENTIST", "ROLE_PHYSIOTHERAPIST", "ROLE_STAFF"})
+    void isLicensedPhysician_refusesEveryOtherRole(String heldRole) {
+        UUID userId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+            eq(userId), eq(hospitalId), anySet()))
+            .thenAnswer(i -> i.<java.util.Set<String>>getArgument(2).contains(heldRole));
+        assertThat(roleValidator.isLicensedPhysician(userId, hospitalId)).isFalse();
+    }
+
+    @Test
+    void licensedPhysicianRoleCodes_areExactlyTheSeededPhysicianRoles() {
+        assertThat(RoleValidator.LICENSED_PHYSICIAN_ROLE_CODES)
+            .containsExactly("DOCTOR", "PHYSICIAN", "SURGEON", "ANESTHESIOLOGIST", "RADIOLOGIST");
+    }
 }

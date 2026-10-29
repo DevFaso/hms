@@ -54,9 +54,12 @@ import java.util.UUID;
  * documents, so the staff chart and the patient portal list and download it
  * like any other document. Nothing is stored that the PDF does not say.
  *
- * <p>Who may issue it: a doctor (controller) with a staff record at the
- * visit's hospital, for a visit of that hospital that the patient was seen
- * in; a visit closed unseen or cancelled has nothing to certify.
+ * <p>Who may issue it: a licensed physician (the controller and
+ * {@code RoleValidator.LICENSED_PHYSICIAN_ROLE_CODES}: doctor, physician,
+ * surgeon, anaesthesiologist, radiologist) holding that role at the visit's
+ * hospital and who treated the visit, for a visit of that hospital that the
+ * patient was seen in; a visit closed unseen or cancelled has nothing to
+ * certify.
  */
 @Slf4j
 @Service
@@ -98,11 +101,14 @@ public class MedicalCertificateServiceImpl implements MedicalCertificateService 
             throw new com.example.hms.exception.ClientSafeAccessDeniedException(
                 com.example.hms.utility.MessageUtil.resolveOrRaw("identity.notCaller"));
         }
-        // Review of #971: a doctor AT this hospital; a doctor elsewhere who is
-        // a nurse here does not sign with her nurse record.
-        if (!roleValidator.isDoctor(doctor.getUser().getId(), hospital.getId())) {
+        // Review of #971: a physician AT this hospital; a doctor elsewhere who
+        // is a nurse here does not sign with her nurse record. Product decision
+        // 2026-10-28: any licensed physician signs (general practitioner,
+        // physician, surgeon, anaesthesiologist, radiologist), not only
+        // ROLE_DOCTOR; nurses, midwives, receptionists and admins do not.
+        if (!roleValidator.isLicensedPhysician(doctor.getUser().getId(), hospital.getId())) {
             throw new com.example.hms.exception.ClientSafeAccessDeniedException(
-                com.example.hms.utility.MessageUtil.resolveOrRaw("medicalCertificate.notTreating"));
+                com.example.hms.utility.MessageUtil.resolveOrRaw("medicalCertificate.physicianOnly"));
         }
         // The certificate says "I examined the patient on that day": only a
         // clinician who treated the visit (its clinician of record or a note

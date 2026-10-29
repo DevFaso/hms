@@ -2490,7 +2490,11 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   integration branch, so the FK needs its own migration (next free number)
   rather than an edit; the certificate endpoint admits ROLE_DOCTOR only,
   while checkout ownership counts physicians and surgeons as doctors
-  (whether surgeons and physicians sign certificates is a product call);
+  (DECIDED by the user 2026-10-28, applied on fix/r17-review-976: any
+  licensed physician at the visit's hospital signs - doctor, physician,
+  surgeon, anaesthesiologist, radiologist, `RoleValidator.
+  LICENSED_PHYSICIAN_ROLE_CODES`; never a nurse, midwife, receptionist or
+  admin; the endpoint, the service and the portal button share the list);
   the maternity screens show a gestational age up to 44 weeks while the
   pregnancy-hypertension card stops at the due date + 14 days (42 weeks);
   the nursing-notes panel on a closed visit reads the 50 newest notes and

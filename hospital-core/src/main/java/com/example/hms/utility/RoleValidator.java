@@ -213,6 +213,23 @@ public class RoleValidator {
         return hasAnyCode(userId, hospitalId, NURSE_ROLE, MIDWIFE_ROLE) && !isSigningPhysician(userId, hospitalId);
     }
 
+    /**
+     * Product decision 2026-10-28 ("as it works in real hospitals"): the
+     * licensed-physician roles this codebase seeds (V2__seed_roles.sql) - the
+     * doctor (general practitioner), the physician, and the specialist
+     * physicians: surgeon, anaesthesiologist, radiologist. Nurses, midwives,
+     * receptionists and administrators are not physicians. The medical
+     * certificate endpoint's {@code @PreAuthorize} names exactly these
+     * (MedicalCertificateServiceImplTest pins the two lists together).
+     */
+    public static final java.util.List<String> LICENSED_PHYSICIAN_ROLE_CODES = java.util.List.of(
+        DOCTOR_ROLE, PHYSICIAN_ROLE, SURGEON_ROLE, "ANESTHESIOLOGIST", "RADIOLOGIST");
+
+    /** A licensed physician ({@link #LICENSED_PHYSICIAN_ROLE_CODES}) at {@code hospitalId}, in one query. */
+    public boolean isLicensedPhysician(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, LICENSED_PHYSICIAN_ROLE_CODES.toArray(new String[0]));
+    }
+
     public boolean isDoctor(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, DOCTOR_ROLE); }
     public boolean isPhysician(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, PHYSICIAN_ROLE); }
     public boolean isSurgeon(UUID userId, UUID hospitalId) { return hasAnyCode(userId, hospitalId, SURGEON_ROLE); }

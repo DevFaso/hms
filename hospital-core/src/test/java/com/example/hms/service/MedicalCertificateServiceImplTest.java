@@ -89,7 +89,7 @@ class MedicalCertificateServiceImplTest {
         CallerIdentityTestSupport.actAs(doctor, hospital);
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(staffRepository.findByUserIdAndHospitalId(user.getId(), hospital.getId())).thenReturn(Optional.of(doctor));
-        org.mockito.Mockito.lenient().when(roleValidator.isDoctor(user.getId(), hospital.getId())).thenReturn(true);
+        org.mockito.Mockito.lenient().when(roleValidator.isLicensedPhysician(user.getId(), hospital.getId())).thenReturn(true);
         when(localeResolver.resolve(any(), any())).thenReturn(java.util.Locale.FRENCH);
         when(fileUploadService.storeGeneratedPatientDocument(any(), anyString(), any())).thenAnswer(inv ->
             new FileUploadService.StoredFileDescriptor("/uploads/patient-documents/c.pdf", null,
@@ -272,12 +272,78 @@ class MedicalCertificateServiceImplTest {
     @Test
     void aDoctorElsewhereWhoIsANurseHereCannotSign() {
         // Her nurse record here is the visit's clinician of record; her doctor role is at another hospital.
-        when(roleValidator.isDoctor(doctor.getUser().getId(), hospital.getId())).thenReturn(false);
+        when(roleValidator.isLicensedPhysician(doctor.getUser().getId(), hospital.getId())).thenReturn(false);
         MedicalCertificateRequestDTO request = MedicalCertificateRequestDTO.builder()
             .type(MedicalCertificateType.ATTENDANCE).build();
         assertThatThrownBy(() -> service.issue(encounterId, request))
             .isInstanceOf(ClientSafeAccessDeniedException.class);
         verify(documentRepository, never()).save(any());
+    }
+
+    /**
+     * Product decision 2026-10-28: the signer is any licensed physician at the
+     * visit's hospital. The service asks exactly that question (the per-role
+     * answers are RoleValidatorTest.isLicensedPhysician_*), at the visit's
+     * hospital, and refuses everyone else with the translated physician-only
+     * reason, before anything is written.
+     */
+    @Test
+    void decision20261028_theSignerIsAskedWhetherTheyAreALicensedPhysicianAtTheVisitsHospital() {
+        service.issue(encounterId, MedicalCertificateRequestDTO.builder().type(MedicalCertificateType.ATTENDANCE).build());
+        verify(roleValidator).isLicensedPhysician(doctor.getUser().getId(), hospital.getId());
+        verify(roleValidator, never()).isDoctor(any(), any());
+    }
+
+    @Test
+    void decision20261028_aNonPhysicianIsRefusedWithTheTranslatedPhysicianOnlyReason() {
+        when(roleValidator.isLicensedPhysician(doctor.getUser().getId(), hospital.getId())).thenReturn(false);
+        MedicalCertificateRequestDTO request = MedicalCertificateRequestDTO.builder()
+            .type(MedicalCertificateType.ATTENDANCE).build();
+        org.springframework.context.MessageSource bundles = com.example.hms.i18n.TestMessageSources.bundles();
+        com.example.hms.utility.MessageUtil.setMessageSource(bundles);
+        try {
+            for (String tag : java.util.List.of("en", "fr", "es")) {
+                java.util.Locale locale = java.util.Locale.forLanguageTag(tag);
+                org.springframework.context.i18n.LocaleContextHolder.setLocale(locale);
+                String expected = bundles.getMessage("medicalCertificate.physicianOnly", null, locale);
+                assertThat(expected).as(tag).doesNotContain("medicalCertificate.");
+                assertThatThrownBy(() -> service.issue(encounterId, request))
+                    .isInstanceOf(ClientSafeAccessDeniedException.class)
+                    .hasMessage(expected);
+            }
+        } finally {
+            com.example.hms.utility.MessageUtil.setMessageSource(null);
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        }
+        verify(documentRepository, never()).save(any());
+    }
+
+    /**
+     * The endpoint admits exactly the licensed-physician roles the service
+     * checks (and the portal's button mirrors the endpoint through
+     * ActionPermissionsMirrorTest), and every one of them is a role the
+     * migrations seed: no button for a role the server refuses, no role that
+     * does not exist.
+     */
+    @Test
+    void decision20261028_theEndpointAdmitsExactlyTheSeededLicensedPhysicianRoles() throws Exception {
+        String rule = com.example.hms.controller.EncounterController.class
+            .getMethod("issueMedicalCertificate", UUID.class, MedicalCertificateRequestDTO.class)
+            .getAnnotation(org.springframework.security.access.prepost.PreAuthorize.class).value();
+        java.util.Set<String> admitted = new java.util.TreeSet<>();
+        java.util.regex.Matcher quoted = java.util.regex.Pattern.compile("'(ROLE_[A-Z_]+)'").matcher(rule);
+        while (quoted.find()) {
+            admitted.add(quoted.group(1));
+        }
+        java.util.Set<String> expected = new java.util.TreeSet<>();
+        com.example.hms.utility.RoleValidator.LICENSED_PHYSICIAN_ROLE_CODES.forEach(code -> expected.add("ROLE_" + code));
+        assertThat(admitted).as(rule).isEqualTo(expected);
+        String seeds = java.nio.file.Files.readString(
+            java.nio.file.Path.of("src/main/resources/db/migration/V2__seed_roles.sql"));
+        for (String role : expected) {
+            assertThat(seeds).as(role + " is a seeded role").contains("'" + role + "'");
+        }
+        assertThat(expected).doesNotContain("ROLE_MIDWIFE", "ROLE_NURSE");
     }
 
     @Test
