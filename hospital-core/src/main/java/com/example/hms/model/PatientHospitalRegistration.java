@@ -128,11 +128,17 @@ public class PatientHospitalRegistration extends BaseEntity {
         setStayStatus(PatientStayStatus.ADMITTED);
     }
 
+    /**
+     * Ends the stay, never the registration. QA D1014: this used to clear
+     * {@code active} too, and every patient list, search and picker reads
+     * active registrations only, so an approved discharge made the patient
+     * vanish and impossible to readmit, book or see again (V244 restores the
+     * rows it ended). A discharged patient stays registered here.
+     */
     public void markDischarged() {
         this.readyByStaffId = null;
         this.readyForDischargeNote = null;
         setStayStatus(PatientStayStatus.DISCHARGED);
-        this.active = false;
     }
 
     public PatientHospitalRegistration(Patient patient, Hospital hospital) {

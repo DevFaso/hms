@@ -3,13 +3,39 @@ import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { EmpiStatusService } from './empi-status.service';
 import { BACKGROUND_REQUEST } from '../services/ws-transport';
+import { AuthService } from '../auth/auth.service';
 
 describe('EmpiStatusService (QA D987)', () => {
-  beforeEach(() =>
+  let held: string[];
+  beforeEach(() => {
+    held = ['ROLE_RECEPTIONIST'];
     TestBed.configureTestingModule({
-      providers: [provideHttpClient(withXhr()), provideHttpClientTesting()],
-    }),
-  );
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        {
+          provide: AuthService,
+          useValue: { hasAnyRole: (rs: string[]) => rs.some((r) => held.includes(r)) },
+        },
+      ],
+    });
+  });
+
+  for (const role of ['ROLE_PATIENT', 'ROLE_PHARMACIST', 'ROLE_LAB_TECHNICIAN', 'ROLE_LAB_DIRECTOR']) {
+    it(`QA D1012: never asks for ${role}, which the matcher refuses, and reads it as off`, () => {
+      held = [role];
+      const service = TestBed.inject(EmpiStatusService);
+      const http = TestBed.inject(HttpTestingController);
+      let answer: boolean | null | undefined;
+      service.load().subscribe((on) => (answer = on));
+      service.load().subscribe();
+      http.expectNone('/empi/candidates/status');
+      expect(answer).toBeFalse();
+      expect(service.enabled()).toBeFalse();
+      expect(service.failed()).toBeFalse();
+      http.verify();
+    });
+  }
 
   it('reads the switch once and shares it', () => {
     const service = TestBed.inject(EmpiStatusService);

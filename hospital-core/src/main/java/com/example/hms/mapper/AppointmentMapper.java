@@ -129,7 +129,9 @@ public class AppointmentMapper {
         appointment.setAppointmentDate(dto.getAppointmentDate());
         appointment.setStartTime(dto.getStartTime());
         appointment.setEndTime(dto.getEndTime());
-        appointment.setStatus(dto.getStatus());
+        // QA D1018: an edit that sends no status keeps the current one; a
+        // null used to be written over it (NOT NULL column).
+        if (dto.getStatus() != null) appointment.setStatus(dto.getStatus());
         appointment.setReason(dto.getReason());
         appointment.setNotes(dto.getNotes());
 

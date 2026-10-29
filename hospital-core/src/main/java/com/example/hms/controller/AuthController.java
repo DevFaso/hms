@@ -573,17 +573,15 @@ public class AuthController {
             }
             return resendActivationByPhone(phone.trim());
         }
+        // QA D1017: one answer whatever the address: unknown, active or
+        // waiting. An active account used to answer "already verified", which
+        // told an anonymous caller which addresses hold a live account.
+        MessageResponse neutral = new MessageResponse(MessageUtil.resolve("auth.resend.emailNeutral"));
         var userOpt = userRepository.findByEmail(email);
-        if (userOpt.isEmpty()) {
-            // Don't reveal whether email exists
-            return ResponseEntity.ok(new MessageResponse(
-                    "If the email is registered, a new verification link has been sent."));
+        if (userOpt.isEmpty() || userOpt.get().isActive()) {
+            return ResponseEntity.ok(neutral);
         }
         var user = userOpt.get();
-        if (user.isActive()) {
-            return ResponseEntity.ok(new MessageResponse(
-                    "Account is already verified. You can log in."));
-        }
 
         // Generate new token
         user.setActivationToken(java.util.UUID.randomUUID().toString());
@@ -601,8 +599,7 @@ public class AuthController {
         }
         resendPendingAssignmentCodes(user);
 
-        return ResponseEntity.ok(new MessageResponse(
-                "If the email is registered, a new verification link has been sent."));
+        return ResponseEntity.ok(neutral);
     }
 
     private static String firstNonBlank(String preferred, String fallback) {
@@ -617,8 +614,7 @@ public class AuthController {
      * not the number is known, so the endpoint does not reveal accounts.
      */
     private ResponseEntity<Object> resendActivationByPhone(String phone) {
-        MessageResponse neutral = new MessageResponse(
-                "If the number is registered, a new activation code has been sent.");
+        MessageResponse neutral = new MessageResponse(MessageUtil.resolve("auth.resend.phoneNeutral"));
         // Same lookup as the reset-by-phone flow: the number as typed at the
         // desk ("70 00 00 00") is stored in E.164.
         String e164 = com.example.hms.utility.PhoneNumbers.toE164(

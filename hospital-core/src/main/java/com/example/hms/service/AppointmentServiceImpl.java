@@ -734,6 +734,28 @@ public class AppointmentServiceImpl implements AppointmentService {
     }
 
 
+    /**
+     * QA D1018: the department an edit files the visit under. A department the
+     * request names wins (same lookup as a booking, scoped to the hospital);
+     * otherwise a visit moved to another hospital, or to another clinician who
+     * has a department, is filed as a new booking would be; otherwise it stays
+     * where it was.
+     */
+    private Department resolveDepartmentForEdit(AppointmentRequestDTO request, Hospital hospital, Staff staff,
+                                                Appointment existing) {
+        boolean named = request.getDepartmentId() != null || request.getDepartmentCode() != null
+            || request.getDepartmentName() != null;
+        boolean staffChanged = existing.getStaff() == null || !staff.getId().equals(existing.getStaff().getId());
+        boolean hospitalChanged = existing.getHospital() == null
+            || !hospital.getId().equals(existing.getHospital().getId());
+        // A visit moved to another hospital never keeps the old hospital's department.
+        if (named || hospitalChanged || existing.getDepartment() == null
+                || (staffChanged && staff.getDepartment() != null)) {
+            return resolveDepartment(request, hospital, staff);
+        }
+        return existing.getDepartment();
+    }
+
     /* =======================
        UPDATE
        ======================= */
@@ -811,10 +833,16 @@ public class AppointmentServiceImpl implements AppointmentService {
             ));
         }
 
+        // QA D1018 / D923: the department is part of the edit. The PUT used to
+        // answer 200 and keep the old one, so a visit moved to a paediatrician
+        // stayed filed under general medicine.
+        Department department = resolveDepartmentForEdit(request, hospital, staff, existing);
+
         // Capture old schedule before mapper overwrites fields
         LocalDate   oldDate  = existing.getAppointmentDate();
         LocalTime   oldStart = existing.getStartTime();
         LocalTime   oldEnd   = existing.getEndTime();
+        UUID        oldStaffId = existing.getStaff() != null ? existing.getStaff().getId() : null;
 
         // The update path used to write request.getStatus() straight onto the
         // entity with no transition check at all, while
@@ -837,6 +865,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         }
 
         appointmentMapper.updateAppointmentFromDto(request, existing, patient, staff, hospital);
+        existing.setDepartment(department);
         existing.setAssignment(assignment);
         existing.setUpdatedAt(LocalDateTime.now());
 
@@ -848,6 +877,17 @@ public class AppointmentServiceImpl implements AppointmentService {
         entityManager.refresh(saved);
         if (statusMoved) {
             afterEditMovedStatus(saved);
+        }
+
+        // QA D1013 (sibling): a visit moved off the inventory slot it was
+        // booked from, or to another clinician, frees that slot; it used to
+        // stay BOOKED for an appointment that was no longer there.
+        boolean leftItsSlot = !saved.getAppointmentDate().equals(oldDate)
+            || !saved.getStartTime().equals(oldStart)
+            || !saved.getEndTime().equals(oldEnd)
+            || !Objects.equals(oldStaffId, staff.getId());
+        if (leftItsSlot) {
+            slotInventoryService.releaseForAppointment(saved.getId());
         }
 
         // Outbound webhooks (Tier 2 item 45): a moved visit is a reschedule

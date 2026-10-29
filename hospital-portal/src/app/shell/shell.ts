@@ -1,4 +1,4 @@
-import { EmpiStatusService } from '../reception/empi-status.service';
+import { EMPI_MATCHER_ROLES, EmpiStatusService } from '../reception/empi-status.service';
 import {
   Component,
   computed,
@@ -1411,13 +1411,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // QA D987: and only while the matcher is switched on; it answers 404 off.
     if (
       (this.empiStatus.enabled() === true || this.empiStatus.failed()) &&
-      this.hasAnyRole([
-        'ROLE_RECEPTIONIST',
-        'ROLE_NURSE',
-        'ROLE_DOCTOR',
-        'ROLE_HOSPITAL_ADMIN',
-        'ROLE_SUPER_ADMIN',
-      ])
+      this.hasAnyRole([...EMPI_MATCHER_ROLES])
     ) {
       items.push({
         icon: 'join_inner',

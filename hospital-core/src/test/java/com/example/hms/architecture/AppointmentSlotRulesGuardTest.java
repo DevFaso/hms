@@ -121,6 +121,123 @@ class AppointmentSlotRulesGuardTest {
             .isGreaterThanOrEqualTo(1);
     }
 
+    /**
+     * QA D1013 (class guard): every method that gives a clinician's time to a
+     * patient - builds a new appointment, or moves one to another date or
+     * clinician - checks in its own body that the clinician is free, through
+     * the shared rule. The slot inventory's {@code book} (an accepted waitlist
+     * offer) and the referral's appointment had no check, and a clinician got
+     * two patients at 09:20. The mappers only copy fields (their callers are
+     * checked), the dev seeder writes fixtures, and the FHIR mapper builds
+     * HAPI's own {@code Appointment}.
+     */
+    @Test
+    void everyMethodThatBooksAClinicianChecksTheyAreFree() throws IOException {
+        List<String> unchecked = new java.util.ArrayList<>();
+        int seen = 0;
+        for (Path f : javaFiles()) {
+            String rel = MAIN.relativize(f).toString().replace('\\', '/');
+            if (rel.startsWith("mapper/") || rel.startsWith("fhir/") || rel.startsWith("model/")
+                    || rel.contains("/dto/") || rel.equals("bootstrap/DevSyntheticDataSeeder.java")) {
+                continue;
+            }
+            String src = com.example.hms.testsupport.SourceScan.stripComments(read(f));
+            List<String> checks = checksIn(src);
+            for (String token : BOOKING_WRITES) {
+                for (int at = src.indexOf(token); at >= 0; at = src.indexOf(token, at + 1)) {
+                    if (token.equals(".setAppointmentDate(") && !rel.startsWith("service/")) {
+                        continue;
+                    }
+                    seen++;
+                    String body = enclosingMethod(src, at);
+                    if (checks.stream().noneMatch(body::contains)) {
+                        unchecked.add(rel + ":" + com.example.hms.testsupport.SourceScan.lineOf(src, at) + " " + token);
+                    }
+                }
+            }
+        }
+        assertThat(seen).as("booking writes found").isGreaterThanOrEqualTo(7);
+        assertThat(unchecked)
+            .as("a method gives a clinician's time without checking they are free (QA D1013): "
+                + "call AppointmentSlotRules.overlapsHeldSlot in it")
+            .isEmpty();
+    }
+
+    @Test
+    void theBookingScanSeesAnUncheckedBuilder() {
+        String src = """
+            class X {
+                public Appointment book(UUID id) {
+                    return repo.save(Appointment.builder().build());
+                }
+            }
+            """;
+        String body = enclosingMethod(src, src.indexOf("Appointment.builder()"));
+        assertThat(body).contains("public Appointment book");
+        assertThat(CLINICIAN_FREE_CHECKS.stream().noneMatch(body::contains)).isTrue();
+    }
+
+    private static final List<String> BOOKING_WRITES = List.of(
+        "Appointment.builder()", "new Appointment()", ".setAppointmentDate(", "updateAppointmentFromDto(");
+
+    private static final List<String> CLINICIAN_FREE_CHECKS = List.of("AppointmentSlotRules.overlapsHeldSlot(");
+
+    /**
+     * The shared rule, plus every method of the same file whose own body calls
+     * it (a helper such as {@code requireClinicianFree} or
+     * {@code freeFollowUpSlot}): calling one of those is the check too.
+     */
+    static List<String> checksIn(String src) {
+        List<String> out = new java.util.ArrayList<>(CLINICIAN_FREE_CHECKS);
+        java.util.Map<String, String> bodies = new java.util.LinkedHashMap<>();
+        java.util.regex.Matcher header = java.util.regex.Pattern.compile("(?m)^    [a-zA-Z][^\\n(]*\\(").matcher(src);
+        while (header.find()) {
+            int open = com.example.hms.testsupport.SourceScan.indexOfOutsideLiterals(src, '{', header.end());
+            int semi = com.example.hms.testsupport.SourceScan.indexOfOutsideLiterals(src, ';', header.end());
+            if (open < 0 || (semi >= 0 && semi < open)) {
+                continue;
+            }
+            String head = src.substring(header.start(), header.end() - 1).trim();
+            bodies.merge(head.substring(head.lastIndexOf(' ') + 1) + "(",
+                src.substring(open, com.example.hms.testsupport.SourceScan.closingBrace(src, open)), String::concat);
+        }
+        // To a fixpoint: a helper that calls a helper that calls the rule is a check too.
+        boolean grew = true;
+        while (grew) {
+            grew = false;
+            for (java.util.Map.Entry<String, String> m : bodies.entrySet()) {
+                if (!out.contains(m.getKey()) && out.stream().anyMatch(m.getValue()::contains)) {
+                    out.add(m.getKey());
+                    grew = true;
+                }
+            }
+        }
+        return out;
+    }
+
+    /** The body of the method (4-space indented member) around {@code index}. */
+    static String enclosingMethod(String src, int index) {
+        java.util.regex.Matcher header = java.util.regex.Pattern.compile(
+            "(?m)^    [a-zA-Z][^\\n(]*\\(")
+            .matcher(src);
+        int bestStart = -1;
+        int bestEnd = -1;
+        while (header.find() && header.start() < index) {
+            int open = com.example.hms.testsupport.SourceScan.indexOfOutsideLiterals(src, '{', header.end());
+            int semi = com.example.hms.testsupport.SourceScan.indexOfOutsideLiterals(src, ';', header.end());
+            if (open < 0 || (semi >= 0 && semi < open)) {
+                continue;
+            }
+            int close = com.example.hms.testsupport.SourceScan.closingBrace(src, open);
+            if (close > index) {
+                bestStart = header.start();
+                bestEnd = close;
+            }
+        }
+        assertThat(bestStart).as("no method encloses offset %d", index).isNotNegative();
+        return src.substring(bestStart, bestEnd);
+    }
+
     @Test
     void everyPatientBookingCheckReadsTheHospitalsClock() throws IOException {
         // QA D978 (review round 8): "in the past" is judged at the hospital,
