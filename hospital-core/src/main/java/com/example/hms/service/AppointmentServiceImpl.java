@@ -545,7 +545,7 @@ public class AppointmentServiceImpl implements AppointmentService {
                 Locale mailLocale = patientLocaleResolver.resolve(patient, EmailService.DEFAULT_RECIPIENT_LOCALE);
                 emailService.sendAppointmentConfirmationEmail(
                     patient.getEmail(),
-                    patient.getFirstName() + " " + patient.getLastName(),
+                    patient.getFullName(),
                     hospital.getName(),
                     staff.getUser().getFirstName() + " " + staff.getUser().getLastName(),
                     saved.getAppointmentDate().toString(),
@@ -573,7 +573,7 @@ public class AppointmentServiceImpl implements AppointmentService {
             .startTime(saved.getStartTime())
             .endTime(saved.getEndTime())
             .patientId(p.getId())
-            .patientName(p.getFirstName() + " " + p.getLastName())
+            .patientName(p.getFullName())
             .patientEmail(p.getEmail())
             .patientPhone(p.getPhoneNumberPrimary())
             .staffId(s.getId())
@@ -1008,7 +1008,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         Patient patient = appointment.getPatient();
         Staff staff = appointment.getStaff();
         Hospital hospital = appointment.getHospital();
-        String patientName = patient.getFirstName() + " " + patient.getLastName();
+        String patientName = patient.getFullName();
         String staffName = staff.getUser().getFirstName() + " " + staff.getUser().getLastName();
         String appointmentDate = appointment.getAppointmentDate().toString();
         String appointmentTime = appointment.getStartTime().toString() + " - " + appointment.getEndTime().toString();

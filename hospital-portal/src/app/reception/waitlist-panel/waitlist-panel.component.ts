@@ -1,3 +1,4 @@
+import { PersonNamePipe } from '../../shared/pipes/person-name.pipe';
 import { DialogFocusDirective } from '../../shared/a11y/dialog-focus.directive';
 import {
   Component,
@@ -36,7 +37,7 @@ type WaitlistStatus = 'ALL' | 'WAITING' | 'OFFERED' | 'CLOSED';
 @Component({
   selector: 'app-waitlist-panel',
   standalone: true,
-  imports: [
+  imports: [PersonNamePipe, 
     DialogFocusDirective,
     PatientSublinePipe,
     ServerTimePipe,

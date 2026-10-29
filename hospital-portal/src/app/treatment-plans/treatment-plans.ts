@@ -1,3 +1,4 @@
+import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
 import { textMatches } from '../shared/person-search';
 import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -28,7 +29,7 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 @Component({
   selector: 'app-treatment-plans',
   standalone: true,
-  imports: [
+  imports: [PersonNamePipe, 
     ModalDialogDirective,
     PatientSublinePipe,
     ServerTimePipe,

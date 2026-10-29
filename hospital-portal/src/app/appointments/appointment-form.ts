@@ -1,3 +1,4 @@
+import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
 import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
@@ -34,7 +35,7 @@ interface DeptOption {
 @Component({
   selector: 'app-appointment-form',
   standalone: true,
-  imports: [PatientSublinePipe, FormsModule, RouterLink, TranslateModule, EnumLabelPipe],
+  imports: [PersonNamePipe, PatientSublinePipe, FormsModule, RouterLink, TranslateModule, EnumLabelPipe],
   templateUrl: './appointment-form.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './appointment-form.scss',

@@ -1,3 +1,4 @@
+import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
 import { textMatches } from '../shared/person-search';
 import {
   Component,
@@ -41,7 +42,7 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 @Component({
   selector: 'app-referrals',
   standalone: true,
-  imports: [
+  imports: [PersonNamePipe, 
     ModalDialogDirective,
     PatientSublinePipe,
     ServerTimePipe,

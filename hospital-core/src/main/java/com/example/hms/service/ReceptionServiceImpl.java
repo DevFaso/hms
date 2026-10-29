@@ -286,7 +286,7 @@ public class ReceptionServiceImpl implements ReceptionService {
 
         return FrontDeskPatientSnapshotDTO.builder()
                 .patientId(patientId)
-                .fullName(patient.getFirstName() + " " + patient.getLastName())
+                .fullName(patient.getFullName())
                 .mrn(mrn)
                 .dob(patient.getDateOfBirth())
                 .phone(patient.getPhoneNumberPrimary())
@@ -346,7 +346,7 @@ public class ReceptionServiceImpl implements ReceptionService {
         return InsuranceIssueDTO.builder()
                 .appointmentId(appt.getId())
                 .patientId(pid)
-                .patientName(p.getFirstName() + " " + p.getLastName())
+                .patientName(p.getFullName())
                 .mrn(p.getMrnForHospital(appt.getHospital() != null ? appt.getHospital().getId() : null))
                 .appointmentTime(appt.getStartTime() != null ? appt.getStartTime().format(TIME_FMT) : null)
                 .issueType(issueType)
@@ -425,7 +425,7 @@ public class ReceptionServiceImpl implements ReceptionService {
         return ReceptionQueueItemDTO.builder()
                 .appointmentId(appt.getId())
                 .patientId(pid)
-                .patientName(p.getFirstName() + " " + p.getLastName())
+                .patientName(p.getFullName())
                 // QA D239: the MRN at this hospital, and the booked reason
                 // (else what triage recorded); both were hard-wired to null.
                 .mrn(p.getMrnForHospital(hospitalId))
@@ -454,7 +454,7 @@ public class ReceptionServiceImpl implements ReceptionService {
         return ReceptionQueueItemDTO.builder()
                 .appointmentId(null)
                 .patientId(p.getId())
-                .patientName(p.getFirstName() + " " + p.getLastName())
+                .patientName(p.getFullName())
                 .mrn(p.getMrnForHospital(walkInHospitalId))
                 .dateOfBirth(p.getDateOfBirth())
                 .appointmentTime(walkIn.getEncounterDate() != null
@@ -718,7 +718,7 @@ public class ReceptionServiceImpl implements ReceptionService {
                             .findFirst().orElse(null);
                     return DuplicateCandidateDTO.builder()
                             .patientId(p.getId())
-                            .fullName(p.getFirstName() + " " + p.getLastName())
+                            .fullName(p.getFullName())
                             .mrn(mrn)
                             .dateOfBirth(p.getDateOfBirth())
                             .phone(p.getPhoneNumberPrimary())
@@ -1158,7 +1158,7 @@ public class ReceptionServiceImpl implements ReceptionService {
                 patient.getId(), appointment.getId(), encounter.getCode(), actorUsername);
 
         // 5. Build response
-        String patientName = patient.getFirstName() + " " + patient.getLastName();
+        String patientName = patient.getFullName();
         return CheckInResponseDTO.builder()
                 .appointmentId(appointment.getId())
                 .appointmentStatus(appointment.getStatus())
@@ -1204,7 +1204,7 @@ public class ReceptionServiceImpl implements ReceptionService {
                 .id(e.getId())
                 .hospitalId(e.getHospital().getId())
                 .patientId(p.getId())
-                .patientName(p.getFirstName() + " " + p.getLastName())
+                .patientName(p.getFullName())
                 .mrn(mrn)
                 .departmentId(e.getDepartment().getId())
                 .departmentName(e.getDepartment().getName())

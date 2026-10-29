@@ -396,7 +396,19 @@ public class GlobalExceptionHandler {
         body.put(FIELD_TIMESTAMP, LocalDateTime.now());
         body.put(FIELD_STATUS, HttpStatus.BAD_REQUEST.value());
         body.put(FIELD_ERROR, "Validation Failed");
-        body.put(FIELD_MESSAGE, localized("error.validation.request", "Validation errors in request"));
+        // QA D1037 / D984: the message says what to fix. It was the generic
+        // "the request parameters are not valid" whatever the field, and every
+        // page that shows err.error.message (130 of them) showed only that.
+        // The field reasons (already in the request's language) are the
+        // message now; the generic sentence stays the fallback.
+        String reasons = fieldErrors.values().stream()
+                .filter(message -> message != null && !message.isBlank())
+                .map(String::trim)
+                .distinct()
+                .collect(Collectors.joining(" "));
+        body.put(FIELD_MESSAGE, reasons.isEmpty()
+                ? localized("error.validation.request", "Validation errors in request")
+                : reasons);
         body.put(FIELD_ERRORS, fieldErrors);
         body.put(FIELD_PATH, request.getDescription(false).replace("uri=", ""));
 

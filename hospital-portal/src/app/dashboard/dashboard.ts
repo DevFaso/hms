@@ -1,3 +1,4 @@
+import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
 import { currentMedications } from '../patient-portal/current-medications';
 import {
   ChangeDetectionStrategy,
@@ -139,7 +140,7 @@ export { currentMedications };
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [
+  imports: [PersonNamePipe, 
     ClockTimePipe,
     ServerTimePipe,
     CommonModule,

@@ -1,3 +1,4 @@
+import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
 import { textMatches } from '../shared/person-search';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
@@ -51,7 +52,7 @@ const CANCELLABLE_STATUSES = new Set<string>(['PENDING', 'ACTIVE', 'ON_LEAVE']);
 @Component({
   selector: 'app-admissions',
   standalone: true,
-  imports: [
+  imports: [PersonNamePipe, 
     PatientSublinePipe,
     CommonModule,
     FormsModule,

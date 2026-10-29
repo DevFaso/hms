@@ -1,3 +1,4 @@
+import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
 import { personNameMatches, phoneMatches, textMatches } from '../shared/person-search';
 import {
   Component,
@@ -25,7 +26,7 @@ type SortDir = 'asc' | 'desc';
 @Component({
   selector: 'app-patient-list',
   standalone: true,
-  imports: [CommonModule, RouterLink, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [PersonNamePipe, CommonModule, RouterLink, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './patient-list.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './patient-list.scss',

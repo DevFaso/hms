@@ -280,7 +280,7 @@
                   {{ patient.firstName.charAt(0) }}{{ patient.lastName.charAt(0) }}
                 </div>
                 <div class="name-stack">
-                  <span class="name-primary">{{ patient.firstName }} {{ patient.lastName }}</span>
+                  <span class="name-primary">{{ patient | personName }}</span>
                   @if (patient.hospitalName) {
                     <span class="name-sub">{{ patient.hospitalName }}</span>
                   }

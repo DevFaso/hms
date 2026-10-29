@@ -1,3 +1,4 @@
+import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
 import { textMatches } from '../shared/person-search';
 import {
   Component,
@@ -44,7 +45,7 @@ const CONSULTANT_TAB_ROLES = ['ROLE_DOCTOR', 'ROLE_SUPER_ADMIN'];
 @Component({
   selector: 'app-consultations',
   standalone: true,
-  imports: [
+  imports: [PersonNamePipe, 
     ModalDialogDirective,
     PatientSublinePipe,
     ServerTimePipe,

@@ -157,6 +157,35 @@
           />
         </div>
         <div class="field-group">
+          <label for="demoPostal">{{ 'PATIENTS.ZIP_CODE' | translate }}</label>
+          <input
+            id="demoPostal"
+            name="postalCode"
+            class="form-control"
+            maxlength="100"
+            [(ngModel)]="form.postalCode"
+          />
+        </div>
+        <div class="field-group">
+          <label for="demoEthnicity">{{ 'PATIENTS.ETHNICITY' | translate }}</label>
+          <input
+            id="demoEthnicity"
+            name="ethnicity"
+            class="form-control"
+            maxlength="100"
+            [(ngModel)]="form.ethnicity"
+          />
+        </div>
+        <div class="field-group">
+          <label for="demoBloodType">{{ 'PATIENTS.BLOOD_TYPE' | translate }}</label>
+          <select id="demoBloodType" name="bloodType" class="form-control" [(ngModel)]="form.bloodType">
+            <option value="">{{ 'PATIENTS.SELECT_BLOOD_TYPE' | translate }}</option>
+            @for (b of bloodTypes; track b) {
+              <option [value]="b">{{ b }}</option>
+            }
+          </select>
+        </div>
+        <div class="field-group">
           <label for="demoCountry">{{ 'PATIENTS.COUNTRY' | translate }}</label>
           <input
             id="demoCountry"

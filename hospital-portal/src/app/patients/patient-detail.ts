@@ -133,6 +133,17 @@ export class PatientDetailComponent implements OnInit {
   /** The route's patient id; read by the template for the restricted-chart prompt (E8 #54). */
   patientId = '';
 
+  /**
+   * QA D1036 / D926: the full name with the middle name, each part once and
+   * single-spaced. The header and "Full name" showed first and last only.
+   */
+  fullName(p: Pick<PatientResponse, 'firstName' | 'middleName' | 'lastName'>): string {
+    return [p.firstName, p.middleName, p.lastName]
+      .map((part) => (part ?? '').trim())
+      .filter((part) => part !== '')
+      .join(' ');
+  }
+
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('id');
     if (!id) {

@@ -291,6 +291,43 @@
               />
             </div>
           </div>
+          <!-- QA D1018 / D923: the clinician, the department and the reason
+               can change with the time. -->
+          <div class="field">
+            <label for="reschedStaff">{{ 'APPOINTMENTS.DOCTOR_STAFF' | translate }}</label>
+            <select
+              id="reschedStaff"
+              name="reschedStaff"
+              [ngModel]="rescheduleStaffId"
+              (ngModelChange)="onRescheduleStaffChange($event)"
+            >
+              @if (appointment(); as a) {
+                @if (!rescheduleStaffOptions().length || !hasRescheduleStaff(a.staffId)) {
+                  <option [value]="a.staffId">{{ a.staffName }}</option>
+                }
+              }
+              @for (s of rescheduleStaffOptions(); track s.id) {
+                <option [value]="s.id">{{ s.name }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="reschedDept">{{ 'APPOINTMENTS.DEPARTMENT' | translate }}</label>
+            <select id="reschedDept" name="reschedDept" [(ngModel)]="rescheduleDepartmentId">
+              @for (d of rescheduleDepartments(); track d.id) {
+                <option [value]="d.id">{{ d.name }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="reschedReason">{{ 'APPOINTMENTS.REASON' | translate }}</label>
+            <input
+              id="reschedReason"
+              name="reschedReason"
+              maxlength="2048"
+              [(ngModel)]="rescheduleReason"
+            />
+          </div>
           <div class="field">
             <label for="reschedNotes">{{ 'APPOINTMENTS.NOTES_OPTIONAL' | translate }}</label>
             <textarea

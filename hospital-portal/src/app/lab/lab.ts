@@ -1,3 +1,4 @@
+import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
 import { textMatches } from '../shared/person-search';
 import { CdkTrapFocus } from '@angular/cdk/a11y';
 import {
@@ -42,7 +43,7 @@ import { ActivatedRoute } from '@angular/router';
 @Component({
   selector: 'app-lab',
   standalone: true,
-  imports: [
+  imports: [PersonNamePipe, 
     CdkTrapFocus,
     PatientSublinePipe,
     ServerTimePipe,

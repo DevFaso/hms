@@ -27,6 +27,12 @@ export interface PatientDemographicsPatch {
   city?: string;
   state?: string;
   country?: string;
+  /** QA D1036: the postal code (the record's `zipCode`). */
+  postalCode?: string;
+  /** QA D1036: self-reported, correctable. */
+  ethnicity?: string;
+  /** QA D1036: A, B, AB or O with its Rhesus sign. */
+  bloodType?: string;
   emergencyContactName?: string;
   emergencyContactPhone?: string;
   emergencyContactRelationship?: string;

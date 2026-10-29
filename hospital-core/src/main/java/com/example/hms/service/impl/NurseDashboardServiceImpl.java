@@ -93,8 +93,9 @@ public class NurseDashboardServiceImpl implements NurseDashboardService {
         String patientFullName = Optional.ofNullable(patient)
             .map(Patient::getFullName)
             .orElse(null);
-        dto.setDisplayName(firstNonNull(trimToNull(registration.getPatientFullName()),
-            trimToNull(patientFullName),
+        // QA D1036 (sibling): the live name first, the registration's copy as a fallback.
+        dto.setDisplayName(firstNonNull(trimToNull(patientFullName),
+            trimToNull(registration.getPatientFullName()),
             dto.getPatientName()));
         dto.setRoom(firstNonNull(trimToNull(registration.getCurrentBed()), trimToNull(registration.getCurrentRoom())));
         dto.setBed(trimToNull(registration.getCurrentBed()));

@@ -227,10 +227,12 @@ public class PatientHospitalRegistration extends BaseEntity {
         if (patientFullName != null || patient == null) {
             return;
         }
-        String f = safeTrim(patient.getFirstName());
-        String m = safeTrim(patient.getMiddleName());
-        String l = safeTrim(patient.getLastName());
-        String full = ((f == null ? "" : f) + (m == null ? "" : " " + m) + (l == null ? "" : " " + l)).trim();
+        // QA D1036: a blank part adds nothing (a blank middle name used to
+        // leave two spaces between the first and the last name).
+        String full = java.util.stream.Stream.of(patient.getFirstName(), patient.getMiddleName(), patient.getLastName())
+            .map(this::safeTrim)
+            .filter(part -> part != null && !part.isEmpty())
+            .collect(java.util.stream.Collectors.joining(" "));
         patientFullName = full.isEmpty() ? null : full;
     }
 

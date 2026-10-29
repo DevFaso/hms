@@ -1,3 +1,4 @@
+import { PersonNamePipe } from '../../shared/pipes/person-name.pipe';
 import { DialogFocusDirective } from '../../shared/a11y/dialog-focus.directive';
 import {
   Component,
@@ -25,7 +26,7 @@ type EncounterType = 'CONSULTATION' | 'FOLLOW_UP' | 'EMERGENCY' | 'OUTPATIENT' |
 @Component({
   selector: 'app-walkin-dialog',
   standalone: true,
-  imports: [DialogFocusDirective, PatientSublinePipe, FormsModule, TranslateModule],
+  imports: [PersonNamePipe, DialogFocusDirective, PatientSublinePipe, FormsModule, TranslateModule],
   templateUrl: './walkin-dialog.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './walkin-dialog.component.scss',

@@ -201,9 +201,12 @@ public class PatientMapper {
             .chartRestrictionReason(patient.getChartRestrictionReason())
             .chartRestrictedAt(patient.getChartRestrictedAt())
             .mrn(resolvedMrn)
+            // QA D1036 / D926: the live name first. The registration's copy is
+            // taken once, when the patient is registered, so a middle name
+            // added later never showed, and a blank middle name left two spaces.
             .displayName(nullIfBlank(firstNonBlank(
-                scopedRegistration != null ? scopedRegistration.getPatientFullName() : null,
-                outPatientName
+                outPatientName,
+                scopedRegistration != null ? scopedRegistration.getPatientFullName() : null
             )))
             .username(safeInit(patient.getUser()) != null ? patient.getUser().getUsername() : null)
             .room(scopedRegistration != null ? nullIfBlank(firstNonBlank(

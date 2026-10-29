@@ -65,6 +65,15 @@ public class PatientProfileUpdateRequestDTO {
     @Size(max = 100)
     private String country;
 
+    /**
+     * QA D1036: the blood group captured at registration, correctable like the
+     * rest of the demographics: A, B, AB or O with its Rhesus sign. Blank
+     * clears it.
+     */
+    @jakarta.validation.constraints.Pattern(regexp = "(?i)^$|^(A|B|AB|O)[+-]$",
+        message = "{patient.bloodType.invalid}")
+    private String bloodType;
+
     /** Self-reported free text — optional (Tier 2 item 38). */
     @Size(max = 100, message = "{patientProfile.ethnicity.size}")
     private String ethnicity;
