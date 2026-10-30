@@ -131,13 +131,14 @@ public class PrescriberReauthenticationService {
 
     private void audit(UUID userId, UUID prescriptionId, String method, AuditStatus status, String reasonCode) {
         try {
-            String outcome = status == AuditStatus.SUCCESS ? "verified" : "refused (" + reasonCode + ")";
+            String description = status == AuditStatus.SUCCESS
+                ? "Re-authentication to sign a controlled-drug prescription verified by " + method
+                : "Re-authentication to sign a controlled-drug prescription refused (" + reasonCode + ")";
             auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                 .userId(userId)
                 .eventType(AuditEventType.PRESCRIPTION_SIGN_REAUTHENTICATION)
                 .status(status)
-                .eventDescription("Re-authentication for " + ACTION + " " + outcome
-                    + (method == null ? "" : " by " + method))
+                .eventDescription(description)
                 .entityType("Prescription")
                 .resourceId(prescriptionId == null ? null : prescriptionId.toString())
                 .build());

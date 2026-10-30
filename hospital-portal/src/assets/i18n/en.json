@@ -1733,7 +1733,13 @@
       "STATUS_WAS": "{{what}} (was {{previous}})",
       "PLATFORM_SERVICE_UPDATED": "Platform service updated: {{details}}",
       "PLATFORM_SERVICE_STATUS": "Platform service status set to {{status}}: {{details}}",
-      "PLATFORM_LINK_TOGGLED": "Platform service link to a {{target}} {{state}}: {{details}}"
+      "PLATFORM_LINK_TOGGLED": "Platform service link to a {{target}} {{state}}: {{details}}",
+      "CDS_OVERRIDE_CREATED": "Critical decision-support alert overridden when the prescription was created",
+      "CDS_OVERRIDE_EDITED": "Critical decision-support alert overridden when the prescription was edited",
+      "DOSE_LIMITS_APPROVED": "Paediatric dose limits approved on the catalogue item {{item}}",
+      "DOSE_LIMITS_DEFAULT": "Paediatric dose limits set as a default pending approval on the catalogue item {{item}}",
+      "RX_SIGN_REAUTH_VERIFIED": "Identity confirmed to sign a controlled-drug prescription ({{method}})",
+      "RX_SIGN_REAUTH_REFUSED": "Identity not confirmed to sign a controlled-drug prescription ({{reason}})"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",

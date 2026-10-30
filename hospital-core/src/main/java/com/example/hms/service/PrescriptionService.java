@@ -60,7 +60,9 @@ public interface PrescriptionService {
      * prescription's own prescriber, applies the controlled-substance gates, and
      * records who signed, when, and a SHA-256 digest of what they signed.
      */
-    PrescriptionResponseDTO signPrescription(UUID id, Locale locale);
+    default PrescriptionResponseDTO signPrescription(UUID id, Locale locale) {
+        return signPrescription(id, null, locale);
+    }
 
     /**
      * Round 18: sign with the prescriber's re-authentication, which a

@@ -1733,7 +1733,13 @@
       "STATUS_WAS": "{{what}} (estaba {{previous}})",
       "PLATFORM_SERVICE_UPDATED": "Servicio de plataforma modificado: {{details}}",
       "PLATFORM_SERVICE_STATUS": "Estado del servicio de plataforma cambiado a {{status}}: {{details}}",
-      "PLATFORM_LINK_TOGGLED": "Vínculo del servicio de plataforma con un {{target}} {{state}}: {{details}}"
+      "PLATFORM_LINK_TOGGLED": "Vínculo del servicio de plataforma con un {{target}} {{state}}: {{details}}",
+      "CDS_OVERRIDE_CREATED": "Alerta crítica de apoyo a la decisión anulada al crear la receta",
+      "CDS_OVERRIDE_EDITED": "Alerta crítica de apoyo a la decisión anulada al modificar la receta",
+      "DOSE_LIMITS_APPROVED": "Límites de dosis pediátricos aprobados en el artículo del catálogo {{item}}",
+      "DOSE_LIMITS_DEFAULT": "Límites de dosis pediátricos definidos por defecto, pendientes de aprobación, en el artículo del catálogo {{item}}",
+      "RX_SIGN_REAUTH_VERIFIED": "Identidad confirmada para firmar una receta de estupefaciente ({{method}})",
+      "RX_SIGN_REAUTH_REFUSED": "Identidad no confirmada para firmar una receta de estupefaciente ({{reason}})"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "ningún rol activo en este hospital",

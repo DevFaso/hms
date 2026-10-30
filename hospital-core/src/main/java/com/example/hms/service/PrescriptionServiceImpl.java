@@ -395,12 +395,6 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      */
     @Override
     @Transactional
-    public PrescriptionResponseDTO signPrescription(UUID id, Locale locale) {
-        return signPrescription(id, null, locale);
-    }
-
-    @Override
-    @Transactional
     public PrescriptionResponseDTO signPrescription(UUID id,
                                                     com.example.hms.payload.dto.SignPrescriptionRequestDTO reauthentication,
                                                     Locale locale) {

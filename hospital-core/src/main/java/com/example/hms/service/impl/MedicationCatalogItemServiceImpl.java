@@ -225,7 +225,9 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
 
         MedicationCatalogItem saved = catalogRepository.save(item);
         logAudit(AuditEventType.MEDICATION_DOSE_LIMITS_UPDATED,
-            "Paediatric dose limits set (" + dto.getPediatricDoseStatus() + ") on catalog item '"
+            (dto.getPediatricDoseStatus() == com.example.hms.enums.PediatricDoseLimitStatus.APPROVED
+                ? "Paediatric dose limits approved on catalog item '"
+                : "Paediatric dose limits set as a default pending approval on catalog item '")
                 + saved.getNameFr() + "'",
             saved.getId().toString());
         return mapper.toResponseDTO(saved);

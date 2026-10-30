@@ -58,6 +58,9 @@ class PharmacyPageEndpointRolesTest {
             Map.entry("medication-catalog#createMedication", "canManage()"),
             Map.entry("medication-catalog#updateMedication", "canManage()"),
             Map.entry("medication-catalog#deleteMedication", "canManage()"),
+            // Round 18 (QA D935): the paediatric dose limits are the pharmacy's
+            // (and the hospital admin's); a doctor or store manager reads them.
+            Map.entry("medication-catalog#updatePediatricDosing", "canEditDosing()"),
             Map.entry("pharmacy-registry#createPharmacy", "canManage()"),
             Map.entry("pharmacy-registry#updatePharmacy", "canManage()"),
             Map.entry("pharmacy-registry#deletePharmacy", "canManage()"));

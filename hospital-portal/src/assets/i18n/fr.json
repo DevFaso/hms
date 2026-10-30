@@ -1733,7 +1733,13 @@
       "STATUS_WAS": "{{what}} (était {{previous}})",
       "PLATFORM_SERVICE_UPDATED": "Service de plateforme modifié : {{details}}",
       "PLATFORM_SERVICE_STATUS": "Statut du service de plateforme passé à {{status}} : {{details}}",
-      "PLATFORM_LINK_TOGGLED": "Rattachement du service de plateforme à un {{target}} {{state}} : {{details}}"
+      "PLATFORM_LINK_TOGGLED": "Rattachement du service de plateforme à un {{target}} {{state}} : {{details}}",
+      "CDS_OVERRIDE_CREATED": "Alerte critique d’aide à la décision outrepassée à la création de l’ordonnance",
+      "CDS_OVERRIDE_EDITED": "Alerte critique d’aide à la décision outrepassée à la modification de l’ordonnance",
+      "DOSE_LIMITS_APPROVED": "Limites de dose pédiatriques validées sur l’article du catalogue {{item}}",
+      "DOSE_LIMITS_DEFAULT": "Limites de dose pédiatriques définies par défaut, en attente de validation, sur l’article du catalogue {{item}}",
+      "RX_SIGN_REAUTH_VERIFIED": "Identité confirmée pour signer une ordonnance de stupéfiant ({{method}})",
+      "RX_SIGN_REAUTH_REFUSED": "Identité non confirmée pour signer une ordonnance de stupéfiant ({{reason}})"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "aucun rôle actif dans cet hôpital",
