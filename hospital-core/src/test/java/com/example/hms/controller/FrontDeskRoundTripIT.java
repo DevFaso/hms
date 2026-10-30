@@ -192,6 +192,56 @@ class FrontDeskRoundTripIT extends BaseIT {
     }
 
     @Test
+    @DisplayName("D1018 / D923: a PUT that changes the department stores it, and a fresh read shows it")
+    void anEditStoresTheNewDepartment() throws Exception {
+        Department urgences = departmentRepository.save(Department.builder()
+            .name("R17 Urgences").code("R17U" + nextId()).email("r17urg" + nextId() + "@dept.test")
+            .phoneNumber("+226-111-1717").active(true).hospital(hospital).assignment(doctorAssignment).build());
+        Appointment appt = appointment(aicha, LocalDate.now().plusDays(1), LocalTime.of(9, 0), AppointmentStatus.SCHEDULED);
+        String body = appointmentBody(aicha, LocalDate.now().plusDays(1), "09:00", "09:30", "demo-r17")
+            .replace(department.getId().toString(), urgences.getId().toString());
+
+        mockMvc.perform(put(API + "/appointments/{id}", appt.getId()).contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON).content(body).with(asReceptionist()))
+            .andExpect(status().isOk());
+
+        Appointment stored = appointmentRepository.findById(appt.getId()).orElseThrow();
+        assertThat(stored.getDepartment().getId()).isEqualTo(urgences.getId());
+    }
+
+    @Test
+    @DisplayName("D1019: the pickers' ?search= finds a patient by phone, however the number is written")
+    void thePickerSearchFindsAPhoneInEveryFormat() throws Exception {
+        for (String typed : List.of("70161099", "70 16 10 99", "+226 70 16 10 99", "0022670161099")) {
+            mockMvc.perform(get(API + "/patients").contextPath(API)
+                    .param("search", typed).with(asReceptionist()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[*].id", hasItem(aicha.getId().toString())));
+        }
+    }
+
+    @Test
+    @DisplayName("D1036: the desk corrects the postal code, the ethnicity and the blood group; a fresh read shows them")
+    void theDeskCorrectsPostalCodeEthnicityAndBloodGroup() throws Exception {
+        mockMvc.perform(patch(API + "/patients/{id}", aicha.getId()).contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"postalCode\":\"01 BP 1234\",\"ethnicity\":\"Mossi\",\"bloodType\":\"o+\"}")
+                .with(asReceptionist()))
+            .andExpect(status().isOk());
+
+        Patient stored = patientRepository.findById(aicha.getId()).orElseThrow();
+        assertThat(stored.getZipCode()).isEqualTo("01 BP 1234");
+        assertThat(stored.getEthnicity()).isEqualTo("Mossi");
+        assertThat(stored.getBloodType()).isEqualTo("O+");
+
+        mockMvc.perform(patch(API + "/patients/{id}", aicha.getId()).contextPath(API)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"bloodType\":\"Z9\"}")
+                .with(asReceptionist()))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.fieldErrors.bloodType").exists());
+    }
+
+    @Test
     @DisplayName("D937: a cancelled booking frees its slot for the next booking")
     void aCancelledBookingFreesTheSlot() throws Exception {
         LocalDate day = LocalDate.now().plusDays(12);
