@@ -2073,6 +2073,9 @@ public class EncounterServiceImpl implements EncounterService {
         if (request == null || request.getEsiScore() == null) {
             throw new BusinessException("triage.esi.required");
         }
+        // QA D1077: no fundal height for a man (sibling fix in branch 3's file, one call).
+        com.example.hms.service.support.PatientMeasureRules.requireFundalHeightApplicable(
+            encounter.getPatient(), request.getFundalHeightCm());
 
         // (a) Record vital signs as PatientVitalSign
         com.example.hms.model.PatientVitalSign vital = buildVitalSign(encounter, request, actorUsername);
@@ -3205,14 +3208,14 @@ public class EncounterServiceImpl implements EncounterService {
             if (user != null && encounterStaff != null
                     && encounterStaff.getUser() != null
                     && !encounterStaff.getUser().getId().equals(user.getId())) {
-                throw new BusinessException("encounter.notAssignedPhysician");
+                throw new BusinessException("encounter.start.notAssignedClinician");
             }
             // QA D1015: a midwife-led visit (antenatal care booked with the
             // midwife) is started by that midwife; an unassigned visit stays
             // with the physicians.
             if (mustBeAssignedClinician && (user == null || encounterStaff == null
                     || encounterStaff.getUser() == null)) {
-                throw new BusinessException("encounter.notAssignedPhysician");
+                throw new BusinessException("encounter.start.notAssignedClinician");
             }
         }
 

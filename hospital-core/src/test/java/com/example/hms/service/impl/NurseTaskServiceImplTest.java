@@ -354,6 +354,9 @@ class NurseTaskServiceImplTest {
             .recommendation("Continue q4h vitals.")
             .createdByName("Nina Nurse")
             .build();
+        // QA D1075: the report time is the creation time, which completion never moves.
+        first.setCreatedAt(java.time.LocalDateTime.of(2026, 10, 30, 13, 33, 43));
+        first.setUpdatedAt(java.time.LocalDateTime.of(2026, 10, 30, 13, 34, 2));
         NurseHandoff second = NurseHandoff.builder()
             .patient(patientEntity)
             .direction("Transfer to Radiology")
@@ -372,6 +375,7 @@ class NurseTaskServiceImplTest {
         assertThat(dto.getNote()).isEqualTo("Post-op day 1, afebrile.");
         assertThat(dto.getRecommendation()).isEqualTo("Continue q4h vitals.");
         assertThat(dto.getCreatedByName()).isEqualTo("Nina Nurse");
+        assertThat(dto.getCreatedAt()).isEqualTo(java.time.LocalDateTime.of(2026, 10, 30, 13, 33, 43));
         assertThat(dto.getStatus()).isEqualTo("PENDING");
     }
 
@@ -1261,6 +1265,9 @@ class NurseTaskServiceImplTest {
         lenient().when(rx.getPatient()).thenReturn(mockPatient);
         lenient().when(rx.getHospital()).thenReturn(mockHospital);
         lenient().when(rx.getMedicationName()).thenReturn("Morphine");
+        lenient().when(rx.isControlledSubstance()).thenReturn(true);
+        // A controlled order is verified by a pharmacist before it is given (the gate above the witness).
+        lenient().when(rx.getPharmacistVerifiedAt()).thenReturn(LocalDateTime.now().minusHours(1));
         lenient().when(rx.getCreatedAt()).thenReturn(LocalDateTime.now().minusHours(1));
         when(prescriptionRepository.findByIdForUpdate(rxId)).thenReturn(Optional.of(rx));
         NurseMedicationAdministrationRequestDTO request = new NurseMedicationAdministrationRequestDTO();
@@ -1292,6 +1299,22 @@ class NurseTaskServiceImplTest {
         verify(marRepository).save(saved.capture());
         assertThat(saved.getValue().getWitnessUser()).isSameAs(colleague);
         assertThat(result.getWitnessName()).isEqualTo("Awa Kaboré");
+        // QA D1080: the administer response says what the GET says - morphine is controlled.
+        assertThat(result.isControlledSubstance()).isTrue();
+    }
+
+    /** QA D1080: the synthetic-task fallback keeps the row's controlled flag too. */
+    @Test
+    void d1080_theFallbackResponseKeepsTheControlledFlag() {
+        UUID taskId = UUID.randomUUID();
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        doReturn(List.of(NurseMedicationTaskResponseDTO.builder().id(taskId).patientId(UUID.randomUUID())
+            .medication("Morphine").status("DUE").controlledSubstance(true).build()))
+            .when(service).getMedicationTasks(nurseId, hospitalId, null);
+
+        assertThat(service.recordMedicationAdministration(taskId, nurseId, hospitalId, null).isControlledSubstance())
+            .isTrue();
     }
 
     @Test

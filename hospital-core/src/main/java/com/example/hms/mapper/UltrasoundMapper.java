@@ -30,6 +30,7 @@ public class UltrasoundMapper {
 
         return UltrasoundOrderResponseDTO.builder()
             .id(order.getId())
+            .authorUserId(order.getOrderedByUserId())
             .patientId(order.getPatient() != null ? order.getPatient().getId() : null)
             .patientDisplayName(resolvePatientDisplayName(order.getPatient()))
             .patientMrn(resolvePatientMrn(order.getPatient()))

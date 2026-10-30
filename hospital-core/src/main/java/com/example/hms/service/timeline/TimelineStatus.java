@@ -26,6 +26,18 @@ public final class TimelineStatus {
         return own != null ? own : VisitTimelineRows.label(status);
     }
 
+    /**
+     * QA D959 (round 18): {@code summary (label)} for a record whose status is
+     * free text, not an enum (an immunization's COMPLETED / REFUSED…); the
+     * caller resolves the label. The summary alone when there is no label.
+     */
+    public static String withStatusLabel(String summary, String statusLabel) {
+        if (statusLabel == null || statusLabel.isBlank()) {
+            return summary;
+        }
+        return MessageUtil.resolveOrRaw("timeline.withStatus", summary, statusLabel);
+    }
+
     /** {@code summary (status)}; the summary alone when there is no status. */
     public static String withStatus(String summary, Enum<?> status) {
         if (status == null) {

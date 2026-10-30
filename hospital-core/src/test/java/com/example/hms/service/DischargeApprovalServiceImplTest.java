@@ -89,6 +89,13 @@ class DischargeApprovalServiceImplTest {
         registration.setId(registrationId);
         registration.setPatient(patient);
         registration.setHospital(hospital);
+        // QA D1065: a discharge request needs an open stay; every request test
+        // below has one unless it says otherwise.
+        com.example.hms.model.Admission openStay = new com.example.hms.model.Admission();
+        openStay.setStatus(com.example.hms.enums.AdmissionStatus.ACTIVE);
+        org.mockito.Mockito.lenient().when(admissionRepository.findByPatient_IdAndHospital_IdAndStatusIn(
+                eq(patientId), eq(hospitalId), any()))
+            .thenReturn(List.of(openStay));
 
         role = new Role();
         role.setId(UUID.randomUUID());
@@ -181,6 +188,37 @@ class DischargeApprovalServiceImplTest {
         DischargeApprovalResponseDTO result = service.requestDischarge(buildRequest());
         assertThat(result).isEqualTo(responseDTO);
         verify(dischargeApprovalRepository).save(any(DischargeApproval.class));
+    }
+
+    /** QA D1065: a walk-in who left unseen (never admitted) has no stay to end. */
+    @Test
+    void d1065_requestDischarge_neverAdmitted_isRefusedAndNothingIsWritten() {
+        when(registrationRepository.findById(registrationId)).thenReturn(Optional.of(registration));
+        when(dischargeApprovalRepository.findByRegistration_IdAndStatusIn(eq(registrationId), any()))
+            .thenReturn(Collections.emptyList());
+        when(admissionRepository.findByPatient_IdAndHospital_IdAndStatusIn(eq(patientId), eq(hospitalId), any()))
+            .thenReturn(List.of());
+
+        var request = buildRequest();
+        assertThatThrownBy(() -> service.requestDischarge(request))
+            .isInstanceOf(BusinessException.class)
+            .hasMessage("discharge.request.notAdmitted");
+        verify(dischargeApprovalRepository, org.mockito.Mockito.never()).save(any());
+        verify(registrationRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    /** QA D1065: the open stay is read in every open status, awaiting discharge included. */
+    @Test
+    void d1065_theOpenStayStatusesAreTheSharedSet() {
+        when(registrationRepository.findById(registrationId)).thenReturn(Optional.of(registration));
+        when(dischargeApprovalRepository.findByRegistration_IdAndStatusIn(eq(registrationId), any()))
+            .thenReturn(Collections.emptyList());
+        when(staffRepository.findByIdAndActiveTrue(nurseStaffId)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.requestDischarge(buildRequest())).isInstanceOf(ResourceNotFoundException.class);
+        verify(admissionRepository).findByPatient_IdAndHospital_IdAndStatusIn(patientId, hospitalId,
+            com.example.hms.enums.AdmissionStatus.OPEN);
+        assertThat(com.example.hms.enums.AdmissionStatus.OPEN).contains(com.example.hms.enums.AdmissionStatus.AWAITING_DISCHARGE);
     }
 
     @Test

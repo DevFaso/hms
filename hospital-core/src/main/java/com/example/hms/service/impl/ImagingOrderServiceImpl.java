@@ -40,6 +40,9 @@ import java.util.Set;
 @Transactional
 public class ImagingOrderServiceImpl implements ImagingOrderService {
 
+    /** QA D1066: refused on any write to a cancelled order. */
+    private static final String IMAGING_ORDER_CANCELLED_LOCKED = "imaging.order.cancelled.locked";
+
     private static final int DEFAULT_DUPLICATE_LOOKBACK_DAYS = 30;
 
     /**
@@ -105,6 +108,9 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
     public ImagingOrderResponseDTO updateOrder(UUID orderId, ImagingOrderRequestDTO request, UUID callerUserId) {
         ImagingOrder order = getOrderInScope(orderId);
         requireEditableBy(order, callerUserId);
+        // QA D1066 class: a cancelled order is not edited back to life either.
+        com.example.hms.service.support.CancelledOrders.requireNotCancelled(order.getStatus(),
+            IMAGING_ORDER_CANCELLED_LOCKED);
 
         if (request.getPatientId() != null && (order.getPatient() == null || !request.getPatientId().equals(order.getPatient().getId()))) {
             Patient patient = patientRepository.findById(request.getPatientId())
@@ -150,14 +156,13 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
     public ImagingOrderResponseDTO updateOrderStatus(UUID orderId, ImagingOrderStatusUpdateRequestDTO request) {
         ImagingOrder order = getOrderInScope(orderId);
         // QA D930 class: a cancel ends the order for the patient; it is the
-        // ordering provider's or the imaging department's decision. Review of
-        // #976: so is undoing one, or a colleague could reopen the author's
-        // cancelled order; and the stamp below is written on the transition
-        // only, or re-sending CANCELLED rewrote who cancelled it, when and why.
-        boolean wasCancelled = order.getStatus() == ImagingOrderStatus.CANCELLED;
-        boolean cancelling = request.getStatus() == ImagingOrderStatus.CANCELLED && !wasCancelled;
-        boolean reopening = wasCancelled && request.getStatus() != ImagingOrderStatus.CANCELLED;
-        if (cancelling || reopening) {
+        // ordering provider's or the imaging department's decision.
+        // QA D1066 (round 18): a cancelled order is closed - not reopened, not
+        // re-stamped. Undoing a cancellation is a new order, as in real hospitals.
+        com.example.hms.service.support.CancelledOrders.requireNotCancelled(order.getStatus(),
+            IMAGING_ORDER_CANCELLED_LOCKED);
+        boolean cancelling = request.getStatus() == ImagingOrderStatus.CANCELLED;
+        if (cancelling) {
             requireCancelAuthor(order);
         }
 
@@ -212,8 +217,8 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
      * radiologist of the order's hospital (the department declines or calls
      * off an exam), or a verified super-admin in global view. An order with no
      * recorded provider (written before D302) keeps the old rule, as on edit
-     * ({@link #requireEditableBy}). Any other doctor in scope gets 403. The
-     * same people reopen a cancelled order (review of #976).
+     * ({@link #requireEditableBy}). Any other doctor in scope gets 403. Nobody
+     * reopens a cancelled order (QA D1066: a new order is placed instead).
      */
     private void requireCancelAuthor(ImagingOrder order) {
         UUID orderingProvider = order.getOrderingProviderUserId();
@@ -285,6 +290,9 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
     public ImagingOrderResponseDTO captureProviderSignature(UUID orderId, ImagingOrderSignatureRequestDTO request,
                                                             UUID signerUserId) {
         ImagingOrder order = getOrderInScope(orderId);
+        // QA D1066 class: a cancelled order is not signed into force.
+        com.example.hms.service.support.CancelledOrders.requireNotCancelled(order.getStatus(),
+            IMAGING_ORDER_CANCELLED_LOCKED);
         // QA D302: the signer and the signing time come from the session. A
         // body naming someone else is refused; a body-supplied time is ignored.
         com.example.hms.model.User signer = signerUserId == null ? null

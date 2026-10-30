@@ -204,7 +204,7 @@ class ObgynReferralServiceImplTest {
         when(userRepository.findByIdWithRolesAndProfiles(userId)).thenReturn(Optional.of(user));
         assertThatThrownBy(() -> service.acknowledgeReferral(referralId, req, "admin"))
             .isInstanceOf(IllegalStateException.class)
-            .hasMessageContaining("acknowledge");
+            .hasMessage("referral.r7.wrongStatus"); // QA D1086: a key, no longer English
     }
 
     @Test void startReferralSuccess() {
@@ -225,7 +225,7 @@ class ObgynReferralServiceImplTest {
         when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
         assertThatThrownBy(() -> service.startReferral(referralId, "admin"))
             .isInstanceOf(IllegalStateException.class)
-            .hasMessageContaining("start");
+            .hasMessage("referral.r7.wrongStatus"); // QA D1086: a key, no longer English
     }
 
     @Test void completeReferral_success() {
@@ -257,7 +257,7 @@ class ObgynReferralServiceImplTest {
         when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
         assertThatThrownBy(() -> service.cancelReferral(referralId, req, "admin"))
             .isInstanceOf(IllegalStateException.class)
-            .hasMessageContaining("terminal status");
+            .hasMessage("referral.r7.cannotCancelTerminal"); // QA D1086: a key, no longer English
     }
 
     @Test void addMessage_success() {

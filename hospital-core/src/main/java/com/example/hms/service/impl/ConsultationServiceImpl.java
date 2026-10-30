@@ -1088,6 +1088,8 @@ public class ConsultationServiceImpl implements ConsultationService {
 
         return ConsultationResponseDTO.builder()
             .id(consultationId)
+            .authorUserId(consultation.getRequestingProvider() != null && consultation.getRequestingProvider().getUser() != null
+                ? consultation.getRequestingProvider().getUser().getId() : null)
             .patientId(patient != null ? patient.getId() : null)
             .patientName(patient != null ? patient.getFullName() : null)
             .patientMrn(patientMrn)

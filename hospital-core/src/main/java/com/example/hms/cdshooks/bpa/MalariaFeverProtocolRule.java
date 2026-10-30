@@ -117,7 +117,7 @@ public class MalariaFeverProtocolRule implements BpaRule {
     private CdsCard buildCard(BpaProtocol protocol, PatientVitalSign feverEvent) {
         String detail = BpaCardText.summary(text, protocol) + "\n\n" + text.get("cds.bpa.malaria.temperature",
             "Most recent temperature: {0}°C at {1}.",
-            String.format(Locale.ROOT, "%.1f", feverEvent.getTemperatureCelsius()),
+            text.decimal(feverEvent.getTemperatureCelsius(), 1),
             BpaCardText.when(feverEvent.getRecordedAt()));
         List<CdsLink> links = protocol.getProtocolUrl() == null
             ? null

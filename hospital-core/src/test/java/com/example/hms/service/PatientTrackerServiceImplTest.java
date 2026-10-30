@@ -39,6 +39,8 @@ import static org.mockito.Mockito.when;
 @SuppressWarnings("java:S100")
 class PatientTrackerServiceImplTest {
 
+    private static final UUID STAFF_USER_ID = UUID.randomUUID();
+
     @Mock
     private EncounterRepository encounterRepository;
 
@@ -72,6 +74,7 @@ class PatientTrackerServiceImplTest {
         lenient().when(patient.getMrnForHospital(any(UUID.class))).thenReturn("MRN-" + firstName);
 
         User staffUser = mock(User.class);
+        lenient().when(staffUser.getId()).thenReturn(STAFF_USER_ID);
         lenient().when(staffUser.getFirstName()).thenReturn("Dr");
         lenient().when(staffUser.getLastName()).thenReturn("Smith");
 
@@ -231,6 +234,8 @@ class PatientTrackerServiceImplTest {
         assertEquals("TRIAGE", item.getCurrentStatus());
         assertEquals("Room-5A", item.getRoomAssignment());
         assertEquals("Dr Smith", item.getAssignedProvider());
+        // QA D1085: the card names the assigned clinician's user, for the per-visit start rule.
+        assertEquals(STAFF_USER_ID, item.getAssignedProviderUserId());
         assertEquals("ER", item.getDepartmentName());
         assertEquals("ESI-3", item.getAcuityLevel());
         assertTrue(item.getPreCheckedIn());

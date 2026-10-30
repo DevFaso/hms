@@ -26,6 +26,18 @@ import com.example.hms.model.Consultation;
 import com.example.hms.model.PatientUploadedDocument;
 import com.example.hms.model.discharge.DischargeSummary;
 import com.example.hms.model.treatment.TreatmentPlan;
+import com.example.hms.model.DeathRecord;
+import com.example.hms.model.NursingNote;
+import com.example.hms.model.PatientImmunization;
+import com.example.hms.model.ProcedureOrder;
+import com.example.hms.model.TransfusionRequest;
+import com.example.hms.model.User;
+import com.example.hms.model.labor.DeliveryRecord;
+import com.example.hms.model.referral.ObgynReferral;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Sort;
+import java.util.LinkedHashMap;
+import java.util.function.Function;
 import com.example.hms.enums.PatientDocumentType;
 import org.springframework.data.domain.PageRequest;
 import com.example.hms.utility.MessageUtil;
@@ -68,6 +80,17 @@ public class VisitTimelineRows {
     public static final String CATEGORY_CONSULTATION = "CONSULTATION";
     public static final String CATEGORY_DISCHARGE_SUMMARY = "DISCHARGE_SUMMARY";
     public static final String CATEGORY_DOCUMENT = "DOCUMENT";
+    /** QA D959 (round 18): the rest of the clinical events the registry hunt found. */
+    public static final String CATEGORY_TRANSFUSION = "TRANSFUSION";
+    public static final String CATEGORY_PROCEDURE_ORDER = "PROCEDURE_ORDER";
+    public static final String CATEGORY_OBGYN_REFERRAL = "OBGYN_REFERRAL";
+    public static final String CATEGORY_NURSING_NOTE = "NURSING_NOTE";
+    public static final String CATEGORY_IMMUNIZATION = "IMMUNIZATION";
+    public static final String CATEGORY_DELIVERY = "DELIVERY";
+    public static final String CATEGORY_DEATH = "DEATH";
+    /** A microbiology culture writes no LabResult: its released report is its own row. */
+    public static final String CATEGORY_MICRO_CULTURE = "MICRO_CULTURE";
+    private static final String IMMUNIZATION_VOID = "ENTERED_IN_ERROR";
     /** The most rows of one of these kinds the chronology reads at once. */
     private static final int DOCUMENT_ROWS_MAX = 200;
 
@@ -89,6 +112,14 @@ public class VisitTimelineRows {
     private final ConsultationRepository consultationRepository;
     private final DischargeSummaryRepository dischargeSummaryRepository;
     private final PatientUploadedDocumentRepository documentRepository;
+    private final com.example.hms.repository.TransfusionRequestRepository transfusionRequestRepository;
+    private final com.example.hms.repository.ProcedureOrderRepository procedureOrderRepository;
+    private final com.example.hms.repository.ObgynReferralRepository obgynReferralRepository;
+    private final com.example.hms.repository.NursingNoteRepository nursingNoteRepository;
+    private final com.example.hms.repository.ImmunizationRepository immunizationRepository;
+    private final com.example.hms.repository.DeliveryRecordRepository deliveryRecordRepository;
+    private final com.example.hms.repository.DeathRecordRepository deathRecordRepository;
+    private final com.example.hms.repository.MicroCultureResultRepository microCultureResultRepository;
     /** The same classification the other chronology rows use (E8 #51): explicit tag, codes, department. */
     private final com.example.hms.service.recordaccess.SensitivityClassifier sensitivityClassifier;
 
@@ -99,7 +130,6 @@ public class VisitTimelineRows {
 
     /** Every visit row of the patient at the acting hospital, in the categories asked for. */
     public List<PatientTimelineEntryDTO> collect(UUID patientId, UUID actingHospitalId, Set<String> categoryFilters) {
-        List<PatientTimelineEntryDTO> rows = new ArrayList<>();
         // The patient's visits here, read once: a note, an order and an imaging
         // order take their sensitivity from the visit that wrote them.
         Map<UUID, Encounter> visitsHere = new HashMap<>();
@@ -109,68 +139,334 @@ public class VisitTimelineRows {
                 .filter(encounter -> encounter.getId() != null)
                 .forEach(encounter -> visitsHere.put(encounter.getId(), encounter));
         }
-        if (wanted(categoryFilters, CATEGORY_DIAGNOSIS)) {
-            // Every diagnosis, with its status: a removed one reads "(Inactif)", as on
-            // the chart's history; a clinician may also set INACTIVE, so it is not hidden.
-            problemRepository.findByPatient_IdAndHospital_Id(patientId, actingHospitalId)
-                .forEach(problem -> rows.add(diagnosisRow(problem, actingHospitalId)));
-        }
-        if (wanted(categoryFilters, CATEGORY_LAB_ORDER)) {
-            labOrderRepository.findByPatient_IdAndHospital_Id(patientId, actingHospitalId).stream()
-                .filter(order -> order.getStatus() == null || !LAB_ORDER_CLOSED.contains(order.getStatus()))
-                .forEach(order -> rows.add(labOrderRow(order, actingHospitalId)));
-        }
-        if (wanted(categoryFilters, CATEGORY_IMAGING)) {
-            imagingOrderRepository.findByPatient_IdAndHospital_Id(patientId, actingHospitalId).stream()
-                .filter(order -> order.getStatus() != ImagingOrderStatus.DRAFT
-                    && order.getStatus() != ImagingOrderStatus.CANCELLED)
-                .forEach(order -> rows.add(imagingOrderRow(order, actingHospitalId,
-                    order.getEncounterId() != null ? visitsHere.get(order.getEncounterId()) : null)));
-        }
-        if (wanted(categoryFilters, CATEGORY_NOTE)) {
-            List<UUID> visits = new ArrayList<>(visitsHere.keySet());
-            if (!visits.isEmpty()) {
-                encounterNoteRepository.findByEncounter_IdIn(visits).stream()
-                    .filter(note -> note.getSignedAt() != null)
-                    .forEach(note -> rows.add(noteRow(note, actingHospitalId)));
-            }
-        }
-        if (wanted(categoryFilters, CATEGORY_REFERRAL)) {
-            referralRepository.findByPatientIdAndHospitalIdOrderByCreatedAtDesc(patientId, actingHospitalId).stream()
-                .filter(referral -> referral.getStatus() != ReferralStatus.DRAFT)
-                .forEach(referral -> rows.add(referralRow(referral, actingHospitalId)));
-        }
-        // QA D959 (round 17): the treatment plan, the consultation request, the
-        // discharge summary and the medical certificate were still missing.
-        if (wanted(categoryFilters, CATEGORY_TREATMENT_PLAN)) {
-            org.springframework.data.domain.Page<TreatmentPlan> plans = treatmentPlanRepository
-                .findAllByPatientIdAndHospitalId(patientId, actingHospitalId, PageRequest.of(0, DOCUMENT_ROWS_MAX,
-                    org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt")));
-            if (plans != null) {
-                plans.getContent().forEach(plan -> rows.add(treatmentPlanRow(plan, actingHospitalId)));
-            }
-        }
-        if (wanted(categoryFilters, CATEGORY_CONSULTATION)) {
-            consultationRepository.findByPatient_IdAndHospital_IdInOrderByRequestedAtDesc(patientId,
-                    Set.of(actingHospitalId))
-                .forEach(consultation -> rows.add(consultationRow(consultation, actingHospitalId)));
-        }
-        if (wanted(categoryFilters, CATEGORY_DISCHARGE_SUMMARY)) {
-            dischargeSummaryRepository.findByPatient_IdAndHospital_IdOrderByDischargeDateDesc(patientId, actingHospitalId)
-                .forEach(summary -> rows.add(dischargeSummaryRow(summary, actingHospitalId)));
-        }
-        if (wanted(categoryFilters, CATEGORY_DOCUMENT)) {
-            // A document this hospital issued (a certificate); never the patient's own uploads.
-            org.springframework.data.domain.Page<PatientUploadedDocument> issued = documentRepository.findForStaffByType(
-                patientId, actingHospitalId, PatientDocumentType.MEDICAL_CERTIFICATE, PageRequest.of(0, DOCUMENT_ROWS_MAX,
-                    org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt")));
-            if (issued != null) {
-                issued.getContent().stream()
-                    .filter(document -> document.getIssuingHospital() != null)
-                    .forEach(document -> rows.add(certificateRow(document, actingHospitalId)));
+        Scope scope = new Scope(patientId, actingHospitalId, visitsHere);
+        // QA D959 (round 18): the chronology is built from one registry of row
+        // sources, one per category. TimelineEventRegistryGuardTest holds every
+        // patient-owned entity to a category (or a written reason it is not a
+        // chronology event), and every category to a portal label and icon.
+        List<PatientTimelineEntryDTO> rows = new ArrayList<>();
+        for (Map.Entry<String, Function<Scope, List<PatientTimelineEntryDTO>>> source : sources().entrySet()) {
+            if (wanted(categoryFilters, source.getKey())) {
+                rows.addAll(source.getValue().apply(scope));
             }
         }
         return rows;
+    }
+
+    /** What every row source reads: the patient, the acting hospital, the patient's visits here. */
+    record Scope(UUID patientId, UUID acting, Map<UUID, Encounter> visitsHere) {
+    }
+
+    /** The categories this class writes, in the order it reads them (the keys of {@link #sources()}). */
+    public static final List<String> CATEGORIES = List.of(
+        CATEGORY_DIAGNOSIS, CATEGORY_LAB_ORDER, CATEGORY_IMAGING, CATEGORY_NOTE, CATEGORY_REFERRAL,
+        CATEGORY_TREATMENT_PLAN, CATEGORY_CONSULTATION, CATEGORY_DISCHARGE_SUMMARY, CATEGORY_DOCUMENT,
+        CATEGORY_TRANSFUSION, CATEGORY_PROCEDURE_ORDER, CATEGORY_OBGYN_REFERRAL, CATEGORY_NURSING_NOTE,
+        CATEGORY_IMMUNIZATION, CATEGORY_DELIVERY, CATEGORY_DEATH, CATEGORY_MICRO_CULTURE);
+
+    /** The registry: one row source per category of {@link #CATEGORIES}. */
+    Map<String, Function<Scope, List<PatientTimelineEntryDTO>>> sources() {
+        Map<String, Function<Scope, List<PatientTimelineEntryDTO>>> sources = new LinkedHashMap<>();
+        sources.put(CATEGORY_DIAGNOSIS, this::diagnosisRows);
+        sources.put(CATEGORY_LAB_ORDER, this::labOrderRows);
+        sources.put(CATEGORY_IMAGING, this::imagingOrderRows);
+        sources.put(CATEGORY_NOTE, this::noteRows);
+        sources.put(CATEGORY_REFERRAL, this::referralRows);
+        sources.put(CATEGORY_TREATMENT_PLAN, this::treatmentPlanRows);
+        sources.put(CATEGORY_CONSULTATION, this::consultationRows);
+        sources.put(CATEGORY_DISCHARGE_SUMMARY, this::dischargeSummaryRows);
+        sources.put(CATEGORY_DOCUMENT, this::certificateRows);
+        sources.put(CATEGORY_TRANSFUSION, this::transfusionRows);
+        sources.put(CATEGORY_PROCEDURE_ORDER, this::procedureOrderRows);
+        sources.put(CATEGORY_OBGYN_REFERRAL, this::obgynReferralRows);
+        sources.put(CATEGORY_NURSING_NOTE, this::nursingNoteRows);
+        sources.put(CATEGORY_IMMUNIZATION, this::immunizationRows);
+        sources.put(CATEGORY_DELIVERY, this::deliveryRows);
+        sources.put(CATEGORY_DEATH, this::deathRows);
+        sources.put(CATEGORY_MICRO_CULTURE, this::microCultureRows);
+        return sources;
+    }
+
+    private List<PatientTimelineEntryDTO> diagnosisRows(Scope s) {
+        // Every diagnosis, with its status: a removed one reads "(Inactif)", as on
+        // the chart's history; a clinician may also set INACTIVE, so it is not hidden.
+        return problemRepository.findByPatient_IdAndHospital_Id(s.patientId(), s.acting()).stream()
+            .map(problem -> diagnosisRow(problem, s.acting()))
+            .toList();
+    }
+
+    private List<PatientTimelineEntryDTO> labOrderRows(Scope s) {
+        return labOrderRepository.findByPatient_IdAndHospital_Id(s.patientId(), s.acting()).stream()
+            .filter(order -> order.getStatus() == null || !LAB_ORDER_CLOSED.contains(order.getStatus()))
+            .map(order -> labOrderRow(order, s.acting()))
+            .toList();
+    }
+
+    private List<PatientTimelineEntryDTO> imagingOrderRows(Scope s) {
+        return imagingOrderRepository.findByPatient_IdAndHospital_Id(s.patientId(), s.acting()).stream()
+            .filter(order -> order.getStatus() != ImagingOrderStatus.DRAFT
+                && order.getStatus() != ImagingOrderStatus.CANCELLED)
+            .map(order -> imagingOrderRow(order, s.acting(),
+                order.getEncounterId() != null ? s.visitsHere().get(order.getEncounterId()) : null))
+            .toList();
+    }
+
+    private List<PatientTimelineEntryDTO> noteRows(Scope s) {
+        List<UUID> visits = new ArrayList<>(s.visitsHere().keySet());
+        if (visits.isEmpty()) {
+            return List.of();
+        }
+        return encounterNoteRepository.findByEncounter_IdIn(visits).stream()
+            .filter(note -> note.getSignedAt() != null)
+            .map(note -> noteRow(note, s.acting()))
+            .toList();
+    }
+
+    private List<PatientTimelineEntryDTO> referralRows(Scope s) {
+        return referralRepository.findByPatientIdAndHospitalIdOrderByCreatedAtDesc(s.patientId(), s.acting()).stream()
+            .filter(referral -> referral.getStatus() != ReferralStatus.DRAFT)
+            .map(referral -> referralRow(referral, s.acting()))
+            .toList();
+    }
+
+    // QA D959 (round 17): the treatment plan, the consultation request, the
+    // discharge summary and the medical certificate were still missing.
+    private List<PatientTimelineEntryDTO> treatmentPlanRows(Scope s) {
+        Page<TreatmentPlan> plans = treatmentPlanRepository
+            .findAllByPatientIdAndHospitalId(s.patientId(), s.acting(), newestFirst("createdAt"));
+        return plans == null ? List.of()
+            : plans.getContent().stream().map(plan -> treatmentPlanRow(plan, s.acting())).toList();
+    }
+
+    private List<PatientTimelineEntryDTO> consultationRows(Scope s) {
+        return consultationRepository.findByPatient_IdAndHospital_IdInOrderByRequestedAtDesc(s.patientId(),
+                Set.of(s.acting())).stream()
+            .map(consultation -> consultationRow(consultation, s.acting()))
+            .toList();
+    }
+
+    private List<PatientTimelineEntryDTO> dischargeSummaryRows(Scope s) {
+        return dischargeSummaryRepository.findByPatient_IdAndHospital_IdOrderByDischargeDateDesc(s.patientId(), s.acting())
+            .stream().map(summary -> dischargeSummaryRow(summary, s.acting())).toList();
+    }
+
+    private List<PatientTimelineEntryDTO> certificateRows(Scope s) {
+        // A document this hospital issued (a certificate); never the patient's own uploads.
+        Page<PatientUploadedDocument> issued = documentRepository.findForStaffByType(
+            s.patientId(), s.acting(), PatientDocumentType.MEDICAL_CERTIFICATE, newestFirst("createdAt"));
+        return issued == null ? List.of()
+            : issued.getContent().stream()
+                .filter(document -> document.getIssuingHospital() != null)
+                .map(document -> certificateRow(document, s.acting()))
+                .toList();
+    }
+
+    // QA D959 (round 18): transfusion requests, procedure orders and OB/GYN
+    // referrals were still missing, and the registry hunt found the ward's
+    // nursing notes, the vaccines given, the delivery and the death too.
+    private List<PatientTimelineEntryDTO> transfusionRows(Scope s) {
+        return transfusionRequestRepository.findByPatient_IdAndHospital_IdOrderByRequestedAtDesc(s.patientId(), s.acting())
+            .stream().map(request -> transfusionRow(request, s.acting())).toList();
+    }
+
+    private List<PatientTimelineEntryDTO> procedureOrderRows(Scope s) {
+        return procedureOrderRepository.findByPatient_IdAndHospital_IdOrderByOrderedAtDesc(s.patientId(), s.acting())
+            .stream().map(order -> procedureOrderRow(order, s.acting())).toList();
+    }
+
+    private List<PatientTimelineEntryDTO> obgynReferralRows(Scope s) {
+        Page<ObgynReferral> referrals = obgynReferralRepository
+            .findByPatient_IdAndHospital_IdIn(s.patientId(), Set.of(s.acting()), newestFirst("createdAt"));
+        return referrals == null ? List.of()
+            : referrals.getContent().stream().map(referral -> obgynReferralRow(referral, s.acting())).toList();
+    }
+
+    private List<PatientTimelineEntryDTO> nursingNoteRows(Scope s) {
+        return nursingNoteRepository.findTop50ByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(s.patientId(),
+                Set.of(s.acting())).stream()
+            .map(note -> nursingNoteRow(note, s.acting()))
+            .toList();
+    }
+
+    private List<PatientTimelineEntryDTO> immunizationRows(Scope s) {
+        return immunizationRepository.findByPatient_IdAndHospital_IdOrderByAdministrationDateDesc(s.patientId(), s.acting())
+            .stream()
+            // Entered in error is a void row, not a vaccine given or refused.
+            .filter(dose -> dose.getStatus() == null || !IMMUNIZATION_VOID.equalsIgnoreCase(dose.getStatus().trim()))
+            .map(dose -> immunizationRow(dose, s.acting()))
+            .toList();
+    }
+
+    private List<PatientTimelineEntryDTO> deliveryRows(Scope s) {
+        return deliveryRecordRepository.findByPatient_IdAndHospital_IdOrderByBirthDateTimeDesc(s.patientId(), s.acting())
+            .stream().map(delivery -> deliveryRow(delivery, s.acting())).toList();
+    }
+
+    private List<PatientTimelineEntryDTO> deathRows(Scope s) {
+        return deathRecordRepository.findByPatient_Id(s.patientId()).stream()
+            .filter(death -> death.getHospital() != null && s.acting().equals(death.getHospital().getId()))
+            .map(death -> deathRow(death, s.acting()))
+            .toList();
+    }
+
+    private List<PatientTimelineEntryDTO> microCultureRows(Scope s) {
+        // A preliminary culture is still the laboratory's; the chronology shows the released report.
+        return microCultureResultRepository.findForPatient(s.patientId(), s.acting()).stream()
+            .filter(culture -> culture.getStatus() == com.example.hms.enums.MicroCultureStatus.FINAL
+                || culture.getStatus() == com.example.hms.enums.MicroCultureStatus.CORRECTED)
+            .map(culture -> microCultureRow(culture, s.acting()))
+            .toList();
+    }
+
+    private PatientTimelineEntryDTO microCultureRow(com.example.hms.model.MicroCultureResult culture, UUID acting) {
+        Map<String, Object> metadata = new HashMap<>();
+        boolean corrected = com.example.hms.service.lab.LabResultCorrections.isCorrected(culture);
+        metadata.put("corrected", corrected);
+        String source = firstNonBlank(culture.getSpecimenSource(),
+            culture.getLabOrder() != null && culture.getLabOrder().getLabTestDefinition() != null
+                ? culture.getLabOrder().getLabTestDefinition().getName() : null);
+        String growth = culture.getGrowthResult() != null ? label(culture.getGrowthResult()) : "—";
+        StringBuilder summary = new StringBuilder(MessageUtil.resolveOrRaw("timeline.microCulture.summary",
+            source != null ? source : "—", growth));
+        // QA D1016/D931 class (round 18): a corrected report says so on the chronology too.
+        if (corrected) {
+            summary.append(" (").append(MessageUtil.resolveOrRaw("lab.result.correctedLabel")).append(")");
+        }
+        return row(culture.getId(), CATEGORY_MICRO_CULTURE,
+            coalesce(culture.getCorrectedAt(), coalesce(culture.getFinalizedAt(), culture.getCreatedAt())),
+            summary.toString(),
+            culture.getLabOrder() != null && sensitive(culture.getLabOrder().getEncounter()),
+            provenance(metadata, culture.getHospital(), acting));
+    }
+
+    private static PageRequest newestFirst(String property) {
+        return PageRequest.of(0, DOCUMENT_ROWS_MAX, Sort.by(Sort.Direction.DESC, property));
+    }
+
+    private PatientTimelineEntryDTO transfusionRow(TransfusionRequest request, UUID acting) {
+        Map<String, Object> metadata = new HashMap<>();
+        putIfNotNull(metadata, META_STATUS, request.getStatus() != null ? request.getStatus().name() : null);
+        putIfNotNull(metadata, "urgency", request.getUrgency() != null ? request.getUrgency().name() : null);
+        putIfNotNull(metadata, META_CLINICIAN, staffName(request.getRequestedBy()));
+        String product = request.getProductType() != null ? label(request.getProductType()) : "—";
+        String summary = MessageUtil.resolveOrRaw("timeline.transfusion.summary", product,
+            request.getUnitsRequested() != null ? request.getUnitsRequested() : 1);
+        String indication = truncate(request.getIndication());
+        if (indication != null) {
+            summary = summary + " — " + indication;
+        }
+        return row(request.getId(), CATEGORY_TRANSFUSION,
+            request.getRequestedAt(),
+            TimelineStatus.withStatus(summary, request.getStatus()),
+            sensitive(request.getEncounter()),
+            provenance(metadata, request.getHospital(), acting));
+    }
+
+    private PatientTimelineEntryDTO procedureOrderRow(ProcedureOrder order, UUID acting) {
+        Map<String, Object> metadata = new HashMap<>();
+        putIfNotNull(metadata, META_STATUS, order.getStatus() != null ? order.getStatus().name() : null);
+        putIfNotNull(metadata, "urgency", order.getUrgency() != null ? order.getUrgency().name() : null);
+        putIfNotNull(metadata, META_CLINICIAN, staffName(order.getOrderingProvider()));
+        String what = firstNonBlank(order.getProcedureName(), order.getProcedureCode());
+        String summary = MessageUtil.resolveOrRaw("timeline.procedureOrder.summary", what != null ? what : "—");
+        String indication = truncate(order.getIndication());
+        if (indication != null) {
+            summary = summary + " — " + indication;
+        }
+        return row(order.getId(), CATEGORY_PROCEDURE_ORDER,
+            order.getOrderedAt(),
+            TimelineStatus.withStatus(summary, order.getStatus()),
+            sensitive(order.getEncounter()),
+            provenance(metadata, order.getHospital(), acting));
+    }
+
+    private PatientTimelineEntryDTO obgynReferralRow(ObgynReferral referral, UUID acting) {
+        Map<String, Object> metadata = new HashMap<>();
+        putIfNotNull(metadata, META_STATUS, referral.getStatus() != null ? referral.getStatus().name() : null);
+        putIfNotNull(metadata, "urgency", referral.getUrgency() != null ? referral.getUrgency().name() : null);
+        putIfNotNull(metadata, META_CLINICIAN, userName(referral.getMidwife()));
+        String reason = truncate(firstNonBlank(referral.getReferralReason(), referral.getClinicalIndication()));
+        String summary = MessageUtil.resolveOrRaw("timeline.obgynReferral.summary", reason != null ? reason : "—");
+        return row(referral.getId(), CATEGORY_OBGYN_REFERRAL,
+            referral.getCreatedAt(),
+            TimelineStatus.withStatus(summary, referral.getStatus()),
+            sensitive(referral.getEncounter()),
+            provenance(metadata, referral.getHospital(), acting));
+    }
+
+    private PatientTimelineEntryDTO nursingNoteRow(NursingNote note, UUID acting) {
+        Map<String, Object> metadata = new HashMap<>();
+        putIfNotNull(metadata, META_CLINICIAN, firstNonBlank(note.getSignedByName(), note.getAuthorName()));
+        String template = note.getTemplate() != null ? label(note.getTemplate()) : "—";
+        String summary = MessageUtil.resolveOrRaw("timeline.nursingNote.summary", template);
+        String body = truncate(firstNonBlank(note.getNarrative(), note.getDataAssessment(), note.getActionSummary(),
+            note.getResponseSummary(), note.getDataSubjective(), note.getTitle()));
+        if (body != null) {
+            summary = summary + " — " + body;
+        }
+        return row(note.getId(), CATEGORY_NURSING_NOTE,
+            coalesce(note.getSignedAt(), note.getDocumentedAt()),
+            summary,
+            sensitivityClassifier.effectiveCategory(note) != null,
+            provenance(metadata, note.getHospital(), acting));
+    }
+
+    private PatientTimelineEntryDTO immunizationRow(PatientImmunization dose, UUID acting) {
+        Map<String, Object> metadata = new HashMap<>();
+        String status = blankToNull(dose.getStatus());
+        putIfNotNull(metadata, META_STATUS, status);
+        putIfNotNull(metadata, META_CLINICIAN, staffName(dose.getAdministeredBy()));
+        String vaccine = firstNonBlank(dose.getVaccineDisplay(), dose.getVaccineType(), dose.getVaccineCode());
+        String summary = MessageUtil.resolveOrRaw("timeline.immunization.summary", vaccine != null ? vaccine : "—");
+        if (dose.getDoseNumber() != null) {
+            summary = summary + " · " + MessageUtil.resolveOrRaw("timeline.immunization.dose", dose.getDoseNumber());
+        }
+        summary = TimelineStatus.withStatusLabel(summary, status != null ? immunizationStatusLabel(status) : null);
+        return row(dose.getId(), CATEGORY_IMMUNIZATION,
+            atStartOfDay(dose.getAdministrationDate()),
+            summary,
+            sensitive(dose.getEncounter()),
+            provenance(metadata, dose.getHospital(), acting));
+    }
+
+    /** An immunization's free-text status in the reader's language (a String column, not an enum). */
+    private static String immunizationStatusLabel(String status) {
+        String own = MessageUtil.resolveOrNull(null,
+            "timeline.status.Immunization." + status.trim().toUpperCase(Locale.ROOT));
+        return own != null ? own : statusLabel(status);
+    }
+
+    private PatientTimelineEntryDTO deliveryRow(DeliveryRecord delivery, UUID acting) {
+        Map<String, Object> metadata = new HashMap<>();
+        putIfNotNull(metadata, META_CLINICIAN, staffName(delivery.getDeliveredByStaff()));
+        String mode = delivery.getDeliveryMode() != null ? label(delivery.getDeliveryMode()) : "—";
+        String summary = MessageUtil.resolveOrRaw("timeline.delivery.summary", mode);
+        return row(delivery.getId(), CATEGORY_DELIVERY,
+            delivery.getBirthDateTime(),
+            summary,
+            false,
+            provenance(metadata, delivery.getHospital(), acting));
+    }
+
+    private PatientTimelineEntryDTO deathRow(DeathRecord death, UUID acting) {
+        Map<String, Object> metadata = new HashMap<>();
+        putIfNotNull(metadata, META_CLINICIAN, staffName(death.getCertifiedBy()));
+        String cause = truncate(joinCodeAndName(death.getImmediateCauseCode(), death.getImmediateCause()));
+        String summary = MessageUtil.resolveOrRaw("timeline.death.summary", cause != null ? cause : "—");
+        return row(death.getId(), CATEGORY_DEATH,
+            death.getDiedAt(),
+            summary,
+            false,
+            provenance(metadata, death.getHospital(), acting));
+    }
+
+    private static String userName(User user) {
+        if (user == null) {
+            return null;
+        }
+        String full = ((user.getFirstName() != null ? user.getFirstName() : "") + " "
+            + (user.getLastName() != null ? user.getLastName() : "")).trim();
+        return full.isEmpty() ? null : full;
     }
 
     private PatientTimelineEntryDTO treatmentPlanRow(TreatmentPlan plan, UUID acting) {

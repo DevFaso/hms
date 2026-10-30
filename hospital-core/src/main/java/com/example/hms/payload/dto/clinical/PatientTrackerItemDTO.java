@@ -29,6 +29,12 @@ public class PatientTrackerItemDTO {
 
     private String roomAssignment;
     private String assignedProvider;
+    /**
+     * QA D1085: the assigned clinician's user id (null when the visit is
+     * unassigned), so the tracker offers "Démarrer" only to whoever the
+     * server lets start it (EncounterServiceImpl#startEncounter).
+     */
+    private UUID assignedProviderUserId;
     private String departmentName;
 
     private LocalDateTime arrivalTimestamp;

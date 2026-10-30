@@ -163,6 +163,23 @@ server reason (`ClientSafeAccessDeniedException`: a `message`, no `code`) is
 reported in a toast on the page, never by the 403 page; its spec covers an
 arbitrary URL.
 
+## Guards added by fix/r18-clinical-record (round 18; extend these too)
+
+| Guard | Class | Scope / allowlist |
+|---|---|---|
+| `architecture/TimelineEventRegistryGuardTest` | D959 (NOT_FIXED in r17 and r18): a kind of clinical event missing from the chronology. Every JPA entity that belongs to a patient is either a chronology event with its category or listed in `NOT_EVENTS` with a reason; every category has a row source (`VisitTimelineRows.sources()` registry or `PatientServiceImpl`'s shared rows), `timeline.category.*` in the three backend bundles, `PORTAL.ENUM.TIMELINE_CATEGORY` in en/fr/es and a `timelineIcon` case. | All of `model/` (85 patient-owned entities: 24 events, 61 decided not-events) |
+| `architecture/LabResultReleaseAnnouncementGuardTest#everyRowBuiltFromAResultValueCarriesTheCorrection` (widened) | D1016/D931 (third round): a row built from a lab result's value (directly, or through a same-class helper like `formatResult`) without `.corrected(…)` in the same builder. The class-level rule passed for the chart review because its Results section asked the question while its Chronologie dropped the answer. | Every class reading `getResultValue()`; no allowlist |
+| `scripts/lib/lab-correction-shown.test.mjs` (widened) | D1016: a template iterating a timeline or lab-result list without the correction badge in the loop body (per loop, not per file). | Every template; the patient-chart Chronologie loop is excused by expression (the server writes "(Corrigé)" in the summary) |
+| `architecture/CdsCardLocaleFormatGuardTest` | D1049 / D1078 (D1002 class): a CDS or BPA card that formats a date (`toLocalDate().toString()`, `…At().toString()`, ISO formatter) or a decimal (`String.format("%.1f")`, `toPlainString()`) itself instead of `CdsCardText.date(…)` / `CdsCardText.decimal(…)`. | Every class writing card text; `PediatricDoseRule` (3, owned by fix/r18-clinical-reference, flagged) |
+| `architecture/ControlledFlagResponseGuardTest` | D1080: a response DTO with a `controlledSubstance` field built without setting it (reads `false` for morphine). | Every `Dto.builder()` of a flagged response type in `src/main`; no allowlist |
+| `architecture/CancelledOrderLockGuardTest` | D1066: a status write that can revive a cancelled order. Every non-cancel status write in the ten order services must refuse a cancelled order first (`CancelledOrders.requireNotCancelled`, an explicit CANCELLED check, `isTerminal()`, a transition table, or a live-state precondition). | 4 sites allowlisted with reasons (creates, the lab-order create branch, the ultrasound report path that refuses on entry, the signed-prescription withdrawal) |
+| `architecture/EntityTransitionRefusalProseGuardTest` | D1086 (D1046 class): an entity state transition (or a helper it calls) that refuses with an English sentence instead of a message key. | All of `model/`; JPA lifecycle callbacks (integrity invariants) excluded; no allowlist |
+| `architecture/EmptyCurrentRecordAnswerGuardTest` | D1082: a patient's `…/current`, `…/active` or `…/latest` GET that answers 404 (or a 200 with an empty body) when there is none. House convention: 204. | Every controller; no allowlist |
+| `scripts/lib/author-only-actions.test.mjs` | D1081 (D995 class): a cancel / void / withdraw button on a row of an order list not gated by `authorship.isAuthor(row)`. | Every template; excused sites listed with reasons (general referrals already per row, lab void, pharmacy fill, appointments) |
+| `scripts/lib/pregnancy-delivered.test.mjs` | D1067: a running gestational age computed from a history without the delivery check (`ongoingPregnancy`). | One excused site (the history form's preview) |
+| `scripts/lib/maternity-notes-shown.test.mjs` | D1068: a free-text field a maternity form saves that no read surface renders. | Maternity templates; the two `recentDeliveryOverrideReason` confirmations excused |
+| `guard:a11y-dialogs`, `glued-colon` (shrunk) | D1004, D1079. | a11y-dialogs 247 → 210 pins; glued colons 113 sites in 41 files → 92 in 32 |
+
 ## What is not guarded (and why)
 
 - **Bean Validation default messages** (D925 "providerName: must not be

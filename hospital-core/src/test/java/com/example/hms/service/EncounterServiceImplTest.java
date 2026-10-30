@@ -1820,7 +1820,7 @@ class EncounterServiceImplTest {
 
         assertThatThrownBy(() -> service.startEncounter(encounterId, "other-doctor", false, hospitalId))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("not the assigned physician");
+                .hasMessageContaining("Only the clinician assigned to this visit"); // QA D1085: was "not the assigned physician"
     }
 
     @Test
@@ -1867,7 +1867,7 @@ class EncounterServiceImplTest {
 
         assertThatThrownBy(() -> service.startEncounter(encounterId, "midwife1", false, hospitalId, true))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("not the assigned physician");
+                .hasMessageContaining("Only the clinician assigned to this visit"); // QA D1085: was "not the assigned physician"
         assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.WAITING_FOR_PHYSICIAN);
     }
 

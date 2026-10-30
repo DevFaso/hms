@@ -22,6 +22,8 @@ import com.example.hms.payload.dto.chartreview.ChartReviewDTO.ResultEntryDTO;
 import com.example.hms.payload.dto.chartreview.ChartReviewDTO.TimelineEventDTO;
 import com.example.hms.payload.dto.chartreview.ChartReviewDTO.TimelineEventDTO.Section;
 import com.example.hms.repository.EncounterNoteRepository;
+import com.example.hms.repository.NursingNoteRepository;
+import com.example.hms.model.NursingNote;
 import com.example.hms.repository.EncounterRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.ImagingOrderRepository;
@@ -67,10 +69,15 @@ public class ChartReviewServiceImpl implements ChartReviewService {
 
     /** Length used for note / imaging-impression preview snippets. */
     static final int PREVIEW_LENGTH = 280;
+    /** QA D1076: where a Notes-tab row comes from. */
+    static final String NOTE_SOURCE_ENCOUNTER = "ENCOUNTER";
+    static final String NOTE_SOURCE_NURSING = "NURSING";
 
     private final PatientChartAccess patientChartAccess;
     private final EncounterRepository encounterRepository;
     private final EncounterNoteRepository encounterNoteRepository;
+    /** QA D1076: the ward's nursing notes are part of the record the chart review and its PDF show. */
+    private final NursingNoteRepository nursingNoteRepository;
     private final LabResultRepository labResultRepository;
     private final PrescriptionRepository prescriptionRepository;
     private final ImagingOrderRepository imagingOrderRepository;
@@ -111,7 +118,9 @@ public class ChartReviewServiceImpl implements ChartReviewService {
         // treatment relationship's reach and never in both.
         Map<String, Long> performedHereReach = new HashMap<>();
         List<EncounterEntryDTO> encounters = loadEncounters(patient.getId(), hospitalId, readable, effectiveLimit, reach, unlocked);
-        List<NoteEntryDTO> notes = loadNotes(encounters);
+        List<NoteEntryDTO> notes = new ArrayList<>(loadNotes(encounters));
+        notes.addAll(loadNursingNotes(patient.getId(), hospitalId, readable, effectiveLimit, reach, unlocked));
+        notes.sort(Comparator.comparing(NoteEntryDTO::getDocumentedAt, Comparator.nullsLast(Comparator.reverseOrder())));
         List<ResultEntryDTO> results = loadResults(patient.getId(), hospitalId, readable, effectiveLimit, reach,
             performedHereReach);
         List<MedicationEntryDTO> medications = loadMedications(patient.getId(), hospitalId, readable, effectiveLimit, reach);
@@ -200,6 +209,57 @@ public class ChartReviewServiceImpl implements ChartReviewService {
             .sorted(Comparator.comparing(NoteEntryDTO::getDocumentedAt,
                 Comparator.nullsLast(Comparator.reverseOrder())))
             .toList();
+    }
+
+    /**
+     * QA D1076: the chart review read clinical (encounter) notes only, so the
+     * Notes tab said 0 and the record PDF "Aucun élément enregistré" while the
+     * ward had written nursing notes. Read as /nurse/notes reads them (E9 #59):
+     * the readable set, a foreign sensitive note withheld unless unlocked, each
+     * foreign note surfaced counted in the review's reach.
+     */
+    private List<NoteEntryDTO> loadNursingNotes(UUID patientId, UUID hospitalId, Set<UUID> readable,
+                                                int limit, Map<String, Long> reach, boolean unlocked) {
+        List<NursingNote> source = (readable != null
+            ? nursingNoteRepository.findTop50ByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patientId, readable).stream()
+                .filter(n -> CrossHospitalRows.maySurface(n.getHospital(), hospitalId,
+                    sensitivityClassifier.effectiveCategory(n), unlocked))
+            : nursingNoteRepository.findTop50ByPatient_IdOrderByCreatedAtDesc(patientId).stream())
+            .limit(limit)
+            .toList();
+        account(reach, hospitalId, source.stream().map(n -> CrossHospitalReachRecorder.hospitalIdOf(n.getHospital())).toList());
+        return source.stream().map(ChartReviewServiceImpl::toNursingNoteDto).toList();
+    }
+
+    static NoteEntryDTO toNursingNoteDto(NursingNote note) {
+        return NoteEntryDTO.builder()
+            .id(note.getId())
+            .template(note.getTemplate() != null ? note.getTemplate().name() : null)
+            .authorName(firstNonBlankOf(note.getSignedByName(), note.getAuthorName()))
+            .authorCredentials(firstNonBlankOf(note.getSignedByCredentials(), note.getAuthorCredentials()))
+            .documentedAt(note.getDocumentedAt())
+            .signedAt(note.getSignedAt())
+            .signed(note.getSignedAt() != null)
+            .lateEntry(note.isLateEntry())
+            .preview(firstPreview(note.getNarrative(), note.getDataAssessment(), note.getActionSummary(),
+                note.getResponseSummary(), note.getDataSubjective(), note.getDataObjective(), note.getDataPlan(),
+                note.getDataImplementation(), note.getDataEvaluation(), note.getEducationSummary(), note.getTitle()))
+            .source(NOTE_SOURCE_NURSING)
+            .build();
+    }
+
+    private static String firstNonBlankOf(String first, String second) {
+        return first != null && !first.isBlank() ? first : second;
+    }
+
+    private static String firstPreview(String... candidates) {
+        for (String candidate : candidates) {
+            String preview = truncatePreview(candidate);
+            if (preview != null) {
+                return preview;
+            }
+        }
+        return null;
     }
 
     private List<ResultEntryDTO> loadResults(UUID patientId, UUID hospitalId, Set<UUID> readable,
@@ -374,6 +434,10 @@ public class ChartReviewServiceImpl implements ChartReviewService {
             .occurredAt(r.getResultDate())
             .title(joinNonBlank(" ", r.getTestName(), formatResult(r)))
             .status(r.getAbnormalFlag())
+            // QA D1016/D931 (round 18): the chronology carried the value but
+            // dropped the result's correction flag, so a corrected value read
+            // as the original there while every other section said "Corrigé".
+            .corrected(r.isCorrected())
             .build()));
 
         medications.forEach(m -> events.add(TimelineEventDTO.builder()
@@ -441,6 +505,7 @@ public class ChartReviewServiceImpl implements ChartReviewService {
             .requiresCosign(note.isRequiresCosign())
             .cosignedAt(note.getCosignedAt())
             .preview(buildNotePreview(note))
+            .source(NOTE_SOURCE_ENCOUNTER)
             .build();
     }
 

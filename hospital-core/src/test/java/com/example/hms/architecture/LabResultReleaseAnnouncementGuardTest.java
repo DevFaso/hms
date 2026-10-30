@@ -109,6 +109,82 @@ class LabResultReleaseAnnouncementGuardTest {
             .isEmpty();
     }
 
+    private static final Pattern BUILDER = Pattern.compile("\\b(\\w+)\\.builder\\(\\)");
+    private static final Pattern PRIVATE_HELPER = Pattern.compile(
+        "\\n    private\\s+(?:static\\s+)?[\\w<>\\[\\], ]+\\s+(\\w+)\\(([^;{]*?)\\)\\s*\\{");
+
+    /**
+     * QA D1016/D931 (round 18, NOT_FIXED a third time): the class-level rule
+     * above passed for the chart review because its Results section asked the
+     * question - and its Chronologie, built from the same row, dropped the
+     * answer. Per row, now: every DTO built with a lab result's value (read
+     * directly, or through a helper of the same class such as
+     * {@code formatResult(r)}) must carry the correction in the same builder
+     * ({@code .corrected(…)}, {@code isCorrection}, {@code isCorrected()}).
+     */
+    @Test
+    void everyRowBuiltFromAResultValueCarriesTheCorrection() throws IOException {
+        java.util.List<String> unmarked = new java.util.ArrayList<>();
+        for (String file : filesMatching(READS_VALUE)) {
+            unmarked.addAll(rowsWithoutCorrection(file, code(file)));
+        }
+        assertThat(unmarked)
+            .as("a row built from a lab result's value drops whether it corrects a released result, so one "
+                + "screen shows the corrected value as the original (QA D1016/D931): carry .corrected(...) "
+                + "in the same builder")
+            .isEmpty();
+    }
+
+    @Test
+    void theRowScanCatchesTheChronologyShape() {
+        String before = """
+            class ChartReviewServiceImpl {
+                private List<TimelineEventDTO> buildTimeline(List<ResultEntryDTO> results) {
+                    results.forEach(r -> events.add(TimelineEventDTO.builder()
+                        .title(joinNonBlank(" ", r.getTestName(), formatResult(r)))
+                        .status(r.getAbnormalFlag())
+                        .build()));
+                }
+                private static String formatResult(ResultEntryDTO r) {
+                    return r.getResultValue() + " " + r.getResultUnit();
+                }
+            }
+            """;
+        assertThat(rowsWithoutCorrection("ChartReviewServiceImpl.java", before)).hasSize(1);
+        String after = before.replace(".status(r.getAbnormalFlag())", ".status(r.getAbnormalFlag()).corrected(r.isCorrected())");
+        assertThat(rowsWithoutCorrection("ChartReviewServiceImpl.java", after)).isEmpty();
+    }
+
+    static java.util.List<String> rowsWithoutCorrection(String file, String source) {
+        java.util.Set<String> valueHelpers = new java.util.TreeSet<>();
+        java.util.regex.Matcher helper = PRIVATE_HELPER.matcher(source);
+        while (helper.find()) {
+            int open = helper.end() - 1;
+            int close = com.example.hms.testsupport.SourceScan.closingBrace(source, open);
+            if (READS_VALUE.matcher(source.substring(open, Math.min(close + 1, source.length()))).find()) {
+                valueHelpers.add(helper.group(1));
+            }
+        }
+        java.util.List<String> out = new java.util.ArrayList<>();
+        java.util.regex.Matcher builder = BUILDER.matcher(source);
+        while (builder.find()) {
+            int end = source.indexOf(".build()", builder.end());
+            if (!builder.group(1).endsWith("DTO")) {
+                continue; // an entity built from a request, not a row shown to someone
+            }
+            String whole = end < 0 ? source.substring(builder.end()) : source.substring(builder.end(), end);
+            int nested = whole.indexOf(".builder()");
+            String chain = nested >= 0 ? whole.substring(0, nested) : whole;
+            boolean takesValue = READS_VALUE.matcher(chain).find()
+                || valueHelpers.stream().anyMatch(h -> chain.matches("(?s).*\\b" + h + "\\(.*"));
+            if (takesValue && !chain.contains(".corrected(") && !ASKS_CORRECTION.matcher(chain).find()) {
+                out.add(file + ":" + com.example.hms.testsupport.SourceScan.lineOf(source, builder.start())
+                    + " " + builder.group(1) + ".builder()");
+            }
+        }
+        return out;
+    }
+
     private static final Pattern IN_BASKET_KEY = Pattern.compile("\"([A-Za-z0-9_.]*\\.inBasket[A-Za-z0-9_]*)\"");
 
     /**

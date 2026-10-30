@@ -1165,57 +1165,69 @@ class ImagingOrderServiceImplTest {
         return order;
     }
 
+    /*
+     * QA D1066 (round 18): the four review-976 tests below used to let the
+     * ordering provider or a radiologist reopen a cancelled order, and a
+     * colleague re-send CANCELLED. Product decision (round-18 brief): a
+     * cancelled order is closed and nobody revives it - the clinician places a
+     * new one. Each now asserts the refusal, and that nothing was written.
+     */
     @Test
-    void review976_reCancellingByAColleagueKeepsTheOriginalStamp() {
+    void d1066_reCancellingACancelledOrderIsRefusedAndKeepsTheOriginalStamp() {
         UUID author = UUID.randomUUID();
         ImagingOrder order = cancelledBy(author);
         when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
-        when(imagingOrderRepository.save(order)).thenReturn(order);
 
-        statusAs(UUID.randomUUID(), order, ImagingOrderStatus.CANCELLED);
+        org.assertj.core.api.Assertions.assertThatThrownBy(
+                () -> statusAs(UUID.randomUUID(), order, ImagingOrderStatus.CANCELLED))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .hasMessage("imaging.order.cancelled.locked");
 
         assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.CANCELLED);
         assertThat(order.getCancellationReason()).isEqualTo("Original reason");
         assertThat(order.getCancelledAt()).isEqualTo(ORIGINAL_CANCELLED_AT);
         assertThat(order.getCancelledByUserId()).isEqualTo(author);
         assertThat(order.getCancelledByName()).isEqualTo("Original Author");
+        verify(imagingOrderRepository, never()).save(any());
     }
 
     @Test
-    void review976_aColleagueCannotReopenTheAuthorsCancelledOrder() {
+    void d1066_aColleagueCannotReopenTheAuthorsCancelledOrder() {
         ImagingOrder order = cancelledBy(UUID.randomUUID());
         when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
-        UUID colleague = UUID.randomUUID();
-        when(roleValidator.hasRole(colleague, hospitalId, "RADIOLOGIST")).thenReturn(false);
 
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> statusAs(colleague, order, ImagingOrderStatus.ORDERED))
-            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> statusAs(UUID.randomUUID(), order, ImagingOrderStatus.ORDERED))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .hasMessage("imaging.order.cancelled.locked");
         assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.CANCELLED);
         verify(imagingOrderRepository, never()).save(any());
     }
 
     @Test
-    void review976_theOrderingProviderReopensHerCancelledOrder() {
+    void d1066_theOrderingProviderCannotReopenHerCancelledOrder() {
         UUID author = UUID.randomUUID();
         ImagingOrder order = cancelledBy(author);
         when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
-        when(imagingOrderRepository.save(order)).thenReturn(order);
 
-        statusAs(author, order, ImagingOrderStatus.ORDERED);
-
-        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.ORDERED);
+        for (ImagingOrderStatus revived : List.of(ImagingOrderStatus.ORDERED, ImagingOrderStatus.SCHEDULED)) {
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> statusAs(author, order, revived))
+                .as(revived.name())
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .hasMessage("imaging.order.cancelled.locked");
+        }
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.CANCELLED);
+        verify(imagingOrderRepository, never()).save(any());
     }
 
     @Test
-    void review976_aRadiologistReopensACancelledOrderSheDidNotPlace() {
+    void d1066_aRadiologistCannotReopenACancelledOrderEither() {
         ImagingOrder order = cancelledBy(UUID.randomUUID());
         when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
-        when(imagingOrderRepository.save(order)).thenReturn(order);
         UUID radiologist = UUID.randomUUID();
-        when(roleValidator.hasRole(radiologist, hospitalId, "RADIOLOGIST")).thenReturn(true);
+        org.mockito.Mockito.lenient().when(roleValidator.hasRole(radiologist, hospitalId, "RADIOLOGIST")).thenReturn(true);
 
-        statusAs(radiologist, order, ImagingOrderStatus.ORDERED);
-
-        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.ORDERED);
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> statusAs(radiologist, order, ImagingOrderStatus.ORDERED))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class);
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.CANCELLED);
     }
 }

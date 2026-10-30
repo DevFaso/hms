@@ -25,4 +25,14 @@ public final class LabResultCorrections {
     public static boolean isCorrection(LabResult result) {
         return result != null && result.getSupersedesResultId() != null;
     }
+
+    /**
+     * QA D1016/D931 class (round 18): a microbiology culture is corrected in
+     * place once final (status CORRECTED, a stamped time and a mandatory
+     * reason), not by a superseding row; it is the same question.
+     */
+    public static boolean isCorrected(com.example.hms.model.MicroCultureResult culture) {
+        return culture != null && (culture.getStatus() == com.example.hms.enums.MicroCultureStatus.CORRECTED
+            || culture.getCorrectedAt() != null);
+    }
 }

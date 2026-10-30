@@ -43,7 +43,7 @@ class TimelineStatusGuardTest {
         "\\n    (?:private|public|protected)[^;{=]*?\\(([^;{]*?)\\)\\s*(?:throws [\\w., ]+)?\\{");
     private static final Pattern NAME = Pattern.compile("(\\w+)\\s*\\($");
     private static final Pattern STATUS_IN_SUMMARY = Pattern.compile(
-        "TimelineStatus\\.withStatus\\(|statusLabel\\(|\\blabel\\(\\s*\\w+\\.getStatus\\(\\)\\s*\\)");
+        "TimelineStatus\\.withStatus(?:Label)?\\(|statusLabel\\(|\\blabel\\(\\s*\\w+\\.getStatus\\(\\)\\s*\\)");
 
     /** Rows that carry a status without printing it, each with its reason. Shrink only. */
     private static final Map<String, Allowance> ALLOWED = GuardAllowlist.allow(

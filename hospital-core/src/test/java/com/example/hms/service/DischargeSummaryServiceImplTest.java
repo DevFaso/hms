@@ -145,6 +145,100 @@ class DischargeSummaryServiceImplTest {
         assertThat(result.getId()).isEqualTo(summaryId);
     }
 
+    private void createPathStubs() {
+        when(dischargeSummaryRepository.existsByEncounter_Id(encounterId)).thenReturn(false);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        org.mockito.Mockito.lenient().when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        org.mockito.Mockito.lenient().when(assignmentRepository.findById(assignmentId)).thenReturn(Optional.of(assignment));
+    }
+
+    /** QA D1070: a visit still waiting for its physician has no summary to write yet. */
+    @Test void d1070_aVisitNobodyHasSeenGetsNoSummary() {
+        for (com.example.hms.enums.EncounterStatus unseen : List.of(com.example.hms.enums.EncounterStatus.ARRIVED,
+                com.example.hms.enums.EncounterStatus.TRIAGE, com.example.hms.enums.EncounterStatus.WAITING_FOR_PHYSICIAN,
+                com.example.hms.enums.EncounterStatus.LEFT_WITHOUT_BEING_SEEN)) {
+            encounter.setStatus(unseen);
+            createPathStubs();
+            DischargeSummaryRequestDTO req = buildRequest();
+            assertThatThrownBy(() -> service.createDischargeSummary(req, Locale.ENGLISH))
+                .as(unseen.name())
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("dischargeSummary.encounter.notSeen");
+        }
+        verify(dischargeSummaryRepository, never()).save(any());
+    }
+
+    /** QA D1070: another physician does not sign the after-visit summary of a visit assigned to a colleague. */
+    @Test void d1070_anotherPhysicianCannotSignTheVisitsSummary() {
+        encounter.setStatus(com.example.hms.enums.EncounterStatus.IN_PROGRESS);
+        encounter.setEncounterType(com.example.hms.enums.EncounterType.OUTPATIENT);
+        Staff assigned = new Staff();
+        assigned.setId(UUID.randomUUID());
+        com.example.hms.model.User assignedUser = new com.example.hms.model.User();
+        assignedUser.setId(UUID.randomUUID());
+        assigned.setUser(assignedUser);
+        encounter.setStaff(assigned);
+        when(roleValidator.isDoctor(assignedUser.getId(), hospitalId)).thenReturn(true);
+        createPathStubs();
+
+        DischargeSummaryRequestDTO req = buildRequest();
+        assertThatThrownBy(() -> service.createDischargeSummary(req, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .hasMessage("dischargeSummary.encounter.notTreatingClinician");
+        verify(dischargeSummaryRepository, never()).save(any());
+    }
+
+    /** QA D930 stays true: a walk-in opened by a nurse is summed up by the doctor who saw the patient. */
+    @Test void d1070_aVisitOpenedByANurseIsSummedUpByTheDoctor() {
+        encounter.setStatus(com.example.hms.enums.EncounterStatus.IN_PROGRESS);
+        Staff nurse = new Staff();
+        nurse.setId(UUID.randomUUID());
+        com.example.hms.model.User nurseUser = new com.example.hms.model.User();
+        nurseUser.setId(UUID.randomUUID());
+        nurse.setUser(nurseUser);
+        encounter.setStaff(nurse);
+        createPathStubs();
+        when(dischargeSummaryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(dischargeSummaryMapper.toResponseDTO(any())).thenReturn(responseDTO);
+
+        assertThat(service.createDischargeSummary(buildRequest(), Locale.ENGLISH)).isSameAs(responseDTO);
+    }
+
+    /** QA D1070: an inpatient stay is discharged by the ward's physicians, not only the one it names. */
+    @Test void d1070_aStayIsDischargedByTheWardsPhysicians() {
+        encounter.setStatus(com.example.hms.enums.EncounterStatus.IN_PROGRESS);
+        encounter.setEncounterType(com.example.hms.enums.EncounterType.INPATIENT);
+        Staff admitting = new Staff();
+        admitting.setId(UUID.randomUUID());
+        encounter.setStaff(admitting);
+        createPathStubs();
+        when(dischargeSummaryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(dischargeSummaryMapper.toResponseDTO(any())).thenReturn(responseDTO);
+
+        assertThat(service.createDischargeSummary(buildRequest(), Locale.ENGLISH)).isSameAs(responseDTO);
+    }
+
+    /** QA D1070: the portal publishes a summary once its visit is completed, never a draft of an open visit. */
+    @Test void d1070_thePortalShowsOnlyACompletedVisitsSummary() {
+        Encounter open = new Encounter();
+        open.setStatus(com.example.hms.enums.EncounterStatus.WAITING_FOR_PHYSICIAN);
+        Encounter done = new Encounter();
+        done.setStatus(com.example.hms.enums.EncounterStatus.COMPLETED);
+        DischargeSummary draft = DischargeSummary.builder().encounter(open).isFinalized(false).build();
+        DischargeSummary finalisedEarly = DischargeSummary.builder().encounter(open).isFinalized(true).build();
+        DischargeSummary published = DischargeSummary.builder().encounter(done).isFinalized(false).build();
+        DischargeSummary noVisitFinal = DischargeSummary.builder().isFinalized(true).build();
+        DischargeSummary noVisitDraft = DischargeSummary.builder().isFinalized(false).build();
+
+        assertThat(DischargeSummaryServiceImpl.publishedToPatient(draft)).isFalse();
+        assertThat(DischargeSummaryServiceImpl.publishedToPatient(finalisedEarly)).isFalse();
+        assertThat(DischargeSummaryServiceImpl.publishedToPatient(published)).isTrue();
+        assertThat(DischargeSummaryServiceImpl.publishedToPatient(noVisitFinal)).isTrue();
+        assertThat(DischargeSummaryServiceImpl.publishedToPatient(noVisitDraft)).isFalse();
+    }
+
     @Test void createDischargeSummary_alreadyExists_throws() {
         DischargeSummaryRequestDTO req = buildRequest();
         when(dischargeSummaryRepository.existsByEncounter_Id(encounterId)).thenReturn(true);
@@ -562,11 +656,35 @@ class DischargeSummaryServiceImplTest {
     @DisplayName("Portal-patient AVS retrieval — observability + backfill")
     class PortalPatientAvs {
 
+        /** QA D1070: the portal publishes a completed visit's summary, so the shared visit is completed here. */
+        @org.junit.jupiter.api.BeforeEach
+        void theVisitIsCompleted() {
+            encounter.setStatus(com.example.hms.enums.EncounterStatus.COMPLETED);
+        }
+
         private double counterCount(String name, String outcome) {
             io.micrometer.core.instrument.Counter c = meterRegistry.find(name)
                     .tag(DischargeSummaryServiceImpl.TAG_OUTCOME, outcome)
                     .counter();
             return c == null ? 0.0d : c.count();
+        }
+
+        /** QA D1070: Salif's visit still waiting for the physician: its draft summary is not his yet. */
+        @Test
+        void d1070_theOpenVisitsDraftIsNotOnThePortal() {
+            Encounter waiting = new Encounter();
+            waiting.setId(UUID.randomUUID());
+            waiting.setStatus(com.example.hms.enums.EncounterStatus.WAITING_FOR_PHYSICIAN);
+            DischargeSummary early = DischargeSummary.builder().patient(patient).encounter(waiting)
+                .hospital(hospital).isFinalized(false).hospitalCourse("seen").dischargeDate(LocalDate.now()).build();
+            org.mockito.Mockito.lenient().when(encounterRepository.findCompletedWithoutDischargeSummary(patientId))
+                .thenReturn(List.of());
+            when(dischargeSummaryRepository.findByPatient_IdOrderByDischargeDateDesc(patientId))
+                .thenReturn(List.of(early, summary));
+            org.mockito.Mockito.lenient().when(dischargeSummaryMapper.toResponseDTO(summary)).thenReturn(responseDTO);
+
+            assertThat(service.getDischargeSummariesForPortalPatient(patientId)).containsExactly(responseDTO);
+            verify(dischargeSummaryMapper, never()).toResponseDTO(early);
         }
 
         @Test

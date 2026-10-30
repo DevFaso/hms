@@ -26,6 +26,13 @@ public class ProcedureOrderResponseDTO extends ProcedureOrderBaseDTO {
     private String hospitalName;
 
     private UUID orderingProviderId;
+    /**
+     * QA D1081 (D995 class): the user the server's author check compares the caller with, so a
+     * list offers the author-only actions (cancel, edit, sign) on this row only to its author.
+     */
+    private java.util.UUID authorUserId;
+    /** QA D1081: false when the author drafts for a physician's signature, so a physician may end it too. */
+    private Boolean authorIsPhysician;
 
     private String orderingProviderName;
 

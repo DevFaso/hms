@@ -39,9 +39,7 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
 
     private static final EnumSet<DischargeStatus> ACTIVE_STATUSES = EnumSet.of(DischargeStatus.PENDING, DischargeStatus.APPROVED);
 
-    private static final java.util.Set<AdmissionStatus> OPEN_ADMISSION_STATUSES = java.util.EnumSet.of(
-        AdmissionStatus.PENDING, AdmissionStatus.ACTIVE, AdmissionStatus.ON_LEAVE,
-        AdmissionStatus.AWAITING_DISCHARGE);
+    private static final java.util.Set<AdmissionStatus> OPEN_ADMISSION_STATUSES = AdmissionStatus.OPEN;
 
     private final DischargeApprovalRepository dischargeApprovalRepository;
     private final PatientHospitalRegistrationRepository registrationRepository;
@@ -71,6 +69,12 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
             throw new BusinessException("Discharge already completed for this registration");
         }
         ensureNoActiveRequest(registration.getId());
+        // QA D1065: a discharge ends a hospital stay. A walk-in who left without
+        // being seen, or any patient merely registered here, has none to end.
+        if (admissionRepository.findByPatient_IdAndHospital_IdAndStatusIn(registration.getPatient().getId(),
+                registration.getHospital().getId(), OPEN_ADMISSION_STATUSES).isEmpty()) {
+            throw new BusinessException("discharge.request.notAdmitted");
+        }
 
         Staff nurse = staffRepository.findByIdAndActiveTrue(request.getNurseStaffId())
             .orElseThrow(() -> new ResourceNotFoundException("staff.nurse.notFoundOrInactive", request.getNurseStaffId()));

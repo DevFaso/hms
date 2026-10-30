@@ -143,6 +143,7 @@ public class LabResultMapper {
             .resultValue(result.getResultValue())
             .resultUnit(result.getResultUnit())
             .severityFlag(severityFlag)
+            .corrected(com.example.hms.service.lab.LabResultCorrections.isCorrection(result))
             .build();
     }
 

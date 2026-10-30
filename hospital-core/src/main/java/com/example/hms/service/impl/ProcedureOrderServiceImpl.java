@@ -402,6 +402,21 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
         return new ResourceNotFoundException("procedureOrder.notFound", orderId);
     }
 
+    private static UUID orderingUserId(ProcedureOrder order) {
+        Staff orderer = order.getOrderingProvider();
+        return orderer != null && orderer.getUser() != null ? orderer.getUser().getId() : null;
+    }
+
+    /** QA D1081: the same question requireCancelAuthor asks, for the list's per-row Annuler. */
+    private Boolean authorIsPhysician(ProcedureOrder order) {
+        UUID author = orderingUserId(order);
+        UUID hospitalId = com.example.hms.security.CallerIdentity.hospitalIdOf(order.getHospital());
+        if (author == null || hospitalId == null) {
+            return null;
+        }
+        return !roleValidator.draftsForPhysicianSignature(author, hospitalId);
+    }
+
     private ProcedureOrderResponseDTO toResponseDTO(ProcedureOrder order) {
         UUID hospitalId = order.getHospital() != null ? order.getHospital().getId() : null;
         String patientMrn = null;
@@ -411,6 +426,8 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
         
         return ProcedureOrderResponseDTO.builder()
             .id(order.getId())
+            .authorUserId(orderingUserId(order))
+            .authorIsPhysician(authorIsPhysician(order))
             .patientId(order.getPatient() != null ? order.getPatient().getId() : null)
             .patientName(order.getPatient() != null ? order.getPatient().getFullName() : null)
             .patientMrn(patientMrn)

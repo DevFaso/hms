@@ -561,9 +561,19 @@ public class AdmissionServiceImpl implements AdmissionService {
     public AdmissionResponseDTO getCurrentAdmissionForPatient(UUID patientId) {
         // ── Tenant isolation ──
         UUID activeHospitalId = roleValidator.requireActiveHospitalId();
+        // QA D1065 (round 18): the open stay at THIS hospital, in any open
+        // status (awaiting discharge is still a stay). It used to take the
+        // patient's latest open admission anywhere and then drop it when it
+        // was another hospital's, hiding this hospital's own stay.
+        if (activeHospitalId != null) {
+            return admissionRepository.findByPatient_IdAndHospital_IdAndStatusIn(patientId, activeHospitalId,
+                    com.example.hms.enums.AdmissionStatus.OPEN).stream()
+                .max(java.util.Comparator.comparing(com.example.hms.model.Admission::getAdmissionDateTime,
+                    java.util.Comparator.nullsFirst(java.util.Comparator.naturalOrder())))
+                .map(admissionMapper::toResponseDTO)
+                .orElse(null);
+        }
         return admissionRepository.findCurrentAdmissionByPatient(patientId)
-            .filter(admission -> activeHospitalId == null
-                || (admission.getHospital() != null && activeHospitalId.equals(admission.getHospital().getId())))
             .map(admissionMapper::toResponseDTO)
             .orElse(null);
     }

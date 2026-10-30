@@ -12,6 +12,9 @@ public interface DeliveryRecordRepository extends JpaRepository<DeliveryRecord, 
 
     boolean existsByEpisode_Id(UUID episodeId);
 
+    /** QA D959 (round 18): the deliveries on the chronology, at the acting hospital. */
+    java.util.List<DeliveryRecord> findByPatient_IdAndHospital_IdOrderByBirthDateTimeDesc(UUID patientId, UUID hospitalId);
+
     /** The mother's latest birth at this hospital (QA D215: a new delivery starts a new postpartum plan). */
     Optional<DeliveryRecord> findFirstByPatient_IdAndHospital_IdOrderByBirthDateTimeDesc(UUID patientId, UUID hospitalId);
 
@@ -20,4 +23,8 @@ public interface DeliveryRecordRepository extends JpaRepository<DeliveryRecord, 
         java.time.LocalDateTime from, java.time.LocalDateTime to);
 
     boolean existsByPatient_IdAndBirthDateTimeGreaterThanEqual(UUID patientId, java.time.LocalDateTime since);
+
+    /** QA D1067: the delivery that ended the pregnancy a maternal history dates (at or after its start). */
+    Optional<DeliveryRecord> findFirstByPatient_IdAndBirthDateTimeGreaterThanEqualOrderByBirthDateTimeDesc(
+        UUID patientId, java.time.LocalDateTime since);
 }
