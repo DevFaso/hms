@@ -126,6 +126,35 @@ describe('LabReleaseWorklistComponent', () => {
     expect(host().querySelector('[data-testid="release-action-result-1"]')).not.toBeNull();
   });
 
+  /**
+   * QA D1016: the worklist row read "TDR paludisme … Négatif Normal" and the
+   * dialog "Valider TDR paludisme = Négatif ?" for a correction of a result
+   * already validated as Positif. The row is marked and the dialog says the
+   * value replaces a validated one; a first result is neither.
+   */
+  it('QA D1016: a correction is marked on its row and the confirmation says it replaces a validated value', () => {
+    setup(['ROLE_LAB_SCIENTIST']);
+    fixture.detectChanges();
+    const correction = result({ id: 'result-2', supersedesResultId: 'result-0' } as never);
+    flushWorklist([result(), correction]);
+
+    const first = host().querySelector('[data-testid="release-row-result-1"]');
+    const second = host().querySelector('[data-testid="release-row-result-2"]');
+    expect(first?.querySelector('[data-testid="lab-correction-badge"]')).toBeNull();
+    expect(second?.querySelector('[data-testid="lab-correction-badge"]')).not.toBeNull();
+
+    component.askRelease(correction);
+    fixture.detectChanges();
+    expect(host().querySelector('[data-testid="release-correction-note"]')?.textContent).toContain(
+      'LAB_RELEASE.CONFIRM_CORRECTION',
+    );
+    component.cancelRelease();
+    fixture.detectChanges();
+    component.askRelease(result());
+    fixture.detectChanges();
+    expect(host().querySelector('[data-testid="release-correction-note"]')).toBeNull();
+  });
+
   it('shows the result date and when the row actually landed as two columns', () => {
     // An analyzer's OBX-14 can be hours before the ORU reaches us, and a
     // hand-entered result can be backdated: calling the result date an

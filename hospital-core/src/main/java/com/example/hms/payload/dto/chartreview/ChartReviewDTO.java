@@ -122,6 +122,8 @@ public class ChartReviewDTO {
         private String orderingStaffName;
         private boolean acknowledged;
         private boolean released;
+        /** QA D1016: the result corrects a released value the reader may already have acted on. */
+        private boolean corrected;
     }
 
     @Getter

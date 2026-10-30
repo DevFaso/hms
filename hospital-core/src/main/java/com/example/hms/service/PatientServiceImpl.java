@@ -2801,6 +2801,10 @@ public class PatientServiceImpl implements PatientService {
                 .toString();
         }
         summary.append(": ").append(result.getResultValue());
+        // QA D1016: the timeline says the value corrects a released one.
+        if (com.example.hms.service.lab.LabResultCorrections.isCorrection(result)) {
+            summary.append(" (").append(com.example.hms.utility.MessageUtil.resolveOrRaw("lab.result.correctedLabel")).append(")");
+        }
         // QA D958: the unit of the result, else the test's own unit.
         String unit = result.getResultUnit();
         if ((unit == null || unit.isBlank()) && test != null) {

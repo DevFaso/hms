@@ -54,6 +54,8 @@ public class LabResultReleaseNotifier {
 
     static final String NOTIFICATION_TYPE = "LAB_RESULT";
     static final String PATIENT_MESSAGE_KEY = "lab.result.patient.available";
+    /** QA D1016: a released correction is announced as a correction, not as a second new result. */
+    static final String PATIENT_CORRECTION_MESSAGE_KEY = "lab.result.patient.corrected";
     static final String CORRECTION_MESSAGE_KEY = "lab.result.correction.notification";
 
     private final NotificationService notificationService;
@@ -80,7 +82,8 @@ public class LabResultReleaseNotifier {
         UUID userId = portalUser.getId();
         String username = portalUser.getUsername();
         Object testName = testNameOf(order);
-        TransactionCallbacks.afterCommit(() -> deliverToPatient(resultId, userId, username, testName));
+        String messageKey = LabResultCorrections.isCorrection(result) ? PATIENT_CORRECTION_MESSAGE_KEY : PATIENT_MESSAGE_KEY;
+        TransactionCallbacks.afterCommit(() -> deliverToPatient(resultId, userId, username, testName, messageKey));
     }
 
     /**
@@ -124,13 +127,13 @@ public class LabResultReleaseNotifier {
             : value;
     }
 
-    private void deliverToPatient(UUID resultId, UUID userId, String username, Object testName) {
+    private void deliverToPatient(UUID resultId, UUID userId, String username, Object testName, String messageKey) {
         try {
             ownTransaction().executeWithoutResult(status -> {
                 if (!inAppEnabled(userId)) {
                     return;
                 }
-                notificationService.createNotification(PATIENT_MESSAGE_KEY, new Object[] {testName}, username,
+                notificationService.createNotification(messageKey, new Object[] {testName}, username,
                     NOTIFICATION_TYPE, resultId);
             });
         } catch (RuntimeException ex) {

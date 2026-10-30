@@ -503,6 +503,7 @@ public class ResultReviewServiceImpl implements ResultReviewService {
                 .abnormalFlag(abnormalFlag)
                 .resultedAt(result.getResultDate())
                 .orderingContext(order.getClinicalIndication())
+                .corrected(com.example.hms.service.lab.LabResultCorrections.isCorrection(result))
                 .build();
     }
 

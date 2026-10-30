@@ -10,6 +10,7 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { LabCorrectionBadgeComponent } from '../shared/lab-correction-badge.component';
 import { Subject, of } from 'rxjs';
 import { catchError, map, switchMap } from 'rxjs/operators';
 
@@ -51,6 +52,7 @@ import { LabValuePipe } from '../shared/lab-value.pipe';
   selector: 'app-lab-release-worklist',
   standalone: true,
   imports: [
+    LabCorrectionBadgeComponent,
     CdkTrapFocus,
     ServerTimePipe,
     EnumLabelPipe,

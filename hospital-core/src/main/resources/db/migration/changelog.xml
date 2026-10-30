@@ -3163,4 +3163,15 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- V246 (round 17, QA D1053): an in-basket item keeps the message keys
+         and arguments of its title and body, so it is rendered in the
+         reader's language. Nullable, plain statements, no DO block.
+         Idempotent. -->
+    <changeSet id="V246-in-basket-item-message-keys" author="hms-team" runOnChange="false">
+        <sqlFile path="V246__in_basket_item_message_keys.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

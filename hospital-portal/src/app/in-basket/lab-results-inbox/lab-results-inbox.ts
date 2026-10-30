@@ -11,6 +11,7 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
+import { LabCorrectionBadgeComponent } from '../../lab/shared/lab-correction-badge.component';
 
 import { RoleContextService } from '../../core/role-context.service';
 import { DashboardService, DoctorResultQueueItem } from '../../services/dashboard.service';
@@ -99,6 +100,7 @@ function isQualitativeValue(value: string | null | undefined): boolean {
   selector: 'app-lab-results-inbox',
   standalone: true,
   imports: [
+    LabCorrectionBadgeComponent,
     RouterLink,
     TranslateModule,
     HospitalScopeChipComponent,

@@ -62,6 +62,7 @@ import {
   CareTeamDTO,
 } from '../services/patient-portal.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { LabCorrectionBadgeComponent } from '../lab/shared/lab-correction-badge.component';
 import { Subscription } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
 import { PatientTrackerWsService } from '../services/patient-tracker-ws.service';
@@ -140,6 +141,7 @@ export { currentMedications };
   selector: 'app-dashboard',
   standalone: true,
   imports: [
+    LabCorrectionBadgeComponent,
     ClockTimePipe,
     ServerTimePipe,
     CommonModule,

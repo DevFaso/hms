@@ -104,6 +104,7 @@
                 <span class="rp-test-name">{{ r.testName }}</span>
               </button>
               <span class="rp-value rp-value-critical">{{ r.resultValue | labValue }}</span>
+              <app-lab-correction-badge [corrected]="r.corrected" />
               <span class="rp-time">{{ formatDate(r.resultedAt) }}</span>
               <a
                 [routerLink]="['/patients', r.patientId]"
@@ -167,6 +168,7 @@
                 <span class="rp-test-name">{{ r.testName }}</span>
               </button>
               <span class="rp-value rp-value-abnormal">{{ r.resultValue | labValue }}</span>
+              <app-lab-correction-badge [corrected]="r.corrected" />
               <span class="rp-time">{{ formatDate(r.resultedAt) }}</span>
               <a
                 [routerLink]="['/patients', r.patientId]"
@@ -212,6 +214,7 @@
                 <span class="rp-test-name">{{ r.testName }}</span>
               </button>
               <span class="rp-value">{{ r.resultValue | labValue }}</span>
+              <app-lab-correction-badge [corrected]="r.corrected" />
               <span class="rp-time">{{ formatDate(r.resultedAt) }}</span>
               <a
                 [routerLink]="['/patients', r.patientId]"

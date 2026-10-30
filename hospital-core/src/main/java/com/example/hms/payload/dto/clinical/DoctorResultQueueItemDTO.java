@@ -27,4 +27,6 @@ public class DoctorResultQueueItemDTO {
     private com.example.hms.enums.AbnormalDirection abnormalDirection;
     private LocalDateTime resultedAt;
     private String orderingContext;
+    /** QA D1016: the result corrects a released value the clinician may already have acted on. */
+    private boolean corrected;
 }

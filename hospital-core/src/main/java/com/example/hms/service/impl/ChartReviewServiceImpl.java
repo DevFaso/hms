@@ -507,6 +507,8 @@ public class ChartReviewServiceImpl implements ChartReviewService {
             .orderingStaffName(orderingStaffName)
             .acknowledged(r.isAcknowledged())
             .released(r.isReleased())
+            // QA D1016: the chart review says the value replaces a released one.
+            .corrected(showsValue && com.example.hms.service.lab.LabResultCorrections.isCorrection(r))
             .build();
     }
 

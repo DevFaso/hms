@@ -3,6 +3,7 @@ import { CommonModule, DatePipe } from '@angular/common';
 import { CfaPipe } from '../../../shared/pipes/cfa.pipe';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
+import { LabCorrectionBadgeComponent } from '../../../lab/shared/lab-correction-badge.component';
 import {
   PatientPortalService,
   PortalAppointment,
@@ -50,6 +51,7 @@ function normalizeScopes(csv: string | null | undefined): Set<string> {
   selector: 'app-proxy-data-viewer',
   standalone: true,
   imports: [
+    LabCorrectionBadgeComponent,
     ClockTimePipe,
     ServerTimePipe,
     CommonModule,

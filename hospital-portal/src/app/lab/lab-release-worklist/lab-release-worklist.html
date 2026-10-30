@@ -110,6 +110,8 @@
               </td>
               <td class="numeric">
                 {{ row.resultValue | labValue: row.resultUnit }}
+                <!-- QA D1016: a correction says it replaces a validated value -->
+                <app-lab-correction-badge [corrected]="!!row.supersedesResultId" />
               </td>
               <td>
                 <span [class]="severityClass(row)">
@@ -235,6 +237,12 @@
                   }
           }}
         </p>
+        @if (target.supersedesResultId) {
+          <!-- QA D1016: validating a correction replaces a value already validated -->
+          <p class="self-release-note" role="note" data-testid="release-correction-note">
+            {{ 'LAB_RELEASE.CONFIRM_CORRECTION' | translate }}
+          </p>
+        }
         <p class="confirm-note">{{ 'LAB_RELEASE.CONFIRM_NOTE' | translate }}</p>
         @if (isSelfRelease(target)) {
           <p class="self-release-note" role="note" data-testid="self-release-note">

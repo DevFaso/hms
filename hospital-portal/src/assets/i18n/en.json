@@ -2150,6 +2150,31 @@
       "CREDIT_NOTE": "Credit note",
       "DISCOUNT": "Discount",
       "WAIVER": "Waiver (free care)"
+    },
+    "CASH_CLOSING": {
+      "OPEN": "Cash closing",
+      "TITLE": "Daily cash closing",
+      "DATE": "Day",
+      "PRINT": "Print",
+      "LOADING": "Loading the cash closing…",
+      "LOAD_FAILED": "The cash closing could not be loaded.",
+      "SUBTITLE": "Money received by {{cashier}} on {{date}}",
+      "EMPTY": "No payment received on this day.",
+      "BY_METHOD": "Totals by payment method",
+      "SOURCE": "Till",
+      "COUNT": "Payments",
+      "AMOUNT": "Amount",
+      "TOTAL": "Total received",
+      "REVERSED": "Reversed or voided since (not in the till)",
+      "ENTRIES": "Payments received",
+      "TIME": "Time",
+      "DOCUMENT": "Invoice or medicine",
+      "REFERENCE": "Reference",
+      "REVERSED_TAG": "reversed",
+      "SOURCES": {
+        "BILLING": "Invoices",
+        "PHARMACY": "Pharmacy"
+      }
     }
   },
   "CHAT": {
@@ -3749,7 +3774,8 @@
     "CORRECTION_OF": "Correction of the released result {{test}} ({{value}}). The released value stays on record, marked superseded.",
     "SUPERSEDED": "Superseded",
     "SUPERSEDED_HINT": "A correction replaced this released result; the correction is the current value.",
-    "EXPECTED_RESULT": "Expected result"
+    "EXPECTED_RESULT": "Expected result",
+    "CORRECTED_HINT_PATIENT": "The laboratory corrected this result after first releasing it. This is the value that counts; your care team has been told."
   },
   "LAB_RELEASE": {
     "FLAG_ABNORMAL": "Abnormal",
@@ -3791,7 +3817,8 @@
     "LOAD_ERROR": "Could not load the release worklist.",
     "PAGE_OF": "Page {{page}} of {{total}}",
     "SELF_RELEASE_NOTE": "You entered this result yourself. Releasing it without a second reviewer is allowed, and it is recorded as a self-release.",
-    "SELF_RELEASE_CONFIRM": "Release it myself"
+    "SELF_RELEASE_CONFIRM": "Release it myself",
+    "CONFIRM_CORRECTION": "This result is a correction: validating it replaces a value already validated and sent to the clinician and the patient."
   },
   "LAB_INSTRUMENTS": {
     "TITLE": "Lab Instruments",
@@ -9402,7 +9429,12 @@
     "CATEGORY_PLACEHOLDER": "e.g. Antibiotic",
     "PEDIATRIC_MAX_DOSE_MG_PER_KG": "Paediatric maximum dose (mg/kg per dose)",
     "PEDIATRIC_MAX_DOSE_HINT": "Optional. Enter it only from your hospital's reference; the prescription check flags a child's dose above it.",
-    "CANCEL_DISPENSE": "Cancel dispense"
+    "CANCEL_DISPENSE": "Cancel dispense",
+    "LEDGER_REASON_RETURN_FILL": "Return, ref. lot {{lot}} dispensed {{date}}",
+    "LEDGER_REASON_RETURN_FILL_DATE": "Return of the fill of {{date}}",
+    "DISPENSE_SPLIT_SUCCESS": "Dispensed in {{count}} fills, shortest-dated lot first.",
+    "FEFO_SPLIT_HINT": "The shortest-dated lot does not cover the quantity: it is emptied first, then the next lot.",
+    "FEFO_SPLIT_PART": "{{quantity}} from lot {{lot}} (exp. {{date}})"
   },
   "LAB_QC": {
     "TITLE": "Quality Control Dashboard",
@@ -12044,7 +12076,8 @@
     "DISPENSE_PICK_PLACEHOLDER": "Choose a dispense",
     "NO_DISPENSES": "No dispense to collect at this pharmacy.",
     "DISPENSES_LOAD_FAILED": "The pharmacy's dispenses could not be loaded.",
-    "ALREADY_PAID": "This dispense has already been paid. No second payment is taken."
+    "ALREADY_PAID": "This dispense has already been paid. No second payment is taken.",
+    "REFERENCE_REQUIRED": "Enter the mobile-money transaction reference shown on the patient’s phone."
   },
   "MY_PHARMACY_INVOICES": {
     "TITLE": "My pharmacy invoices",

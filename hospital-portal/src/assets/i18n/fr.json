@@ -2150,6 +2150,31 @@
       "CREDIT_NOTE": "Avoir",
       "DISCOUNT": "Remise",
       "WAIVER": "Exonération (gratuité)"
+    },
+    "CASH_CLOSING": {
+      "OPEN": "Clôture de caisse",
+      "TITLE": "Clôture de caisse du jour",
+      "DATE": "Jour",
+      "PRINT": "Imprimer",
+      "LOADING": "Chargement de la clôture de caisse…",
+      "LOAD_FAILED": "La clôture de caisse n’a pas pu être chargée.",
+      "SUBTITLE": "Encaissements de {{cashier}} le {{date}}",
+      "EMPTY": "Aucun encaissement ce jour-là.",
+      "BY_METHOD": "Totaux par moyen de paiement",
+      "SOURCE": "Caisse",
+      "COUNT": "Paiements",
+      "AMOUNT": "Montant",
+      "TOTAL": "Total encaissé",
+      "REVERSED": "Annulés depuis (hors caisse)",
+      "ENTRIES": "Paiements encaissés",
+      "TIME": "Heure",
+      "DOCUMENT": "Facture ou médicament",
+      "REFERENCE": "Référence",
+      "REVERSED_TAG": "annulé",
+      "SOURCES": {
+        "BILLING": "Factures",
+        "PHARMACY": "Pharmacie"
+      }
     }
   },
   "CHAT": {
@@ -3749,7 +3774,8 @@
     "CORRECTION_OF": "Correction du résultat validé {{test}} ({{value}}). La valeur validée reste dans le dossier, marquée comme remplacée.",
     "SUPERSEDED": "Remplacé",
     "SUPERSEDED_HINT": "Une correction a remplacé ce résultat validé ; la correction est la valeur en vigueur.",
-    "EXPECTED_RESULT": "Résultat attendu"
+    "EXPECTED_RESULT": "Résultat attendu",
+    "CORRECTED_HINT_PATIENT": "Le laboratoire a corrigé ce résultat après l’avoir communiqué. C’est cette valeur qui compte ; votre équipe soignante en est informée."
   },
   "LAB_RELEASE": {
     "FLAG_ABNORMAL": "Anormal",
@@ -3791,7 +3817,8 @@
     "LOAD_ERROR": "Impossible de charger la file de validation.",
     "PAGE_OF": "Page {{page}} sur {{total}}",
     "SELF_RELEASE_NOTE": "Vous avez saisi ce résultat vous-même. Le valider sans second relecteur est permis, et la validation est enregistrée comme « Validé par son auteur ».",
-    "SELF_RELEASE_CONFIRM": "Le valider moi-même"
+    "SELF_RELEASE_CONFIRM": "Le valider moi-même",
+    "CONFIRM_CORRECTION": "Ce résultat est une correction : le valider remplace une valeur déjà validée et communiquée au clinicien et au patient."
   },
   "LAB_INSTRUMENTS": {
     "TITLE": "Instruments de laboratoire",
@@ -9402,7 +9429,12 @@
     "CATEGORY_PLACEHOLDER": "ex. Antibiotique",
     "PEDIATRIC_MAX_DOSE_MG_PER_KG": "Dose pédiatrique maximale (mg/kg par prise)",
     "PEDIATRIC_MAX_DOSE_HINT": "Facultatif. À saisir uniquement depuis la référence de votre établissement ; le contrôle de prescription signale une dose d'enfant supérieure.",
-    "CANCEL_DISPENSE": "Annuler la dispensation"
+    "CANCEL_DISPENSE": "Annuler la dispensation",
+    "LEDGER_REASON_RETURN_FILL": "Retour, réf. lot {{lot}} délivré le {{date}}",
+    "LEDGER_REASON_RETURN_FILL_DATE": "Retour de la délivrance du {{date}}",
+    "DISPENSE_SPLIT_SUCCESS": "Délivré en {{count}} délivrances, le lot à la date la plus proche d’abord.",
+    "FEFO_SPLIT_HINT": "Le lot à la date la plus proche ne couvre pas la quantité : il est vidé d’abord, puis le lot suivant.",
+    "FEFO_SPLIT_PART": "{{quantity}} du lot {{lot}} (pér. {{date}})"
   },
   "LAB_QC": {
     "TITLE": "Tableau de bord du contrôle qualité",
@@ -12044,7 +12076,8 @@
     "DISPENSE_PICK_PLACEHOLDER": "Choisir une délivrance",
     "NO_DISPENSES": "Aucune délivrance à encaisser dans cette pharmacie.",
     "DISPENSES_LOAD_FAILED": "Impossible de charger les délivrances de la pharmacie.",
-    "ALREADY_PAID": "Cette délivrance est déjà payée. Aucun second paiement n'est encaissé."
+    "ALREADY_PAID": "Cette délivrance est déjà payée. Aucun second paiement n'est encaissé.",
+    "REFERENCE_REQUIRED": "Saisissez la référence de la transaction mobile money affichée sur le téléphone du patient."
   },
   "MY_PHARMACY_INVOICES": {
     "TITLE": "Mes factures de pharmacie",
