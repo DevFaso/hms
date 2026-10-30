@@ -111,6 +111,22 @@ public class CdsRuleEngine {
                                        String proposedDosage,
                                        MedicationCatalogItem proposedCatalogItem,
                                        UUID excludedPrescriptionId) {
+        return buildContext(patient, hospitalId, proposedMedicationName, proposedMedicationCode,
+            proposedDosage, null, proposedCatalogItem, excludedPrescriptionId);
+    }
+
+    /**
+     * Round 18 (QA D935): the context with the order's frequency, so the
+     * paediatric rule can check the daily total, and the date of the weight
+     * it uses, so an old weight is flagged.
+     */
+    public CdsRuleContext buildContext(Patient patient, UUID hospitalId,
+                                       String proposedMedicationName,
+                                       String proposedMedicationCode,
+                                       String proposedDosage,
+                                       String proposedFrequency,
+                                       MedicationCatalogItem proposedCatalogItem,
+                                       UUID excludedPrescriptionId) {
         MedicationCatalogItem catalogItem = proposedCatalogItem != null
             ? proposedCatalogItem
             : resolveCatalogItem(hospitalId, proposedMedicationCode);
@@ -126,8 +142,11 @@ public class CdsRuleEngine {
         }
         List<String> activeRxnorms = mapRxnorms(active, hospitalId);
 
-        Double weight = patient == null ? null : loadLatestWeight(patient.getId(), hospitalId);
-        Double doseMg = parseDoseMg(proposedDosage, weight);
+        Optional<PatientVitalSign> weighed = patient == null
+            ? Optional.empty() : loadLatestWeighing(patient.getId(), hospitalId);
+        Double weight = weighed.map(PatientVitalSign::getWeightKg).orElse(null);
+        java.time.LocalDateTime weighedAt = weighed.map(PatientVitalSign::getRecordedAt).orElse(null);
+        Double doseMg = parseDoseMg(proposedDosage, weight, catalogItem);
 
         return new CdsRuleContext(
             patient,
@@ -139,7 +158,10 @@ public class CdsRuleEngine {
             catalogItem,
             weight,
             active,
-            activeRxnorms
+            activeRxnorms,
+            proposedFrequency,
+            parseDoseUnits(proposedDosage),
+            weighedAt
         );
     }
 
@@ -168,6 +190,18 @@ public class CdsRuleEngine {
                                                        String proposedDosage) {
         return evaluate(buildContext(patient, hospitalId,
             proposedMedicationName, proposedMedicationCode, proposedDosage));
+    }
+
+    /** Round 18: build context (with the frequency, a resolved item and an edited order) + evaluate. */
+    public List<CdsCard> evaluateProposedPrescription(Patient patient, UUID hospitalId,
+                                                       String proposedMedicationName,
+                                                       String proposedMedicationCode,
+                                                       String proposedDosage,
+                                                       String proposedFrequency,
+                                                       MedicationCatalogItem proposedCatalogItem,
+                                                       UUID excludedPrescriptionId) {
+        return evaluate(buildContext(patient, hospitalId, proposedMedicationName, proposedMedicationCode,
+            proposedDosage, proposedFrequency, proposedCatalogItem, excludedPrescriptionId));
     }
 
     /** Convenience: build context (with a resolved item and an edited order) + evaluate. */
@@ -259,10 +293,19 @@ public class CdsRuleEngine {
     }
 
     Double loadLatestWeight(UUID patientId, UUID hospitalId) {
-        Optional<PatientVitalSign> latest = hospitalId != null
-            ? vitalSignRepository.findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(patientId, hospitalId)
-            : vitalSignRepository.findFirstByPatient_IdOrderByRecordedAtDesc(patientId);
-        return latest.map(PatientVitalSign::getWeightKg).orElse(null);
+        return loadLatestWeighing(patientId, hospitalId).map(PatientVitalSign::getWeightKg).orElse(null);
+    }
+
+    /**
+     * Round 18 (QA D935): the latest vital-signs row that RECORDS a weight.
+     * The latest row of any kind was read before, so a temperature taken
+     * after the weighing made the child's weight "not on file".
+     */
+    Optional<PatientVitalSign> loadLatestWeighing(UUID patientId, UUID hospitalId) {
+        return hospitalId != null
+            ? vitalSignRepository.findFirstByPatient_IdAndHospital_IdAndWeightKgIsNotNullOrderByRecordedAtDesc(
+                patientId, hospitalId)
+            : vitalSignRepository.findFirstByPatient_IdAndWeightKgIsNotNullOrderByRecordedAtDesc(patientId);
     }
 
     /**
@@ -272,11 +315,109 @@ public class CdsRuleEngine {
      * 15 mg/kg order look like 15 mg.
      */
     static Double parseDoseMg(String dosage, Double weightKg) {
+        return parseDoseMg(dosage, weightKg, null);
+    }
+
+    /**
+     * Round 18 (QA D935): as {@link #parseDoseMg(String, Double)}, and a dose
+     * written as a count of tablets or capsules ("2 cp") is that count times
+     * the catalogue item's strength when the strength is one number in mg or g
+     * (paracetamol 500 mg: "2 cp" is 1000 mg). Any other unit (mL, IU, or a
+     * count of a combined strength such as 20/120) is unknown (null), never
+     * read as mg: "2 cp" and "5 ml" were read as 2 mg and 5 mg before, so no
+     * limit could fire. Micrograms are converted.
+     */
+    static Double parseDoseMg(String dosage, Double weightKg, MedicationCatalogItem item) {
         if (dosage != null && PER_KG.matcher(dosage).find()) {
             Double perKg = parseDoseMg(dosage);
             return perKg == null || weightKg == null || weightKg <= 0d ? null : perKg * weightKg;
         }
+        String unit = leadingUnit(dosage);
+        if (unit != null && COUNT_UNITS.contains(unit)) {
+            Double count = leadingNumber(dosage);
+            Double strengthMg = strengthMgOf(item);
+            return count == null || strengthMg == null ? null : count * strengthMg;
+        }
+        if (unit != null && MICROGRAM_UNITS.contains(unit)) {
+            Double micrograms = leadingNumber(dosage);
+            return micrograms == null ? null : micrograms / 1000d;
+        }
+        if (unit != null && !unit.equals("mg") && !unit.equals("g")) {
+            return null;
+        }
         return parseDoseMg(dosage);
+    }
+
+    /**
+     * Round 18 (QA D935): the dose as a count of units, for a drug dosed by
+     * weight band: "2 cp", "2 comprimés", "2 tablets", or a bare "2". Null for
+     * a dose in mg, mL or any other measured unit.
+     */
+    static Double parseDoseUnits(String dosage) {
+        String unit = leadingUnit(dosage);
+        if (unit == null || COUNT_UNITS.contains(unit)) {
+            return leadingNumber(dosage);
+        }
+        return null;
+    }
+
+    /** Tablet, capsule and sachet words in English, French and Spanish, lower-cased. */
+    private static final Set<String> COUNT_UNITS = Set.of(
+        "cp", "cps", "comp", "comps", "cpr", "comprimé", "comprimés", "comprime", "comprimes",
+        "tab", "tabs", "tablet", "tablets", "comprimido", "comprimidos",
+        "gélule", "gélules", "gelule", "gelules", "caps", "capsule", "capsules", "cápsula", "cápsulas",
+        "sachet", "sachets", "sobre", "sobres", "unit", "units", "unité", "unités", "unidad", "unidades");
+
+    private static final Set<String> MICROGRAM_UNITS = Set.of("mcg", "ug", "\u00b5g", "\u03bcg");
+
+    /** Number, then the unit word right after it. Possessive quantifiers: no backtracking (CodeQL ReDoS). */
+    private static final Pattern LEADING_QUANTITY = Pattern.compile(
+        "^\\s*+(\\d++(?:[.,]\\d++)?+)\\s*+([\\p{L}\\u00b5\\u03bc]++)?+");
+
+    private static Double leadingNumber(String dosage) {
+        if (dosage == null) {
+            return null;
+        }
+        Matcher m = LEADING_QUANTITY.matcher(dosage);
+        if (!m.find()) {
+            return null;
+        }
+        try {
+            return Double.parseDouble(m.group(1).replace(',', '.'));
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+    }
+
+    private static String leadingUnit(String dosage) {
+        if (dosage == null) {
+            return null;
+        }
+        Matcher m = LEADING_QUANTITY.matcher(dosage);
+        if (!m.find() || m.group(2) == null) {
+            return null;
+        }
+        return m.group(2).toLowerCase(Locale.ROOT);
+    }
+
+    private static final Pattern PLAIN_NUMBER = Pattern.compile("\\d++(?:\\.\\d++)?+");
+
+    /** The item's strength in mg when it is one number in mg or g ("500" mg); else null ("20/120"). */
+    static Double strengthMgOf(MedicationCatalogItem item) {
+        if (item == null || item.getStrength() == null) {
+            return null;
+        }
+        String strength = item.getStrength().trim().replace(',', '.');
+        if (!PLAIN_NUMBER.matcher(strength).matches()) {
+            return null;
+        }
+        String unit = item.getStrengthUnit() == null ? "" : item.getStrengthUnit().trim().toLowerCase(Locale.ROOT);
+        double value = Double.parseDouble(strength);
+        return switch (unit) {
+            case "mg" -> value;
+            case "g" -> value * 1000d;
+            default -> null;
+        };
     }
 
     /** "mg/kg", "mg / kg", "g/kg" right after the leading number. */

@@ -131,6 +131,12 @@ public enum AuditEventType {
     /** G13: a lapsed claim was found and removed by a later write. */
     PRESCRIPTION_QUEUE_CLAIM_EXPIRED,
     MEDICATION_DEACTIVATED,
+    /** Round 18 (QA D935): the pharmacy set or approved an item's paediatric dose limits. */
+    MEDICATION_DOSE_LIMITS_UPDATED,
+    /** Round 18 (QA D935): a prescriber overrode a critical dose-check (CDS) alert, with a reason. */
+    PRESCRIPTION_CDS_OVERRIDDEN,
+    /** Round 18: the prescriber's re-authentication when signing a controlled-drug order (success or failure). */
+    PRESCRIPTION_SIGN_REAUTHENTICATION,
     PHARMACY_DEACTIVATED,
     MTM_REVIEW_STARTED,
     MTM_INTERVENTION_RECORDED,

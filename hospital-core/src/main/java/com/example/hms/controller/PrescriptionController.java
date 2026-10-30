@@ -94,8 +94,11 @@ public class PrescriptionController {
             + "PENDING_SIGNATURE prescription can be signed.")
     public ResponseEntity<PrescriptionResponseDTO> sign(
         @PathVariable UUID id,
+        // Round 18: the re-authentication a controlled-drug signature needs.
+        @org.springframework.web.bind.annotation.RequestBody(required = false)
+        @jakarta.validation.Valid com.example.hms.payload.dto.SignPrescriptionRequestDTO reauthentication,
         Locale locale) {
-        return ResponseEntity.ok(prescriptionService.signPrescription(id, locale));
+        return ResponseEntity.ok(prescriptionService.signPrescription(id, reauthentication, locale));
     }
 
     /**

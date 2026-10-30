@@ -172,7 +172,10 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
         existing.setCategory(dto.getCategory());
         existing.setEssentialList(dto.isEssentialList());
         existing.setControlled(dto.isControlled());
-        existing.setPediatricMaxDoseMgPerKg(dto.getPediatricMaxDoseMgPerKg());
+        // Round 18 (QA D935): the paediatric limits are no longer written here.
+        // They are the pharmacy's, set and approved through
+        // updatePediatricDosing (audited), and this full-replace edit would
+        // otherwise wipe the fields its form does not carry.
         existing.setActive(dto.isActive());
         existing.setDescription(dto.getDescription());
 
@@ -194,6 +197,72 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
         logAudit(AuditEventType.MEDICATION_DEACTIVATED,
                 "Deactivated medication catalog item '" + item.getNameFr() + "'",
                 item.getId().toString());
+    }
+
+    @Override
+    public MedicationCatalogItemResponseDTO updatePediatricDosing(
+            UUID id, com.example.hms.payload.dto.medication.PediatricDosingRequestDTO dto) {
+        // The scope is the caller's acting hospital, never a request field.
+        UUID scope = roleValidator.requireActiveHospitalId();
+        MedicationCatalogItem item = (scope != null
+                ? catalogRepository.findByIdAndHospital_Id(id, scope)
+                : java.util.Optional.<MedicationCatalogItem>empty())
+            .orElseThrow(() -> new ResourceNotFoundException(MEDICATION_CATALOG_NOT_FOUND));
+        requireConsistentPediatricLimits(dto);
+
+        item.setPediatricMaxDoseMgPerKg(dto.getPediatricMaxDoseMgPerKg());
+        item.setPediatricMaxDailyMgPerKg(dto.getPediatricMaxDailyMgPerKg());
+        item.setPediatricMaxSingleDoseMg(dto.getPediatricMaxSingleDoseMg());
+        item.setPediatricMaxDailyMg(dto.getPediatricMaxDailyMg());
+        item.setPediatricManualReviewUnderMonths(dto.getPediatricManualReviewUnderMonths());
+        item.setPediatricWeightBands(new java.util.ArrayList<>(
+            MedicationCatalogItemMapper.toBands(dto.getPediatricWeightBands())));
+        String source = dto.getPediatricDoseSource();
+        item.setPediatricDoseSource(source == null || source.isBlank() ? null : source.trim());
+        item.setPediatricDoseStatus(dto.getPediatricDoseStatus());
+        item.setPediatricDoseReviewedBy(roleValidator.getCurrentUserId());
+        item.setPediatricDoseReviewedAt(java.time.LocalDateTime.now());
+
+        MedicationCatalogItem saved = catalogRepository.save(item);
+        logAudit(AuditEventType.MEDICATION_DOSE_LIMITS_UPDATED,
+            "Paediatric dose limits set (" + dto.getPediatricDoseStatus() + ") on catalog item '"
+                + saved.getNameFr() + "'",
+            saved.getId().toString());
+        return mapper.toResponseDTO(saved);
+    }
+
+    /** Round 18 (QA D935): limits that contradict each other are refused, field by field. */
+    static void requireConsistentPediatricLimits(com.example.hms.payload.dto.medication.PediatricDosingRequestDTO dto) {
+        if (dto.getPediatricMaxDoseMgPerKg() != null && dto.getPediatricMaxDailyMgPerKg() != null
+                && dto.getPediatricMaxDoseMgPerKg().compareTo(dto.getPediatricMaxDailyMgPerKg()) > 0) {
+            throw new com.example.hms.exception.FieldBusinessException("pediatricMaxDoseMgPerKg",
+                "medicationCatalogItem.pediatricDosing.perDoseAbovePerDay");
+        }
+        if (dto.getPediatricMaxSingleDoseMg() != null && dto.getPediatricMaxDailyMg() != null
+                && dto.getPediatricMaxSingleDoseMg().compareTo(dto.getPediatricMaxDailyMg()) > 0) {
+            throw new com.example.hms.exception.FieldBusinessException("pediatricMaxSingleDoseMg",
+                "medicationCatalogItem.pediatricDosing.singleAboveDaily");
+        }
+        java.util.List<com.example.hms.model.medication.PediatricWeightBand> bands =
+            MedicationCatalogItemMapper.toBands(dto.getPediatricWeightBands());
+        for (int i = 0; i < bands.size(); i++) {
+            com.example.hms.model.medication.PediatricWeightBand band = bands.get(i);
+            if (band.getMaxWeightKg() != null && band.getMinWeightKg() != null
+                    && band.getMaxWeightKg().compareTo(band.getMinWeightKg()) <= 0) {
+                throw new com.example.hms.exception.FieldBusinessException(
+                    "pediatricWeightBands[" + i + "].maxWeightKg",
+                    "medicationCatalogItem.pediatricDosing.bandInverted");
+            }
+            if (i > 0) {
+                java.math.BigDecimal previousMax = bands.get(i - 1).getMaxWeightKg();
+                if (previousMax == null || (band.getMinWeightKg() != null
+                        && band.getMinWeightKg().compareTo(previousMax) < 0)) {
+                    throw new com.example.hms.exception.FieldBusinessException(
+                        "pediatricWeightBands[" + i + "].minWeightKg",
+                        "medicationCatalogItem.pediatricDosing.bandOverlap");
+                }
+            }
+        }
     }
 
     private void logAudit(AuditEventType eventType, String description, String resourceId) {

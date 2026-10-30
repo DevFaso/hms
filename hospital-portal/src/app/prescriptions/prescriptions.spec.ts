@@ -1,7 +1,8 @@
 import { EncounterResponse, EncounterService } from '../services/encounter.service';
 import { AuthService, LoginUserProfile } from '../auth/auth.service';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideHttpClient, withXhr } from '@angular/common/http';
+import { HttpErrorResponse, provideHttpClient, withXhr } from '@angular/common/http';
+import { MfaService } from '../auth/mfa.service';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -786,6 +787,85 @@ describe('PrescriptionsComponent — signing', () => {
     component.signPrescription(rx('rx-1', 'DRAFT'));
 
     expect(toast.error).toHaveBeenCalledWith('t:PRESCRIPTIONS.TOAST.ACTION_FORBIDDEN');
+  });
+
+  describe('controlled-drug signature re-authentication (round 18)', () => {
+    let mfa: MfaService;
+
+    beforeEach(() => {
+      mfa = TestBed.inject(MfaService);
+    });
+
+    it('a controlled order opens the re-authentication dialog instead of signing', () => {
+      spyOn(mfa, 'getStatus').and.returnValue(of({ mfaEnabled: false }));
+      component.signPrescription({ ...rx('rx-1', 'DRAFT'), controlledSubstance: true });
+
+      expect(prescriptionService.sign).not.toHaveBeenCalled();
+      expect(component.signReauthTarget()?.id).toBe('rx-1');
+      expect(component.signReauthUsesCode()).toBeFalse();
+    });
+
+    it('sends the password, once, and clears it after a signature', () => {
+      spyOn(mfa, 'getStatus').and.returnValue(of({ mfaEnabled: false }));
+      component.signPrescription({ ...rx('rx-1', 'DRAFT'), controlledSubstance: true });
+      component.signReauthSecret = 's3cret';
+
+      component.submitSignReauth();
+
+      expect(prescriptionService.sign).toHaveBeenCalledWith('rx-1', { password: 's3cret' });
+      expect(component.signReauthTarget()).toBeNull();
+      expect(component.signReauthSecret).toBe('');
+    });
+
+    it('sends the authenticator code when one is enrolled', () => {
+      spyOn(mfa, 'getStatus').and.returnValue(of({ mfaEnabled: true }));
+      component.signPrescription({ ...rx('rx-1', 'DRAFT'), controlledSubstance: true });
+      component.signReauthSecret = ' 123456 ';
+
+      component.submitSignReauth();
+
+      expect(prescriptionService.sign).toHaveBeenCalledWith('rx-1', { mfaCode: '123456' });
+    });
+
+    it('a refused re-authentication stays in the dialog with the reason and an empty field', () => {
+      spyOn(mfa, 'getStatus').and.returnValue(of({ mfaEnabled: false }));
+      prescriptionService.sign.and.returnValue(
+        throwError(
+          () =>
+            new HttpErrorResponse({
+              status: 403,
+              error: { message: 'Code incorrect', code: 'mfa.stepup.invalid' },
+            }),
+        ),
+      );
+      component.signPrescription({ ...rx('rx-1', 'DRAFT'), controlledSubstance: true });
+      component.signReauthSecret = 'wrong';
+
+      component.submitSignReauth();
+
+      expect(component.signReauthTarget()?.id).toBe('rx-1');
+      expect(component.signReauthError()).toBe('Code incorrect');
+      expect(component.signReauthSecret).toBe('');
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it('a catalogue-controlled order the list did not flag opens the dialog on the step-up refusal', () => {
+      spyOn(mfa, 'getStatus').and.returnValue(of({ mfaEnabled: false }));
+      prescriptionService.sign.and.returnValue(
+        throwError(
+          () =>
+            new HttpErrorResponse({
+              status: 403,
+              error: { message: 'Saisissez votre mot de passe', code: 'mfa.stepup.required' },
+            }),
+        ),
+      );
+
+      component.signPrescription(rx('rx-1', 'DRAFT'));
+
+      expect(component.signReauthTarget()?.id).toBe('rx-1');
+      expect(component.signReauthError()).toBe('Saisissez votre mot de passe');
+    });
   });
 
   it('a non-403 failure without a body falls back to the generic sign failure', () => {

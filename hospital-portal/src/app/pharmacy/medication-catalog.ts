@@ -17,6 +17,8 @@ import {
   PharmacyService,
   MedicationCatalogItemRequest,
   MedicationCatalogItemResponse,
+  PediatricDosingRequest,
+  PediatricWeightBand,
 } from '../services/pharmacy.service';
 
 @Component({
@@ -41,6 +43,15 @@ export class MedicationCatalogComponent implements OnInit {
    */
   readonly canManage = computed(() =>
     this.roleContext.hasAnyActiveRoleExactly(['ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN']),
+  );
+
+  /**
+   * Round 18 (QA D935): the paediatric dose limits are the pharmacy's, as in a
+   * real formulary: the pharmacist (and the hospital admin) sets and approves
+   * them in their own dialog, audited server-side.
+   */
+  readonly canEditDosing = computed(() =>
+    this.roleContext.hasAnyActiveRoleExactly(['ROLE_PHARMACIST', 'ROLE_HOSPITAL_ADMIN']),
   );
 
   /** The dosage forms the editor offers, each with a PHARMACY.FORM_OPTION key. */
@@ -86,6 +97,11 @@ export class MedicationCatalogComponent implements OnInit {
   editing = signal<MedicationCatalogItemResponse | null>(null);
   saving = signal(false);
   form: MedicationCatalogItemRequest = this.emptyForm();
+
+  // Paediatric dosing (round 18, QA D935)
+  dosingItem = signal<MedicationCatalogItemResponse | null>(null);
+  dosingSaving = signal(false);
+  dosingForm: PediatricDosingRequest = this.emptyDosing();
 
   // Delete
   showDeleteConfirm = signal(false);
@@ -158,7 +174,6 @@ export class MedicationCatalogComponent implements OnInit {
       category: item.category ?? '',
       essentialList: item.essentialList ?? false,
       controlled: item.controlled ?? false,
-      pediatricMaxDoseMgPerKg: item.pediatricMaxDoseMgPerKg ?? null,
       description: item.description ?? '',
     };
     this.showModal.set(true);
@@ -275,8 +290,88 @@ export class MedicationCatalogComponent implements OnInit {
       category: '',
       essentialList: false,
       controlled: false,
-      pediatricMaxDoseMgPerKg: null,
       description: '',
+    };
+  }
+
+  /** Whether an item has any paediatric limit on file. */
+  hasPediatricLimits(item: MedicationCatalogItemResponse): boolean {
+    return (
+      item.pediatricMaxDoseMgPerKg != null ||
+      item.pediatricMaxDailyMgPerKg != null ||
+      item.pediatricMaxSingleDoseMg != null ||
+      item.pediatricMaxDailyMg != null ||
+      (item.pediatricWeightBands?.length ?? 0) > 0
+    );
+  }
+
+  openDosing(item: MedicationCatalogItemResponse): void {
+    this.dosingForm = {
+      pediatricMaxDoseMgPerKg: item.pediatricMaxDoseMgPerKg ?? null,
+      pediatricMaxDailyMgPerKg: item.pediatricMaxDailyMgPerKg ?? null,
+      pediatricMaxSingleDoseMg: item.pediatricMaxSingleDoseMg ?? null,
+      pediatricMaxDailyMg: item.pediatricMaxDailyMg ?? null,
+      pediatricManualReviewUnderMonths: item.pediatricManualReviewUnderMonths ?? null,
+      pediatricWeightBands: (item.pediatricWeightBands ?? []).map((b) => ({ ...b })),
+      pediatricDoseSource: item.pediatricDoseSource ?? null,
+      pediatricDoseStatus: item.pediatricDoseStatus ?? 'DEFAULT_PENDING_APPROVAL',
+    };
+    this.dosingItem.set(item);
+  }
+
+  closeDosing(): void {
+    this.dosingItem.set(null);
+  }
+
+  addBand(): void {
+    this.dosingForm.pediatricWeightBands = [
+      ...this.dosingForm.pediatricWeightBands,
+      {
+        minWeightKg: null,
+        maxWeightKg: null,
+        dosePerAdministration: null,
+        doseUnit: '',
+        maxDosesPerDay: null,
+      } as PediatricWeightBand,
+    ];
+  }
+
+  removeBand(index: number): void {
+    this.dosingForm.pediatricWeightBands = this.dosingForm.pediatricWeightBands.filter(
+      (_, i) => i !== index,
+    );
+  }
+
+  saveDosing(): void {
+    const item = this.dosingItem();
+    if (!item) return;
+    this.dosingSaving.set(true);
+    this.svc.updatePediatricDosing(item.id, this.dosingForm).subscribe({
+      next: () => {
+        this.toast.success(this.translate.instant('PHARMACY.DOSING.SAVED'));
+        this.dosingSaving.set(false);
+        this.closeDosing();
+        this.loadItems();
+      },
+      error: (err) => {
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('PHARMACY.DOSING.SAVE_FAILED'),
+        );
+        this.dosingSaving.set(false);
+      },
+    });
+  }
+
+  private emptyDosing(): PediatricDosingRequest {
+    return {
+      pediatricMaxDoseMgPerKg: null,
+      pediatricMaxDailyMgPerKg: null,
+      pediatricMaxSingleDoseMg: null,
+      pediatricMaxDailyMg: null,
+      pediatricManualReviewUnderMonths: null,
+      pediatricWeightBands: [],
+      pediatricDoseSource: null,
+      pediatricDoseStatus: 'DEFAULT_PENDING_APPROVAL',
     };
   }
 }

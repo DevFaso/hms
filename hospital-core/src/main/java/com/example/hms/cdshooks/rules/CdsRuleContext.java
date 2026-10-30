@@ -44,6 +44,15 @@ import java.util.UUID;
  *                                 activePrescriptions order, with nulls
  *                                 where a prescription could not be
  *                                 mapped to a catalog item)
+ * @param proposedFrequency        round 18 (QA D935): the order's free-text
+ *                                 frequency, read by the paediatric daily
+ *                                 checks (may be null)
+ * @param proposedDoseUnits        round 18: the dose as a count of units
+ *                                 (tablets) when it is written that way
+ *                                 ("2 cp"), for weight-band drugs (may be null)
+ * @param patientWeightRecordedAt  round 18: when {@code patientWeightKg} was
+ *                                 recorded; an older weight is flagged (may
+ *                                 be null when unknown)
  */
 public record CdsRuleContext(
     Patient patient,
@@ -55,8 +64,21 @@ public record CdsRuleContext(
     MedicationCatalogItem proposedCatalogItem,
     Double patientWeightKg,
     List<Prescription> activePrescriptions,
-    List<String> activePrescriptionRxnorms
+    List<String> activePrescriptionRxnorms,
+    String proposedFrequency,
+    Double proposedDoseUnits,
+    java.time.LocalDateTime patientWeightRecordedAt
 ) {
+
+    /** The context without frequency, unit count or weight date (rules and callers before round 18). */
+    public CdsRuleContext(Patient patient, UUID hospitalId, String proposedMedicationName,
+                          String proposedMedicationCode, String proposedRxnormCode, Double proposedDoseMg,
+                          MedicationCatalogItem proposedCatalogItem, Double patientWeightKg,
+                          List<Prescription> activePrescriptions, List<String> activePrescriptionRxnorms) {
+        this(patient, hospitalId, proposedMedicationName, proposedMedicationCode, proposedRxnormCode,
+            proposedDoseMg, proposedCatalogItem, patientWeightKg, activePrescriptions,
+            activePrescriptionRxnorms, null, null, null);
+    }
 
     /** Defensive copy + null guards to keep the record fully immutable. */
     public CdsRuleContext {

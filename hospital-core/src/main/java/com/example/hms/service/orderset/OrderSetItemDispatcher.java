@@ -125,6 +125,7 @@ public class OrderSetItemDispatcher {
         req.setDuration(string(item.get("duration")));
         req.setNotes(NARRATIVE_PREFIX + ctx.orderSetName());
         req.setForceOverride(ctx.forceOverride());
+        req.setOverrideReason(ctx.overrideReason());
 
         PrescriptionResponseDTO created = prescriptionService.createPrescription(req, locale);
         return DispatchResult.medication(created.getId(), created.getCdsAdvisories());

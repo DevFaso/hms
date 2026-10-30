@@ -10,6 +10,7 @@ import {
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { HttpErrorResponse } from '@angular/common/http';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -53,6 +54,8 @@ import { serverInstant } from '../shared/date-utils';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
 import { canonicalRoute } from '../shared/pipes/medication-route.pipe';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { isStepUpRefusal } from '../services/step-up';
+import { MfaService } from '../auth/mfa.service';
 
 /**
  * The prescriber's list tabs (gap G10).
@@ -180,6 +183,7 @@ export class PrescriptionsComponent implements OnInit {
   private readonly translate = inject(TranslateService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly auth = inject(AuthService);
+  private readonly mfa = inject(MfaService);
 
   /**
    * QA D427: the actions the API admits for this caller, so nobody is offered
@@ -320,6 +324,8 @@ export class PrescriptionsComponent implements OnInit {
    * advisory. Surfaces the override checkbox in the form.
    */
   cdsCriticalBlocked = signal(false);
+  /** Round 18 (QA D935): a hard stop among the cards: no override is offered, the dose must change. */
+  readonly cdsHardStop = computed(() => this.cdsAdvisories().some((c) => !!c.hardStop));
 
   ngOnInit(): void {
     // Cross-tenant: hydrate URL scope before the first list fetch so
@@ -981,12 +987,63 @@ export class PrescriptionsComponent implements OnInit {
     });
   }
 
+  /**
+   * Round 18: the order a controlled-drug signature is being re-authenticated
+   * for, and what the prescriber types: their TOTP code when an authenticator
+   * is enrolled, else their password. Cleared after every attempt that ends
+   * the dialog, so nothing is kept between signatures.
+   */
+  readonly signReauthTarget = signal<PrescriptionResponse | null>(null);
+  readonly signReauthUsesCode = signal(false);
+  readonly signReauthError = signal('');
+  signReauthSecret = '';
+
   signPrescription(p: PrescriptionResponse): void {
+    if (p.controlledSubstance) {
+      this.openSignReauth(p);
+      return;
+    }
+    this.doSign(p);
+  }
+
+  openSignReauth(p: PrescriptionResponse): void {
+    this.actionError.set('');
+    this.signReauthSecret = '';
+    this.signReauthError.set('');
+    this.signReauthUsesCode.set(false);
+    this.signReauthTarget.set(p);
+    this.mfa.getStatus().subscribe({
+      next: (status) => this.signReauthUsesCode.set(!!status?.mfaEnabled),
+      error: () => this.signReauthUsesCode.set(false),
+    });
+  }
+
+  closeSignReauth(): void {
+    this.signReauthSecret = '';
+    this.signReauthError.set('');
+    this.signReauthTarget.set(null);
+  }
+
+  submitSignReauth(): void {
+    const target = this.signReauthTarget();
+    const secret = this.signReauthSecret;
+    if (!target || !secret.trim() || this.signingId()) return;
+    this.doSign(
+      target,
+      this.signReauthUsesCode() ? { mfaCode: secret.trim() } : { password: secret },
+    );
+  }
+
+  private doSign(p: PrescriptionResponse, reauth?: { password?: string; mfaCode?: string }): void {
     this.actionError.set('');
     this.signingId.set(p.id);
-    this.prescriptionService.sign(p.id).subscribe({
+    const signed$ = reauth
+      ? this.prescriptionService.sign(p.id, reauth)
+      : this.prescriptionService.sign(p.id);
+    signed$.subscribe({
       next: (signed) => {
         this.toast.success(this.translate.instant('PRESCRIPTIONS.TOAST.SIGNED'));
+        this.closeSignReauth();
         // QA D793: the signature repeats the non-blocking advisories (a
         // beta-lactam cross-reactivity), already in the reader's language.
         for (const card of signed?.cdsAdvisories ?? []) {
@@ -1003,10 +1060,24 @@ export class PrescriptionsComponent implements OnInit {
         // outstanding. Collapsing those into one generic string would leave a
         // prescriber with no idea what to do next.
         const msg = this.extractErrorMessage(err);
+        this.signingId.set(null);
+        // Round 18: a refused re-authentication (missing, wrong, locked) is
+        // shown in the sign dialog, which opens if the list did not know the
+        // drug was controlled; the secret typed is cleared either way.
+        if (err instanceof HttpErrorResponse && isStepUpRefusal(err)) {
+          this.signReauthSecret = '';
+          if (!this.signReauthTarget()) {
+            this.openSignReauth(p);
+          }
+          this.signReauthError.set(
+            msg || this.translate.instant('PRESCRIPTIONS.SIGN_REAUTH.FAILED'),
+          );
+          return;
+        }
         const text = msg || this.refusalText(err, 'PRESCRIPTIONS.TOAST.SIGN_FAILED');
+        this.closeSignReauth();
         this.actionError.set(text);
         this.toast.error(text);
-        this.signingId.set(null);
       },
     });
   }

@@ -108,6 +108,10 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private final com.example.hms.service.AdmissionStayEncounterService stayEncounters;
     /** D654: a catalog pick carries its code into the order. */
     private final com.example.hms.repository.MedicationCatalogItemRepository medicationCatalogItemRepository;
+    /** Round 18: the catalogue flag makes an order controlled, whatever the tick (D922). */
+    private final com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver;
+    /** Round 18: the prescriber's step-up re-authentication at a controlled signature. */
+    private final PrescriberReauthenticationService prescriberReauthentication;
 
     @Override
     @Transactional
@@ -160,11 +164,17 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         entity.setAssignment(prescriberAssignment);
         requirePrescribedQuantityForControlled(entity, catalogItem);
         recordAllergyOverride(entity, allergyOverride);
+        String cdsOverride = cdsOverrideReason(request, advisories);
+        recordCdsOverride(entity, cdsOverride);
         controlledSubstanceGuard.requireSafeguardsFor(entity, entity.getStatus());
 
         Prescription saved = prescriptionRepository.save(entity);
         if (allergyOverride != null) {
             auditAllergyOverrideAfterCommit(saved, currentUserId, allergyOverride, "Allergy override recorded at creation");
+        }
+        if (cdsOverride != null) {
+            auditCdsOverrideAfterCommit(saved, currentUserId, cdsOverride, advisories,
+                "Critical decision-support alert overridden at creation");
         }
         PrescriptionResponseDTO response = prescriptionMapper.toResponseDTO(saved);
         response.setCdsAdvisories(advisories);
@@ -386,6 +396,14 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     @Override
     @Transactional
     public PrescriptionResponseDTO signPrescription(UUID id, Locale locale) {
+        return signPrescription(id, null, locale);
+    }
+
+    @Override
+    @Transactional
+    public PrescriptionResponseDTO signPrescription(UUID id,
+                                                    com.example.hms.payload.dto.SignPrescriptionRequestDTO reauthentication,
+                                                    Locale locale) {
         Prescription prescription = prescriptionRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND));
 
@@ -420,6 +438,21 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // the one who signs it - two signatures, one judgment.
         if (sameClinician(prescription.getCosignedBy(), signer)) {
             throw new BusinessException("prescription.sign.ownCosign");
+        }
+
+        // Round 18: a controlled drug (the prescriber's tick OR the catalogue's
+        // flag, D922) is signed only after the prescriber re-authenticates on
+        // this very call (EPCS-style step-up). The proof is written on the
+        // order as its two-factor verification, for this signature only; the
+        // tick-keyed safeguard below then has the step it waited for.
+        if (controlledResolver.isControlled(prescription)) {
+            UUID signerUserId = signer.getUser() != null ? signer.getUser().getId() : null;
+            PrescriberReauthenticationService.Verified verified =
+                prescriberReauthentication.requireForControlledSigning(signerUserId, prescription.getId(),
+                    reauthentication == null ? null : reauthentication.getPassword(),
+                    reauthentication == null ? null : reauthentication.getMfaCode());
+            prescription.setTwoFactorVerifiedAt(verified.at());
+            prescription.setTwoFactorMethod(verified.method());
         }
 
         // Checked against the status we are about to move to, not the one the
@@ -1124,6 +1157,12 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // QA D706: no quantity check on an edit - a legacy controlled row must
         // stay withdrawable; the dispense refuses it until a quantity is set.
         applyAllergyOverrideOnUpdate(existing, allergyOverride, overrideBefore, currentUserId);
+        String cdsOverride = cdsOverrideReason(request, advisories);
+        recordCdsOverride(existing, cdsOverride);
+        if (cdsOverride != null) {
+            auditCdsOverrideAfterCommit(existing, currentUserId, cdsOverride, advisories,
+                "Critical decision-support alert overridden on edit");
+        }
         closePartnerOffersOnWithdrawal(existing, statusBefore);
         // Tier 2 item 33: an edit invalidates any pharmacist verification.
         // updateEntity rewrites medicationName, dosage and frequency, and
@@ -1793,6 +1832,60 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     }
 
     /**
+     * Round 18 (QA D935): the reason the prescriber gave for passing a
+     * critical decision-support alert (a paediatric soft stop, a major
+     * interaction), or null when no critical alert was overridden.
+     * {@link #runCdsRuleEngine} has already refused a critical alert sent
+     * without forceOverride and a reason.
+     */
+    static String cdsOverrideReason(PrescriptionRequestDTO request, List<CdsCard> advisories) {
+        if (!Boolean.TRUE.equals(request.getForceOverride()) || advisories == null
+                || advisories.stream().noneMatch(c -> c.indicator() == CdsCard.Indicator.CRITICAL)) {
+            return null;
+        }
+        String reason = request.getOverrideReason() == null ? "" : request.getOverrideReason().trim();
+        return reason.isEmpty() ? null : reason;
+    }
+
+    /** The CDS override reason is stored on the order unless an allergy override already holds the field. */
+    private static void recordCdsOverride(Prescription prescription, String reason) {
+        if (reason != null && (prescription.getOverrideReason() == null || prescription.getOverrideReason().isBlank())) {
+            prescription.setOverrideReason(reason);
+        }
+    }
+
+    /**
+     * Round 18 (QA D935): after commit, ids, a digest of the reason and how
+     * many critical alerts were passed. No drug, dose or reason text: the
+     * audit row is not encrypted.
+     */
+    private void auditCdsOverrideAfterCommit(Prescription prescription, UUID actorId, String reason,
+                                             List<CdsCard> advisories, String description) {
+        UUID prescriptionId = prescription.getId();
+        UUID patientId = prescription.getPatient() != null ? prescription.getPatient().getId() : null;
+        UUID assignmentId = prescription.getAssignment() != null ? prescription.getAssignment().getId() : null;
+        long critical = advisories.stream().filter(c -> c.indicator() == CdsCard.Indicator.CRITICAL).count();
+        String details = "{\"reasonSha256\":\"" + computeSignatureDigest(reason) + "\",\"criticalAlerts\":" + critical + "}";
+        com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
+            try {
+                auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
+                    .eventType(com.example.hms.enums.AuditEventType.PRESCRIPTION_CDS_OVERRIDDEN)
+                    .status(com.example.hms.enums.AuditStatus.SUCCESS)
+                    .userId(actorId)
+                    .assignmentId(assignmentId)
+                    .patientId(patientId)
+                    .eventDescription(description)
+                    .details(details)
+                    .entityType("Prescription")
+                    .resourceId(prescriptionId != null ? prescriptionId.toString() : null)
+                    .build());
+            } catch (RuntimeException ex) {
+                logger.warn("CDS override audit not written for prescription {}: {}", prescriptionId, ex.getClass().getSimpleName());
+            }
+        });
+    }
+
+    /**
      * An edit either still conflicts (the new reason is recorded and audited,
      * so a replaced reason leaves a trail) or no longer does (the stale
      * override is cleared - it vouched for a drug that is no longer ordered -
@@ -1914,9 +2007,34 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             request.getMedicationName(),
             request.getMedicationCode(),
             request.getDosage(),
+            request.getFrequency(),
             catalogItem,
             editedPrescriptionId);
-        if (advisories.isEmpty() || Boolean.TRUE.equals(request.getForceOverride())) {
+        if (advisories.isEmpty()) {
+            return advisories;
+        }
+        // Round 18 (QA D935): a hard stop (a dose above the absolute daily
+        // maximum) is refused whatever the override.
+        for (CdsCard card : advisories) {
+            if (card.blocksOverride()) {
+                if (logger.isWarnEnabled()) {
+                    logger.warn("CDS hard stop refused prescription: {}", sanitizeLog(card.summary()));
+                }
+                throw new CdsCriticalBlockException(
+                    com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.cds.hardStop", card.summary()),
+                    advisories);
+            }
+        }
+        if (Boolean.TRUE.equals(request.getForceOverride())) {
+            // Round 18 (QA D935): an override of a critical alert states its
+            // reason, which is stored on the order and audited (as the
+            // allergy override always required, QA D83).
+            boolean critical = advisories.stream().anyMatch(c -> c.indicator() == CdsCard.Indicator.CRITICAL);
+            if (critical && (request.getOverrideReason() == null || request.getOverrideReason().isBlank())) {
+                throw new CdsCriticalBlockException(
+                    com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.cds.overrideReasonRequired"),
+                    advisories);
+            }
             return advisories;
         }
         for (CdsCard card : advisories) {

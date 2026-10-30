@@ -144,6 +144,9 @@ class PrescriptionServiceImplTest {
     /** D654: a catalog pick carries its code into the order. */
     @Mock private com.example.hms.repository.MedicationCatalogItemRepository catalogRepo;
     @Mock private AdmissionStayEncounterService stayEncounters;
+    /** Round 18: controlled orders (tick or catalogue) re-authenticate the prescriber at signing. */
+    @Mock private com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver;
+    @Mock private PrescriberReauthenticationService prescriberReauthentication;
 
     @InjectMocks
     private PrescriptionServiceImpl prescriptionService;
@@ -199,7 +202,7 @@ class PrescriptionServiceImplTest {
 
         lenient().when(patientAllergyRepository.findByPatient_Id(any()))
             .thenReturn(List.of());
-        lenient().when(cdsRuleEngine.evaluateProposedPrescription(any(), any(), any(), any(), any(), any(), any()))
+        lenient().when(cdsRuleEngine.evaluateProposedPrescription(any(), any(), any(), any(), any(), any(), any(), any()))
             .thenReturn(List.of());
         // QA D922: an order without id or code is resolved by name in the catalogue.
         lenient().when(catalogRepo.findByHospital_IdAndActiveTrue(any(), any()))
@@ -1479,6 +1482,89 @@ class PrescriptionServiceImplTest {
         assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.SIGNED);
         assertThat(signed.getCdsAdvisories()).singleElement()
             .satisfies(card -> assertThat(card.indicator()).isEqualTo(com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard.Indicator.WARNING));
+    }
+
+    /** Round 18: a controlled order (catalogue flag, no tick) is signed only after re-authentication. */
+    @Test
+    void signingAControlledOrderReAuthenticatesThePrescriberAndRecordsTheProof() {
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(prescriberUserId);
+        rx.setMedicationName("Morphine 10 mg");
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(java.util.Optional.of(rx));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(rx.getHospital().getId());
+        when(roleValidator.getCurrentUserId()).thenReturn(prescriberUserId);
+        when(prescriptionRepository.save(any(Prescription.class))).thenAnswer(i -> i.getArgument(0));
+        when(prescriptionMapper.toResponseDTO(any(Prescription.class))).thenReturn(new PrescriptionResponseDTO());
+        when(controlledResolver.isControlled(rx)).thenReturn(true);
+        java.time.LocalDateTime at = java.time.LocalDateTime.of(2026, 10, 30, 9, 0);
+        when(prescriberReauthentication.requireForControlledSigning(prescriberUserId, rx.getId(), "s3cret", null))
+            .thenReturn(new PrescriberReauthenticationService.Verified("PASSWORD", at));
+
+        prescriptionService.signPrescription(rx.getId(),
+            com.example.hms.payload.dto.SignPrescriptionRequestDTO.builder().password("s3cret").build(), Locale.ENGLISH);
+
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.SIGNED);
+        assertThat(rx.getTwoFactorVerifiedAt()).isEqualTo(at);
+        assertThat(rx.getTwoFactorMethod()).isEqualTo("PASSWORD");
+    }
+
+    /** Round 18: a ticked controlled order, unsignable before (nothing wrote the proof), now signs after re-authentication. */
+    @Test
+    void aTickedControlledOrderIsSignableOnceThePrescriberReAuthenticates() {
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(prescriberUserId);
+        rx.setControlledSubstance(true);
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(java.util.Optional.of(rx));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(rx.getHospital().getId());
+        when(roleValidator.getCurrentUserId()).thenReturn(prescriberUserId);
+        when(prescriptionRepository.save(any(Prescription.class))).thenAnswer(i -> i.getArgument(0));
+        when(prescriptionMapper.toResponseDTO(any(Prescription.class))).thenReturn(new PrescriptionResponseDTO());
+        when(controlledResolver.isControlled(rx)).thenReturn(true);
+        when(prescriberReauthentication.requireForControlledSigning(any(), any(), any(), any()))
+            .thenReturn(new PrescriberReauthenticationService.Verified("TOTP", java.time.LocalDateTime.now()));
+
+        prescriptionService.signPrescription(rx.getId(),
+            com.example.hms.payload.dto.SignPrescriptionRequestDTO.builder().mfaCode("123456").build(), Locale.ENGLISH);
+
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.SIGNED);
+        assertThat(rx.getTwoFactorMethod()).isEqualTo("TOTP");
+    }
+
+    /** Round 18: a refused re-authentication leaves the order unsigned. */
+    @Test
+    void aRefusedReAuthenticationLeavesTheOrderUnsigned() {
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(prescriberUserId);
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(java.util.Optional.of(rx));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(rx.getHospital().getId());
+        when(roleValidator.getCurrentUserId()).thenReturn(prescriberUserId);
+        when(controlledResolver.isControlled(rx)).thenReturn(true);
+        when(prescriberReauthentication.requireForControlledSigning(any(), any(), any(), any()))
+            .thenThrow(new com.example.hms.exception.MfaStepUpRefusedException(
+                com.example.hms.exception.MfaStepUpRefusedException.Reason.INVALID));
+
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rx.getId(), Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.MfaStepUpRefusedException.class);
+        assertThat(rx.getSignatureValue()).isNull();
+        assertThat(rx.getTwoFactorVerifiedAt()).isNull();
+        verify(prescriptionRepository, never()).save(any());
+    }
+
+    /** Round 18: an ordinary drug signs without any re-authentication. */
+    @Test
+    void anOrdinaryOrderSignsWithoutReAuthentication() {
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(prescriberUserId);
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(java.util.Optional.of(rx));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(rx.getHospital().getId());
+        when(roleValidator.getCurrentUserId()).thenReturn(prescriberUserId);
+        when(prescriptionRepository.save(any(Prescription.class))).thenAnswer(i -> i.getArgument(0));
+        when(prescriptionMapper.toResponseDTO(any(Prescription.class))).thenReturn(new PrescriptionResponseDTO());
+
+        prescriptionService.signPrescription(rx.getId(), Locale.ENGLISH);
+
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.SIGNED);
+        verify(prescriberReauthentication, never()).requireForControlledSigning(any(), any(), any(), any());
     }
 
     @Test
@@ -3109,7 +3195,7 @@ class PrescriptionServiceImplTest {
         when(prescriptionRepository.save(mappedEntity)).thenReturn(mappedEntity);
         when(prescriptionMapper.toResponseDTO(mappedEntity)).thenReturn(responseDTO);
         when(cdsRuleEngine.evaluateProposedPrescription(
-                eq(patient), eq(hospitalId), eq(TEST_MEDICATION), any(), eq(TEST_DOSAGE), any(), any()))
+                eq(patient), eq(hospitalId), eq(TEST_MEDICATION), any(), eq(TEST_DOSAGE), any(), any(), any()))
             .thenReturn(List.of(warning));
 
         PrescriptionResponseDTO result = prescriptionService.createPrescription(request, Locale.ENGLISH);
@@ -3139,7 +3225,7 @@ class PrescriptionServiceImplTest {
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(authService.getCurrentUserId()).thenReturn(currentUser);
         when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
-        when(cdsRuleEngine.evaluateProposedPrescription(any(), any(), any(), any(), any(), any(), any()))
+        when(cdsRuleEngine.evaluateProposedPrescription(any(), any(), any(), any(), any(), any(), any(), any()))
             .thenReturn(List.of(critical));
 
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
@@ -3156,6 +3242,8 @@ class PrescriptionServiceImplTest {
     void createPrescriptionWithCriticalCdsAdvisoryAndForceOverridePersists() {
         PrescriptionRequestDTO request = buildRequest();
         request.setForceOverride(true);
+        // Round 18 (QA D935): an override of a critical alert states its reason.
+        request.setOverrideReason("Benefit outweighs risk, INR monitored");
         UserRoleHospitalAssignment encAssignment = new UserRoleHospitalAssignment();
         encAssignment.setId(UUID.randomUUID());
         encAssignment.setHospital(encounter.getHospital());
@@ -3181,13 +3269,75 @@ class PrescriptionServiceImplTest {
         when(prescriptionMapper.toEntity(request, patient, staff, encounter)).thenReturn(mappedEntity);
         when(prescriptionRepository.save(mappedEntity)).thenReturn(mappedEntity);
         when(prescriptionMapper.toResponseDTO(mappedEntity)).thenReturn(responseDTO);
-        when(cdsRuleEngine.evaluateProposedPrescription(any(), any(), any(), any(), any(), any(), any()))
+        when(cdsRuleEngine.evaluateProposedPrescription(any(), any(), any(), any(), any(), any(), any(), any()))
             .thenReturn(List.of(critical));
 
         PrescriptionResponseDTO result = prescriptionService.createPrescription(request, Locale.ENGLISH);
 
         assertThat(result.getCdsAdvisories()).containsExactly(critical);
         verify(prescriptionRepository).save(mappedEntity);
+        // Round 18 (QA D935): the reason is kept on the order.
+        assertThat(mappedEntity.getOverrideReason()).isEqualTo("Benefit outweighs risk, INR monitored");
+    }
+
+    /** Round 18 (QA D935): forceOverride alone no longer passes a critical alert. */
+    @Test
+    void criticalCdsOverrideWithoutReasonIsRefused() {
+        PrescriptionRequestDTO request = buildRequest();
+        request.setForceOverride(true);
+        request.setOverrideReason("   ");
+        UserRoleHospitalAssignment encAssignment = new UserRoleHospitalAssignment();
+        encAssignment.setId(UUID.randomUUID());
+        encAssignment.setHospital(encounter.getHospital());
+        encounter.setAssignment(encAssignment);
+        UUID currentUser = staff.getUser().getId();
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
+        com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard softStop =
+            new com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard(
+                "Paracetamol: 52.63 mg/kg per dose is above 15 mg/kg", null,
+                com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard.Indicator.CRITICAL,
+                new com.example.hms.cdshooks.dto.CdsHookDtos.Source("HMS Pediatric Dose Check", null, null),
+                null, null, null, "uuid");
+        when(cdsRuleEngine.evaluateProposedPrescription(any(), any(), any(), any(), any(), any(), any(), any()))
+            .thenReturn(List.of(softStop));
+
+        assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class);
+        verify(prescriptionRepository, never()).save(any());
+    }
+
+    /** Round 18 (QA D935): a hard stop is refused even with an override and a reason. */
+    @Test
+    void cdsHardStopIsRefusedWhateverTheOverride() {
+        PrescriptionRequestDTO request = buildRequest();
+        request.setForceOverride(true);
+        request.setOverrideReason("Prescriber insists");
+        UserRoleHospitalAssignment encAssignment = new UserRoleHospitalAssignment();
+        encAssignment.setId(UUID.randomUUID());
+        encAssignment.setHospital(encounter.getHospital());
+        encounter.setAssignment(encAssignment);
+        UUID currentUser = staff.getUser().getId();
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
+        com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard hardStop =
+            new com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard(
+                "Paracetamol: 6000 mg per day is above the absolute daily maximum of 4000 mg", null,
+                com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard.Indicator.CRITICAL,
+                new com.example.hms.cdshooks.dto.CdsHookDtos.Source("HMS Pediatric Dose Check", null, null),
+                null, null, null, "uuid", Boolean.TRUE);
+        when(cdsRuleEngine.evaluateProposedPrescription(any(), any(), any(), any(), any(), any(), any(), any()))
+            .thenReturn(List.of(hardStop));
+
+        assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class);
+        verify(prescriptionRepository, never()).save(any());
     }
 
     // ── The signing ceremony (P2 #16) ─────────────────────────────────────
@@ -4850,7 +5000,7 @@ class PrescriptionServiceImplTest {
 
         assertThat(request.getMedicationCatalogItemId()).isEqualTo(morphine.getId());
         verify(cdsRuleEngine).evaluateProposedPrescription(eq(patient), eq(hospitalId), eq("Morphine 10 mg"),
-            any(), any(), eq(morphine), org.mockito.ArgumentMatchers.isNull());
+            any(), any(), any(), eq(morphine), org.mockito.ArgumentMatchers.isNull());
     }
 
     @Test
@@ -4888,7 +5038,7 @@ class PrescriptionServiceImplTest {
 
         // Not tied to one strength: the dispense may still pick either.
         assertThat(request.getMedicationCatalogItemId()).isNull();
-        verify(cdsRuleEngine).evaluateProposedPrescription(any(), any(), any(), any(), any(), eq(syrup),
+        verify(cdsRuleEngine).evaluateProposedPrescription(any(), any(), any(), any(), any(), any(), eq(syrup),
             org.mockito.ArgumentMatchers.isNull());
     }
 
@@ -4908,7 +5058,7 @@ class PrescriptionServiceImplTest {
         prescriptionService.createPrescription(request, Locale.ENGLISH);
 
         assertThat(request.getMedicationCatalogItemId()).isEqualTo(morphine.getId());
-        verify(cdsRuleEngine).evaluateProposedPrescription(any(), any(), any(), any(), any(), eq(morphine),
+        verify(cdsRuleEngine).evaluateProposedPrescription(any(), any(), any(), any(), any(), any(), eq(morphine),
             org.mockito.ArgumentMatchers.isNull());
     }
 
@@ -4948,7 +5098,7 @@ class PrescriptionServiceImplTest {
         assertThat(request.getMedicationCatalogItemId()).isEqualTo(linkedItemId);
         // The kept link is the answer: no name resolution runs over the catalogue.
         verify(catalogRepo, never()).findByHospital_IdAndActiveTrue(any(), any());
-        verify(cdsRuleEngine).evaluateProposedPrescription(any(), any(), any(), any(), any(), eq(linked),
+        verify(cdsRuleEngine).evaluateProposedPrescription(any(), any(), any(), any(), any(), any(), eq(linked),
             eq(prescriptionId));
     }
 
@@ -5098,7 +5248,7 @@ class PrescriptionServiceImplTest {
 
         prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH);
 
-        verify(cdsRuleEngine).evaluateProposedPrescription(any(), any(), any(), any(), any(), any(),
+        verify(cdsRuleEngine).evaluateProposedPrescription(any(), any(), any(), any(), any(), any(), any(),
             eq(prescriptionId));
     }
 

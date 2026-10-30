@@ -50,12 +50,14 @@ public class ControlledSubstanceGuard {
         // a dispense or a dose, the stock witness, the controlled register,
         // the prescribed-quantity rule, the refill refusal and the controlled
         // mark on the MAR, chart, history and copies (ControlledFlagGuardTest).
-        // This two-factor clause is the one exception, and only because the
-        // step it demands does not exist: nothing ever writes
-        // twoFactorVerifiedAt, so keying it on the catalogue would make every
-        // morphine order unsignable and undispensable. It keys on the tick
-        // until the prescriber two-factor step is built (tasklist standing
-        // debt "Prescriber two-factor step", flagged to the user in r17).
+        // This two-factor clause keys on the tick. Round 18 built the step it
+        // demands: signPrescription re-authenticates the prescriber for EVERY
+        // controlled order (tick or catalogue, PrescriptionControlledResolver)
+        // and writes twoFactorVerifiedAt before this check, so a signed
+        // controlled order always carries the proof. The clause stays on the
+        // tick here because the dispense side (requireDispensable) must not
+        // strand catalogue-controlled orders signed before round 18; the
+        // signing choke point is where the catalogue rule is enforced.
         if (prescription.isControlledSubstance() && prescription.getTwoFactorVerifiedAt() == null) {
             // QA D1000: a key resolved in the caller's language; the code
             // (CONTROLLED_SUBSTANCE) stays in the key for log searches.

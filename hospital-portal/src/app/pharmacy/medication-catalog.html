@@ -61,6 +61,21 @@
                     'PHARMACY.BADGE_CONTROLLED' | translate
                   }}</span>
                 }
+                @if (hasPediatricLimits(item)) {
+                  <!-- Round 18 (QA D935): who may rely on the limits, at a glance. -->
+                  <span
+                    class="badge"
+                    [class.badge-pending]="item.pediatricDoseStatus !== 'APPROVED'"
+                    [class.badge-essential]="item.pediatricDoseStatus === 'APPROVED'"
+                    data-test="catalog-dosing-status"
+                    >{{
+                      (item.pediatricDoseStatus === 'APPROVED'
+                        ? 'PHARMACY.DOSING.BADGE_APPROVED'
+                        : 'PHARMACY.DOSING.BADGE_PENDING'
+                      ) | translate
+                    }}</span
+                  >
+                }
               </td>
               <td>{{ item.genericName }}</td>
               <td>{{ formLabel(item.form) }}</td>
@@ -78,6 +93,17 @@
               </td>
               <td>
                 <div class="action-group">
+                  @if (canEditDosing()) {
+                    <button
+                      class="action-link"
+                      [title]="'PHARMACY.DOSING.ACTION' | translate"
+                      [attr.aria-label]="'PHARMACY.DOSING.ACTION' | translate"
+                      data-test="catalog-dosing"
+                      (click)="openDosing(item)"
+                    >
+                      <span class="material-symbols-outlined" aria-hidden="true">child_care</span>
+                    </button>
+                  }
                   @if (canManage()) {
                     <button
                       class="action-link"
@@ -343,22 +369,8 @@
               </div>
             </div>
 
-            <!-- QA D935: the ceiling the paediatric dose check compares a
-                 child's dose with (mg per kg per dose); optional. -->
-            <div class="field">
-              <label for="pediatricMaxDoseMgPerKg">{{
-                'PHARMACY.PEDIATRIC_MAX_DOSE_MG_PER_KG' | translate
-              }}</label>
-              <input
-                id="pediatricMaxDoseMgPerKg"
-                type="number"
-                min="0.001"
-                step="any"
-                name="pediatricMaxDoseMgPerKg"
-                [(ngModel)]="form.pediatricMaxDoseMgPerKg"
-              />
-              <small class="field-hint">{{ 'PHARMACY.PEDIATRIC_MAX_DOSE_HINT' | translate }}</small>
-            </div>
+            <!-- Round 18 (QA D935): the paediatric dose limits moved to their own
+                 dialog (the child_care action), the pharmacy's to set and approve. -->
 
             <div class="field">
               <label for="description">{{ 'COMMON.DESCRIPTION' | translate }}</label>
@@ -383,6 +395,241 @@
                   : editing()
                     ? ('COMMON.SAVE_CHANGES' | translate)
                     : ('COMMON.CREATE' | translate)
+              }}
+            </button>
+          </div>
+        </form>
+      </dialog>
+    </div>
+  }
+
+  <!-- Paediatric dosing (round 18, QA D935) -->
+  @if (dosingItem(); as dItem) {
+    <div
+      class="modal-backdrop"
+      (click)="closeDosing()"
+      (keydown.escape)="closeDosing()"
+      role="presentation"
+      tabindex="-1"
+    >
+      <dialog
+        class="modal modal-lg"
+        [open]="!!dosingItem()"
+        (click)="$event.stopPropagation()"
+        (keydown)="$event.stopPropagation()"
+        tabindex="-1"
+        appModalDialog
+        aria-labelledby="medication-catalog-dialog-title-3"
+        (escaped)="closeDosing()"
+      >
+        <div class="modal-header">
+          <h2 id="medication-catalog-dialog-title-3">
+            {{ 'PHARMACY.DOSING.TITLE' | translate }} — {{ dItem.nameFr }}
+          </h2>
+          <button
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+            class="modal-close"
+            (click)="closeDosing()"
+          >
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
+          </button>
+        </div>
+        <form (ngSubmit)="saveDosing()">
+          <div class="modal-body">
+            <p class="field-hint">{{ 'PHARMACY.DOSING.INTRO' | translate }}</p>
+            <div class="form-row">
+              <div class="field">
+                <label for="dose-per-kg">{{ 'PHARMACY.DOSING.PER_DOSE_MG_KG' | translate }}</label>
+                <input
+                  id="dose-per-kg"
+                  type="number"
+                  min="0.001"
+                  step="any"
+                  name="pediatricMaxDoseMgPerKg"
+                  [(ngModel)]="dosingForm.pediatricMaxDoseMgPerKg"
+                />
+              </div>
+              <div class="field">
+                <label for="dose-per-day-kg">{{
+                  'PHARMACY.DOSING.PER_DAY_MG_KG' | translate
+                }}</label>
+                <input
+                  id="dose-per-day-kg"
+                  type="number"
+                  min="0.001"
+                  step="any"
+                  name="pediatricMaxDailyMgPerKg"
+                  [(ngModel)]="dosingForm.pediatricMaxDailyMgPerKg"
+                />
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="field">
+                <label for="dose-single-mg">{{
+                  'PHARMACY.DOSING.SINGLE_DOSE_MG' | translate
+                }}</label>
+                <input
+                  id="dose-single-mg"
+                  type="number"
+                  min="0.001"
+                  step="any"
+                  name="pediatricMaxSingleDoseMg"
+                  [(ngModel)]="dosingForm.pediatricMaxSingleDoseMg"
+                />
+              </div>
+              <div class="field">
+                <label for="dose-daily-mg">{{ 'PHARMACY.DOSING.DAILY_MAX_MG' | translate }}</label>
+                <input
+                  id="dose-daily-mg"
+                  type="number"
+                  min="0.001"
+                  step="any"
+                  name="pediatricMaxDailyMg"
+                  aria-describedby="dose-daily-mg-hint"
+                  [(ngModel)]="dosingForm.pediatricMaxDailyMg"
+                />
+                <small class="field-hint" id="dose-daily-mg-hint">{{
+                  'PHARMACY.DOSING.DAILY_MAX_HINT' | translate
+                }}</small>
+              </div>
+            </div>
+            <div class="field">
+              <label for="dose-review-months">{{
+                'PHARMACY.DOSING.MANUAL_REVIEW_MONTHS' | translate
+              }}</label>
+              <input
+                id="dose-review-months"
+                type="number"
+                min="0"
+                max="216"
+                step="1"
+                name="pediatricManualReviewUnderMonths"
+                aria-describedby="dose-review-months-hint"
+                [(ngModel)]="dosingForm.pediatricManualReviewUnderMonths"
+              />
+              <small class="field-hint" id="dose-review-months-hint">{{
+                'PHARMACY.DOSING.MANUAL_REVIEW_HINT' | translate
+              }}</small>
+            </div>
+
+            <fieldset class="field">
+              <legend>{{ 'PHARMACY.DOSING.BANDS' | translate }}</legend>
+              <small class="field-hint">{{ 'PHARMACY.DOSING.BANDS_HINT' | translate }}</small>
+              @for (band of dosingForm.pediatricWeightBands; track $index; let i = $index) {
+                <div class="form-row" data-test="dosing-band">
+                  <div class="field">
+                    <label [for]="'band-min-' + i">{{
+                      'PHARMACY.DOSING.BAND_MIN_KG' | translate
+                    }}</label>
+                    <input
+                      [id]="'band-min-' + i"
+                      type="number"
+                      min="0"
+                      step="any"
+                      [name]="'bandMin' + i"
+                      [(ngModel)]="band.minWeightKg"
+                    />
+                  </div>
+                  <div class="field">
+                    <label [for]="'band-max-' + i">{{
+                      'PHARMACY.DOSING.BAND_MAX_KG' | translate
+                    }}</label>
+                    <input
+                      [id]="'band-max-' + i"
+                      type="number"
+                      min="0"
+                      step="any"
+                      [name]="'bandMax' + i"
+                      [(ngModel)]="band.maxWeightKg"
+                    />
+                  </div>
+                  <div class="field">
+                    <label [for]="'band-dose-' + i">{{
+                      'PHARMACY.DOSING.BAND_DOSE' | translate
+                    }}</label>
+                    <input
+                      [id]="'band-dose-' + i"
+                      type="number"
+                      min="0.01"
+                      step="any"
+                      [name]="'bandDose' + i"
+                      [(ngModel)]="band.dosePerAdministration"
+                    />
+                  </div>
+                  <div class="field">
+                    <label [for]="'band-unit-' + i">{{
+                      'PHARMACY.DOSING.BAND_UNIT' | translate
+                    }}</label>
+                    <input
+                      [id]="'band-unit-' + i"
+                      type="text"
+                      maxlength="40"
+                      [name]="'bandUnit' + i"
+                      [(ngModel)]="band.doseUnit"
+                    />
+                  </div>
+                  <div class="field">
+                    <label [for]="'band-per-day-' + i">{{
+                      'PHARMACY.DOSING.BAND_PER_DAY' | translate
+                    }}</label>
+                    <input
+                      [id]="'band-per-day-' + i"
+                      type="number"
+                      min="1"
+                      max="24"
+                      step="1"
+                      [name]="'bandPerDay' + i"
+                      [(ngModel)]="band.maxDosesPerDay"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    class="action-link danger"
+                    [attr.aria-label]="'COMMON.REMOVE' | translate"
+                    (click)="removeBand(i)"
+                  >
+                    <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+                  </button>
+                </div>
+              }
+              <button type="button" class="btn-secondary" (click)="addBand()">
+                {{ 'PHARMACY.DOSING.ADD_BAND' | translate }}
+              </button>
+            </fieldset>
+
+            <div class="field">
+              <label for="dose-source">{{ 'PHARMACY.DOSING.SOURCE' | translate }}</label>
+              <input
+                id="dose-source"
+                type="text"
+                maxlength="500"
+                name="pediatricDoseSource"
+                [(ngModel)]="dosingForm.pediatricDoseSource"
+              />
+            </div>
+            <div class="field">
+              <label for="dose-status">{{ 'PHARMACY.DOSING.STATUS' | translate }}</label>
+              <select
+                id="dose-status"
+                name="pediatricDoseStatus"
+                [(ngModel)]="dosingForm.pediatricDoseStatus"
+              >
+                <option value="DEFAULT_PENDING_APPROVAL">
+                  {{ 'PHARMACY.DOSING.STATUS_PENDING' | translate }}
+                </option>
+                <option value="APPROVED">
+                  {{ 'PHARMACY.DOSING.STATUS_APPROVED' | translate }}
+                </option>
+              </select>
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button type="button" class="btn-secondary" (click)="closeDosing()">
+              {{ 'COMMON.CANCEL' | translate }}
+            </button>
+            <button type="submit" class="btn-primary" [disabled]="dosingSaving()">
+              {{
+                dosingSaving() ? ('COMMON.SAVING' | translate) : ('COMMON.SAVE_CHANGES' | translate)
               }}
             </button>
           </div>

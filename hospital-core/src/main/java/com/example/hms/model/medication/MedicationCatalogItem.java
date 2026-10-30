@@ -119,6 +119,51 @@ public class MedicationCatalogItem extends BaseEntity {
     @Column(name = "pediatric_max_dose_mg_per_kg", precision = 8, scale = 3)
     private java.math.BigDecimal pediatricMaxDoseMgPerKg;
 
+    /* Round 18 (QA D935, V247): the rest of a real formulary's paediatric
+       dosing. Per-dose and per-day maxima are soft stops (override with an
+       audited reason); the absolute daily mg cap is a hard stop. */
+
+    /** Usual maximum per day, mg/kg/day (soft stop). */
+    @Column(name = "pediatric_max_daily_mg_per_kg", precision = 8, scale = 3)
+    private java.math.BigDecimal pediatricMaxDailyMgPerKg;
+
+    /** Absolute maximum per dose in mg, whatever the weight (soft stop). */
+    @Column(name = "pediatric_max_single_dose_mg", precision = 10, scale = 3)
+    private java.math.BigDecimal pediatricMaxSingleDoseMg;
+
+    /** Absolute maximum per day in mg, whatever the weight (HARD stop). */
+    @Column(name = "pediatric_max_daily_mg", precision = 10, scale = 3)
+    private java.math.BigDecimal pediatricMaxDailyMg;
+
+    /**
+     * Below this age, in months, no automatic mg/kg verdict: the order needs a
+     * manual pharmacist/physician review. Null means the default, 3 months.
+     */
+    @Column(name = "pediatric_manual_review_under_months")
+    private Integer pediatricManualReviewUnderMonths;
+
+    /** Weight bands replacing the mg/kg check (artemether-lumefantrine). */
+    @jakarta.persistence.Convert(converter = com.example.hms.model.converter.PediatricWeightBandConverter.class)
+    @Column(name = "pediatric_weight_bands", columnDefinition = "TEXT")
+    @Builder.Default
+    private java.util.List<PediatricWeightBand> pediatricWeightBands = new java.util.ArrayList<>();
+
+    /** Where the paediatric limits come from (the published reference). */
+    @Column(name = "pediatric_dose_source", length = 500)
+    private String pediatricDoseSource;
+
+    /** Default awaiting local approval, or approved by this hospital's pharmacy. */
+    @jakarta.persistence.Enumerated(jakarta.persistence.EnumType.STRING)
+    @Column(name = "pediatric_dose_status", length = 40)
+    private com.example.hms.enums.PediatricDoseLimitStatus pediatricDoseStatus;
+
+    /** The user who last set or approved the paediatric limits. */
+    @Column(name = "pediatric_dose_reviewed_by")
+    private java.util.UUID pediatricDoseReviewedBy;
+
+    @Column(name = "pediatric_dose_reviewed_at")
+    private java.time.LocalDateTime pediatricDoseReviewedAt;
+
     /** Whether this is on Burkina's essential medicines list. */
     @Column(name = "essential_list", nullable = false)
     @Builder.Default
