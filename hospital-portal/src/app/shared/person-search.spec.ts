@@ -21,7 +21,9 @@ describe('person-search (QA D1019, D1020)', () => {
       expect(phoneMatches('+22665112233', typed)).withContext(typed).toBeTrue();
     }
     expect(phoneMatches('+22665112233', '75 40 50 60')).toBeFalse();
-    expect(phoneMatches('+22665112233', '22')).withContext('too short to be a phone search').toBeFalse();
+    expect(phoneMatches('+22665112233', '22'))
+      .withContext('too short to be a phone search')
+      .toBeFalse();
     expect(phoneSearchKey('+226 65 11 22 33')).toBe('65112233');
   });
 

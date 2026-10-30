@@ -51,7 +51,8 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 @Component({
   selector: 'app-encounters',
   standalone: true,
-  imports: [PersonNamePipe, 
+  imports: [
+    PersonNamePipe,
     ModalDialogDirective,
     PatientSublinePipe,
     ServerTimePipe,

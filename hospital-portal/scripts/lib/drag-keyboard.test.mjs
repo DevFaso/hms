@@ -40,6 +40,9 @@ test('the scan sees a drag-only card', () => {
     draggableTagsWithoutKeyboard('<div cdkDrag (keydown.alt.arrowright)="m(1)">').length,
     0,
   );
-  assert.equal(draggableTagsWithoutKeyboard('<a (dragstart)="s($event)" (keydown)="k($event)">').length, 0);
+  assert.equal(
+    draggableTagsWithoutKeyboard('<a (dragstart)="s($event)" (keydown)="k($event)">').length,
+    0,
+  );
   assert.equal(draggableTagsWithoutKeyboard('<div cdkDragHandle>').length, 0);
 });

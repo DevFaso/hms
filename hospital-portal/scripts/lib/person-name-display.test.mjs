@@ -16,7 +16,10 @@ const STAFF_ACCOUNT_SCREENS = new Map([
   // D1036 class, not fixed here: the lines are the ones fix/r17-lab-pharmacy-billing
   // rewrites for D1052 ("Patient: …" colons); that branch switches them to
   // `| personName` and deletes this entry (flagged in the hand-back).
-  ['src/app/pharmacy/dispensing.html', 'D1036 sibling owned by fix/r17-lab-pharmacy-billing (D1052 lines)'],
+  [
+    'src/app/pharmacy/dispensing.html',
+    'D1036 sibling owned by fix/r17-lab-pharmacy-billing (D1052 lines)',
+  ],
 ]);
 
 const FIRST_LAST = /\{\{\s*([\w.?!]+)\.firstName\s*\}\}\s*\{\{\s*\1\.lastName\s*\}\}/g;

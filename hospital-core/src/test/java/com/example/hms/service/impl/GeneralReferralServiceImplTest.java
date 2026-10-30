@@ -1373,6 +1373,42 @@ class GeneralReferralServiceImplTest {
         assertEquals(created.getId(), referral.getAppointment().getId());
     }
 
+    /** QA D1013 (sibling): a provider already booked then is not double-booked; the referral still schedules. */
+    @Test
+    void scheduleReferral_aProviderAlreadyBookedThenGetsNoSecondAppointment_D1013() {
+        UUID referralId = UUID.randomUUID();
+        GeneralReferral referral = buildReferral(referralId);
+        referral.setStatus(ReferralStatus.ACKNOWLEDGED);
+        com.example.hms.model.UserRoleHospitalAssignment assignment =
+            com.example.hms.model.UserRoleHospitalAssignment.builder().build();
+        assignment.setId(UUID.randomUUID());
+        com.example.hms.model.Staff provider = com.example.hms.model.Staff.builder().assignment(assignment).build();
+        provider.setId(UUID.randomUUID());
+        com.example.hms.model.Department department = new com.example.hms.model.Department();
+        department.setId(UUID.randomUUID());
+        referral.setReceivingProvider(provider);
+        referral.setTargetDepartment(department);
+        LocalDateTime appointmentTime = LocalDateTime.now().plusDays(5)
+            .withHour(10).withMinute(0).withSecond(0).withNano(0);
+        com.example.hms.model.Appointment existing = com.example.hms.model.Appointment.builder()
+            .staff(provider).appointmentDate(appointmentTime.toLocalDate())
+            .startTime(java.time.LocalTime.of(10, 15)).endTime(java.time.LocalTime.of(10, 45))
+            .status(com.example.hms.enums.AppointmentStatus.SCHEDULED).build();
+        existing.setId(UUID.randomUUID());
+        when(appointmentRepository.findByStaff_IdAndAppointmentDate(provider.getId(), appointmentTime.toLocalDate()))
+            .thenReturn(List.of(existing));
+        when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
+        when(referralRepository.save(referral)).thenReturn(referral);
+
+        GeneralReferralResponseDTO response = generalReferralService.scheduleReferral(referralId,
+            com.example.hms.payload.dto.referral.ScheduleReferralRequestDTO.builder()
+                .appointmentTime(appointmentTime).location("Clinic 7").build());
+
+        assertEquals(ReferralStatus.SCHEDULED, response.getStatus());
+        assertNull(response.getAppointmentId());
+        verify(appointmentRepository, never()).save(any(com.example.hms.model.Appointment.class));
+    }
+
     @Test
     void scheduleReferral_withoutAReceivingProviderStillSchedules() {
         // The commonest referral there is: out to an external facility, no known

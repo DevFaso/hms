@@ -35,7 +35,14 @@ interface DeptOption {
 @Component({
   selector: 'app-appointment-form',
   standalone: true,
-  imports: [PersonNamePipe, PatientSublinePipe, FormsModule, RouterLink, TranslateModule, EnumLabelPipe],
+  imports: [
+    PersonNamePipe,
+    PatientSublinePipe,
+    FormsModule,
+    RouterLink,
+    TranslateModule,
+    EnumLabelPipe,
+  ],
   templateUrl: './appointment-form.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './appointment-form.scss',

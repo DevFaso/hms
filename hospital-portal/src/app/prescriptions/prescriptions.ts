@@ -147,7 +147,8 @@ export const PRESCRIPTION_TABS: readonly { id: PrescriptionTab; labelKey: string
 @Component({
   selector: 'app-prescriptions',
   standalone: true,
-  imports: [PersonNamePipe, 
+  imports: [
+    PersonNamePipe,
     ModalDialogDirective,
     PatientSublinePipe,
     ServerTimePipe,

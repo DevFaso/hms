@@ -34,7 +34,16 @@ const components = componentSources();
 const ctx = { components, templates: loadTemplates(components) };
 
 let failed = 0;
-for (const gate of [dialogs, names, picker, money, literals, fragments, personSearch, translateParams]) {
+for (const gate of [
+  dialogs,
+  names,
+  picker,
+  money,
+  literals,
+  fragments,
+  personSearch,
+  translateParams,
+]) {
   if (!evaluateGate(gate, argv, ctx)) failed++;
 }
 if (failed > 0) {

@@ -21,7 +21,12 @@ describe('EmpiStatusService (QA D987)', () => {
     });
   });
 
-  for (const role of ['ROLE_PATIENT', 'ROLE_PHARMACIST', 'ROLE_LAB_TECHNICIAN', 'ROLE_LAB_DIRECTOR']) {
+  for (const role of [
+    'ROLE_PATIENT',
+    'ROLE_PHARMACIST',
+    'ROLE_LAB_TECHNICIAN',
+    'ROLE_LAB_DIRECTOR',
+  ]) {
     it(`QA D1012: never asks for ${role}, which the matcher refuses, and reads it as off`, () => {
       held = [role];
       const service = TestBed.inject(EmpiStatusService);

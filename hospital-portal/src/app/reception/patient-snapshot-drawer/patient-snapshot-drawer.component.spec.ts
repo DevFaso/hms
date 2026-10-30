@@ -107,14 +107,23 @@ describe('PatientSnapshotDrawerComponent', () => {
         });
       component.patientId = 'p1';
       component.ngOnChanges({
-        patientId: { currentValue: 'p1', previousValue: null, firstChange: true, isFirstChange: () => true },
+        patientId: {
+          currentValue: 'p1',
+          previousValue: null,
+          firstChange: true,
+          isFirstChange: () => true,
+        },
       });
       fixture.detectChanges();
       const labels = Array.from(
         (fixture.nativeElement as HTMLElement).querySelectorAll('.field-label'),
       ).map((e) => e.textContent?.trim());
-      expect(labels).toContain(hasPrimary ? 'RECEPTION.PRIMARY_PAYER' : 'RECEPTION.INSURANCE_PROVIDER');
-      expect(labels).not.toContain(hasPrimary ? 'RECEPTION.INSURANCE_PROVIDER' : 'RECEPTION.PRIMARY_PAYER');
+      expect(labels).toContain(
+        hasPrimary ? 'RECEPTION.PRIMARY_PAYER' : 'RECEPTION.INSURANCE_PROVIDER',
+      );
+      expect(labels).not.toContain(
+        hasPrimary ? 'RECEPTION.INSURANCE_PROVIDER' : 'RECEPTION.PRIMARY_PAYER',
+      );
     });
   }
 });

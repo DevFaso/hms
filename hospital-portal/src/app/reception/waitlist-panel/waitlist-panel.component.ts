@@ -37,7 +37,8 @@ type WaitlistStatus = 'ALL' | 'WAITING' | 'OFFERED' | 'CLOSED';
 @Component({
   selector: 'app-waitlist-panel',
   standalone: true,
-  imports: [PersonNamePipe, 
+  imports: [
+    PersonNamePipe,
     DialogFocusDirective,
     PatientSublinePipe,
     ServerTimePipe,

@@ -43,7 +43,8 @@ import { ActivatedRoute } from '@angular/router';
 @Component({
   selector: 'app-lab',
   standalone: true,
-  imports: [PersonNamePipe, 
+  imports: [
+    PersonNamePipe,
     CdkTrapFocus,
     PatientSublinePipe,
     ServerTimePipe,

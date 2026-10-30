@@ -84,7 +84,9 @@
                 type="button"
                 class="card-action"
                 data-testid="flow-close-unseen"
-                [attr.aria-label]="('RECEPTION.CLOSE_UNSEEN_TITLE' | translate) + ' — ' + item.patientName"
+                [attr.aria-label]="
+                  ('RECEPTION.CLOSE_UNSEEN_TITLE' | translate) + ' — ' + item.patientName
+                "
                 (click)="requestCloseUnseen(item, $event)"
               >
                 <span class="material-symbols-outlined" aria-hidden="true">directions_walk</span>

@@ -39,7 +39,8 @@ type RecallFilter = 'ALL' | RecallStatus;
 @Component({
   selector: 'app-recalls-panel',
   standalone: true,
-  imports: [PersonNamePipe, 
+  imports: [
+    PersonNamePipe,
     DialogFocusDirective,
     PatientSublinePipe,
     ServerTimePipe,

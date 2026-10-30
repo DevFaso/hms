@@ -107,9 +107,23 @@ describe('PaymentPendingPanelComponent', () => {
     const billing = TestBed.inject(BillingService);
     spyOn(billing, 'listPayments').and.returnValue(
       of([
-        { id: 'pay-old', amount: 500, paymentDate: '2026-10-28', paymentMethod: 'CASH', status: 'COMPLETED', createdAt: '2026-10-28T09:00:00' },
-        { id: 'pay-new', amount: 2000, paymentDate: '2026-10-29', paymentMethod: 'MOBILE_MONEY', status: 'COMPLETED', createdAt: '2026-10-29T10:15:00' },
-      ] as PaymentRow[]),
+        {
+          id: 'pay-old',
+          amount: 500,
+          paymentDate: '2026-10-28',
+          paymentMethod: 'CASH',
+          status: 'COMPLETED',
+          createdAt: '2026-10-28T09:00:00',
+        },
+        {
+          id: 'pay-new',
+          amount: 2000,
+          paymentDate: '2026-10-29',
+          paymentMethod: 'MOBILE_MONEY',
+          status: 'COMPLETED',
+          createdAt: '2026-10-29T10:15:00',
+        },
+      ] as unknown as PaymentRow[]),
     );
     const receipt = spyOn(billing, 'getReceiptPdf').and.returnValue(
       of(new HttpResponse<Blob>({ body: new Blob(['%PDF']) })),
@@ -130,7 +144,7 @@ describe('PaymentPendingPanelComponent', () => {
       newestPayment([
         { id: 'a', paymentDate: '2026-10-29', createdAt: '2026-10-29T08:00:00' },
         { id: 'b', paymentDate: '2026-10-29', createdAt: '2026-10-29T11:00:00' },
-      ] as PaymentRow[])?.id,
+      ] as unknown as PaymentRow[])?.id,
     ).toBe('b');
   });
 });

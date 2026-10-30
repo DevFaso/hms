@@ -31,7 +31,10 @@ export function foldSearchText(value: string | null | undefined): string {
 }
 
 /** Whether `value` contains `term`, both folded. An empty term matches everything. */
-export function textMatches(value: string | null | undefined, term: string | null | undefined): boolean {
+export function textMatches(
+  value: string | null | undefined,
+  term: string | null | undefined,
+): boolean {
   const needle = foldSearchText(term);
   return needle === '' || foldSearchText(value).includes(needle);
 }
@@ -68,7 +71,10 @@ export function phoneSearchKey(value: string | null | undefined): string {
  * Whether a stored number matches what was typed, however either is written.
  * A term with fewer than four digits is not a phone search (a year, a room).
  */
-export function phoneMatches(stored: string | null | undefined, term: string | null | undefined): boolean {
+export function phoneMatches(
+  stored: string | null | undefined,
+  term: string | null | undefined,
+): boolean {
   const key = phoneSearchKey(term);
   if (key.length < 4) return false;
   return (stored ?? '').replace(NON_DIGITS, '').includes(key);

@@ -77,10 +77,14 @@
           required
           (ngModelChange)="onIdentifierChange()"
           [attr.aria-invalid]="serverFieldErrors['phoneNumberPrimary'] ? true : null"
-          [attr.aria-describedby]="serverFieldErrors['phoneNumberPrimary'] ? 'phoneNumberPrimary-server-error' : null"
+          [attr.aria-describedby]="
+            serverFieldErrors['phoneNumberPrimary'] ? 'phoneNumberPrimary-server-error' : null
+          "
         />
         @if (serverFieldErrors['phoneNumberPrimary']; as reason) {
-          <small class="field-error" id="phoneNumberPrimary-server-error" role="alert">{{ reason }}</small>
+          <small class="field-error" id="phoneNumberPrimary-server-error" role="alert">{{
+            reason
+          }}</small>
         }
         <!-- SMS OTP phone verification (hidden when the SMS provider is off) -->
         @if (otpAvailable) {
@@ -148,10 +152,14 @@
           [(ngModel)]="form.phoneNumberSecondary"
           name="phoneNumberSecondary"
           [attr.aria-invalid]="serverFieldErrors['phoneNumberSecondary'] ? true : null"
-          [attr.aria-describedby]="serverFieldErrors['phoneNumberSecondary'] ? 'phoneNumberSecondary-server-error' : null"
+          [attr.aria-describedby]="
+            serverFieldErrors['phoneNumberSecondary'] ? 'phoneNumberSecondary-server-error' : null
+          "
         />
         @if (serverFieldErrors['phoneNumberSecondary']; as reason) {
-          <small class="field-error" id="phoneNumberSecondary-server-error" role="alert">{{ reason }}</small>
+          <small class="field-error" id="phoneNumberSecondary-server-error" role="alert">{{
+            reason
+          }}</small>
         }
       </div>
       <div class="form-group">
@@ -164,7 +172,9 @@
           required
           (ngModelChange)="onNameOrDobChange()"
           [attr.aria-invalid]="serverFieldErrors['dateOfBirth'] ? true : null"
-          [attr.aria-describedby]="serverFieldErrors['dateOfBirth'] ? 'dateOfBirth-server-error' : null"
+          [attr.aria-describedby]="
+            serverFieldErrors['dateOfBirth'] ? 'dateOfBirth-server-error' : null
+          "
         />
         @if (serverFieldErrors['dateOfBirth']; as reason) {
           <small class="field-error" id="dateOfBirth-server-error" role="alert">{{ reason }}</small>

@@ -31,7 +31,9 @@ export function deskPaymentsWithoutReceipt(sources) {
 
 test('QA D1022: every staff screen that takes a payment hands over its receipt', () => {
   const sources = componentSources();
-  const takers = sources.filter(({ file, text }) => !file.endsWith('.service.ts') && takesPayment(text));
+  const takers = sources.filter(
+    ({ file, text }) => !file.endsWith('.service.ts') && takesPayment(text),
+  );
   assert.ok(takers.length >= 3, `payment screens found: ${takers.map((t) => t.file).join(', ')}`);
   assert.deepEqual(deskPaymentsWithoutReceipt(sources), []);
 });

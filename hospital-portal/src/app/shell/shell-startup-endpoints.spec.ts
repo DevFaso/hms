@@ -92,11 +92,15 @@ describe('Shell startup requests (QA D1012 class guard)', () => {
   for (const role of SHELL_GUARD_ROLES) {
     it(`${role}: every request is listed, and admitted for the role`, () => {
       const sent = bootAs(role);
-      expect(sent.length).withContext('the boot sent nothing: the guard reads nothing').toBeGreaterThan(0);
+      expect(sent.length)
+        .withContext('the boot sent nothing: the guard reads nothing')
+        .toBeGreaterThan(0);
       for (const request of sent) {
         const admitted = SHELL_STARTUP_ENDPOINTS[request];
         expect(admitted)
-          .withContext(`${request} is not in SHELL_STARTUP_ENDPOINTS: list it with the roles the server admits`)
+          .withContext(
+            `${request} is not in SHELL_STARTUP_ENDPOINTS: list it with the roles the server admits`,
+          )
           .toBeDefined();
         if (admitted && admitted !== ANY_AUTHENTICATED) {
           expect(expandRoleEquivalents([role]).some((r) => admitted.includes(r)))

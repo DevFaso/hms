@@ -52,7 +52,8 @@ const CANCELLABLE_STATUSES = new Set<string>(['PENDING', 'ACTIVE', 'ON_LEAVE']);
 @Component({
   selector: 'app-admissions',
   standalone: true,
-  imports: [PersonNamePipe, 
+  imports: [
+    PersonNamePipe,
     PatientSublinePipe,
     CommonModule,
     FormsModule,

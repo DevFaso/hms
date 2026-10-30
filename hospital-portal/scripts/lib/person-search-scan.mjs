@@ -21,10 +21,7 @@ const RAW_NAME = new RegExp(
   String.raw`\(?\s*(${NAME_FIELD})\s*(?:\?\?\s*(?:''|"")\s*\))?\s*[?!]?\.toLowerCase\(\)\s*[?!]?\.includes\(`,
   'g',
 );
-const RAW_PHONE = new RegExp(
-  String.raw`([\w$.?!]*?[pP]hone\w*)\s*[?!]?\.includes\(`,
-  'g',
-);
+const RAW_PHONE = new RegExp(String.raw`([\w$.?!]*?[pP]hone\w*)\s*[?!]?\.includes\(`, 'g');
 
 /**
  * @param {string} text a component source
