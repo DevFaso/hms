@@ -379,7 +379,29 @@ export interface RegistrationMatch {
   maskedEmail: string | null;
   hospitalCount: number;
   alreadyRegisteredHere: boolean;
-  matchedOn: 'PHONE' | 'EMAIL';
+  /**
+   * PHONE / EMAIL: the typed contact is on file. IDENTITY (QA D1064): the same
+   * name and date of birth at another hospital of the organisation, whatever
+   * the phone.
+   */
+  matchedOn: 'PHONE' | 'EMAIL' | 'IDENTITY';
+  /**
+   * QA D1061: true when the record has the typed name and date of birth, false
+   * when it only shares the contact (a parent's phone on a child's
+   * registration), null when the request carried no name or date of birth.
+   */
+  sameIdentity?: boolean | null;
+}
+
+/** The registration-match request: a contact, and/or the identity (QA D1064). */
+export interface RegistrationMatchQuery {
+  email?: string;
+  phone?: string;
+  hospitalId?: string;
+  firstName?: string;
+  lastName?: string;
+  /** yyyy-MM-dd */
+  dateOfBirth?: string;
 }
 
 export interface AllergyListResult {
@@ -470,15 +492,16 @@ export class PatientService {
    * Exact email/phone match across ALL hospitals for the registration form.
    * Returns a masked, privacy-minimal projection — link via POST /registrations.
    */
-  registrationMatch(params: {
-    email?: string;
-    phone?: string;
-    hospitalId?: string;
-  }): Observable<RegistrationMatch[]> {
+  registrationMatch(params: RegistrationMatchQuery): Observable<RegistrationMatch[]> {
     let httpParams = new HttpParams();
     if (params.email) httpParams = httpParams.set('email', params.email);
     if (params.phone) httpParams = httpParams.set('phone', params.phone);
     if (params.hospitalId) httpParams = httpParams.set('hospitalId', params.hospitalId);
+    // QA D1061 / D1064: the identity, so a record is told apart from one that
+    // only shares the phone, and found at another hospital when the phone differs.
+    if (params.firstName) httpParams = httpParams.set('firstName', params.firstName);
+    if (params.lastName) httpParams = httpParams.set('lastName', params.lastName);
+    if (params.dateOfBirth) httpParams = httpParams.set('dateOfBirth', params.dateOfBirth);
     return this.http.get<RegistrationMatch[]>('/patients/registration-match', {
       params: httpParams,
     });

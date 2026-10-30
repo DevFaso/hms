@@ -127,7 +127,7 @@ public class EncounterMapper {
     private void populatePatient(EncounterResponseDTO dto, Patient p) {
         if (p == null) return;
         dto.setPatientId(p.getId());
-        dto.setPatientName(joinName(p.getFirstName(), p.getLastName()));
+        dto.setPatientName(nullSafe(p.getFullName()));
         dto.setPatientEmail(nullSafe(p.getEmail()));
         dto.setPatientPhoneNumber(nullSafe(p.getPhoneNumberPrimary()));
     }

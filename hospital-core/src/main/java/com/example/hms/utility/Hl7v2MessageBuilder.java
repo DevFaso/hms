@@ -42,6 +42,19 @@ public class Hl7v2MessageBuilder {
     // ── Outbound OML^O21 – New Lab Order sent to instrument ──────────────────
 
     /**
+     * PID-5 (XPN): family^given^middle. QA D1036: the middle name travels in
+     * its own component; it used to be dropped from every outbound order.
+     */
+    private String pid5(com.example.hms.model.Patient patient) {
+        if (patient == null) {
+            return "UNKNOWN^UNKNOWN";
+        }
+        String xpn = encodeEscapes(patient.getLastName()) + "^" + encodeEscapes(patient.getFirstName());
+        String middle = patient.getMiddleName();
+        return middle != null && !middle.isBlank() ? xpn + "^" + encodeEscapes(middle.trim()) : xpn;
+    }
+
+    /**
      * Builds an OML^O21 (laboratory order) message for the given specimen.
      * Triggered when a specimen is received at the lab.
      */
@@ -50,9 +63,7 @@ public class Hl7v2MessageBuilder {
         String now = LocalDateTime.now().format(HL7_DT);
         String msgId = "HMS-" + UUID.randomUUID().toString().replace("-", "").substring(0, 12).toUpperCase();
 
-        String patientName = order.getPatient() != null
-            ? encodeEscapes(order.getPatient().getLastName()) + "^" + encodeEscapes(order.getPatient().getFirstName())
-            : "UNKNOWN^UNKNOWN";
+        String patientName = pid5(order.getPatient());
         String patientId = order.getPatient() != null ? encodeEscapes(order.getPatient().getId().toString()) : "";
         String testCode = order.getLabTestDefinition() != null
             ? encodeEscapes(order.getLabTestDefinition().getTestCode()) : "";
@@ -101,9 +112,7 @@ public class Hl7v2MessageBuilder {
         // Every stored text is escaped on its own (a CE field's parts one by
         // one, never the joined field), so a delimiter inside it - the caret
         // in 10^9/L, a pipe in a value - is data to the receiver, not a split.
-        String patientName = order.getPatient() != null
-            ? encodeEscapes(order.getPatient().getLastName()) + "^" + encodeEscapes(order.getPatient().getFirstName())
-            : "UNKNOWN^UNKNOWN";
+        String patientName = pid5(order.getPatient());
         String patientId = order.getPatient() != null ? encodeEscapes(order.getPatient().getId().toString()) : "";
         String testCode = order.getLabTestDefinition() != null
             ? encodeEscapes(order.getLabTestDefinition().getTestCode()) : "";

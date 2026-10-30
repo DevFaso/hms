@@ -318,7 +318,13 @@ public class UserServiceImpl implements UserService {
 
         // Normalised only once the caller may grant these roles: a refused
         // caller gets the 403, never a phone-format 400.
-        final String phone = normalizeRegistrationPhone(request);
+        final String typedPhone = normalizeRegistrationPhone(request);
+        // QA D1061: a patient's own account takes the phone as its login only
+        // when no OTHER person holds it. A child registered under a parent's
+        // number is a new person with no login phone; the number stays the
+        // contact on the child's patient record. It used to answer 409
+        // "already registered", so the desk invented a number.
+        final String phone = isPatient ? loginPhoneFor(typedPhone, request) : typedPhone;
         request.setPhoneNumber(phone);
 
         // ---- 0a) Duplicate checks ----
@@ -473,8 +479,11 @@ public class UserServiceImpl implements UserService {
         // ---- 6a) Generated credentials nobody can deliver ----
         // No e-mail on file and no real SMS transport: the staff UI shows them
         // once, from this response only. Never logged, never persisted in clear.
+        // QA D1061: a dependant with no login phone (registered under a
+        // guardian's number) has no channel either, whatever the SMS transport.
         if (generatedPassword != null && (email == null || email.isBlank())
-                && (smsService == null || !smsService.deliversRealSms())) {
+                && (user.getPhoneNumber() == null || user.getPhoneNumber().isBlank()
+                    || smsService == null || !smsService.deliversRealSms())) {
             result.setTemporaryUsername(user.getUsername());
             result.setTemporaryPassword(generatedPassword);
         }
@@ -895,6 +904,40 @@ public class UserServiceImpl implements UserService {
             }
         }
         return findByPhoneInAnyForm(phone);
+    }
+
+    /**
+     * QA D1061: {@code phone} as the new patient account's login phone, or
+     * null when the account holding it is another person (a parent, a spouse):
+     * same number, different name or date of birth. The same person keeps the
+     * existing behaviour (linked at another hospital, refused as already
+     * registered here). Real registration desks file a dependant under the
+     * guardian's contact number; one phone is not one person.
+     */
+    private String loginPhoneFor(String phone, AdminSignupRequest request) {
+        if (phone == null) {
+            return null;
+        }
+        Optional<User> holder = findByPhoneInAnyForm(phone);
+        // The registrar's own discarded attempt keeps the phone, so it is
+        // reclaimed (QA D40) even when its name was corrected since.
+        if (holder.isEmpty() || isDiscardedRegistration(holder.get()) || isSamePerson(holder.get(), request)) {
+            return phone;
+        }
+        log.info("[REGISTER] the phone belongs to another person: the new patient account gets no login phone");
+        return null;
+    }
+
+    /** Whether the registration names the person behind {@code holder} (PatientMatchKeys.sameIdentity). */
+    private boolean isSamePerson(User holder, AdminSignupRequest request) {
+        com.example.hms.payload.dto.PatientRequestDTO record = request.getPatient();
+        String first = record != null && hasText(record.getFirstName()) ? record.getFirstName() : request.getFirstName();
+        String last = record != null && hasText(record.getLastName()) ? record.getLastName() : request.getLastName();
+        java.time.LocalDate dob = record != null ? record.getDateOfBirth() : null;
+        return patientRepository.findByUserId(holder.getId())
+            .map(existing -> com.example.hms.utility.PatientMatchKeys.sameIdentity(existing, first, last, dob))
+            .orElseGet(() -> com.example.hms.utility.PatientMatchKeys.sameIdentity(
+                holder.getFirstName(), holder.getLastName(), null, first, last, dob));
     }
 
     /**

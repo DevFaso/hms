@@ -1388,10 +1388,7 @@
     "DOCTOR": "Médico",
     "DOCTOR_STAFF": "Médico / Personal",
     "DURATION": "Duración",
-    "END_BEFORE_START": "La hora de fin debe ser posterior a la hora de inicio.",
     "END_TIME": "Hora de Fin",
-    "END_TIME_AFTER_START": "La hora de fin debe ser posterior a la hora de inicio",
-    "END_TIME_HINT": "Se calcula automáticamente si se deja vacío (30 min por defecto)",
     "FILTER_FROM_DATE_TITLE": "Filtrar desde la fecha",
     "FILTER_TO_DATE_TITLE": "Filtrar hasta la fecha",
     "FROM": "Desde",
@@ -1461,7 +1458,8 @@
     "TO_DATE": "Hasta",
     "VIEW": "Ver cita",
     "VIEW_MANAGE_SUBTITLE": "Ver y gestionar detalles de la cita",
-    "YES_CANCEL": "Sí, Cancelar"
+    "YES_CANCEL": "Sí, Cancelar",
+    "DURATION_SET_BY_SLOTS": "La duración de la visita la fijan los turnos del profesional."
   },
   "APPOINTMENT_CALENDAR": {
     "TITLE": "Calendario de citas",
@@ -2360,7 +2358,8 @@
     "PATIENT_PICKER_NO_MATCH": "Ningún paciente coincide con esta búsqueda.",
     "MISSING_REQUIRED_FIELDS": "Faltan campos obligatorios: {{fields}}",
     "REMOVE_FILTER": "Quitar el filtro",
-    "SHOW_DETAILS": "Mostrar u ocultar los detalles"
+    "SHOW_DETAILS": "Mostrar u ocultar los detalles",
+    "FIELD_REQUIRED": "Este campo es obligatorio."
   },
   "CONSULTATIONS": {
     "ACKNOWLEDGE": "Acusar recibo",
@@ -5011,7 +5010,11 @@
     "ZIP_CODE": "Código postal",
     "AGE_YEARS": "{{count}} años",
     "AGE_YEAR": "{{count}} año",
-    "CHART_UNAVAILABLE_TITLE": "Este expediente no se puede abrir aquí"
+    "CHART_UNAVAILABLE_TITLE": "Este expediente no se puede abrir aquí",
+    "PHONE_GUARDIAN_HINT": "Para un niño, puede dejarlo vacío e indicar el teléfono del padre, la madre o el tutor en Contacto de emergencia.",
+    "PHONE_FROM_GUARDIAN": "Vacío: el teléfono del padre, la madre o el tutor (Contacto de emergencia) se registrará como contacto de este paciente.",
+    "SHARED_CONTACT_NOTE": "Este número de teléfono ya es el contacto de otro paciente (por ejemplo, un padre o una madre). Está permitido: este registro crea un expediente distinto.",
+    "MATCHED_ON_IDENTITY": "mismo nombre y fecha de nacimiento"
   },
   "PLATFORM": {
     "ACCESS_LOGS": "Registros de acceso",
@@ -5336,11 +5339,9 @@
       },
       "RESCHEDULE": {
         "BTN": "Reprogramar",
-        "END_AFTER_START": "La hora de fin debe ser posterior a la hora de inicio.",
         "FAILED": "No se pudo reprogramar la cita. Inténtelo de nuevo.",
-        "MISSING_FIELDS": "Elija una nueva fecha, hora de inicio y hora de fin.",
+        "MISSING_FIELDS": "Elija una nueva fecha y una hora de inicio.",
         "NEW_DATE": "Nueva fecha",
-        "NEW_END": "Nueva hora de fin",
         "NEW_START": "Nueva hora de inicio",
         "PAST_DATE": "La nueva fecha no puede estar en el pasado.",
         "REASON": "Motivo (opcional)",
@@ -5348,7 +5349,8 @@
         "SAVING": "Reprogramando…",
         "SUBMIT": "Reprogramar la cita",
         "TITLE": "Reprogramar la cita"
-      }
+      },
+      "DURATION_NOTE": "La duración de su cita la fijan los turnos de la clínica."
     },
     "MEDICATIONS": {
       "TITLE": "Mis medicamentos",

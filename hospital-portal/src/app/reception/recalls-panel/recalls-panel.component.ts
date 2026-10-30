@@ -1,4 +1,5 @@
-import { PersonNamePipe } from '../../shared/pipes/person-name.pipe';
+import { refuseFields } from '../../shared/forms/invalid-fields';
+import { PersonNamePipe, personName } from '../../shared/pipes/person-name.pipe';
 import { RouterLink } from '@angular/router';
 import { DialogFocusDirective } from '../../shared/a11y/dialog-focus.directive';
 import {
@@ -9,6 +10,7 @@ import {
   Output,
   EventEmitter,
   ChangeDetectionStrategy,
+  ElementRef,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -62,6 +64,7 @@ export class RecallsPanelComponent implements OnInit {
   private readonly roleCtx = inject(RoleContextService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   /* ── List state ─────────── */
   recalls = signal<RecallResponse[]>([]);
@@ -140,7 +143,7 @@ export class RecallsPanelComponent implements OnInit {
 
   selectPatient(p: PatientResponse): void {
     this.selectedPatient.set(p);
-    this.patientQuery.set(p.firstName + ' ' + p.lastName);
+    this.patientQuery.set(personName(p));
     this.patientResults.set([]);
   }
 
@@ -157,6 +160,17 @@ export class RecallsPanelComponent implements OnInit {
 
   submitAdd(): void {
     if (!this.selectedPatient() || !this.dueDate() || !this.reason().trim()) {
+      // QA D1072: the missing field is marked and focused.
+      refuseFields(
+        this.host.nativeElement,
+        [
+          !this.selectedPatient() ? 'rc-patient' : null,
+          !this.dueDate() ? 'rc-due' : null,
+          !this.reason().trim() ? 'rc-reason' : null,
+        ].filter((id): id is string => id !== null),
+        ['rc-patient', 'rc-due', 'rc-reason'],
+        this.translate.instant('COMMON.FIELD_REQUIRED'),
+      );
       this.toast.error(this.translate.instant('RECEPTION.RECALL_FIELDS_REQUIRED'));
       return;
     }

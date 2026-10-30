@@ -1,3 +1,4 @@
+import { personName } from '../shared/pipes/person-name.pipe';
 import {
   Component,
   computed,
@@ -314,7 +315,7 @@ export class StockRoutingComponent implements OnInit {
   }
 
   patientLabel(rx: WorkQueuePrescription): string {
-    return [rx.patient?.firstName, rx.patient?.lastName].filter((p) => !!p).join(' ');
+    return personName(rx.patient);
   }
 
   private searchText(rx: WorkQueuePrescription): string {

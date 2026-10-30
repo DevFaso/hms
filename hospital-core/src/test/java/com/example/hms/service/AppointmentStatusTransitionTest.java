@@ -65,6 +65,10 @@ class AppointmentStatusTransitionTest {
     @Mock private com.example.hms.service.i18n.PatientLocaleResolver patientLocaleResolver;
     @Mock private com.example.hms.repository.EncounterRepository encounterRepository;
 
+    /** QA D1060: the slot rules, stubbed to their 30-minute fallback (SlotPolicyStubs). */
+    @org.mockito.Mock
+    private com.example.hms.service.scheduling.AppointmentSlotPolicy slotPolicy;
+
     @InjectMocks
     private AppointmentServiceImpl appointmentService;
 
@@ -75,6 +79,7 @@ class AppointmentStatusTransitionTest {
 
     @BeforeEach
     void setUp() {
+        com.example.hms.testsupport.SlotPolicyStubs.defaultLength(slotPolicy);
         ReflectionTestUtils.setField(appointmentService, "frontendBaseUrl", "http://localhost");
 
         UUID hospitalId = UUID.randomUUID();

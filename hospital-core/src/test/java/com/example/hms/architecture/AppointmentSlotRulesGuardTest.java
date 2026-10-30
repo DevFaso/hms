@@ -163,6 +163,102 @@ class AppointmentSlotRulesGuardTest {
             .isEmpty();
     }
 
+    /**
+     * QA D1060 / D1063 (class guard): every method that gives a clinician's
+     * time to a patient takes the visit's END from the slot rules
+     * ({@code AppointmentSlotPolicy.endFor}, or the slot row itself) and
+     * refuses a slot HELD for a waitlist offer ({@code requireNoLiveHold}, or
+     * the slot's own {@code isOfferable}). The portal took the patient's end
+     * time (a 12-hour self-booking), and the desk booked over a held slot.
+     */
+    @Test
+    void everyMethodThatBooksAClinicianTakesTheSlotRules() throws IOException {
+        List<String> missing = new java.util.ArrayList<>();
+        int seen = 0;
+        for (Path f : javaFiles()) {
+            String rel = MAIN.relativize(f).toString().replace('\\', '/');
+            if (rel.startsWith("mapper/") || rel.startsWith("fhir/") || rel.startsWith("model/")
+                    || rel.contains("/dto/") || rel.equals("bootstrap/DevSyntheticDataSeeder.java")) {
+                continue;
+            }
+            String src = com.example.hms.testsupport.SourceScan.stripComments(read(f));
+            List<String> ends = checksIn(src, SLOT_LENGTH_CHECKS);
+            List<String> holds = checksIn(src, SLOT_HOLD_CHECKS);
+            for (String token : BOOKING_WRITES) {
+                for (int at = src.indexOf(token); at >= 0; at = src.indexOf(token, at + 1)) {
+                    if (token.equals(".setAppointmentDate(") && !rel.startsWith("service/")) {
+                        continue;
+                    }
+                    seen++;
+                    String body = enclosingMethod(src, at);
+                    String site = rel + ":" + com.example.hms.testsupport.SourceScan.lineOf(src, at) + " " + token;
+                    if (ends.stream().noneMatch(body::contains)) {
+                        missing.add(site + " (end time not from the slot rules)");
+                    }
+                    if (holds.stream().noneMatch(body::contains)) {
+                        missing.add(site + " (a slot held for a waitlist offer is not refused)");
+                    }
+                }
+            }
+        }
+        assertThat(seen).as("booking writes found").isGreaterThanOrEqualTo(7);
+        assertThat(missing)
+            .as("a method books a clinician without the slot rules (QA D1060 / D1063): take the end from "
+                + "AppointmentSlotPolicy.endFor and call AppointmentSlotPolicy.requireNoLiveHold")
+            .isEmpty();
+    }
+
+    /**
+     * QA D1073 (class guard): every method that creates an appointment names
+     * who booked it. The slot inventory (a slot or an accepted waitlist offer),
+     * the referral and the check-out follow-up wrote no creator, so the list
+     * showed nobody where a desk booking shows the receptionist.
+     */
+    @Test
+    void everyMethodThatCreatesAnAppointmentNamesItsCreator() throws IOException {
+        List<String> anonymous = new java.util.ArrayList<>();
+        int seen = 0;
+        for (Path f : javaFiles()) {
+            String rel = MAIN.relativize(f).toString().replace('\\', '/');
+            if (rel.startsWith("mapper/") || rel.startsWith("fhir/") || rel.startsWith("model/")
+                    || rel.contains("/dto/") || rel.equals("bootstrap/DevSyntheticDataSeeder.java")) {
+                continue;
+            }
+            String src = com.example.hms.testsupport.SourceScan.stripComments(read(f));
+            for (String token : List.of("Appointment.builder()", "new Appointment()")) {
+                for (int at = src.indexOf(token); at >= 0; at = src.indexOf(token, at + 1)) {
+                    seen++;
+                    String body = enclosingMethod(src, at);
+                    if (!body.contains(".createdBy(") && !body.contains(".setCreatedBy(")) {
+                        anonymous.add(rel + ":" + com.example.hms.testsupport.SourceScan.lineOf(src, at));
+                    }
+                }
+            }
+        }
+        assertThat(seen).as("appointment creations found").isGreaterThanOrEqualTo(5);
+        assertThat(anonymous).as("an appointment created without its creator (QA D1073)").isEmpty();
+    }
+
+    @Test
+    void theSlotRuleScanSeesAClientEndTime() {
+        String src = """
+            class X {
+                public Appointment book(Request r) {
+                    Appointment a = new Appointment();
+                    a.setEndTime(r.getEndTime());
+                    return a;
+                }
+            }
+            """;
+        String body = enclosingMethod(src, src.indexOf("new Appointment()"));
+        assertThat(checksIn(src, SLOT_LENGTH_CHECKS).stream().noneMatch(body::contains)).isTrue();
+        assertThat(checksIn(src, SLOT_HOLD_CHECKS).stream().noneMatch(body::contains)).isTrue();
+    }
+
+    private static final List<String> SLOT_LENGTH_CHECKS = List.of("slotPolicy.endFor(", "slot.getEndAt()");
+
+    private static final List<String> SLOT_HOLD_CHECKS = List.of("slotPolicy.requireNoLiveHold(", ".isOfferable(");
+
     @Test
     void theBookingScanSeesAnUncheckedBuilder() {
         String src = """
@@ -188,7 +284,12 @@ class AppointmentSlotRulesGuardTest {
      * {@code freeFollowUpSlot}): calling one of those is the check too.
      */
     static List<String> checksIn(String src) {
-        List<String> out = new java.util.ArrayList<>(CLINICIAN_FREE_CHECKS);
+        return checksIn(src, CLINICIAN_FREE_CHECKS);
+    }
+
+    /** {@link #checksIn(String)} for any set of base checks. */
+    static List<String> checksIn(String src, List<String> base) {
+        List<String> out = new java.util.ArrayList<>(base);
         java.util.Map<String, String> bodies = new java.util.LinkedHashMap<>();
         java.util.regex.Matcher header = java.util.regex.Pattern.compile("(?m)^    [a-zA-Z][^\\n(]*\\(").matcher(src);
         while (header.find()) {

@@ -14,6 +14,7 @@ export interface ReferralPatientSummary {
   id: string;
   mrn?: string;
   firstName?: string;
+  middleName?: string;
   lastName?: string;
   dateOfBirth?: string;
 }

@@ -3209,6 +3209,18 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- V249 (round 18, front desk and identity): QA D1061, a dependant's
+         patient account may have no login phone (security.users.phone_number
+         loses NOT NULL; the UNIQUE constraint stays, NULLs never collide), so
+         a child is registered under the guardian's number. Plain statement,
+         no DO block. Idempotent. -->
+    <changeSet id="V249-dependant-account-without-login-phone" author="hms-team" runOnChange="false">
+        <sqlFile path="V249__dependant_account_without_login_phone.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
     <!-- V251 (round 18): QA D1069, an invoice cancellation stores its
          reason, when and by whom (cancel_reason, cancelled_at, cancelled_by
          on billing.billing_invoices). Plain statements, no DO block.

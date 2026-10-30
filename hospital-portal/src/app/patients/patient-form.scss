@@ -298,3 +298,18 @@
   color: var(--danger, #b42318);
   font-size: 0.8rem;
 }
+
+/* QA D1061: another patient only shares the typed contact (a parent's number). */
+.shared-contact-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: var(--primary-soft);
+  border: 1px solid var(--primary-light);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+}
+.shared-contact-note p {
+  margin: 0;
+}

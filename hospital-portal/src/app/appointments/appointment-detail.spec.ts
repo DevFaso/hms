@@ -133,7 +133,6 @@ describe('AppointmentDetailComponent', () => {
     mockAppointmentService.update.calls.reset();
     component.rescheduleDate = '2099-01-01';
     component.rescheduleStart = '09:00:00';
-    component.rescheduleEnd = '09:30:00';
 
     component.submitReschedule();
 
@@ -142,6 +141,8 @@ describe('AppointmentDetailComponent', () => {
     expect(req.status).toBe('SCHEDULED');
     expect(req.status).not.toBe('RESCHEDULED');
     expect(req.appointmentDate).toBe('2099-01-01');
+    // QA D1060: the desk does not choose the length; the slot rules do.
+    expect(req.endTime).toBeUndefined();
   });
 
   it('markAsScheduled sends the SCHEDULE action for legacy stranded rows', () => {

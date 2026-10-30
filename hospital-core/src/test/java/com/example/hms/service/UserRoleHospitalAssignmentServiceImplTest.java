@@ -384,6 +384,29 @@ class UserRoleHospitalAssignmentServiceImplTest {
     }
 
     @Test
+    void qaD1061_aDependantWithNoPhoneAndNoEmailIsNeverReportedAsSentBySms() {
+        // A child registered under a guardian's number: no login phone, no e-mail.
+        assignee.setPhoneNumber(null);
+        assignee.setEmail(null);
+        assignment.setTempPlainPassword("Temp@Secret123");
+        when(assignmentRepository.findById(assignment.getId())).thenReturn(Optional.of(assignment));
+        org.mockito.Mockito.lenient().when(smsService.deliversRealSms()).thenReturn(true);
+
+        com.example.hms.utility.ActivationDeliveryTracker.open();
+        try {
+            service.sendNotifications(assignment.getId());
+            var report = com.example.hms.utility.ActivationDeliveryTracker.close();
+            assertThat(report)
+                .filteredOn(r -> "CREDENTIALS".equals(r.getPurpose()))
+                .extracting(com.example.hms.payload.dto.NotificationDeliveryStatusDTO::getOutcome)
+                .doesNotContain("SENT");
+            verify(smsService, never()).send(org.mockito.ArgumentMatchers.isNull(), any());
+        } finally {
+            com.example.hms.utility.ActivationDeliveryTracker.close();
+        }
+    }
+
+    @Test
     void sendNotifications_skipsTheAssignmentMailWhenTheWelcomeMailCarriesTheCode() {
         // D10: a new single-role staff account gets ONE mail (the welcome
         // mail with the code); the role-assignment mail must not follow it.

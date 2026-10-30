@@ -271,27 +271,19 @@
               required
             />
           </div>
-          <div class="form-row-two">
-            <div class="field">
-              <label for="reschedStart">{{ 'APPOINTMENTS.START_TIME' | translate }} *</label>
-              <input
-                id="reschedStart"
-                type="time"
-                [(ngModel)]="rescheduleStart"
-                name="reschedStart"
-                required
-              />
-            </div>
-            <div class="field">
-              <label for="reschedEnd">{{ 'APPOINTMENTS.END_TIME' | translate }} *</label>
-              <input
-                id="reschedEnd"
-                type="time"
-                [(ngModel)]="rescheduleEnd"
-                name="reschedEnd"
-                required
-              />
-            </div>
+          <div class="field">
+            <label for="reschedStart">{{ 'APPOINTMENTS.START_TIME' | translate }} *</label>
+            <input
+              id="reschedStart"
+              type="time"
+              [(ngModel)]="rescheduleStart"
+              name="reschedStart"
+              required
+            />
+            <!-- QA D1060: the clinician's slot rules set how long the visit lasts. -->
+            <small class="field-hint" data-testid="resched-duration-note">{{
+              'APPOINTMENTS.DURATION_SET_BY_SLOTS' | translate
+            }}</small>
           </div>
           <!-- QA D1018 / D923: the clinician, the department and the reason
                can change with the time. -->

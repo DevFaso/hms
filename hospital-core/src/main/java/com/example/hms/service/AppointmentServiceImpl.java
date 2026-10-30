@@ -130,6 +130,8 @@ public class AppointmentServiceImpl implements AppointmentService {
     private final PatientSubjectReadGuard subjectReadGuard;
     /** QA D788: an appointment is COMPLETED by its visit's check-out, never ahead of it. */
     private final com.example.hms.repository.EncounterRepository encounterRepository;
+    /** QA D1060 / D1063: the slot rules set the visit length and refuse a slot held for an offer. */
+    private final com.example.hms.service.scheduling.AppointmentSlotPolicy slotPolicy;
 
     @org.springframework.beans.factory.annotation.Value("${app.frontend.base-url}")
     private String frontendBaseUrl;
@@ -247,8 +249,9 @@ public class AppointmentServiceImpl implements AppointmentService {
         if (request.getAppointmentDate() == null) {
             throw new BusinessException("Appointment date must not be null");
         }
-        if (request.getStartTime() == null || request.getEndTime() == null) {
-            throw new BusinessException("Appointment start and end time must not be null");
+        // QA D1060: the end time is the slot rules', never the caller's, so only the start is required.
+        if (request.getStartTime() == null) {
+            throw new BusinessException("appointment.timeRange.invalid");
         }
     }
 
@@ -475,15 +478,19 @@ public class AppointmentServiceImpl implements AppointmentService {
             .stream().findFirst()
             .orElseThrow(() -> new BusinessException("Staff role assignment not found"));
 
-        // --- Time validations (default endTime = startTime + 30 min) ---
-        LocalTime endTime = request.getEndTime() != null
-                ? request.getEndTime()
-                : request.getStartTime().plusMinutes(30);
-        LocalDateTime requestedStart = LocalDateTime.of(request.getAppointmentDate(), request.getStartTime());
-        LocalDateTime requestedEnd = LocalDateTime.of(request.getAppointmentDate(), endTime);
-        if (!requestedEnd.isAfter(requestedStart)) {
+        // --- Time validations ---
+        // QA D1060: the slot rules decide how long the visit lasts (the generated
+        // slot, else the session template's slot length, else 30 minutes). An
+        // end time in the request is ignored: a patient booked a clinician's
+        // whole day through this endpoint.
+        if (request.getStartTime() == null || request.getAppointmentDate() == null) {
             throw new BusinessException("appointment.timeRange.invalid");
         }
+        LocalTime endTime = slotPolicy.endFor(staff.getId(), request.getAppointmentDate(), request.getStartTime());
+        LocalDateTime requestedStart = LocalDateTime.of(request.getAppointmentDate(), request.getStartTime());
+        LocalDateTime requestedEnd = LocalDateTime.of(request.getAppointmentDate(), endTime);
+        // QA D1063: a slot held for a waitlist offer is not given to anyone else.
+        slotPolicy.requireNoLiveHold(staff.getId(), requestedStart, requestedEnd);
 
         // schedule check
         if (!staffAvailabilityService.isStaffAvailable(staff.getId(), requestedStart)) {
@@ -774,11 +781,6 @@ public class AppointmentServiceImpl implements AppointmentService {
         requireCompleteEdit(request);
 
         requireAppointmentVisible(currentUser, existing);
-        // QA D727: a staff edit refuses an appointment that ends before it starts,
-        // exactly as create and the portal reschedule do.
-        if (!request.getEndTime().isAfter(request.getStartTime())) {
-            throw new BusinessException("appointment.timeRange.invalid");
-        }
         // QA D788: the edit form is the other road to COMPLETED; refused as the
         // status action refuses it, before anything else is looked up.
         requireVisitCompletedBeforeAppointment(existing, request.getStatus());
@@ -805,8 +807,22 @@ public class AppointmentServiceImpl implements AppointmentService {
             .findFirst()
             .orElseThrow(() -> new BusinessException("Staff role assignment not found"));
 
+        // QA D1060: the slot rules set the length. A visit kept at its date,
+        // start and clinician keeps its own end (an edit of the notes or the
+        // status never re-times it); a moved one takes the slot length where
+        // it lands. The end time in the request is ignored.
+        boolean moved = !request.getAppointmentDate().equals(existing.getAppointmentDate())
+            || !request.getStartTime().equals(existing.getStartTime())
+            || existing.getStaff() == null || !staff.getId().equals(existing.getStaff().getId());
+        request.setEndTime(moved || existing.getEndTime() == null
+            ? slotPolicy.endFor(staff.getId(), request.getAppointmentDate(), request.getStartTime())
+            : existing.getEndTime());
         LocalDateTime requestedStart = LocalDateTime.of(request.getAppointmentDate(), request.getStartTime());
         LocalDateTime requestedEnd = LocalDateTime.of(request.getAppointmentDate(), request.getEndTime());
+        if (moved) {
+            // QA D1063: nor is it moved onto a slot held for a waitlist offer.
+            slotPolicy.requireNoLiveHold(staff.getId(), requestedStart, requestedEnd);
+        }
 
         // --- Staff Schedule Check ---
         boolean staffAvailable = staffAvailabilityService.isStaffAvailable(staff.getId(), requestedStart);
@@ -909,7 +925,7 @@ public class AppointmentServiceImpl implements AppointmentService {
                 Locale mailLocale = patientLocaleResolver.resolve(pt, EmailService.DEFAULT_RECIPIENT_LOCALE);
                 emailService.sendAppointmentRescheduledEmail(
                     pt.getEmail(),
-                    pt.getFirstName() + " " + pt.getLastName(),
+                    pt.getFullName(),
                     h.getName(),
                     st.getUser().getFirstName() + " " + st.getUser().getLastName(),
                     saved.getAppointmentDate().toString(),
@@ -1506,8 +1522,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         if (patient == null) {
             return null;
         }
-        String first = patient.getFirstName() == null ? "" : patient.getFirstName();
-        String last = patient.getLastName() == null ? "" : patient.getLastName();
-        return (first + " " + last).trim();
+        String fullName = patient.getFullName();
+        return fullName != null ? fullName : "";
     }
 }

@@ -783,7 +783,6 @@ export interface RescheduleAppointmentRequest {
   appointmentId: string;
   newDate: string;
   newStartTime: string;
-  newEndTime: string;
   reason: string;
 }
 
@@ -850,8 +849,7 @@ export interface BookAppointmentRequest {
   departmentId: string;
   staffId?: string;
   date: string; // yyyy-MM-dd
-  startTime: string; // HH:mm
-  endTime?: string; // HH:mm — defaults to startTime + 30 min
+  startTime: string; // HH:mm — the end is set by the clinic's slot rules (QA D1060)
   reason?: string;
   notes?: string;
 }

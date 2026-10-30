@@ -1388,10 +1388,7 @@
     "DOCTOR": "Médecin",
     "DOCTOR_STAFF": "Médecin / Personnel",
     "DURATION": "Durée",
-    "END_BEFORE_START": "L'heure de fin doit être postérieure à l'heure de début.",
     "END_TIME": "Heure de Fin",
-    "END_TIME_AFTER_START": "L'heure de fin doit être postérieure à l'heure de début",
-    "END_TIME_HINT": "Calculée automatiquement si laissée vide (30 min par défaut)",
     "FILTER_FROM_DATE_TITLE": "Filtrer à partir de la date",
     "FILTER_TO_DATE_TITLE": "Filtrer jusqu'à la date",
     "FROM": "Du",
@@ -1461,7 +1458,8 @@
     "TO_DATE": "Date de Fin",
     "VIEW": "Voir le rendez-vous",
     "VIEW_MANAGE_SUBTITLE": "Voir et gérer les détails du rendez-vous",
-    "YES_CANCEL": "Oui, Annuler"
+    "YES_CANCEL": "Oui, Annuler",
+    "DURATION_SET_BY_SLOTS": "La durée de la visite est fixée par les créneaux du praticien."
   },
   "APPOINTMENT_CALENDAR": {
     "TITLE": "Calendrier des rendez-vous",
@@ -2360,7 +2358,8 @@
     "PATIENT_PICKER_NO_MATCH": "Aucun patient ne correspond à cette recherche.",
     "MISSING_REQUIRED_FIELDS": "Champs obligatoires manquants : {{fields}}",
     "REMOVE_FILTER": "Retirer le filtre",
-    "SHOW_DETAILS": "Afficher ou masquer les détails"
+    "SHOW_DETAILS": "Afficher ou masquer les détails",
+    "FIELD_REQUIRED": "Ce champ est obligatoire."
   },
   "CONSULTATIONS": {
     "ACKNOWLEDGE": "Accuser Réception",
@@ -5011,7 +5010,11 @@
     "ZIP_CODE": "Code postal",
     "AGE_YEARS": "{{count}} ans",
     "AGE_YEAR": "{{count}} an",
-    "CHART_UNAVAILABLE_TITLE": "Ce dossier ne peut pas être ouvert ici"
+    "CHART_UNAVAILABLE_TITLE": "Ce dossier ne peut pas être ouvert ici",
+    "PHONE_GUARDIAN_HINT": "Pour un enfant, vous pouvez laisser ce champ vide et saisir le téléphone du parent ou du tuteur dans Contact d'urgence.",
+    "PHONE_FROM_GUARDIAN": "Laissé vide : le téléphone du parent ou du tuteur (Contact d'urgence) sera enregistré comme contact de ce patient.",
+    "SHARED_CONTACT_NOTE": "Ce numéro de téléphone est déjà le contact d'un autre patient (par exemple un parent). C'est autorisé : cet enregistrement crée un dossier distinct.",
+    "MATCHED_ON_IDENTITY": "mêmes nom et date de naissance"
   },
   "PLATFORM": {
     "ACCESS_LOGS": "Journaux d'accès",
@@ -5336,11 +5339,9 @@
       },
       "RESCHEDULE": {
         "BTN": "Reprogrammer",
-        "END_AFTER_START": "L'heure de fin doit être postérieure à l'heure de début.",
         "FAILED": "Impossible de reprogrammer le rendez-vous. Veuillez réessayer.",
-        "MISSING_FIELDS": "Veuillez choisir une nouvelle date, une heure de début et une heure de fin.",
+        "MISSING_FIELDS": "Veuillez choisir une nouvelle date et une heure de début.",
         "NEW_DATE": "Nouvelle date",
-        "NEW_END": "Nouvelle heure de fin",
         "NEW_START": "Nouvelle heure de début",
         "PAST_DATE": "La nouvelle date ne peut pas être dans le passé.",
         "REASON": "Motif (facultatif)",
@@ -5348,7 +5349,8 @@
         "SAVING": "Reprogrammation…",
         "SUBMIT": "Reprogrammer le rendez-vous",
         "TITLE": "Reprogrammer le rendez-vous"
-      }
+      },
+      "DURATION_NOTE": "La durée de votre rendez-vous est fixée par les créneaux de la clinique."
     },
     "MEDICATIONS": {
       "TITLE": "Mes médicaments",

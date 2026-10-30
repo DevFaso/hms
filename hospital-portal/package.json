@@ -38,6 +38,7 @@
     "guard:uuid-fragments": "node scripts/check-uuid-fragments.mjs",
     "guard:person-search": "node scripts/check-person-search.mjs",
     "guard:translate-params": "node scripts/check-translate-params.mjs",
+    "guard:required-refusal": "node scripts/check-required-refusal.mjs",
     "guards": "node scripts/check-guards.mjs",
     "test:scripts": "node --test \"scripts/**/*.test.mjs\"",
     "i18n:report": "node scripts/check-i18n-coverage.mjs --report-only"

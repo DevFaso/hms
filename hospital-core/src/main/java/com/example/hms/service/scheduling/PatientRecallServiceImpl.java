@@ -270,7 +270,7 @@ public class PatientRecallServiceImpl implements PatientRecallService {
             .id(recall.getId())
             .hospitalId(recall.getHospital().getId())
             .patientId(patient.getId())
-            .patientName(patient.getFirstName() + " " + patient.getLastName())
+            .patientName(patient.getFullName())
             .mrn(mrn)
             .departmentId(recall.getDepartment() != null ? recall.getDepartment().getId() : null)
             .departmentName(recall.getDepartment() != null ? recall.getDepartment().getName() : null)

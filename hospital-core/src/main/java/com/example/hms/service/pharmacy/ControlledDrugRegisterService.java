@@ -558,9 +558,7 @@ public class ControlledDrugRegisterService {
         if (patient == null) {
             return null;
         }
-        String full = (Objects.toString(patient.getFirstName(), "").trim() + " "
-                + Objects.toString(patient.getLastName(), "").trim()).trim();
-        return full.isEmpty() ? null : full;
+        return patient.getFullName();
     }
 
     private static String prescriberName(Staff staff) {

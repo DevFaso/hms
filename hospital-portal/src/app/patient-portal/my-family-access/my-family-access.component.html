@@ -143,9 +143,9 @@
                   <small class="text-muted">{{ p.proxyUsername }}</small>
                 </td>
                 <td>
-                  <span class="badge">{{ p.relationship }}</span>
+                  <span class="badge">{{ p.relationship | enumLabel: 'relationship' }}</span>
                 </td>
-                <td>{{ p.permissions }}</td>
+                <td>{{ p.permissions | enumLabel: 'permissions' }}</td>
                 <td>{{ p.createdAt | serverTime | date: 'mediumDate' }}</td>
                 <td>
                   {{

@@ -1578,9 +1578,10 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     private String resolvePatientName(PatientResponseDTO patient) {
         if (patient.getDisplayName() != null && !patient.getDisplayName().isBlank()) return patient.getDisplayName();
         if (patient.getPatientName() != null && !patient.getPatientName().isBlank()) return patient.getPatientName();
-        String first = patient.getFirstName();
-        String last = patient.getLastName();
-        String full = ((first == null ? "" : first) + " " + (last == null ? "" : last)).trim();
+        String full = java.util.stream.Stream.of(patient.getFirstName(), patient.getMiddleName(), patient.getLastName())
+            .filter(part -> part != null && !part.isBlank())
+            .map(String::trim)
+            .collect(java.util.stream.Collectors.joining(" "));
         return full.isEmpty() ? DEFAULT_PATIENT_NAME : full;
     }
 

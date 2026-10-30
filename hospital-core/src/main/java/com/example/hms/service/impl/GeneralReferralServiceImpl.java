@@ -54,7 +54,6 @@ import java.util.Set;
 @Transactional(readOnly = true)
 public class GeneralReferralServiceImpl implements GeneralReferralService {
 
-    private static final int REFERRAL_APPOINTMENT_MINUTES = 30;
 
     private final GeneralReferralRepository referralRepository;
     private final com.example.hms.repository.AppointmentRepository appointmentRepository;
@@ -68,6 +67,10 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
     private final ReferralEventRepository eventRepository;
     private final RecordAccessPolicy recordAccessPolicy;
     private final CrossHospitalReachRecorder reachRecorder;
+    /** QA D1060 / D1063: the slot rules set the visit length and keep a slot held for an offer. */
+    private final com.example.hms.service.scheduling.AppointmentSlotPolicy slotPolicy;
+    /** QA D1073: the person who scheduled the referral is the appointment's creator. */
+    private final com.example.hms.repository.UserRepository userRepository;
     /** QA D309: each referral step is audited here, with its patient (the generic write audit is skipped). */
     private final org.springframework.beans.factory.ObjectProvider<com.example.hms.service.AuditEventLogService> auditServiceProvider;
 
@@ -277,7 +280,17 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         // provider already booked at that time keeps the referral scheduled
         // without an appointment, like the other "cannot produce one" cases,
         // instead of double-booking them.
-        java.time.LocalDateTime end = appointmentTime.plusMinutes(REFERRAL_APPOINTMENT_MINUTES);
+        // QA D1060: the slot rules set the length (it was a flat 30 minutes).
+        java.time.LocalDateTime end = java.time.LocalDateTime.of(appointmentTime.toLocalDate(),
+            slotPolicy.endFor(provider.getId(), appointmentTime.toLocalDate(), appointmentTime.toLocalTime()));
+        try {
+            // QA D1063: a slot held for a waitlist offer is not given to the referral either.
+            slotPolicy.requireNoLiveHold(provider.getId(), appointmentTime, end);
+        } catch (com.example.hms.exception.BusinessException held) {
+            log.info("Referral {} scheduled without an appointment: the slot is held for a waitlist offer",
+                referral.getId());
+            return null;
+        }
         if (com.example.hms.service.AppointmentSlotRules.overlapsHeldSlot(
                 appointmentRepository.findByStaff_IdAndAppointmentDate(provider.getId(), appointmentTime.toLocalDate()),
                 null, appointmentTime, end)) {
@@ -295,9 +308,11 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
                 .department(department)
                 .appointmentDate(appointmentTime.toLocalDate())
                 .startTime(appointmentTime.toLocalTime())
-                .endTime(appointmentTime.toLocalTime().plusMinutes(REFERRAL_APPOINTMENT_MINUTES))
+                .endTime(end.toLocalTime())
                 .status(com.example.hms.enums.AppointmentStatus.SCHEDULED)
                 .reason(buildAppointmentReason(referral))
+                // QA D1073: the appointment names who booked it.
+                .createdBy(currentUserOrNull())
                 .build();
             return appointmentRepository.save(appointment);
         } catch (RuntimeException ex) {
@@ -305,6 +320,11 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
                 referral.getId(), ex.getMessage());
             return null;
         }
+    }
+
+    private com.example.hms.model.User currentUserOrNull() {
+        UUID userId = roleValidator.getCurrentUserId();
+        return userId != null ? userRepository.findById(userId).orElse(null) : null;
     }
 
     private String buildAppointmentReason(GeneralReferral referral) {
@@ -791,17 +811,7 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         if (patient == null) {
             return null;
         }
-        StringBuilder builder = new StringBuilder();
-        if (patient.getFirstName() != null) {
-            builder.append(patient.getFirstName().trim());
-        }
-        if (patient.getLastName() != null) {
-            if (!builder.isEmpty()) {
-                builder.append(' ');
-            }
-            builder.append(patient.getLastName().trim());
-        }
-        return builder.isEmpty() ? null : builder.toString();
+        return patient.getFullName();
     }
 
     /**

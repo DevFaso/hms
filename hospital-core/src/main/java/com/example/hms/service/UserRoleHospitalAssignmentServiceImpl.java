@@ -2355,6 +2355,15 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
                 "no real SMS channel — one-time credentials were not delivered");
             return;
         }
+        // QA D1061: a dependant registered under a guardian's number has no
+        // login phone: nothing is sent, and the registrar is told so (the
+        // response carries the credentials instead), never a false SENT.
+        if (user.getPhoneNumber() == null || user.getPhoneNumber().isBlank()) {
+            recordDelivery(NotificationDeliveryStatusDTO.CHANNEL_SMS,
+                NotificationDeliveryStatusDTO.PURPOSE_CREDENTIALS,
+                NotificationDeliveryStatusDTO.OUTCOME_NO_CONTACT, null, null);
+            return;
+        }
         String message = String.format(
             "🔐 e-Keneya account created. Username: %s Temp password: %s — change it at first login.",
             user.getUsername(),

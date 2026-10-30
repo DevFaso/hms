@@ -132,6 +132,17 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
     Optional<Patient> findByUserId(UUID userId);
 
     /**
+     * QA D1064: the patients born on {@code dateOfBirth} registered at any
+     * hospital of {@code organizationId} - the candidates a registration's
+     * same-name-and-birth-date match is decided among (names compared in Java,
+     * accent-folded, by PatientMatchKeys.sameIdentity).
+     */
+    @Query("SELECT DISTINCT p FROM Patient p JOIN p.hospitalRegistrations r "
+        + "WHERE p.dateOfBirth = :birthDate AND r.hospital.organization.id = :organizationId")
+    List<Patient> findByDateOfBirthInOrganization(@Param("birthDate") java.time.LocalDate dateOfBirth,
+                                                  @Param("organizationId") UUID organizationId);
+
+    /**
      * Is this patient row one of the ones linked to this user account?
      *
      * <p>The question every "is this record the caller’s" check actually asks,

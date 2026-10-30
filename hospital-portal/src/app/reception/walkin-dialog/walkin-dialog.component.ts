@@ -1,4 +1,5 @@
-import { PersonNamePipe } from '../../shared/pipes/person-name.pipe';
+import { refuseFields } from '../../shared/forms/invalid-fields';
+import { PersonNamePipe, personName } from '../../shared/pipes/person-name.pipe';
 import { DialogFocusDirective } from '../../shared/a11y/dialog-focus.directive';
 import {
   Component,
@@ -9,6 +10,7 @@ import {
   OnInit,
   computed,
   ChangeDetectionStrategy,
+  ElementRef,
 } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
@@ -41,6 +43,7 @@ export class WalkInDialogComponent implements OnInit {
   private readonly roleCtx = inject(RoleContextService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   /* ── Patient search ─────────────────────── */
   patientQuery = signal('');
@@ -118,7 +121,7 @@ export class WalkInDialogComponent implements OnInit {
 
   selectPatient(p: PatientResponse): void {
     this.selectedPatient.set(p);
-    this.patientQuery.set(`${p.firstName} ${p.lastName}`);
+    this.patientQuery.set(personName(p));
     this.patientResults.set([]);
   }
 
@@ -139,6 +142,17 @@ export class WalkInDialogComponent implements OnInit {
     const hospitalId = this.roleCtx.effectiveHospitalIdForRequest();
 
     if (!patient || !staff || !hospitalId || !this.departmentId()) {
+      // QA D1072: the missing field is marked and focused.
+      refuseFields(
+        this.host.nativeElement,
+        [
+          !patient ? 'patientSearch' : null,
+          !staff ? 'staffSearch' : null,
+          !this.departmentId() ? 'walkinDept' : null,
+        ].filter((id): id is string => id !== null),
+        ['patientSearch', 'staffSearch', 'walkinDept'],
+        this.translate.instant('COMMON.FIELD_REQUIRED'),
+      );
       this.toast.error(this.translate.instant('RECEPTION.WALKIN_VALIDATION_ERROR'));
       return;
     }

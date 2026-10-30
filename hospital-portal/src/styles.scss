@@ -220,3 +220,13 @@ button {
     margin: 1.5cm;
   }
 }
+
+/* QA D1072: the message shared/forms/invalid-fields.ts shows under a field a
+   client-side check refused (inserted at run time, so it lives here, outside
+   any component's encapsulated styles). */
+.invalid-field-msg {
+  display: block;
+  margin-top: 4px;
+  color: #b42318;
+  font-size: 0.8rem;
+}

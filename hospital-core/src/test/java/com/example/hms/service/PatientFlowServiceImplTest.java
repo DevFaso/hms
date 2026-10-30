@@ -109,8 +109,9 @@ class PatientFlowServiceImplTest {
         UUID patientId = UUID.randomUUID();
         Patient patient = mock(Patient.class);
         when(patient.getId()).thenReturn(patientId);
-        when(patient.getFirstName()).thenReturn("John");
-        when(patient.getLastName()).thenReturn("Doe");
+        lenient().when(patient.getFullName()).thenReturn("John Doe"); // QA D1036: the whole name
+        lenient().when(patient.getFirstName()).thenReturn("John");
+        lenient().when(patient.getLastName()).thenReturn("Doe");
 
         UUID encId = UUID.randomUUID();
         Encounter enc = mock(Encounter.class);
@@ -157,8 +158,9 @@ class PatientFlowServiceImplTest {
         givenStaffFor(userId, stubStaff(staffId));
         Patient patient = mock(Patient.class);
         when(patient.getId()).thenReturn(UUID.randomUUID());
-        when(patient.getFirstName()).thenReturn("Boukaré");
-        when(patient.getLastName()).thenReturn("Kiemtoré");
+        lenient().when(patient.getFullName()).thenReturn("Boukaré Kiemtoré"); // QA D1036: the whole name
+        lenient().when(patient.getFirstName()).thenReturn("Boukaré");
+        lenient().when(patient.getLastName()).thenReturn("Kiemtoré");
         Encounter enc = mock(Encounter.class);
         when(enc.getId()).thenReturn(UUID.randomUUID());
         when(enc.getPatient()).thenReturn(patient);
@@ -247,8 +249,9 @@ class PatientFlowServiceImplTest {
 
         Patient patient = mock(Patient.class);
         when(patient.getId()).thenReturn(UUID.randomUUID());
-        when(patient.getFirstName()).thenReturn("Jane");
-        when(patient.getLastName()).thenReturn("Doe");
+        lenient().when(patient.getFullName()).thenReturn("Jane Doe"); // QA D1036: the whole name
+        lenient().when(patient.getFirstName()).thenReturn("Jane");
+        lenient().when(patient.getLastName()).thenReturn("Doe");
 
         Encounter enc = mock(Encounter.class);
         when(enc.getId()).thenReturn(UUID.randomUUID());
@@ -288,13 +291,15 @@ class PatientFlowServiceImplTest {
 
         Patient p1 = mock(Patient.class);
         when(p1.getId()).thenReturn(UUID.randomUUID());
-        when(p1.getFirstName()).thenReturn("A");
-        when(p1.getLastName()).thenReturn("B");
+        lenient().when(p1.getFullName()).thenReturn("A B"); // QA D1036: the whole name
+        lenient().when(p1.getFirstName()).thenReturn("A");
+        lenient().when(p1.getLastName()).thenReturn("B");
 
         Patient p2 = mock(Patient.class);
         when(p2.getId()).thenReturn(UUID.randomUUID());
-        when(p2.getFirstName()).thenReturn("C");
-        when(p2.getLastName()).thenReturn("D");
+        lenient().when(p2.getFullName()).thenReturn("C D"); // QA D1036: the whole name
+        lenient().when(p2.getFirstName()).thenReturn("C");
+        lenient().when(p2.getLastName()).thenReturn("D");
 
         Encounter enc1 = mock(Encounter.class);
         when(enc1.getId()).thenReturn(UUID.randomUUID());
@@ -340,8 +345,9 @@ class PatientFlowServiceImplTest {
 
         Patient p = mock(Patient.class);
         when(p.getId()).thenReturn(UUID.randomUUID());
-        when(p.getFirstName()).thenReturn("Explicit");
-        when(p.getLastName()).thenReturn("Urgency");
+        lenient().when(p.getFullName()).thenReturn("Explicit Urgency"); // QA D1036: the whole name
+        lenient().when(p.getFirstName()).thenReturn("Explicit");
+        lenient().when(p.getLastName()).thenReturn("Urgency");
 
         Encounter enc = mock(Encounter.class);
         when(enc.getId()).thenReturn(UUID.randomUUID());
@@ -381,8 +387,9 @@ class PatientFlowServiceImplTest {
 
         Patient p = mock(Patient.class);
         when(p.getId()).thenReturn(UUID.randomUUID());
-        when(p.getFirstName()).thenReturn("Long");
-        when(p.getLastName()).thenReturn("Wait");
+        lenient().when(p.getFullName()).thenReturn("Long Wait"); // QA D1036: the whole name
+        lenient().when(p.getFirstName()).thenReturn("Long");
+        lenient().when(p.getLastName()).thenReturn("Wait");
 
         Encounter enc = mock(Encounter.class);
         when(enc.getId()).thenReturn(UUID.randomUUID());
@@ -422,8 +429,9 @@ class PatientFlowServiceImplTest {
 
         Patient p = mock(Patient.class);
         when(p.getId()).thenReturn(UUID.randomUUID());
-        when(p.getFirstName()).thenReturn("Med");
-        when(p.getLastName()).thenReturn("Wait");
+        lenient().when(p.getFullName()).thenReturn("Med Wait"); // QA D1036: the whole name
+        lenient().when(p.getFirstName()).thenReturn("Med");
+        lenient().when(p.getLastName()).thenReturn("Wait");
 
         Encounter enc = mock(Encounter.class);
         when(enc.getId()).thenReturn(UUID.randomUUID());
@@ -468,8 +476,9 @@ class PatientFlowServiceImplTest {
         Patient p = mock(Patient.class);
         UUID admPatientId = UUID.randomUUID();
         when(p.getId()).thenReturn(admPatientId);
-        when(p.getFirstName()).thenReturn("Jane");
-        when(p.getLastName()).thenReturn("Smith");
+        lenient().when(p.getFullName()).thenReturn("Jane Smith"); // QA D1036: the whole name
+        lenient().when(p.getFirstName()).thenReturn("Jane");
+        lenient().when(p.getLastName()).thenReturn("Smith");
 
         UUID admId = UUID.randomUUID();
         Admission adm = mock(Admission.class);
@@ -505,8 +514,9 @@ class PatientFlowServiceImplTest {
 
         Patient p = mock(Patient.class);
         when(p.getId()).thenReturn(UUID.randomUUID());
-        when(p.getFirstName()).thenReturn("Bob");
-        when(p.getLastName()).thenReturn("Jones");
+        lenient().when(p.getFullName()).thenReturn("Bob Jones"); // QA D1036: the whole name
+        lenient().when(p.getFirstName()).thenReturn("Bob");
+        lenient().when(p.getLastName()).thenReturn("Jones");
 
         Admission adm = mock(Admission.class);
         when(adm.getId()).thenReturn(UUID.randomUUID());
@@ -554,8 +564,9 @@ class PatientFlowServiceImplTest {
         // Outpatient encounter — IN_PROGRESS
         Patient encPatient = mock(Patient.class);
         when(encPatient.getId()).thenReturn(UUID.randomUUID());
-        when(encPatient.getFirstName()).thenReturn("Enc");
-        when(encPatient.getLastName()).thenReturn("Patient");
+        lenient().when(encPatient.getFullName()).thenReturn("Enc Patient"); // QA D1036: the whole name
+        lenient().when(encPatient.getFirstName()).thenReturn("Enc");
+        lenient().when(encPatient.getLastName()).thenReturn("Patient");
 
         Encounter enc = mock(Encounter.class);
         when(enc.getId()).thenReturn(UUID.randomUUID());
@@ -570,8 +581,9 @@ class PatientFlowServiceImplTest {
         // Inpatient admission — also IN_PROGRESS (ACTIVE)
         Patient admPatient = mock(Patient.class);
         when(admPatient.getId()).thenReturn(UUID.randomUUID());
-        when(admPatient.getFirstName()).thenReturn("Adm");
-        when(admPatient.getLastName()).thenReturn("Patient");
+        lenient().when(admPatient.getFullName()).thenReturn("Adm Patient"); // QA D1036: the whole name
+        lenient().when(admPatient.getFirstName()).thenReturn("Adm");
+        lenient().when(admPatient.getLastName()).thenReturn("Patient");
 
         Admission adm = mock(Admission.class);
         when(adm.getId()).thenReturn(UUID.randomUUID());

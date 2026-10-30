@@ -226,7 +226,7 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
         List<Encounter> encounters = loadEncounters(patientId, hospitalId, readable, reach, unlocked);
         PatientSnapshotDTO snapshot = PatientSnapshotDTO.builder()
                 .patientId(patient.getId())
-                .name(patient.getFirstName() + " " + patient.getLastName())
+                .name(patient.getFullName())
                 .age(computeAge(patient))
                 .sex(patient.getGender())
                 // QA D1040 class: the hospital's MRN, never the patient's UUID.

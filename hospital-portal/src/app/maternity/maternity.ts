@@ -1,3 +1,4 @@
+import { personName } from '../shared/pipes/person-name.pipe';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -317,9 +318,7 @@ export class MaternityComponent implements OnInit {
     if (!this.hospitalId) return;
     this.patientService.list(this.hospitalId).subscribe({
       next: (patients) => {
-        this.patientNames = new Map(
-          (patients ?? []).map((p) => [p.id, `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim()]),
-        );
+        this.patientNames = new Map((patients ?? []).map((p) => [p.id, personName(p)]));
       },
       error: () => {
         // Names stay blank; the table says the name is unavailable.
@@ -765,7 +764,7 @@ export class MaternityComponent implements OnInit {
   patientDisplay(referral: ObgynReferralResponse): string {
     const p = referral.patient;
     if (!p) return '—';
-    return `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim() || (p.mrn ?? p.id);
+    return personName(p) || (p.mrn ?? p.id);
   }
 
   /** Mirrors the backend summary: SUBMITTED and ACKNOWLEDGED both count. */

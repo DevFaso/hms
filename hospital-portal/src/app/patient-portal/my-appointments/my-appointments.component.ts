@@ -1,3 +1,4 @@
+import { refuseFields } from '../../shared/forms/invalid-fields';
 import {
   Component,
   OnInit,
@@ -5,6 +6,7 @@ import {
   inject,
   signal,
   ChangeDetectionStrategy,
+  ElementRef,
 } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -52,6 +54,7 @@ function visitKey(a: PortalAppointment): string {
 export class MyAppointmentsComponent implements OnInit {
   private readonly portal = inject(PatientPortalService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly route = inject(ActivatedRoute);
   appointments = signal<PortalAppointment[]>([]);
   loading = signal(true);
@@ -73,6 +76,8 @@ export class MyAppointmentsComponent implements OnInit {
   bookingLoading = signal(false);
   bookingError = signal<string | null>(null);
   bookingSuccess = signal(false);
+  /** QA D1060: the booking as the server stored it (its start and end, set by the slot rules). */
+  bookedAppointment = signal<PortalAppointment | null>(null);
 
   // ── Pre-check-in state ──────────────────────────────────────────
   showPreCheckIn = signal(false);
@@ -90,7 +95,6 @@ export class MyAppointmentsComponent implements OnInit {
   rescheduleError = signal<string | null>(null);
   rescheduleDate = '';
   rescheduleStartTime = '';
-  rescheduleEndTime = '';
   rescheduleReason = '';
 
   hospitals = signal<SchedulingHospital[]>([]);
@@ -278,7 +282,6 @@ export class MyAppointmentsComponent implements OnInit {
     this.rescheduleTarget.set(appt);
     this.rescheduleDate = appt.date;
     this.rescheduleStartTime = appt.rawStartTime;
-    this.rescheduleEndTime = appt.rawEndTime;
     this.rescheduleReason = '';
     this.rescheduleError.set(null);
   }
@@ -291,15 +294,20 @@ export class MyAppointmentsComponent implements OnInit {
   submitReschedule(): void {
     const appt = this.rescheduleTarget();
     if (!appt) return;
-    if (!this.rescheduleDate || !this.rescheduleStartTime || !this.rescheduleEndTime) {
+    // QA D1060: no end time is asked for or sent; the clinic's slot length sets it.
+    if (!this.rescheduleDate || !this.rescheduleStartTime) {
+      // QA D1072: the missing field is marked and focused.
+      refuseFields(
+        this.host.nativeElement,
+        [
+          !this.rescheduleDate ? 'reschedDate' : null,
+          !this.rescheduleStartTime ? 'reschedStart' : null,
+        ].filter((id): id is string => id !== null),
+        ['reschedDate', 'reschedStart'],
+        this.translate.instant('COMMON.FIELD_REQUIRED'),
+      );
       this.rescheduleError.set(
         this.translate.instant('PORTAL.APPOINTMENTS.RESCHEDULE.MISSING_FIELDS'),
-      );
-      return;
-    }
-    if (this.rescheduleEndTime <= this.rescheduleStartTime) {
-      this.rescheduleError.set(
-        this.translate.instant('PORTAL.APPOINTMENTS.RESCHEDULE.END_AFTER_START'),
       );
       return;
     }
@@ -315,7 +323,6 @@ export class MyAppointmentsComponent implements OnInit {
         appointmentId: appt.id,
         newDate: this.rescheduleDate,
         newStartTime: this.rescheduleStartTime,
-        newEndTime: this.rescheduleEndTime,
         reason: this.rescheduleReason,
       })
       .subscribe({
@@ -382,6 +389,18 @@ export class MyAppointmentsComponent implements OnInit {
       !this.selectedDate ||
       !this.selectedTime
     ) {
+      // QA D1072: the missing field is marked and focused.
+      refuseFields(
+        this.host.nativeElement,
+        [
+          !this.selectedHospitalId ? 'hospital' : null,
+          !this.selectedDepartmentId ? 'department' : null,
+          !this.selectedDate ? 'apptDate' : null,
+          !this.selectedTime ? 'apptTime' : null,
+        ].filter((id): id is string => id !== null),
+        ['hospital', 'department', 'apptDate', 'apptTime'],
+        this.translate.instant('COMMON.FIELD_REQUIRED'),
+      );
       this.bookingError.set(this.translate.instant('PORTAL.APPOINTMENTS.BOOKING.MISSING_FIELDS'));
       return;
     }
@@ -400,8 +419,9 @@ export class MyAppointmentsComponent implements OnInit {
     };
 
     this.portal.bookAppointment(dto).subscribe({
-      next: () => {
+      next: (booked) => {
         this.bookingLoading.set(false);
+        this.bookedAppointment.set(booked ?? null);
         this.bookingSuccess.set(true);
         this.loadAppointments();
         setTimeout(() => this.closeBookingForm(), 2000);
@@ -429,6 +449,7 @@ export class MyAppointmentsComponent implements OnInit {
     this.providers.set([]);
     this.bookingError.set(null);
     this.bookingSuccess.set(false);
+    this.bookedAppointment.set(null);
   }
 
   get todayDate(): string {

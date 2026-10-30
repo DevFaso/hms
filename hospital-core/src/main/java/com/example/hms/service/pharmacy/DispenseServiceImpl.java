@@ -1886,6 +1886,7 @@ public class DispenseServiceImpl implements DispenseService {
             patient = WorkQueuePrescriptionDTO.Patient.builder()
                     .id(p.getPatient().getId())
                     .firstName(p.getPatient().getFirstName())
+                    .middleName(p.getPatient().getMiddleName())
                     .lastName(p.getPatient().getLastName())
                     .build();
         }

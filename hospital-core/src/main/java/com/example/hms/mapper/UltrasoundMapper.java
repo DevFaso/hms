@@ -395,7 +395,14 @@ public class UltrasoundMapper {
             return null;
         }
 
-        String firstName = safeTrim(patient.getFirstName());
+        // QA D1036: "Last, First Middle" - the given names whole, middle name included.
+        String firstName = safeTrim(java.util.stream.Stream.of(patient.getFirstName(), patient.getMiddleName())
+            .filter(part -> part != null && !part.isBlank())
+            .map(String::trim)
+            .collect(java.util.stream.Collectors.joining(" ")));
+        if (firstName != null && firstName.isEmpty()) {
+            firstName = null;
+        }
         String lastName = safeTrim(patient.getLastName());
 
         if (lastName != null && firstName != null) {

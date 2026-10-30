@@ -258,14 +258,140 @@ describe('PatientFormComponent', () => {
     component.onSubmit();
 
     expect(toastSpy.error).toHaveBeenCalledWith('Un patient ... est déjà enregistré.');
+    // QA D1061 / D1064: the re-query also carries the identity typed in the form.
     expect(patientSpy.registrationMatch).toHaveBeenCalledWith({
       email: undefined,
       phone: '+22670707070',
       hospitalId: 'h1',
+      firstName: 'Awa',
+      lastName: 'Ouedraogo',
+      dateOfBirth: '1992-05-04',
     });
     expect(component.registrationMatches.length).toBe(1);
     expect(component.matchDismissed).toBeFalse();
     expect(routerSpy.navigate).not.toHaveBeenCalled();
+  });
+
+  it('QA D1072: a client-side refusal marks every missing field and focuses the first', () => {
+    const fixture = TestBed.createComponent(PatientFormComponent);
+    const form = fixture.componentInstance;
+    form.ngOnInit();
+    document.body.appendChild(fixture.nativeElement);
+    try {
+      fixture.detectChanges();
+      Object.assign(form.form, { firstName: 'Abdoul', lastName: '', hospitalId: 'h1' });
+      form.onSubmit();
+      fixture.detectChanges();
+
+      const el = fixture.nativeElement as HTMLElement;
+      const last = el.querySelector<HTMLInputElement>('#lastName')!;
+      expect(last.getAttribute('aria-invalid')).toBe('true');
+      expect(last.getAttribute('aria-describedby')).toBe('lastName-server-error');
+      expect(el.querySelector('#lastName-server-error')?.textContent).toContain(
+        'COMMON.FIELD_REQUIRED',
+      );
+      for (const id of ['phonePrimary', 'dob', 'gender', 'country', 'city']) {
+        expect(el.querySelector(`#${id}`)?.getAttribute('aria-invalid'))
+          .withContext(id)
+          .toBe('true');
+      }
+      // The first refused field in reading order has the focus.
+      expect(document.activeElement).toBe(last);
+      expect(el.querySelector('#firstName')?.getAttribute('aria-invalid')).toBeNull();
+      expect(userSpy.adminRegister).not.toHaveBeenCalled();
+    } finally {
+      fixture.nativeElement.remove();
+    }
+  });
+
+  it('QA D1061: a child with no phone of their own is registered under the guardian phone', () => {
+    fillValidForm();
+    Object.assign(component.form, {
+      firstName: 'Abdoul Aziz',
+      lastName: 'Nikiéma',
+      dateOfBirth: '2021-08-19',
+      phoneNumberPrimary: '',
+      emergencyContactName: 'Boukari Nikiéma',
+      emergencyContactPhone: '+22676334455',
+    });
+    expect(component.phoneRequired).toBeFalse();
+    component.onSubmit();
+    expect(userSpy.adminRegister).toHaveBeenCalledWith(
+      jasmine.objectContaining({
+        phoneNumber: '+22676334455',
+        patient: jasmine.objectContaining({ phoneNumberPrimary: '+22676334455' }),
+      }),
+    );
+  });
+
+  it('QA D1061: a match that only shares the contact does not block the registration', () => {
+    fillValidForm();
+    component.form.dateOfBirth = '2021-08-19';
+    component.registrationMatches = [mockMatch({ sameIdentity: false, birthYear: 1985 })];
+    expect(component.identityMatches.length).toBe(0);
+    expect(component.sharedContactMatches.length).toBe(1);
+    component.onSubmit();
+    expect(userSpy.adminRegister).toHaveBeenCalled();
+  });
+
+  it('QA D1061 review: a phone match born the same year still asks (a spelling variant)', () => {
+    fillValidForm();
+    component.form.dateOfBirth = '1990-04-02';
+    component.registrationMatches = [mockMatch({ sameIdentity: false, birthYear: 1990 })];
+    component.onSubmit();
+    expect(userSpy.adminRegister).not.toHaveBeenCalled();
+    expect(toastSpy.error).toHaveBeenCalledWith('PATIENTS.MATCH_DECIDE');
+  });
+
+  it('QA D1061 review: a shared e-mail still asks (an e-mail is one person)', () => {
+    fillValidForm();
+    component.form.dateOfBirth = '2021-08-19';
+    component.registrationMatches = [
+      mockMatch({ sameIdentity: false, birthYear: 1985, matchedOn: 'EMAIL' }),
+    ];
+    component.onSubmit();
+    expect(userSpy.adminRegister).not.toHaveBeenCalled();
+  });
+
+  it('QA D1061 review: a refused submit leaves the blank phone blank (the guardian number goes into the request only)', () => {
+    fillValidForm();
+    Object.assign(component.form, {
+      phoneNumberPrimary: '',
+      emergencyContactPhone: '+22676334455',
+      city: '',
+    });
+    component.onSubmit();
+    expect(userSpy.adminRegister).not.toHaveBeenCalled();
+    expect(component.form.phoneNumberPrimary).toBe('');
+  });
+
+  it('QA D1064: the same name and date of birth is looked up even with no phone match', (done) => {
+    component.ngOnInit();
+    Object.assign(component.form, {
+      firstName: 'Rakiéta',
+      lastName: 'Ouédraogo',
+      dateOfBirth: '1993-05-14',
+      phoneNumberPrimary: '',
+    });
+    component.onNameOrDobChange();
+    setTimeout(() => {
+      expect(patientSpy.registrationMatch).toHaveBeenCalledWith(
+        jasmine.objectContaining({
+          firstName: 'Rakiéta',
+          lastName: 'Ouédraogo',
+          dateOfBirth: '1993-05-14',
+        }),
+      );
+      done();
+    }, 700);
+  });
+
+  it('QA D1064: an IDENTITY match still asks the desk to link or dismiss', () => {
+    fillValidForm();
+    component.registrationMatches = [mockMatch({ matchedOn: 'IDENTITY', sameIdentity: true })];
+    component.onSubmit();
+    expect(userSpy.adminRegister).not.toHaveBeenCalled();
+    expect(toastSpy.error).toHaveBeenCalledWith('PATIENTS.MATCH_DECIDE');
   });
 
   it('QA D725: any other refusal does not re-query the match', () => {

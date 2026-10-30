@@ -30,7 +30,7 @@
               />
             </div>
           </div>
-          <div class="field-row two-col">
+          <div class="field-row">
             <div class="field">
               <label for="start">{{ 'APPOINTMENTS.START_TIME' | translate }} *</label>
               <input
@@ -39,27 +39,13 @@
                 [(ngModel)]="form.startTime"
                 name="startTime"
                 required
-                (change)="onStartTimeChange()"
               />
-            </div>
-            <div class="field">
-              <label for="end">{{ 'APPOINTMENTS.END_TIME' | translate }}</label>
-              <input
-                id="end"
-                type="time"
-                [(ngModel)]="form.endTime"
-                name="endTime"
-                (change)="onEndTimeChange()"
-              />
-              <small class="field-hint">{{ 'APPOINTMENTS.END_TIME_HINT' | translate }}</small>
+              <!-- QA D1060: the clinician's slot rules set how long the visit lasts. -->
+              <small class="field-hint" data-testid="appt-duration-note">{{
+                'APPOINTMENTS.DURATION_SET_BY_SLOTS' | translate
+              }}</small>
             </div>
           </div>
-          @if (timeError()) {
-            <p class="field-error">
-              <span class="material-symbols-outlined">error</span>
-              {{ timeError() }}
-            </p>
-          }
         </div>
 
         <!-- Patient picker -->
@@ -69,9 +55,7 @@
             <div class="picker-chip">
               <div class="chip-avatar">{{ patientInitials(selectedPatient()!) }}</div>
               <div class="chip-info">
-                <span class="chip-name"
-                  >{{ selectedPatient()!.firstName }} {{ selectedPatient()!.lastName }}</span
-                >
+                <span class="chip-name">{{ selectedPatient() | personName }}</span>
                 @if (selectedPatient() | patientSubline; as sub) {
                   <span class="chip-sub">{{ sub }}</span>
                 }
@@ -90,6 +74,7 @@
             <div class="patient-picker-wrap">
               <span class="material-symbols-outlined picker-search-icon">person_search</span>
               <input
+                id="apptPatientSearch"
                 [attr.aria-label]="'APPOINTMENTS.SEARCH_PATIENT_PLACEHOLDER' | translate"
                 class="picker-input"
                 type="text"
@@ -172,6 +157,7 @@
             <div class="patient-picker-wrap">
               <span class="material-symbols-outlined picker-search-icon">badge</span>
               <input
+                id="apptStaffSearch"
                 [attr.aria-label]="'APPOINTMENTS.SEARCH_STAFF_PLACEHOLDER' | translate"
                 class="picker-input"
                 type="text"

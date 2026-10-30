@@ -160,6 +160,8 @@ public class WorkQueuePrescriptionDTO {
     public static class Patient {
         private UUID id;
         private String firstName;
+        /** QA D1036: the middle name, so the work queue shows the patient's whole name. */
+        private String middleName;
         private String lastName;
     }
 

@@ -113,7 +113,6 @@
     "src/app/organizations/organization-detail.html::lc.suspensionReason",
     "src/app/organizations/organization-list.html::<option>tz",
     "src/app/patient-portal/my-appointments/my-appointments.component.html::appt.reason",
-    "src/app/patient-portal/my-family-access/my-family-access.component.html::p.relationship",
     "src/app/patient-portal/my-family-access/proxy-data-viewer/proxy-data-viewer.component.html::l.result",
     "src/app/patient-portal/my-family-access/proxy-data-viewer/proxy-data-viewer.component.html::m.frequency",
     "src/app/patient-portal/my-lab-results/my-lab-results.component.html::lab.result",

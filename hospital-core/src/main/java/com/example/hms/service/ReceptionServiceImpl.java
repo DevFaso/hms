@@ -291,7 +291,9 @@ public class ReceptionServiceImpl implements ReceptionService {
                 .dob(patient.getDateOfBirth())
                 .phone(patient.getPhoneNumberPrimary())
                 .email(patient.getEmail())
-                .address(patient.getAddress())
+                // QA D1074: a legacy pipe-joined composite shows its street lines.
+                .address(com.example.hms.utility.PatientAddressText.display(
+                        patient.getAddress(), patient.getAddressLine1(), patient.getAddressLine2()))
                 .insurance(insuranceSummary)
                 .billing(billingSummary)
                 .alerts(alerts)

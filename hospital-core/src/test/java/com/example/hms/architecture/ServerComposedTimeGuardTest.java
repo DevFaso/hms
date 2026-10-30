@@ -39,9 +39,11 @@ class ServerComposedTimeGuardTest {
     /** Known sources that print server time as stored, each with why it is not fixed here. Shrink only. */
     private static final Map<String, String> ALLOWED = Map.of(
         "service/PdfLabels.java",
-        "QA D1084 sibling: fmt(LocalDateTime) prints a payment time on the invoice PDF and receipt as stored; it "
-            + "has no hospital, and its caller PdfInvoiceService belongs to the front-desk branch "
-            + "(fix/r18-front-desk, D1036/D1091), which must pass HospitalTime.zoneOf(invoice.getHospital())");
+        "Shared PDF labels, not a billing time: the invoice and receipt (PdfInvoiceService) print dates only "
+            + "(PaymentTransaction.paymentDate, invoice and due dates are LocalDate; confirmed at the round-18 merge). "
+            + "fmt(LocalDateTime) is reached by the clinical PDFs only (PatientRecordPdfService 'generated at' and "
+            + "chart rows, WristbandPdfService specimen collection time), outside this guard's pharmacy/billing "
+            + "scope: tasklist standing debt (QA D1084 sibling, clinical PDFs on the hospital clock)");
 
     @Test
     @DisplayName("every pharmacy or billing date-time formatter converts through HospitalTime")

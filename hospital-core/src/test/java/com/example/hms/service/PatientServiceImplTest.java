@@ -1646,6 +1646,64 @@ class PatientServiceImplTest {
     }
 
     @Test
+    void qaD1061_aPhoneMatchSaysWhetherItIsTheSamePerson() {
+        // A child registered under the father's number: the father is listed,
+        // and the card is told he is NOT the person being registered.
+        patient.setPhoneNumberPrimary("+22676334455");
+        when(patientRepository.findAllByPhoneSubscriber(eq("%76334455"), any())).thenReturn(List.of(patient));
+
+        var child = patientService.findRegistrationMatches(null, "+22676334455", "Abdoul Aziz", "Nikiéma",
+            LocalDate.of(2021, 8, 19), hospitalId);
+        assertThat(child).singleElement().satisfies(m -> {
+            assertThat(m.getMatchedOn()).isEqualTo("PHONE");
+            assertThat(m.getSameIdentity()).isFalse();
+        });
+
+        var same = patientService.findRegistrationMatches(null, "+22676334455", "JANE", "doe",
+            LocalDate.of(1990, 1, 1), hospitalId);
+        assertThat(same).singleElement().satisfies(m -> assertThat(m.getSameIdentity()).isTrue());
+
+        // Without a name and date of birth there is nothing to compare: null, as before.
+        assertThat(patientService.findRegistrationMatches(null, "+22676334455", hospitalId))
+            .singleElement().satisfies(m -> assertThat(m.getSameIdentity()).isNull());
+    }
+
+    @Test
+    void qaD1064_theSamePersonAtAnotherHospitalOfTheOrganisationIsProposedWithAnotherPhone() {
+        com.example.hms.model.Organization organization = new com.example.hms.model.Organization();
+        organization.setId(UUID.randomUUID());
+        hospital.setOrganization(organization);
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        Patient homonym = new Patient();
+        homonym.setId(UUID.randomUUID());
+        homonym.setFirstName("Jane");
+        homonym.setLastName("Smith");
+        homonym.setDateOfBirth(LocalDate.of(1990, 1, 1));
+        homonym.setHospitalRegistrations(new java.util.HashSet<>());
+        when(patientRepository.findByDateOfBirthInOrganization(LocalDate.of(1990, 1, 1), organization.getId()))
+            .thenReturn(List.of(patient, homonym));
+
+        var matches = patientService.findRegistrationMatches(null, "+22670440099", "Jané", "DOE",
+            LocalDate.of(1990, 1, 1), hospitalId);
+
+        // The same first name, last name and date of birth; never a mere same-birthday homonym.
+        assertThat(matches).singleElement().satisfies(m -> {
+            assertThat(m.getPatientId()).isEqualTo(patientId);
+            assertThat(m.getMatchedOn()).isEqualTo("IDENTITY");
+            assertThat(m.getSameIdentity()).isTrue();
+        });
+    }
+
+    @Test
+    void qaD1064_noIdentityMatchOutsideAnOrganisation() {
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+
+        assertThat(patientService.findRegistrationMatches(null, null, "Jane", "Doe", LocalDate.of(1990, 1, 1),
+            hospitalId)).isEmpty();
+        verify(patientRepository, never()).findByDateOfBirthInOrganization(any(), any());
+    }
+
+    @Test
     void findRegistrationMatchesFlagsAlreadyRegisteredHere() {
         patient.setPhoneNumberPrimary("+22670707070");
         patient.getHospitalRegistrations().add(activeRegistrationAt(hospital));

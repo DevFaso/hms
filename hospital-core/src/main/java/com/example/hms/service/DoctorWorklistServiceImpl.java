@@ -297,7 +297,7 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
         UUID apptHospitalId = appt.getHospital() != null ? appt.getHospital().getId() : null;
         return DoctorWorklistItemDTO.builder()
                 .patientId(p.getId())
-                .patientName(p.getFirstName() + " " + p.getLastName())
+                .patientName(p.getFullName())
                 .mrn(p.getMrnForHospital(apptHospitalId))
                 .age(computeAge(p))
                 .sex(p.getGender())
@@ -314,7 +314,7 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
         UUID consultHospitalId = consult.getHospital() != null ? consult.getHospital().getId() : null;
         return DoctorWorklistItemDTO.builder()
                 .patientId(p.getId())
-                .patientName(p.getFirstName() + " " + p.getLastName())
+                .patientName(p.getFullName())
                 .mrn(p.getMrnForHospital(consultHospitalId))
                 .age(computeAge(p))
                 .sex(p.getGender())
@@ -343,7 +343,7 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
         return DoctorWorklistItemDTO.builder()
                 .patientId(p.getId())
                 .encounterId(enc.getId())
-                .patientName(p.getFirstName() + " " + p.getLastName())
+                .patientName(p.getFullName())
                 .mrn(p.getMrnForHospital(encHospitalId))
                 .age(age)
                 .sex(p.getGender())

@@ -1,4 +1,5 @@
-import { PersonNamePipe } from '../../shared/pipes/person-name.pipe';
+import { refuseFields } from '../../shared/forms/invalid-fields';
+import { PersonNamePipe, personName } from '../../shared/pipes/person-name.pipe';
 import { DialogFocusDirective } from '../../shared/a11y/dialog-focus.directive';
 import {
   Component,
@@ -9,6 +10,7 @@ import {
   Output,
   EventEmitter,
   ChangeDetectionStrategy,
+  ElementRef,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -61,6 +63,7 @@ export class WaitlistPanelComponent implements OnInit {
   private readonly roleCtx = inject(RoleContextService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   /* ── List state ─────────── */
   entries = signal<WaitlistEntryResponse[]>([]);
@@ -156,7 +159,7 @@ export class WaitlistPanelComponent implements OnInit {
 
   selectPatient(p: PatientResponse): void {
     this.selectedPatient.set(p);
-    this.patientQuery.set(p.firstName + ' ' + p.lastName);
+    this.patientQuery.set(personName(p));
     this.patientResults.set([]);
   }
 
@@ -175,6 +178,16 @@ export class WaitlistPanelComponent implements OnInit {
 
   submitAdd(): void {
     if (!this.selectedPatient() || !this.selectedDeptId()) {
+      // QA D1072: the missing field is marked and focused.
+      refuseFields(
+        this.host.nativeElement,
+        [
+          !this.selectedPatient() ? 'wl-patient' : null,
+          !this.selectedDeptId() ? 'wl-dept' : null,
+        ].filter((id): id is string => id !== null),
+        ['wl-patient', 'wl-dept'],
+        this.translate.instant('COMMON.FIELD_REQUIRED'),
+      );
       this.toast.error(this.translate.instant('RECEPTION.PATIENT_DEPT_REQUIRED'));
       return;
     }
