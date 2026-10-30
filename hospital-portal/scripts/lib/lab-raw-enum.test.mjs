@@ -22,6 +22,8 @@ const LAB_FREE_TEXT = {
     'LabTestDefinition.category is a label typed by the lab (QA D836)',
   'src/app/lab/lab-approval-queue/lab-approval-queue.html::def.rejectionReason':
     'a reviewer typed it',
+  'src/app/lab/lab-results/lab-results.html::rr.source':
+    'the source of a reference range, typed by the lab director (round 18)',
   'src/app/lab/lab-inventory/lab-inventory.html::item.category':
     'LabInventoryItem.category is typed by the lab',
   'src/app/lab/lab-outbox/lab-outbox.html::d.message.messageType':
