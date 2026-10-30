@@ -848,10 +848,7 @@
         <button
           type="button"
           class="btn-primary"
-          [disabled]="
-            immunizationSaving() ||
-            !immunizationForm.vaccineDisplay
-          "
+          [disabled]="immunizationSaving() || !immunizationForm.vaccineDisplay"
           (click)="submitImmunization()"
         >
           {{ 'COMMON.SAVE' | translate }}

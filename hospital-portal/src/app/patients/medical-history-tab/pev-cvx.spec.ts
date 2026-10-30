@@ -11,7 +11,9 @@ describe('PEV to CVX table (QA D1003)', () => {
     for (const v of PEV_VACCINES) {
       const mapped = v in PEV_CVX;
       const unmapped = v in PEV_UNMAPPED;
-      expect(mapped !== unmapped).withContext(v).toBeTrue();
+      expect(mapped !== unmapped)
+        .withContext(v)
+        .toBeTrue();
     }
   });
 
@@ -24,12 +26,16 @@ describe('PEV to CVX table (QA D1003)', () => {
 
   it('every code carries its CDC verification record', () => {
     for (const [v, entry] of Object.entries(PEV_CVX)) {
-      expect(entry!.cvx).withContext(v).toMatch(/^\d{2,3}$/);
+      expect(entry!.cvx)
+        .withContext(v)
+        .toMatch(/^\d{2,3}$/);
       expect(entry!.cdcShortDescription.trim().length).withContext(v).toBeGreaterThan(0);
       expect(['Active', 'Inactive', 'Non-US']).withContext(v).toContain(entry!.cdcStatus);
     }
     for (const [v, why] of Object.entries(PEV_UNMAPPED)) {
-      expect((why ?? '').trim().length).withContext(v).toBeGreaterThan(20);
+      expect((why ?? '').trim().length)
+        .withContext(v)
+        .toBeGreaterThan(20);
     }
   });
 
