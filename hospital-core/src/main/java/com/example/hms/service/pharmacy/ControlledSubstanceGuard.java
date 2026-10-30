@@ -44,6 +44,11 @@ public class ControlledSubstanceGuard {
         // PrescriptionControlledResolver's catalog answer. A catalog-controlled
         // drug would otherwise be unsignable, as no two-factor step exists yet
         // (tasklist standing debt). Verification, chart, history and PDF do use it.
+        // User decision 2026-10-28 SUPERSEDES D654: a drug the catalogue marks
+        // controlled is always controlled, whatever the prescriber ticked. The
+        // administration witness already reads the catalogue
+        // (ControlledAdministrationWitness); this signing/dispense gate is
+        // owned by the pharmacy fix branch (QA D1028), which moves it.
         if (prescription.isControlledSubstance() && prescription.getTwoFactorVerifiedAt() == null) {
             // QA D1000: a key resolved in the caller's language; the code
             // (CONTROLLED_SUBSTANCE) stays in the key for log searches.

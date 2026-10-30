@@ -2042,6 +2042,7 @@ class NurseTaskServiceImplTest {
             .temperatureCelsius(36.8)
             .systolicBpMmHg(120)
             .diastolicBpMmHg(80)
+            .painScale(4)
             .build();
 
         service.captureVitals(patientId, nurseId, hospitalId, req);
@@ -2050,6 +2051,8 @@ class NurseTaskServiceImplTest {
         verify(vitalSignRepository).save(captor.capture());
         PatientVitalSign saved = captor.getValue();
         assertThat(saved.getHeartRateBpm()).isEqualTo(72);
+        // QA D1045: the ward pain reassessment is charted (the bundle text, or its key without bundles).
+        assertThat(saved.getNotes()).isNotBlank();
         assertThat(saved.isClinicallySignificant()).isFalse();
     }
 
@@ -2479,9 +2482,15 @@ class NurseTaskServiceImplTest {
         req.setDataPart("Vital signs stable");
         req.setActionPart("Repositioned patient");
         req.setResponsePart("Patient comfortable after repositioning");
+        req.setTitle("Réévaluation douleur post-morphine");
 
         NurseCareNoteResponseDTO result = service.createCareNote(patientId, nurseId, hospitalId, req);
 
+        // QA D1044: the title the nurse typed is stored with the note and returned.
+        ArgumentCaptor<NursingNote> savedNote = ArgumentCaptor.forClass(NursingNote.class);
+        verify(nursingNoteRepository).save(savedNote.capture());
+        assertThat(savedNote.getValue().getTitle()).isEqualTo("Réévaluation douleur post-morphine");
+        assertThat(result.getTitle()).isEqualTo("Réévaluation douleur post-morphine");
         assertThat(result.getTemplate()).isEqualTo("DAR");
         assertThat(result.getAuthorName()).isEqualTo("Jane RN");
         assertThat(result.getPatientName()).isEqualTo("Note Patient");

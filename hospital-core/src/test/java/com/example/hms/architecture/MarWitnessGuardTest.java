@@ -26,7 +26,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * records a dose's outcome going through it. Any production method that sets
  * a medication-administration record's status from a variable (the outcome
  * the nurse chose: {@code setStatus(status)}, {@code .status(marStatus)}) must
- * name the witness ({@code witness…}) in the same method. A sweep that writes
+ * write the witness onto the record ({@code .witnessUser(…)},
+ * {@code setWitnessUser(…)}) or call the rule in the same method. A sweep that writes
  * a constant ({@code MISSED}, {@code PENDING}) records no dose and is not
  * matched.
  */
@@ -36,6 +37,10 @@ class MarWitnessGuardTest {
     private static final Path MAIN = Paths.get("src/main/java/com/example/hms");
     private static final Pattern METHOD = Pattern.compile(
         "\\n    (?:(?:private|public|protected|static|final|synchronized)\\s+)+[\\w<>,.? \\[\\]]+\\s+(\\w+)\\s*\\([^;{]*?\\)\\s*(?:throws [\\w., ]+)?\\{");
+    /** The witness written onto the record, or the rule called, in the same method. */
+    private static final Pattern WITNESS_STAMP = Pattern.compile(
+        "\\.witnessUser\\(|\\bsetWitnessUser\\(|\\bcontrolledAdministrationWitness\\.resolve\\(");
+
     /** A MAR record's status set from a variable: on the record, or in its builder chain. */
     private static final Pattern OUTCOME = Pattern.compile(
         "\\bmar\\w*\\.setStatus\\(\\s*(?:marStatus|status|outcome|administrationStatus)\\s*\\)"
@@ -80,7 +85,7 @@ class MarWitnessGuardTest {
             int open = m.end() - 1;
             int close = SourceScan.closingBrace(source, open);
             String body = source.substring(open, Math.min(close + 1, source.length()));
-            if (OUTCOME.matcher(body).find() && !body.matches("(?s).*\\b[wW]itness.*")) {
+            if (OUTCOME.matcher(body).find() && !WITNESS_STAMP.matcher(body).find()) {
                 out.add(file + "#" + m.group(1));
             }
         }

@@ -22,6 +22,8 @@ public class PatientDocumentResponseDTO {
     private UUID uploadedByUserId;
     private String uploadedByDisplayName;
     private PatientDocumentType documentType;
+    /** QA D1048: issued by a hospital (a medical certificate), not uploaded by the patient. */
+    private boolean issuedByHospital;
     private String displayName;
     private String fileUrl;
     private String mimeType;
