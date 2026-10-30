@@ -139,7 +139,8 @@ class IkoddiGatewayImplTest {
                 .body("{\"message\":\"Sender HMS is not approved\",\"sentTo\":[\"22670000101\"]}")
                 .contentType(MediaType.APPLICATION_JSON));
 
-        assertThatThrownBy(() -> gateway.sendSms(List.of("+22670000101"), "code 123456", null))
+        List<String> recipients = List.of("+22670000101");
+        assertThatThrownBy(() -> gateway.sendSms(recipients, "code 123456", null))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("400")
             .hasMessageNotContaining("22670000101");

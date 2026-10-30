@@ -34,11 +34,13 @@ class EntityTransitionRefusalProseGuardTest {
 
     private static final Path MODEL = Path.of("src/main/java/com/example/hms/model");
     private static final Pattern METHOD = Pattern.compile(
-        "\\n    (?:private|public|protected)?\\s*[\\w<>\\[\\], ]+\\s+(\\w+)\\(([^;{]*?)\\)\\s*(?:throws [\\w., ]+)?\\{");
+        // Possessive, one level of nested parentheses in the parameters (Sonar S8786: no backtracking).
+        "\\n    (?:\\s++(?:[\\w<>\\[\\],]++\\s++)*+|(?:[\\w<>\\[\\],]++\\s++)++)(\\w++)\\(((?:[^;{()\"]|\"[^\";{]*+\"|\\((?:[^;{()\"]|\"[^\";{]*+\")*+\\))*+)\\)"
+            + "\\s*+(?:throws [\\w., ]++)?+\\{");
     private static final Pattern TRANSITION = Pattern.compile("this\\.status\\s*=|\\bstatus\\s*=\\s*\\w+Status\\.|setStatus\\(");
     private static final Pattern LIFECYCLE = Pattern.compile("@(?:PrePersist|PreUpdate|PostLoad|PostPersist|PostUpdate)\\b");
     private static final Pattern PROSE_REFUSAL = Pattern.compile(
-        "throw new \\w*Exception\\(\\s*\"[^\"]*\\s[^\"]*\"|throw new \\w*Exception\\(\\s*\"[^\"]*\"\\s*\\+");
+        "throw new \\w++\\(\\s*+\"(?:[^\"\\s]*+\\s[^\"]*+\"|[^\"]*+\"\\s*+\\+)");
 
     @Test
     @DisplayName("no entity transition refuses in English")

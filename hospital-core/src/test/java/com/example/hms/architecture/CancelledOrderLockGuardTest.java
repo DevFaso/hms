@@ -53,8 +53,9 @@ class CancelledOrderLockGuardTest {
         Map.entry("TreatmentPlanServiceImpl.java", "TreatmentPlanStatus"));
 
     private static final Pattern METHOD = Pattern.compile(
-        "\\n    (?:private|public|protected)[^;{=]*?\\(([^;{]*?)\\)\\s*(?:throws [\\w., ]+)?\\{");
-    private static final Pattern NAME = Pattern.compile("(\\w+)\\s*\\($");
+        // Possessive, one level of nested parentheses in the parameters (Sonar S8786: no backtracking).
+        "\\n    (?:private|public|protected)[^;{=(]*+\\(((?:[^;{()\"]|\"[^\";{]*+\"|\\((?:[^;{()\"]|\"[^\";{]*+\")*+\\))*+)\\)\\s*+(?:throws [\\w., ]++)?+\\{");
+    private static final Pattern NAME = Pattern.compile("(\\w++)\\s*+\\($");
     private static final Pattern SET_STATUS = Pattern.compile("(\\w+)\\.setStatus\\(");
     private static final Pattern LOCK = Pattern.compile(
         // A refusal of the cancelled state, not merely a mention of CANCELLED:

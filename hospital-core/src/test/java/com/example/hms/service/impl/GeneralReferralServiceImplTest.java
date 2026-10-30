@@ -81,16 +81,12 @@ class GeneralReferralServiceImplTest {
     @org.mockito.Mock
     private com.example.hms.service.scheduling.AppointmentSlotPolicy slotPolicy;
 
-    @org.junit.jupiter.api.BeforeEach
-    void stubTheSlotRules() {
-        com.example.hms.testsupport.SlotPolicyStubs.defaultLength(slotPolicy);
-    }
-
     @InjectMocks
     private GeneralReferralServiceImpl generalReferralService;
 
     @org.junit.jupiter.api.BeforeEach
     void registeredAndPhysicianByDefault() {
+        com.example.hms.testsupport.SlotPolicyStubs.defaultLength(slotPolicy);
         org.mockito.Mockito.lenient().when(registrationRepository.existsByPatientIdAndHospitalId(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())).thenReturn(true);
         // QA D273: a named receiver is a physician unless a test says otherwise.
         org.mockito.Mockito.lenient().when(roleValidator.isDoctor(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())).thenReturn(true);

@@ -110,8 +110,10 @@ class LabSpecimenRejectionNotifierTest {
         verify(inBasketService).createItemInNewTransaction(item.capture());
         assertThat(item.getValue().getTitleKey()).isEqualTo("lab.specimen.rejected.inBasketTitle");
         assertThat(item.getValue().getTitleArgs()[0]).isInstanceOf(java.util.Map.class);
-        assertThat(((java.util.Map<?, ?>) item.getValue().getTitleArgs()[0]).get("key"))
-            .isEqualTo(com.example.hms.mapper.LabOrderMapper.DELETED_TEST_LABEL);
+        @SuppressWarnings("unchecked")
+        java.util.Map<String, Object> titleArg = (java.util.Map<String, Object>) item.getValue().getTitleArgs()[0];
+        assertThat(titleArg)
+            .containsEntry("key", com.example.hms.mapper.LabOrderMapper.DELETED_TEST_LABEL);
     }
 
     @Test

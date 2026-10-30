@@ -500,8 +500,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             }
         }
         List<CdsCard> cards = cdsRuleEngine.evaluateProposedPrescription(prescription.getPatient(), hospitalId,
-            prescription.getMedicationName(), prescription.getMedicationCode(), prescription.getDosage(),
-            prescription.getFrequency(), item, prescription.getId());
+            new com.example.hms.cdshooks.rules.CdsRuleEngine.ProposedOrder(prescription.getMedicationName(),
+                prescription.getMedicationCode(), prescription.getDosage(), prescription.getFrequency(), item,
+                prescription.getId()));
         if (cards == null) {
             return;
         }
@@ -1104,20 +1105,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // The hospital is in the locking query when one is pinned (#825
         // security finding 3); a super-admin in global view has none.
         UUID actingHospitalId = roleValidator.requireActiveHospitalId();
-        Prescription existing = (actingHospitalId != null
-                ? prescriptionRepository.findByIdAndHospitalIdForUpdate(id, actingHospitalId)
-                : prescriptionRepository.findByIdForUpdate(id))
-            .orElseThrow(() -> new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND));
-        // ── Hospital scope enforcement ── the row's own hospital, as on
-        // sign/co-sign/delete, and BEFORE the status checks below, which
-        // answer 400 and would otherwise tell a real id from a missing one.
-        // Authority used to be judged only at the REQUEST's encounter
-        // hospital, so another hospital's prescription could be rewritten.
-        // Kept after the scoped lock as defence in depth.
-        if (actingHospitalId != null
-                && (existing.getHospital() == null || !actingHospitalId.equals(existing.getHospital().getId()))) {
-            throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
-        }
+        Prescription existing = lockForUpdateInActingHospital(id, actingHospitalId);
         // QA D660: a signed order is no longer rewritten by edit.
         if (existing.getStatus() == PrescriptionStatus.SIGNED) {
             return withdrawSignedPrescription(existing, request);
@@ -1146,16 +1134,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
         ensureContextConsistency(patient, staff, encounter);
 
-        UUID hospitalId = encounter.getHospital() != null ? encounter.getHospital().getId() : null;
-        if (hospitalId == null) {
-            throw new BusinessException("prescription.hospital.context.missing");
-        }
-        // Never moved onto another hospital's encounter: the row stays where
-        // the caller acts. An encounter elsewhere answers exactly as a missing
-        // one. A super-admin in global view keeps the old behaviour.
-        if (actingHospitalId != null && !actingHospitalId.equals(hospitalId)) {
-            throw new ResourceNotFoundException("encounter.notfound", encounter.getId());
-        }
+        UUID hospitalId = encounterHospitalForUpdate(encounter, actingHospitalId);
         // QA D401: the order is written into the chart at hospitalId, so the
         // patient must be registered there. Thrown inside the transaction, it
         // also rolls back an encounter resolveEncounterContext auto-created.
@@ -1190,18 +1169,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // QA D706: no quantity check on an edit - a legacy controlled row must
         // stay withdrawable; the dispense refuses it until a quantity is set.
         applyAllergyOverrideOnUpdate(existing, allergyOverride, overrideBefore, currentUserId);
-        String cdsOverride = cdsOverrideReason(request, advisories);
-        if (!existing.isAllergiesReviewed()) {
-            // Round 18: with no allergy override the field is the CDS reason's:
-            // an edit writes its own reason, or drops a stale one that vouched
-            // for a dose no longer ordered (an allergy reason is the allergy
-            // logic's, above, and is never overwritten).
-            existing.setOverrideReason(cdsOverride);
-        }
-        if (cdsOverride != null) {
-            auditCdsOverrideAfterCommit(existing, currentUserId, cdsOverride, advisories,
-                "Critical decision-support alert overridden on edit");
-        }
+        applyCdsOverrideOnUpdate(existing, request, advisories, currentUserId);
         closePartnerOffersOnWithdrawal(existing, statusBefore);
         // Tier 2 item 33: an edit invalidates any pharmacist verification.
         // updateEntity rewrites medicationName, dosage and frequency, and
@@ -1217,6 +1185,62 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         PrescriptionResponseDTO response = prescriptionMapper.toResponseDTO(saved);
         response.setCdsAdvisories(advisories);
         return response;
+    }
+
+    /**
+     * The prescription locked for an edit (G15 rule 1), in the caller's
+     * hospital. Hospital scope enforcement: the row's own hospital, as on
+     * sign/co-sign/delete, and BEFORE the status checks, which answer 400 and
+     * would otherwise tell a real id from a missing one. Authority used to be
+     * judged only at the REQUEST's encounter hospital, so another hospital's
+     * prescription could be rewritten. Kept after the scoped lock as defence
+     * in depth.
+     */
+    private Prescription lockForUpdateInActingHospital(UUID id, UUID actingHospitalId) {
+        Prescription existing = (actingHospitalId != null
+                ? prescriptionRepository.findByIdAndHospitalIdForUpdate(id, actingHospitalId)
+                : prescriptionRepository.findByIdForUpdate(id))
+            .orElseThrow(() -> new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND));
+        if (actingHospitalId != null
+                && (existing.getHospital() == null || !actingHospitalId.equals(existing.getHospital().getId()))) {
+            throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
+        }
+        return existing;
+    }
+
+    /**
+     * The hospital of the edit's encounter. Never moved onto another
+     * hospital's encounter: the row stays where the caller acts. An encounter
+     * elsewhere answers exactly as a missing one. A super-admin in global view
+     * keeps the old behaviour.
+     */
+    private static UUID encounterHospitalForUpdate(Encounter encounter, UUID actingHospitalId) {
+        UUID hospitalId = encounter.getHospital() != null ? encounter.getHospital().getId() : null;
+        if (hospitalId == null) {
+            throw new BusinessException("prescription.hospital.context.missing");
+        }
+        if (actingHospitalId != null && !actingHospitalId.equals(hospitalId)) {
+            throw new ResourceNotFoundException("encounter.notfound", encounter.getId());
+        }
+        return hospitalId;
+    }
+
+    /**
+     * Round 18: with no allergy override the override field is the CDS
+     * reason's: an edit writes its own reason, or drops a stale one that
+     * vouched for a dose no longer ordered (an allergy reason is the allergy
+     * logic's and is never overwritten). A critical override is audited.
+     */
+    private void applyCdsOverrideOnUpdate(Prescription existing, PrescriptionRequestDTO request,
+                                          List<CdsCard> advisories, UUID currentUserId) {
+        String cdsOverride = cdsOverrideReason(request, advisories);
+        if (!existing.isAllergiesReviewed()) {
+            existing.setOverrideReason(cdsOverride);
+        }
+        if (cdsOverride != null) {
+            auditCdsOverrideAfterCommit(existing, currentUserId, cdsOverride, advisories,
+                "Critical decision-support alert overridden on edit");
+        }
     }
 
     /**
@@ -2043,17 +2067,28 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                                            UUID editedPrescriptionId) {
         List<CdsCard> advisories = cdsRuleEngine.evaluateProposedPrescription(
             patient, hospitalId,
-            request.getMedicationName(),
-            request.getMedicationCode(),
-            request.getDosage(),
-            request.getFrequency(),
-            catalogItem,
-            editedPrescriptionId);
+            new com.example.hms.cdshooks.rules.CdsRuleEngine.ProposedOrder(
+                request.getMedicationName(),
+                request.getMedicationCode(),
+                request.getDosage(),
+                request.getFrequency(),
+                catalogItem,
+                editedPrescriptionId));
         if (advisories.isEmpty()) {
             return advisories;
         }
-        // Round 18 (QA D935): a hard stop (a dose above the absolute daily
-        // maximum) is refused whatever the override.
+        refuseHardStop(advisories);
+        if (Boolean.TRUE.equals(request.getForceOverride())) {
+            requireOverrideReasonForCritical(request, advisories);
+            return advisories;
+        }
+        refuseUnoverriddenCritical(advisories);
+        return advisories;
+    }
+
+
+    /** Round 18 (QA D935): a hard stop (a dose above the absolute daily maximum) is refused whatever the override. */
+    private void refuseHardStop(List<CdsCard> advisories) {
         for (CdsCard card : advisories) {
             if (card.blocksOverride()) {
                 if (logger.isWarnEnabled()) {
@@ -2064,18 +2099,24 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                     advisories);
             }
         }
-        if (Boolean.TRUE.equals(request.getForceOverride())) {
-            // Round 18 (QA D935): an override of a critical alert states its
-            // reason, which is stored on the order and audited (as the
-            // allergy override always required, QA D83).
-            boolean critical = advisories.stream().anyMatch(c -> c.indicator() == CdsCard.Indicator.CRITICAL);
-            if (critical && (request.getOverrideReason() == null || request.getOverrideReason().isBlank())) {
-                throw new CdsCriticalBlockException(
-                    com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.cds.overrideReasonRequired"),
-                    advisories);
-            }
-            return advisories;
+    }
+
+    /**
+     * Round 18 (QA D935): an override of a critical alert states its reason,
+     * which is stored on the order and audited (as the allergy override
+     * always required, QA D83).
+     */
+    private static void requireOverrideReasonForCritical(PrescriptionRequestDTO request, List<CdsCard> advisories) {
+        boolean critical = advisories.stream().anyMatch(c -> c.indicator() == CdsCard.Indicator.CRITICAL);
+        if (critical && (request.getOverrideReason() == null || request.getOverrideReason().isBlank())) {
+            throw new CdsCriticalBlockException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.cds.overrideReasonRequired"),
+                advisories);
         }
+    }
+
+    /** A critical advisory blocks the order until the prescriber overrides it after review. */
+    private void refuseUnoverriddenCritical(List<CdsCard> advisories) {
         for (CdsCard card : advisories) {
             if (card.indicator() == CdsCard.Indicator.CRITICAL) {
                 if (logger.isWarnEnabled()) {
@@ -2088,9 +2129,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                     advisories);
             }
         }
-        return advisories;
     }
-
 
     /**
      * The catalogue item behind the order, at the order's hospital, so that

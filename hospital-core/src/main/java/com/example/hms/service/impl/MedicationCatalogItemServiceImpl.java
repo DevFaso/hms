@@ -221,7 +221,7 @@ public class MedicationCatalogItemServiceImpl implements MedicationCatalogItemSe
         item.setPediatricDoseSource(source == null || source.isBlank() ? null : source.trim());
         item.setPediatricDoseStatus(dto.getPediatricDoseStatus());
         item.setPediatricDoseReviewedBy(roleValidator.getCurrentUserId());
-        item.setPediatricDoseReviewedAt(java.time.LocalDateTime.now());
+        item.setPediatricDoseReviewedAt(java.time.LocalDateTime.now(java.time.ZoneId.systemDefault()));
 
         MedicationCatalogItem saved = catalogRepository.save(item);
         logAudit(AuditEventType.MEDICATION_DOSE_LIMITS_UPDATED,

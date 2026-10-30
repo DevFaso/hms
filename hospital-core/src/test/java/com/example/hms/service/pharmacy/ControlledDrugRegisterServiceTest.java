@@ -320,8 +320,8 @@ class ControlledDrugRegisterServiceTest {
      */
     @Test
     void aReturnReasonNamesTheFillTimeOnTheHospitalClock_D1084() {
-        java.time.ZoneId hospitalZone = "Asia/Tokyo".equals(java.time.ZoneId.systemDefault().getId())
-                ? java.time.ZoneId.of("America/Santo_Domingo") : java.time.ZoneId.of("Asia/Tokyo");
+        java.time.ZoneId hospitalZone = java.time.ZoneId.of(
+                "Asia/Tokyo".equals(java.time.ZoneId.systemDefault().getId()) ? "America/Santo_Domingo" : "Asia/Tokyo");
         java.time.LocalDateTime stored = java.time.LocalDateTime.of(2026, 10, 30, 17, 9);
         java.time.LocalDateTime local = stored.atZone(java.time.ZoneId.systemDefault())
                 .withZoneSameInstant(hospitalZone).toLocalDateTime();

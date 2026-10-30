@@ -1300,7 +1300,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         return "See order";
     }
 
-    /** Persist a MedicationAdministrationRecord linked to a real Prescription. */
+    // Persist a MedicationAdministrationRecord linked to a real Prescription.
     /**
      * Tier 2 item 33 — refuse administration of a high-risk medication that
      * no pharmacist has verified.
@@ -1781,7 +1781,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         requireNotDischargedWithoutVisit(patientId, hospitalId);
         // QA D1077: a head circumference is a child's measure (the growth tab's age rule).
         com.example.hms.service.support.PatientMeasureRules.requireHeadCircumferenceApplicable(
-            patient, request.getHeadCircumferenceCm(), java.time.LocalDate.now());
+            patient, request.getHeadCircumferenceCm(), java.time.LocalDate.now(java.time.ZoneId.systemDefault()));
 
         PatientVitalSign vital = PatientVitalSign.builder()
             .patient(patient)

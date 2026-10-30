@@ -140,7 +140,8 @@ class MedicationCatalogPediatricDosingTest {
         UUID otherItem = UUID.randomUUID();
         when(repository.findByIdAndHospital_Id(otherItem, hospitalId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> catalogService.updatePediatricDosing(otherItem, paracetamol()))
+        var dosing = paracetamol();
+        assertThatThrownBy(() -> catalogService.updatePediatricDosing(otherItem, dosing))
             .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -148,7 +149,8 @@ class MedicationCatalogPediatricDosingTest {
     void withoutAnActingHospitalNothingIsFound() {
         when(roleValidator.requireActiveHospitalId()).thenReturn(null);
 
-        assertThatThrownBy(() -> catalogService.updatePediatricDosing(itemId, paracetamol()))
+        var dosing = paracetamol();
+        assertThatThrownBy(() -> catalogService.updatePediatricDosing(itemId, dosing))
             .isInstanceOf(ResourceNotFoundException.class);
         verify(repository, never()).save(any());
     }

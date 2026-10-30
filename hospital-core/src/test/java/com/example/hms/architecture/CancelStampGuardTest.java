@@ -39,7 +39,9 @@ class CancelStampGuardTest {
     private static final Path MAIN = Paths.get("src/main/java/com/example/hms");
     private static final Pattern CANCELLED_AT = Pattern.compile("private\\s+LocalDateTime\\s+cancelledAt\\s*;");
     private static final Pattern METHOD = Pattern.compile(
-        "\\n    (?:(?:private|public|protected|static|final|synchronized)\\s+)+[\\w<>,.? \\[\\]]+\\s+(\\w+)\\s*\\([^;{]*?\\)\\s*(?:throws [\\w., ]+)?\\{");
+        // Possessive, one level of nested parentheses in the parameters (Sonar S8786: no backtracking).
+        "\\n    (?:(?:private|public|protected|static|final|synchronized)\\s++)++(?:[\\w<>,.?\\[\\]]++\\s++)++"
+            + "(\\w++)\\s*+\\((?:[^;{()\"]|\"[^\";{]*+\"|\\((?:[^;{()\"]|\"[^\";{]*+\")*+\\))*+\\)\\s*+(?:throws [\\w., ]++)?+\\{");
 
     /** Known unstamped cancellations, per {@code "file#method Status"}. Shrink only. */
     private static final Map<String, Allowance> ALLOWED = GuardAllowlist.allow();

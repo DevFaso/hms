@@ -99,7 +99,7 @@ class PrescriptionServiceImplTest {
     @org.mockito.Spy
     private com.example.hms.service.pharmacy.ControlledSubstanceGuard controlledSubstanceGuard =
         new com.example.hms.service.pharmacy.ControlledSubstanceGuard(
-            new com.example.hms.service.pharmacy.PrescriptionControlledResolver(org.mockito.Mockito.mock(com.example.hms.repository.MedicationCatalogItemRepository.class)));
+            new com.example.hms.service.pharmacy.PrescriptionControlledResolver(mock(com.example.hms.repository.MedicationCatalogItemRepository.class)));
 
     // Also real, same reasoning. updatePrescription calls invalidateOnChange,
     // which is a pure mutation of the passed Prescription — mocking it would
@@ -203,7 +203,7 @@ class PrescriptionServiceImplTest {
 
         lenient().when(patientAllergyRepository.findByPatient_Id(any()))
             .thenReturn(List.of());
-        lenient().when(cdsRuleEngine.evaluateProposedPrescription(any(), any(), any(), any(), any(), any(), any(), any()))
+        lenient().when(cdsRuleEngine.evaluateProposedPrescription(any(), any(), any(com.example.hms.cdshooks.rules.CdsRuleEngine.ProposedOrder.class)))
             .thenReturn(List.of());
         // QA D922: an order without id or code is resolved by name in the catalogue.
         lenient().when(catalogRepo.findByHospital_IdAndActiveTrue(any(), any()))
@@ -1582,7 +1582,7 @@ class PrescriptionServiceImplTest {
                 com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard.Indicator.CRITICAL,
                 new com.example.hms.cdshooks.dto.CdsHookDtos.Source("HMS Pediatric Dose Check", null, null),
                 null, null, null, "uuid", Boolean.TRUE);
-        when(cdsRuleEngine.evaluateProposedPrescription(any(), any(), any(), any(), any(), any(), any(), any()))
+        when(cdsRuleEngine.evaluateProposedPrescription(any(), any(), any(com.example.hms.cdshooks.rules.CdsRuleEngine.ProposedOrder.class)))
             .thenReturn(List.of(hardStop));
 
         assertThatThrownBy(() -> prescriptionService.signPrescription(rx.getId(), null, Locale.ENGLISH))
@@ -1615,8 +1615,8 @@ class PrescriptionServiceImplTest {
 
         prescriptionService.signPrescription(rx.getId(), null, Locale.ENGLISH);
 
-        verify(cdsRuleEngine).evaluateProposedPrescription(any(), any(), any(), any(), any(), any(), eq(capped),
-            eq(rx.getId()));
+        verify(cdsRuleEngine).evaluateProposedPrescription(any(), any(), org.mockito.ArgumentMatchers.argThat(
+            o -> o.catalogItem() == capped && rx.getId().equals(o.excludedPrescriptionId())));
     }
 
     /** Round 18: an ordinary drug signs without any re-authentication. */
@@ -3264,7 +3264,8 @@ class PrescriptionServiceImplTest {
         when(prescriptionRepository.save(mappedEntity)).thenReturn(mappedEntity);
         when(prescriptionMapper.toResponseDTO(mappedEntity)).thenReturn(responseDTO);
         when(cdsRuleEngine.evaluateProposedPrescription(
-                eq(patient), eq(hospitalId), eq(TEST_MEDICATION), any(), eq(TEST_DOSAGE), any(), any(), any()))
+                eq(patient), eq(hospitalId), org.mockito.ArgumentMatchers.argThat(
+                    o -> TEST_MEDICATION.equals(o.medicationName()) && TEST_DOSAGE.equals(o.dosage()))))
             .thenReturn(List.of(warning));
 
         PrescriptionResponseDTO result = prescriptionService.createPrescription(request, Locale.ENGLISH);
@@ -3294,7 +3295,7 @@ class PrescriptionServiceImplTest {
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
         when(authService.getCurrentUserId()).thenReturn(currentUser);
         when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
-        when(cdsRuleEngine.evaluateProposedPrescription(any(), any(), any(), any(), any(), any(), any(), any()))
+        when(cdsRuleEngine.evaluateProposedPrescription(any(), any(), any(com.example.hms.cdshooks.rules.CdsRuleEngine.ProposedOrder.class)))
             .thenReturn(List.of(critical));
 
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
@@ -3338,7 +3339,7 @@ class PrescriptionServiceImplTest {
         when(prescriptionMapper.toEntity(request, patient, staff, encounter)).thenReturn(mappedEntity);
         when(prescriptionRepository.save(mappedEntity)).thenReturn(mappedEntity);
         when(prescriptionMapper.toResponseDTO(mappedEntity)).thenReturn(responseDTO);
-        when(cdsRuleEngine.evaluateProposedPrescription(any(), any(), any(), any(), any(), any(), any(), any()))
+        when(cdsRuleEngine.evaluateProposedPrescription(any(), any(), any(com.example.hms.cdshooks.rules.CdsRuleEngine.ProposedOrder.class)))
             .thenReturn(List.of(critical));
 
         PrescriptionResponseDTO result = prescriptionService.createPrescription(request, Locale.ENGLISH);
@@ -3371,7 +3372,7 @@ class PrescriptionServiceImplTest {
                 com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard.Indicator.CRITICAL,
                 new com.example.hms.cdshooks.dto.CdsHookDtos.Source("HMS Pediatric Dose Check", null, null),
                 null, null, null, "uuid");
-        when(cdsRuleEngine.evaluateProposedPrescription(any(), any(), any(), any(), any(), any(), any(), any()))
+        when(cdsRuleEngine.evaluateProposedPrescription(any(), any(), any(com.example.hms.cdshooks.rules.CdsRuleEngine.ProposedOrder.class)))
             .thenReturn(List.of(softStop));
 
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
@@ -3401,7 +3402,7 @@ class PrescriptionServiceImplTest {
                 com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard.Indicator.CRITICAL,
                 new com.example.hms.cdshooks.dto.CdsHookDtos.Source("HMS Pediatric Dose Check", null, null),
                 null, null, null, "uuid", Boolean.TRUE);
-        when(cdsRuleEngine.evaluateProposedPrescription(any(), any(), any(), any(), any(), any(), any(), any()))
+        when(cdsRuleEngine.evaluateProposedPrescription(any(), any(), any(com.example.hms.cdshooks.rules.CdsRuleEngine.ProposedOrder.class)))
             .thenReturn(List.of(hardStop));
 
         assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.ENGLISH))
@@ -5068,8 +5069,9 @@ class PrescriptionServiceImplTest {
         prescriptionService.createPrescription(request, Locale.ENGLISH);
 
         assertThat(request.getMedicationCatalogItemId()).isEqualTo(morphine.getId());
-        verify(cdsRuleEngine).evaluateProposedPrescription(eq(patient), eq(hospitalId), eq("Morphine 10 mg"),
-            any(), any(), any(), eq(morphine), org.mockito.ArgumentMatchers.isNull());
+        verify(cdsRuleEngine).evaluateProposedPrescription(eq(patient), eq(hospitalId),
+            org.mockito.ArgumentMatchers.argThat(o -> "Morphine 10 mg".equals(o.medicationName())
+                && o.catalogItem() == morphine && o.excludedPrescriptionId() == null));
     }
 
     @Test
@@ -5107,8 +5109,8 @@ class PrescriptionServiceImplTest {
 
         // Not tied to one strength: the dispense may still pick either.
         assertThat(request.getMedicationCatalogItemId()).isNull();
-        verify(cdsRuleEngine).evaluateProposedPrescription(any(), any(), any(), any(), any(), any(), eq(syrup),
-            org.mockito.ArgumentMatchers.isNull());
+        verify(cdsRuleEngine).evaluateProposedPrescription(any(), any(), org.mockito.ArgumentMatchers.argThat(
+            o -> o.catalogItem() == syrup && o.excludedPrescriptionId() == null));
     }
 
     /** Review of #975: a code names this hospital's item; the order is linked to it. */
@@ -5127,8 +5129,8 @@ class PrescriptionServiceImplTest {
         prescriptionService.createPrescription(request, Locale.ENGLISH);
 
         assertThat(request.getMedicationCatalogItemId()).isEqualTo(morphine.getId());
-        verify(cdsRuleEngine).evaluateProposedPrescription(any(), any(), any(), any(), any(), any(), eq(morphine),
-            org.mockito.ArgumentMatchers.isNull());
+        verify(cdsRuleEngine).evaluateProposedPrescription(any(), any(), org.mockito.ArgumentMatchers.argThat(
+            o -> o.catalogItem() == morphine && o.excludedPrescriptionId() == null));
     }
 
     /**
@@ -5167,8 +5169,8 @@ class PrescriptionServiceImplTest {
         assertThat(request.getMedicationCatalogItemId()).isEqualTo(linkedItemId);
         // The kept link is the answer: no name resolution runs over the catalogue.
         verify(catalogRepo, never()).findByHospital_IdAndActiveTrue(any(), any());
-        verify(cdsRuleEngine).evaluateProposedPrescription(any(), any(), any(), any(), any(), any(), eq(linked),
-            eq(prescriptionId));
+        verify(cdsRuleEngine).evaluateProposedPrescription(any(), any(), org.mockito.ArgumentMatchers.argThat(
+            o -> o.catalogItem() == linked && prescriptionId.equals(o.excludedPrescriptionId())));
     }
 
     /**
@@ -5317,8 +5319,8 @@ class PrescriptionServiceImplTest {
 
         prescriptionService.updatePrescription(prescriptionId, request, Locale.ENGLISH);
 
-        verify(cdsRuleEngine).evaluateProposedPrescription(any(), any(), any(), any(), any(), any(), any(),
-            eq(prescriptionId));
+        verify(cdsRuleEngine).evaluateProposedPrescription(any(), any(), org.mockito.ArgumentMatchers.argThat(
+            o -> prescriptionId.equals(o.excludedPrescriptionId())));
     }
 
     /**

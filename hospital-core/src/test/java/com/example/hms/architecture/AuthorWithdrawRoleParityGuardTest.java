@@ -47,7 +47,7 @@ class AuthorWithdrawRoleParityGuardTest {
     private static final Pattern MAPPING = Pattern.compile(
         "@(Post|Put|Patch)Mapping\\b(\\s*\\(([^)]*)\\))?");
     private static final Pattern CLASS_MAPPING = Pattern.compile(
-        "@RequestMapping\\(\\s*(?:(?:value|path)\\s*=\\s*)?\\{?\\s*\"([^\"]*)\"");
+        "@RequestMapping\\(\\s*+(?:(?:value|path)\\s*+=\\s*+)?+\\{?+\\s*+\"([^\"]*+)\"");
     private static final Pattern STRING_CONSTANT = Pattern.compile(
         "static\\s+final\\s+String\\s+(\\w+)\\s*=\\s*\"([^\"]*)\"\\s*;");
     private static final Pattern ROLE_LIST = Pattern.compile("has(?:Any)?(Role|Authority)\\(([^)]*)\\)");
@@ -156,11 +156,11 @@ class AuthorWithdrawRoleParityGuardTest {
         if (args == null) {
             return "";
         }
-        Matcher named = Pattern.compile("(?:value|path)\\s*=\\s*\\{?\\s*\"([^\"]*)\"").matcher(args);
+        Matcher named = Pattern.compile("(?:value|path)\\s*+=\\s*+\\{?+\\s*+\"([^\"]*+)\"").matcher(args);
         if (named.find()) {
             return named.group(1);
         }
-        Matcher first = Pattern.compile("^\\s*\\{?\\s*\"([^\"]*)\"").matcher(args);
+        Matcher first = Pattern.compile("^\\s*+\\{?+\\s*+\"([^\"]*+)\"").matcher(args);
         return first.find() ? first.group(1) : "";
     }
 

@@ -73,12 +73,21 @@ class PatientAddressCompositeGuardTest {
 
     @Test
     void theScanSeesTheComposite() {
-        String src = "class X {\n    private void patch(Patient p) {\n"
-            + "        p.setAddress(build(p.getAddressLine1(), p.getCity(), p.getCountry()));\n    }\n}\n";
+        String src = """
+            class X {
+                private void patch(Patient p) {
+                    p.setAddress(build(p.getAddressLine1(), p.getCity(), p.getCountry()));
+                }
+            }
+            """;
         assertThat(compositeSites("X.java", src)).hasSize(1);
-        assertThat(compositeSites("X.java",
-            "class X {\n    private void patch(Patient p) {\n        p.setAddress(PatientAddressText.streetLine("
-                + "p.getAddressLine1(), p.getAddressLine2()));\n    }\n}\n")).isEmpty();
+        assertThat(compositeSites("X.java", """
+            class X {
+                private void patch(Patient p) {
+                    p.setAddress(PatientAddressText.streetLine(p.getAddressLine1(), p.getAddressLine2()));
+                }
+            }
+            """)).isEmpty();
     }
 
     @Test

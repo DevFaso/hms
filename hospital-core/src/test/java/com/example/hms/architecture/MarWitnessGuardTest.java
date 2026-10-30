@@ -36,7 +36,9 @@ class MarWitnessGuardTest {
 
     private static final Path MAIN = Paths.get("src/main/java/com/example/hms");
     private static final Pattern METHOD = Pattern.compile(
-        "\\n    (?:(?:private|public|protected|static|final|synchronized)\\s+)+[\\w<>,.? \\[\\]]+\\s+(\\w+)\\s*\\([^;{]*?\\)\\s*(?:throws [\\w., ]+)?\\{");
+        // Possessive, one level of nested parentheses in the parameters (Sonar S8786: no backtracking).
+        "\\n    (?:(?:private|public|protected|static|final|synchronized)\\s++)++(?:[\\w<>,.?\\[\\]]++\\s++)++"
+            + "(\\w++)\\s*+\\((?:[^;{()\"]|\"[^\";{]*+\"|\\((?:[^;{()\"]|\"[^\";{]*+\")*+\\))*+\\)\\s*+(?:throws [\\w., ]++)?+\\{");
     /** The witness written onto the record, or the rule called, in the same method. */
     private static final Pattern WITNESS_STAMP = Pattern.compile(
         "\\.witnessUser\\(|\\bsetWitnessUser\\(|\\bcontrolledAdministrationWitness\\.resolve\\(");

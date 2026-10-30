@@ -167,7 +167,7 @@ public class ClinicalDashboardServiceImpl implements ClinicalDashboardService {
                                 ? Period.between(p.getDateOfBirth(), LocalDate.now()).getYears()
                                 : 0;
                         // QA D1039: from the arrival, never from the visit day's midnight.
-                        long waitMinutes = com.example.hms.utility.EncounterWait.minutes(enc, LocalDateTime.now());
+                        long waitMinutes = com.example.hms.utility.EncounterWait.minutes(enc, LocalDateTime.now(java.time.ZoneId.systemDefault()));
                         result.add(RoomedPatientDTO.builder()
                                 .id(p.getId())
                                 .encounterId(enc.getId())

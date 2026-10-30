@@ -226,9 +226,9 @@ public final class PatientMatchKeys {
     }
 
     /** {@link #sameIdentity} against a stored patient record. */
-    public static boolean sameIdentity(com.example.hms.model.Patient record, String first, String last,
+    public static boolean sameIdentity(com.example.hms.model.Patient stored, String first, String last,
                                        java.time.LocalDate dob) {
-        return record != null && sameIdentity(record.getFirstName(), record.getLastName(), record.getDateOfBirth(),
+        return stored != null && sameIdentity(stored.getFirstName(), stored.getLastName(), stored.getDateOfBirth(),
             first, last, dob);
     }
 

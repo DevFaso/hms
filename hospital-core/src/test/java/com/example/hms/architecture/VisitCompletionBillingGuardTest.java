@@ -32,7 +32,9 @@ class VisitCompletionBillingGuardTest {
 
     private static final Path MAIN = Paths.get("src/main/java/com/example/hms");
     private static final Pattern METHOD = Pattern.compile(
-        "\\n    (?:(?:private|public|protected|static|final|synchronized)\\s+)+[\\w<>,.? \\[\\]]+\\s+(\\w+)\\s*\\([^;{]*?\\)\\s*(?:throws [\\w., ]+)?\\{");
+        // Possessive, one level of nested parentheses in the parameters (Sonar S8786: no backtracking).
+        "\\n    (?:(?:private|public|protected|static|final|synchronized)\\s++)++(?:[\\w<>,.?\\[\\]]++\\s++)++"
+            + "(\\w++)\\s*+\\((?:[^;{()\"]|\"[^\";{]*+\"|\\((?:[^;{()\"]|\"[^\";{]*+\")*+\\))*+\\)\\s*+(?:throws [\\w., ]++)?+\\{");
     private static final Pattern COMPLETES = Pattern.compile(
         "\\.setStatus\\(\\s*EncounterStatus\\.COMPLETED\\s*\\)|\\.status\\(\\s*EncounterStatus\\.COMPLETED\\s*\\)");
     private static final Pattern HANDS_OFF = Pattern.compile(

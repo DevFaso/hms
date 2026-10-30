@@ -33,7 +33,7 @@ class ServerComposedTimeGuardTest {
 
     private static final Path MAIN = Paths.get("src/main/java/com/example/hms");
     private static final Pattern DATE_TIME_FORMATTER = Pattern.compile(
-        "ofLocalizedDateTime\\(|ofPattern\\(\\s*\"[^\"]*H[^\"]*\"|appendPattern\\(\\s*\"[^\"]*H[^\"]*\"");
+        "ofLocalizedDateTime\\(|(?:ofPattern|appendPattern)\\(\\s*+\"[^\"H]*+H[^\"]*+\"");
     private static final Pattern CONVERTS = Pattern.compile("\\bHospitalTime\\.");
 
     /** Known sources that print server time as stored, each with why it is not fixed here. Shrink only. */

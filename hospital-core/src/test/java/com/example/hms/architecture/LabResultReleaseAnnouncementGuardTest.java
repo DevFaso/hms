@@ -111,7 +111,7 @@ class LabResultReleaseAnnouncementGuardTest {
 
     private static final Pattern BUILDER = Pattern.compile("\\b(\\w+)\\.builder\\(\\)");
     private static final Pattern PRIVATE_HELPER = Pattern.compile(
-        "\\n    private\\s+(?:static\\s+)?[\\w<>\\[\\], ]+\\s+(\\w+)\\(([^;{]*?)\\)\\s*\\{");
+        "\\n    private\\s++(?:static\\s++)?+(?:[\\w<>\\[\\],]++\\s++)++(\\w++)\\(((?:[^;{()\"]|\"[^\";{]*+\"|\\((?:[^;{()\"]|\"[^\";{]*+\")*+\\))*+)\\)\\s*+\\{");
 
     /**
      * QA D1016/D931 (round 18, NOT_FIXED a third time): the class-level rule

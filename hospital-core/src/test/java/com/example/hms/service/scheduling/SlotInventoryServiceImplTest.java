@@ -45,6 +45,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.times;
 
 /**
  * Slot inventory (P2 #11) — foundation pass.
@@ -545,7 +546,8 @@ class SlotInventoryServiceImplTest {
         AppointmentSlot slot = openSlot();
         deskBookingOver(slot, AppointmentStatus.SCHEDULED);
 
-        assertThatThrownBy(() -> service.hold(slot.getId(), 10))
+        UUID slotId = slot.getId();
+        assertThatThrownBy(() -> service.hold(slotId, 10))
             .isInstanceOf(BusinessException.class)
             .hasFieldOrPropertyWithValue("messageKey", "appointment.staff.unavailable");
         assertThat(slot.getStatus()).isEqualTo(SlotStatus.OPEN);
@@ -556,10 +558,11 @@ class SlotInventoryServiceImplTest {
         AppointmentSlot slot = bookableSlot();
         deskBookingOver(slot, AppointmentStatus.SCHEDULED);
 
-        assertThatThrownBy(() -> service.book(slot.getId(), patientId, null))
+        UUID bookableId = slot.getId();
+        assertThatThrownBy(() -> service.book(bookableId, patientId, null))
             .isInstanceOf(BusinessException.class)
             .hasFieldOrPropertyWithValue("messageKey", "appointment.staff.unavailable");
-        org.mockito.Mockito.verify(appointmentRepository, org.mockito.Mockito.never()).save(any(Appointment.class));
+        verify(appointmentRepository, never()).save(any(Appointment.class));
     }
 
     @Test
@@ -589,7 +592,7 @@ class SlotInventoryServiceImplTest {
 
         assertThat(offered).extracting(AppointmentSlotDTO::getId).containsExactly(free.getId());
         // One read for the clinician's day, not one per slot.
-        org.mockito.Mockito.verify(appointmentRepository, org.mockito.Mockito.times(1))
+        verify(appointmentRepository, times(1))
             .findByStaff_IdAndAppointmentDate(staff.getId(), taken.getSlotDate());
     }
 }

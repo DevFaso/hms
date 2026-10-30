@@ -41,7 +41,8 @@ class MapperDisplayNameGuardTest {
     private static final Path MAIN = Paths.get("src/main/java/com/example/hms");
     private static final Pattern BUILDER = Pattern.compile("\\b(\\w+DTO)\\.builder\\(\\)");
     private static final Pattern CALL = Pattern.compile("\\.(\\w+)\\(");
-    private static final Pattern FIELD = Pattern.compile("^\\s*private\\s+[\\w.<>, ?\\[\\]]+\\s+(\\w+)\\s*(?:=[^;]*)?;");
+    /** A field declaration line: {@code private <type> <name> [= …];} (possessive: no backtracking). */
+    private static final Pattern FIELD = Pattern.compile("^\\s*+private\\s++([\\w.<>, ?\\[\\]]++)(?:=[^;]*+)?+;");
 
     /** Known chains that leave a name unset, per {@code "file: DTO.field"}. Shrink only. */
     private static final Set<String> ALLOWED = Set.of();
@@ -115,7 +116,12 @@ class MapperDisplayNameGuardTest {
                     if (depth == 1) {
                         Matcher m = FIELD.matcher(line);
                         if (m.find()) {
-                            fields.add(m.group(1));
+                            String declaration = m.group(1).strip();
+                            int space = declaration.lastIndexOf(' ');
+                            String name = declaration.substring(space + 1);
+                            if (space > 0 && !name.isEmpty() && name.chars().allMatch(Character::isJavaIdentifierPart)) {
+                                fields.add(name);
+                            }
                         }
                     }
                     for (char c : line.toCharArray()) {

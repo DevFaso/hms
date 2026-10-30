@@ -491,7 +491,7 @@ public class ControlledDrugRegisterService {
     }
 
     private static final Pattern RETURN_FILL_REF = Pattern.compile(
-        "^(?:(?i:lot)\\s+)?(?:(\\S+)\\s+)?(\\d{4}-\\d{2}-\\d{2})[T ](\\d{2}:\\d{2})$");
+        "^(?i:lot\\s+)?(?:(\\S+)\\s+)?(\\d{4}-\\d{2}-\\d{2})[T ](\\d{2}:\\d{2})$");
 
     private static String movementLabel(Locale locale, String type) {
         return type == null ? "" : label(locale, "pharmacy.register.movement." + type);

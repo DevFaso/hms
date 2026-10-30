@@ -22,7 +22,8 @@ class PatientMeasureRulesTest {
     @Test
     void aFundalHeightIsRefusedForAMan() {
         for (String male : new String[] {"MALE", "M", "male"}) {
-            assertThatThrownBy(() -> PatientMeasureRules.requireFundalHeightApplicable(patient(male, null), 28))
+            var man = patient(male, null);
+            assertThatThrownBy(() -> PatientMeasureRules.requireFundalHeightApplicable(man, 28))
                 .isInstanceOf(BusinessException.class).hasMessage("vitals.fundalHeight.notApplicable");
         }
     }
@@ -37,11 +38,11 @@ class PatientMeasureRulesTest {
     @Test
     void aHeadCircumferenceIsAChildsMeasure() {
         LocalDate today = LocalDate.of(2026, 10, 30);
-        assertThatThrownBy(() -> PatientMeasureRules.requireHeadCircumferenceApplicable(
-                patient("MALE", today.minusYears(65)), 56.0, today))
+        var adult = patient("MALE", today.minusYears(65));
+        assertThatThrownBy(() -> PatientMeasureRules.requireHeadCircumferenceApplicable(adult, 56.0, today))
             .isInstanceOf(BusinessException.class).hasMessage("vitals.headCircumference.notApplicable");
-        assertThatThrownBy(() -> PatientMeasureRules.requireHeadCircumferenceApplicable(
-                patient("F", today.minusYears(20)), 54.0, today))
+        var twenty = patient("F", today.minusYears(20));
+        assertThatThrownBy(() -> PatientMeasureRules.requireHeadCircumferenceApplicable(twenty, 54.0, today))
             .isInstanceOf(BusinessException.class);
         assertThatCode(() -> PatientMeasureRules.requireHeadCircumferenceApplicable(
                 patient("F", today.minusYears(19).minusDays(364)), 54.0, today)).doesNotThrowAnyException();

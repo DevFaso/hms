@@ -99,6 +99,45 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
         throw new BusinessException("pharmacy.payment.alreadyPaid");
     }
 
+    /**
+     * The provider reference of a mobile-money payment.
+     *
+     * <p>QA D1033: with no real provider configured (the mock gateway is the
+     * fallback bean in every environment), a mobile-money payment is what
+     * the cashier saw on the patient's phone: the typed transaction
+     * reference is required and stored as typed. The mock is never asked
+     * to "charge": it made a payment COMPLETED with no money moved and put
+     * "MOCK-&lt;uuid&gt;" on a patient's receipt. With a real provider, the
+     * patient's phone is charged and the provider's reference is kept.
+     */
+    private String mobileMoneyReference(PharmacyPaymentRequestDTO dto, Dispense dispense, Patient patient,
+                                        String currency) {
+        if (!isRealProvider()) {
+            String typed = dto.getReferenceNumber();
+            if (typed == null || typed.isBlank()) {
+                throw new BusinessException("pharmacy.payment.mobileMoneyReferenceRequired");
+            }
+            return typed.trim();
+        }
+        String phone = patient.getPhoneNumberPrimary();
+        if (phone == null || phone.isBlank()) {
+            throw new BusinessException("pharmacy.payment.noMobileMoneyPhone");
+        }
+        try {
+            MobileMoneyGateway.MobileMoneyCharge charge = mobileMoneyGateway.charge(
+                    new MobileMoneyGateway.MobileMoneyChargeRequest(
+                            phone,
+                            dto.getAmount(),
+                            currency,
+                            "Pharmacie: " + dispense.getMedicationName(),
+                            dispense.getId().toString()));
+            return charge.providerReference();
+        } catch (MobileMoneyGateway.MobileMoneyException e) {
+            log.warn("Mobile-money charge failed for dispense {}: {}", dispense.getId(), e.getMessage());
+            throw new BusinessException("pharmacy.payment.mobileMoneyFailed");
+        }
+    }
+
     @Override
     @Transactional
     public PharmacyPaymentResponseDTO createPayment(PharmacyPaymentRequestDTO dto) {
@@ -134,35 +173,8 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
         String providerReference = dto.getReferenceNumber();
         String currency = dto.getCurrency() != null ? dto.getCurrency() : "XOF";
 
-        // QA D1033: with no real provider configured (the mock gateway is the
-        // fallback bean in every environment), a mobile-money payment is what
-        // the cashier saw on the patient's phone: the typed transaction
-        // reference is required and stored as typed. The mock is never asked
-        // to "charge": it made a payment COMPLETED with no money moved and put
-        // "MOCK-<uuid>" on a patient's receipt.
-        if (dto.getPaymentMethod() == PharmacyPaymentMethod.MOBILE_MONEY && !isRealProvider()) {
-            if (providerReference == null || providerReference.isBlank()) {
-                throw new BusinessException("pharmacy.payment.mobileMoneyReferenceRequired");
-            }
-            providerReference = providerReference.trim();
-        } else if (dto.getPaymentMethod() == PharmacyPaymentMethod.MOBILE_MONEY) {
-            String phone = patient.getPhoneNumberPrimary();
-            if (phone == null || phone.isBlank()) {
-                throw new BusinessException("pharmacy.payment.noMobileMoneyPhone");
-            }
-            try {
-                MobileMoneyGateway.MobileMoneyCharge charge = mobileMoneyGateway.charge(
-                        new MobileMoneyGateway.MobileMoneyChargeRequest(
-                                phone,
-                                dto.getAmount(),
-                                currency,
-                                "Pharmacie: " + dispense.getMedicationName(),
-                                dispense.getId().toString()));
-                providerReference = charge.providerReference();
-            } catch (MobileMoneyGateway.MobileMoneyException e) {
-                log.warn("Mobile-money charge failed for dispense {}: {}", dispense.getId(), e.getMessage());
-                throw new BusinessException("pharmacy.payment.mobileMoneyFailed");
-            }
+        if (dto.getPaymentMethod() == PharmacyPaymentMethod.MOBILE_MONEY) {
+            providerReference = mobileMoneyReference(dto, dispense, patient, currency);
         }
 
         PharmacyPayment entity = paymentMapper.toEntity(dto, dispense, patient, hospital, receivedBy);

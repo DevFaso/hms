@@ -59,11 +59,9 @@ public interface PrescriptionService {
      * is the only path that can set it: it verifies the signer is the
      * prescription's own prescriber, applies the controlled-substance gates, and
      * records who signed, when, and a SHA-256 digest of what they signed.
-     */
-    // Round 18: one signature entry point, signPrescription(id, reauthentication, locale).
-
-    /**
-     * Round 18: sign with the prescriber's re-authentication, which a
+     *
+     * <p>Round 18: the one signature entry point. It signs with the
+     * prescriber's re-authentication, which a
      * controlled-drug prescription requires (the password, or the TOTP code
      * when an authenticator is enrolled), checked on this call only.
      */

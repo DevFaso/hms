@@ -77,7 +77,7 @@ public class PediatricDoseRule implements CdsRule {
         if (context.patient() == null) return List.of();
         LocalDate dob = context.patient().getDateOfBirth();
         if (dob == null) return List.of();
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(java.time.ZoneId.systemDefault());
         Period age = Period.between(dob, today);
         if (age.isNegative() || age.getYears() >= PEDIATRIC_AGE_THRESHOLD_YEARS) return List.of();
 
@@ -177,7 +177,7 @@ public class PediatricDoseRule implements CdsRule {
             if (weighedAt == null) {
                 return Optional.empty();
             }
-            long days = ChronoUnit.DAYS.between(weighedAt.toLocalDate(), LocalDate.now());
+            long days = ChronoUnit.DAYS.between(weighedAt.toLocalDate(), LocalDate.now(java.time.ZoneId.systemDefault()));
             if (days <= WEIGHT_MAX_AGE_DAYS) {
                 return Optional.empty();
             }
@@ -275,6 +275,16 @@ public class PediatricDoseRule implements CdsRule {
                 : band.getDoseUnit();
         }
 
+        /** A configured limit, with the decimals it was entered with (QA D1078: the reader's separator). */
+        private String number(BigDecimal v) {
+            return v == null ? "?" : text.decimal(v, Math.max(0, v.stripTrailingZeros().scale()));
+        }
+
+        /** A computed value, two decimals (QA D1078: the reader's separator). */
+        private String number(double v) {
+            return text.decimal(v, 2);
+        }
+
         String ageText() {
             if (age.getYears() > 0) {
                 return text.get("cds.pediatric.age.years", "{0} years", String.valueOf(age.getYears()));
@@ -338,11 +348,4 @@ public class PediatricDoseRule implements CdsRule {
         return v == null ? "?" : text.decimal(v, 2);
     }
 
-    private String number(BigDecimal v) {
-        return v == null ? "?" : text.decimal(v, Math.max(0, v.stripTrailingZeros().scale()));
-    }
-
-    private String number(double v) {
-        return text.decimal(v, 2);
-    }
 }

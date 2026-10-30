@@ -40,7 +40,7 @@ class PdfTextTest {
         assertThat(lines).hasSize(1);
         assertThat(lines.get(0)).endsWith("…");
         String kept = lines.get(0).substring(0, lines.get(0).length() - 1);
-        assertThat("Abdoul Aziz Wendlassida Nikiéma Ouédraogo").startsWith(kept);
+        assertThat(kept).isEqualTo("Abdoul Aziz Wendlassida Nikiéma Ouédraogo".substring(0, kept.length()));
         assertThat("Abdoul Aziz Wendlassida Nikiéma Ouédraogo".charAt(kept.length())).isEqualTo(' ');
     }
 

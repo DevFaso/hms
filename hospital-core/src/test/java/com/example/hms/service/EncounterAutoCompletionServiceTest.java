@@ -21,6 +21,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.times;
 
 @ExtendWith(MockitoExtension.class)
 class EncounterAutoCompletionServiceTest {
@@ -190,7 +191,7 @@ class EncounterAutoCompletionServiceTest {
         assertThat(stay.getStatus()).isEqualTo(EncounterStatus.IN_PROGRESS);
         verify(encounterRepository).saveAll(List.of(ed, consult));
         // QA D972 (round 18): the visits that led to the stay are billed like a checkout.
-        verify(eventPublisher, org.mockito.Mockito.times(2))
+        verify(eventPublisher, times(2))
                 .publishEvent(org.mockito.ArgumentMatchers.any(com.example.hms.event.EncounterCheckedOutEvent.class));
     }
 

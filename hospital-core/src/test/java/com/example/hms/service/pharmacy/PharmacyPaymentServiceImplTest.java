@@ -42,6 +42,8 @@ import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 
 /**
  * T-41: pharmacy payment service unit tests. Covers validation, tenant isolation,
@@ -249,7 +251,7 @@ class PharmacyPaymentServiceImplTest {
     @Test
     @DisplayName("QA D1032: a recorded payment stores its allocated receipt number, and a read returns it")
     void d1032_aPaymentStoresItsReceiptNumberAndAReadReturnsIt() {
-        PharmacyReceiptNumberAllocator allocator = org.mockito.Mockito.mock(PharmacyReceiptNumberAllocator.class);
+        PharmacyReceiptNumberAllocator allocator = mock(PharmacyReceiptNumberAllocator.class);
         service.setReceiptNumberAllocator(allocator);
         when(allocator.next(eq(hospital), any())).thenReturn("CHW75C64-PH-2026-000012");
         PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.CASH);
@@ -277,7 +279,7 @@ class PharmacyPaymentServiceImplTest {
         stored.setReceiptNumber("CHW75C64-PH-2026-000012");
         when(paymentRepository.findById(stored.getId())).thenReturn(Optional.of(stored));
         assertThat(service.getPayment(stored.getId()).getReceiptNumber()).isEqualTo("CHW75C64-PH-2026-000012");
-        org.mockito.Mockito.verify(allocator, org.mockito.Mockito.times(1)).next(any(), any());
+        verify(allocator, times(1)).next(any(), any());
     }
 
     @Test

@@ -40,8 +40,9 @@ class TimelineStatusGuardTest {
     private static final Path MAIN = Paths.get("src/main/java/com/example/hms/service");
 
     private static final Pattern METHOD = Pattern.compile(
-        "\\n    (?:private|public|protected)[^;{=]*?\\(([^;{]*?)\\)\\s*(?:throws [\\w., ]+)?\\{");
-    private static final Pattern NAME = Pattern.compile("(\\w+)\\s*\\($");
+        // Possessive, one level of nested parentheses in the parameters (Sonar S8786: no backtracking).
+        "\\n    (?:private|public|protected)[^;{=(]*+\\(((?:[^;{()\"]|\"[^\";{]*+\"|\\((?:[^;{()\"]|\"[^\";{]*+\")*+\\))*+)\\)\\s*+(?:throws [\\w., ]++)?+\\{");
+    private static final Pattern NAME = Pattern.compile("(\\w++)\\s*+\\($");
     private static final Pattern STATUS_IN_SUMMARY = Pattern.compile(
         "TimelineStatus\\.withStatus(?:Label)?\\(|statusLabel\\(|\\blabel\\(\\s*\\w+\\.getStatus\\(\\)\\s*\\)");
 

@@ -187,20 +187,10 @@ public class PatientRecordPdfService {
         pages.heading(t.get("pdf.record.section.notes"));
         // QA D1076: the ward's nursing notes print too, said to be nursing
         // notes, and the template by its name (never "DAR").
-        pages.rows(chart.getNotes(), n -> join(SEPARATOR, t.fmt(n.getDocumentedAt()),
-            "NURSING".equals(n.getSource()) ? t.get("pdf.record.note.nursing") : null,
-            label(t, n.getTemplate()),
-            n.getAuthorName(), t.get(n.isSigned() ? "pdf.record.note.signed" : "pdf.record.note.draft"),
-            n.getPreview()));
+        pages.rows(chart.getNotes(), n -> noteRow(n, t));
 
         pages.heading(t.get("pdf.record.section.results"));
-        pages.rows(chart.getResults(), r -> join(SEPARATOR, t.fmt(r.getResultDate()),
-            safe(r.getTestName()) + code(r.getTestCode()),
-            // QA D740: an unreleased row prints as pending, never with a value.
-            r.isReleased() ? join(" ", r.getResultValue(), r.getResultUnit()) : t.get("pdf.record.result.pending"),
-            // QA D1016: a correction says so on the printed record too.
-            r.isCorrected() ? t.get("pdf.record.result.corrected") : null,
-            r.isReleased() ? label(t, r.getAbnormalFlag()) : null, r.getOrderingStaffName()));
+        pages.rows(chart.getResults(), r -> resultRow(r, t));
 
         pages.heading(t.get("pdf.record.section.medications"));
         pages.rows(chart.getMedications(), m -> join(SEPARATOR, t.fmt(m.getCreatedAt()), m.getMedicationName(),
@@ -218,6 +208,25 @@ public class PatientRecordPdfService {
             label(t, pr.getProcedureCategory()), label(t, pr.getUrgency()), label(t, pr.getStatus()), pr.getOrderingProviderName(),
             t.get(pr.isConsentObtained() ? "pdf.record.procedure.consentObtained"
                 : "pdf.record.procedure.consentNotRecorded")));
+    }
+
+    /** QA D1076: a nursing note prints as one, with its template by name (never "DAR"). */
+    private static String noteRow(ChartReviewDTO.NoteEntryDTO n, PdfLabels t) {
+        return join(SEPARATOR, t.fmt(n.getDocumentedAt()),
+            "NURSING".equals(n.getSource()) ? t.get("pdf.record.note.nursing") : null,
+            label(t, n.getTemplate()),
+            n.getAuthorName(), t.get(n.isSigned() ? "pdf.record.note.signed" : "pdf.record.note.draft"),
+            n.getPreview());
+    }
+
+    private static String resultRow(ChartReviewDTO.ResultEntryDTO r, PdfLabels t) {
+        return join(SEPARATOR, t.fmt(r.getResultDate()),
+            safe(r.getTestName()) + code(r.getTestCode()),
+            // QA D740: an unreleased row prints as pending, never with a value.
+            r.isReleased() ? join(" ", r.getResultValue(), r.getResultUnit()) : t.get("pdf.record.result.pending"),
+            // QA D1016: a correction says so on the printed record too.
+            r.isCorrected() ? t.get("pdf.record.result.corrected") : null,
+            r.isReleased() ? label(t, r.getAbnormalFlag()) : null, r.getOrderingStaffName());
     }
 
     // ---------------------------------------------------------------- audit

@@ -75,7 +75,8 @@ class AppointmentSlotPolicyTest {
         // Never past midnight.
         assertThat(policy.endFor(staffId, FRIDAY, LocalTime.of(23, 50))).isEqualTo(LocalTime.of(23, 59));
         // ... and a visit that would last no time at all is refused.
-        assertThatThrownBy(() -> policy.endFor(staffId, FRIDAY, LocalTime.of(23, 59)))
+        LocalTime lastMinute = LocalTime.of(23, 59);
+        assertThatThrownBy(() -> policy.endFor(staffId, FRIDAY, lastMinute))
             .isInstanceOf(BusinessException.class).hasMessageContaining("appointment.timeRange.invalid");
     }
 
@@ -85,9 +86,12 @@ class AppointmentSlotPolicyTest {
         when(slotRepository.findByStaff_IdAndSlotDate(staffId, FRIDAY)).thenReturn(List.of(
             slot(held, held.plusMinutes(20), SlotStatus.HELD, LocalDateTime.now(CLOCK).plusHours(2))));
 
-        assertThatThrownBy(() -> policy.requireNoLiveHold(staffId, held, held.plusMinutes(20)))
+        LocalDateTime heldEnd = held.plusMinutes(20);
+        assertThatThrownBy(() -> policy.requireNoLiveHold(staffId, held, heldEnd))
             .isInstanceOf(BusinessException.class).hasMessageContaining("slot.heldForOffer");
-        assertThatThrownBy(() -> policy.requireNoLiveHold(staffId, held.plusMinutes(10), held.plusMinutes(30)))
+        LocalDateTime overlapStart = held.plusMinutes(10);
+        LocalDateTime overlapEnd = held.plusMinutes(30);
+        assertThatThrownBy(() -> policy.requireNoLiveHold(staffId, overlapStart, overlapEnd))
             .isInstanceOf(BusinessException.class);
         // Next to it, not over it.
         assertThatCode(() -> policy.requireNoLiveHold(staffId, held.plusMinutes(20), held.plusMinutes(40)))

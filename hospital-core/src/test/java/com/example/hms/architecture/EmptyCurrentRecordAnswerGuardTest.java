@@ -35,7 +35,7 @@ class EmptyCurrentRecordAnswerGuardTest {
 
     private static final Path CONTROLLERS = Path.of("src/main/java/com/example/hms/controller");
     private static final Pattern PATIENT_CURRENT = Pattern.compile(
-        "@GetMapping\\(\\s*(?:value\\s*=\\s*)?\"([^\"]*\\{patientId\\}[^\"]*/(?:current|active|latest))\"\\s*\\)");
+        "@GetMapping\\(\\s*+(?:value\\s*+=\\s*+)?+\"([^\"]*+)\"\\s*+\\)");
 
     @Test
     @DisplayName("every patient current/active/latest GET answers an empty result with 204")
@@ -92,10 +92,20 @@ class EmptyCurrentRecordAnswerGuardTest {
         assertThat(answersEmptyWithNoContent(handlers(fixed).get(0))).isTrue();
     }
 
+    /** A patient's {@code …{patientId}…/current}, {@code /active} or {@code /latest} path. */
+    static boolean isPatientCurrentPath(String path) {
+        int last = path.lastIndexOf('/');
+        return last >= 0 && path.substring(0, last).contains("{patientId}")
+            && java.util.Set.of("current", "active", "latest").contains(path.substring(last + 1));
+    }
+
     static List<String> handlers(String source) {
         List<String> out = new ArrayList<>();
         Matcher m = PATIENT_CURRENT.matcher(source);
         while (m.find()) {
+            if (!isPatientCurrentPath(m.group(1))) {
+                continue;
+            }
             int open = source.indexOf('{', source.indexOf(')', source.indexOf("public", m.end())));
             if (open < 0) {
                 continue;

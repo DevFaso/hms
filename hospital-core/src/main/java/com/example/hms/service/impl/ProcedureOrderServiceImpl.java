@@ -28,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import com.example.hms.service.recordaccess.CrossHospitalReachRecorder;
 import com.example.hms.service.recordaccess.RecordAccessPolicy;
@@ -407,14 +408,18 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
         return orderer != null && orderer.getUser() != null ? orderer.getUser().getId() : null;
     }
 
-    /** QA D1081: the same question requireCancelAuthor asks, for the list's per-row Annuler. */
-    private Boolean authorIsPhysician(ProcedureOrder order) {
+    /**
+     * QA D1081: the same question requireCancelAuthor asks, for the list's
+     * per-row Annuler; unknown (null in the response) without an author or a
+     * hospital.
+     */
+    private Optional<Boolean> authorIsPhysician(ProcedureOrder order) {
         UUID author = orderingUserId(order);
         UUID hospitalId = com.example.hms.security.CallerIdentity.hospitalIdOf(order.getHospital());
         if (author == null || hospitalId == null) {
-            return null;
+            return Optional.empty();
         }
-        return !roleValidator.draftsForPhysicianSignature(author, hospitalId);
+        return Optional.of(!roleValidator.draftsForPhysicianSignature(author, hospitalId));
     }
 
     private ProcedureOrderResponseDTO toResponseDTO(ProcedureOrder order) {
@@ -427,7 +432,7 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
         return ProcedureOrderResponseDTO.builder()
             .id(order.getId())
             .authorUserId(orderingUserId(order))
-            .authorIsPhysician(authorIsPhysician(order))
+            .authorIsPhysician(authorIsPhysician(order).orElse(null))
             .patientId(order.getPatient() != null ? order.getPatient().getId() : null)
             .patientName(order.getPatient() != null ? order.getPatient().getFullName() : null)
             .patientMrn(patientMrn)

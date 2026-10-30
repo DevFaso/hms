@@ -160,7 +160,7 @@ class ImagingOrderServiceImplTest {
 
         org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.createOrder(request, null))
             .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
-        org.mockito.Mockito.verify(imagingOrderRepository, org.mockito.Mockito.never()).save(any());
+        verify(imagingOrderRepository, never()).save(any());
     }
 
     private ImagingOrderRequestDTO requestWithVisit(UUID encounterId) {

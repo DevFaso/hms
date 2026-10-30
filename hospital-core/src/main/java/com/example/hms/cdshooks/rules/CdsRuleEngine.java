@@ -111,8 +111,18 @@ public class CdsRuleEngine {
                                        String proposedDosage,
                                        MedicationCatalogItem proposedCatalogItem,
                                        UUID excludedPrescriptionId) {
-        return buildContext(patient, hospitalId, proposedMedicationName, proposedMedicationCode,
-            proposedDosage, null, proposedCatalogItem, excludedPrescriptionId);
+        return buildContext(patient, hospitalId, new ProposedOrder(proposedMedicationName, proposedMedicationCode,
+            proposedDosage, null, proposedCatalogItem, excludedPrescriptionId));
+    }
+
+    /**
+     * The order being written, as the rules read it: its name and code, the
+     * dose and frequency as typed, the catalogue item picked or resolved (may
+     * be null), and the order being edited, left out of the duplicate check
+     * (null on a create).
+     */
+    public record ProposedOrder(String medicationName, String medicationCode, String dosage, String frequency,
+                                MedicationCatalogItem catalogItem, UUID excludedPrescriptionId) {
     }
 
     /**
@@ -120,15 +130,14 @@ public class CdsRuleEngine {
      * paediatric rule can check the daily total, and the date of the weight
      * it uses, so an old weight is flagged.
      */
-    public CdsRuleContext buildContext(Patient patient, UUID hospitalId,
-                                       String proposedMedicationName,
-                                       String proposedMedicationCode,
-                                       String proposedDosage,
-                                       String proposedFrequency,
-                                       MedicationCatalogItem proposedCatalogItem,
-                                       UUID excludedPrescriptionId) {
-        MedicationCatalogItem catalogItem = proposedCatalogItem != null
-            ? proposedCatalogItem
+    public CdsRuleContext buildContext(Patient patient, UUID hospitalId, ProposedOrder order) {
+        String proposedMedicationName = order.medicationName();
+        String proposedMedicationCode = order.medicationCode();
+        String proposedDosage = order.dosage();
+        String proposedFrequency = order.frequency();
+        UUID excludedPrescriptionId = order.excludedPrescriptionId();
+        MedicationCatalogItem catalogItem = order.catalogItem() != null
+            ? order.catalogItem()
             : resolveCatalogItem(hospitalId, proposedMedicationCode);
         String rxnorm = catalogItem == null ? null : catalogItem.getRxnormCode();
 
@@ -193,15 +202,8 @@ public class CdsRuleEngine {
     }
 
     /** Round 18: build context (with the frequency, a resolved item and an edited order) + evaluate. */
-    public List<CdsCard> evaluateProposedPrescription(Patient patient, UUID hospitalId,
-                                                       String proposedMedicationName,
-                                                       String proposedMedicationCode,
-                                                       String proposedDosage,
-                                                       String proposedFrequency,
-                                                       MedicationCatalogItem proposedCatalogItem,
-                                                       UUID excludedPrescriptionId) {
-        return evaluate(buildContext(patient, hospitalId, proposedMedicationName, proposedMedicationCode,
-            proposedDosage, proposedFrequency, proposedCatalogItem, excludedPrescriptionId));
+    public List<CdsCard> evaluateProposedPrescription(Patient patient, UUID hospitalId, ProposedOrder order) {
+        return evaluate(buildContext(patient, hospitalId, order));
     }
 
     /** Convenience: build context (with a resolved item and an edited order) + evaluate. */
@@ -333,16 +335,21 @@ public class CdsRuleEngine {
             return perKg == null || weightKg == null || weightKg <= 0d ? null : perKg * weightKg;
         }
         String unit = leadingUnit(dosage);
-        if (unit != null && COUNT_UNITS.contains(unit)) {
+        return unit == null ? parseDoseMg(dosage) : doseMgInUnit(dosage, unit, item);
+    }
+
+    /** The dose in mg when it is written with a unit word: a count, micrograms, mg or g; null otherwise. */
+    private static Double doseMgInUnit(String dosage, String unit, MedicationCatalogItem item) {
+        if (COUNT_UNITS.contains(unit)) {
             Double count = leadingNumber(dosage);
             Double strengthMg = strengthMgOf(item);
             return count == null || strengthMg == null ? null : count * strengthMg;
         }
-        if (unit != null && MICROGRAM_UNITS.contains(unit)) {
+        if (MICROGRAM_UNITS.contains(unit)) {
             Double micrograms = leadingNumber(dosage);
             return micrograms == null ? null : micrograms / 1000d;
         }
-        if (unit != null && !unit.equals("mg") && !unit.equals("g")) {
+        if (!unit.equals("mg") && !unit.equals("g")) {
             return null;
         }
         return parseDoseMg(dosage);

@@ -6,6 +6,8 @@ import com.example.hms.model.Prescription;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.util.Objects;
+
 /**
  * The one copy of the controlled-substance rule (P2 #15).
  *
@@ -49,6 +51,7 @@ public class ControlledSubstanceGuard {
                 || targetStatus == PrescriptionStatus.PENDING_SIGNATURE) {
             return;
         }
+        Objects.requireNonNull(prescription, "prescription");
 
         // QA D922: user decision 2026-10-28 SUPERSEDES D654 ("the guard keys
         // only on the prescriber's tick"). A drug the catalogue marks
@@ -99,6 +102,7 @@ public class ControlledSubstanceGuard {
      * order with the tick unset was dispensed with no prescriber proof.
      */
     public void requireDispensable(Prescription prescription) {
+        Objects.requireNonNull(prescription, "prescription");
         if (controlledResolver.isControlled(prescription) && prescription.getTwoFactorVerifiedAt() == null) {
             throw new BusinessException("prescription.safeguard.CONTROLLED_SUBSTANCE.dispense");
         }

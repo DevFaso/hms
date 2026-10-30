@@ -103,13 +103,17 @@ class DispenseReadyForCollectionTest {
     @Mock private PreparedFillVoider preparedFillVoider;
     @Mock private jakarta.persistence.EntityManager entityManager;
 
-    /** The catalogue the guard's resolver reads (QA D922: the catalogue decides "controlled" too). */
-    private final MedicationCatalogItemRepository guardCatalog =
-        org.mockito.Mockito.mock(MedicationCatalogItemRepository.class);
-
     @org.mockito.Spy
     private ControlledSubstanceGuard controlledSubstanceGuard =
-        new ControlledSubstanceGuard(new PrescriptionControlledResolver(guardCatalog));
+        new ControlledSubstanceGuard(new PrescriptionControlledResolver(null) {
+            // QA D922: the guard reads the catalogue (the test's @Mock repository, assigned after this
+            // initialiser runs, so it is looked up at each call).
+            @Override
+            public boolean catalogControlled(UUID hospitalId, UUID catalogItemId, String medicationCode) {
+                return new PrescriptionControlledResolver(medicationCatalogItemRepository)
+                    .catalogControlled(hospitalId, catalogItemId, medicationCode);
+            }
+        });
 
     static final LocalDate TODAY = LocalDate.of(2026, 10, 7);
 
@@ -119,7 +123,7 @@ class DispenseReadyForCollectionTest {
         com.example.hms.model.medication.MedicationCatalogItem morphine =
             new com.example.hms.model.medication.MedicationCatalogItem();
         morphine.setControlled(true);
-        when(guardCatalog.findByIdAndHospital_Id(morphineItem, hospitalId)).thenReturn(Optional.of(morphine));
+        when(medicationCatalogItemRepository.findByIdAndHospital_Id(morphineItem, hospitalId)).thenReturn(Optional.of(morphine));
         prescription.setMedicationCatalogItemId(morphineItem);
         prescription.setControlledSubstance(false);
     }

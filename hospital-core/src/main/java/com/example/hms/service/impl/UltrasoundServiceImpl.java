@@ -149,7 +149,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         order.setStatus(UltrasoundOrderStatus.CANCELLED);
         order.setCancellationReason(cancellationReason);
         // QA D1047: a cancellation is stamped with when and by whom, like every order.
-        order.setCancelledAt(LocalDateTime.now());
+        order.setCancelledAt(LocalDateTime.now(java.time.ZoneId.systemDefault()));
         order.setCancelledBy(cancellerName(order));
 
         UltrasoundOrder saved = orderRepository.save(order);

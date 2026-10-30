@@ -779,7 +779,7 @@ class ChartReviewServiceImplTest {
     @Test
     void d1076_theGlobalViewReadsNursingNotesPatientWide() {
         service.getChartReview(PATIENT_ID, null, null);
-        org.mockito.Mockito.verify(nursingNoteRepo).findTop50ByPatient_IdOrderByCreatedAtDesc(PATIENT_ID);
+        verify(nursingNoteRepo).findTop50ByPatient_IdOrderByCreatedAtDesc(PATIENT_ID);
     }
 
     @Test

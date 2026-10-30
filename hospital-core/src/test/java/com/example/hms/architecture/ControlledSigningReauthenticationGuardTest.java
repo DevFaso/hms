@@ -63,7 +63,7 @@ class ControlledSigningReauthenticationGuardTest {
         assertThat(found.keySet())
             .as("A listed site no longer writes SIGNED: delete its entry")
             .containsAll(NOT_A_SIGNATURE.keySet());
-        assertThat(found.get("service/PrescriptionServiceImpl.java")).isEqualTo(1);
+        assertThat(found).containsEntry("service/PrescriptionServiceImpl.java", 1);
     }
 
     @Test

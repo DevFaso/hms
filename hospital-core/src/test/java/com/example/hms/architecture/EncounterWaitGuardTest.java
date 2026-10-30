@@ -37,6 +37,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 @DisplayName("Waits start at the arrival; an MRN is never a UUID")
 class EncounterWaitGuardTest {
 
+    /** An id turned into text: {@code String.valueOf(x.getId())} (possessive: no backtracking). */
+    private static final java.util.regex.Pattern ID_AS_STRING =
+        java.util.regex.Pattern.compile("String\\.valueOf\\((?:\\w++\\.)*+getId\\(\\)\\)");
+    /** The id itself: {@code x.getId()}. */
+    private static final java.util.regex.Pattern ID_ITSELF = java.util.regex.Pattern.compile("(?:\\w++\\.)*+getId\\(\\)");
+
     private static final Path MAIN = Paths.get("src/main/java/com/example/hms");
 
     private static final Pattern DURATION = Pattern.compile(
@@ -100,8 +106,7 @@ class EncounterWaitGuardTest {
         while (m.find()) {
             int open = m.end() - 1;
             String arg = source.substring(open + 1, SourceScan.closingParen(source, open)).replaceAll("\\s+", "");
-            if (arg.matches(".*getId\\(\\)\\.toString\\(\\).*") || arg.matches(".*String\\.valueOf\\([\\w.]*getId\\(\\)\\).*")
-                    || arg.matches("[\\w.]*getId\\(\\)")) {
+            if (arg.contains("getId().toString()") || ID_AS_STRING.matcher(arg).find() || ID_ITSELF.matcher(arg).matches()) {
                 out.add(file + ":" + SourceScan.lineOf(source, m.start()) + " MRN from an id: " + arg);
             }
         }

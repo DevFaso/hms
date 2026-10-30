@@ -643,7 +643,7 @@ class PatientPortalServiceImplPhase2Test {
             UUID apptId = UUID.randomUUID();
             Appointment appointment = buildAppointment(apptId, AppointmentStatus.SCHEDULED);
             when(appointmentRepository.findById(apptId)).thenReturn(Optional.of(appointment));
-            org.mockito.Mockito.doThrow(new BusinessException("slot.heldForOffer"))
+            doThrow(new BusinessException("slot.heldForOffer"))
                     .when(slotPolicy).requireNoLiveHold(any(), any(), any());
 
             RescheduleAppointmentRequestDTO dto = RescheduleAppointmentRequestDTO.builder()
@@ -1902,7 +1902,7 @@ class PatientPortalServiceImplPhase2Test {
             stubSchedulingBasics();
             when(staffRepository.findByIdAndActiveTrue(staffId)).thenReturn(Optional.of(staff));
             when(staffAvailabilityService.isStaffAvailable(eq(staffId), any())).thenReturn(true);
-            org.mockito.Mockito.doThrow(new BusinessException("slot.heldForOffer"))
+            doThrow(new BusinessException("slot.heldForOffer"))
                     .when(slotPolicy).requireNoLiveHold(eq(staffId), any(), any());
 
             PortalBookAppointmentRequestDTO dto = PortalBookAppointmentRequestDTO.builder()

@@ -75,7 +75,7 @@ public class AppointmentSlotPolicy {
         LocalDateTime startAt = LocalDateTime.of(date, start);
         AppointmentSlot slot = slotRepository.findFirstByStaff_IdAndStartAt(staffId, startAt).orElse(null);
         if (slot != null && slot.getEndAt() != null && slot.getEndAt().isAfter(startAt)) {
-            return (int) java.time.Duration.between(startAt, slot.getEndAt()).toMinutes();
+            return (int) com.example.hms.utility.ElapsedTime.between(startAt, slot.getEndAt()).toMinutes();
         }
         return templateRepository.findByStaff_IdAndActiveTrue(staffId).stream()
             .filter(t -> t.appliesOn(date) && covers(t, start))

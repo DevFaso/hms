@@ -80,7 +80,7 @@ class RouteLabelGuardTest {
         while (m.find()) {
             int open = m.end() - 1;
             String args = source.substring(open + 1, SourceScan.closingParen(source, open));
-            Matcher route = Pattern.compile("([\\w.]*?)\\bgetRoute\\(\\)").matcher(args);
+            Matcher route = Pattern.compile("((?:\\w*+\\.)*+)\\bgetRoute\\(\\)").matcher(args);
             while (route.find()) {
                 String before = args.substring(0, route.start());
                 if (before.matches("(?s).*MedicationRoutes\\.label\\(\\s*$")) {

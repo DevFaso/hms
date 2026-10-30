@@ -610,10 +610,12 @@ public class PatientServiceImpl implements PatientService {
 
     /** The organisation a hospital belongs to, or null. */
     private UUID organizationOf(UUID hospitalId) {
-        return hospitalId == null ? null
-            : hospitalRepository.findById(hospitalId)
-                .map(h -> h.getOrganization() != null ? h.getOrganization().getId() : null)
-                .orElse(null);
+        if (hospitalId == null) {
+            return null;
+        }
+        return hospitalRepository.findById(hospitalId)
+            .map(h -> h.getOrganization() != null ? h.getOrganization().getId() : null)
+            .orElse(null);
     }
 
     /** The country of a hospital, or null when unknown (Burkina Faso is then assumed). */
@@ -966,7 +968,7 @@ public class PatientServiceImpl implements PatientService {
     @Override
     @Transactional(readOnly = true)
     public List<RegistrationMatchDTO> findRegistrationMatches(String email, String phone, UUID hospitalId) {
-        return findRegistrationMatches(email, phone, null, null, null, hospitalId);
+        return registrationMatches(email, phone, null, null, null, hospitalId);
     }
 
     @Override
@@ -974,6 +976,13 @@ public class PatientServiceImpl implements PatientService {
     public List<RegistrationMatchDTO> findRegistrationMatches(String email, String phone, String firstName,
                                                               String lastName, java.time.LocalDate dateOfBirth,
                                                               UUID hospitalId) {
+        return registrationMatches(email, phone, firstName, lastName, dateOfBirth, hospitalId);
+    }
+
+    /** Both registration-match entry points, inside the caller's read-only transaction. */
+    private List<RegistrationMatchDTO> registrationMatches(String email, String phone, String firstName,
+                                                           String lastName, java.time.LocalDate dateOfBirth,
+                                                           UUID hospitalId) {
         final String normEmail = email != null ? email.trim().toLowerCase(Locale.ROOT) : null;
         final String normPhone = phone != null ? phone.trim() : null;
 

@@ -44,7 +44,7 @@ class CdsCardLocaleFormatGuardTest {
     private static final Pattern WRITES_CARD_TEXT = Pattern.compile(
         "\\bCdsCardText\\b|\\bBpaCardText\\b|\"cds\\.[a-zA-Z]");
     private static final Pattern FIXED_FORMAT = Pattern.compile(
-        "String\\.format\\([^;]*?%[-+ 0#,]*\\d*(?:\\.\\d+)?[fFeEgG]"
+        "String\\.format\\((?:[^;%]|%(?![-+ 0#,]*+\\d*+(?:\\.\\d++)?+[fFeEgG]))*+%[-+ 0#,]*+\\d*+(?:\\.\\d++)?+[fFeEgG]"
             + "|\\.toPlainString\\(\\)"
             + "|toLocal(?:Date|Time|DateTime)\\(\\)\\.toString\\(\\)"
             + "|(?:Date|At|Time|DateTime)\\(\\)\\.toString\\(\\)"

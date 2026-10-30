@@ -95,6 +95,8 @@ public class VisitTimelineRows {
     private static final int DOCUMENT_ROWS_MAX = 200;
 
     private static final String META_STATUS = "status";
+    private static final String META_URGENCY = "urgency";
+    private static final String CREATED_AT = "createdAt";
     private static final String META_CLINICIAN = "clinician";
 
     /** A lab order with one of these has its result row instead, or is void. */
@@ -233,7 +235,7 @@ public class VisitTimelineRows {
     // discharge summary and the medical certificate were still missing.
     private List<PatientTimelineEntryDTO> treatmentPlanRows(Scope s) {
         Page<TreatmentPlan> plans = treatmentPlanRepository
-            .findAllByPatientIdAndHospitalId(s.patientId(), s.acting(), newestFirst("createdAt"));
+            .findAllByPatientIdAndHospitalId(s.patientId(), s.acting(), newestFirst(CREATED_AT));
         return plans == null ? List.of()
             : plans.getContent().stream().map(plan -> treatmentPlanRow(plan, s.acting())).toList();
     }
@@ -253,7 +255,7 @@ public class VisitTimelineRows {
     private List<PatientTimelineEntryDTO> certificateRows(Scope s) {
         // A document this hospital issued (a certificate); never the patient's own uploads.
         Page<PatientUploadedDocument> issued = documentRepository.findForStaffByType(
-            s.patientId(), s.acting(), PatientDocumentType.MEDICAL_CERTIFICATE, newestFirst("createdAt"));
+            s.patientId(), s.acting(), PatientDocumentType.MEDICAL_CERTIFICATE, newestFirst(CREATED_AT));
         return issued == null ? List.of()
             : issued.getContent().stream()
                 .filter(document -> document.getIssuingHospital() != null)
@@ -276,7 +278,7 @@ public class VisitTimelineRows {
 
     private List<PatientTimelineEntryDTO> obgynReferralRows(Scope s) {
         Page<ObgynReferral> referrals = obgynReferralRepository
-            .findByPatient_IdAndHospital_IdIn(s.patientId(), Set.of(s.acting()), newestFirst("createdAt"));
+            .findByPatient_IdAndHospital_IdIn(s.patientId(), Set.of(s.acting()), newestFirst(CREATED_AT));
         return referrals == null ? List.of()
             : referrals.getContent().stream().map(referral -> obgynReferralRow(referral, s.acting())).toList();
     }
@@ -346,7 +348,7 @@ public class VisitTimelineRows {
     private PatientTimelineEntryDTO transfusionRow(TransfusionRequest request, UUID acting) {
         Map<String, Object> metadata = new HashMap<>();
         putIfNotNull(metadata, META_STATUS, request.getStatus() != null ? request.getStatus().name() : null);
-        putIfNotNull(metadata, "urgency", request.getUrgency() != null ? request.getUrgency().name() : null);
+        putIfNotNull(metadata, META_URGENCY, request.getUrgency() != null ? request.getUrgency().name() : null);
         putIfNotNull(metadata, META_CLINICIAN, staffName(request.getRequestedBy()));
         String product = request.getProductType() != null ? label(request.getProductType()) : "—";
         String summary = MessageUtil.resolveOrRaw("timeline.transfusion.summary", product,
@@ -365,7 +367,7 @@ public class VisitTimelineRows {
     private PatientTimelineEntryDTO procedureOrderRow(ProcedureOrder order, UUID acting) {
         Map<String, Object> metadata = new HashMap<>();
         putIfNotNull(metadata, META_STATUS, order.getStatus() != null ? order.getStatus().name() : null);
-        putIfNotNull(metadata, "urgency", order.getUrgency() != null ? order.getUrgency().name() : null);
+        putIfNotNull(metadata, META_URGENCY, order.getUrgency() != null ? order.getUrgency().name() : null);
         putIfNotNull(metadata, META_CLINICIAN, staffName(order.getOrderingProvider()));
         String what = firstNonBlank(order.getProcedureName(), order.getProcedureCode());
         String summary = MessageUtil.resolveOrRaw("timeline.procedureOrder.summary", what != null ? what : "—");
@@ -383,7 +385,7 @@ public class VisitTimelineRows {
     private PatientTimelineEntryDTO obgynReferralRow(ObgynReferral referral, UUID acting) {
         Map<String, Object> metadata = new HashMap<>();
         putIfNotNull(metadata, META_STATUS, referral.getStatus() != null ? referral.getStatus().name() : null);
-        putIfNotNull(metadata, "urgency", referral.getUrgency() != null ? referral.getUrgency().name() : null);
+        putIfNotNull(metadata, META_URGENCY, referral.getUrgency() != null ? referral.getUrgency().name() : null);
         putIfNotNull(metadata, META_CLINICIAN, userName(referral.getMidwife()));
         String reason = truncate(firstNonBlank(referral.getReferralReason(), referral.getClinicalIndication()));
         String summary = MessageUtil.resolveOrRaw("timeline.obgynReferral.summary", reason != null ? reason : "—");
@@ -599,7 +601,7 @@ public class VisitTimelineRows {
     private PatientTimelineEntryDTO referralRow(GeneralReferral referral, UUID acting) {
         Map<String, Object> metadata = new HashMap<>();
         putIfNotNull(metadata, META_STATUS, referral.getStatus() != null ? referral.getStatus().name() : null);
-        putIfNotNull(metadata, "urgency", referral.getUrgency() != null ? referral.getUrgency().name() : null);
+        putIfNotNull(metadata, META_URGENCY, referral.getUrgency() != null ? referral.getUrgency().name() : null);
         putIfNotNull(metadata, META_CLINICIAN, staffName(referral.getReferringProvider()));
         String target = firstNonBlank(
             referral.getTargetDepartment() != null ? referral.getTargetDepartment().getName() : null,

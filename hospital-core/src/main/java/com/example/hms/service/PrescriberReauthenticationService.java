@@ -92,7 +92,7 @@ public class PrescriberReauthenticationService {
                 throw ex;
             }
             audit(userId, prescriptionId, METHOD_TOTP, AuditStatus.SUCCESS, null);
-            return new Verified(METHOD_TOTP, LocalDateTime.now());
+            return new Verified(METHOD_TOTP, LocalDateTime.now(java.time.ZoneId.systemDefault()));
         }
         User user = userRepository.findById(userId).orElse(null);
         if (user == null) {
@@ -120,7 +120,7 @@ public class PrescriberReauthenticationService {
         }
         attemptStore.clear(key);
         audit(userId, prescriptionId, METHOD_PASSWORD, AuditStatus.SUCCESS, null);
-        return new Verified(METHOD_PASSWORD, LocalDateTime.now());
+        return new Verified(METHOD_PASSWORD, LocalDateTime.now(java.time.ZoneId.systemDefault()));
     }
 
     private MfaStepUpRefusedException refused(UUID userId, UUID prescriptionId, String method,

@@ -452,7 +452,7 @@ public class LabResultMapper {
             }
         }
         java.time.LocalDate onDate = result.getResultDate() != null
-            ? result.getResultDate().toLocalDate() : java.time.LocalDate.now();
+            ? result.getResultDate().toLocalDate() : java.time.LocalDate.now(java.time.ZoneId.systemDefault());
         return LabRangeApplicability.Demographics.of(patient.getGender(), patient.getDateOfBirth(), onDate);
     }
 

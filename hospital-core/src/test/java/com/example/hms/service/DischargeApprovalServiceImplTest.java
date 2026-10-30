@@ -203,8 +203,8 @@ class DischargeApprovalServiceImplTest {
         assertThatThrownBy(() -> service.requestDischarge(request))
             .isInstanceOf(BusinessException.class)
             .hasMessage("discharge.request.notAdmitted");
-        verify(dischargeApprovalRepository, org.mockito.Mockito.never()).save(any());
-        verify(registrationRepository, org.mockito.Mockito.never()).save(any());
+        verify(dischargeApprovalRepository, never()).save(any());
+        verify(registrationRepository, never()).save(any());
     }
 
     /** QA D1065: the open stay is read in every open status, awaiting discharge included. */
@@ -215,7 +215,8 @@ class DischargeApprovalServiceImplTest {
             .thenReturn(Collections.emptyList());
         when(staffRepository.findByIdAndActiveTrue(nurseStaffId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.requestDischarge(buildRequest())).isInstanceOf(ResourceNotFoundException.class);
+        var request = buildRequest();
+        assertThatThrownBy(() -> service.requestDischarge(request)).isInstanceOf(ResourceNotFoundException.class);
         verify(admissionRepository).findByPatient_IdAndHospital_IdAndStatusIn(patientId, hospitalId,
             com.example.hms.enums.AdmissionStatus.OPEN);
         assertThat(com.example.hms.enums.AdmissionStatus.OPEN).contains(com.example.hms.enums.AdmissionStatus.AWAITING_DISCHARGE);

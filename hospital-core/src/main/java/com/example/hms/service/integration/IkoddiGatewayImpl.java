@@ -215,8 +215,10 @@ public class IkoddiGatewayImpl implements IkoddiGateway {
         // unregistered sender name, an exhausted balance, a malformed number),
         // and the status alone did not. Logged without PHI: digit runs (phone
         // numbers) and e-mail addresses are masked, and the text is capped.
-        LOG.warn("IKODDI {} failed for organizationId={} sender={} with status {}: {}", operation, organizationId,
-            smsSender, ex.getStatusCode().value(), safeGatewayBody(ex.getResponseBodyAsString()));
+        if (LOG.isWarnEnabled()) {
+            LOG.warn("IKODDI {} failed for organizationId={} sender={} with status {}: {}", operation, organizationId,
+                smsSender, ex.getStatusCode().value(), safeGatewayBody(ex.getResponseBodyAsString()));
+        }
         return new IllegalStateException(
             "IKODDI " + operation + " request failed with status " + ex.getStatusCode().value(), ex);
     }

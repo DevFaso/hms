@@ -182,7 +182,8 @@ class PrescriberReauthenticationServiceTest {
         when(passwordEncoder.matches("right-password", "{bcrypt}hash")).thenReturn(true);
         service.requireForControlledSigning(userId, rxId, "right-password", null);
 
-        assertThatThrownBy(() -> service.requireForControlledSigning(userId, UUID.randomUUID(), null, null))
+        UUID otherRx = UUID.randomUUID();
+        assertThatThrownBy(() -> service.requireForControlledSigning(userId, otherRx, null, null))
             .isInstanceOf(MfaStepUpRefusedException.class);
     }
 }

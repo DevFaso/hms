@@ -116,8 +116,8 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
             ? item.getAssignment()
             : resolveAssignment(dto.getAssignmentId(), invoice);
         // QA D1088: a line priced in place keeps the service it was charged
-        // for (the checkout's link), as it keeps its owner, unless the body
-        // names another one.
+        // for, which is the checkout's link, as it keeps its owner, unless
+        // the body names another one.
         Treatment related = dto.getRelatedServiceId() == null && item.getRelatedService() != null
             ? item.getRelatedService()
             : resolveRelatedService(dto.getRelatedServiceId(), invoice);

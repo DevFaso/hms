@@ -2729,8 +2729,10 @@ public class EncounterServiceImpl implements EncounterService {
      * so it is rendered in the writing clinician's language from the bundle,
      * never from an English literal (QA D952/D989 class).
      * {@code StoredClinicalTextLiteralGuardTest} keeps literals out.
+     *
+     * <p>Here: the pain score and the fundal height of a triage, in the
+     * clinician's language (QA D989, D1031).
      */
-    /** The pain score and the fundal height of a triage, in the clinician's language (QA D989, D1031). */
     private String triageVitalNotes(com.example.hms.payload.dto.TriageSubmissionRequestDTO req) {
         List<String> parts = new ArrayList<>();
         if (req.getPainScale() != null) {

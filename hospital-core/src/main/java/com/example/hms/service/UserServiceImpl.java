@@ -930,10 +930,10 @@ public class UserServiceImpl implements UserService {
 
     /** Whether the registration names the person behind {@code holder} (PatientMatchKeys.sameIdentity). */
     private boolean isSamePerson(User holder, AdminSignupRequest request) {
-        com.example.hms.payload.dto.PatientRequestDTO record = request.getPatient();
-        String first = record != null && hasText(record.getFirstName()) ? record.getFirstName() : request.getFirstName();
-        String last = record != null && hasText(record.getLastName()) ? record.getLastName() : request.getLastName();
-        java.time.LocalDate dob = record != null ? record.getDateOfBirth() : null;
+        com.example.hms.payload.dto.PatientRequestDTO patientRequest = request.getPatient();
+        String first = patientRequest != null && hasText(patientRequest.getFirstName()) ? patientRequest.getFirstName() : request.getFirstName();
+        String last = patientRequest != null && hasText(patientRequest.getLastName()) ? patientRequest.getLastName() : request.getLastName();
+        java.time.LocalDate dob = patientRequest != null ? patientRequest.getDateOfBirth() : null;
         return patientRepository.findByUserId(holder.getId())
             .map(existing -> com.example.hms.utility.PatientMatchKeys.sameIdentity(existing, first, last, dob))
             .orElseGet(() -> com.example.hms.utility.PatientMatchKeys.sameIdentity(

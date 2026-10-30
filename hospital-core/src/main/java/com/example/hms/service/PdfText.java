@@ -44,25 +44,35 @@ public final class PdfText {
             if (width(font, size, candidate) <= maxWidth) {
                 line.setLength(0);
                 line.append(candidate);
-                continue;
-            }
-            if (!line.isEmpty()) {
-                lines.add(line.toString());
-                line.setLength(0);
-            }
-            String rest = word;
-            while (rest.length() > 1 && width(font, size, rest) > maxWidth) {
-                int cut = rest.length() - 1;
-                while (cut > 1 && width(font, size, rest.substring(0, cut)) > maxWidth) {
-                    cut--;
+            } else {
+                if (!line.isEmpty()) {
+                    lines.add(line.toString());
+                    line.setLength(0);
                 }
-                lines.add(rest.substring(0, cut));
-                rest = rest.substring(cut);
+                line.append(breakOverlongWord(font, size, word, maxWidth, lines));
             }
-            line.append(rest);
         }
         lines.add(line.toString());
         return lines;
+    }
+
+    /**
+     * A single word wider than the line: its full-width pieces are added to
+     * {@code lines}, and the remainder (which fits) is returned to start the
+     * next line.
+     */
+    private static String breakOverlongWord(PDFont font, float size, String word, float maxWidth, List<String> lines)
+            throws IOException {
+        String rest = word;
+        while (rest.length() > 1 && width(font, size, rest) > maxWidth) {
+            int cut = rest.length() - 1;
+            while (cut > 1 && width(font, size, rest.substring(0, cut)) > maxWidth) {
+                cut--;
+            }
+            lines.add(rest.substring(0, cut));
+            rest = rest.substring(cut);
+        }
+        return rest;
     }
 
     /**

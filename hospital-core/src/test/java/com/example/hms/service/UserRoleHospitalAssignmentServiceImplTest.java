@@ -398,6 +398,7 @@ class UserRoleHospitalAssignmentServiceImplTest {
             var report = com.example.hms.utility.ActivationDeliveryTracker.close();
             assertThat(report)
                 .filteredOn(r -> "CREDENTIALS".equals(r.getPurpose()))
+                .isNotEmpty()
                 .extracting(com.example.hms.payload.dto.NotificationDeliveryStatusDTO::getOutcome)
                 .doesNotContain("SENT");
             verify(smsService, never()).send(org.mockito.ArgumentMatchers.isNull(), any());

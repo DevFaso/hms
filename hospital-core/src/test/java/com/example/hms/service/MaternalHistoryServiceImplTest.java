@@ -394,7 +394,7 @@ class MaternalHistoryServiceImplTest {
 
         maternalHistoryService.getCurrentMaternalHistoryByPatientId(patientId, username);
 
-        org.mockito.Mockito.verify(deliveryRecordRepository).findFirstByPatient_IdAndHospital_IdAndBirthDateTimeGreaterThanEqualOrderByBirthDateTimeDesc(
+        verify(deliveryRecordRepository).findFirstByPatient_IdAndHospital_IdAndBirthDateTimeGreaterThanEqualOrderByBirthDateTimeDesc(
             patientId, hospitalId, due.minusDays(280).atStartOfDay());
     }
 

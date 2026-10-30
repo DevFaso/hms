@@ -50,7 +50,7 @@ public final class LabRangeApplicability {
 
         /** From the stored gender text and date of birth, on {@code onDate} (today when null). */
         public static Demographics of(String gender, LocalDate dateOfBirth, LocalDate onDate) {
-            return new Demographics(sexOf(gender), dateOfBirth, onDate != null ? onDate : LocalDate.now());
+            return new Demographics(sexOf(gender), dateOfBirth, onDate != null ? onDate : LocalDate.now(java.time.ZoneId.systemDefault()));
         }
     }
 

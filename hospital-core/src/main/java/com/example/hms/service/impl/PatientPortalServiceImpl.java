@@ -815,6 +815,33 @@ public class PatientPortalServiceImpl implements PatientPortalService {
 
     // ── Reschedule own appointment ───────────────────────────────────────
 
+    /** A completed, cancelled or already-arrived visit is not moved by the patient (QA D717 sibling). */
+    private static void requirePatientReschedulable(Appointment appointment) {
+        if (appointment.getStatus() == AppointmentStatus.COMPLETED) {
+            throw new BusinessException("appointment.reschedule.completed");
+        }
+        if (appointment.getStatus() == AppointmentStatus.CANCELLED) {
+            throw new BusinessException("appointment.reschedule.cancelled");
+        }
+        if (!PATIENT_CHANGEABLE_STATUSES.contains(appointment.getStatus())) {
+            throw new BusinessException("appointment.patient.notChangeable");
+        }
+    }
+
+    /** QA D978 / D937: the clinician works at the new time and has no other booking over it. */
+    private void requireProviderFreeForMove(Appointment appointment, java.time.LocalDateTime newStart,
+                                            java.time.LocalDateTime newEnd) {
+        UUID staffId = appointment.getStaff().getId();
+        if (!staffAvailabilityService.isStaffAvailable(staffId, newStart)) {
+            throw new BusinessException(MessageUtil.resolve(PROVIDER_UNAVAILABLE_KEY));
+        }
+        if (com.example.hms.service.AppointmentSlotRules.overlapsHeldSlot(
+                appointmentRepository.findByStaff_IdAndAppointmentDate(staffId, newStart.toLocalDate()),
+                appointment.getId(), newStart, newEnd)) {
+            throw new BusinessException(MessageUtil.resolve("portal.booking.providerBusy"));
+        }
+    }
+
     @Override
     @Transactional
     public AppointmentResponseDTO rescheduleMyAppointment(Authentication auth,
@@ -825,17 +852,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .orElseThrow(() -> new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_KEY, dto.getAppointmentId()));
 
         requirePatientOwnership(appointment, patientId);
-
-        if (appointment.getStatus() == AppointmentStatus.COMPLETED) {
-            throw new BusinessException("appointment.reschedule.completed");
-        }
-        if (appointment.getStatus() == AppointmentStatus.CANCELLED) {
-            throw new BusinessException("appointment.reschedule.cancelled");
-        }
-        // QA D717 sibling: an arrived patient cannot move the visit either.
-        if (!PATIENT_CHANGEABLE_STATUSES.contains(appointment.getStatus())) {
-            throw new BusinessException("appointment.patient.notChangeable");
-        }
+        requirePatientReschedulable(appointment);
         // QA D1060: the slot rules set the length at the new time; the patient
         // never chooses it (the dialog's free end field saved 08:20-09:20).
         java.time.LocalTime newEndTime = slotPolicy.endFor(
@@ -847,18 +864,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         java.time.LocalDateTime newEnd = java.time.LocalDateTime.of(dto.getNewDate(), newEndTime);
         com.example.hms.service.AppointmentSlotRules.requirePatientBookable(
                 newStart, newEnd, nowAt(appointment.getHospital()));
-        if (appointment.getStaff() != null
-                && !staffAvailabilityService.isStaffAvailable(appointment.getStaff().getId(), newStart)) {
-            throw new BusinessException(MessageUtil.resolve(PROVIDER_UNAVAILABLE_KEY));
-        }
         if (appointment.getStaff() != null) {
+            requireProviderFreeForMove(appointment, newStart, newEnd);
             // QA D1063: nor onto a slot held for a waitlist offer.
             slotPolicy.requireNoLiveHold(appointment.getStaff().getId(), newStart, newEnd);
-        }
-        if (appointment.getStaff() != null && com.example.hms.service.AppointmentSlotRules.overlapsHeldSlot(
-                appointmentRepository.findByStaff_IdAndAppointmentDate(appointment.getStaff().getId(), dto.getNewDate()),
-                appointment.getId(), newStart, newEnd)) {
-            throw new BusinessException(MessageUtil.resolve("portal.booking.providerBusy"));
         }
 
         appointment.setAppointmentDate(dto.getNewDate());
