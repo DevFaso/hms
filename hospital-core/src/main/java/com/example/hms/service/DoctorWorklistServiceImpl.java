@@ -332,11 +332,10 @@ public class DoctorWorklistServiceImpl implements DoctorWorklistService {
 
     private DoctorWorklistItemDTO buildWorklistItem(Patient p, Encounter enc, String mappedStatus, Map<UUID, String> patientRoomBed) {
         int age = computeAge(p);
+        String location = enc.getDepartment() != null ? enc.getDepartment().getName() : null;
         // QA D1039: from the arrival, never from the visit day's midnight.
         int waitMinutes = (int) Math.min(
                 com.example.hms.utility.EncounterWait.minutes(enc, LocalDateTime.now()), Integer.MAX_VALUE);
-
-        String location = enc.getDepartment() != null ? enc.getDepartment().getName() : null;
         String[] roomBed = parseRoomBed(patientRoomBed.get(p.getId()));
         String latestVitalsSummary = fetchVitalsSummary(p.getId());
 

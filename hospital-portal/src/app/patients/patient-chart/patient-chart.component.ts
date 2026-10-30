@@ -114,6 +114,7 @@ export class PatientChartComponent implements OnInit, OnChanges {
     if (
       !this.patientId ||
       (gender !== 'FEMALE' && gender !== 'F') ||
+      // rbac-inline-ok: a read, not a write button: only the roles GET /maternal-history/patient/{id}/current admits ask for it (no 403 for everyone else).
       !this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'])
     ) {
       return;

@@ -222,7 +222,7 @@ public class IkoddiGatewayImpl implements IkoddiGateway {
     }
 
     private static final java.util.regex.Pattern DIGIT_RUN = java.util.regex.Pattern.compile("\\+?\\d[\\d .-]{4,}\\d");
-    private static final java.util.regex.Pattern EMAIL = java.util.regex.Pattern.compile("[\\w.+-]+@[\\w-]+(\\.[\\w-]+)+");
+    private static final java.util.regex.Pattern EMAIL = java.util.regex.Pattern.compile("[\\w.+-]++@[\\w-]++(?:\\.[\\w-]++)++");
     private static final java.util.regex.Pattern SPACES = java.util.regex.Pattern.compile("\\s+");
     private static final int MAX_LOGGED_BODY = 300;
 

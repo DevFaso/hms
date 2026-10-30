@@ -92,7 +92,18 @@ const ESCAPE_IN_MARKUP = /\(keydown\.esc(?:ape)?\)=/;
  * so it is never an Escape handler; it swallows the key only when it stops
  * propagation.)
  */
-const SWALLOW_ONLY = /^\s*(?:\$event\.(?:stopPropagation|preventDefault)\(\)\s*;?\s*)+$/;
+// Split on `;` and test each statement whole: one anchored, linear regex per
+// statement (a repeated `\s*;?\s*` group backtracks exponentially, CodeQL js/redos).
+const STOP_STATEMENT = /^\$event\.(?:stopPropagation|preventDefault)\(\)$/;
+const SWALLOW_ONLY = {
+  test(binding) {
+    const statements = binding
+      .split(';')
+      .map((part) => part.trim())
+      .filter((part) => part !== '');
+    return statements.length > 0 && statements.every((part) => STOP_STATEMENT.test(part));
+  },
+};
 const STOPS_PROPAGATION = /\$event\.stopPropagation\(\)/;
 
 function escapeBindings(tag) {
