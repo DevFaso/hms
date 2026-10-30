@@ -439,7 +439,8 @@ public class ReceptionServiceImpl implements ReceptionService {
         if (walkIn.getStatus() == EncounterStatus.ARRIVED
                 || walkIn.getStatus() == EncounterStatus.TRIAGE
                 || walkIn.getStatus() == EncounterStatus.WAITING_FOR_PHYSICIAN) {
-            waitMins = (int) ElapsedTime.minutesBetween(walkIn.getEncounterDate(), LocalDateTime.now());
+            // QA D1039 class: from the arrival, never from the visit day's midnight.
+            waitMins = (int) com.example.hms.utility.EncounterWait.minutes(walkIn, LocalDateTime.now());
         }
         return ReceptionQueueItemDTO.builder()
                 .appointmentId(null)
@@ -564,7 +565,8 @@ public class ReceptionServiceImpl implements ReceptionService {
 
     private int computeWaitMinutes(Encounter encounter) {
         if (encounter != null && encounter.getStatus() == EncounterStatus.ARRIVED) {
-            return (int) ElapsedTime.minutesBetween(encounter.getEncounterDate(), LocalDateTime.now());
+            // QA D1039 class: from the arrival, never from the visit day's midnight.
+            return (int) com.example.hms.utility.EncounterWait.minutes(encounter, LocalDateTime.now());
         }
         return 0;
     }

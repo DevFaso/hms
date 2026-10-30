@@ -1,6 +1,5 @@
 package com.example.hms.mapper;
 
-import com.example.hms.utility.ElapsedTime;
 import com.example.hms.model.Appointment;
 import com.example.hms.model.Department;
 import com.example.hms.model.Encounter;
@@ -84,15 +83,8 @@ public class PatientTrackerMapper {
     }
 
     private long computeWaitMinutes(Encounter enc, LocalDateTime now) {
-        LocalDateTime reference = enc.getArrivalTimestamp();
-        if (reference == null) {
-            reference = enc.getEncounterDate();
-        }
-        if (reference == null) {
-            return 0;
-        }
-        long minutes = ElapsedTime.minutesBetween(reference, now);
-        return Math.max(minutes, 0);
+        // QA D1039: the one reading of a wait (arrival, else when it was recorded).
+        return com.example.hms.utility.EncounterWait.minutes(enc, now);
     }
 
     private static String nullSafe(String value) {
