@@ -111,6 +111,24 @@ are excusing; `why` of existing pins is kept, new pins get `TODO`).
 | `scripts/lib/lab-dialog-a11y.test.mjs` (#975, extended) | An overlay that is a keyboard trap (D968). | Every overlay in `lab/`, and every `detail-overlay` / `form-overlay` side panel in the portal. |
 | `scripts/lib/lab-locale-format.test.mjs` (#975, extended) | A lab value, date or label colon not formatted for the reader (D1002). | `lab/` and the MTM review; outside `lab/`, every template showing a lab result value (value and colon rules). |
 
+## Guards added by the round-17 front-desk branch (fix/r17-frontdesk-identity)
+
+| Guard | Class | Scope / allowlist |
+|---|---|---|
+| `shell/shell-startup-endpoints.spec.ts` + `security/ShellStartupEndpointRolesTest` | The shell or an app-wide service calls an endpoint the signed-in role cannot use (D1012: the EMPI probe 403'd for every patient, pharmacist and lab user on every page load). | The spec boots the real shell for every role in `SecurityConstants` and refuses a request not in `SHELL_STARTUP_ENDPOINTS` or not admitted for the role; the Java test holds that table to each controller's `@PreAuthorize`. Allowlist: none. |
+| `architecture/AppointmentSlotRulesGuardTest#everyMethodThatBooksAClinicianChecksTheyAreFree` | A method that gives a clinician's time (new appointment, moved appointment) without the shared overlap rule (D1013: slot booking, accepted waitlist offer, referral appointment). | Every production method building an `Appointment` or moving one; helpers that call the rule count (to a fixpoint). Allowlist: mappers, FHIR mapper, dev seeder (not booking paths). |
+| `architecture/DischargedPatientStaysFindableGuardTest` | A discharge (or any side effect) ends the registration, or a registration query leaves out a stay status, so a patient vanishes from every list (D1014). | All of `src/main`. Allowlist: none. |
+| `architecture/OpenVisitDayWindowGuardTest` | The desk reads the day's walk-ins by calendar day without the visits still open from an earlier day (D1021). | Allowlist: none (one helper, `walkInsShownOn`). |
+| `architecture/PatientMatchKeysGuardTest` (extended) | A free-text patient search that never routes a typed number to the phone match; a request DTO capping a written phone below 20 characters (D1019). | |
+| `architecture/PatientDisplayNameGuardTest` | A patient name assembled as first + last, dropping the middle name (D1036 / D926). | GuardAllowlist of 9 files owned by other branches or pre-existing, each with its reason; shrinks only. |
+| `controller/AuthControllerTest#resendVerification_answersTheSameForUnknownActiveAndPendingContacts_D1017` | A public account lookup whose answer differs by account state (D1017). | Resend by e-mail and phone; password reset was already always 204. |
+| `service/disclosure/DisclosureAccountingServiceImplTest#thePatientsHeaderAlwaysAddsUpToItsLines` | A count shown beside a list that counts something else (D979). | Seeded random mixes, 20 runs. |
+| `npm run guard:person-search` | People filtered with a raw `toLowerCase().includes()` (accents, full names, written phone formats missed; D1019, D1020). | 19 sites fixed, baseline 0. |
+| `npm run guard:translate-params` | A translate call that leaves a placeholder of the value unfilled (D1035). | Baseline 0. |
+| `scripts/lib/desk-receipt.test.mjs` | A staff screen that takes money without handing a receipt (D1022). | |
+| `scripts/lib/drag-keyboard.test.mjs` | An action done only by mouse drag (D1023, WCAG 2.1.1). | Every `cdkDrag` / `(dragstart)` element. |
+| `scripts/lib/person-name-display.test.mjs` | A template rendering `first last` without the middle name (D1036). | Staff-account screens; `pharmacy/dispensing.html` pinned for fix/r17-lab-pharmacy-billing (D1052 lines). |
+
 ## What is not guarded (and why)
 
 - **Bean Validation default messages** (D925 "providerName: must not be
