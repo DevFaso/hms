@@ -2484,38 +2484,17 @@ public class EncounterServiceImpl implements EncounterService {
 
     /**
      * QA D972 hand-off (prepared in round 16): the clinic tells billing that a
-     * visit is complete, with its billable items, through an event billing
-     * consumes after commit. Nothing here knows about invoices.
+     * visit is complete through an event billing consumes after commit.
+     * Nothing here knows about invoices or about what is billable.
      */
     private void publishCheckedOut(Encounter encounter, LocalDateTime checkedOutAt) {
         if (eventPublisher == null) {
             return;
         }
-        UUID encounterId = encounter.getId();
-        // Id projections only, withdrawn / cancelled orders left out: billing
-        // must never charge an order the clinician took back.
-        // Unsigned drafts, withdrawn orders and partner rejections are not billable.
-        List<UUID> prescriptionIds = prescriptionRepository.findIdsByEncounterIdAndStatusNotIn(encounterId,
-            java.util.EnumSet.of(com.example.hms.enums.PrescriptionStatus.DRAFT,
-                com.example.hms.enums.PrescriptionStatus.PENDING_SIGNATURE,
-                com.example.hms.enums.PrescriptionStatus.CANCELLED,
-                com.example.hms.enums.PrescriptionStatus.DISCONTINUED,
-                com.example.hms.enums.PrescriptionStatus.PARTNER_REJECTED));
-        eventPublisher.publishEvent(new com.example.hms.event.EncounterCheckedOutEvent(
-            encounterId,
-            encounter.getCode(),
-            encounter.getPatient() != null ? encounter.getPatient().getId() : null,
-            encounter.getHospital() != null ? encounter.getHospital().getId() : null,
-            encounter.getDepartment() != null ? encounter.getDepartment().getId() : null,
-            encounter.getStaff() != null ? encounter.getStaff().getId() : null,
-            encounter.getEncounterType() != null ? encounter.getEncounterType().name() : null,
-            checkedOutAt,
-            prescriptionIds,
-            labOrderRepository.findIdsByEncounterIdAndStatusNotIn(encounterId,
-                java.util.EnumSet.of(com.example.hms.enums.LabOrderStatus.CANCELLED,
-                    com.example.hms.enums.LabOrderStatus.ENTERED_IN_ERROR)),
-            procedureOrderRepository.findIdsByEncounterIdAndStatusNotIn(encounterId,
-                java.util.EnumSet.of(com.example.hms.enums.ProcedureOrderStatus.CANCELLED))));
+        // QA D972 (round 18): billing reads every billable item of the visit
+        // itself, through its registry of billable order types; the clinic no
+        // longer picks the order types (imaging was left out of its lists).
+        eventPublisher.publishEvent(com.example.hms.event.EncounterCheckedOutEvent.of(encounter, checkedOutAt));
     }
 
     @Override

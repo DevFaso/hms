@@ -1734,6 +1734,7 @@
       "PLATFORM_SERVICE_UPDATED": "Service de plateforme modifié : {{details}}",
       "PLATFORM_SERVICE_STATUS": "Statut du service de plateforme passé à {{status}} : {{details}}",
       "PLATFORM_LINK_TOGGLED": "Rattachement du service de plateforme à un {{target}} {{state}} : {{details}}",
+      "INVOICE_CANCELLED": "Facture {{invoice}} annulée, motif enregistré",
       "CDS_OVERRIDE_CREATED": "Alerte critique d’aide à la décision outrepassée à la création de l’ordonnance",
       "CDS_OVERRIDE_EDITED": "Alerte critique d’aide à la décision outrepassée à la modification de l’ordonnance",
       "DOSE_LIMITS_APPROVED": "Limites de dose pédiatriques validées sur l’article du catalogue {{item}}",
@@ -2200,7 +2201,13 @@
         "BILLING": "Factures",
         "PHARMACY": "Pharmacie"
       }
-    }
+    },
+    "CANCEL_REASON": "Motif de l’annulation",
+    "CANCEL_REASON_PLACEHOLDER": "Pourquoi cette facture émise est-elle annulée ? Le motif est conservé avec elle.",
+    "CANCEL_REASON_REQUIRED": "Indiquez le motif de l’annulation de cette facture émise.",
+    "ADJUSTMENT_AMOUNT_REQUIRED": "Saisissez le montant de la remise ou de l’exonération (supérieur à zéro).",
+    "EDIT_LINE": "Tarifer ou corriger cette ligne",
+    "ITEM_UPDATED": "Ligne mise à jour"
   },
   "CHAT": {
     "ACCESS_DENIED": "Vous n'avez pas l'autorisation d'accéder à la messagerie.",
@@ -9147,7 +9154,7 @@
     "EXP_SHORT": "exp.",
     "FEFO_REASON": "Motif du choix de ce lot",
     "FEFO_REASON_REQUIRED": "Indiquez pourquoi vous utilisez ce lot : un autre lot expire plus tôt.",
-    "FEFO_WARNING": "Le lot {{lot}} expire plus tôt ({{date}}) et couvre cette quantité. Prenez-le, ou indiquez pourquoi vous utilisez ce lot.",
+    "FEFO_WARNING": "Le lot {{lot}} expire plus tôt ({{date}}) et en contient encore {{left}}. Prenez-le d’abord, ou indiquez pourquoi vous utilisez ce lot.",
     "FACILITY_CODE": "Code Établissement",
     "FILTER_BY_TYPE": "Filtrer par type",
     "FORM": "Forme",
@@ -9500,6 +9507,8 @@
     "DISPENSE_SPLIT_SUCCESS": "Délivré en {{count}} délivrances, le lot à la date la plus proche d’abord.",
     "FEFO_SPLIT_HINT": "Le lot à la date la plus proche ne couvre pas la quantité : il est vidé d’abord, puis le lot suivant.",
     "FEFO_SPLIT_PART": "{{quantity}} du lot {{lot}} (pér. {{date}})",
+    "REGISTER_RETURN_FILL": "Retour, réf. lot {{lot}} délivré le {{date}}",
+    "REGISTER_RETURN_FILL_DATE": "Retour de la délivrance du {{date}}",
     "DOSING": {
       "ACTION": "Limites de dose pédiatriques",
       "TITLE": "Limites de dose pédiatriques",

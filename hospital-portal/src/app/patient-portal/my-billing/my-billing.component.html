@@ -35,14 +35,10 @@
       <div class="portal-list">
         @for (inv of invoices(); track inv.id) {
           <div class="portal-list-item">
-            <div
-              class="pli-icon"
-              [style.background]="isPayable(inv) ? '#fef3c7' : '#d1fae5'"
-              [style.color]="isPayable(inv) ? '#d97706' : '#059669'"
-            >
-              <span class="material-symbols-outlined">{{
-                isPayable(inv) ? 'pending' : 'check_circle'
-              }}</span>
+            <!-- QA D1071: the icon follows the status; a cancelled invoice is never the paid check -->
+            @let tone = toneOf(inv);
+            <div class="pli-icon invoice-tone" [attr.data-tone]="tone.tone">
+              <span class="material-symbols-outlined" aria-hidden="true">{{ tone.icon }}</span>
             </div>
             <div class="pli-body">
               <span class="pli-title">{{

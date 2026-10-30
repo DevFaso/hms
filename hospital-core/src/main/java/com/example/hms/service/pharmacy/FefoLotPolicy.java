@@ -93,10 +93,16 @@ public class FefoLotPolicy {
         String reason = overrideReason == null ? "" : overrideReason.trim();
         if (reason.isEmpty()) {
             StockLot lot = earlier.get();
+            // QA D1083: the message says what the rule tested (stock left on
+            // the earlier lot, D1029) and how much, never that the earlier lot
+            // "covers this quantity": it often does not (250 left for 300).
+            BigDecimal left = lot.getRemainingQuantity()
+                    .subtract(alreadyTaken.getOrDefault(lot.getId(), BigDecimal.ZERO));
             throw new BusinessException("pharmacy.fefo.reasonRequired", lot.getLotNumber(),
                     java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM)
                             .withLocale(org.springframework.context.i18n.LocaleContextHolder.getLocale())
-                            .format(lot.getExpiryDate()));
+                            .format(lot.getExpiryDate()),
+                    left.stripTrailingZeros().toPlainString());
         }
         if (reason.length() > REASON_MAX) {
             throw new BusinessException("pharmacy.fefo.reasonTooLong", String.valueOf(REASON_MAX));

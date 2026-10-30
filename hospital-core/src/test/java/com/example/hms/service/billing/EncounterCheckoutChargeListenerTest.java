@@ -42,9 +42,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
- * QA D972 (rounds 16 and 17): a checked-out visit reached billing as nothing
- * but its copay. The checkout event now opens one DRAFT visit invoice with the
- * services, lab orders and procedures of the visit.
+ * QA D972 (rounds 16, 17 and 18): a checked-out visit reached billing as
+ * nothing but its copay. The checkout event now opens one DRAFT visit invoice
+ * with a line for every billable item of the visit, from the registry's charge
+ * sources: services or consultation, lab, imaging, procedure, transfusion and
+ * bed days.
  */
 class EncounterCheckoutChargeListenerTest {
 
@@ -56,8 +58,19 @@ class EncounterCheckoutChargeListenerTest {
     private final TreatmentRepository treatments = mock(TreatmentRepository.class);
     private final UserRoleHospitalAssignmentRepository assignments = mock(UserRoleHospitalAssignmentRepository.class);
     private final InvoiceNumberAllocator numbers = mock(InvoiceNumberAllocator.class);
+    private final com.example.hms.repository.ImagingOrderRepository imaging =
+        mock(com.example.hms.repository.ImagingOrderRepository.class);
+    private final com.example.hms.repository.TransfusionRequestRepository transfusions =
+        mock(com.example.hms.repository.TransfusionRequestRepository.class);
+    private final com.example.hms.repository.BloodUnitRepository units =
+        mock(com.example.hms.repository.BloodUnitRepository.class);
+    private final com.example.hms.repository.AdmissionRepository admissions =
+        mock(com.example.hms.repository.AdmissionRepository.class);
     private final EncounterCheckoutChargeListener listener = new EncounterCheckoutChargeListener(
-        encounters, invoices, given, labOrders, procedures, treatments, assignments, numbers);
+        encounters, invoices, treatments, assignments, numbers, List.of(
+            new ConsultationChargeSource(given), new LabOrderChargeSource(labOrders),
+            new ImagingOrderChargeSource(imaging), new ProcedureOrderChargeSource(procedures),
+            new TransfusionChargeSource(transfusions, units), new BedDaysChargeSource(admissions)));
 
     private final UUID hospitalId = UUID.randomUUID();
     private Encounter encounter;
@@ -91,15 +104,14 @@ class EncounterCheckoutChargeListenerTest {
         labOrderId = UUID.randomUUID();
         order.setId(labOrderId);
         order.setLabTestDefinition(tdr);
+        when(labOrders.findIdsByEncounterIdAndStatusNotIn(eq(encounter.getId()), any())).thenReturn(List.of(labOrderId));
         when(labOrders.findAllById(List.of(labOrderId))).thenReturn(List.of(order));
-        when(procedures.findAllById(List.of())).thenReturn(List.of());
         when(given.findByEncounter_Id(encounter.getId())).thenReturn(List.of());
     }
 
     private EncounterCheckedOutEvent event() {
         return new EncounterCheckedOutEvent(encounter.getId(), "ENC-20261029-9F86F7", encounter.getPatient().getId(),
-            hospitalId, null, null, "OUTPATIENT", LocalDateTime.now(), List.of(UUID.randomUUID()),
-            List.of(labOrderId), List.of());
+            hospitalId, null, null, "OUTPATIENT", LocalDateTime.now());
     }
 
     private static Treatment priced(String name, String price) {
@@ -182,5 +194,73 @@ class EncounterCheckoutChargeListenerTest {
         when(treatments.findByHospital_Id(hospitalId)).thenThrow(new IllegalStateException("db down"));
         assertThatCode(() -> listener.onCheckedOut(event())).doesNotThrowAnyException();
         verify(invoices, never()).save(any());
+    }
+
+    @Test
+    void anImagingOrderIsOnTheDraftAndADraftOrCancelledOneIsNot_D972() {
+        com.example.hms.model.ImagingOrder chest = new com.example.hms.model.ImagingOrder();
+        chest.setStudyType("Radiographie thoracique");
+        when(imaging.findByEncounterIdAndStatusNotIn(eq(encounter.getId()),
+                org.mockito.ArgumentMatchers.argThat(excluded -> excluded.contains(com.example.hms.enums.ImagingOrderStatus.CANCELLED)
+                    && excluded.contains(com.example.hms.enums.ImagingOrderStatus.DRAFT))))
+            .thenReturn(List.of(chest));
+        when(treatments.findByHospital_Id(hospitalId)).thenReturn(List.of(priced("Radiographie Thoracique", "7500")));
+
+        BillingInvoice draft = listener.chargeVisit(event()).orElseThrow();
+
+        assertThat(lines(draft)).extracting(InvoiceItem::getItemDescription, InvoiceItem::getUnitPrice)
+            .contains(org.assertj.core.groups.Tuple.tuple("Radiographie thoracique", new BigDecimal("7500.00")));
+    }
+
+    @Test
+    void issuedBloodIsChargedByTheUnitsIssuedAndAWaitingRequestIsNot_D972() {
+        com.example.hms.model.TransfusionRequest request = new com.example.hms.model.TransfusionRequest();
+        request.setId(UUID.randomUUID());
+        request.setProductType(com.example.hms.enums.BloodProductType.PACKED_RED_CELLS);
+        request.setUnitsRequested(3);
+        when(transfusions.findByEncounter_IdAndStatusIn(eq(encounter.getId()),
+                org.mockito.ArgumentMatchers.argThat(statuses -> statuses.contains(com.example.hms.enums.TransfusionRequestStatus.ISSUED)
+                    && !statuses.contains(com.example.hms.enums.TransfusionRequestStatus.REQUESTED)
+                    && !statuses.contains(com.example.hms.enums.TransfusionRequestStatus.CANCELLED))))
+            .thenReturn(List.of(request));
+        com.example.hms.model.BloodUnit given1 = new com.example.hms.model.BloodUnit();
+        given1.setStatus(com.example.hms.enums.BloodUnitStatus.TRANSFUSED);
+        com.example.hms.model.BloodUnit given2 = new com.example.hms.model.BloodUnit();
+        given2.setStatus(com.example.hms.enums.BloodUnitStatus.ISSUED);
+        com.example.hms.model.BloodUnit returned = new com.example.hms.model.BloodUnit();
+        returned.setStatus(com.example.hms.enums.BloodUnitStatus.RETURNED);
+        when(units.findByRequest_IdOrderByUnitNumberAsc(request.getId())).thenReturn(List.of(given1, given2, returned));
+        when(treatments.findByHospital_Id(hospitalId)).thenReturn(List.of());
+
+        BillingInvoice draft = listener.chargeVisit(event()).orElseThrow();
+
+        assertThat(lines(draft)).filteredOn(i -> i.getQuantity() == 2).hasSize(1);
+    }
+
+    @Test
+    void aStayIsChargedByTheNightsSpent_D972() {
+        UUID admissionId = UUID.randomUUID();
+        encounter.setAdmissionId(admissionId);
+        com.example.hms.model.Admission stay = new com.example.hms.model.Admission();
+        stay.setHospital(encounter.getHospital());
+        stay.setAdmissionDateTime(LocalDateTime.of(2026, 10, 25, 22, 0));
+        stay.setActualDischargeDateTime(LocalDateTime.of(2026, 10, 29, 9, 0));
+        when(admissions.findById(admissionId)).thenReturn(Optional.of(stay));
+        when(treatments.findByHospital_Id(hospitalId)).thenReturn(List.of(priced("Hospitalisation salle commune", "5000")));
+
+        BillingInvoice draft = listener.chargeVisit(event()).orElseThrow();
+
+        assertThat(lines(draft)).extracting(InvoiceItem::getItemDescription, InvoiceItem::getQuantity, InvoiceItem::getTotalPrice)
+            .contains(org.assertj.core.groups.Tuple.tuple("Hospitalisation salle commune", 4, new BigDecimal("20000.00")));
+    }
+
+    @Test
+    void anOutpatientVisitHasNoBedDays_D972() {
+        when(treatments.findByHospital_Id(hospitalId)).thenReturn(List.of(priced("Hospitalisation", "5000")));
+
+        BillingInvoice draft = listener.chargeVisit(event()).orElseThrow();
+
+        assertThat(lines(draft)).extracting(InvoiceItem::getItemDescription).doesNotContain("Hospitalisation");
+        verify(admissions, never()).findById(any());
     }
 }

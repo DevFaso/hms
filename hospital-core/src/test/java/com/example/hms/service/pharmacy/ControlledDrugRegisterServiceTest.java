@@ -312,6 +312,31 @@ class ControlledDrugRegisterServiceTest {
                 .isEqualTo("Retour, réf. QA-RET-001");
     }
 
+    /**
+     * QA D1084: the return reason printed the fill minute as stored (server
+     * UTC, 17:09) while the row time was shown local (13:09). It is now on the
+     * hospital wall clock, and the screen also gets the lot and the stored
+     * minute to word it on the reader clock, as the row time is.
+     */
+    @Test
+    void aReturnReasonNamesTheFillTimeOnTheHospitalClock_D1084() {
+        java.time.ZoneId hospitalZone = "Asia/Tokyo".equals(java.time.ZoneId.systemDefault().getId())
+                ? java.time.ZoneId.of("America/Santo_Domingo") : java.time.ZoneId.of("Asia/Tokyo");
+        java.time.LocalDateTime stored = java.time.LocalDateTime.of(2026, 10, 30, 17, 9);
+        java.time.LocalDateTime local = stored.atZone(java.time.ZoneId.systemDefault())
+                .withZoneSameInstant(hospitalZone).toLocalDateTime();
+        String expectedTime = java.time.format.DateTimeFormatter.ofLocalizedDateTime(java.time.format.FormatStyle.SHORT)
+                .withLocale(Locale.FRENCH).format(local);
+
+        String fr = ControlledDrugRegisterService.reasonText(Locale.FRENCH, "RETURN ref LOT-A-R18-01b 2026-10-30T17:09", hospitalZone);
+
+        assertThat(fr).endsWith(expectedTime);
+        ControlledDrugRegisterService.FillRef fill = ControlledDrugRegisterService.fillRef("RETURN ref LOT-A-R18-01b 2026-10-30T17:09");
+        assertThat(fill.lot()).isEqualTo("LOT-A-R18-01b");
+        assertThat(fill.at()).isEqualTo(stored);
+        assertThat(ControlledDrugRegisterService.fillRef("RETURN ref QA-RET-001")).isNull();
+    }
+
     private void stubLedger() {
         when(ledger.sumByItemAndTypeBefore(eq(List.of(morphine.getId())), any())).thenReturn(List.of(
                 new Object[] {morphine.getId(), StockTransactionType.RECEIPT, new BigDecimal("100")},

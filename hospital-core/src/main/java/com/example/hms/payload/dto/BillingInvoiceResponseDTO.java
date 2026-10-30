@@ -73,6 +73,10 @@ public class BillingInvoiceResponseDTO {
     private String status;
     private String notes;
 
+    /** QA D1069: why, and when (ISO, server time), a cancelled invoice was cancelled. */
+    private String cancelReason;
+    private String cancelledAt;
+
     // Optional alias
     private String patientName;
 }

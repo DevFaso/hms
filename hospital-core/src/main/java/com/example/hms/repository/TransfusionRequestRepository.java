@@ -9,6 +9,9 @@ import java.util.UUID;
 
 public interface TransfusionRequestRepository extends JpaRepository<TransfusionRequest, UUID> {
 
+    /** QA D972: a visit's transfusion requests in the given statuses, for the checkout charge. */
+    List<TransfusionRequest> findByEncounter_IdAndStatusIn(UUID encounterId, java.util.Collection<TransfusionRequestStatus> statuses);
+
     List<TransfusionRequest> findByHospital_IdOrderByRequestedAtDesc(UUID hospitalId);
 
     List<TransfusionRequest> findByHospital_IdAndStatusOrderByRequestedAtDesc(

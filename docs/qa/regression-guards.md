@@ -173,6 +173,19 @@ server reason (`ClientSafeAccessDeniedException`: a `message`, no `code`) is
 reported in a toast on the page, never by the 403 page; its spec covers an
 arbitrary URL.
 
+## Guards added by fix/r18-billing-pharmacy (round 18; extend these too)
+
+| Guard | Class | Scope / allowlist |
+|---|---|---|
+| `architecture/BillableOrderRegistryGuardTest` (new) | D972 (NOT_FIXED in rounds 17 and 18): a billable order type of a visit with no charge mapping. Every `BillableOrderType` charged on the visit invoice has exactly one `VisitChargeSource`; every entity linked to an encounter is either the source of a registry entry or in `NOT_BILLABLE` with its reason. | every `@Entity` under `model/` with an `encounter`/`encounterId` field; 14 documentation/record entities declared not billable, each with why |
+| `architecture/VisitCompletionBillingGuardTest` (new) | D972, second half: a path that completes a visit (sets `EncounterStatus.COMPLETED`) without publishing `EncounterCheckedOutEvent` (discharge, the admission that ends an emergency visit, a recorded death were never billed). | every production method; 1 allowed (`PrescriptionServiceImpl#createEncounterSnapshot`, the anchor of a stand-alone prescription: no visit took place) |
+| `architecture/MapperDisplayNameGuardTest` (new) | D1058: a response mapper that sets `fooId` and leaves the DTO's own `fooName` to some of its callers (the checkout picker read "Non renseigné" because only `getDispense` filled the name). | every `…DTO.builder()` chain under `mapper/`; 0 allowed (`ServiceTranslationMapper.treatmentName` fixed with it) |
+| `architecture/StatusRefusalLabelGuardTest` (widened) | D1090: a refusal or a 409 that names an invoice, routing or claim status by its raw code. Now also scans the billing and pharmacy services, `ConflictException`, `InvoiceStatus`/`RoutingDecisionStatus` labels in every locale, and `billing.*`/`stock.routing.*` messages that spell a code; a status looked up as a bundle label counts as a label. | 0 allowed (3 pharmacy messages that spelt ACCEPTED/PENDING reworded) |
+| `architecture/ServerComposedTimeGuardTest` (new) | D1084: a pharmacy or billing source that formats a date-time without converting it through `HospitalTime` (server UTC printed as the hospital time). | pharmacy/billing packages and the billing/PDF services; 1 allowed: `service/PdfLabels.java`, whose caller `PdfInvoiceService` belongs to the front-desk branch (it must pass the hospital zone) |
+| `service/pharmacy/FefoLotPolicyTest#noLocaleOfTheFefoMessageClaimsTheEarlierLotCoversTheQuantity_D1083` (new) | D1083: a FEFO message (server bundle or portal locale) that says the earlier lot "covers" the quantity, or does not name what is left on it. | `pharmacy.fefo.reasonRequired` in 4 bundles, `PHARMACY.FEFO_WARNING` in 3 locales |
+| `scripts/lib/invoice-tone.test.mjs` (new) | D1071: an invoice icon or colour chosen by a ternary of its own (`isPayable(inv) ? 'pending' : 'check_circle'`) instead of `shared/invoice-tone.ts`. | every template/ts about invoices; 0 allowed |
+| `scripts/lib/cfa-amount.test.mjs` (new) | D1089: a screen naming `BILLING.PAYMENT_WHOLE_AMOUNT` itself instead of `shared/cfa-amount.ts`, which asks for an amount before it checks decimals. | every `.ts`/`.html`; 0 allowed |
+
 ## What is not guarded (and why)
 
 - **Bean Validation default messages** (D925 "providerName: must not be

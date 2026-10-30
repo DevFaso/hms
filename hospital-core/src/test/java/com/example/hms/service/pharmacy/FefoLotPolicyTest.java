@@ -69,6 +69,50 @@ class FefoLotPolicyTest {
     }
 
     /**
+     * QA D1083: the refusal said the earlier lot "covers this quantity" when
+     * it held 250 of the 300 asked. It now names what is left on it (less what
+     * earlier lines of the same movement take), and no locale of the message,
+     * on the server or on the screen, claims the earlier lot covers anything.
+     */
+    @Test
+    void theRefusalNamesWhatIsLeftOnTheEarlierLot_D1083() {
+        BigDecimal hundredFifty = new BigDecimal("150");
+        assertThatThrownBy(() -> policy.requireFefoOrReason(longDated, hundredFifty, null))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(e -> assertThat(((BusinessException) e).getArgs()[2]).isEqualTo("100"));
+        java.util.Map<UUID, BigDecimal> partly = java.util.Map.of(shortDated.getId(), new BigDecimal("90"));
+        assertThatThrownBy(() -> policy.requireFefoOrReason(longDated, BigDecimal.ONE, null, partly))
+                .satisfies(e -> assertThat(((BusinessException) e).getArgs()[2]).isEqualTo("10"));
+    }
+
+    @Test
+    void noLocaleOfTheFefoMessageClaimsTheEarlierLotCoversTheQuantity_D1083() throws IOException {
+        java.util.regex.Pattern claim = java.util.regex.Pattern.compile("(?i)covers|can serve|couvre|cubre");
+        List<String> problems = new ArrayList<>();
+        for (String suffix : List.of("", "_en", "_fr", "_es")) {
+            java.util.Properties bundle = new java.util.Properties();
+            try (var reader = Files.newBufferedReader(
+                    Path.of("src/main/resources/i18n/messages-pharmacy" + suffix + ".properties"), StandardCharsets.UTF_8)) {
+                bundle.load(reader);
+            }
+            String text = bundle.getProperty("pharmacy.fefo.reasonRequired", "");
+            if (claim.matcher(text).find() || !text.contains("{2}")) {
+                problems.add("messages-pharmacy" + suffix + ": " + text);
+            }
+        }
+        for (String lang : List.of("en", "fr", "es")) {
+            String json = Files.readString(Path.of("../hospital-portal/src/assets/i18n/" + lang + ".json"), StandardCharsets.UTF_8);
+            java.util.regex.Matcher warning = java.util.regex.Pattern.compile("\"FEFO_WARNING\": \"([^\"]*)\"").matcher(json);
+            while (warning.find()) {
+                if (claim.matcher(warning.group(1)).find() || !warning.group(1).contains("{{left}}")) {
+                    problems.add(lang + ".json FEFO_WARNING: " + warning.group(1));
+                }
+            }
+        }
+        assertThat(problems).as("a FEFO message that says the earlier lot covers the quantity (QA D1083)").isEmpty();
+    }
+
+    /**
      * Review of #975: a counter sale is built line by line before any stock
      * moves; 100 already taken off the short lot by an earlier line leaves it
      * nothing, so the next line from the long lot follows FEFO.

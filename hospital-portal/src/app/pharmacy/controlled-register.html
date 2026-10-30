@@ -147,7 +147,24 @@
                       <td>{{ e.prescriberName || '—' }}</td>
                       <td>{{ e.recordedBy || '—' }}</td>
                       <td>{{ e.witnessedBy || '—' }}</td>
-                      <td>{{ e.reason || '—' }}</td>
+                      <!-- QA D1084: the fill time of a return is on the reader's clock, like the row time -->
+                      <td>
+                        @if (e.reasonFillAt) {
+                          {{
+                            (e.reasonFillLot
+                              ? 'PHARMACY.REGISTER_RETURN_FILL'
+                              : 'PHARMACY.REGISTER_RETURN_FILL_DATE'
+                            )
+                              | translate
+                                : {
+                                    lot: e.reasonFillLot,
+                                    date: (e.reasonFillAt | serverTime | date: 'short'),
+                                  }
+                          }}
+                        } @else {
+                          {{ e.reason || '—' }}
+                        }
+                      </td>
                     </tr>
                   }
                 </tbody>

@@ -891,10 +891,66 @@ class BillingInvoiceServiceImplTest {
     void updateInvoice_anIssuedInvoiceIsStillCancelledWithItsEchoedValues_D656() {
         BillingInvoice invoice = existingInvoice(InvoiceStatus.SENT, "0");
 
+        // QA D1069: an issued invoice is cancelled with its reason (declared change: it used to need none).
         billingInvoiceService.updateInvoice(invoice.getId(),
-            editOf().totalAmount(new BigDecimal("500.00")).status(InvoiceStatus.CANCELLED).build(), Locale.FRENCH);
+            editOf().totalAmount(new BigDecimal("500.00")).status(InvoiceStatus.CANCELLED)
+                .cancelReason("Facturé au mauvais patient").build(), Locale.FRENCH);
 
         assertEquals(InvoiceStatus.CANCELLED, invoice.getStatus());
+    }
+
+    @Test
+    void updateInvoice_anIssuedInvoiceIsNotCancelledWithoutAReason_D1069() {
+        BillingInvoice invoice = existingInvoice(InvoiceStatus.SENT, "0");
+        UUID invoiceId = invoice.getId();
+        BillingInvoiceRequestDTO noReason = editOf().status(InvoiceStatus.CANCELLED).cancelReason("   ").build();
+
+        com.example.hms.exception.BusinessException refused = assertThrows(
+            com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.updateInvoice(invoiceId, noReason, Locale.FRENCH));
+
+        assertEquals("billing.invoice.cancelReasonRequired", refused.getMessageKey());
+        assertEquals(InvoiceStatus.SENT, invoice.getStatus());
+        verify(invoiceRepository, never()).save(any());
+    }
+
+    @Test
+    void updateInvoice_aCancellationKeepsItsReasonWhenAndWho_D1069() {
+        BillingInvoice invoice = existingInvoice(InvoiceStatus.SENT, "0");
+        UUID clerk = UUID.randomUUID();
+        when(roleValidator.getCurrentUserId()).thenReturn(clerk);
+
+        billingInvoiceService.updateInvoice(invoice.getId(),
+            editOf().status(InvoiceStatus.CANCELLED).cancelReason("  Doublon de CHW-2026-000025  ").build(),
+            Locale.FRENCH);
+
+        assertEquals("Doublon de CHW-2026-000025", invoice.getCancelReason());
+        assertNotNull(invoice.getCancelledAt());
+        assertEquals(clerk, invoice.getCancelledBy());
+    }
+
+    @Test
+    void updateInvoice_aWaiverSettledInvoiceNeedsAReasonToo_D1069() {
+        BillingInvoice invoice = existingInvoice(InvoiceStatus.PAID, "0");
+        UUID invoiceId = invoice.getId();
+        BillingInvoiceRequestDTO noReason = editOf().status(InvoiceStatus.CANCELLED).build();
+
+        com.example.hms.exception.BusinessException refused = assertThrows(
+            com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.updateInvoice(invoiceId, noReason, Locale.FRENCH));
+        assertEquals("billing.invoice.cancelReasonRequired", refused.getMessageKey());
+    }
+
+    @Test
+    void updateInvoice_aDraftIsCancelledWithoutAReason_D1069() {
+        BillingInvoice invoice = existingInvoice(InvoiceStatus.DRAFT, "0");
+
+        billingInvoiceService.updateInvoice(invoice.getId(), editOf().status(InvoiceStatus.CANCELLED).build(),
+            Locale.FRENCH);
+
+        assertEquals(InvoiceStatus.CANCELLED, invoice.getStatus());
+        assertNull(invoice.getCancelReason());
+        assertNotNull(invoice.getCancelledAt());
     }
 
     /** QA D612: invoiceDate 2026-10-23, dueDate 2026-10-01 gave a 500. */
@@ -2183,10 +2239,21 @@ class BillingInvoiceServiceImplTest {
         BillingInvoiceRequestDTO request = requestFor(a2).encounterReference("ENC-STAY-1")
             .clientRequestId(UUID.randomUUID()).build();
 
-        com.example.hms.exception.ConflictException refused = assertThrows(
-            com.example.hms.exception.ConflictException.class,
-            () -> billingInvoiceService.createInvoice(request, Locale.ENGLISH));
-        assertTrue(refused.getMessage().contains("RHA-2026-000012") || refused.getMessage().contains("encounterAlreadyInvoiced"));
+        // QA D1090: resolved with the real bundles, so the status argument is visible in the sentence.
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(Locale.ENGLISH);
+        try {
+            com.example.hms.exception.ConflictException refused = assertThrows(
+                com.example.hms.exception.ConflictException.class,
+                () -> billingInvoiceService.createInvoice(request, Locale.ENGLISH));
+            assertTrue(refused.getMessage().contains("RHA-2026-000012"), refused.getMessage());
+            // The existing invoice's status is named as people read it ("Paid"), never the code "PAID".
+            assertFalse(refused.getMessage().contains("PAID"), refused.getMessage());
+            assertTrue(refused.getMessage().contains("(status Paid)"), refused.getMessage());
+        } finally {
+            com.example.hms.utility.MessageUtil.setMessageSource(null);
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        }
         verify(invoiceRepository, never()).saveAndFlush(any());
     }
 

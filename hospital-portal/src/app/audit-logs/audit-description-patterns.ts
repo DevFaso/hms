@@ -1244,6 +1244,12 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     localise: { kind: 'phrase:INVOICE_ADJUSTMENT' },
   },
   {
+    // QA D1069: an issued invoice cancelled; the reason is kept on the invoice, not in the audit text.
+    key: 'AUDIT.DESC.INVOICE_CANCELLED',
+    re: /^Invoice cancelled with a recorded reason: invoice (\S+)$/,
+    params: ['invoice'],
+  },
+  {
     key: 'AUDIT.DESC.STATUS_WAS',
     re: /^(.+) \(was ([A-Z_]+)\)$/,
     params: ['what', 'previous'],

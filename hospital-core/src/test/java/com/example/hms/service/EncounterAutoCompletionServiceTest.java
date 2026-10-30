@@ -28,6 +28,7 @@ class EncounterAutoCompletionServiceTest {
     @Mock private EncounterRepository encounterRepository;
     @Mock private PatientTrackerEventPublisher trackerEventPublisher;
     @Mock private AuditEventLogService auditEventLogService;
+    @Mock private org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private EncounterAutoCompletionService service;
@@ -73,6 +74,12 @@ class EncounterAutoCompletionServiceTest {
         // the card out of the right lane.
         verify(trackerEventPublisher).publishStatusTransition(
                 active, EncounterStatus.IN_PROGRESS.name(), EncounterStatus.COMPLETED.name());
+        // QA D972 (round 18): the closed stay is handed to billing (bed days, the stay's orders).
+        org.mockito.ArgumentCaptor<com.example.hms.event.EncounterCheckedOutEvent> billed =
+                org.mockito.ArgumentCaptor.forClass(com.example.hms.event.EncounterCheckedOutEvent.class);
+        verify(eventPublisher).publishEvent(billed.capture());
+        assertThat(billed.getValue().encounterId()).isEqualTo(active.getId());
+        assertThat(billed.getValue().checkedOutAt()).isEqualTo(active.getCheckoutTimestamp());
     }
 
     @Test
@@ -85,6 +92,7 @@ class EncounterAutoCompletionServiceTest {
 
         verify(encounterRepository, never()).saveAll(any());
         verify(trackerEventPublisher, never()).publishStatusTransition(any(), any(), any());
+        verify(eventPublisher, never()).publishEvent(any());
     }
 
     @Test
@@ -181,6 +189,9 @@ class EncounterAutoCompletionServiceTest {
         assertThat(oldConsult.getStatus()).isEqualTo(EncounterStatus.IN_PROGRESS);
         assertThat(stay.getStatus()).isEqualTo(EncounterStatus.IN_PROGRESS);
         verify(encounterRepository).saveAll(List.of(ed, consult));
+        // QA D972 (round 18): the visits that led to the stay are billed like a checkout.
+        verify(eventPublisher, org.mockito.Mockito.times(2))
+                .publishEvent(org.mockito.ArgumentMatchers.any(com.example.hms.event.EncounterCheckedOutEvent.class));
     }
 
     @Test

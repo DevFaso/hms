@@ -51,6 +51,9 @@ export interface BillingInvoiceResponse {
   patientResponsibilityAmount: number;
   status: InvoiceStatus;
   notes: string;
+  /** QA D1069: why and when (server time) a cancelled invoice was cancelled. */
+  cancelReason?: string | null;
+  cancelledAt?: string | null;
   createdAt: string;
   updatedAt: string;
   /** QA D428: the visit invoice a folded check-in copay was credited to. */
@@ -103,6 +106,8 @@ export interface BillingInvoiceRequest {
   /** DRAFT, SENT or CANCELLED; paid statuses follow payments. */
   status: InvoiceStatus;
   notes?: string;
+  /** QA D1069: why an issued invoice is cancelled; required by the server for that move. */
+  cancelReason?: string;
   /** Idempotency key, one per create form: a double submit is one invoice. */
   clientRequestId?: string;
   /**
@@ -314,6 +319,11 @@ export class BillingService {
   }
 
   /** The backend answers text/plain, so parse as text. */
+  /** QA D1088: a draft line is corrected in place (its price above all); it keeps its id and its links. */
+  updateInvoiceItem(id: string, req: InvoiceItemRequest): Observable<InvoiceItemResponse> {
+    return this.http.put<InvoiceItemResponse>(`/invoice-items/${id}`, req);
+  }
+
   deleteInvoiceItem(id: string): Observable<string> {
     return this.http.delete(`/invoice-items/${id}`, { responseType: 'text' });
   }

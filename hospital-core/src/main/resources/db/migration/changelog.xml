@@ -3209,4 +3209,15 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- V251 (round 18): QA D1069, an invoice cancellation stores its
+         reason, when and by whom (cancel_reason, cancelled_at, cancelled_by
+         on billing.billing_invoices). Plain statements, no DO block.
+         Idempotent. -->
+    <changeSet id="V251-invoice-cancel-reason" author="hms-team" runOnChange="false">
+        <sqlFile path="V251__invoice_cancel_reason.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

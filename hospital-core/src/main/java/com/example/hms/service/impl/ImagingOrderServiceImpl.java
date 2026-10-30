@@ -81,6 +81,9 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         requireNotInThePast(request.getScheduledDate(), null);
         ImagingOrder imagingOrder = imagingOrderMapper.toEntity(request, patient, hospital);
         imagingOrder.setOrderedAt(LocalDateTime.now());
+        // QA D972 (round 18): an order belongs to the visit it was written in,
+        // which is how the checkout bills it.
+        imagingOrder.setEncounterId(visitOf(request.getEncounterId(), patient.getId(), hospital.getId()));
         // QA D302: the ordering provider is whoever is signed in. A free-text
         // name in the request is a claim, never shown as if a user had placed
         // the order; without a resolved user the order carries no provider.
@@ -99,6 +102,41 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
 
         ImagingOrder saved = imagingOrderRepository.save(imagingOrder);
         return imagingOrderMapper.toResponseDTO(saved, duplicateMatches);
+    }
+
+    /** QA D972: the visits an order can belong to; null in a hand-built unit test. */
+    private com.example.hms.repository.EncounterRepository encounterRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setEncounterRepository(com.example.hms.repository.EncounterRepository encounterRepository) {
+        this.encounterRepository = encounterRepository;
+    }
+
+    /**
+     * QA D972 (round 18): the visit an imaging order is written in. A named
+     * visit must be this patient's, at this hospital: otherwise the order would
+     * be billed on someone else's invoice, so it is answered as not found. With
+     * none named (the imaging page has no visit field), the patient's open
+     * visit here, the latest one, is the order's visit, as an order entered in
+     * a real hospital's chart belongs to the current encounter; with no open
+     * visit the order stands alone and is not billed at a checkout.
+     */
+    private UUID visitOf(UUID requested, UUID patientId, UUID hospitalId) {
+        if (encounterRepository == null) {
+            return requested;
+        }
+        if (requested != null) {
+            return encounterRepository.findByIdAndHospital_Id(requested, hospitalId)
+                .filter(enc -> enc.getPatient() != null && patientId.equals(enc.getPatient().getId()))
+                .map(com.example.hms.model.Encounter::getId)
+                .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound", requested));
+        }
+        return encounterRepository.findByPatient_IdAndHospital_IdAndStatusNotIn(patientId, hospitalId,
+                com.example.hms.enums.EncounterStatus.CLOSED).stream()
+            .filter(enc -> enc.getEncounterDate() != null)
+            .max(java.util.Comparator.comparing(com.example.hms.model.Encounter::getEncounterDate))
+            .map(com.example.hms.model.Encounter::getId)
+            .orElse(null);
     }
 
     @Override
@@ -125,7 +163,16 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         }
 
         requireNotInThePast(request.getScheduledDate(), order.getScheduledDate());
+        UUID visitBefore = order.getEncounterId();
         imagingOrderMapper.updateEntityFromRequest(order, request);
+        // QA D972: an edit keeps the order's visit (the form has no visit
+        // field), and a visit it names must be this patient's at this hospital.
+        if (request.getEncounterId() == null) {
+            order.setEncounterId(visitBefore);
+        } else if (order.getPatient() != null && order.getHospital() != null) {
+            order.setEncounterId(visitOf(request.getEncounterId(), order.getPatient().getId(),
+                order.getHospital().getId()));
+        }
 
         // QA D970 (sibling): the order being edited is not a duplicate of itself.
         List<ImagingOrder> duplicateMatches = loadDuplicateMatches(

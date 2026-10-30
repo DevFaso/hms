@@ -111,6 +111,29 @@ describe('MyBillingComponent', () => {
     expect(host().querySelectorAll('.pay-btn').length).toBe(1);
   });
 
+  it('QA D1071: a cancelled invoice never wears the paid check', () => {
+    create([
+      invoice({ id: 'x', balance: 0, status: 'CANCELLED' }),
+      invoice({ id: 'y', balance: 0, paid: 100, status: 'PAID' }),
+    ]);
+    const icons = Array.from(host().querySelectorAll('.pli-icon'));
+    expect(icons[0].getAttribute('data-tone')).toBe('cancelled');
+    expect(icons[0].textContent?.trim()).not.toBe('check_circle');
+    expect(icons[1].getAttribute('data-tone')).toBe('paid');
+    expect(icons[1].textContent?.trim()).toBe('check_circle');
+    expect((icons[0] as HTMLElement).style.background).toBe('');
+  });
+
+  it('QA D1089: an empty amount is answered, not ignored', () => {
+    create([invoice({ balance: 50 })]);
+    openDialog();
+    component.payAmount = null as unknown as number;
+    (host().querySelector('.pay-submit-btn') as HTMLElement).click();
+    fixture.detectChanges();
+    expect(portal.payInvoice).not.toHaveBeenCalled();
+    expect(component.payError()).toBe('BILLING.PAYMENT_AMOUNT_REQUIRED');
+  });
+
   it('QA D254: a paid invoice shows its total, not 0', () => {
     create([invoice({ id: 'c', amount: 2500, paid: 2500, balance: 0, status: 'PAID' })]);
     expect(text('.pli-amount').replace(/\D/g, '')).toBe('2500');

@@ -47,7 +47,9 @@ class BillingChargeCreatorGuardTest {
         "service/billing/EncounterCheckoutChargeListener.java#chargeVisit",
         "QA D972: one visit invoice per visit - a visit that already has a live invoice other than its check-in "
             + "copay is left alone, the copay is folded in when the draft is issued (QA D210), and medicines are "
-            + "not on it (paid at the pharmacy checkout) - EncounterCheckoutChargeListenerTest");
+            + "not on it (paid at the pharmacy checkout); its lines come from the registry of billable order "
+            + "types, one charge source each (QA D972 round 18) - EncounterCheckoutChargeListenerTest, "
+            + "BillableOrderRegistryGuardTest, VisitCompletionBillingGuardTest");
 
     @Test
     void everyInvoiceCreatorStatesItsNoDoubleChargeRule() throws IOException {

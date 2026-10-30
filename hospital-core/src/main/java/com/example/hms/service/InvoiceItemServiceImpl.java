@@ -115,7 +115,12 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
         UserRoleHospitalAssignment assignment = dto.getAssignmentId() == null && item.getAssignment() != null
             ? item.getAssignment()
             : resolveAssignment(dto.getAssignmentId(), invoice);
-        Treatment related = resolveRelatedService(dto.getRelatedServiceId(), invoice);
+        // QA D1088: a line priced in place keeps the service it was charged
+        // for (the checkout's link), as it keeps its owner, unless the body
+        // names another one.
+        Treatment related = dto.getRelatedServiceId() == null && item.getRelatedService() != null
+            ? item.getRelatedService()
+            : resolveRelatedService(dto.getRelatedServiceId(), invoice);
 
         // apply updates
         item.setBillingInvoice(invoice);

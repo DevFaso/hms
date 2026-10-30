@@ -392,6 +392,20 @@
               <p>{{ inv.notes }}</p>
             </div>
           }
+          <!-- QA D1069: a cancelled invoice says why, when it was recorded -->
+          @if (inv.status === 'CANCELLED' && inv.cancelReason) {
+            <div class="notes-section" data-testid="cancel-reason">
+              <span class="field-label">{{ 'BILLING.CANCEL_REASON' | translate }}</span>
+              <p>
+                {{ inv.cancelReason }}
+                @if (inv.cancelledAt) {
+                  <span class="cell-secondary">
+                    · {{ inv.cancelledAt | serverTime | date: 'short' }}</span
+                  >
+                }
+              </p>
+            </div>
+          }
 
           <div class="lines-section">
             <h3>{{ 'BILLING.LINES' | translate }}</h3>
@@ -423,22 +437,90 @@
                           {{ it.itemCategory | enumLabel: 'invoiceItemCategory' }}
                         </div>
                       </td>
-                      <td>{{ it.quantity }}</td>
-                      <td class="amount">{{ formatCurrency(it.unitPrice) }}</td>
-                      <td class="amount">{{ formatCurrency(it.totalPrice) }}</td>
-                      @if (canDelete || canEditLines(inv)) {
+                      @if (editingLineId() === it.id) {
+                        <!-- QA D1088: the line is priced in place; it keeps its id, owner and service -->
                         <td>
+                          <input
+                            type="number"
+                            min="1"
+                            step="1"
+                            class="line-edit-input"
+                            [attr.aria-label]="'BILLING.LINE_QUANTITY' | translate"
+                            [attr.data-testid]="'line-qty-' + it.id"
+                            [ngModel]="editLineQuantity()"
+                            (ngModelChange)="editLineQuantity.set($event)"
+                          />
+                        </td>
+                        <td class="amount">
+                          <input
+                            type="number"
+                            min="1"
+                            step="1"
+                            class="line-edit-input"
+                            [attr.aria-label]="'BILLING.LINE_UNIT_PRICE' | translate"
+                            [attr.data-testid]="'line-price-' + it.id"
+                            [ngModel]="editLineUnitPrice()"
+                            (ngModelChange)="editLineUnitPrice.set($event)"
+                            (keydown.enter)="saveLine(it)"
+                          />
+                        </td>
+                        <td class="amount">
+                          {{
+                            formatCurrency((editLineQuantity() ?? 0) * (editLineUnitPrice() ?? 0))
+                          }}
+                        </td>
+                      } @else {
+                        <td>{{ it.quantity }}</td>
+                        <td class="amount" [class.unpriced]="!(it.unitPrice > 0)">
+                          {{ formatCurrency(it.unitPrice) }}
+                        </td>
+                        <td class="amount">{{ formatCurrency(it.totalPrice) }}</td>
+                      }
+                      @if (canDelete || canEditLines(inv)) {
+                        <td class="line-actions">
                           @if (canEditLines(inv)) {
-                            <button
-                              type="button"
-                              class="btn-secondary btn-sm"
-                              [disabled]="itemSaving()"
-                              [title]="'BILLING.REMOVE_LINE' | translate"
-                              [attr.aria-label]="'BILLING.REMOVE_LINE' | translate"
-                              (click)="removeItem(it)"
-                            >
-                              <span class="material-symbols-outlined">delete</span>
-                            </button>
+                            @if (editingLineId() === it.id) {
+                              <button
+                                type="button"
+                                class="btn-primary btn-sm"
+                                [disabled]="!canSaveLine()"
+                                [attr.data-testid]="'line-save-' + it.id"
+                                (click)="saveLine(it)"
+                              >
+                                {{ 'COMMON.SAVE' | translate }}
+                              </button>
+                              <button
+                                type="button"
+                                class="btn-secondary btn-sm"
+                                (click)="cancelEditLine()"
+                              >
+                                {{ 'COMMON.CANCEL' | translate }}
+                              </button>
+                            } @else {
+                              <button
+                                type="button"
+                                class="btn-secondary btn-sm"
+                                [disabled]="itemSaving()"
+                                [title]="'BILLING.EDIT_LINE' | translate"
+                                [attr.aria-label]="'BILLING.EDIT_LINE' | translate"
+                                [attr.data-testid]="'line-edit-' + it.id"
+                                (click)="startEditLine(it)"
+                              >
+                                <span class="material-symbols-outlined" aria-hidden="true"
+                                  >edit</span
+                                >
+                              </button>
+                              <button
+                                type="button"
+                                class="btn-secondary btn-sm"
+                                [disabled]="itemSaving()"
+                                [title]="'BILLING.REMOVE_LINE' | translate"
+                                [attr.aria-label]="'BILLING.REMOVE_LINE' | translate"
+                                (click)="removeItem(it)"
+                              >
+                                <span class="material-symbols-outlined">delete</span>
+                              </button>
+                            }
                           }
                         </td>
                       }
@@ -747,6 +829,24 @@
             }
           </div>
         </div>
+        <!-- QA D1069: cancelling an issued invoice asks why; the reason is kept with it -->
+        @if (cancellingIssued()) {
+          <div class="form-row">
+            <div class="field">
+              <label for="bill-cancel-reason">{{ 'BILLING.CANCEL_REASON' | translate }} *</label>
+              <textarea
+                id="bill-cancel-reason"
+                data-testid="cancel-reason-input"
+                [(ngModel)]="form.cancelReason"
+                maxlength="500"
+                rows="2"
+                required
+                [attr.aria-invalid]="!form.cancelReason?.trim()"
+                [placeholder]="'BILLING.CANCEL_REASON_PLACEHOLDER' | translate"
+              ></textarea>
+            </div>
+          </div>
+        }
         <div class="form-row">
           <div class="field">
             <label for="bill-invoiceDate">{{ 'BILLING.INVOICE_DATE' | translate }} *</label>
@@ -856,7 +956,13 @@
         <button
           class="btn-primary"
           (click)="submitForm()"
-          [disabled]="saving() || !form.patientId || !form.invoiceDate || !form.dueDate"
+          [disabled]="
+            saving() ||
+            !form.patientId ||
+            !form.invoiceDate ||
+            !form.dueDate ||
+            (cancellingIssued() && !form.cancelReason?.trim())
+          "
         >
           {{
             saving()

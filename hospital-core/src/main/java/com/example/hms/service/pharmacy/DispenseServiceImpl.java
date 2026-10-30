@@ -1290,14 +1290,8 @@ public class DispenseServiceImpl implements DispenseService {
         Dispense dispense = dispenseRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(DISPENSE_NOT_FOUND));
         enforceHospitalScope(dispense.getPharmacy());
+        // QA D102 / D1058: the names are mapped by DispenseMapper for every read.
         DispenseResponseDTO dto = dispenseMapper.toResponseDTO(dispense);
-        // QA D102: the checkout and its receipt show names, not raw ids.
-        if (dispense.getPatient() != null) {
-            dto.setPatientName(dispense.getPatient().getFullName());
-        }
-        if (dispense.getPharmacy() != null) {
-            dto.setPharmacyName(dispense.getPharmacy().getName());
-        }
         // QA D264: the checkout takes the amount from here, not from a typed figure.
         dto.setChargeAmount(DispenseCharge.of(dispense, inventoryItemRepository).orElse(null));
         // QA D843: a paid fill was offered at the checkout with nothing saying so.

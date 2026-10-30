@@ -138,6 +138,20 @@ public class BillingInvoice extends BaseEntity {
     @JoinColumn(name = "created_by", insertable = false, updatable = false)
     private User createdByUser;
 
+    /**
+     * QA D1069: why an issued invoice was cancelled, when and by whom (V251).
+     * A staff cancellation requires the reason; a check-in copay folded into
+     * its visit invoice is closed by {@link #creditedToInvoice} instead.
+     */
+    @Column(name = "cancel_reason", length = 500)
+    private String cancelReason;
+
+    @Column(name = "cancelled_at")
+    private java.time.LocalDateTime cancelledAt;
+
+    @Column(name = "cancelled_by")
+    private java.util.UUID cancelledBy;
+
     /* ---------- Helpers ---------- */
 
     public void addItem(InvoiceItem item) {

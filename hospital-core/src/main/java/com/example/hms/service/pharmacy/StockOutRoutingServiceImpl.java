@@ -510,7 +510,8 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
             throw new BusinessException("stock.routing.noShowNotPartner");
         }
         if (decision.getStatus() != RoutingDecisionStatus.ACCEPTED) {
-            throw new BusinessException("stock.routing.noShowNotAccepted", String.valueOf(decision.getStatus()));
+            throw new BusinessException("stock.routing.noShowNotAccepted",
+                RoutingDecisionStatus.labelOf(decision.getStatus()));
         }
 
         String words = reason.trim();
