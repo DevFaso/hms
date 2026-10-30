@@ -54,7 +54,8 @@ function today(): string {
         <p class="cash-closing-who">
           {{
             'BILLING.CASH_CLOSING.SUBTITLE'
-              | translate: { cashier: c.cashierName || '—', date: (c.date | serverTime | date: 'longDate') }
+              | translate
+                : { cashier: c.cashierName || '—', date: (c.date | serverTime | date: 'longDate') }
           }}
         </p>
         @if (c.entries.length === 0) {

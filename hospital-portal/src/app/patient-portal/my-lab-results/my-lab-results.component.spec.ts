@@ -158,7 +158,8 @@ describe('MyLabResultsComponent', () => {
     expect(items[1].querySelector('[data-testid="lab-correction-badge"]')).toBeFalsy();
     component.toggleExpand('c1');
     fixture.detectChanges();
-    expect(el.querySelectorAll('.detail-panel [data-testid="lab-correction-badge"]').length).toBe(1);
+    expect(el.querySelectorAll('.detail-panel [data-testid="lab-correction-badge"]').length).toBe(
+      1,
+    );
   });
 });
-
