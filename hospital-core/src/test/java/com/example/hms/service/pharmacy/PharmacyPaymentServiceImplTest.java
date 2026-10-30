@@ -241,22 +241,43 @@ class PharmacyPaymentServiceImplTest {
         verify(mobileMoneyGateway, never()).charge(any());
     }
 
-    /** QA D1032: the receipt number is CODE-PH-YYYY-rank, never a slice of the payment id. */
+    /**
+     * QA D1032 (review of #978): the receipt number is allocated once when the
+     * payment is recorded and stored, never recomputed on a read, so a reprint
+     * shows the number first printed.
+     */
     @Test
-    @DisplayName("QA D1032: a payment read carries its readable receipt number")
-    void d1032_aPaymentCarriesAReadableReceiptNumber() {
-        hospital.setCode("chw-75c64");
-        PharmacyPayment payment = new PharmacyPayment();
-        payment.setId(UUID.randomUUID());
-        payment.setHospital(hospital);
-        payment.setCreatedAt(java.time.LocalDateTime.of(2026, 10, 29, 0, 2));
+    @DisplayName("QA D1032: a recorded payment stores its allocated receipt number, and a read returns it")
+    void d1032_aPaymentStoresItsReceiptNumberAndAReadReturnsIt() {
+        PharmacyReceiptNumberAllocator allocator = org.mockito.Mockito.mock(PharmacyReceiptNumberAllocator.class);
+        service.setReceiptNumberAllocator(allocator);
+        when(allocator.next(eq(hospital), any())).thenReturn("CHW75C64-PH-2026-000012");
+        PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.CASH);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        when(paymentRepository.findById(payment.getId())).thenReturn(Optional.of(payment));
-        when(paymentRepository.countReceiptRank(hospitalId, java.time.LocalDateTime.of(2026, 1, 1, 0, 0),
-                payment.getCreatedAt())).thenReturn(12L);
-        when(paymentMapper.toResponseDTO(payment)).thenReturn(PharmacyPaymentResponseDTO.builder().build());
+        when(roleValidator.getCurrentUserId()).thenReturn(userId);
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(paymentMapper.toEntity(any(), any(), any(), any(), any())).thenReturn(new PharmacyPayment());
+        when(paymentRepository.save(any())).thenAnswer(inv -> {
+            PharmacyPayment p = inv.getArgument(0);
+            p.setId(UUID.randomUUID());
+            return p;
+        });
+        when(paymentMapper.toResponseDTO(any())).thenReturn(PharmacyPaymentResponseDTO.builder().build());
 
-        assertThat(service.getPayment(payment.getId()).getReceiptNumber()).isEqualTo("CHW75C64-PH-2026-000012");
+        assertThat(service.createPayment(dto).getReceiptNumber()).isEqualTo("CHW75C64-PH-2026-000012");
+        verify(paymentRepository).save(org.mockito.ArgumentMatchers.argThat(
+                p -> "CHW75C64-PH-2026-000012".equals(p.getReceiptNumber())));
+
+        PharmacyPayment stored = new PharmacyPayment();
+        stored.setId(UUID.randomUUID());
+        stored.setHospital(hospital);
+        stored.setReceiptNumber("CHW75C64-PH-2026-000012");
+        when(paymentRepository.findById(stored.getId())).thenReturn(Optional.of(stored));
+        assertThat(service.getPayment(stored.getId()).getReceiptNumber()).isEqualTo("CHW75C64-PH-2026-000012");
+        org.mockito.Mockito.verify(allocator, org.mockito.Mockito.times(1)).next(any(), any());
     }
 
     @Test

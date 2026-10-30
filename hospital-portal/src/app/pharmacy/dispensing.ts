@@ -616,6 +616,10 @@ export class DispensingComponent implements OnInit, OnDestroy {
     const chosen = this.selectedLot();
     const qty = Number(this.form.quantityDispensed) || 0;
     if (!chosen || chosen.id !== this.fefoLot()?.id || qty <= chosen.remainingQuantity) return [];
+    // An order with no stated quantity counts one complete fill as the whole
+    // order (the server's rule), so a first part would close it and refuse
+    // the rest: such a fill is not split (the shortest lot, or a reason).
+    if (this.selectedPrescription?.quantity == null) return [];
     const parts = fefoAllocation(this.dispensableLots(), qty);
     return parts.length > 1 ? parts : [];
   }

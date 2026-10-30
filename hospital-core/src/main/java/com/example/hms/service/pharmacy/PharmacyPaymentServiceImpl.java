@@ -53,6 +53,14 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
     private final PharmacyServiceSupport support;
     private final InventoryItemRepository inventoryItemRepository;
 
+    /** QA D1032: the receipt counter. Setter-injected so hand-built test instances keep working. */
+    private PharmacyReceiptNumberAllocator receiptNumberAllocator;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setReceiptNumberAllocator(PharmacyReceiptNumberAllocator receiptNumberAllocator) {
+        this.receiptNumberAllocator = receiptNumberAllocator;
+    }
+
     private Dispense loadDispenseForPayment(PharmacyPaymentRequestDTO dto, UUID hospitalId) {
         Dispense dispense = dispenseRepository.findLockedById(dto.getDispenseId())
                 .orElseThrow(() -> new ResourceNotFoundException("dispense.notfound"));
@@ -160,6 +168,7 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
         PharmacyPayment entity = paymentMapper.toEntity(dto, dispense, patient, hospital, receivedBy);
         entity.setReferenceNumber(providerReference);
         entity.setCurrency(currency);
+        entity.setReceiptNumber(allocateReceiptNumber(hospital));
         PharmacyPayment saved = paymentRepository.save(entity);
 
         support.logAudit(AuditEventType.PAYMENT_POSTED,
@@ -178,30 +187,30 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
                         .equals(mobileMoneyGateway.providerCode());
     }
 
-    /**
-     * QA D1032: every payment read carries its readable receipt number,
-     * {@code CODE-PH-YYYY-000001}: the payment's rank among the hospital's
-     * pharmacy payments of its year (the house rule of the invoice receipts,
-     * "number-R&lt;rank&gt;", QA D228). Never a slice of the payment id.
-     */
+    /** QA D1032: every payment read carries the receipt number stored when it was recorded. */
     private PharmacyPaymentResponseDTO toResponse(PharmacyPayment payment) {
         PharmacyPaymentResponseDTO dto = paymentMapper.toResponseDTO(payment);
         if (dto != null) {
-            dto.setReceiptNumber(receiptNumberOf(payment));
+            dto.setReceiptNumber(payment.getReceiptNumber());
         }
         return dto;
     }
 
-    private String receiptNumberOf(PharmacyPayment payment) {
-        if (payment.getHospital() == null || payment.getHospital().getId() == null || payment.getCreatedAt() == null) {
+    /**
+     * QA D1032: the payment's readable receipt number, allocated once; the
+     * first allocation of a year can lose the counter-row insert race, and is
+     * retried once (the invoice number's rule).
+     */
+    private String allocateReceiptNumber(Hospital hospital) {
+        if (receiptNumberAllocator == null) {
             return null;
         }
-        java.time.LocalDateTime createdAt = payment.getCreatedAt();
-        java.time.LocalDateTime yearStart = createdAt.toLocalDate().withDayOfYear(1).atStartOfDay();
-        long rank = paymentRepository.countReceiptRank(payment.getHospital().getId(), yearStart, createdAt);
-        return String.format(java.util.Locale.ROOT, "%s-PH-%d-%06d",
-                com.example.hms.service.InvoiceNumberAllocator.prefixOf(payment.getHospital()),
-                createdAt.getYear(), Math.max(rank, 1));
+        java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneId.systemDefault());
+        try {
+            return receiptNumberAllocator.next(hospital, today);
+        } catch (org.springframework.dao.DataIntegrityViolationException firstOfYearRace) {
+            return receiptNumberAllocator.next(hospital, today);
+        }
     }
 
     @Override

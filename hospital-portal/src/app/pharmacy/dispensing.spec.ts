@@ -1757,6 +1757,13 @@ describe('DispensingComponent — work-queue claim (G13)', () => {
       expect(bodies.every((b) => b.fefoOverrideReason === undefined)).toBeTrue();
     });
 
+    it('QA D1029 (review of #978): an order that states no quantity is not split', async () => {
+      await openWithLots();
+      component.selectedPrescription = { ...component.selectedPrescription!, quantity: undefined };
+      component.form.quantityDispensed = 130;
+      expect(component.fefoSplit()).toEqual([]);
+    });
+
     it('QA D1029: taking the later lot for a quantity the shorter one cannot cover still needs a reason', async () => {
       await openWithLots();
       component.form.quantityDispensed = 130;

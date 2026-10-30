@@ -3163,12 +3163,14 @@
                  stripComments="false"/>
     </changeSet>
 
-    <!-- V246 (round 17, QA D1053): an in-basket item keeps the message keys
+    <!-- V246 (round 17): QA D1053, an in-basket item keeps the message keys
          and arguments of its title and body, so it is rendered in the
-         reader's language. Nullable, plain statements, no DO block.
+         reader's language; QA D1032, a pharmacy payment stores a readable
+         receipt number from a per-hospital, per-year counter (existing
+         payments numbered in order). Plain statements, no DO block.
          Idempotent. -->
-    <changeSet id="V246-in-basket-item-message-keys" author="hms-team" runOnChange="false">
-        <sqlFile path="V246__in_basket_item_message_keys.sql"
+    <changeSet id="V246-r17-in-basket-keys-and-pharmacy-receipts" author="hms-team" runOnChange="false">
+        <sqlFile path="V246__r17_in_basket_keys_and_pharmacy_receipts.sql"
                  relativeToChangelogFile="true"
                  splitStatements="true"
                  stripComments="false"/>

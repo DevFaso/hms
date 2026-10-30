@@ -86,6 +86,7 @@ public class LabSpecimenRejectionNotifier {
                 : MessageUtil.resolve(NotificationLocales.STAFF, com.example.hms.mapper.LabOrderMapper.DELETED_TEST_LABEL)));
         // QA D1053: the key too, so each reader sees the title in their language.
         item.setTitleKey(IN_BASKET_TITLE_KEY);
+        // A deleted test arrives as a key (testNameOf) and is rendered in the reader's language.
         item.setTitleArgs(new Object[] {testName});
         item.setBody(reason);
         item.setReferenceId(specimenId);

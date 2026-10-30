@@ -24,8 +24,6 @@ import com.example.hms.utility.MessageUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
@@ -91,11 +89,29 @@ public class EncounterCheckoutChargeListener {
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final InvoiceNumberAllocator invoiceNumberAllocator;
 
+    /** The charge's own transaction; null in a hand-built unit test (the charge then runs as called). */
+    private org.springframework.transaction.support.TransactionTemplate chargeTx;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setTransactionManager(org.springframework.transaction.PlatformTransactionManager transactionManager) {
+        this.chargeTx = new org.springframework.transaction.support.TransactionTemplate(transactionManager);
+        this.chargeTx.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+    }
+
+    /**
+     * Not transactional itself: the charge runs in its own REQUIRES_NEW
+     * transaction ({@code chargeTx}), so a failure at commit (a constraint, a
+     * rollback-only mark) is caught here too and logged with ids only, never
+     * with row values.
+     */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void onCheckedOut(EncounterCheckedOutEvent event) {
         try {
-            chargeVisit(event);
+            if (chargeTx == null) {
+                chargeVisit(event);
+            } else {
+                chargeTx.executeWithoutResult(status -> chargeVisit(event));
+            }
         } catch (RuntimeException ex) {
             log.warn("Visit {} was not billed at checkout: {}", event != null ? event.encounterId() : null,
                 ex.getClass().getSimpleName());

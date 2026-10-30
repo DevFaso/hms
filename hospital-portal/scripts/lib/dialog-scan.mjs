@@ -201,7 +201,8 @@ export function dialogFindings(html, componentSource = html, dialogSelectors = n
     // showModal() and closes on Escape by itself: only its NAME is checked.
     // QA D1030: only when the component opens it with showModal(). A
     // `<dialog [open]="...">` is NOT modal: no inert page behind, no Escape,
-    // no focus moved in. It is checked like a hand-built dialog.
+    // no focus moved in. It is checked like a hand-built dialog. (Coarse on
+    // purpose: one showModal() call in the component exempts its <dialog>s.)
     const nativeDialog = tag.name === 'dialog' && SHOW_MODAL.test(componentSource);
     const isDialog =
       tag.name === 'dialog' ||

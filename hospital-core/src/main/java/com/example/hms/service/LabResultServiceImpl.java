@@ -1501,7 +1501,7 @@ public class LabResultServiceImpl implements LabResultService {
         request.setReferenceId(labResult.getId());
         request.setReferenceType(LAB_RESULT_REFERENCE_TYPE);
         request.setPatientId(patient != null ? patient.getId() : null);
-        request.setPatientName(patient != null ? (patient.getFirstName() + " " + patient.getLastName()).trim() : null);
+        request.setPatientName(patient != null ? patient.getFullName() : null);
         request.setEncounterId(order.getEncounter() != null ? order.getEncounter().getId() : null);
         UUID resultId = labResult.getId();
         TransactionCallbacks.afterCommit(() -> {

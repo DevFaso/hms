@@ -58,6 +58,12 @@ export class BillingComponent implements OnInit {
   private readonly translate = inject(TranslateService);
 
   // Permission-gated action flags
+  /** QA D1059: the cashier's daily cash closing, opened from the page header. */
+  readonly showCashClosing = signal(false);
+
+  /** QA D1059: the date range of the last search run, which the KPI tiles follow. */
+  private appliedRange: { fromDate?: string; toDate?: string } = {};
+
   readonly canCreate = this.permissions.hasAnyPermission('Create Invoice', 'Manage Billing');
   readonly canEdit = this.permissions.hasAnyPermission('Create Invoice', 'Manage Billing');
   /** QA D181: the server deletes only for SUPER_ADMIN and HOSPITAL_ADMIN, so a
@@ -72,9 +78,6 @@ export class BillingComponent implements OnInit {
   );
   /** QA D973: the front desk takes payments (the server admits the receptionist
    *  on POST /billing-invoices/{id}/payments), so the button is not hidden from it. */
-  /** QA D1059: the cashier's daily cash closing, opened from the page header. */
-  readonly showCashClosing = signal(false);
-
   readonly canRecordPayment = this.roleContext.hasAnyActiveRole([
     'ROLE_SUPER_ADMIN',
     'ROLE_HOSPITAL_ADMIN',
@@ -488,12 +491,17 @@ ${this.translate.instant('BILLING.SUPPLEMENTARY_CONFIRM')}`)
           : this.filterStatus()
             ? [this.filterStatus() as InvoiceStatus]
             : undefined;
+    // QA D1059: the tiles follow the range of the search actually run (an
+    // inverted one is not a range: the tiles then cover every invoice).
+    const fromDate = this.filterFromDate() || undefined;
+    const toDate = this.filterToDate() || undefined;
+    this.appliedRange = fromDate && toDate && fromDate > toDate ? {} : { fromDate, toDate };
     this.billingService
       .searchInvoices(
         {
           statuses,
-          fromDate: this.filterFromDate() || undefined,
-          toDate: this.filterToDate() || undefined,
+          fromDate,
+          toDate,
           query: this.searchTerm.trim() || undefined,
         },
         page,
@@ -523,23 +531,18 @@ ${this.translate.instant('BILLING.SUPPLEMENTARY_CONFIRM')}`)
    */
   private refreshStats(): void {
     // QA D1059: the tiles follow the list's date filter (the invoice date, as the search reads it).
-    this.billingService
-      .getSummary({
-        fromDate: this.filterFromDate() || undefined,
-        toDate: this.filterToDate() || undefined,
-      })
-      .subscribe({
-        next: (summary) =>
-          this.stats.set({
-            total: Number(summary?.total ?? 0),
-            paid: Number(summary?.paid ?? 0),
-            outstanding: Number(summary?.outstanding ?? 0),
-            overdue: Number(summary?.overdue ?? 0),
-            totalRevenue: Number(summary?.totalRevenue ?? 0),
-            balance: Number(summary?.balance ?? 0),
-          }),
-        error: () => undefined,
-      });
+    this.billingService.getSummary(this.appliedRange).subscribe({
+      next: (summary) =>
+        this.stats.set({
+          total: Number(summary?.total ?? 0),
+          paid: Number(summary?.paid ?? 0),
+          outstanding: Number(summary?.outstanding ?? 0),
+          overdue: Number(summary?.overdue ?? 0),
+          totalRevenue: Number(summary?.totalRevenue ?? 0),
+          balance: Number(summary?.balance ?? 0),
+        }),
+      error: () => undefined,
+    });
   }
 
   setTab(tab: BillingTab): void {
