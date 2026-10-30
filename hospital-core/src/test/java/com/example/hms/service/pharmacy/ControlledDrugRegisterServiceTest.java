@@ -320,14 +320,15 @@ class ControlledDrugRegisterServiceTest {
      */
     @Test
     void aReturnReasonNamesTheFillTimeOnTheHospitalClock_D1084() {
-        java.time.ZoneId minus4 = java.time.ZoneId.of("America/Santo_Domingo");
+        java.time.ZoneId hospitalZone = "Asia/Tokyo".equals(java.time.ZoneId.systemDefault().getId())
+                ? java.time.ZoneId.of("America/Santo_Domingo") : java.time.ZoneId.of("Asia/Tokyo");
         java.time.LocalDateTime stored = java.time.LocalDateTime.of(2026, 10, 30, 17, 9);
         java.time.LocalDateTime local = stored.atZone(java.time.ZoneId.systemDefault())
-                .withZoneSameInstant(minus4).toLocalDateTime();
+                .withZoneSameInstant(hospitalZone).toLocalDateTime();
         String expectedTime = java.time.format.DateTimeFormatter.ofLocalizedDateTime(java.time.format.FormatStyle.SHORT)
                 .withLocale(Locale.FRENCH).format(local);
 
-        String fr = ControlledDrugRegisterService.reasonText(Locale.FRENCH, "RETURN ref LOT-A-R18-01b 2026-10-30T17:09", minus4);
+        String fr = ControlledDrugRegisterService.reasonText(Locale.FRENCH, "RETURN ref LOT-A-R18-01b 2026-10-30T17:09", hospitalZone);
 
         assertThat(fr).endsWith(expectedTime);
         ControlledDrugRegisterService.FillRef fill = ControlledDrugRegisterService.fillRef("RETURN ref LOT-A-R18-01b 2026-10-30T17:09");
