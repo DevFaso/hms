@@ -9,7 +9,8 @@ import { AuthService } from '../auth/auth.service';
  * The roles the matcher admits: `EmpiProbabilisticController` answers
  * `/empi/candidates/status` and `/empi/candidates` to these only
  * (`ShellStartupEndpointRolesTest` keeps the two lists equal). The shell's
- * nav entry and the route use the same list.
+ * nav entry uses this list; the route's RoleGuard (`app.routes.ts`) names the
+ * same five roles.
  */
 export const EMPI_MATCHER_ROLES: readonly string[] = [
   'ROLE_RECEPTIONIST',
