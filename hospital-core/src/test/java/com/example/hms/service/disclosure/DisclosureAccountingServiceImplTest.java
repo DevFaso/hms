@@ -24,6 +24,7 @@ import org.springframework.data.domain.Pageable;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -310,7 +311,7 @@ class DisclosureAccountingServiceImplTest {
     }
 
     @Test
-    @DisplayName("QA D979: unpaged, the patient's list folds every row; the accounting keeps the counts")
+    @DisplayName("QA D979: unpaged, the patient's list folds every row, and its counts are the lines shown")
     void theUnpagedPatientListFoldsEveryRow() {
         LocalDateTime now = LocalDateTime.now();
         List<AuditEventLog> rows = new java.util.ArrayList<>();
@@ -328,8 +329,77 @@ class DisclosureAccountingServiceImplTest {
 
         var accounting = service.getAccountingAsPatientSees(patientId, null, null, Pageable.unpaged());
         assertThat(accounting.getEntries()).hasSize(1);
-        assertThat(accounting.getTotalEvents()).isEqualTo(3);
-        assertThat(accounting.getCountsByCategory()).containsEntry(DisclosureCategory.SHARED_WITH_PROVIDER, 3L);
+        // Changed in round 17 (QA D979 reopened): the patient's header counted
+        // every audit row (3) above one line, and could not be reconciled with
+        // it. It now counts the lines the patient reads; the staff accounting
+        // (getAccounting) still counts every row.
+        assertThat(accounting.getTotalEvents()).isEqualTo(1);
+        assertThat(accounting.getCountsByCategory()).containsEntry(DisclosureCategory.SHARED_WITH_PROVIDER, 1L);
+    }
+
+    /**
+     * QA D979 (class guard): whatever the mix of readers, kinds and times, the
+     * patient's header adds up to the lines of the patient's list, category by
+     * category (within the fold window).
+     */
+    @Test
+    @DisplayName("QA D979: the patient's header always adds up to its lines")
+    void thePatientsHeaderAlwaysAddsUpToItsLines() {
+        java.util.Random random = new java.util.Random(979);
+        LocalDateTime now = LocalDateTime.now();
+        AuditEventType[] types = {AuditEventType.RECORD_SHARE, AuditEventType.BREAK_GLASS_ACCESS};
+        String[] entities = {"PATIENT", "BREAK_GLASS_SESSION"};
+        for (int run = 0; run < 20; run++) {
+            List<AuditEventLog> rows = new java.util.ArrayList<>();
+            Map<String, Long> raw = new java.util.HashMap<>();
+            int n = 1 + random.nextInt(40);
+            for (int i = 0; i < n; i++) {
+                int kind = random.nextInt(2);
+                AuditEventLog r = row(types[kind], entities[kind], "Dr " + random.nextInt(3));
+                r.setEventDescription("d" + random.nextInt(3));
+                r.setEventTimestamp(now.minusMinutes(random.nextInt(180)));
+                rows.add(r);
+                raw.merge(types[kind] + "|" + entities[kind], 1L, Long::sum);
+            }
+            rows.sort(java.util.Comparator.comparing(AuditEventLog::getEventTimestamp).reversed());
+            org.mockito.Mockito.reset(auditRepository);
+            when(auditRepository.findDisclosuresForPatient(any(), any(), any(), any(), any()))
+                .thenReturn(new PageImpl<>(rows));
+            List<Object[]> counted = raw.entrySet().stream()
+                .map(e -> new Object[] {AuditEventType.valueOf(e.getKey().split("\\|")[0]), e.getKey().split("\\|")[1],
+                    e.getValue()})
+                .toList();
+            when(auditRepository.countDisclosureCategoriesForPatient(any(), any(), any(), any())).thenReturn(counted);
+
+            var accounting = service.getAccountingAsPatientSees(patientId, null, null, PageRequest.of(0, 2000));
+
+            Map<DisclosureCategory, Long> shown = new java.util.EnumMap<>(DisclosureCategory.class);
+            accounting.getEntries().forEach(e -> shown.merge(e.getCategory(), 1L, Long::sum));
+            assertThat(accounting.getCountsByCategory()).as("run %d", run).containsAllEntriesOf(shown);
+            assertThat(accounting.getTotalEvents()).as("run %d", run).isEqualTo(accounting.getEntries().size());
+        }
+    }
+
+    @Test
+    @DisplayName("QA D979 (round 17): two reads by the same person that differ only in description show once")
+    void aRepeatWithAnotherDescriptionStillFolds() {
+        LocalDateTime now = LocalDateTime.now();
+        AuditEventLog chart = row(AuditEventType.RECORD_SHARE, "PATIENT", "Joséphine Hien");
+        chart.setEventTimestamp(now);
+        chart.setEventDescription("Chart read");
+        AuditEventLog timeline = row(AuditEventType.RECORD_SHARE, "PATIENT", "Joséphine Hien");
+        timeline.setEventTimestamp(now.minusSeconds(20));
+        timeline.setEventDescription("Timeline read");
+        when(auditRepository.findDisclosuresForPatient(any(), any(), any(), any(), any()))
+            .thenReturn(new PageImpl<>(List.of(chart, timeline)));
+        when(auditRepository.countDisclosureCategoriesForPatient(any(), any(), any(), any()))
+            .thenReturn(List.<Object[]>of(new Object[] {AuditEventType.RECORD_SHARE, "PATIENT", 2L}));
+
+        var accounting = service.getAccountingAsPatientSees(patientId, null, null, PageRequest.of(0, 20));
+
+        assertThat(accounting.getEntries()).hasSize(1);
+        assertThat(accounting.getCountsByCategory()).containsEntry(DisclosureCategory.SHARED_WITH_PROVIDER, 1L);
+        assertThat(accounting.getTotalEvents()).isEqualTo(1);
     }
 
     @Test

@@ -77,7 +77,14 @@ public class DisclosureAccountingServiceImpl implements DisclosureAccountingServ
                                                               LocalDateTime to, Pageable pageable) {
         Set<AuditEventType> accountable = DisclosureCategory.accountableEventTypes();
         Map<DisclosureCategory, Long> counts = countByCategory(patientId, accountable, from, to);
-        Page<AccessLogEntryDTO> folded = foldedEntries(patientId, accountable, from, to, pageable);
+        // QA D979: the header counts what the list shows. It summed every audit
+        // row (SHARED_WITH_PROVIDER = 8) above a list that folds repeats (3
+        // lines), so the patient could not reconcile the two. The repeats the
+        // list folds are taken off the counts; the staff accounting keeps every row.
+        Page<AccessLogEntryDTO> window = queryEntries(patientId, accountable, from, to, windowPage(0));
+        foldedAwayByCategory(window.getContent()).forEach((category, removed) ->
+            counts.computeIfPresent(category, (c, n) -> Math.max(0, n - removed)));
+        Page<AccessLogEntryDTO> folded = foldedEntries(patientId, accountable, from, to, pageable, window);
         return DisclosureAccountingDTO.builder()
             .from(from)
             .to(to)
@@ -109,11 +116,20 @@ public class DisclosureAccountingServiceImpl implements DisclosureAccountingServ
      */
     private Page<AccessLogEntryDTO> foldedEntries(UUID patientId, Set<AuditEventType> accountable,
                                                   LocalDateTime from, LocalDateTime to, Pageable pageable) {
+        return foldedEntries(patientId, accountable, from, to, pageable, null);
+    }
+
+    /** As above, reusing the fold window when the caller has already read it. */
+    private Page<AccessLogEntryDTO> foldedEntries(UUID patientId, Set<AuditEventType> accountable,
+                                                  LocalDateTime from, LocalDateTime to, Pageable pageable,
+                                                  Page<AccessLogEntryDTO> readWindow) {
         if (pageable.isUnpaged()) {
             return new org.springframework.data.domain.PageImpl<>(
                 foldRepeats(queryEntries(patientId, accountable, from, to, pageable).getContent()));
         }
-        Page<AccessLogEntryDTO> window = queryEntries(patientId, accountable, from, to, windowPage(0));
+        Page<AccessLogEntryDTO> window = readWindow != null
+            ? readWindow
+            : queryEntries(patientId, accountable, from, to, windowPage(0));
         List<AccessLogEntryDTO> lines = foldRepeats(window.getContent());
         long older = Math.max(0, window.getTotalElements() - window.getContent().size());
         long total = lines.size() + older;
@@ -186,6 +202,19 @@ public class DisclosureAccountingServiceImpl implements DisclosureAccountingServ
         return kept;
     }
 
+    /** QA D979: how many rows of each category the patient's list folds away. */
+    static Map<DisclosureCategory, Long> foldedAwayByCategory(List<AccessLogEntryDTO> entries) {
+        Map<DisclosureCategory, Long> removed = new EnumMap<>(DisclosureCategory.class);
+        java.util.Set<AccessLogEntryDTO> kept = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+        kept.addAll(foldRepeats(entries));
+        for (AccessLogEntryDTO entry : entries) {
+            if (!kept.contains(entry) && entry.getCategory() != null) {
+                removed.merge(entry.getCategory(), 1L, Long::sum);
+            }
+        }
+        return removed;
+    }
+
     /** A row within the repeat window of the line kept for its key (none kept yet: not a repeat). */
     private static boolean isRepeat(LocalDateTime lastKeptAt, LocalDateTime when) {
         return lastKeptAt != null && withinRepeatWindow(when, lastKeptAt);
@@ -196,7 +225,11 @@ public class DisclosureAccountingServiceImpl implements DisclosureAccountingServ
         if (entry.getCategory() == null || !FOLDABLE.contains(entry.getCategory()) || entry.getTimestamp() == null) {
             return null;
         }
-        return entry.getCategory() + "|" + entry.getActor() + "|" + entry.getHospitalName() + "|" + entry.getDescription();
+        // QA D979 (round 17): the description is not part of what makes a
+        // repeat. The patient's list does not show it, and two reads of the
+        // chart by the same person (one described "chart", one "timeline")
+        // were two identical-looking lines: Joséphine Hien, twice.
+        return entry.getCategory() + "|" + entry.getActor() + "|" + entry.getHospitalName();
     }
 
     /** Audit timestamps are UTC wall-clock values; compared as such. */
