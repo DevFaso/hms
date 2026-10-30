@@ -14,19 +14,21 @@ import com.example.hms.repository.CdsAcknowledgementRepository;
 import com.example.hms.repository.HospitalRepository;
 import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.UserRepository;
-import com.example.hms.utility.ElapsedTime;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.Authentication;
 
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -50,7 +52,17 @@ class CdsAcknowledgementServiceImplTest {
     @Mock private ControllerAuthUtils authUtils;
     @Mock private Authentication auth;
 
-    @InjectMocks private CdsAcknowledgementServiceImpl service;
+    /**
+     * A fixed clock the day before a daylight-saving change (America/New_York
+     * falls back at 02:00 on 2026-11-01): noon EDT on 2026-10-31. The TTL
+     * tests are then the same on every machine, whatever its zone or date,
+     * and they exercise the DST case instead of only passing outside it.
+     */
+    private static final ZoneId DST_ZONE = ZoneId.of("America/New_York");
+    private static final Instant NOW = LocalDateTime.of(2026, 10, 31, 12, 0).atZone(DST_ZONE).toInstant();
+    private final Clock clock = Clock.fixed(NOW, DST_ZONE);
+
+    private CdsAcknowledgementServiceImpl service;
 
     private UUID patientId;
     private UUID userId;
@@ -60,6 +72,8 @@ class CdsAcknowledgementServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        service = new CdsAcknowledgementServiceImpl(repository, patientRepository, hospitalRepository,
+                userRepository, authUtils, clock);
         patientId = UUID.randomUUID();
         userId = UUID.randomUUID();
         hospitalId = UUID.randomUUID();
@@ -112,8 +126,12 @@ class CdsAcknowledgementServiceImplTest {
         verify(repository).save(captor.capture());
         CdsAcknowledgement saved = captor.getValue();
 
-        long hoursTillExpiry = ElapsedTime.between(LocalDateTime.now(), saved.getExpiresAt()).toHours();
-        assertThat(hoursTillExpiry).isBetween(23L, 24L);
+        // Declared assertion change (round-18 merge): was "ElapsedTime from the machine's now, 23 to 24 whole
+        // hours", which read 25 across a DST change. Now exactly 24 real hours on a fixed clock that crosses one.
+        assertThat(Duration.between(NOW, saved.getExpiresAt().atZone(DST_ZONE).toInstant()))
+                .isEqualTo(Duration.ofHours(24));
+        assertThat(saved.getExpiresAt()).as("noon EDT + 24 real hours = 11:00 EST")
+                .isEqualTo(LocalDateTime.of(2026, 11, 1, 11, 0));
         assertThat(result.getAction()).isEqualTo(CdsAcknowledgementAction.ACKNOWLEDGED);
     }
 
@@ -179,9 +197,11 @@ class CdsAcknowledgementServiceImplTest {
 
         ArgumentCaptor<CdsAcknowledgement> captor = ArgumentCaptor.forClass(CdsAcknowledgement.class);
         verify(repository).save(captor.capture());
-        long hoursTillExpiry =
-                ElapsedTime.between(LocalDateTime.now(), captor.getValue().getExpiresAt()).toHours();
-        assertThat(hoursTillExpiry).isBetween(71L, 72L);
+        // Declared assertion change (round-18 merge): was "ElapsedTime from the machine's now, 71 to 72 whole
+        // hours", which read 73 across the 2026-11-01 DST change. Now exactly 72 real hours on a fixed clock.
+        LocalDateTime expiresAt = captor.getValue().getExpiresAt();
+        assertThat(Duration.between(NOW, expiresAt.atZone(DST_ZONE).toInstant())).isEqualTo(Duration.ofHours(72));
+        assertThat(expiresAt).as("noon EDT + 72 real hours = 11:00 EST").isEqualTo(LocalDateTime.of(2026, 11, 3, 11, 0));
     }
 
     @Test

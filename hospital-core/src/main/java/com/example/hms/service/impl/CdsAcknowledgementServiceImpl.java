@@ -22,6 +22,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -41,6 +42,20 @@ public class CdsAcknowledgementServiceImpl implements CdsAcknowledgementService 
     private final HospitalRepository hospitalRepository;
     private final UserRepository userRepository;
     private final ControllerAuthUtils authUtils;
+    /** The server clock (TimeConfig: the system zone the stored LocalDateTimes are written in). */
+    private final Clock clock;
+
+    /**
+     * The expiry {@code ttl} of REAL time from now, written as the server's
+     * local time like every stored clinical timestamp. Round-18 merge: it was
+     * {@code LocalDateTime.now().plus(ttl)}, wall-clock arithmetic, so an
+     * override taken the day before a daylight-saving change lasted 73 or 71
+     * real hours instead of 72 (and a 24-hour acknowledgement 25 or 23). The
+     * deployment zone (UTC+0, no DST) is unaffected.
+     */
+    LocalDateTime expiryAfter(Duration ttl) {
+        return LocalDateTime.ofInstant(clock.instant().plus(ttl), clock.getZone());
+    }
 
     @Override
     @Transactional
@@ -89,7 +104,7 @@ public class CdsAcknowledgementServiceImpl implements CdsAcknowledgementService 
                 .indicator(request.getIndicator())
                 .action(request.getAction())
                 .reason(request.getReason() != null ? request.getReason().trim() : null)
-                .expiresAt(LocalDateTime.now().plus(ttl))
+                .expiresAt(expiryAfter(ttl))
                 .build();
 
         entity = repository.save(entity);
