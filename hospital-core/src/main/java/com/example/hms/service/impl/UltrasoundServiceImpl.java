@@ -108,11 +108,11 @@ public class UltrasoundServiceImpl implements UltrasoundService {
 
         // Prevent modification of completed orders
         if (order.getStatus() == UltrasoundOrderStatus.COMPLETED) {
-            throw new BusinessException("Cannot modify a completed ultrasound order");
+            throw new BusinessException("ultrasound.order.completedNoEdit");
         }
 
         if (order.getStatus() == UltrasoundOrderStatus.CANCELLED) {
-            throw new BusinessException("Cannot modify a cancelled ultrasound order");
+            throw new BusinessException("ultrasound.order.cancelledNoEdit");
         }
 
         // Update hospital if changed
@@ -139,15 +139,18 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         requireOrderAuthor(order);
 
         if (order.getStatus() == UltrasoundOrderStatus.CANCELLED) {
-            throw new BusinessException("Order is already cancelled");
+            throw new BusinessException("ultrasound.order.alreadyCancelled");
         }
 
         if (order.getStatus() == UltrasoundOrderStatus.COMPLETED) {
-            throw new BusinessException("Cannot cancel a completed order");
+            throw new BusinessException("ultrasound.order.completedNoCancel");
         }
 
         order.setStatus(UltrasoundOrderStatus.CANCELLED);
         order.setCancellationReason(cancellationReason);
+        // QA D1047: a cancellation is stamped with when and by whom, like every order.
+        order.setCancelledAt(LocalDateTime.now());
+        order.setCancelledBy(cancellerName(order));
 
         UltrasoundOrder saved = orderRepository.save(order);
         return ultrasoundMapper.toOrderResponseDTO(saved);
@@ -291,7 +294,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         UltrasoundOrder order = getOrderInScope(orderId);
 
         if (order.getStatus() == UltrasoundOrderStatus.CANCELLED) {
-            throw new BusinessException("Cannot create report for a cancelled order");
+            throw new BusinessException("ultrasound.report.cancelledOrder");
         }
 
         String performerName = resolveStaffName(performedByUserId, order.getHospital().getId());
@@ -305,7 +308,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
             }
         } else {
             if (Boolean.TRUE.equals(report.getReportReviewedByProvider())) {
-                throw new BusinessException("Cannot modify a reviewed report. Please create an addendum or new order.");
+                throw new BusinessException("ultrasound.report.reviewedNoEdit");
             }
             ultrasoundMapper.updateReportFromRequest(report, request);
         }
@@ -326,7 +329,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         UltrasoundReport report = getReportInScope(reportId);
 
         if (report.getReportReviewedByProvider() != null && report.getReportReviewedByProvider()) {
-            throw new BusinessException("Report is already reviewed");
+            throw new BusinessException("ultrasound.report.alreadyReviewed");
         }
 
         UUID hospitalId = report.getUltrasoundOrder().getHospital().getId();
@@ -353,7 +356,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         UltrasoundReport report = getReportInScope(reportId);
 
         if (report.getPatientNotifiedAt() != null) {
-            throw new BusinessException("Patient has already been notified");
+            throw new BusinessException("ultrasound.report.patientAlreadyNotified");
         }
 
         report.setPatientNotifiedAt(LocalDateTime.now());
@@ -558,25 +561,34 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         switch (scanType) {
             case NUCHAL_TRANSLUCENCY:
                 if (gestationalAgeWeeks < 11 || gestationalAgeWeeks > 14) {
-                    throw new BusinessException(
-                        "Nuchal Translucency scan is typically performed between 11-14 weeks. Current: " + gestationalAgeWeeks + " weeks");
+                    throw new BusinessException("ultrasound.ga.NUCHAL_TRANSLUCENCY", gestationalAgeWeeks);
                 }
                 break;
             case ANATOMY_SCAN:
                 if (gestationalAgeWeeks < 18 || gestationalAgeWeeks > 22) {
-                    throw new BusinessException(
-                        "Anatomy scan is typically performed between 18-22 weeks. Current: " + gestationalAgeWeeks + " weeks");
+                    throw new BusinessException("ultrasound.ga.ANATOMY_SCAN", gestationalAgeWeeks);
                 }
                 break;
             case GROWTH_SCAN:
                 if (gestationalAgeWeeks < 24) {
-                    throw new BusinessException(
-                        "Growth scan is typically performed after 24 weeks. Current: " + gestationalAgeWeeks + " weeks");
+                    throw new BusinessException("ultrasound.ga.GROWTH_SCAN", gestationalAgeWeeks);
                 }
                 break;
             default:
                 break;
         }
+    }
+
+    /** QA D1047: the canceller's name at the order's hospital, else the session's username. */
+    private String cancellerName(UltrasoundOrder order) {
+        UUID caller = com.example.hms.security.CallerIdentity.currentUserId();
+        String name = order.getHospital() != null ? resolveStaffName(caller, order.getHospital().getId()) : null;
+        if (name != null) {
+            return name;
+        }
+        org.springframework.security.core.Authentication auth =
+            org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        return auth != null ? auth.getName() : null;
     }
 
     private String resolveStaffName(UUID userId, UUID hospitalId) {
