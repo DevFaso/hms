@@ -29,4 +29,14 @@ public class LabTestReferenceRange implements Serializable {
      */
     private Double criticalLow;
     private Double criticalHigh;
+    /**
+     * Round 18: the unit {@code ageMin}/{@code ageMax} are counted in:
+     * {@code YEARS} (also when null, every range stored before this field),
+     * {@code MONTHS} or {@code DAYS}. Both bounds are inclusive and compare
+     * against the patient's completed age in that unit on the result date, so
+     * neonatal and infant bands (0-7 days, 1-5 months) can be stated.
+     */
+    private String ageUnit;
+    /** Round 18: where the limits come from (a reference, "default pending local approval"). */
+    private String source;
 }

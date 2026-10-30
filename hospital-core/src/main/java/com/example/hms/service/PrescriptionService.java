@@ -60,7 +60,16 @@ public interface PrescriptionService {
      * prescription's own prescriber, applies the controlled-substance gates, and
      * records who signed, when, and a SHA-256 digest of what they signed.
      */
-    PrescriptionResponseDTO signPrescription(UUID id, Locale locale);
+    // Round 18: one signature entry point, signPrescription(id, reauthentication, locale).
+
+    /**
+     * Round 18: sign with the prescriber's re-authentication, which a
+     * controlled-drug prescription requires (the password, or the TOTP code
+     * when an authenticator is enrolled), checked on this call only.
+     */
+    PrescriptionResponseDTO signPrescription(UUID id,
+                                             com.example.hms.payload.dto.SignPrescriptionRequestDTO reauthentication,
+                                             Locale locale);
 
     /**
      * Co-sign a prescription that declared it needs one (P2 #15).

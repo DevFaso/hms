@@ -61,6 +61,8 @@ export interface LabResultResponse {
   resultDate: string;
   notes: string;
   referenceRanges: LabResultReferenceRange[];
+  /** Round 18: the range this result was graded against (the patient's sex and age band). */
+  gradedReferenceRange?: LabResultReferenceRange | null;
   /** QA D834: the expected answer of a qualitative test, shown where it has no range. */
   expectedResult?: string | null;
   trendHistory?: LabResultTrendPoint[];
@@ -118,6 +120,12 @@ export interface LabResultReferenceRange {
   ageMax: number | null;
   gender: string | null;
   notes: string | null;
+  criticalLow?: number | null;
+  criticalHigh?: number | null;
+  /** Round 18: unit of ageMin/ageMax; YEARS when absent. */
+  ageUnit?: 'YEARS' | 'MONTHS' | 'DAYS' | null;
+  /** Round 18: where the limits come from. */
+  source?: string | null;
 }
 
 export interface LabResultTrendPoint {
@@ -172,6 +180,10 @@ export interface LabTestReferenceRange {
   /** D107: panic limits; a value beyond them grades CRITICAL. */
   criticalLow?: number | null;
   criticalHigh?: number | null;
+  /** Round 18: unit of ageMin/ageMax (inclusive bounds); YEARS when absent. */
+  ageUnit?: 'YEARS' | 'MONTHS' | 'DAYS' | null;
+  /** Round 18: where the limits come from, shown to the approving lab director. */
+  source?: string | null;
 }
 
 export interface LabTestDefinitionApprovalRequest {

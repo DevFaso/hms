@@ -36,21 +36,60 @@ class MedicationCatalogItemDtoCoverageTest {
             .collect(Collectors.toSet());
     }
 
+    /**
+     * Round 18 (QA D935): columns the server stamps from the caller, readable
+     * on the response but written by no request.
+     */
+    private static final Map<String, String> SERVER_SET = Map.of(
+        "pediatricDoseReviewedBy", "the pharmacist who set or approved the limits (the caller)",
+        "pediatricDoseReviewedAt", "when they did (the server clock)");
+
+    /**
+     * Round 18 (QA D935): a column is writable through the general catalogue
+     * request OR the pharmacy's paediatric-dosing request
+     * (PUT /medication-catalog/{id}/pediatric-dosing), and readable on the
+     * response. Changed from "on the general request": the paediatric limits
+     * moved to the pharmacy's own audited write path.
+     */
     @Test
     void everyCatalogColumnIsOnTheRequestAndTheResponse() {
         Set<String> entity = fields(MedicationCatalogItem.class);
         entity.removeAll(NOT_EXPOSED.keySet());
-        assertThat(fields(MedicationCatalogItemRequestDTO.class)).containsAll(entity);
         assertThat(fields(MedicationCatalogItemResponseDTO.class)).containsAll(entity);
+        Set<String> writable = new java.util.HashSet<>(fields(MedicationCatalogItemRequestDTO.class));
+        writable.addAll(fields(com.example.hms.payload.dto.medication.PediatricDosingRequestDTO.class));
+        entity.removeAll(SERVER_SET.keySet());
+        assertThat(writable).containsAll(entity);
     }
 
+    /**
+     * Round 18 (QA D935): every paediatric limit the dose rule reads is one the
+     * pharmacy can write: the round-17 QA found the pharmacist could edit none.
+     */
     @Test
-    void thePaediatricCeilingRoundTripsThroughTheMapper() {
+    void everyPaediatricColumnIsOnThePharmacyDosingRequest() {
+        Set<String> paediatric = fields(MedicationCatalogItem.class).stream()
+            .filter(f -> f.startsWith("pediatric"))
+            .filter(f -> !SERVER_SET.containsKey(f))
+            .collect(Collectors.toSet());
+        assertThat(paediatric).hasSizeGreaterThanOrEqualTo(8);
+        assertThat(fields(com.example.hms.payload.dto.medication.PediatricDosingRequestDTO.class))
+            .containsAll(paediatric);
+    }
+
+    /**
+     * Round 18 (changed): the general create no longer carries the paediatric
+     * ceiling (the pharmacy's audited dosing endpoint is its only writer); the
+     * response still shows what the item holds.
+     */
+    @Test
+    void thePaediatricCeilingIsReadOnTheResponseAndWrittenOnlyByThePharmacy() {
         MedicationCatalogItemMapper mapper = new MedicationCatalogItemMapper();
+        assertThat(fields(MedicationCatalogItemRequestDTO.class)).doesNotContain("pediatricMaxDoseMgPerKg");
         MedicationCatalogItem item = mapper.toEntity(MedicationCatalogItemRequestDTO.builder()
-            .nameFr("Paracétamol sirop").genericName("paracetamol")
-            .pediatricMaxDoseMgPerKg(new BigDecimal("15.000")).build());
-        assertThat(item.getPediatricMaxDoseMgPerKg()).isEqualByComparingTo("15");
+            .nameFr("Paracétamol sirop").genericName("paracetamol").build());
+        assertThat(item.getPediatricMaxDoseMgPerKg()).isNull();
+        item.setPediatricMaxDoseMgPerKg(new BigDecimal("15.000"));
         assertThat(mapper.toResponseDTO(item).getPediatricMaxDoseMgPerKg()).isEqualByComparingTo("15");
     }
 }

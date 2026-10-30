@@ -927,6 +927,36 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     params: ['id'],
   },
   {
+    key: 'AUDIT.DESC.CDS_OVERRIDE_CREATED',
+    re: /^Critical decision-support alert overridden at creation$/,
+  },
+  {
+    key: 'AUDIT.DESC.CDS_OVERRIDE_EDITED',
+    re: /^Critical decision-support alert overridden on edit$/,
+  },
+  {
+    key: 'AUDIT.DESC.DOSE_LIMITS_APPROVED',
+    re: /^Paediatric dose limits approved on catalog item '(.*)'$/,
+    params: ['item'],
+  },
+  {
+    key: 'AUDIT.DESC.DOSE_LIMITS_DEFAULT',
+    re: /^Paediatric dose limits set as a default pending approval on catalog item '(.*)'$/,
+    params: ['item'],
+  },
+  {
+    key: 'AUDIT.DESC.RX_SIGN_REAUTH_VERIFIED',
+    re: /^Re-authentication to sign a controlled-drug prescription verified by (\S+)$/,
+    params: ['method'],
+    localise: { method: 'phrase:RX_SIGN_REAUTH' },
+  },
+  {
+    key: 'AUDIT.DESC.RX_SIGN_REAUTH_REFUSED',
+    re: /^Re-authentication to sign a controlled-drug prescription refused \((\S+)\)$/,
+    params: ['reason'],
+    localise: { reason: 'phrase:RX_SIGN_REAUTH' },
+  },
+  {
     key: 'AUDIT.DESC.ALLERGY_OVERRIDE',
     re: /^Allergy override (recorded at creation|recorded on edit|reason replaced on edit|cleared: the edited order no longer conflicts)$/,
     params: ['what'],

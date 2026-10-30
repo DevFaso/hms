@@ -17,9 +17,33 @@ export interface MedicationCatalogItemRequest {
   category?: string;
   essentialList?: boolean;
   controlled?: boolean;
-  /** QA D935: the paediatric ceiling, mg per kg per dose; empty when none is known. */
-  pediatricMaxDoseMgPerKg?: number | null;
   description?: string;
+}
+
+/** Round 18 (QA D935): one weight band; min inclusive, max exclusive (null: no upper bound). */
+export interface PediatricWeightBand {
+  minWeightKg: number | null;
+  maxWeightKg: number | null;
+  dosePerAdministration: number | null;
+  doseUnit: string;
+  maxDosesPerDay: number | null;
+}
+
+export type PediatricDoseLimitStatus = 'DEFAULT_PENDING_APPROVAL' | 'APPROVED';
+
+/**
+ * Round 18 (QA D935): a catalogue item's paediatric dose limits, the
+ * pharmacy's to set and approve (PUT /medication-catalog/{id}/pediatric-dosing).
+ */
+export interface PediatricDosingRequest {
+  pediatricMaxDoseMgPerKg: number | null;
+  pediatricMaxDailyMgPerKg: number | null;
+  pediatricMaxSingleDoseMg: number | null;
+  pediatricMaxDailyMg: number | null;
+  pediatricManualReviewUnderMonths: number | null;
+  pediatricWeightBands: PediatricWeightBand[];
+  pediatricDoseSource: string | null;
+  pediatricDoseStatus: PediatricDoseLimitStatus;
 }
 
 export interface MedicationCatalogItemResponse {
@@ -38,6 +62,15 @@ export interface MedicationCatalogItemResponse {
   controlled: boolean;
   /** QA D935: mg per kg per dose, or null when the catalogue holds no ceiling. */
   pediatricMaxDoseMgPerKg?: number | null;
+  /** Round 18 (QA D935): the rest of the paediatric limits, their source and approval. */
+  pediatricMaxDailyMgPerKg?: number | null;
+  pediatricMaxSingleDoseMg?: number | null;
+  pediatricMaxDailyMg?: number | null;
+  pediatricManualReviewUnderMonths?: number | null;
+  pediatricWeightBands?: PediatricWeightBand[];
+  pediatricDoseSource?: string | null;
+  pediatricDoseStatus?: PediatricDoseLimitStatus | null;
+  pediatricDoseReviewedAt?: string | null;
   active: boolean;
   description?: string;
   hospitalId?: string;
@@ -730,6 +763,17 @@ export class PharmacyService {
 
   deleteMedication(id: string): Observable<void> {
     return this.http.delete<void>(`/medication-catalog/${id}`);
+  }
+
+  /** Round 18 (QA D935): the pharmacy sets or approves an item's paediatric dose limits. */
+  updatePediatricDosing(
+    id: string,
+    req: PediatricDosingRequest,
+  ): Observable<MedicationCatalogItemResponse> {
+    return this.http.put<MedicationCatalogItemResponse>(
+      `/medication-catalog/${id}/pediatric-dosing`,
+      req,
+    );
   }
 
   // ── Pharmacy Registry ──

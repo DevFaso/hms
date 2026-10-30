@@ -19,9 +19,10 @@ import java.util.UUID;
  * medication history and the record PDF all treated catalog-controlled
  * morphine as an ordinary drug. Those callers ask this class.
  *
- * <p>Deliberately NOT used by {@link ControlledSubstanceGuard}: the
- * prescriber two-factor signing block stays on the prescriber's own tick
- * until a two-factor step exists (user decision D654, tasklist standing debt).
+ * <p>Round 18: the prescriber's two-factor step now exists and keys on THIS
+ * class: {@code PrescriptionServiceImpl#signPrescription} re-authenticates the
+ * prescriber whenever {@link #isControlled} is true, and writes the proof the
+ * {@link ControlledSubstanceGuard} checks.
  *
  * <p>The catalog is always read at the prescription's own hospital, never
  * another tenant's item with the same code.

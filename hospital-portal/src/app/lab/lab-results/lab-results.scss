@@ -811,3 +811,15 @@
   margin: 0 0 1rem;
   color: var(--text-secondary, #4b5563);
 }
+
+/* Round 18: the range the result was graded against (its sex and age band). */
+.range-applied {
+  border-left: 3px solid var(--primary, #0e7c6b);
+}
+
+.range-applied-label {
+  margin-left: 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--primary, #0e7c6b);
+}

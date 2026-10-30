@@ -17,6 +17,7 @@ import {
   LabService,
   LabResultResponse,
   LabResultTrendPoint,
+  LabResultReferenceRange,
   LabResultRequest,
   LabOrderResponse,
   LabResultComparison,
@@ -640,13 +641,41 @@ export class LabResultsComponent implements OnInit {
     return '—';
   }
 
-  formatReferenceRangeAge(range: { ageMin?: number | null; ageMax?: number | null }): string {
+  formatReferenceRangeAge(range: {
+    ageMin?: number | null;
+    ageMax?: number | null;
+    ageUnit?: string | null;
+  }): string {
     const ageMin = range.ageMin;
     const ageMax = range.ageMax;
-    if (ageMin != null && ageMax != null) return `${ageMin}–${ageMax}`;
-    if (ageMin != null) return `${ageMin}+`;
-    if (ageMax != null) return `0–${ageMax}`;
+    // Round 18: a band in days or months says so ("0–7 jours"); years stay as before.
+    const unit = (range.ageUnit ?? 'YEARS').toUpperCase();
+    // Round 18: free-text source and the unit word come from fixed keys.
+    const suffix =
+      unit === 'DAYS'
+        ? ' ' + this.translate.instant('LAB_TEST_CONFIG.AGE_UNIT_DAYS')
+        : unit === 'MONTHS'
+          ? ' ' + this.translate.instant('LAB_TEST_CONFIG.AGE_UNIT_MONTHS')
+          : '';
+    if (ageMin != null && ageMax != null) return `${ageMin}–${ageMax}${suffix}`;
+    if (ageMin != null) return `${ageMin}+${suffix}`;
+    if (ageMax != null) return `0–${ageMax}${suffix}`;
     return this.translate.instant('LAB_RESULTS.ALL_AGES');
+  }
+
+  /** Round 18: whether this listed range is the one the result was graded against. */
+  isGradedRange(result: LabResultResponse, range: LabResultReferenceRange): boolean {
+    const graded = result.gradedReferenceRange;
+    if (!graded) return false;
+    return (
+      graded.minValue === range.minValue &&
+      graded.maxValue === range.maxValue &&
+      (graded.unit ?? null) === (range.unit ?? null) &&
+      (graded.gender ?? null) === (range.gender ?? null) &&
+      (graded.ageMin ?? null) === (range.ageMin ?? null) &&
+      (graded.ageMax ?? null) === (range.ageMax ?? null) &&
+      (graded.ageUnit ?? null) === (range.ageUnit ?? null)
+    );
   }
 
   formatTrendDelta(sortedHistory: LabResultTrendPoint[], index: number): string {

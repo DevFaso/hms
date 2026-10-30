@@ -25,6 +25,7 @@ import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { PEV_VACCINES, pevCvx } from './pev-cvx';
 
 type HistorySection = 'social' | 'family' | 'immunizations';
 type FamilyFilter = 'all' | 'genetic' | 'screening-needed';
@@ -334,23 +335,10 @@ export class MedicalHistoryTabComponent implements OnInit {
 
   /**
    * QA D1003: the Burkina Faso EPI (PEV) vaccines, offered by name so the
-   * vaccine is chosen rather than typed. Labels only: the CVX code stays an
-   * optional field, filled when known.
+   * vaccine is chosen rather than typed. Choosing one fills its verified CVX
+   * code (pev-cvx.ts); the code stays optional and editable.
    */
-  readonly pevVaccines = [
-    'BCG',
-    'VPO',
-    'VPI',
-    'PENTA',
-    'PCV',
-    'ROTA',
-    'RR',
-    'VAA',
-    'MENA',
-    'TD',
-    'HPV',
-    'MALARIA',
-  ];
+  readonly pevVaccines = PEV_VACCINES;
   readonly immunizationSources = [
     'GIVEN_HERE',
     'VACCINATION_CARD',
@@ -399,6 +387,7 @@ export class MedicalHistoryTabComponent implements OnInit {
       hospitalId: this.hospitalId(),
     };
     this.immunizationSourceTouched = false;
+    this.autoFilledCvx = null;
     this.editingImmunizationId.set(null);
     this.showImmunizationModal.set(true);
   }
@@ -418,26 +407,53 @@ export class MedicalHistoryTabComponent implements OnInit {
       sourceOfRecord: immunization.sourceOfRecord ?? '',
     };
     this.immunizationSourceTouched = true;
+    this.autoFilledCvx = null;
     this.editingImmunizationId.set(immunization.id);
     this.showImmunizationModal.set(true);
   }
 
   /**
-   * QA D1003: a vaccine chosen by name takes the CVX code an earlier dose of
-   * the same vaccine in this chart was recorded with. No PEV-to-CVX table is
-   * held in the codebase, so nothing is guessed: with no earlier dose, the
-   * clinician enters the code the hospital's DHIS2 export is configured for.
+   * QA D1003 (round 17): a PEV vaccine chosen by name fills its CVX code from
+   * the verified table (pev-cvx.ts). Any other vaccine takes the code an
+   * earlier dose of the same vaccine in this chart carries, when there is
+   * one. A code the clinician typed is never overwritten; one this method
+   * filled is replaced when the vaccine changes, and cleared when the new
+   * vaccine has no code, so a stale code never travels with another vaccine.
    */
   onVaccineChosen(display: string): void {
     this.immunizationForm.vaccineDisplay = display;
-    if (this.immunizationForm.vaccineCode?.trim()) return;
+    const current = this.immunizationForm.vaccineCode?.trim() ?? '';
+    if (current && current !== this.autoFilledCvx) return;
+    const filled = pevCvx(this.pevVaccineNamed(display)) ?? this.earlierDoseCode(display);
+    this.immunizationForm.vaccineCode = filled ?? '';
+    this.autoFilledCvx = filled ?? null;
+  }
+
+  /** The CVX code the form filled itself, or null when the clinician typed it (or none). */
+  private autoFilledCvx: string | null = null;
+
+  /** The PEV vaccine whose label (in the reader's language) or key the text names. */
+  private pevVaccineNamed(display: string): string | undefined {
     const name = (display ?? '').trim().toLocaleLowerCase();
-    if (!name) return;
+    if (!name) return undefined;
+    return this.pevVaccines.find(
+      (v) =>
+        v.toLocaleLowerCase() === name ||
+        String(this.translate.instant('MED_HISTORY.PEV.' + v))
+          .trim()
+          .toLocaleLowerCase() === name,
+    );
+  }
+
+  /** The code an earlier dose of the same vaccine in this chart carries. */
+  private earlierDoseCode(display: string): string | undefined {
+    const name = (display ?? '').trim().toLocaleLowerCase();
+    if (!name) return undefined;
     const earlier = this.immunizations().find(
       (i) =>
         (i.vaccineDisplay ?? '').trim().toLocaleLowerCase() === name && !!i.vaccineCode?.trim(),
     );
-    if (earlier?.vaccineCode) this.immunizationForm.vaccineCode = earlier.vaccineCode;
+    return earlier?.vaccineCode?.trim() || undefined;
   }
 
   closeImmunizationModal(): void {
@@ -446,8 +462,8 @@ export class MedicalHistoryTabComponent implements OnInit {
 
   submitImmunization(): void {
     const form = this.immunizationForm;
-    // The CVX code stays required: the DHIS2 export counts doses by it.
-    if (!form.vaccineCode.trim() || !form.vaccineDisplay.trim() || !form.administrationDate) {
+    // QA D1003: the CVX code is optional (a PEV vaccine may have none).
+    if (!form.vaccineDisplay.trim() || !form.administrationDate) {
       this.toast.error(this.translate.instant('MED_HISTORY.IMMUNIZATION_REQUIRED_FIELDS'));
       return;
     }

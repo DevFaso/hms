@@ -198,6 +198,8 @@ export class LabTestConfigComponent implements OnInit {
         notes: null,
         criticalLow: null,
         criticalHigh: null,
+        ageUnit: 'YEARS',
+        source: null,
       },
     ]);
   }

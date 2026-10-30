@@ -801,7 +801,8 @@
       "INFO": "Información",
       "WARNING": "Advertencia",
       "CRITICAL": "Crítico"
-    }
+    },
+    "HARD_STOP": "Esta dosis supera un máximo absoluto y no puede anularse. Cambie la dosis o la frecuencia."
   },
   "BPA": {
     "ACK_FAILED": "No se pudo registrar el reconocimiento del aviso.",
@@ -1732,7 +1733,13 @@
       "STATUS_WAS": "{{what}} (estaba {{previous}})",
       "PLATFORM_SERVICE_UPDATED": "Servicio de plataforma modificado: {{details}}",
       "PLATFORM_SERVICE_STATUS": "Estado del servicio de plataforma cambiado a {{status}}: {{details}}",
-      "PLATFORM_LINK_TOGGLED": "Vínculo del servicio de plataforma con un {{target}} {{state}}: {{details}}"
+      "PLATFORM_LINK_TOGGLED": "Vínculo del servicio de plataforma con un {{target}} {{state}}: {{details}}",
+      "CDS_OVERRIDE_CREATED": "Alerta crítica de apoyo a la decisión anulada al crear la receta",
+      "CDS_OVERRIDE_EDITED": "Alerta crítica de apoyo a la decisión anulada al modificar la receta",
+      "DOSE_LIMITS_APPROVED": "Límites de dosis pediátricos aprobados en el artículo del catálogo {{item}}",
+      "DOSE_LIMITS_DEFAULT": "Límites de dosis pediátricos definidos por defecto, pendientes de aprobación, en el artículo del catálogo {{item}}",
+      "RX_SIGN_REAUTH_VERIFIED": "Identidad confirmada para firmar una receta de estupefaciente ({{method}})",
+      "RX_SIGN_REAUTH_REFUSED": "Identidad no confirmada para firmar una receta de estupefaciente ({{reason}})"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "ningún rol activo en este hospital",
@@ -1993,6 +2000,24 @@
       "CREDIT_NOTE": "Nota de crédito",
       "DISCOUNT": "Descuento",
       "WAIVER": "Exención"
+    },
+    "RX_SIGN_REAUTH": {
+      "TOTP": "código de autenticación",
+      "PASSWORD": "contraseña",
+      "REQUIRED": "ningún código introducido",
+      "INVALID": "código erróneo",
+      "CHALLENGE": "inicio de sesión no completado",
+      "NOT_ENROLLED": "ninguna aplicación de autenticación",
+      "UNAVAILABLE": "autenticación no disponible",
+      "UNIDENTIFIED": "cuenta no identificada",
+      "LOCKED": "demasiados códigos erróneos",
+      "REUSED": "código ya utilizado",
+      "IMPERSONATION": "sesión de soporte",
+      "PASSWORD_REQUIRED": "ninguna contraseña introducida",
+      "PASSWORD_INVALID": "contraseña errónea",
+      "PASSWORD_LOCKED": "demasiadas contraseñas erróneas",
+      "SIGNING_IMPERSONATION": "sesión de soporte",
+      "SIGNING_NOT_ENROLLED": "aplicación de autenticación necesaria para esta cuenta"
     }
   },
   "BILLING": {
@@ -3683,7 +3708,12 @@
     "EXPECTED_RESULT": "Resultado esperado (prueba cualitativa)",
     "EXPECTED_RESULT_PLACEHOLDER": "p. ej. Negativo",
     "EXPECTED_RESULT_HINT": "Para una prueba que se responde con palabras (prueba rápida, cultivo), indique la respuesta normal en lugar de un rango numérico. El paciente la ve junto al resultado.",
-    "EXPECTED_RESULT_SHORT": "Esperado: {{value}}"
+    "EXPECTED_RESULT_SHORT": "Esperado: {{value}}",
+    "AGE_UNIT": "Unidad de edad",
+    "AGE_UNIT_YEARS": "años",
+    "AGE_UNIT_MONTHS": "meses",
+    "AGE_UNIT_DAYS": "días",
+    "RANGE_SOURCE": "Fuente"
   },
   "LAB_RESULTS": {
     "ALL_AGES": "Todas las edades",
@@ -3775,7 +3805,9 @@
     "SUPERSEDED": "Sustituido",
     "SUPERSEDED_HINT": "Una corrección sustituyó este resultado liberado; la corrección es el valor vigente.",
     "EXPECTED_RESULT": "Resultado esperado",
-    "CORRECTED_HINT_PATIENT": "El laboratorio corrigió este resultado después de comunicarlo. Este es el valor que cuenta; su equipo médico está informado."
+    "CORRECTED_HINT_PATIENT": "El laboratorio corrigió este resultado después de comunicarlo. Este es el valor que cuenta; su equipo médico está informado.",
+    "RANGE_APPLIED": "Intervalo aplicado a este paciente",
+    "RANGE_SOURCE": "Fuente"
   },
   "LAB_RELEASE": {
     "FLAG_ABNORMAL": "Anormal",
@@ -6321,7 +6353,10 @@
         "USER_RESTORE": "Usuario restaurado",
         "LAB_ORDER_CANCELLED": "Orden de laboratorio cancelada",
         "LAB_RESULT_SELF_RELEASED": "Resultado de laboratorio autovalidado",
-        "LAB_ORDER_ENTERED_IN_ERROR": "Orden de laboratorio registrada por error"
+        "LAB_ORDER_ENTERED_IN_ERROR": "Orden de laboratorio registrada por error",
+        "MEDICATION_DOSE_LIMITS_UPDATED": "Límites de dosis pediátricos modificados",
+        "PRESCRIPTION_CDS_OVERRIDDEN": "Alerta de apoyo a la decisión anulada en una receta",
+        "PRESCRIPTION_SIGN_REAUTHENTICATION": "Reautenticación para firmar una receta de estupefaciente"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelada",
@@ -7230,7 +7265,15 @@
       "INH": "Inhalada (INH)",
       "NEB": "Nebulizada (NEB)"
     },
-    "CONTROLLED_PICKED_HINT": "Estupefaciente: la receta debe ser verificada por un farmacéutico antes de administrarse, y el paciente no puede solicitar su renovación."
+    "CONTROLLED_PICKED_HINT": "Estupefaciente: la receta debe ser verificada por un farmacéutico antes de administrarse, y el paciente no puede solicitar su renovación.",
+    "SIGN_REAUTH": {
+      "TITLE": "Confirme su identidad para firmar",
+      "INTRO": "{{medication}} es un estupefaciente. Su receta solo se firma después de confirmar su identidad, únicamente para esta firma.",
+      "PASSWORD": "Su contraseña",
+      "CODE": "Código de su aplicación de autenticación (o un código de respaldo)",
+      "SUBMIT": "Firmar",
+      "FAILED": "No se pudo confirmar su identidad. La receta no está firmada."
+    }
   },
   "PROFILE": {
     "ACCOUNT_AGE": "Antigüedad de la cuenta",
@@ -9451,14 +9494,40 @@
     "ATC_PLACEHOLDER": "ej. J01CA04 (amoxicilina)",
     "STRENGTH_PLACEHOLDER": "ej. 500",
     "CATEGORY_PLACEHOLDER": "ej. Antibiótico",
-    "PEDIATRIC_MAX_DOSE_MG_PER_KG": "Dosis pediátrica máxima (mg/kg por toma)",
-    "PEDIATRIC_MAX_DOSE_HINT": "Opcional. Introdúzcala solo desde la referencia de su establecimiento; el control de prescripción señala una dosis infantil superior.",
     "CANCEL_DISPENSE": "Anular la dispensación",
     "LEDGER_REASON_RETURN_FILL": "Devolución, ref. lote {{lot}} dispensado el {{date}}",
     "LEDGER_REASON_RETURN_FILL_DATE": "Devolución de la dispensación del {{date}}",
     "DISPENSE_SPLIT_SUCCESS": "Dispensado en {{count}} dispensaciones, primero el lote de caducidad más próxima.",
     "FEFO_SPLIT_HINT": "El lote de caducidad más próxima no cubre la cantidad: se vacía primero y luego el lote siguiente.",
-    "FEFO_SPLIT_PART": "{{quantity}} del lote {{lot}} (cad. {{date}})"
+    "FEFO_SPLIT_PART": "{{quantity}} del lote {{lot}} (cad. {{date}})",
+    "DOSING": {
+      "ACTION": "Límites de dosis pediátricos",
+      "TITLE": "Límites de dosis pediátricos",
+      "INTRO": "Los usa el control de dosis de las recetas para niños. Por encima de un máximo habitual, el prescriptor debe dar un motivo para continuar; por encima del máximo diario absoluto, la dosis se rechaza. Deje vacío un campo cuando no se aplique ningún límite.",
+      "PER_DOSE_MG_KG": "Máximo habitual por dosis (mg/kg)",
+      "PER_DAY_MG_KG": "Máximo habitual por día (mg/kg/día)",
+      "SINGLE_DOSE_MG": "Máximo por dosis (mg)",
+      "DAILY_MAX_MG": "Máximo absoluto por día (mg)",
+      "DAILY_MAX_HINT": "Un bloqueo: un total diario por encima no puede prescribirse, ni siquiera con un motivo.",
+      "MANUAL_REVIEW_MONTHS": "Revisión manual antes de (meses)",
+      "MANUAL_REVIEW_HINT": "Por debajo de esta edad no se hace ningún control automático en mg/kg; un farmacéutico o un médico revisa la dosis. Vacío: 3 meses.",
+      "BANDS": "Tramos de peso (en lugar de mg/kg)",
+      "BANDS_HINT": "Desde el peso mínimo (incluido) hasta el máximo (excluido); deje vacío el último máximo.",
+      "BAND_MIN_KG": "Desde (kg)",
+      "BAND_MAX_KG": "Menos de (kg)",
+      "BAND_DOSE": "Dosis",
+      "BAND_UNIT": "Unidad",
+      "BAND_PER_DAY": "Dosis por día",
+      "ADD_BAND": "Añadir un tramo de peso",
+      "SOURCE": "Fuente de los valores",
+      "STATUS": "Estado",
+      "STATUS_PENDING": "Valor por defecto, pendiente de aprobación local",
+      "STATUS_APPROVED": "Aprobados por esta farmacia",
+      "BADGE_PENDING": "Límites pediátricos: por aprobar",
+      "BADGE_APPROVED": "Límites pediátricos aprobados",
+      "SAVED": "Límites de dosis pediátricos guardados",
+      "SAVE_FAILED": "No se pudieron guardar los límites de dosis pediátricos"
+    }
   },
   "LAB_QC": {
     "TITLE": "Panel de control de calidad",
@@ -9958,12 +10027,12 @@
     "ADD_IMMUNIZATION": "Agregar vacuna",
     "EDIT_IMMUNIZATION": "Editar vacuna",
     "NO_IMMUNIZATIONS": "Sin vacunas registradas.",
-    "IMMUNIZATION_REQUIRED_FIELDS": "El código, el nombre de la vacuna y la fecha de administración son obligatorios",
+    "IMMUNIZATION_REQUIRED_FIELDS": "El nombre de la vacuna y la fecha de administración son obligatorios",
     "IMMUNIZATION_CREATED": "Vacuna registrada",
     "IMMUNIZATION_UPDATED": "Vacuna actualizada",
     "IMMUNIZATION_SAVE_ERROR": "Error al guardar la vacuna",
     "VACCINE": "Vacuna",
-    "VACCINE_CODE": "Código de vacuna (CVX)",
+    "VACCINE_CODE": "Código de vacuna (CVX, opcional)",
     "ADMINISTERED": "Administrada",
     "DOSE": "Dosis",
     "DOSE_NUMBER": "Número de dosis",
@@ -10010,9 +10079,10 @@
       "TD": "Td (tétanos-difteria)",
       "VAA": "Fiebre amarilla",
       "VPI": "VPI (polio inactivada)",
-      "VPO": "VPO (polio oral)"
+      "VPO": "VPO (polio oral)",
+      "HEPB0": "Hepatitis B (dosis al nacer)"
     },
-    "VACCINE_CODE_HINT": "Tomado de una dosis anterior de la misma vacuna en esta historia, si la hay; si no, el código que usa la exportación DHIS2 del centro."
+    "VACCINE_CODE_HINT": "Se rellena a partir de la vacuna del PEV elegida (tabla CVX de los CDC, verificada el 30/10/2026) o de una dosis anterior de la misma vacuna en esta historia. Opcional y editable; MenAfriVac y la vacuna contra la malaria no tienen código CVX."
   },
   "MATERNITY": {
     "GA": "Edad gestacional",

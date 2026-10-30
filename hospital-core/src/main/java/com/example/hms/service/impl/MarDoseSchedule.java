@@ -36,6 +36,29 @@ public final class MarDoseSchedule {
     private MarDoseSchedule() {
     }
 
+    /**
+     * Round 18 (QA D935): doses in 24 hours for a fixed repeat, or {@code null}
+     * when the frequency is not one. Unlike {@link #intervalHours}, a count
+     * that does not divide the day ("5 fois par jour") is still read, and an
+     * interval longer than a day gives a fraction ("q48h" = 0.5).
+     */
+    public static Double dosesPerDay(String frequency) {
+        if (frequency == null || frequency.isBlank() || isAsNeeded(frequency.toUpperCase(Locale.ROOT))) {
+            return null;
+        }
+        String f = countWordsAsDigits(frequency.trim().toUpperCase(Locale.ROOT)
+            .replace('_', ' ').replace('.', ' ').replace(',', ' '));
+        Matcher m = TIMES.matcher(f);
+        while (m.find()) {
+            if (PER_DAY.matcher(f).region(m.end(), f.length()).lookingAt()) {
+                int perDay = Integer.parseInt(m.group(1));
+                return perDay > 0 ? (double) perDay : null;
+            }
+        }
+        Integer interval = intervalHours(frequency);
+        return interval == null ? null : 24d / interval;
+    }
+
     /** Hours between doses, or {@code null} when the frequency is not a fixed repeat. */
     public static Integer intervalHours(String frequency) {
         if (frequency == null || frequency.isBlank()) {

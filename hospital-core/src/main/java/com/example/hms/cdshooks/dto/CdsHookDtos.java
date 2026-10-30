@@ -60,8 +60,26 @@ public final class CdsHookDtos {
         List<CdsLink> links,
         List<CdsSuggestion> suggestions,
         String selectionBehavior,
-        String uuid
+        String uuid,
+        /*
+         * Round 18 (QA D935): true on a card no override can pass (a dose
+         * above the absolute daily maximum). Absent (null) on every other
+         * card, so the CDS Hooks wire shape is unchanged for them.
+         */
+        Boolean hardStop
     ) {
+        /** A card any critical-override path may pass with a reason (every card before round 18). */
+        public CdsCard(String summary, String detail, Indicator indicator, Source source,
+                       List<CdsLink> links, List<CdsSuggestion> suggestions,
+                       String selectionBehavior, String uuid) {
+            this(summary, detail, indicator, source, links, suggestions, selectionBehavior, uuid, null);
+        }
+
+        /** Whether no override may pass this card. */
+        public boolean blocksOverride() {
+            return Boolean.TRUE.equals(hardStop);
+        }
+
         public enum Indicator {
             INFO, WARNING, CRITICAL;
 

@@ -50,7 +50,7 @@ class CdsRuleEngineRound16Test {
     private void weighs(Patient p, double kg) {
         PatientVitalSign v = new PatientVitalSign();
         v.setWeightKg(kg);
-        when(vitalSignRepository.findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(p.getId(), hospitalId))
+        when(vitalSignRepository.findFirstByPatient_IdAndHospital_IdAndWeightKgIsNotNullOrderByRecordedAtDesc(p.getId(), hospitalId))
             .thenReturn(Optional.of(v));
     }
 

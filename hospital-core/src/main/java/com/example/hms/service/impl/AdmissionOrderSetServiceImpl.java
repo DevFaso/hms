@@ -224,7 +224,8 @@ public class AdmissionOrderSetServiceImpl implements AdmissionOrderSetService {
             request.orderingStaffId(),
             assignmentId,
             admission.getPrimaryDiagnosisCode(),
-            request.forceOverride()
+            request.forceOverride(),
+            request.overrideReason()
         );
 
         List<UUID> prescriptionIds = new ArrayList<>();

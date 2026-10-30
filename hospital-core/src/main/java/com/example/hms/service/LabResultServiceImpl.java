@@ -2417,17 +2417,8 @@ public class LabResultServiceImpl implements LabResultService {
         }
 
         return labOrder.getLabTestDefinition().getReferenceRanges().stream()
-            .map(range -> LabResultReferenceRangeDTO.builder()
-                .minValue(range.getMinValue())
-                .maxValue(range.getMaxValue())
-                .unit(range.getUnit())
-                .ageMin(range.getAgeMin())
-                .ageMax(range.getAgeMax())
-                .gender(range.getGender())
-                .notes(range.getNotes())
-                .criticalLow(range.getCriticalLow())
-                .criticalHigh(range.getCriticalHigh())
-                .build())
+            .filter(java.util.Objects::nonNull)
+            .map(LabResultMapper::toReferenceRangeDto)
             .toList();
     }
 }

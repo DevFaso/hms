@@ -120,6 +120,8 @@ public class LabTestDefinitionMapper {
                 .notes(range.getNotes())
                 .criticalLow(range.getCriticalLow())
                 .criticalHigh(range.getCriticalHigh())
+                .ageUnit(range.getAgeUnit())
+                .source(range.getSource())
                 .build())
             .collect(Collectors.toCollection(java.util.ArrayList::new));
     }
@@ -140,6 +142,8 @@ public class LabTestDefinitionMapper {
                 .notes(range.getNotes())
                 .criticalLow(range.getCriticalLow())
                 .criticalHigh(range.getCriticalHigh())
+                .ageUnit(range.getAgeUnit())
+                .source(range.getSource())
                 .build())
             .collect(Collectors.toCollection(java.util.ArrayList::new));
     }

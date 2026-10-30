@@ -123,6 +123,22 @@ public class MedicationCatalogController {
         return ResponseEntity.ok(catalogService.update(id, dto));
     }
 
+    /**
+     * Round 18 (QA D935): the paediatric dose limits are the pharmacy's to set
+     * and approve, as a real formulary is (the round-17 QA found the
+     * pharmacist could not edit them at all). Scoped to the caller's acting
+     * hospital; the service audits MEDICATION_DOSE_LIMITS_UPDATED.
+     */
+    @PutMapping("/{id}/pediatric-dosing")
+    @WriteAudited(skip = true, reason = "service emits MEDICATION_DOSE_LIMITS_UPDATED")
+    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_HOSPITAL_ADMIN')")
+    @Operation(summary = "Set or approve a medication's paediatric dose limits")
+    public ResponseEntity<MedicationCatalogItemResponseDTO> updatePediatricDosing(
+            @PathVariable UUID id,
+            @Valid @RequestBody com.example.hms.payload.dto.medication.PediatricDosingRequestDTO dto) {
+        return ResponseEntity.ok(catalogService.updatePediatricDosing(id, dto));
+    }
+
     @DeleteMapping("/{id}")
     // P-02: formulary deactivation is a governance act — restrict to admin roles only.
     @WriteAudited(skip = true, reason = "service emits MEDICATION_DEACTIVATED")

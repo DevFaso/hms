@@ -54,6 +54,14 @@ public class LabTestReferenceRangeDTO implements Serializable {
 
     private Double criticalHigh;
 
+    /** Round 18: YEARS (default when absent), MONTHS or DAYS - the unit of ageMin/ageMax. */
+    @Pattern(regexp = "YEARS|MONTHS|DAYS", message = "{lab.referenceRange.ageUnit.invalid}")
+    private String ageUnit;
+
+    /** Round 18: where the limits come from, shown to the lab director who approves them. */
+    @Size(max = 500, message = "{lab.referenceRange.source.maxLength}")
+    private String source;
+
     /** QA D287: an inverted range (min above max) was saved and graded every value wrongly. */
     @JsonIgnore
     @AssertTrue(message = "{lab.referenceRange.inverted}")

@@ -78,15 +78,18 @@ public class ImmunizationFhirMapper {
     private static CodeableConcept mapVaccineCode(PatientImmunization src) {
         CodeableConcept code = new CodeableConcept();
         if (src.getVaccineDisplay() != null) code.setText(src.getVaccineDisplay());
+        // QA D1003: the CVX code is optional. Without one the local type is the
+        // coding, and without that the concept is text only: never a coding
+        // with an empty code, which a FHIR validator rejects.
         if (src.getVaccineCode() != null && !src.getVaccineCode().isBlank()) {
             code.addCoding(new Coding()
                 .setSystem(SYSTEM_CVX)
-                .setCode(src.getVaccineCode())
+                .setCode(src.getVaccineCode().trim())
                 .setDisplay(src.getVaccineDisplay()));
-        } else if (src.getVaccineType() != null) {
+        } else if (src.getVaccineType() != null && !src.getVaccineType().isBlank()) {
             code.addCoding(new Coding()
                 .setSystem(SYSTEM_HMS_LOCAL)
-                .setCode(src.getVaccineType())
+                .setCode(src.getVaccineType().trim())
                 .setDisplay(src.getVaccineDisplay()));
         }
         return code;

@@ -801,7 +801,8 @@
       "INFO": "Info",
       "WARNING": "Warning",
       "CRITICAL": "Critical"
-    }
+    },
+    "HARD_STOP": "This dose is above an absolute maximum and cannot be overridden. Change the dose or the frequency."
   },
   "BPA": {
     "ACK_FAILED": "Could not record advisory acknowledgement.",
@@ -1732,7 +1733,13 @@
       "STATUS_WAS": "{{what}} (was {{previous}})",
       "PLATFORM_SERVICE_UPDATED": "Platform service updated: {{details}}",
       "PLATFORM_SERVICE_STATUS": "Platform service status set to {{status}}: {{details}}",
-      "PLATFORM_LINK_TOGGLED": "Platform service link to a {{target}} {{state}}: {{details}}"
+      "PLATFORM_LINK_TOGGLED": "Platform service link to a {{target}} {{state}}: {{details}}",
+      "CDS_OVERRIDE_CREATED": "Critical decision-support alert overridden when the prescription was created",
+      "CDS_OVERRIDE_EDITED": "Critical decision-support alert overridden when the prescription was edited",
+      "DOSE_LIMITS_APPROVED": "Paediatric dose limits approved on the catalogue item {{item}}",
+      "DOSE_LIMITS_DEFAULT": "Paediatric dose limits set as a default pending approval on the catalogue item {{item}}",
+      "RX_SIGN_REAUTH_VERIFIED": "Identity confirmed to sign a controlled-drug prescription ({{method}})",
+      "RX_SIGN_REAUTH_REFUSED": "Identity not confirmed to sign a controlled-drug prescription ({{reason}})"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",
@@ -1993,6 +2000,24 @@
       "CREDIT_NOTE": "Credit note",
       "DISCOUNT": "Discount",
       "WAIVER": "Waiver"
+    },
+    "RX_SIGN_REAUTH": {
+      "TOTP": "authenticator code",
+      "PASSWORD": "password",
+      "REQUIRED": "no code sent",
+      "INVALID": "wrong code",
+      "CHALLENGE": "sign-in not completed",
+      "NOT_ENROLLED": "no authenticator",
+      "UNAVAILABLE": "authenticator unavailable",
+      "UNIDENTIFIED": "account not identified",
+      "LOCKED": "too many wrong codes",
+      "REUSED": "code already used",
+      "IMPERSONATION": "support session",
+      "PASSWORD_REQUIRED": "no password sent",
+      "PASSWORD_INVALID": "wrong password",
+      "PASSWORD_LOCKED": "too many wrong passwords",
+      "SIGNING_IMPERSONATION": "support session",
+      "SIGNING_NOT_ENROLLED": "authenticator required for this account"
     }
   },
   "BILLING": {
@@ -3683,7 +3708,12 @@
     "EXPECTED_RESULT": "Expected result (qualitative test)",
     "EXPECTED_RESULT_PLACEHOLDER": "e.g. Negative",
     "EXPECTED_RESULT_HINT": "For a test answered in words (a rapid test, a culture), give the normal answer instead of a numeric range. The patient sees it beside the result.",
-    "EXPECTED_RESULT_SHORT": "Expected: {{value}}"
+    "EXPECTED_RESULT_SHORT": "Expected: {{value}}",
+    "AGE_UNIT": "Age unit",
+    "AGE_UNIT_YEARS": "years",
+    "AGE_UNIT_MONTHS": "months",
+    "AGE_UNIT_DAYS": "days",
+    "RANGE_SOURCE": "Source"
   },
   "LAB_RESULTS": {
     "ALL_AGES": "All ages",
@@ -3775,7 +3805,9 @@
     "SUPERSEDED": "Superseded",
     "SUPERSEDED_HINT": "A correction replaced this released result; the correction is the current value.",
     "EXPECTED_RESULT": "Expected result",
-    "CORRECTED_HINT_PATIENT": "The laboratory corrected this result after first releasing it. This is the value that counts; your care team has been told."
+    "CORRECTED_HINT_PATIENT": "The laboratory corrected this result after first releasing it. This is the value that counts; your care team has been told.",
+    "RANGE_APPLIED": "Range applied to this patient",
+    "RANGE_SOURCE": "Source"
   },
   "LAB_RELEASE": {
     "FLAG_ABNORMAL": "Abnormal",
@@ -6321,7 +6353,10 @@
         "USER_RESTORE": "User Restored",
         "LAB_ORDER_CANCELLED": "Lab Order Cancelled",
         "LAB_RESULT_SELF_RELEASED": "Lab Result Self-Released",
-        "LAB_ORDER_ENTERED_IN_ERROR": "Lab Order Entered in Error"
+        "LAB_ORDER_ENTERED_IN_ERROR": "Lab Order Entered in Error",
+        "MEDICATION_DOSE_LIMITS_UPDATED": "Paediatric dose limits updated",
+        "PRESCRIPTION_CDS_OVERRIDDEN": "Prescription decision-support alert overridden",
+        "PRESCRIPTION_SIGN_REAUTHENTICATION": "Re-authentication to sign a controlled-drug prescription"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelled",
@@ -7230,7 +7265,15 @@
       "INH": "Inhaled (INH)",
       "NEB": "Nebulised (NEB)"
     },
-    "CONTROLLED_PICKED_HINT": "Controlled substance: the order needs a pharmacist's verification before it is given, and the patient cannot request a renewal."
+    "CONTROLLED_PICKED_HINT": "Controlled substance: the order needs a pharmacist's verification before it is given, and the patient cannot request a renewal.",
+    "SIGN_REAUTH": {
+      "TITLE": "Confirm your identity to sign",
+      "INTRO": "{{medication}} is a controlled drug. Its prescription is signed only after you confirm your identity, for this signature only.",
+      "PASSWORD": "Your password",
+      "CODE": "Code from your authenticator app (or a backup code)",
+      "SUBMIT": "Sign",
+      "FAILED": "Your identity could not be confirmed. The prescription is not signed."
+    }
   },
   "PROFILE": {
     "ACCOUNT_AGE": "Account Age",
@@ -9451,14 +9494,40 @@
     "ATC_PLACEHOLDER": "e.g. J01CA04 (amoxicillin)",
     "STRENGTH_PLACEHOLDER": "e.g. 500",
     "CATEGORY_PLACEHOLDER": "e.g. Antibiotic",
-    "PEDIATRIC_MAX_DOSE_MG_PER_KG": "Paediatric maximum dose (mg/kg per dose)",
-    "PEDIATRIC_MAX_DOSE_HINT": "Optional. Enter it only from your hospital's reference; the prescription check flags a child's dose above it.",
     "CANCEL_DISPENSE": "Cancel dispense",
     "LEDGER_REASON_RETURN_FILL": "Return, ref. lot {{lot}} dispensed {{date}}",
     "LEDGER_REASON_RETURN_FILL_DATE": "Return of the fill of {{date}}",
     "DISPENSE_SPLIT_SUCCESS": "Dispensed in {{count}} fills, shortest-dated lot first.",
     "FEFO_SPLIT_HINT": "The shortest-dated lot does not cover the quantity: it is emptied first, then the next lot.",
-    "FEFO_SPLIT_PART": "{{quantity}} from lot {{lot}} (exp. {{date}})"
+    "FEFO_SPLIT_PART": "{{quantity}} from lot {{lot}} (exp. {{date}})",
+    "DOSING": {
+      "ACTION": "Paediatric dose limits",
+      "TITLE": "Paediatric dose limits",
+      "INTRO": "Used by the prescription dose check for children. Above a usual maximum the prescriber must give a reason to continue; above the absolute daily maximum the dose is refused. Leave a field empty when no limit applies.",
+      "PER_DOSE_MG_KG": "Usual maximum per dose (mg/kg)",
+      "PER_DAY_MG_KG": "Usual maximum per day (mg/kg/day)",
+      "SINGLE_DOSE_MG": "Maximum per dose (mg)",
+      "DAILY_MAX_MG": "Absolute maximum per day (mg)",
+      "DAILY_MAX_HINT": "A hard stop: a daily total above it cannot be prescribed, even with a reason.",
+      "MANUAL_REVIEW_MONTHS": "Manual review under (months)",
+      "MANUAL_REVIEW_HINT": "Below this age no automatic mg/kg check is made; a pharmacist or physician reviews the dose. Empty means 3 months.",
+      "BANDS": "Weight bands (instead of mg/kg)",
+      "BANDS_HINT": "From the minimum weight (included) to the maximum (excluded); leave the last maximum empty.",
+      "BAND_MIN_KG": "From (kg)",
+      "BAND_MAX_KG": "Under (kg)",
+      "BAND_DOSE": "Dose",
+      "BAND_UNIT": "Unit",
+      "BAND_PER_DAY": "Doses per day",
+      "ADD_BAND": "Add a weight band",
+      "SOURCE": "Source of the values",
+      "STATUS": "Status",
+      "STATUS_PENDING": "Default, pending local approval",
+      "STATUS_APPROVED": "Approved by this pharmacy",
+      "BADGE_PENDING": "Paediatric limits: to approve",
+      "BADGE_APPROVED": "Paediatric limits approved",
+      "SAVED": "Paediatric dose limits saved",
+      "SAVE_FAILED": "The paediatric dose limits could not be saved"
+    }
   },
   "LAB_QC": {
     "TITLE": "Quality Control Dashboard",
@@ -9958,12 +10027,12 @@
     "ADD_IMMUNIZATION": "Add immunization",
     "EDIT_IMMUNIZATION": "Edit immunization",
     "NO_IMMUNIZATIONS": "No immunizations recorded.",
-    "IMMUNIZATION_REQUIRED_FIELDS": "Vaccine code, name and administration date are required",
+    "IMMUNIZATION_REQUIRED_FIELDS": "Vaccine name and administration date are required",
     "IMMUNIZATION_CREATED": "Immunization recorded",
     "IMMUNIZATION_UPDATED": "Immunization updated",
     "IMMUNIZATION_SAVE_ERROR": "Failed to save immunization",
     "VACCINE": "Vaccine",
-    "VACCINE_CODE": "Vaccine code (CVX)",
+    "VACCINE_CODE": "Vaccine code (CVX, optional)",
     "ADMINISTERED": "Administered",
     "DOSE": "Dose",
     "DOSE_NUMBER": "Dose number",
@@ -10010,9 +10079,10 @@
       "TD": "Td (tetanus-diphtheria)",
       "VAA": "Yellow fever",
       "VPI": "IPV (injectable polio)",
-      "VPO": "OPV (oral polio)"
+      "VPO": "OPV (oral polio)",
+      "HEPB0": "Hepatitis B (birth dose)"
     },
-    "VACCINE_CODE_HINT": "Taken from an earlier dose of the same vaccine in this chart, when there is one; otherwise the code your hospital’s DHIS2 export uses."
+    "VACCINE_CODE_HINT": "Filled from the PEV vaccine chosen (CDC CVX table, checked 2026-10-30), or from an earlier dose of the same vaccine in this chart. Optional and editable; MenAfriVac and the malaria vaccine have no CVX code."
   },
   "MATERNITY": {
     "GA": "Gestational age",
