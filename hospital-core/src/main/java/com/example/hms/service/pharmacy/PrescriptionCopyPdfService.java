@@ -135,7 +135,8 @@ public class PrescriptionCopyPdfService {
         pdf.field(label(locale, "pdf.rxcopy.medication"), firstNonBlank(rx.getMedicationDisplayName(),
                 rx.getMedicationName()), 12f);
         pdf.field(label(locale, "pdf.rxcopy.dosage"), join(rx.getDosage(), rx.getDoseUnit()), 11f);
-        pdf.field(label(locale, "pdf.rxcopy.route"), rx.getRoute(), 11f);
+        // QA D1025 class: the route in the reader's language.
+        pdf.field(label(locale, "pdf.rxcopy.route"), com.example.hms.service.emar.MedicationRoutes.label(rx.getRoute(), locale), 11f);
         pdf.field(label(locale, "pdf.rxcopy.frequency"), rx.getFrequency(), 11f);
         pdf.field(label(locale, "pdf.rxcopy.duration"), rx.getDuration(), 11f);
         pdf.field(label(locale, "pdf.rxcopy.quantityToDispense"),

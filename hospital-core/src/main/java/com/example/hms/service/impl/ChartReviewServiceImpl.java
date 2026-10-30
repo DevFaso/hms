@@ -381,7 +381,9 @@ public class ChartReviewServiceImpl implements ChartReviewService {
             .section(Section.MEDICATION)
             .occurredAt(m.getCreatedAt())
             .title(joinNonBlank(" — ", m.getMedicationName(), m.getDosage()))
-            .summary(joinNonBlank(", ", m.getFrequency(), m.getRoute(), m.getDuration()))
+            // QA D1025: the route in the reader's language, never "INTRAVENOUS".
+            .summary(joinNonBlank(", ", m.getFrequency(),
+                com.example.hms.service.emar.MedicationRoutes.label(m.getRoute()), m.getDuration()))
             .status(m.getStatus())
             .build()));
 
