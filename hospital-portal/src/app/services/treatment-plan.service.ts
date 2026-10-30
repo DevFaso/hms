@@ -28,6 +28,9 @@ export interface TreatmentPlanReview {
 }
 
 export interface TreatmentPlanResponse {
+  /** QA D1081: the user the server's author check compares with (shared/authorship.service). */
+  authorUserId?: string | null;
+
   id: string;
   patientId: string;
   patientName: string;

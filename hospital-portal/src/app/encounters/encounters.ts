@@ -47,6 +47,7 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { serverLocalDate, toServerDateTime } from '../shared/date-utils';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { mayStartVisit } from '../core/encounter-start';
 
 @Component({
   selector: 'app-encounters',
@@ -940,8 +941,34 @@ export class EncountersComponent implements OnInit {
 
   /** D96: a doctor picks up a patient who is waiting for one. */
   canStartEncounter(enc: EncounterResponse): boolean {
-    return (
-      enc.status === 'WAITING_FOR_PHYSICIAN' && this.auth.hasAnyRole(actionRoles('encounterStart'))
+    if (
+      enc.status !== 'WAITING_FOR_PHYSICIAN' ||
+      !this.auth.hasAnyRole(actionRoles('encounterStart'))
+    ) {
+      return false;
+    }
+    // QA D1085: per visit, the server's rule (core/encounter-start). The
+    // assigned clinician is named by user when the server sends it, else by
+    // the staff record the session carries.
+    const myStaffId = this.auth.getUserProfile()?.staffId ?? null;
+    const assigned =
+      enc.staffUserId !== undefined
+        ? enc.staffUserId
+        : enc.staffId
+          ? enc.staffId === myStaffId
+            ? this.auth.getUserId()
+            : `staff:${enc.staffId}`
+          : null;
+    return mayStartVisit(
+      {
+        superAdmin: this.roleContext.isSuperAdmin(),
+        // rbac-inline-ok: mirrors EncounterController#startEncounter's midwifeOnly test (ROLE_DOCTOR held or not).
+        doctor: this.auth.hasAnyRole(['ROLE_DOCTOR']),
+        // rbac-inline-ok: mirrors EncounterController#startEncounter (a midwife leads her own visits).
+        midwife: this.auth.hasAnyRole(['ROLE_MIDWIFE']),
+        userId: this.auth.getUserId(),
+      },
+      assigned,
     );
   }
 

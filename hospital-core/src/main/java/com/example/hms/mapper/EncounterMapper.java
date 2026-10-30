@@ -135,6 +135,7 @@ public class EncounterMapper {
     private void populateStaff(EncounterResponseDTO dto, Staff s) {
         if (s == null) return;
         dto.setStaffId(s.getId());
+        dto.setStaffUserId(s.getUser() != null ? s.getUser().getId() : null);
         String staffDisplay = (s.getUser() != null)
             ? joinName(s.getUser().getFirstName(), s.getUser().getLastName())
             : nullSafe(s.getName());

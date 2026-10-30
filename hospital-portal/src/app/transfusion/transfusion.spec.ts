@@ -18,6 +18,7 @@ import { PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { roleContextStub } from '../testing/role-context.stub';
+import { AuthService } from '../auth/auth.service';
 
 function mockRequest(
   overrides: Partial<TransfusionRequestResponse> = {},
@@ -102,6 +103,17 @@ describe('TransfusionComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  // QA D1081: DOCTOR2_A was offered "Annuler" on DOCTOR_A's request (via
+  // window.prompt) and refused only after typing the reason.
+  it('D1081: offers Cancel on a request only to the clinician who asked for it', () => {
+    spyOn(TestBed.inject(AuthService), 'getUserProfile').and.returnValue({ id: 'u-me' } as never);
+    expect(component.canCancelRequest(mockRequest({ authorUserId: 'u-colleague' }))).toBeFalse();
+    expect(component.canCancelRequest(mockRequest({ authorUserId: 'u-me' }))).toBeTrue();
+    expect(
+      component.canCancelRequest(mockRequest({ authorUserId: 'u-me', status: 'CANCELLED' })),
+    ).toBeFalse();
   });
 
   it('loads requests on init', () => {

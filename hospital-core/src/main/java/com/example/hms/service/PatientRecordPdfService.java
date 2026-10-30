@@ -185,7 +185,11 @@ public class PatientRecordPdfService {
             label(t, e.getStatus()), e.getDepartmentName(), e.getStaffFullName(), e.getChiefComplaint()));
 
         pages.heading(t.get("pdf.record.section.notes"));
-        pages.rows(chart.getNotes(), n -> join(SEPARATOR, t.fmt(n.getDocumentedAt()), n.getTemplate(),
+        // QA D1076: the ward's nursing notes print too, said to be nursing
+        // notes, and the template by its name (never "DAR").
+        pages.rows(chart.getNotes(), n -> join(SEPARATOR, t.fmt(n.getDocumentedAt()),
+            "NURSING".equals(n.getSource()) ? t.get("pdf.record.note.nursing") : null,
+            label(t, n.getTemplate()),
             n.getAuthorName(), t.get(n.isSigned() ? "pdf.record.note.signed" : "pdf.record.note.draft"),
             n.getPreview()));
 

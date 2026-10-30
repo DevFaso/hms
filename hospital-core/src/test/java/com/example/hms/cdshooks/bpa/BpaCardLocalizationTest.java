@@ -88,8 +88,24 @@ class BpaCardLocalizationTest {
     void malariaCardIsFrench() {
         CdsCard card = new MalariaFeverProtocolRule(repo, text).evaluate(context(List.of(qaSet()))).get(0);
         assertThat(card.summary()).startsWith("Paludisme");
-        assertThat(card.detail()).contains("Dernière température : 38.9 °C")
-            .doesNotContain("English").doesNotContain("Most recent");
+        // QA D1078 (round 18): the French decimal comma. This assertion used to
+        // read "38.9 °C" - it pinned the defect (Locale.ROOT formatting).
+        assertThat(card.detail()).contains("Dernière température : 38,9 °C")
+            .doesNotContain("38.9").doesNotContain("English").doesNotContain("Most recent");
+    }
+
+    @Test
+    void malariaCardUsesTheSpanishDecimalCommaToo() {
+        LocaleContextHolder.setLocale(Locale.forLanguageTag("es"));
+        CdsCard card = new MalariaFeverProtocolRule(repo, text).evaluate(context(List.of(qaSet()))).get(0);
+        assertThat(card.detail()).contains("38,9").doesNotContain("38.9");
+    }
+
+    @Test
+    void theEnglishCardKeepsTheDecimalPoint() {
+        LocaleContextHolder.setLocale(Locale.ENGLISH);
+        CdsCard card = new MalariaFeverProtocolRule(repo, text).evaluate(context(List.of(qaSet()))).get(0);
+        assertThat(card.detail()).contains("38.9");
     }
 
     @Test

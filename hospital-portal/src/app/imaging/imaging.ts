@@ -32,6 +32,7 @@ import { actionRoles } from '../core/action-permissions';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { refusalReason } from '../shared/refusal-reason';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { AuthorshipService } from '../shared/authorship.service';
 
 type ImagingForm = Omit<ImagingOrderRequest, 'laterality'> & {
   laterality?: ImagingLaterality | '';
@@ -84,6 +85,7 @@ interface ReportForm {
 })
 export class ImagingComponent implements OnInit {
   private readonly imagingService = inject(ImagingService);
+  private readonly authorship = inject(AuthorshipService);
   private readonly hospitalService = inject(HospitalService);
   private readonly patientService = inject(PatientService);
   private readonly toast = inject(ToastService);
@@ -215,6 +217,17 @@ export class ImagingComponent implements OnInit {
   readonly canCancelOrder = computed(() =>
     this.roleContext.hasAnyActiveRole(actionRoles('imagingOrderStatus')),
   );
+  /**
+   * QA D1081: cancelling an imaging order is its author's (the server refuses
+   * any other clinician after the confirm). Per row, through the shared rule.
+   */
+  canCancelThisOrder(o: ImagingOrderResponse): boolean {
+    return (
+      this.canCancelOrder() &&
+      this.authorship.isAuthor({ authorUserId: o.authorUserId ?? o.orderingProviderUserId })
+    );
+  }
+
   /** RADIOLOGIST joins DOCTOR here — the endpoint has admitted the role since item 26. */
   readonly canAckCritical = this.roleContext.hasAnyActiveRole(actionRoles('imagingCriticalAck'));
 

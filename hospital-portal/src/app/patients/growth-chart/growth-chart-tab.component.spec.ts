@@ -1,5 +1,5 @@
 import { TestBed, ComponentFixture } from '@angular/core/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 import { GrowthChartTabComponent } from './growth-chart-tab.component';
 import {
@@ -42,6 +42,27 @@ describe('GrowthChartTabComponent', () => {
     fixture = TestBed.createComponent(GrowthChartTabComponent);
     component = fixture.componentInstance;
     component.patientId = 'p1';
+  });
+
+  // QA D1087: 6 years 7 months 15 days was shown as "6 a 8 mois".
+  it('D1087: tells the age in completed years and months, never rounded up', () => {
+    const asked: Record<string, unknown>[] = [];
+    spyOn(TestBed.inject(TranslateService), 'instant').and.callFake(((
+      key: string,
+      params?: Record<string, unknown>,
+    ) => {
+      asked.push({ key, ...(params ?? {}) });
+      return key;
+    }) as never);
+    // 6 y 7 m 15 d
+    component.formatAge(Math.floor(6 * 365.25 + 7 * 30.4375 + 15));
+    expect(asked.pop()).toEqual({ key: 'GROWTH.AGE_YEARS_MONTHS', years: 6, months: 7 });
+    // 6 y 11 m 29 d must not print 12 months
+    component.formatAge(Math.floor(6 * 365.25 + 11 * 30.4375 + 29));
+    expect(asked.pop()).toEqual({ key: 'GROWTH.AGE_YEARS_MONTHS', years: 6, months: 11 });
+    // 7 months 20 days, under two years
+    component.formatAge(Math.floor(7 * 30.4375 + 20));
+    expect(asked.pop()).toEqual({ key: 'GROWTH.AGE_MONTHS', months: 7 });
   });
 
   it('plots the weight trajectory by default, oldest first', () => {

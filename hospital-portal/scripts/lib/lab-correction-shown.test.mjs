@@ -12,6 +12,17 @@
 // A template "shows a lab result's value" when it interpolates `.resultValue`,
 // pipes something other than a stock quantity through `| labValue`, or prints
 // the patient-side value of a lab row (`lab.result`, `l.result`, `lab.value`).
+//
+// Round 18 (D1016/D931 NOT_FIXED a second time): the chart review's
+// Chronologie rendered every event, results included, through a generic
+// `{{ event.title }}` — the value rode inside the title, so none of the
+// shapes above saw it and the timeline had no badge. An aggregate list (an
+// `@for` over a `….timeline` / timeline `entries` array whose rows are printed
+// through a generic `.title` / `.summary`) now counts as showing a lab value.
+// The patient chart's Chronologie is the one aggregate that marks the
+// correction in the row text the server writes (PatientServiceImpl's
+// lab.result.correctedLabel suffix, held by LabResultReleaseAnnouncementGuardTest);
+// it is listed below with that reason, not skipped silently.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { join, dirname, relative } from 'node:path';
@@ -27,13 +38,85 @@ const SHOWS_VALUE = [
   /\{\{[^}]*\b(?:lab|l)\.(?:result|value)\b(?!\w)[^}]*\}\}/,
   /displayResult\(\s*lab\.result\s*\)/,
 ];
+
+/** An `@for` over a timeline-shaped array; group 1 is the row variable, group 2 the iterated expression. */
+const AGGREGATE_LOOP =
+  /@for\s*\(\s*(\w+)\s+of\s+([\w.()?!]*?(?:timeline|[tT]imeline\w*|tl\.entries)\b[^;]*);[^)]*\)\s*\{/g;
+/**
+ * An `@for` over a lab-result list (the iterated expression names labs or
+ * results). Round 18: the patient chart's Labs table printed `{{ r.value }}`
+ * — a row variable none of the SHOWS_VALUE shapes (`lab.`, `l.`) knew.
+ */
+const LAB_LIST_LOOP =
+  /@for\s*\(\s*(\w+)\s+of\s+([^;]*(?:\w*[rR]esults?|\blabs)\b[^;]*);[^)]*\)\s*\{/g;
+
+/**
+ * Any `@for` (round 18 sibling: the lab-results trend history iterated
+ * `cmp.trendHistory` and printed `pt.resultValue`, a list name the shapes
+ * above did not know). A row printing `resultValue` is a lab value.
+ */
+const ANY_LOOP = /@for\s*\(\s*(\w+)\s+of\s+([^;]*);[^)]*\)\s*\{/g;
+
+/** The `{ … }` block that opens at `open` (balanced braces; `{{ }}` interpolations balance too). */
+function blockAt(html, open) {
+  let depth = 0;
+  for (let i = open; i < html.length; i++) {
+    if (html[i] === '{') depth++;
+    else if (html[i] === '}' && --depth === 0) return html.slice(open, i + 1);
+  }
+  return html.slice(open);
+}
+
+/** Loop bodies matched by `loop` whose row variable prints one of `fields`. */
+function loopBodies(html, loop, fields) {
+  const bodies = [];
+  for (const m of html.matchAll(loop)) {
+    const v = m[1];
+    const body = blockAt(html, m.index + m[0].length - 1);
+    if (new RegExp(String.raw`\{\{[^}]*\b${v}\.(?:${fields})\b(?![\w(])[^}]*\}\}`).test(body)) {
+      bodies.push({ over: m[2].trim(), body });
+    }
+  }
+  return bodies;
+}
+
+/**
+ * The bodies of the loops that show lab values row by row: aggregate
+ * timelines printing a generic title/summary, and lab-result lists printing a
+ * row's value. Checked per loop body, not per file: the round-17 chart review
+ * carried a badge on its Results tab, so a file-level check passed while its
+ * Chronologie had none (why D1016 came back).
+ */
+function rowBodies(html) {
+  return [
+    ...loopBodies(html, AGGREGATE_LOOP, 'title|summary'),
+    ...loopBodies(html, LAB_LIST_LOOP, 'value|result'),
+    ...loopBodies(html, ANY_LOOP, 'resultValue'),
+  ];
+}
+
+/**
+ * Aggregates that mark a correction in the row text the server writes, by
+ * the expression they iterate, and why. Only that loop is excused, never the
+ * rest of its file.
+ */
+const SERVER_MARKED = new Map([
+  [
+    'tl.entries',
+    'the patient chart Chronologie: LAB_RESULT rows carry the "(Corrigé)" suffix in their summary (PatientServiceImpl, lab.result.correctedLabel)',
+  ],
+]);
 const MARKS_CORRECTION = /<app-lab-correction-badge\b|supersedesResultId/;
 
 /** Whether a template shows a lab result value, and whether it marks a correction. */
 export function correctionShape(html) {
+  const direct = SHOWS_VALUE.some((re) => re.test(html));
+  const rows = rowBodies(html);
   return {
-    showsValue: SHOWS_VALUE.some((re) => re.test(html)),
-    marksCorrection: MARKS_CORRECTION.test(html),
+    showsValue: direct || rows.length > 0,
+    marksCorrection:
+      (!direct || MARKS_CORRECTION.test(html)) &&
+      rows.every(({ over, body }) => SERVER_MARKED.has(over) || MARKS_CORRECTION.test(body)),
   };
 }
 
@@ -54,10 +137,81 @@ test('QA D1016: every template that shows a lab result value marks a correction'
   ]) {
     assert.ok(names.includes(known), `the scan must see ${known}`);
   }
+  assert.ok(
+    names.includes('patients/patient-chart/patient-chart.component.html'),
+    'the scan must see the patient chart Chronologie (an aggregate timeline)',
+  );
   const unmarked = showing
     .filter(([, html]) => !correctionShape(html).marksCorrection)
     .map(([f]) => f);
   assert.deepEqual(unmarked, []);
+});
+
+test('QA D1016 round 18: an aggregate timeline printing a generic title shows a lab value', () => {
+  // The chart-review Chronologie as it shipped in round 18: no badge.
+  const old = `@for (event of c.timeline; track event.id) {
+    <p class="chart-review__timeline-title">{{ event.title }}</p> }`;
+  assert.deepEqual(correctionShape(old), { showsValue: true, marksCorrection: false });
+  // A badge on another tab of the same file does not mark the timeline (why D1016 came back).
+  assert.equal(
+    correctionShape(
+      old + '<td>{{ r.resultValue }} <app-lab-correction-badge [corrected]="r.corrected" /></td>',
+    ).marksCorrection,
+    false,
+  );
+  assert.equal(
+    correctionShape(
+      `@for (event of c.timeline; track event.id) { <p>{{ event.title }}
+        <app-lab-correction-badge [corrected]="event.corrected" /></p> }`,
+    ).marksCorrection,
+    true,
+  );
+  assert.equal(
+    correctionShape(`@for (e of tl.entries; track e.entryId) { <div>{{ e.summary }}</div> }`)
+      .showsValue,
+    true,
+  );
+  // A loop over something else, or a timeline printing only typed fields, is not one.
+  assert.equal(
+    correctionShape(`@for (e of t.items; track e.id) { {{ e.title }} }`).showsValue,
+    false,
+  );
+  assert.equal(
+    correctionShape(`@for (e of t.timeline; track e.id) { {{ e.medicationName }} }`).showsValue,
+    false,
+  );
+  // The server-marked loop excuses itself only, never a lab table beside it.
+  assert.equal(
+    correctionShape(
+      `@for (e of tl.entries; track e.entryId) { {{ e.summary }} }
+       @for (r of labResults(); track r.id) { <td>{{ r.value }}</td> }`,
+    ).marksCorrection,
+    false,
+  );
+  // Every listed server-marked aggregate still exists (the list cannot outlive its site).
+  const all = [...templatesIn(appDir)].map(({ text }) => text).join('\n');
+  for (const over of SERVER_MARKED.keys()) {
+    assert.ok(all.includes(`of ${over};`), `stale SERVER_MARKED entry: ${over}`);
+  }
+});
+
+test('QA D1016 round 18: a lab-result list printing a row value is seen whatever the row is called', () => {
+  // The patient chart's Labs table as it shipped in round 18: no badge.
+  assert.deepEqual(
+    correctionShape(`@for (r of labResults(); track r.id) { <span>{{ r.value || '—' }}</span> }`),
+    { showsValue: true, marksCorrection: false },
+  );
+  assert.equal(
+    correctionShape(`@for (r of labResults(); track r.id) { {{ r.value }}
+      <app-lab-correction-badge [corrected]="r.corrected" /> }`).marksCorrection,
+    true,
+  );
+  // A lab list printing only its names and dates shows no value.
+  assert.equal(
+    correctionShape(`@for (l of labs(); track l.id) { {{ l.testName }} {{ l.valueSetName() }} }`)
+      .showsValue,
+    false,
+  );
 });
 
 test('QA D1016 guard: the scan sees the shapes the defect had', () => {
@@ -75,4 +229,12 @@ test('QA D1016 guard: the scan sees the shapes the defect had', () => {
       .marksCorrection,
     true,
   );
+});
+
+test('QA D1016 round 18: a trend history row printing resultValue is a lab value, whatever the list is called', () => {
+  const badgeElsewhere = `<p>{{ r.resultValue }} <app-lab-correction-badge [corrected]="r.corrected" /></p>`;
+  const trend = `@for (pt of cmp.trendHistory; track pt.labResultId) { <td>{{ pt.resultValue | labValue }}</td> }`;
+  assert.deepEqual(correctionShape(badgeElsewhere + trend), { showsValue: true, marksCorrection: false });
+  const fixed = trend.replace('</td>', '<app-lab-correction-badge [corrected]="pt.corrected" /></td>');
+  assert.equal(correctionShape(badgeElsewhere + fixed).marksCorrection, true);
 });

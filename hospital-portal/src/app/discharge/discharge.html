@@ -112,7 +112,7 @@
                       {{ 'DISCHARGE.REJECT' | translate }}
                     </button>
                   }
-                  @if (a.status === 'PENDING' && canRequest) {
+                  @if (canCancelApproval(a)) {
                     <button
                       class="btn-secondary btn-sm"
                       (click)="openCancel(a)"
@@ -280,6 +280,7 @@
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="closeDecision(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
         <h2 id="discharge-dialog-1-title">
@@ -363,6 +364,7 @@
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="closeCancel(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
         <h2 id="discharge-dialog-2-title">{{ 'DISCHARGE.CANCEL_TITLE' | translate }}</h2>
@@ -411,6 +413,7 @@
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="closeRequest(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
         <h2 id="discharge-dialog-3-title">{{ 'DISCHARGE.REQUEST_TITLE' | translate }}</h2>
@@ -429,8 +432,14 @@
             inputId="request-patient"
             [hospitalId]="pickerHospitalId"
             [selected]="selectedPatient()"
-            (selectedChange)="onPatientPicked($event)"
+            (selectedChange)="onRequestPatientPicked($event)"
           />
+          <!-- QA D1065: only a patient with an open stay here can be discharged. -->
+          @if (requestStay() === 'not-admitted') {
+            <p class="field-error" role="alert" data-testid="request-not-admitted">
+              {{ 'DISCHARGE.NOT_ADMITTED' | translate }}
+            </p>
+          }
         </div>
         <div class="field">
           <label for="request-summary">{{ 'DISCHARGE.NURSE_SUMMARY' | translate }}</label>
@@ -441,11 +450,7 @@
         <button class="btn-secondary" (click)="closeRequest()">
           {{ 'COMMON.CANCEL' | translate }}
         </button>
-        <button
-          class="btn-primary"
-          [disabled]="!selectedPatient() || requestSubmitting()"
-          (click)="submitRequest()"
-        >
+        <button class="btn-primary" [disabled]="!canSubmitRequest()" (click)="submitRequest()">
           {{ 'DISCHARGE.SUBMIT_REQUEST' | translate }}
         </button>
       </div>
@@ -469,6 +474,7 @@
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="closeSummaryModal(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
         <h2 id="discharge-dialog-4-title">
@@ -758,6 +764,7 @@
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="closeView(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
         <h2 id="discharge-dialog-5-title">
@@ -881,6 +888,7 @@
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="closeFinalize(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
         <h2 id="discharge-dialog-6-title">{{ 'DISCHARGE.FINALIZE_TITLE' | translate }}</h2>
@@ -932,6 +940,7 @@
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="closeDelete(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
         <h2 id="discharge-dialog-7-title">{{ 'DISCHARGE.DELETE_TITLE' | translate }}</h2>

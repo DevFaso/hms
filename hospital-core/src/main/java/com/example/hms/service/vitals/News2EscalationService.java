@@ -112,8 +112,12 @@ public class News2EscalationService {
     }
 
     private Optional<String> responsiblePhysicianUsername(UUID patientId, UUID hospitalId) {
-        return admissionRepository.findCurrentAdmissionByPatient(patientId)
-            .filter(a -> a.getHospital() != null && hospitalId.equals(a.getHospital().getId()))
+        // QA D1065 class (round 18): this hospital's open stay, not the
+        // patient's latest admission anywhere filtered afterwards.
+        return admissionRepository.findByPatient_IdAndHospital_IdAndStatusIn(patientId, hospitalId,
+                com.example.hms.enums.AdmissionStatus.OPEN).stream()
+            .max(java.util.Comparator.comparing(com.example.hms.model.Admission::getAdmissionDateTime,
+                java.util.Comparator.nullsFirst(java.util.Comparator.naturalOrder())))
             .map(News2EscalationService::responsibleOf)
             .filter(s -> s.getUser() != null && s.getUser().getUsername() != null)
             .map(s -> s.getUser().getUsername());

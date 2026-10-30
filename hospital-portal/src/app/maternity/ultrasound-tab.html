@@ -77,14 +77,17 @@
                   <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
                 </button>
                 @if (canOrder && o.status !== 'CANCELLED') {
-                  <button
-                    [attr.aria-label]="'COMMON.EDIT' | translate"
-                    class="btn-secondary btn-sm"
-                    [title]="'COMMON.EDIT' | translate"
-                    (click)="openEditOrder(o)"
-                  >
-                    <span class="material-symbols-outlined" aria-hidden="true">edit</span>
-                  </button>
+                  <!-- QA D1081: rewriting an order is its author's. -->
+                  @if (isOrderAuthor(o)) {
+                    <button
+                      [attr.aria-label]="'COMMON.EDIT' | translate"
+                      class="btn-secondary btn-sm"
+                      [title]="'COMMON.EDIT' | translate"
+                      (click)="openEditOrder(o)"
+                    >
+                      <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+                    </button>
+                  }
                   <button
                     [attr.aria-label]="'ULTRASOUND.RECORD_REPORT' | translate"
                     class="btn-secondary btn-sm"
@@ -215,6 +218,13 @@
               {{ o.highRiskNotes }}
             </p>
           }
+          <!-- QA D1068: the instructions typed with the order are read back. -->
+          @if (o.specialInstructions) {
+            <p class="saved-note" data-testid="ultrasound-special-instructions">
+              {{ 'ULTRASOUND.SPECIAL_INSTRUCTIONS' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ o.specialInstructions }}
+            </p>
+          }
           @if (o.cancellationReason) {
             <p class="muted">
               {{ 'MATERNITY.CANCELLATION_REASON' | translate }}: {{ o.cancellationReason }}
@@ -295,7 +305,7 @@
             </button>
           }
         }
-        @if (canOrder && o.status !== 'CANCELLED' && !showCancelPrompt()) {
+        @if (canOrder && o.status !== 'CANCELLED' && !showCancelPrompt() && isOrderAuthor(o)) {
           <button class="btn-danger" (click)="openCancelPrompt()">
             {{ 'ULTRASOUND.CANCEL_ORDER' | translate }}
           </button>

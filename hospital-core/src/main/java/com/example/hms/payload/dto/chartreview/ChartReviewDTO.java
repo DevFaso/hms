@@ -98,6 +98,8 @@ public class ChartReviewDTO {
         private LocalDateTime cosignedAt;
         /** Short preview (first ~280 chars) of the most-relevant body field. */
         private String preview;
+        /** QA D1076: {@code ENCOUNTER} (the visit's clinical note) or {@code NURSING} (a ward nursing note). */
+        private String source;
     }
 
     @Getter
@@ -210,5 +212,7 @@ public class ChartReviewDTO {
         private String title;
         private String summary;
         private String status;
+        /** QA D1016/D931 (round 18): a RESULT event whose value replaces a released one. */
+        private boolean corrected;
     }
 }

@@ -80,6 +80,9 @@ class MaternalHistoryServiceImplTest {
     @Mock
     private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
 
+    @Mock
+    private com.example.hms.repository.DeliveryRecordRepository deliveryRecordRepository;
+
     @InjectMocks
     private MaternalHistoryServiceImpl maternalHistoryService;
 
@@ -341,13 +344,58 @@ class MaternalHistoryServiceImplTest {
         assertThat(result).isNotNull().isEqualTo(responseDTO);
     }
 
+    /**
+     * QA D1082 (round 18): this used to expect a ResourceNotFoundException
+     * (404 on every chart of a woman with no history). None is an answer now:
+     * null, which the controller sends as 204.
+     */
     @Test
-    void getCurrentMaternalHistoryByPatientId_shouldThrowExceptionWhenNotFound() {
+    void getCurrentMaternalHistoryByPatientId_returnsNullWhenThereIsNone() {
         when(maternalHistoryRepository.findCurrentByPatientId(patientId)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> maternalHistoryService.getCurrentMaternalHistoryByPatientId(patientId, username))
-                .isInstanceOf(ResourceNotFoundException.class)
-                .hasMessageContaining("No maternal history found");
+        assertThat(maternalHistoryService.getCurrentMaternalHistoryByPatientId(patientId, username)).isNull();
+    }
+
+    /** QA D1067: a delivery at or after the pregnancy's LMP ends it, on every read. */
+    @Test
+    void d1067_aDeliveryAfterTheLmpMarksThePregnancyOver() {
+        maternalHistory.setLastMenstrualPeriod(java.time.LocalDate.now().minusWeeks(40));
+        LocalDateTime birth = LocalDateTime.now().minusDays(1);
+        com.example.hms.model.labor.DeliveryRecord delivery = new com.example.hms.model.labor.DeliveryRecord();
+        delivery.setBirthDateTime(birth);
+        MaternalHistoryResponseDTO dto = new MaternalHistoryResponseDTO();
+        when(maternalHistoryRepository.findCurrentByPatientId(patientId)).thenReturn(Optional.of(maternalHistory));
+        when(maternalHistoryMapper.toResponseDTO(maternalHistory)).thenReturn(dto);
+        when(deliveryRecordRepository.findFirstByPatient_IdAndHospital_IdAndBirthDateTimeGreaterThanEqualOrderByBirthDateTimeDesc(
+            patientId, hospitalId, maternalHistory.getLastMenstrualPeriod().atStartOfDay())).thenReturn(Optional.of(delivery));
+
+        assertThat(maternalHistoryService.getCurrentMaternalHistoryByPatientId(patientId, username).getDeliveredAt())
+            .isEqualTo(birth);
+    }
+
+    @Test
+    void d1067_noDeliveryLeavesThePregnancyOngoing() {
+        maternalHistory.setLastMenstrualPeriod(java.time.LocalDate.now().minusWeeks(20));
+        MaternalHistoryResponseDTO dto = new MaternalHistoryResponseDTO();
+        when(maternalHistoryRepository.findCurrentByPatientId(patientId)).thenReturn(Optional.of(maternalHistory));
+        when(maternalHistoryMapper.toResponseDTO(maternalHistory)).thenReturn(dto);
+
+        assertThat(maternalHistoryService.getCurrentMaternalHistoryByPatientId(patientId, username).getDeliveredAt())
+            .isNull();
+    }
+
+    @Test
+    void d1067_withoutAnLmpThePregnancyStartsATermBeforeTheDueDate() {
+        maternalHistory.setLastMenstrualPeriod(null);
+        java.time.LocalDate due = java.time.LocalDate.now().plusDays(3);
+        maternalHistory.setEstimatedDueDate(due);
+        when(maternalHistoryRepository.findCurrentByPatientId(patientId)).thenReturn(Optional.of(maternalHistory));
+        when(maternalHistoryMapper.toResponseDTO(maternalHistory)).thenReturn(new MaternalHistoryResponseDTO());
+
+        maternalHistoryService.getCurrentMaternalHistoryByPatientId(patientId, username);
+
+        org.mockito.Mockito.verify(deliveryRecordRepository).findFirstByPatient_IdAndHospital_IdAndBirthDateTimeGreaterThanEqualOrderByBirthDateTimeDesc(
+            patientId, hospitalId, due.minusDays(280).atStartOfDay());
     }
 
     @Test

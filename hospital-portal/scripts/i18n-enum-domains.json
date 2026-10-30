@@ -247,7 +247,13 @@
   },
   "wardType": { "enum": "hospital-core/src/main/java/com/example/hms/enums/WardType.java" },
   "timelineCategory": {
-    "reason": "no enum holds it: PatientTimelineEntryDTO.category is a String that PatientServiceImpl writes from its CATEGORY_* constants (ENCOUNTER / PRESCRIPTION / LAB_RESULT / ALLERGY / IMAGING / PROCEDURE), all six keyed in PORTAL.ENUM.TIMELINE_CATEGORY; check by hand when a category is added there."
+    "reason": "no enum holds it: PatientTimelineEntryDTO.category is a String that PatientServiceImpl and VisitTimelineRows write from their CATEGORY_* constants (the chronology registry, QA D959); every category is keyed in PORTAL.ENUM.TIMELINE_CATEGORY, and the backend registry guard fails when a category has no label in enum-label.service.ts or icon in patient-chart.component.ts."
+  },
+  "noteTemplate": {
+    "enums": [
+      "hospital-core/src/main/java/com/example/hms/enums/EncounterNoteTemplate.java",
+      "hospital-core/src/main/java/com/example/hms/model/NursingNoteTemplate.java"
+    ]
   },
   "specimenType": {
     "reason": "QA D528: LabSpecimen.specimenType and LabTestDefinition.sampleType are free String columns (the definition upper-cases it on save), not an enum. Keyed: the catalogue codes in use (BLOOD from the seeded definitions, WHOLE_BLOOD, SERUM, URINE, STOOL, CSF, SPUTUM, SWAB, TISSUE, OTHER); free text outside that list is Title-Cased by the pipe."

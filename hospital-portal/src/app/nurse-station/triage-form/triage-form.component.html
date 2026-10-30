@@ -28,18 +28,25 @@
     @if (encounter) {
       <div class="triage-dialog__patient-info">
         <div class="info-row">
-          <span class="label">{{ 'TRIAGE.PATIENT' | translate }}:</span>
+          <span class="label"
+            >{{ 'TRIAGE.PATIENT' | translate }}{{ 'COMMON.COLON' | translate }}</span
+          >
           <span class="value">{{ encounter.patientFullName || encounter.patientName }}</span>
         </div>
         @if (encounter.code) {
           <div class="info-row">
-            <span class="label">{{ 'TRIAGE.ENCOUNTER' | translate }}:</span>
+            <span class="label"
+              >{{ 'TRIAGE.ENCOUNTER' | translate }}{{ 'COMMON.COLON' | translate }}</span
+            >
             <span class="value">{{ encounter.code }}</span>
           </div>
         }
         @if (encounter.chiefComplaint) {
           <div class="info-row">
-            <span class="label">{{ 'TRIAGE.CHIEF_COMPLAINT_CURRENT' | translate }}:</span>
+            <span class="label"
+              >{{ 'TRIAGE.CHIEF_COMPLAINT_CURRENT' | translate
+              }}{{ 'COMMON.COLON' | translate }}</span
+            >
             <span class="value">{{ encounter.chiefComplaint }}</span>
           </div>
         }
@@ -211,19 +218,22 @@
             />
           </div>
 
-          <!-- QA D1031: the antenatal fundal height, charted with the vitals. -->
-          <div class="form-group">
-            <label for="fundalHeightCm">{{ 'TRIAGE.FUNDAL_HEIGHT' | translate }}</label>
-            <input
-              id="fundalHeightCm"
-              type="number"
-              min="1"
-              step="1"
-              [ngModel]="fundalHeightCm()"
-              (ngModelChange)="fundalHeightCm.set($event)"
-              name="fundalHeightCm"
-            />
-          </div>
+          <!-- QA D1031: the antenatal fundal height, charted with the vitals.
+               QA D1077: never offered for a patient recorded as male. -->
+          @if (showFundalHeight()) {
+            <div class="form-group" data-testid="triage-fundal-height">
+              <label for="fundalHeightCm">{{ 'TRIAGE.FUNDAL_HEIGHT' | translate }}</label>
+              <input
+                id="fundalHeightCm"
+                type="number"
+                min="1"
+                step="1"
+                [ngModel]="fundalHeightCm()"
+                (ngModelChange)="fundalHeightCm.set($event)"
+                name="fundalHeightCm"
+              />
+            </div>
+          }
 
           <!-- NEWS2 parameters (P3 #25b) -->
           <div class="form-group">

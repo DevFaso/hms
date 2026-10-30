@@ -46,7 +46,6 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
 
         private static final String MATERNAL_HISTORY_NOT_FOUND_WITH_ID = "maternalHistory.notFoundById";
         private static final String MATERNAL_HISTORY_VERSION_NOT_FOUND = "maternalHistory.versionNotFound";
-        private static final String MATERNAL_HISTORY_NOT_FOUND_FOR_PATIENT = "maternalHistory.noneForPatient";
         private static final String PATIENT_NOT_FOUND_WITH_ID = "patient.notFoundWithId";
         private static final String HOSPITAL_NOT_FOUND_WITH_ID = "hospital.notFoundWithId";
         private static final String USER_NOT_FOUND_WITH_USERNAME = "user.notFoundByUsername";
@@ -59,6 +58,8 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
     private final StaffRepository staffRepository;
     private final UserRepository userRepository;
     private final MaternalHistoryMapper maternalHistoryMapper;
+    /** QA D1067: whether the pregnancy a history dates has ended in a delivery. */
+    private final com.example.hms.repository.DeliveryRecordRepository deliveryRecordRepository;
     private final RecordAccessPolicy recordAccessPolicy;
     private final CrossHospitalReachRecorder reachRecorder;
 
@@ -108,7 +109,7 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
         log.info("Created maternal history ID: {} (version {}) for patient ID: {}", 
                 saved.getId(), saved.getVersionNumber(), patient.getId());
         
-        return maternalHistoryMapper.toResponseDTO(saved);
+        return toDto(saved);
     }
 
     @Override
@@ -163,7 +164,7 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
         log.info("Created maternal history version {} (ID: {}) for patient ID: {}", 
                 saved.getVersionNumber(), saved.getId(), patient.getId());
         
-        return maternalHistoryMapper.toResponseDTO(saved);
+        return toDto(saved);
     }
 
     @Override
@@ -174,7 +175,7 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
         MaternalHistory maternalHistory = maternalHistoryRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(MATERNAL_HISTORY_NOT_FOUND_WITH_ID, id));
         
-        return maternalHistoryMapper.toResponseDTO(maternalHistory);
+        return toDto(maternalHistory);
     }
 
     @Override
@@ -187,9 +188,8 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
         HospitalContext ctx = HospitalContextHolder.getContextOrEmpty();
         UUID actingHospitalId = ctx.pinnedHospitalId();
         if (actingHospitalId == null) {
-            MaternalHistory maternalHistory = maternalHistoryRepository.findCurrentByPatientId(patientId)
-                .orElseThrow(() -> new ResourceNotFoundException(MATERNAL_HISTORY_NOT_FOUND_FOR_PATIENT, patientId));
-            return maternalHistoryMapper.toResponseDTO(maternalHistory);
+            // QA D1082: no history yet is an answer (204), not an error.
+            return maternalHistoryRepository.findCurrentByPatientId(patientId).map(this::toDto).orElse(null);
         }
         UUID requesterUserId = ctx.getPrincipalUserId();
         Set<UUID> readable = recordAccessPolicy.readableHospitalIds(requesterUserId, patientId, actingHospitalId);
@@ -198,10 +198,12 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
         reachRecorder.recordReach(patientId, actingHospitalId, requesterUserId, null,
             CrossHospitalReachRecorder.reachOf(current.stream().map(r -> CrossHospitalReachRecorder.hospitalIdOf(r.getHospital())).toList(), actingHospitalId),
             "Cross-hospital maternal history read on the treatment relationship");
+        // QA D1082: every chart of a woman with no history asked this and got
+        // a 404; none is an answer, which the controller sends as 204.
         return current.stream()
-            .map(maternalHistoryMapper::toResponseDTO)
+            .map(this::toDto)
             .findFirst()
-            .orElseThrow(() -> new ResourceNotFoundException(MATERNAL_HISTORY_NOT_FOUND_FOR_PATIENT, patientId));
+            .orElse(null);
     }
 
     @Override
@@ -214,7 +216,7 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
         UUID actingHospitalId = ctx.pinnedHospitalId();
         if (actingHospitalId == null) {
             return maternalHistoryRepository.findAllVersionsByPatientId(patientId).stream()
-                .map(maternalHistoryMapper::toResponseDTO)
+                .map(this::toDto)
                 .toList();
         }
         UUID requesterUserId = ctx.getPrincipalUserId();
@@ -225,7 +227,7 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
             CrossHospitalReachRecorder.reachOf(histories.stream().map(r -> CrossHospitalReachRecorder.hospitalIdOf(r.getHospital())).toList(), actingHospitalId),
             "Cross-hospital maternal history read on the treatment relationship");
         return histories.stream()
-                .map(maternalHistoryMapper::toResponseDTO)
+                .map(this::toDto)
                 .toList();
     }
 
@@ -240,7 +242,7 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         MATERNAL_HISTORY_VERSION_NOT_FOUND, versionNumber, patientId));
         
-        return maternalHistoryMapper.toResponseDTO(maternalHistory);
+        return toDto(maternalHistory);
     }
 
     @Override
@@ -253,7 +255,7 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
                 .findByPatientIdAndDateRange(patientId, startDate, endDate);
         
         return histories.stream()
-                .map(maternalHistoryMapper::toResponseDTO)
+                .map(this::toDto)
                 .toList();
     }
 
@@ -269,7 +271,7 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
                 hospitalId, patientId, riskCategory, dataComplete, reviewedByProvider,
                 dateFrom, dateTo, pageable);
         
-        return histories.map(maternalHistoryMapper::toResponseDTO);
+        return histories.map(this::toDto);
     }
 
     @Override
@@ -280,7 +282,7 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
         
         Page<MaternalHistory> histories = maternalHistoryRepository.findHighRiskByHospital(hospitalId, pageable);
         
-        return histories.map(maternalHistoryMapper::toResponseDTO);
+        return histories.map(this::toDto);
     }
 
     @Override
@@ -290,7 +292,7 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
         
         Page<MaternalHistory> histories = maternalHistoryRepository.findPendingReviewByHospital(hospitalId, pageable);
         
-        return histories.map(maternalHistoryMapper::toResponseDTO);
+        return histories.map(this::toDto);
     }
 
     @Override
@@ -302,7 +304,7 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
         Page<MaternalHistory> histories = maternalHistoryRepository
                 .findRequiringSpecialistReferral(hospitalId, pageable);
         
-        return histories.map(maternalHistoryMapper::toResponseDTO);
+        return histories.map(this::toDto);
     }
 
     @Override
@@ -314,7 +316,7 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
         Page<MaternalHistory> histories = maternalHistoryRepository
                 .findWithPsychosocialConcerns(hospitalId, pageable);
         
-        return histories.map(maternalHistoryMapper::toResponseDTO);
+        return histories.map(this::toDto);
     }
 
     @Override
@@ -333,7 +335,7 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
         
         log.info("Marked maternal history ID: {} as reviewed by user: {}", id, username);
         
-        return maternalHistoryMapper.toResponseDTO(updated);
+        return toDto(updated);
     }
 
     @Override
@@ -412,6 +414,46 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
         
         MaternalHistory saved = maternalHistoryRepository.save(maternalHistory);
         
-        return maternalHistoryMapper.toResponseDTO(saved);
+        return toDto(saved);
+    }
+
+    /**
+     * QA D1067 (caused by the D1005 fix): the one way this service maps a
+     * history, so every read says whether its pregnancy is over. A woman
+     * delivered on 30 October still showed "Grossesse en cours : 39 SA" on the
+     * chart and a running term on the maternity list: the history kept its
+     * dates and nothing said a delivery had followed them. The delivery is the
+     * latest one recorded at or after the pregnancy's start (the LMP, else the
+     * due date less a term by Naegele's rule, else the history's own date) -
+     * the rule the prenatal schedule already refuses a delivered pregnancy by.
+     */
+    private MaternalHistoryResponseDTO toDto(MaternalHistory history) {
+        MaternalHistoryResponseDTO dto = maternalHistoryMapper.toResponseDTO(history);
+        if (dto == null || history == null || history.getPatient() == null || history.getPatient().getId() == null) {
+            return dto;
+        }
+        LocalDateTime since = pregnancyStart(history);
+        // Read at the history's own hospital: a delivery another hospital
+        // recorded is that hospital's record, not disclosed through this one.
+        UUID hospitalId = history.getHospital() != null ? history.getHospital().getId() : null;
+        if (since != null && hospitalId != null) {
+            deliveryRecordRepository
+                .findFirstByPatient_IdAndHospital_IdAndBirthDateTimeGreaterThanEqualOrderByBirthDateTimeDesc(
+                    history.getPatient().getId(), hospitalId, since)
+                .ifPresent(delivery -> dto.setDeliveredAt(delivery.getBirthDateTime()));
+        }
+        return dto;
+    }
+
+    private static LocalDateTime pregnancyStart(MaternalHistory history) {
+        if (history.getLastMenstrualPeriod() != null) {
+            return history.getLastMenstrualPeriod().atStartOfDay();
+        }
+        java.time.LocalDate due = history.getEstimatedDueDateByUltrasound() != null
+            ? history.getEstimatedDueDateByUltrasound() : history.getEstimatedDueDate();
+        if (due != null) {
+            return due.minusDays(GestationalDating.TERM_DAYS).atStartOfDay();
+        }
+        return history.getRecordedDate();
     }
 }

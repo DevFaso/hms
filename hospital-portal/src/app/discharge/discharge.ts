@@ -15,12 +15,15 @@ import {
 import { EncounterService, EncounterResponse } from '../services/encounter.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { ProfileService } from '../services/profile.service';
+import { AdmissionService } from '../services/admission.service';
 import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { serverLocalDate } from '../shared/date-utils';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { AuthorshipService } from '../shared/authorship.service';
 
 type ApprovalFilter = DischargeStatus | 'ALL';
 type SummaryFilter = 'unfinalized' | 'pending-results' | 'range';
@@ -28,16 +31,25 @@ type SummaryFilter = 'unfinalized' | 'pending-results' | 'range';
 @Component({
   selector: 'app-discharge',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, PatientPickerComponent],
+  imports: [
+    ModalDialogDirective,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    PatientPickerComponent,
+  ],
   templateUrl: './discharge.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './discharge.scss',
 })
 export class DischargeComponent implements OnInit {
   private readonly dischargeService = inject(DischargeService);
+  private readonly authorship = inject(AuthorshipService);
   private readonly encounterService = inject(EncounterService);
   private readonly patientService = inject(PatientService);
   private readonly profileService = inject(ProfileService);
+  private readonly admissionService = inject(AdmissionService);
   private readonly auth = inject(AuthService);
   private readonly roleContext = inject(RoleContextService);
   private readonly toast = inject(ToastService);
@@ -307,6 +319,18 @@ export class DischargeComponent implements OnInit {
     });
   }
 
+  /**
+   * QA D1081: only the nurse who requested a discharge withdraws it
+   * (DischargeApprovalServiceImpl.cancel: requireCallerUnlessSuperAdmin).
+   */
+  canCancelApproval(a: DischargeApproval): boolean {
+    return (
+      a.status === 'PENDING' &&
+      this.canRequest &&
+      this.authorship.isAuthor(a, !a.nurseStaffId || a.nurseStaffId === this.staffId)
+    );
+  }
+
   openCancel(approval: DischargeApproval): void {
     if (!this.requireStaffContext()) return;
     this.cancelTarget.set(approval);
@@ -343,6 +367,7 @@ export class DischargeComponent implements OnInit {
     if (!this.requireStaffContext(true)) return;
     this.resetPatientPicker();
     this.requestSummaryText = '';
+    this.requestStay.set('idle');
     this.showRequestModal.set(true);
   }
 
@@ -350,9 +375,50 @@ export class DischargeComponent implements OnInit {
     this.showRequestModal.set(false);
   }
 
+  /**
+   * QA D1065: a discharge is requested for a stay. The picker searches every
+   * patient (it is the shared one), so the pick is checked against the open
+   * admission here (GET /admissions/patient/{id}/current, 204 when none) and
+   * a patient never admitted cannot be sent; the server refuses one too
+   * (discharge.request.notAdmitted). A failed check leaves the decision to it.
+   */
+  readonly requestStay = signal<'idle' | 'checking' | 'admitted' | 'not-admitted' | 'unknown'>(
+    'idle',
+  );
+
+  onRequestPatientPicked(p: PatientResponse | null): void {
+    this.selectedPatient.set(p);
+    if (!p) {
+      this.requestStay.set('idle');
+      return;
+    }
+    this.requestStay.set('checking');
+    const asked = p.id;
+    this.admissionService.getCurrentByPatient(asked).subscribe({
+      next: (admission) => {
+        if (this.selectedPatient()?.id !== asked) return;
+        this.requestStay.set(admission ? 'admitted' : 'not-admitted');
+      },
+      error: () => {
+        if (this.selectedPatient()?.id !== asked) return;
+        this.requestStay.set('unknown');
+      },
+    });
+  }
+
+  /** Whether the request can be sent for the picked patient. */
+  canSubmitRequest(): boolean {
+    const stay = this.requestStay();
+    return (
+      !!this.selectedPatient() &&
+      !this.requestSubmitting() &&
+      (stay === 'admitted' || stay === 'unknown')
+    );
+  }
+
   submitRequest(): void {
     const patient = this.selectedPatient();
-    if (!patient || !this.requireStaffContext(true)) return;
+    if (!patient || !this.requireStaffContext(true) || !this.canSubmitRequest()) return;
     this.requestSubmitting.set(true);
     this.dischargeService.findActiveRegistration(patient.id, this.hospitalId!).subscribe({
       next: (registrations) => {

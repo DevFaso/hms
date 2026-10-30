@@ -131,7 +131,7 @@
                     >
                       <span class="material-symbols-outlined">visibility</span>
                     </button>
-                    @if (canRequest && r.status !== 'COMPLETED' && r.status !== 'CANCELLED') {
+                    @if (canCancelRequest(r)) {
                       <button
                         class="action-link delete"
                         (click)="cancelRequest(r)"
@@ -382,9 +382,14 @@
       (click)="closeNewRequest()"
       (keydown.escape)="closeNewRequest()"
     ></div>
-    <div class="modal modal-wide">
+    <div
+      class="modal modal-wide"
+      appModalDialog
+      aria-labelledby="transfusion-dialog-1-title"
+      (escaped)="closeNewRequest()"
+    >
       <div class="modal-header">
-        <h2>{{ 'TRANSFUSION.NEW_REQUEST' | translate }}</h2>
+        <h2 id="transfusion-dialog-1-title">{{ 'TRANSFUSION.NEW_REQUEST' | translate }}</h2>
         <button class="modal-close" (click)="closeNewRequest()">&times;</button>
       </div>
       <div class="modal-body">
@@ -400,7 +405,10 @@
               <span class="group-badge"
                 >{{ g.aboGroup }}{{ g.rhFactor === 'POSITIVE' ? '+' : '−' }}</span
               >
-              <span>{{ 'TRANSFUSION.SCREEN' | translate }}: {{ g.antibodyScreen }}</span>
+              <span
+                >{{ 'TRANSFUSION.SCREEN' | translate }}{{ 'COMMON.COLON' | translate }}
+                {{ g.antibodyScreen }}</span
+              >
               @if (!g.screenCurrent) {
                 <span class="warn-inline">{{ 'TRANSFUSION.SCREEN_LAPSED' | translate }}</span>
               }
@@ -478,9 +486,14 @@
       (click)="closeGroupModal()"
       (keydown.escape)="closeGroupModal()"
     ></div>
-    <div class="modal">
+    <div
+      class="modal"
+      appModalDialog
+      aria-labelledby="transfusion-dialog-2-title"
+      (escaped)="closeGroupModal()"
+    >
       <div class="modal-header">
-        <h2>{{ 'TRANSFUSION.RECORD_GROUP' | translate }}</h2>
+        <h2 id="transfusion-dialog-2-title">{{ 'TRANSFUSION.RECORD_GROUP' | translate }}</h2>
         <button class="modal-close" (click)="closeGroupModal()">&times;</button>
       </div>
       <div class="modal-body">
@@ -541,9 +554,14 @@
       (click)="closeUnitModal()"
       (keydown.escape)="closeUnitModal()"
     ></div>
-    <div class="modal">
+    <div
+      class="modal"
+      appModalDialog
+      aria-labelledby="transfusion-dialog-3-title"
+      (escaped)="closeUnitModal()"
+    >
       <div class="modal-header">
-        <h2>{{ 'TRANSFUSION.RECEIVE_UNIT' | translate }}</h2>
+        <h2 id="transfusion-dialog-3-title">{{ 'TRANSFUSION.RECEIVE_UNIT' | translate }}</h2>
         <button class="modal-close" (click)="closeUnitModal()">&times;</button>
       </div>
       <div class="modal-body">
@@ -630,9 +648,14 @@
       (click)="closeCrossmatch()"
       (keydown.escape)="closeCrossmatch()"
     ></div>
-    <div class="modal">
+    <div
+      class="modal"
+      appModalDialog
+      aria-labelledby="transfusion-dialog-4-title"
+      (escaped)="closeCrossmatch()"
+    >
       <div class="modal-header">
-        <h2>{{ 'TRANSFUSION.RECORD_CROSSMATCH' | translate }}</h2>
+        <h2 id="transfusion-dialog-4-title">{{ 'TRANSFUSION.RECORD_CROSSMATCH' | translate }}</h2>
         <button class="modal-close" (click)="closeCrossmatch()">&times;</button>
       </div>
       <div class="modal-body">
@@ -688,9 +711,14 @@
       (click)="closeHang()"
       (keydown.escape)="closeHang()"
     ></div>
-    <div class="modal">
+    <div
+      class="modal"
+      appModalDialog
+      aria-labelledby="transfusion-dialog-5-title"
+      (escaped)="closeHang()"
+    >
       <div class="modal-header">
-        <h2>{{ 'TRANSFUSION.HANG' | translate }}</h2>
+        <h2 id="transfusion-dialog-5-title">{{ 'TRANSFUSION.HANG' | translate }}</h2>
         <button class="modal-close" (click)="closeHang()">&times;</button>
       </div>
       <div class="modal-body">
@@ -728,9 +756,14 @@
       (click)="closeReaction()"
       (keydown.escape)="closeReaction()"
     ></div>
-    <div class="modal">
+    <div
+      class="modal"
+      appModalDialog
+      aria-labelledby="transfusion-dialog-6-title"
+      (escaped)="closeReaction()"
+    >
       <div class="modal-header">
-        <h2>{{ 'TRANSFUSION.REPORT_REACTION' | translate }}</h2>
+        <h2 id="transfusion-dialog-6-title">{{ 'TRANSFUSION.REPORT_REACTION' | translate }}</h2>
         <button class="modal-close" (click)="closeReaction()">&times;</button>
       </div>
       <div class="modal-body">

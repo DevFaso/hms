@@ -69,9 +69,27 @@ class VisitTimelineRowsTest {
         mock(com.example.hms.repository.DischargeSummaryRepository.class);
     private final com.example.hms.repository.PatientUploadedDocumentRepository documents =
         mock(com.example.hms.repository.PatientUploadedDocumentRepository.class);
+    // QA D959 (round 18): the rest of the registry's sources.
+    private final com.example.hms.repository.TransfusionRequestRepository transfusions =
+        mock(com.example.hms.repository.TransfusionRequestRepository.class);
+    private final com.example.hms.repository.ProcedureOrderRepository procedureOrders =
+        mock(com.example.hms.repository.ProcedureOrderRepository.class);
+    private final com.example.hms.repository.ObgynReferralRepository obgynReferrals =
+        mock(com.example.hms.repository.ObgynReferralRepository.class);
+    private final com.example.hms.repository.NursingNoteRepository nursingNotes =
+        mock(com.example.hms.repository.NursingNoteRepository.class);
+    private final com.example.hms.repository.ImmunizationRepository immunizations =
+        mock(com.example.hms.repository.ImmunizationRepository.class);
+    private final com.example.hms.repository.DeliveryRecordRepository deliveries =
+        mock(com.example.hms.repository.DeliveryRecordRepository.class);
+    private final com.example.hms.repository.DeathRecordRepository deaths =
+        mock(com.example.hms.repository.DeathRecordRepository.class);
+    private final com.example.hms.repository.MicroCultureResultRepository cultures =
+        mock(com.example.hms.repository.MicroCultureResultRepository.class);
     private final VisitTimelineRows rows =
         new VisitTimelineRows(problems, labOrders, imagingOrders, referrals, encounters, notes,
-            plans, consultations, dischargeSummaries, documents, classifier);
+            plans, consultations, dischargeSummaries, documents, transfusions, procedureOrders, obgynReferrals,
+            nursingNotes, immunizations, deliveries, deaths, cultures, classifier);
 
     private final UUID patientId = UUID.randomUUID();
     private final Hospital here = hospital();
@@ -208,7 +226,10 @@ class VisitTimelineRowsTest {
         List<Enum<?>> printed = new ArrayList<>();
         for (Class<? extends Enum<?>> type : List.<Class<? extends Enum<?>>>of(EncounterType.class,
                 ImagingModality.class, ImagingOrderStatus.class, ReferralStatus.class, ReferralSpecialty.class,
-                UltrasoundScanType.class)) {
+                UltrasoundScanType.class,
+                // QA D959 (round 18): the registry's new rows print these too.
+                com.example.hms.enums.BloodProductType.class, com.example.hms.enums.DeliveryMode.class,
+                com.example.hms.enums.MicroGrowthResult.class)) {
             printed.addAll(List.of(type.getEnumConstants()));
         }
         List<String> missing = new ArrayList<>();
@@ -234,7 +255,10 @@ class VisitTimelineRowsTest {
         for (Class<? extends Enum<?>> type : List.<Class<? extends Enum<?>>>of(
                 com.example.hms.enums.PrescriptionStatus.class, com.example.hms.enums.TreatmentPlanStatus.class,
                 com.example.hms.enums.ConsultationStatus.class, com.example.hms.enums.EncounterStatus.class,
-                com.example.hms.enums.UltrasoundOrderStatus.class)) {
+                com.example.hms.enums.UltrasoundOrderStatus.class,
+                // QA D959 (round 18).
+                com.example.hms.enums.TransfusionRequestStatus.class, com.example.hms.enums.ProcedureOrderStatus.class,
+                com.example.hms.enums.ObgynReferralStatus.class)) {
             for (Enum<?> value : type.getEnumConstants()) {
                 String key = "timeline.status." + type.getSimpleName() + "." + value.name();
                 String fr = bundles.getMessage(key, null, null, Locale.FRENCH);
@@ -353,5 +377,126 @@ class VisitTimelineRowsTest {
             .isEqualTo(java.time.LocalDate.of(2026, 10, 20).atStartOfDay());
         // A constant no bundle labels is still made readable.
         assertThat(VisitTimelineRows.label(LabOrderStatus.ENTERED_IN_ERROR)).isEqualTo("Entered in error");
+    }
+    /**
+     * QA D959 (round 18, NOT_FIXED twice): transfusion requests, procedure
+     * orders and OB/GYN referrals were missing, and the registry hunt found the
+     * nursing notes, vaccines, delivery, death and microbiology cultures too.
+     * Every source of the registry writes its row, in French, with its status.
+     */
+    @Test
+    void d959_everyRegisteredSourceWritesItsRow() {
+        com.example.hms.model.TransfusionRequest transfusion = new com.example.hms.model.TransfusionRequest();
+        transfusion.setId(UUID.randomUUID());
+        transfusion.setHospital(here);
+        transfusion.setProductType(com.example.hms.enums.BloodProductType.PACKED_RED_CELLS);
+        transfusion.setUnitsRequested(2);
+        transfusion.setStatus(com.example.hms.enums.TransfusionRequestStatus.CANCELLED);
+        transfusion.setRequestedAt(LocalDateTime.now().minusHours(5));
+        when(transfusions.findByPatient_IdAndHospital_IdOrderByRequestedAtDesc(patientId, here.getId()))
+            .thenReturn(List.of(transfusion));
+
+        com.example.hms.model.ProcedureOrder procedure = new com.example.hms.model.ProcedureOrder();
+        procedure.setId(UUID.randomUUID());
+        procedure.setHospital(here);
+        procedure.setProcedureName("Ponction lombaire");
+        procedure.setStatus(com.example.hms.enums.ProcedureOrderStatus.SCHEDULED);
+        when(procedureOrders.findByPatient_IdAndHospital_IdOrderByOrderedAtDesc(patientId, here.getId()))
+            .thenReturn(List.of(procedure));
+
+        com.example.hms.model.referral.ObgynReferral obgyn = new com.example.hms.model.referral.ObgynReferral();
+        obgyn.setId(UUID.randomUUID());
+        obgyn.setHospital(here);
+        obgyn.setReferralReason("Pré-éclampsie suspectée");
+        obgyn.setStatus(com.example.hms.enums.ObgynReferralStatus.SUBMITTED);
+        when(obgynReferrals.findByPatient_IdAndHospital_IdIn(org.mockito.ArgumentMatchers.eq(patientId),
+                org.mockito.ArgumentMatchers.eq(Set.of(here.getId())), org.mockito.ArgumentMatchers.any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(obgyn)));
+
+        com.example.hms.model.NursingNote note = new com.example.hms.model.NursingNote();
+        note.setId(UUID.randomUUID());
+        note.setHospital(here);
+        note.setTemplate(com.example.hms.model.NursingNoteTemplate.DAR);
+        note.setDataAssessment("Patient calme");
+        note.setDocumentedAt(LocalDateTime.now().minusHours(1));
+        when(nursingNotes.findTop50ByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patientId, Set.of(here.getId())))
+            .thenReturn(List.of(note));
+
+        com.example.hms.model.PatientImmunization dose = new com.example.hms.model.PatientImmunization();
+        dose.setId(UUID.randomUUID());
+        dose.setHospital(here);
+        dose.setVaccineDisplay("Pentavalent");
+        dose.setDoseNumber(2);
+        dose.setStatus("COMPLETED");
+        dose.setAdministrationDate(java.time.LocalDate.now().minusDays(3));
+        com.example.hms.model.PatientImmunization voided = new com.example.hms.model.PatientImmunization();
+        voided.setId(UUID.randomUUID());
+        voided.setHospital(here);
+        voided.setVaccineDisplay("BCG");
+        voided.setStatus("ENTERED_IN_ERROR");
+        when(immunizations.findByPatient_IdAndHospital_IdOrderByAdministrationDateDesc(patientId, here.getId()))
+            .thenReturn(List.of(dose, voided));
+
+        com.example.hms.model.labor.DeliveryRecord delivery = new com.example.hms.model.labor.DeliveryRecord();
+        delivery.setId(UUID.randomUUID());
+        delivery.setHospital(here);
+        delivery.setDeliveryMode(com.example.hms.enums.DeliveryMode.SPONTANEOUS_VAGINAL);
+        delivery.setBirthDateTime(LocalDateTime.now().minusDays(1));
+        when(deliveries.findByPatient_IdAndHospital_IdOrderByBirthDateTimeDesc(patientId, here.getId()))
+            .thenReturn(List.of(delivery));
+
+        com.example.hms.model.DeathRecord death = new com.example.hms.model.DeathRecord();
+        death.setId(UUID.randomUUID());
+        death.setHospital(here);
+        death.setImmediateCause("Choc septique");
+        death.setDiedAt(LocalDateTime.now());
+        when(deaths.findByPatient_Id(patientId)).thenReturn(java.util.Optional.of(death));
+
+        com.example.hms.model.MicroCultureResult culture = new com.example.hms.model.MicroCultureResult();
+        culture.setId(UUID.randomUUID());
+        culture.setHospital(here);
+        culture.setSpecimenSource("Hémoculture");
+        culture.setGrowthResult(com.example.hms.enums.MicroGrowthResult.NO_GROWTH);
+        culture.setStatus(com.example.hms.enums.MicroCultureStatus.CORRECTED);
+        culture.setCorrectedAt(LocalDateTime.now().minusHours(2));
+        com.example.hms.model.MicroCultureResult preliminary = new com.example.hms.model.MicroCultureResult();
+        preliminary.setId(UUID.randomUUID());
+        preliminary.setHospital(here);
+        preliminary.setStatus(com.example.hms.enums.MicroCultureStatus.PRELIMINARY);
+        when(cultures.findForPatient(patientId, here.getId())).thenReturn(List.of(culture, preliminary));
+
+        List<PatientTimelineEntryDTO> visit = rows.collect(patientId, here.getId(), Set.of("TRANSFUSION",
+            "PROCEDURE_ORDER", "OBGYN_REFERRAL", "NURSING_NOTE", "IMMUNIZATION", "DELIVERY", "DEATH", "MICRO_CULTURE"));
+
+        assertThat(visit).extracting(PatientTimelineEntryDTO::getCategory, PatientTimelineEntryDTO::getSummary)
+            .containsExactlyInAnyOrder(
+                org.assertj.core.groups.Tuple.tuple("TRANSFUSION",
+                    "Demande de transfusion : Concentré de globules rouges, 2 unité(s) (Annulée)"),
+                org.assertj.core.groups.Tuple.tuple("PROCEDURE_ORDER", "Demande d’acte : Ponction lombaire (Programmée)"),
+                org.assertj.core.groups.Tuple.tuple("OBGYN_REFERRAL",
+                    "Orientation gynéco-obstétricale : Pré-éclampsie suspectée (Envoyée)"),
+                org.assertj.core.groups.Tuple.tuple("NURSING_NOTE", "Note infirmière (DAR) — Patient calme"),
+                org.assertj.core.groups.Tuple.tuple("IMMUNIZATION", "Vaccination : Pentavalent · dose 2 (Administré)"),
+                org.assertj.core.groups.Tuple.tuple("DELIVERY", "Accouchement : Voie basse spontanée"),
+                org.assertj.core.groups.Tuple.tuple("DEATH", "Décès : Choc septique"),
+                org.assertj.core.groups.Tuple.tuple("MICRO_CULTURE", "Culture (Hémoculture) : Culture stérile (Corrigé)"));
+        assertThat(visit).allSatisfy(row -> assertThat(row.getMetadata()).containsEntry("foreign", false));
+    }
+
+    /** The registry and the published category list are one list: a source cannot be added to one only. */
+    @Test
+    void d959_theRegistryIsTheCategoryList() {
+        assertThat(rows.sources().keySet()).containsExactlyElementsOf(VisitTimelineRows.CATEGORIES);
+    }
+
+    /** Another hospital's death record is not this hospital's row. */
+    @Test
+    void d959_anotherHospitalsDeathRecordIsNotRead() {
+        com.example.hms.model.DeathRecord death = new com.example.hms.model.DeathRecord();
+        death.setId(UUID.randomUUID());
+        death.setHospital(hospital());
+        when(deaths.findByPatient_Id(patientId)).thenReturn(java.util.Optional.of(death));
+
+        assertThat(rows.collect(patientId, here.getId(), Set.of("DEATH"))).isEmpty();
     }
 }

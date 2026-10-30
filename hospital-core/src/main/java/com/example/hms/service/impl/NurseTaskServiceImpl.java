@@ -499,6 +499,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                 .dueTime(marRecord.getScheduledTime())
                 .status(normalizedStatus)
                 .witnessName(witnessName(marRecord.getWitnessUser()))
+                // QA D1080: the same catalogue-or-tick answer the GET gives (#978 rule).
+                .controlledSubstance(pharmacistVerificationService.isControlledSubstance(marRecord.getPrescription()))
                 .build();
         }
 
@@ -676,6 +678,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .routeCode(task.getRouteCode())
             .dueTime(task.getDueTime())
             .status(status)
+            .controlledSubstance(task.isControlledSubstance())
             .build();
     }
 
@@ -958,6 +961,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .patientName(patient != null ? patient.getFullName() : DEFAULT_PATIENT_NAME)
             .direction(h.getDirection())
             .updatedAt(h.getUpdatedAt() != null ? h.getUpdatedAt() : h.getCreatedAt())
+            .createdAt(h.getCreatedAt())
             .note(h.getSituation())
             .background(h.getBackground())
             .assessment(h.getAssessment())
@@ -1418,6 +1422,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .dueTime(saved.getScheduledTime())
             .status(status.name())
             .witnessName(witnessName(saved.getWitnessUser()))
+            // QA D1080: the same catalogue-or-tick answer the GET gives (#978 rule).
+            .controlledSubstance(pharmacistVerificationService.isControlledSubstance(rx))
             .build();
     }
 
@@ -1449,6 +1455,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .dueTime(saved.getScheduledTime())
             .status(status.name())
             .witnessName(witnessName(saved.getWitnessUser()))
+            // QA D1080: the same catalogue-or-tick answer the GET gives (#978 rule).
+            .controlledSubstance(pharmacistVerificationService.isControlledSubstance(rx))
             .build();
     }
 
@@ -1771,6 +1779,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             throw new BusinessException("nurse.patient.notRegisteredHere");
         }
         requireNotDischargedWithoutVisit(patientId, hospitalId);
+        // QA D1077: a head circumference is a child's measure (the growth tab's age rule).
+        com.example.hms.service.support.PatientMeasureRules.requireHeadCircumferenceApplicable(
+            patient, request.getHeadCircumferenceCm(), java.time.LocalDate.now());
 
         PatientVitalSign vital = PatientVitalSign.builder()
             .patient(patient)

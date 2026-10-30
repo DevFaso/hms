@@ -18,6 +18,7 @@ import {
   ChartReview,
   ChartReviewEncounter,
   ChartReviewImaging,
+  ChartReviewNote,
   ChartReviewService,
 } from '../../services/chart-review.service';
 import { EnumLabelService } from '../../core/enum-label.service';
@@ -100,6 +101,13 @@ export class ChartReviewComponent implements OnChanges, OnDestroy {
   protected readonly encountersById = computed(() => {
     const byId = new Map<string, ChartReviewEncounter>();
     for (const e of this.chart()?.encounters ?? []) byId.set(e.id, e);
+    return byId;
+  });
+
+  /** QA D1076: a note's timeline row reads its template by name, never "SOAP — …" from the wire. */
+  protected readonly notesById = computed(() => {
+    const byId = new Map<string, ChartReviewNote>();
+    for (const n of this.chart()?.notes ?? []) byId.set(n.id, n);
     return byId;
   });
 

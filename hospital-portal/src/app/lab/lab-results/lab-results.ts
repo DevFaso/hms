@@ -1,3 +1,4 @@
+import { LabCorrectionBadgeComponent } from '../shared/lab-correction-badge.component';
 import { textMatches } from '../../shared/person-search';
 import { CdkTrapFocus } from '@angular/cdk/a11y';
 import {
@@ -54,6 +55,7 @@ export { toServerDateTime, toLocalInputValue };
   selector: 'app-lab-results',
   standalone: true,
   imports: [
+    LabCorrectionBadgeComponent,
     CdkTrapFocus,
     LabValuePipe,
     ServerTimePipe,

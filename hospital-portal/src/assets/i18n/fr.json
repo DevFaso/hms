@@ -1086,7 +1086,8 @@
         "CANCELLED": "Annulée",
         "POSTPONED": "Reportée"
       }
-    }
+    },
+    "NURSING_NOTE": "Note infirmière"
   },
   "ORDER_SETS": {
     "ADD_ITEM": "Ajouter un élément",
@@ -6864,7 +6865,15 @@
         "TREATMENT_PLAN": "Plan de traitement",
         "CONSULTATION": "Demande d’avis",
         "DISCHARGE_SUMMARY": "Résumé de sortie",
-        "DOCUMENT": "Document émis"
+        "DOCUMENT": "Document émis",
+        "TRANSFUSION": "Demande de transfusion",
+        "PROCEDURE_ORDER": "Demande d’acte",
+        "OBGYN_REFERRAL": "Orientation gynéco-obstétricale",
+        "NURSING_NOTE": "Note infirmière",
+        "IMMUNIZATION": "Vaccination",
+        "DELIVERY": "Accouchement",
+        "DEATH": "Décès",
+        "MICRO_CULTURE": "Culture microbiologique"
       },
       "SPECIMEN_TYPE": {
         "BLOOD": "Sang",
@@ -6943,6 +6952,11 @@
         "MISSED": "Manquée",
         "PENDING": "En attente",
         "REFUSED": "Refusée"
+      },
+      "NOTE_TEMPLATE": {
+        "DAR": "Note DAR",
+        "SOAP": "Note SOAP",
+        "SOAPIE": "Note SOAPIE"
       }
     },
     "DOCUMENTS": {
@@ -8928,7 +8942,8 @@
     "TEST_TYPE_PATHOLOGY": "Anatomopathologie",
     "TITLE": "Sortie",
     "WARNING_SIGNS": "Signes d'alerte",
-    "WOUND_CARE": "Soins des plaies"
+    "WOUND_CARE": "Soins des plaies",
+    "NOT_ADMITTED": "Ce patient n’a aucune hospitalisation en cours ici : une sortie ne se demande que pour un patient hospitalisé."
   },
   "CHART": {
     "ALLERGIES_WITHHELD": "Les allergies enregistrées dans d'autres hôpitaux ne sont pas affichées : ce patient a refusé le partage de son dossier. Cette liste peut être incomplète.",
@@ -10269,7 +10284,8 @@
     "NO_VERSIONS": "Aucune version antérieure",
     "PARA_ABOVE_GRAVIDA": "La parité (P) ne peut pas dépasser la gestité (G) : chaque accouchement compté dans P est aussi une grossesse comptée dans G.",
     "OUTCOMES_ABOVE_GRAVIDA": "La parité (P) plus les avortements (A) ne peuvent pas dépasser la gestité (G) : chaque grossesse se termine par au plus l'un des deux.",
-    "RECORDED_FUTURE": "Enregistré : la date ne peut pas être dans le futur."
+    "RECORDED_FUTURE": "Enregistré : la date ne peut pas être dans le futur.",
+    "DELIVERED_ON": "Accouchée le {{date}}"
   },
   "ULTRASOUND": {
     "WORKLIST_ALL": "Toutes les demandes",

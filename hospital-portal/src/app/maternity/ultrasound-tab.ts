@@ -21,6 +21,7 @@ import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.
 import { localDateString } from '../shared/date-utils';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { refusalReason } from '../shared/refusal-reason';
+import { AuthorshipService } from '../shared/authorship.service';
 
 type UltrasoundWorklist = 'all' | 'pending' | 'high-risk' | 'follow-up' | 'anomalies';
 
@@ -34,6 +35,7 @@ type UltrasoundWorklist = 'all' | 'pending' | 'high-risk' | 'follow-up' | 'anoma
 })
 export class UltrasoundTabComponent implements OnInit {
   private readonly ultrasoundService = inject(UltrasoundService);
+  private readonly authorship = inject(AuthorshipService);
   private readonly auth = inject(AuthService);
   private readonly roleContext = inject(RoleContextService);
   private readonly toast = inject(ToastService);
@@ -42,6 +44,11 @@ export class UltrasoundTabComponent implements OnInit {
   private hospitalId: string | null = null;
 
   /** Order + report writes = DOCTOR/MIDWIFE/SUPER_ADMIN (effective backend roles). */
+  /** QA D1081: an ultrasound order is rewritten or cancelled by its author only. */
+  isOrderAuthor(o: UltrasoundOrderResponse): boolean {
+    return this.authorship.isAuthor(o);
+  }
+
   readonly canOrder = this.roleContext.hasAnyActiveRole([
     'ROLE_DOCTOR',
     'ROLE_MIDWIFE',

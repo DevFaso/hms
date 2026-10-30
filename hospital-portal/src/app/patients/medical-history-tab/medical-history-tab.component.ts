@@ -155,7 +155,7 @@ export class MedicalHistoryTabComponent implements OnInit {
     this.socialLoading.set(true);
     this.historyService.currentSocialHistory(this.patientId).subscribe({
       next: (current) => {
-        // Backend returns 200 with an empty body when none exists.
+        // None: an empty body (QA D1082 class: 204 No Content), read as null.
         this.currentSocial.set(current && current.id ? current : null);
         this.socialLoading.set(false);
       },

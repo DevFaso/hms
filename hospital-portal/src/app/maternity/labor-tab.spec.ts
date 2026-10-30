@@ -559,4 +559,71 @@ describe('LaborTabComponent', () => {
       expect(text).not.toContain('(ml)');
     });
   }
+  /* ── Round 18 (QA D1068): what the midwife typed is read back ── */
+
+  it('QA D1068: the delivery summary shows the placenta, the uterotonic and the notes', () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', fr);
+    translate.use('fr');
+    const delivered = { ...episode('e1', 'DELIVERED'), deliveryRecorded: true };
+    laborSpy.episodes.and.returnValue(of([delivered]));
+    laborSpy.delivery.and.returnValue(
+      of({
+        id: 'd1',
+        episodeId: 'e1',
+        patientId: 'p1',
+        deliveredByStaffName: null,
+        birthDateTime: '2026-10-30T17:12:00',
+        deliveryMode: 'SPONTANEOUS_VAGINAL',
+        liveBirth: true,
+        numberOfInfants: 1,
+        infantSex: null,
+        birthWeightGrams: null,
+        gestationalAgeWeeksAtBirth: null,
+        apgarOneMinute: null,
+        apgarFiveMinute: null,
+        placentaDeliveredAt: '2026-10-30T17:20:00',
+        placentaComplete: true,
+        uterotonicGiven: true,
+        estimatedBloodLossMl: null,
+        perinealTear: null,
+        notes: 'Déchirure suturée, mère stable',
+        alerts: [],
+      }),
+    );
+    const fixture = TestBed.createComponent(LaborTabComponent);
+    fixture.componentInstance.onPatientChange({ id: 'p1' } as PatientResponse);
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    const stage = (
+      el.querySelector('[data-testid="delivery-third-stage"]')?.textContent ?? ''
+    ).replace(/\s+/g, ' ');
+    expect(stage).toContain('Placenta complet : Oui');
+    expect(stage).toContain('Utérotonique administré (GATPA) : Oui');
+    expect(el.querySelector('[data-testid="delivery-notes"]')?.textContent).toContain(
+      'Déchirure suturée, mère stable',
+    );
+  });
+
+  it('QA D1068: the partograph lists the drugs and notes of each observation, and the risk notes', () => {
+    useFrench();
+    laborSpy.episodes.and.returnValue(
+      of([{ ...episode('e1', 'ACTIVE'), riskNotes: 'Antécédent de césarienne' }]),
+    );
+    laborSpy.entries.and.returnValue(
+      of([{ ...entry('pe1'), drugsGiven: 'Ocytocine 5 UI', notes: 'Poche des eaux rompue' }]),
+    );
+    const fixture = TestBed.createComponent(LaborTabComponent);
+    fixture.componentInstance.onPatientChange({ id: 'p1' } as PatientResponse);
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    const cell = el.querySelector('[data-testid="partograph-entry-notes"]')?.textContent ?? '';
+    expect(cell).toContain('Ocytocine 5 UI');
+    expect(cell).toContain('Poche des eaux rompue');
+    expect(el.querySelector('[data-testid="labor-risk-notes"]')?.textContent).toContain(
+      'Antécédent de césarienne',
+    );
+  });
 });

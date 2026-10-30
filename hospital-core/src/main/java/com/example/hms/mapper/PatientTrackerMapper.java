@@ -61,6 +61,7 @@ public class PatientTrackerMapper {
                 .currentStatus(enc.getStatus() != null ? enc.getStatus().name() : null)
                 .roomAssignment(enc.getRoomAssignment())
                 .assignedProvider(providerName)
+                .assignedProviderUserId(staff != null && staff.getUser() != null ? staff.getUser().getId() : null)
                 .departmentName(deptName)
                 .arrivalTimestamp(enc.getArrivalTimestamp())
                 .triageTimestamp(enc.getTriageTimestamp())

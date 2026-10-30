@@ -327,6 +327,9 @@ public class UltrasoundServiceImpl implements UltrasoundService {
     @Override
     public UltrasoundReportResponseDTO markReportReviewed(UUID reportId, UUID reviewedByUserId) {
         UltrasoundReport report = getReportInScope(reportId);
+        // QA D1066 class: a cancelled scan order is not completed back to life by its report's review.
+        com.example.hms.service.support.CancelledOrders.requireNotCancelled(report.getUltrasoundOrder().getStatus(),
+            "ultrasound.order.cancelled.locked");
 
         if (report.getReportReviewedByProvider() != null && report.getReportReviewedByProvider()) {
             throw new BusinessException("ultrasound.report.alreadyReviewed");

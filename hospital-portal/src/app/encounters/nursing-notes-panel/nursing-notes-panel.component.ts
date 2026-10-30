@@ -14,6 +14,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { NursingNote, NursingNoteService } from '../../services/nursing-note.service';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { serverInstant, serverLocalDate } from '../../shared/date-utils';
+import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 
 /** One labelled part of a note, in the order the template writes it. */
 export interface NursingNotePart {
@@ -29,7 +30,7 @@ export interface NursingNotePart {
 @Component({
   selector: 'app-nursing-notes-panel',
   standalone: true,
-  imports: [CommonModule, TranslateModule, ServerTimePipe],
+  imports: [CommonModule, TranslateModule, ServerTimePipe, EnumLabelPipe],
   templateUrl: './nursing-notes-panel.component.html',
   styleUrl: './nursing-notes-panel.component.scss',
   changeDetection: ChangeDetectionStrategy.Eager,

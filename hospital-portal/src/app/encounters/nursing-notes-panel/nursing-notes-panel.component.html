@@ -21,7 +21,10 @@
             </p>
           }
           <p class="nursing-notes__meta">
-            <span class="nursing-notes__template">{{ note.template }}</span>
+            <!-- QA D1076 class: the template by its name, never its code -->
+            <span class="nursing-notes__template">{{
+              note.template | enumLabel: 'noteTemplate'
+            }}</span>
             {{ note.documentedAt | serverTime | date: 'short' }}
             @if (note.authorName) {
               — {{ note.authorName }}

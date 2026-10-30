@@ -124,6 +124,7 @@ public class ImagingOrderMapper {
 
         return ImagingOrderResponseDTO.builder()
             .id(orderId)
+            .authorUserId(order.getOrderingProviderUserId())
             .patientId(patient != null ? patient.getId() : null)
             .patientDisplayName(resolvePatientDisplayName(patient))
             .patientMrn(resolvePatientMrn(patient, hospital, orderId))

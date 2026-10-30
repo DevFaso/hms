@@ -286,8 +286,8 @@
   ></div>
   <div
     class="modal"
-    role="dialog"
-    aria-modal="true"
+    appModalDialog
+    (escaped)="closePrecautions()"
     [attr.aria-label]="'BED_BOARD.PRECAUTIONS' | translate"
   >
     <header class="modal-header">
@@ -399,8 +399,8 @@
   ></div>
   <div
     class="modal"
-    role="dialog"
-    aria-modal="true"
+    appModalDialog
+    (escaped)="closeTransfer()"
     [attr.aria-label]="'BED_BOARD.TRANSFER' | translate"
   >
     <header class="modal-header">

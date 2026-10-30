@@ -35,24 +35,12 @@
     "count": 2,
     "why": "QA D1052 class (#975: reported, not yet fixed)"
   },
-  "imaging/imaging.html": {
-    "count": 1,
-    "why": "QA D1052 class (#975: reported, not yet fixed)"
-  },
   "maternity/birth-plan-tab.html": {
     "count": 6,
     "why": "QA D1052 class (#975: reported, not yet fixed)"
   },
-  "maternity/labor-tab.html": {
-    "count": 3,
-    "why": "QA D1052 class (#975: reported, not yet fixed)"
-  },
   "maternity/maternity.html": {
     "count": 6,
-    "why": "QA D1052 class (#975: reported, not yet fixed)"
-  },
-  "maternity/postpartum-tab.html": {
-    "count": 3,
     "why": "QA D1052 class (#975: reported, not yet fixed)"
   },
   "maternity/prenatal-tab.html": {
@@ -69,18 +57,6 @@
   },
   "mortality/mortality.html": {
     "count": 1,
-    "why": "QA D1052 class (#975: reported, not yet fixed)"
-  },
-  "nurse-station/nurse-station.html": {
-    "count": 3,
-    "why": "QA D1052 class (#975: reported, not yet fixed)"
-  },
-  "nurse-station/nursing-intake-form/nursing-intake-form.component.html": {
-    "count": 2,
-    "why": "QA D1052 class (#975: reported, not yet fixed)"
-  },
-  "nurse-station/triage-form/triage-form.component.html": {
-    "count": 3,
     "why": "QA D1052 class (#975: reported, not yet fixed)"
   },
   "patient-portal/my-appointments/pre-checkin-form/pre-checkin-form.component.html": {
@@ -107,10 +83,6 @@
     "count": 1,
     "why": "QA D1052 class (#975: reported, not yet fixed)"
   },
-  "patient-tracker/patient-tracker.component.html": {
-    "count": 4,
-    "why": "QA D1052 class (#975: reported, not yet fixed)"
-  },
   "patients/bpa-panel/bpa-panel.component.html": {
     "count": 1,
     "why": "QA D1052 class (#975: reported, not yet fixed)"
@@ -121,10 +93,6 @@
   },
   "patients/micro/micro-tab.component.html": {
     "count": 5,
-    "why": "QA D1052 class (#975: reported, not yet fixed)"
-  },
-  "patients/patient-chart/patient-chart.component.html": {
-    "count": 1,
     "why": "QA D1052 class (#975: reported, not yet fixed)"
   },
   "patients/patient-detail.html": {
@@ -152,10 +120,6 @@
     "why": "QA D1052 class (#975: reported, not yet fixed)"
   },
   "scheduling/scheduling.html": {
-    "count": 1,
-    "why": "QA D1052 class (#975: reported, not yet fixed)"
-  },
-  "transfusion/transfusion.html": {
     "count": 1,
     "why": "QA D1052 class (#975: reported, not yet fixed)"
   },

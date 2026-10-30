@@ -10,7 +10,7 @@ import {
   NurseHandoff,
   NurseMedicationTask,
 } from '../services/nurse-task.service';
-import { PatientResponse } from '../services/patient.service';
+import { PatientResponse, PatientService } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { EncounterService } from '../services/encounter.service';
 import { AuthService } from '../auth/auth.service';
@@ -589,6 +589,37 @@ describe('NurseStationComponent — two-tier polling', () => {
     expect(
       component.canCompleteHandoff({ ...base, id: 'to-me', completableByMe: true } as NurseHandoff),
     ).toBeTrue();
+  });
+
+  it('QA D1075: the handoff card shows when it was reported, not when it was completed', () => {
+    const h = {
+      id: 'h1',
+      patientId: 'p1',
+      patientName: 'Bea Ward',
+      direction: 'SHIFT_CHANGE',
+      createdAt: '2026-10-30T13:33:43',
+      updatedAt: '2026-10-30T13:34:02',
+      completedAt: '2026-10-30T13:34:02',
+      note: 'Stable.',
+      background: null,
+      assessment: null,
+      recommendation: null,
+      status: 'COMPLETED',
+      createdByName: 'Nina Nurse',
+    } as NurseHandoff;
+    expect(component.handoffReportedAt(h)).toBe('2026-10-30T13:33:43');
+    // A server that predates createdAt still shows a time.
+    expect(component.handoffReportedAt({ ...h, createdAt: undefined })).toBe('2026-10-30T13:34:02');
+  });
+
+  it('QA D1077: the ward vitals offer head circumference only on the growth age rule', () => {
+    const lookup = spyOn(TestBed.inject(PatientService), 'getById');
+    lookup.and.returnValue(of({ id: 'p65', dateOfBirth: '1961-05-01' } as PatientResponse));
+    component.recordVitals('p65', 'Daouda Traoré');
+    expect(component.showHeadCircumference()).withContext('65 years old').toBeFalse();
+    lookup.and.returnValue(of({ id: 'p1', dateOfBirth: '2025-03-01' } as PatientResponse));
+    component.recordVitals('p1', 'Bébé');
+    expect(component.showHeadCircumference()).withContext('infant').toBeTrue();
   });
 
   it('completeHandoff calls the service and refreshes', () => {

@@ -628,7 +628,8 @@ class ProcedureOrderServiceImplTest {
                 assertThat(r.getStatus()).as(step.toString()).isEqualTo(step.getStatus());
             }
         }
-        verify(roleValidator, never()).draftsForPhysicianSignature(any(), any());
+        // QA D1081: the response says whether the ORDER's author drafts for a physician's signature
+        // (authorIsPhysician); the cancel rule (the caller as signing physician) is still never asked.
         verify(roleValidator, never()).isSigningPhysician(any(), any());
     }
 

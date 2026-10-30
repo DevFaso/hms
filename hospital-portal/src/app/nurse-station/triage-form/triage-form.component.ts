@@ -5,6 +5,7 @@ import {
   Output,
   inject,
   signal,
+  computed,
   ChangeDetectionStrategy,
   DestroyRef,
 } from '@angular/core';
@@ -22,6 +23,8 @@ import {
 import { ToastService } from '../../core/toast.service';
 import { RovingFocusDirective } from '../../shared/a11y/roving-focus.directive';
 import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
+import { PatientService } from '../../services/patient.service';
+import { offersFundalHeight } from '../../shared/patient-measures';
 
 type ConsciousnessOption = 'ALERT' | 'NEW_CONFUSION' | 'VOICE' | 'PAIN' | 'UNRESPONSIVE';
 
@@ -40,6 +43,7 @@ export class TriageFormComponent {
    */
   @Input() set encounter(value: EncounterResponse | null) {
     this._encounter = value;
+    this.loadPatientSex(value);
     if (value?.chiefComplaint && !this.chiefComplaint()) {
       this.chiefComplaint.set(value.chiefComplaint);
     }
@@ -52,6 +56,30 @@ export class TriageFormComponent {
   @Output() triageCompleted = new EventEmitter<TriageSubmissionResponse>();
 
   private readonly encounterService = inject(EncounterService);
+  private readonly patientService = inject(PatientService);
+
+  /**
+   * QA D1077: the patient's recorded sex, read once per encounter. A fundal
+   * height is not offered (nor sent) for a patient recorded as male.
+   */
+  readonly patientGender = signal<string | null>(null);
+  readonly showFundalHeight = computed(() => offersFundalHeight(this.patientGender()));
+
+  private loadPatientSex(value: EncounterResponse | null): void {
+    this.patientGender.set(null);
+    if (!value?.patientId) return;
+    const asked = value.patientId;
+    this.patientService
+      .getById(asked, value.hospitalId || undefined)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (p) => {
+          if (this._encounter?.patientId === asked) this.patientGender.set(p?.gender ?? null);
+        },
+        // Unknown sex keeps the field: the server refuses it for a male patient.
+        error: () => undefined,
+      });
+  }
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
 
@@ -202,7 +230,7 @@ export class TriageFormComponent {
       onOxygen: this.onOxygen(),
       consciousnessLevel: this.consciousnessLevel() || undefined,
       painScale: this.painScale() ?? undefined,
-      fundalHeightCm: this.fundalHeightCm() ?? undefined,
+      fundalHeightCm: this.showFundalHeight() ? (this.fundalHeightCm() ?? undefined) : undefined,
       fallRisk: this.fallRisk() || undefined,
       fallRiskScore: this.fallRiskScore() ?? undefined,
       roomAssignment: this.roomAssignment() || undefined,

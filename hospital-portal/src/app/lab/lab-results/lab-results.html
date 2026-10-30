@@ -509,7 +509,10 @@
                 @for (tp of sortedTrendHistory(r); track $index) {
                   <div class="trend-row">
                     <span>{{ tp.resultDate | serverTime | date: 'medium' }}</span>
-                    <span>{{ tp.resultValue | labValue: tp.resultUnit }}</span>
+                    <span
+                      >{{ tp.resultValue | labValue: tp.resultUnit }}
+                      <app-lab-correction-badge [corrected]="tp.corrected"
+                    /></span>
                     <span>{{ formatTrendDelta(sortedTrendHistory(r), $index) }}</span>
                   </div>
                 }
@@ -883,7 +886,10 @@
           <div class="compare-card">
             <h4>{{ 'LAB_RESULTS.CURRENT_RESULT' | translate }}</h4>
             @if (cmp.currentResult; as cur) {
-              <p class="compare-value">{{ cur.resultValue | labValue: cur.resultUnit }}</p>
+              <p class="compare-value">
+                {{ cur.resultValue | labValue: cur.resultUnit }}
+                <app-lab-correction-badge [corrected]="cur.corrected" />
+              </p>
               <p class="compare-date">{{ cur.resultDate | serverTime | date: 'medium' }}</p>
             } @else {
               <p>—</p>
@@ -892,7 +898,10 @@
           <div class="compare-card">
             <h4>{{ 'LAB_RESULTS.PREVIOUS_RESULT' | translate }}</h4>
             @if (cmp.previousResult; as prev) {
-              <p class="compare-value">{{ prev.resultValue | labValue: prev.resultUnit }}</p>
+              <p class="compare-value">
+                {{ prev.resultValue | labValue: prev.resultUnit }}
+                <app-lab-correction-badge [corrected]="prev.corrected" />
+              </p>
               <p class="compare-date">{{ prev.resultDate | serverTime | date: 'medium' }}</p>
             } @else {
               <p>{{ 'LAB_RESULTS.BASELINE' | translate }}</p>
@@ -938,7 +947,11 @@
                 @for (pt of cmp.trendHistory; track pt.labResultId) {
                   <tr>
                     <td>{{ pt.resultDate | serverTime | date: 'medium' }}</td>
-                    <td>{{ pt.resultValue | labValue: pt.resultUnit }}</td>
+                    <td>
+                      {{ pt.resultValue | labValue: pt.resultUnit }}
+                      <!-- QA D1016/D931 (round 18): a corrected point says so in the trend too -->
+                      <app-lab-correction-badge [corrected]="pt.corrected" />
+                    </td>
                     <td>
                       {{ pt.severityFlag ? (pt.severityFlag | enumLabel: 'labSeverityFlag') : '—' }}
                     </td>

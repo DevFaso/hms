@@ -52,6 +52,7 @@ import { ClockTimePipe } from '../shared/pipes/clock-time.pipe';
 import { NursingNotesPanelComponent } from '../encounters/nursing-notes-panel/nursing-notes-panel.component';
 import { NursingNoteService } from '../services/nursing-note.service';
 import { PatientDemographicsEditComponent } from './patient-demographics-edit/patient-demographics-edit.component';
+import { isGrowthAge } from '../shared/patient-measures';
 
 type TabKey =
   | 'overview'
@@ -496,10 +497,8 @@ export class PatientDetailComponent implements OnInit {
    *  tab hides for adults rather than rendering a lifetime weight log. */
   showGrowthTab(): boolean {
     if (!this.canViewGrowth()) return false;
-    const dob = this.patient()?.dateOfBirth;
-    if (!dob) return false;
-    const ageMs = Date.now() - serverDateOrInstant(dob).getTime();
-    return ageMs >= 0 && ageMs < 20 * 365.25 * 24 * 3600 * 1000;
+    // QA D1077: one rule for every growth surface (shared/patient-measures).
+    return isGrowthAge(this.patient()?.dateOfBirth);
   }
 
   /** Whether the current user can view the structured Chart tab (roles that can

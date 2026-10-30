@@ -58,6 +58,7 @@ import {
 import { currentLocale } from '../shared/i18n/app-locale';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 /** QA D808: the bounds NewbornAssessmentRequestDTO puts on each number (APGAR 15 was sent). */
 export const NEWBORN_LIMITS: readonly FieldLimit[] = [
   { field: 'apgarOneMinute', labelKey: 'POSTPARTUM.APGAR_ONE', min: 0, max: 10 },
@@ -95,6 +96,7 @@ const DEFAULT_SCREENING_INSTRUMENT = 'EPDS';
   selector: 'app-postpartum-tab',
   standalone: true,
   imports: [
+    ModalDialogDirective,
     ServerTimePipe,
     MeasurePipe,
     CommonModule,

@@ -139,7 +139,8 @@ public class AdmissionController {
     public ResponseEntity<AdmissionResponseDTO> getCurrentAdmissionForPatient(@PathVariable UUID patientId) {
         AdmissionResponseDTO admission = admissionService.getCurrentAdmissionForPatient(patientId);
         if (admission == null) {
-            return ResponseEntity.notFound().build();
+            // QA D1082 class: no open stay is an answer (204), not a missing resource.
+            return ResponseEntity.noContent().build();
         }
         return ResponseEntity.ok(admission);
     }

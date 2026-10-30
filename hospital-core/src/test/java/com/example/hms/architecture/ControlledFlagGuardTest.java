@@ -48,6 +48,8 @@ class ControlledFlagGuardTest {
         "a pharmacy fill's own recorded flag (an outside fill), not a prescription",
         "service/impl/MedicationHistoryServiceImpl.java", 1,
         "a pharmacy fill's own recorded flag (an outside fill), not a prescription",
+        "service/impl/NurseTaskServiceImpl.java", 1,
+        "QA D1080: the synthetic-task fallback copies a MAR row DTO's flag, already resolved through the catalogue",
         "service/PatientRecordPdfService.java", 1,
         "a chart-review DTO whose flag ChartReviewServiceImpl already resolved through the catalogue");
 
