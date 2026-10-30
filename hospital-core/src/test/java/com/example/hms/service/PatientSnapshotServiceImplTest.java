@@ -100,8 +100,9 @@ class PatientSnapshotServiceImplTest {
     private Patient stubPatient(UUID patientId) {
         Patient p = mock(Patient.class);
         when(p.getId()).thenReturn(patientId);
-        when(p.getFirstName()).thenReturn("Alice");
-        when(p.getLastName()).thenReturn("Wong");
+        lenient().when(p.getFullName()).thenReturn("Alice Wong"); // QA D1036: the whole name
+        lenient().when(p.getFirstName()).thenReturn("Alice");
+        lenient().when(p.getLastName()).thenReturn("Wong");
         when(p.getDateOfBirth()).thenReturn(LocalDate.of(1990, 3, 15));
         when(p.getGender()).thenReturn("F");
         when(p.getChronicConditions()).thenReturn(null);
@@ -961,8 +962,9 @@ class PatientSnapshotServiceImplTest {
         // is never called when structured diagnoses are non-empty (short-circuit)
         Patient patient = mock(Patient.class);
         when(patient.getId()).thenReturn(patientId);
-        when(patient.getFirstName()).thenReturn("Alice");
-        when(patient.getLastName()).thenReturn("Wong");
+        lenient().when(patient.getFullName()).thenReturn("Alice Wong"); // QA D1036: the whole name
+        lenient().when(patient.getFirstName()).thenReturn("Alice");
+        lenient().when(patient.getLastName()).thenReturn("Wong");
         when(patient.getDateOfBirth()).thenReturn(LocalDate.of(1990, 3, 15));
         givenPatient(patientId, patient);
 
@@ -996,8 +998,9 @@ class PatientSnapshotServiceImplTest {
         UUID patientId = UUID.randomUUID();
         Patient patient = mock(Patient.class);
         when(patient.getId()).thenReturn(patientId);
-        when(patient.getFirstName()).thenReturn("Alice");
-        when(patient.getLastName()).thenReturn("Wong");
+        lenient().when(patient.getFullName()).thenReturn("Alice Wong"); // QA D1036: the whole name
+        lenient().when(patient.getFirstName()).thenReturn("Alice");
+        lenient().when(patient.getLastName()).thenReturn("Wong");
         when(patient.getDateOfBirth()).thenReturn(LocalDate.of(1990, 3, 15));
         givenPatient(patientId, patient);
 
@@ -1036,8 +1039,9 @@ class PatientSnapshotServiceImplTest {
         UUID patientId = UUID.randomUUID();
         Patient patient = mock(Patient.class);
         when(patient.getId()).thenReturn(patientId);
-        when(patient.getFirstName()).thenReturn("Alice");
-        when(patient.getLastName()).thenReturn("Wong");
+        lenient().when(patient.getFullName()).thenReturn("Alice Wong"); // QA D1036: the whole name
+        lenient().when(patient.getFirstName()).thenReturn("Alice");
+        lenient().when(patient.getLastName()).thenReturn("Wong");
         when(patient.getDateOfBirth()).thenReturn(LocalDate.of(1990, 3, 15));
         givenPatient(patientId, patient);
 
@@ -1197,6 +1201,7 @@ class PatientSnapshotServiceImplTest {
         // an NPE on a half-built mock, which would prove nothing.
         Patient patient = mock(Patient.class);
         lenient().when(patient.getId()).thenReturn(patientId);
+        lenient().when(patient.getFullName()).thenReturn("Alice Wong"); // QA D1036: the whole name
         lenient().when(patient.getFirstName()).thenReturn("Alice");
         lenient().when(patient.getLastName()).thenReturn("Wong");
         lenient().when(patient.getDateOfBirth()).thenReturn(LocalDate.of(1990, 3, 15));
@@ -1255,6 +1260,7 @@ class PatientSnapshotServiceImplTest {
         // than on a stubbing miss or an NPE inside a half-built mock.
         Patient reachable = mock(Patient.class);
         lenient().when(reachable.getId()).thenReturn(patientId);
+        lenient().when(reachable.getFullName()).thenReturn("Alice Wong"); // QA D1036: the whole name
         lenient().when(reachable.getFirstName()).thenReturn("Alice");
         lenient().when(reachable.getLastName()).thenReturn("Wong");
         lenient().when(reachable.getDateOfBirth()).thenReturn(LocalDate.of(1990, 3, 15));

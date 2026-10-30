@@ -149,6 +149,10 @@ class PatientPortalServiceImplPhase2Test {
 
     @Mock private com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver;
 
+    /** QA D1060: the slot rules, stubbed to their 30-minute fallback (SlotPolicyStubs). */
+    @org.mockito.Mock
+    private com.example.hms.service.scheduling.AppointmentSlotPolicy slotPolicy;
+
     @InjectMocks
     private PatientPortalServiceImpl service;
 
@@ -161,6 +165,7 @@ class PatientPortalServiceImplPhase2Test {
 
     @BeforeEach
     void setUp() {
+        com.example.hms.testsupport.SlotPolicyStubs.defaultLength(slotPolicy);
         // findClinicalById answers as the database does: the stubbed row, when it is a hospital.
         lenient().when(hospitalRepository.findClinicalById(any()))
             .thenAnswer(invocation -> hospitalRepository.findById(invocation.getArgument(0))
@@ -604,26 +609,57 @@ class PatientPortalServiceImplPhase2Test {
         }
 
         @Test
-        @DisplayName("should throw when end time is not after start time")
-        void endBeforeStart_throws() {
+        @DisplayName("QA D1060: the patient's end time is ignored, the slot rules set the length")
+        void reschedule_theSlotRulesSetTheLength() {
+            // Was "should throw when end time is not after start time": the end
+            // is no longer the patient's to send (the dialog saved 08:20-09:20).
             stubPatientResolution();
             UUID apptId = UUID.randomUUID();
             Appointment appointment = buildAppointment(apptId, AppointmentStatus.SCHEDULED);
-
             when(appointmentRepository.findById(apptId)).thenReturn(Optional.of(appointment));
+            when(appointmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+            when(appointmentMapper.toAppointmentResponseDTO(any()))
+                    .thenReturn(AppointmentResponseDTO.builder().id(apptId).build());
+            when(slotPolicy.endFor(any(), eq(RESCHEDULE_DATE), eq(LocalTime.of(14, 0))))
+                    .thenReturn(LocalTime.of(14, 20));
 
             RescheduleAppointmentRequestDTO dto = RescheduleAppointmentRequestDTO.builder()
                     .appointmentId(apptId)
                     .newDate(RESCHEDULE_DATE)
-                    .newStartTime(LocalTime.of(14, 30))
-                    .newEndTime(LocalTime.of(14, 0))
+                    .newStartTime(LocalTime.of(14, 0))
+                    .newEndTime(LocalTime.of(20, 0))
                     .build();
 
+            service.rescheduleMyAppointment(auth, dto, Locale.ENGLISH);
+
+            assertThat(appointment.getStartTime()).isEqualTo(LocalTime.of(14, 0));
+            assertThat(appointment.getEndTime()).isEqualTo(LocalTime.of(14, 20));
+        }
+
+        @Test
+        @DisplayName("QA D1063: a reschedule onto a slot held for a waitlist offer is refused")
+        void reschedule_ontoAHeldSlotIsRefused() {
+            stubPatientResolution();
+            UUID apptId = UUID.randomUUID();
+            Appointment appointment = buildAppointment(apptId, AppointmentStatus.SCHEDULED);
+            when(appointmentRepository.findById(apptId)).thenReturn(Optional.of(appointment));
+            org.mockito.Mockito.doThrow(new BusinessException("slot.heldForOffer"))
+                    .when(slotPolicy).requireNoLiveHold(any(), any(), any());
+
+            RescheduleAppointmentRequestDTO dto = RescheduleAppointmentRequestDTO.builder()
+                    .appointmentId(apptId)
+                    .newDate(RESCHEDULE_DATE)
+                    .newStartTime(LocalTime.of(14, 0))
+                    .build();
+
+            com.example.hms.model.Staff clinician = new com.example.hms.model.Staff();
+            clinician.setId(UUID.randomUUID());
+            appointment.setStaff(clinician);
+            when(staffAvailabilityService.isStaffAvailable(eq(clinician.getId()), any())).thenReturn(true);
             assertThatThrownBy(() -> service.rescheduleMyAppointment(auth, dto, Locale.ENGLISH))
                     .isInstanceOf(BusinessException.class)
-                    .hasFieldOrPropertyWithValue("messageKey", "appointment.timeRange.invalid");
-
-            assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.SCHEDULED);
+                    .hasFieldOrPropertyWithValue("messageKey", "slot.heldForOffer");
+            verify(appointmentRepository, never()).save(any());
         }
     }
 
@@ -1663,7 +1699,7 @@ class PatientPortalServiceImplPhase2Test {
         }
 
         @Test
-        @DisplayName("should default endTime to startTime + 30 min when omitted")
+        @DisplayName("should default endTime to the slot rules' 30-minute fallback when no template covers it")
         void scheduleDefaultEndTime() {
             stubSchedulingBasics();
             when(staffRepository.findByIdAndActiveTrue(staffId)).thenReturn(Optional.of(staff));
@@ -1830,10 +1866,19 @@ class PatientPortalServiceImplPhase2Test {
         }
 
         @Test
-        @DisplayName("should throw when end time is not after start time")
-        void endTimeNotAfterStart_throws() {
+        @DisplayName("QA D1060: a self-booking of a whole day takes one slot; the patient's end time is ignored")
+        void aWholeDayRequestTakesTheSlotLength() {
+            // Was "should throw when end time is not after start time": the API
+            // accepted 07:00-19:00 for one patient; the end is no longer theirs.
             stubSchedulingBasics();
             when(staffRepository.findByIdAndActiveTrue(staffId)).thenReturn(Optional.of(staff));
+            when(staffAvailabilityService.isStaffAvailable(eq(staffId), any())).thenReturn(true);
+            when(appointmentRepository.findByStaff_IdAndAppointmentDate(eq(staffId), any())).thenReturn(List.of());
+            when(assignmentRepository.findActiveStaffAssignment(staff.getUser().getId(), hospitalId))
+                    .thenReturn(Optional.of(assignment));
+            when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(appointmentMapper.toAppointmentResponseDTO(any())).thenReturn(AppointmentResponseDTO.builder().build());
+            when(slotPolicy.endFor(staffId, BOOKING_DATE, LocalTime.of(10, 0))).thenReturn(LocalTime.of(10, 20));
 
             PortalBookAppointmentRequestDTO dto = PortalBookAppointmentRequestDTO.builder()
                     .hospitalId(hospitalId)
@@ -1841,11 +1886,37 @@ class PatientPortalServiceImplPhase2Test {
                     .staffId(staffId)
                     .date(BOOKING_DATE)
                     .startTime(LocalTime.of(10, 0))
-                    .endTime(LocalTime.of(10, 0)) // same as start — invalid
+                    .endTime(LocalTime.of(19, 0))
+                    .build();
+
+            service.scheduleMyAppointment(auth, dto, Locale.ENGLISH);
+
+            ArgumentCaptor<Appointment> captor = ArgumentCaptor.forClass(Appointment.class);
+            verify(appointmentRepository).save(captor.capture());
+            assertThat(captor.getValue().getEndTime()).isEqualTo(LocalTime.of(10, 20));
+        }
+
+        @Test
+        @DisplayName("QA D1063: a self-booking over a slot held for a waitlist offer is refused")
+        void aHeldSlotIsNotSelfBooked() {
+            stubSchedulingBasics();
+            when(staffRepository.findByIdAndActiveTrue(staffId)).thenReturn(Optional.of(staff));
+            when(staffAvailabilityService.isStaffAvailable(eq(staffId), any())).thenReturn(true);
+            org.mockito.Mockito.doThrow(new BusinessException("slot.heldForOffer"))
+                    .when(slotPolicy).requireNoLiveHold(eq(staffId), any(), any());
+
+            PortalBookAppointmentRequestDTO dto = PortalBookAppointmentRequestDTO.builder()
+                    .hospitalId(hospitalId)
+                    .departmentId(departmentId)
+                    .staffId(staffId)
+                    .date(BOOKING_DATE)
+                    .startTime(LocalTime.of(8, 0))
                     .build();
 
             assertThatThrownBy(() -> service.scheduleMyAppointment(auth, dto, Locale.ENGLISH))
-                    .isInstanceOf(BusinessException.class);
+                    .isInstanceOf(BusinessException.class)
+                    .hasFieldOrPropertyWithValue("messageKey", "slot.heldForOffer");
+            verify(appointmentRepository, never()).save(any());
         }
     }
 

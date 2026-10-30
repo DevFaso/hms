@@ -64,6 +64,7 @@ class SlotInventoryServiceImplTest {
     @Mock private PatientRepository patientRepository;
     @Mock private UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock private RoleValidator roleValidator;
+    @Mock private com.example.hms.repository.UserRepository userRepository;
 
     /** Fixed instant: holds, the reclaim sweep and the search all read the injected clock. */
     private static final LocalDateTime NOW = LocalDateTime.of(2026, 3, 2, 9, 0);
@@ -80,7 +81,7 @@ class SlotInventoryServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new SlotInventoryServiceImpl(templateRepository, slotRepository,
-            appointmentRepository, patientRepository, assignmentRepository, roleValidator, FIXED);
+            appointmentRepository, patientRepository, assignmentRepository, roleValidator, FIXED, userRepository);
 
         hospitalId = UUID.randomUUID();
         hospital = Hospital.builder().name("CHU").code("CHU").build();
@@ -361,6 +362,20 @@ class SlotInventoryServiceImplTest {
         assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.SCHEDULED);
         assertThat(appointment.getReason()).isEqualTo("Knee follow-up");
         assertThat(dto.getAppointmentId()).isEqualTo(appointment.getId());
+    }
+
+    @Test
+    void qaD1073_aSlotBookingNamesWhoBookedIt() {
+        // The desk, or the receptionist accepting a waitlist offer: both book here.
+        AppointmentSlot slot = bookableSlot();
+        com.example.hms.model.User receptionist = new com.example.hms.model.User();
+        receptionist.setId(UUID.randomUUID());
+        when(roleValidator.getCurrentUserId()).thenReturn(receptionist.getId());
+        when(userRepository.findById(receptionist.getId())).thenReturn(java.util.Optional.of(receptionist));
+
+        service.book(slot.getId(), patientId, null);
+
+        assertThat(slot.getAppointment().getCreatedBy()).isSameAs(receptionist);
     }
 
     @Test

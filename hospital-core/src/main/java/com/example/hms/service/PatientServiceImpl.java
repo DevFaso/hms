@@ -520,14 +520,13 @@ public class PatientServiceImpl implements PatientService {
         addressTouched |= applyNullable(request.getPostalCode(), patient::setZipCode);
         addressTouched |= applyNullable(request.getCountry(), patient::setCountry);
         if (addressTouched) {
-            patient.setAddress(buildMailingAddress(
-                patient.getAddressLine1(),
-                patient.getAddressLine2(),
-                patient.getCity(),
-                patient.getState(),
-                patient.getZipCode(),
-                patient.getCountry()
-            ));
+            // QA D1074: "Adresse" is the street address. The city, region,
+            // postal code and country keep their own fields; they were joined
+            // into it with pipes, so the screen showed them twice.
+            String street = com.example.hms.utility.PatientAddressText.streetLine(
+                patient.getAddressLine1(), patient.getAddressLine2());
+            patient.setAddress(street != null ? street
+                : com.example.hms.utility.PatientAddressText.display(patient.getAddress(), null, null));
             addressHistoryRecorder.recordIfMoved(patient, before);
         }
     }
@@ -607,6 +606,14 @@ public class PatientServiceImpl implements PatientService {
     /** The calling code a national number typed at this hospital takes (Burkina Faso when unknown). */
     private String callingCodeAt(UUID hospitalId) {
         return PhoneNumbers.callingCodeForCountry(countryFor(hospitalId));
+    }
+
+    /** The organisation a hospital belongs to, or null. */
+    private UUID organizationOf(UUID hospitalId) {
+        return hospitalId == null ? null
+            : hospitalRepository.findById(hospitalId)
+                .map(h -> h.getOrganization() != null ? h.getOrganization().getId() : null)
+                .orElse(null);
     }
 
     /** The country of a hospital, or null when unknown (Burkina Faso is then assumed). */
@@ -959,18 +966,53 @@ public class PatientServiceImpl implements PatientService {
     @Override
     @Transactional(readOnly = true)
     public List<RegistrationMatchDTO> findRegistrationMatches(String email, String phone, UUID hospitalId) {
+        return findRegistrationMatches(email, phone, null, null, null, hospitalId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<RegistrationMatchDTO> findRegistrationMatches(String email, String phone, String firstName,
+                                                              String lastName, java.time.LocalDate dateOfBirth,
+                                                              UUID hospitalId) {
         final String normEmail = email != null ? email.trim().toLowerCase(Locale.ROOT) : null;
         final String normPhone = phone != null ? phone.trim() : null;
 
         // LinkedHashMap keeps phone hits (the primary identifier in practice) ahead of email hits.
         Map<UUID, RegistrationMatchDTO> matches = new LinkedHashMap<>();
+        Map<UUID, Patient> matched = new LinkedHashMap<>();
         if (normPhone != null && !normPhone.isBlank()) {
-            findByPhone(normPhone, callingCodeAt(hospitalId))
-                .forEach(p -> matches.putIfAbsent(p.getId(), toRegistrationMatch(p, hospitalId, "PHONE")));
+            findByPhone(normPhone, callingCodeAt(hospitalId)).forEach(p -> {
+                matched.putIfAbsent(p.getId(), p);
+                matches.putIfAbsent(p.getId(), toRegistrationMatch(p, hospitalId, "PHONE"));
+            });
         }
         if (normEmail != null && !normEmail.isBlank()) {
-            patientRepository.findAllByEmailIgnoreCase(normEmail)
-                .forEach(p -> matches.putIfAbsent(p.getId(), toRegistrationMatch(p, hospitalId, "EMAIL")));
+            patientRepository.findAllByEmailIgnoreCase(normEmail).forEach(p -> {
+                matched.putIfAbsent(p.getId(), p);
+                matches.putIfAbsent(p.getId(), toRegistrationMatch(p, hospitalId, "EMAIL"));
+            });
+        }
+        boolean identityGiven = PatientMatchKeys.foldName(firstName) != null
+            && PatientMatchKeys.foldName(lastName) != null && dateOfBirth != null;
+        if (!identityGiven) {
+            return List.copyOf(matches.values());
+        }
+        // QA D1061: a phone or e-mail match says whether it is the same person.
+        matched.forEach((id, p) -> matches.get(id).setSameIdentity(
+            PatientMatchKeys.sameIdentity(p, firstName, lastName, dateOfBirth)));
+        // QA D1064: the same name and date of birth at another hospital of the
+        // organisation is proposed even with another phone, so a second
+        // identity is not created in the same organisation. Kept inside the
+        // organisation: a name and a date of birth are not a key across tenants.
+        UUID organizationId = organizationOf(hospitalId);
+        if (organizationId != null) {
+            patientRepository.findByDateOfBirthInOrganization(dateOfBirth, organizationId).stream()
+                .filter(p -> PatientMatchKeys.sameIdentity(p, firstName, lastName, dateOfBirth))
+                .forEach(p -> matches.computeIfAbsent(p.getId(), id -> {
+                    RegistrationMatchDTO match = toRegistrationMatch(p, hospitalId, "IDENTITY");
+                    match.setSameIdentity(true);
+                    return match;
+                }));
         }
         return List.copyOf(matches.values());
     }
@@ -2911,10 +2953,8 @@ public class PatientServiceImpl implements PatientService {
         if (patient == null) {
             return null;
         }
-        String first = patient.getFirstName() != null ? patient.getFirstName().trim() : "";
-        String last = patient.getLastName() != null ? patient.getLastName().trim() : "";
-        String full = (first + " " + last).trim();
-        return full.isEmpty() ? patient.getEmail() : full;
+        String full = patient.getFullName();
+        return full == null ? patient.getEmail() : full;
     }
 
     private String normalizeAccessReason(String reason) {
@@ -3114,33 +3154,6 @@ public class PatientServiceImpl implements PatientService {
                 .replacedAt(h.getCreatedAt())
                 .build())
             .toList();
-    }
-
-    private String buildMailingAddress(String line1, String line2, String city, String state, String postalCode, String country) {
-        List<String> segments = new ArrayList<>();
-        if (line1 != null && !line1.isBlank()) {
-            segments.add(line1.trim());
-        }
-        if (line2 != null && !line2.isBlank()) {
-            segments.add(line2.trim());
-        }
-        String cityState = Stream.of(city, state)
-            .filter(value -> value != null && !value.isBlank())
-            .map(String::trim)
-            .collect(Collectors.joining(", "));
-        if (!cityState.isBlank()) {
-            segments.add(cityState);
-        }
-        if (postalCode != null && !postalCode.isBlank()) {
-            segments.add(postalCode.trim());
-        }
-        if (country != null && !country.isBlank()) {
-            segments.add(country.trim());
-        }
-        if (segments.isEmpty()) {
-            return null;
-        }
-        return String.join(" | ", segments);
     }
 
     private String joinChronicConditions(List<String> values) {

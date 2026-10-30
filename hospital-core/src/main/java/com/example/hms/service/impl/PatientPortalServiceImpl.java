@@ -188,6 +188,8 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private final com.example.hms.service.NotificationService notificationService;
     private final EmailService emailService;
     private final com.example.hms.service.scheduling.SlotInventoryService slotInventoryService;
+    /** QA D1060 / D1063: the slot rules set the visit length and refuse a slot held for an offer. */
+    private final com.example.hms.service.scheduling.AppointmentSlotPolicy slotPolicy;
     private final com.example.hms.service.webhook.WebhookPublisher webhookPublisher;
     /** The patient's stated language for the mails the portal sends them. */
     private final com.example.hms.service.i18n.PatientLocaleResolver patientLocaleResolver;
@@ -608,15 +610,12 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             staff = available.get(0); // assign first available
         }
 
-        // Time defaults — endTime = startTime + 30 min if omitted
-        java.time.LocalTime endTime = dto.getEndTime() != null
-                ? dto.getEndTime()
-                : dto.getStartTime().plusMinutes(30);
+        // QA D1060: the slot rules decide how long the visit lasts, never the
+        // patient: a self-booking took a clinician's whole day. Any end time
+        // the client sends is ignored.
+        java.time.LocalTime endTime = slotPolicy.endFor(staff.getId(), dto.getDate(), dto.getStartTime());
         java.time.LocalDateTime requestedStart = java.time.LocalDateTime.of(dto.getDate(), dto.getStartTime());
         java.time.LocalDateTime requestedEnd = java.time.LocalDateTime.of(dto.getDate(), endTime);
-        if (!requestedEnd.isAfter(requestedStart)) {
-            throw new BusinessException(MessageUtil.resolve("portal.booking.endBeforeStart"));
-        }
 
         // QA D978: a patient books a future time within the patient booking day.
         com.example.hms.service.AppointmentSlotRules.requirePatientBookable(
@@ -626,6 +625,9 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         if (!staffAvailabilityService.isStaffAvailable(staff.getId(), requestedStart)) {
             throw new BusinessException(MessageUtil.resolve(PROVIDER_UNAVAILABLE_KEY));
         }
+
+        // QA D1063: a slot held for a waitlist offer is not given to anyone else.
+        slotPolicy.requireNoLiveHold(staff.getId(), requestedStart, requestedEnd);
 
         // Overlap check. QA D937: a cancelled booking or a no-show frees its slot.
         boolean hasConflict = com.example.hms.service.AppointmentSlotRules.overlapsHeldSlot(
@@ -834,18 +836,24 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         if (!PATIENT_CHANGEABLE_STATUSES.contains(appointment.getStatus())) {
             throw new BusinessException("appointment.patient.notChangeable");
         }
-        if (!dto.getNewEndTime().isAfter(dto.getNewStartTime())) {
-            throw new BusinessException("appointment.timeRange.invalid");
-        }
+        // QA D1060: the slot rules set the length at the new time; the patient
+        // never chooses it (the dialog's free end field saved 08:20-09:20).
+        java.time.LocalTime newEndTime = slotPolicy.endFor(
+                appointment.getStaff() != null ? appointment.getStaff().getId() : null,
+                dto.getNewDate(), dto.getNewStartTime());
         // QA D978 / D937: the new slot obeys the same rules as a new booking:
         // in the future, within the patient booking day, and free.
         java.time.LocalDateTime newStart = java.time.LocalDateTime.of(dto.getNewDate(), dto.getNewStartTime());
-        java.time.LocalDateTime newEnd = java.time.LocalDateTime.of(dto.getNewDate(), dto.getNewEndTime());
+        java.time.LocalDateTime newEnd = java.time.LocalDateTime.of(dto.getNewDate(), newEndTime);
         com.example.hms.service.AppointmentSlotRules.requirePatientBookable(
                 newStart, newEnd, nowAt(appointment.getHospital()));
         if (appointment.getStaff() != null
                 && !staffAvailabilityService.isStaffAvailable(appointment.getStaff().getId(), newStart)) {
             throw new BusinessException(MessageUtil.resolve(PROVIDER_UNAVAILABLE_KEY));
+        }
+        if (appointment.getStaff() != null) {
+            // QA D1063: nor onto a slot held for a waitlist offer.
+            slotPolicy.requireNoLiveHold(appointment.getStaff().getId(), newStart, newEnd);
         }
         if (appointment.getStaff() != null && com.example.hms.service.AppointmentSlotRules.overlapsHeldSlot(
                 appointmentRepository.findByStaff_IdAndAppointmentDate(appointment.getStaff().getId(), dto.getNewDate()),
@@ -855,7 +863,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
 
         appointment.setAppointmentDate(dto.getNewDate());
         appointment.setStartTime(dto.getNewStartTime());
-        appointment.setEndTime(dto.getNewEndTime());
+        appointment.setEndTime(newEndTime);
         // QA D977: a moved appointment is booked at its new time, exactly as the
         // desk reschedule lands it (SCHEDULED). RESCHEDULED marks a superseded
         // booking; parking the moved one there hid its pre-check-in and its
@@ -1316,9 +1324,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     }
 
     private String formatPatientName(Patient patient, Locale locale) {
-        String first = patient.getFirstName() != null ? patient.getFirstName() : "";
-        String last = patient.getLastName() != null ? patient.getLastName() : "";
-        String combined = (first + " " + last).trim();
+        String combined = java.util.Objects.toString(patient.getFullName(), "");
         return combined.isBlank()
             ? messageSource.getMessage("patient.fallback.indefinite", null, locale)
             : combined;
@@ -1552,7 +1558,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         return ProxyResponseDTO.builder()
                 .id(p.getId())
                 .grantorPatientId(grantor.getId())
-                .grantorName(grantor.getFirstName() + " " + grantor.getLastName())
+                .grantorName(grantor.getFullName())
                 .proxyUserId(proxy.getId())
                 .proxyUsername(proxy.getUsername())
                 .proxyDisplayName(proxy.getFirstName() + " " + proxy.getLastName())
@@ -1908,7 +1914,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             Patient patient = appointment.getPatient();
             Staff staff = appointment.getStaff();
             Hospital hospital = appointment.getHospital();
-            String patientName = patient.getFirstName() + " " + patient.getLastName();
+            String patientName = patient.getFullName();
             String staffName = staff.getUser().getFirstName() + " " + staff.getUser().getLastName();
             String appointmentDate = appointment.getAppointmentDate().toString();
             String appointmentTime = appointment.getStartTime() + " - " + appointment.getEndTime();
@@ -1930,7 +1936,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             Patient patient = appointment.getPatient();
             Staff staff = appointment.getStaff();
             Hospital hospital = appointment.getHospital();
-            String patientName = patient.getFirstName() + " " + patient.getLastName();
+            String patientName = patient.getFullName();
             String staffName = staff.getUser().getFirstName() + " " + staff.getUser().getLastName();
             String newAppointmentDate = appointment.getAppointmentDate().toString();
             String newAppointmentTime = appointment.getStartTime() + " - " + appointment.getEndTime();

@@ -286,7 +286,7 @@ public class ResultReviewServiceImpl implements ResultReviewService {
                                 .source(consult.getRequestingProvider() != null
                                         ? consult.getRequestingProvider().getFullName()
                                         : text("inbox.source.unknown", locale))
-                                .patientName(consult.getPatient() != null ? consult.getPatient().getFirstName() + " " + consult.getPatient().getLastName() : null)
+                                .patientName(consult.getPatient() != null ? consult.getPatient().getFullName() : null)
                                 .patientId(consult.getPatient() != null ? consult.getPatient().getId() : null)
                                 .subject(consult.getReasonForConsult() != null
                                         ? truncate(consult.getReasonForConsult(), 80)
@@ -337,7 +337,7 @@ public class ResultReviewServiceImpl implements ResultReviewService {
                                         ? note.getAuthorName()
                                         : text("inbox.source.encounterNote", locale))
                                 .patientName(note.getPatient() != null
-                                        ? note.getPatient().getFirstName() + " " + note.getPatient().getLastName()
+                                        ? note.getPatient().getFullName()
                                         : null)
                                 .patientId(note.getPatient() != null ? note.getPatient().getId() : null)
                                 .subject(text("inbox.note.awaitingCosign", locale))
@@ -356,7 +356,7 @@ public class ResultReviewServiceImpl implements ResultReviewService {
                     .id(enc.getId())
                     .category("TASK")
                     .source(text("inbox.source.encounter", locale))
-                    .patientName(enc.getPatient() != null ? enc.getPatient().getFirstName() + " " + enc.getPatient().getLastName() : null)
+                    .patientName(enc.getPatient() != null ? enc.getPatient().getFullName() : null)
                     .patientId(enc.getPatient() != null ? enc.getPatient().getId() : null)
                     .subject(text("inbox.encounter.active", locale))
                     .urgency(URGENCY_NORMAL)
@@ -426,7 +426,7 @@ public class ResultReviewServiceImpl implements ResultReviewService {
                                 .category("REFILL_REQUEST")
                                 .source(text("inbox.source.patientPortal", locale))
                                 .patientName(patient != null
-                                        ? patient.getFirstName() + " " + patient.getLastName() : null)
+                                        ? patient.getFullName() : null)
                                 .patientId(patient != null ? patient.getId() : null)
                                 .subject(text("inbox.refill.requested", locale, truncate(medication, 80)))
                                 .urgency(URGENCY_NORMAL)
@@ -496,7 +496,7 @@ public class ResultReviewServiceImpl implements ResultReviewService {
         return DoctorResultQueueItemDTO.builder()
                 .id(result.getId())
                 .abnormalDirection(direction)
-                .patientName(order.getPatient().getFirstName() + " " + order.getPatient().getLastName())
+                .patientName(order.getPatient().getFullName())
                 .patientId(order.getPatient().getId())
                 .testName(testName)
                 .resultValue(result.getResultValue())

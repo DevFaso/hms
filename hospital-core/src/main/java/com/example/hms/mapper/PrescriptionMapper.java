@@ -314,7 +314,8 @@ public class PrescriptionMapper {
 
     private String resolvePatientFullName(Patient patient) {
         if (patient == null) return "";
-        return buildFullName(patient.getFirstName(), patient.getLastName());
+        String fullName = patient.getFullName();
+        return fullName != null ? fullName : "";
     }
 
     /**

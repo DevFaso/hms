@@ -203,6 +203,35 @@ public final class PatientMatchKeys {
         return value != null && PHONE_SHAPED.matcher(value.trim()).matches();
     }
 
+    /**
+     * QA D1061 / D1064: whether two registrations name the same PERSON, the way
+     * a registration desk decides it: the same first and last name (accents,
+     * case and spacing aside; either order, since a surname is often written
+     * first) and, when both carry one, the same date of birth. A shared phone
+     * or e-mail alone never makes two people one: a child is registered under
+     * a parent's number. The middle name is left out on purpose: it is often
+     * missing from one of the two registrations.
+     */
+    public static boolean sameIdentity(String firstA, String lastA, java.time.LocalDate dobA,
+                                       String firstB, String lastB, java.time.LocalDate dobB) {
+        String fa = foldName(firstA);
+        String la = foldName(lastA);
+        String fb = foldName(firstB);
+        String lb = foldName(lastB);
+        if (fa == null || la == null || fb == null || lb == null) {
+            return false;
+        }
+        boolean sameNames = (fa.equals(fb) && la.equals(lb)) || (fa.equals(lb) && la.equals(fb));
+        return sameNames && (dobA == null || dobB == null || dobA.equals(dobB));
+    }
+
+    /** {@link #sameIdentity} against a stored patient record. */
+    public static boolean sameIdentity(com.example.hms.model.Patient record, String first, String last,
+                                       java.time.LocalDate dob) {
+        return record != null && sameIdentity(record.getFirstName(), record.getLastName(), record.getDateOfBirth(),
+            first, last, dob);
+    }
+
     /** Whether the folded {@code haystack} contains the folded {@code needle}. */
     public static boolean nameContains(String haystack, String needle) {
         String h = foldName(haystack);

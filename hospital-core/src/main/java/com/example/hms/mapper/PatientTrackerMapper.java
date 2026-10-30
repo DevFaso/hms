@@ -34,7 +34,7 @@ public class PatientTrackerMapper {
         Appointment appointment = enc.getAppointment();
 
         String patientName = patient != null
-                ? (nullSafe(patient.getFirstName()) + " " + nullSafe(patient.getLastName())).trim()
+                ? nullSafe(patient.getFullName())
                 : "Unknown";
 
         String mrn = patient != null ? patient.getMrnForHospital(hospitalId) : null;

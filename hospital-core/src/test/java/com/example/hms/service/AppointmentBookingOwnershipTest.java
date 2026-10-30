@@ -56,6 +56,10 @@ class AppointmentBookingOwnershipTest {
     @Mock private com.example.hms.repository.UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock private MessageSource messageSource;
 
+    /** QA D1060: the slot rules, stubbed to their 30-minute fallback (SlotPolicyStubs). */
+    @org.mockito.Mock
+    private com.example.hms.service.scheduling.AppointmentSlotPolicy slotPolicy;
+
     @InjectMocks private AppointmentServiceImpl service;
 
     private final Locale locale = Locale.ENGLISH;
@@ -64,6 +68,7 @@ class AppointmentBookingOwnershipTest {
 
     @BeforeEach
     void setUp() {
+        com.example.hms.testsupport.SlotPolicyStubs.defaultLength(slotPolicy);
         patientUser = user("patient.self", "ROLE_PATIENT");
         receptionist = user("front.desk", "ROLE_RECEPTIONIST");
         when(userRepository.findByUsername(patientUser.getUsername())).thenReturn(Optional.of(patientUser));

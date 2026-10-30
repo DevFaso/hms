@@ -62,9 +62,9 @@ class PdfInvoiceServiceTest {
                 : key + " " + Arrays.stream(args).map(String::valueOf).collect(Collectors.joining(" "));
         });
         // The category lookup carries the enum constant as its default message.
-        // The category cell is truncated to 16 characters by the layout, so the
-        // echoed key is shortened to a marker that survives it and still proves
-        // the lookup went through the bundle rather than the enum default.
+        // The category cell wraps inside its narrow column (QA D1091), so the
+        // echoed key is shortened to a marker that stays on one line and still
+        // proves the lookup went through the bundle rather than the enum default.
         lenient().when(messageSource.getMessage(anyString(), any(), anyString(), any(Locale.class)))
             .thenAnswer(inv -> inv.getArgument(0).toString().replace("pdf.invoice.category.", "cat:"));
 
@@ -133,6 +133,48 @@ class PdfInvoiceServiceTest {
         String text = textOf(service.generateInvoicePdf(invoice, items, List.of(), List.of(waiver), Locale.FRENCH));
 
         assertThat(text).contains("pdf.invoice.adjustmentLine pdf.invoice.adjustment.WAIVER Gratuité 500 F CFA");
+    }
+
+    @Test
+    void qaD1036_theInvoiceAndTheReceiptPrintTheMiddleName() throws Exception {
+        invoice.getPatient().setMiddleName("Wendkouni");
+
+        assertThat(textOf(service.generateInvoicePdf(invoice, items, Locale.FRENCH)))
+            .contains("pdf.invoice.patient Awa Wendkouni Kaboré OUA-1234");
+        com.example.hms.model.PaymentTransaction payment = com.example.hms.model.PaymentTransaction.builder()
+            .amount(new BigDecimal("1500.00")).paymentDate(LocalDate.of(2026, 9, 14)).build();
+        payment.setId(UUID.randomUUID());
+        assertThat(textOf(service.generateReceiptPdf(invoice, payment, Locale.FRENCH)))
+            .contains("Awa Wendkouni Kaboré");
+    }
+
+    @Test
+    void qaD1091_aLongAdjustmentReasonIsPrintedWholeWrappedNeverCut() throws Exception {
+        String reason = "Remise accordée au titre du programme national de gratuité des soins pour les enfants"
+            + " de moins de cinq ans (demo-r18-adj-01)";
+        com.example.hms.model.InvoiceAdjustment discount = com.example.hms.model.InvoiceAdjustment.builder()
+            .type(com.example.hms.enums.InvoiceAdjustmentType.WAIVER)
+            .amount(new BigDecimal("500.00")).reason(reason).build();
+
+        String text = textOf(service.generateInvoicePdf(invoice, items, List.of(), List.of(discount), Locale.FRENCH))
+            .replaceAll("\\s+", " ");
+
+        assertThat(text).contains(reason).contains("500 F CFA").doesNotContain("…");
+    }
+
+    @Test
+    void qaD1091_aLongLineDescriptionWrapsInItsColumn() throws Exception {
+        String description = "Échographie obstétricale du deuxième trimestre avec biométrie foetale complète";
+        List<InvoiceItem> longItems = List.of(InvoiceItem.builder()
+            .itemDescription(description).itemCategory(ItemCategory.SERVICE).quantity(1)
+            .unitPrice(new BigDecimal("1500.00")).totalPrice(new BigDecimal("1500.00")).build());
+
+        String text = textOf(service.generateInvoicePdf(invoice, longItems, Locale.FRENCH));
+
+        for (String word : description.split(" ")) {
+            assertThat(text).contains(word);
+        }
+        assertThat(text).doesNotContain("…");
     }
 
     @Test

@@ -60,6 +60,16 @@ public final class AppointmentSlotRules {
     }
 
     /**
+     * Whether {@code [aStart, aEnd)} and {@code [bStart, bEnd)} share a moment:
+     * the one interval test every booking rule uses (QA D1063: a booking over
+     * a slot held for a waitlist offer).
+     */
+    public static boolean overlaps(LocalDateTime aStart, LocalDateTime aEnd,
+                                   LocalDateTime bStart, LocalDateTime bEnd) {
+        return aStart.isBefore(bEnd) && bStart.isBefore(aEnd);
+    }
+
+    /**
      * QA D978: a slot a patient books or moves to for themselves starts in the
      * future and lies within the patient booking day. Only a past DATE used to
      * be refused, so a time already gone today, or 02:30, was booked.

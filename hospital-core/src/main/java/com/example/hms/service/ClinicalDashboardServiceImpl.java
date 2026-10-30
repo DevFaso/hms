@@ -162,7 +162,7 @@ public class ClinicalDashboardServiceImpl implements ClinicalDashboardService {
                     for (Encounter enc : active) {
                         Patient p = enc.getPatient();
                         if (p == null) continue;
-                        String name = p.getFirstName() + " " + p.getLastName();
+                        String name = p.getFullName();
                         int age = p.getDateOfBirth() != null
                                 ? Period.between(p.getDateOfBirth(), LocalDate.now()).getYears()
                                 : 0;
@@ -216,6 +216,7 @@ public class ClinicalDashboardServiceImpl implements ClinicalDashboardService {
                         // QA D1040: the hospital's MRN, never the patient's UUID.
                         dto.setMrn(e.getHospital() != null ? p.getMrnForHospital(e.getHospital().getId()) : null);
                         dto.setFirstName(p.getFirstName());
+                        dto.setMiddleName(p.getMiddleName());
                         dto.setLastName(p.getLastName());
                         dto.setDateOfBirth(p.getDateOfBirth());
                         dto.setGender(p.getGender());

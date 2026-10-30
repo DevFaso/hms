@@ -28,6 +28,10 @@ public class AppointmentRequestDTO {
     @NotNull(message = "{appointment.startTime.required}")
     private LocalTime startTime;
 
+    /**
+     * QA D1060: ignored on create, and on an edit that moves the visit: the
+     * slot rules set the length. The service writes the resolved end here.
+     */
     private LocalTime endTime;
 
 

@@ -126,6 +126,10 @@ class EncounterServiceImplTest {
     @Mock private com.example.hms.controller.support.ControllerAuthUtils authUtils;
     @Mock private com.example.hms.service.vitals.News2EscalationService news2EscalationService;
 
+    /** QA D1060: the slot rules, stubbed to their 30-minute fallback (SlotPolicyStubs). */
+    @org.mockito.Mock
+    private com.example.hms.service.scheduling.AppointmentSlotPolicy slotPolicy;
+
     @InjectMocks private EncounterServiceImpl service;
 
     private final Locale locale = Locale.ENGLISH;
@@ -150,6 +154,7 @@ class EncounterServiceImplTest {
 
     @BeforeEach
     void setUpCheckoutDefaults() {
+        com.example.hms.testsupport.SlotPolicyStubs.defaultLength(slotPolicy);
         signInAsDoctor();
         // The services ask the one PatientSubjectReadGuard; it is built here over
         // this class's authUtils and patientRepository so ownership is decided

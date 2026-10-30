@@ -67,6 +67,8 @@ public class SlotInventoryServiceImpl implements SlotInventoryService {
      * {@code SlotFhirMapper} already reads {@code heldUntil} with the same bean.
      */
     private final Clock clock;
+    /** QA D1073: the person who booked from a slot (the desk, or the waitlist accept) is its creator. */
+    private final com.example.hms.repository.UserRepository userRepository;
 
     @Override
     @Transactional
@@ -309,6 +311,8 @@ public class SlotInventoryServiceImpl implements SlotInventoryService {
             .endTime(slot.getEndAt().toLocalTime())
             .status(AppointmentStatus.SCHEDULED)
             .reason(reason == null || reason.isBlank() ? defaultReason(slot) : reason)
+            // QA D1073: a slot or waitlist booking names who made it, as a desk booking does.
+            .createdBy(currentUserId != null ? userRepository.findById(currentUserId).orElse(null) : null)
             .build());
 
         clearHold(slot);

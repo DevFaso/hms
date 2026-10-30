@@ -444,11 +444,19 @@ public class PatientController {
         @RequestParam(required = false) String email,
         @RequestParam(required = false) String phone,
         @RequestParam(required = false) UUID hospitalId,
+        // QA D1061 / D1064: the form's name and date of birth, to tell a shared
+        // contact from the same person and to find that person by identity.
+        @RequestParam(required = false) String firstName,
+        @RequestParam(required = false) String lastName,
+        @RequestParam(required = false)
+        @org.springframework.format.annotation.DateTimeFormat(
+            iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate dateOfBirth,
         Authentication auth
     ) {
         authUtils.requireAuth(auth);
         UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, hospitalId, false);
-        return ResponseEntity.ok(patientService.findRegistrationMatches(email, phone, resolvedHospitalId));
+        return ResponseEntity.ok(patientService.findRegistrationMatches(email, phone, firstName, lastName,
+            dateOfBirth, resolvedHospitalId));
     }
 
     @WriteAudited(skip = true, reason = "a read under POST; the service records the access itself")

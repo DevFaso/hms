@@ -72,6 +72,7 @@ class PatientRecallServiceImplTest {
         patientId = UUID.randomUUID();
         patient = mock(Patient.class);
         lenient().when(patient.getId()).thenReturn(patientId);
+        lenient().when(patient.getFullName()).thenReturn("Awa Traore"); // QA D1036: the whole name
         lenient().when(patient.getFirstName()).thenReturn("Awa");
         lenient().when(patient.getLastName()).thenReturn("Traore");
         lenient().when(patient.isRegisteredInHospital(hospitalId)).thenReturn(true);

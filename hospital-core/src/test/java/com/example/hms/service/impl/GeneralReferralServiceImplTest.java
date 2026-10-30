@@ -77,6 +77,15 @@ class GeneralReferralServiceImplTest {
     @Mock private org.springframework.beans.factory.ObjectProvider<com.example.hms.service.AuditEventLogService> auditServiceProvider;
     @Mock private com.example.hms.service.AuditEventLogService auditEventLogService;
 
+    /** QA D1060: the slot rules, stubbed to their 30-minute fallback (SlotPolicyStubs). */
+    @org.mockito.Mock
+    private com.example.hms.service.scheduling.AppointmentSlotPolicy slotPolicy;
+
+    @org.junit.jupiter.api.BeforeEach
+    void stubTheSlotRules() {
+        com.example.hms.testsupport.SlotPolicyStubs.defaultLength(slotPolicy);
+    }
+
     @InjectMocks
     private GeneralReferralServiceImpl generalReferralService;
 

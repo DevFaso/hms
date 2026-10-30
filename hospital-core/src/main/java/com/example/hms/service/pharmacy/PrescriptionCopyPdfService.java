@@ -133,7 +133,7 @@ public class PrescriptionCopyPdfService {
                                         DateTimeFormatter date) throws IOException {
         Patient patient = rx.getPatient();
         pdf.field(label(locale, "pdf.rxcopy.patient"), patient == null ? null
-                : join(patient.getFirstName(), patient.getLastName()), 11f);
+                : patient.getFullName(), 11f);
         if (patient != null && patient.getDateOfBirth() != null) {
             pdf.field(label(locale, "pdf.rxcopy.birthDate"), date.format(patient.getDateOfBirth()), 11f);
         }

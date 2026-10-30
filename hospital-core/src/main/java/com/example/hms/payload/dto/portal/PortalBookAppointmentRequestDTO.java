@@ -44,7 +44,12 @@ public class PortalBookAppointmentRequestDTO {
             requiredMode = Schema.RequiredMode.REQUIRED)
     private LocalTime startTime;
 
-    @Schema(description = "Requested end time (defaults to startTime + 30 min if omitted)", example = "09:30")
+    /**
+     * QA D1060: IGNORED. The slot rules decide how long the visit lasts; kept
+     * only so an older app that still sends it is not refused.
+     */
+    @Schema(description = "Ignored: the clinic's slot rules set the visit length (QA D1060)", example = "09:30",
+            deprecated = true)
     private LocalTime endTime;
 
     @Size(max = 500)

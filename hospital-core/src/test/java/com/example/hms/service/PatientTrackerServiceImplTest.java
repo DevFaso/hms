@@ -67,6 +67,7 @@ class PatientTrackerServiceImplTest {
                                      Boolean preCheckedIn) {
         Patient patient = mock(Patient.class);
         lenient().when(patient.getId()).thenReturn(UUID.randomUUID());
+        lenient().when(patient.getFullName()).thenReturn((firstName + " " + lastName).trim()); // QA D1036: the whole name
         lenient().when(patient.getFirstName()).thenReturn(firstName);
         lenient().when(patient.getLastName()).thenReturn(lastName);
         lenient().when(patient.getMrnForHospital(any(UUID.class))).thenReturn("MRN-" + firstName);

@@ -367,6 +367,7 @@ public class ObgynReferralServiceImpl implements ObgynReferralService {
         snapshot.put("id", patient.getId());
         snapshot.put("mrn", hospital != null ? patient.getMrnForHospital(hospital.getId()) : null);
         snapshot.put("firstName", patient.getFirstName());
+        snapshot.put("middleName", patient.getMiddleName());
         snapshot.put("lastName", patient.getLastName());
         snapshot.put("dateOfBirth", patient.getDateOfBirth());
         snapshot.put("phone", patient.getPhoneNumberPrimary());

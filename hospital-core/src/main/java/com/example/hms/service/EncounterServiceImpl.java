@@ -294,6 +294,8 @@ public class EncounterServiceImpl implements EncounterService {
      */
     private final PatientSubjectReadGuard subjectReadGuard;
     private final UserRepository userRepository;
+    /** QA D1060 / D1063: the follow-up placeholder takes the slot length and skips a slot held for an offer. */
+    private final com.example.hms.service.scheduling.AppointmentSlotPolicy slotPolicy;
     private final DischargeSummaryRepository dischargeSummaryRepository;
     private final NotificationService notificationService;
     private final EmailService emailService;
@@ -1955,8 +1957,7 @@ public class EncounterServiceImpl implements EncounterService {
             .patientId(entity.getEncounter() != null && entity.getEncounter().getPatient() != null
                 ? entity.getEncounter().getPatient().getId() : null)
             .patientFullName(entity.getEncounter() != null && entity.getEncounter().getPatient() != null
-                ? joinName(entity.getEncounter().getPatient().getFirstName(),
-                entity.getEncounter().getPatient().getLastName())
+                ? entity.getEncounter().getPatient().getFullName()
                 : null)
             .patientPhoneNumber(entity.getEncounter() != null && entity.getEncounter().getPatient() != null
                 ? entity.getEncounter().getPatient().getPhoneNumberPrimary() : null)
@@ -2651,10 +2652,11 @@ public class EncounterServiceImpl implements EncounterService {
                     encounter.getId());
             return null;
         }
-        java.time.LocalTime start = freeFollowUpSlot(staff.getId(), date);
-        if (start == null) {
+        java.time.LocalTime[] slot = freeFollowUpSlot(staff.getId(), date);
+        if (slot == null) {
             return null;
         }
+        java.time.LocalTime start = slot[0];
         String reason = checkoutFollowUpReason(followUp);
         String notes = followUp.getNotes();
         Appointment saved = appointmentRepository.save(Appointment.builder()
@@ -2665,12 +2667,28 @@ public class EncounterServiceImpl implements EncounterService {
                 .department(department)
                 .appointmentDate(date)
                 .startTime(start)
-                .endTime(start.plusMinutes(FOLLOW_UP_SLOT_MINUTES))
+                .endTime(slot[1])
                 .status(com.example.hms.enums.AppointmentStatus.PENDING)
+                // QA D1073: the clinician who checked the patient out booked the follow-up.
+                .createdBy(followUpCreator())
                 .reason(reason.length() > 2048 ? reason.substring(0, 2048) : reason)
                 .notes(notes != null && notes.length() > 2048 ? notes.substring(0, 2048) : notes)
                 .build());
         return saved != null ? saved.getId() : null;
+    }
+
+    private boolean notHeld(UUID staffId, java.time.LocalDateTime start, java.time.LocalDateTime end) {
+        try {
+            slotPolicy.requireNoLiveHold(staffId, start, end);
+            return true;
+        } catch (BusinessException held) {
+            return false;
+        }
+    }
+
+    private User followUpCreator() {
+        UUID userId = roleValidator.getCurrentUserId();
+        return userId != null ? userRepository.findById(userId).orElse(null) : null;
     }
 
     private static final java.time.LocalTime FOLLOW_UP_PLACEHOLDER_START = java.time.LocalTime.of(8, 0);
@@ -2680,9 +2698,11 @@ public class EncounterServiceImpl implements EncounterService {
     /**
      * The first half-hour from 08:00 the clinician has nothing booked at, so
      * the placeholder never collides with uq_appt_staff_slot at flush (which
-     * would fail the whole checkout); null when the day is full.
+     * would fail the whole checkout), as {start, end}; null when the day is
+     * full. QA D1060: the end is the slot rules' (it was a flat 30 minutes);
+     * QA D1063: a slot held for a waitlist offer is skipped.
      */
-    private java.time.LocalTime freeFollowUpSlot(UUID staffId, java.time.LocalDate date) {
+    private java.time.LocalTime[] freeFollowUpSlot(UUID staffId, java.time.LocalDate date) {
         // QA D937 class (branch C1): the same overlap rule as every booking
         // path. A cancelled or missed booking frees its time, and a held one
         // blocks any half-hour it overlaps, not only one starting at its minute.
@@ -2691,9 +2711,10 @@ public class EncounterServiceImpl implements EncounterService {
         for (java.time.LocalTime t = FOLLOW_UP_PLACEHOLDER_START; !t.isAfter(FOLLOW_UP_PLACEHOLDER_LAST);
                 t = t.plusMinutes(FOLLOW_UP_SLOT_MINUTES)) {
             java.time.LocalDateTime start = java.time.LocalDateTime.of(date, t);
-            if (!AppointmentSlotRules.overlapsHeldSlot(sameDay, null, start,
-                    start.plusMinutes(FOLLOW_UP_SLOT_MINUTES))) {
-                return t;
+            java.time.LocalTime endTime = slotPolicy.endFor(staffId, date, t);
+            java.time.LocalDateTime end = java.time.LocalDateTime.of(date, endTime);
+            if (!AppointmentSlotRules.overlapsHeldSlot(sameDay, null, start, end) && notHeld(staffId, start, end)) {
+                return new java.time.LocalTime[] {t, endTime};
             }
         }
         return null;
@@ -2941,7 +2962,7 @@ public class EncounterServiceImpl implements EncounterService {
 
     /** The after-visit summary e-mail body, in the patient's language, every interpolated name escaped. */
     private String visitSummaryEmailBody(Encounter encounter, Patient patient, Locale patientLocale) {
-        String patientName = joinName(patient.getFirstName(), patient.getLastName());
+        String patientName = java.util.Objects.toString(patient.getFullName(), "");
         String providerName = encounter.getStaff() != null && encounter.getStaff().getName() != null
             ? encounter.getStaff().getName()
             : messageSource.getMessage("encounter.visitSummary.email.careTeamFallback", null, patientLocale);

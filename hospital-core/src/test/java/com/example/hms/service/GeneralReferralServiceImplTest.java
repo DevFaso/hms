@@ -59,6 +59,10 @@ class GeneralReferralServiceImplTest {
     @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
     @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
 
+    /** QA D1060: the slot rules, stubbed to their 30-minute fallback (SlotPolicyStubs). */
+    @org.mockito.Mock
+    private com.example.hms.service.scheduling.AppointmentSlotPolicy slotPolicy;
+
     @InjectMocks
     private GeneralReferralServiceImpl service;
 
@@ -77,6 +81,7 @@ class GeneralReferralServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        com.example.hms.testsupport.SlotPolicyStubs.defaultLength(slotPolicy);
         org.mockito.Mockito.lenient().when(registrationRepository.existsByPatientIdAndHospitalId(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())).thenReturn(true);
         org.mockito.Mockito.lenient().when(roleValidator.isDoctor(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())).thenReturn(true);
         patient = new Patient();

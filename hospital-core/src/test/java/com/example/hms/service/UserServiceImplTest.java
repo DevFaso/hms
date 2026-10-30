@@ -588,6 +588,9 @@ class UserServiceImplTest {
             hospital.setId(hospitalId);
             hospital.setName("Hospital P");
 
+            // QA D1061: the phone's holder is the same person (same name), so this is still a 409.
+            user.setFirstName("Awa");
+            user.setLastName("Ouedraogo");
             when(userRepository.findByPhoneNumber("+22670707070"))
                 .thenReturn(Optional.of(user));
             when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
@@ -702,6 +705,9 @@ class UserServiceImplTest {
         @DisplayName("QA D24: a staff record alone also marks the account as staff (phone match)")
         void patientPhoneOfAStaffRecordIsRefused() {
             UUID hospitalId = stubHospital("00000000-0000-0000-0000-000000000012");
+            // QA D1061: the same person (same name) as the staff account behind the phone.
+            user.setFirstName("Jane");
+            user.setLastName("Doe");
             when(userRepository.findByPhoneNumber("+22670000001")).thenReturn(Optional.of(user));
             when(staffRepository.existsByUserId(user.getId())).thenReturn(true);
 
@@ -750,6 +756,9 @@ class UserServiceImplTest {
             UUID hospitalId = stubHospital("00000000-0000-0000-0000-000000000015");
             user.setDeleted(true);
             user.setActive(false);
+            // QA D1061: the registrar's own earlier attempt names the same person.
+            user.setFirstName("Jane");
+            user.setLastName("Doe");
             when(userRepository.findByPhoneNumber("+22670000002")).thenReturn(Optional.of(user));
             when(patientRepository.existsByUserId(user.getId())).thenReturn(false);
             lenient().when(assignmentService.isRoleAlreadyAssigned(user.getId(), hospitalId, patientRole.getId()))
@@ -770,6 +779,8 @@ class UserServiceImplTest {
             UUID hospitalId = stubHospital("00000000-0000-0000-0000-000000000016");
             user.setDeleted(true);
             user.setActivatedBeforeDelete(true);
+            user.setFirstName("Jane");
+            user.setLastName("Doe");
             when(userRepository.findByPhoneNumber("+22670000003")).thenReturn(Optional.of(user));
             when(assignmentService.isRoleAlreadyAssigned(user.getId(), hospitalId, patientRole.getId()))
                 .thenReturn(true);
@@ -2757,6 +2768,56 @@ class UserServiceImplTest {
             assertThatThrownBy(() -> userService.createUserWithRolesAndHospital(req))
                 .isInstanceOf(com.example.hms.exception.BusinessException.class);
             verify(userRepository, never()).saveAndFlush(any());
+        }
+
+        @Test
+        @DisplayName("QA D1061: a child registered under a parent's phone is a new person with no login phone")
+        void aChildUnderAParentsPhoneIsANewPersonWithoutALoginPhone() {
+            stubCreation(patientRole);
+            User parent = new User();
+            parent.setId(UUID.randomUUID());
+            parent.setFirstName("Boukari");
+            parent.setLastName("Nikiéma");
+            parent.setPhoneNumber("+22676334455");
+            com.example.hms.model.Patient parentRecord = new com.example.hms.model.Patient();
+            parentRecord.setFirstName("Boukari");
+            parentRecord.setLastName("Nikiéma");
+            parentRecord.setDateOfBirth(java.time.LocalDate.of(1985, 3, 2));
+            lenient().when(userRepository.findByPhoneNumber("+22676334455")).thenReturn(Optional.of(parent));
+            lenient().when(patientRepository.findByUserId(parent.getId())).thenReturn(Optional.of(parentRecord));
+            AdminSignupRequest req = request("ROLE_PATIENT", null, "76334455");
+            req.setFirstName("Abdoul Aziz");
+            req.setLastName("Nikiéma");
+            com.example.hms.payload.dto.PatientRequestDTO child = new com.example.hms.payload.dto.PatientRequestDTO();
+            child.setFirstName("Abdoul Aziz");
+            child.setLastName("Nikiéma");
+            child.setDateOfBirth(java.time.LocalDate.of(2021, 8, 19));
+            req.setPatient(child);
+
+            userService.createUserWithRolesAndHospital(req);
+
+            User saved = savedUser();
+            assertThat(saved.getId()).isNotEqualTo(parent.getId());
+            assertThat(saved.getPhoneNumber()).isNull();
+            verify(assignmentService, never()).isRoleAlreadyAssigned(eq(parent.getId()), any(), any());
+        }
+
+        @Test
+        @DisplayName("QA D1061: the same person behind the phone is still found, never duplicated")
+        void theSamePersonBehindThePhoneIsStillFound() {
+            stubCreation(patientRole);
+            User holder = new User();
+            holder.setId(UUID.randomUUID());
+            holder.setFirstName("Aïcha");
+            holder.setLastName("Ouédraogo");
+            lenient().when(userRepository.findByPhoneNumber("+22670202020")).thenReturn(Optional.of(holder));
+
+            // (The flow may stop downstream on the unstubbed hospital; what is pinned is the account.)
+            org.assertj.core.api.Assertions.catchThrowable(
+                () -> userService.createUserWithRolesAndHospital(request("ROLE_PATIENT", null, "70202020")));
+
+            // The existing account is used: no new account is created.
+            verify(userRepository, never()).saveAndFlush(any(User.class));
         }
 
         @Test

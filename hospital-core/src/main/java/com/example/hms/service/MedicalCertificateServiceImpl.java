@@ -219,7 +219,7 @@ public class MedicalCertificateServiceImpl implements MedicalCertificateService 
     }
 
     private List<String> bodyLines(Certificate c, Patient patient, Staff doctor, Locale locale) {
-        String patientName = joinName(patient.getFirstName(), patient.getLastName());
+        String patientName = java.util.Objects.toString(patient.getFullName(), "");
         String dob = patient.getDateOfBirth() != null ? date(patient.getDateOfBirth(), locale) : "—";
         List<String> lines = new ArrayList<>();
         lines.add(text(locale, "medicalCertificate.body.intro", doctorName(doctor), patientName, dob,
@@ -425,9 +425,5 @@ public class MedicalCertificateServiceImpl implements MedicalCertificateService 
     private static String doctorName(Staff doctor) {
         String name = doctor.getFullName();
         return name == null || name.isBlank() ? "—" : name;
-    }
-
-    private static String joinName(String first, String last) {
-        return ((first == null ? "" : first.trim()) + " " + (last == null ? "" : last.trim())).trim();
     }
 }
