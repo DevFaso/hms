@@ -384,7 +384,7 @@
             </button>
           }
         }
-        @if (canCancel && !isTerminal(o) && !detailAction()) {
+        @if (canCancelOrder(o) && !isTerminal(o) && !detailAction()) {
           <button type="button" class="btn-danger" (click)="openAction('cancel')">
             {{ 'PROCEDURES.CANCEL_ORDER' | translate }}
           </button>

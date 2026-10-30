@@ -190,7 +190,7 @@
                           <span class="material-symbols-outlined">edit</span>
                         </button>
                       }
-                      @if (canCancelOrder()) {
+                      @if (canCancelThisOrder(o)) {
                         <button
                           class="action-link delete"
                           (click)="confirmCancel(o)"
@@ -537,9 +537,14 @@
       (click)="closeStatusUpdate()"
       (keydown.escape)="closeStatusUpdate()"
     ></div>
-    <div class="modal">
+    <div
+      class="modal"
+      appModalDialog
+      aria-labelledby="imaging-dialog-1-title"
+      (escaped)="closeStatusUpdate()"
+    >
       <div class="modal-header">
-        <h2>{{ 'IMAGING.VOID_REPORT' | translate }}</h2>
+        <h2 id="imaging-dialog-1-title">{{ 'IMAGING.VOID_REPORT' | translate }}</h2>
         <button
           class="modal-close"
           (click)="closeStatusUpdate()"
@@ -588,9 +593,14 @@
       (click)="closeReportModal()"
       (keydown.escape)="closeReportModal()"
     ></div>
-    <div class="modal modal-wide">
+    <div
+      class="modal modal-wide"
+      appModalDialog
+      aria-labelledby="imaging-dialog-2-title"
+      (escaped)="closeReportModal()"
+    >
       <div class="modal-header">
-        <h2>
+        <h2 id="imaging-dialog-2-title">
           {{ (reportEditId() ? 'IMAGING.EDIT_REPORT' : 'IMAGING.AUTHOR_REPORT') | translate }}
         </h2>
         <button
@@ -811,7 +821,11 @@
                   </div>
                   @if (rep.impression) {
                     <p class="report-impression">
-                      <strong>{{ 'IMAGING.IMPRESSION' | translate }}:</strong> {{ rep.impression }}
+                      <strong
+                        >{{ 'IMAGING.IMPRESSION' | translate
+                        }}{{ 'COMMON.COLON' | translate }}</strong
+                      >
+                      {{ rep.impression }}
                     </p>
                   }
                   @if (rep.findings) {
@@ -834,9 +848,14 @@
       (click)="closeModal()"
       (keydown.escape)="closeModal()"
     ></div>
-    <div class="modal modal-lg">
+    <div
+      class="modal modal-lg"
+      appModalDialog
+      aria-labelledby="imaging-dialog-3-title"
+      (escaped)="closeModal()"
+    >
       <div class="modal-header">
-        <h2>
+        <h2 id="imaging-dialog-3-title">
           {{
             editing()
               ? ('IMAGING.EDIT_ORDER' | translate)
@@ -978,9 +997,14 @@
       (click)="cancelDeleteAction()"
       (keydown.escape)="cancelDeleteAction()"
     ></div>
-    <div class="modal">
+    <div
+      class="modal"
+      appModalDialog
+      aria-labelledby="imaging-dialog-4-title"
+      (escaped)="cancelDeleteAction()"
+    >
       <div class="modal-header">
-        <h2>{{ 'IMAGING.CANCEL_ORDER' | translate }}</h2>
+        <h2 id="imaging-dialog-4-title">{{ 'IMAGING.CANCEL_ORDER' | translate }}</h2>
         <button
           class="modal-close"
           (click)="cancelDeleteAction()"

@@ -37,6 +37,7 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { localDateString, nowLocalDatetime, toServerDateTime } from '../shared/date-utils';
 import { refusalReason } from '../shared/refusal-reason';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { AuthorshipService } from '../shared/authorship.service';
 
 type Tab = 'requests' | 'units';
 
@@ -66,6 +67,7 @@ type Tab = 'requests' | 'units';
 })
 export class TransfusionComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
+  private readonly authorship = inject(AuthorshipService);
   private readonly transfusion = inject(TransfusionService);
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
@@ -296,6 +298,16 @@ export class TransfusionComponent implements OnInit {
           this.requestSubmitting.set(false);
         },
       });
+  }
+
+  /** QA D1081: a transfusion request is cancelled by the clinician who asked for it. */
+  canCancelRequest(r: TransfusionRequestResponse): boolean {
+    return (
+      this.canRequest &&
+      r.status !== 'COMPLETED' &&
+      r.status !== 'CANCELLED' &&
+      this.authorship.isAuthor(r)
+    );
   }
 
   cancelRequest(request: TransfusionRequestResponse): void {

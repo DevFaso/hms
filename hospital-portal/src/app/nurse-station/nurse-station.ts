@@ -10,6 +10,7 @@ import {
   ElementRef,
   AfterViewChecked,
   ChangeDetectionStrategy,
+  DestroyRef,
 } from '@angular/core';
 import { firstImplausibleVital } from '../shared/vital-sign-limits';
 import { glucoseMmolToMgDl } from '../shared/glucose-units';
@@ -40,7 +41,8 @@ import {
   NurseCareNoteResponse,
 } from '../services/nurse-task.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
-import { PatientResponse } from '../services/patient.service';
+import { PatientResponse, PatientService } from '../services/patient.service';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ToastService } from '../core/toast.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
@@ -65,6 +67,8 @@ import { CdsCardListComponent } from '../shared/cds-card/cds-card.component';
 import { CdsCard } from '../shared/cds-card/cds-card.model';
 import { MedicationRoutePipe } from '../shared/pipes/medication-route.pipe';
 import { CloseUnseenDialogComponent } from '../reception/close-unseen-dialog/close-unseen-dialog.component';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { offersHeadCircumference } from '../shared/patient-measures';
 
 type FilterMode = 'me' | 'unit' | 'all';
 type SectionType =
@@ -92,6 +96,7 @@ export function localInputToUtcIso(value: string | undefined | null): string | u
   selector: 'app-nurse-station',
   standalone: true,
   imports: [
+    ModalDialogDirective,
     MedicationRoutePipe,
     CommonModule,
     FormsModule,
@@ -133,6 +138,15 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   medications = signal<NurseMedicationTask[]>([]);
   orders = signal<NurseOrderTask[]>([]);
   handoffs = signal<NurseHandoff[]>([]);
+
+  /**
+   * QA D1075: "Rapporté par … <time>" is when the handoff was reported. The
+   * row's updatedAt moves when it is completed, so it showed the completion
+   * time; it is only the fallback for a server that sends no createdAt.
+   */
+  handoffReportedAt(h: NurseHandoff): string {
+    return h.createdAt ?? h.updatedAt;
+  }
   /**
    * Completed handoffs, fetched on demand. The ?status= endpoint parameter
    * shipped in PR #462 with zero callers — the record of who handed off what,
@@ -155,6 +169,15 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
 
   /* Vitals capture dialog state */
   vitalsCaptureFor = signal<{ patientId: string; patientName: string } | null>(null);
+  /**
+   * QA D1077 (sibling): head circumference is a growth measurement. The ward
+   * vitals offered it for a 65-year-old; it is offered only on the growth
+   * tab's age rule (shared/patient-measures), read from the patient's DOB.
+   */
+  readonly vitalsPatientDob = signal<string | null>(null);
+  readonly showHeadCircumference = computed(() => offersHeadCircumference(this.vitalsPatientDob()));
+  private readonly patientLookup = inject(PatientService);
+  private readonly destroyRef = inject(DestroyRef);
   vitalsForm = signal<NurseVitalCaptureRequest>({});
   vitalsCapturing = signal(false);
 
@@ -605,6 +628,19 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
     });
     this.vitalsForm.set({});
     this.glucoseMmol.set('');
+    this.vitalsPatientDob.set(null);
+    this.patientLookup
+      .getById(patientId, this.hospitalId() ?? undefined)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (p) => {
+          if (this.vitalsCaptureFor()?.patientId === patientId) {
+            this.vitalsPatientDob.set(p?.dateOfBirth ?? null);
+          }
+        },
+        // Unknown DOB keeps the field (the server's limits still apply).
+        error: () => undefined,
+      });
   }
 
   /** QA D530: glucose is typed in mmol/L, like the lab reports it; sent as mg/dL. */

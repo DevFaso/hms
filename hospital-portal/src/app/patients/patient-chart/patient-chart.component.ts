@@ -1,5 +1,5 @@
 import { MaternityService } from '../../services/maternity.service';
-import { effectiveDueDate, gestationalAge } from '../../maternity/pregnancy-dates';
+import { ongoingPregnancy } from '../../maternity/pregnancy-dates';
 import {
   Component,
   Input,
@@ -47,6 +47,7 @@ import { RestrictedRowsComponent } from '../restricted-rows/restricted-rows.comp
 import { shortOrderCode } from '../../shared/lab/order-code';
 import { DialogFocusDirective } from '../../shared/a11y/dialog-focus.directive';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { LabCorrectionBadgeComponent } from '../../lab/shared/lab-correction-badge.component';
 
 type ChartSection = 'allergies' | 'problems' | 'updates' | 'timeline' | 'labs';
 
@@ -71,6 +72,7 @@ const UNSCOPED_KEY = 'UNSCOPED';
     EnumLabelPipe,
     RestrictedRowsComponent,
     DialogFocusDirective,
+    LabCorrectionBadgeComponent,
   ],
   templateUrl: './patient-chart.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -123,9 +125,9 @@ export class PatientChartComponent implements OnInit, OnChanges {
     this.maternity.currentForPatient(asked).subscribe({
       next: (history) => {
         if (asked !== this.patientId) return;
-        const dueDate = effectiveDueDate(history?.menstrualHistory);
-        const ga = gestationalAge(dueDate);
-        this.pregnancy.set(ga && dueDate ? { ...ga, dueDate } : null);
+        // QA D1067: a delivered woman has no pregnancy in progress; QA D1082:
+        // no history at all answers 204 (null), not a 404.
+        this.pregnancy.set(ongoingPregnancy(history));
       },
       error: () => this.pregnancy.set(null),
     });
@@ -1168,6 +1170,20 @@ export class PatientChartComponent implements OnInit, OnChanges {
         return 'logout';
       case 'DOCUMENT':
         return 'verified';
+      // QA D959 (round 18): transfusions, procedure orders, OB/GYN referrals,
+      // nursing notes, vaccinations and deliveries.
+      case 'TRANSFUSION':
+        return 'bloodtype';
+      case 'PROCEDURE_ORDER':
+        return 'healing';
+      case 'OBGYN_REFERRAL':
+        return 'pregnant_woman';
+      case 'NURSING_NOTE':
+        return 'clinical_notes';
+      case 'IMMUNIZATION':
+        return 'vaccines';
+      case 'DELIVERY':
+        return 'child_care';
       default:
         return 'event_note';
     }

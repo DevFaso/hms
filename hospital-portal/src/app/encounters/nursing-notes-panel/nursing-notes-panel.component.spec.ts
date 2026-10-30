@@ -44,6 +44,13 @@ describe('NursingNotesPanelComponent (QA D927)', () => {
     service = jasmine.createSpyObj('NursingNoteService', ['listRecent']);
   });
 
+  it('QA D1076 class: names the note template instead of printing its code', () => {
+    service.listRecent.and.returnValue(of([dar]));
+    const fixture = render('2026-10-27T08:00:00');
+    const label = (fixture.nativeElement as HTMLElement).querySelector('.nursing-notes__template');
+    expect(label?.textContent?.trim()).toBe('DAR note');
+  });
+
   it('shows the care note the nurse wrote, with its DAR parts and author', () => {
     service.listRecent.and.returnValue(of([older, dar]));
     const fixture = render('2026-10-27T08:00:00');

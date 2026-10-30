@@ -331,6 +331,8 @@ export interface PatientLabResult {
   /** NORMAL | ABNORMAL | ABNORMAL_LOW | ABNORMAL_HIGH | CRITICAL | PENDING | UNKNOWN (not interpreted, D31). */
   status?: string;
   released: boolean;
+  /** QA D1016 (round 18): a released value that replaces an earlier released one. */
+  corrected?: boolean;
   /**
    * No configured reference range is in this result's unit, so nothing
    * graded it: a NORMAL status then only means no abnormal flag was recorded.

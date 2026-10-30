@@ -45,7 +45,14 @@ import { PrenatalTabComponent } from './prenatal-tab';
 import { PostpartumTabComponent } from './postpartum-tab';
 import { LaborTabComponent } from './labor-tab';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
-import { dueDateFromLmp, effectiveDueDate, gestationalAge } from './pregnancy-dates';
+import {
+  dueDateFromLmp,
+  effectiveDueDate,
+  gestationalAge,
+  isDelivered,
+  ongoingPregnancy,
+} from './pregnancy-dates';
+import { AuthorshipService } from '../shared/authorship.service';
 
 /** The history form's fields the server names under `fieldErrors`. */
 const HISTORY_LABELS: Record<string, string> = {
@@ -121,6 +128,7 @@ type MaternityTab =
 })
 export class MaternityComponent implements OnInit {
   private readonly maternityService = inject(MaternityService);
+  private readonly authorship = inject(AuthorshipService);
   private readonly referralService = inject(ObgynReferralService);
   private readonly patientService = inject(PatientService);
   private readonly auth = inject(AuthService);
@@ -349,8 +357,14 @@ export class MaternityComponent implements OnInit {
     return effectiveDueDate(history.menstrualHistory);
   }
 
+  /** QA D1067: a delivered woman's history shows no running gestational age. */
   gestationalAgeOf(history: MaternalHistoryResponse): { weeks: number; days: number } | null {
-    return gestationalAge(this.dueDateOf(history));
+    return ongoingPregnancy(history);
+  }
+
+  /** QA D1067: the delivery that ended this history's pregnancy, if any. */
+  deliveredAtOf(history: MaternalHistoryResponse): string | null {
+    return isDelivered(history) ? (history.deliveredAt ?? null) : null;
   }
 
   patientName(patientId: string): string {
@@ -891,6 +905,16 @@ export class MaternityComponent implements OnInit {
     this.referralAction.set(action);
     this.referralActionText = '';
     this.referralActionUpdateCareTeam = false;
+  }
+
+  /** QA D1081: an OB/GYN referral is cancelled by the midwife who sent it. */
+  canCancelThisReferral(r: ObgynReferralResponse): boolean {
+    return (
+      this.canCancelReferral &&
+      r.status !== 'COMPLETED' &&
+      r.status !== 'CANCELLED' &&
+      this.authorship.isAuthor(r)
+    );
   }
 
   cancelReferralAction(): void {

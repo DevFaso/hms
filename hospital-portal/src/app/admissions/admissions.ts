@@ -38,6 +38,7 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { fromServerDateTime, toLocalInputValue, toServerDateTime } from '../shared/date-utils';
 import { BedService, BedResponse } from '../services/bed.service';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 interface OrderSetPickerCtx {
   hospitalId: string;
@@ -53,6 +54,7 @@ const CANCELLABLE_STATUSES = new Set<string>(['PENDING', 'ACTIVE', 'ON_LEAVE']);
   selector: 'app-admissions',
   standalone: true,
   imports: [
+    ModalDialogDirective,
     PersonNamePipe,
     PatientSublinePipe,
     CommonModule,

@@ -796,6 +796,20 @@ export class EnumLabelService implements OnDestroy {
       CONSULTATION: 'Consultation request',
       DISCHARGE_SUMMARY: 'Discharge summary',
       DOCUMENT: 'Issued document',
+      // QA D959 (round 18): every clinical event type has a chronology row.
+      TRANSFUSION: 'Transfusion request',
+      PROCEDURE_ORDER: 'Procedure order',
+      OBGYN_REFERRAL: 'OB/GYN referral',
+      NURSING_NOTE: 'Nursing note',
+      IMMUNIZATION: 'Immunization',
+      DELIVERY: 'Delivery',
+    },
+
+    /* ── Clinical / nursing note templates (QA D1076) ──────── */
+    noteTemplate: {
+      DAR: 'DAR note',
+      SOAP: 'SOAP note',
+      SOAPIE: 'SOAPIE note',
     },
 
     /* ── Immunization status ───────────────────────────────── */

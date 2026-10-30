@@ -280,7 +280,7 @@
                       <span class="material-symbols-outlined">thumb_down</span>
                     </button>
                   }
-                  @if (!['COMPLETED', 'CANCELLED', 'DECLINED'].includes(c.status)) {
+                  @if (canCancelConsultation(c)) {
                     <button
                       class="action-link delete"
                       (click)="confirmCancel(c)"

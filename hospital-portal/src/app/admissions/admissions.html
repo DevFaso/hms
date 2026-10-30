@@ -266,6 +266,7 @@
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="closeOrderSetPicker(); $event.stopPropagation()"
+      appModalDialog
     >
       <app-order-set-picker
         [hospitalId]="ctx.hospitalId"
@@ -295,6 +296,7 @@
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="closeBedAssign(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
         <h2 id="admissions-dialog-1-title">{{ 'ADMISSIONS.ASSIGN_BED' | translate }}</h2>
@@ -364,6 +366,7 @@
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="closeModal(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
         <h2 id="admissions-dialog-3-title">
@@ -611,6 +614,7 @@
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="cancelDelete(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
         <h2 id="admissions-dialog-4-title">{{ 'ADMISSIONS.DELETE_TITLE' | translate }}</h2>
@@ -657,6 +661,7 @@
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="cancelDischarge(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
         <h2 id="admissions-dialog-5-title">

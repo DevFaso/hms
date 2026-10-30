@@ -199,6 +199,30 @@ describe('BedBoardComponent', () => {
     expect(el.querySelector('app-hospital-scope-hint')).toBeNull();
   });
 
+  // QA D1004 (round 18): the Transférer and Précautions dialogs ignored Escape
+  // (the handler sat on the sibling backdrop) and left focus on the opener.
+  for (const which of ['transfer', 'precautions'] as const) {
+    it(`D1004: the ${which} dialog takes focus and closes on Escape`, () => {
+      const fixture = TestBed.createComponent(BedBoardComponent);
+      const cmp = fixture.componentInstance;
+      fixture.detectChanges();
+      if (which === 'transfer') cmp.openTransfer(occupant());
+      else cmp.openPrecautions(occupant());
+      fixture.detectChanges();
+      const el = fixture.nativeElement as HTMLElement;
+      const dialog = el.querySelector('[role="dialog"]') as HTMLElement;
+      expect(dialog).withContext('dialog rendered').not.toBeNull();
+      expect(dialog.getAttribute('aria-modal')).toBe('true');
+      expect(dialog.contains(document.activeElement))
+        .withContext('focus moved into the dialog')
+        .toBeTrue();
+      dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      fixture.detectChanges();
+      const open = which === 'transfer' ? cmp.showTransferModal() : cmp.showPrecautionModal();
+      expect(open).withContext('Escape closed the dialog').toBeFalse();
+    });
+  }
+
   it('loads the board on init', () => {
     component.ngOnInit();
     expect(boardSpy.getBoard).toHaveBeenCalled();

@@ -149,8 +149,9 @@ export class AdmissionService {
     return this.http.get<AdmissionResponse[]>(`${this.baseUrl}/patient/${patientId}`);
   }
 
-  getCurrentByPatient(patientId: string): Observable<AdmissionResponse> {
-    return this.http.get<AdmissionResponse>(`${this.baseUrl}/patient/${patientId}/current`);
+  /** QA D1082 class: null (204 No Content) when the patient has no open stay. */
+  getCurrentByPatient(patientId: string): Observable<AdmissionResponse | null> {
+    return this.http.get<AdmissionResponse | null>(`${this.baseUrl}/patient/${patientId}/current`);
   }
 
   getByHospital(

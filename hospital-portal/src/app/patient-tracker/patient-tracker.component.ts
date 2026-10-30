@@ -48,6 +48,7 @@ export interface TrackerColumn {
 
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { mayStartVisit } from '../core/encounter-start';
 
 @Component({
   selector: 'app-patient-tracker',
@@ -284,6 +285,26 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
   get canStartVisit(): boolean {
     // The role the user acts in, not every role held (D997 class).
     return this.roleContext.hasAnyActiveRole(actionRoles('encounterStart'));
+  }
+
+  /**
+   * QA D1085: per card, the server's rule (core/encounter-start). The column
+   * offered "Démarrer" to a midwife on every waiting visit, and the server
+   * then refused her the ones not booked with her.
+   */
+  canStartItem(item: PatientTrackerItem): boolean {
+    if (!this.canStartVisit) return false;
+    return mayStartVisit(
+      {
+        superAdmin: this.roleContext.isSuperAdmin(),
+        // rbac-inline-ok: mirrors EncounterController#startEncounter's midwifeOnly test (ROLE_DOCTOR held or not).
+        doctor: this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR']),
+        // rbac-inline-ok: mirrors EncounterController#startEncounter (a midwife leads her own visits).
+        midwife: this.roleContext.hasAnyActiveRole(['ROLE_MIDWIFE']),
+        userId: this.auth.getUserId(),
+      },
+      item.assignedProviderUserId,
+    );
   }
   startInProgress = signal(false);
 

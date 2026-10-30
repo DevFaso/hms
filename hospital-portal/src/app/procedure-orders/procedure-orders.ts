@@ -26,6 +26,7 @@ import {
   withServerDateTimes,
 } from '../shared/date-utils';
 import { refusalReason } from '../shared/refusal-reason';
+import { AuthorshipService } from '../shared/authorship.service';
 
 type Worklist = 'all' | 'pending-consent' | ProcedureOrderStatus;
 
@@ -52,6 +53,7 @@ type Worklist = 'all' | 'pending-consent' | ProcedureOrderStatus;
 })
 export class ProcedureOrdersComponent implements OnInit {
   private readonly orderService = inject(ProcedureOrderService);
+  private readonly authorship = inject(AuthorshipService);
   private readonly auth = inject(AuthService);
   private readonly roleContext = inject(RoleContextService);
   private readonly toast = inject(ToastService);
@@ -67,6 +69,14 @@ export class ProcedureOrdersComponent implements OnInit {
   ]);
   /** Cancel = DOCTOR/SUPER_ADMIN only (no NURSE). */
   readonly canCancel = this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR', 'ROLE_SUPER_ADMIN']);
+
+  /**
+   * QA D1081: the ordering clinician cancels; a physician also ends a nurse's
+   * or a midwife's order (ProcedureOrderServiceImpl.requireCancelAuthor).
+   */
+  canCancelOrder(o: ProcedureOrderResponse): boolean {
+    return this.canCancel && (this.authorship.isAuthor(o) || o.authorIsPhysician === false);
+  }
 
   worklist = signal<Worklist>('all');
   readonly worklists: Worklist[] = [

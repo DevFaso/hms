@@ -149,6 +149,12 @@
                 <td data-testid="history-ga-cell">
                   @if (gestationalAgeOf(h); as ga) {
                     {{ 'MATERNITY.GA_SHORT' | translate: { weeks: ga.weeks, days: ga.days } }}
+                  } @else if (deliveredAtOf(h); as delivered) {
+                    <!-- QA D1067: delivered, not a running term -->
+                    <span data-testid="history-delivered">{{
+                      'MATERNITY.DELIVERED_ON'
+                        | translate: { date: (delivered | serverTime | date: 'mediumDate') }
+                    }}</span>
                   } @else {
                     —
                   }
@@ -1281,7 +1287,7 @@
             {{ 'MATERNITY.COMPLETE' | translate }}
           </button>
         }
-        @if (canCancelReferral && r.status !== 'COMPLETED' && r.status !== 'CANCELLED') {
+        @if (canCancelThisReferral(r)) {
           <button class="btn-danger" (click)="openReferralAction('cancel')">
             {{ 'MATERNITY.CANCEL_REFERRAL' | translate }}
           </button>

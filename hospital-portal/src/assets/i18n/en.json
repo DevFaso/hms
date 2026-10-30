@@ -1085,7 +1085,8 @@
         "CANCELLED": "Cancelled",
         "POSTPONED": "Postponed"
       }
-    }
+    },
+    "NURSING_NOTE": "Nursing note"
   },
   "ORDER_SETS": {
     "ADD_ITEM": "Add item",
@@ -6854,7 +6855,13 @@
         "TREATMENT_PLAN": "Treatment plan",
         "CONSULTATION": "Consultation request",
         "DISCHARGE_SUMMARY": "Discharge summary",
-        "DOCUMENT": "Issued document"
+        "DOCUMENT": "Issued document",
+        "TRANSFUSION": "Transfusion request",
+        "PROCEDURE_ORDER": "Procedure order",
+        "OBGYN_REFERRAL": "OB/GYN referral",
+        "NURSING_NOTE": "Nursing note",
+        "IMMUNIZATION": "Immunization",
+        "DELIVERY": "Delivery"
       },
       "SPECIMEN_TYPE": {
         "BLOOD": "Blood",
@@ -6933,6 +6940,11 @@
         "MISSED": "Missed",
         "PENDING": "Pending",
         "REFUSED": "Refused"
+      },
+      "NOTE_TEMPLATE": {
+        "DAR": "DAR note",
+        "SOAP": "SOAP note",
+        "SOAPIE": "SOAPIE note"
       }
     },
     "DOCUMENTS": {
@@ -8876,7 +8888,8 @@
     "TEST_TYPE_PATHOLOGY": "Pathology",
     "TITLE": "Discharge",
     "WARNING_SIGNS": "Warning signs",
-    "WOUND_CARE": "Wound care"
+    "WOUND_CARE": "Wound care",
+    "NOT_ADMITTED": "This patient has no open hospital stay here: a discharge is requested only for an admitted patient."
   },
   "CHART": {
     "ALLERGIES_WITHHELD": "Allergies recorded at other hospitals are withheld: this patient has opted out of record sharing. This list may be incomplete.",
@@ -10188,7 +10201,8 @@
     "NO_VERSIONS": "No earlier versions",
     "PARA_ABOVE_GRAVIDA": "Parity (P) cannot be higher than gravidity (G): every birth counted in P is also a pregnancy counted in G.",
     "OUTCOMES_ABOVE_GRAVIDA": "Parity (P) plus abortions (A) cannot be higher than gravidity (G): each pregnancy ends in at most one of them.",
-    "RECORDED_FUTURE": "Recorded: the date cannot be in the future."
+    "RECORDED_FUTURE": "Recorded: the date cannot be in the future.",
+    "DELIVERED_ON": "Delivered on {{date}}"
   },
   "ULTRASOUND": {
     "WORKLIST_ALL": "All orders",

@@ -10,12 +10,14 @@ import {
 } from '../../services/encounter.service';
 import { ToastService } from '../../core/toast.service';
 import { of, throwError } from 'rxjs';
+import { PatientService, PatientResponse } from '../../services/patient.service';
 
 describe('TriageFormComponent', () => {
   let component: TriageFormComponent;
   let fixture: ComponentFixture<TriageFormComponent>;
   let mockEncounterService: jasmine.SpyObj<EncounterService>;
   let mockToastService: jasmine.SpyObj<ToastService>;
+  let mockPatientService: jasmine.SpyObj<PatientService>;
 
   const sampleEncounter: Partial<EncounterResponse> = {
     id: 'enc-1',
@@ -40,6 +42,8 @@ describe('TriageFormComponent', () => {
   beforeEach(async () => {
     mockEncounterService = jasmine.createSpyObj('EncounterService', ['submitTriage']);
     mockToastService = jasmine.createSpyObj('ToastService', ['success', 'error']);
+    mockPatientService = jasmine.createSpyObj('PatientService', ['getById']);
+    mockPatientService.getById.and.returnValue(throwError(() => new Error('not asked')));
 
     await TestBed.configureTestingModule({
       imports: [TriageFormComponent, TranslateModule.forRoot()],
@@ -48,6 +52,7 @@ describe('TriageFormComponent', () => {
         provideHttpClientTesting(),
         { provide: EncounterService, useValue: mockEncounterService },
         { provide: ToastService, useValue: mockToastService },
+        { provide: PatientService, useValue: mockPatientService },
       ],
     }).compileComponents();
 
@@ -55,6 +60,38 @@ describe('TriageFormComponent', () => {
     component = fixture.componentInstance;
     component.encounter = sampleEncounter as EncounterResponse;
     fixture.detectChanges();
+  });
+
+  // QA D1077: the triage form offered and stored a fundal height for a man.
+  it('D1077: offers no fundal height for a patient recorded as male, and sends none', () => {
+    mockPatientService.getById.and.returnValue(
+      of({ id: 'p-m', gender: 'MALE' } as PatientResponse),
+    );
+    mockEncounterService.submitTriage.and.returnValue(of(sampleResponse));
+    component.encounter = { ...sampleEncounter, patientId: 'p-m' } as EncounterResponse;
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('[data-testid="triage-fundal-height"]')).toBeNull();
+    component.fundalHeightCm.set(28);
+    component.submit();
+    const sent = mockEncounterService.submitTriage.calls.mostRecent().args[1];
+    expect(sent.fundalHeightCm).toBeUndefined();
+  });
+
+  it('D1077: keeps the fundal height for a woman and for a patient whose sex is not known', () => {
+    mockPatientService.getById.and.returnValue(
+      of({ id: 'p-f', gender: 'FEMALE' } as PatientResponse),
+    );
+    component.encounter = { ...sampleEncounter, patientId: 'p-f' } as EncounterResponse;
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('[data-testid="triage-fundal-height"]')).not.toBeNull();
+    component.encounter = {
+      ...sampleEncounter,
+      patientId: undefined,
+    } as unknown as EncounterResponse;
+    fixture.detectChanges();
+    expect(el.querySelector('[data-testid="triage-fundal-height"]')).not.toBeNull();
   });
 
   // QA D992: the visit is named by its code, never by a slice of its UUID.

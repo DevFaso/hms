@@ -33,6 +33,7 @@ import { AuthService } from '../auth/auth.service';
 import { roleSatisfies } from '../core/role-equivalence';
 import { finalize } from 'rxjs';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
 /**
@@ -53,7 +54,14 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 @Component({
   selector: 'app-bed-board',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+    ModalDialogDirective,
+  ],
   templateUrl: './bed-board.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './bed-board.scss',

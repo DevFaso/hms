@@ -31,6 +31,7 @@ import { PartographChartComponent } from './partograph-chart.component';
  */
 import { fromServerDateTime, localInputInstant, withServerDateTimes } from '../shared/date-utils';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 /**
  * QA D808: the bounds PartographEntryRequestDTO puts on each number. The
@@ -86,6 +87,7 @@ const EPISODE_LABELS: Record<string, string> = {
   selector: 'app-labor-tab',
   standalone: true,
   imports: [
+    ModalDialogDirective,
     ServerTimePipe,
     MeasurePipe,
     CommonModule,

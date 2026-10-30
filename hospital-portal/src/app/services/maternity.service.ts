@@ -156,6 +156,12 @@ export interface MaternalHistoryResponse {
   versionNumber?: number;
   updateReason?: string;
   menstrualHistory?: MenstrualHistory;
+  /**
+   * QA D1067: when a delivery was recorded at or after this pregnancy's LMP
+   * (null while the pregnancy is ongoing). Read it through
+   * maternity/pregnancy-dates.ts `ongoingPregnancy`, never the due date alone.
+   */
+  deliveredAt?: string | null;
   obstetricHistory?: ObstetricHistory;
   complicationsHistory?: ComplicationsHistory;
   medicalHistory?: MaternalMedicalHistory;
@@ -225,8 +231,15 @@ export class MaternityService {
     return this.http.get<MaternalHistoryResponse>(`${this.baseUrl}/${id}`);
   }
 
-  currentForPatient(patientId: string): Observable<MaternalHistoryResponse> {
-    return this.http.get<MaternalHistoryResponse>(`${this.baseUrl}/patient/${patientId}/current`);
+  /**
+   * QA D1082: the patient's current history, or null (204 No Content) when
+   * she has none readable here — the chart asked for it on every load of a
+   * woman with no history and logged a 404 each time.
+   */
+  currentForPatient(patientId: string): Observable<MaternalHistoryResponse | null> {
+    return this.http.get<MaternalHistoryResponse | null>(
+      `${this.baseUrl}/patient/${patientId}/current`,
+    );
   }
 
   versionsForPatient(patientId: string): Observable<MaternalHistoryResponse[]> {

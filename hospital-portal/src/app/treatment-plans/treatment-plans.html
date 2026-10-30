@@ -159,14 +159,17 @@
                   >
                     <span class="material-symbols-outlined">visibility</span>
                   </button>
-                  <button
-                    class="action-link"
-                    (click)="openEdit(p)"
-                    [title]="'TREATMENT.EDIT_PLAN' | translate"
-                    [attr.aria-label]="'TREATMENT.EDIT_PLAN' | translate"
-                  >
-                    <span class="material-symbols-outlined">edit</span>
-                  </button>
+                  <!-- QA D1081: a plan is rewritten by its author (the server refuses others). -->
+                  @if (canEditPlan(p)) {
+                    <button
+                      class="action-link"
+                      (click)="openEdit(p)"
+                      [title]="'TREATMENT.EDIT_PLAN' | translate"
+                      [attr.aria-label]="'TREATMENT.EDIT_PLAN' | translate"
+                    >
+                      <span class="material-symbols-outlined">edit</span>
+                    </button>
+                  }
                 </div>
               </td>
             </tr>

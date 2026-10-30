@@ -28,12 +28,16 @@
     @if (encounter) {
       <div class="intake-dialog__patient-info">
         <div class="info-row">
-          <span class="label">{{ 'INTAKE.PATIENT' | translate }}:</span>
+          <span class="label"
+            >{{ 'INTAKE.PATIENT' | translate }}{{ 'COMMON.COLON' | translate }}</span
+          >
           <span class="value">{{ encounter.patientFullName || encounter.patientName }}</span>
         </div>
         @if (encounter.code) {
           <div class="info-row">
-            <span class="label">{{ 'INTAKE.ENCOUNTER' | translate }}:</span>
+            <span class="label"
+              >{{ 'INTAKE.ENCOUNTER' | translate }}{{ 'COMMON.COLON' | translate }}</span
+            >
             <span class="value">{{ encounter.code }}</span>
           </div>
         }

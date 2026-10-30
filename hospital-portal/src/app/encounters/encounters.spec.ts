@@ -125,8 +125,10 @@ describe('EncountersComponent', () => {
       'hasAnyRole',
       'getHospitalId',
       'getUserId',
+      'getUserProfile',
     ]);
     authSpy.getUserId.and.returnValue(null);
+    authSpy.getUserProfile.and.returnValue(null);
     authSpy.hasAnyRole.and.returnValue(false);
     const scopeUrlSpy = jasmine.createSpyObj('HospitalScopeUrlService', ['applyUrlScopeSync']);
     activeRoles = ['ROLE_DOCTOR'];
@@ -313,6 +315,23 @@ describe('EncountersComponent', () => {
     component.ngOnInit();
     expect(encounterSpy.getById).toHaveBeenCalledWith('e9');
     expect(component.selectedEncounter()?.id).toBe('e9');
+  });
+
+  // QA D1085: Démarrer is offered per visit on the server's rule.
+  it('D1085: offers Start only to the clinician the visit is assigned to; a midwife never on an unassigned one', () => {
+    const auth = TestBed.inject(AuthService) as jasmine.SpyObj<AuthService>;
+    auth.getUserId.and.returnValue('u-midwife');
+    const held = new Set(['ROLE_MIDWIFE']);
+    auth.hasAnyRole.and.callFake((roles: string[]) => roles.some((r) => held.has(r)));
+    const waiting = { id: 'e9', status: 'WAITING_FOR_PHYSICIAN' } as EncounterResponse;
+    expect(component.canStartEncounter({ ...waiting, staffUserId: 'u-doctor' })).toBeFalse();
+    expect(component.canStartEncounter({ ...waiting, staffUserId: null })).toBeFalse();
+    expect(component.canStartEncounter({ ...waiting, staffUserId: 'u-midwife' })).toBeTrue();
+    held.clear();
+    held.add('ROLE_DOCTOR');
+    auth.getUserId.and.returnValue('u-doctor');
+    expect(component.canStartEncounter({ ...waiting, staffUserId: null })).toBeTrue();
+    expect(component.canStartEncounter({ ...waiting, staffUserId: 'u-other' })).toBeFalse();
   });
 
   it('lets a doctor start a waiting encounter (D96)', () => {

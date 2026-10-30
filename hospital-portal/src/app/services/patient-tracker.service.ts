@@ -13,6 +13,8 @@ export interface PatientTrackerItem {
   currentStatus: string;
   roomAssignment: string | null;
   assignedProvider: string | null;
+  /** QA D1085: the user of the assigned clinician (null when unassigned): who may start it. */
+  assignedProviderUserId?: string | null;
   departmentName: string | null;
   arrivalTimestamp: string | null;
   triageTimestamp: string | null;

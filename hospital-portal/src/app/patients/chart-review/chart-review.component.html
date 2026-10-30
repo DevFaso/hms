@@ -102,8 +102,25 @@
                         {{ img.modality ? (img.modality | enumLabel: 'imagingModality') : '—'
                         }}{{ img.studyType ? ' — ' + img.studyType : '' }}
                       </p>
+                    } @else if (event.section === 'NOTE' && notesById().get(event.id); as note) {
+                      <p class="chart-review__timeline-title" data-testid="timeline-note-title">
+                        @if (note.source === 'NURSING') {
+                          {{ 'CHART_REVIEW.NURSING_NOTE' | translate }} ·
+                        }
+                        {{
+                          note.template
+                            ? (note.template | enumLabel: 'noteTemplate')
+                            : ('CHART_REVIEW.SECTION.NOTE' | translate)
+                        }}{{ note.authorName ? ' — ' + note.authorName : '' }}
+                      </p>
                     } @else if (event.title) {
-                      <p class="chart-review__timeline-title">{{ event.title }}</p>
+                      <p class="chart-review__timeline-title">
+                        {{ event.title }}
+                        @if (event.section === 'RESULT') {
+                          <!-- QA D1016 (round 18): the chronology marks a correction too -->
+                          <app-lab-correction-badge [corrected]="event.corrected" />
+                        }
+                      </p>
                     }
                     @if (event.summary) {
                       <p class="chart-review__timeline-summary">{{ event.summary }}</p>
@@ -176,8 +193,18 @@
               @for (n of c.notes; track n.id) {
                 <li class="chart-review__card">
                   <header class="chart-review__card-head">
+                    <!-- QA D1076: a nurse's note says so; the template by its name, never its code -->
+                    @if (n.source === 'NURSING') {
+                      <span
+                        class="chart-review__pill chart-review__pill--neutral"
+                        data-testid="note-source-nursing"
+                        >{{ 'CHART_REVIEW.NURSING_NOTE' | translate }}</span
+                      >
+                    }
                     <span class="chart-review__pill chart-review__pill--info">{{
-                      n.template || ('CHART_REVIEW.SECTION.NOTE' | translate)
+                      n.template
+                        ? (n.template | enumLabel: 'noteTemplate')
+                        : ('CHART_REVIEW.SECTION.NOTE' | translate)
                     }}</span>
                     @if (n.documentedAt) {
                       <time class="chart-review__card-date">

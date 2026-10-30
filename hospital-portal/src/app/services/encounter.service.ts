@@ -110,6 +110,8 @@ export interface EncounterResponse {
   patientEmail: string;
   patientPhoneNumber: string;
   staffId: string;
+  /** QA D1085: the assigned clinician's user (null when unassigned); who may start the visit. */
+  staffUserId?: string | null;
   staffName: string;
   staffEmail: string;
   departmentId: string;

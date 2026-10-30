@@ -25,6 +25,8 @@ import { missingRequiredMessage } from '../shared/required-fields';
 import { labelledRefusalReason } from '../shared/refusal-reason';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { AuthService } from '../auth/auth.service';
+import { AuthorshipService } from '../shared/authorship.service';
 
 @Component({
   selector: 'app-treatment-plans',
@@ -54,6 +56,8 @@ export class TreatmentPlansComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly scopeUrl = inject(HospitalScopeUrlService);
   private readonly translate = inject(TranslateService);
+  private readonly authorship = inject(AuthorshipService);
+  private readonly auth = inject(AuthService);
 
   /** Cross-tenant signals — drive the chip + Hospital column toggle. */
   protected readonly isSuperAdmin = this.roleContext.isSuperAdmin;
@@ -220,6 +224,15 @@ export class TreatmentPlansComponent implements OnInit {
       if (h.length === 1) this.form.hospitalId = h[0].id;
     }
     this.showModal.set(true);
+  }
+
+  /**
+   * QA D1081: the plan's author rewrites it. The row names the author by
+   * user when the server sends it, else by staff record.
+   */
+  canEditPlan(p: TreatmentPlanResponse): boolean {
+    const myStaffId = this.auth.getUserProfile()?.staffId ?? null;
+    return this.authorship.isAuthor(p, !p.authorStaffId || p.authorStaffId === myStaffId);
   }
 
   openEdit(p: TreatmentPlanResponse): void {

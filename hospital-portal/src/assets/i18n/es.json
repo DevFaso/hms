@@ -1085,7 +1085,8 @@
         "CANCELLED": "Cancelado",
         "POSTPONED": "Pospuesto"
       }
-    }
+    },
+    "NURSING_NOTE": "Nota de enfermería"
   },
   "ORDER_SETS": {
     "ADD_ITEM": "Agregar elemento",
@@ -6854,7 +6855,13 @@
         "TREATMENT_PLAN": "Plan de tratamiento",
         "CONSULTATION": "Solicitud de interconsulta",
         "DISCHARGE_SUMMARY": "Resumen de alta",
-        "DOCUMENT": "Documento emitido"
+        "DOCUMENT": "Documento emitido",
+        "TRANSFUSION": "Solicitud de transfusión",
+        "PROCEDURE_ORDER": "Orden de procedimiento",
+        "OBGYN_REFERRAL": "Derivación a ginecoobstetricia",
+        "NURSING_NOTE": "Nota de enfermería",
+        "IMMUNIZATION": "Vacunación",
+        "DELIVERY": "Parto"
       },
       "SPECIMEN_TYPE": {
         "BLOOD": "Sangre",
@@ -6933,6 +6940,11 @@
         "MISSED": "Omitida",
         "PENDING": "Pendiente",
         "REFUSED": "Rechazada"
+      },
+      "NOTE_TEMPLATE": {
+        "DAR": "Nota DAR",
+        "SOAP": "Nota SOAP",
+        "SOAPIE": "Nota SOAPIE"
       }
     },
     "DOCUMENTS": {
@@ -8876,7 +8888,8 @@
     "TEST_TYPE_PATHOLOGY": "Anatomía patológica",
     "TITLE": "Alta",
     "WARNING_SIGNS": "Signos de alarma",
-    "WOUND_CARE": "Cuidado de heridas"
+    "WOUND_CARE": "Cuidado de heridas",
+    "NOT_ADMITTED": "Este paciente no tiene ninguna hospitalización en curso aquí: el alta solo se solicita para un paciente hospitalizado."
   },
   "CHART": {
     "ALLERGIES_WITHHELD": "Las alergias registradas en otros hospitales no se muestran: este paciente rechazó compartir su historial. Esta lista puede estar incompleta.",
@@ -10188,7 +10201,8 @@
     "NO_VERSIONS": "Sin versiones anteriores",
     "PARA_ABOVE_GRAVIDA": "La paridad (P) no puede ser mayor que la gravidez (G): cada parto contado en P es también un embarazo contado en G.",
     "OUTCOMES_ABOVE_GRAVIDA": "La paridad (P) más los abortos (A) no pueden ser mayores que la gravidez (G): cada embarazo termina como máximo en uno de ellos.",
-    "RECORDED_FUTURE": "Registrado: la fecha no puede estar en el futuro."
+    "RECORDED_FUTURE": "Registrado: la fecha no puede estar en el futuro.",
+    "DELIVERED_ON": "Dio a luz el {{date}}"
   },
   "ULTRASOUND": {
     "WORKLIST_ALL": "Todas las órdenes",

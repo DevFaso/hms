@@ -67,6 +67,11 @@ export interface ProcedureOrderRequest extends ProcedureOrderBase {
 }
 
 export interface ProcedureOrderResponse extends ProcedureOrderBase {
+  /** QA D1081: the user the server's author check compares with (shared/authorship.service). */
+  authorUserId?: string | null;
+  /** QA D1081: false when a nurse or a midwife placed it (a physician may end it). */
+  authorIsPhysician?: boolean | null;
+
   id: string;
   patientId: string;
   hospitalId: string;

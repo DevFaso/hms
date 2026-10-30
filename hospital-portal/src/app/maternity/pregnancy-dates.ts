@@ -50,3 +50,31 @@ export function gestationalAge(
   if (elapsed < 0 || elapsed > 44 * 7) return null;
   return { weeks: Math.floor(elapsed / 7), days: elapsed % 7 };
 }
+
+/**
+ * QA D1067: whether the pregnancy this history dates is over. The server sets
+ * `deliveredAt` when a delivery is recorded at or after the history's LMP
+ * (the same rule that refuses an antenatal calendar, prenatal.pregnancy.delivered).
+ */
+export function isDelivered(history: { deliveredAt?: string | null } | null | undefined): boolean {
+  return !!history?.deliveredAt;
+}
+
+/**
+ * QA D1067: the ongoing pregnancy a recorded history describes (gestational
+ * age today and due date), or null when there is none, it is over 44 weeks,
+ * or the woman has delivered. Every screen that shows a running gestational
+ * age for a stored history goes through here (a guard keeps it so): the
+ * D1005 chart line read the due date alone and showed a delivered woman at
+ * "39 SA".
+ */
+export function ongoingPregnancy(
+  history:
+    { deliveredAt?: string | null; menstrualHistory?: MenstrualHistory | null } | null | undefined,
+  today: Date = new Date(),
+): { weeks: number; days: number; dueDate: string } | null {
+  if (!history || isDelivered(history)) return null;
+  const dueDate = effectiveDueDate(history.menstrualHistory);
+  const ga = gestationalAge(dueDate, today);
+  return ga && dueDate ? { ...ga, dueDate } : null;
+}

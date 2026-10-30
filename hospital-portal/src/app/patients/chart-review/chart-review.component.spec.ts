@@ -423,6 +423,85 @@ describe('ChartReviewComponent', () => {
     });
   }
 
+  it('QA D1016 (round 18): the Chronologie marks a corrected result, and only that one', () => {
+    const chart = populatedChart();
+    chart.timeline = [
+      {
+        id: 'r-1',
+        section: 'RESULT',
+        occurredAt: '2026-10-30T12:58:00',
+        title: 'TDR paludisme Négatif',
+        corrected: true,
+      },
+      {
+        id: 'r-2',
+        section: 'RESULT',
+        occurredAt: '2026-10-30T12:00:00',
+        title: 'NFS 12 g/dL',
+        corrected: false,
+      },
+    ];
+    chartSpy.getChartReview.and.returnValue(of(chart));
+    setPatient('p-1');
+    const rows = Array.from(
+      fixture.nativeElement.querySelectorAll(
+        '.chart-review__timeline-item',
+      ) as NodeListOf<HTMLElement>,
+    );
+    expect(rows.length).toBe(2);
+    expect(rows[0].querySelector('[data-testid="lab-correction-badge"]')).not.toBeNull();
+    expect(rows[1].querySelector('[data-testid="lab-correction-badge"]')).toBeNull();
+  });
+
+  it('QA D1076: a nursing note is listed, says it is a nursing note, its template by name', () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', fr);
+    translate.use('fr');
+    const chart = populatedChart();
+    chart.notes = [
+      ...chart.notes,
+      {
+        id: 'nn-1',
+        template: 'DAR',
+        source: 'NURSING',
+        authorName: 'Inf. Kaboré',
+        documentedAt: '2026-10-30T09:00:00',
+        signedAt: '2026-10-30T09:00:00',
+        signed: true,
+        lateEntry: false,
+        preview: 'Patient calme.',
+      },
+    ];
+    chart.timeline = [
+      {
+        id: 'nn-1',
+        section: 'NOTE',
+        occurredAt: '2026-10-30T09:00:00',
+        title: 'DAR — Inf. Kaboré',
+        status: 'SIGNED',
+      },
+    ];
+    chartSpy.getChartReview.and.returnValue(of(chart));
+    setPatient('p-1');
+    const title = (
+      fixture.nativeElement.querySelector('[data-testid="timeline-note-title"]') as HTMLElement
+    ).textContent!.replace(/\s+/g, ' ');
+    expect(title).toContain('Note infirmière');
+    expect(title).toContain('Note DAR');
+    expect(title.trim().startsWith('DAR')).toBeFalse();
+    const notesTab = Array.from(
+      fixture.nativeElement.querySelectorAll('[role="tab"]') as NodeListOf<HTMLElement>,
+    ).find((t) => t.id.includes('notes'))!;
+    notesTab.click();
+    fixture.detectChanges();
+    const panel = fixture.nativeElement.querySelector(
+      '[data-testid="chart-review-panel-notes"]',
+    ) as HTMLElement;
+    expect(panel.querySelectorAll('[data-testid="note-source-nursing"]').length).toBe(1);
+    expect(panel.textContent).toContain('Note SOAP');
+    expect(panel.textContent).toContain('Note DAR');
+  });
+
   it('QA D777: shows the zone-less UTC server time in the reader zone, like every other screen', () => {
     const chart = populatedChart();
     chart.timeline = [

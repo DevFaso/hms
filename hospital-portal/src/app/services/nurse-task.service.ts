@@ -92,6 +92,11 @@ export interface NurseHandoff {
   patientName: string;
   direction: string;
   updatedAt: string;
+  /**
+   * QA D1075: when the handoff was reported. `updatedAt` moves on completion,
+   * so it is never the report time (absent only on a server that predates it).
+   */
+  createdAt?: string | null;
   /** SBAR situation line. */
   note: string | null;
   background: string | null;
