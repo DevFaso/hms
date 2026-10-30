@@ -1,3 +1,4 @@
+import { RoleContextService } from '../core/role-context.service';
 import {
   Component,
   OnInit,
@@ -70,6 +71,7 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
   private readonly trackerService = inject(PatientTrackerService);
   private readonly trackerWs = inject(PatientTrackerWsService);
   private readonly auth = inject(AuthService);
+  private readonly roleContext = inject(RoleContextService);
   /**
    * QA D954: a patient who leaves before anyone sees them is closed from the
    * tracker too (the reception's close-unseen dialog, reused), by the roles
@@ -280,7 +282,8 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
 
   /* ── Start — WAITING_FOR_PHYSICIAN → IN_PROGRESS (QA D1015) ─── */
   get canStartVisit(): boolean {
-    return this.auth.hasAnyRole(actionRoles('encounterStart'));
+    // The role the user acts in, not every role held (D997 class).
+    return this.roleContext.hasAnyActiveRole(actionRoles('encounterStart'));
   }
   startInProgress = signal(false);
 

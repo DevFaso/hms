@@ -273,10 +273,13 @@
             <!-- QA D922 (decision 2026-10-28): a controlled drug is given with a
                  second clinician of this hospital as witness. -->
             @if (needsWitness()) {
-              <app-witness-picker
-                inputId="emar-witness"
-                (witnessChange)="witnessUserId.set($event)"
-              />
+              <!-- A fresh picker per dose: the previous dose's witness is never shown. -->
+              @for (t of [task]; track t.id) {
+                <app-witness-picker
+                  inputId="emar-witness"
+                  (witnessChange)="witnessUserId.set($event)"
+                />
+              }
             }
 
             <section class="emar__actions">

@@ -298,6 +298,7 @@
       }
       <app-patient-chart
         [patientId]="patient()!.id"
+        [patientGender]="patient()!.gender"
         [refreshToken]="accessEpoch()"
         (openRestricted)="openRestrictedRows()"
       />

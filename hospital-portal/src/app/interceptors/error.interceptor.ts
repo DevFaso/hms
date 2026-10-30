@@ -454,8 +454,14 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
         const isPageHandledAction =
           req.method !== 'GET' &&
           PAGE_HANDLED_403_ACTION_PATTERNS.some((pattern) => pattern.test(req.url));
+        // Not for a background write (silent) nor the auth endpoints, whose
+        // pages show their own refusal inline.
         const businessRefusal =
-          !isPageHandledAction && req.method !== 'GET' && req.method !== 'HEAD'
+          !isPageHandledAction &&
+          !isSilent &&
+          !req.url.includes('/auth/') &&
+          req.method !== 'GET' &&
+          req.method !== 'HEAD'
             ? clientSafeRefusal(error)
             : null;
         if (isPageHandledAction) {

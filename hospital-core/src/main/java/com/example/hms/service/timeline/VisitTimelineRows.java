@@ -144,7 +144,8 @@ public class VisitTimelineRows {
         // discharge summary and the medical certificate were still missing.
         if (wanted(categoryFilters, CATEGORY_TREATMENT_PLAN)) {
             org.springframework.data.domain.Page<TreatmentPlan> plans = treatmentPlanRepository
-                .findAllByPatientIdAndHospitalId(patientId, actingHospitalId, PageRequest.of(0, DOCUMENT_ROWS_MAX));
+                .findAllByPatientIdAndHospitalId(patientId, actingHospitalId, PageRequest.of(0, DOCUMENT_ROWS_MAX,
+                    org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt")));
             if (plans != null) {
                 plans.getContent().forEach(plan -> rows.add(treatmentPlanRow(plan, actingHospitalId)));
             }
@@ -161,7 +162,8 @@ public class VisitTimelineRows {
         if (wanted(categoryFilters, CATEGORY_DOCUMENT)) {
             // A document this hospital issued (a certificate); never the patient's own uploads.
             org.springframework.data.domain.Page<PatientUploadedDocument> issued = documentRepository.findForStaffByType(
-                patientId, actingHospitalId, PatientDocumentType.MEDICAL_CERTIFICATE, PageRequest.of(0, DOCUMENT_ROWS_MAX));
+                patientId, actingHospitalId, PatientDocumentType.MEDICAL_CERTIFICATE, PageRequest.of(0, DOCUMENT_ROWS_MAX,
+                    org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt")));
             if (issued != null) {
                 issued.getContent().stream()
                     .filter(document -> document.getIssuingHospital() != null)

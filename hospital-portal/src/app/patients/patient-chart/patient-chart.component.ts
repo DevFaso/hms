@@ -84,6 +84,8 @@ export class PatientChartComponent implements OnInit, OnChanges {
    * sections re-read on their next visit.
    */
   @Input() refreshToken = 0;
+  /** QA D1005 review: the pregnancy line is asked for only when the patient may be pregnant. */
+  @Input() patientGender: string | null | undefined = undefined;
 
   /** E9 #64 — "Ouvrir avec motif" on a restricted line; the host opens the declaration. */
   readonly openRestricted = output<void>();
@@ -106,8 +108,10 @@ export class PatientChartComponent implements OnInit, OnChanges {
 
   private loadPregnancy(): void {
     this.pregnancy.set(null);
+    const gender = (this.patientGender ?? '').toUpperCase();
     if (
       !this.patientId ||
+      (gender !== 'FEMALE' && gender !== 'F') ||
       !this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'])
     ) {
       return;
