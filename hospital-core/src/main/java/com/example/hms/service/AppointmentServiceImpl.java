@@ -737,21 +737,24 @@ public class AppointmentServiceImpl implements AppointmentService {
     /**
      * QA D1018: the department an edit files the visit under. A department the
      * request names wins (same lookup as a booking, scoped to the hospital);
-     * otherwise a visit moved to another hospital, or to another clinician who
-     * has a department, is filed as a new booking would be; otherwise it stays
-     * where it was.
+     * a visit moved to another hospital is filed as a new booking would be; a
+     * visit moved to another clinician who has a department follows them;
+     * otherwise it stays where it was.
      */
     private Department resolveDepartmentForEdit(AppointmentRequestDTO request, Hospital hospital, Staff staff,
                                                 Appointment existing) {
         boolean named = request.getDepartmentId() != null || request.getDepartmentCode() != null
             || request.getDepartmentName() != null;
-        boolean staffChanged = existing.getStaff() == null || !staff.getId().equals(existing.getStaff().getId());
-        boolean hospitalChanged = existing.getHospital() == null
-            || !hospital.getId().equals(existing.getHospital().getId());
+        UUID oldStaffId = existing.getStaff() != null ? existing.getStaff().getId() : null;
+        UUID oldHospitalId = existing.getHospital() != null ? existing.getHospital().getId() : null;
+        boolean staffChanged = oldStaffId != null && !oldStaffId.equals(staff.getId());
+        boolean hospitalChanged = oldHospitalId != null && !oldHospitalId.equals(hospital.getId());
         // A visit moved to another hospital never keeps the old hospital's department.
-        if (named || hospitalChanged || existing.getDepartment() == null
-                || (staffChanged && staff.getDepartment() != null)) {
+        if (named || hospitalChanged) {
             return resolveDepartment(request, hospital, staff);
+        }
+        if (staffChanged && staff.getDepartment() != null) {
+            return staff.getDepartment();
         }
         return existing.getDepartment();
     }
@@ -833,11 +836,6 @@ public class AppointmentServiceImpl implements AppointmentService {
             ));
         }
 
-        // QA D1018 / D923: the department is part of the edit. The PUT used to
-        // answer 200 and keep the old one, so a visit moved to a paediatrician
-        // stayed filed under general medicine.
-        Department department = resolveDepartmentForEdit(request, hospital, staff, existing);
-
         // Capture old schedule before mapper overwrites fields
         LocalDate   oldDate  = existing.getAppointmentDate();
         LocalTime   oldStart = existing.getStartTime();
@@ -864,6 +862,11 @@ public class AppointmentServiceImpl implements AppointmentService {
             requireStartedFor(request.getStatus(), requestedStart, hospital);
         }
 
+        // QA D1018 / D923: the department is part of the edit. The PUT used to
+        // answer 200 and keep the old one, so a visit moved to a paediatrician
+        // stayed filed under general medicine. Resolved after the status
+        // checks, so their refusals come first as before.
+        Department department = resolveDepartmentForEdit(request, hospital, staff, existing);
         appointmentMapper.updateAppointmentFromDto(request, existing, patient, staff, hospital);
         existing.setDepartment(department);
         existing.setAssignment(assignment);
