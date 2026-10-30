@@ -737,7 +737,7 @@
 
 <!-- ═══ CREATE / EDIT PRESCRIPTION MODAL ═══ -->
 @if (showModal()) {
-  <div class="modal-backdrop" tabindex="-1" (click)="closeModal()">
+  <div class="modal-backdrop" tabindex="-1" (click)="closeModal()" (keydown.escape)="closeModal()">
     <!-- QA D1030: a working dialog - focus moves in, Tab stays inside, Escape
          closes (the inner stopPropagation used to swallow it) and focus goes
          back to the opener. -->
@@ -747,6 +747,7 @@
       aria-labelledby="rx-form-title"
       tabindex="-1"
       (click)="$event.stopPropagation()"
+      (keydown)="$event.stopPropagation()"
       (escaped)="closeModal()"
     >
       <div class="modal-header">
@@ -1121,13 +1122,19 @@
 
 <!-- ═══ DELETE CONFIRM ═══ -->
 @if (showDeleteConfirm()) {
-  <div class="modal-backdrop" tabindex="-1" (click)="cancelDelete()">
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="cancelDelete()"
+    (keydown.escape)="cancelDelete()"
+  >
     <div
       class="modal"
       appModalDialog
       aria-labelledby="rx-delete-title"
       tabindex="-1"
       (click)="$event.stopPropagation()"
+      (keydown)="$event.stopPropagation()"
       (escaped)="cancelDelete()"
     >
       <div class="modal-header">
@@ -1164,6 +1171,7 @@
     class="modal-backdrop"
     tabindex="-1"
     (click)="closeDispatchModal()"
+    (keydown.escape)="closeDispatchModal()"
     data-testid="rx-dispatch-modal"
   >
     <div
@@ -1172,6 +1180,7 @@
       aria-labelledby="rx-dispatch-title"
       tabindex="-1"
       (click)="$event.stopPropagation()"
+      (keydown)="$event.stopPropagation()"
       (escaped)="closeDispatchModal()"
     >
       <div class="modal-header">
@@ -1255,6 +1264,7 @@
     class="modal-backdrop"
     tabindex="-1"
     (click)="closeVerifyModal()"
+    (keydown.escape)="closeVerifyModal()"
     data-testid="rx-verify-modal"
   >
     <!-- QA D1030: focus moves in, Tab stays inside, Escape closes, focus goes back. -->
@@ -1264,6 +1274,7 @@
       aria-labelledby="rx-verify-title"
       tabindex="-1"
       (click)="$event.stopPropagation()"
+      (keydown)="$event.stopPropagation()"
       (escaped)="closeVerifyModal()"
     >
       <div class="modal-header">
