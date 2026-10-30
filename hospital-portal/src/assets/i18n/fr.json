@@ -801,7 +801,8 @@
       "INFO": "Info",
       "WARNING": "Avertissement",
       "CRITICAL": "Critique"
-    }
+    },
+    "HARD_STOP": "Cette dose dépasse un maximum absolu et ne peut pas être outrepassée. Modifiez la dose ou la fréquence."
   },
   "BPA": {
     "ACK_FAILED": "Impossible d'enregistrer la prise en compte de l'avis.",
@@ -3683,7 +3684,12 @@
     "EXPECTED_RESULT": "Résultat attendu (examen qualitatif)",
     "EXPECTED_RESULT_PLACEHOLDER": "ex. Négatif",
     "EXPECTED_RESULT_HINT": "Pour un examen dont la réponse est un mot (test rapide, culture), indiquez la réponse normale au lieu d'une plage numérique. Le patient la voit à côté du résultat.",
-    "EXPECTED_RESULT_SHORT": "Attendu : {{value}}"
+    "EXPECTED_RESULT_SHORT": "Attendu : {{value}}",
+    "AGE_UNIT": "Unité d’âge",
+    "AGE_UNIT_YEARS": "ans",
+    "AGE_UNIT_MONTHS": "mois",
+    "AGE_UNIT_DAYS": "jours",
+    "RANGE_SOURCE": "Source"
   },
   "LAB_RESULTS": {
     "ALL_AGES": "Tous âges",
@@ -3775,7 +3781,9 @@
     "SUPERSEDED": "Remplacé",
     "SUPERSEDED_HINT": "Une correction a remplacé ce résultat validé ; la correction est la valeur en vigueur.",
     "EXPECTED_RESULT": "Résultat attendu",
-    "CORRECTED_HINT_PATIENT": "Le laboratoire a corrigé ce résultat après l’avoir communiqué. C’est cette valeur qui compte ; votre équipe soignante en est informée."
+    "CORRECTED_HINT_PATIENT": "Le laboratoire a corrigé ce résultat après l’avoir communiqué. C’est cette valeur qui compte ; votre équipe soignante en est informée.",
+    "RANGE_APPLIED": "Intervalle appliqué à ce patient",
+    "RANGE_SOURCE": "Source"
   },
   "LAB_RELEASE": {
     "FLAG_ABNORMAL": "Anormal",
@@ -6287,7 +6295,10 @@
         "USER_RESTORE": "Utilisateur restauré",
         "LAB_ORDER_CANCELLED": "Demande d'examen annulée",
         "LAB_RESULT_SELF_RELEASED": "Résultat d'examen autovalidé",
-        "LAB_ORDER_ENTERED_IN_ERROR": "Demande d'examen saisie par erreur"
+        "LAB_ORDER_ENTERED_IN_ERROR": "Demande d'examen saisie par erreur",
+        "MEDICATION_DOSE_LIMITS_UPDATED": "Limites de dose pédiatriques modifiées",
+        "PRESCRIPTION_CDS_OVERRIDDEN": "Alerte d’aide à la décision outrepassée sur une ordonnance",
+        "PRESCRIPTION_SIGN_REAUTHENTICATION": "Réauthentification pour signer une ordonnance de stupéfiant"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Annulée",
@@ -7230,7 +7241,15 @@
       "INH": "Inhalée (INH)",
       "NEB": "Nébulisation (NEB)"
     },
-    "CONTROLLED_PICKED_HINT": "Stupéfiant : l'ordonnance doit être vérifiée par un pharmacien avant administration, et le patient ne peut pas en demander le renouvellement."
+    "CONTROLLED_PICKED_HINT": "Stupéfiant : l'ordonnance doit être vérifiée par un pharmacien avant administration, et le patient ne peut pas en demander le renouvellement.",
+    "SIGN_REAUTH": {
+      "TITLE": "Confirmez votre identité pour signer",
+      "INTRO": "{{medication}} est un stupéfiant. Son ordonnance n’est signée qu’après confirmation de votre identité, pour cette seule signature.",
+      "PASSWORD": "Votre mot de passe",
+      "CODE": "Code de votre application d’authentification (ou un code de secours)",
+      "SUBMIT": "Signer",
+      "FAILED": "Votre identité n’a pas pu être confirmée. L’ordonnance n’est pas signée."
+    }
   },
   "PROFILE": {
     "ACCOUNT_AGE": "Ancienneté du compte",
@@ -9451,14 +9470,40 @@
     "ATC_PLACEHOLDER": "ex. J01CA04 (amoxicilline)",
     "STRENGTH_PLACEHOLDER": "ex. 500",
     "CATEGORY_PLACEHOLDER": "ex. Antibiotique",
-    "PEDIATRIC_MAX_DOSE_MG_PER_KG": "Dose pédiatrique maximale (mg/kg par prise)",
-    "PEDIATRIC_MAX_DOSE_HINT": "Facultatif. À saisir uniquement depuis la référence de votre établissement ; le contrôle de prescription signale une dose d'enfant supérieure.",
     "CANCEL_DISPENSE": "Annuler la dispensation",
     "LEDGER_REASON_RETURN_FILL": "Retour, réf. lot {{lot}} délivré le {{date}}",
     "LEDGER_REASON_RETURN_FILL_DATE": "Retour de la délivrance du {{date}}",
     "DISPENSE_SPLIT_SUCCESS": "Délivré en {{count}} délivrances, le lot à la date la plus proche d’abord.",
     "FEFO_SPLIT_HINT": "Le lot à la date la plus proche ne couvre pas la quantité : il est vidé d’abord, puis le lot suivant.",
-    "FEFO_SPLIT_PART": "{{quantity}} du lot {{lot}} (pér. {{date}})"
+    "FEFO_SPLIT_PART": "{{quantity}} du lot {{lot}} (pér. {{date}})",
+    "DOSING": {
+      "ACTION": "Limites de dose pédiatriques",
+      "TITLE": "Limites de dose pédiatriques",
+      "INTRO": "Utilisées par le contrôle de dose des ordonnances pour les enfants. Au-delà d’un maximum habituel, le prescripteur doit donner un motif pour continuer ; au-delà du maximum journalier absolu, la dose est refusée. Laissez un champ vide quand aucune limite ne s’applique.",
+      "PER_DOSE_MG_KG": "Maximum habituel par prise (mg/kg)",
+      "PER_DAY_MG_KG": "Maximum habituel par jour (mg/kg/jour)",
+      "SINGLE_DOSE_MG": "Maximum par prise (mg)",
+      "DAILY_MAX_MG": "Maximum absolu par jour (mg)",
+      "DAILY_MAX_HINT": "Un blocage : un total journalier au-delà ne peut pas être prescrit, même avec un motif.",
+      "MANUAL_REVIEW_MONTHS": "Vérification manuelle avant (mois)",
+      "MANUAL_REVIEW_HINT": "En dessous de cet âge, aucun contrôle automatique en mg/kg n’est fait ; un pharmacien ou un médecin vérifie la dose. Vide : 3 mois.",
+      "BANDS": "Tranches de poids (au lieu des mg/kg)",
+      "BANDS_HINT": "Du poids minimum (inclus) au maximum (exclu) ; laissez vide le dernier maximum.",
+      "BAND_MIN_KG": "À partir de (kg)",
+      "BAND_MAX_KG": "Moins de (kg)",
+      "BAND_DOSE": "Dose",
+      "BAND_UNIT": "Unité",
+      "BAND_PER_DAY": "Prises par jour",
+      "ADD_BAND": "Ajouter une tranche de poids",
+      "SOURCE": "Source des valeurs",
+      "STATUS": "Statut",
+      "STATUS_PENDING": "Valeur par défaut, en attente de validation locale",
+      "STATUS_APPROVED": "Validées par cette pharmacie",
+      "BADGE_PENDING": "Limites pédiatriques : à valider",
+      "BADGE_APPROVED": "Limites pédiatriques validées",
+      "SAVED": "Limites de dose pédiatriques enregistrées",
+      "SAVE_FAILED": "Les limites de dose pédiatriques n’ont pas pu être enregistrées"
+    }
   },
   "LAB_QC": {
     "TITLE": "Tableau de bord du contrôle qualité",

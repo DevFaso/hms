@@ -305,6 +305,33 @@
                   (ngModelChange)="range.ageMax = $event"
                 />
               </div>
+              <div class="range-field">
+                <!-- Round 18: neonatal and infant bands are stated in days or months. -->
+                <label [for]="'ageUnit-' + i">{{ 'LAB_TEST_CONFIG.AGE_UNIT' | translate }}</label>
+                <select
+                  [id]="'ageUnit-' + i"
+                  [ngModel]="range.ageUnit || 'YEARS'"
+                  (ngModelChange)="range.ageUnit = $event"
+                >
+                  <option value="YEARS">{{ 'LAB_TEST_CONFIG.AGE_UNIT_YEARS' | translate }}</option>
+                  <option value="MONTHS">
+                    {{ 'LAB_TEST_CONFIG.AGE_UNIT_MONTHS' | translate }}
+                  </option>
+                  <option value="DAYS">{{ 'LAB_TEST_CONFIG.AGE_UNIT_DAYS' | translate }}</option>
+                </select>
+              </div>
+              <div class="range-field notes-field">
+                <label [for]="'source-' + i">{{
+                  'LAB_TEST_CONFIG.RANGE_SOURCE' | translate
+                }}</label>
+                <input
+                  type="text"
+                  maxlength="500"
+                  [id]="'source-' + i"
+                  [ngModel]="range.source"
+                  (ngModelChange)="range.source = $event"
+                />
+              </div>
               <div class="range-field notes-field">
                 <label [for]="'notes-' + i">{{ 'LAB_TEST_CONFIG.NOTES' | translate }}</label>
                 <input
