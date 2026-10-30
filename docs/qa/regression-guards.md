@@ -29,6 +29,16 @@ reverted (PR body of the guard PR records the runs).
 | `i18n/ResponseProseGuardTest` | An English sentence written straight into a response body: `new MessageResponse("…")`, `ResponseEntity….body("…")`, `Map.of("message", "…")` — as a literal or through a `static final String` constant declared in the file. The global handler never touches these, so they are English in every language. Per **site** (a file cannot swap one sentence for another), the complement of the per-file exception ratchet. | D940, D977, D934, D1000 class (25 reports) | 33 sentences at 43 sites in 7 controllers (each entry carries how many places write the sentence; a second copy of an allowed sentence fails; `Map.of` bodies are read whole, `ResponseEntity.ok("…")` too) |
 | `i18n/StoredTextProseGuardTest` | English literals composed into text the backend **stores** or returns as data: `.notes("Pain scale: " + …)`, `.append("[Medication Reconciliation] ")`, `--- Nursing Intake ---`, `.reason("Medication out of stock…")`, a `: "Walk-in"` fallback, the `"Lab result"` title fallback. Persisted, so read in English for good. Audit descriptions and log lines are exempt (house decision: the audit log is English). | D952, D989, D944, D1000, D958 (and the D935/D953 CDS-card and D941 seeded-description classes) | 48 sentences at 48 sites in 18 files — the scan reads every package that can write a row (services, mappers, controllers, HL7/FHIR, CDS rules, seeders), not only `service/`; FHIR `display` text is pinned as "English by convention", not as a defect |
 
+### Round 18 (`fix/r18-clinical-reference`)
+
+| Guard | Class it stops | QA defects | Allowlist today |
+|---|---|---|---|
+| `immunization/ImmunizationCvxOptionalGuardTest` | A payload that makes a vaccine/CVX code mandatory (CVX is a US code system; MenAfriVac and the malaria vaccine have none). Scans every class under `payload`; also pins the mapper (blank stored as null on create and edit) and the FHIR export (no empty coding). | D1003 | **0** |
+| portal `patients/medical-history-tab/pev-cvx.spec.ts` | A PEV vaccine offered without a decision: each is either mapped to a CVX code checked against the CDC table (description and status recorded) or listed unmapped with a reason. | D1003 | 2 unmapped (MENA, MALARIA), each with its reason |
+| `mapper/LabReferenceRangeFieldCopyGuardTest` | A reference-range copy that drops a field (sex/age band, age unit, critical limits, source): every field is set by reflection and must survive the definition DTO both ways and the result DTO. | r18 lab ranges | **0** |
+| `mapper/MedicationCatalogItemDtoCoverageTest` (extended) | A catalogue column no request can write; round 18: every paediatric limit the dose rule reads is on the pharmacy's dosing request. | D935 | 2 server-set columns (reviewer, time) |
+| `architecture/ControlledSigningReauthenticationGuardTest` | A path that writes `PrescriptionStatus.SIGNED` without the prescriber's re-authentication for a controlled drug; the signature must re-authenticate before SIGNED. | r18 section 6 (D922 class) | 2 non-signature sites, each with its reason |
+
 ### Already in place before round 16 (extend these, do not duplicate)
 
 | Guard | Class |
