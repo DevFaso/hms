@@ -1,6 +1,14 @@
+import { refuseFields } from '../shared/forms/invalid-fields';
 import { StaffService, StaffResponse, isClinicalProvider } from '../services/staff.service';
 import { DialogFocusDirective } from '../shared/a11y/dialog-focus.directive';
-import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+  ElementRef,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -74,6 +82,7 @@ export class AppointmentDetailComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly receptionService = inject(ReceptionService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   protected readonly permissions = inject(PermissionService);
   private readonly auth = inject(AuthService);
   private readonly staffService = inject(StaffService);
@@ -124,7 +133,6 @@ export class AppointmentDetailComponent implements OnInit {
   showReschedule = signal(false);
   rescheduleDate = '';
   rescheduleStart = '';
-  rescheduleEnd = '';
   rescheduleNotes = '';
 
   // Cancel confirm modal
@@ -231,7 +239,6 @@ export class AppointmentDetailComponent implements OnInit {
     if (!appt) return;
     this.rescheduleDate = appt.appointmentDate;
     this.rescheduleStart = appt.startTime;
-    this.rescheduleEnd = appt.endTime;
     this.rescheduleNotes = appt.notes ?? '';
     this.rescheduleStaffId = appt.staffId;
     this.rescheduleDepartmentId = appt.departmentId ?? '';
@@ -252,7 +259,17 @@ export class AppointmentDetailComponent implements OnInit {
 
   submitReschedule(): void {
     const appt = this.appointment();
-    if (!appt || !this.rescheduleDate || !this.rescheduleStart || !this.rescheduleEnd) {
+    if (!appt || !this.rescheduleDate || !this.rescheduleStart) {
+      // QA D1072: the missing field is marked and focused.
+      refuseFields(
+        this.host.nativeElement,
+        [
+          !this.rescheduleDate ? 'reschedDate' : null,
+          !this.rescheduleStart ? 'reschedStart' : null,
+        ].filter((id): id is string => id !== null),
+        ['reschedDate', 'reschedStart'],
+        this.translate.instant('COMMON.FIELD_REQUIRED'),
+      );
       this.toast.error(this.translate.instant('APPOINTMENTS.REQUIRED_FIELDS'));
       return;
     }
@@ -266,16 +283,11 @@ export class AppointmentDetailComponent implements OnInit {
       return;
     }
 
-    if (this.rescheduleEnd <= this.rescheduleStart) {
-      this.toast.error(this.translate.instant('APPOINTMENTS.END_BEFORE_START'));
-      return;
-    }
-
     this.saving.set(true);
     const req: AppointmentUpsertRequest = {
       appointmentDate: this.rescheduleDate,
       startTime: this.rescheduleStart,
-      endTime: this.rescheduleEnd,
+      // QA D1060: no end time; the server sets it from the slot rules.
       // SCHEDULED, not RESCHEDULED. A moved appointment is a LIVE appointment
       // at a new time — the patient is expected to turn up and be checked in.
       // Writing RESCHEDULED here stranded it: every consumer treats that

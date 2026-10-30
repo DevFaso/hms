@@ -360,3 +360,11 @@
   line-height: 1.6;
   text-align: center;
 }
+
+/* QA D1060: the note that the slot rules set the visit length. */
+.field-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}

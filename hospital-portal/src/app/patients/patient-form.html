@@ -68,19 +68,28 @@
         <small class="field-hint">{{ 'PATIENTS.EMAIL_OPTIONAL_HINT' | translate }}</small>
       </div>
       <div class="form-group">
-        <label for="phonePrimary">{{ 'PATIENTS.PHONE' | translate }} *</label>
+        <label for="phonePrimary"
+          >{{ 'PATIENTS.PHONE' | translate }}{{ phoneRequired ? ' *' : '' }}</label
+        >
         <input
           id="phonePrimary"
           type="tel"
           [(ngModel)]="form.phoneNumberPrimary"
           name="phoneNumberPrimary"
-          required
+          [required]="phoneRequired"
           (ngModelChange)="onIdentifierChange()"
           [attr.aria-invalid]="serverFieldErrors['phoneNumberPrimary'] ? true : null"
           [attr.aria-describedby]="
-            serverFieldErrors['phoneNumberPrimary'] ? 'phoneNumberPrimary-server-error' : null
+            serverFieldErrors['phoneNumberPrimary']
+              ? 'phoneNumberPrimary-server-error phonePrimary-guardian-hint'
+              : 'phonePrimary-guardian-hint'
           "
         />
+        <!-- QA D1061: a child is registered under the parent's or guardian's number. -->
+        <small class="field-hint" id="phonePrimary-guardian-hint">{{
+          (phoneRequired ? 'PATIENTS.PHONE_GUARDIAN_HINT' : 'PATIENTS.PHONE_FROM_GUARDIAN')
+            | translate
+        }}</small>
         @if (serverFieldErrors['phoneNumberPrimary']; as reason) {
           <small class="field-error" id="phoneNumberPrimary-server-error" role="alert">{{
             reason
@@ -182,12 +191,22 @@
       </div>
       <div class="form-group">
         <label for="gender">{{ 'PATIENTS.GENDER' | translate }} *</label>
-        <select id="gender" [(ngModel)]="form.gender" name="gender" required>
+        <select
+          id="gender"
+          [(ngModel)]="form.gender"
+          name="gender"
+          required
+          [attr.aria-invalid]="serverFieldErrors['gender'] ? true : null"
+          [attr.aria-describedby]="serverFieldErrors['gender'] ? 'gender-server-error' : null"
+        >
           <option value="">{{ 'PATIENTS.SELECT_GENDER' | translate }}</option>
           <option value="MALE">{{ 'PATIENTS.MALE' | translate }}</option>
           <option value="FEMALE">{{ 'PATIENTS.FEMALE' | translate }}</option>
           <option value="OTHER">{{ 'PATIENTS.OTHER' | translate }}</option>
         </select>
+        @if (serverFieldErrors['gender']; as reason) {
+          <small class="field-error" id="gender-server-error" role="alert">{{ reason }}</small>
+        }
       </div>
       <div class="form-group">
         <label for="bloodType">{{ 'PATIENTS.BLOOD_TYPE' | translate }}</label>
@@ -212,12 +231,26 @@
           </div>
           <input type="hidden" [(ngModel)]="form.hospitalId" name="hospitalId" />
         } @else {
-          <select id="hospital" [(ngModel)]="form.hospitalId" name="hospitalId" required>
+          <select
+            id="hospital"
+            [(ngModel)]="form.hospitalId"
+            name="hospitalId"
+            required
+            [attr.aria-invalid]="serverFieldErrors['hospitalId'] ? true : null"
+            [attr.aria-describedby]="
+              serverFieldErrors['hospitalId'] ? 'hospitalId-server-error' : null
+            "
+          >
             <option value="">{{ 'PATIENTS.SELECT_HOSPITAL' | translate }}</option>
             @for (h of hospitals; track h.id) {
               <option [value]="h.id">{{ h.name }}</option>
             }
           </select>
+          @if (serverFieldErrors['hospitalId']; as reason) {
+            <small class="field-error" id="hospitalId-server-error" role="alert">{{
+              reason
+            }}</small>
+          }
         }
       </div>
 
@@ -247,7 +280,12 @@
           name="country"
           required
           [placeholder]="'PATIENTS.COUNTRY_PLACEHOLDER' | translate"
+          [attr.aria-invalid]="serverFieldErrors['country'] ? true : null"
+          [attr.aria-describedby]="serverFieldErrors['country'] ? 'country-server-error' : null"
         />
+        @if (serverFieldErrors['country']; as reason) {
+          <small class="field-error" id="country-server-error" role="alert">{{ reason }}</small>
+        }
       </div>
       <div class="form-group">
         <label for="city">{{ 'PATIENTS.CITY' | translate }} *</label>
@@ -258,7 +296,12 @@
           name="city"
           required
           [placeholder]="'PATIENTS.CITY_PLACEHOLDER' | translate"
+          [attr.aria-invalid]="serverFieldErrors['city'] ? true : null"
+          [attr.aria-describedby]="serverFieldErrors['city'] ? 'city-server-error' : null"
         />
+        @if (serverFieldErrors['city']; as reason) {
+          <small class="field-error" id="city-server-error" role="alert">{{ reason }}</small>
+        }
       </div>
       <div class="form-group">
         <label for="state">{{ 'PATIENTS.STATE' | translate }}</label>
@@ -310,6 +353,7 @@
           type="tel"
           [(ngModel)]="form.emergencyContactPhone"
           name="emergencyContactPhone"
+          (ngModelChange)="onGuardianPhoneChange()"
         />
       </div>
       <div class="form-group">
@@ -349,7 +393,15 @@
     </div>
 
     <!-- Cross-hospital existing-patient match: offer LINK instead of a duplicate -->
-    @if (registrationMatches.length > 0 && !matchDismissed) {
+    <!-- QA D1061: a number another patient already gives as contact (a parent's,
+         a guardian's) is not that patient: said once, no decision forced. -->
+    @if (sharedContactMatches.length > 0) {
+      <div class="shared-contact-note" role="status" data-testid="shared-contact-note">
+        <span class="material-symbols-outlined" aria-hidden="true">family_restroom</span>
+        <p>{{ 'PATIENTS.SHARED_CONTACT_NOTE' | translate }}</p>
+      </div>
+    }
+    @if (identityMatches.length > 0 && !matchDismissed) {
       <div class="existing-match-card" role="status">
         <div class="existing-match-header">
           <span class="material-symbols-outlined" aria-hidden="true">person_search</span>
@@ -359,7 +411,7 @@
             <p>{{ matchDescriptionKey() | translate }}</p>
           </div>
         </div>
-        @for (m of registrationMatches; track m.patientId) {
+        @for (m of identityMatches; track m.patientId) {
           <div class="existing-match-row">
             <div class="existing-match-info">
               <span class="match-name">{{ m.fullName ?? '—' }}</span>
@@ -367,8 +419,14 @@
                 @if (m.birthYear) {
                   {{ 'PATIENTS.BORN' | translate }} {{ m.birthYear }} ·
                 }
-                {{ m.matchedOn === 'PHONE' ? (m.maskedPhone ?? '') : (m.maskedEmail ?? '') }}
-                · {{ 'PATIENTS.REGISTERED_AT' | translate }} {{ m.hospitalCount }}
+                @if (m.matchedOn === 'PHONE') {
+                  {{ m.maskedPhone ?? '' }} ·
+                } @else if (m.matchedOn === 'EMAIL') {
+                  {{ m.maskedEmail ?? '' }} ·
+                } @else {
+                  {{ 'PATIENTS.MATCHED_ON_IDENTITY' | translate }} ·
+                }
+                {{ 'PATIENTS.REGISTERED_AT' | translate }} {{ m.hospitalCount }}
                 {{
                   m.hospitalCount === 1
                     ? ('PATIENTS.HOSPITAL_ONE' | translate)

@@ -1184,6 +1184,19 @@ export class EnumLabelService implements OnDestroy {
     const known = this.lookupKnown(value, domain);
     if (known) return known;
 
+    // QA D1062: a comma-joined list of codes (a proxy grant's
+    // "VIEW_APPOINTMENTS,VIEW_LAB_RESULTS") is labelled code by code, so a
+    // combination nobody keyed whole still reads in the page's language.
+    if (value.includes(',')) {
+      const parts = value
+        .split(',')
+        .map((p) => p.trim())
+        .filter((p) => p !== '');
+      if (parts.length > 1 && parts.every((p) => EnumLabelService.CODE_LIKE.test(p))) {
+        return parts.map((p) => this.lookup(p, domain)).join(', ');
+      }
+    }
+
     // 3) Prettify — UPPER_SNAKE_CASE → Title Case. QA D836: only a code is
     // prettified. Free text someone typed ("Sang total (EDTA)", a lab sample
     // type) is shown as typed: title-casing it read "Sang total (edta)".

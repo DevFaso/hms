@@ -102,7 +102,8 @@ describe('AppointmentFormComponent — prefill from the prenatal calendar', () =
     expect(component.form.patientId).toBe('11111111-2222-3333-4444-555555555555');
     expect(component.form.appointmentDate).toBe(day);
     expect(component.form.startTime).toBe('09:30');
-    expect(component.form.endTime).toBe('10:00');
+    // QA D1060: no end time is computed or sent; the server sets it from the slot rules.
+    expect(component.form.endTime).toBeUndefined();
     expect(component.form.reason).toBe('Consultation prénatale (CPN) — 24 SA');
   });
 
@@ -255,5 +256,57 @@ describe('AppointmentFormComponent — prefill from the prenatal calendar', () =
     );
     component.submit();
     expect(component.form.recallId).toBe('11111111-2222-3333-4444-555555555555');
+  });
+
+  it('QA D1060: the calendar duration is not turned into an end time, and none is sent', () => {
+    const component = create({ date: inDays(5), time: '08:20', duration: '240' });
+    const appointments = TestBed.inject(AppointmentService) as jasmine.SpyObj<AppointmentService>;
+    // A refusal keeps the test on the page (no navigation); the payload is what matters.
+    appointments.create.and.returnValue(throwError(() => ({ status: 409, error: {} })));
+    component.form.patientId = 'p-1';
+    component.form.staffId = 's-1';
+
+    component.submit();
+
+    const payload = appointments.create.calls.mostRecent().args[0];
+    expect(payload.startTime).toBe('08:20');
+    expect('endTime' in payload).toBeFalse();
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('#end')).toBeNull();
+    expect(el.querySelector('[data-testid="appt-duration-note"]')).not.toBeNull();
+  });
+
+  it('QA D1072: a refused booking marks the missing fields and focuses the first', () => {
+    const component = create({});
+    document.body.appendChild(fixture.nativeElement);
+    try {
+      fixture.detectChanges();
+      component.form.appointmentDate = inDays(3);
+      component.submit();
+      const el = fixture.nativeElement as HTMLElement;
+      const start = el.querySelector<HTMLInputElement>('#start')!;
+      expect(start.getAttribute('aria-invalid')).toBe('true');
+      expect(el.querySelector('#start-invalid-msg')).not.toBeNull();
+      expect(el.querySelector('#apptPatientSearch')?.getAttribute('aria-invalid')).toBe('true');
+      expect(el.querySelector('#date')?.hasAttribute('aria-invalid')).toBeFalse();
+      expect(document.activeElement).toBe(start);
+    } finally {
+      fixture.nativeElement.remove();
+    }
+  });
+
+  it('QA D1036: the picked-patient chip shows the middle name', () => {
+    const component = create({});
+    component.selectedPatient.set({
+      id: 'p-1',
+      firstName: 'Pélagie',
+      middleName: 'Wendkouni',
+      lastName: 'Kiemdé',
+    } as PatientResponse);
+    fixture.detectChanges();
+    expect((fixture.nativeElement as HTMLElement).textContent).toContain(
+      'Pélagie Wendkouni Kiemdé',
+    );
   });
 });

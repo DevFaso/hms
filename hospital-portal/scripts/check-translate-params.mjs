@@ -23,12 +23,16 @@ import { scanTemplates, PORTAL_DIR } from './lib/template-gate.mjs';
 import { scanComponents } from './lib/component-sources.mjs';
 import { runGate, dedupe, isMain } from './lib/baseline.mjs';
 
-let english;
+let locales;
+/** The key's value in every locale, joined, so a placeholder any one of them names is checked. */
 function valueOf(key) {
-  english ??= flatten(
-    JSON.parse(readFileSync(resolve(PORTAL_DIR, 'src', 'assets', 'i18n', 'en.json'), 'utf8')),
+  locales ??= ['en', 'fr', 'es'].map((l) =>
+    flatten(
+      JSON.parse(readFileSync(resolve(PORTAL_DIR, 'src', 'assets', 'i18n', `${l}.json`), 'utf8')),
+    ),
   );
-  return english.get(key);
+  const values = locales.map((m) => m.get(key)).filter((v) => typeof v === 'string');
+  return values.length > 0 ? values.join('\n') : undefined;
 }
 
 export const gate = {

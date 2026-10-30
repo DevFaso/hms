@@ -1,3 +1,4 @@
+import { refuseFields } from '../../shared/forms/invalid-fields';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -7,6 +8,7 @@ import {
   Output,
   inject,
   signal,
+  ElementRef,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -25,6 +27,15 @@ import { localDateString } from '../../shared/date-utils';
  * sent (PATCH /patients/{id}); the server refuses a blank name, sex or phone,
  * and a number or e-mail another record holds.
  */
+/** QA D1072: each required field's element id in the dialog. */
+const DEMOGRAPHICS_FIELD_IDS: Readonly<Record<string, string>> = {
+  firstName: 'demoFirstName',
+  lastName: 'demoLastName',
+  dateOfBirth: 'demoDob',
+  gender: 'demoGender',
+  phoneNumberPrimary: 'demoPhone',
+};
+
 @Component({
   selector: 'app-patient-demographics-edit',
   standalone: true,
@@ -44,6 +55,7 @@ export class PatientDemographicsEditComponent implements OnInit {
   private readonly patientService = inject(PatientService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   readonly saving = signal(false);
   readonly error = signal<string | null>(null);
@@ -154,7 +166,15 @@ export class PatientDemographicsEditComponent implements OnInit {
       'gender',
       'phoneNumberPrimary',
     ];
-    if (required.some((k) => !(this.form[k] ?? '').trim())) {
+    const missing = required.filter((k) => !(this.form[k] ?? '').trim());
+    // QA D1072: every missing field is marked under itself and the first one focused.
+    refuseFields(
+      this.host.nativeElement,
+      missing.map((k) => DEMOGRAPHICS_FIELD_IDS[k]),
+      required.map((k) => DEMOGRAPHICS_FIELD_IDS[k]),
+      this.translate.instant('COMMON.FIELD_REQUIRED'),
+    );
+    if (missing.length > 0) {
       this.error.set(this.translate.instant('PATIENTS.EDIT_REQUIRED_MISSING'));
       return;
     }

@@ -1,6 +1,6 @@
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { DatePipe } from '@angular/common';
-import { Component, inject, OnInit, ChangeDetectionStrategy } from '@angular/core';
+import { Component, ElementRef, inject, OnInit, ChangeDetectionStrategy } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
@@ -8,6 +8,7 @@ import {
   PatientService,
   PatientCreateRequest,
   RegistrationMatch,
+  RegistrationMatchQuery,
 } from '../services/patient.service';
 import { UserService } from '../services/user.service';
 import { AuthService } from '../auth/auth.service';
@@ -25,6 +26,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { switchMap, catchError, debounceTime, distinctUntilChanged, map, Subject } from 'rxjs';
 import { of } from 'rxjs';
 import { labelledRefusalReason } from '../shared/refusal-reason';
+import { blankFields, focusFirstInvalid } from '../shared/forms/invalid-fields';
 
 @Component({
   selector: 'app-patient-form',
@@ -48,6 +50,7 @@ export class PatientFormComponent implements OnInit {
   private readonly receptionService = inject(ReceptionService);
   private readonly registrationService = inject(RegistrationService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   saving = false;
   hospitals: HospitalResponse[] = [];
@@ -69,18 +72,35 @@ export class PatientFormComponent implements OnInit {
    * matched records are: here, elsewhere, or both.
    */
   matchDescriptionKey(): string {
-    const here = this.registrationMatches.filter((m) => m.alreadyRegisteredHere).length;
+    const here = this.identityMatches.filter((m) => m.alreadyRegisteredHere).length;
     if (here === 0) return 'PATIENTS.EXISTING_MATCH_DESC';
-    return here === this.registrationMatches.length
+    return here === this.identityMatches.length
       ? 'PATIENTS.EXISTING_MATCH_DESC_HERE'
       : 'PATIENTS.EXISTING_MATCH_DESC_MIXED';
   }
+  /**
+   * QA D1061 / D1064: the matches that may be this same person (the same name
+   * and date of birth, or a request without them) — the card that asks to
+   * link or to dismiss.
+   */
+  get identityMatches(): RegistrationMatch[] {
+    return this.registrationMatches.filter((m) => m.sameIdentity !== false);
+  }
+
+  /**
+   * QA D1061: another patient who only shares the typed phone or e-mail (a
+   * child registered under a parent's number): said once, no decision forced.
+   */
+  get sharedContactMatches(): RegistrationMatch[] {
+    return this.registrationMatches.filter((m) => m.sameIdentity === false);
+  }
+
   /** Staff confirmed "not the same person" — allows a fresh registration. */
   matchDismissed = false;
   linking = false;
   /** QA D756: the link failure stays on the card, not only in a toast. */
   linkError: string | null = null;
-  private matchCheckSubject = new Subject<{ email: string; phone: string }>();
+  private matchCheckSubject = new Subject<MatchQuery>();
 
   // ── SMS phone verification (IKODDI OTP; hidden when not configured) ─────
   otpAvailable = false;
@@ -173,23 +193,23 @@ export class PatientFormComponent implements OnInit {
     this.matchCheckSubject
       .pipe(
         debounceTime(500),
-        distinctUntilChanged((a, b) => a.email === b.email && a.phone === b.phone),
-        switchMap(({ email, phone }) => {
+        distinctUntilChanged(
+          (a, b) =>
+            a.email === b.email &&
+            a.phone === b.phone &&
+            a.firstName === b.firstName &&
+            a.lastName === b.lastName &&
+            a.dateOfBirth === b.dateOfBirth,
+        ),
+        switchMap((q) => {
           // A new identifier pair re-arms the card: a dismissal only ever
           // applies to the values that were on screen when it was clicked.
           this.matchDismissed = false;
-          const phoneQuery = phone.length >= 6 ? phone : '';
-          const emailQuery = email.includes('@') ? email : '';
-          if (!phoneQuery && !emailQuery) {
+          const params = this.matchParams(q);
+          if (!params) {
             return of([] as RegistrationMatch[]);
           }
-          return this.patientService
-            .registrationMatch({
-              email: emailQuery || undefined,
-              phone: phoneQuery || undefined,
-              hospitalId: this.form.hospitalId || undefined,
-            })
-            .pipe(catchError(() => of(null))); // silent — don't block registration
+          return this.patientService.registrationMatch(params).pipe(catchError(() => of(null))); // silent — don't block registration
         }),
       )
       .subscribe((matches) => {
@@ -208,20 +228,74 @@ export class PatientFormComponent implements OnInit {
     return !this.roleContext.isSuperAdmin();
   }
 
+  /**
+   * QA D1061: the phone the registration will carry — the patient's own, or,
+   * left blank for a child, the parent's or guardian's.
+   */
+  get effectivePhone(): string {
+    return (
+      (this.form.phoneNumberPrimary ?? '').trim() || (this.form.emergencyContactPhone ?? '').trim()
+    );
+  }
+
+  /** QA D1061: the patient's own phone is required only when no guardian phone is given. */
+  get phoneRequired(): boolean {
+    return !(this.form.emergencyContactPhone ?? '').trim();
+  }
+
   /** Called when first name, last name, date of birth, or primary phone changes. */
   onNameOrDobChange(): void {
     const name = `${this.form.firstName} ${this.form.lastName}`.trim();
     const dob = this.form.dateOfBirth ?? '';
-    const phone = (this.form.phoneNumberPrimary ?? '').trim();
+    const phone = this.effectivePhone;
     this.duplicateCheckSubject.next({ name, dob, phone });
+    // QA D1064: the same name and date of birth at another hospital is a match
+    // even when the phone differs, so the identity check runs on these too.
+    this.matchCheckSubject.next(this.currentMatchQuery());
+  }
+
+  /** QA D1061: the guardian's phone stands in for a child's blank one. */
+  onGuardianPhoneChange(): void {
+    if (!(this.form.phoneNumberPrimary ?? '').trim()) {
+      this.onNameOrDobChange();
+    }
+  }
+
+  private currentMatchQuery(): MatchQuery {
+    return {
+      email: (this.form.email ?? '').trim().toLowerCase(),
+      phone: this.effectivePhone,
+      firstName: (this.form.firstName ?? '').trim(),
+      lastName: (this.form.lastName ?? '').trim(),
+      dateOfBirth: this.form.dateOfBirth ?? '',
+    };
+  }
+
+  /**
+   * The registration-match request for what is typed, or null when nothing is
+   * specific enough to look up: a phone of 6+ characters, an e-mail, or the
+   * full name with the date of birth (QA D1064).
+   */
+  private matchParams(q: MatchQuery): RegistrationMatchQuery | null {
+    const phone = q.phone.length >= 6 ? q.phone : '';
+    const email = q.email.includes('@') ? q.email : '';
+    const identity = !!(q.firstName && q.lastName && /^\d{4}-\d{2}-\d{2}$/.test(q.dateOfBirth));
+    if (!phone && !email && !identity) return null;
+    const params: RegistrationMatchQuery = {
+      email: email || undefined,
+      phone: phone || undefined,
+      hospitalId: this.form.hospitalId || undefined,
+    };
+    if (identity) {
+      params.firstName = q.firstName;
+      params.lastName = q.lastName;
+      params.dateOfBirth = q.dateOfBirth;
+    }
+    return params;
   }
 
   /** Called when email or primary phone changes — exact cross-hospital match. */
   onIdentifierChange(): void {
-    this.matchCheckSubject.next({
-      email: (this.form.email ?? '').trim().toLowerCase(),
-      phone: (this.form.phoneNumberPrimary ?? '').trim(),
-    });
     // Editing the PHONE invalidates any code sent to the previous number
     // (email edits leave a completed verification intact).
     const phone = (this.form.phoneNumberPrimary ?? '').trim();
@@ -327,27 +401,38 @@ export class PatientFormComponent implements OnInit {
   }
 
   onSubmit(): void {
+    // QA D1061: a child is registered under the parent's or guardian's number:
+    // with the patient's own phone left blank, the guardian's is used.
+    if (!(this.form.phoneNumberPrimary ?? '').trim() && !this.phoneRequired) {
+      this.form.phoneNumberPrimary = (this.form.emergencyContactPhone ?? '').trim();
+    }
     // Phone-first: email is OPTIONAL — most patients only have a phone number.
-    if (
-      !this.form.firstName ||
-      !this.form.lastName ||
-      !this.form.phoneNumberPrimary ||
-      !this.form.gender ||
-      !this.form.dateOfBirth ||
-      !this.form.country ||
-      !this.form.city
-    ) {
-      this.toast.error(this.translate.instant('PATIENTS.REQUIRED_FIELDS'));
+    // QA D1072: every missing field is marked under itself, and the first one
+    // is focused and scrolled to; the toast alone named none of them.
+    const missing = blankFields(
+      this.form as unknown as Record<string, unknown>,
+      PATIENT_FORM_REQUIRED.filter((f) => f !== 'hospitalId' || !this.hospitalLocked),
+    );
+    if (missing.length > 0 || !this.form.hospitalId) {
+      const required = this.translate.instant('COMMON.FIELD_REQUIRED');
+      this.serverFieldErrors = Object.fromEntries(missing.map((f) => [f, required]));
+      focusFirstInvalid(
+        this.host.nativeElement,
+        missing.map((f) => PATIENT_FORM_FIELD_IDS[f] ?? f),
+      );
+      this.toast.error(
+        this.translate.instant(
+          missing.length > 0 ? 'PATIENTS.REQUIRED_FIELDS' : 'PATIENTS.SELECT_HOSPITAL_FIRST',
+        ),
+      );
       return;
     }
-    if (!this.form.hospitalId) {
-      this.toast.error(this.translate.instant('PATIENTS.SELECT_HOSPITAL_FIRST'));
-      return;
-    }
+    this.serverFieldErrors = {};
 
-    // ── Existing patient matched by email/phone: force an explicit decision ──
-    // (link them, or dismiss as "different person" — e.g. a shared family phone)
-    if (this.registrationMatches.length > 0 && !this.matchDismissed) {
+    // ── Existing patient matched by email/phone/identity: force an explicit decision ──
+    // (link them, or dismiss as "different person"). QA D1061: a match that
+    // only shares the contact (sameIdentity === false) is not asked about.
+    if (this.identityMatches.length > 0 && !this.matchDismissed) {
       this.toast.error(this.translate.instant('PATIENTS.MATCH_DECIDE'));
       return;
     }
@@ -439,14 +524,10 @@ export class PatientFormComponent implements OnInit {
   }
 
   private refreshMatchesNow(): void {
-    const email = (this.form.email ?? '').trim();
-    const phone = (this.form.phoneNumberPrimary ?? '').trim();
+    const params = this.matchParams(this.currentMatchQuery());
+    if (!params) return;
     this.patientService
-      .registrationMatch({
-        email: email.includes('@') ? email : undefined,
-        phone: phone.length >= 6 ? phone : undefined,
-        hospitalId: this.form.hospitalId || undefined,
-      })
+      .registrationMatch(params)
       .pipe(catchError(() => of(null)))
       .subscribe((matches) => {
         if (matches && matches.length > 0) {
@@ -465,6 +546,34 @@ export class PatientFormComponent implements OnInit {
     return `${base}${suffix}`;
   }
 }
+
+/** The query the cross-hospital match runs on (QA D1061 / D1064: identity too). */
+interface MatchQuery {
+  email: string;
+  phone: string;
+  firstName: string;
+  lastName: string;
+  dateOfBirth: string;
+}
+
+/** QA D1072: the fields the browser-side check requires, in reading order. */
+export const PATIENT_FORM_REQUIRED = [
+  'firstName',
+  'lastName',
+  'phoneNumberPrimary',
+  'dateOfBirth',
+  'gender',
+  'hospitalId',
+  'country',
+  'city',
+] as const;
+
+/** QA D1072: a form field's element id, where it differs from the field name. */
+export const PATIENT_FORM_FIELD_IDS: Readonly<Record<string, string>> = {
+  phoneNumberPrimary: 'phonePrimary',
+  dateOfBirth: 'dob',
+  hospitalId: 'hospital',
+};
 
 /** QA D1037: the form's fields, as the server names them, to their label keys. */
 export const PATIENT_FORM_FIELD_LABELS: Readonly<Record<string, string>> = {

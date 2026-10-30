@@ -45,6 +45,12 @@
           <div class="booking-success">
             <span class="material-symbols-outlined">check_circle</span>
             <p>{{ 'PORTAL.APPOINTMENTS.BOOKING.SUCCESS' | translate }}</p>
+            @if (bookedAppointment(); as booked) {
+              <p data-testid="booking-booked-time">
+                {{ booked.date | serverTime | date: 'fullDate' }} · {{ booked.startTime | clockTime
+                }}{{ booked.endTime ? ' – ' + (booked.endTime | clockTime) : '' }}
+              </p>
+            }
           </div>
         } @else {
           <div class="booking-body">
@@ -133,6 +139,10 @@
                 <input type="time" id="apptTime" [(ngModel)]="selectedTime" />
               </div>
             </div>
+            <!-- QA D1060: the clinic's slot length sets how long a visit lasts. -->
+            <p class="booking-hint" data-testid="booking-duration-note">
+              {{ 'PORTAL.APPOINTMENTS.DURATION_NOTE' | translate }}
+            </p>
 
             <div class="booking-field">
               <label for="reason">{{ 'PORTAL.APPOINTMENTS.BOOKING.REASON' | translate }}</label>
@@ -553,14 +563,11 @@
               >
               <input type="time" id="reschedStart" [(ngModel)]="rescheduleStartTime" />
             </div>
-            <div class="booking-field">
-              <label for="reschedEnd"
-                >{{ 'PORTAL.APPOINTMENTS.RESCHEDULE.NEW_END' | translate }}
-                <span class="required">*</span></label
-              >
-              <input type="time" id="reschedEnd" [(ngModel)]="rescheduleEndTime" />
-            </div>
           </div>
+          <!-- QA D1060: the clinic's slot length sets how long a visit lasts. -->
+          <p class="booking-hint" data-testid="reschedule-duration-note">
+            {{ 'PORTAL.APPOINTMENTS.DURATION_NOTE' | translate }}
+          </p>
 
           <div class="booking-field">
             <label for="reschedReason">{{

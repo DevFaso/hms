@@ -1,4 +1,4 @@
-import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
+import { PersonNamePipe, personName } from '../shared/pipes/person-name.pipe';
 import { personNameMatches, phoneMatches, textMatches } from '../shared/person-search';
 import {
   Component,
@@ -171,7 +171,7 @@ export class PatientListComponent implements OnInit, OnDestroy {
     result = [...result].sort((a, b) => {
       switch (field) {
         case 'name':
-          return dir * `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`);
+          return dir * personName(a).localeCompare(personName(b));
         case 'mrn':
           return dir * (a.mrn ?? '').localeCompare(b.mrn ?? '');
         case 'gender':

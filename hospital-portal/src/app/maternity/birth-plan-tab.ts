@@ -1,3 +1,4 @@
+import { personName } from '../shared/pipes/person-name.pipe';
 import { ChangeDetectionStrategy, Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -221,7 +222,7 @@ export class BirthPlanTabComponent implements OnInit {
     this.planPatient.set(p);
     this.planForm.patientId = p?.id ?? '';
     if (p && !this.planForm.introduction.patientName) {
-      this.planForm.introduction.patientName = `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim();
+      this.planForm.introduction.patientName = personName(p);
     }
   }
 

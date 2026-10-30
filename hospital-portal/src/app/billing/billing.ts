@@ -31,6 +31,7 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { DialogA11yDirective } from '../shared/a11y/dialog-a11y.directive';
 import { saveResponse } from '../shared/download-file';
+import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
 
 type BillingTab = 'all' | 'outstanding' | 'paid' | 'overdue';
 
@@ -39,6 +40,7 @@ type BillingTab = 'all' | 'outstanding' | 'paid' | 'overdue';
   standalone: true,
   imports: [
     ServerTimePipe,
+    PersonNamePipe,
     CommonModule,
     FormsModule,
     TranslateModule,

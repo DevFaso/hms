@@ -716,7 +716,7 @@
             <label for="bill-patient">{{ 'APPOINTMENTS.PATIENT' | translate }} *</label>
             @if (patientLocked()) {
               <p id="bill-patient" class="field-value" data-testid="bill-patient-locked">
-                {{ formPatient()?.firstName }} {{ formPatient()?.lastName }}
+                {{ formPatient() | personName }}
               </p>
               <p class="field-hint">{{ 'BILLING.PATIENT_LOCKED_ISSUED' | translate }}</p>
             } @else {

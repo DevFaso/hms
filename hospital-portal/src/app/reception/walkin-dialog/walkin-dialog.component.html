@@ -67,7 +67,7 @@
       @if (selectedPatient()) {
         <div class="selected-badge">
           <span class="material-symbols-outlined">check_circle</span>
-          {{ selectedPatient()!.firstName }} {{ selectedPatient()!.lastName }}
+          {{ selectedPatient() | personName }}
           @if (selectedPatient() | patientSubline; as sub) {
             <span class="result-meta">{{ sub }}</span>
           }

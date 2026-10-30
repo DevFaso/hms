@@ -129,6 +129,20 @@ are excusing; `why` of existing pins is kept, new pins get `TODO`).
 | `scripts/lib/drag-keyboard.test.mjs` | An action done only by mouse drag (D1023, WCAG 2.1.1). | Every `cdkDrag` / `(dragstart)` element. |
 | `scripts/lib/person-name-display.test.mjs` | A template rendering `first last` without the middle name (D1036). | Staff-account screens only (the `pharmacy/dispensing.html` pin left when the combined branch piped its D1052 lines through `\| personName`). |
 
+## Guards added or widened by the round-18 front-desk branch (fix/r18-frontdesk-identity)
+
+| Guard | Class | Scope / allowlist |
+|---|---|---|
+| `architecture/PatientDisplayNameGuardTest` (rewritten, per method) | A patient name built from its first and last name, dropping the middle name, **whatever wraps or joins the parts** (`safe()`, `nullSafe()`, `nullToEmpty()`, `Objects.toString`, a join helper, `first = …; last = …;` locals). D1036 / D926 failed three rounds because the first version matched only `p.getFirstName() + " " + p.getLastName()`. Plus `#noProjectionConcatenatesANameWithoutItsMiddleName` for JPQL `SELECT new` projections. | Every method of `src/main` that reads both parts of a record carrying a middle name (the entity and every DTO with a `middleName` field, found by scanning). Allowlist: 4 name MATCHES (EMPI Jaro-Winkler, reception `nameContains`, `PatientMatchKeys.sameIdentity`) and the partner-pharmacy SMS initials, each with its reason. |
+| `scripts/lib/person-name-display.test.mjs` (widened) | As above, portal: any receiver (`selectedPatient()!.firstName`, `formPatient()?.firstName`), and `.ts` template literals, concatenations and `[first, last]` joins. | Staff/user-account screens and the duplicate-search query, each with its reason. |
+| `architecture/AppointmentSlotRulesGuardTest#everyMethodThatBooksAClinicianTakesTheSlotRules` | A booking path that takes the visit's end time from the caller, or books over a slot held for a waitlist offer (D1060, D1063). | Every method building or moving an `Appointment`: it must call `AppointmentSlotPolicy.endFor` (or use the slot row) and `requireNoLiveHold` (or the slot's `isOfferable`). Allowlist: mappers, FHIR, dev seeder. |
+| `architecture/AppointmentSlotRulesGuardTest#everyMethodThatCreatesAnAppointmentNamesItsCreator` | An appointment created with no creator (D1073: slot and waitlist bookings). | Every `Appointment.builder()` / `new Appointment()` outside mappers, FHIR and the dev seeder. |
+| `architecture/PdfCharCountTruncationGuardTest` | Printed text cut at a character count, mid-word (D1091: the invoice adjustment reason, D1036: the wristband name). | Every class drawing with PDFBox; `PdfText.wrap` / `fitSize` / `wrapAtMost` is the way. Allowlist: none. |
+| `architecture/PatientAddressCompositeGuardTest` | An address rebuilt from its city, region, postal code and country (pipe-joined), so the parts show twice (D1074). | All of `src/main`; `PatientAddressText` is the one writer and reader. Allowlist: none. |
+| `npm run guard:required-refusal` (new, part of `npm run guards`) | A form that refuses a submission with a generic "required fields" toast without marking, focusing and scrolling to the field (D1072, WCAG 3.3.1). | Every component method that shows a REQUIRED / MISSING / VALIDATION_ERROR message must call `refuseFields` / `focusFirstInvalid`. Baseline: the pre-existing sites outside the front desk, pinned with the defect id; shrinks only. |
+| `npm run guard:translate-params` (widened) | A translate call with no params for a value that has a placeholder, or a key whose placeholders differ between EN, FR and ES (D1035 class). | Baseline 0; `placeholderMismatches` 0. |
+| `i18n:raw-enums` (widened) | A comma-joined permission list or a relationship code rendered raw (D1062). | `permissions` added to the enum words; the `p.relationship` pin on family access removed. |
+
 ## Guards added or widened by round 17 (fix/r17-lab-pharmacy-billing)
 
 | Guard | Class | Scope / allowlist |

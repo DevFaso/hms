@@ -1,5 +1,13 @@
+import { refuseFields } from '../shared/forms/invalid-fields';
 import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
-import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+  ElementRef,
+} from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -32,6 +40,9 @@ interface DeptOption {
   name: string;
 }
 
+/** QA D1072: the fields the booking form may refuse, in reading order. */
+const APPOINTMENT_FORM_REQUIRED_IDS = ['date', 'start', 'apptPatientSearch', 'apptStaffSearch'];
+
 @Component({
   selector: 'app-appointment-form',
   standalone: true,
@@ -57,6 +68,7 @@ export class AppointmentFormComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   saving = signal(false);
 
@@ -119,7 +131,6 @@ export class AppointmentFormComponent implements OnInit {
   form: AppointmentUpsertRequest = {
     appointmentDate: '',
     startTime: '',
-    endTime: '',
     reason: '',
     notes: '',
   };
@@ -175,17 +186,9 @@ export class AppointmentFormComponent implements OnInit {
     const time = params.get('time');
     if (time && /^\d{2}:\d{2}$/.test(time)) {
       this.form.startTime = time;
-      this.onStartTimeChange();
-      // QA D1055: the recommended visit length (a 45-minute first antenatal
-      // visit), not the 30-minute default.
-      const duration = Number(params.get('duration'));
-      if (Number.isInteger(duration) && duration >= 5 && duration <= 240) {
-        const [h, m] = time.split(':').map(Number);
-        const end = h * 60 + m + duration;
-        if (end < 24 * 60) {
-          this.form.endTime = `${String(Math.floor(end / 60)).padStart(2, '0')}:${String(end % 60).padStart(2, '0')}`;
-        }
-      }
+      // QA D1060: the visit's length is the clinician's slot length, set by
+      // the server on every booking path; the calendar's suggested duration
+      // (QA D1055) is no longer sent as an end time.
     }
     // QA D1055: the provider (and so the department) the calendar was planned with.
     const staffId = params.get('staffId');
@@ -466,52 +469,26 @@ export class AppointmentFormComponent implements OnInit {
     return this.hospitals().find((h) => h.id === id)?.name ?? id;
   }
 
-  // ── Time validation ────────────────────────────────────
-  timeError = signal<string | null>(null);
-
-  onStartTimeChange(): void {
-    const start = this.form.startTime;
-    if (!start) return;
-    this.timeError.set(null);
-    const [h, m] = start.split(':').map(Number);
-    const totalMin = h * 60 + m + 30;
-    const endH = Math.floor(totalMin / 60) % 24;
-    const endM = totalMin % 60;
-    const autoEnd = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
-    if (!this.form.endTime || this.form.endTime <= start) {
-      this.form.endTime = autoEnd;
-    }
-  }
-
-  onEndTimeChange(): void {
-    if (this.form.startTime && this.form.endTime) {
-      if (this.form.endTime <= this.form.startTime) {
-        this.timeError.set(this.translate.instant('APPOINTMENTS.END_TIME_AFTER_START'));
-      } else {
-        this.timeError.set(null);
-      }
-    }
-  }
-
-  private validateTimes(): boolean {
-    if (!this.form.startTime || !this.form.endTime) return true;
-    if (this.form.endTime <= this.form.startTime) {
-      const msg = this.translate.instant('APPOINTMENTS.END_TIME_AFTER_START');
-      this.timeError.set(msg);
-      this.toast.error(msg);
-      return false;
-    }
-    this.timeError.set(null);
-    return true;
-  }
-
   // ── Submit ───────────────────────────────────────────────
   submit(): void {
+    // QA D1072: every missing field is marked and the first one focused, with
+    // the toast naming the first gap as before.
+    const missing = [
+      !this.form.appointmentDate ? 'date' : null,
+      !this.form.startTime ? 'start' : null,
+      !this.form.patientId ? 'apptPatientSearch' : null,
+      !this.form.staffId ? 'apptStaffSearch' : null,
+    ].filter((id): id is string => id !== null);
+    refuseFields(
+      this.host.nativeElement,
+      missing,
+      APPOINTMENT_FORM_REQUIRED_IDS,
+      this.translate.instant('COMMON.FIELD_REQUIRED'),
+    );
     if (!this.form.appointmentDate || !this.form.startTime) {
       this.toast.error(this.translate.instant('APPOINTMENTS.TOAST.DATE_TIME_REQUIRED'));
       return;
     }
-    if (this.form.endTime && !this.validateTimes()) return;
     if (!this.form.patientId) {
       this.toast.error(this.translate.instant('APPOINTMENTS.TOAST.PATIENT_REQUIRED'));
       return;
