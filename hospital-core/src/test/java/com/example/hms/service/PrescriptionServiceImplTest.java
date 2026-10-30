@@ -1590,6 +1590,34 @@ class PrescriptionServiceImplTest {
         verify(prescriberReauthentication, never()).requireForControlledSigning(any(), any(), any(), any());
     }
 
+    /** Review round 3: an unlinked order is re-checked against the strictest item its name names (the daily cap decides). */
+    @Test
+    void anUnlinkedOrderIsReCheckedAgainstTheItemWithTheLowestDailyCap() {
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(prescriberUserId);
+        rx.setMedicationName("Paracétamol");
+        com.example.hms.model.medication.MedicationCatalogItem uncapped =
+            com.example.hms.model.medication.MedicationCatalogItem.builder()
+                .nameFr("Paracétamol").genericName("Paracetamol").strength("250").strengthUnit("mg")
+                .pediatricMaxDoseMgPerKg(new java.math.BigDecimal("10")).build();
+        com.example.hms.model.medication.MedicationCatalogItem capped =
+            com.example.hms.model.medication.MedicationCatalogItem.builder()
+                .nameFr("Paracétamol").genericName("Paracetamol").strength("500").strengthUnit("mg")
+                .pediatricMaxDailyMg(new java.math.BigDecimal("4000")).build();
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(java.util.Optional.of(rx));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(rx.getHospital().getId());
+        when(roleValidator.getCurrentUserId()).thenReturn(prescriberUserId);
+        when(prescriptionRepository.save(any(Prescription.class))).thenAnswer(i -> i.getArgument(0));
+        when(prescriptionMapper.toResponseDTO(any(Prescription.class))).thenReturn(new PrescriptionResponseDTO());
+        when(catalogRepo.findByHospital_IdAndActiveTrue(eq(rx.getHospital().getId()), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(uncapped, capped)));
+
+        prescriptionService.signPrescription(rx.getId(), null, Locale.ENGLISH);
+
+        verify(cdsRuleEngine).evaluateProposedPrescription(any(), any(), any(), any(), any(), any(), eq(capped),
+            eq(rx.getId()));
+    }
+
     /** Round 18: an ordinary drug signs without any re-authentication. */
     @Test
     void anOrdinaryOrderSignsWithoutReAuthentication() {

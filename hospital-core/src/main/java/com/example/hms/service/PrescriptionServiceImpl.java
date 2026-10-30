@@ -486,10 +486,18 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     private void refuseHardStopAtSigning(Prescription prescription) {
         UUID hospitalId = prescription.getHospital() != null ? prescription.getHospital().getId() : null;
         com.example.hms.model.medication.MedicationCatalogItem item = null;
-        if (medicationCatalogItemRepository != null && hospitalId != null
-                && prescription.getMedicationCatalogItemId() != null) {
-            item = medicationCatalogItemRepository
-                .findByIdAndHospital_Id(prescription.getMedicationCatalogItemId(), hospitalId).orElse(null);
+        if (medicationCatalogItemRepository != null && hospitalId != null) {
+            if (prescription.getMedicationCatalogItemId() != null) {
+                item = medicationCatalogItemRepository
+                    .findByIdAndHospital_Id(prescription.getMedicationCatalogItemId(), hospitalId).orElse(null);
+            } else {
+                // Review round 3: an order left unlinked (its typed name matched
+                // several uncontrolled items) is checked as creation checks it,
+                // against the strictest of the items its name names.
+                List<com.example.hms.model.medication.MedicationCatalogItem> named =
+                    catalogItemsNamed(prescription.getMedicationName(), hospitalId);
+                item = named.isEmpty() ? null : strictestPediatricCeiling(named);
+            }
         }
         List<CdsCard> cards = cdsRuleEngine.evaluateProposedPrescription(prescription.getPatient(), hospitalId,
             prescription.getMedicationName(), prescription.getMedicationCode(), prescription.getDosage(),
@@ -2171,9 +2179,23 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             .toList();
     }
 
-    /** QA D935: the item with the lowest paediatric ceiling on file, else the first. */
+    /**
+     * QA D935: the item with the lowest paediatric ceiling on file, else the
+     * first. Review round 3: an absolute daily maximum (the hard stop) decides
+     * first, the lowest one wins; the mg/kg ceiling only when no item has one.
+     */
     private static com.example.hms.model.medication.MedicationCatalogItem strictestPediatricCeiling(
             List<com.example.hms.model.medication.MedicationCatalogItem> items) {
+        com.example.hms.model.medication.MedicationCatalogItem capped = null;
+        for (com.example.hms.model.medication.MedicationCatalogItem item : items) {
+            java.math.BigDecimal cap = item.getPediatricMaxDailyMg();
+            if (cap != null && (capped == null || cap.compareTo(capped.getPediatricMaxDailyMg()) < 0)) {
+                capped = item;
+            }
+        }
+        if (capped != null) {
+            return capped;
+        }
         com.example.hms.model.medication.MedicationCatalogItem strictest = items.get(0);
         for (com.example.hms.model.medication.MedicationCatalogItem item : items) {
             java.math.BigDecimal ceiling = item.getPediatricMaxDoseMgPerKg();
