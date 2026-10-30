@@ -59,4 +59,35 @@ class DispenseMapperDispenserNameTest {
         assertThat(dto.getDispensedBy()).isNotNull();
         assertThat(dto.getDispensedByName()).isNull();
     }
+
+    @Test
+    void everyReadNamesThePatientAndThePharmacy_D1058() {
+        com.example.hms.model.Patient patient = new com.example.hms.model.Patient();
+        patient.setId(UUID.randomUUID());
+        patient.setFirstName("Awa");
+        patient.setMiddleName("Mariam");
+        patient.setLastName("Ouédraogo");
+        com.example.hms.model.pharmacy.Pharmacy pharmacy = new com.example.hms.model.pharmacy.Pharmacy();
+        pharmacy.setId(UUID.randomUUID());
+        pharmacy.setName("Pharmacie centrale");
+        Dispense dispense = dispensedBy(null);
+        dispense.setPatient(patient);
+        dispense.setPharmacy(pharmacy);
+
+        DispenseResponseDTO dto = mapper.toResponseDTO(dispense);
+
+        assertThat(dto.getPatientName()).isEqualTo("Awa Mariam Ouédraogo");
+        assertThat(dto.getPharmacyName()).isEqualTo("Pharmacie centrale");
+    }
+
+    @Test
+    void aDetachedPatientProxyAnswersNull_D1058() {
+        com.example.hms.model.Patient detached = mock(com.example.hms.model.Patient.class);
+        when(detached.getId()).thenReturn(UUID.randomUUID());
+        when(detached.getFullName()).thenThrow(new LazyInitializationException("no session"));
+        Dispense dispense = dispensedBy(null);
+        dispense.setPatient(detached);
+
+        assertThat(mapper.toResponseDTO(dispense).getPatientName()).isNull();
+    }
 }

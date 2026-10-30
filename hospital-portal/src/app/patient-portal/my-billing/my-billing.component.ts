@@ -1,3 +1,4 @@
+import { invoiceTone, InvoiceTone } from '../../shared/invoice-tone';
 import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -15,6 +16,7 @@ import { CfaPipe } from '../../shared/pipes/cfa.pipe';
 import { DialogA11yDirective } from '../../shared/a11y/dialog-a11y.directive';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { formatCfa } from '../../shared/i18n/app-locale';
+import { cfaAmountMessageKey, cfaAmountProblem } from '../../shared/cfa-amount';
 
 @Component({
   selector: 'app-my-billing',
@@ -130,6 +132,11 @@ export class MyBillingComponent implements OnInit {
     });
   }
 
+  /** QA D1071: the card's icon and tone, from the invoice's status. */
+  toneOf(inv: PortalInvoice): InvoiceTone {
+    return invoiceTone(inv, this.isPayable(inv));
+  }
+
   /** QA D202: only an issued, open invoice with money left on it is owed or payable. */
   isPayable(inv: PortalInvoice): boolean {
     return (
@@ -179,11 +186,13 @@ export class MyBillingComponent implements OnInit {
 
   submitPayment() {
     const inv = this.payingInvoice();
-    if (!inv || !this.payAmount || this.payAmount <= 0) return;
+    if (!inv) return;
 
-    // QA D184: francs CFA have no cents.
-    if (!Number.isInteger(this.payAmount)) {
-      this.payError.set(this.translate.instant('BILLING.PAYMENT_WHOLE_AMOUNT'));
+    // QA D184 / D1089: an empty amount is answered (it used to do nothing),
+    // then whole francs (francs CFA have no cents).
+    const amountProblem = cfaAmountProblem(this.payAmount);
+    if (amountProblem) {
+      this.payError.set(this.translate.instant(cfaAmountMessageKey(amountProblem)));
       return;
     }
 

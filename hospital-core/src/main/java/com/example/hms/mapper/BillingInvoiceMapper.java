@@ -115,6 +115,8 @@ public class BillingInvoiceMapper {
 
         dto.setStatus(invoice.getStatus() != null ? invoice.getStatus().name() : null);
         dto.setNotes(invoice.getNotes());
+        dto.setCancelReason(invoice.getCancelReason());
+        dto.setCancelledAt(invoice.getCancelledAt() != null ? invoice.getCancelledAt().toString() : null);
         dto.setCreatedAt(invoice.getCreatedAt() != null ? invoice.getCreatedAt().toString() : null);
         dto.setUpdatedAt(invoice.getUpdatedAt() != null ? invoice.getUpdatedAt().toString() : null);
     }

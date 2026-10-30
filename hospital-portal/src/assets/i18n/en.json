@@ -1732,7 +1732,8 @@
       "STATUS_WAS": "{{what}} (was {{previous}})",
       "PLATFORM_SERVICE_UPDATED": "Platform service updated: {{details}}",
       "PLATFORM_SERVICE_STATUS": "Platform service status set to {{status}}: {{details}}",
-      "PLATFORM_LINK_TOGGLED": "Platform service link to a {{target}} {{state}}: {{details}}"
+      "PLATFORM_LINK_TOGGLED": "Platform service link to a {{target}} {{state}}: {{details}}",
+      "INVOICE_CANCELLED": "Invoice {{invoice}} cancelled, reason recorded"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "no active role at this hospital",
@@ -2175,7 +2176,13 @@
         "BILLING": "Invoices",
         "PHARMACY": "Pharmacy"
       }
-    }
+    },
+    "CANCEL_REASON": "Reason for cancelling",
+    "CANCEL_REASON_PLACEHOLDER": "Why is this issued invoice cancelled? The reason is kept with it.",
+    "CANCEL_REASON_REQUIRED": "Give the reason for cancelling this issued invoice.",
+    "ADJUSTMENT_AMOUNT_REQUIRED": "Enter the amount of the discount or waiver (greater than zero).",
+    "EDIT_LINE": "Price or correct this line",
+    "ITEM_UPDATED": "Line updated"
   },
   "CHAT": {
     "ACCESS_DENIED": "You do not have permission to access chat.",
@@ -9104,7 +9111,7 @@
     "EXP_SHORT": "exp.",
     "FEFO_REASON": "Reason for using this lot",
     "FEFO_REASON_REQUIRED": "Give the reason for using this lot: another lot expires earlier.",
-    "FEFO_WARNING": "Lot {{lot}} expires earlier ({{date}}) and covers this quantity. Take it, or say why you use this lot.",
+    "FEFO_WARNING": "Lot {{lot}} expires earlier ({{date}}) and still has {{left}} left. Take it first, or say why you use this lot.",
     "FACILITY_CODE": "Facility Code",
     "FILTER_BY_TYPE": "Filter by type",
     "FORM": "Form",
@@ -9458,7 +9465,9 @@
     "LEDGER_REASON_RETURN_FILL_DATE": "Return of the fill of {{date}}",
     "DISPENSE_SPLIT_SUCCESS": "Dispensed in {{count}} fills, shortest-dated lot first.",
     "FEFO_SPLIT_HINT": "The shortest-dated lot does not cover the quantity: it is emptied first, then the next lot.",
-    "FEFO_SPLIT_PART": "{{quantity}} from lot {{lot}} (exp. {{date}})"
+    "FEFO_SPLIT_PART": "{{quantity}} from lot {{lot}} (exp. {{date}})",
+    "REGISTER_RETURN_FILL": "Return, ref. lot {{lot}} dispensed {{date}}",
+    "REGISTER_RETURN_FILL_DATE": "Return of the fill of {{date}}"
   },
   "LAB_QC": {
     "TITLE": "Quality Control Dashboard",

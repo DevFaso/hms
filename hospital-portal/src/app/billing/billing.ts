@@ -31,6 +31,7 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { DialogA11yDirective } from '../shared/a11y/dialog-a11y.directive';
 import { saveResponse } from '../shared/download-file';
+import { cfaAmountMessageKey, cfaAmountProblem } from '../shared/cfa-amount';
 
 type BillingTab = 'all' | 'outstanding' | 'paid' | 'overdue';
 
@@ -221,8 +222,14 @@ export class BillingComponent implements OnInit {
       this.toast.error(this.translate.instant('BILLING.ADJUSTMENT_LINE_REQUIRED'));
       return;
     }
-    if (type !== 'CREDIT_NOTE' && (!amount || amount <= 0 || !Number.isInteger(amount))) {
-      this.toast.error(this.translate.instant('BILLING.PAYMENT_WHOLE_AMOUNT'));
+    // QA D1089: an empty amount asks for one; only a typed one is checked for decimals.
+    const amountProblem = type === 'CREDIT_NOTE' ? null : cfaAmountProblem(amount);
+    if (amountProblem) {
+      this.toast.error(
+        this.translate.instant(
+          cfaAmountMessageKey(amountProblem, 'BILLING.ADJUSTMENT_AMOUNT_REQUIRED'),
+        ),
+      );
       return;
     }
     this.adjustmentSaving.set(true);
@@ -290,6 +297,21 @@ export class BillingComponent implements OnInit {
     // it: billing.invoice.noReturnToDraft); it stays as it is or is cancelled.
     if (current && current !== 'DRAFT') return [current, 'CANCELLED'];
     return ['DRAFT', 'SENT', 'CANCELLED'];
+  }
+
+  /**
+   * QA D1069: the edit moves an issued invoice to CANCELLED, so the reason is
+   * asked for (the server refuses the move without it).
+   */
+  cancellingIssued(): boolean {
+    const current = this.editingStatus();
+    return (
+      this.editing() &&
+      this.form.status === 'CANCELLED' &&
+      !!current &&
+      current !== 'DRAFT' &&
+      current !== 'CANCELLED'
+    );
   }
 
   /** QA D614: an issued invoice keeps its patient; it is cancelled and re-issued instead. */
@@ -405,6 +427,13 @@ export class BillingComponent implements OnInit {
 
   submitForm(): void {
     if (this.saving()) return;
+    // QA D1069: only a cancellation carries a reason; any other edit sends none.
+    if (this.form.status !== 'CANCELLED') {
+      this.form.cancelReason = undefined;
+    } else if (this.cancellingIssued() && !this.form.cancelReason?.trim()) {
+      this.toast.error(this.translate.instant('BILLING.CANCEL_REASON_REQUIRED'));
+      return;
+    }
     this.saving.set(true);
     const op = this.editing()
       ? this.billingService.updateInvoice(this.editingId()!, this.form)
@@ -682,6 +711,66 @@ ${this.translate.instant('BILLING.SUPPLEMENTARY_CONFIRM')}`)
       });
   }
 
+  /* QA D1088: a line posted at zero (the checkout's unpriced charges) is priced in place. */
+  editingLineId = signal<string | null>(null);
+  editLineQuantity = signal<number | null>(null);
+  editLineUnitPrice = signal<number | null>(null);
+
+  startEditLine(item: InvoiceItemResponse): void {
+    this.editingLineId.set(item.id);
+    this.editLineQuantity.set(item.quantity ?? 1);
+    this.editLineUnitPrice.set(Number(item.unitPrice) > 0 ? Number(item.unitPrice) : null);
+  }
+
+  cancelEditLine(): void {
+    this.editingLineId.set(null);
+  }
+
+  canSaveLine(): boolean {
+    const qty = this.editLineQuantity();
+    return (
+      !this.itemSaving() &&
+      !!qty &&
+      qty >= 1 &&
+      Number.isInteger(qty) &&
+      cfaAmountProblem(this.editLineUnitPrice()) === null
+    );
+  }
+
+  saveLine(item: InvoiceItemResponse): void {
+    const inv = this.selectedInvoice();
+    if (!inv || this.itemSaving()) return;
+    const priceProblem = cfaAmountProblem(this.editLineUnitPrice());
+    if (priceProblem) {
+      this.toast.error(this.translate.instant(cfaAmountMessageKey(priceProblem)));
+      return;
+    }
+    if (!this.canSaveLine()) return;
+    this.itemSaving.set(true);
+    this.billingService
+      .updateInvoiceItem(item.id, {
+        billingInvoiceId: inv.id,
+        itemDescription: item.itemDescription,
+        itemCategory: item.itemCategory as InvoiceItemCategory,
+        quantity: this.editLineQuantity() ?? 1,
+        unitPrice: this.editLineUnitPrice() ?? 0,
+      })
+      .subscribe({
+        next: () => {
+          this.itemSaving.set(false);
+          this.editingLineId.set(null);
+          this.toast.success(this.translate.instant('BILLING.ITEM_UPDATED'));
+          this.refreshSelected(inv.id);
+        },
+        error: (err: HttpErrorResponse) => {
+          this.itemSaving.set(false);
+          this.toast.error(
+            err.error?.message ?? this.translate.instant('BILLING.ITEM_SAVE_FAILED'),
+          );
+        },
+      });
+  }
+
   removeItem(item: InvoiceItemResponse): void {
     const inv = this.selectedInvoice();
     if (!inv || this.itemSaving()) return;
@@ -924,17 +1013,15 @@ ${this.translate.instant('BILLING.SUPPLEMENTARY_CONFIRM')}`)
   recordPayment(): void {
     const inv = this.paymentInv();
     const amount = this.paymentAmount();
-    if (!inv || !amount || amount <= 0) {
-      this.toast.error(this.translate.instant('BILLING.PAYMENT_AMOUNT_REQUIRED'));
+    if (!inv) return;
+    // QA D184 / D1089: an amount first, then whole francs (francs CFA have no cents).
+    const amountProblem = cfaAmountProblem(amount);
+    if (amountProblem || amount === null) {
+      this.toast.error(this.translate.instant(cfaAmountMessageKey(amountProblem ?? 'required')));
       return;
     }
     if (amount > (inv.balanceDue ?? 0)) {
       this.toast.error(this.translate.instant('BILLING.PAYMENT_EXCEEDS_BALANCE'));
-      return;
-    }
-    // QA D184: francs CFA have no cents.
-    if (!Number.isInteger(amount)) {
-      this.toast.error(this.translate.instant('BILLING.PAYMENT_WHOLE_AMOUNT'));
       return;
     }
     const reference = this.paymentReference().trim();

@@ -1732,7 +1732,8 @@
       "STATUS_WAS": "{{what}} (estaba {{previous}})",
       "PLATFORM_SERVICE_UPDATED": "Servicio de plataforma modificado: {{details}}",
       "PLATFORM_SERVICE_STATUS": "Estado del servicio de plataforma cambiado a {{status}}: {{details}}",
-      "PLATFORM_LINK_TOGGLED": "Vínculo del servicio de plataforma con un {{target}} {{state}}: {{details}}"
+      "PLATFORM_LINK_TOGGLED": "Vínculo del servicio de plataforma con un {{target}} {{state}}: {{details}}",
+      "INVOICE_CANCELLED": "Factura {{invoice}} anulada, motivo registrado"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "ningún rol activo en este hospital",
@@ -2175,7 +2176,13 @@
         "BILLING": "Facturas",
         "PHARMACY": "Farmacia"
       }
-    }
+    },
+    "CANCEL_REASON": "Motivo de la anulación",
+    "CANCEL_REASON_PLACEHOLDER": "¿Por qué se anula esta factura emitida? El motivo se conserva con ella.",
+    "CANCEL_REASON_REQUIRED": "Indique el motivo de la anulación de esta factura emitida.",
+    "ADJUSTMENT_AMOUNT_REQUIRED": "Indique el importe del descuento o de la exoneración (mayor que cero).",
+    "EDIT_LINE": "Tarifar o corregir esta línea",
+    "ITEM_UPDATED": "Línea actualizada"
   },
   "CHAT": {
     "ACCESS_DENIED": "No tiene permiso para acceder a la mensajería.",
@@ -9104,7 +9111,7 @@
     "EXP_SHORT": "cad.",
     "FEFO_REASON": "Motivo para usar este lote",
     "FEFO_REASON_REQUIRED": "Indique por qué usa este lote: otro lote caduca antes.",
-    "FEFO_WARNING": "El lote {{lot}} caduca antes ({{date}}) y cubre esta cantidad. Tómelo o indique por qué usa este lote.",
+    "FEFO_WARNING": "El lote {{lot}} caduca antes ({{date}}) y aún le quedan {{left}}. Úselo primero o indique por qué usa este lote.",
     "FACILITY_CODE": "Código del centro",
     "FILTER_BY_TYPE": "Filtrar por tipo",
     "FORM": "Forma",
@@ -9458,7 +9465,9 @@
     "LEDGER_REASON_RETURN_FILL_DATE": "Devolución de la dispensación del {{date}}",
     "DISPENSE_SPLIT_SUCCESS": "Dispensado en {{count}} dispensaciones, primero el lote de caducidad más próxima.",
     "FEFO_SPLIT_HINT": "El lote de caducidad más próxima no cubre la cantidad: se vacía primero y luego el lote siguiente.",
-    "FEFO_SPLIT_PART": "{{quantity}} del lote {{lot}} (cad. {{date}})"
+    "FEFO_SPLIT_PART": "{{quantity}} del lote {{lot}} (cad. {{date}})",
+    "REGISTER_RETURN_FILL": "Devolución, ref. lote {{lot}} dispensado el {{date}}",
+    "REGISTER_RETURN_FILL_DATE": "Devolución de la dispensación del {{date}}"
   },
   "LAB_QC": {
     "TITLE": "Panel de control de calidad",

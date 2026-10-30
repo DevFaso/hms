@@ -207,6 +207,9 @@ export interface ControlledRegisterEntry {
   witnessedBy?: string;
   /** Already in the reader's language. */
   reason?: string;
+  /** QA D1084: a return booked against a fill: its lot, and the minute it was given (server time). */
+  reasonFillLot?: string | null;
+  reasonFillAt?: string | null;
 }
 
 /** QA D967: one controlled drug's page of the register. */

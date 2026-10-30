@@ -732,3 +732,18 @@
   display: grid;
   gap: 0.5rem;
 }
+
+/* QA D1088: a draft line priced in place */
+.line-edit-input {
+  width: 6.5rem;
+  padding: 0.25rem 0.4rem;
+}
+.line-actions {
+  display: flex;
+  gap: 0.25rem;
+  flex-wrap: wrap;
+}
+.amount.unpriced {
+  color: #b45309;
+  font-weight: 600;
+}

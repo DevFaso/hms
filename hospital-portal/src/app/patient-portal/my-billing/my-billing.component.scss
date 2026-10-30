@@ -311,3 +311,27 @@
     padding: 0.25rem 0;
   }
 }
+
+/* QA D1071: the invoice icon's tone follows its status (shared/invoice-tone.ts). */
+.invoice-tone {
+  &[data-tone='due'] {
+    background: #fef3c7;
+    color: #b45309;
+  }
+  &[data-tone='paid'] {
+    background: #d1fae5;
+    color: #047857;
+  }
+  &[data-tone='cancelled'] {
+    background: #f1f5f9;
+    color: #475569;
+  }
+  &[data-tone='credited'] {
+    background: #e0f2fe;
+    color: #0369a1;
+  }
+  &[data-tone='neutral'] {
+    background: #f1f5f9;
+    color: #334155;
+  }
+}

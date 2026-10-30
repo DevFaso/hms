@@ -1051,28 +1051,14 @@ class EncounterServiceImplTest {
             .thenReturn(AfterVisitSummaryDTO.builder().encounterId(encounterId).build());
         lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.FRENCH);
         lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("ok");
-        com.example.hms.model.Prescription signed = new com.example.hms.model.Prescription();
-        signed.setId(UUID.randomUUID());
-        signed.setStatus(com.example.hms.enums.PrescriptionStatus.SIGNED);
-        com.example.hms.model.Prescription cancelled = new com.example.hms.model.Prescription();
-        cancelled.setId(UUID.randomUUID());
-        cancelled.setStatus(com.example.hms.enums.PrescriptionStatus.CANCELLED);
-        when(prescriptionRepository.findIdsByEncounterIdAndStatusNotIn(eq(encounterId),
-                org.mockito.ArgumentMatchers.argThat(excluded -> excluded.contains(com.example.hms.enums.PrescriptionStatus.CANCELLED))))
-            .thenReturn(List.of(signed.getId()));
-        UUID labOrderId = UUID.randomUUID();
-        when(labOrderRepository.findIdsByEncounterIdAndStatusNotIn(eq(encounterId),
-                org.mockito.ArgumentMatchers.argThat(excluded -> excluded.contains(com.example.hms.enums.LabOrderStatus.CANCELLED))))
-            .thenReturn(List.of(labOrderId));
-
+        // QA D972 (round 18): the event names the visit only; billing reads the
+        // visit's orders itself, through its registry (EncounterCheckoutChargeListenerTest).
         service.checkOut(encounterId, CheckOutRequestDTO.builder().build(), "doctor1", true, null);
 
         org.mockito.ArgumentCaptor<com.example.hms.event.EncounterCheckedOutEvent> event =
             org.mockito.ArgumentCaptor.forClass(com.example.hms.event.EncounterCheckedOutEvent.class);
         verify(eventPublisher).publishEvent(event.capture());
         assertThat(event.getValue().encounterId()).isEqualTo(encounterId);
-        assertThat(event.getValue().prescriptionIds()).containsExactly(signed.getId());
-        assertThat(event.getValue().labOrderIds()).containsExactly(labOrderId);
         assertThat(event.getValue().checkedOutAt()).isNotNull();
         assertThat(event.getValue().encounterType()).isEqualTo("OUTPATIENT");
         assertThat(event.getValue().patientId()).isEqualTo(patient.getId());

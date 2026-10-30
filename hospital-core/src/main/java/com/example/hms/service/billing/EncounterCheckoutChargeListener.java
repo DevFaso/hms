@@ -1,27 +1,18 @@
 package com.example.hms.service.billing;
 
 import com.example.hms.enums.InvoiceStatus;
-import com.example.hms.enums.ItemCategory;
 import com.example.hms.event.EncounterCheckedOutEvent;
 import com.example.hms.model.BillingInvoice;
 import com.example.hms.model.Encounter;
-import com.example.hms.model.EncounterTreatment;
 import com.example.hms.model.InvoiceItem;
-import com.example.hms.model.LabOrder;
-import com.example.hms.model.ProcedureOrder;
-import com.example.hms.model.Treatment;
 import com.example.hms.model.UserRoleHospitalAssignment;
 import com.example.hms.repository.BillingInvoiceRepository;
 import com.example.hms.repository.EncounterRepository;
-import com.example.hms.repository.EncounterTreatmentRepository;
-import com.example.hms.repository.LabOrderRepository;
-import com.example.hms.repository.ProcedureOrderRepository;
 import com.example.hms.repository.TreatmentRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.service.InvoiceNumberAllocator;
 import com.example.hms.service.i18n.NotificationLocales;
 import com.example.hms.utility.MessageUtil;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.event.TransactionPhase;
@@ -29,32 +20,27 @@ import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.text.Normalizer;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
 /**
- * QA D972 (rounds 16 and 17): a checked-out visit reached billing as nothing
- * but its 0-line check-in copay. The clinic publishes
- * {@link EncounterCheckedOutEvent} at checkout (round 16, the producer); this
- * is the consumer: after the checkout commits, it opens one DRAFT invoice for
- * the visit with a line for each billable item, for the cashier to check,
+ * QA D972 (rounds 16, 17 and 18): a checked-out visit reached billing as
+ * nothing but its 0-line check-in copay. The clinic publishes
+ * {@link EncounterCheckedOutEvent} when a visit is completed (checkout, a
+ * completed PUT, a discharge, the admission that ends an emergency visit, a
+ * death); this is the consumer: after the visit closes, it opens one DRAFT
+ * invoice for it with a line for each billable item, for the cashier to check,
  * price where needed and issue.
  *
- * <ul>
- *   <li>each service recorded on the visit (encounter treatments) at the
- *       hospital's own price for it;</li>
- *   <li>when no service was recorded, one consultation line, priced by the
- *       hospital's single active service named for a consultation, else at
- *       zero for the cashier to price;</li>
- *   <li>each lab order and procedure order not withdrawn (the event already
- *       leaves them out), priced by the hospital's single active service of
- *       the same name, else at zero.</li>
- * </ul>
+ * <p>The lines come from the registry of billable order types
+ * ({@link BillableOrderType}): every type charged on the visit invoice has one
+ * {@link VisitChargeSource} (consultation or recorded services, lab, imaging,
+ * procedure, transfusion, bed days), and the listener asks every source.
+ * Round 17 listed the order types here by hand and left imaging out; a type
+ * with no source now fails {@code BillableOrderRegistryGuardTest}.
  *
  * <p>Medicines are NOT put on the visit invoice: a dispensed medicine is paid
  * at the pharmacy checkout (its own payment, QA D264), so charging it here
@@ -73,21 +59,40 @@ import java.util.UUID;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class EncounterCheckoutChargeListener {
 
     private static final List<String> FALLBACK_OWNER_ROLES = List.of("ROLE_BILLING_SPECIALIST", "ROLE_HOSPITAL_ADMIN");
-    /** Words a hospital's priced-service name uses for a consultation (EN/FR/ES). */
-    private static final List<String> CONSULTATION_WORDS = List.of("consultation", "consulta");
 
     private final EncounterRepository encounterRepository;
     private final BillingInvoiceRepository invoiceRepository;
-    private final EncounterTreatmentRepository encounterTreatmentRepository;
-    private final LabOrderRepository labOrderRepository;
-    private final ProcedureOrderRepository procedureOrderRepository;
     private final TreatmentRepository treatmentRepository;
     private final UserRoleHospitalAssignmentRepository assignmentRepository;
     private final InvoiceNumberAllocator invoiceNumberAllocator;
+    /** One per visit-invoice type of the registry, in the registry's order. */
+    private final List<VisitChargeSource> sources;
+
+    public EncounterCheckoutChargeListener(EncounterRepository encounterRepository,
+                                           BillingInvoiceRepository invoiceRepository,
+                                           TreatmentRepository treatmentRepository,
+                                           UserRoleHospitalAssignmentRepository assignmentRepository,
+                                           InvoiceNumberAllocator invoiceNumberAllocator,
+                                           List<VisitChargeSource> sources) {
+        this.encounterRepository = encounterRepository;
+        this.invoiceRepository = invoiceRepository;
+        this.treatmentRepository = treatmentRepository;
+        this.assignmentRepository = assignmentRepository;
+        this.invoiceNumberAllocator = invoiceNumberAllocator;
+        this.sources = sources.stream()
+            .sorted(java.util.Comparator.comparing(VisitChargeSource::type))
+            .toList();
+        java.util.Set<BillableOrderType> covered = java.util.EnumSet.noneOf(BillableOrderType.class);
+        this.sources.forEach(source -> covered.add(source.type()));
+        for (BillableOrderType type : BillableOrderType.values()) {
+            if (type.onVisitInvoice() && !covered.contains(type)) {
+                log.error("Billable order type {} has no charge source: its items are not billed at checkout", type);
+            }
+        }
+    }
 
     /** The charge's own transaction; null in a hand-built unit test (the charge then runs as called). */
     private org.springframework.transaction.support.TransactionTemplate chargeTx;
@@ -143,10 +148,9 @@ public class EncounterCheckoutChargeListener {
                 encounter.getId(), hospitalId);
             return Optional.empty();
         }
-        List<Treatment> priced = treatmentRepository.findByHospital_Id(hospitalId).stream()
-            .filter(t -> !Boolean.FALSE.equals(t.getActive()) && t.getPrice() != null && t.getPrice().signum() >= 0
-                && t.getName() != null)
-            .toList();
+        VisitPriceList prices = new VisitPriceList(treatmentRepository.findByHospital_Id(hospitalId));
+        VisitChargeSource.Visit visit = new VisitChargeSource.Visit(encounter,
+            event.checkedOutAt() != null ? event.checkedOutAt() : encounter.getCheckoutTimestamp(), prices);
 
         LocalDate today = LocalDate.now(ZoneId.systemDefault());
         BillingInvoice invoice = BillingInvoice.builder()
@@ -163,39 +167,13 @@ public class EncounterCheckoutChargeListener {
                 event.encounterCode() != null ? event.encounterCode() : encounter.getCode()))
             .build();
 
-        List<EncounterTreatment> services = encounterTreatmentRepository.findByEncounter_Id(encounter.getId());
-        for (EncounterTreatment given : services) {
-            Treatment treatment = given.getTreatment();
-            if (treatment == null) {
+        for (VisitChargeSource source : sources) {
+            if (!source.type().onVisitInvoice()) {
                 continue;
             }
-            invoice = addLine(invoice, line(treatment.getName(), ItemCategory.SERVICE,
-                treatment.getPrice(), treatment, owner.get()));
-        }
-        if (services.isEmpty()) {
-            Optional<Treatment> consultation = single(priced, name -> CONSULTATION_WORDS.stream().anyMatch(name::contains));
-            invoice = addLine(invoice, line(consultation.map(Treatment::getName)
-                    .orElseGet(() -> MessageUtil.resolve(NotificationLocales.STAFF, "billing.checkout.consultation")),
-                ItemCategory.SERVICE, consultation.map(Treatment::getPrice).orElse(null),
-                consultation.orElse(null), owner.get()));
-        }
-        for (LabOrder order : labOrderRepository.findAllById(event.labOrderIds())) {
-            String test = order.getLabTestDefinition() != null ? order.getLabTestDefinition().getName() : null;
-            if (test == null || test.isBlank()) {
-                continue;
+            for (VisitChargeSource.VisitCharge charge : source.charges(visit)) {
+                invoice = addLine(invoice, line(charge, owner.get()));
             }
-            Optional<Treatment> service = sameName(priced, test);
-            invoice = addLine(invoice, line(test, ItemCategory.LAB_TEST, service.map(Treatment::getPrice).orElse(null),
-                service.orElse(null), owner.get()));
-        }
-        for (ProcedureOrder order : procedureOrderRepository.findAllById(event.procedureOrderIds())) {
-            String procedure = order.getProcedureName();
-            if (procedure == null || procedure.isBlank()) {
-                continue;
-            }
-            Optional<Treatment> service = sameName(priced, procedure);
-            invoice = addLine(invoice, line(procedure, ItemCategory.SERVICE, service.map(Treatment::getPrice).orElse(null),
-                service.orElse(null), owner.get()));
         }
         // addItem keeps a priced draft a DRAFT; the cashier issues it.
         invoice.setStatus(InvoiceStatus.DRAFT);
@@ -215,18 +193,19 @@ public class EncounterCheckoutChargeListener {
         return invoiceRepository.save(invoice);
     }
 
-    private static InvoiceItem line(String description, ItemCategory category, BigDecimal price, Treatment service,
-                                    UserRoleHospitalAssignment owner) {
-        BigDecimal unit = (price != null ? price : BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
+    private static InvoiceItem line(VisitChargeSource.VisitCharge charge, UserRoleHospitalAssignment owner) {
+        BigDecimal unit = (charge.unitPrice() != null ? charge.unitPrice() : BigDecimal.ZERO)
+            .setScale(2, RoundingMode.HALF_UP);
+        String description = charge.description();
         String text = description.length() > 255 ? description.substring(0, 255) : description;
         return InvoiceItem.builder()
             .itemDescription(text)
-            .quantity(1)
-            .itemCategory(category)
+            .quantity(charge.quantity())
+            .itemCategory(charge.category())
             .unitPrice(unit)
-            .totalPrice(unit)
+            .totalPrice(unit.multiply(BigDecimal.valueOf(charge.quantity())))
             .assignment(owner)
-            .relatedService(service)
+            .relatedService(charge.service())
             .build();
     }
 
@@ -241,21 +220,5 @@ public class EncounterCheckoutChargeListener {
                 hospitalId, FALLBACK_OWNER_ROLES);
         }
         return owner;
-    }
-
-    /** The one priced service named exactly like {@code name} (case and accents aside), if exactly one is. */
-    private static Optional<Treatment> sameName(List<Treatment> priced, String name) {
-        String wanted = fold(name);
-        return single(priced, candidate -> candidate.equals(wanted));
-    }
-
-    private static Optional<Treatment> single(List<Treatment> priced, java.util.function.Predicate<String> nameMatches) {
-        List<Treatment> matches = priced.stream().filter(t -> nameMatches.test(fold(t.getName()))).toList();
-        return matches.size() == 1 ? Optional.of(matches.get(0)) : Optional.empty();
-    }
-
-    private static String fold(String text) {
-        return Normalizer.normalize(text.trim().toLowerCase(Locale.ROOT), Normalizer.Form.NFD)
-            .replaceAll("\\p{M}", "");
     }
 }

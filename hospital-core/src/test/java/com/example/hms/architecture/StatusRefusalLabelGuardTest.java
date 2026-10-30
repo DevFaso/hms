@@ -28,7 +28,8 @@ import java.util.stream.Stream;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * QA D825 guard: a refusal that names a visit's or an appointment's status
+ * QA D825 guard (widened for QA D1090 to the billing and pharmacy services,
+ * {@code ConflictException}, and the invoice and routing statuses): a refusal that names a visit's or an appointment's status
  * reads the status as people do ("Parti sans être vu"), never the raw code
  * ({@code LEFT_WITHOUT_BEING_SEEN}). Reopening a visit closed unseen answered
  * « Cette visite est déjà au statut LEFT_WITHOUT_BEING_SEEN » in French, and
@@ -53,9 +54,9 @@ class StatusRefusalLabelGuardTest {
 
     private static final Path SERVICES = Paths.get("src/main/java/com/example/hms/service");
     private static final Pattern WORKFLOW_SERVICE =
-        Pattern.compile("(Encounter|Reception|Appointment|Admission)\\w*\\.java");
+        Pattern.compile("(Encounter|Reception|Appointment|Admission|Billing|Invoice|Pharmacy|Dispense|Stock|Payment)\\w*\\.java");
     private static final Pattern REFUSAL = Pattern.compile(
-        "new\\s+(?:\\w+\\.)*(?:Business|BusinessRule)Exception\\s*\\(");
+        "new\\s+(?:\\w+\\.)*(?:Business|BusinessRule|Conflict)Exception\\s*\\(");
     private static final Pattern RAW_STATUS_ARGUMENT = Pattern.compile(
         "\\.name\\(\\)|getStatus\\(\\)\\s*[,)]"
             + "|String\\.valueOf\\(\\s*+(?=\\w*?(?i:status|current|previous|from|open))\\w++\\s*+\\)");
@@ -64,10 +65,12 @@ class StatusRefusalLabelGuardTest {
     private static final Pattern LITERAL = Pattern.compile("\"(?:[^\"\\\\]|\\\\.)*\"");
     /** A status already turned into its label is not a raw code, whatever surrounds it. */
     private static final Pattern LABELLED = Pattern.compile(
-        "\\w*\\.labelOf\\([^()]*\\)|[\\w.]+(?:\\(\\))?\\.localizedLabel\\(\\)");
+        "\\w*\\.labelOf\\((?:[^()]|\\([^()]*\\))*\\)|[\\w.]+(?:\\(\\))?\\.localizedLabel\\(\\)"
+            // QA D1090: a status code looked up as a bundle label (pharmacy.claim.status.X) is a label.
+            + "|MessageUtil\\.resolve\\(\\s*\"[\\w.]*status\\.\"\\s*\\+\\s*[\\w.()]+?\\.name\\(\\)\\)");
     private static final Pattern STATUS_IDENTIFIER = Pattern.compile(
         "\\b\\w*(?i:status|current|requested|previous|from|open)\\w*\\b");
-    private static final Pattern WORKFLOW_KEY = Pattern.compile("^(encounter|reception|appointment)\\..*");
+    private static final Pattern WORKFLOW_KEY = Pattern.compile("^(encounter|reception|appointment|billing|stock\\.routing)\\..*");
     private static final List<String> LOCALES = List.of("", "_en", "_fr", "_es");
 
     @AfterEach
@@ -93,6 +96,17 @@ class StatusRefusalLabelGuardTest {
                 String label = status.localizedLabel();
                 if (label.equals(status.name())) {
                     problems.add("appointment " + status + " in " + locale);
+                }
+            }
+            // QA D1090: the billing and pharmacy refusals name their statuses too.
+            for (com.example.hms.enums.InvoiceStatus status : com.example.hms.enums.InvoiceStatus.values()) {
+                if (status.localizedLabel().equals(status.name())) {
+                    problems.add("invoice " + status + " in " + locale);
+                }
+            }
+            for (com.example.hms.enums.RoutingDecisionStatus status : com.example.hms.enums.RoutingDecisionStatus.values()) {
+                if (status.localizedLabel().equals(status.name())) {
+                    problems.add("routing " + status + " in " + locale);
                 }
             }
         }
@@ -150,9 +164,15 @@ class StatusRefusalLabelGuardTest {
         for (AppointmentStatus status : AppointmentStatus.values()) {
             codes.add(status.name());
         }
+        for (com.example.hms.enums.InvoiceStatus status : com.example.hms.enums.InvoiceStatus.values()) {
+            codes.add(status.name());
+        }
+        for (com.example.hms.enums.RoutingDecisionStatus status : com.example.hms.enums.RoutingDecisionStatus.values()) {
+            codes.add(status.name());
+        }
         Pattern code = Pattern.compile("\\b(" + String.join("|", codes) + ")\\b");
         List<String> offenders = new ArrayList<>();
-        for (String area : List.of("clinical", "scheduling", "admin")) {
+        for (String area : List.of("clinical", "scheduling", "admin", "billing", "pharmacy")) {
             for (String suffix : LOCALES) {
                 Properties bundle = bundle(area, suffix);
                 for (String key : bundle.stringPropertyNames()) {
@@ -189,8 +209,9 @@ class StatusRefusalLabelGuardTest {
         if (!COMPOSED.matcher(statement).find()) {
             return false;
         }
-        String code = LITERAL.matcher(statement).replaceAll("\"\"");
-        code = LABELLED.matcher(code).replaceAll("");
+        // Labels first: a bundle-label lookup is recognised by its key literal (QA D1090).
+        String code = LABELLED.matcher(statement).replaceAll("");
+        code = LITERAL.matcher(code).replaceAll("\"\"");
         return STATUS_IDENTIFIER.matcher(code).find();
     }
 
@@ -200,7 +221,9 @@ class StatusRefusalLabelGuardTest {
         while (refusal.find()) {
             int end = source.indexOf(';', refusal.end());
             String statement = source.substring(refusal.start(), end < 0 ? source.length() : end);
-            if (RAW_STATUS_ARGUMENT.matcher(statement).find() || composesAStatus(statement)) {
+            // A status already passed through labelOf/localizedLabel is not a raw code (QA D1090).
+            String unlabelled = LABELLED.matcher(statement).replaceAll("label");
+            if (RAW_STATUS_ARGUMENT.matcher(unlabelled).find() || composesAStatus(statement)) {
                 int line = (int) source.substring(0, refusal.start()).chars().filter(c -> c == '\n').count() + 1;
                 found.add(file + ":" + line + " " + statement.replaceAll("\\s+", " "));
             }

@@ -2205,6 +2205,20 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 
 ## Standing platform debt — owed, not parity
 
+- **QA round 18 residuals (fix/r18-billing-pharmacy), noted, not fixed there.**
+  (1) D1069 sibling: cancelling a completed dispense (`POST /pharmacy/dispense/{id}/cancel`) voids its payment
+  (refund due) and puts the stock back with no reason asked; the ledger and the payment store the English
+  literals "Dispense cancelled ..." (read through the register's reason labels). Needs a reason field in the
+  dispensing cancel panel and on `DispenseCancelRequestDTO`, stored on the payment void and the ledger row.
+  (2) D1084 sibling: `PdfLabels.fmt(LocalDateTime)` prints the payment time on the invoice PDF and the receipt
+  in the server's zone; `PdfInvoiceService` (front-desk branch) must convert through
+  `HospitalTime.at(t, invoice.getHospital())` — pinned in `ServerComposedTimeGuardTest`.
+  (3) D972: an ultrasound order has no encounter link, so it cannot reach the visit invoice; it needs a charge
+  at completion (as `DeliveryChargeService` does for a birth) or an encounter column.
+  (4) D972 decision recorded: an in-house specialist consultation and an immunization are not separate visit
+  lines (`BillableOrderRegistryGuardTest.NOT_BILLABLE`); a hospital that charges for them records the service
+  on the visit. Revisit if the user wants them billed by default.
+
 - **QA round 16 residuals (PR #972 review round 8), noted, not fixed there.**
   (1) The slot inventory and the overlap rule disagree on RESCHEDULED: the
   status action releases the inventory slot, while `holdsSlot()` keeps the

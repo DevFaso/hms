@@ -56,6 +56,7 @@ describe('BillingComponent', () => {
       'getInvoice',
       'getInvoiceItems',
       'createInvoiceItem',
+      'updateInvoiceItem',
       'deleteInvoiceItem',
       'listPayments',
       'confirmPayment',
@@ -769,6 +770,137 @@ describe('BillingComponent', () => {
     expect(component.statusLocked()).toBeFalse();
     component.openEdit(mockInvoice({ status: 'PAID', amountPaid: 1000 }));
     expect(component.statusOptions()).toEqual(['PAID']);
+  });
+
+  describe('cancelling an issued invoice (QA D1069)', () => {
+    it('asks for the reason, refuses without one, and sends it', () => {
+      billingSpy.updateInvoice.and.returnValue(of(mockInvoice({ status: 'CANCELLED' })));
+      component.openEdit(mockInvoice({ status: 'SENT' }));
+      component.form.status = 'CANCELLED';
+      expect(component.cancellingIssued()).toBeTrue();
+      component.submitForm();
+      expect(billingSpy.updateInvoice).not.toHaveBeenCalled();
+      expect(toastSpy.error).toHaveBeenCalledWith('BILLING.CANCEL_REASON_REQUIRED');
+      component.form.cancelReason = 'Facturé au mauvais patient';
+      component.submitForm();
+      expect(billingSpy.updateInvoice.calls.mostRecent().args[1].cancelReason).toBe(
+        'Facturé au mauvais patient',
+      );
+    });
+
+    it('a waiver-settled invoice is cancelled with a reason too', () => {
+      component.openEdit(
+        mockInvoice({ status: 'PAID', amountPaid: 0, totalAmount: 0, balanceDue: 0 }),
+      );
+      component.form.status = 'CANCELLED';
+      expect(component.cancellingIssued()).toBeTrue();
+    });
+
+    it('a draft, or an edit that does not cancel, sends no reason', () => {
+      billingSpy.updateInvoice.and.returnValue(of(mockInvoice()));
+      component.openEdit(mockInvoice({ status: 'DRAFT' }));
+      component.form.status = 'CANCELLED';
+      expect(component.cancellingIssued()).toBeFalse();
+      component.openEdit(mockInvoice({ status: 'SENT' }));
+      component.form.cancelReason = 'left over';
+      component.submitForm();
+      expect(billingSpy.updateInvoice.calls.mostRecent().args[1].cancelReason).toBeUndefined();
+    });
+
+    it('shows the recorded reason on the cancelled invoice', () => {
+      fixture.detectChanges();
+      component.viewInvoice(
+        mockInvoice({
+          status: 'CANCELLED',
+          cancelReason: 'Doublon',
+          cancelledAt: '2026-10-30T17:09:00',
+        }),
+      );
+      fixture.detectChanges();
+      const reason = fixture.nativeElement.querySelector('[data-testid="cancel-reason"]');
+      expect(reason?.textContent).toContain('Doublon');
+    });
+  });
+
+  describe('a zero-priced line is priced in place (QA D1088)', () => {
+    const zeroLine = {
+      id: 'line-0',
+      billingInvoiceId: 'inv-1',
+      itemDescription: 'Radiographie thoracique',
+      itemCategory: 'SERVICE',
+      quantity: 1,
+      unitPrice: 0,
+      totalPrice: 0,
+    };
+
+    beforeEach(() => {
+      billingSpy.getInvoiceItems.and.returnValue(of([zeroLine]));
+      billingSpy.getInvoice.and.returnValue(
+        of(mockInvoice({ status: 'DRAFT', totalAmount: 7500 })),
+      );
+      fixture.detectChanges();
+      component.viewInvoice(mockInvoice({ status: 'DRAFT', totalAmount: 0, balanceDue: 0 }));
+      fixture.detectChanges();
+    });
+
+    it('offers to edit each line of a draft, not only to delete it', () => {
+      expect(
+        fixture.nativeElement.querySelector('[data-testid="line-edit-line-0"]'),
+      ).not.toBeNull();
+    });
+
+    it('updates the same line with its new price and re-reads the total', () => {
+      billingSpy.updateInvoiceItem.and.returnValue(
+        of({ ...zeroLine, unitPrice: 7500, totalPrice: 7500 }),
+      );
+      component.startEditLine(zeroLine);
+      expect(component.editLineUnitPrice()).toBeNull();
+      expect(component.canSaveLine()).toBeFalse();
+      component.editLineUnitPrice.set(7500);
+      component.saveLine(zeroLine);
+      expect(billingSpy.updateInvoiceItem).toHaveBeenCalledWith('line-0', {
+        billingInvoiceId: 'inv-1',
+        itemDescription: 'Radiographie thoracique',
+        itemCategory: 'SERVICE',
+        quantity: 1,
+        unitPrice: 7500,
+      });
+      expect(billingSpy.createInvoiceItem).not.toHaveBeenCalled();
+      expect(billingSpy.deleteInvoiceItem).not.toHaveBeenCalled();
+      expect(component.editingLineId()).toBeNull();
+    });
+  });
+
+  describe('an empty amount asks for an amount (QA D1089)', () => {
+    beforeEach(() => {
+      fixture.detectChanges();
+      component.viewInvoice(component.invoices()[0]);
+    });
+
+    it('a waiver with no amount is not told about decimals', () => {
+      component.adjustmentType.set('WAIVER');
+      component.adjustmentReason.set('Indigent');
+      component.adjustmentAmount.set(null);
+      component.submitAdjustment();
+      expect(billingSpy.addAdjustment).not.toHaveBeenCalled();
+      expect(toastSpy.error).toHaveBeenCalledWith('BILLING.ADJUSTMENT_AMOUNT_REQUIRED');
+      expect(toastSpy.error).not.toHaveBeenCalledWith('BILLING.PAYMENT_WHOLE_AMOUNT');
+    });
+
+    it('a waiver with decimals is told about decimals', () => {
+      component.adjustmentType.set('DISCOUNT');
+      component.adjustmentReason.set('Geste commercial');
+      component.adjustmentAmount.set(250.5);
+      component.submitAdjustment();
+      expect(toastSpy.error).toHaveBeenCalledWith('BILLING.PAYMENT_WHOLE_AMOUNT');
+    });
+
+    it('a payment with no amount asks for one', () => {
+      component.paymentInv.set(mockInvoice());
+      component.paymentAmount.set(null);
+      component.recordPayment();
+      expect(toastSpy.error).toHaveBeenCalledWith('BILLING.PAYMENT_AMOUNT_REQUIRED');
+    });
   });
 
   describe('receptionist (QA D973)', () => {

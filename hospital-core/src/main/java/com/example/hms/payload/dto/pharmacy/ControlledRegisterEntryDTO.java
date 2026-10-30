@@ -22,5 +22,10 @@ public record ControlledRegisterEntryDTO(
         String prescriberName,
         String recordedBy,
         String witnessedBy,
-        String reason) {
+        /** In the reader language; times on the hospital wall clock (QA D1084). */
+        String reason,
+        /** QA D1084: for a return booked against a fill, its lot, so the screen words it itself. */
+        String reasonFillLot,
+        /** QA D1084: and the minute the fill was given (server time), shown on the reader clock. */
+        LocalDateTime reasonFillAt) {
 }

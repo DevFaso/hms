@@ -119,7 +119,8 @@ public class PrescriptionCopyPdfService {
             LocalDateTime printedAt = print != null && print.getDecidedAt() != null
                     ? print.getDecidedAt() : LocalDateTime.now(ZoneId.systemDefault());
             pdf.paragraph(PharmacyPdfWriter.REGULAR, 9f, label(locale, "pdf.rxcopy.printedBy",
-                    print != null ? userName(print.getDecidedByUser()) : "-", dateTime.format(printedAt)));
+                    print != null ? userName(print.getDecidedByUser()) : "-",
+                    dateTime.format(com.example.hms.utility.HospitalTime.at(printedAt, rx.getHospital()))));
             pdf.paragraph(PharmacyPdfWriter.REGULAR, 9f, label(locale, "pdf.rxcopy.footer"));
             pdf.paragraph(PharmacyPdfWriter.REGULAR, 8f, label(locale, "pdf.rxcopy.reference", rx.getId()));
             return pdf.finish();

@@ -14,6 +14,7 @@ import { AuthService } from '../auth/auth.service';
 import { ToastService } from '../core/toast.service';
 import { CfaPipe } from '../shared/pipes/cfa.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { cfaAmountMessageKey, cfaAmountProblem } from '../shared/cfa-amount';
 
 /**
  * T-43 / T-44: pharmacy checkout and French printable receipt.
@@ -165,13 +166,15 @@ export class PharmacyCheckoutComponent implements OnInit {
       this.toast.error(this.translate.instant('PHARMACY_CHECKOUT.ALREADY_PAID'));
       return;
     }
-    if (!this.amount || this.amount <= 0) {
-      this.toast.error(this.translate.instant('PHARMACY.CHECKOUT_INVALID_AMOUNT'));
-      return;
-    }
-    // QA D204: the franc CFA has no minor unit.
-    if (!Number.isInteger(this.amount)) {
-      this.toast.error(this.translate.instant('BILLING.PAYMENT_WHOLE_AMOUNT'));
+    // QA D204 / D1089: an amount first, then whole francs (the franc CFA has no minor unit).
+    const amount = this.amount;
+    const amountProblem = cfaAmountProblem(amount);
+    if (amountProblem || amount === null) {
+      this.toast.error(
+        this.translate.instant(
+          cfaAmountMessageKey(amountProblem ?? 'required', 'PHARMACY.CHECKOUT_INVALID_AMOUNT'),
+        ),
+      );
       return;
     }
     // QA D1033: a mobile-money payment is recorded with the transaction
@@ -192,7 +195,7 @@ export class PharmacyCheckoutComponent implements OnInit {
       patientId: d.patientId,
       hospitalId,
       paymentMethod: this.paymentMethod,
-      amount: this.amount,
+      amount,
       currency: 'XOF',
       referenceNumber: this.referenceNumber.trim() || undefined,
       receivedBy: userId,

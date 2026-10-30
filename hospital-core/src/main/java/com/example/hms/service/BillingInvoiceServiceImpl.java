@@ -44,6 +44,8 @@ import java.util.UUID;
 public class BillingInvoiceServiceImpl implements BillingInvoiceService {
 
     private static final String BILLING_INVOICE_NOT_FOUND = "billinginvoice.notfound";
+    /** QA D1069: the longest cancellation reason kept (the column is 500). */
+    static final int CANCEL_REASON_MAX = 500;
     private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(BillingInvoiceServiceImpl.class);
 
     /** Optional so the unit tests that build the service by hand keep working. */
@@ -369,7 +371,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             .findFirst()
             .ifPresent(existing -> {
                 throw new com.example.hms.exception.ConflictException(com.example.hms.utility.MessageUtil.resolve("billing.invoice.encounterAlreadyInvoiced",
-                    existing.getInvoiceNumber(), String.valueOf(existing.getStatus())));
+                    existing.getInvoiceNumber(), InvoiceStatus.labelOf(existing.getStatus())));
             });
     }
 
@@ -820,6 +822,10 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         if (wasDraft) {
             requireIssuableTotal(nextStatus, invoice.getTotalAmount());
         }
+        boolean cancelling = nextStatus == InvoiceStatus.CANCELLED && invoice.getStatus() != InvoiceStatus.CANCELLED;
+        if (cancelling) {
+            recordCancellation(invoice, dto.getCancelReason(), wasDraft);
+        }
         invoice.setStatus(nextStatus);
         // D656: an issued invoice keeps its notes (checked unchanged above).
         if (wasDraft) {
@@ -827,9 +833,53 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         }
 
         BillingInvoice saved = invoiceRepository.save(invoice);
+        if (cancelling) {
+            auditCancellationAfterCommit(saved.getCancelledBy(), saved);
+        }
         // QA D210: issuing the visit invoice takes over the check-in copay.
         creditCheckInCopays(saved);
         return invoiceMapper.toBillingInvoiceResponseDTO(saved);
+    }
+
+    /**
+     * QA D1069: an issued invoice is a document the patient may hold; it is
+     * cancelled only with the reason why, kept with when and by whom, as a
+     * discount, a waiver or a credit note keeps its reason (D974). A draft
+     * was never issued: its reason is kept when given, not required.
+     */
+    private void recordCancellation(BillingInvoice invoice, String reason, boolean wasDraft) {
+        String why = reason == null ? "" : reason.trim();
+        if (why.isEmpty() && !wasDraft) {
+            throw new BusinessException("billing.invoice.cancelReasonRequired");
+        }
+        if (why.length() > CANCEL_REASON_MAX) {
+            throw new BusinessException("billing.invoice.cancelReasonTooLong", String.valueOf(CANCEL_REASON_MAX));
+        }
+        invoice.setCancelReason(why.isEmpty() ? null : why);
+        invoice.setCancelledAt(java.time.LocalDateTime.now(java.time.ZoneId.systemDefault()));
+        invoice.setCancelledBy(roleValidator.getCurrentUserId());
+    }
+
+    /** QA D1069: who cancelled which invoice (ids only, as the adjustment audit: never the reason text). */
+    private void auditCancellationAfterCommit(UUID actorId, BillingInvoice invoice) {
+        if (auditEventLogService == null) {
+            return;
+        }
+        String invoiceIdText = String.valueOf(invoice.getId());
+        com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
+            try {
+                auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
+                    .eventType(AuditEventType.INVOICE_UPDATED)
+                    .status(com.example.hms.enums.AuditStatus.SUCCESS)
+                    .userId(actorId)
+                    .eventDescription("Invoice cancelled with a recorded reason: invoice " + invoiceIdText)
+                    .entityType("BillingInvoice")
+                    .resourceId(invoiceIdText)
+                    .build());
+            } catch (RuntimeException ex) {
+                LOG.warn("Cancellation audit not written for invoice {}: {}", invoiceIdText, ex.getClass().getSimpleName());
+            }
+        });
     }
 
     /**

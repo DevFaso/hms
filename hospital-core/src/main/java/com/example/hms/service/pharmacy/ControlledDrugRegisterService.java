@@ -125,7 +125,8 @@ public class ControlledDrugRegisterService {
         People people = people(rows, pharmacy.getHospital() != null ? pharmacy.getHospital().getId() : null);
 
         Map<UUID, BigDecimal> balance = new HashMap<>(opening);
-        Map<UUID, List<ControlledRegisterEntryDTO>> entries = entriesByItem(rows, people, balance);
+        Map<UUID, List<ControlledRegisterEntryDTO>> entries = entriesByItem(rows, people, balance,
+                com.example.hms.utility.HospitalTime.zoneOf(pharmacy.getHospital()));
         // Review of #975: the shelf count is today's; it is only comparable
         // with a closing balance carried to today, and a truncated register
         // has no closing balance at all (its last row is not the period's).
@@ -159,7 +160,7 @@ public class ControlledDrugRegisterService {
 
     /** The period's rows per drug, oldest first, each with the balance after it ({@code balance} is carried). */
     private static Map<UUID, List<ControlledRegisterEntryDTO>> entriesByItem(List<StockTransaction> rows,
-            People people, Map<UUID, BigDecimal> balance) {
+            People people, Map<UUID, BigDecimal> balance, java.time.ZoneId hospitalZone) {
         Map<UUID, List<ControlledRegisterEntryDTO>> entries = new LinkedHashMap<>();
         for (StockTransaction tx : rows) {
             UUID itemId = tx.getInventoryItem().getId();
@@ -167,6 +168,7 @@ public class ControlledDrugRegisterService {
             BigDecimal after = balance.getOrDefault(itemId, BigDecimal.ZERO).add(moved);
             balance.put(itemId, after);
             Prescription prescription = people.prescriptionOf(tx);
+            FillRef fill = fillRef(tx.getReason());
             entries.computeIfAbsent(itemId, k -> new ArrayList<>()).add(new ControlledRegisterEntryDTO(
                     tx.getId(),
                     tx.getCreatedAt(),
@@ -178,7 +180,9 @@ public class ControlledDrugRegisterService {
                     prescription != null ? prescriberName(prescription.getStaff()) : null,
                     userName(tx.getPerformedByUser()),
                     userName(tx.getWitnessedByUser()),
-                    reasonText(LocaleContextHolder.getLocale(), tx.getReason())));
+                    reasonText(LocaleContextHolder.getLocale(), tx.getReason(), hospitalZone),
+                    fill != null ? fill.lot() : null,
+                    fill != null ? fill.at() : null));
         }
         return entries;
     }
@@ -188,6 +192,9 @@ public class ControlledDrugRegisterService {
     public byte[] exportCsv(UUID pharmacyId, UUID inventoryItemId, LocalDate from, LocalDate to) {
         ControlledRegisterDTO register = buildRegister(pharmacyId, inventoryItemId, from, to);
         Locale locale = LocaleContextHolder.getLocale();
+        // QA D1084: the export prints the hospital wall clock, as the screen
+        // and the reason column do, never the server UTC.
+        java.time.ZoneId zone = com.example.hms.utility.HospitalTime.zoneOf(pharmacyInScope(pharmacyId).getHospital());
         DateTimeFormatter when = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
         StringBuilder csv = new StringBuilder("\uFEFF");
         csv.append(String.join(";", headers(locale))).append("\r\n");
@@ -196,7 +203,7 @@ public class ControlledDrugRegisterService {
                     plain(drug.openingBalance()), "", "", "", "", "")).append("\r\n");
             for (ControlledRegisterEntryDTO e : drug.entries()) {
                 csv.append(cells(drug.medicationName(),
-                        e.occurredAt() != null ? when.format(e.occurredAt()) : "",
+                        e.occurredAt() != null ? when.format(com.example.hms.utility.HospitalTime.at(e.occurredAt(), zone)) : "",
                         movementLabel(locale, e.movementType()), plain(e.quantity()), e.lotNumber(),
                         plain(e.balanceAfter()), e.patientName(), e.prescriberName(), e.recordedBy(),
                         e.witnessedBy(), e.reason())).append("\r\n");
@@ -212,6 +219,8 @@ public class ControlledDrugRegisterService {
         Locale locale = LocaleContextHolder.getLocale();
         DateTimeFormatter day = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(locale);
         DateTimeFormatter when = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT).withLocale(locale);
+        // QA D1084: the hospital wall clock, not the server UTC.
+        java.time.ZoneId zone = com.example.hms.utility.HospitalTime.zoneOf(pharmacyInScope(pharmacyId).getHospital());
         try (PharmacyPdfWriter pdf = new PharmacyPdfWriter(true)) {
             pdf.paragraph(PharmacyPdfWriter.BOLD, 15f, label(locale, "pharmacy.register.title"));
             pdf.paragraph(PharmacyPdfWriter.REGULAR, 10f, label(locale, "pharmacy.register.subtitle",
@@ -238,7 +247,7 @@ public class ControlledDrugRegisterService {
                 pdf.tableHeader(widths, head.toArray(new String[0]));
                 for (ControlledRegisterEntryDTO e : drug.entries()) {
                     pdf.tableRow(new String[] {
-                        e.occurredAt() != null ? when.format(e.occurredAt()) : "",
+                        e.occurredAt() != null ? when.format(com.example.hms.utility.HospitalTime.at(e.occurredAt(), zone)) : "",
                         movementLabel(locale, e.movementType()), plain(e.quantity()), nz(e.lotNumber()),
                         plain(e.balanceAfter()), nz(e.patientName()), nz(e.prescriberName()),
                         nz(e.recordedBy()), nz(e.witnessedBy()), nz(e.reason())});
@@ -397,6 +406,14 @@ public class ControlledDrugRegisterService {
      * each known shape reads in the request's language, the typed words kept.
      */
     static String reasonText(Locale locale, String reason) {
+        return reasonText(locale, reason, java.time.ZoneId.systemDefault());
+    }
+
+    /**
+     * {@link #reasonText(Locale, String)} with the times a reason names (the
+     * minute a returned fill was given) on the hospital wall clock (QA D1084).
+     */
+    static String reasonText(Locale locale, String reason, java.time.ZoneId hospitalZone) {
         if (reason == null || reason.isBlank()) {
             return null;
         }
@@ -411,7 +428,7 @@ public class ControlledDrugRegisterService {
             return label(locale, "pharmacy.register.reason.receipt", r.substring(RECEIPT_PREFIX.length()));
         }
         if (r.startsWith(RETURN_PREFIX)) {
-            return returnReason(locale, r.substring(RETURN_PREFIX.length()).trim());
+            return returnReason(locale, r.substring(RETURN_PREFIX.length()).trim(), hospitalZone);
         }
         if (r.startsWith(TRANSFER_PREFIX)) {
             return label(locale, "pharmacy.register.reason.transfer", r.substring(TRANSFER_PREFIX.length()));
@@ -434,11 +451,21 @@ public class ControlledDrugRegisterService {
      * pharmacist typed is kept as typed.
      */
     static String returnReason(Locale locale, String ref) {
+        return returnReason(locale, ref, java.time.ZoneId.systemDefault());
+    }
+
+    /**
+     * QA D1084: the stored minute is the server time of the fill
+     * ({@code dispensedAt}, UTC on the hosts); it is printed on the hospital
+     * wall clock, as the row time is shown, never as stored.
+     */
+    static String returnReason(Locale locale, String ref, java.time.ZoneId hospitalZone) {
         Matcher fill = RETURN_FILL_REF.matcher(ref);
         if (!fill.matches()) {
             return label(locale, "pharmacy.register.reason.return", ref);
         }
-        java.time.LocalDateTime at = java.time.LocalDateTime.parse(fill.group(2) + "T" + fill.group(3));
+        java.time.LocalDateTime at = com.example.hms.utility.HospitalTime.at(
+            java.time.LocalDateTime.parse(fill.group(2) + "T" + fill.group(3)), hospitalZone);
         String date = java.time.format.DateTimeFormatter
             .ofLocalizedDateTime(java.time.format.FormatStyle.SHORT)
             .withLocale(locale != null ? locale : Locale.FRENCH)
@@ -446,6 +473,21 @@ public class ControlledDrugRegisterService {
         return fill.group(1) != null
             ? label(locale, "pharmacy.register.reason.returnFill", fill.group(1), date)
             : label(locale, "pharmacy.register.reason.returnFillDate", date);
+    }
+
+    /** The lot and the server-time minute of the fill a return was booked against, for the screen (QA D1084). */
+    record FillRef(String lot, java.time.LocalDateTime at) {
+    }
+
+    static FillRef fillRef(String reason) {
+        if (reason == null || !reason.trim().startsWith(RETURN_PREFIX)) {
+            return null;
+        }
+        Matcher fill = RETURN_FILL_REF.matcher(reason.trim().substring(RETURN_PREFIX.length()).trim());
+        if (!fill.matches()) {
+            return null;
+        }
+        return new FillRef(fill.group(1), java.time.LocalDateTime.parse(fill.group(2) + "T" + fill.group(3)));
     }
 
     private static final Pattern RETURN_FILL_REF = Pattern.compile(

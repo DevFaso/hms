@@ -46,6 +46,8 @@ public interface DispenseRepository extends JpaRepository<Dispense, UUID> {
     List<Dispense> findByPrescription_IdInAndStatusNotOrderByDispensedAtDesc(
             List<UUID> prescriptionIds, DispenseStatus excludedStatus);
 
+    /** QA D1058: each row names its patient and pharmacy, loaded with the page rather than one by one. */
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"patient", "pharmacy"})
     Page<Dispense> findByPharmacyId(UUID pharmacyId, Pageable pageable);
 
     /**

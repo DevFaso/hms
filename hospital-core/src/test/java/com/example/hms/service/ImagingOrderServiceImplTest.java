@@ -124,6 +124,64 @@ class ImagingOrderServiceImplTest {
         imagingOrderService.setSelf(imagingOrderService);
     }
 
+    /** QA D972 (round 18): an imaging order written with no visit joins the open visit, so checkout bills it. */
+    @Test
+    void anOrderWithNoVisitJoinsThePatientsOpenVisit_D972() {
+        com.example.hms.repository.EncounterRepository encounters = mock(com.example.hms.repository.EncounterRepository.class);
+        imagingOrderService.setEncounterRepository(encounters);
+        com.example.hms.model.Encounter older = new com.example.hms.model.Encounter();
+        older.setId(UUID.randomUUID());
+        older.setEncounterDate(LocalDateTime.now().minusDays(3));
+        com.example.hms.model.Encounter today = new com.example.hms.model.Encounter();
+        today.setId(UUID.randomUUID());
+        today.setEncounterDate(LocalDateTime.now().minusHours(1));
+        when(encounters.findByPatient_IdAndHospital_IdAndStatusNotIn(eq(patientId), eq(hospitalId), any()))
+            .thenReturn(List.of(older, today));
+        ImagingOrder order = stubCreate(null);
+
+        imagingOrderService.createOrder(requestWithVisit(null), null);
+
+        assertThat(order.getEncounterId()).isEqualTo(today.getId());
+    }
+
+    /** QA D972: a visit of another patient is refused; it would put the order on someone else's invoice. */
+    @Test
+    void aVisitOfAnotherPatientIsRefused_D972() {
+        com.example.hms.repository.EncounterRepository encounters = mock(com.example.hms.repository.EncounterRepository.class);
+        imagingOrderService.setEncounterRepository(encounters);
+        Patient other = new Patient();
+        other.setId(UUID.randomUUID());
+        com.example.hms.model.Encounter theirs = new com.example.hms.model.Encounter();
+        theirs.setId(UUID.randomUUID());
+        theirs.setPatient(other);
+        when(encounters.findByIdAndHospital_Id(theirs.getId(), hospitalId)).thenReturn(Optional.of(theirs));
+        stubCreate(theirs.getId());
+        ImagingOrderRequestDTO request = requestWithVisit(theirs.getId());
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> imagingOrderService.createOrder(request, null))
+            .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+        org.mockito.Mockito.verify(imagingOrderRepository, org.mockito.Mockito.never()).save(any());
+    }
+
+    private ImagingOrderRequestDTO requestWithVisit(UUID encounterId) {
+        return ImagingOrderRequestDTO.builder().patientId(patientId).hospitalId(hospitalId)
+            .encounterId(encounterId).modality(ImagingModality.XRAY).studyType("Radiographie thoracique")
+            .bodyRegion(BODY_REGION_CHEST).priority(ImagingOrderPriority.ROUTINE).build();
+    }
+
+    private ImagingOrder stubCreate(UUID encounterId) {
+        ImagingOrder order = new ImagingOrder();
+        order.setPatient(patient);
+        order.setHospital(hospital);
+        order.setModality(ImagingModality.XRAY);
+        order.setEncounterId(encounterId);
+        org.mockito.Mockito.lenient().when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        org.mockito.Mockito.lenient().when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        org.mockito.Mockito.lenient().when(imagingOrderMapper.toEntity(any(), eq(patient), eq(hospital))).thenReturn(order);
+        org.mockito.Mockito.lenient().when(imagingOrderRepository.save(order)).thenReturn(order);
+        return order;
+    }
+
     @Test
     void createOrderSetsOrderingUserAndDuplicateMetadata() {
         UUID orderingUserId = UUID.randomUUID();

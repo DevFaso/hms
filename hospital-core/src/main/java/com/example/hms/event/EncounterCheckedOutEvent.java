@@ -1,33 +1,35 @@
 package com.example.hms.event;
 
+import com.example.hms.model.Encounter;
+
 import java.time.LocalDateTime;
-import java.util.List;
 import java.util.UUID;
 
 /**
- * Published by {@code EncounterServiceImpl.checkOut} when a visit is checked
- * out (status COMPLETED), so billing can turn the visit into pending charges
- * or a draft invoice without the clinic code knowing anything about billing
- * (QA D972 hand-off, prepared in round 16; the billing consumer is the
- * follow-up).
+ * Published whenever a visit is completed, so billing can turn it into a
+ * draft invoice without the clinic code knowing anything about billing (QA
+ * D972). Every path that completes a visit publishes it through
+ * {@link #of(Encounter, LocalDateTime)}: the checkout, a PUT that completes
+ * the visit, the discharge that closes a stay's encounter, the admission that
+ * ends the emergency visit that led to it, and a recorded death
+ * ({@code VisitCompletionBillingGuardTest}).
  *
  * <p>Ids and scalars only, no JPA entities: a consumer listens with
  * {@code @TransactionalEventListener(phase = AFTER_COMMIT)} and re-loads what
  * it prices in its own transaction, so a failed charge can never roll the
- * checkout back. The billable items are the visit itself (type, department,
- * provider) plus the orders written during it that were not withdrawn.
+ * checkout back. QA D972 (round 18): the event no longer carries hand-picked
+ * order id lists (imaging was missing from them); billing reads every
+ * billable item of the visit by its id, through its registry of billable
+ * order types.
  *
- * @param encounterId        the checked-out visit
- * @param encounterCode      its human code (ENC-…), for the invoice line
- * @param patientId          the patient billed
- * @param hospitalId         the hospital whose price list applies
- * @param departmentId       the department of the consultation, or null
- * @param providerStaffId    the treating clinician, or null
- * @param encounterType      OUTPATIENT, EMERGENCY, … (the consultation tariff)
- * @param checkedOutAt       when the visit was closed
- * @param prescriptionIds    the visit's prescriptions, withdrawn ones excluded
- * @param labOrderIds        the visit's lab orders
- * @param procedureOrderIds  the visit's procedure orders
+ * @param encounterId     the completed visit
+ * @param encounterCode   its human code (ENC-…), for the invoice note
+ * @param patientId       the patient billed
+ * @param hospitalId      the hospital whose price list applies
+ * @param departmentId    the department of the visit, or null
+ * @param providerStaffId the treating clinician, or null
+ * @param encounterType   OUTPATIENT, EMERGENCY, INPATIENT, …
+ * @param checkedOutAt    when the visit was closed
  */
 public record EncounterCheckedOutEvent(
     UUID encounterId,
@@ -37,14 +39,20 @@ public record EncounterCheckedOutEvent(
     UUID departmentId,
     UUID providerStaffId,
     String encounterType,
-    LocalDateTime checkedOutAt,
-    List<UUID> prescriptionIds,
-    List<UUID> labOrderIds,
-    List<UUID> procedureOrderIds
+    LocalDateTime checkedOutAt
 ) {
-    public EncounterCheckedOutEvent {
-        prescriptionIds = prescriptionIds == null ? List.of() : List.copyOf(prescriptionIds);
-        labOrderIds = labOrderIds == null ? List.of() : List.copyOf(labOrderIds);
-        procedureOrderIds = procedureOrderIds == null ? List.of() : List.copyOf(procedureOrderIds);
+
+    /** The event for a visit completed at {@code checkedOutAt} (its checkout time when null). */
+    public static EncounterCheckedOutEvent of(Encounter encounter, LocalDateTime checkedOutAt) {
+        LocalDateTime at = checkedOutAt != null ? checkedOutAt : encounter.getCheckoutTimestamp();
+        return new EncounterCheckedOutEvent(
+            encounter.getId(),
+            encounter.getCode(),
+            encounter.getPatient() != null ? encounter.getPatient().getId() : null,
+            encounter.getHospital() != null ? encounter.getHospital().getId() : null,
+            encounter.getDepartment() != null ? encounter.getDepartment().getId() : null,
+            encounter.getStaff() != null ? encounter.getStaff().getId() : null,
+            encounter.getEncounterType() != null ? encounter.getEncounterType().name() : null,
+            at);
     }
 }
