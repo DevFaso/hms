@@ -16,6 +16,27 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
 
     Page<PaymentTransaction> findByInvoice_Id(UUID invoiceId, Pageable pageable);
 
+    /**
+     * QA D1059: the money one cashier received in [{@code start}, {@code end}):
+     * confirmed by them (or recorded by them when it needed no confirmation),
+     * still counted or reversed since. A pending or rejected declaration was
+     * never received.
+     */
+    @org.springframework.data.jpa.repository.Query("""
+           SELECT p FROM PaymentTransaction p
+            WHERE p.status IN (com.example.hms.enums.PaymentStatus.CONFIRMED,
+                               com.example.hms.enums.PaymentStatus.REVERSED)
+              AND (p.confirmedBy = :cashierId OR (p.confirmedBy IS NULL AND p.recordedBy = :cashierId))
+              AND (:hospitalId IS NULL OR p.invoice.hospital.id = :hospitalId)
+              AND COALESCE(p.confirmedAt, p.createdAt) >= :start AND COALESCE(p.confirmedAt, p.createdAt) < :end
+            ORDER BY COALESCE(p.confirmedAt, p.createdAt) ASC
+           """)
+    java.util.List<PaymentTransaction> findReceivedByCashier(
+        @org.springframework.data.repository.query.Param("cashierId") UUID cashierId,
+        @org.springframework.data.repository.query.Param("hospitalId") UUID hospitalId,
+        @org.springframework.data.repository.query.Param("start") java.time.LocalDateTime start,
+        @org.springframework.data.repository.query.Param("end") java.time.LocalDateTime end);
+
     boolean existsByInvoice_Id(UUID invoiceId);
 
     boolean existsByInvoice_IdAndStatusIn(UUID invoiceId, java.util.Collection<com.example.hms.enums.PaymentStatus> statuses);

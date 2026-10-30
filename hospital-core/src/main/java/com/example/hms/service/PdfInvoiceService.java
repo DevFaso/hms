@@ -167,6 +167,19 @@ public class PdfInvoiceService {
      */
     public byte[] generateReceiptPdf(BillingInvoice invoice, PaymentTransaction payment, String receiptNumber,
                                      BigDecimal paidAsOfPayment, Locale locale) {
+        return generateReceiptPdf(invoice, payment, receiptNumber, paidAsOfPayment, null, false, locale);
+    }
+
+    /**
+     * QA D1056: {@code totalOverride}, when given, is the total printed instead
+     * of the one recorded with the payment - for a payment received on another
+     * invoice and carried over to this one (a folded check-in copay), whose
+     * recorded total is the other invoice's. {@code carriedOver} adds the line
+     * saying so.
+     */
+    public byte[] generateReceiptPdf(BillingInvoice invoice, PaymentTransaction payment, String receiptNumber,
+                                     BigDecimal paidAsOfPayment, BigDecimal totalOverride, boolean carriedOver,
+                                     Locale locale) {
         PdfLabels t = PdfLabels.of(messageSource, locale);
         try (var doc = new PDDocument()) {
             var w = new Writer(doc);
@@ -188,11 +201,20 @@ public class PdfInvoiceService {
                 w.down(15);
                 w.text(BODY, 11, MARGIN, t.get("pdf.receipt.reference", payment.getReferenceNumber()));
             }
+            if (carriedOver) {
+                w.down(15);
+                w.text(BODY, 11, MARGIN, t.get("pdf.receipt.carriedOver"));
+            }
             w.down(28);
             w.text(BOLD, 14, MARGIN, t.get("pdf.receipt.amount", money(payment.getAmount())));
             // QA D228: the total when this money was received, not today's.
-            BigDecimal total = payment.getInvoiceTotalAtReceipt() != null
-                ? payment.getInvoiceTotalAtReceipt() : nz(invoice.getTotalAmount());
+            BigDecimal total;
+            if (totalOverride != null) {
+                total = totalOverride;
+            } else {
+                total = payment.getInvoiceTotalAtReceipt() != null
+                    ? payment.getInvoiceTotalAtReceipt() : nz(invoice.getTotalAmount());
+            }
             BigDecimal paid = nz(paidAsOfPayment);
             w.down(24);
             w.text(BODY, 11, MARGIN, t.get(GRAND_TOTAL, money(total)));

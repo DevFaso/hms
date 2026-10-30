@@ -43,7 +43,11 @@ class BillingChargeCreatorGuardTest {
             + "BillingInvoiceServiceImplTest.aSecondCheckInOfTheSameVisitIsNotBilledAgain_D936",
         "service/DeliveryChargeService.java#chargeDelivery",
         "one delivery per labour episode: LaborServiceImpl refuses a second one (maternity.delivery.alreadyRecorded) "
-            + "before the charge is posted");
+            + "before the charge is posted",
+        "service/billing/EncounterCheckoutChargeListener.java#chargeVisit",
+        "QA D972: one visit invoice per visit - a visit that already has a live invoice other than its check-in "
+            + "copay is left alone, the copay is folded in when the draft is issued (QA D210), and medicines are "
+            + "not on it (paid at the pharmacy checkout) - EncounterCheckoutChargeListenerTest");
 
     @Test
     void everyInvoiceCreatorStatesItsNoDoubleChargeRule() throws IOException {

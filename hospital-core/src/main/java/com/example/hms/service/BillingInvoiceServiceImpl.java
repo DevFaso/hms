@@ -1073,11 +1073,30 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         int rank = position.rank();
         BigDecimal paidThen = position.paidThen();
         String receiptNumber = invoice.getInvoiceNumber() + "-R" + rank;
-        byte[] pdf = pdfInvoiceService.generateReceiptPdf(invoice, row, receiptNumber, paidThen, effectiveLocale);
+        // QA D1056: a check-in copay folded onto this visit invoice (QA D210)
+        // was received before the invoice existed, and its row still carries
+        // the copay's own total (1 500) - printed under the visit invoice's
+        // number it read "Total 1 500, nothing due" while 1 000 was owed. Its
+        // receipt now shows this invoice's total, the amount paid as of it, and
+        // says it was paid at the front desk and carried over.
+        byte[] pdf = isFoldedPayment(invoice, row)
+            ? pdfInvoiceService.generateReceiptPdf(invoice, row, receiptNumber, paidThen, invoice.getTotalAmount(),
+                true, effectiveLocale)
+            : pdfInvoiceService.generateReceiptPdf(invoice, row, receiptNumber, paidThen, effectiveLocale);
         return new InvoicePdfResponseDTO(pdf, receiptNumber, invoice.getId());
     }
 
     private record ReceiptPosition(int rank, BigDecimal paidThen) { }
+
+    /**
+     * QA D1056: money received on another invoice and moved onto this one (a
+     * check-in copay folded onto the visit invoice, QA D210): it was received
+     * before this invoice existed.
+     */
+    static boolean isFoldedPayment(BillingInvoice invoice, PaymentTransaction row) {
+        java.time.LocalDateTime received = receivedAt(row);
+        return invoice.getCreatedAt() != null && received != null && received.isBefore(invoice.getCreatedAt());
+    }
 
     /** QA D228: the payment's rank among the money received, and the amount paid as of it. */
     private static ReceiptPosition receiptPosition(List<PaymentTransaction> received, PaymentTransaction row) {
@@ -1180,6 +1199,143 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             .totalRevenue(asAmount(row[4]))
             .balance(asAmount(row[5]))
             .build();
+    }
+
+    /** QA D1059: the widest invoice-date range, sent when a bound of the filter is open. */
+    private static final LocalDate OPEN_FROM = LocalDate.of(1900, 1, 1);
+    private static final LocalDate OPEN_TO = LocalDate.of(9999, 12, 31);
+
+    @Override
+    @Transactional(readOnly = true)
+    public com.example.hms.payload.dto.BillingSummaryDTO summarize(LocalDate fromDate, LocalDate toDate, Locale locale) {
+        if (fromDate == null && toDate == null) {
+            return summarize(locale);
+        }
+        if (fromDate != null && toDate != null && fromDate.isAfter(toDate)) {
+            throw new BusinessException("billing.summary.rangeInverted");
+        }
+        // QA D1059: the tiles follow the list's date filter (invoice date, as the search reads it).
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        List<Object[]> rows = invoiceRepository.summarizeBetween(hospitalId,
+            LocalDate.now(java.time.ZoneId.systemDefault()),
+            fromDate != null ? fromDate : OPEN_FROM, toDate != null ? toDate : OPEN_TO);
+        Object[] row = rows.isEmpty() ? new Object[6] : rows.get(0);
+        return com.example.hms.payload.dto.BillingSummaryDTO.builder()
+            .total(asLong(row[0]))
+            .paid(asLong(row[1]))
+            .outstanding(asLong(row[2]))
+            .overdue(asLong(row[3]))
+            .totalRevenue(asAmount(row[4]))
+            .balance(asAmount(row[5]))
+            .build();
+    }
+
+    /** QA D1059: the pharmacy payments, for the cashier's closing. Setter-injected like the other late additions. */
+    private com.example.hms.repository.pharmacy.PharmacyPaymentRepository pharmacyPaymentRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setPharmacyPaymentRepository(com.example.hms.repository.pharmacy.PharmacyPaymentRepository repository) {
+        this.pharmacyPaymentRepository = repository;
+    }
+
+    private static final String SOURCE_BILLING = "BILLING";
+    private static final String SOURCE_PHARMACY = "PHARMACY";
+
+    /**
+     * QA D1059: the cashier's daily cash closing. What the signed-in cashier
+     * received on {@code date} at the acting hospital (every hospital in global
+     * view): the invoice payments they confirmed (or took at the desk), and the
+     * pharmacy payments they took, totalled per source and method. A payment
+     * reversed or voided since is listed and counted apart: it is not in the
+     * till. Read-only: the closing is a count, not a state change.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public com.example.hms.payload.dto.CashClosingDTO cashClosing(LocalDate date, Locale locale) {
+        UUID cashierId = roleValidator.getCurrentUserId();
+        if (cashierId == null) {
+            throw new BusinessException("billing.cashClosing.userUnknown");
+        }
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        LocalDate day = date != null ? date : LocalDate.now(java.time.ZoneId.systemDefault());
+        java.time.LocalDateTime start = day.atStartOfDay();
+        java.time.LocalDateTime end = day.plusDays(1).atStartOfDay();
+
+        List<com.example.hms.payload.dto.CashClosingDTO.Entry> entries = new java.util.ArrayList<>();
+        for (PaymentTransaction p : paymentTransactionRepository.findReceivedByCashier(cashierId, hospitalId, start, end)) {
+            BillingInvoice invoice = p.getInvoice();
+            entries.add(com.example.hms.payload.dto.CashClosingDTO.Entry.builder()
+                .id(p.getId())
+                .source(SOURCE_BILLING)
+                .receivedAt(receivedAt(p))
+                .document(invoice != null ? invoice.getInvoiceNumber() : null)
+                .patientName(invoice != null && invoice.getPatient() != null ? invoice.getPatient().getFullName() : null)
+                .method(p.getPaymentMethod() != null ? p.getPaymentMethod().name() : null)
+                .reference(p.getReferenceNumber())
+                .amount(p.getAmount())
+                .status(p.getStatus() != null ? p.getStatus().name() : null)
+                .build());
+        }
+        if (pharmacyPaymentRepository != null) {
+            for (com.example.hms.model.pharmacy.PharmacyPayment p
+                    : pharmacyPaymentRepository.findReceivedByCashier(cashierId, hospitalId, start, end)) {
+                entries.add(com.example.hms.payload.dto.CashClosingDTO.Entry.builder()
+                    .id(p.getId())
+                    .source(SOURCE_PHARMACY)
+                    .receivedAt(p.getCreatedAt())
+                    .document(p.getDispense() != null ? p.getDispense().getMedicationName() : null)
+                    .patientName(p.getPatient() != null ? p.getPatient().getFullName() : null)
+                    .method(p.getPaymentMethod() != null ? p.getPaymentMethod().name() : null)
+                    .reference(p.getReferenceNumber())
+                    .amount(p.getAmount())
+                    .status(p.getStatus() != null ? p.getStatus().name() : null)
+                    .build());
+            }
+        }
+        entries.sort(java.util.Comparator.comparing(com.example.hms.payload.dto.CashClosingDTO.Entry::getReceivedAt,
+            java.util.Comparator.nullsFirst(java.util.Comparator.naturalOrder())));
+
+        java.util.Map<String, com.example.hms.payload.dto.CashClosingDTO.MethodTotal> totals = new java.util.LinkedHashMap<>();
+        long receivedCount = 0;
+        long reversedCount = 0;
+        BigDecimal received = BigDecimal.ZERO;
+        BigDecimal reversed = BigDecimal.ZERO;
+        for (com.example.hms.payload.dto.CashClosingDTO.Entry e : entries) {
+            BigDecimal amount = e.getAmount() != null ? e.getAmount() : BigDecimal.ZERO;
+            if (stillCounted(e.getStatus())) {
+                receivedCount++;
+                received = received.add(amount);
+                com.example.hms.payload.dto.CashClosingDTO.MethodTotal t = totals.computeIfAbsent(
+                    e.getSource() + "|" + e.getMethod(),
+                    k -> com.example.hms.payload.dto.CashClosingDTO.MethodTotal.builder()
+                        .source(e.getSource()).method(e.getMethod()).count(0).amount(BigDecimal.ZERO).build());
+                t.setCount(t.getCount() + 1);
+                t.setAmount(t.getAmount().add(amount));
+            } else {
+                reversedCount++;
+                reversed = reversed.add(amount);
+            }
+        }
+        String cashierName = userRepository == null ? null : userRepository.findById(cashierId)
+            .map(u -> ((u.getFirstName() == null ? "" : u.getFirstName()) + " "
+                + (u.getLastName() == null ? "" : u.getLastName())).trim())
+            .orElse(null);
+        return com.example.hms.payload.dto.CashClosingDTO.builder()
+            .date(day)
+            .cashierId(cashierId)
+            .cashierName(cashierName)
+            .byMethod(new java.util.ArrayList<>(totals.values()))
+            .entries(entries)
+            .receivedCount(receivedCount)
+            .receivedAmount(received)
+            .reversedCount(reversedCount)
+            .reversedAmount(reversed)
+            .build();
+    }
+
+    private static boolean stillCounted(String status) {
+        return PaymentStatus.CONFIRMED.name().equals(status)
+            || com.example.hms.enums.PharmacyPaymentStatus.POSTED.name().equals(status);
     }
 
     private static long asLong(Object value) {

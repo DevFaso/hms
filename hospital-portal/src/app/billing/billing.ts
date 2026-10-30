@@ -24,6 +24,7 @@ import { ToastService } from '../core/toast.service';
 import { PermissionService } from '../core/permission.service';
 import { RoleContextService } from '../core/role-context.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { CashClosingComponent } from './cash-closing/cash-closing.component';
 import { formatCfa } from '../shared/i18n/app-locale';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
@@ -43,6 +44,7 @@ type BillingTab = 'all' | 'outstanding' | 'paid' | 'overdue';
     EnumLabelPipe,
     PatientPickerComponent,
     DialogA11yDirective,
+    CashClosingComponent,
   ],
   templateUrl: './billing.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -70,6 +72,9 @@ export class BillingComponent implements OnInit {
   );
   /** QA D973: the front desk takes payments (the server admits the receptionist
    *  on POST /billing-invoices/{id}/payments), so the button is not hidden from it. */
+  /** QA D1059: the cashier's daily cash closing, opened from the page header. */
+  readonly showCashClosing = signal(false);
+
   readonly canRecordPayment = this.roleContext.hasAnyActiveRole([
     'ROLE_SUPER_ADMIN',
     'ROLE_HOSPITAL_ADMIN',
@@ -277,6 +282,9 @@ export class BillingComponent implements OnInit {
     // QA D974: settled by a waiver with no money received: a mistaken waiver is undone by cancelling.
     if (current === 'PAID' && this.editingPaid() === 0) return ['PAID', 'CANCELLED'];
     if (current === 'PAID' || current === 'PARTIALLY_PAID') return [current];
+    // QA D1057: an issued invoice never goes back to DRAFT (the server refuses
+    // it: billing.invoice.noReturnToDraft); it stays as it is or is cancelled.
+    if (current && current !== 'DRAFT') return [current, 'CANCELLED'];
     return ['DRAFT', 'SENT', 'CANCELLED'];
   }
 
@@ -514,18 +522,24 @@ ${this.translate.instant('BILLING.SUPPLEMENTARY_CONFIRM')}`)
    * page of 20 rows undercounted revenue and money owed.
    */
   private refreshStats(): void {
-    this.billingService.getSummary().subscribe({
-      next: (summary) =>
-        this.stats.set({
-          total: Number(summary?.total ?? 0),
-          paid: Number(summary?.paid ?? 0),
-          outstanding: Number(summary?.outstanding ?? 0),
-          overdue: Number(summary?.overdue ?? 0),
-          totalRevenue: Number(summary?.totalRevenue ?? 0),
-          balance: Number(summary?.balance ?? 0),
-        }),
-      error: () => undefined,
-    });
+    // QA D1059: the tiles follow the list's date filter (the invoice date, as the search reads it).
+    this.billingService
+      .getSummary({
+        fromDate: this.filterFromDate() || undefined,
+        toDate: this.filterToDate() || undefined,
+      })
+      .subscribe({
+        next: (summary) =>
+          this.stats.set({
+            total: Number(summary?.total ?? 0),
+            paid: Number(summary?.paid ?? 0),
+            outstanding: Number(summary?.outstanding ?? 0),
+            overdue: Number(summary?.overdue ?? 0),
+            totalRevenue: Number(summary?.totalRevenue ?? 0),
+            balance: Number(summary?.balance ?? 0),
+          }),
+        error: () => undefined,
+      });
   }
 
   setTab(tab: BillingTab): void {

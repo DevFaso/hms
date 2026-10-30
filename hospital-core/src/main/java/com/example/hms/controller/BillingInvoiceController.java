@@ -151,8 +151,23 @@ public class BillingInvoiceController {
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT','ROLE_RECEPTIONIST')")
     @Operation(summary = "Billing KPIs over every invoice in scope")
     public ResponseEntity<com.example.hms.payload.dto.BillingSummaryDTO> summary(
+        @RequestParam(name = "fromDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fromDate,
+        @RequestParam(name = "toDate", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate toDate,
         @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
-        return ResponseEntity.ok(invoiceService.summarize(locale));
+        // QA D1059: the tiles follow the list's date filter; no filter, every invoice in scope.
+        if (fromDate == null && toDate == null) {
+            return ResponseEntity.ok(invoiceService.summarize(locale));
+        }
+        return ResponseEntity.ok(invoiceService.summarize(fromDate, toDate, locale));
+    }
+
+    @GetMapping("/cash-closing")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT','ROLE_RECEPTIONIST')")
+    @Operation(summary = "The signed-in cashier's daily cash closing (QA D1059)")
+    public ResponseEntity<com.example.hms.payload.dto.CashClosingDTO> cashClosing(
+        @RequestParam(name = "date", required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+        @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
+        return ResponseEntity.ok(invoiceService.cashClosing(date, locale));
     }
 
     @PostMapping("/search")
