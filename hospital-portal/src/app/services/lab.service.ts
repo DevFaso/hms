@@ -124,6 +124,8 @@ export interface LabResultTrendPoint {
   resultDate: string;
   resultValue: string;
   resultUnit: string;
+  /** QA D1016/D931 (round 18): the value replaces a released one. */
+  corrected?: boolean;
 }
 
 export interface LabTestDefinition {
@@ -357,6 +359,8 @@ export interface LabResultComparisonPoint {
   resultValue: string;
   resultUnit: string;
   severityFlag: string | null;
+  /** QA D1016/D931 (round 18): the value replaces a released one. */
+  corrected?: boolean;
 }
 
 export interface LabResultComparison {

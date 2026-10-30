@@ -1161,6 +1161,9 @@ export class PatientChartComponent implements OnInit, OnChanges {
         return 'description';
       case 'REFERRAL':
         return 'forward_to_inbox';
+      // QA D959 (round 18): surgical history had no icon of its own.
+      case 'PROCEDURE':
+        return 'medical_services';
       // QA D959 (round 17): the visit's other documents.
       case 'TREATMENT_PLAN':
         return 'assignment';
@@ -1184,6 +1187,10 @@ export class PatientChartComponent implements OnInit, OnChanges {
         return 'vaccines';
       case 'DELIVERY':
         return 'child_care';
+      case 'DEATH':
+        return 'deceased';
+      case 'MICRO_CULTURE':
+        return 'microbiology';
       default:
         return 'event_note';
     }

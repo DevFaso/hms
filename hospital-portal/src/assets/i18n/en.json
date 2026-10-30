@@ -6861,7 +6861,9 @@
         "OBGYN_REFERRAL": "OB/GYN referral",
         "NURSING_NOTE": "Nursing note",
         "IMMUNIZATION": "Immunization",
-        "DELIVERY": "Delivery"
+        "DELIVERY": "Delivery",
+        "DEATH": "Death",
+        "MICRO_CULTURE": "Microbiology culture"
       },
       "SPECIMEN_TYPE": {
         "BLOOD": "Blood",

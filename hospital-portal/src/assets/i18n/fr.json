@@ -6827,7 +6827,9 @@
         "OBGYN_REFERRAL": "Orientation gynéco-obstétricale",
         "NURSING_NOTE": "Note infirmière",
         "IMMUNIZATION": "Vaccination",
-        "DELIVERY": "Accouchement"
+        "DELIVERY": "Accouchement",
+        "DEATH": "Décès",
+        "MICRO_CULTURE": "Culture microbiologique"
       },
       "SPECIMEN_TYPE": {
         "BLOOD": "Sang",

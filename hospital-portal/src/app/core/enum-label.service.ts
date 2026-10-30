@@ -803,6 +803,8 @@ export class EnumLabelService implements OnDestroy {
       NURSING_NOTE: 'Nursing note',
       IMMUNIZATION: 'Immunization',
       DELIVERY: 'Delivery',
+      DEATH: 'Death',
+      MICRO_CULTURE: 'Microbiology culture',
     },
 
     /* ── Clinical / nursing note templates (QA D1076) ──────── */

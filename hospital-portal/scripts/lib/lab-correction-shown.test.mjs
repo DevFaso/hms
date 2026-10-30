@@ -50,6 +50,13 @@ const AGGREGATE_LOOP =
 const LAB_LIST_LOOP =
   /@for\s*\(\s*(\w+)\s+of\s+([^;]*(?:\w*[rR]esults?|\blabs)\b[^;]*);[^)]*\)\s*\{/g;
 
+/**
+ * Any `@for` (round 18 sibling: the lab-results trend history iterated
+ * `cmp.trendHistory` and printed `pt.resultValue`, a list name the shapes
+ * above did not know). A row printing `resultValue` is a lab value.
+ */
+const ANY_LOOP = /@for\s*\(\s*(\w+)\s+of\s+([^;]*);[^)]*\)\s*\{/g;
+
 /** The `{ … }` block that opens at `open` (balanced braces; `{{ }}` interpolations balance too). */
 function blockAt(html, open) {
   let depth = 0;
@@ -84,6 +91,7 @@ function rowBodies(html) {
   return [
     ...loopBodies(html, AGGREGATE_LOOP, 'title|summary'),
     ...loopBodies(html, LAB_LIST_LOOP, 'value|result'),
+    ...loopBodies(html, ANY_LOOP, 'resultValue'),
   ];
 }
 
@@ -221,4 +229,12 @@ test('QA D1016 guard: the scan sees the shapes the defect had', () => {
       .marksCorrection,
     true,
   );
+});
+
+test('QA D1016 round 18: a trend history row printing resultValue is a lab value, whatever the list is called', () => {
+  const badgeElsewhere = `<p>{{ r.resultValue }} <app-lab-correction-badge [corrected]="r.corrected" /></p>`;
+  const trend = `@for (pt of cmp.trendHistory; track pt.labResultId) { <td>{{ pt.resultValue | labValue }}</td> }`;
+  assert.deepEqual(correctionShape(badgeElsewhere + trend), { showsValue: true, marksCorrection: false });
+  const fixed = trend.replace('</td>', '<app-lab-correction-badge [corrected]="pt.corrected" /></td>');
+  assert.equal(correctionShape(badgeElsewhere + fixed).marksCorrection, true);
 });

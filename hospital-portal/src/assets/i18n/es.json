@@ -6861,7 +6861,9 @@
         "OBGYN_REFERRAL": "Derivación a ginecoobstetricia",
         "NURSING_NOTE": "Nota de enfermería",
         "IMMUNIZATION": "Vacunación",
-        "DELIVERY": "Parto"
+        "DELIVERY": "Parto",
+        "DEATH": "Fallecimiento",
+        "MICRO_CULTURE": "Cultivo microbiológico"
       },
       "SPECIMEN_TYPE": {
         "BLOOD": "Sangre",
