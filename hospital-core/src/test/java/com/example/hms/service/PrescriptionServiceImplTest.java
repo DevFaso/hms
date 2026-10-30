@@ -1477,7 +1477,7 @@ class PrescriptionServiceImplTest {
         when(prescriptionMapper.toResponseDTO(any(Prescription.class))).thenReturn(new PrescriptionResponseDTO());
         when(patientAllergyRepository.findByPatient_Id(rx.getPatient().getId())).thenReturn(List.of(allergy));
 
-        PrescriptionResponseDTO signed = prescriptionService.signPrescription(rx.getId(), Locale.ENGLISH);
+        PrescriptionResponseDTO signed = prescriptionService.signPrescription(rx.getId(), null, Locale.ENGLISH);
 
         assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.SIGNED);
         assertThat(signed.getCdsAdvisories()).singleElement()
@@ -1543,7 +1543,7 @@ class PrescriptionServiceImplTest {
             .thenThrow(new com.example.hms.exception.MfaStepUpRefusedException(
                 com.example.hms.exception.MfaStepUpRefusedException.Reason.INVALID));
 
-        assertThatThrownBy(() -> prescriptionService.signPrescription(rx.getId(), Locale.ENGLISH))
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rx.getId(), null, Locale.ENGLISH))
             .isInstanceOf(com.example.hms.exception.MfaStepUpRefusedException.class);
         assertThat(rx.getSignatureValue()).isNull();
         assertThat(rx.getTwoFactorVerifiedAt()).isNull();
@@ -1567,6 +1567,29 @@ class PrescriptionServiceImplTest {
         verify(prescriberReauthentication, never()).requireForControlledSigning(any(), any(), any(), any());
     }
 
+    /** Review round 2: a hard stop on a draft saved before the cap existed is refused at the signature, before any code is spent. */
+    @Test
+    void aHardStopIsRefusedAtTheSignatureBeforeTheReAuthentication() {
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(prescriberUserId);
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(java.util.Optional.of(rx));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(rx.getHospital().getId());
+        when(roleValidator.getCurrentUserId()).thenReturn(prescriberUserId);
+        com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard hardStop =
+            new com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard(
+                "Paracetamol: 6000 mg per day is above the absolute daily maximum of 4000 mg", null,
+                com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard.Indicator.CRITICAL,
+                new com.example.hms.cdshooks.dto.CdsHookDtos.Source("HMS Pediatric Dose Check", null, null),
+                null, null, null, "uuid", Boolean.TRUE);
+        when(cdsRuleEngine.evaluateProposedPrescription(any(), any(), any(), any(), any(), any(), any(), any()))
+            .thenReturn(List.of(hardStop));
+
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rx.getId(), null, Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class);
+        assertThat(rx.getSignatureValue()).isNull();
+        verify(prescriberReauthentication, never()).requireForControlledSigning(any(), any(), any(), any());
+    }
+
     /** Round 18: an ordinary drug signs without any re-authentication. */
     @Test
     void anOrdinaryOrderSignsWithoutReAuthentication() {
@@ -1578,7 +1601,7 @@ class PrescriptionServiceImplTest {
         when(prescriptionRepository.save(any(Prescription.class))).thenAnswer(i -> i.getArgument(0));
         when(prescriptionMapper.toResponseDTO(any(Prescription.class))).thenReturn(new PrescriptionResponseDTO());
 
-        prescriptionService.signPrescription(rx.getId(), Locale.ENGLISH);
+        prescriptionService.signPrescription(rx.getId(), null, Locale.ENGLISH);
 
         assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.SIGNED);
         verify(prescriberReauthentication, never()).requireForControlledSigning(any(), any(), any(), any());
@@ -1600,7 +1623,7 @@ class PrescriptionServiceImplTest {
         when(prescriptionMapper.toResponseDTO(any(Prescription.class))).thenReturn(new PrescriptionResponseDTO());
         when(patientAllergyRepository.findByPatient_Id(rx.getPatient().getId())).thenReturn(List.of(allergy));
 
-        PrescriptionResponseDTO signed = prescriptionService.signPrescription(rx.getId(), Locale.ENGLISH);
+        PrescriptionResponseDTO signed = prescriptionService.signPrescription(rx.getId(), null, Locale.ENGLISH);
 
         assertThat(signed.getCdsAdvisories()).isNullOrEmpty();
     }
@@ -3817,7 +3840,7 @@ class PrescriptionServiceImplTest {
         when(prescriptionMapper.toResponseDTO(any(Prescription.class)))
             .thenReturn(new PrescriptionResponseDTO());
 
-        prescriptionService.signPrescription(rx.getId(), java.util.Locale.ENGLISH);
+        prescriptionService.signPrescription(rx.getId(), null, java.util.Locale.ENGLISH);
 
         assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.SIGNED);
         assertThat(rx.getSignedAt()).isNotNull();
@@ -3839,7 +3862,7 @@ class PrescriptionServiceImplTest {
         when(roleValidator.getCurrentUserId()).thenReturn(UUID.randomUUID());
 
         UUID rxId = rx.getId();
-        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, java.util.Locale.ENGLISH))
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, null, java.util.Locale.ENGLISH))
             .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class)
             .hasMessage("Only the prescribing clinician can sign this prescription.");
         assertThat(rx.getSignatureValue()).isNull();
@@ -3855,7 +3878,7 @@ class PrescriptionServiceImplTest {
         when(roleValidator.requireActiveHospitalId()).thenReturn(rx.getHospital().getId());
 
         UUID rxId = rx.getId();
-        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, java.util.Locale.ENGLISH))
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, null, java.util.Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("already been signed");
     }
@@ -3873,7 +3896,7 @@ class PrescriptionServiceImplTest {
         when(roleValidator.getCurrentUserId()).thenReturn(prescriberUserId);
 
         UUID rxId = rx.getId();
-        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, java.util.Locale.ENGLISH))
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, null, java.util.Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
             .extracting("messageKey").isEqualTo("prescription.safeguard.CONTROLLED_SUBSTANCE.status");
         assertThat(rx.getSignatureValue()).isNull();
@@ -3889,7 +3912,7 @@ class PrescriptionServiceImplTest {
         when(roleValidator.requireActiveHospitalId()).thenReturn(rx.getHospital().getId());
 
         UUID rxId = rx.getId();
-        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, java.util.Locale.ENGLISH))
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, null, java.util.Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
             // QA D934 class: the status in words, not the enum constant.
             .hasMessageContaining("draft or awaiting signature")
@@ -3905,7 +3928,7 @@ class PrescriptionServiceImplTest {
         when(roleValidator.requireActiveHospitalId()).thenReturn(UUID.randomUUID());
 
         UUID rxId = rx.getId();
-        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, java.util.Locale.ENGLISH))
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, null, java.util.Locale.ENGLISH))
             .isInstanceOf(ResourceNotFoundException.class);
     }
 
@@ -5290,7 +5313,7 @@ class PrescriptionServiceImplTest {
         when(prescriptionRepository.save(rx)).thenReturn(rx);
         when(prescriptionMapper.toResponseDTO(rx)).thenReturn(PrescriptionResponseDTO.builder().build());
 
-        prescriptionService.signPrescription(rx.getId(), Locale.ENGLISH);
+        prescriptionService.signPrescription(rx.getId(), null, Locale.ENGLISH);
 
         assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.SIGNED);
         assertThat(rx.getSignedBy()).isSameAs(doctor);
@@ -5321,7 +5344,7 @@ class PrescriptionServiceImplTest {
         when(staffRepository.findByUserIdAndHospitalId(doctorUserId, rxHospitalId)).thenReturn(Optional.of(doctor));
 
         UUID rxId = rx.getId();
-        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, Locale.ENGLISH))
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, null, Locale.ENGLISH))
             .isInstanceOf(com.example.hms.exception.BusinessException.class)
             .extracting("messageKey").isEqualTo("prescription.sign.ownCosign");
         assertThat(rx.getSignatureValue()).isNull();
@@ -5342,7 +5365,7 @@ class PrescriptionServiceImplTest {
         lenient().when(roleValidator.isSigningPhysician(doctorUserId, rxHospitalId)).thenReturn(true);
 
         UUID rxId = rx.getId();
-        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, Locale.ENGLISH))
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, null, Locale.ENGLISH))
             .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
         assertThat(rx.getSignatureValue()).isNull();
     }
@@ -5365,7 +5388,7 @@ class PrescriptionServiceImplTest {
         lenient().when(roleValidator.isSigningPhysician(doctorUserId, rxHospitalId)).thenReturn(true);
 
         UUID rxId = rx.getId();
-        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, Locale.ENGLISH))
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, null, Locale.ENGLISH))
             .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
         assertThat(rx.getSignatureValue()).isNull();
         verify(staffRepository, never()).findByUserIdAndHospitalId(any(), any());

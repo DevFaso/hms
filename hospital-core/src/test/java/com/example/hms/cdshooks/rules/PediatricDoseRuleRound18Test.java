@@ -118,6 +118,26 @@ class PediatricDoseRuleRound18Test {
         assertThat(anyHardStop(cards)).isTrue();
     }
 
+    /** Review round 2: a count that does not divide the day, and an interval over a day, still count. */
+    @Test
+    void fiveTimesADayAndEveryTwoDaysAreCountedAgainstTheDailyCap() {
+        MedicationCatalogItem capped = MedicationCatalogItem.builder()
+            .nameFr("Aciclovir").genericName("Aciclovir").strength("200").strengthUnit("mg")
+            .pediatricMaxDailyMg(new BigDecimal("1000"))
+            .build();
+
+        assertThat(anyHardStop(rule.evaluate(ctx(childAged(6, 0, 0), capped, "300 mg", "5 fois par jour",
+            19.0, LocalDateTime.now())))).as("5 x 300 = 1500 mg > 1000").isTrue();
+        assertThat(anyHardStop(rule.evaluate(ctx(childAged(6, 0, 0), capped, "1200 mg", "q48h",
+            19.0, LocalDateTime.now())))).as("a full dose on the dosing day").isTrue();
+        assertThat(anyHardStop(rule.evaluate(ctx(childAged(6, 0, 0), capped, "150 mg", "5 fois par jour",
+            19.0, LocalDateTime.now())))).isFalse();
+        assertThat(com.example.hms.service.impl.MarDoseSchedule.dosesPerDay("5 fois par jour")).isEqualTo(5.0);
+        assertThat(com.example.hms.service.impl.MarDoseSchedule.dosesPerDay("q48h")).isEqualTo(0.5);
+        assertThat(com.example.hms.service.impl.MarDoseSchedule.dosesPerDay("q6h")).isEqualTo(4.0);
+        assertThat(com.example.hms.service.impl.MarDoseSchedule.dosesPerDay("si besoin")).isNull();
+    }
+
     @Test
     void correctDosesRaiseNothing() {
         Patient child = childAged(6, 0, 0);

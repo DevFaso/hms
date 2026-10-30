@@ -88,7 +88,7 @@ public class PrescriberReauthenticationService {
             try {
                 mfaService.requireStepUp(userId, mfaCode, ACTION, true);
             } catch (MfaStepUpRefusedException ex) {
-                audit(userId, prescriptionId, METHOD_TOTP, AuditStatus.FAILURE, ex.getReason().code());
+                audit(userId, prescriptionId, METHOD_TOTP, AuditStatus.FAILURE, ex.getReason().name());
                 throw ex;
             }
             audit(userId, prescriptionId, METHOD_TOTP, AuditStatus.SUCCESS, null);
@@ -125,7 +125,7 @@ public class PrescriberReauthenticationService {
 
     private MfaStepUpRefusedException refused(UUID userId, UUID prescriptionId, String method,
                                               MfaStepUpRefusedException.Reason reason) {
-        audit(userId, prescriptionId, method, AuditStatus.FAILURE, reason.code());
+        audit(userId, prescriptionId, method, AuditStatus.FAILURE, reason.name());
         return new MfaStepUpRefusedException(reason);
     }
 
@@ -134,6 +134,8 @@ public class PrescriberReauthenticationService {
             String description = status == AuditStatus.SUCCESS
                 ? "Re-authentication to sign a controlled-drug prescription verified by " + method
                 : "Re-authentication to sign a controlled-drug prescription refused (" + reasonCode + ")";
+            // reasonCode is the reason's NAME (PASSWORD_INVALID): a closed token
+            // the audit screen translates (AUDIT.RX_SIGN_REAUTH.*).
             auditEventLogService.logEvent(AuditEventRequestDTO.builder()
                 .userId(userId)
                 .eventType(AuditEventType.PRESCRIPTION_SIGN_REAUTHENTICATION)

@@ -2000,6 +2000,24 @@
       "CREDIT_NOTE": "Nota de crédito",
       "DISCOUNT": "Descuento",
       "WAIVER": "Exención"
+    },
+    "RX_SIGN_REAUTH": {
+      "TOTP": "código de autenticación",
+      "PASSWORD": "contraseña",
+      "REQUIRED": "ningún código introducido",
+      "INVALID": "código erróneo",
+      "CHALLENGE": "inicio de sesión no completado",
+      "NOT_ENROLLED": "ninguna aplicación de autenticación",
+      "UNAVAILABLE": "autenticación no disponible",
+      "UNIDENTIFIED": "cuenta no identificada",
+      "LOCKED": "demasiados códigos erróneos",
+      "REUSED": "código ya utilizado",
+      "IMPERSONATION": "sesión de soporte",
+      "PASSWORD_REQUIRED": "ninguna contraseña introducida",
+      "PASSWORD_INVALID": "contraseña errónea",
+      "PASSWORD_LOCKED": "demasiadas contraseñas erróneas",
+      "SIGNING_IMPERSONATION": "sesión de soporte",
+      "SIGNING_NOT_ENROLLED": "aplicación de autenticación necesaria para esta cuenta"
     }
   },
   "BILLING": {

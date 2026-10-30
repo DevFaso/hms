@@ -439,6 +439,12 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // this very call (EPCS-style step-up). The proof is written on the
         // order as its two-factor verification, for this signature only; the
         // tick-keyed safeguard below then has the step it waited for.
+        // Review of round 18: a draft saved before its catalogue item had an
+        // absolute daily maximum (or with an override) is checked again at
+        // the signature; a hard stop is never signed. Before the
+        // re-authentication, so no code is spent on a refusal.
+        refuseHardStopAtSigning(prescription);
+
         if (controlledResolver.isControlled(prescription)) {
             controlledSubstanceGuard.requireCosignedFor(prescription, PrescriptionStatus.SIGNED);
             UUID signerUserId = signer.getUser() != null ? signer.getUser().getId() : null;
@@ -474,6 +480,30 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             signed.setCdsAdvisories(advisories);
         }
         return signed;
+    }
+
+    /** Review of round 18: the CDS hard stop (absolute daily maximum) re-run on the order being signed. */
+    private void refuseHardStopAtSigning(Prescription prescription) {
+        UUID hospitalId = prescription.getHospital() != null ? prescription.getHospital().getId() : null;
+        com.example.hms.model.medication.MedicationCatalogItem item = null;
+        if (medicationCatalogItemRepository != null && hospitalId != null
+                && prescription.getMedicationCatalogItemId() != null) {
+            item = medicationCatalogItemRepository
+                .findByIdAndHospital_Id(prescription.getMedicationCatalogItemId(), hospitalId).orElse(null);
+        }
+        List<CdsCard> cards = cdsRuleEngine.evaluateProposedPrescription(prescription.getPatient(), hospitalId,
+            prescription.getMedicationName(), prescription.getMedicationCode(), prescription.getDosage(),
+            prescription.getFrequency(), item, prescription.getId());
+        if (cards == null) {
+            return;
+        }
+        for (CdsCard card : cards) {
+            if (card.blocksOverride()) {
+                throw new CdsCriticalBlockException(
+                    com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.cds.hardStop", card.summary()),
+                    cards);
+            }
+        }
     }
 
     /**

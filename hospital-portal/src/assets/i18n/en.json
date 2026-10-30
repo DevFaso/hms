@@ -2000,6 +2000,24 @@
       "CREDIT_NOTE": "Credit note",
       "DISCOUNT": "Discount",
       "WAIVER": "Waiver"
+    },
+    "RX_SIGN_REAUTH": {
+      "TOTP": "authenticator code",
+      "PASSWORD": "password",
+      "REQUIRED": "no code sent",
+      "INVALID": "wrong code",
+      "CHALLENGE": "sign-in not completed",
+      "NOT_ENROLLED": "no authenticator",
+      "UNAVAILABLE": "authenticator unavailable",
+      "UNIDENTIFIED": "account not identified",
+      "LOCKED": "too many wrong codes",
+      "REUSED": "code already used",
+      "IMPERSONATION": "support session",
+      "PASSWORD_REQUIRED": "no password sent",
+      "PASSWORD_INVALID": "wrong password",
+      "PASSWORD_LOCKED": "too many wrong passwords",
+      "SIGNING_IMPERSONATION": "support session",
+      "SIGNING_NOT_ENROLLED": "authenticator required for this account"
     }
   },
   "BILLING": {

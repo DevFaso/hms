@@ -948,11 +948,13 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     key: 'AUDIT.DESC.RX_SIGN_REAUTH_VERIFIED',
     re: /^Re-authentication to sign a controlled-drug prescription verified by (\S+)$/,
     params: ['method'],
+    localise: { method: 'phrase:RX_SIGN_REAUTH' },
   },
   {
     key: 'AUDIT.DESC.RX_SIGN_REAUTH_REFUSED',
     re: /^Re-authentication to sign a controlled-drug prescription refused \((\S+)\)$/,
     params: ['reason'],
+    localise: { reason: 'phrase:RX_SIGN_REAUTH' },
   },
   {
     key: 'AUDIT.DESC.ALLERGY_OVERRIDE',

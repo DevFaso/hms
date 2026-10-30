@@ -124,8 +124,11 @@ public class PediatricDoseRule implements CdsRule {
             this.item = context.proposedCatalogItem();
             this.age = age;
             this.ageMonths = ageMonths;
-            Integer interval = MarDoseSchedule.intervalHours(context.proposedFrequency());
-            this.dosesPerDay = interval == null ? null : 24d / interval;
+            // Review of round 18: the doses given on a dosing day - at least the
+            // dose itself (q48h is still a full dose that day); a count that
+            // does not divide the day ("5 fois par jour") is read as written.
+            Double perDay = MarDoseSchedule.dosesPerDay(context.proposedFrequency());
+            this.dosesPerDay = perDay == null ? null : Math.max(1d, perDay);
         }
 
         String medication() {

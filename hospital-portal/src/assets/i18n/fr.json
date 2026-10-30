@@ -2000,6 +2000,24 @@
       "CREDIT_NOTE": "Avoir",
       "DISCOUNT": "Remise",
       "WAIVER": "Exonération"
+    },
+    "RX_SIGN_REAUTH": {
+      "TOTP": "code d’authentification",
+      "PASSWORD": "mot de passe",
+      "REQUIRED": "aucun code saisi",
+      "INVALID": "code erroné",
+      "CHALLENGE": "connexion non terminée",
+      "NOT_ENROLLED": "aucune application d’authentification",
+      "UNAVAILABLE": "authentification indisponible",
+      "UNIDENTIFIED": "compte non identifié",
+      "LOCKED": "trop de codes erronés",
+      "REUSED": "code déjà utilisé",
+      "IMPERSONATION": "session de support",
+      "PASSWORD_REQUIRED": "aucun mot de passe saisi",
+      "PASSWORD_INVALID": "mot de passe erroné",
+      "PASSWORD_LOCKED": "trop de mots de passe erronés",
+      "SIGNING_IMPERSONATION": "session de support",
+      "SIGNING_NOT_ENROLLED": "application d’authentification requise pour ce compte"
     }
   },
   "BILLING": {
