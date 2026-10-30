@@ -9958,12 +9958,12 @@
     "ADD_IMMUNIZATION": "Add immunization",
     "EDIT_IMMUNIZATION": "Edit immunization",
     "NO_IMMUNIZATIONS": "No immunizations recorded.",
-    "IMMUNIZATION_REQUIRED_FIELDS": "Vaccine code, name and administration date are required",
+    "IMMUNIZATION_REQUIRED_FIELDS": "Vaccine name and administration date are required",
     "IMMUNIZATION_CREATED": "Immunization recorded",
     "IMMUNIZATION_UPDATED": "Immunization updated",
     "IMMUNIZATION_SAVE_ERROR": "Failed to save immunization",
     "VACCINE": "Vaccine",
-    "VACCINE_CODE": "Vaccine code (CVX)",
+    "VACCINE_CODE": "Vaccine code (CVX, optional)",
     "ADMINISTERED": "Administered",
     "DOSE": "Dose",
     "DOSE_NUMBER": "Dose number",
@@ -10010,9 +10010,10 @@
       "TD": "Td (tetanus-diphtheria)",
       "VAA": "Yellow fever",
       "VPI": "IPV (injectable polio)",
-      "VPO": "OPV (oral polio)"
+      "VPO": "OPV (oral polio)",
+      "HEPB0": "Hepatitis B (birth dose)"
     },
-    "VACCINE_CODE_HINT": "Taken from an earlier dose of the same vaccine in this chart, when there is one; otherwise the code your hospital’s DHIS2 export uses."
+    "VACCINE_CODE_HINT": "Filled from the PEV vaccine chosen (CDC CVX table, checked 2026-10-30), or from an earlier dose of the same vaccine in this chart. Optional and editable; MenAfriVac and the malaria vaccine have no CVX code."
   },
   "MATERNITY": {
     "GA": "Gestational age",

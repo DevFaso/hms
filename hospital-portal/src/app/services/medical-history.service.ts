@@ -216,7 +216,8 @@ export interface ImmunizationBase {
 export interface ImmunizationRequest extends ImmunizationBase {
   patientId: string;
   hospitalId: string;
-  vaccineCode: string;
+  /** CDC CVX code; optional (QA D1003). */
+  vaccineCode?: string;
   vaccineDisplay: string;
   administrationDate: string;
   status: string;

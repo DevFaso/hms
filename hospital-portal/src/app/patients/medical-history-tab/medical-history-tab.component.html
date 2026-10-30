@@ -721,15 +721,16 @@
             </datalist>
           </div>
           <div class="field">
-            <label for="im-code">{{ 'MED_HISTORY.VACCINE_CODE' | translate }} *</label>
+            <label for="im-code">{{ 'MED_HISTORY.VACCINE_CODE' | translate }}</label>
             <input
               id="im-code"
               type="text"
               [(ngModel)]="immunizationForm.vaccineCode"
               aria-describedby="im-code-hint"
             />
-            <!-- QA D1003: the code is the one this patient's earlier dose of the
-                 same vaccine carries, when there is one; no code is invented. -->
+            <!-- QA D1003 (round 17): optional. A PEV vaccine fills its verified
+                 CVX code (pev-cvx.ts); any other vaccine takes the code of an
+                 earlier dose of it in this chart. Always editable. -->
             <p class="field-hint" id="im-code-hint">
               {{ 'MED_HISTORY.VACCINE_CODE_HINT' | translate }}
             </p>
@@ -849,7 +850,6 @@
           class="btn-primary"
           [disabled]="
             immunizationSaving() ||
-            !immunizationForm.vaccineCode ||
             !immunizationForm.vaccineDisplay
           "
           (click)="submitImmunization()"

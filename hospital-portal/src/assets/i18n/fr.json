@@ -9958,12 +9958,12 @@
     "ADD_IMMUNIZATION": "Ajouter une vaccination",
     "EDIT_IMMUNIZATION": "Modifier la vaccination",
     "NO_IMMUNIZATIONS": "Aucune vaccination enregistrée.",
-    "IMMUNIZATION_REQUIRED_FIELDS": "Le code, le nom du vaccin et la date d'administration sont requis",
+    "IMMUNIZATION_REQUIRED_FIELDS": "Le nom du vaccin et la date d’administration sont requis",
     "IMMUNIZATION_CREATED": "Vaccination enregistrée",
     "IMMUNIZATION_UPDATED": "Vaccination mise à jour",
     "IMMUNIZATION_SAVE_ERROR": "Échec de l'enregistrement de la vaccination",
     "VACCINE": "Vaccin",
-    "VACCINE_CODE": "Code vaccin (CVX)",
+    "VACCINE_CODE": "Code vaccin (CVX, facultatif)",
     "ADMINISTERED": "Administré",
     "DOSE": "Dose",
     "DOSE_NUMBER": "Numéro de dose",
@@ -10010,9 +10010,10 @@
       "TD": "Td (tétanos-diphtérie)",
       "VAA": "VAA (fièvre jaune)",
       "VPI": "VPI (polio injectable)",
-      "VPO": "VPO (polio oral)"
+      "VPO": "VPO (polio oral)",
+      "HEPB0": "Hépatite B (dose de naissance)"
     },
-    "VACCINE_CODE_HINT": "Repris d’une dose antérieure du même vaccin dans ce dossier, s’il y en a une ; sinon le code utilisé par l’export DHIS2 de l’établissement."
+    "VACCINE_CODE_HINT": "Rempli à partir du vaccin PEV choisi (table CVX du CDC, vérifiée le 30/10/2026) ou d’une dose antérieure du même vaccin dans ce dossier. Facultatif et modifiable ; le MenAfriVac et le vaccin antipaludique n’ont pas de code CVX."
   },
   "MATERNITY": {
     "GA": "Terme",

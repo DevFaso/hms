@@ -9958,12 +9958,12 @@
     "ADD_IMMUNIZATION": "Agregar vacuna",
     "EDIT_IMMUNIZATION": "Editar vacuna",
     "NO_IMMUNIZATIONS": "Sin vacunas registradas.",
-    "IMMUNIZATION_REQUIRED_FIELDS": "El código, el nombre de la vacuna y la fecha de administración son obligatorios",
+    "IMMUNIZATION_REQUIRED_FIELDS": "El nombre de la vacuna y la fecha de administración son obligatorios",
     "IMMUNIZATION_CREATED": "Vacuna registrada",
     "IMMUNIZATION_UPDATED": "Vacuna actualizada",
     "IMMUNIZATION_SAVE_ERROR": "Error al guardar la vacuna",
     "VACCINE": "Vacuna",
-    "VACCINE_CODE": "Código de vacuna (CVX)",
+    "VACCINE_CODE": "Código de vacuna (CVX, opcional)",
     "ADMINISTERED": "Administrada",
     "DOSE": "Dosis",
     "DOSE_NUMBER": "Número de dosis",
@@ -10010,9 +10010,10 @@
       "TD": "Td (tétanos-difteria)",
       "VAA": "Fiebre amarilla",
       "VPI": "VPI (polio inactivada)",
-      "VPO": "VPO (polio oral)"
+      "VPO": "VPO (polio oral)",
+      "HEPB0": "Hepatitis B (dosis al nacer)"
     },
-    "VACCINE_CODE_HINT": "Tomado de una dosis anterior de la misma vacuna en esta historia, si la hay; si no, el código que usa la exportación DHIS2 del centro."
+    "VACCINE_CODE_HINT": "Se rellena a partir de la vacuna del PEV elegida (tabla CVX de los CDC, verificada el 30/10/2026) o de una dosis anterior de la misma vacuna en esta historia. Opcional y editable; MenAfriVac y la vacuna contra la malaria no tienen código CVX."
   },
   "MATERNITY": {
     "GA": "Edad gestacional",
