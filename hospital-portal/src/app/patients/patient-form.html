@@ -463,7 +463,7 @@
           <tr>
             <td>{{ c.fullName }}</td>
             <td>{{ c.mrn ?? '—' }}</td>
-            <td>{{ c.dateOfBirth ?? '—' }}</td>
+            <td>{{ c.dateOfBirth ? (c.dateOfBirth | serverTime | date: 'mediumDate') : '—' }}</td>
             <td>{{ c.phone ?? '—' }}</td>
             <td>
               <span class="confidence-bar">

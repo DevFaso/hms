@@ -304,6 +304,18 @@ describe('PermissionService', () => {
     expect(service.hasActivePermission('Create Encounters')).toBeTrue();
   });
 
+  it('QA D997 (round 17): a token scoped to the acting role still hides another held role’s grant', () => {
+    // The token names the lab director alone; the backend's merged grants and
+    // the roles offered at login still carry the doctor's.
+    setup(['ROLE_LAB_DIRECTOR']);
+    const roleContext = TestBed.inject(RoleContextService);
+    roleContext.setHeldRoles(['ROLE_LAB_DIRECTOR', 'ROLE_DOCTOR']);
+    roleContext.setRoles(['ROLE_LAB_DIRECTOR']);
+    roleContext.activeRole = 'ROLE_LAB_DIRECTOR';
+    spyOn(service, 'hasPermission').and.callFake((p: string) => p === 'Create Encounters');
+    expect(service.hasActivePermission('Create Encounters')).toBeFalse();
+  });
+
   it('QA D997 review: a grant only the backend carries still shows for the acting role', () => {
     setup(['ROLE_RECEPTIONIST']);
     const roleContext = TestBed.inject(RoleContextService);

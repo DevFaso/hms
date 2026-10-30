@@ -83,7 +83,8 @@
             <div class="workboard-card-meta">
               <span class="meta-item">
                 <span class="material-symbols-outlined">schedule</span>
-                {{ e.encounterDate | serverTime | date: 'shortTime' }}
+                <!-- QA D1039: the arrival time, never the visit day's midnight (00:00). -->
+                {{ waitStart(e) | serverTime | date: 'shortTime' }}
               </span>
             </div>
             <div class="workboard-card-actions">
@@ -1113,6 +1114,11 @@
         [placeholder]="'NURSE.ENTER_REASON' | translate"
         rows="3"
       ></textarea>
+      <!-- QA D922 (decision 2026-10-28): a controlled drug is given with a
+           second clinician of this hospital as witness. -->
+      @if (promptNeedsWitness()) {
+        <app-witness-picker inputId="mar-witness" (witnessChange)="witnessUserId.set($event)" />
+      }
       <div class="modal-actions">
         <button class="modal-btn modal-cancel" (click)="cancelHoldRefuse()">
           {{ 'COMMON.CANCEL' | translate }}
@@ -1120,7 +1126,7 @@
         <button
           class="modal-btn modal-confirm"
           (click)="confirmHoldRefuse()"
-          [disabled]="!reasonText()"
+          [disabled]="!reasonText() || (promptNeedsWitness() && !witnessUserId())"
         >
           {{ 'NURSE.CONFIRM' | translate }}
           {{ reasonActionLabelKey() | translate }}
@@ -1305,6 +1311,19 @@
             {{ 'NURSE.ON_OXYGEN' | translate }}
           </label>
         </div>
+        <!-- QA D1045: the pain reassessment is charted with the ward vitals. -->
+        <div class="vitals-field">
+          <label for="vf-pain">{{ 'NURSE.PAIN_SCORE' | translate }}</label>
+          <input
+            id="vf-pain"
+            type="number"
+            min="0"
+            max="10"
+            step="1"
+            [value]="vitalsForm().painScale ?? ''"
+            (input)="updateVitalsField('painScale', $any($event.target).value)"
+          />
+        </div>
         <div class="vitals-field vitals-field-full">
           <label for="vf-notes">{{ 'NURSE.NOTES' | translate }}</label>
           <textarea
@@ -1359,9 +1378,12 @@
       (keydown.enter)="$event.stopPropagation()"
       tabindex="-1"
       role="dialog"
+      aria-modal="true"
+      aria-labelledby="task-create-title"
+      (keydown.escape)="closeTaskCreate()"
     >
       <div class="modal-header">
-        <h3>{{ 'NURSE.CREATE_TASK' | translate }}</h3>
+        <h3 id="task-create-title">{{ 'NURSE.CREATE_TASK' | translate }}</h3>
         <button
           [attr.aria-label]="'COMMON.CLOSE' | translate"
           class="modal-close"
@@ -1478,9 +1500,12 @@
       (keydown.enter)="$event.stopPropagation()"
       tabindex="-1"
       role="dialog"
+      aria-modal="true"
+      aria-labelledby="handoff-create-title"
+      (keydown.escape)="closeHandoffCreate()"
     >
       <div class="modal-header">
-        <h3>{{ 'NURSE.NEW_HANDOFF' | translate }}</h3>
+        <h3 id="handoff-create-title">{{ 'NURSE.NEW_HANDOFF' | translate }}</h3>
         <button
           [attr.aria-label]="'COMMON.CLOSE' | translate"
           class="modal-close"
@@ -1614,9 +1639,14 @@
       (keydown.enter)="$event.stopPropagation()"
       tabindex="-1"
       role="dialog"
+      aria-modal="true"
+      aria-labelledby="care-note-title"
+      (keydown.escape)="closeCareNote()"
     >
       <div class="modal-header">
-        <h3>{{ 'NURSE.CARE_NOTE' | translate }} — {{ careNoteFor()!.patientName }}</h3>
+        <h3 id="care-note-title">
+          {{ 'NURSE.CARE_NOTE' | translate }} — {{ careNoteFor()!.patientName }}
+        </h3>
         <button
           [attr.aria-label]="'COMMON.CLOSE' | translate"
           class="modal-close"
@@ -1631,6 +1661,7 @@
           <input
             id="cn-title"
             type="text"
+            maxlength="255"
             class="reason-input"
             [placeholder]="'NURSE.NOTE_TITLE' | translate"
             [value]="careNoteForm().title ?? ''"

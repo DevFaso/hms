@@ -166,6 +166,8 @@ export interface TriageSubmissionRequest {
   /** NEWS2 (P3 #25b): ACVPU consciousness assessment. */
   consciousnessLevel?: 'ALERT' | 'NEW_CONFUSION' | 'VOICE' | 'PAIN' | 'UNRESPONSIVE';
   painScale?: number;
+  /** QA D1031: the antenatal fundal height, in cm. */
+  fundalHeightCm?: number;
   chiefComplaint?: string;
   esiScore: number;
   fallRisk?: boolean;

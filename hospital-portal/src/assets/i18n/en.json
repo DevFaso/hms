@@ -4485,7 +4485,16 @@
     "LAST_DOSE": "Last dose:",
     "NOT_YET_DUE": "Not yet due",
     "COURSE_ENDED": "Course ended",
-    "CONTROLLED_SUBSTANCE": "Controlled substance"
+    "CONTROLLED_SUBSTANCE": "Controlled substance",
+    "WITNESS": {
+      "LABEL": "Witness (second clinician)",
+      "CHOOSE": "Choose the witness",
+      "HINT": "Controlled drug: a second nurse, midwife or doctor of this hospital witnesses the dose.",
+      "NONE": "No other active clinician in this hospital can witness the dose.",
+      "LOAD_FAILED": "The list of witnesses could not be loaded.",
+      "REQUIRED": "Choose the witness of this controlled dose."
+    },
+    "PAIN_SCORE": "Pain (0-10)"
   },
   "ONBOARDING": {
     "ABILITIES_TITLE": "Your Abilities",
@@ -6841,7 +6850,11 @@
         "NOTE": "Clinical note",
         "PRESCRIPTION": "Prescription",
         "PROCEDURE": "Procedure",
-        "REFERRAL": "Referral"
+        "REFERRAL": "Referral",
+        "TREATMENT_PLAN": "Treatment plan",
+        "CONSULTATION": "Consultation request",
+        "DISCHARGE_SUMMARY": "Discharge summary",
+        "DOCUMENT": "Issued document"
       },
       "SPECIMEN_TYPE": {
         "BLOOD": "Blood",
@@ -8525,7 +8538,8 @@
     "TEMPERATURE": "Temperature",
     "TITLE": "Triage Assessment",
     "VITAL_SIGNS": "Vital Signs",
-    "WEIGHT": "Weight"
+    "WEIGHT": "Weight",
+    "FUNDAL_HEIGHT": "Fundal height (cm) — pregnancy"
   },
   "INTAKE": {
     "ADD_ALLERGY": "Add Allergy",
@@ -8558,7 +8572,14 @@
     "SUBMIT": "Submit Intake",
     "SUBMIT_FAILED": "Failed to submit nursing intake. Please try again.",
     "TITLE": "Nursing Intake",
-    "ALLERGY_SEVERITY_ROW": "Allergy severity for row {{row}}"
+    "ALLERGY_SEVERITY_ROW": "Allergy severity for row {{row}}",
+    "ALLERGEN_ROW": "Allergen, row {{row}}",
+    "ALLERGY_CATEGORY_ROW": "Allergy category, row {{row}}",
+    "ALLERGY_REACTION_ROW": "Reaction, row {{row}}",
+    "MED_NAME_ROW": "Medication, row {{row}}",
+    "MED_DOSAGE_ROW": "Dosage, row {{row}}",
+    "MED_FREQUENCY_ROW": "Frequency, row {{row}}",
+    "MED_ROUTE_ROW": "Route, row {{row}}"
   },
   "PRE_CHECKIN": {
     "ADDRESS": "Address",
@@ -8634,7 +8655,9 @@
     "COMPLETE_EXAM": "Complete Exam",
     "READY_DISCHARGE": "Ready for D/C",
     "NO_PATIENTS": "No patients",
-    "COLUMN_PATIENTS": "{{column}} patients"
+    "COLUMN_PATIENTS": "{{column}} patients",
+    "START_VISIT": "Start the visit",
+    "START_FAILED": "The visit could not be started."
   },
   "CHECKOUT": {
     "TITLE": "Check-Out Patient",
@@ -8969,7 +8992,8 @@
     "VERIF_UNCONFIRMED": "Unconfirmed",
     "LAB_STATUS_QUALITATIVE": "Qualitative result: read by your clinician",
     "LAB_STATUS_NOT_INTERPRETED": "Not interpreted: no reference range",
-    "CODE_PLACEHOLDER": "e.g. B54 (malaria)"
+    "CODE_PLACEHOLDER": "e.g. B54 (malaria)",
+    "PREGNANCY": "Ongoing pregnancy: {{weeks}} weeks + {{days}} days"
   },
   "PHARMACY": {
     "QUEUE_CLAIM": {
@@ -9839,8 +9863,8 @@
   "PATIENT_DOCUMENTS": {
     "TAB": "Documents",
     "TAB_TITLE": "Documents the patient uploaded through the portal",
-    "TITLE": "Patient-uploaded documents",
-    "HINT": "Outside lab reports, referral letters and other files the patient added from their portal. Read-only here; every download is recorded in the audit log.",
+    "TITLE": "Patient documents",
+    "HINT": "Files the patient added from their portal (outside lab reports, referral letters…) and the documents this hospital issued (medical certificates). Read-only here; every download is recorded in the audit log.",
     "FILTER_TYPE": "Filter by type",
     "FILTER_ALL": "All types",
     "LOADING": "Loading documents…",
@@ -9860,7 +9884,9 @@
     "PAGER": "Document pages",
     "PREVIOUS": "Previous",
     "NEXT": "Next",
-    "PAGE_OF": "Page {{page}} of {{total}}"
+    "PAGE_OF": "Page {{page}} of {{total}}",
+    "SOURCE_PATIENT": "Uploaded by the patient",
+    "SOURCE_HOSPITAL": "Issued by the hospital"
   },
   "MED_HISTORY": {
     "SOURCE_OF_RECORD": "Source",
@@ -9985,7 +10011,8 @@
       "VAA": "Yellow fever",
       "VPI": "IPV (injectable polio)",
       "VPO": "OPV (oral polio)"
-    }
+    },
+    "VACCINE_CODE_HINT": "Taken from an earlier dose of the same vaccine in this chart, when there is one; otherwise the code your hospital’s DHIS2 export uses."
   },
   "MATERNITY": {
     "GA": "Gestational age",
@@ -10330,7 +10357,8 @@
     "VISIT_LATE_PREGNANCY": "Late pregnancy",
     "BOOK": "Book",
     "BOOK_REASON": "Antenatal visit (week {{week}})",
-    "BOOK_HINT": "Book a recommended visit to plan it as an appointment; it then shows as planned. On the day, check the patient in on the appointment to open the consultation where the visit (vital signs, examination) is recorded."
+    "BOOK_HINT": "Book a recommended visit to plan it as an appointment; it then shows as planned. On the day, check the patient in on the appointment to open the consultation where the visit (vital signs, examination) is recorded.",
+    "ANC_CONTACTS": "Antenatal contacts held: {{done}} (next: contact {{next}})"
   },
   "PRO": {
     "HEADING": "Mental-health screening ({{instrument}})",
@@ -11654,7 +11682,8 @@
       "VERIFY_FAILED": "Verification failed. Try again."
     },
     "VERIFYING": "Verifying…",
-    "VERIFY_FIVE_RIGHTS": "Verify five rights"
+    "VERIFY_FIVE_RIGHTS": "Verify five rights",
+    "PRESCRIBED": "Prescribed"
   },
   "CREDENTIALING": {
     "CURRENT_EXPIRY": "Current expiry",

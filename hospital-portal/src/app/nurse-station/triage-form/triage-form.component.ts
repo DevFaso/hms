@@ -65,6 +65,8 @@ export class TriageFormComponent {
   weightKg = signal<number | null>(null);
   heightCm = signal<number | null>(null);
   painScale = signal<number | null>(null);
+  /** QA D1031: the antenatal fundal height, in cm (optional). */
+  fundalHeightCm = signal<number | null>(null);
 
   /* ── NEWS2 parameters (P3 #25b) ─────────── */
   onOxygen = signal(false);
@@ -141,6 +143,7 @@ export class TriageFormComponent {
       this.weightKg(),
       this.heightCm(),
       this.painScale(),
+      this.fundalHeightCm(),
       this.fallRiskScore(),
     ];
     return (
@@ -199,6 +202,7 @@ export class TriageFormComponent {
       onOxygen: this.onOxygen(),
       consciousnessLevel: this.consciousnessLevel() || undefined,
       painScale: this.painScale() ?? undefined,
+      fundalHeightCm: this.fundalHeightCm() ?? undefined,
       fallRisk: this.fallRisk() || undefined,
       fallRiskScore: this.fallRiskScore() ?? undefined,
       roomAssignment: this.roomAssignment() || undefined,

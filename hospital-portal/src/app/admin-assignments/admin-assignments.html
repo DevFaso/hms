@@ -234,7 +234,7 @@
         aria-modal="true"
         tabindex="-1"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="$event.stopPropagation()"
+        (keydown.escape)="closeModal(); $event.stopPropagation()"
       >
         <h2>
           {{ (modal() === 'create' ? 'ASSIGN_ADMIN.NEW' : 'ASSIGN_ADMIN.EDIT') | translate }}
@@ -329,7 +329,7 @@
         aria-modal="true"
         tabindex="-1"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="$event.stopPropagation()"
+        (keydown.escape)="closeModal(); $event.stopPropagation()"
       >
         <h2>{{ 'ASSIGN_ADMIN.MULTI_SCOPE_TITLE' | translate }}</h2>
         @if (!multiResult()) {
@@ -444,7 +444,7 @@
         aria-modal="true"
         tabindex="-1"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="$event.stopPropagation()"
+        (keydown.escape)="closeModal(); $event.stopPropagation()"
       >
         <h2>{{ 'ASSIGN_ADMIN.DETAIL_TITLE' | translate }}</h2>
         <div class="detail-grid">
@@ -471,7 +471,9 @@
           </div>
           <div>
             <span class="label">{{ 'ASSIGN_ADMIN.START_DATE' | translate }}</span>
-            <span>{{ row.startDate || '—' }}</span>
+            <span>{{
+              row.startDate ? (row.startDate | serverTime | date: 'mediumDate') : '—'
+            }}</span>
           </div>
           <div>
             <span class="label">{{ 'ASSIGN_ADMIN.ASSIGNED_AT' | translate }}</span>
@@ -535,7 +537,7 @@
         aria-modal="true"
         tabindex="-1"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="$event.stopPropagation()"
+        (keydown.escape)="closeModal(); $event.stopPropagation()"
       >
         <h2>{{ 'ASSIGN_ADMIN.REGENERATE_TITLE' | translate }}</h2>
         <p class="warning-note">
@@ -576,7 +578,7 @@
         aria-modal="true"
         tabindex="-1"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="$event.stopPropagation()"
+        (keydown.escape)="closeModal(); $event.stopPropagation()"
       >
         <h2>{{ 'ASSIGN_ADMIN.IMPORT_TITLE' | translate }}</h2>
         @if (!importResult()) {

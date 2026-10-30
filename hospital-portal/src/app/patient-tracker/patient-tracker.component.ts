@@ -1,3 +1,4 @@
+import { RoleContextService } from '../core/role-context.service';
 import {
   Component,
   OnInit,
@@ -70,6 +71,7 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
   private readonly trackerService = inject(PatientTrackerService);
   private readonly trackerWs = inject(PatientTrackerWsService);
   private readonly auth = inject(AuthService);
+  private readonly roleContext = inject(RoleContextService);
   /**
    * QA D954: a patient who leaves before anyone sees them is closed from the
    * tracker too (the reception's close-unseen dialog, reused), by the roles
@@ -274,6 +276,28 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
         this.toast.error(
           err?.error?.message || this.translate.instant('TRACKER.TRIAGE_INCOMPLETE'),
         );
+      },
+    });
+  }
+
+  /* ── Start — WAITING_FOR_PHYSICIAN → IN_PROGRESS (QA D1015) ─── */
+  get canStartVisit(): boolean {
+    // The role the user acts in, not every role held (D997 class).
+    return this.roleContext.hasAnyActiveRole(actionRoles('encounterStart'));
+  }
+  startInProgress = signal(false);
+
+  startVisit(item: PatientTrackerItem): void {
+    this.startInProgress.set(true);
+    this.encounterService.startEncounter(item.encounterId).subscribe({
+      next: () => {
+        this.startInProgress.set(false);
+        this.loadBoard();
+      },
+      error: (err: { error?: { message?: string } } | null) => {
+        this.startInProgress.set(false);
+        // The server's reason (not the assigned clinician) in the reader's language.
+        this.toast.error(err?.error?.message || this.translate.instant('TRACKER.START_FAILED'));
       },
     });
   }

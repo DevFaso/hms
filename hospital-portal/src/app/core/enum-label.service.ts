@@ -792,6 +792,10 @@ export class EnumLabelService implements OnDestroy {
       PRESCRIPTION: 'Prescription',
       PROCEDURE: 'Procedure',
       REFERRAL: 'Referral',
+      TREATMENT_PLAN: 'Treatment plan',
+      CONSULTATION: 'Consultation request',
+      DISCHARGE_SUMMARY: 'Discharge summary',
+      DOCUMENT: 'Issued document',
     },
 
     /* ── Immunization status ───────────────────────────────── */

@@ -86,9 +86,14 @@ const ESCAPE_IN_MARKUP = /\(keydown\.esc(?:ape)?\)=/;
  * QA D1030 (D968's class): `(keydown.escape)="$event.stopPropagation()"` on
  * the dialog does not close it, it SWALLOWS the key, so a close bound on the
  * backdrop around it never fires. Such a binding is not an Escape handler,
- * and it hides every handler above it.
+ * and it hides every handler above it. (QA D1004 class, the same rule as
+ * fix/r17-clinical-workflow wrote it: a binding made only of
+ * `$event.stopPropagation()` and/or `$event.preventDefault()` closes nothing,
+ * so it is never an Escape handler; it swallows the key only when it stops
+ * propagation.)
  */
-const SWALLOW_ONLY = /^\s*\$event\.stopPropagation\(\)\s*;?\s*$/;
+const SWALLOW_ONLY = /^\s*(?:\$event\.(?:stopPropagation|preventDefault)\(\)\s*;?\s*)+$/;
+const STOPS_PROPAGATION = /\$event\.stopPropagation\(\)/;
 
 function escapeBindings(tag) {
   return [...tag.attrs.keys()]
@@ -102,10 +107,18 @@ function hasEscapeAttr(tag) {
 
 function swallowsEscape(tag) {
   const bindings = escapeBindings(tag);
-  if (bindings.length > 0 && bindings.every((binding) => SWALLOW_ONLY.test(binding))) return true;
+  if (
+    bindings.length > 0 &&
+    bindings.every((binding) => SWALLOW_ONLY.test(binding)) &&
+    bindings.some((binding) => STOPS_PROPAGATION.test(binding))
+  )
+    return true;
   // `(keydown)="$event.stopPropagation()"` swallows every key, Escape included.
   return [...tag.attrs.keys()].some(
-    (k) => KEYDOWN_ATTR.test(k) && SWALLOW_ONLY.test(tag.attrs.get(k) ?? ''),
+    (k) =>
+      KEYDOWN_ATTR.test(k) &&
+      SWALLOW_ONLY.test(tag.attrs.get(k) ?? '') &&
+      STOPS_PROPAGATION.test(tag.attrs.get(k) ?? ''),
   );
 }
 

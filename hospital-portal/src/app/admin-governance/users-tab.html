@@ -94,7 +94,7 @@
         aria-modal="true"
         tabindex="-1"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="$event.stopPropagation()"
+        (keydown.escape)="closeImport(); $event.stopPropagation()"
       >
         <h2>{{ 'ADMIN_GOV.IMPORT_USERS' | translate }}</h2>
         @if (!importResult()) {
@@ -224,7 +224,7 @@
         aria-modal="true"
         tabindex="-1"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="$event.stopPropagation()"
+        (keydown.escape)="closeReset(); $event.stopPropagation()"
       >
         <h2>{{ 'ADMIN_GOV.FORCE_RESET' | translate }}</h2>
         @if (!resetResult()) {

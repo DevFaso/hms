@@ -77,3 +77,47 @@ test('QA D950 guard: the scan sees the shape the defect had', () => {
   assert.equal(rawRouteInterpolations('<td>{{ m.route }}</td>').length, 1);
   assert.equal(rawRouteInterpolations('<td>{{ m.route | medicationRoute }}</td>').length, 0);
 });
+
+/**
+ * QA D1025 (round 17): a route seeded into a FORM FIELD as its stored code. The
+ * eMAR's "Voie" input was prefilled with "INTRAVENOUS" (so "Bonne voie" passed
+ * with nothing typed) and the intake reconciliation row with "ORAL". A form
+ * value copied from a server `.route` (`route: rx.route`, `routeScan.set(t.route)`,
+ * `[value]="m.route"`) fails; seed nothing, or the reader's label.
+ */
+export function rawRouteSeeds(source, file = 'source') {
+  const offenders = [];
+  const patterns = [
+    // a dose's route copied from the prescription / MAR task into a form model
+    /\broute\s*:\s*(?:rx|prescription|task|dose|mar)[?!]?\.route\b/g,
+    // a route-named form signal set from a stored route
+    /\b\w*[Rr]oute\w*\.set\(\s*[\w.?!]+\.route\b/g,
+    /\[value\]="[^"]*\.route\b(?![^"]*\|\s*medicationRoute)[^"]*"/g,
+  ];
+  for (const re of patterns) {
+    for (const m of source.matchAll(re)) {
+      offenders.push(`${file}:${source.slice(0, m.index).split('\n').length} ${m[0]}`);
+    }
+  }
+  return offenders;
+}
+
+test('QA D1025: no form field is seeded with a stored route code', () => {
+  const offenders = walk(appDir, ['.ts', '.html'])
+    .filter((f) => !f.endsWith('.spec.ts'))
+    .flatMap((f) =>
+      rawRouteSeeds(
+        readFileSync(f, 'utf8'),
+        relative(appDir, f).split(String.fromCharCode(92)).join('/'),
+      ),
+    );
+  assert.deepEqual(offenders, []);
+});
+
+test('QA D1025: the seed scan catches the old shapes', () => {
+  assert.equal(rawRouteSeeds("this.routeScan.set(task.route ?? '');").length, 1);
+  assert.equal(rawRouteSeeds("route: rx.route ?? '',").length, 1);
+  assert.equal(rawRouteSeeds('<input [value]="m.route" />').length, 1);
+  assert.equal(rawRouteSeeds('route: this.routeLabel(rx.route),').length, 0);
+  assert.equal(rawRouteSeeds("this.routeScan.set('');").length, 0);
+});

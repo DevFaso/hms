@@ -20,6 +20,8 @@ export interface NursingNote {
   responseSummary?: string | null;
   educationSummary?: string | null;
   narrative?: string | null;
+  /** QA D1044: the title the nurse gave the note. */
+  title?: string | null;
   lateEntry?: boolean;
   eventOccurredAt?: string | null;
   documentedAt?: string | null;

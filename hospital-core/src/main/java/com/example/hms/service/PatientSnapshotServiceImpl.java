@@ -229,7 +229,8 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
                 .name(patient.getFirstName() + " " + patient.getLastName())
                 .age(computeAge(patient))
                 .sex(patient.getGender())
-                .mrn(patient.getId().toString())
+                // QA D1040 class: the hospital's MRN, never the patient's UUID.
+                .mrn(patient.getMrnForHospital(hospitalId))
                 .codeStatus(patient.getCodeStatus())
                 .allergies(buildAllergies(patientId, patient, hospitalId, reach))
                 // QA D504 (round 2): the list above is narrowed by the patient's opt-out; say so.

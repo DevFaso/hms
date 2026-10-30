@@ -6,26 +6,6 @@
     "A site not listed fails the build; fix a dialog, then delete its pins."
   ],
   "pinned": {
-    "src/app/admin-assignments/admin-assignments.html::escape::modal <{{ 'ASSIGN_ADMIN.REGENERATE_TITLE' | translate }}>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
-    "src/app/admin-assignments/admin-assignments.html::escape::modal <{{ (modal() === 'create' ? 'ASSIGN_ADMIN.NEW' : 'ASSIGN_ADMI>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
-    "src/app/admin-assignments/admin-assignments.html::escape::modal modal-lg <{{ 'ASSIGN_ADMIN.DETAIL_TITLE' | translate }}>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
-    "src/app/admin-assignments/admin-assignments.html::escape::modal modal-lg <{{ 'ASSIGN_ADMIN.IMPORT_TITLE' | translate }}>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
-    "src/app/admin-assignments/admin-assignments.html::escape::modal modal-lg <{{ 'ASSIGN_ADMIN.MULTI_SCOPE_TITLE' | translate }}>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
     "src/app/admin-assignments/admin-assignments.html::focus::modal <{{ 'ASSIGN_ADMIN.REGENERATE_TITLE' | translate }}>": {
       "count": 1,
       "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
@@ -66,10 +46,6 @@
       "count": 1,
       "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
     },
-    "src/app/admin-governance/credentials-tab.html::escape::modal modal-lg <{{ row.username || row.email }}>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
     "src/app/admin-governance/credentials-tab.html::focus::modal modal-lg <{{ row.username || row.email }}>": {
       "count": 1,
       "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
@@ -77,14 +53,6 @@
     "src/app/admin-governance/credentials-tab.html::label::modal modal-lg <{{ row.username || row.email }}>": {
       "count": 1,
       "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/admin-governance/matrix-tab.html::escape::modal modal-lg <{{ 'ADMIN_GOV.ENV_' + snap.environment | translate }} · v{{ >": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
-    "src/app/admin-governance/matrix-tab.html::escape::modal modal-xl <{{ 'ADMIN_GOV.NEW_SNAPSHOT' | translate }}>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
     },
     "src/app/admin-governance/matrix-tab.html::focus::modal modal-lg <{{ 'ADMIN_GOV.ENV_' + snap.environment | translate }} · v{{ >": {
       "count": 1,
@@ -102,14 +70,6 @@
       "count": 1,
       "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
     },
-    "src/app/admin-governance/policies-tab.html::escape::modal <{{ (editingPolicy() ? 'ADMIN_GOV.EDIT_POLICY' : 'ADMIN_GOV.N>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
-    "src/app/admin-governance/policies-tab.html::escape::modal <{{ (editingRule() ? 'ADMIN_GOV.EDIT_RULE' : 'ADMIN_GOV.NEW_R>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
     "src/app/admin-governance/policies-tab.html::focus::modal <{{ (editingPolicy() ? 'ADMIN_GOV.EDIT_POLICY' : 'ADMIN_GOV.N>": {
       "count": 1,
       "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
@@ -125,14 +85,6 @@
     "src/app/admin-governance/policies-tab.html::label::modal <{{ (editingRule() ? 'ADMIN_GOV.EDIT_RULE' : 'ADMIN_GOV.NEW_R>": {
       "count": 1,
       "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/admin-governance/security-tab.html::escape::modal <{{ 'ADMIN_GOV.NEW_BASELINE' | translate }}>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
-    "src/app/admin-governance/security-tab.html::escape::modal modal-lg <{{ 'ADMIN_GOV.SIMULATE_TITLE' | translate: { title: template>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
     },
     "src/app/admin-governance/security-tab.html::focus::modal <{{ 'ADMIN_GOV.NEW_BASELINE' | translate }}>": {
       "count": 1,
@@ -150,14 +102,6 @@
       "count": 1,
       "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
     },
-    "src/app/admin-governance/users-tab.html::escape::modal <{{ 'ADMIN_GOV.FORCE_RESET' | translate }}>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
-    "src/app/admin-governance/users-tab.html::escape::modal modal-lg <{{ 'ADMIN_GOV.IMPORT_USERS' | translate }}>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
     "src/app/admin-governance/users-tab.html::focus::modal <{{ 'ADMIN_GOV.FORCE_RESET' | translate }}>": {
       "count": 1,
       "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
@@ -174,26 +118,6 @@
       "count": 1,
       "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
     },
-    "src/app/admissions/admissions.html::escape::modal <{{ 'ADMISSIONS.ASSIGN_BED' | translate }}>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
-    "src/app/admissions/admissions.html::escape::modal <{{ 'ADMISSIONS.DELETE_TITLE' | translate }}>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
-    "src/app/admissions/admissions.html::escape::modal modal-lg": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
-    "src/app/admissions/admissions.html::escape::modal modal-lg <{{ editing() ? ('ADMISSIONS.EDIT' | translate) : ('ADMISSION>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
-    "src/app/admissions/admissions.html::escape::modal modal-lg <exit_to_app {{ 'ADMISSIONS.DISCHARGE_MODAL_TITLE' | translat>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
     "src/app/admissions/admissions.html::focus::modal <{{ 'ADMISSIONS.ASSIGN_BED' | translate }}>": {
       "count": 1,
       "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
@@ -206,11 +130,11 @@
       "count": 1,
       "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
     },
-    "src/app/admissions/admissions.html::focus::modal modal-lg <{{ editing() ? ('ADMISSIONS.EDIT' | translate) : ('ADMISSION>": {
+    "src/app/admissions/admissions.html::focus::modal modal-lg <exit_to_app {{ 'ADMISSIONS.DISCHARGE_MODAL_TITLE' | translat>": {
       "count": 1,
       "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
     },
-    "src/app/admissions/admissions.html::focus::modal modal-lg <exit_to_app {{ 'ADMISSIONS.DISCHARGE_MODAL_TITLE' | translat>": {
+    "src/app/admissions/admissions.html::focus::modal modal-lg <{{ editing() ? ('ADMISSIONS.EDIT' | translate) : ('ADMISSION>": {
       "count": 1,
       "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
     },
@@ -318,10 +242,6 @@
       "count": 1,
       "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
     },
-    "src/app/dashboard/credential-renewal/credential-renewal.component.html::escape::cred-modal <{{ 'CREDENTIALING.RENEW_TITLE' | translate }}>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
     "src/app/dashboard/credential-renewal/credential-renewal.component.html::focus::cred-modal <{{ 'CREDENTIALING.RENEW_TITLE' | translate }}>": {
       "count": 1,
       "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
@@ -418,34 +338,6 @@
       "count": 1,
       "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
     },
-    "src/app/discharge/discharge.html::escape::modal <{{ 'DISCHARGE.CANCEL_TITLE' | translate }}>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
-    "src/app/discharge/discharge.html::escape::modal <{{ 'DISCHARGE.DELETE_TITLE' | translate }}>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
-    "src/app/discharge/discharge.html::escape::modal <{{ 'DISCHARGE.FINALIZE_TITLE' | translate }}>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
-    "src/app/discharge/discharge.html::escape::modal <{{ 'DISCHARGE.REQUEST_TITLE' | translate }}>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
-    "src/app/discharge/discharge.html::escape::modal <{{ (decisionMode() === 'approve' ? 'DISCHARGE.APPROVE_TITLE'>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
-    "src/app/discharge/discharge.html::escape::modal modal-lg <{{ 'DISCHARGE.SUMMARY_FOR' | translate }} {{ s.patientName }>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
-    "src/app/discharge/discharge.html::escape::modal modal-lg <{{ (editingSummaryId() ? 'DISCHARGE.EDIT_SUMMARY' : 'DISCHAR>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
     "src/app/discharge/discharge.html::focus::modal <{{ 'DISCHARGE.CANCEL_TITLE' | translate }}>": {
       "count": 1,
       "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
@@ -485,18 +377,6 @@
     "src/app/encounters/eligibility-check-dialog/eligibility-check-dialog.component.html::focus::elig-dialog__panel <{{ 'ENCOUNTERS.ELIGIBILITY.TITLE' | translate }}>": {
       "count": 1,
       "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
-    },
-    "src/app/encounters/encounters.html::escape::modal <{{ 'ENCOUNTERS.DELETE' | translate }}>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
-    "src/app/encounters/encounters.html::escape::modal modal-lg <{{ 'ENCOUNTERS.AVS_TITLE' | translate }} — {{ summary.patien>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
-    "src/app/encounters/encounters.html::escape::modal modal-lg <{{ editing() ? ('ENCOUNTERS.EDIT' | translate) : ('ENCOUNTER>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
     },
     "src/app/encounters/encounters.html::focus::modal <{{ 'ENCOUNTERS.DELETE' | translate }}>": {
       "count": 1,
@@ -594,22 +474,6 @@
       "count": 1,
       "why": "QA D1030 class (round-17 <dialog [open]> rule): a <dialog> not opened with showModal() is not modal; fix with appModalDialog and delete the pin"
     },
-    "src/app/maternity/birth-plan-tab.html::escape::modal <{{ 'BIRTH_PLAN.DELETE_TITLE' | translate }}>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
-    "src/app/maternity/birth-plan-tab.html::escape::modal <{{ 'BIRTH_PLAN.REVIEW_TITLE' | translate }}>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
-    "src/app/maternity/birth-plan-tab.html::escape::modal modal-lg <{{ (editingPlanId() ? 'BIRTH_PLAN.EDIT' : 'BIRTH_PLAN.NEW') >": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
-    "src/app/maternity/birth-plan-tab.html::escape::modal modal-lg <{{ p.introduction?.patientName }} — {{ 'BIRTH_PLAN.TITLE' | >": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
     "src/app/maternity/birth-plan-tab.html::focus::modal <{{ 'BIRTH_PLAN.DELETE_TITLE' | translate }}>": {
       "count": 1,
       "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
@@ -626,14 +490,6 @@
       "count": 1,
       "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
     },
-    "src/app/maternity/labor-tab.html::escape::modal modal-lg <{{ 'LABOR.NEW_ENTRY' | translate }}>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
-    "src/app/maternity/labor-tab.html::escape::modal modal-lg <{{ 'LABOR.RECORD_DELIVERY' | translate }}>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
     "src/app/maternity/labor-tab.html::focus::modal modal-lg <{{ 'LABOR.NEW_ENTRY' | translate }}>": {
       "count": 1,
       "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
@@ -641,22 +497,6 @@
     "src/app/maternity/labor-tab.html::focus::modal modal-lg <{{ 'LABOR.RECORD_DELIVERY' | translate }}>": {
       "count": 1,
       "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
-    },
-    "src/app/maternity/maternity.html::escape::modal modal-lg <{{ 'MATERNITY.NEW_REFERRAL' | translate }}>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
-    "src/app/maternity/maternity.html::escape::modal modal-lg <{{ (editingHistoryId() ? 'MATERNITY.EDIT_HISTORY' : 'MATERNI>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
-    "src/app/maternity/maternity.html::escape::modal modal-lg <{{ patientDisplay(r) }} {{ 'MATERNITY.STATUS_' + r.status | >": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
-    "src/app/maternity/maternity.html::escape::modal modal-lg <{{ patientName(h.patientId) }} — {{ 'MATERNITY.HISTORY_TITLE>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
     },
     "src/app/maternity/maternity.html::focus::modal modal-lg <{{ 'MATERNITY.NEW_REFERRAL' | translate }}>": {
       "count": 1,
@@ -674,14 +514,6 @@
       "count": 1,
       "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
     },
-    "src/app/maternity/postpartum-tab.html::escape::modal modal-lg <{{ 'POSTPARTUM.NEW_ASSESSMENT' | translate }}>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
-    "src/app/maternity/postpartum-tab.html::escape::modal modal-lg <{{ 'POSTPARTUM.NEW_OBSERVATION' | translate }}>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
     "src/app/maternity/postpartum-tab.html::focus::modal <{{ 'PRO.ACKNOWLEDGE_TITLE' | translate }}>": {
       "count": 1,
       "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
@@ -698,14 +530,6 @@
       "count": 1,
       "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
     },
-    "src/app/maternity/prenatal-tab.html::escape::modal <{{ 'PRENATAL.RESCHEDULE' | translate }}>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
-    "src/app/maternity/prenatal-tab.html::escape::modal <{{ 'PRENATAL.SEND_REMINDER' | translate }}>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
     "src/app/maternity/prenatal-tab.html::focus::modal <{{ 'PRENATAL.RESCHEDULE' | translate }}>": {
       "count": 1,
       "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
@@ -713,18 +537,6 @@
     "src/app/maternity/prenatal-tab.html::focus::modal <{{ 'PRENATAL.SEND_REMINDER' | translate }}>": {
       "count": 1,
       "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
-    },
-    "src/app/maternity/ultrasound-tab.html::escape::modal modal-lg <{{ 'ULTRASOUND.RECORD_REPORT' | translate }} — {{ order.pati>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
-    "src/app/maternity/ultrasound-tab.html::escape::modal modal-lg <{{ (editingOrderId() ? 'ULTRASOUND.EDIT_ORDER' : 'ULTRASOUND>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
-    "src/app/maternity/ultrasound-tab.html::escape::modal modal-lg <{{ o.patientDisplayName || ('MATERNITY.PATIENT' | translate)>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
     },
     "src/app/maternity/ultrasound-tab.html::focus::modal modal-lg <{{ 'ULTRASOUND.RECORD_REPORT' | translate }} — {{ order.pati>": {
       "count": 1,
@@ -737,10 +549,6 @@
     "src/app/maternity/ultrasound-tab.html::focus::modal modal-lg <{{ o.patientDisplayName || ('MATERNITY.PATIENT' | translate)>": {
       "count": 1,
       "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
-    },
-    "src/app/medication-history/medication-history.html::escape::modal modal-lg <{{ (editingFillId() ? 'MED_TIMELINE.EDIT_FILL' : 'MED_TIMELI>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
     },
     "src/app/medication-history/medication-history.html::focus::modal modal-lg <{{ (editingFillId() ? 'MED_TIMELINE.EDIT_FILL' : 'MED_TIMELI>": {
       "count": 1,
@@ -802,30 +610,6 @@
       "count": 1,
       "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
     },
-    "src/app/nurse-station/nurse-station.html::label::modal-card modal-large <{{ 'NURSE.CARE_NOTE' | translate }} — {{ careNoteFor()!.pati>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/nurse-station/nurse-station.html::label::modal-card modal-medium <{{ 'NURSE.CREATE_TASK' | translate }}>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/nurse-station/nurse-station.html::label::modal-card modal-medium <{{ 'NURSE.NEW_HANDOFF' | translate }}>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/nurse-station/nurse-station.html::modal::modal-card modal-large <{{ 'NURSE.CARE_NOTE' | translate }} — {{ careNoteFor()!.pati>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/nurse-station/nurse-station.html::modal::modal-card modal-medium <{{ 'NURSE.CREATE_TASK' | translate }}>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/nurse-station/nurse-station.html::modal::modal-card modal-medium <{{ 'NURSE.NEW_HANDOFF' | translate }}>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
     "src/app/organizations/organization-detail.html::escape::modal <{{ cfg.titleKey | translate }}>": {
       "count": 1,
       "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
@@ -873,18 +657,6 @@
     "src/app/panel/panel.html::focus::modal <{{ 'PANEL.END_TITLE' | translate: { name: row.patientName } >": {
       "count": 1,
       "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
-    },
-    "src/app/patient-education/patient-education.html::escape::modal <{{ 'EDUCATION.ASSIGN_TITLE' | translate }}>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
-    "src/app/patient-education/patient-education.html::escape::modal <{{ 'EDUCATION.UPDATE_PROGRESS' | translate }}>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
-    "src/app/patient-education/patient-education.html::escape::modal modal-lg <{{ (editingResourceId() ? 'EDUCATION.EDIT_RESOURCE' : 'EDUCA>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
     },
     "src/app/patient-education/patient-education.html::focus::modal <{{ 'EDUCATION.ASSIGN_TITLE' | translate }}>": {
       "count": 1,
@@ -958,18 +730,6 @@
       "count": 1,
       "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
     },
-    "src/app/patients/medical-history-tab/medical-history-tab.component.html::escape::modal modal-lg <{{ 'MED_HISTORY.NEW_SOCIAL_VERSION' | translate }}>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
-    "src/app/patients/medical-history-tab/medical-history-tab.component.html::escape::modal modal-lg <{{ (editingFamilyId() ? 'MED_HISTORY.EDIT_FAMILY' : 'MED_HIS>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
-    "src/app/patients/medical-history-tab/medical-history-tab.component.html::escape::modal modal-lg <{{ (editingImmunizationId() ? 'MED_HISTORY.EDIT_IMMUNIZATION>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
     "src/app/patients/medical-history-tab/medical-history-tab.component.html::focus::modal modal-lg <{{ 'MED_HISTORY.NEW_SOCIAL_VERSION' | translate }}>": {
       "count": 1,
       "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
@@ -981,30 +741,6 @@
     "src/app/patients/medical-history-tab/medical-history-tab.component.html::focus::modal modal-lg <{{ (editingImmunizationId() ? 'MED_HISTORY.EDIT_IMMUNIZATION>": {
       "count": 1,
       "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
-    },
-    "src/app/patients/patient-chart/patient-chart.component.html::role::modal <{{ 'CHART.DEACTIVATE_ALLERGY' | translate }}>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/patients/patient-chart/patient-chart.component.html::role::modal <{{ 'CHART.DELETE_PROBLEM' | translate }}>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/patients/patient-chart/patient-chart.component.html::role::modal <{{ 'CHART.TIMELINE_ACCESS' | translate }}>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/patients/patient-chart/patient-chart.component.html::role::modal <{{ (editingAllergyId() ? 'CHART.EDIT_ALLERGY' : 'CHART.ADD_A>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/patients/patient-chart/patient-chart.component.html::role::modal <{{ (editingProblemId() ? 'CHART.EDIT_PROBLEM' : 'CHART.ADD_P>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/patients/patient-chart/patient-chart.component.html::role::modal modal-lg <{{ 'CHART.NEW_UPDATE' | translate }}>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
     },
     "src/app/patients/patient-form.html::escape::dup-modal <{{ 'PATIENTS.POSSIBLE_DUPLICATES' | translate }}>": {
       "count": 1,
@@ -1025,14 +761,6 @@
     "src/app/patients/patient-photo/patient-photo.component.html::label::modal <{{ 'PATIENT_PHOTO.MODAL_TITLE' | translate }}>": {
       "count": 1,
       "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/procedure-orders/procedure-orders.html::escape::modal modal-lg <{{ 'PROCEDURES.NEW_ORDER' | translate }}>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
-    "src/app/procedure-orders/procedure-orders.html::escape::modal modal-lg <{{ o.procedureName }} {{ o.status | enumLabel: 'procedureOrd>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
     },
     "src/app/procedure-orders/procedure-orders.html::focus::modal modal-lg <{{ 'PROCEDURES.NEW_ORDER' | translate }}>": {
       "count": 1,
@@ -1081,14 +809,6 @@
     "src/app/referrals/referrals.html::focus::modal modal-lg <{{ 'REFERRALS.NEW' | translate }}>": {
       "count": 1,
       "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
-    },
-    "src/app/registrations/registrations.html::escape::modal <{{ 'REGISTRATIONS.DELETE_TITLE' | translate }}>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
-    },
-    "src/app/registrations/registrations.html::escape::modal <{{ (editingRegistration() ? 'REGISTRATIONS.EDIT' : 'REGISTRA>": {
-      "count": 1,
-      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
     },
     "src/app/registrations/registrations.html::focus::modal <{{ 'REGISTRATIONS.DELETE_TITLE' | translate }}>": {
       "count": 1,

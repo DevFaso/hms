@@ -365,7 +365,7 @@
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeObservation(); $event.stopPropagation()"
     >
       <div class="modal-header">
         <h2 id="postpartum-tab-dialog-1-title">{{ 'POSTPARTUM.NEW_OBSERVATION' | translate }}</h2>
@@ -586,7 +586,7 @@
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeAssessment(); $event.stopPropagation()"
     >
       <div class="modal-header">
         <h2 id="postpartum-tab-dialog-2-title">{{ 'POSTPARTUM.NEW_ASSESSMENT' | translate }}</h2>

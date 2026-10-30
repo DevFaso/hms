@@ -110,10 +110,6 @@
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/encounters/encounters.html::field-label::input text": {
-      "count": 1,
-      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
-    },
     "src/app/imaging/imaging.html::field-label::select reportModalityFilter()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
@@ -134,38 +130,6 @@
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/nurse-station/nursing-intake-form/nursing-intake-form.component.html::field-label::input 'allergen_' + i": {
-      "count": 1,
-      "why": "D993 class: intake row fields have no label"
-    },
-    "src/app/nurse-station/nursing-intake-form/nursing-intake-form.component.html::field-label::input 'allergyCategory_' + i": {
-      "count": 1,
-      "why": "D993 class: intake row fields have no label"
-    },
-    "src/app/nurse-station/nursing-intake-form/nursing-intake-form.component.html::field-label::input 'allergyReaction_' + i": {
-      "count": 1,
-      "why": "D993 class: intake row fields have no label"
-    },
-    "src/app/nurse-station/nursing-intake-form/nursing-intake-form.component.html::field-label::input 'medDosage_' + i": {
-      "count": 1,
-      "why": "D993 class: intake row fields have no label"
-    },
-    "src/app/nurse-station/nursing-intake-form/nursing-intake-form.component.html::field-label::input 'medFrequency_' + i": {
-      "count": 1,
-      "why": "D993 class: intake row fields have no label"
-    },
-    "src/app/nurse-station/nursing-intake-form/nursing-intake-form.component.html::field-label::input 'medName_' + i": {
-      "count": 1,
-      "why": "D993 class: intake row fields have no label"
-    },
-    "src/app/nurse-station/nursing-intake-form/nursing-intake-form.component.html::field-label::input 'medRoute_' + i": {
-      "count": 1,
-      "why": "D993 class: intake row fields have no label"
-    },
-    "src/app/nurse-station/nursing-intake-form/nursing-intake-form.component.html::field-label::textarea chiefComplaint": {
-      "count": 1,
-      "why": "D993 class: intake row fields have no label"
-    },
     "src/app/patient-education/patient-education.html::field-label::select categoryFilter()": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
@@ -176,14 +140,6 @@
     },
     "src/app/patient-portal/my-medical-history/my-medical-history.component.html::field-label::textarea text": {
       "count": 4,
-      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
-    },
-    "src/app/patients/patient-chart/patient-chart.component.html::field-label::input s.display": {
-      "count": 1,
-      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
-    },
-    "src/app/patients/patient-chart/patient-chart.component.html::field-label::input s.narrative": {
-      "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
     "src/app/profile/profile.html::field-label::input mfaTotpCode": {

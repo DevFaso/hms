@@ -165,6 +165,8 @@ class NurseTaskServiceImplTest {
     private com.example.hms.repository.UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock
     private com.example.hms.repository.PatientAllergyRepository patientAllergyRepository;
+    @Mock
+    private com.example.hms.service.emar.ControlledAdministrationWitness administrationWitness;
 
     @BeforeEach
     void setUp() {
@@ -176,7 +178,7 @@ class NurseTaskServiceImplTest {
             nurseHandoffRepository, labOrderRepository, imagingOrderRepository, procedureOrderRepository,
             fiveRightsService, objectMapper, news2EscalationService,
             new com.example.hms.service.support.DischargedPatientGuard(admissionRepository, encounterRepository),
-            assignmentRepository, patientAllergyRepository));
+            assignmentRepository, patientAllergyRepository, administrationWitness));
 
         // QA D220 narrowed the vitals rounds to admitted patients; the tests
         // below that are about windows, names and counts treat every listed
@@ -1245,6 +1247,54 @@ class NurseTaskServiceImplTest {
     }
 
     @Test
+    void D922_aControlledDoseIsRecordedWithItsWitnessAndRefusedWithoutOne() {
+        UUID rxId = UUID.randomUUID();
+        UUID nurseId = UUID.randomUUID();
+        UUID witnessId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Patient mockPatient = mock(Patient.class);
+        lenient().when(mockPatient.getId()).thenReturn(UUID.randomUUID());
+        Hospital mockHospital = mock(Hospital.class);
+        lenient().when(mockHospital.getId()).thenReturn(hospitalId);
+        Prescription rx = mock(Prescription.class);
+        lenient().when(rx.getId()).thenReturn(rxId);
+        lenient().when(rx.getPatient()).thenReturn(mockPatient);
+        lenient().when(rx.getHospital()).thenReturn(mockHospital);
+        lenient().when(rx.getMedicationName()).thenReturn("Morphine");
+        lenient().when(rx.getCreatedAt()).thenReturn(LocalDateTime.now().minusHours(1));
+        when(prescriptionRepository.findByIdForUpdate(rxId)).thenReturn(Optional.of(rx));
+        NurseMedicationAdministrationRequestDTO request = new NurseMedicationAdministrationRequestDTO();
+        request.setStatus("GIVEN");
+        request.setOverrideReason("Scanner down; checked by hand.");
+
+        // Without a witness: refused before anything is written.
+        when(administrationWitness.resolve(rx, MedicationAdministrationStatus.GIVEN, null, nurseId))
+            .thenThrow(new BusinessException("nurse.mar.witness.required", "Morphine"));
+        assertThatThrownBy(() -> service.recordMedicationAdministration(rxId, nurseId, hospitalId, request))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "nurse.mar.witness.required");
+        verify(marRepository, never()).save(any(MedicationAdministrationRecord.class));
+
+        // With a colleague as witness: recorded with the dose.
+        User colleague = new User();
+        colleague.setId(witnessId);
+        colleague.setFirstName("Awa");
+        colleague.setLastName("Kaboré");
+        request.setWitnessUserId(witnessId);
+        when(administrationWitness.resolve(rx, MedicationAdministrationStatus.GIVEN, witnessId, nurseId))
+            .thenReturn(colleague);
+        when(marRepository.save(any(MedicationAdministrationRecord.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        NurseMedicationTaskResponseDTO result = service.recordMedicationAdministration(rxId, nurseId, hospitalId, request);
+
+        org.mockito.ArgumentCaptor<MedicationAdministrationRecord> saved =
+            org.mockito.ArgumentCaptor.forClass(MedicationAdministrationRecord.class);
+        verify(marRepository).save(saved.capture());
+        assertThat(saved.getValue().getWitnessUser()).isSameAs(colleague);
+        assertThat(result.getWitnessName()).isEqualTo("Awa Kaboré");
+    }
+
+    @Test
     void recordMedicationAdministrationGivenWithoutOverrideOrVerifyIsRejected() {
         UUID rxId = UUID.randomUUID();
         UUID nurseId = UUID.randomUUID();
@@ -1992,6 +2042,7 @@ class NurseTaskServiceImplTest {
             .temperatureCelsius(36.8)
             .systolicBpMmHg(120)
             .diastolicBpMmHg(80)
+            .painScale(4)
             .build();
 
         service.captureVitals(patientId, nurseId, hospitalId, req);
@@ -2000,6 +2051,8 @@ class NurseTaskServiceImplTest {
         verify(vitalSignRepository).save(captor.capture());
         PatientVitalSign saved = captor.getValue();
         assertThat(saved.getHeartRateBpm()).isEqualTo(72);
+        // QA D1045: the ward pain reassessment is charted (the bundle text, or its key without bundles).
+        assertThat(saved.getNotes()).isNotBlank();
         assertThat(saved.isClinicallySignificant()).isFalse();
     }
 
@@ -2429,9 +2482,15 @@ class NurseTaskServiceImplTest {
         req.setDataPart("Vital signs stable");
         req.setActionPart("Repositioned patient");
         req.setResponsePart("Patient comfortable after repositioning");
+        req.setTitle("Réévaluation douleur post-morphine");
 
         NurseCareNoteResponseDTO result = service.createCareNote(patientId, nurseId, hospitalId, req);
 
+        // QA D1044: the title the nurse typed is stored with the note and returned.
+        ArgumentCaptor<NursingNote> savedNote = ArgumentCaptor.forClass(NursingNote.class);
+        verify(nursingNoteRepository).save(savedNote.capture());
+        assertThat(savedNote.getValue().getTitle()).isEqualTo("Réévaluation douleur post-morphine");
+        assertThat(result.getTitle()).isEqualTo("Réévaluation douleur post-morphine");
         assertThat(result.getTemplate()).isEqualTo("DAR");
         assertThat(result.getAuthorName()).isEqualTo("Jane RN");
         assertThat(result.getPatientName()).isEqualTo("Note Patient");
@@ -3262,7 +3321,7 @@ class NurseTaskServiceImplTest {
             nurseHandoffRepository, labOrderRepository, imagingOrderRepository, procedureOrderRepository,
             fiveRightsService, failingMapper, news2EscalationService,
             new com.example.hms.service.support.DischargedPatientGuard(admissionRepository, encounterRepository),
-            assignmentRepository, patientAllergyRepository);
+            assignmentRepository, patientAllergyRepository, administrationWitness);
 
         UUID rxId = UUID.randomUUID();
         UUID nurseId = UUID.randomUUID();

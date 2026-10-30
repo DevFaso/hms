@@ -912,7 +912,8 @@
                   >
                   <span class="sched-reason"
                     >{{ 'CREDENTIALING.LICENSE_NUMBER' | translate }}: {{ alert.licenseNumber }} —
-                    {{ 'DASHBOARD.EXPIRES' | translate }}: {{ alert.licenseExpiryDate }}</span
+                    {{ 'DASHBOARD.EXPIRES' | translate }}:
+                    {{ alert.licenseExpiryDate | serverTime | date: 'mediumDate' }}</span
                   >
                 </div>
                 <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px">

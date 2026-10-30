@@ -3174,6 +3174,17 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- V245 (round 17, clinical workflow): the witness of a controlled-drug
+         administration on the MAR/eMAR (QA D922, decision 2026-10-28) and the
+         care-note title (QA D1044). Nullable, plain statements, no DO block.
+         Idempotent. -->
+    <changeSet id="V245-mar-witness-and-care-note-title" author="hms-team" runOnChange="false">
+        <sqlFile path="V245__mar_witness_and_care_note_title.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
     <!-- V246 (round 17): QA D1053, an in-basket item keeps the message keys
          and arguments of its title and body, so it is rendered in the
          reader's language; QA D1032, a pharmacy payment stores a readable

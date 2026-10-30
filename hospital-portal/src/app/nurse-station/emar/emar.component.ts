@@ -28,6 +28,7 @@ import { CdsCardListComponent } from '../../shared/cds-card/cds-card.component';
 import { CdsCard } from '../../shared/cds-card/cds-card.model';
 import { MedicationRoutePipe } from '../../shared/pipes/medication-route.pipe';
 import { isServerTimeToday } from '../../shared/date-utils';
+import { WitnessPickerComponent } from '../witness-picker/witness-picker.component';
 
 type LoadState = 'loading' | 'ready' | 'empty' | 'error';
 type ScanField = 'patient' | 'medication';
@@ -71,6 +72,7 @@ const FIVE_RIGHTS_LABEL_KEYS: Record<FiveRightsCheck, string> = {
     ServerTimePipe,
     CdsCardListComponent,
     MedicationRoutePipe,
+    WitnessPickerComponent,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './emar.component.html',
@@ -86,6 +88,8 @@ export class EmarComponent implements OnInit, OnDestroy {
   protected readonly doseScan = signal('');
   protected readonly routeScan = signal('');
   protected readonly overrideReason = signal('');
+  /** QA D922: the second clinician who witnesses a controlled dose. */
+  protected readonly witnessUserId = signal<string | null>(null);
 
   protected readonly verification = signal<MarVerificationResponse | null>(null);
   protected readonly verifyInFlight = signal(false);
@@ -139,8 +143,12 @@ export class EmarComponent implements OnInit, OnDestroy {
     return !!t && !!t.requiresPharmacistVerification && !t.pharmacistVerified;
   });
 
+  /** QA D922: a controlled drug is given only with a witness. */
+  protected readonly needsWitness = computed(() => !!this.activeTask()?.controlledSubstance);
+
   protected readonly canAdminister = computed(() => {
     if (this.blockedPendingPharmacist()) return false;
+    if (this.needsWitness() && !this.witnessUserId()) return false;
     const v = this.verification();
     if (!v) return false;
     if (v.allPassed) return true;
@@ -192,9 +200,13 @@ export class EmarComponent implements OnInit, OnDestroy {
     this.activeTask.set(task);
     this.patientScan.set('');
     this.medicationScan.set('');
-    this.doseScan.set(task.dose ?? '');
-    this.routeScan.set(task.route ?? '');
+    // QA D1025: the nurse confirms the dose and the route she is about to
+    // give; a prefilled prescribed value made "Bonne dose" and "Bonne voie"
+    // pass without anyone checking. The prescription is shown beside them.
+    this.doseScan.set('');
+    this.routeScan.set('');
     this.overrideReason.set('');
+    this.witnessUserId.set(null);
     this.verification.set(null);
     this.scannerError.set(null);
     this.stopScanner();
@@ -301,9 +313,18 @@ export class EmarComponent implements OnInit, OnDestroy {
     if (status === 'GIVEN' && !this.canAdminister()) return;
 
     this.administerInFlight.set(true);
-    const payload: { status: string; note?: string; overrideReason?: string } = { status };
+    const payload: {
+      status: string;
+      note?: string;
+      overrideReason?: string;
+      witnessUserId?: string;
+    } = { status };
     if (this.needsOverride() && status === 'GIVEN') {
       payload.overrideReason = this.overrideReason().trim();
+    }
+    const witness = this.witnessUserId();
+    if (status === 'GIVEN' && this.needsWitness() && witness) {
+      payload.witnessUserId = witness;
     }
 
     this.nurseTaskService

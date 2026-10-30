@@ -265,7 +265,7 @@
       [attr.aria-label]="'ORDER_SETS.OPEN_PICKER' | translate"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeOrderSetPicker(); $event.stopPropagation()"
     >
       <app-order-set-picker
         [hospitalId]="ctx.hospitalId"
@@ -294,7 +294,7 @@
       aria-labelledby="admissions-dialog-1-title"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeBedAssign(); $event.stopPropagation()"
     >
       <div class="modal-header">
         <h2 id="admissions-dialog-1-title">{{ 'ADMISSIONS.ASSIGN_BED' | translate }}</h2>
@@ -363,7 +363,7 @@
       aria-labelledby="admissions-dialog-3-title"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeModal(); $event.stopPropagation()"
     >
       <div class="modal-header">
         <h2 id="admissions-dialog-3-title">
@@ -610,7 +610,7 @@
       aria-labelledby="admissions-dialog-4-title"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="cancelDelete(); $event.stopPropagation()"
     >
       <div class="modal-header">
         <h2 id="admissions-dialog-4-title">{{ 'ADMISSIONS.DELETE_TITLE' | translate }}</h2>
@@ -656,7 +656,7 @@
       aria-labelledby="admissions-dialog-5-title"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="cancelDischarge(); $event.stopPropagation()"
     >
       <div class="modal-header">
         <h2 id="admissions-dialog-5-title">

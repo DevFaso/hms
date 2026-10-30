@@ -1,3 +1,5 @@
+import { DatePipe } from '@angular/common';
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -36,7 +38,7 @@ interface SchemeOption {
 @Component({
   selector: 'app-eligibility-check-dialog',
   standalone: true,
-  imports: [FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [FormsModule, TranslateModule, EnumLabelPipe, DatePipe, ServerTimePipe],
   templateUrl: './eligibility-check-dialog.component.html',
   styleUrl: './eligibility-check-dialog.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

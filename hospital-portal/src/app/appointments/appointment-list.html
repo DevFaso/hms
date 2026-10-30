@@ -321,7 +321,9 @@
               </td>
               <td>{{ appt.staffName }}</td>
               <td class="date-cell">
-                <span class="date-primary">{{ appt.appointmentDate }}</span>
+                <span class="date-primary">{{
+                  appt.appointmentDate | serverTime | date: 'mediumDate'
+                }}</span>
                 <span class="date-time"
                   >{{ appt.startTime | clockTime }} – {{ appt.endTime | clockTime }}</span
                 >

@@ -155,6 +155,7 @@ class PatientSnapshotServiceImplTest {
     void getSnapshot_basicDemographics_shouldPopulateCorrectly() {
         UUID patientId = UUID.randomUUID();
         Patient patient = stubPatient(patientId);
+        when(patient.getMrnForHospital(HOSPITAL_ID)).thenReturn("MRN-A-0042");
         givenPatient(patientId, patient);
         stubEmptySubQueries(patientId);
 
@@ -165,7 +166,8 @@ class PatientSnapshotServiceImplTest {
         assertEquals("Alice Wong", result.getName());
         assertEquals("F", result.getSex());
         assertTrue(result.getAge() > 0);
-        assertEquals(patientId.toString(), result.getMrn());
+        // QA D1040 class: the hospital's MRN, never the patient's UUID (was asserted as the UUID).
+        assertEquals("MRN-A-0042", result.getMrn());
     }
 
     @Test

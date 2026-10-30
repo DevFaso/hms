@@ -121,6 +121,8 @@ class MedicalCertificateServiceImplTest {
         assertThat(saved.getValue().getUploadedByUser()).isEqualTo(doctor.getUser());
         assertThat(saved.getValue().getNotes()).startsWith("Arrêt de travail : 3 jours").contains("référence ");
         assertThat(result.getDocumentType()).isEqualTo(PatientDocumentType.MEDICAL_CERTIFICATE);
+        // QA D1048: listed as issued by the hospital, not as a patient upload.
+        assertThat(result.isIssuedByHospital()).isTrue();
 
         String text = pdfText();
         assertThat(text).contains("CERTIFICAT D'ARRÊT DE TRAVAIL")

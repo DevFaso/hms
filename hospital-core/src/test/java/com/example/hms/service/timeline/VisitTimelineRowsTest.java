@@ -61,8 +61,17 @@ class VisitTimelineRowsTest {
     private final EncounterNoteRepository notes = mock(EncounterNoteRepository.class);
     private final com.example.hms.service.recordaccess.SensitivityClassifier classifier =
         mock(com.example.hms.service.recordaccess.SensitivityClassifier.class);
+    private final com.example.hms.repository.TreatmentPlanRepository plans =
+        mock(com.example.hms.repository.TreatmentPlanRepository.class);
+    private final com.example.hms.repository.ConsultationRepository consultations =
+        mock(com.example.hms.repository.ConsultationRepository.class);
+    private final com.example.hms.repository.DischargeSummaryRepository dischargeSummaries =
+        mock(com.example.hms.repository.DischargeSummaryRepository.class);
+    private final com.example.hms.repository.PatientUploadedDocumentRepository documents =
+        mock(com.example.hms.repository.PatientUploadedDocumentRepository.class);
     private final VisitTimelineRows rows =
-        new VisitTimelineRows(problems, labOrders, imagingOrders, referrals, encounters, notes, classifier);
+        new VisitTimelineRows(problems, labOrders, imagingOrders, referrals, encounters, notes,
+            plans, consultations, dischargeSummaries, documents, classifier);
 
     private final UUID patientId = UUID.randomUUID();
     private final Hospital here = hospital();
@@ -212,6 +221,82 @@ class VisitTimelineRowsTest {
             }
         }
         assertThat(missing).as("constants the chronology would print untranslated").isEmpty();
+    }
+
+    /**
+     * QA D1027 guard: every status a chronology row prints through
+     * TimelineStatus has its own French and Spanish label.
+     */
+    @Test
+    void everyStatusTheChronologyPrintsHasItsOwnFrenchAndSpanishLabel() {
+        MessageSource bundles = TestMessageSources.bundles();
+        List<String> missing = new ArrayList<>();
+        for (Class<? extends Enum<?>> type : List.<Class<? extends Enum<?>>>of(
+                com.example.hms.enums.PrescriptionStatus.class, com.example.hms.enums.TreatmentPlanStatus.class,
+                com.example.hms.enums.ConsultationStatus.class, com.example.hms.enums.EncounterStatus.class,
+                com.example.hms.enums.UltrasoundOrderStatus.class)) {
+            for (Enum<?> value : type.getEnumConstants()) {
+                String key = "timeline.status." + type.getSimpleName() + "." + value.name();
+                String fr = bundles.getMessage(key, null, null, Locale.FRENCH);
+                String es = bundles.getMessage(key, null, null, Locale.forLanguageTag("es"));
+                if (fr == null || es == null) {
+                    missing.add(key);
+                }
+            }
+        }
+        assertThat(missing).as("statuses the chronology would print untranslated").isEmpty();
+    }
+
+    @Test
+    void theVisitDocumentsAreOnTheChronologyWithTheirStatus() {
+        // QA D959 (round 17): plan, consultation request, discharge summary, certificate.
+        com.example.hms.model.treatment.TreatmentPlan plan = new com.example.hms.model.treatment.TreatmentPlan();
+        plan.setId(UUID.randomUUID());
+        plan.setHospital(here);
+        plan.setProblemStatement("Paludisme grave");
+        plan.setStatus(com.example.hms.enums.TreatmentPlanStatus.CANCELLED);
+        plan.setCreatedAt(LocalDateTime.now().minusHours(1));
+        when(plans.findAllByPatientIdAndHospitalId(org.mockito.ArgumentMatchers.eq(patientId),
+            org.mockito.ArgumentMatchers.eq(here.getId()), org.mockito.ArgumentMatchers.any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(plan)));
+        com.example.hms.model.Consultation consult = new com.example.hms.model.Consultation();
+        consult.setId(UUID.randomUUID());
+        consult.setHospital(here);
+        consult.setSpecialtyRequested("Cardiologie");
+        consult.setStatus(com.example.hms.enums.ConsultationStatus.REQUESTED);
+        when(consultations.findByPatient_IdAndHospital_IdInOrderByRequestedAtDesc(patientId, Set.of(here.getId())))
+            .thenReturn(List.of(consult));
+        com.example.hms.model.discharge.DischargeSummary discharge = new com.example.hms.model.discharge.DischargeSummary();
+        discharge.setId(UUID.randomUUID());
+        discharge.setHospital(here);
+        discharge.setIsFinalized(true);
+        discharge.setDischargeDiagnosis("Pneumonie");
+        discharge.setFinalizedAt(LocalDateTime.now().minusMinutes(30));
+        when(dischargeSummaries.findByPatient_IdAndHospital_IdOrderByDischargeDateDesc(patientId, here.getId()))
+            .thenReturn(List.of(discharge));
+        com.example.hms.model.PatientUploadedDocument certificate = new com.example.hms.model.PatientUploadedDocument();
+        certificate.setId(UUID.randomUUID());
+        certificate.setIssuingHospital(here);
+        certificate.setDocumentType(com.example.hms.enums.PatientDocumentType.MEDICAL_CERTIFICATE);
+        certificate.setDisplayName("Arrêt de travail");
+        com.example.hms.model.PatientUploadedDocument upload = new com.example.hms.model.PatientUploadedDocument();
+        upload.setId(UUID.randomUUID());
+        upload.setDocumentType(com.example.hms.enums.PatientDocumentType.MEDICAL_CERTIFICATE);
+        upload.setDisplayName("Le mien");
+        when(documents.findForStaffByType(org.mockito.ArgumentMatchers.eq(patientId),
+            org.mockito.ArgumentMatchers.eq(here.getId()),
+            org.mockito.ArgumentMatchers.eq(com.example.hms.enums.PatientDocumentType.MEDICAL_CERTIFICATE),
+            org.mockito.ArgumentMatchers.any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(certificate, upload)));
+
+        assertThat(rows.collect(patientId, here.getId(),
+                Set.of("TREATMENT_PLAN", "CONSULTATION", "DISCHARGE_SUMMARY", "DOCUMENT")))
+            .extracting(PatientTimelineEntryDTO::getSummary)
+            .containsExactlyInAnyOrder(
+                "Plan de traitement : Paludisme grave (Annulé)",
+                "Demande d’avis : Cardiologie (Demandée)",
+                "Résumé de sortie (finalisé) : Pneumonie",
+                "Certificat médical : Arrêt de travail");
     }
 
     private static String labelIn(Enum<?> value, Locale locale) {

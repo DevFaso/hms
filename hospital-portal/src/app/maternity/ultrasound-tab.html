@@ -181,7 +181,7 @@
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeOrder(); $event.stopPropagation()"
     >
       <div class="modal-header">
         <h2 id="ultrasound-tab-dialog-1-title">
@@ -323,7 +323,7 @@
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeOrderModal(); $event.stopPropagation()"
     >
       <div class="modal-header">
         <h2 id="ultrasound-tab-dialog-2-title">
@@ -458,7 +458,7 @@
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeReportModal(); $event.stopPropagation()"
     >
       <div class="modal-header">
         <h2 id="ultrasound-tab-dialog-3-title">

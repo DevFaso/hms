@@ -1,4 +1,5 @@
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { ToastService } from '../core/toast.service';
 import {
   HttpClient,
   HttpContext,
@@ -147,7 +148,12 @@ describe('errorInterceptor', () => {
     });
     httpMock
       .expectOne('/super-admin/hospitals/h/suspend')
-      .flush({ message: 'Access denied' }, { status: 403, statusText: 'Forbidden' });
+      // The server's opaque refusal carries code ACCESS_DENIED (GlobalExceptionHandler /
+      // JsonAccessDeniedHandler); a reason without a code is the page's (QA D995).
+      .flush(
+        { message: 'Access denied', code: 'ACCESS_DENIED' },
+        { status: 403, statusText: 'Forbidden' },
+      );
 
     expect(error?.status).toBe(403);
     expect(router.navigate).toHaveBeenCalledWith(['/error/403']);
@@ -414,6 +420,39 @@ describe('errorInterceptor', () => {
     expect(router.navigate).not.toHaveBeenCalled();
     expect(error?.status).toBe(403);
     httpMock.expectNone('/frontend-audit');
+  });
+
+  it('D995 (round 17): any write refused with a server reason stays on the page, the reason in a toast', () => {
+    const toast = TestBed.inject(ToastService);
+    let error: HttpErrorResponse | undefined;
+    http.post('/treatment-plans', {}).subscribe({ error: (e) => (error = e) });
+    httpMock
+      .expectOne('/treatment-plans')
+      .flush(
+        { message: 'Seul l’auteur du plan peut le modifier.' },
+        { status: 403, statusText: 'Forbidden' },
+      );
+
+    expect(router.navigate).not.toHaveBeenCalled();
+    expect(error?.status).toBe(403);
+    expect(toast.toasts().map((t) => t.message)).toEqual([
+      'Seul l’auteur du plan peut le modifier.',
+    ]);
+    // The page reporting the same reason does not stack a second toast.
+    toast.error('Seul l’auteur du plan peut le modifier.');
+    expect(toast.toasts().length).toBe(1);
+  });
+
+  it('D995 (round 17): the opaque role refusal (code ACCESS_DENIED) still opens the 403 page', () => {
+    http.post('/treatment-plans', {}).subscribe({ error: () => undefined });
+    httpMock
+      .expectOne('/treatment-plans')
+      .flush(
+        { message: 'Accès refusé', code: 'ACCESS_DENIED' },
+        { status: 403, statusText: 'Forbidden' },
+      );
+
+    expect(router.navigate).toHaveBeenCalledWith(['/error/403']);
   });
 
   // QA D995/D933 guard: every encounter workflow action and discharge write is

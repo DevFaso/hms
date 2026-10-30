@@ -1,3 +1,5 @@
+import { MaternityService } from '../../services/maternity.service';
+import { effectiveDueDate, gestationalAge } from '../../maternity/pregnancy-dates';
 import {
   Component,
   Input,
@@ -43,6 +45,7 @@ import { LabService, LabOrderResponse } from '../../services/lab.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { RestrictedRowsComponent } from '../restricted-rows/restricted-rows.component';
 import { shortOrderCode } from '../../shared/lab/order-code';
+import { DialogFocusDirective } from '../../shared/a11y/dialog-focus.directive';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 type ChartSection = 'allergies' | 'problems' | 'updates' | 'timeline' | 'labs';
@@ -67,6 +70,7 @@ const UNSCOPED_KEY = 'UNSCOPED';
     TranslateModule,
     EnumLabelPipe,
     RestrictedRowsComponent,
+    DialogFocusDirective,
   ],
   templateUrl: './patient-chart.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -82,6 +86,8 @@ export class PatientChartComponent implements OnInit, OnChanges {
    * sections re-read on their next visit.
    */
   @Input() refreshToken = 0;
+  /** QA D1005 review: the pregnancy line is asked for only when the patient may be pregnant. */
+  @Input() patientGender: string | null | undefined = undefined;
 
   /** E9 #64 — "Ouvrir avec motif" on a restricted line; the host opens the declaration. */
   readonly openRestricted = output<void>();
@@ -93,6 +99,36 @@ export class PatientChartComponent implements OnInit, OnChanges {
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
   private readonly registrations = inject(RegistrationService);
+  private readonly maternity = inject(MaternityService);
+
+  /**
+   * QA D1005: the ongoing pregnancy (gestational age today and due date) on
+   * the chart, read from the patient's current maternal history the way the
+   * maternity list reads it; null when there is none or it is over.
+   */
+  readonly pregnancy = signal<{ weeks: number; days: number; dueDate: string } | null>(null);
+
+  private loadPregnancy(): void {
+    this.pregnancy.set(null);
+    const gender = (this.patientGender ?? '').toUpperCase();
+    if (
+      !this.patientId ||
+      (gender !== 'FEMALE' && gender !== 'F') ||
+      !this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'])
+    ) {
+      return;
+    }
+    const asked = this.patientId;
+    this.maternity.currentForPatient(asked).subscribe({
+      next: (history) => {
+        if (asked !== this.patientId) return;
+        const dueDate = effectiveDueDate(history?.menstrualHistory);
+        const ga = gestationalAge(dueDate);
+        this.pregnancy.set(ga && dueDate ? { ...ga, dueDate } : null);
+      },
+      error: () => this.pregnancy.set(null),
+    });
+  }
 
   section = signal<ChartSection>('allergies');
 
@@ -344,6 +380,7 @@ export class PatientChartComponent implements OnInit, OnChanges {
     this.section.set(this.firstVisibleSection());
     this.loadCurrentSection();
     this.loadRegistrationHere();
+    this.loadPregnancy();
   }
 
   /**
@@ -1121,6 +1158,15 @@ export class PatientChartComponent implements OnInit, OnChanges {
         return 'description';
       case 'REFERRAL':
         return 'forward_to_inbox';
+      // QA D959 (round 17): the visit's other documents.
+      case 'TREATMENT_PLAN':
+        return 'assignment';
+      case 'CONSULTATION':
+        return 'group';
+      case 'DISCHARGE_SUMMARY':
+        return 'logout';
+      case 'DOCUMENT':
+        return 'verified';
       default:
         return 'event_note';
     }

@@ -34,7 +34,11 @@ describe('EmarComponent (P1 #8 — five-rights barcode-scan loop)', () => {
       'getMedicationMAR',
       'verifyMedication',
       'administerMedication',
+      'getAdministrationWitnessCandidates',
     ]);
+    nurseSpy.getAdministrationWitnessCandidates.and.returnValue(
+      of([{ userId: 'u-witness', displayName: 'Awa Kaboré' }]),
+    );
     toastSpy = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error', 'info']);
 
     await TestBed.configureTestingModule({
@@ -205,6 +209,47 @@ describe('EmarComponent (P1 #8 — five-rights barcode-scan loop)', () => {
       routeScanValue: 'PO',
     });
     expect(toastSpy.success).toHaveBeenCalled();
+  });
+
+  it('QA D1025: choosing a dose prefills neither the dose nor the route the nurse must confirm', () => {
+    nurseSpy.getMedicationMAR.and.returnValue(of([sampleTask]));
+    fixture.detectChanges();
+    component['selectTask'](sampleTask);
+    expect(component['doseScan']()).toBe('');
+    expect(component['routeScan']()).toBe('');
+  });
+
+  it('QA D922: a controlled dose is given only with a witness, sent with the dose', () => {
+    const morphine: NurseMedicationTask = {
+      ...sampleTask,
+      id: 'task-mor',
+      controlledSubstance: true,
+    };
+    nurseSpy.getMedicationMAR.and.returnValue(of([morphine]));
+    nurseSpy.administerMedication.and.returnValue(of(morphine));
+    fixture.detectChanges();
+    component['selectTask'](morphine);
+    fixture.detectChanges();
+    component['verification'].set({
+      marId: morphine.id,
+      outcomes: { PATIENT: true, DRUG: true, DOSE: true, ROUTE: true, TIME: true },
+      failedChecks: [],
+      failureReasons: {},
+      allPassed: true,
+      verifiedAt: '2026-04-30T08:01:00',
+    });
+    expect(root().querySelector('[data-testid="witness-picker"]')).not.toBeNull();
+    expect(component['canAdminister']()).toBeFalse();
+    component['administer']('GIVEN');
+    expect(nurseSpy.administerMedication).not.toHaveBeenCalled();
+
+    component['witnessUserId'].set('u-witness');
+    expect(component['canAdminister']()).toBeTrue();
+    component['administer']('GIVEN');
+    expect(nurseSpy.administerMedication).toHaveBeenCalledOnceWith(morphine.id, {
+      status: 'GIVEN',
+      witnessUserId: 'u-witness',
+    });
   });
 
   it('records GIVEN with the override reason when the five-rights check failed', () => {

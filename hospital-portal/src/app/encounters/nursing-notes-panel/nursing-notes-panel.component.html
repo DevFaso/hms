@@ -14,6 +14,12 @@
     <ul class="nursing-notes__list">
       @for (note of notes(); track note.id) {
         <li class="nursing-notes__item" data-testid="nursing-note">
+          <!-- QA D1044: the title the nurse gave the note. -->
+          @if (note.title) {
+            <p class="nursing-notes__title" data-testid="nursing-note-title">
+              <strong>{{ note.title }}</strong>
+            </p>
+          }
           <p class="nursing-notes__meta">
             <span class="nursing-notes__template">{{ note.template }}</span>
             {{ note.documentedAt | serverTime | date: 'short' }}

@@ -129,6 +129,17 @@ export class EncountersComponent implements OnInit {
     return !!status && EncountersComponent.NEVER_SEEN.has(status);
   }
 
+  /**
+   * QA D1024: the LWBS dialog opened from the visit's detail rendered under the
+   * drawer (whose focus trap also kept the keyboard out of it), so it could
+   * not be submitted. The drawer is closed first; the dialog is then the only
+   * modal on the page.
+   */
+  openCloseUnseenFromDetail(enc: EncounterResponse): void {
+    this.closeDetail();
+    this.closeUnseenEncounter.set(enc);
+  }
+
   onUnseenVisitClosed(): void {
     this.closeUnseenEncounter.set(null);
     this.closeDetail();

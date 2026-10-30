@@ -111,6 +111,18 @@
                       </button>
                     }
                   }
+                  @if (col.key === 'waitingForPhysician' && canStartVisit) {
+                    <!-- QA D1015: the clinician who owns the visit starts it here (a
+                         midwife her antenatal visit); the server refuses anyone else. -->
+                    <button
+                      class="btn-complete-exam"
+                      data-testid="tracker-start"
+                      (click)="startVisit(item)"
+                      [disabled]="startInProgress()"
+                    >
+                      {{ 'TRACKER.START_VISIT' | translate }}
+                    </button>
+                  }
                   @if (col.key === 'inProgress') {
                     <button
                       class="btn-complete-exam"

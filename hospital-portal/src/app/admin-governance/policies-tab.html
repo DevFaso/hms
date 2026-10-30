@@ -172,7 +172,7 @@
         aria-modal="true"
         tabindex="-1"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="$event.stopPropagation()"
+        (keydown.escape)="closePolicyModal(); $event.stopPropagation()"
       >
         <h2>
           {{ (editingPolicy() ? 'ADMIN_GOV.EDIT_POLICY' : 'ADMIN_GOV.NEW_POLICY') | translate }}
@@ -268,7 +268,7 @@
         aria-modal="true"
         tabindex="-1"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="$event.stopPropagation()"
+        (keydown.escape)="closeRuleModal(); $event.stopPropagation()"
       >
         <h2>
           {{ (editingRule() ? 'ADMIN_GOV.EDIT_RULE' : 'ADMIN_GOV.NEW_RULE') | translate }}

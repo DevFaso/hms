@@ -1823,6 +1823,54 @@ class EncounterServiceImplTest {
                 .hasMessageContaining("not the assigned physician");
     }
 
+    @Test
+    void startEncounter_midwifeStartsTheVisitBookedWithHer_D1015() {
+        UUID encounterId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Hospital hospital = new Hospital();
+        hospital.setId(hospitalId);
+        User midwife = User.builder().build();
+        midwife.setId(UUID.randomUUID());
+        Staff staff = Staff.builder().user(midwife).build();
+        staff.setId(UUID.randomUUID());
+        Encounter encounter = new Encounter();
+        encounter.setId(encounterId);
+        encounter.setStatus(EncounterStatus.WAITING_FOR_PHYSICIAN);
+        encounter.setHospital(hospital);
+        encounter.setStaff(staff);
+        EncounterResponseDTO dto = new EncounterResponseDTO();
+        dto.setId(encounterId);
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(userRepository.findByUsername("midwife1")).thenReturn(Optional.of(midwife));
+        when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(encounterMapper.toEncounterResponseDTO(any(Encounter.class))).thenReturn(dto);
+
+        service.startEncounter(encounterId, "midwife1", false, hospitalId, true);
+
+        assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.IN_PROGRESS);
+    }
+
+    @Test
+    void startEncounter_midwifeCannotPickUpAnUnassignedVisit_D1015() {
+        UUID encounterId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Hospital hospital = new Hospital();
+        hospital.setId(hospitalId);
+        User midwife = User.builder().build();
+        midwife.setId(UUID.randomUUID());
+        Encounter encounter = new Encounter();
+        encounter.setId(encounterId);
+        encounter.setStatus(EncounterStatus.WAITING_FOR_PHYSICIAN);
+        encounter.setHospital(hospital);
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(userRepository.findByUsername("midwife1")).thenReturn(Optional.of(midwife));
+
+        assertThatThrownBy(() -> service.startEncounter(encounterId, "midwife1", false, hospitalId, true))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("not the assigned physician");
+        assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.WAITING_FOR_PHYSICIAN);
+    }
+
     // ---------- completeExamination ----------
 
     @Test

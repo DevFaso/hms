@@ -69,6 +69,27 @@ public final class MedicationRoutes {
         return SYNONYMS.get(folded);
     }
 
+    /**
+     * QA D1025: the route as a reader of {@code text}'s language reads it
+     * ("Intraveineuse (IV)"), the same labels as the prescription form; a text
+     * this class does not know is printed as written. Every route the backend
+     * composes into text (chart review, after-visit summary, PDFs) goes
+     * through here; {@code RouteLabelGuardTest} fails on a raw one.
+     */
+    public static String label(String text) {
+        return label(text, null);
+    }
+
+    /** {@link #label(String)} in {@code locale} (a PDF's language); {@code null} is the request's. */
+    public static String label(String text, Locale locale) {
+        String code = canonical(text);
+        if (code == null) {
+            return text;
+        }
+        String label = com.example.hms.utility.MessageUtil.resolveOrNull(locale, "medication.route." + code);
+        return label != null ? label : text;
+    }
+
     /** True when both texts name the same route; unknown texts compare as written, ignoring case. */
     public static boolean sameRoute(String prescribed, String given) {
         String a = canonical(prescribed);

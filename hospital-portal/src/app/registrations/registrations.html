@@ -206,7 +206,7 @@
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeFormModal(); $event.stopPropagation()"
     >
       <div class="modal-header">
         <h2>
@@ -307,7 +307,7 @@
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeDelete(); $event.stopPropagation()"
     >
       <div class="modal-header">
         <h2>{{ 'REGISTRATIONS.DELETE_TITLE' | translate }}</h2>

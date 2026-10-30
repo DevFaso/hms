@@ -533,6 +533,9 @@ describe('EncountersComponent', () => {
     fixture.detectChanges();
     expect(component.closeUnseenEncounter()?.id).toBe('e1');
     expect(fixture.nativeElement.querySelector('app-close-unseen-dialog')).toBeTruthy();
+    // QA D1024: the drawer is closed, so the dialog is the only modal (not under it).
+    expect(component.selectedEncounter()).toBeNull();
+    expect(fixture.nativeElement.querySelector('.detail-overlay')).toBeNull();
   });
 
   it('QA D954: a visit already seen offers no LWBS action', () => {

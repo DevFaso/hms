@@ -422,6 +422,24 @@ export class MedicalHistoryTabComponent implements OnInit {
     this.showImmunizationModal.set(true);
   }
 
+  /**
+   * QA D1003: a vaccine chosen by name takes the CVX code an earlier dose of
+   * the same vaccine in this chart was recorded with. No PEV-to-CVX table is
+   * held in the codebase, so nothing is guessed: with no earlier dose, the
+   * clinician enters the code the hospital's DHIS2 export is configured for.
+   */
+  onVaccineChosen(display: string): void {
+    this.immunizationForm.vaccineDisplay = display;
+    if (this.immunizationForm.vaccineCode?.trim()) return;
+    const name = (display ?? '').trim().toLocaleLowerCase();
+    if (!name) return;
+    const earlier = this.immunizations().find(
+      (i) =>
+        (i.vaccineDisplay ?? '').trim().toLocaleLowerCase() === name && !!i.vaccineCode?.trim(),
+    );
+    if (earlier?.vaccineCode) this.immunizationForm.vaccineCode = earlier.vaccineCode;
+  }
+
   closeImmunizationModal(): void {
     this.showImmunizationModal.set(false);
   }

@@ -110,6 +110,20 @@ public class NurseTaskController {
         );
     }
 
+    @GetMapping("/medications/mar/witness-candidates")
+    @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
+    @Operation(summary = "Clinicians who may witness a controlled dose (QA D922)")
+    public ResponseEntity<java.util.List<com.example.hms.payload.dto.pharmacy.StockWitnessCandidateDTO>>
+        administrationWitnessCandidates(
+            @RequestParam(name = "hospitalId", required = false) UUID hospitalId,
+            Authentication auth
+        ) {
+        authUtils.requireAuth(auth);
+        UUID scopedHospital = ensureHospitalScope(auth, hospitalId);
+        UUID self = authUtils.resolveUserId(auth).orElse(null);
+        return ResponseEntity.ok(nurseTaskService.listAdministrationWitnessCandidates(self, scopedHospital));
+    }
+
     @PutMapping("/medications/mar/{taskId}/administer")
     @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Record medication administration outcome for a MAR task")

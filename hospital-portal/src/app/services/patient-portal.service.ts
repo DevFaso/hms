@@ -983,6 +983,8 @@ export interface PatientDocumentResponse {
   uploadedByUserId: string;
   uploadedByDisplayName: string;
   documentType: PatientDocumentType;
+  /** QA D1048: issued by a hospital (a medical certificate), not uploaded by the patient. */
+  issuedByHospital?: boolean;
   displayName: string;
   fileUrl: string;
   mimeType: string;

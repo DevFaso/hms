@@ -2188,7 +2188,8 @@ public class EncounterServiceImpl implements EncounterService {
                 .consciousnessLevel(req.getConsciousnessLevel())
                 // QA D989: stored chart text is written in the clinician's
                 // language, never an English label ("Pain scale: 8").
-                .notes(req.getPainScale() != null ? storedText("triage.vitals.painScale", req.getPainScale()) : null)
+                // QA D1031: the antenatal fundal height is charted beside it.
+                .notes(triageVitalNotes(req))
                 .build();
     }
 
@@ -2726,6 +2727,18 @@ public class EncounterServiceImpl implements EncounterService {
      * never from an English literal (QA D952/D989 class).
      * {@code StoredClinicalTextLiteralGuardTest} keeps literals out.
      */
+    /** The pain score and the fundal height of a triage, in the clinician's language (QA D989, D1031). */
+    private String triageVitalNotes(com.example.hms.payload.dto.TriageSubmissionRequestDTO req) {
+        List<String> parts = new ArrayList<>();
+        if (req.getPainScale() != null) {
+            parts.add(storedText("triage.vitals.painScale", req.getPainScale()));
+        }
+        if (req.getFundalHeightCm() != null) {
+            parts.add(storedText("triage.vitals.fundalHeight", req.getFundalHeightCm()));
+        }
+        return parts.isEmpty() ? null : String.join(" · ", parts);
+    }
+
     private String storedText(String key, Object... args) {
         return messageSource.getMessage(key, args, org.springframework.context.i18n.LocaleContextHolder.getLocale());
     }
@@ -3006,7 +3019,9 @@ public class EncounterServiceImpl implements EncounterService {
             .filter(m -> !Boolean.FALSE.equals(m.getContinueAtDischarge()))
             .filter(m -> m.getReconciliationAction() != MedicationReconciliationAction.DISCONTINUED)
             .filter(m -> !isBlankText(m.getMedicationName()))
-            .map(m -> java.util.stream.Stream.of(m.getMedicationName(), m.getDosage(), m.getRoute(),
+            // QA D1025 class: the route in the reader's language.
+            .map(m -> java.util.stream.Stream.of(m.getMedicationName(), m.getDosage(),
+                    com.example.hms.service.emar.MedicationRoutes.label(m.getRoute()),
                     m.getFrequency(), m.getPatientInstructions())
                 .filter(part -> !isBlankText(part))
                 .map(String::trim)
@@ -3178,7 +3193,8 @@ public class EncounterServiceImpl implements EncounterService {
     @Override
     @Transactional
     public EncounterResponseDTO startEncounter(UUID encounterId, String actorUsername,
-                                                boolean isSuperAdmin, UUID callerHospitalId) {
+                                                boolean isSuperAdmin, UUID callerHospitalId,
+                                                boolean mustBeAssignedClinician) {
         Encounter encounter = requireEncounterInScope(encounterId, isSuperAdmin, callerHospitalId);
 
         if (!isSuperAdmin) {
@@ -3189,6 +3205,13 @@ public class EncounterServiceImpl implements EncounterService {
             if (user != null && encounterStaff != null
                     && encounterStaff.getUser() != null
                     && !encounterStaff.getUser().getId().equals(user.getId())) {
+                throw new BusinessException("encounter.notAssignedPhysician");
+            }
+            // QA D1015: a midwife-led visit (antenatal care booked with the
+            // midwife) is started by that midwife; an unassigned visit stays
+            // with the physicians.
+            if (mustBeAssignedClinician && (user == null || encounterStaff == null
+                    || encounterStaff.getUser() == null)) {
                 throw new BusinessException("encounter.notAssignedPhysician");
             }
         }

@@ -195,7 +195,7 @@ class UltrasoundServiceImplTest {
 
         assertThatThrownBy(() -> ultrasoundService.createOrder(request, null))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Growth scan");
+            .hasMessageContaining("ultrasound.ga.GROWTH_SCAN"); // QA D1046: keyed, was English prose
 
         verifyNoInteractions(ultrasoundMapper);
         verify(orderRepository, never()).save(any());
@@ -215,7 +215,7 @@ class UltrasoundServiceImplTest {
 
         assertThatThrownBy(() -> ultrasoundService.createOrder(request, null))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Anatomy scan");
+            .hasMessageContaining("ultrasound.ga.ANATOMY_SCAN"); // QA D1046: keyed, was English prose
 
         verify(orderRepository, never()).save(any());
     }
@@ -436,7 +436,7 @@ class UltrasoundServiceImplTest {
 
         assertThatThrownBy(() -> ultrasoundService.markReportReviewed(reportId, null))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("already reviewed");
+            .hasMessageContaining("ultrasound.report.alreadyReviewed"); // QA D1046
 
         verify(reportRepository, never()).save(any());
     }
@@ -472,7 +472,7 @@ class UltrasoundServiceImplTest {
 
         assertThatThrownBy(() -> ultrasoundService.markPatientNotified(reportId))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("already been notified");
+            .hasMessageContaining("ultrasound.report.patientAlreadyNotified"); // QA D1046
 
         verify(reportRepository, never()).save(any());
     }
@@ -570,6 +570,8 @@ class UltrasoundServiceImplTest {
 
         assertThat(order.getStatus()).isEqualTo(UltrasoundOrderStatus.CANCELLED);
         assertThat(order.getCancellationReason()).isEqualTo(reason);
+        // QA D1047: the cancellation is stamped with its time.
+        assertThat(order.getCancelledAt()).isNotNull();
         assertThat(result).isSameAs(responseDTO);
     }
 

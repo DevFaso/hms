@@ -50,6 +50,7 @@ describe('NurseStationComponent — two-tier polling', () => {
       'getPendingAdmissions',
       'captureVitals',
       'administerMedication',
+      'getAdministrationWitnessCandidates',
     ]);
     toastSpy = jasmine.createSpyObj('ToastService', ['info', 'success', 'error', 'warn']);
     routerSpy = jasmine.createSpyObj('Router', ['navigate']);
@@ -64,6 +65,7 @@ describe('NurseStationComponent — two-tier polling', () => {
       of([{ userId: 'u-2', displayName: 'Awa Sanou' }]),
     );
     nurseServiceSpy.getMedicationMAR.and.returnValue(of([]));
+    nurseServiceSpy.getAdministrationWitnessCandidates.and.returnValue(of([]));
     nurseServiceSpy.getDashboardSummary.and.returnValue(of(null as any));
     nurseServiceSpy.getNursingTasks.and.returnValue(of([]));
     nurseServiceSpy.getNurseInbox.and.returnValue(of([]));
@@ -720,8 +722,51 @@ describe('NurseStationComponent — two-tier polling', () => {
     component.recordVitals('p1', 'Awa');
     component.updateVitalsField('spo2Percent', '97');
     component.submitVitals();
-    expect(nurseServiceSpy.captureVitals).toHaveBeenCalledWith('p1', { spo2Percent: 97 });
+    // QA D1043: the unticked oxygen box is sent as false.
+    expect(nurseServiceSpy.captureVitals).toHaveBeenCalledWith('p1', {
+      spo2Percent: 97,
+      onOxygen: false,
+    });
     expect(toastSpy.error).toHaveBeenCalledWith('SpO2 out of range');
+  });
+
+  it('QA D1043: an untouched oxygen box alone is not a vitals set; with readings it is sent as false', () => {
+    component.recordVitals('p1', 'Awa');
+    component.updateVitalsOnOxygen(false);
+    component.submitVitals();
+    expect(nurseServiceSpy.captureVitals).not.toHaveBeenCalled();
+  });
+
+  it('QA D1045: the ward pain score is sent with the vitals', () => {
+    nurseServiceSpy.captureVitals.and.returnValue(of(undefined));
+    component.recordVitals('p1', 'Awa');
+    component.updateVitalsField('painScale', '6');
+    component.submitVitals();
+    expect(nurseServiceSpy.captureVitals).toHaveBeenCalledWith('p1', {
+      painScale: 6,
+      onOxygen: false,
+    });
+  });
+
+  it('QA D1039: the triage card reads the arrival time, never the visit day midnight', () => {
+    expect(
+      component.waitStart({
+        arrivalTimestamp: '2026-10-29T08:10:00',
+        encounterDate: '2026-10-29T00:00:00',
+      }),
+    ).toBe('2026-10-29T08:10:00');
+    expect(
+      component.waitStart({
+        encounterDate: '2026-10-29T00:00:00',
+        createdAt: '2026-10-29T07:55:00',
+      }),
+    ).toBe('2026-10-29T07:55:00');
+    expect(
+      component.waitStart({
+        encounterDate: '2026-10-20T09:00:00',
+        createdAt: '2026-10-29T07:55:00',
+      }),
+    ).toBe('2026-10-20T09:00:00');
   });
 
   it('QA D530: glucose is typed in mmol/L like the lab and sent in mg/dL', () => {
@@ -729,7 +774,10 @@ describe('NurseStationComponent — two-tier polling', () => {
     component.recordVitals('p1', 'Awa');
     component.updateGlucoseMmol('5.6');
     component.submitVitals();
-    expect(nurseServiceSpy.captureVitals).toHaveBeenCalledWith('p1', { bloodGlucoseMgDl: 101 });
+    expect(nurseServiceSpy.captureVitals).toHaveBeenCalledWith('p1', {
+      bloodGlucoseMgDl: 101,
+      onOxygen: false,
+    });
   });
 
   it('QA D530: the vitals modal names the patient, never the English word Patient', () => {
@@ -771,6 +819,27 @@ describe('NurseStationComponent — two-tier polling', () => {
         overrideReason: 'Scanner broken on ward',
       });
       expect(component.reasonPrompt()).toBeNull();
+    });
+
+    it('D922: Give of a controlled drug from the station asks for a witness and sends it', () => {
+      nurseServiceSpy.administerMedication.and.returnValue(of({} as any));
+      component.medications.set([
+        { id: 'rx-mor', medication: 'Morphine', controlledSubstance: true } as any,
+      ]);
+      component.administerMedication('rx-mor');
+      component.reasonText.set('Pas de scanner au chevet');
+      expect(component.promptNeedsWitness()).toBeTrue();
+      component.confirmHoldRefuse();
+      expect(nurseServiceSpy.administerMedication).not.toHaveBeenCalled();
+      expect(toastSpy.error).toHaveBeenCalledWith('NURSE.WITNESS.REQUIRED');
+
+      component.witnessUserId.set('u-witness');
+      component.confirmHoldRefuse();
+      expect(nurseServiceSpy.administerMedication).toHaveBeenCalledWith('rx-mor', {
+        status: 'GIVEN',
+        overrideReason: 'Pas de scanner au chevet',
+        witnessUserId: 'u-witness',
+      });
     });
 
     it("D78: a refusal shows the server's localised reason, not the generic toast", () => {

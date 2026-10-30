@@ -51,6 +51,9 @@ public class NurseMedicationTaskResponseDTO {
     /** True once verified. False plus the flag above means administration is refused. */
     private boolean pharmacistVerified;
 
+    /** QA D922: the clinician who witnessed this controlled dose, once it is recorded. */
+    private String witnessName;
+
     /**
      * QA D799: non-blocking clinical advisories for this dose, today the
      * beta-lactam cross-reactivity warning the prescriber saw. Empty when

@@ -313,7 +313,7 @@
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="entryFormOpen.set(false); $event.stopPropagation()"
     >
       <div class="modal-header">
         <h2 id="labor-tab-dialog-1-title">{{ 'LABOR.NEW_ENTRY' | translate }}</h2>
@@ -507,7 +507,7 @@
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="cancelDelivery(); $event.stopPropagation()"
     >
       <div class="modal-header">
         <h2 id="labor-tab-dialog-2-title">{{ 'LABOR.RECORD_DELIVERY' | translate }}</h2>

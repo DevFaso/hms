@@ -47,6 +47,7 @@ import {
   fromServerDateTime,
   isServerTimeToday,
   localDateString,
+  serverInstant,
   toServerDateTime,
 } from '../shared/date-utils';
 import {
@@ -59,6 +60,7 @@ import { AuthService } from '../auth/auth.service';
 import { TriageFormComponent } from './triage-form/triage-form.component';
 import { NursingIntakeFormComponent } from './nursing-intake-form/nursing-intake-form.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { WitnessPickerComponent } from './witness-picker/witness-picker.component';
 import { CdsCardListComponent } from '../shared/cds-card/cds-card.component';
 import { CdsCard } from '../shared/cds-card/cds-card.model';
 import { MedicationRoutePipe } from '../shared/pipes/medication-route.pipe';
@@ -102,6 +104,7 @@ export function localInputToUtcIso(value: string | undefined | null): string | u
     PatientPickerComponent,
     ServerTimePipe,
     CdsCardListComponent,
+    WitnessPickerComponent,
   ],
   templateUrl: './nurse-station.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -470,6 +473,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   administerMedication(taskId: string): void {
     this.reasonPrompt.set({ taskId, action: 'GIVEN' });
     this.reasonText.set('');
+    this.witnessUserId.set(null);
   }
 
   /**
@@ -503,6 +507,41 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
     this.reasonText.set('');
   }
 
+  /**
+   * QA D1039: when the patient started waiting, read as the server reads it
+   * (EncounterWait): the arrival time; else when the visit was recorded, if
+   * that is within the 24 hours after its date (a date picked as a day is
+   * midnight); else the visit's date.
+   */
+  waitStart(e: {
+    arrivalTimestamp?: string | null;
+    createdAt?: string | null;
+    encounterDate?: string | null;
+  }): string | null {
+    if (e.arrivalTimestamp) return e.arrivalTimestamp;
+    const date = e.encounterDate ? serverInstant(e.encounterDate).getTime() : Number.NaN;
+    const created = e.createdAt ? serverInstant(e.createdAt).getTime() : Number.NaN;
+    if (
+      !Number.isNaN(date) &&
+      !Number.isNaN(created) &&
+      created > date &&
+      created < date + 86_400_000
+    ) {
+      return e.createdAt ?? null;
+    }
+    return e.encounterDate ?? e.createdAt ?? null;
+  }
+
+  /** QA D922: the second clinician who witnesses a controlled dose given from this table. */
+  readonly witnessUserId = signal<string | null>(null);
+
+  /** QA D922: the prompt is giving a controlled drug, so a witness is asked for. */
+  promptNeedsWitness(): boolean {
+    const prompt = this.reasonPrompt();
+    if (prompt?.action !== 'GIVEN') return false;
+    return !!this.medications().find((m) => m.id === prompt.taskId)?.controlledSubstance;
+  }
+
   confirmHoldRefuse(): void {
     const prompt = this.reasonPrompt();
     if (!prompt) return;
@@ -511,10 +550,19 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
       this.toast.error(this.translate.instant('NURSE.TOAST.REASON_REQUIRED'));
       return;
     }
+    if (this.promptNeedsWitness() && !this.witnessUserId()) {
+      this.toast.error(this.translate.instant('NURSE.WITNESS.REQUIRED'));
+      return;
+    }
     this.actionInProgress.set(prompt.taskId);
+    const witness = this.witnessUserId();
     const payload =
       prompt.action === 'GIVEN'
-        ? { status: 'GIVEN', overrideReason: reason }
+        ? {
+            status: 'GIVEN',
+            overrideReason: reason,
+            ...(this.promptNeedsWitness() && witness ? { witnessUserId: witness } : {}),
+          }
         : { status: prompt.action, note: reason };
     this.nurseService.administerMedication(prompt.taskId, payload).subscribe({
       next: () => {
@@ -541,6 +589,7 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   cancelHoldRefuse(): void {
     this.reasonPrompt.set(null);
     this.reasonText.set('');
+    this.witnessUserId.set(null);
   }
 
   /* ── Vitals: open inline capture dialog ────────────────── */
@@ -618,8 +667,12 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   submitVitals(): void {
     const target = this.vitalsCaptureFor();
     if (!target) return;
-    const form = this.vitalsForm();
-    const hasAtLeastOne = Object.values(form).some((v) => v !== undefined && v !== '');
+    // QA D1043: the oxygen box is a yes/no the nurse answers by leaving it
+    // unticked; sent as false (never omitted) so NEWS2 is complete, as from triage.
+    // It is not a reading, so it alone does not make the set "not empty".
+    const { onOxygen, ...readings } = this.vitalsForm();
+    const form: NurseVitalCaptureRequest = { ...readings, onOxygen: onOxygen === true };
+    const hasAtLeastOne = Object.values(readings).some((v) => v !== undefined && v !== '');
     if (!hasAtLeastOne) {
       this.toast.error(this.translate.instant('NURSE.TOAST.VITALS_REQUIRED'));
       return;

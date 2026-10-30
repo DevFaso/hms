@@ -218,11 +218,19 @@
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'TREATMENT.START' | translate }}</span
-              ><span class="field-value">{{ plan.timelineStartDate || '—' }}</span>
+              ><span class="field-value">{{
+                plan.timelineStartDate
+                  ? (plan.timelineStartDate | serverTime | date: 'mediumDate')
+                  : '—'
+              }}</span>
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'TREATMENT.REVIEW' | translate }}</span
-              ><span class="field-value">{{ plan.timelineReviewDate || '—' }}</span>
+              ><span class="field-value">{{
+                plan.timelineReviewDate
+                  ? (plan.timelineReviewDate | serverTime | date: 'mediumDate')
+                  : '—'
+              }}</span>
             </div>
           </div>
           @if (plan.problemStatement) {

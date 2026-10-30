@@ -4485,7 +4485,16 @@
     "LAST_DOSE": "Última dosis:",
     "NOT_YET_DUE": "Aún no corresponde",
     "COURSE_ENDED": "Tratamiento terminado",
-    "CONTROLLED_SUBSTANCE": "Estupefaciente"
+    "CONTROLLED_SUBSTANCE": "Estupefaciente",
+    "WITNESS": {
+      "LABEL": "Testigo (segundo profesional)",
+      "CHOOSE": "Elegir al testigo",
+      "HINT": "Estupefaciente: un segundo enfermero, matrona o médico del centro es testigo de la administración.",
+      "NONE": "Ningún otro profesional activo del centro puede ser testigo.",
+      "LOAD_FAILED": "No se pudo cargar la lista de testigos.",
+      "REQUIRED": "Elija al testigo de esta administración de estupefaciente."
+    },
+    "PAIN_SCORE": "Dolor (0-10)"
   },
   "ONBOARDING": {
     "ABILITIES_TITLE": "Sus capacidades",
@@ -6841,7 +6850,11 @@
         "NOTE": "Nota clínica",
         "PRESCRIPTION": "Receta",
         "PROCEDURE": "Procedimiento",
-        "REFERRAL": "Derivación"
+        "REFERRAL": "Derivación",
+        "TREATMENT_PLAN": "Plan de tratamiento",
+        "CONSULTATION": "Solicitud de interconsulta",
+        "DISCHARGE_SUMMARY": "Resumen de alta",
+        "DOCUMENT": "Documento emitido"
       },
       "SPECIMEN_TYPE": {
         "BLOOD": "Sangre",
@@ -8525,7 +8538,8 @@
     "TEMPERATURE": "Temperatura",
     "TITLE": "Evaluación de triaje",
     "VITAL_SIGNS": "Signos vitales",
-    "WEIGHT": "Peso"
+    "WEIGHT": "Peso",
+    "FUNDAL_HEIGHT": "Altura uterina (cm) — embarazo"
   },
   "INTAKE": {
     "ADD_ALLERGY": "Agregar alergia",
@@ -8558,7 +8572,14 @@
     "SUBMIT": "Enviar admisión",
     "SUBMIT_FAILED": "Error al enviar la admisión de enfermería. Inténtelo de nuevo.",
     "TITLE": "Admisión de enfermería",
-    "ALLERGY_SEVERITY_ROW": "Gravedad de la alergia, fila {{row}}"
+    "ALLERGY_SEVERITY_ROW": "Gravedad de la alergia, fila {{row}}",
+    "ALLERGEN_ROW": "Alérgeno, fila {{row}}",
+    "ALLERGY_CATEGORY_ROW": "Categoría de la alergia, fila {{row}}",
+    "ALLERGY_REACTION_ROW": "Reacción, fila {{row}}",
+    "MED_NAME_ROW": "Medicamento, fila {{row}}",
+    "MED_DOSAGE_ROW": "Dosis, fila {{row}}",
+    "MED_FREQUENCY_ROW": "Frecuencia, fila {{row}}",
+    "MED_ROUTE_ROW": "Vía, fila {{row}}"
   },
   "PRE_CHECKIN": {
     "ADDRESS": "Dirección",
@@ -8634,7 +8655,9 @@
     "COMPLETE_EXAM": "Completar examen",
     "READY_DISCHARGE": "Listo para alta",
     "NO_PATIENTS": "Sin pacientes",
-    "COLUMN_PATIENTS": "Pacientes: {{column}}"
+    "COLUMN_PATIENTS": "Pacientes: {{column}}",
+    "START_VISIT": "Iniciar la consulta",
+    "START_FAILED": "No se pudo iniciar la consulta."
   },
   "CHECKOUT": {
     "TITLE": "Alta del paciente",
@@ -8969,7 +8992,8 @@
     "VERIF_UNCONFIRMED": "Sin confirmar",
     "LAB_STATUS_QUALITATIVE": "Resultado cualitativo: lo interpreta el clínico",
     "LAB_STATUS_NOT_INTERPRETED": "Sin interpretar: sin intervalo de referencia",
-    "CODE_PLACEHOLDER": "ej. B54 (paludismo)"
+    "CODE_PLACEHOLDER": "ej. B54 (paludismo)",
+    "PREGNANCY": "Embarazo en curso: {{weeks}} semanas + {{days}} días"
   },
   "PHARMACY": {
     "QUEUE_CLAIM": {
@@ -9839,8 +9863,8 @@
   "PATIENT_DOCUMENTS": {
     "TAB": "Documentos",
     "TAB_TITLE": "Documentos que el paciente subió a través del portal",
-    "TITLE": "Documentos subidos por el paciente",
-    "HINT": "Resultados de laboratorio externos, cartas de derivación y otros archivos que el paciente añadió desde su portal. Solo lectura aquí; cada descarga queda registrada en el registro de auditoría.",
+    "TITLE": "Documentos del paciente",
+    "HINT": "Archivos que el paciente añadió desde su portal (resultados externos, cartas de derivación…) y documentos emitidos por el centro (certificados médicos). Solo lectura aquí; cada descarga queda registrada en el registro de auditoría.",
     "FILTER_TYPE": "Filtrar por tipo",
     "FILTER_ALL": "Todos los tipos",
     "LOADING": "Cargando documentos…",
@@ -9860,7 +9884,9 @@
     "PAGER": "Páginas de documentos",
     "PREVIOUS": "Anterior",
     "NEXT": "Siguiente",
-    "PAGE_OF": "Página {{page}} de {{total}}"
+    "PAGE_OF": "Página {{page}} de {{total}}",
+    "SOURCE_PATIENT": "Subido por el paciente",
+    "SOURCE_HOSPITAL": "Emitido por el centro"
   },
   "MED_HISTORY": {
     "SOURCE_OF_RECORD": "Fuente",
@@ -9985,7 +10011,8 @@
       "VAA": "Fiebre amarilla",
       "VPI": "VPI (polio inactivada)",
       "VPO": "VPO (polio oral)"
-    }
+    },
+    "VACCINE_CODE_HINT": "Tomado de una dosis anterior de la misma vacuna en esta historia, si la hay; si no, el código que usa la exportación DHIS2 del centro."
   },
   "MATERNITY": {
     "GA": "Edad gestacional",
@@ -10330,7 +10357,8 @@
     "VISIT_LATE_PREGNANCY": "Embarazo tardío",
     "BOOK": "Programar",
     "BOOK_REASON": "Control prenatal (semana {{week}})",
-    "BOOK_HINT": "Programe una visita recomendada para convertirla en una cita; aparecerá entonces como programada. El día de la cita, registre la llegada de la paciente para abrir la consulta donde se registra la visita (constantes, exploración)."
+    "BOOK_HINT": "Programe una visita recomendada para convertirla en una cita; aparecerá entonces como programada. El día de la cita, registre la llegada de la paciente para abrir la consulta donde se registra la visita (constantes, exploración).",
+    "ANC_CONTACTS": "Controles prenatales realizados: {{done}} (siguiente: control {{next}})"
   },
   "PRO": {
     "HEADING": "Cribado de salud mental ({{instrument}})",
@@ -11654,7 +11682,8 @@
       "VERIFY_FAILED": "Error en la verificación. Inténtelo de nuevo."
     },
     "VERIFYING": "Verificando…",
-    "VERIFY_FIVE_RIGHTS": "Verificar los cinco correctos"
+    "VERIFY_FIVE_RIGHTS": "Verificar los cinco correctos",
+    "PRESCRIBED": "Prescrito"
   },
   "CREDENTIALING": {
     "CURRENT_EXPIRY": "Caducidad actual",

@@ -200,7 +200,8 @@ public class PatientRecordPdfService {
 
         pages.heading(t.get("pdf.record.section.medications"));
         pages.rows(chart.getMedications(), m -> join(SEPARATOR, t.fmt(m.getCreatedAt()), m.getMedicationName(),
-            m.getDosage(), join(" / ", m.getFrequency(), m.getRoute(), m.getDuration()), label(t, m.getStatus()),
+            m.getDosage(), join(" / ", m.getFrequency(),
+                com.example.hms.service.emar.MedicationRoutes.label(m.getRoute(), t.locale()), m.getDuration()), label(t, m.getStatus()),
             m.getPrescriberName(), m.isControlledSubstance() ? t.get("pdf.record.medication.controlled") : null));
 
         pages.heading(t.get("pdf.record.section.imaging"));
