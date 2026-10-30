@@ -314,10 +314,11 @@ public class EncounterController {
     // Start Encounter — Doctor picks up a WAITING_FOR_PHYSICIAN patient
     // ----------------------------------------------------------
     @PostMapping("/{encounterId}/start")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_DOCTOR','ROLE_MIDWIFE')")
     @Operation(
-        summary = "Start an encounter (doctor picks up patient)",
-        description = "Transitions a WAITING_FOR_PHYSICIAN encounter to IN_PROGRESS."
+        summary = "Start an encounter (the assigned clinician picks up the patient)",
+        description = "Transitions a WAITING_FOR_PHYSICIAN encounter to IN_PROGRESS. A doctor may "
+            + "start an unassigned visit; a midwife starts only the visits booked with her (QA D1015)."
     )
     public ResponseEntity<EncounterResponseDTO> startEncounter(
         @PathVariable UUID encounterId,
@@ -326,7 +327,10 @@ public class EncounterController {
     ) {
         boolean isSuperAdmin = authUtils.hasAuthority(auth, ROLE_SUPER_ADMIN);
         UUID hospitalId = authUtils.resolveHospitalScope(auth, ctx.hospitalId(), false);
-        EncounterResponseDTO response = encounterService.startEncounter(encounterId, auth.getName(), isSuperAdmin, hospitalId);
+        // QA D1015: a midwife who is not also a doctor leads only her own visits.
+        boolean midwifeOnly = !isSuperAdmin && !authUtils.hasAuthority(auth, "ROLE_DOCTOR");
+        EncounterResponseDTO response = encounterService.startEncounter(
+            encounterId, auth.getName(), isSuperAdmin, hospitalId, midwifeOnly);
         return ResponseEntity.ok(response);
     }
 

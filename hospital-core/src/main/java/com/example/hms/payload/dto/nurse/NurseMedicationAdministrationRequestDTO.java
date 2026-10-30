@@ -19,4 +19,11 @@ public class NurseMedicationAdministrationRequestDTO {
      */
     @Size(max = 1024)
     private String overrideReason;
+
+    /**
+     * QA D922 (decision 2026-10-28): the second clinician of the same hospital,
+     * not the one giving it, who witnessed a controlled drug being given.
+     * Required for a GIVEN dose of a controlled drug, ignored otherwise.
+     */
+    private java.util.UUID witnessUserId;
 }

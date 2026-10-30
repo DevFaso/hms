@@ -138,9 +138,11 @@ export const ACTION_PERMISSIONS = {
     endpoint: 'EncounterController#delete',
     roles: ['ROLE_SUPER_ADMIN'],
   },
+  // QA D1015: the midwife starts the visits booked with her (the service
+  // refuses her any other one).
   encounterStart: {
     endpoint: 'EncounterController#startEncounter',
-    roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR'],
+    roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_MIDWIFE'],
   },
   // QA D954: closing a visit nobody has seen (LWBS / cancelled).
   encounterCloseUnseen: {
@@ -164,7 +166,7 @@ export const ACTION_PERMISSIONS = {
     endpoint: 'GeneralReferralController#createReferral',
     roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
   },
-  // QA D661: the receiving-side and cancel actions are physician-only.
+  // QA D661: the receiving-side actions are physician-only.
   referralAcknowledge: {
     endpoint: 'GeneralReferralController#acknowledgeReferral',
     roles: ['ROLE_DOCTOR'],
@@ -185,9 +187,11 @@ export const ACTION_PERMISSIONS = {
     endpoint: 'GeneralReferralController#rejectReferral',
     roles: ['ROLE_DOCTOR'],
   },
+  // QA D1026 class: the referrer withdraws it, whoever may write one (the page
+  // also checks that the caller is the referrer).
   referralCancel: {
     endpoint: 'GeneralReferralController#cancelReferral',
-    roles: ['ROLE_DOCTOR'],
+    roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],
   },
   // QA D611/D677: signing is the prescriber's own act; nurses and midwives
   // may draft and edit, but POST /sign and /cosign admit ROLE_DOCTOR only.

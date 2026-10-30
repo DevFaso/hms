@@ -74,6 +74,11 @@ public class NurseVitalCaptureRequestDTO {
     @Size(max = 1000)
     private String notes;
 
+    /** QA D1045: the 0-10 pain score of a ward reassessment, charted like the triage one. */
+    @Min(value = 0, message = "{vitals.painScale.range}")
+    @Max(value = 10, message = "{vitals.painScale.range}")
+    private Integer painScale;
+
     @AssertTrue(message = "{vitals.bloodPressure.invalid}")
     @JsonIgnore
     public boolean isBloodPressureOrdered() {

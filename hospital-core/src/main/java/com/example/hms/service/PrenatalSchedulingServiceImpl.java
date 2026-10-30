@@ -113,7 +113,16 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
         LocalDate dueDate = resolveDueDate(request, lmp);
         int currentWeek = Math.max(0, (int) ChronoUnit.WEEKS.between(lmp, today));
 
-        List<Appointment> futureAppointments = appointmentRepository.findByHospital_IdAndPatient_Id(hospital.getId(), patient.getId()).stream()
+        List<Appointment> patientAppointments = appointmentRepository.findByHospital_IdAndPatient_Id(hospital.getId(), patient.getId());
+        // QA D1031: the antenatal contacts already held in this pregnancy (since
+        // the LMP), by the same rule the calendar uses to recognise one.
+        int completedContacts = (int) patientAppointments.stream()
+            .filter(PrenatalSchedulingServiceImpl::countsAsPrenatalVisit)
+            .filter(appt -> appt.getStatus() == AppointmentStatus.COMPLETED)
+            .filter(appt -> appt.getAppointmentDate().compareTo(lmp) >= 0)
+            .filter(appt -> appt.getAppointmentDate().compareTo(today) <= 0)
+            .count();
+        List<Appointment> futureAppointments = patientAppointments.stream()
             .filter(appt -> !appt.getAppointmentDate().isBefore(today.minusWeeks(1)))
             // QA D519: a cancelled (or missed) appointment and a visit with
             // another service (a GP consultation) are not antenatal visits.
@@ -145,6 +154,7 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
             .staffId(staff != null ? staff.getId() : null)
             .estimatedDueDate(dueDate)
             .currentGestationalWeek(currentWeek)
+            .completedContacts(completedContacts)
             .highRisk(highRisk)
             .recommendations(recommendations)
             .existingAppointments(existingAppointments)

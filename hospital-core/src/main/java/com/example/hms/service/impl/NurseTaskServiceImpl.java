@@ -214,6 +214,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     private final com.example.hms.repository.UserRoleHospitalAssignmentRepository assignmentRepository;
     /** QA D799: the eMAR row and the bedside verify carry the cross-reactivity advisory. */
     private final com.example.hms.repository.PatientAllergyRepository patientAllergyRepository;
+    /** QA D922 (decision 2026-10-28): the second clinician who witnesses a controlled dose. */
+    private final com.example.hms.service.emar.ControlledAdministrationWitness controlledAdministrationWitness;
 
     /** QA D776: the roles a patient can be handed over to. */
     static final Set<String> HANDOFF_RECIPIENT_ROLE_CODES = Set.of("ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_DOCTOR");
@@ -445,6 +447,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         MedicationAdministrationStatus marStatus = MedicationAdministrationStatus.valueOf(normalizedStatus);
         String note = request != null ? request.getNote() : null;
         String overrideReason = request != null ? request.getOverrideReason() : null;
+        UUID witnessUserId = request != null ? request.getWitnessUserId() : null;
 
         // Try to find a real prescription matching the task ID
         // Locked: two concurrent administrations of the same prescription
@@ -456,7 +459,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             validateHospitalMatch(rx.getHospital(), hospitalId);
             requireOrderNotEndedByDischarge(rx, hospitalId);
             requirePharmacistVerification(rx, marStatus);
-            return persistMarRecord(rx, nurseUserId, hospitalId, marStatus, note, overrideReason);
+            // QA D922: a controlled dose is given with a witness, refused before anything is written.
+            User witness = controlledAdministrationWitness.resolve(rx, marStatus, witnessUserId, nurseUserId);
+            return persistMarRecord(rx, nurseUserId, hospitalId, marStatus, note, overrideReason, witness);
         }
 
         // Fall back: check existing MAR records
@@ -468,6 +473,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             requireStillPending(marRecord, hospitalId);
             requirePharmacistVerification(marRecord.getPrescription(), marStatus);
             requireScanByAdministeringNurse(marRecord, marStatus, nurseUserId, hospitalId);
+            // QA D922: a controlled dose is given with a witness, refused before anything is written.
+            marRecord.setWitnessUser(controlledAdministrationWitness.resolve(
+                marRecord.getPrescription(), marStatus, witnessUserId, nurseUserId));
             marRecord.setStatus(marStatus);
             marRecord.setAdministeredAt(LocalDateTime.now());
             marRecord.setNotes(note);
@@ -490,6 +498,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                 .routeCode(com.example.hms.service.emar.MedicationRoutes.canonical(marRecord.getRoute()))
                 .dueTime(marRecord.getScheduledTime())
                 .status(normalizedStatus)
+                .witnessName(witnessName(marRecord.getWitnessUser()))
                 .build();
         }
 
@@ -1302,6 +1311,39 @@ public class NurseTaskServiceImpl implements NurseTaskService {
      * <p>Scope lives in PharmacistVerificationService, not here, so
      * widening it later is one edit.
      */
+    @Override
+    @Transactional(readOnly = true)
+    public List<com.example.hms.payload.dto.pharmacy.StockWitnessCandidateDTO> listAdministrationWitnessCandidates(
+        UUID selfUserId, UUID hospitalId
+    ) {
+        if (hospitalId == null) {
+            return List.of();
+        }
+        Map<UUID, com.example.hms.payload.dto.pharmacy.StockWitnessCandidateDTO> byUser = new LinkedHashMap<>();
+        for (com.example.hms.model.UserRoleHospitalAssignment a : assignmentRepository.findStaffRowsByHospitalId(hospitalId)) {
+            User user = a.getUser();
+            if (!Boolean.TRUE.equals(a.getActive()) || user == null || !user.isActive() || user.isDeleted()
+                    || a.getRole() == null || a.getRole().getCode() == null
+                    || user.getId() == null || user.getId().equals(selfUserId)
+                    || !com.example.hms.service.emar.ControlledAdministrationWitness.WITNESS_ROLE_CODES
+                        .contains(a.getRole().getCode().toUpperCase(Locale.ROOT))) {
+                continue;
+            }
+            byUser.putIfAbsent(user.getId(), new com.example.hms.payload.dto.pharmacy.StockWitnessCandidateDTO(
+                user.getId(), witnessName(user)));
+        }
+        return byUser.values().stream()
+            .sorted(Comparator.comparing(com.example.hms.payload.dto.pharmacy.StockWitnessCandidateDTO::displayName,
+                Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER)))
+            .toList();
+    }
+
+    /** QA D922: the witness as the MAR shows it. */
+    private String witnessName(User witness) {
+        return witness == null ? null
+            : formatFullName(witness.getFirstName(), witness.getLastName(), witness.getUsername());
+    }
+
     private void requirePharmacistVerification(
         Prescription rx, MedicationAdministrationStatus status
     ) {
@@ -1317,7 +1359,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
     private NurseMedicationTaskResponseDTO persistMarRecord(
         Prescription rx, UUID nurseUserId, UUID hospitalId,
-        MedicationAdministrationStatus status, String note, String overrideReason
+        MedicationAdministrationStatus status, String note, String overrideReason, User witness
     ) {
         LocalDateTime slot = requireNextDue(rx);
         Optional<MedicationAdministrationRecord> verified = findPendingForSlot(rx, slot);
@@ -1325,7 +1367,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             // The bedside verify call already materialised this dose: finalise
             // that row so its five-rights scan counts, instead of demanding an
             // override as if nothing had been scanned (D78).
-            return finalizeVerifiedRow(rx, verified.get(), nurseUserId, hospitalId, status, note, overrideReason);
+            return finalizeVerifiedRow(rx, verified.get(), nurseUserId, hospitalId, status, note, overrideReason,
+                witness);
         }
         MedicationAdministrationRecord marRecord = MedicationAdministrationRecord.builder()
             .prescription(rx)
@@ -1340,6 +1383,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .reason(status == MedicationAdministrationStatus.HELD
                 || status == MedicationAdministrationStatus.REFUSED ? note : null)
             .notes(note)
+            .witnessUser(witness)
             .build();
 
         resolveNurseStaff(nurseUserId, hospitalId).ifPresent(marRecord::setAdministeredByStaff);
@@ -1373,14 +1417,16 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .routeCode(com.example.hms.service.emar.MedicationRoutes.canonical(rx.getRoute()))
             .dueTime(saved.getScheduledTime())
             .status(status.name())
+            .witnessName(witnessName(saved.getWitnessUser()))
             .build();
     }
 
     private NurseMedicationTaskResponseDTO finalizeVerifiedRow(
         Prescription rx, MedicationAdministrationRecord marRecord, UUID nurseUserId, UUID hospitalId,
-        MedicationAdministrationStatus status, String note, String overrideReason
+        MedicationAdministrationStatus status, String note, String overrideReason, User witness
     ) {
         requireScanByAdministeringNurse(marRecord, status, nurseUserId, hospitalId);
+        marRecord.setWitnessUser(witness);
         marRecord.setStatus(status);
         marRecord.setAdministeredAt(LocalDateTime.now());
         marRecord.setNotes(note);
@@ -1402,6 +1448,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .routeCode(com.example.hms.service.emar.MedicationRoutes.canonical(saved.getRoute()))
             .dueTime(saved.getScheduledTime())
             .status(status.name())
+            .witnessName(witnessName(saved.getWitnessUser()))
             .build();
     }
 
@@ -1741,7 +1788,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .headCircumferenceCm(request.getHeadCircumferenceCm())
             .onOxygen(request.getOnOxygen())
             .consciousnessLevel(request.getConsciousnessLevel())
-            .notes(request.getNotes())
+            // QA D1045: the ward pain reassessment is charted as the triage one is.
+            .notes(wardVitalNotes(request))
             .build();
 
         // Significant when the legacy per-vital thresholds fire OR the
@@ -1790,6 +1838,16 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             });
 
         log.info("Vitals captured: patientId={}, nurse={}, significant={}", patientId, nurseUserId, clinicallySig);
+    }
+
+    /** The nurse's note and the pain score, in the nurse's language (QA D1045). */
+    private static String wardVitalNotes(NurseVitalCaptureRequestDTO request) {
+        String note = request.getNotes() != null && !request.getNotes().isBlank() ? request.getNotes().strip() : null;
+        if (request.getPainScale() == null) {
+            return note;
+        }
+        String pain = com.example.hms.utility.MessageUtil.resolveOrRaw("triage.vitals.painScale", request.getPainScale());
+        return note == null ? pain : pain + " · " + note;
     }
 
     /** Auto-flag a vital set as clinically significant when values fall outside safe ranges. */
@@ -2031,6 +2089,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .template(template)
             .documentedAt(LocalDateTime.now())
             .narrative(request.getNarrative())
+            // QA D1044: the title the nurse typed is kept with the note.
+            .title(request.getTitle() != null && !request.getTitle().isBlank()
+                ? request.getTitle().strip() : null)
             .attestAccuracy(true);
 
         if (template == NursingNoteTemplate.SOAPIE) {
@@ -2051,8 +2112,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
         NursingNote saved = nursingNoteRepository.save(noteBuilder.build());
 
-        String title = request.getTitle() != null ? request.getTitle()
-            : (template.name() + " Note — " + patient.getFullName());
+        String title = saved.getTitle() != null ? saved.getTitle()
+            : com.example.hms.utility.MessageUtil.resolveOrRaw("nurse.careNote.defaultTitle",
+                template.name(), patient.getFullName());
         String summary = buildNoteSummary(request, template);
 
         return NurseCareNoteResponseDTO.builder()
