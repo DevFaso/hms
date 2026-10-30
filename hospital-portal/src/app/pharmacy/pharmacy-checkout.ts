@@ -174,6 +174,12 @@ export class PharmacyCheckoutComponent implements OnInit {
       this.toast.error(this.translate.instant('BILLING.PAYMENT_WHOLE_AMOUNT'));
       return;
     }
+    // QA D1033: a mobile-money payment is recorded with the transaction
+    // reference the patient's phone shows; the server refuses one without it.
+    if (this.paymentMethod === 'MOBILE_MONEY' && !this.referenceNumber.trim()) {
+      this.toast.error(this.translate.instant('PHARMACY_CHECKOUT.REFERENCE_REQUIRED'));
+      return;
+    }
     const hospitalId = this.auth.getHospitalId();
     const userId = this.auth.getUserId();
     if (!hospitalId || !userId) {
@@ -188,7 +194,7 @@ export class PharmacyCheckoutComponent implements OnInit {
       paymentMethod: this.paymentMethod,
       amount: this.amount,
       currency: 'XOF',
-      referenceNumber: this.referenceNumber || undefined,
+      referenceNumber: this.referenceNumber.trim() || undefined,
       receivedBy: userId,
       notes: this.notes || undefined,
     };
@@ -220,11 +226,6 @@ export class PharmacyCheckoutComponent implements OnInit {
     this.notes = '';
     this.dispense.set(null);
     this.receipt.set(null);
-  }
-
-  /** A short receipt reference instead of the raw payment UUID (QA D102). */
-  receiptNumber(id: string | null | undefined): string {
-    return (id ?? '').replace(/-/g, '').substring(0, 10).toUpperCase();
   }
 
   methodLabel(m: PharmacyPaymentMethod): string {

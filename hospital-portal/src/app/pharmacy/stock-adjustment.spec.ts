@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Observable, of, NEVER } from 'rxjs';
 import { StockAdjustmentComponent } from './stock-adjustment';
 import { PharmacyService } from '../services/pharmacy.service';
@@ -191,16 +191,40 @@ describe('StockAdjustmentComponent (D82 / D108)', () => {
       'PHARMACY.LEDGER_REASON_PREPARED_CANCELLED',
     );
     expect(label('CYCLE_COUNT_VARIANCE: recount')).toBe(
-      'PHARMACY.ADJ_REASON_CYCLE_COUNT_VARIANCE : recount',
+      // QA D1051: the colon is the reader's (COMMON.COLON), not a French space typed in.
+      'PHARMACY.ADJ_REASON_CYCLE_COUNT_VARIANCECOMMON.COLON recount',
     );
     expect(label('CONTROLLED_DISCREPANCY')).toBe('PHARMACY.ADJ_REASON_CONTROLLED_DISCREPANCY');
     expect(label('Broken bottle')).toBe('Broken bottle');
     // QA D337: the API's DAMAGED / EXPIRED spellings are translated too.
     expect(label('DAMAGED: QA R6 ampoule cassée')).toBe(
-      'PHARMACY.ADJ_REASON_DAMAGE : QA R6 ampoule cassée',
+      'PHARMACY.ADJ_REASON_DAMAGECOMMON.COLON QA R6 ampoule cassée',
     );
-    expect(label('EXPIRED: QA R6')).toBe('PHARMACY.ADJ_REASON_EXPIRY_WRITE_OFF : QA R6');
+    expect(label('EXPIRED: QA R6')).toBe('PHARMACY.ADJ_REASON_EXPIRY_WRITE_OFFCOMMON.COLON QA R6');
     expect(c.reasonLabel({ reason: null } as never)).toBe('—');
+  });
+
+  it('QA D1051: a return against a fill reads its lot and date in the reader language, old and new rows', () => {
+    const c = create();
+    const translate = TestBed.inject(TranslateService);
+    const seen: { key: string; params?: Record<string, unknown> }[] = [];
+    spyOn(translate, 'instant').and.callFake(((key: string, params?: Record<string, unknown>) => {
+      seen.push({ key, params });
+      return key;
+    }) as never);
+    expect(c.reasonLabel({ reason: 'RETURN ref R16-MOR-01 2026-10-27T09:00' } as never)).toBe(
+      'PHARMACY.LEDGER_REASON_RETURN_FILL',
+    );
+    expect(c.reasonLabel({ reason: 'RETURN ref lot R16-MOR-01 2026-10-27 09:00' } as never)).toBe(
+      'PHARMACY.LEDGER_REASON_RETURN_FILL',
+    );
+    const fill = seen.filter((s) => s.key === 'PHARMACY.LEDGER_REASON_RETURN_FILL');
+    expect(fill.map((s) => s.params?.['lot'])).toEqual(['R16-MOR-01', 'R16-MOR-01']);
+    // Never the raw ISO timestamp, never the English word "lot" from the stored text.
+    for (const s of fill) expect(String(s.params?.['date'])).not.toContain('2026-10-27');
+    expect(c.reasonLabel({ reason: 'RETURN ref QA-RET-001' } as never)).toBe(
+      'PHARMACY.LEDGER_REASON_RETURN',
+    );
   });
 
   it('requires a lot to adjust a lot-tracked item', () => {
@@ -266,7 +290,10 @@ describe('StockAdjustmentComponent (D82 / D108)', () => {
       expect(body.referenceId).toBe(fill.dispenseId);
       expect(body.stockLotId).toBe('lot-1');
       // QA D992 class: the fill's lot and time, not a slice of its id (was 'RETURN ref D-3105c0de').
-      expect(body.reason).toBe('RETURN ref lot R16-MOR-01 2026-10-27 09:00');
+      // QA D1051: stored as data (lot, then the ISO minute); the words and the
+      // date are put in the reader's language where it is shown (was
+      // 'RETURN ref lot R16-MOR-01 2026-10-27 09:00': English "lot", raw date).
+      expect(body.reason).toBe('RETURN ref R16-MOR-01 2026-10-27T09:00');
     });
 
     it('asks for the dispense when one exists and none is chosen, and caps the quantity', () => {

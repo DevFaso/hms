@@ -158,7 +158,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
         Prescription entity = prescriptionMapper.toEntity(request, patient, staff, encounter);
         entity.setAssignment(prescriberAssignment);
-        requirePrescribedQuantityForControlled(entity);
+        requirePrescribedQuantityForControlled(entity, catalogItem);
         recordAllergyOverride(entity, allergyOverride);
         controlledSubstanceGuard.requireSafeguardsFor(entity, entity.getStatus());
 
@@ -1017,9 +1017,14 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      * QA D706: a controlled substance states how much may be handed over,
      * on every path that creates one (the form, order sets), because
      * the pharmacy caps the dispense at it and refuses one without it.
+     * QA D922 (user decision 2026-10-28, supersedes D654): a drug the
+     * catalogue marks controlled is controlled whatever the prescriber
+     * ticked, so the catalogue item decides too.
      */
-    private static void requirePrescribedQuantityForControlled(Prescription prescription) {
-        if (prescription.isControlledSubstance() && prescription.getQuantity() == null) {
+    private static void requirePrescribedQuantityForControlled(
+            Prescription prescription, com.example.hms.model.medication.MedicationCatalogItem catalogItem) {
+        boolean controlled = prescription.isControlledSubstance() || catalogItem != null && catalogItem.isControlled();
+        if (controlled && prescription.getQuantity() == null) {
             throw new BusinessException("prescription.quantity.requiredControlled");
         }
     }

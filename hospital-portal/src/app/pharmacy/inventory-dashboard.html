@@ -212,7 +212,9 @@
   <!-- Expiry Report Tab -->
   @if (activeTab() === 'expiry') {
     <div class="expiry-controls">
-      <label for="expiryDays">{{ 'PHARMACY.DAYS_AHEAD' | translate }}:</label>
+      <label for="expiryDays"
+        >{{ 'PHARMACY.DAYS_AHEAD' | translate }}{{ 'COMMON.COLON' | translate }}</label
+      >
       <select id="expiryDays" [(ngModel)]="daysAhead" (ngModelChange)="loadExpiringLots()">
         <option [ngValue]="30">30</option>
         <option [ngValue]="60">60</option>
@@ -295,9 +297,12 @@
         (click)="$event.stopPropagation()"
         (keydown)="$event.stopPropagation()"
         tabindex="-1"
+        appModalDialog
+        aria-labelledby="inventory-dashboard-dialog-title-1"
+        (escaped)="closeCreateModal()"
       >
         <div class="modal-header">
-          <h2>{{ 'PHARMACY.ADD_ITEM' | translate }}</h2>
+          <h2 id="inventory-dashboard-dialog-title-1">{{ 'PHARMACY.ADD_ITEM' | translate }}</h2>
           <button
             [attr.aria-label]="'COMMON.CLOSE' | translate"
             class="modal-close"

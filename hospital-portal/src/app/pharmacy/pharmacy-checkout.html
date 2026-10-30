@@ -33,7 +33,9 @@
         >
           <option value="">{{ 'PHARMACY_CHECKOUT.DISPENSE_PICK_PLACEHOLDER' | translate }}</option>
           @for (d of dispenses(); track d.id) {
+            <!-- QA D1058: the patient first, so four Paracétamol rows are told apart -->
             <option [value]="d.id">
+              {{ d.patientName || ('PHARMACY_CHECKOUT.RECEIPT_NO_PATIENT' | translate) }} ·
               {{ d.medicationName }} · {{ d.quantityDispensed }} {{ d.unit }} ·
               {{ d.dispensedAt | serverTime | date: 'dd/MM/yyyy HH:mm' }}
             </option>
@@ -102,7 +104,10 @@
       </div>
       @if (paymentMethod !== 'CASH') {
         <div class="form-row">
-          <label for="ref">{{ 'PHARMACY_CHECKOUT.REFERENCE' | translate }}</label>
+          <label for="ref"
+            >{{ 'PHARMACY_CHECKOUT.REFERENCE' | translate
+            }}{{ paymentMethod === 'MOBILE_MONEY' ? ' *' : '' }}</label
+          >
           <input
             id="ref"
             type="text"
@@ -129,7 +134,8 @@
       <header class="receipt-header">
         <h1>Reçu de pharmacie</h1>
         <p class="receipt-meta">
-          Nº {{ receiptNumber(r.id) }}<br />
+          <!-- QA D1032: the server's receipt number (CODE-PH-YYYY-000001), never a slice of the id -->
+          Nº {{ r.receiptNumber || '—' }}<br />
           Émis le : {{ r.createdAt | serverTime | date: 'dd/MM/yyyy HH:mm' }}
         </p>
       </header>

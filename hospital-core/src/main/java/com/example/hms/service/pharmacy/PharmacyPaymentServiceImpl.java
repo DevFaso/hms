@@ -102,7 +102,7 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
 
         java.util.Optional<PharmacyPayment> replay = findReplayedPayment(dispense, dto);
         if (replay.isPresent()) {
-            return paymentMapper.toResponseDTO(replay.get());
+            return toResponse(replay.get());
         }
         requireAmountMatchesCharge(dispense, dto.getAmount());
 
@@ -126,7 +126,18 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
         String providerReference = dto.getReferenceNumber();
         String currency = dto.getCurrency() != null ? dto.getCurrency() : "XOF";
 
-        if (dto.getPaymentMethod() == PharmacyPaymentMethod.MOBILE_MONEY) {
+        // QA D1033: with no real provider configured (the mock gateway is the
+        // fallback bean in every environment), a mobile-money payment is what
+        // the cashier saw on the patient's phone: the typed transaction
+        // reference is required and stored as typed. The mock is never asked
+        // to "charge": it made a payment COMPLETED with no money moved and put
+        // "MOCK-<uuid>" on a patient's receipt.
+        if (dto.getPaymentMethod() == PharmacyPaymentMethod.MOBILE_MONEY && !isRealProvider()) {
+            if (providerReference == null || providerReference.isBlank()) {
+                throw new BusinessException("pharmacy.payment.mobileMoneyReferenceRequired");
+            }
+            providerReference = providerReference.trim();
+        } else if (dto.getPaymentMethod() == PharmacyPaymentMethod.MOBILE_MONEY) {
             String phone = patient.getPhoneNumberPrimary();
             if (phone == null || phone.isBlank()) {
                 throw new BusinessException("pharmacy.payment.noMobileMoneyPhone");
@@ -157,7 +168,40 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
                 saved.getId().toString(),
                 AUDIT_ENTITY);
 
-        return paymentMapper.toResponseDTO(saved);
+        return toResponse(saved);
+    }
+
+    /** QA D1033: a configured provider, not the development fallback. */
+    private boolean isRealProvider() {
+        return mobileMoneyGateway != null
+                && !com.example.hms.service.pharmacy.payment.MockMobileMoneyGateway.PROVIDER_CODE
+                        .equals(mobileMoneyGateway.providerCode());
+    }
+
+    /**
+     * QA D1032: every payment read carries its readable receipt number,
+     * {@code CODE-PH-YYYY-000001}: the payment's rank among the hospital's
+     * pharmacy payments of its year (the house rule of the invoice receipts,
+     * "number-R&lt;rank&gt;", QA D228). Never a slice of the payment id.
+     */
+    private PharmacyPaymentResponseDTO toResponse(PharmacyPayment payment) {
+        PharmacyPaymentResponseDTO dto = paymentMapper.toResponseDTO(payment);
+        if (dto != null) {
+            dto.setReceiptNumber(receiptNumberOf(payment));
+        }
+        return dto;
+    }
+
+    private String receiptNumberOf(PharmacyPayment payment) {
+        if (payment.getHospital() == null || payment.getHospital().getId() == null || payment.getCreatedAt() == null) {
+            return null;
+        }
+        java.time.LocalDateTime createdAt = payment.getCreatedAt();
+        java.time.LocalDateTime yearStart = createdAt.toLocalDate().withDayOfYear(1).atStartOfDay();
+        long rank = paymentRepository.countReceiptRank(payment.getHospital().getId(), yearStart, createdAt);
+        return String.format(java.util.Locale.ROOT, "%s-PH-%d-%06d",
+                com.example.hms.service.InvoiceNumberAllocator.prefixOf(payment.getHospital()),
+                createdAt.getYear(), Math.max(rank, 1));
     }
 
     @Override
@@ -171,7 +215,7 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
                 && (entity.getHospital() == null || !hospitalId.equals(entity.getHospital().getId()))) {
             throw new ResourceNotFoundException("pharmacy.payment.notfound");
         }
-        return paymentMapper.toResponseDTO(entity);
+        return toResponse(entity);
     }
 
     @Override
@@ -180,10 +224,10 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId == null) {
             // SUPER_ADMIN unscoped read (no active hospital).
-            return paymentRepository.findByDispenseId(dispenseId, pageable).map(paymentMapper::toResponseDTO);
+            return paymentRepository.findByDispenseId(dispenseId, pageable).map(this::toResponse);
         }
         return paymentRepository.findByDispenseIdAndHospital_Id(dispenseId, hospitalId, pageable)
-                .map(paymentMapper::toResponseDTO);
+                .map(this::toResponse);
     }
 
     @Override
@@ -191,10 +235,10 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
     public Page<PharmacyPaymentResponseDTO> listByPatient(UUID patientId, Pageable pageable) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId == null) {
-            return paymentRepository.findByPatientId(patientId, pageable).map(paymentMapper::toResponseDTO);
+            return paymentRepository.findByPatientId(patientId, pageable).map(this::toResponse);
         }
         return paymentRepository.findByPatientIdAndHospital_Id(patientId, hospitalId, pageable)
-                .map(paymentMapper::toResponseDTO);
+                .map(this::toResponse);
     }
 
     /**
@@ -206,7 +250,7 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
     @Override
     @Transactional(readOnly = true)
     public Page<PharmacyPaymentResponseDTO> listByPatientForSelf(UUID patientId, Pageable pageable) {
-        return paymentRepository.findByPatientId(patientId, pageable).map(paymentMapper::toResponseDTO);
+        return paymentRepository.findByPatientId(patientId, pageable).map(this::toResponse);
     }
 
     /**

@@ -19,7 +19,9 @@ import org.springframework.stereotype.Component;
  * substance must have completed two-factor verification, and one flagged as
  * requiring a co-signature must actually carry one, before it may reach any
  * state that authorises somebody to act on it. Both gates apply ONLY when the
- * prescriber set the flag — nothing changes for ordinary prescriptions.
+ * prescriber set the flag — nothing changes for ordinary prescriptions. (QA
+ * D922, 2026-10-28: "controlled" itself is the catalogue's answer everywhere
+ * else; see the note in {@link #requireSafeguardsFor}.)
  */
 @Component
 public class ControlledSubstanceGuard {
@@ -40,10 +42,20 @@ public class ControlledSubstanceGuard {
             return;
         }
 
-        // QA D678 / user decision D654: the prescriber's own tick ONLY, never
-        // PrescriptionControlledResolver's catalog answer. A catalog-controlled
-        // drug would otherwise be unsignable, as no two-factor step exists yet
-        // (tasklist standing debt). Verification, chart, history and PDF do use it.
+        // QA D922: user decision 2026-10-28 SUPERSEDES D654 ("the guard keys
+        // only on the prescriber's tick"). A drug the catalogue marks
+        // controlled is controlled whatever the prescriber ticked, and every
+        // controlled safeguard the product has keys on
+        // PrescriptionControlledResolver: the pharmacist's verification before
+        // a dispense or a dose, the stock witness, the controlled register,
+        // the prescribed-quantity rule, the refill refusal and the controlled
+        // mark on the MAR, chart, history and copies (ControlledFlagGuardTest).
+        // This two-factor clause is the one exception, and only because the
+        // step it demands does not exist: nothing ever writes
+        // twoFactorVerifiedAt, so keying it on the catalogue would make every
+        // morphine order unsignable and undispensable. It keys on the tick
+        // until the prescriber two-factor step is built (tasklist standing
+        // debt "Prescriber two-factor step", flagged to the user in r17).
         if (prescription.isControlledSubstance() && prescription.getTwoFactorVerifiedAt() == null) {
             // QA D1000: a key resolved in the caller's language; the code
             // (CONTROLLED_SUBSTANCE) stays in the key for log searches.

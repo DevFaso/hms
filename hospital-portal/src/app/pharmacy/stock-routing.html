@@ -120,23 +120,31 @@
       <h2>{{ 'PHARMACY.STOCK_RESULT' | translate }}</h2>
       <div class="stock-summary">
         <div class="stock-info">
-          <span class="label">{{ 'PHARMACY.MEDICATION' | translate }}:</span>
+          <span class="label"
+            >{{ 'PHARMACY.MEDICATION' | translate }}{{ 'COMMON.COLON' | translate }}</span
+          >
           <span class="value">{{ stockResult()!.medicationName }}</span>
         </div>
         <div class="stock-info">
-          <span class="label">{{ 'PHARMACY.PHARMACY_NAME' | translate }}:</span>
+          <span class="label"
+            >{{ 'PHARMACY.PHARMACY_NAME' | translate }}{{ 'COMMON.COLON' | translate }}</span
+          >
           <span class="value">{{
             stockResult()!.pharmacyName ?? ('PHARMACY.ALL_DISPENSARIES' | translate)
           }}</span>
         </div>
         <div class="stock-info">
-          <span class="label">{{ 'PHARMACY.QTY_ON_HAND_COLUMN' | translate }}:</span>
+          <span class="label"
+            >{{ 'PHARMACY.QTY_ON_HAND_COLUMN' | translate }}{{ 'COMMON.COLON' | translate }}</span
+          >
           <span class="value" [class.text-danger]="!stockResult()!.sufficient">
             {{ stockResult()!.quantityOnHand | number: '1.0-2' }}
           </span>
         </div>
         <div class="stock-info">
-          <span class="label">{{ 'PHARMACY.STATUS' | translate }}:</span>
+          <span class="label"
+            >{{ 'PHARMACY.STATUS' | translate }}{{ 'COMMON.COLON' | translate }}</span
+          >
           <span
             class="badge"
             data-testid="stock-status"
@@ -269,7 +277,9 @@
     <div class="form-card form-card-accent slide-in">
       <h2>{{ 'PHARMACY.ROUTE_TO_PARTNER' | translate }}</h2>
       <div class="partner-detail">
-        <span class="label">{{ 'PHARMACY.PARTNER' | translate }}:</span>
+        <span class="label"
+          >{{ 'PHARMACY.PARTNER' | translate }}{{ 'COMMON.COLON' | translate }}</span
+        >
         <span class="value">{{ selectedPartner()?.pharmacyName }}</span>
       </div>
       <div class="form-group">

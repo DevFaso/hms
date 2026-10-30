@@ -722,6 +722,64 @@ class DispenseServiceImplTest {
             verify(dispenseRepository, never()).save(any(Dispense.class));
         }
 
+        /**
+         * QA D1028: morphine could not be dispensed from the dispensing
+         * screen: the controlled gate refused the fill before the
+         * pharmacist's own attest ("J'ai vérifié cette ordonnance") was
+         * read, so the attest did nothing and the only way through was
+         * another screen. The attest is the verification, stamped with the
+         * fill, for a controlled prescription too.
+         */
+        @Test
+        @DisplayName("QA D1028: a controlled prescription is filled on the dispensing pharmacist's attest, which is stamped")
+        void d1028_theAttestVerifiesAControlledPrescriptionAtTheCounter() {
+            prescription.setPharmacistVerifiedAt(null);
+            prescription.setControlledSubstance(true);
+            prescription.setTwoFactorVerifiedAt(java.time.LocalDateTime.of(2026, 8, 24, 9, 0));
+            DispenseRequestDTO dto = buildRequest();
+            dto.setVerifiedBy(userId);
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(roleValidator.hasAnyAuthority("PHARMACIST", "PHARMACY_VERIFIER", "SUPER_ADMIN")).thenReturn(true);
+
+            try {
+                service.createDispense(dto);
+            } catch (BusinessException refused) {
+                assertThat(refused.getMessage()).doesNotContain("dispense.verification.required");
+            } catch (RuntimeException downstream) {
+                // Later stages are not stubbed here; the verification runs before them.
+            }
+
+            assertThat(prescription.getPharmacistVerifiedAt()).isNotNull();
+            assertThat(prescription.getPharmacistVerifiedBy()).isSameAs(user);
+        }
+
+        @Test
+        @DisplayName("QA D1028: a nurse or admin cannot use the attest to pass a controlled prescription")
+        void d1028_onlyAPharmacistsAttestPassesTheControlledGate() {
+            prescription.setPharmacistVerifiedAt(null);
+            prescription.setControlledSubstance(true);
+            prescription.setTwoFactorVerifiedAt(java.time.LocalDateTime.of(2026, 8, 24, 9, 0));
+            DispenseRequestDTO dto = buildRequest();
+            dto.setVerifiedBy(userId);
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(roleValidator.hasAnyAuthority("PHARMACIST", "PHARMACY_VERIFIER", "SUPER_ADMIN")).thenReturn(false);
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+            assertThat(prescription.getPharmacistVerifiedAt()).isNull();
+            verify(dispenseRepository, never()).save(any(Dispense.class));
+        }
+
         @Test
         @DisplayName("should dispense with stock lot and decrement inventory")
         void shouldDispenseWithStockLot() {

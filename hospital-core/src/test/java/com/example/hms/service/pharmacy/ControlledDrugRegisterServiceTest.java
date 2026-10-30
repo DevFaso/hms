@@ -293,6 +293,25 @@ class ControlledDrugRegisterServiceTest {
         assertThat(ControlledDrugRegisterService.reasonText(Locale.FRENCH, "Comptage du soir")).isEqualTo("Comptage du soir");
     }
 
+    /**
+     * QA D1051: the register printed "Retour, réf. lot LOT-A-R17-01b 2026-10-28
+     * 23:58" (a raw ISO minute, and "lot" untranslated in Spanish) and
+     * "Damaged : ..." with a French space in English and Spanish.
+     */
+    @Test
+    void aReturnAgainstAFillAndAnAdjustmentReadInTheReadersLanguage_D1051() {
+        String fr = ControlledDrugRegisterService.reasonText(Locale.FRENCH, "RETURN ref LOT-A-R17-01b 2026-10-28T23:58");
+        assertThat(fr).startsWith("Retour, réf. lot LOT-A-R17-01b délivré le ").doesNotContain("2026-10-28");
+        String legacy = ControlledDrugRegisterService.reasonText(Locale.forLanguageTag("es"),
+                "RETURN ref lot LOT-A-R17-01b 2026-10-28 23:58");
+        assertThat(legacy).startsWith("Devolución, ref. lote LOT-A-R17-01b").doesNotContain("2026-10-28")
+                .doesNotContain(" lot ");
+        assertThat(ControlledDrugRegisterService.reasonText(Locale.ENGLISH, "DAMAGE: broken vial"))
+                .doesNotContain(" : ").contains(": broken vial");
+        assertThat(ControlledDrugRegisterService.reasonText(Locale.FRENCH, "RETURN ref QA-RET-001"))
+                .isEqualTo("Retour, réf. QA-RET-001");
+    }
+
     private void stubLedger() {
         when(ledger.sumByItemAndTypeBefore(eq(List.of(morphine.getId())), any())).thenReturn(List.of(
                 new Object[] {morphine.getId(), StockTransactionType.RECEIPT, new BigDecimal("100")},

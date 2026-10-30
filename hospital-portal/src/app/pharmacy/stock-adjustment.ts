@@ -11,6 +11,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Observable } from 'rxjs';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { earlierLotWithStock, fefoFirstLot } from './fefo-lots';
 import { ToastService } from '../core/toast.service';
 import {
   PharmacyService,
@@ -23,6 +24,11 @@ import {
   ReturnableDispense,
 } from '../services/pharmacy.service';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { currentLocale } from '../shared/i18n/app-locale';
+import { serverInstant } from '../shared/date-utils';
+
+/** QA D1051: a fill reference as stored: an optional lot (older rows: "lot X"), then the minute. */
+const RETURN_FILL_REF = /^(?:lot\s+)?(?:(\S+)\s+)?(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2})$/i;
 
 /**
  * P-06: stock-adjustment uses a single generic form across five transaction types,
@@ -295,8 +301,10 @@ export class StockAdjustmentComponent implements OnInit {
   private returnFillReference(): string {
     const fill = this.selectedReturnDispense();
     if (!fill) return '';
-    const when = fill.dispensedAt ? fill.dispensedAt.replace('T', ' ').substring(0, 16) : '';
-    const ref = [fill.lotNumber ? `lot ${fill.lotNumber}` : '', when].filter(Boolean).join(' ');
+    // QA D1051: stored as data (lot, then the ISO minute); the ledger and the
+    // register put the words and the date in the reader's language.
+    const when = fill.dispensedAt ? fill.dispensedAt.substring(0, 16) : '';
+    const ref = [fill.lotNumber ?? '', when].filter(Boolean).join(' ');
     return ref || (fill.medicationName ?? '');
   }
 
@@ -314,31 +322,24 @@ export class StockAdjustmentComponent implements OnInit {
   }
 
   /**
-   * QA D964: a transfer sends first expired, first out. The shortest-dated
-   * usable lot that covers the quantity (else the shortest-dated one) is
-   * pre-selected; a write-off or a return names its own lot on purpose.
+   * QA D964 / D1029: a transfer sends first expired, first out. The
+   * shortest-dated usable lot is pre-selected, whatever the quantity; a
+   * write-off or a return names its own lot on purpose.
    */
   private preselectTransferLot(): void {
     if (!this.isTransfer() || this.form.stockLotId) return;
-    const qty = Math.abs(Number(this.form.quantity) || 0);
-    const lots = this.usableLots();
-    const lot = lots.find((l) => l.remainingQuantity >= qty) ?? lots[0];
+    const lot = fefoFirstLot(this.usableLots());
     if (lot) this.form.stockLotId = lot.id;
   }
 
   /**
-   * QA D964: the shorter-dated lot that could serve this transfer instead of
-   * the chosen one (the server's FefoLotPolicy rule); while it exists the
-   * transfer needs a reason.
+   * QA D964 / D1029: a shorter-dated lot that still holds stock (the server's
+   * FefoLotPolicy rule); while it exists the transfer needs a reason.
    */
   earlierTransferLot(): StockLotResponse | undefined {
     if (!this.isTransfer() || !this.form.stockLotId) return undefined;
     const chosen = this.itemLots().find((l) => l.id === this.form.stockLotId);
-    if (!chosen?.expiryDate) return undefined;
-    const qty = Math.abs(Number(this.form.quantity) || 0);
-    return this.usableLots().find(
-      (l) => l.id !== chosen.id && l.expiryDate < chosen.expiryDate && l.remainingQuantity >= qty,
-    );
+    return earlierLotWithStock(this.usableLots(), chosen);
   }
 
   /** ISO date (YYYY-MM-DD) of today in the browser's calendar. */
@@ -548,7 +549,7 @@ export class StockAdjustmentComponent implements OnInit {
     if (/^Dispense cancelled\b/i.test(reason)) return t('LEDGER_REASON_DISPENSE_CANCELLED');
     if (/^Prepared fill cancelled\b/i.test(reason)) return t('LEDGER_REASON_PREPARED_CANCELLED');
     m = /^RETURN ref (.+)$/i.exec(reason);
-    if (m) return t('LEDGER_REASON_RETURN', { ref: m[1] });
+    if (m) return this.returnReasonLabel(m[1]);
     // QA D964: the server appends " | FEFO: <reason>" when a transfer skipped
     // a shorter-dated lot (StockTransactionServiceImpl.FEFO_LEDGER_SEPARATOR).
     m = /^TRANSFER to (.+?)(?: \| FEFO: ([\s\S]+))?$/i.exec(reason);
@@ -562,9 +563,33 @@ export class StockAdjustmentComponent implements OnInit {
     const code = m ? (LEGACY_REASON_CODES[m[1]] ?? m[1]) : '';
     if (m && (ADJUSTMENT_REASON_CODES as readonly string[]).includes(code)) {
       const label = t(`ADJ_REASON_${code}`);
-      return m[2] ? `${label} : ${m[2]}` : label;
+      // QA D1051: the colon is the reader's ("Dommage : x", "Damage: x").
+      return m[2] ? `${label}${this.translate.instant('COMMON.COLON')} ${m[2]}` : label;
     }
     return reason;
+  }
+
+  /**
+   * QA D1051: a return booked against a fill stores its lot and the minute
+   * it was given as data ("LOT-A-01b 2026-10-28T23:58", older rows "lot
+   * LOT-A-01b 2026-10-28 23:58"). The words and the date are the reader's:
+   * "Retour, réf. lot LOT-A-01b du 28/10/2026 23:58" - never a raw ISO
+   * timestamp or the English word "lot" on a French or Spanish screen.
+   * Anything else (a reference the pharmacist typed) is shown as typed.
+   */
+  private returnReasonLabel(ref: string): string {
+    const fill = RETURN_FILL_REF.exec(ref.trim());
+    if (!fill) return this.translate.instant('PHARMACY.LEDGER_REASON_RETURN', { ref });
+    const [, lot, stamp] = fill;
+    // The server's times are zone-less UTC wall times (QA D731): read as UTC
+    // by serverInstant, shown in the reader's zone, as | serverTime does.
+    const date = new Intl.DateTimeFormat(currentLocale(), {
+      dateStyle: 'short',
+      timeStyle: 'short',
+    }).format(serverInstant(stamp.replace(' ', 'T')));
+    return lot
+      ? this.translate.instant('PHARMACY.LEDGER_REASON_RETURN_FILL', { lot, date })
+      : this.translate.instant('PHARMACY.LEDGER_REASON_RETURN_FILL_DATE', { date });
   }
 
   signedQuantity(tx: StockTransactionResponse): string {

@@ -312,6 +312,8 @@ class PrescriptionServiceImplTest {
     @Test
     void createPrescriptionFromACatalogPickTakesTheItemCode() {
         PrescriptionRequestDTO request = buildRequest();
+        // QA D922: a catalogue-controlled drug states its quantity, as the form always sends it.
+        request.setQuantity(java.math.BigDecimal.TEN);
         request.setMedicationCode(null);
         UUID catalogId = UUID.randomUUID();
         request.setMedicationCatalogItemId(catalogId);
@@ -325,6 +327,7 @@ class PrescriptionServiceImplTest {
         encounter.setAssignment(encounterAssignment);
         UUID currentUser = staff.getUser().getId();
         Prescription mappedEntity = new Prescription();
+        mappedEntity.setQuantity(java.math.BigDecimal.TEN); // the mapper copies the request's quantity
 
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
@@ -4831,11 +4834,14 @@ class PrescriptionServiceImplTest {
     @Test
     void d922_aTypedNameIsResolvedToTheHospitalsOneCatalogItem() {
         PrescriptionRequestDTO request = buildRequest();
+        // QA D922: a catalogue-controlled drug states its quantity, as the form always sends it.
+        request.setQuantity(java.math.BigDecimal.TEN);
         request.setMedicationName("Morphine 10 mg");
         request.setMedicationCode(null);
         com.example.hms.model.medication.MedicationCatalogItem morphine = catalogItem("Morphine", true);
         com.example.hms.model.medication.MedicationCatalogItem other = catalogItem("Paracétamol", false);
         Prescription mappedEntity = new Prescription();
+        mappedEntity.setQuantity(java.math.BigDecimal.TEN); // the mapper copies the request's quantity
         stubCreateContext(request, mappedEntity);
         when(catalogRepo.findByHospital_IdAndActiveTrue(eq(hospitalId), any()))
             .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(other, morphine)));
@@ -4890,9 +4896,12 @@ class PrescriptionServiceImplTest {
     @Test
     void d922_aMedicationCodeResolvesToTheHospitalsItem() {
         PrescriptionRequestDTO request = buildRequest();
+        // QA D922: a catalogue-controlled drug states its quantity, as the form always sends it.
+        request.setQuantity(java.math.BigDecimal.TEN);
         request.setMedicationCode("N02AA01");
         com.example.hms.model.medication.MedicationCatalogItem morphine = catalogItem("Morphine", true);
         Prescription mappedEntity = new Prescription();
+        mappedEntity.setQuantity(java.math.BigDecimal.TEN); // the mapper copies the request's quantity
         stubCreateContext(request, mappedEntity);
         when(catalogRepo.findByHospitalIdAndCode(hospitalId, "N02AA01")).thenReturn(Optional.of(morphine));
 
@@ -5021,10 +5030,13 @@ class PrescriptionServiceImplTest {
     @Test
     void d922_anUnknownCodeFallsThroughToTheName() {
         PrescriptionRequestDTO request = buildRequest();
+        // QA D922: a catalogue-controlled drug states its quantity, as the form always sends it.
+        request.setQuantity(java.math.BigDecimal.TEN);
         request.setMedicationName("Morphine");
         request.setMedicationCode("7052");
         com.example.hms.model.medication.MedicationCatalogItem morphine = catalogItem("Morphine", true);
         Prescription mappedEntity = new Prescription();
+        mappedEntity.setQuantity(java.math.BigDecimal.TEN); // the mapper copies the request's quantity
         stubCreateContext(request, mappedEntity);
         when(catalogRepo.findByHospitalIdAndCode(hospitalId, "7052")).thenReturn(Optional.empty());
         when(catalogRepo.findByHospital_IdAndActiveTrue(eq(hospitalId), any()))

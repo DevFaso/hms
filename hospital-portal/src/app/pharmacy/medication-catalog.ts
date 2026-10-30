@@ -9,6 +9,7 @@ import {
 
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
@@ -21,7 +22,7 @@ import {
 @Component({
   selector: 'app-medication-catalog',
   standalone: true,
-  imports: [FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [FormsModule, TranslateModule, EnumLabelPipe, ModalDialogDirective],
   templateUrl: './medication-catalog.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './medication-catalog.scss',

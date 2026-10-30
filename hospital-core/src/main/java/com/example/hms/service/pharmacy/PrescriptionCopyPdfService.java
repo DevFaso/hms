@@ -52,6 +52,19 @@ public class PrescriptionCopyPdfService {
     private final DispenseRepository dispenseRepository;
     private final RoleValidator roleValidator;
 
+    /**
+     * QA D922 (user decision 2026-10-28, supersedes D654): a drug the
+     * catalogue marks controlled is controlled whatever the prescriber
+     * ticked, and the copy says so. Optional so a hand-built instance in a
+     * unit test still works (then the tick alone).
+     */
+    private PrescriptionControlledResolver controlledResolver;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setControlledResolver(PrescriptionControlledResolver controlledResolver) {
+        this.controlledResolver = controlledResolver;
+    }
+
     /** The copy for the pharmacy that printed it (the active hospital's prescriptions only). */
     @Transactional(readOnly = true)
     public byte[] copyForStaff(UUID prescriptionId) {
@@ -130,7 +143,7 @@ public class PrescriptionCopyPdfService {
     }
 
     /** The medicine as prescribed, and what is still to be dispensed of it. */
-    private static void writeMedication(PharmacyPdfWriter pdf, Prescription rx, BigDecimal remaining,
+    private void writeMedication(PharmacyPdfWriter pdf, Prescription rx, BigDecimal remaining,
                                         Locale locale) throws IOException {
         pdf.field(label(locale, "pdf.rxcopy.medication"), firstNonBlank(rx.getMedicationDisplayName(),
                 rx.getMedicationName()), 12f);
@@ -148,7 +161,7 @@ public class PrescriptionCopyPdfService {
         if (rx.getInstructions() != null && !rx.getInstructions().isBlank()) {
             pdf.field(label(locale, "pdf.rxcopy.instructions"), rx.getInstructions(), 11f);
         }
-        if (rx.isControlledSubstance()) {
+        if (controlledResolver != null ? controlledResolver.isControlled(rx) : rx.isControlledSubstance()) {
             pdf.space(4f);
             pdf.paragraph(PharmacyPdfWriter.BOLD, 10f, label(locale, "pdf.rxcopy.controlled"));
         }
