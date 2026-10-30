@@ -82,8 +82,20 @@ const KEYDOWN_ATTR = /^\(keydown\)$/;
 const ESCAPE_KEY = /['"]Escape['"]/;
 const ESCAPE_IN_MARKUP = /\(keydown\.esc(?:ape)?\)=/;
 
+/**
+ * QA D1004 class (round 17): `(keydown.escape)="$event.stopPropagation()"` on
+ * the dialog closes nothing and swallows the key before the backdrop's own
+ * Escape sees it, so it is not an Escape handler; it also blocks an ancestor's.
+ */
+const STOP_ONLY = /^\s*(?:\$event\.(?:stopPropagation|preventDefault)\(\)\s*;?\s*)+$/;
+
 function hasEscapeAttr(tag) {
-  return [...tag.attrs.keys()].some((k) => ESCAPE_ATTR.test(k));
+  return [...tag.attrs.entries()].some(([k, v]) => ESCAPE_ATTR.test(k) && !STOP_ONLY.test(v ?? ''));
+}
+
+/** A stop-only Escape on the dialog: the key never reaches an ancestor's handler. */
+function swallowsEscape(tag) {
+  return [...tag.attrs.entries()].some(([k, v]) => ESCAPE_ATTR.test(k) && STOP_ONLY.test(v ?? ''));
 }
 
 /**
@@ -202,7 +214,7 @@ export function dialogFindings(html, componentSource = html, dialogSelectors = n
         componentEscape ||
         hasEscapeAttr(tag) ||
         hasKeydownEscape(tag, componentSource) ||
-        stack.some((s) => s.escape) ||
+        (!swallowsEscape(tag) && stack.some((s) => s.escape)) ||
         (inner != null && ESCAPE_IN_MARKUP.test(inner));
       if (!hasEscape) {
         out.push({

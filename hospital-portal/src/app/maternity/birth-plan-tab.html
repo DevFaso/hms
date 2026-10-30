@@ -167,7 +167,7 @@
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closePlan(); $event.stopPropagation()"
     >
       <div class="modal-header">
         <h2 id="birth-plan-tab-dialog-1-title">
@@ -301,7 +301,7 @@
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closePlanModal(); $event.stopPropagation()"
     >
       <div class="modal-header">
         <h2 id="birth-plan-tab-dialog-2-title">
@@ -494,7 +494,7 @@
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeReview(); $event.stopPropagation()"
     >
       <div class="modal-header">
         <h2 id="birth-plan-tab-dialog-3-title">{{ 'BIRTH_PLAN.REVIEW_TITLE' | translate }}</h2>
@@ -548,7 +548,7 @@
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeDelete(); $event.stopPropagation()"
     >
       <div class="modal-header">
         <h2 id="birth-plan-tab-dialog-4-title">{{ 'BIRTH_PLAN.DELETE_TITLE' | translate }}</h2>

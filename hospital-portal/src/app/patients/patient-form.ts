@@ -1,3 +1,5 @@
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { DatePipe } from '@angular/common';
 import { Component, inject, OnInit, ChangeDetectionStrategy } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
@@ -26,7 +28,7 @@ import { of } from 'rxjs';
 @Component({
   selector: 'app-patient-form',
   standalone: true,
-  imports: [FormsModule, RouterLink, TranslateModule],
+  imports: [FormsModule, RouterLink, TranslateModule, DatePipe, ServerTimePipe],
   templateUrl: './patient-form.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './patient-form.scss',

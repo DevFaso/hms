@@ -250,30 +250,6 @@
       "count": 1,
       "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
     },
-    "src/app/nurse-station/nurse-station.html::label::modal-card modal-large <{{ 'NURSE.CARE_NOTE' | translate }} — {{ careNoteFor()!.pati>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/nurse-station/nurse-station.html::label::modal-card modal-medium <{{ 'NURSE.CREATE_TASK' | translate }}>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/nurse-station/nurse-station.html::label::modal-card modal-medium <{{ 'NURSE.NEW_HANDOFF' | translate }}>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/nurse-station/nurse-station.html::modal::modal-card modal-large <{{ 'NURSE.CARE_NOTE' | translate }} — {{ careNoteFor()!.pati>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/nurse-station/nurse-station.html::modal::modal-card modal-medium <{{ 'NURSE.CREATE_TASK' | translate }}>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/nurse-station/nurse-station.html::modal::modal-card modal-medium <{{ 'NURSE.NEW_HANDOFF' | translate }}>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
     "src/app/organizations/organization-detail.html::label::modal <{{ cfg.titleKey | translate }}>": {
       "count": 1,
       "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
@@ -338,30 +314,6 @@
       "count": 1,
       "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
     },
-    "src/app/patients/patient-chart/patient-chart.component.html::role::modal <{{ 'CHART.DEACTIVATE_ALLERGY' | translate }}>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/patients/patient-chart/patient-chart.component.html::role::modal <{{ 'CHART.DELETE_PROBLEM' | translate }}>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/patients/patient-chart/patient-chart.component.html::role::modal <{{ 'CHART.TIMELINE_ACCESS' | translate }}>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/patients/patient-chart/patient-chart.component.html::role::modal <{{ (editingAllergyId() ? 'CHART.EDIT_ALLERGY' : 'CHART.ADD_A>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/patients/patient-chart/patient-chart.component.html::role::modal <{{ (editingProblemId() ? 'CHART.EDIT_PROBLEM' : 'CHART.ADD_P>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
-    "src/app/patients/patient-chart/patient-chart.component.html::role::modal modal-lg <{{ 'CHART.NEW_UPDATE' | translate }}>": {
-      "count": 1,
-      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
-    },
     "src/app/patients/patient-form.html::escape::dup-modal <{{ 'PATIENTS.POSSIBLE_DUPLICATES' | translate }}>": {
       "count": 1,
       "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
@@ -401,6 +353,14 @@
     "src/app/pharmacy/pharmacy-registry.html::label::modal modal-lg <{{ editing() ? ('PHARMACY.EDIT_PHARMACY' | translate) : ('PH>": {
       "count": 1,
       "why": "pre-existing (class D976/D988): dialog without a name; aria-labelledby pointing at its title"
+    },
+    "src/app/prescriptions/prescriptions.html::escape::modal <{{ 'PRESCRIPTIONS.DISPATCH_SMS_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "D1004 class (round 17): Escape swallowed by a stop-only handler on the dialog; prescriptions.html belongs to fix/r17-lab-pharmacy-billing (D1030), fixed there"
+    },
+    "src/app/prescriptions/prescriptions.html::escape::modal <{{ 'PRESCRIPTIONS.PHARMACIST_VERIFY_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "D1004 class (round 17): Escape swallowed by a stop-only handler on the dialog; prescriptions.html belongs to fix/r17-lab-pharmacy-billing (D1030), fixed there"
     },
     "src/app/prescriptions/prescriptions.html::label::modal <{{ 'PRESCRIPTIONS.DISPATCH_SMS_TITLE' | translate }}>": {
       "count": 1,

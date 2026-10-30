@@ -25,13 +25,10 @@ const KNOWN = {
   'departments/department-list.html': 2,
   'digital-signatures/digital-signatures.html': 3,
   'discharge/discharge.html': 7,
-  'encounters/encounters.html': 1,
   'lock-screen/lock-screen.html': 1,
   'mfa/mfa-challenge.html': 1,
   'mfa/mfa-enroll.html': 1,
-  'nurse-station/nursing-intake-form/nursing-intake-form.component.html': 8,
   'patient-portal/my-medical-history/my-medical-history.component.html': 4,
-  'patients/patient-chart/patient-chart.component.html': 2,
   'profile/profile.html': 1,
 };
 

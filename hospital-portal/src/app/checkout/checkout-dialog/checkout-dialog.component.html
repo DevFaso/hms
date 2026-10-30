@@ -216,7 +216,7 @@
           @if (avs()!.followUpAppointmentDate) {
             <div>
               <dt>{{ 'CHECKOUT.AVS_FOLLOWUP_DATE' | translate }}</dt>
-              <dd>{{ avs()!.followUpAppointmentDate }}</dd>
+              <dd>{{ avs()!.followUpAppointmentDate | serverTime | date: 'mediumDate' }}</dd>
             </div>
           }
         </dl>

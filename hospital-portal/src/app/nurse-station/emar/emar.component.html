@@ -121,13 +121,16 @@
             }
 
             <section class="emar__scan">
-              <h3>{{ 'EMAR.STEP_SCAN_PATIENT' | translate }}</h3>
+              <!-- QA D993: every scan field carries a visible label of its own. -->
+              <h3>
+                <label for="emar-patient-scan">{{ 'EMAR.STEP_SCAN_PATIENT' | translate }}</label>
+              </h3>
               <div class="emar__scan-row">
                 <input
+                  id="emar-patient-scan"
                   type="text"
                   class="emar__input"
                   data-testid="emar-patient-scan"
-                  [attr.aria-label]="'EMAR.PATIENT_SCAN_PLACEHOLDER' | translate"
                   [placeholder]="'EMAR.PATIENT_SCAN_PLACEHOLDER' | translate"
                   [value]="patientScan()"
                   (input)="onScanInput('patient', $any($event.target).value)"
@@ -142,13 +145,15 @@
                 </button>
               </div>
 
-              <h3>{{ 'EMAR.STEP_SCAN_MEDICATION' | translate }}</h3>
+              <h3>
+                <label for="emar-med-scan">{{ 'EMAR.STEP_SCAN_MEDICATION' | translate }}</label>
+              </h3>
               <div class="emar__scan-row">
                 <input
+                  id="emar-med-scan"
                   type="text"
                   class="emar__input"
                   data-testid="emar-med-scan"
-                  [attr.aria-label]="'EMAR.MEDICATION_SCAN_PLACEHOLDER' | translate"
                   [placeholder]="'EMAR.MEDICATION_SCAN_PLACEHOLDER' | translate"
                   [value]="medicationScan()"
                   (input)="onScanInput('medication', $any($event.target).value)"
@@ -164,25 +169,35 @@
               </div>
 
               <h3>{{ 'EMAR.STEP_CONFIRM_DOSE' | translate }}</h3>
+              <!-- QA D1025: typed (or scanned) by the nurse, never prefilled; the
+                   prescribed dose and route are read beside them, in the reader's language. -->
+              <p class="emar__prescribed" data-testid="emar-prescribed">
+                {{ 'EMAR.PRESCRIBED' | translate }} : {{ task.dose }} ·
+                {{ task.route | medicationRoute }}
+              </p>
               <div class="emar__scan-row">
-                <input
-                  type="text"
-                  class="emar__input"
-                  data-testid="emar-dose"
-                  [attr.aria-label]="'NURSE.DOSE' | translate"
-                  [placeholder]="'NURSE.DOSE' | translate"
-                  [value]="doseScan()"
-                  (input)="onDoseInput($any($event.target).value)"
-                />
-                <input
-                  type="text"
-                  class="emar__input"
-                  data-testid="emar-route"
-                  [attr.aria-label]="'NURSE.ROUTE' | translate"
-                  [placeholder]="'NURSE.ROUTE' | translate"
-                  [value]="routeScan()"
-                  (input)="onRouteInput($any($event.target).value)"
-                />
+                <label class="emar__field" for="emar-dose">
+                  <span>{{ 'NURSE.DOSE' | translate }}</span>
+                  <input
+                    id="emar-dose"
+                    type="text"
+                    class="emar__input"
+                    data-testid="emar-dose"
+                    [value]="doseScan()"
+                    (input)="onDoseInput($any($event.target).value)"
+                  />
+                </label>
+                <label class="emar__field" for="emar-route">
+                  <span>{{ 'NURSE.ROUTE' | translate }}</span>
+                  <input
+                    id="emar-route"
+                    type="text"
+                    class="emar__input"
+                    data-testid="emar-route"
+                    [value]="routeScan()"
+                    (input)="onRouteInput($any($event.target).value)"
+                  />
+                </label>
               </div>
 
               @if (scannerActive(); as field) {
@@ -254,6 +269,15 @@
                 }
               }
             </section>
+
+            <!-- QA D922 (decision 2026-10-28): a controlled drug is given with a
+                 second clinician of this hospital as witness. -->
+            @if (needsWitness()) {
+              <app-witness-picker
+                inputId="emar-witness"
+                (witnessChange)="witnessUserId.set($event)"
+              />
+            }
 
             <section class="emar__actions">
               <button

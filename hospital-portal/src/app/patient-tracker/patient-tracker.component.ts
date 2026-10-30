@@ -278,6 +278,27 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
     });
   }
 
+  /* ── Start — WAITING_FOR_PHYSICIAN → IN_PROGRESS (QA D1015) ─── */
+  get canStartVisit(): boolean {
+    return this.auth.hasAnyRole(actionRoles('encounterStart'));
+  }
+  startInProgress = signal(false);
+
+  startVisit(item: PatientTrackerItem): void {
+    this.startInProgress.set(true);
+    this.encounterService.startEncounter(item.encounterId).subscribe({
+      next: () => {
+        this.startInProgress.set(false);
+        this.loadBoard();
+      },
+      error: (err: { error?: { message?: string } } | null) => {
+        this.startInProgress.set(false);
+        // The server's reason (not the assigned clinician) in the reader's language.
+        this.toast.error(err?.error?.message || this.translate.instant('TRACKER.START_FAILED'));
+      },
+    });
+  }
+
   /* ── Complete Examination — IN_PROGRESS → AWAITING / READY ─── */
   examInProgress = signal(false);
 

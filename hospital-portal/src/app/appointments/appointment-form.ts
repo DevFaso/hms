@@ -138,6 +138,7 @@ export class AppointmentFormComponent implements OnInit {
         this.allStaff = list.filter(isClinicalProvider);
         this.staffLoaded = true;
         this.setDeptsFromStaff(lockedId);
+        this.applyPendingStaff();
       });
     } else {
       // Multi-hospital admin: load all hospitals for the dropdown.
@@ -167,6 +168,22 @@ export class AppointmentFormComponent implements OnInit {
     if (time && /^\d{2}:\d{2}$/.test(time)) {
       this.form.startTime = time;
       this.onStartTimeChange();
+      // QA D1055: the recommended visit length (a 45-minute first antenatal
+      // visit), not the 30-minute default.
+      const duration = Number(params.get('duration'));
+      if (Number.isInteger(duration) && duration >= 5 && duration <= 240) {
+        const [h, m] = time.split(':').map(Number);
+        const end = h * 60 + m + duration;
+        if (end < 24 * 60) {
+          this.form.endTime = `${String(Math.floor(end / 60)).padStart(2, '0')}:${String(end % 60).padStart(2, '0')}`;
+        }
+      }
+    }
+    // QA D1055: the provider (and so the department) the calendar was planned with.
+    const staffId = params.get('staffId');
+    if (staffId && /^[0-9a-f-]{36}$/i.test(staffId)) {
+      this.pendingStaffId = staffId;
+      this.applyPendingStaff();
     }
     const reason = params.get('reason');
     if (reason) {
@@ -336,6 +353,20 @@ export class AppointmentFormComponent implements OnInit {
       // now sits where the old highlight was (review round 11).
       this.staffActive.set(-1);
       this.staffDropdownOpen.set(false);
+    }
+  }
+
+  /** QA D1055: a provider asked for by the link, applied once the staff list is in. */
+  private pendingStaffId: string | null = null;
+
+  private applyPendingStaff(): void {
+    if (!this.pendingStaffId || !this.staffLoaded) return;
+    const staff = this.allStaff.find((s) => s.id === this.pendingStaffId);
+    this.pendingStaffId = null;
+    if (!staff) return;
+    this.selectStaff(staff);
+    if (staff.departmentId && !this.form.departmentId) {
+      this.form.departmentId = staff.departmentId;
     }
   }
 

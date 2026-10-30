@@ -139,7 +139,7 @@
               }
               <div>
                 <dt>{{ 'ENCOUNTERS.ELIGIBILITY.CHECKED_AT' | translate }}</dt>
-                <dd>{{ r.completedAt ?? r.requestedAt }}</dd>
+                <dd>{{ r.completedAt ?? r.requestedAt | serverTime | date: 'short' }}</dd>
               </div>
             </dl>
           </article>

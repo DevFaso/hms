@@ -28,6 +28,7 @@ import { ImpersonationService } from '../services/impersonation.service';
 import { DowntimeService } from '../services/downtime.service';
 import { STEP_UP_REQUEST, isStepUpRefusal } from '../services/step-up';
 import { BACKGROUND_REQUEST } from '../services/ws-transport';
+import { ToastService } from '../core/toast.service';
 
 const SILENT_403_PATTERNS = [
   /\/hospitals(\?|$|\/$)/,
@@ -166,6 +167,21 @@ const HOSPITAL_SCOPE_REFUSED = 'hospital_scope_refused';
  * The hospital a NO_LONGER_PERMITTED refusal names: the one refused, which is
  * not necessarily the selection (a stale link to B while A is selected).
  */
+/**
+ * QA D995 (round 17): a write refused by a business rule the server explains
+ * (`ClientSafeAccessDeniedException`: not the author, not the signing
+ * physician…) carries its reason in `message` and no `code`; the opaque
+ * role refusal carries `code: 'ACCESS_DENIED'`. The reason is the page's
+ * answer, never a redirect that replaces the form the user was typing in.
+ * The choke point for every write, so no page can be forgotten again (the
+ * treatment-plan form was, after the D995 list fixed the note's sign).
+ */
+export function clientSafeRefusal(error: HttpErrorResponse): string | null {
+  const body = error.error as { message?: unknown; code?: unknown } | null;
+  if (!body || typeof body !== 'object' || body.code !== undefined) return null;
+  return typeof body.message === 'string' && body.message.trim() ? body.message.trim() : null;
+}
+
 function refusedHospitalId(error: HttpErrorResponse): string | null {
   const body = error.error as { hospitalId?: unknown } | null;
   return body && typeof body === 'object' && typeof body.hospitalId === 'string'
@@ -348,6 +364,7 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
   const downtime = inject(DowntimeService);
   const sessionScope = inject(SessionScopeService);
   const roleContext = inject(RoleContextService);
+  const toast = inject(ToastService);
 
   return next(req).pipe(
     catchError((error: HttpErrorResponse) => {
@@ -437,8 +454,16 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
         const isPageHandledAction =
           req.method !== 'GET' &&
           PAGE_HANDLED_403_ACTION_PATTERNS.some((pattern) => pattern.test(req.url));
+        const businessRefusal =
+          !isPageHandledAction && req.method !== 'GET' && req.method !== 'HEAD'
+            ? clientSafeRefusal(error)
+            : null;
         if (isPageHandledAction) {
           // The page's error handler shows the refusal; no redirect.
+        } else if (businessRefusal !== null) {
+          // QA D995: the server's reason, on the page the user is on. A page
+          // that reports it too shows one toast (ToastService drops a duplicate).
+          toast.error(businessRefusal);
         } else if (isSilent) {
           reportSilent403(http, req);
         } else if (!isAuditCall) {

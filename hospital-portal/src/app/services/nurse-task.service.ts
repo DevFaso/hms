@@ -13,6 +13,12 @@ export interface NurseVitalTask {
   overdue: boolean;
 }
 
+/** QA D922: a colleague who may witness a controlled dose. */
+export interface AdministrationWitnessCandidate {
+  userId: string;
+  displayName: string;
+}
+
 export interface NurseMedicationTask {
   id: string;
   patientId: string;
@@ -204,6 +210,8 @@ export interface NurseVitalCaptureRequest {
   onOxygen?: boolean;
   /** NEWS2 (P3 #25b): ACVPU consciousness assessment. */
   consciousnessLevel?: 'ALERT' | 'NEW_CONFUSION' | 'VOICE' | 'PAIN' | 'UNRESPONSIVE';
+  /** QA D1045: the 0-10 pain score of a ward reassessment. */
+  painScale?: number;
   notes?: string;
 }
 
@@ -301,9 +309,19 @@ export class NurseTaskService {
     });
   }
 
+  /**
+   * QA D922: the clinicians of the active hospital, the caller excluded, who
+   * may witness a controlled dose (NurseTaskController).
+   */
+  getAdministrationWitnessCandidates(): Observable<AdministrationWitnessCandidate[]> {
+    return this.http.get<AdministrationWitnessCandidate[]>(
+      `${this.baseUrl}/medications/mar/witness-candidates`,
+    );
+  }
+
   administerMedication(
     taskId: string,
-    data: { status: string; note?: string; overrideReason?: string },
+    data: { status: string; note?: string; overrideReason?: string; witnessUserId?: string },
   ): Observable<NurseMedicationTask> {
     return this.http.put<NurseMedicationTask>(
       `${this.baseUrl}/medications/mar/${taskId}/administer`,

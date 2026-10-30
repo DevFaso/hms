@@ -62,7 +62,8 @@
           }
           @if (p.dateOfBirth) {
             <span class="meta-tag" data-testid="header-dob"
-              ><span class="material-symbols-outlined">cake</span> {{ p.dateOfBirth }}</span
+              ><span class="material-symbols-outlined">cake</span>
+              {{ p.dateOfBirth | serverTime | date: 'mediumDate' }}</span
             >
           }
           @if (p.bloodType) {
@@ -425,7 +426,9 @@
             </div>
             <div class="info-row">
               <span class="label">{{ 'PATIENTS.DOB' | translate }}</span
-              ><span class="value">{{ p.dateOfBirth ?? '—' }}</span>
+              ><span class="value">{{
+                p.dateOfBirth ? (p.dateOfBirth | serverTime | date: 'mediumDate') : '—'
+              }}</span>
             </div>
             <div class="info-row">
               <span class="label">{{ 'PATIENTS.GENDER' | translate }}</span

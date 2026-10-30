@@ -559,7 +559,13 @@ export class PermissionService {
     // A grant the acting role's static map does not list (one the backend's
     // merged permissions carry) still counts, unless another role the user
     // holds is what grants it: that is the union this check exists to narrow.
-    const otherRoles = this.auth.getRoles().filter((r) => !roles.includes(r));
+    // QA D997 (round 17): the other roles are the ones the user HOLDS (chosen
+    // from at login), not only the token's: a token scoped to the acting role
+    // carries ROLE_LAB_DIRECTOR alone, while the backend's merged grants still
+    // carry the doctor's "Create Encounters", so the lab director was offered
+    // "Démarrer une Consultation" again.
+    const held = [...new Set([...this.auth.getRoles(), ...this.roleContext.heldRoles])];
+    const otherRoles = held.filter((r) => !roles.includes(r));
     return this.hasPermission(permission) && !otherRoles.some(grants);
   }
 

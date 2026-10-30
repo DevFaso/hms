@@ -765,7 +765,10 @@
             <div class="detail-field">
               <span class="field-label">{{ 'IMAGING.SCHEDULED' | translate }}</span
               ><span class="field-value"
-                >{{ ord.scheduledDate || '—' }} {{ ord.scheduledTime || '' }}</span
+                >{{
+                  ord.scheduledDate ? (ord.scheduledDate | serverTime | date: 'mediumDate') : '—'
+                }}
+                {{ ord.scheduledTime || '' }}</span
               >
             </div>
             <div class="detail-field">

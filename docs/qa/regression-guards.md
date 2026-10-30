@@ -111,6 +111,26 @@ are excusing; `why` of existing pins is kept, new pins get `TODO`).
 | `scripts/lib/lab-dialog-a11y.test.mjs` (#975, extended) | An overlay that is a keyboard trap (D968). | Every overlay in `lab/`, and every `detail-overlay` / `form-overlay` side panel in the portal. |
 | `scripts/lib/lab-locale-format.test.mjs` (#975, extended) | A lab value, date or label colon not formatted for the reader (D1002). | `lab/` and the MTM review; outside `lab/`, every template showing a lab result value (value and colon rules). |
 
+## Guards added by fix/r17-clinical-workflow (round 17; extend these too)
+
+| Guard | Class | Scope / allowlist |
+|---|---|---|
+| `architecture/AuthorWithdrawRoleParityGuardTest` | A record its author cannot withdraw: a `/{id}/cancel` that admits fewer roles than the collection's `POST` create (D1026). | Every controller. 0 allowed. |
+| `architecture/TimelineStatusGuardTest` | A chronology row that puts a status in its metadata but not in its summary, so a cancelled order reads as active (D1027). | `PatientServiceImpl` + `service/timeline`. 1 allowed (open lab orders, with reason). |
+| `architecture/EncounterWaitGuardTest` | A wait computed from `getEncounterDate()` (the visit day's midnight) instead of `EncounterWait` (D1039/D990); a patient id served as the MRN (D1040). | All production code. 0 allowed. |
+| `architecture/CancelStampGuardTest` | A cancellation of an entity with a `cancelledAt` column that stamps neither (D1047). | All production code. 0 allowed. |
+| `architecture/RouteLabelGuardTest` | A medication route composed into text as its raw code (D1025, backend half of D950). | All production code. 2 allowed (partner SMS, FHIR text). |
+| `architecture/MarWitnessGuardTest` | A MAR dose outcome recorded outside `ControlledAdministrationWitness` (D922, decision 2026-10-28). | All production code. 0 allowed. |
+| `guard:a11y-dialogs` (extended) | An `(keydown.escape)="$event.stopPropagation()"` on a dialog is not an Escape handler and swallows its backdrop's (D1004 class): 58 sites fixed, 2 pinned in `prescriptions.html` (lab-pharmacy branch, D1030). | |
+| `scripts/lib/medication-route-display.test.mjs` (extended) | A form field seeded with a stored route code (D1025: the eMAR "Voie", the intake reconciliation). | |
+| `scripts/lib/iso-date-display.test.mjs` | An ISO date interpolated in any template without `\| date` (D1049); the lab-only date rule of `lab-locale-format.test.mjs`, for the whole portal. | 0 pinned. |
+| `scripts/lib/fr-false-friends.test.mjs` | A French false friend in a portal or backend French string ("Reconnaître" for acknowledge, D1054). | |
+
+The error interceptor is the choke point for D995: a write refused with a
+server reason (`ClientSafeAccessDeniedException`: a `message`, no `code`) is
+reported in a toast on the page, never by the 403 page; its spec covers an
+arbitrary URL.
+
 ## What is not guarded (and why)
 
 - **Bean Validation default messages** (D925 "providerName: must not be

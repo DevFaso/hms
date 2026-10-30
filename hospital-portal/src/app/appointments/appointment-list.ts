@@ -1,3 +1,4 @@
+import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import {
   Component,
   inject,
@@ -26,7 +27,15 @@ type SortDir = 'asc' | 'desc';
 @Component({
   selector: 'app-appointment-list',
   standalone: true,
-  imports: [ClockTimePipe, CommonModule, RouterLink, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [
+    ClockTimePipe,
+    ServerTimePipe,
+    CommonModule,
+    RouterLink,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+  ],
   templateUrl: './appointment-list.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './appointment-list.scss',

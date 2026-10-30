@@ -211,6 +211,20 @@
             />
           </div>
 
+          <!-- QA D1031: the antenatal fundal height, charted with the vitals. -->
+          <div class="form-group">
+            <label for="fundalHeightCm">{{ 'TRIAGE.FUNDAL_HEIGHT' | translate }}</label>
+            <input
+              id="fundalHeightCm"
+              type="number"
+              min="1"
+              step="1"
+              [ngModel]="fundalHeightCm()"
+              (ngModelChange)="fundalHeightCm.set($event)"
+              name="fundalHeightCm"
+            />
+          </div>
+
           <!-- NEWS2 parameters (P3 #25b) -->
           <div class="form-group">
             <label for="consciousness">{{ 'TRIAGE.CONSCIOUSNESS' | translate }}</label>

@@ -156,3 +156,18 @@ test('appDialogFocus closes on Escape when (dialogDismiss) is bound, but does no
     ['role'],
   );
 });
+
+test('round 17 (D1004 class): an Escape that only stops propagation on the dialog swallows the backdrop’s', () => {
+  const swallowed = `<div class="modal-backdrop" (click)="close()" (keydown.escape)="close()">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="t"
+      (click)="$event.stopPropagation()" (keydown.escape)="$event.stopPropagation()">
+      <h2 id="t">Title</h2>
+    </div>
+  </div>`;
+  assert.deepEqual(rules(swallowed, swallowed), ['escape']);
+  const closes = swallowed.replace(
+    '(keydown.escape)="$event.stopPropagation()"',
+    '(keydown.escape)="close(); $event.stopPropagation()"',
+  );
+  assert.deepEqual(rules(closes, closes), []);
+});

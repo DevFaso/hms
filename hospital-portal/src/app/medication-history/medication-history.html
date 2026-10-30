@@ -324,7 +324,7 @@
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeFillModal(); $event.stopPropagation()"
     >
       <div class="modal-header">
         <h2>

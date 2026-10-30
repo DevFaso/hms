@@ -805,7 +805,7 @@
   },
   "BPA": {
     "ACK_FAILED": "Impossible d'enregistrer la prise en compte de l'avis.",
-    "ACTION_ACKNOWLEDGE": "Reconnaître",
+    "ACTION_ACKNOWLEDGE": "Prendre acte",
     "ACTION_OVERRIDE": "Outrepasser",
     "CRITICAL_TITLE": "Avis critique",
     "ERROR": "Impossible de charger les avis de bonne pratique. Le dossier reste utilisable.",
@@ -4458,7 +4458,16 @@
     "LAST_DOSE": "Dernière dose :",
     "NOT_YET_DUE": "Pas encore due",
     "COURSE_ENDED": "Traitement terminé",
-    "CONTROLLED_SUBSTANCE": "Stupéfiant"
+    "CONTROLLED_SUBSTANCE": "Stupéfiant",
+    "WITNESS": {
+      "LABEL": "Témoin (second soignant)",
+      "CHOOSE": "Choisir le témoin",
+      "HINT": "Stupéfiant : un second infirmier, une sage-femme ou un médecin de l’établissement est témoin de l’administration.",
+      "NONE": "Aucun autre soignant actif de l’établissement ne peut être témoin.",
+      "LOAD_FAILED": "La liste des témoins n’a pas pu être chargée.",
+      "REQUIRED": "Choisissez le témoin de cette administration de stupéfiant."
+    },
+    "PAIN_SCORE": "Douleur (0-10)"
   },
   "ONBOARDING": {
     "ABILITIES_TITLE": "Vos capacités",
@@ -6780,7 +6789,11 @@
         "NOTE": "Note clinique",
         "PRESCRIPTION": "Ordonnance",
         "PROCEDURE": "Acte",
-        "REFERRAL": "Orientation"
+        "REFERRAL": "Orientation",
+        "TREATMENT_PLAN": "Plan de traitement",
+        "CONSULTATION": "Demande d’avis",
+        "DISCHARGE_SUMMARY": "Résumé de sortie",
+        "DOCUMENT": "Document émis"
       },
       "SPECIMEN_TYPE": {
         "BLOOD": "Sang",
@@ -8498,7 +8511,8 @@
     "TEMPERATURE": "Température",
     "TITLE": "Évaluation de triage",
     "VITAL_SIGNS": "Signes vitaux",
-    "WEIGHT": "Poids"
+    "WEIGHT": "Poids",
+    "FUNDAL_HEIGHT": "Hauteur utérine (cm) — grossesse"
   },
   "INTAKE": {
     "ADD_ALLERGY": "Ajouter une allergie",
@@ -8531,7 +8545,14 @@
     "SUBMIT": "Soumettre l'admission",
     "SUBMIT_FAILED": "Échec de l'enregistrement de l'admission infirmière. Veuillez réessayer.",
     "TITLE": "Admission infirmière",
-    "ALLERGY_SEVERITY_ROW": "Gravité de l’allergie, ligne {{row}}"
+    "ALLERGY_SEVERITY_ROW": "Gravité de l’allergie, ligne {{row}}",
+    "ALLERGEN_ROW": "Allergène, ligne {{row}}",
+    "ALLERGY_CATEGORY_ROW": "Catégorie de l’allergie, ligne {{row}}",
+    "ALLERGY_REACTION_ROW": "Réaction, ligne {{row}}",
+    "MED_NAME_ROW": "Médicament, ligne {{row}}",
+    "MED_DOSAGE_ROW": "Posologie, ligne {{row}}",
+    "MED_FREQUENCY_ROW": "Fréquence, ligne {{row}}",
+    "MED_ROUTE_ROW": "Voie, ligne {{row}}"
   },
   "PRE_CHECKIN": {
     "ADDRESS": "Adresse",
@@ -8607,7 +8628,9 @@
     "COMPLETE_EXAM": "Terminer l'examen",
     "READY_DISCHARGE": "Prêt pour la sortie",
     "NO_PATIENTS": "Aucun patient",
-    "COLUMN_PATIENTS": "Patients : {{column}}"
+    "COLUMN_PATIENTS": "Patients : {{column}}",
+    "START_VISIT": "Démarrer la consultation",
+    "START_FAILED": "La consultation n’a pas pu être démarrée."
   },
   "CHECKOUT": {
     "TITLE": "Sortie du patient",
@@ -8942,7 +8965,8 @@
     "VERIF_UNCONFIRMED": "Non confirmée",
     "LAB_STATUS_QUALITATIVE": "Résultat qualitatif : à interpréter par le clinicien",
     "LAB_STATUS_NOT_INTERPRETED": "Non interprété : aucun intervalle de référence",
-    "CODE_PLACEHOLDER": "ex. B54 (paludisme)"
+    "CODE_PLACEHOLDER": "ex. B54 (paludisme)",
+    "PREGNANCY": "Grossesse en cours : {{weeks}} SA + {{days}} j"
   },
   "PHARMACY": {
     "QUEUE_CLAIM": {
@@ -9807,8 +9831,8 @@
   "PATIENT_DOCUMENTS": {
     "TAB": "Documents",
     "TAB_TITLE": "Documents déposés par le patient via le portail",
-    "TITLE": "Documents déposés par le patient",
-    "HINT": "Résultats de laboratoire externes, lettres d'orientation et autres fichiers ajoutés par le patient depuis son portail. Lecture seule ici ; chaque téléchargement est enregistré dans le journal d'audit.",
+    "TITLE": "Documents du patient",
+    "HINT": "Fichiers ajoutés par le patient depuis son portail (résultats externes, lettres d’orientation…) et documents émis par l’établissement (certificats médicaux). Lecture seule ici ; chaque téléchargement est enregistré dans le journal d’audit.",
     "FILTER_TYPE": "Filtrer par type",
     "FILTER_ALL": "Tous les types",
     "LOADING": "Chargement des documents…",
@@ -9828,7 +9852,9 @@
     "PAGER": "Pages de documents",
     "PREVIOUS": "Précédent",
     "NEXT": "Suivant",
-    "PAGE_OF": "Page {{page}} sur {{total}}"
+    "PAGE_OF": "Page {{page}} sur {{total}}",
+    "SOURCE_PATIENT": "Déposé par le patient",
+    "SOURCE_HOSPITAL": "Émis par l’établissement"
   },
   "MED_HISTORY": {
     "SOURCE_OF_RECORD": "Source",
@@ -9953,7 +9979,8 @@
       "VAA": "VAA (fièvre jaune)",
       "VPI": "VPI (polio injectable)",
       "VPO": "VPO (polio oral)"
-    }
+    },
+    "VACCINE_CODE_HINT": "Repris d’une dose antérieure du même vaccin dans ce dossier, s’il y en a une ; sinon le code utilisé par l’export DHIS2 de l’établissement."
   },
   "MATERNITY": {
     "GA": "Terme",
@@ -10298,7 +10325,8 @@
     "VISIT_LATE_PREGNANCY": "Fin de grossesse",
     "BOOK": "Planifier",
     "BOOK_REASON": "Consultation prénatale (CPN) — {{week}} SA",
-    "BOOK_HINT": "Planifiez une visite recommandée pour en faire un rendez-vous ; elle apparaît alors comme planifiée. Le jour venu, enregistrez l'arrivée de la patiente sur le rendez-vous pour ouvrir la consultation où la visite (constantes, examen) est saisie."
+    "BOOK_HINT": "Planifiez une visite recommandée pour en faire un rendez-vous ; elle apparaît alors comme planifiée. Le jour venu, enregistrez l'arrivée de la patiente sur le rendez-vous pour ouvrir la consultation où la visite (constantes, examen) est saisie.",
+    "ANC_CONTACTS": "Contacts CPN effectués : {{done}} (prochain : CPN {{next}})"
   },
   "PRO": {
     "HEADING": "Dépistage de santé mentale ({{instrument}})",
@@ -11622,7 +11650,8 @@
       "VERIFY_FAILED": "Échec de la vérification. Réessayez."
     },
     "VERIFYING": "Vérification en cours…",
-    "VERIFY_FIVE_RIGHTS": "Vérifier les cinq B"
+    "VERIFY_FIVE_RIGHTS": "Vérifier les cinq B",
+    "PRESCRIBED": "Prescrit"
   },
   "CREDENTIALING": {
     "CURRENT_EXPIRY": "Expiration actuelle",

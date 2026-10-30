@@ -374,7 +374,7 @@
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeSocialModal(); $event.stopPropagation()"
     >
       <div class="modal-header">
         <h2 id="medical-history-tab-dialog-1-title">
@@ -567,7 +567,7 @@
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeFamilyModal(); $event.stopPropagation()"
     >
       <div class="modal-header">
         <h2 id="medical-history-tab-dialog-2-title">
@@ -683,7 +683,7 @@
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeImmunizationModal(); $event.stopPropagation()"
     >
       <div class="modal-header">
         <h2 id="medical-history-tab-dialog-3-title">
@@ -711,7 +711,8 @@
               id="im-display"
               type="text"
               list="im-pev-vaccines"
-              [(ngModel)]="immunizationForm.vaccineDisplay"
+              [ngModel]="immunizationForm.vaccineDisplay"
+              (ngModelChange)="onVaccineChosen($event)"
             />
             <datalist id="im-pev-vaccines">
               @for (v of pevVaccines; track v) {
@@ -721,7 +722,17 @@
           </div>
           <div class="field">
             <label for="im-code">{{ 'MED_HISTORY.VACCINE_CODE' | translate }} *</label>
-            <input id="im-code" type="text" [(ngModel)]="immunizationForm.vaccineCode" />
+            <input
+              id="im-code"
+              type="text"
+              [(ngModel)]="immunizationForm.vaccineCode"
+              aria-describedby="im-code-hint"
+            />
+            <!-- QA D1003: the code is the one this patient's earlier dose of the
+                 same vaccine carries, when there is one; no code is invented. -->
+            <p class="field-hint" id="im-code-hint">
+              {{ 'MED_HISTORY.VACCINE_CODE_HINT' | translate }}
+            </p>
           </div>
         </div>
         <div class="form-row">

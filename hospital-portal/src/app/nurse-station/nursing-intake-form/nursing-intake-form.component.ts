@@ -22,6 +22,7 @@ import {
   MedicationReconciliationEntry,
 } from '../../services/encounter.service';
 import { ToastService } from '../../core/toast.service';
+import { canonicalRoute } from '../../shared/pipes/medication-route.pipe';
 import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 import { PatientAllergy, PatientService } from '../../services/patient.service';
 import { PrescriptionResponse, PrescriptionService } from '../../services/prescription.service';
@@ -159,7 +160,8 @@ export class NursingIntakeFormComponent {
         medicationName: name,
         dosage: rx.dosage ?? '',
         frequency: rx.frequency ?? '',
-        route: rx.route ?? '',
+        // QA D1025: the route in the reader's language ("Orale (PO)"), never "ORAL".
+        route: this.routeLabel(rx.route),
         stillTaking: true,
         notes: '',
       },
@@ -243,5 +245,12 @@ export class NursingIntakeFormComponent {
         this.toast.error(msg);
       },
     });
+  }
+
+  /** QA D1025: a stored route ("ORAL") as the reader reads it ("Orale (PO)"); unknown text as written. */
+  private routeLabel(route: string | null | undefined): string {
+    if (!route) return '';
+    const code = canonicalRoute(route);
+    return code ? (this.translate.instant(`PRESCRIPTIONS.ROUTES.${code}`) as string) : route;
   }
 }

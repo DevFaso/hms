@@ -1,3 +1,5 @@
+import { MaternityService } from '../../services/maternity.service';
+import { effectiveDueDate, gestationalAge } from '../../maternity/pregnancy-dates';
 import {
   Component,
   Input,
@@ -93,6 +95,34 @@ export class PatientChartComponent implements OnInit, OnChanges {
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
   private readonly registrations = inject(RegistrationService);
+  private readonly maternity = inject(MaternityService);
+
+  /**
+   * QA D1005: the ongoing pregnancy (gestational age today and due date) on
+   * the chart, read from the patient's current maternal history the way the
+   * maternity list reads it; null when there is none or it is over.
+   */
+  readonly pregnancy = signal<{ weeks: number; days: number; dueDate: string } | null>(null);
+
+  private loadPregnancy(): void {
+    this.pregnancy.set(null);
+    if (
+      !this.patientId ||
+      !this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'])
+    ) {
+      return;
+    }
+    const asked = this.patientId;
+    this.maternity.currentForPatient(asked).subscribe({
+      next: (history) => {
+        if (asked !== this.patientId) return;
+        const dueDate = effectiveDueDate(history?.menstrualHistory);
+        const ga = gestationalAge(dueDate);
+        this.pregnancy.set(ga && dueDate ? { ...ga, dueDate } : null);
+      },
+      error: () => this.pregnancy.set(null),
+    });
+  }
 
   section = signal<ChartSection>('allergies');
 
@@ -344,6 +374,7 @@ export class PatientChartComponent implements OnInit, OnChanges {
     this.section.set(this.firstVisibleSection());
     this.loadCurrentSection();
     this.loadRegistrationHere();
+    this.loadPregnancy();
   }
 
   /**
@@ -1121,6 +1152,15 @@ export class PatientChartComponent implements OnInit, OnChanges {
         return 'description';
       case 'REFERRAL':
         return 'forward_to_inbox';
+      // QA D959 (round 17): the visit's other documents.
+      case 'TREATMENT_PLAN':
+        return 'assignment';
+      case 'CONSULTATION':
+        return 'group';
+      case 'DISCHARGE_SUMMARY':
+        return 'logout';
+      case 'DOCUMENT':
+        return 'verified';
       default:
         return 'event_note';
     }

@@ -322,3 +322,16 @@
   text-align: center;
   color: var(--color-text-muted, #4a5568);
 }
+
+/* QA D1025: the dose and route inputs carry their own labels; the prescription is read beside them. */
+.emar__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1;
+}
+
+.emar__prescribed {
+  margin: 0 0 0.5rem;
+  color: var(--text-secondary, #555);
+}

@@ -295,7 +295,7 @@
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeResourceModal(); $event.stopPropagation()"
     >
       <div class="modal-header">
         <h2>
@@ -425,7 +425,7 @@
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeAssign(); $event.stopPropagation()"
     >
       <div class="modal-header">
         <h2>{{ 'EDUCATION.ASSIGN_TITLE' | translate }}</h2>
@@ -480,7 +480,7 @@
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeProgressModal(); $event.stopPropagation()"
     >
       <div class="modal-header">
         <h2>{{ 'EDUCATION.UPDATE_PROGRESS' | translate }}</h2>

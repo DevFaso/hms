@@ -46,6 +46,10 @@
       <fieldset class="form-section">
         <legend>{{ 'INTAKE.CHIEF_COMPLAINT' | translate }}</legend>
         <div class="form-group">
+          <!-- QA D1041: named by a label, not by its placeholder. -->
+          <label class="sr-only" for="chiefComplaint">{{
+            'INTAKE.CHIEF_COMPLAINT' | translate
+          }}</label>
           <textarea
             id="chiefComplaint"
             rows="2"
@@ -87,6 +91,7 @@
                 [ngModel]="allergy.allergenDisplay"
                 (ngModelChange)="allergy.allergenDisplay = $event"
                 [name]="'allergen_' + i"
+                [attr.aria-label]="'INTAKE.ALLERGEN_ROW' | translate: { row: i + 1 }"
                 [placeholder]="'INTAKE.ALLERGEN_PLACEHOLDER' | translate"
               />
               <input
@@ -94,6 +99,7 @@
                 [ngModel]="allergy.category"
                 (ngModelChange)="allergy.category = $event"
                 [name]="'allergyCategory_' + i"
+                [attr.aria-label]="'INTAKE.ALLERGY_CATEGORY_ROW' | translate: { row: i + 1 }"
                 [placeholder]="'CHART.CATEGORY' | translate"
               />
               <select
@@ -112,6 +118,7 @@
                 [ngModel]="allergy.reaction"
                 (ngModelChange)="allergy.reaction = $event"
                 [name]="'allergyReaction_' + i"
+                [attr.aria-label]="'INTAKE.ALLERGY_REACTION_ROW' | translate: { row: i + 1 }"
                 [placeholder]="'CHART.REACTION' | translate"
               />
               <button
@@ -172,6 +179,7 @@
                 [ngModel]="med.medicationName"
                 (ngModelChange)="med.medicationName = $event"
                 [name]="'medName_' + i"
+                [attr.aria-label]="'INTAKE.MED_NAME_ROW' | translate: { row: i + 1 }"
                 [placeholder]="'INTAKE.MED_NAME_PLACEHOLDER' | translate"
               />
               <input
@@ -179,6 +187,7 @@
                 [ngModel]="med.dosage"
                 (ngModelChange)="med.dosage = $event"
                 [name]="'medDosage_' + i"
+                [attr.aria-label]="'INTAKE.MED_DOSAGE_ROW' | translate: { row: i + 1 }"
                 [placeholder]="'PRESCRIPTIONS.DOSAGE' | translate"
               />
               <input
@@ -186,6 +195,7 @@
                 [ngModel]="med.frequency"
                 (ngModelChange)="med.frequency = $event"
                 [name]="'medFrequency_' + i"
+                [attr.aria-label]="'INTAKE.MED_FREQUENCY_ROW' | translate: { row: i + 1 }"
                 [placeholder]="'PRESCRIPTIONS.FREQUENCY' | translate"
               />
               <input
@@ -193,6 +203,7 @@
                 [ngModel]="med.route"
                 (ngModelChange)="med.route = $event"
                 [name]="'medRoute_' + i"
+                [attr.aria-label]="'INTAKE.MED_ROUTE_ROW' | translate: { row: i + 1 }"
                 [placeholder]="'PRESCRIPTIONS.ROUTE' | translate"
               />
               <label class="checkbox-label">

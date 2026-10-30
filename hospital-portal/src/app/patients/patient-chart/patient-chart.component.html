@@ -1,4 +1,12 @@
 <div class="chart-container">
+  <!-- QA D1005: the ongoing pregnancy is read on every tab of the chart. -->
+  @if (pregnancy(); as pg) {
+    <p class="chart-pregnancy" data-testid="chart-pregnancy">
+      <span class="material-symbols-outlined" aria-hidden="true">pregnant_woman</span>
+      {{ 'CHART.PREGNANCY' | translate: { weeks: pg.weeks, days: pg.days } }} ·
+      {{ 'MATERNITY.EDD' | translate }} {{ pg.dueDate | serverTime | date: 'mediumDate' }}
+    </p>
+  }
   <div class="chart-tabs">
     @if (canViewAllergies()) {
       <button
@@ -650,12 +658,15 @@
   >
     <div
       class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="chart-dialog-1-title"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeAllergyModal(); $event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="chart-dialog-1-title">
           {{ (editingAllergyId() ? 'CHART.EDIT_ALLERGY' : 'CHART.ADD_ALLERGY') | translate }}
         </h2>
         <button
@@ -741,12 +752,15 @@
   >
     <div
       class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="chart-dialog-2-title"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeDeactivateAllergy(); $event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'CHART.DEACTIVATE_ALLERGY' | translate }}</h2>
+        <h2 id="chart-dialog-2-title">{{ 'CHART.DEACTIVATE_ALLERGY' | translate }}</h2>
         <button
           [attr.aria-label]="'COMMON.CLOSE' | translate"
           type="button"
@@ -787,12 +801,15 @@
   >
     <div
       class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="chart-dialog-3-title"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeProblemModal(); $event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="chart-dialog-3-title">
           {{ (editingProblemId() ? 'CHART.EDIT_PROBLEM' : 'CHART.ADD_PROBLEM') | translate }}
         </h2>
         <button
@@ -878,12 +895,15 @@
   >
     <div
       class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="chart-dialog-4-title"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeDeleteProblem(); $event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'CHART.DELETE_PROBLEM' | translate }}</h2>
+        <h2 id="chart-dialog-4-title">{{ 'CHART.DELETE_PROBLEM' | translate }}</h2>
         <button
           [attr.aria-label]="'COMMON.CLOSE' | translate"
           type="button"
@@ -928,12 +948,15 @@
   >
     <div
       class="modal modal-lg"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="chart-dialog-5-title"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeUpdateModal(); $event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'CHART.NEW_UPDATE' | translate }}</h2>
+        <h2 id="chart-dialog-5-title">{{ 'CHART.NEW_UPDATE' | translate }}</h2>
         <button
           [attr.aria-label]="'COMMON.CLOSE' | translate"
           type="button"
@@ -978,11 +1001,13 @@
               <input
                 type="text"
                 [placeholder]="'CHART.SECTION_DISPLAY' | translate"
+                [attr.aria-label]="'CHART.SECTION_DISPLAY' | translate"
                 [(ngModel)]="s.display"
               />
               <input
                 type="text"
                 [placeholder]="'CHART.SECTION_NARRATIVE' | translate"
+                [attr.aria-label]="'CHART.SECTION_NARRATIVE' | translate"
                 [(ngModel)]="s.narrative"
               />
               <button
@@ -1024,12 +1049,15 @@
   >
     <div
       class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="chart-dialog-6-title"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeTimelineReason(); $event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'CHART.TIMELINE_ACCESS' | translate }}</h2>
+        <h2 id="chart-dialog-6-title">{{ 'CHART.TIMELINE_ACCESS' | translate }}</h2>
         <button
           [attr.aria-label]="'COMMON.CLOSE' | translate"
           type="button"
