@@ -4974,7 +4974,7 @@
     "CHART_UNAVAILABLE_TITLE": "Este expediente no se puede abrir aquí",
     "PHONE_GUARDIAN_HINT": "Para un niño, puede dejarlo vacío e indicar el teléfono del padre, la madre o el tutor en Contacto de emergencia.",
     "PHONE_FROM_GUARDIAN": "Vacío: el teléfono del padre, la madre o el tutor (Contacto de emergencia) se registrará como contacto de este paciente.",
-    "SHARED_CONTACT_NOTE": "Este teléfono o correo ya es el contacto de otro paciente (por ejemplo, un padre o una madre). Está permitido: este registro crea un expediente distinto.",
+    "SHARED_CONTACT_NOTE": "Este número de teléfono ya es el contacto de otro paciente (por ejemplo, un padre o una madre). Está permitido: este registro crea un expediente distinto.",
     "MATCHED_ON_IDENTITY": "mismo nombre y fecha de nacimiento"
   },
   "PLATFORM": {

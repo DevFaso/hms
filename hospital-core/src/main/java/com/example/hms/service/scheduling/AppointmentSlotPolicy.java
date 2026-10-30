@@ -60,7 +60,12 @@ public class AppointmentSlotPolicy {
         }
         int minutes = minutesFor(staffId, date, start);
         LocalTime end = start.plusMinutes(minutes);
-        return end.isAfter(start) ? end : LocalTime.of(23, 59);
+        LocalTime capped = end.isAfter(start) ? end : LocalTime.of(23, 59);
+        if (!capped.isAfter(start)) {
+            // A visit starting at 23:59 would last no time at all.
+            throw new BusinessException("appointment.timeRange.invalid");
+        }
+        return capped;
     }
 
     private int minutesFor(UUID staffId, LocalDate date, LocalTime start) {

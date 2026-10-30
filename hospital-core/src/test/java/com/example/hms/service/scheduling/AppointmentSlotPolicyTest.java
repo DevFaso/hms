@@ -74,6 +74,9 @@ class AppointmentSlotPolicyTest {
         assertThat(policy.endFor(null, FRIDAY, LocalTime.of(9, 0))).isEqualTo(LocalTime.of(9, 30));
         // Never past midnight.
         assertThat(policy.endFor(staffId, FRIDAY, LocalTime.of(23, 50))).isEqualTo(LocalTime.of(23, 59));
+        // ... and a visit that would last no time at all is refused.
+        assertThatThrownBy(() -> policy.endFor(staffId, FRIDAY, LocalTime.of(23, 59)))
+            .isInstanceOf(BusinessException.class).hasMessageContaining("appointment.timeRange.invalid");
     }
 
     @Test

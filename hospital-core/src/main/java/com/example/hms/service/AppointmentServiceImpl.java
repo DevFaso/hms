@@ -251,7 +251,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         }
         // QA D1060: the end time is the slot rules', never the caller's, so only the start is required.
         if (request.getStartTime() == null) {
-            throw new BusinessException("Appointment start and end time must not be null");
+            throw new BusinessException("appointment.timeRange.invalid");
         }
     }
 

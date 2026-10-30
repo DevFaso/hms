@@ -42,10 +42,6 @@ public class Hl7v2MessageBuilder {
     // ── Outbound OML^O21 – New Lab Order sent to instrument ──────────────────
 
     /**
-     * Builds an OML^O21 (laboratory order) message for the given specimen.
-     * Triggered when a specimen is received at the lab.
-     */
-    /**
      * PID-5 (XPN): family^given^middle. QA D1036: the middle name travels in
      * its own component; it used to be dropped from every outbound order.
      */
@@ -58,6 +54,10 @@ public class Hl7v2MessageBuilder {
         return middle != null && !middle.isBlank() ? xpn + "^" + encodeEscapes(middle.trim()) : xpn;
     }
 
+    /**
+     * Builds an OML^O21 (laboratory order) message for the given specimen.
+     * Triggered when a specimen is received at the lab.
+     */
     public String buildOml021(LabSpecimen specimen) {
         LabOrder order = specimen.getLabOrder();
         String now = LocalDateTime.now().format(HL7_DT);

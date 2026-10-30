@@ -326,11 +326,43 @@ describe('PatientFormComponent', () => {
 
   it('QA D1061: a match that only shares the contact does not block the registration', () => {
     fillValidForm();
-    component.registrationMatches = [mockMatch({ sameIdentity: false })];
+    component.form.dateOfBirth = '2021-08-19';
+    component.registrationMatches = [mockMatch({ sameIdentity: false, birthYear: 1985 })];
     expect(component.identityMatches.length).toBe(0);
     expect(component.sharedContactMatches.length).toBe(1);
     component.onSubmit();
     expect(userSpy.adminRegister).toHaveBeenCalled();
+  });
+
+  it('QA D1061 review: a phone match born the same year still asks (a spelling variant)', () => {
+    fillValidForm();
+    component.form.dateOfBirth = '1990-04-02';
+    component.registrationMatches = [mockMatch({ sameIdentity: false, birthYear: 1990 })];
+    component.onSubmit();
+    expect(userSpy.adminRegister).not.toHaveBeenCalled();
+    expect(toastSpy.error).toHaveBeenCalledWith('PATIENTS.MATCH_DECIDE');
+  });
+
+  it('QA D1061 review: a shared e-mail still asks (an e-mail is one person)', () => {
+    fillValidForm();
+    component.form.dateOfBirth = '2021-08-19';
+    component.registrationMatches = [
+      mockMatch({ sameIdentity: false, birthYear: 1985, matchedOn: 'EMAIL' }),
+    ];
+    component.onSubmit();
+    expect(userSpy.adminRegister).not.toHaveBeenCalled();
+  });
+
+  it('QA D1061 review: a refused submit leaves the blank phone blank (the guardian number goes into the request only)', () => {
+    fillValidForm();
+    Object.assign(component.form, {
+      phoneNumberPrimary: '',
+      emergencyContactPhone: '+22676334455',
+      city: '',
+    });
+    component.onSubmit();
+    expect(userSpy.adminRegister).not.toHaveBeenCalled();
+    expect(component.form.phoneNumberPrimary).toBe('');
   });
 
   it('QA D1064: the same name and date of birth is looked up even with no phone match', (done) => {

@@ -4974,7 +4974,7 @@
     "CHART_UNAVAILABLE_TITLE": "Ce dossier ne peut pas être ouvert ici",
     "PHONE_GUARDIAN_HINT": "Pour un enfant, vous pouvez laisser ce champ vide et saisir le téléphone du parent ou du tuteur dans Contact d'urgence.",
     "PHONE_FROM_GUARDIAN": "Laissé vide : le téléphone du parent ou du tuteur (Contact d'urgence) sera enregistré comme contact de ce patient.",
-    "SHARED_CONTACT_NOTE": "Ce téléphone ou cet e-mail est déjà le contact d'un autre patient (par exemple un parent). C'est autorisé : cet enregistrement crée un dossier distinct.",
+    "SHARED_CONTACT_NOTE": "Ce numéro de téléphone est déjà le contact d'un autre patient (par exemple un parent). C'est autorisé : cet enregistrement crée un dossier distinct.",
     "MATCHED_ON_IDENTITY": "mêmes nom et date de naissance"
   },
   "PLATFORM": {

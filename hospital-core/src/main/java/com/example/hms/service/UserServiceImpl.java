@@ -479,8 +479,11 @@ public class UserServiceImpl implements UserService {
         // ---- 6a) Generated credentials nobody can deliver ----
         // No e-mail on file and no real SMS transport: the staff UI shows them
         // once, from this response only. Never logged, never persisted in clear.
+        // QA D1061: a dependant with no login phone (registered under a
+        // guardian's number) has no channel either, whatever the SMS transport.
         if (generatedPassword != null && (email == null || email.isBlank())
-                && (smsService == null || !smsService.deliversRealSms())) {
+                && (user.getPhoneNumber() == null || user.getPhoneNumber().isBlank()
+                    || smsService == null || !smsService.deliversRealSms())) {
             result.setTemporaryUsername(user.getUsername());
             result.setTemporaryPassword(generatedPassword);
         }
@@ -916,7 +919,9 @@ public class UserServiceImpl implements UserService {
             return null;
         }
         Optional<User> holder = findByPhoneInAnyForm(phone);
-        if (holder.isEmpty() || isSamePerson(holder.get(), request)) {
+        // The registrar's own discarded attempt keeps the phone, so it is
+        // reclaimed (QA D40) even when its name was corrected since.
+        if (holder.isEmpty() || isDiscardedRegistration(holder.get()) || isSamePerson(holder.get(), request)) {
             return phone;
         }
         log.info("[REGISTER] the phone belongs to another person: the new patient account gets no login phone");

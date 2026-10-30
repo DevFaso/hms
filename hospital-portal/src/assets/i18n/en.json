@@ -4974,7 +4974,7 @@
     "CHART_UNAVAILABLE_TITLE": "This chart cannot be opened here",
     "PHONE_GUARDIAN_HINT": "For a child, you may leave this blank and give the parent's or guardian's phone under Emergency contact.",
     "PHONE_FROM_GUARDIAN": "Left blank: the parent's or guardian's phone (Emergency contact) will be recorded as this patient's contact.",
-    "SHARED_CONTACT_NOTE": "This phone or e-mail is already the contact of another patient (for example a parent). That is allowed: this registration creates a separate record.",
+    "SHARED_CONTACT_NOTE": "This phone number is already the contact of another patient (for example a parent). That is allowed: this registration creates a separate record.",
     "MATCHED_ON_IDENTITY": "same name and date of birth"
   },
   "PLATFORM": {

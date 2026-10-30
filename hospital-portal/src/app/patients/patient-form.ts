@@ -84,15 +84,27 @@ export class PatientFormComponent implements OnInit {
    * link or to dismiss.
    */
   get identityMatches(): RegistrationMatch[] {
-    return this.registrationMatches.filter((m) => m.sameIdentity !== false);
+    return this.registrationMatches.filter((m) => !this.isSharedContact(m));
   }
 
   /**
-   * QA D1061: another patient who only shares the typed phone or e-mail (a
-   * child registered under a parent's number): said once, no decision forced.
+   * QA D1061: another patient who only shares the typed PHONE and was born
+   * another year (a child registered under a parent's number): said once, no
+   * decision forced. An e-mail stays one person's (the server refuses a shared
+   * one), and a phone match born the same year may be this person with the
+   * name spelled differently, so both still ask to link or dismiss.
    */
   get sharedContactMatches(): RegistrationMatch[] {
-    return this.registrationMatches.filter((m) => m.sameIdentity === false);
+    return this.registrationMatches.filter((m) => this.isSharedContact(m));
+  }
+
+  private isSharedContact(m: RegistrationMatch): boolean {
+    const year = Number((this.form.dateOfBirth ?? '').slice(0, 4));
+    return (
+      m.sameIdentity === false &&
+      m.matchedOn === 'PHONE' &&
+      (!year || m.birthYear == null || m.birthYear !== year)
+    );
   }
 
   /** Staff confirmed "not the same person" — allows a fresh registration. */
@@ -403,14 +415,17 @@ export class PatientFormComponent implements OnInit {
   onSubmit(): void {
     // QA D1061: a child is registered under the parent's or guardian's number:
     // with the patient's own phone left blank, the guardian's is used.
-    if (!(this.form.phoneNumberPrimary ?? '').trim() && !this.phoneRequired) {
-      this.form.phoneNumberPrimary = (this.form.emergencyContactPhone ?? '').trim();
-    }
+    // The form itself is left as typed: the guardian's number goes into the
+    // request only (submitRegistration), so a refused submit shows no
+    // number the desk never typed in that field.
     // Phone-first: email is OPTIONAL — most patients only have a phone number.
     // QA D1072: every missing field is marked under itself, and the first one
     // is focused and scrolled to; the toast alone named none of them.
     const missing = blankFields(
-      this.form as unknown as Record<string, unknown>,
+      { ...this.form, phoneNumberPrimary: this.effectivePhone } as unknown as Record<
+        string,
+        unknown
+      >,
       PATIENT_FORM_REQUIRED.filter((f) => f !== 'hospitalId' || !this.hospitalLocked),
     );
     if (missing.length > 0 || !this.form.hospitalId) {
@@ -461,6 +476,7 @@ export class PatientFormComponent implements OnInit {
     let deliveryReport: NotificationDeliveryStatus[] = [];
     const patient: PatientCreateRequest = {
       ...this.form,
+      phoneNumberPrimary: this.effectivePhone,
       email,
       phoneVerificationId:
         this.phoneVerified && this.otpChallengeId ? this.otpChallengeId : undefined,
@@ -471,7 +487,7 @@ export class PatientFormComponent implements OnInit {
         email,
         firstName: this.form.firstName,
         lastName: this.form.lastName,
-        phoneNumber: this.form.phoneNumberPrimary,
+        phoneNumber: this.effectivePhone,
         roleNames: ['PATIENT'],
         hospitalId: this.form.hospitalId,
         forcePasswordChange: true,

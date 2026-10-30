@@ -2793,12 +2793,17 @@ class UserServiceImplTest {
             child.setLastName("Nikiéma");
             child.setDateOfBirth(java.time.LocalDate.of(2021, 8, 19));
             req.setPatient(child);
+            // Review round 1: even with a real SMS transport there is no channel to the child.
+            lenient().when(smsService.deliversRealSms()).thenReturn(true);
 
-            userService.createUserWithRolesAndHospital(req);
+            UserResponseDTO result = userService.createUserWithRolesAndHospital(req);
 
             User saved = savedUser();
             assertThat(saved.getId()).isNotEqualTo(parent.getId());
             assertThat(saved.getPhoneNumber()).isNull();
+            // The one-time credentials are handed to the desk, not lost.
+            assertThat(result.getTemporaryPassword()).isNotNull();
+            assertThat(result.getTemporaryUsername()).isEqualTo(saved.getUsername());
             verify(assignmentService, never()).isRoleAlreadyAssigned(eq(parent.getId()), any(), any());
         }
 
