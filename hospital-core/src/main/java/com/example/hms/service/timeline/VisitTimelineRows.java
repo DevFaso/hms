@@ -18,6 +18,16 @@ import com.example.hms.repository.GeneralReferralRepository;
 import com.example.hms.repository.ImagingOrderRepository;
 import com.example.hms.repository.LabOrderRepository;
 import com.example.hms.repository.PatientProblemRepository;
+import com.example.hms.repository.ConsultationRepository;
+import com.example.hms.repository.DischargeSummaryRepository;
+import com.example.hms.repository.PatientUploadedDocumentRepository;
+import com.example.hms.repository.TreatmentPlanRepository;
+import com.example.hms.model.Consultation;
+import com.example.hms.model.PatientUploadedDocument;
+import com.example.hms.model.discharge.DischargeSummary;
+import com.example.hms.model.treatment.TreatmentPlan;
+import com.example.hms.enums.PatientDocumentType;
+import org.springframework.data.domain.PageRequest;
 import com.example.hms.utility.MessageUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -53,6 +63,13 @@ public class VisitTimelineRows {
     public static final String CATEGORY_IMAGING = "IMAGING";
     public static final String CATEGORY_NOTE = "NOTE";
     public static final String CATEGORY_REFERRAL = "REFERRAL";
+    /** QA D959 (round 17): the treatment plan, the consultation request, the discharge summary, the certificate. */
+    public static final String CATEGORY_TREATMENT_PLAN = "TREATMENT_PLAN";
+    public static final String CATEGORY_CONSULTATION = "CONSULTATION";
+    public static final String CATEGORY_DISCHARGE_SUMMARY = "DISCHARGE_SUMMARY";
+    public static final String CATEGORY_DOCUMENT = "DOCUMENT";
+    /** The most rows of one of these kinds the chronology reads at once. */
+    private static final int DOCUMENT_ROWS_MAX = 200;
 
     private static final String META_STATUS = "status";
     private static final String META_CLINICIAN = "clinician";
@@ -68,6 +85,10 @@ public class VisitTimelineRows {
     private final GeneralReferralRepository referralRepository;
     private final EncounterRepository encounterRepository;
     private final EncounterNoteRepository encounterNoteRepository;
+    private final TreatmentPlanRepository treatmentPlanRepository;
+    private final ConsultationRepository consultationRepository;
+    private final DischargeSummaryRepository dischargeSummaryRepository;
+    private final PatientUploadedDocumentRepository documentRepository;
     /** The same classification the other chronology rows use (E8 #51): explicit tag, codes, department. */
     private final com.example.hms.service.recordaccess.SensitivityClassifier sensitivityClassifier;
 
@@ -119,7 +140,93 @@ public class VisitTimelineRows {
                 .filter(referral -> referral.getStatus() != ReferralStatus.DRAFT)
                 .forEach(referral -> rows.add(referralRow(referral, actingHospitalId)));
         }
+        // QA D959 (round 17): the treatment plan, the consultation request, the
+        // discharge summary and the medical certificate were still missing.
+        if (wanted(categoryFilters, CATEGORY_TREATMENT_PLAN)) {
+            org.springframework.data.domain.Page<TreatmentPlan> plans = treatmentPlanRepository
+                .findAllByPatientIdAndHospitalId(patientId, actingHospitalId, PageRequest.of(0, DOCUMENT_ROWS_MAX));
+            if (plans != null) {
+                plans.getContent().forEach(plan -> rows.add(treatmentPlanRow(plan, actingHospitalId)));
+            }
+        }
+        if (wanted(categoryFilters, CATEGORY_CONSULTATION)) {
+            consultationRepository.findByPatient_IdAndHospital_IdInOrderByRequestedAtDesc(patientId,
+                    Set.of(actingHospitalId))
+                .forEach(consultation -> rows.add(consultationRow(consultation, actingHospitalId)));
+        }
+        if (wanted(categoryFilters, CATEGORY_DISCHARGE_SUMMARY)) {
+            dischargeSummaryRepository.findByPatient_IdAndHospital_IdOrderByDischargeDateDesc(patientId, actingHospitalId)
+                .forEach(summary -> rows.add(dischargeSummaryRow(summary, actingHospitalId)));
+        }
+        if (wanted(categoryFilters, CATEGORY_DOCUMENT)) {
+            // A document this hospital issued (a certificate); never the patient's own uploads.
+            org.springframework.data.domain.Page<PatientUploadedDocument> issued = documentRepository.findForStaffByType(
+                patientId, actingHospitalId, PatientDocumentType.MEDICAL_CERTIFICATE, PageRequest.of(0, DOCUMENT_ROWS_MAX));
+            if (issued != null) {
+                issued.getContent().stream()
+                    .filter(document -> document.getIssuingHospital() != null)
+                    .forEach(document -> rows.add(certificateRow(document, actingHospitalId)));
+            }
+        }
         return rows;
+    }
+
+    private PatientTimelineEntryDTO treatmentPlanRow(TreatmentPlan plan, UUID acting) {
+        Map<String, Object> metadata = new HashMap<>();
+        putIfNotNull(metadata, META_STATUS, plan.getStatus() != null ? plan.getStatus().name() : null);
+        putIfNotNull(metadata, META_CLINICIAN, staffName(plan.getAuthor()));
+        String what = truncate(plan.getProblemStatement());
+        String summary = MessageUtil.resolveOrRaw("timeline.treatmentPlan.summary", what != null ? what : "—");
+        return row(plan.getId(), CATEGORY_TREATMENT_PLAN,
+            coalesce(plan.getSignOffAt(), plan.getCreatedAt()),
+            TimelineStatus.withStatus(summary, plan.getStatus()),
+            sensitive(plan.getEncounter()),
+            provenance(metadata, plan.getHospital(), acting));
+    }
+
+    private PatientTimelineEntryDTO consultationRow(Consultation consultation, UUID acting) {
+        Map<String, Object> metadata = new HashMap<>();
+        putIfNotNull(metadata, META_STATUS, consultation.getStatus() != null ? consultation.getStatus().name() : null);
+        putIfNotNull(metadata, META_CLINICIAN, staffName(consultation.getRequestingProvider()));
+        String what = firstNonBlank(consultation.getSpecialtyRequested(),
+            consultation.getConsultationType() != null ? label(consultation.getConsultationType()) : null);
+        String summary = MessageUtil.resolveOrRaw("timeline.consultation.summary", what != null ? what : "—");
+        String reason = truncate(firstNonBlank(consultation.getReasonForConsult(), consultation.getClinicalQuestion()));
+        if (reason != null) {
+            summary = summary + " — " + reason;
+        }
+        return row(consultation.getId(), CATEGORY_CONSULTATION,
+            consultation.getRequestedAt(),
+            TimelineStatus.withStatus(summary, consultation.getStatus()),
+            sensitivityClassifier.effectiveCategory(consultation) != null,
+            provenance(metadata, consultation.getHospital(), acting));
+    }
+
+    private PatientTimelineEntryDTO dischargeSummaryRow(DischargeSummary discharge, UUID acting) {
+        Map<String, Object> metadata = new HashMap<>();
+        boolean finalized = Boolean.TRUE.equals(discharge.getIsFinalized());
+        metadata.put("finalized", finalized);
+        putIfNotNull(metadata, META_CLINICIAN, staffName(discharge.getDischargingProvider()));
+        String diagnosis = truncate(discharge.getDischargeDiagnosis());
+        String summary = MessageUtil.resolveOrRaw(finalized ? "timeline.dischargeSummary.finalized"
+            : "timeline.dischargeSummary.draft", diagnosis != null ? diagnosis : "—");
+        return row(discharge.getId(), CATEGORY_DISCHARGE_SUMMARY,
+            coalesce(discharge.getFinalizedAt(), coalesce(discharge.getDischargeTime(), discharge.getCreatedAt())),
+            summary,
+            sensitive(discharge.getEncounter()),
+            provenance(metadata, discharge.getHospital(), acting));
+    }
+
+    private PatientTimelineEntryDTO certificateRow(PatientUploadedDocument document, UUID acting) {
+        Map<String, Object> metadata = new HashMap<>();
+        putIfNotNull(metadata, "documentType", document.getDocumentType() != null ? document.getDocumentType().name() : null);
+        String name = firstNonBlank(document.getDisplayName());
+        String summary = MessageUtil.resolveOrRaw("timeline.document.certificate", name != null ? name : "—");
+        return row(document.getId(), CATEGORY_DOCUMENT,
+            document.getCreatedAt(),
+            summary,
+            false,
+            provenance(metadata, document.getIssuingHospital(), acting));
     }
 
     private PatientTimelineEntryDTO diagnosisRow(PatientProblem problem, UUID acting) {

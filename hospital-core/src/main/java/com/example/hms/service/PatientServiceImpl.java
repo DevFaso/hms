@@ -2134,7 +2134,11 @@ public class PatientServiceImpl implements PatientService {
                     .entryId(encounter.getId() != null ? encounter.getId().toString() : null)
                     .category(CATEGORY_ENCOUNTER)
                     .occurredAt(encounter.getEncounterDate())
-                    .summary(formatEncounterSummary(encounter))
+                    // QA D1027: a visit that never happened says so.
+                    .summary(com.example.hms.enums.EncounterStatus.ENDED_UNSEEN.contains(encounter.getStatus())
+                        ? com.example.hms.service.timeline.TimelineStatus.withStatus(
+                            formatEncounterSummary(encounter), encounter.getStatus())
+                        : formatEncounterSummary(encounter))
                     .sensitive(isSensitiveEncounter(encounter))
                     .metadata(stampProvenance(metadata, encounter.getHospital(), actingHospitalId))
                     .build();
@@ -2169,7 +2173,9 @@ public class PatientServiceImpl implements PatientService {
                     .entryId(prescription.getId() != null ? prescription.getId().toString() : null)
                     .category(CATEGORY_PRESCRIPTION)
                     .occurredAt(coalesce(prescription.getUpdatedAt(), prescription.getCreatedAt()))
-                    .summary(formatPrescriptionSummary(prescription))
+                    // QA D1027: a cancelled order (morphine included) never reads as an active one.
+                    .summary(com.example.hms.service.timeline.TimelineStatus.withStatus(
+                        formatPrescriptionSummary(prescription), prescription.getStatus()))
                     .sensitive(isSensitiveMedication(prescription))
                     .metadata(stampProvenance(metadata, prescription.getHospital(), actingHospitalId))
                     .build();
@@ -2316,7 +2322,9 @@ public class PatientServiceImpl implements PatientService {
                     .entryId(order.getId() != null ? order.getId().toString() : null)
                     .category(CATEGORY_IMAGING)
                     .occurredAt(order.getOrderedDate())
-                    .summary(formatImagingOrderSummary(order))
+                    // QA D1027 class: a cancelled ultrasound order reads as cancelled.
+                    .summary(com.example.hms.service.timeline.TimelineStatus.withStatus(
+                        formatImagingOrderSummary(order), order.getStatus()))
                     .sensitive(isSensitiveUltrasoundOrder(order))
                     .metadata(stampProvenance(metadata, order.getHospital(), hospitalId))
                     .build();
