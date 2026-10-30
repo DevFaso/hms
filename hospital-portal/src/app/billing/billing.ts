@@ -1,5 +1,12 @@
 import { textMatches } from '../shared/person-search';
-import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -33,8 +40,12 @@ import { DialogA11yDirective } from '../shared/a11y/dialog-a11y.directive';
 import { saveResponse } from '../shared/download-file';
 import { cfaAmountMessageKey, cfaAmountProblem } from '../shared/cfa-amount';
 import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
+import { refuseFields } from '../shared/forms/invalid-fields';
 
 type BillingTab = 'all' | 'outstanding' | 'paid' | 'overdue';
+
+/** The cancellation reason's field (QA D1069), marked when it is refused (QA D1072). */
+const CANCEL_REASON_ID = 'bill-cancel-reason';
 
 @Component({
   selector: 'app-billing',
@@ -60,6 +71,7 @@ export class BillingComponent implements OnInit {
   private readonly permissions = inject(PermissionService);
   private readonly roleContext = inject(RoleContextService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   // Permission-gated action flags
   /** QA D1059: the cashier's daily cash closing, opened from the page header. */
@@ -433,7 +445,11 @@ export class BillingComponent implements OnInit {
     if (this.form.status !== 'CANCELLED') {
       this.form.cancelReason = undefined;
     } else if (this.cancellingIssued() && !this.form.cancelReason?.trim()) {
-      this.toast.error(this.translate.instant('BILLING.CANCEL_REASON_REQUIRED'));
+      // QA D1072 (round-18 merge): the missing reason is marked under its field
+      // and focused, not only named in a toast.
+      const message = this.translate.instant('BILLING.CANCEL_REASON_REQUIRED');
+      refuseFields(this.host.nativeElement, [CANCEL_REASON_ID], [CANCEL_REASON_ID], message);
+      this.toast.error(message);
       return;
     }
     this.saving.set(true);

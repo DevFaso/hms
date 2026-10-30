@@ -234,7 +234,13 @@ test('QA D1016 guard: the scan sees the shapes the defect had', () => {
 test('QA D1016 round 18: a trend history row printing resultValue is a lab value, whatever the list is called', () => {
   const badgeElsewhere = `<p>{{ r.resultValue }} <app-lab-correction-badge [corrected]="r.corrected" /></p>`;
   const trend = `@for (pt of cmp.trendHistory; track pt.labResultId) { <td>{{ pt.resultValue | labValue }}</td> }`;
-  assert.deepEqual(correctionShape(badgeElsewhere + trend), { showsValue: true, marksCorrection: false });
-  const fixed = trend.replace('</td>', '<app-lab-correction-badge [corrected]="pt.corrected" /></td>');
+  assert.deepEqual(correctionShape(badgeElsewhere + trend), {
+    showsValue: true,
+    marksCorrection: false,
+  });
+  const fixed = trend.replace(
+    '</td>',
+    '<app-lab-correction-badge [corrected]="pt.corrected" /></td>',
+  );
   assert.equal(correctionShape(badgeElsewhere + fixed).marksCorrection, true);
 });

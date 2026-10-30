@@ -788,6 +788,19 @@ describe('BillingComponent', () => {
       );
     });
 
+    it('marks and describes the missing reason under its field (QA D1072)', () => {
+      component.openEdit(mockInvoice({ status: 'SENT' }));
+      component.form.status = 'CANCELLED';
+      fixture.detectChanges();
+      component.submitForm();
+      fixture.detectChanges();
+      const field: HTMLElement = fixture.nativeElement.querySelector('#bill-cancel-reason');
+      expect(field.getAttribute('aria-invalid')).toBe('true');
+      const message = fixture.nativeElement.querySelector('#bill-cancel-reason-invalid-msg');
+      expect(message?.textContent).toBe('BILLING.CANCEL_REASON_REQUIRED');
+      expect(field.getAttribute('aria-describedby')).toContain('bill-cancel-reason-invalid-msg');
+    });
+
     it('a waiver-settled invoice is cancelled with a reason too', () => {
       component.openEdit(
         mockInvoice({ status: 'PAID', amountPaid: 0, totalAmount: 0, balanceDue: 0 }),
