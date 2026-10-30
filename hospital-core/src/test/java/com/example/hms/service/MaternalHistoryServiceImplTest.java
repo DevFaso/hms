@@ -366,8 +366,8 @@ class MaternalHistoryServiceImplTest {
         MaternalHistoryResponseDTO dto = new MaternalHistoryResponseDTO();
         when(maternalHistoryRepository.findCurrentByPatientId(patientId)).thenReturn(Optional.of(maternalHistory));
         when(maternalHistoryMapper.toResponseDTO(maternalHistory)).thenReturn(dto);
-        when(deliveryRecordRepository.findFirstByPatient_IdAndBirthDateTimeGreaterThanEqualOrderByBirthDateTimeDesc(
-            patientId, maternalHistory.getLastMenstrualPeriod().atStartOfDay())).thenReturn(Optional.of(delivery));
+        when(deliveryRecordRepository.findFirstByPatient_IdAndHospital_IdAndBirthDateTimeGreaterThanEqualOrderByBirthDateTimeDesc(
+            patientId, hospitalId, maternalHistory.getLastMenstrualPeriod().atStartOfDay())).thenReturn(Optional.of(delivery));
 
         assertThat(maternalHistoryService.getCurrentMaternalHistoryByPatientId(patientId, username).getDeliveredAt())
             .isEqualTo(birth);
@@ -394,8 +394,8 @@ class MaternalHistoryServiceImplTest {
 
         maternalHistoryService.getCurrentMaternalHistoryByPatientId(patientId, username);
 
-        org.mockito.Mockito.verify(deliveryRecordRepository).findFirstByPatient_IdAndBirthDateTimeGreaterThanEqualOrderByBirthDateTimeDesc(
-            patientId, due.minusDays(280).atStartOfDay());
+        org.mockito.Mockito.verify(deliveryRecordRepository).findFirstByPatient_IdAndHospital_IdAndBirthDateTimeGreaterThanEqualOrderByBirthDateTimeDesc(
+            patientId, hospitalId, due.minusDays(280).atStartOfDay());
     }
 
     @Test

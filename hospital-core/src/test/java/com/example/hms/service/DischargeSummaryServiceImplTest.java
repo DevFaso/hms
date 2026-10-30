@@ -190,6 +190,37 @@ class DischargeSummaryServiceImplTest {
         verify(dischargeSummaryRepository, never()).save(any());
     }
 
+    /** Review round 1: a physician with two staff records at the hospital is still the visit's physician. */
+    @Test void d1070_theSamePhysicianUnderAnotherStaffRecordSignsHerVisit() {
+        encounter.setStatus(com.example.hms.enums.EncounterStatus.IN_PROGRESS);
+        Staff sameDoctorOtherDept = new Staff();
+        sameDoctorOtherDept.setId(UUID.randomUUID());
+        sameDoctorOtherDept.setUser(staff.getUser());
+        encounter.setStaff(sameDoctorOtherDept);
+        createPathStubs();
+        when(dischargeSummaryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(dischargeSummaryMapper.toResponseDTO(any())).thenReturn(responseDTO);
+
+        assertThat(service.createDischargeSummary(buildRequest(), Locale.ENGLISH)).isSameAs(responseDTO);
+    }
+
+    /** Review round 1: the emergency department hands over at shift change; the receiving doctor discharges. */
+    @Test void d1070_anEmergencyVisitIsDischargedByTheReceivingDoctor() {
+        encounter.setStatus(com.example.hms.enums.EncounterStatus.IN_PROGRESS);
+        encounter.setEncounterType(com.example.hms.enums.EncounterType.EMERGENCY);
+        Staff offShift = new Staff();
+        offShift.setId(UUID.randomUUID());
+        com.example.hms.model.User offShiftUser = new com.example.hms.model.User();
+        offShiftUser.setId(UUID.randomUUID());
+        offShift.setUser(offShiftUser);
+        encounter.setStaff(offShift);
+        createPathStubs();
+        when(dischargeSummaryRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(dischargeSummaryMapper.toResponseDTO(any())).thenReturn(responseDTO);
+
+        assertThat(service.createDischargeSummary(buildRequest(), Locale.ENGLISH)).isSameAs(responseDTO);
+    }
+
     /** QA D930 stays true: a walk-in opened by a nurse is summed up by the doctor who saw the patient. */
     @Test void d1070_aVisitOpenedByANurseIsSummedUpByTheDoctor() {
         encounter.setStatus(com.example.hms.enums.EncounterStatus.IN_PROGRESS);

@@ -121,6 +121,10 @@ public class ChartReviewServiceImpl implements ChartReviewService {
         List<NoteEntryDTO> notes = new ArrayList<>(loadNotes(encounters));
         notes.addAll(loadNursingNotes(patient.getId(), hospitalId, readable, effectiveLimit, reach, unlocked));
         notes.sort(Comparator.comparing(NoteEntryDTO::getDocumentedAt, Comparator.nullsLast(Comparator.reverseOrder())));
+        // The section stays within the review's limit once the two kinds are merged.
+        if (notes.size() > effectiveLimit) {
+            notes = new ArrayList<>(notes.subList(0, effectiveLimit));
+        }
         List<ResultEntryDTO> results = loadResults(patient.getId(), hospitalId, readable, effectiveLimit, reach,
             performedHereReach);
         List<MedicationEntryDTO> medications = loadMedications(patient.getId(), hospitalId, readable, effectiveLimit, reach);

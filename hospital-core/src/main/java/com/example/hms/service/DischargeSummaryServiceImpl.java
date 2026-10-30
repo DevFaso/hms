@@ -845,7 +845,9 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
 
     /** Stays and operations are discharged by the ward's physicians, not only the one the encounter names. */
     private static final java.util.Set<com.example.hms.enums.EncounterType> TEAM_DISCHARGED = java.util.EnumSet.of(
-        com.example.hms.enums.EncounterType.INPATIENT, com.example.hms.enums.EncounterType.SURGERY);
+        com.example.hms.enums.EncounterType.INPATIENT, com.example.hms.enums.EncounterType.SURGERY,
+        // The emergency department hands patients over at shift change: the receiving doctor discharges.
+        com.example.hms.enums.EncounterType.EMERGENCY);
 
     /**
      * QA D1070: an outpatient visit's after-visit summary is signed by the
@@ -859,7 +861,11 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         }
         Staff treating = encounter.getStaff();
         if (treating == null || treating.getId() == null || dischargingProvider == null
-                || treating.getId().equals(dischargingProvider.getId())) {
+                || treating.getId().equals(dischargingProvider.getId())
+                // One physician may hold two staff records at a hospital (two departments): the same person.
+                || (treating.getUser() != null && dischargingProvider.getUser() != null
+                    && treating.getUser().getId() != null
+                    && treating.getUser().getId().equals(dischargingProvider.getUser().getId()))) {
             return;
         }
         // A visit opened by a nurse (the walk-in desk) names the nurse: the
@@ -871,7 +877,11 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         }
     }
 
-    /** QA D1070: what the patient portal publishes - a completed visit's summary, or a finalised one with no visit. */
+    /**
+     * QA D1070: what the patient portal publishes - a completed visit's summary, or a finalised one with no visit.
+     * A completed visit's summary is shown even when not finalised: the checkout backfill writes those rows
+     * unfinalised (backfillMissingDischargeSummaries), and they are the after-visit summary patients read.
+     */
     static boolean publishedToPatient(DischargeSummary summary) {
         Encounter visit = summary.getEncounter();
         if (visit == null) {

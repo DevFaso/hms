@@ -433,9 +433,13 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
             return dto;
         }
         LocalDateTime since = pregnancyStart(history);
-        if (since != null) {
+        // Read at the history's own hospital: a delivery another hospital
+        // recorded is that hospital's record, not disclosed through this one.
+        UUID hospitalId = history.getHospital() != null ? history.getHospital().getId() : null;
+        if (since != null && hospitalId != null) {
             deliveryRecordRepository
-                .findFirstByPatient_IdAndBirthDateTimeGreaterThanEqualOrderByBirthDateTimeDesc(history.getPatient().getId(), since)
+                .findFirstByPatient_IdAndHospital_IdAndBirthDateTimeGreaterThanEqualOrderByBirthDateTimeDesc(
+                    history.getPatient().getId(), hospitalId, since)
                 .ifPresent(delivery -> dto.setDeliveredAt(delivery.getBirthDateTime()));
         }
         return dto;
