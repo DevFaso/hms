@@ -28,6 +28,14 @@ import static org.assertj.core.api.Assertions.assertThat;
  * catalogue ({@code controlledResolver.isControlled(}, a catalogue item's
  * {@code isControlled()}), or is listed below with why the tick itself is
  * meant there. A new read keyed on the tick alone fails.
+ *
+ * <p>Round-18 merge: the prescriber's two-factor proof is demanded on the same
+ * answer. Round 18 built the step (signing re-authenticates every controlled
+ * order), but {@code ControlledSubstanceGuard} still keyed its status and
+ * dispense clauses on the tick, so catalogue-controlled morphine signed
+ * without the proof was dispensed as an ordinary drug. Every check of the
+ * proof ({@code getTwoFactorVerifiedAt() == null}) must now ask the resolver
+ * in the same statement.
  */
 class ControlledFlagGuardTest {
 
@@ -37,9 +45,6 @@ class ControlledFlagGuardTest {
     private static final Map<String, GuardAllowlist.Allowance> ALLOWED = GuardAllowlist.allow(
         "service/pharmacy/PrescriptionControlledResolver.java", 1,
         "the resolver itself: the tick, then the catalogue",
-        "service/pharmacy/ControlledSubstanceGuard.java", 2,
-        "the prescriber two-factor clause: no two-factor step exists, so keying it on the catalogue would make "
-            + "every morphine order unsignable (D922 note in the class; standing debt 'Prescriber two-factor step')",
         "service/PrescriptionServiceImpl.java", 2,
         "the tick's own edit rules: a prescriber cannot withdraw a tick (#463) and an edit compares the flags",
         "mapper/PrescriptionMapper.java", 1,
@@ -80,4 +85,38 @@ class ControlledFlagGuardTest {
             .isEmpty();
         assertThat(GuardAllowlist.stale(counts, ALLOWED)).as("the site was fixed: delete its line").isEmpty();
     }
+
+    /**
+     * Round-18 merge (QA D922 at the dispense): a demand for the prescriber's
+     * two-factor proof keyed on anything but the catalogue-or-tick resolver. No
+     * allowlist: the step exists for every controlled order since round 18.
+     */
+    @Test
+    void everyTwoFactorSafeguardAsksTheCatalogue() throws IOException {
+        List<String> sites = new ArrayList<>();
+        int checks = 0;
+        try (Stream<Path> files = Files.walk(MAIN)) {
+            for (Path file : files.filter(f -> f.toString().endsWith(".java")).toList()) {
+                String rel = MAIN.relativize(file).toString().replace('\\', '/');
+                String source = SourceScan.stripComments(Files.readString(file, StandardCharsets.UTF_8));
+                int[] starts = SourceScan.statementStarts(source);
+                for (int at = source.indexOf(PROOF_MISSING); at >= 0; at = source.indexOf(PROOF_MISSING, at + 1)) {
+                    checks++;
+                    int start = SourceScan.statementStartBefore(starts, at);
+                    String condition = source.substring(start, at);
+                    if (!condition.contains("controlledResolver.isControlled(")) {
+                        sites.add(rel + " @" + at);
+                    }
+                }
+            }
+        }
+        assertThat(checks).as("the dispense and status safeguards check the proof").isGreaterThanOrEqualTo(2);
+        assertThat(sites)
+            .as("a two-factor safeguard keyed on the prescriber's tick alone (QA D922: a drug the catalogue marks "
+                + "controlled is always treated as controlled, at the dispense too): ask "
+                + "PrescriptionControlledResolver.isControlled" + SourceScan.MANDATE)
+            .isEmpty();
+    }
+
+    private static final String PROOF_MISSING = "getTwoFactorVerifiedAt() == null";
 }

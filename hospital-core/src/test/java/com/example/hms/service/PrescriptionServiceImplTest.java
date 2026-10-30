@@ -98,7 +98,8 @@ class PrescriptionServiceImplTest {
     // would let the service pass while the rule refuses.
     @org.mockito.Spy
     private com.example.hms.service.pharmacy.ControlledSubstanceGuard controlledSubstanceGuard =
-        new com.example.hms.service.pharmacy.ControlledSubstanceGuard();
+        new com.example.hms.service.pharmacy.ControlledSubstanceGuard(
+            new com.example.hms.service.pharmacy.PrescriptionControlledResolver(org.mockito.Mockito.mock(com.example.hms.repository.MedicationCatalogItemRepository.class)));
 
     // Also real, same reasoning. updatePrescription calls invalidateOnChange,
     // which is a pure mutation of the passed Prescription — mocking it would

@@ -103,10 +103,26 @@ class DispenseReadyForCollectionTest {
     @Mock private PreparedFillVoider preparedFillVoider;
     @Mock private jakarta.persistence.EntityManager entityManager;
 
+    /** The catalogue the guard's resolver reads (QA D922: the catalogue decides "controlled" too). */
+    private final MedicationCatalogItemRepository guardCatalog =
+        org.mockito.Mockito.mock(MedicationCatalogItemRepository.class);
+
     @org.mockito.Spy
-    private ControlledSubstanceGuard controlledSubstanceGuard = new ControlledSubstanceGuard();
+    private ControlledSubstanceGuard controlledSubstanceGuard =
+        new ControlledSubstanceGuard(new PrescriptionControlledResolver(guardCatalog));
 
     static final LocalDate TODAY = LocalDate.of(2026, 10, 7);
+
+    /** QA D922: the order's catalogue item is controlled at its hospital; the prescriber's tick is unset. */
+    void catalogueControlledWithoutTick() {
+        UUID morphineItem = UUID.randomUUID();
+        com.example.hms.model.medication.MedicationCatalogItem morphine =
+            new com.example.hms.model.medication.MedicationCatalogItem();
+        morphine.setControlled(true);
+        when(guardCatalog.findByIdAndHospital_Id(morphineItem, hospitalId)).thenReturn(Optional.of(morphine));
+        prescription.setMedicationCatalogItemId(morphineItem);
+        prescription.setControlledSubstance(false);
+    }
     static final java.time.Clock FIXED_CLOCK = java.time.Clock.fixed(
             TODAY.atTime(9, 0).toInstant(java.time.ZoneOffset.UTC), java.time.ZoneOffset.UTC);
 
@@ -411,6 +427,26 @@ class DispenseReadyForCollectionTest {
         @DisplayName("AC-2: a controlled substance without 2FA is refused like a dispense")
         void controlledSubstanceIsRefused() {
             prescription.setControlledSubstance(true);
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+
+            DispenseRequestDTO req = request();
+            assertThatThrownBy(() -> service.markReadyForCollection(req))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting("messageKey").isEqualTo("prescription.safeguard.CONTROLLED_SUBSTANCE.dispense");
+            assertNothingPrepared();
+        }
+
+        /**
+         * Round-18 merge (QA D922 at the dispense): the catalogue marks the drug
+         * controlled, the prescriber left the tick unset, and the order carries
+         * no two-factor proof. It is refused like a ticked one; before, it was
+         * prepared as an ordinary drug.
+         */
+        @Test
+        @DisplayName("QA D922: a catalogue-controlled order without 2FA is refused whatever the tick")
+        void catalogueControlledSubstanceIsRefused() {
+            catalogueControlledWithoutTick();
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
             when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
 
@@ -804,6 +840,18 @@ class DispenseReadyForCollectionTest {
         @DisplayName("AC-6: the controlled-substance guard is re-run: 400")
         void controlledAtHandOver() {
             prescription.setControlledSubstance(true);
+            stubLocked(preparedFill());
+
+            assertThatThrownBy(() -> service.handOver(dispenseId, null))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting("messageKey").isEqualTo("prescription.safeguard.CONTROLLED_SUBSTANCE.dispense");
+            verify(dispenseRepository, never()).completePreparedFill(any(), any(), any(), any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("QA D922: a catalogue-controlled order without 2FA is not handed over whatever the tick")
+        void catalogueControlledAtHandOver() {
+            catalogueControlledWithoutTick();
             stubLocked(preparedFill());
 
             assertThatThrownBy(() -> service.handOver(dispenseId, null))

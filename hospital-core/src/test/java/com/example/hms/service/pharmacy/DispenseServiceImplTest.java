@@ -92,8 +92,13 @@ class DispenseServiceImplTest {
     @Mock private com.example.hms.repository.pharmacy.PrescriptionRoutingDecisionRepository routingDecisionRepository;
 
     // Real, not mocked: the guard is a pure rule with its own test.
+    /** The catalogue the guard's resolver reads (QA D922: the catalogue decides "controlled" too). */
+    private final MedicationCatalogItemRepository guardCatalog =
+        org.mockito.Mockito.mock(MedicationCatalogItemRepository.class);
+
     @org.mockito.Spy
-    private ControlledSubstanceGuard controlledSubstanceGuard = new ControlledSubstanceGuard();
+    private ControlledSubstanceGuard controlledSubstanceGuard =
+        new ControlledSubstanceGuard(new PrescriptionControlledResolver(guardCatalog));
 
     /**
      * Also real, for the same reason — a pure rule with its own test

@@ -3,6 +3,7 @@ package com.example.hms.service.pharmacy;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.model.Prescription;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 /**
@@ -18,13 +19,20 @@ import org.springframework.stereotype.Component;
  * <p>The rule itself: a prescription the prescriber flagged as a controlled
  * substance must have completed two-factor verification, and one flagged as
  * requiring a co-signature must actually carry one, before it may reach any
- * state that authorises somebody to act on it. Both gates apply ONLY when the
- * prescriber set the flag — nothing changes for ordinary prescriptions. (QA
- * D922, 2026-10-28: "controlled" itself is the catalogue's answer everywhere
- * else; see the note in {@link #requireSafeguardsFor}.)
+ * state that authorises somebody to act on it - signing, every later status,
+ * and the dispense. "Controlled" is {@link PrescriptionControlledResolver}'s
+ * answer (the prescriber's tick OR the catalogue item's flag, QA D922, user
+ * decision 2026-10-28: "a drug the catalogue marks as controlled is always
+ * treated as controlled, whatever the prescriber ticked"); the co-signature
+ * gate applies when the order requires one. Nothing changes for ordinary
+ * prescriptions.
  */
 @Component
+@RequiredArgsConstructor
 public class ControlledSubstanceGuard {
+
+    /** The one answer to "is this order controlled": the tick or the catalogue. */
+    private final PrescriptionControlledResolver controlledResolver;
 
     /**
      * Refuse to move {@code prescription} to {@code targetStatus} with a
@@ -44,21 +52,16 @@ public class ControlledSubstanceGuard {
 
         // QA D922: user decision 2026-10-28 SUPERSEDES D654 ("the guard keys
         // only on the prescriber's tick"). A drug the catalogue marks
-        // controlled is controlled whatever the prescriber ticked, and every
-        // controlled safeguard the product has keys on
-        // PrescriptionControlledResolver: the pharmacist's verification before
-        // a dispense or a dose, the stock witness, the controlled register,
-        // the prescribed-quantity rule, the refill refusal and the controlled
-        // mark on the MAR, chart, history and copies (ControlledFlagGuardTest).
-        // This two-factor clause keys on the tick. Round 18 built the step it
-        // demands: signPrescription re-authenticates the prescriber for EVERY
-        // controlled order (tick or catalogue, PrescriptionControlledResolver)
-        // and writes twoFactorVerifiedAt before this check, so a signed
-        // controlled order always carries the proof. The clause stays on the
-        // tick here because the dispense side (requireDispensable) must not
-        // strand catalogue-controlled orders signed before round 18; the
-        // signing choke point is where the catalogue rule is enforced.
-        if (prescription.isControlledSubstance() && prescription.getTwoFactorVerifiedAt() == null) {
+        // controlled is controlled whatever the prescriber ticked. Round 18
+        // built the step this clause demands: signPrescription re-authenticates
+        // the prescriber for EVERY controlled order (tick or catalogue) and
+        // writes twoFactorVerifiedAt before this check. The round-18 merge
+        // keys this clause, and the dispense one below, on the same resolver
+        // (ControlledFlagGuardTest), so a catalogue-controlled order signed
+        // before round 18 without the proof is refused at the dispense, as a
+        // ticked order without the proof always was, instead of being handed
+        // over as an ordinary drug.
+        if (controlledResolver.isControlled(prescription) && prescription.getTwoFactorVerifiedAt() == null) {
             // QA D1000: a key resolved in the caller's language; the code
             // (CONTROLLED_SUBSTANCE) stays in the key for log searches.
             throw new BusinessException("prescription.safeguard.CONTROLLED_SUBSTANCE.status",
@@ -91,10 +94,12 @@ public class ControlledSubstanceGuard {
      * signed prescription can be cancelled, medication handed to a patient
      * cannot be recalled — and status can be reached by paths that never pass
      * the prescribe-side gate, so the dispense path must check independently
-     * rather than trust the status.
+     * rather than trust the status. "Controlled" is the catalogue-or-tick
+     * answer here too (QA D922, round-18 merge): before, a catalogue-controlled
+     * order with the tick unset was dispensed with no prescriber proof.
      */
     public void requireDispensable(Prescription prescription) {
-        if (prescription.isControlledSubstance() && prescription.getTwoFactorVerifiedAt() == null) {
+        if (controlledResolver.isControlled(prescription) && prescription.getTwoFactorVerifiedAt() == null) {
             throw new BusinessException("prescription.safeguard.CONTROLLED_SUBSTANCE.dispense");
         }
 
