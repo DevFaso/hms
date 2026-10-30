@@ -5893,3 +5893,10 @@ ships*, not for building — and check the shipped surface before trusting a
   ROLE_SUPER_ADMIN for those. A complete fix is backend-side: return the held
   roles in the session bootstrap, and a required-role hint in 403 bodies.
 - **QA D601 follow-up (r9-lab-integrity):** lab test definitions and orders with results can no longer be hard-deleted, but dev already holds rows orphaned before the fix (definition 570c6b4d gone, its orders and released results left behind). They need a one-off data repair (restore the definition row as RETIRED from a backup, or re-point the orders) that the user must run; it is data, not code, so it is not in the PR. A DB-level FK `lab_orders.lab_test_definition_id` (the entity declares `fk_laborder_testdef`, the dev schema evidently lacks it) should be added in a migration once the orphans are repaired, since the migration would fail on them today.
+- **Round 18 branch 2 (fix/r18-clinical-record, #983) residuals (efficiency, not logic).**
+  `ProcedureOrderServiceImpl#authorIsPhysician` asks `RoleValidator.draftsForPhysicianSignature`
+  for every row of a procedure list (up to two role queries per row): resolve it once per distinct
+  (author, hospital) in the list methods. `MaternalHistoryServiceImpl#toDto` looks up the delivery
+  (D1067 `deliveredAt`) once per row on the paged hospital lists: batch it per page.
+  `PediatricDoseRule` (fix/r18-clinical-reference) still formats card decimals with `Locale.ROOT`
+  (allowlisted in `CdsCardLocaleFormatGuardTest`).
