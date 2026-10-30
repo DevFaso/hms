@@ -11234,7 +11234,7 @@
     "DEPARTMENT": "Department",
     "FROM": "From",
     "GENERATE": "Generate",
-    "GENERATED": "{{count}} slots generated",
+    "GENERATED": "{{created}} slots generated from {{templates}} templates ({{skipped}} already existed)",
     "GENERATE_ERROR": "Could not generate slots.",
     "GENERATE_HINT": "Slots are created from the active templates for the chosen range. Existing slots are left untouched.",
     "GENERATE_TITLE": "Generate slots",

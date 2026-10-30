@@ -42,7 +42,7 @@
         [canEdit]="canEditPhoto()"
       />
       <div class="header-info">
-        <h1>{{ p.firstName }} {{ p.lastName }}</h1>
+        <h1>{{ fullName(p) }}</h1>
         <div class="header-meta">
           @if (p.mrn) {
             <span class="meta-tag mrn"
@@ -413,7 +413,7 @@
           <div class="info-rows">
             <div class="info-row">
               <span class="label">{{ 'PATIENTS.FULL_NAME' | translate }}</span
-              ><span class="value">{{ p.firstName }} {{ p.lastName }}</span>
+              ><span class="value">{{ fullName(p) }}</span>
             </div>
             <div class="info-row">
               <span class="label">{{ 'PATIENTS.EMAIL' | translate }}</span
@@ -422,6 +422,12 @@
             <div class="info-row">
               <span class="label">{{ 'PATIENTS.PHONE' | translate }}</span
               ><span class="value">{{ p.phoneNumberPrimary ?? '—' }}</span>
+            </div>
+            <!-- QA D1036 / D926: the second number and the postal code were
+                 stored at registration and shown nowhere. -->
+            <div class="info-row">
+              <span class="label">{{ 'PATIENTS.PHONE_SECONDARY' | translate }}</span
+              ><span class="value">{{ p.phoneNumberSecondary || '—' }}</span>
             </div>
             <div class="info-row">
               <span class="label">{{ 'PATIENTS.DOB' | translate }}</span
@@ -442,6 +448,10 @@
             <div class="info-row">
               <span class="label">{{ 'PATIENTS.STATE' | translate }}</span
               ><span class="value">{{ p.state ?? '—' }}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">{{ 'PATIENTS.ZIP_CODE' | translate }}</span
+              ><span class="value">{{ p.zipCode || '—' }}</span>
             </div>
             <div class="info-row">
               <span class="label">{{ 'PATIENTS.ADDRESS' | translate }}</span

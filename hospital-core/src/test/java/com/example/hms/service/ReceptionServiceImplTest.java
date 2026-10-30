@@ -348,6 +348,41 @@ class ReceptionServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D1021: an open walk-in and an open booked visit from before midnight stay on today's queue")
+        void openVisitsFromAnEarlierDayStayOnTodaysQueue_D1021() {
+            Encounter lateWalkIn = makeWalkInEncounter(EncounterStatus.ARRIVED);
+            when(lateWalkIn.getEncounterDate()).thenReturn(today.minusDays(1).atTime(23, 57));
+            Appointment lateAppt = makeAppointment(AppointmentStatus.SCHEDULED);
+            Encounter lateCheckIn = makeEncounter(EncounterStatus.ARRIVED, lateAppt);
+            when(appointmentRepo.findByHospital_IdAndAppointmentDate(hospitalId, today)).thenReturn(List.of());
+            when(encounterRepo.findOpenStartedBefore(eq(hospitalId), eq(today.atStartOfDay()), any()))
+                    .thenReturn(List.of(lateWalkIn, lateCheckIn));
+            when(encounterRepo.findByAppointmentIdIn(any())).thenReturn(List.of(lateCheckIn));
+            when(encounterRepo.findWalkInsForHospitalAndPeriod(eq(hospitalId), any(), any()))
+                    .thenReturn(Collections.emptyList());
+            stubEmptyInsuranceAndInvoices();
+
+            List<ReceptionQueueItemDTO> queue = service.getQueue(today, hospitalId, "ALL", null, null);
+
+            assertThat(queue).extracting(ReceptionQueueItemDTO::getEncounterId)
+                    .containsExactlyInAnyOrder(lateWalkIn.getId(), lateCheckIn.getId());
+            assertThat(service.getDashboardSummary(today, hospitalId).getArrivedCount()).isEqualTo(2);
+        }
+
+        @Test
+        @DisplayName("QA D1021: a past day shows only what happened on it (no carry-over query)")
+        void aPastDayCarriesNothingOver_D1021() {
+            LocalDate yesterday = today.minusDays(1);
+            when(appointmentRepo.findByHospital_IdAndAppointmentDate(hospitalId, yesterday)).thenReturn(List.of());
+            when(encounterRepo.findWalkInsForHospitalAndPeriod(eq(hospitalId), any(), any()))
+                    .thenReturn(Collections.emptyList());
+
+            assertThat(service.getQueue(yesterday, hospitalId, "ALL", null, null)).isEmpty();
+            org.mockito.Mockito.verify(encounterRepo, org.mockito.Mockito.never())
+                    .findOpenStartedBefore(any(), any(), any());
+        }
+
+        @Test
         @DisplayName("returns queue items for all appointments")
         void returnsQueueItems() {
             Appointment appt = makeAppointment(AppointmentStatus.SCHEDULED);

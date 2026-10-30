@@ -1,3 +1,5 @@
+import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
+import { textMatches } from '../shared/person-search';
 import {
   Component,
   computed,
@@ -44,6 +46,7 @@ const CONSULTANT_TAB_ROLES = ['ROLE_DOCTOR', 'ROLE_SUPER_ADMIN'];
   selector: 'app-consultations',
   standalone: true,
   imports: [
+    PersonNamePipe,
     ModalDialogDirective,
     PatientSublinePipe,
     ServerTimePipe,
@@ -464,9 +467,9 @@ export class ConsultationsComponent implements OnInit {
     if (term) {
       list = list.filter(
         (c) =>
-          (c.patientName ?? '').toLowerCase().includes(term) ||
+          textMatches(c.patientName, term) ||
           (c.specialtyRequested ?? '').toLowerCase().includes(term) ||
-          (c.consultantName ?? '').toLowerCase().includes(term),
+          textMatches(c.consultantName, term),
       );
     }
     this.filtered.set(list);

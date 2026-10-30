@@ -211,10 +211,33 @@ public class IkoddiGatewayImpl implements IkoddiGateway {
     }
 
     private IllegalStateException requestFailure(String operation, RestClientResponseException ex) {
-        LOG.warn("IKODDI {} failed for organizationId={} with status {}", operation, organizationId,
-            ex.getStatusCode().value());
+        // QA D1034: the gateway's own answer says why it refused (an
+        // unregistered sender name, an exhausted balance, a malformed number),
+        // and the status alone did not. Logged without PHI: digit runs (phone
+        // numbers) and e-mail addresses are masked, and the text is capped.
+        LOG.warn("IKODDI {} failed for organizationId={} sender={} with status {}: {}", operation, organizationId,
+            smsSender, ex.getStatusCode().value(), safeGatewayBody(ex.getResponseBodyAsString()));
         return new IllegalStateException(
             "IKODDI " + operation + " request failed with status " + ex.getStatusCode().value(), ex);
+    }
+
+    private static final java.util.regex.Pattern DIGIT_RUN = java.util.regex.Pattern.compile("\\+?\\d[\\d .-]{4,}\\d");
+    private static final java.util.regex.Pattern EMAIL = java.util.regex.Pattern.compile("[\\w.+-]+@[\\w-]+(\\.[\\w-]+)+");
+    private static final java.util.regex.Pattern SPACES = java.util.regex.Pattern.compile("\\s+");
+    private static final int MAX_LOGGED_BODY = 300;
+
+    /**
+     * QA D1034: a gateway response body fit for the log: phone numbers (any
+     * run of six digits or more, with separators) and e-mail addresses masked,
+     * whitespace collapsed, capped at {@value #MAX_LOGGED_BODY} characters.
+     */
+    static String safeGatewayBody(String body) {
+        if (body == null || body.isBlank()) {
+            return "<empty>";
+        }
+        String noEmail = EMAIL.matcher(body).replaceAll("[email]");
+        String masked = SPACES.matcher(DIGIT_RUN.matcher(noEmail).replaceAll("[number]")).replaceAll(" ").trim();
+        return masked.length() > MAX_LOGGED_BODY ? masked.substring(0, MAX_LOGGED_BODY) + "…" : masked;
     }
 
     /**

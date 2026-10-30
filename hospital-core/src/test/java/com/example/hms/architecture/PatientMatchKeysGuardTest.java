@@ -103,6 +103,62 @@ class PatientMatchKeysGuardTest {
         }
     }
 
+    /**
+     * QA D1019 (class guard): a free-text patient search sends a typed phone
+     * number to the phone match. {@code GET /patients?search=65112233} used to
+     * be matched against names only, so no picker found a patient by phone.
+     * Every method that builds a {@code PatientSearchCriteria} with a name
+     * must also decide, with {@code PatientMatchKeys.looksLikePhone}, whether
+     * the text is a number.
+     */
+    @Test
+    void everyFreeTextPatientSearchSendsANumberToThePhoneMatch() throws IOException {
+        int builders = 0;
+        for (Path f : javaFiles()) {
+            String src = com.example.hms.testsupport.SourceScan.stripComments(read(f));
+            for (int at = src.indexOf("PatientSearchCriteria.builder()"); at >= 0;
+                    at = src.indexOf("PatientSearchCriteria.builder()", at + 1)) {
+                String body = AppointmentSlotRulesGuardTest.enclosingMethod(src, at);
+                if (!body.contains(".name(")) {
+                    continue;
+                }
+                builders++;
+                assertThat(body).as(MAIN.relativize(f) + ": a name search that never asks whether the text is a "
+                        + "phone number (QA D1019)").contains("looksLikePhone(");
+            }
+        }
+        assertThat(builders).as("free-text patient searches found").isGreaterThanOrEqualTo(2);
+    }
+
+    /**
+     * QA D1019 (class guard): a phone number is checked for length as the
+     * desk writes it, with spaces and the country code ("+226 65 11 22 33",
+     * 16 characters), before it is normalised. A request DTO that caps a phone
+     * field below 20 characters refuses a normal written number.
+     */
+    @Test
+    void noRequestCapsAWrittenPhoneNumberBelowItsWrittenLength() throws IOException {
+        java.util.regex.Pattern capped = java.util.regex.Pattern.compile(
+            "@(?:jakarta\\.validation\\.constraints\\.)?Size\\(\\s*max\\s*=\\s*(\\d+)[^)]*\\)\\s*"
+                + "(?:@[\\w.]+(?:\\([^)]*\\))?\\s*)*private\\s+String\\s+(\\w*[Pp]hone\\w*)\\s*;");
+        List<String> tooShort = new java.util.ArrayList<>();
+        int phoneFields = 0;
+        for (Path f : javaFiles()) {
+            if (!f.toString().replace('\\', '/').contains("/payload/")) {
+                continue;
+            }
+            java.util.regex.Matcher m = capped.matcher(read(f));
+            while (m.find()) {
+                phoneFields++;
+                if (Integer.parseInt(m.group(1)) < 20) {
+                    tooShort.add(MAIN.relativize(f) + "#" + m.group(2) + " max=" + m.group(1));
+                }
+            }
+        }
+        assertThat(phoneFields).as("capped phone fields found").isGreaterThanOrEqualTo(5);
+        assertThat(tooShort).as("a phone field capped below a written number's length (QA D1019)").isEmpty();
+    }
+
     @Test
     void exactPhoneFindersAreUsedOnlyWhereExactIsMeant() throws IOException {
         for (Path f : javaFiles()) {

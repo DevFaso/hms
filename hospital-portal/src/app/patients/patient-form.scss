@@ -290,3 +290,11 @@
   color: var(--danger);
   font-size: 0.875rem;
 }
+
+/* QA D1037: the server's reason under the field it refused. */
+.field-error {
+  display: block;
+  margin-top: 4px;
+  color: var(--danger, #b42318);
+  font-size: 0.8rem;
+}

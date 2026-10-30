@@ -559,7 +559,7 @@
                       <li class="picker-option" (mousedown)="selectPatient(p)">
                         <span class="opt-avatar">{{ patientInitials(p) }}</span>
                         <span class="opt-info">
-                          <span class="opt-name">{{ p.firstName }} {{ p.lastName }}</span>
+                          <span class="opt-name">{{ p | personName }}</span>
                           @if (p | patientSubline; as sub) {
                             <span class="opt-meta">{{ sub }}</span>
                           }

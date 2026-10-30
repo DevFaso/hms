@@ -56,7 +56,7 @@
               (click)="selectPatient(p)"
               (keydown.enter)="selectPatient(p)"
             >
-              <span class="result-name">{{ p.firstName }} {{ p.lastName }}</span>
+              <span class="result-name">{{ p | personName }}</span>
               @if (p | patientSubline; as sub) {
                 <span class="result-meta">{{ sub }}</span>
               }

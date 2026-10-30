@@ -21,7 +21,12 @@
           name="firstName"
           required
           (ngModelChange)="onNameOrDobChange()"
+          [attr.aria-invalid]="serverFieldErrors['firstName'] ? true : null"
+          [attr.aria-describedby]="serverFieldErrors['firstName'] ? 'firstName-server-error' : null"
         />
+        @if (serverFieldErrors['firstName']; as reason) {
+          <small class="field-error" id="firstName-server-error" role="alert">{{ reason }}</small>
+        }
       </div>
       <div class="form-group">
         <label for="middleName">{{ 'PATIENTS.MIDDLE_NAME' | translate }}</label>
@@ -36,7 +41,12 @@
           name="lastName"
           required
           (ngModelChange)="onNameOrDobChange()"
+          [attr.aria-invalid]="serverFieldErrors['lastName'] ? true : null"
+          [attr.aria-describedby]="serverFieldErrors['lastName'] ? 'lastName-server-error' : null"
         />
+        @if (serverFieldErrors['lastName']; as reason) {
+          <small class="field-error" id="lastName-server-error" role="alert">{{ reason }}</small>
+        }
       </div>
       <div class="form-group">
         <label for="email">
@@ -49,7 +59,12 @@
           [(ngModel)]="form.email"
           name="email"
           (ngModelChange)="onIdentifierChange()"
+          [attr.aria-invalid]="serverFieldErrors['email'] ? true : null"
+          [attr.aria-describedby]="serverFieldErrors['email'] ? 'email-server-error' : null"
         />
+        @if (serverFieldErrors['email']; as reason) {
+          <small class="field-error" id="email-server-error" role="alert">{{ reason }}</small>
+        }
         <small class="field-hint">{{ 'PATIENTS.EMAIL_OPTIONAL_HINT' | translate }}</small>
       </div>
       <div class="form-group">
@@ -61,7 +76,16 @@
           name="phoneNumberPrimary"
           required
           (ngModelChange)="onIdentifierChange()"
+          [attr.aria-invalid]="serverFieldErrors['phoneNumberPrimary'] ? true : null"
+          [attr.aria-describedby]="
+            serverFieldErrors['phoneNumberPrimary'] ? 'phoneNumberPrimary-server-error' : null
+          "
         />
+        @if (serverFieldErrors['phoneNumberPrimary']; as reason) {
+          <small class="field-error" id="phoneNumberPrimary-server-error" role="alert">{{
+            reason
+          }}</small>
+        }
         <!-- SMS OTP phone verification (hidden when the SMS provider is off) -->
         @if (otpAvailable) {
           <div class="otp-verify-row">
@@ -127,7 +151,16 @@
           type="tel"
           [(ngModel)]="form.phoneNumberSecondary"
           name="phoneNumberSecondary"
+          [attr.aria-invalid]="serverFieldErrors['phoneNumberSecondary'] ? true : null"
+          [attr.aria-describedby]="
+            serverFieldErrors['phoneNumberSecondary'] ? 'phoneNumberSecondary-server-error' : null
+          "
         />
+        @if (serverFieldErrors['phoneNumberSecondary']; as reason) {
+          <small class="field-error" id="phoneNumberSecondary-server-error" role="alert">{{
+            reason
+          }}</small>
+        }
       </div>
       <div class="form-group">
         <label for="dob">{{ 'PATIENTS.DOB' | translate }} *</label>
@@ -138,7 +171,14 @@
           name="dateOfBirth"
           required
           (ngModelChange)="onNameOrDobChange()"
+          [attr.aria-invalid]="serverFieldErrors['dateOfBirth'] ? true : null"
+          [attr.aria-describedby]="
+            serverFieldErrors['dateOfBirth'] ? 'dateOfBirth-server-error' : null
+          "
         />
+        @if (serverFieldErrors['dateOfBirth']; as reason) {
+          <small class="field-error" id="dateOfBirth-server-error" role="alert">{{ reason }}</small>
+        }
       </div>
       <div class="form-group">
         <label for="gender">{{ 'PATIENTS.GENDER' | translate }} *</label>

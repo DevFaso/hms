@@ -1,3 +1,5 @@
+import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
+import { textMatches } from '../shared/person-search';
 import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -28,6 +30,7 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
   selector: 'app-treatment-plans',
   standalone: true,
   imports: [
+    PersonNamePipe,
     ModalDialogDirective,
     PatientSublinePipe,
     ServerTimePipe,
@@ -316,9 +319,9 @@ export class TreatmentPlansComponent implements OnInit {
     if (term) {
       list = list.filter(
         (p) =>
-          (p.patientName ?? '').toLowerCase().includes(term) ||
+          textMatches(p.patientName, term) ||
           (p.problemStatement ?? '').toLowerCase().includes(term) ||
-          (p.authorStaffName ?? '').toLowerCase().includes(term),
+          textMatches(p.authorStaffName, term),
       );
     }
     this.filtered.set(list);

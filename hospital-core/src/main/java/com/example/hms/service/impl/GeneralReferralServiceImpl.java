@@ -273,6 +273,19 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
             return null;
         }
 
+        // QA D1013 (sibling): the same overlap rule as every booking path. A
+        // provider already booked at that time keeps the referral scheduled
+        // without an appointment, like the other "cannot produce one" cases,
+        // instead of double-booking them.
+        java.time.LocalDateTime end = appointmentTime.plusMinutes(REFERRAL_APPOINTMENT_MINUTES);
+        if (com.example.hms.service.AppointmentSlotRules.overlapsHeldSlot(
+                appointmentRepository.findByStaff_IdAndAppointmentDate(provider.getId(), appointmentTime.toLocalDate()),
+                null, appointmentTime, end)) {
+            log.info("Referral {} scheduled without an appointment: the provider is already booked then",
+                referral.getId());
+            return null;
+        }
+
         try {
             com.example.hms.model.Appointment appointment = com.example.hms.model.Appointment.builder()
                 .patient(referral.getPatient())

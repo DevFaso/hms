@@ -507,4 +507,74 @@ class SlotInventoryServiceImplTest {
         assertThat(service.releaseForAppointment(UUID.randomUUID())).isZero();
         verify(slotRepository, never()).save(any());
     }
+
+    /* ── QA D1013: a clinician booked by another path is never sold twice ── */
+
+    /** An appointment the desk booked for the slot's clinician over the slot's time. */
+    private Appointment deskBookingOver(AppointmentSlot slot, AppointmentStatus status) {
+        Appointment desk = Appointment.builder()
+            .staff(staff)
+            .appointmentDate(slot.getSlotDate())
+            .startTime(slot.getStartAt().toLocalTime())
+            .endTime(slot.getEndAt().toLocalTime())
+            .status(status)
+            .build();
+        desk.setId(UUID.randomUUID());
+        when(appointmentRepository.findByStaff_IdAndAppointmentDate(staff.getId(), slot.getSlotDate()))
+            .thenReturn(List.of(desk));
+        return desk;
+    }
+
+    @Test
+    void aSlotTheClinicianIsAlreadyBookedOverCannotBeHeld_D1013() {
+        AppointmentSlot slot = openSlot();
+        deskBookingOver(slot, AppointmentStatus.SCHEDULED);
+
+        assertThatThrownBy(() -> service.hold(slot.getId(), 10))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "appointment.staff.unavailable");
+        assertThat(slot.getStatus()).isEqualTo(SlotStatus.OPEN);
+    }
+
+    @Test
+    void aSlotTheClinicianIsAlreadyBookedOverCannotBeBooked_D1013() {
+        AppointmentSlot slot = bookableSlot();
+        deskBookingOver(slot, AppointmentStatus.SCHEDULED);
+
+        assertThatThrownBy(() -> service.book(slot.getId(), patientId, null))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "appointment.staff.unavailable");
+        org.mockito.Mockito.verify(appointmentRepository, org.mockito.Mockito.never()).save(any(Appointment.class));
+    }
+
+    @Test
+    void aCancelledDeskBookingFreesTheSlotAgain_D1013() {
+        AppointmentSlot slot = bookableSlot();
+        deskBookingOver(slot, AppointmentStatus.CANCELLED);
+
+        service.book(slot.getId(), patientId, null);
+
+        assertThat(slot.getStatus()).isEqualTo(SlotStatus.BOOKED);
+    }
+
+    @Test
+    void theSearchDoesNotOfferASlotTheClinicianIsBookedOver_D1013() {
+        AppointmentSlot taken = openSlot();
+        AppointmentSlot free = AppointmentSlot.builder()
+            .hospital(hospital).staff(staff)
+            .slotDate(taken.getSlotDate())
+            .startAt(taken.getEndAt()).endAt(taken.getEndAt().plusMinutes(30))
+            .status(SlotStatus.OPEN).build();
+        free.setId(UUID.randomUUID());
+        deskBookingOver(taken, AppointmentStatus.SCHEDULED);
+        when(slotRepository.searchOpen(any(), any(), any(), any(), any(), any(), any(), any(), any()))
+            .thenReturn(List.of(taken, free));
+
+        List<AppointmentSlotDTO> offered = service.searchOpen(null, null, null, null, null, 50);
+
+        assertThat(offered).extracting(AppointmentSlotDTO::getId).containsExactly(free.getId());
+        // One read for the clinician's day, not one per slot.
+        org.mockito.Mockito.verify(appointmentRepository, org.mockito.Mockito.times(1))
+            .findByStaff_IdAndAppointmentDate(staff.getId(), taken.getSlotDate());
+    }
 }

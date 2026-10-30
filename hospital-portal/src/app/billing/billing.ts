@@ -1,3 +1,4 @@
+import { textMatches } from '../shared/person-search';
 import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -568,7 +569,7 @@ ${this.translate.instant('BILLING.SUPPLEMENTARY_CONFIRM')}`)
       list = list.filter(
         (inv) =>
           (inv.invoiceNumber ?? '').toLowerCase().includes(term) ||
-          (inv.patientFullName ?? '').toLowerCase().includes(term) ||
+          textMatches(inv.patientFullName, term) ||
           (inv.status ?? '').toLowerCase().includes(term),
       );
     }

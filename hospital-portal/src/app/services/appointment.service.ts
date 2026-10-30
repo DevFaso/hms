@@ -37,6 +37,8 @@ export interface AppointmentResponse {
   hospitalName: string;
   hospitalAddress: string | null;
   departmentId?: string | null;
+  /** The department's name (the API has always sent it). */
+  departmentName?: string | null;
   createdById: string;
   createdByName: string;
   reason: string;

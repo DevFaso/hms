@@ -545,7 +545,7 @@ public class AppointmentServiceImpl implements AppointmentService {
                 Locale mailLocale = patientLocaleResolver.resolve(patient, EmailService.DEFAULT_RECIPIENT_LOCALE);
                 emailService.sendAppointmentConfirmationEmail(
                     patient.getEmail(),
-                    patient.getFirstName() + " " + patient.getLastName(),
+                    patient.getFullName(),
                     hospital.getName(),
                     staff.getUser().getFirstName() + " " + staff.getUser().getLastName(),
                     saved.getAppointmentDate().toString(),
@@ -573,7 +573,7 @@ public class AppointmentServiceImpl implements AppointmentService {
             .startTime(saved.getStartTime())
             .endTime(saved.getEndTime())
             .patientId(p.getId())
-            .patientName(p.getFirstName() + " " + p.getLastName())
+            .patientName(p.getFullName())
             .patientEmail(p.getEmail())
             .patientPhone(p.getPhoneNumberPrimary())
             .staffId(s.getId())
@@ -734,6 +734,31 @@ public class AppointmentServiceImpl implements AppointmentService {
     }
 
 
+    /**
+     * QA D1018: the department an edit files the visit under. A department the
+     * request names wins (same lookup as a booking, scoped to the hospital);
+     * a visit moved to another hospital is filed as a new booking would be; a
+     * visit moved to another clinician who has a department follows them;
+     * otherwise it stays where it was.
+     */
+    private Department resolveDepartmentForEdit(AppointmentRequestDTO request, Hospital hospital, Staff staff,
+                                                Appointment existing) {
+        boolean named = request.getDepartmentId() != null || request.getDepartmentCode() != null
+            || request.getDepartmentName() != null;
+        UUID oldStaffId = existing.getStaff() != null ? existing.getStaff().getId() : null;
+        UUID oldHospitalId = existing.getHospital() != null ? existing.getHospital().getId() : null;
+        boolean staffChanged = oldStaffId != null && !oldStaffId.equals(staff.getId());
+        boolean hospitalChanged = oldHospitalId != null && !oldHospitalId.equals(hospital.getId());
+        // A visit moved to another hospital never keeps the old hospital's department.
+        if (named || hospitalChanged) {
+            return resolveDepartment(request, hospital, staff);
+        }
+        if (staffChanged && staff.getDepartment() != null) {
+            return staff.getDepartment();
+        }
+        return existing.getDepartment();
+    }
+
     /* =======================
        UPDATE
        ======================= */
@@ -815,6 +840,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         LocalDate   oldDate  = existing.getAppointmentDate();
         LocalTime   oldStart = existing.getStartTime();
         LocalTime   oldEnd   = existing.getEndTime();
+        UUID        oldStaffId = existing.getStaff() != null ? existing.getStaff().getId() : null;
 
         // The update path used to write request.getStatus() straight onto the
         // entity with no transition check at all, while
@@ -836,7 +862,13 @@ public class AppointmentServiceImpl implements AppointmentService {
             requireStartedFor(request.getStatus(), requestedStart, hospital);
         }
 
+        // QA D1018 / D923: the department is part of the edit. The PUT used to
+        // answer 200 and keep the old one, so a visit moved to a paediatrician
+        // stayed filed under general medicine. Resolved after the status
+        // checks, so their refusals come first as before.
+        Department department = resolveDepartmentForEdit(request, hospital, staff, existing);
         appointmentMapper.updateAppointmentFromDto(request, existing, patient, staff, hospital);
+        existing.setDepartment(department);
         existing.setAssignment(assignment);
         existing.setUpdatedAt(LocalDateTime.now());
 
@@ -848,6 +880,17 @@ public class AppointmentServiceImpl implements AppointmentService {
         entityManager.refresh(saved);
         if (statusMoved) {
             afterEditMovedStatus(saved);
+        }
+
+        // QA D1013 (sibling): a visit moved off the inventory slot it was
+        // booked from, or to another clinician, frees that slot; it used to
+        // stay BOOKED for an appointment that was no longer there.
+        boolean leftItsSlot = !saved.getAppointmentDate().equals(oldDate)
+            || !saved.getStartTime().equals(oldStart)
+            || !saved.getEndTime().equals(oldEnd)
+            || !Objects.equals(oldStaffId, staff.getId());
+        if (leftItsSlot) {
+            slotInventoryService.releaseForAppointment(saved.getId());
         }
 
         // Outbound webhooks (Tier 2 item 45): a moved visit is a reschedule
@@ -968,7 +1011,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         Patient patient = appointment.getPatient();
         Staff staff = appointment.getStaff();
         Hospital hospital = appointment.getHospital();
-        String patientName = patient.getFirstName() + " " + patient.getLastName();
+        String patientName = patient.getFullName();
         String staffName = staff.getUser().getFirstName() + " " + staff.getUser().getLastName();
         String appointmentDate = appointment.getAppointmentDate().toString();
         String appointmentTime = appointment.getStartTime().toString() + " - " + appointment.getEndTime().toString();

@@ -1,3 +1,5 @@
+import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
+import { textMatches } from '../shared/person-search';
 import {
   Component,
   computed,
@@ -50,6 +52,7 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
   selector: 'app-encounters',
   standalone: true,
   imports: [
+    PersonNamePipe,
     ModalDialogDirective,
     PatientSublinePipe,
     ServerTimePipe,
@@ -653,8 +656,8 @@ export class EncountersComponent implements OnInit {
     if (term) {
       list = list.filter(
         (e) =>
-          (e.patientName ?? '').toLowerCase().includes(term) ||
-          (e.staffName ?? '').toLowerCase().includes(term) ||
+          textMatches(e.patientName, term) ||
+          textMatches(e.staffName, term) ||
           (e.departmentName ?? '').toLowerCase().includes(term) ||
           (e.notes ?? '').toLowerCase().includes(term),
       );

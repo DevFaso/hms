@@ -164,7 +164,7 @@
             <ul class="autocomplete-list">
               @for (p of patientResults(); track p.id) {
                 <li (click)="selectPatient(p)" (keydown.enter)="selectPatient(p)" tabindex="0">
-                  {{ p.firstName }} {{ p.lastName }}
+                  {{ p | personName }}
                   @if (p | patientSubline; as sub) {
                     <span class="mrn-hint">· {{ sub }}</span>
                   }

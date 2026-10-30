@@ -159,6 +159,7 @@
     "src/app/patients/patient-chart/patient-chart.component.html::s.sectionType",
     "src/app/patients/patient-chart/patient-chart.component.html::tl.accessReason",
     "src/app/patients/patient-chart/patient-chart.component.html::u.updateReason",
+    "src/app/patients/patient-demographics-edit/patient-demographics-edit.component.html::<option>b",
     "src/app/patients/patient-detail.html::appt.reason",
     "src/app/patients/patient-detail.html::p.bloodType",
     "src/app/patients/patient-detail.html::p.chartRestrictionReason",

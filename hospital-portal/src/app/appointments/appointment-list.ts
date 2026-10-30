@@ -1,3 +1,4 @@
+import { textMatches } from '../shared/person-search';
 import {
   Component,
   inject,
@@ -153,10 +154,10 @@ export class AppointmentListComponent implements OnInit, OnDestroy {
     if (term) {
       result = result.filter(
         (a) =>
-          a.patientName.toLowerCase().includes(term) ||
-          a.staffName.toLowerCase().includes(term) ||
-          a.reason.toLowerCase().includes(term) ||
-          (a.hospitalName?.toLowerCase().includes(term) ?? false),
+          textMatches(a.patientName, term) ||
+          textMatches(a.staffName, term) ||
+          textMatches(a.reason, term) ||
+          textMatches(a.hospitalName, term),
       );
     }
 

@@ -22,6 +22,7 @@ import { RegistrationService } from '../services/registration.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { switchMap, catchError, debounceTime, distinctUntilChanged, map, Subject } from 'rxjs';
 import { of } from 'rxjs';
+import { labelledRefusalReason } from '../shared/refusal-reason';
 
 @Component({
   selector: 'app-patient-form',
@@ -32,6 +33,9 @@ import { of } from 'rxjs';
   styleUrl: './patient-form.scss',
 })
 export class PatientFormComponent implements OnInit {
+  /** QA D1037: the server's reason per refused field, shown under the field. */
+  serverFieldErrors: Record<string, string> = {};
+
   private readonly patientService = inject(PatientService);
   private readonly userService = inject(UserService);
   private readonly auth = inject(AuthService);
@@ -357,6 +361,7 @@ export class PatientFormComponent implements OnInit {
 
   private submitRegistration(): void {
     this.saving = true;
+    this.serverFieldErrors = {};
 
     // QA D626: ONE call registers the account and the patient record, in one
     // server transaction, so a failure leaves neither behind (no client-side
@@ -413,8 +418,12 @@ export class PatientFormComponent implements OnInit {
           this.router.navigate(['/patients', patient.id]);
         },
         error: (err) => {
+          // QA D1037 / D984: the refused field is named, in the toast and
+          // under the field; the generic "invalid parameters" said neither.
+          this.serverFieldErrors = fieldErrorsOf(err);
           this.toast.error(
-            err?.error?.message ?? this.translate.instant('PATIENTS.REGISTER_FAILED'),
+            labelledRefusalReason(err, this.translate, PATIENT_FORM_FIELD_LABELS) ??
+              this.translate.instant('PATIENTS.REGISTER_FAILED'),
           );
           this.saving = false;
           // QA D725: the server refuses an e-mail/phone that already belongs to
@@ -453,4 +462,26 @@ export class PatientFormComponent implements OnInit {
     const suffix = 1000 + (array[0] % 9000);
     return `${base}${suffix}`;
   }
+}
+
+/** QA D1037: the form's fields, as the server names them, to their label keys. */
+export const PATIENT_FORM_FIELD_LABELS: Readonly<Record<string, string>> = {
+  firstName: 'PATIENTS.FIRST_NAME',
+  lastName: 'PATIENTS.LAST_NAME',
+  email: 'PATIENTS.EMAIL',
+  phoneNumberPrimary: 'PATIENTS.PHONE',
+  phoneNumberSecondary: 'PATIENTS.PHONE_SECONDARY',
+  dateOfBirth: 'PATIENTS.DOB',
+};
+
+/** The per-field reasons of a validation refusal, or none. */
+export function fieldErrorsOf(err: unknown): Record<string, string> {
+  const body = (err as { error?: { fieldErrors?: unknown } } | null)?.error;
+  const raw = body?.fieldErrors;
+  if (!raw || typeof raw !== 'object') return {};
+  return Object.fromEntries(
+    Object.entries(raw as Record<string, unknown>).filter(
+      (e): e is [string, string] => typeof e[1] === 'string' && e[1].trim() !== '',
+    ),
+  );
 }

@@ -57,7 +57,10 @@ public class PatientRequestDTO {
     private String ethnicity;
 
     @NotBlank(message = "{patient.phoneNumberPrimary.required}")
-    @Size(max = 15, message = "{patient.phoneNumberPrimary.size}")
+    // QA D1019: the number as the desk writes it ("+226 65 11 22 33", 16
+    // characters) is stored in E.164 after this check; 15 refused a normal
+    // written form. 30 leaves room for separators, the column holds 100.
+    @Size(max = 30, message = "{patient.phoneNumberPrimary.size}")
     private String phoneNumberPrimary;
 
     private String phoneNumberSecondary;

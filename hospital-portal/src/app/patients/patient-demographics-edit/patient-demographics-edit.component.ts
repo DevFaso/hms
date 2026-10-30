@@ -63,12 +63,17 @@ export class PatientDemographicsEditComponent implements OnInit {
     city: '',
     state: '',
     country: '',
+    postalCode: '',
+    ethnicity: '',
+    bloodType: '',
     emergencyContactName: '',
     emergencyContactPhone: '',
     emergencyContactRelationship: '',
   };
 
   readonly genders = ['MALE', 'FEMALE', 'OTHER'];
+  /** QA D1036: the groups the server accepts. */
+  readonly bloodTypes = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
   /** The local calendar day (a birth date cannot be later). */
   readonly today = localDateString(new Date());
 
@@ -80,7 +85,8 @@ export class PatientDemographicsEditComponent implements OnInit {
 
   private original(key: keyof PatientDemographicsPatch): string {
     const p = this.patient as unknown as Record<string, unknown>;
-    const raw = p[key];
+    // QA D1036: the record calls the postal code `zipCode`.
+    const raw = key === 'postalCode' ? p['zipCode'] : p[key];
     // Older records keep the street in `address` only.
     if (key === 'addressLine1' && (raw === undefined || raw === null || raw === '')) {
       return typeof p['address'] === 'string' ? this.streetOf(p['address'] as string) : '';
@@ -128,6 +134,7 @@ export class PatientDemographicsEditComponent implements OnInit {
       'addressLine2',
       'city',
       'state',
+      'postalCode',
       'country',
     ];
     if (!this.patient.addressLine1 && addressKeys.some((k) => k in out)) {

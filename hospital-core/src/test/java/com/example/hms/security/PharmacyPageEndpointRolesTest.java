@@ -188,7 +188,7 @@ class PharmacyPageEndpointRolesTest {
         return out;
     }
 
-    private static List<Handler> handlers() throws ClassNotFoundException {
+    static List<Handler> handlers() throws ClassNotFoundException {
         ClassPathScanningCandidateComponentProvider scanner = new ClassPathScanningCandidateComponentProvider(false);
         scanner.addIncludeFilter(new AnnotationTypeFilter(RestController.class));
         List<Handler> out = new ArrayList<>();
@@ -217,7 +217,7 @@ class PharmacyPageEndpointRolesTest {
     }
 
     /** The handler with the most literal segments matching, like Spring's own pattern ranking. */
-    private static Handler resolve(Endpoint endpoint, List<Handler> handlers) {
+    static Handler resolve(Endpoint endpoint, List<Handler> handlers) {
         String[] wanted = segments(endpoint.path());
         Handler best = null;
         int bestScore = -1;
@@ -254,7 +254,7 @@ class PharmacyPageEndpointRolesTest {
     }
 
     /** The roles a handler admits; null when it admits every authenticated caller. */
-    private static Set<String> rolesOf(Method method) {
+    static Set<String> rolesOf(Method method) {
         PreAuthorize pre = AnnotatedElementUtils.findMergedAnnotation(method, PreAuthorize.class);
         if (pre == null) {
             pre = AnnotatedElementUtils.findMergedAnnotation(method.getDeclaringClass(), PreAuthorize.class);

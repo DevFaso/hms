@@ -480,6 +480,8 @@ public class PatientServiceImpl implements PatientService {
         }
         applyRequired(request.getGender(), patient::setGender, "patient.r16.genderRequired");
         applyNullable(request.getEthnicity(), patient::setEthnicity);
+        // QA D1036: the blood group is corrected here too (the entity upper-cases it).
+        applyNullable(request.getBloodType(), patient::setBloodType);
     }
 
     /** Phones (stored by the facility rule, QA D942) and the e-mail (unique to one record, D113). */

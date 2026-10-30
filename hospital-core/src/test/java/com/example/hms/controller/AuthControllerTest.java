@@ -1507,6 +1507,56 @@ class AuthControllerTest {
         verify(notifier, never()).resendPendingActivationCode(any(java.util.UUID.class), any());
     }
 
+    /**
+     * QA D1017: the anonymous resend answers the same status and body whether
+     * the contact is unknown, belongs to an active account or to one waiting
+     * for activation, for an e-mail and for a phone. An active e-mail used to
+     * answer "Account is already verified", an account-enumeration oracle.
+     */
+    @Test
+    void resendVerification_answersTheSameForUnknownActiveAndPendingContacts_D1017() throws Exception {
+        com.example.hms.service.EmailService email = mock(com.example.hms.service.EmailService.class);
+        com.example.hms.service.UserRoleHospitalAssignmentService notifier =
+                mock(com.example.hms.service.UserRoleHospitalAssignmentService.class);
+        when(authNotificationFacade.email()).thenReturn(email);
+        when(authNotificationFacade.assignments()).thenReturn(notifier);
+        com.example.hms.model.User active = com.example.hms.model.User.builder()
+                .username("live").email("live@example.test").phoneNumber("+22670000011").build();
+        org.springframework.test.util.ReflectionTestUtils.setField(active, "id", java.util.UUID.randomUUID());
+        active.setActive(true);
+        com.example.hms.model.User pending = com.example.hms.model.User.builder()
+                .username("wait").email("wait@example.test").phoneNumber("+22670000012").build();
+        org.springframework.test.util.ReflectionTestUtils.setField(pending, "id", java.util.UUID.randomUUID());
+        pending.setActive(false);
+        when(userRepository.findByEmail(any())).thenReturn(java.util.Optional.empty());
+        when(userRepository.findByEmail("live@example.test")).thenReturn(java.util.Optional.of(active));
+        when(userRepository.findByEmail("wait@example.test")).thenReturn(java.util.Optional.of(pending));
+        when(userRepository.findByPhoneNumber(any())).thenReturn(java.util.Optional.empty());
+        when(userRepository.findByPhoneNumber("+22670000011")).thenReturn(java.util.Optional.of(active));
+        when(userRepository.findByPhoneNumber("+22670000012")).thenReturn(java.util.Optional.of(pending));
+        when(assignmentRepository.findByUserId(any())).thenReturn(java.util.List.of());
+
+        for (String channel : java.util.List.of("email", "phone")) {
+            java.util.List<String> contacts = channel.equals("email")
+                    ? java.util.List.of("nobody@example.test", "live@example.test", "wait@example.test")
+                    : java.util.List.of("+22679999998", "+22670000011", "+22670000012");
+            java.util.Set<String> answers = new java.util.HashSet<>();
+            for (String contact : contacts) {
+                String body = mockMvc.perform(post("/auth/resend-verification")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"" + channel + "\":\"" + contact + "\"}"))
+                        .andExpect(status().isOk())
+                        .andReturn().getResponse().getContentAsString();
+                answers.add(body);
+            }
+            assertThat(answers).as("%s: one answer for unknown, active and pending (QA D1017)", channel).hasSize(1);
+            assertThat(answers.iterator().next()).doesNotContain("already verified");
+        }
+        // Only the account waiting for activation is sent anything.
+        verify(email, times(1)).sendActivationEmail(eq("wait@example.test"), any());
+        verify(email, never()).sendActivationEmail(eq("live@example.test"), any());
+    }
+
     @Test
     void resendVerification_withNeitherEmailNorPhone_isABadRequest_D418() throws Exception {
         mockMvc.perform(post("/auth/resend-verification"))

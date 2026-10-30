@@ -1,3 +1,4 @@
+import { textMatches } from '../shared/person-search';
 import {
   Component,
   inject,
@@ -252,7 +253,7 @@ export class ChatComponent implements OnInit, OnDestroy {
     if (!term) return all;
     return all.filter(
       (c) =>
-        c.conversationUserName.toLowerCase().includes(term) ||
+        textMatches(c.conversationUserName, term) ||
         c.lastMessageContent?.toLowerCase().includes(term),
     );
   });

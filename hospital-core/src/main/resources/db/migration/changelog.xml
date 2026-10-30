@@ -3163,4 +3163,15 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- V244 (round 17, front desk and identity): a discharge approval no
+         longer ends the patient's registration (QA D1014); puts back the
+         registrations it ended. Data only, plain statement, no DO block.
+         Idempotent. -->
+    <changeSet id="V244-discharged-registrations-stay-registered" author="hms-team" runOnChange="false">
+        <sqlFile path="V244__discharged_registrations_stay_registered.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

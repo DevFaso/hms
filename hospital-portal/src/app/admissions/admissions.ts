@@ -1,3 +1,5 @@
+import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
+import { textMatches } from '../shared/person-search';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
   Component,
@@ -51,6 +53,7 @@ const CANCELLABLE_STATUSES = new Set<string>(['PENDING', 'ACTIVE', 'ON_LEAVE']);
   selector: 'app-admissions',
   standalone: true,
   imports: [
+    PersonNamePipe,
     PatientSublinePipe,
     CommonModule,
     FormsModule,
@@ -720,7 +723,7 @@ export class AdmissionsComponent implements OnInit {
     if (term) {
       list = list.filter(
         (a) =>
-          (a.patientName ?? '').toLowerCase().includes(term) ||
+          textMatches(a.patientName, term) ||
           (a.chiefComplaint ?? '').toLowerCase().includes(term) ||
           (a.roomBed ?? '').toLowerCase().includes(term),
       );

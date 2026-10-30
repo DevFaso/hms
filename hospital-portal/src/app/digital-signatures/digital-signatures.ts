@@ -1,3 +1,4 @@
+import { textMatches } from '../shared/person-search';
 import {
   Component,
   inject,
@@ -131,7 +132,7 @@ export class DigitalSignaturesComponent implements OnInit {
     if (q) {
       list = list.filter(
         (s) =>
-          s.signedByName?.toLowerCase().includes(q) ||
+          textMatches(s.signedByName, q) ||
           s.hospitalName?.toLowerCase().includes(q) ||
           s.reportType?.toLowerCase().includes(q),
       );

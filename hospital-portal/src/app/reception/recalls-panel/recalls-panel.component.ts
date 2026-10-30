@@ -1,3 +1,4 @@
+import { PersonNamePipe } from '../../shared/pipes/person-name.pipe';
 import { RouterLink } from '@angular/router';
 import { DialogFocusDirective } from '../../shared/a11y/dialog-focus.directive';
 import {
@@ -39,6 +40,7 @@ type RecallFilter = 'ALL' | RecallStatus;
   selector: 'app-recalls-panel',
   standalone: true,
   imports: [
+    PersonNamePipe,
     DialogFocusDirective,
     PatientSublinePipe,
     ServerTimePipe,

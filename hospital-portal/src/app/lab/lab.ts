@@ -1,3 +1,5 @@
+import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
+import { textMatches } from '../shared/person-search';
 import { CdkTrapFocus } from '@angular/cdk/a11y';
 import {
   Component,
@@ -42,6 +44,7 @@ import { ActivatedRoute } from '@angular/router';
   selector: 'app-lab',
   standalone: true,
   imports: [
+    PersonNamePipe,
     CdkTrapFocus,
     PatientSublinePipe,
     ServerTimePipe,
@@ -653,7 +656,7 @@ export class LabComponent implements OnInit {
       list = list.filter(
         (o) =>
           (o.labOrderCode ?? '').toLowerCase().includes(term) ||
-          (o.patientFullName ?? '').toLowerCase().includes(term) ||
+          textMatches(o.patientFullName, term) ||
           (o.labTestName ?? '').toLowerCase().includes(term) ||
           (o.status ?? '').toLowerCase().includes(term),
       );

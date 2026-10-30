@@ -415,7 +415,7 @@
                     {{ p.firstName.charAt(0) }}{{ p.lastName.charAt(0) }}
                   </div>
                   <div class="patient-info">
-                    <span class="patient-name">{{ p.firstName }} {{ p.lastName }}</span>
+                    <span class="patient-name">{{ p | personName }}</span>
                     <span class="patient-meta">
                       @if (p.mrn) {
                         <span class="mrn-tag">{{ p.mrn }}</span>
@@ -1426,7 +1426,7 @@
                     {{ p.firstName.charAt(0) }}{{ p.lastName.charAt(0) }}
                   </div>
                   <div class="patient-info">
-                    <span class="patient-name">{{ p.firstName }} {{ p.lastName }}</span>
+                    <span class="patient-name">{{ p | personName }}</span>
                     <span class="patient-meta">
                       @if (p.mrn) {
                         <span class="mrn-tag">{{ p.mrn }}</span>
@@ -1840,7 +1840,7 @@
                     {{ p.firstName.charAt(0) }}{{ p.lastName.charAt(0) }}
                   </div>
                   <div class="patient-info">
-                    <span class="patient-name">{{ p.firstName }} {{ p.lastName }}</span>
+                    <span class="patient-name">{{ p | personName }}</span>
                   </div>
                   <span class="material-symbols-outlined chevron">chevron_right</span>
                 </a>
@@ -2001,7 +2001,7 @@
                     {{ p.firstName.charAt(0) }}{{ p.lastName.charAt(0) }}
                   </div>
                   <div class="patient-info">
-                    <span class="patient-name">{{ p.firstName }} {{ p.lastName }}</span>
+                    <span class="patient-name">{{ p | personName }}</span>
                     <span class="patient-meta">
                       @if (p.mrn) {
                         <span class="mrn-tag">{{ p.mrn }}</span>
@@ -2592,7 +2592,7 @@
                     {{ p.firstName.charAt(0) }}{{ p.lastName.charAt(0) }}
                   </div>
                   <div class="patient-info">
-                    <span class="patient-name">{{ p.firstName }} {{ p.lastName }}</span>
+                    <span class="patient-name">{{ p | personName }}</span>
                   </div>
                   <span class="material-symbols-outlined chevron">chevron_right</span>
                 </a>
@@ -2717,7 +2717,7 @@
                     {{ p.firstName.charAt(0) }}{{ p.lastName.charAt(0) }}
                   </div>
                   <div class="patient-info">
-                    <span class="patient-name">{{ p.firstName }} {{ p.lastName }}</span>
+                    <span class="patient-name">{{ p | personName }}</span>
                   </div>
                   <span class="material-symbols-outlined chevron">chevron_right</span>
                 </a>
@@ -2842,7 +2842,7 @@
                     {{ p.firstName.charAt(0) }}{{ p.lastName.charAt(0) }}
                   </div>
                   <div class="patient-info">
-                    <span class="patient-name">{{ p.firstName }} {{ p.lastName }}</span>
+                    <span class="patient-name">{{ p | personName }}</span>
                   </div>
                   <span class="material-symbols-outlined chevron">chevron_right</span>
                 </a>
@@ -3319,7 +3319,7 @@
                   {{ p.firstName.charAt(0) }}{{ p.lastName.charAt(0) }}
                 </div>
                 <div class="patient-info">
-                  <span class="patient-name">{{ p.firstName }} {{ p.lastName }}</span>
+                  <span class="patient-name">{{ p | personName }}</span>
                 </div>
                 <span class="material-symbols-outlined chevron">chevron_right</span>
               </a>

@@ -1,3 +1,5 @@
+import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
+import { textMatches } from '../shared/person-search';
 import {
   Component,
   computed,
@@ -41,6 +43,7 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
   selector: 'app-referrals',
   standalone: true,
   imports: [
+    PersonNamePipe,
     ModalDialogDirective,
     PatientSublinePipe,
     ServerTimePipe,
@@ -758,9 +761,9 @@ export class ReferralsComponent implements OnInit {
     if (term) {
       list = list.filter(
         (r) =>
-          (r.patientName ?? '').toLowerCase().includes(term) ||
+          textMatches(r.patientName, term) ||
           (r.targetSpecialty ?? '').toLowerCase().includes(term) ||
-          (r.receivingProviderName ?? '').toLowerCase().includes(term),
+          textMatches(r.receivingProviderName, term),
       );
     }
     this.filtered.set(list);

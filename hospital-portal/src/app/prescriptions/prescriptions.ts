@@ -1,3 +1,5 @@
+import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
+import { textMatches } from '../shared/person-search';
 import {
   Component,
   computed,
@@ -146,6 +148,7 @@ export const PRESCRIPTION_TABS: readonly { id: PrescriptionTab; labelKey: string
   selector: 'app-prescriptions',
   standalone: true,
   imports: [
+    PersonNamePipe,
     ModalDialogDirective,
     PatientSublinePipe,
     ServerTimePipe,
@@ -1183,9 +1186,9 @@ export class PrescriptionsComponent implements OnInit {
     if (term) {
       list = list.filter(
         (p) =>
-          (p.patientFullName ?? '').toLowerCase().includes(term) ||
+          textMatches(p.patientFullName, term) ||
           (p.medicationName ?? '').toLowerCase().includes(term) ||
-          (p.staffFullName ?? '').toLowerCase().includes(term),
+          textMatches(p.staffFullName, term),
       );
     }
     this.filtered.set(list);
