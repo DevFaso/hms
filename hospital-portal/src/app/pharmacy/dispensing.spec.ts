@@ -1722,6 +1722,59 @@ describe('DispensingComponent — work-queue claim (G13)', () => {
       expect(body.stockLotId).toBe('long');
       expect(body.fefoOverrideReason).toBe('lot court réservé aux urgences');
     });
+
+    /**
+     * QA D1029: 130 tablets with 100 left in the shorter lot. Round 16
+     * pre-selected the later lot ("the one that covers the fill") and the whole
+     * quantity left it with no reason. The shorter lot is now chosen, emptied
+     * first, and the rest comes from the next lot: one fill per lot, in order.
+     */
+    it('QA D1029: a quantity above the shorter lot empties it first, then takes the rest from the next', async () => {
+      await openWithLots();
+      component.form.quantityDispensed = 130;
+      component.form.quantityRequested = 130;
+      fixture.detectChanges();
+
+      expect(component.form.stockLotId).toBe('court');
+      expect(component.earlierLot()).toBeUndefined();
+      expect(component.fefoSplit().map((p) => [p.lot.id, p.quantity])).toEqual([
+        ['court', 100],
+        ['long', 30],
+      ]);
+      expect(exists('fefo-split')).toBeTrue();
+
+      pharmacySvc.createDispense.and.returnValue(of({ data: {} }) as never);
+      component.verifyAttested.set(true);
+      component.submitDispense();
+      // The parts are sent one after the other, each once the previous one is recorded.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      const bodies = pharmacySvc.createDispense.calls.allArgs().map((a) => a[0]);
+      expect(bodies.map((b) => [b.stockLotId, b.quantityDispensed])).toEqual([
+        ['court', 100],
+        ['long', 30],
+      ]);
+      expect(bodies.every((b) => b.fefoOverrideReason === undefined)).toBeTrue();
+    });
+
+    it('QA D1029 (review of #978): an order that states no quantity is not split', async () => {
+      await openWithLots();
+      component.selectedPrescription = { ...component.selectedPrescription!, quantity: undefined };
+      component.form.quantityDispensed = 130;
+      expect(component.fefoSplit()).toEqual([]);
+    });
+
+    it('QA D1029: taking the later lot for a quantity the shorter one cannot cover still needs a reason', async () => {
+      await openWithLots();
+      component.form.quantityDispensed = 130;
+      component.form.stockLotId = 'long';
+      component.onLotChange();
+      fixture.detectChanges();
+
+      expect(component.earlierLot()?.id).toBe('court');
+      expect(component.fefoReasonMissing()).toBeTrue();
+      expect(component.fefoSplit()).toEqual([]);
+    });
   });
 
   it('Dispense on a colleague’s row then Cancel keeps the open form and its claim', async () => {

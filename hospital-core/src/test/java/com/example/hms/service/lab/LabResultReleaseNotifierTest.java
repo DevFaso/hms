@@ -93,6 +93,24 @@ class LabResultReleaseNotifierTest {
     }
 
     @Test
+    @DisplayName("QA D1016 — a released correction tells the patient it is a correction, not a second new result")
+    void aReleasedCorrectionIsAnnouncedAsACorrection() {
+        LabResult correction = released("Négatif", null);
+        correction.setSupersedesResultId(UUID.randomUUID());
+        when(preferenceRepository.findByUser_IdAndNotificationType(portalUser.getId(), NotificationType.LAB_RESULT))
+            .thenReturn(List.of());
+        ArgumentCaptor<Object[]> args = ArgumentCaptor.forClass(Object[].class);
+
+        notifier.patientResultReleased(correction);
+
+        verify(notificationService).createNotification(eq("lab.result.patient.corrected"), args.capture(),
+            eq("awa.patient"), eq("LAB_RESULT"), eq(correction.getId()));
+        verify(notificationService, never()).createNotification(eq("lab.result.patient.available"), any(),
+            anyString(), anyString(), any());
+        assertThat(args.getValue()).containsExactly("Hémoglobine");
+    }
+
+    @Test
     @DisplayName("QA D938 — an explicit disabled in-app preference for lab results turns the notice off")
     void aDisabledPreferenceIsHonoured() {
         NotificationPreference off = new NotificationPreference();

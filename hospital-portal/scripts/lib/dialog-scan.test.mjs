@@ -8,7 +8,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { dialogFindings } from './dialog-scan.mjs';
+import { dialogFindings as scan } from './dialog-scan.mjs';
+
+// The round-16 cases below test the role/modal/label/escape rules; the focus
+// rule (QA D1030, round 17) has its own cases at the end, so it is read apart.
+const dialogFindings = (...args) => scan(...args).filter((f) => f.rule !== 'focus');
 
 const rules = (html, source, selectors) =>
   dialogFindings(html, source, selectors)
@@ -109,13 +113,74 @@ test('an empty aria-label names nothing, aria-modal="false" is not modal, and a 
   assert.deepEqual(rules(sibling, sibling, new Set(['app-order-set-picker'])), ['role']);
 });
 
-test('a native <dialog> has the role, the modality and Escape built in; only its name is checked', () => {
+test('a native <dialog> opened with showModal() has the role, the modality and Escape built in; only its name is checked', () => {
+  const opens = 'this.ref.nativeElement.showModal();';
   const named = `<dialog class="modal" aria-labelledby="t" (keydown.escape)="close()"><h2 id="t">T</h2></dialog>`;
-  assert.deepEqual(dialogFindings(named), []);
+  assert.deepEqual(
+    scan(
+      named,
+      `${named}
+${opens}`,
+    ),
+    [],
+  );
   const unnamed = `<dialog class="modal"><h2>T</h2></dialog>`;
-  assert.deepEqual(rules(unnamed, unnamed), ['label']);
+  assert.deepEqual(
+    rules(
+      unnamed,
+      `${unnamed}
+${opens}`,
+    ),
+    ['label'],
+  );
   const wrapped = `<div class="modal-wrapper"><dialog aria-label="x"></dialog></div>`;
-  assert.deepEqual(dialogFindings(wrapped), []);
+  assert.deepEqual(
+    scan(
+      wrapped,
+      `${wrapped}
+${opens}`,
+    ),
+    [],
+  );
+});
+
+test('QA D1030: a <dialog [open]> is not modal - checked like a hand-built dialog', () => {
+  const open = `<dialog class="modal" [open]="show()" (keydown)="$event.stopPropagation()"><h2>T</h2></dialog>`;
+  assert.deepEqual(
+    scan(open, open)
+      .map((f) => f.rule)
+      .sort(),
+    ['escape', 'focus', 'label', 'modal'],
+  );
+  const fixed = `<dialog class="modal" [open]="show()" appModalDialog aria-labelledby="t" (escaped)="close()"><h2 id="t">T</h2></dialog>`;
+  assert.deepEqual(scan(fixed, fixed), []);
+});
+
+test('QA D1030: an inner (keydown.escape)="$event.stopPropagation()" swallows the backdrop close', () => {
+  const swallowed = `<div class="modal-backdrop" (click)="close()" (keydown.escape)="close()">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="t" (keydown.escape)="$event.stopPropagation()"><h2 id="t">T</h2></div></div>`;
+  assert.deepEqual(rules(swallowed, swallowed), ['escape']);
+});
+
+test('QA D1030: a hand-built dialog must manage focus (shared directive, CDK trap or dialog service)', () => {
+  const bare = `<div class="modal" role="dialog" aria-modal="true" aria-label="x" (keydown.escape)="c()"></div>`;
+  assert.deepEqual(
+    scan(bare, bare).map((f) => f.rule),
+    ['focus'],
+  );
+  const trapped = `<div class="modal" role="dialog" aria-modal="true" aria-label="x" cdkTrapFocus (keydown.escape)="c()"></div>`;
+  assert.deepEqual(scan(trapped, trapped), []);
+  const directive = `<div class="modal" appModalDialog aria-label="x" (escaped)="c()"></div>`;
+  assert.deepEqual(scan(directive, directive), []);
+  const service = `import { MatDialog } from '@angular/material/dialog';`;
+  assert.deepEqual(
+    scan(
+      bare,
+      `${bare}
+${service}`,
+    ),
+    [],
+  );
 });
 
 test('parts of a dialog (header, body, footer, backdrop, button) are not containers', () => {

@@ -53,6 +53,14 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
     private final PharmacyServiceSupport support;
     private final InventoryItemRepository inventoryItemRepository;
 
+    /** QA D1032: the receipt counter. Setter-injected so hand-built test instances keep working. */
+    private PharmacyReceiptNumberAllocator receiptNumberAllocator;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setReceiptNumberAllocator(PharmacyReceiptNumberAllocator receiptNumberAllocator) {
+        this.receiptNumberAllocator = receiptNumberAllocator;
+    }
+
     private Dispense loadDispenseForPayment(PharmacyPaymentRequestDTO dto, UUID hospitalId) {
         Dispense dispense = dispenseRepository.findLockedById(dto.getDispenseId())
                 .orElseThrow(() -> new ResourceNotFoundException("dispense.notfound"));
@@ -102,7 +110,7 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
 
         java.util.Optional<PharmacyPayment> replay = findReplayedPayment(dispense, dto);
         if (replay.isPresent()) {
-            return paymentMapper.toResponseDTO(replay.get());
+            return toResponse(replay.get());
         }
         requireAmountMatchesCharge(dispense, dto.getAmount());
 
@@ -126,7 +134,18 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
         String providerReference = dto.getReferenceNumber();
         String currency = dto.getCurrency() != null ? dto.getCurrency() : "XOF";
 
-        if (dto.getPaymentMethod() == PharmacyPaymentMethod.MOBILE_MONEY) {
+        // QA D1033: with no real provider configured (the mock gateway is the
+        // fallback bean in every environment), a mobile-money payment is what
+        // the cashier saw on the patient's phone: the typed transaction
+        // reference is required and stored as typed. The mock is never asked
+        // to "charge": it made a payment COMPLETED with no money moved and put
+        // "MOCK-<uuid>" on a patient's receipt.
+        if (dto.getPaymentMethod() == PharmacyPaymentMethod.MOBILE_MONEY && !isRealProvider()) {
+            if (providerReference == null || providerReference.isBlank()) {
+                throw new BusinessException("pharmacy.payment.mobileMoneyReferenceRequired");
+            }
+            providerReference = providerReference.trim();
+        } else if (dto.getPaymentMethod() == PharmacyPaymentMethod.MOBILE_MONEY) {
             String phone = patient.getPhoneNumberPrimary();
             if (phone == null || phone.isBlank()) {
                 throw new BusinessException("pharmacy.payment.noMobileMoneyPhone");
@@ -149,6 +168,7 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
         PharmacyPayment entity = paymentMapper.toEntity(dto, dispense, patient, hospital, receivedBy);
         entity.setReferenceNumber(providerReference);
         entity.setCurrency(currency);
+        entity.setReceiptNumber(allocateReceiptNumber(hospital));
         PharmacyPayment saved = paymentRepository.save(entity);
 
         support.logAudit(AuditEventType.PAYMENT_POSTED,
@@ -157,7 +177,40 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
                 saved.getId().toString(),
                 AUDIT_ENTITY);
 
-        return paymentMapper.toResponseDTO(saved);
+        return toResponse(saved);
+    }
+
+    /** QA D1033: a configured provider, not the development fallback. */
+    private boolean isRealProvider() {
+        return mobileMoneyGateway != null
+                && !com.example.hms.service.pharmacy.payment.MockMobileMoneyGateway.PROVIDER_CODE
+                        .equals(mobileMoneyGateway.providerCode());
+    }
+
+    /** QA D1032: every payment read carries the receipt number stored when it was recorded. */
+    private PharmacyPaymentResponseDTO toResponse(PharmacyPayment payment) {
+        PharmacyPaymentResponseDTO dto = paymentMapper.toResponseDTO(payment);
+        if (dto != null) {
+            dto.setReceiptNumber(payment.getReceiptNumber());
+        }
+        return dto;
+    }
+
+    /**
+     * QA D1032: the payment's readable receipt number, allocated once; the
+     * first allocation of a year can lose the counter-row insert race, and is
+     * retried once (the invoice number's rule).
+     */
+    private String allocateReceiptNumber(Hospital hospital) {
+        if (receiptNumberAllocator == null) {
+            return null;
+        }
+        java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneId.systemDefault());
+        try {
+            return receiptNumberAllocator.next(hospital, today);
+        } catch (org.springframework.dao.DataIntegrityViolationException firstOfYearRace) {
+            return receiptNumberAllocator.next(hospital, today);
+        }
     }
 
     @Override
@@ -171,7 +224,7 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
                 && (entity.getHospital() == null || !hospitalId.equals(entity.getHospital().getId()))) {
             throw new ResourceNotFoundException("pharmacy.payment.notfound");
         }
-        return paymentMapper.toResponseDTO(entity);
+        return toResponse(entity);
     }
 
     @Override
@@ -180,10 +233,10 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId == null) {
             // SUPER_ADMIN unscoped read (no active hospital).
-            return paymentRepository.findByDispenseId(dispenseId, pageable).map(paymentMapper::toResponseDTO);
+            return paymentRepository.findByDispenseId(dispenseId, pageable).map(this::toResponse);
         }
         return paymentRepository.findByDispenseIdAndHospital_Id(dispenseId, hospitalId, pageable)
-                .map(paymentMapper::toResponseDTO);
+                .map(this::toResponse);
     }
 
     @Override
@@ -191,10 +244,10 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
     public Page<PharmacyPaymentResponseDTO> listByPatient(UUID patientId, Pageable pageable) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         if (hospitalId == null) {
-            return paymentRepository.findByPatientId(patientId, pageable).map(paymentMapper::toResponseDTO);
+            return paymentRepository.findByPatientId(patientId, pageable).map(this::toResponse);
         }
         return paymentRepository.findByPatientIdAndHospital_Id(patientId, hospitalId, pageable)
-                .map(paymentMapper::toResponseDTO);
+                .map(this::toResponse);
     }
 
     /**
@@ -206,7 +259,7 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
     @Override
     @Transactional(readOnly = true)
     public Page<PharmacyPaymentResponseDTO> listByPatientForSelf(UUID patientId, Pageable pageable) {
-        return paymentRepository.findByPatientId(patientId, pageable).map(paymentMapper::toResponseDTO);
+        return paymentRepository.findByPatientId(patientId, pageable).map(this::toResponse);
     }
 
     /**

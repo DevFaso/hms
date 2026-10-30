@@ -156,6 +156,13 @@ public class InBasketServiceImpl implements InBasketService {
                 .priority(request.getPriority())
                 .title(request.getTitle())
                 .body(request.getBody())
+                // QA D1053: keys and arguments, rendered in the reader's language.
+                .titleKey(request.getTitleKey())
+                .titleArgs(request.getTitleKey() != null
+                        ? com.example.hms.service.i18n.NotificationLocalizer.storable(request.getTitleArgs()) : null)
+                .bodyKey(request.getBodyKey())
+                .bodyArgs(request.getBodyKey() != null
+                        ? com.example.hms.service.i18n.NotificationLocalizer.storable(request.getBodyArgs()) : null)
                 .referenceId(request.getReferenceId())
                 .referenceType(request.getReferenceType())
                 .patientName(request.getPatientName())

@@ -65,6 +65,8 @@ public class PatientSnapshotDTO {
         /** LOW / HIGH when the abnormal result's side of the range is known. */
         private com.example.hms.enums.AbnormalDirection abnormalDirection;
         private String date;
+        /** QA D1016: the result corrects a released value. */
+        private boolean corrected;
     }
 
     @Data @Builder @NoArgsConstructor @AllArgsConstructor

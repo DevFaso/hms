@@ -12,6 +12,14 @@
  *  slice-call  — `.slice(0, N)`, `.substring(0, N)`, `.substr(0, N)` (N ≤ 12)
  *                on an id-shaped expression in a template or a component,
  *                through `?.` and `!.` as well (`row.id?.slice(0, 8)`).
+ *  strip-slice — QA D1032: the dashes stripped first, then a slice
+ *                (`.replace(/-/g, '').substring(0, 10)`, `.replaceAll('-', '')
+ *                .slice(0, 8)`, `.split('-').join('').substr(0, 12)`): the
+ *                pharmacy receipt printed "Nº 38D0FCFE16" and the id-shaped
+ *                test above never saw it, because the receiver was a bare
+ *                `(id ?? '')` and the slice came after the strip. Whatever the
+ *                receiver, a dash-stripped string cut to 32 characters or
+ *                fewer is a UUID fragment.
  */
 import { lineOf } from './html-tags.mjs';
 
@@ -32,6 +40,14 @@ const SPLIT_CALL = new RegExp(
   'g',
 );
 const MAX_FRAGMENT = 12;
+// QA D1032: dashes stripped, then cut: `.replace(/-/g, '')`, `.replaceAll('-', '')`,
+// `.split('-').join('')`, optionally followed by a case change, then a slice of 32 or fewer.
+const STRIP_SLICE = new RegExp(
+  String.raw`\.(?:replace\(\s*\/-\/g\s*,|replaceAll\(\s*(['"])-\1\s*,|split\(\s*(['"])-\2\s*\)\s*\.join\()\s*(['"])\3\s*\)` +
+    String.raw`(?:\s*\.to(?:Upper|Lower)Case\(\))?\s*\.(slice|substring|substr)\(\s*0\s*,\s*(\d{1,2})\s*\)`,
+  'g',
+);
+const UUID_HEX_LENGTH = 32;
 
 /** The fragment length a match asks for, whichever spelling it used. */
 function fragmentLength(...groups) {
@@ -108,6 +124,16 @@ export function uuidFragmentFindings(text) {
       rule: 'slice-call',
       anchor: `${m[1]}.${m[2]}`,
       message: `${m[1]}.${m[2]}(…) (${n} characters): a UUID fragment on screen — show the human code (number, MRN, reference)`,
+    });
+  }
+  for (const m of text.matchAll(STRIP_SLICE)) {
+    const n = Number(m[5]);
+    if (n > UUID_HEX_LENGTH) continue;
+    out.push({
+      line: lineAt(text, m.index),
+      rule: 'strip-slice',
+      anchor: `${m[4]}(0, ${n}) after stripping dashes`,
+      message: `dashes stripped then .${m[4]}(0, ${n}): a UUID fragment on screen — show the human code (number, receipt number, reference)`,
     });
   }
   for (const m of text.matchAll(SPLIT_CALL)) {

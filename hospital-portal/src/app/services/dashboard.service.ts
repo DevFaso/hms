@@ -232,6 +232,8 @@ export interface DoctorResultQueueItem {
   abnormalDirection?: 'LOW' | 'HIGH';
   resultedAt: string;
   orderingContext?: string;
+  /** QA D1016: the result corrects a released value the clinician may already have acted on. */
+  corrected?: boolean;
 }
 
 export interface PatientSnapshot {
@@ -250,7 +252,14 @@ export interface PatientSnapshot {
   activeMedications: { name: string; dose: string; frequency: string }[];
   recentVitals: { type: string; value: string; timestamp: string }[];
   // `test` is null when the result's lab order has no test definition.
-  latestLabs: { test: string | null; value: string; flag: string; date: string }[];
+  /** QA D1016: `corrected` when the result corrects a released value. */
+  latestLabs: {
+    test: string | null;
+    value: string;
+    flag: string;
+    date: string;
+    corrected?: boolean;
+  }[];
   // `description` is null when the lab order has no test definition.
   pendingOrders: { type: string; description: string | null; orderedAt: string }[];
   // `type` is null when the encounter has no type, and `author` when the

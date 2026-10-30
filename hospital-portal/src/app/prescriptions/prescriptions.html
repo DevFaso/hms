@@ -737,15 +737,20 @@
 
 <!-- ═══ CREATE / EDIT PRESCRIPTION MODAL ═══ -->
 @if (showModal()) {
-  <div class="modal-backdrop" tabindex="-1" (click)="closeModal()" (keydown.escape)="closeModal()">
+  <div class="modal-backdrop" tabindex="-1" (click)="closeModal()">
+    <!-- QA D1030: a working dialog - focus moves in, Tab stays inside, Escape
+         closes (the inner stopPropagation used to swallow it) and focus goes
+         back to the opener. -->
     <div
       class="modal modal-lg"
+      appModalDialog
+      aria-labelledby="rx-form-title"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (escaped)="closeModal()"
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="rx-form-title">
           {{ editing() ? ('PRESCRIPTIONS.EDIT' | translate) : ('PRESCRIPTIONS.NEW' | translate) }}
         </h2>
         <button
@@ -1116,20 +1121,17 @@
 
 <!-- ═══ DELETE CONFIRM ═══ -->
 @if (showDeleteConfirm()) {
-  <div
-    class="modal-backdrop"
-    tabindex="-1"
-    (click)="cancelDelete()"
-    (keydown.escape)="cancelDelete()"
-  >
+  <div class="modal-backdrop" tabindex="-1" (click)="cancelDelete()">
     <div
       class="modal"
+      appModalDialog
+      aria-labelledby="rx-delete-title"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (escaped)="cancelDelete()"
     >
       <div class="modal-header">
-        <h2>{{ 'PRESCRIPTIONS.DELETE_TITLE' | translate }}</h2>
+        <h2 id="rx-delete-title">{{ 'PRESCRIPTIONS.DELETE_TITLE' | translate }}</h2>
         <button
           [attr.aria-label]="'COMMON.CLOSE' | translate"
           class="modal-close"
@@ -1162,19 +1164,18 @@
     class="modal-backdrop"
     tabindex="-1"
     (click)="closeDispatchModal()"
-    (keydown.escape)="closeDispatchModal()"
     data-testid="rx-dispatch-modal"
   >
     <div
       class="modal"
-      role="dialog"
-      aria-modal="true"
+      appModalDialog
+      aria-labelledby="rx-dispatch-title"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (escaped)="closeDispatchModal()"
     >
       <div class="modal-header">
-        <h2>{{ 'PRESCRIPTIONS.DISPATCH_SMS_TITLE' | translate }}</h2>
+        <h2 id="rx-dispatch-title">{{ 'PRESCRIPTIONS.DISPATCH_SMS_TITLE' | translate }}</h2>
         <button
           type="button"
           class="btn-close"
@@ -1187,7 +1188,7 @@
       </div>
       <div class="modal-body">
         <p>
-          {{ 'PRESCRIPTIONS.DISPATCH_SMS_FOR' | translate }}:
+          {{ 'PRESCRIPTIONS.DISPATCH_SMS_FOR' | translate }}{{ 'COMMON.COLON' | translate }}
           <strong>{{ dispatchTarget()?.medicationName }}</strong>
         </p>
         <label class="form-field">
@@ -1254,19 +1255,19 @@
     class="modal-backdrop"
     tabindex="-1"
     (click)="closeVerifyModal()"
-    (keydown.escape)="closeVerifyModal()"
     data-testid="rx-verify-modal"
   >
+    <!-- QA D1030: focus moves in, Tab stays inside, Escape closes, focus goes back. -->
     <div
       class="modal"
-      role="dialog"
-      aria-modal="true"
+      appModalDialog
+      aria-labelledby="rx-verify-title"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (escaped)="closeVerifyModal()"
     >
       <div class="modal-header">
-        <h2>{{ 'PRESCRIPTIONS.PHARMACIST_VERIFY_TITLE' | translate }}</h2>
+        <h2 id="rx-verify-title">{{ 'PRESCRIPTIONS.PHARMACIST_VERIFY_TITLE' | translate }}</h2>
         <button
           type="button"
           class="btn-close"
@@ -1279,7 +1280,7 @@
       </div>
       <div class="modal-body">
         <p>
-          {{ 'PRESCRIPTIONS.PHARMACIST_VERIFY_FOR' | translate }}:
+          {{ 'PRESCRIPTIONS.PHARMACIST_VERIFY_FOR' | translate }}{{ 'COMMON.COLON' | translate }}
           <strong>{{
             verifyTarget()?.medicationDisplayName || verifyTarget()?.medicationName
           }}</strong>

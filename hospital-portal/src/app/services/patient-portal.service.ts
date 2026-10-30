@@ -70,6 +70,8 @@ export interface LabResultSummary {
   /** Ordered and awaiting release: show it as expected, never as a normal result. */
   isPending: boolean;
   isAbnormal: boolean;
+  /** QA D1016: the laboratory corrected a result it had released; shown as such, never as a new one. */
+  corrected?: boolean;
   /**
    * Released, not flagged abnormal, and never compared with a reference range
    * (none is configured in the result's unit): neither normal nor abnormal.
@@ -101,6 +103,8 @@ interface LabResultApiResponse {
   performedBy: string;
   category: string;
   notes: string;
+  /** QA D1016: a released correction of a result the patient may already have read. */
+  corrected?: boolean;
 }
 
 export interface MedicationSummary {
@@ -365,6 +369,7 @@ function mapLabResult(l: LabResultApiResponse): LabResultSummary {
     released: !pending,
     isPending: pending,
     isAbnormal: !pending && ABNORMAL_LAB_STATUSES.has(l.status),
+    corrected: !pending && l.corrected === true,
     // D31: UNKNOWN = released but nothing interpreted it (no range applies,
     // no flag recorded) — never drawn as a green "within normal limits".
     isUngraded:

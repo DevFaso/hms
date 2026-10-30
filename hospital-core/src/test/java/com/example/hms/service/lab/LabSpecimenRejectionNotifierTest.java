@@ -93,6 +93,28 @@ class LabSpecimenRejectionNotifierTest {
     }
 
     @Test
+    @DisplayName("QA D1053 — the in-basket title keeps its key, and a deleted test is named as a key too")
+    void theTitleIsStoredAsAKeyAndADeletedTestIsAKey() {
+        MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        User doctor = new User();
+        doctor.setId(UUID.randomUUID());
+        doctor.setUsername("dr.ouattara");
+        Staff staff = new Staff();
+        staff.setUser(doctor);
+        LabSpecimen specimen = rejectedSpecimen(staff);
+        specimen.getLabOrder().setLabTestDefinition(null);
+        ArgumentCaptor<CreateInBasketItemRequest> item = ArgumentCaptor.forClass(CreateInBasketItemRequest.class);
+
+        notifier.specimenRejected(specimen);
+
+        verify(inBasketService).createItemInNewTransaction(item.capture());
+        assertThat(item.getValue().getTitleKey()).isEqualTo("lab.specimen.rejected.inBasketTitle");
+        assertThat(item.getValue().getTitleArgs()[0]).isInstanceOf(java.util.Map.class);
+        assertThat(((java.util.Map<?, ?>) item.getValue().getTitleArgs()[0]).get("key"))
+            .isEqualTo(com.example.hms.mapper.LabOrderMapper.DELETED_TEST_LABEL);
+    }
+
+    @Test
     @DisplayName("QA D962 — an order with no ordering clinician account is a no-op, never a failed rejection")
     void noClinicianNoNotice() {
         notifier.specimenRejected(rejectedSpecimen(null));

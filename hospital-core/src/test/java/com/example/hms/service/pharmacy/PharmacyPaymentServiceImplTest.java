@@ -186,6 +186,100 @@ class PharmacyPaymentServiceImplTest {
                 p -> "MOCK-abc".equals(p.getReferenceNumber())));
     }
 
+    /**
+     * QA D1033: with no real provider (the mock is the fallback bean in every
+     * environment) the receipt printed "MOCK-<uuid>" and the typed reference
+     * was dropped, and the payment counted as charged with no money moved.
+     * The cashier records what the patient's phone shows; nothing is charged.
+     */
+    @Test
+    @DisplayName("QA D1033: with the mock gateway, the typed mobile-money reference is required and kept")
+    void d1033_withoutARealProviderTheTypedReferenceIsKept() {
+        PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.MOBILE_MONEY);
+        dto.setReferenceNumber("  OM-R17-662001 ");
+
+        when(mobileMoneyGateway.providerCode()).thenReturn("MOCK");
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(userId);
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(paymentMapper.toEntity(any(), any(), any(), any(), any())).thenReturn(new PharmacyPayment());
+        when(paymentRepository.save(any())).thenAnswer(inv -> {
+            PharmacyPayment p = inv.getArgument(0);
+            p.setId(UUID.randomUUID());
+            return p;
+        });
+        when(paymentMapper.toResponseDTO(any())).thenReturn(PharmacyPaymentResponseDTO.builder().build());
+
+        service.createPayment(dto);
+
+        verify(mobileMoneyGateway, never()).charge(any());
+        verify(paymentRepository).save(org.mockito.ArgumentMatchers.argThat(
+                p -> "OM-R17-662001".equals(p.getReferenceNumber())));
+    }
+
+    @Test
+    @DisplayName("QA D1033: with the mock gateway, a mobile-money payment without a reference is refused")
+    void d1033_withoutARealProviderAReferenceIsRequired() {
+        PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.MOBILE_MONEY);
+        dto.setReferenceNumber(" ");
+
+        when(mobileMoneyGateway.providerCode()).thenReturn("MOCK");
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(userId);
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+
+        assertThatThrownBy(() -> service.createPayment(dto))
+                .isInstanceOf(BusinessException.class)
+                .extracting("messageKey").isEqualTo("pharmacy.payment.mobileMoneyReferenceRequired");
+        verify(paymentRepository, never()).save(any());
+        verify(mobileMoneyGateway, never()).charge(any());
+    }
+
+    /**
+     * QA D1032 (review of #978): the receipt number is allocated once when the
+     * payment is recorded and stored, never recomputed on a read, so a reprint
+     * shows the number first printed.
+     */
+    @Test
+    @DisplayName("QA D1032: a recorded payment stores its allocated receipt number, and a read returns it")
+    void d1032_aPaymentStoresItsReceiptNumberAndAReadReturnsIt() {
+        PharmacyReceiptNumberAllocator allocator = org.mockito.Mockito.mock(PharmacyReceiptNumberAllocator.class);
+        service.setReceiptNumberAllocator(allocator);
+        when(allocator.next(eq(hospital), any())).thenReturn("CHW75C64-PH-2026-000012");
+        PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.CASH);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(userId);
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(paymentMapper.toEntity(any(), any(), any(), any(), any())).thenReturn(new PharmacyPayment());
+        when(paymentRepository.save(any())).thenAnswer(inv -> {
+            PharmacyPayment p = inv.getArgument(0);
+            p.setId(UUID.randomUUID());
+            return p;
+        });
+        when(paymentMapper.toResponseDTO(any())).thenReturn(PharmacyPaymentResponseDTO.builder().build());
+
+        assertThat(service.createPayment(dto).getReceiptNumber()).isEqualTo("CHW75C64-PH-2026-000012");
+        verify(paymentRepository).save(org.mockito.ArgumentMatchers.argThat(
+                p -> "CHW75C64-PH-2026-000012".equals(p.getReceiptNumber())));
+
+        PharmacyPayment stored = new PharmacyPayment();
+        stored.setId(UUID.randomUUID());
+        stored.setHospital(hospital);
+        stored.setReceiptNumber("CHW75C64-PH-2026-000012");
+        when(paymentRepository.findById(stored.getId())).thenReturn(Optional.of(stored));
+        assertThat(service.getPayment(stored.getId()).getReceiptNumber()).isEqualTo("CHW75C64-PH-2026-000012");
+        org.mockito.Mockito.verify(allocator, org.mockito.Mockito.times(1)).next(any(), any());
+    }
+
     @Test
     @DisplayName("mobile-money payment: gateway failure surfaces as BusinessException")
     void mobileMoneyGatewayFailureThrowsBusinessException() {

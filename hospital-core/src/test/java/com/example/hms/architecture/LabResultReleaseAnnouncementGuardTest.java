@@ -79,13 +79,86 @@ class LabResultReleaseAnnouncementGuardTest {
             .isEmpty();
     }
 
+    private static final Pattern READS_VALUE = Pattern.compile("\\.getResultValue\\(\\)");
+    private static final Pattern ASKS_CORRECTION =
+        Pattern.compile("isCorrection\\(|isCorrected\\(\\)|getSupersedesResultId\\(\\)");
+
+    /**
+     * QA D1016 (D931 was fixed on the clinician's side only): a corrected
+     * result reached the patient portal, the patient's notification, the
+     * in-basket table, the chart review and the release worklist as an
+     * ordinary result. Every class that reads a lab result's value to show or
+     * send it must also ask whether it is a correction
+     * ({@code LabResultCorrections.isCorrection}, a DTO's {@code isCorrected()},
+     * or the link itself), so a new screen or export cannot drop the marker.
+     */
+    @Test
+    void everyClassShowingAResultValueSaysWhetherItIsACorrection() throws IOException {
+        TreeSet<String> showing = filesMatching(READS_VALUE);
+        assertThat(showing)
+            .as("the scan must see the known result readers, or it is scanning nothing")
+            .contains("com/example/hms/service/ResultReviewServiceImpl.java",
+                "com/example/hms/service/impl/PatientLabResultServiceImpl.java",
+                "com/example/hms/service/impl/ChartReviewServiceImpl.java");
+        List<String> unmarked = showing.stream()
+            .filter(file -> !ASKS_CORRECTION.matcher(code(file)).find())
+            .toList();
+        assertThat(unmarked)
+            .as("a class that shows or sends a lab result's value must say whether it corrects a released "
+                + "result (QA D1016): call LabResultCorrections.isCorrection and carry it to the reader")
+            .isEmpty();
+    }
+
+    private static final Pattern IN_BASKET_KEY = Pattern.compile("\"([A-Za-z0-9_.]*\\.inBasket[A-Za-z0-9_]*)\"");
+
+    /**
+     * QA D1053: the correction and rejection items were resolved in French
+     * when they were written and stored as prose, so Spanish and English
+     * readers saw French. Every in-basket message key a class resolves must
+     * also be stored as the item's key ({@code setTitleKey} /
+     * {@code setBodyKey}), through the literal or the constant that holds it,
+     * so the item is rendered in the reader's language.
+     */
+    @Test
+    void everyInBasketTextIsStoredAsAKey() throws IOException {
+        TreeSet<String> composing = filesMatching(IN_BASKET_KEY);
+        assertThat(composing)
+            .as("the scan must see the known in-basket composers")
+            .contains("com/example/hms/service/LabResultServiceImpl.java",
+                "com/example/hms/service/lab/LabSpecimenRejectionNotifier.java");
+        List<String> prose = new java.util.ArrayList<>();
+        for (String file : composing) {
+            String source = code(file);
+            java.util.regex.Matcher m = IN_BASKET_KEY.matcher(source);
+            while (m.find()) {
+                String key = m.group(1);
+                java.util.regex.Matcher constant = Pattern
+                    .compile("(\\w+)\\s*=\\s*\"" + Pattern.quote(key) + "\"").matcher(source);
+                String name = constant.find() ? constant.group(1) : null;
+                boolean stored = source.matches("(?s).*set(Title|Body)Key\\(\\s*\"" + Pattern.quote(key) + "\".*")
+                    || name != null && source.matches("(?s).*set(Title|Body)Key\\(\\s*" + name + "\\s*\\).*");
+                if (!stored) {
+                    prose.add(file + " -> " + key);
+                }
+            }
+        }
+        assertThat(prose)
+            .as("an in-basket title or body resolved from a message key must also store the key "
+                + "(setTitleKey / setBodyKey) so it renders in the reader's language (QA D1053)")
+            .isEmpty();
+    }
+
+    private static String code(String relative) {
+        return com.example.hms.testsupport.SourceScan.stripComments(read(relative));
+    }
+
     private static TreeSet<String> filesMatching(Pattern pattern) throws IOException {
         TreeSet<String> files = new TreeSet<>();
         try (Stream<Path> paths = Files.walk(MAIN)) {
             paths.filter(p -> p.toString().endsWith(".java"))
                 .forEach(p -> {
                     String relative = MAIN.relativize(p).toString().replace('\\', '/');
-                    if (pattern.matcher(read(relative)).find()) {
+                    if (pattern.matcher(code(relative)).find()) {
                         files.add(relative);
                     }
                 });

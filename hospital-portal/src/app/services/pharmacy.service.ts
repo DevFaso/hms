@@ -480,6 +480,7 @@ export interface WorkQueuePrescription {
   patient?: {
     id: string;
     firstName?: string;
+    middleName?: string;
     lastName?: string;
   };
   staff?: {
@@ -635,6 +636,8 @@ export interface PharmacyPaymentRequest {
 
 export interface PharmacyPaymentResponse {
   id: string;
+  /** QA D1032: the readable receipt number (CODE-PH-YYYY-000001) the server assigns. */
+  receiptNumber?: string | null;
   dispenseId: string;
   patientId: string;
   hospitalId: string;

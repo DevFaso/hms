@@ -855,6 +855,7 @@
               <input
                 id="specimen-type"
                 type="text"
+                maxlength="50"
                 [placeholder]="'LAB.SPECIMEN_TYPE_PLACEHOLDER' | translate"
                 [(ngModel)]="specimenForm.specimenType"
               />
@@ -864,13 +865,20 @@
               <input
                 id="specimen-location"
                 type="text"
+                maxlength="100"
                 [(ngModel)]="specimenForm.currentLocation"
               />
             </div>
           </div>
           <div class="field">
             <label for="specimen-notes">{{ 'COMMON.NOTES' | translate }}</label>
-            <textarea id="specimen-notes" rows="2" [(ngModel)]="specimenForm.notes"></textarea>
+            <!-- QA D1050: each field holds what its column holds (50 / 100 / 2048) -->
+            <textarea
+              id="specimen-notes"
+              rows="2"
+              maxlength="2048"
+              [(ngModel)]="specimenForm.notes"
+            ></textarea>
           </div>
         }
       </div>

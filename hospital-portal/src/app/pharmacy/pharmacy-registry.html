@@ -144,9 +144,12 @@
         (click)="$event.stopPropagation()"
         (keydown)="$event.stopPropagation()"
         tabindex="-1"
+        appModalDialog
+        aria-labelledby="pharmacy-registry-dialog-title-1"
+        (escaped)="closeModal()"
       >
         <div class="modal-header">
-          <h2>
+          <h2 id="pharmacy-registry-dialog-title-1">
             {{
               editing()
                 ? ('PHARMACY.EDIT_PHARMACY' | translate)
@@ -346,9 +349,12 @@
         (click)="$event.stopPropagation()"
         (keydown)="$event.stopPropagation()"
         tabindex="-1"
+        appModalDialog
+        aria-labelledby="pharmacy-registry-dialog-title-2"
+        (escaped)="cancelDelete()"
       >
         <div class="modal-header">
-          <h2>{{ 'COMMON.DELETE' | translate }}</h2>
+          <h2 id="pharmacy-registry-dialog-title-2">{{ 'COMMON.DELETE' | translate }}</h2>
           <button
             [attr.aria-label]="'COMMON.CLOSE' | translate"
             class="modal-close"

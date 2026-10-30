@@ -1442,6 +1442,9 @@ public class LabResultServiceImpl implements LabResultService {
      * touch a lazy association. Its own transaction, and a failure is logged
      * (ids only) rather than undoing the release.
      */
+    static final String CORRECTION_IN_BASKET_TITLE_KEY = "lab.result.correction.inBasketTitle";
+    static final String CORRECTION_IN_BASKET_BODY_KEY = "lab.result.correction.inBasketBody";
+
     private void fileInOrderingClinicianInBasketAfterCommit(LabResult labResult, LabResult superseded) {
         if (inBasketService == null) {
             return;
@@ -1479,18 +1482,26 @@ public class LabResultServiceImpl implements LabResultService {
         String title = testName != null ? testName : "Lab result";
         if (superseded != null) {
             // QA D931: the item says it replaces a result, and from what to what.
-            title = com.example.hms.utility.MessageUtil.resolve(
-                com.example.hms.service.i18n.NotificationLocales.STAFF, "lab.result.correction.inBasketTitle", title);
-            request.setBody(com.example.hms.utility.MessageUtil.resolve(
-                com.example.hms.service.i18n.NotificationLocales.STAFF, "lab.result.correction.inBasketBody",
+            // QA D1053: kept as keys too, so each reader sees it in their language.
+            Object[] titleArgs = {title};
+            Object[] bodyArgs = {
                 com.example.hms.service.lab.LabResultReleaseNotifier.valueOf(superseded),
-                com.example.hms.service.lab.LabResultReleaseNotifier.valueOf(labResult)));
+                com.example.hms.service.lab.LabResultReleaseNotifier.valueOf(labResult)
+            };
+            title = com.example.hms.utility.MessageUtil.resolve(
+                com.example.hms.service.i18n.NotificationLocales.STAFF, CORRECTION_IN_BASKET_TITLE_KEY, titleArgs);
+            request.setTitleKey(CORRECTION_IN_BASKET_TITLE_KEY);
+            request.setTitleArgs(titleArgs);
+            request.setBody(com.example.hms.utility.MessageUtil.resolve(
+                com.example.hms.service.i18n.NotificationLocales.STAFF, CORRECTION_IN_BASKET_BODY_KEY, bodyArgs));
+            request.setBodyKey(CORRECTION_IN_BASKET_BODY_KEY);
+            request.setBodyArgs(bodyArgs);
         }
         request.setTitle(title);
         request.setReferenceId(labResult.getId());
         request.setReferenceType(LAB_RESULT_REFERENCE_TYPE);
         request.setPatientId(patient != null ? patient.getId() : null);
-        request.setPatientName(patient != null ? (patient.getFirstName() + " " + patient.getLastName()).trim() : null);
+        request.setPatientName(patient != null ? patient.getFullName() : null);
         request.setEncounterId(order.getEncounter() != null ? order.getEncounter().getId() : null);
         UUID resultId = labResult.getId();
         TransactionCallbacks.afterCommit(() -> {

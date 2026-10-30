@@ -194,6 +194,8 @@ public class PatientRecordPdfService {
             safe(r.getTestName()) + code(r.getTestCode()),
             // QA D740: an unreleased row prints as pending, never with a value.
             r.isReleased() ? join(" ", r.getResultValue(), r.getResultUnit()) : t.get("pdf.record.result.pending"),
+            // QA D1016: a correction says so on the printed record too.
+            r.isCorrected() ? t.get("pdf.record.result.corrected") : null,
             r.isReleased() ? label(t, r.getAbnormalFlag()) : null, r.getOrderingStaffName()));
 
         pages.heading(t.get("pdf.record.section.medications"));

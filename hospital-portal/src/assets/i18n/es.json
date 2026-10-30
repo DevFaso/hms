@@ -2150,6 +2150,31 @@
       "CREDIT_NOTE": "Nota de crédito",
       "DISCOUNT": "Descuento",
       "WAIVER": "Exención (gratuidad)"
+    },
+    "CASH_CLOSING": {
+      "OPEN": "Cierre de caja",
+      "TITLE": "Cierre de caja del día",
+      "DATE": "Día",
+      "PRINT": "Imprimir",
+      "LOADING": "Cargando el cierre de caja…",
+      "LOAD_FAILED": "No se pudo cargar el cierre de caja.",
+      "SUBTITLE": "Cobros de {{cashier}} el {{date}}",
+      "EMPTY": "Ningún cobro ese día.",
+      "BY_METHOD": "Totales por medio de pago",
+      "SOURCE": "Caja",
+      "COUNT": "Pagos",
+      "AMOUNT": "Importe",
+      "TOTAL": "Total cobrado",
+      "REVERSED": "Anulados después (fuera de caja)",
+      "ENTRIES": "Pagos cobrados",
+      "TIME": "Hora",
+      "DOCUMENT": "Factura o medicamento",
+      "REFERENCE": "Referencia",
+      "REVERSED_TAG": "anulado",
+      "SOURCES": {
+        "BILLING": "Facturas",
+        "PHARMACY": "Farmacia"
+      }
     }
   },
   "CHAT": {
@@ -3749,7 +3774,8 @@
     "CORRECTION_OF": "Corrección del resultado liberado {{test}} ({{value}}). El valor liberado queda registrado, marcado como sustituido.",
     "SUPERSEDED": "Sustituido",
     "SUPERSEDED_HINT": "Una corrección sustituyó este resultado liberado; la corrección es el valor vigente.",
-    "EXPECTED_RESULT": "Resultado esperado"
+    "EXPECTED_RESULT": "Resultado esperado",
+    "CORRECTED_HINT_PATIENT": "El laboratorio corrigió este resultado después de comunicarlo. Este es el valor que cuenta; su equipo médico está informado."
   },
   "LAB_RELEASE": {
     "FLAG_ABNORMAL": "Anormal",
@@ -3791,7 +3817,8 @@
     "LOAD_ERROR": "No se pudo cargar la lista de validación.",
     "PAGE_OF": "Página {{page}} de {{total}}",
     "SELF_RELEASE_NOTE": "Usted ingresó este resultado. Liberarlo sin un segundo revisor está permitido y queda registrado como «Validado por su autor».",
-    "SELF_RELEASE_CONFIRM": "Liberarlo yo mismo"
+    "SELF_RELEASE_CONFIRM": "Liberarlo yo mismo",
+    "CONFIRM_CORRECTION": "Este resultado es una corrección: validarlo sustituye un valor ya validado y comunicado al clínico y al paciente."
   },
   "LAB_INSTRUMENTS": {
     "TITLE": "Instrumentos de laboratorio",
@@ -9402,7 +9429,12 @@
     "CATEGORY_PLACEHOLDER": "ej. Antibiótico",
     "PEDIATRIC_MAX_DOSE_MG_PER_KG": "Dosis pediátrica máxima (mg/kg por toma)",
     "PEDIATRIC_MAX_DOSE_HINT": "Opcional. Introdúzcala solo desde la referencia de su establecimiento; el control de prescripción señala una dosis infantil superior.",
-    "CANCEL_DISPENSE": "Anular la dispensación"
+    "CANCEL_DISPENSE": "Anular la dispensación",
+    "LEDGER_REASON_RETURN_FILL": "Devolución, ref. lote {{lot}} dispensado el {{date}}",
+    "LEDGER_REASON_RETURN_FILL_DATE": "Devolución de la dispensación del {{date}}",
+    "DISPENSE_SPLIT_SUCCESS": "Dispensado en {{count}} dispensaciones, primero el lote de caducidad más próxima.",
+    "FEFO_SPLIT_HINT": "El lote de caducidad más próxima no cubre la cantidad: se vacía primero y luego el lote siguiente.",
+    "FEFO_SPLIT_PART": "{{quantity}} del lote {{lot}} (cad. {{date}})"
   },
   "LAB_QC": {
     "TITLE": "Panel de control de calidad",
@@ -12044,7 +12076,8 @@
     "DISPENSE_PICK_PLACEHOLDER": "Elija una dispensación",
     "NO_DISPENSES": "No hay ninguna dispensación que cobrar en esta farmacia.",
     "DISPENSES_LOAD_FAILED": "No se pudieron cargar las dispensaciones de la farmacia.",
-    "ALREADY_PAID": "Esta dispensación ya está pagada. No se cobra un segundo pago."
+    "ALREADY_PAID": "Esta dispensación ya está pagada. No se cobra un segundo pago.",
+    "REFERENCE_REQUIRED": "Introduzca la referencia de la transacción de dinero móvil que muestra el teléfono del paciente."
   },
   "MY_PHARMACY_INVOICES": {
     "TITLE": "Mis facturas de farmacia",

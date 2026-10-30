@@ -989,8 +989,17 @@ public class DispenseServiceImpl implements DispenseService {
         // QA D156: the pharmacist-verification step existed but only the MAR
         // read it, so a controlled or co-sign prescription was filled with
         // nobody having verified it. The same scope gates the counter.
+        // QA D1028: the dispensing pharmacist's own attest ("J'ai vérifié
+        // cette ordonnance": verifiedBy = the session user, a pharmacist role,
+        // checked and stamped by requirePharmacistVerification before any
+        // stock moves) IS that verification, recorded with the fill: the same
+        // review by the same role, as a real dispensary does it. Refusing it
+        // sent the pharmacist to another screen with no hint, so morphine
+        // could not be dispensed from the dispensing screen at all. A
+        // controlled fill still needs its witness on the stock movement.
         if (pharmacistVerificationService != null
-                && pharmacistVerificationService.blocksAdministration(prescription)) {
+                && pharmacistVerificationService.blocksAdministration(prescription)
+                && dto.getVerifiedBy() == null) {
             throw new BusinessException(MessageUtil.resolve("dispense.verification.required"));
         }
         return prescription;
@@ -1018,8 +1027,9 @@ public class DispenseServiceImpl implements DispenseService {
      * gate is scoped (no dispensary cover at night) does not apply: every fill
      * needs a verification. The dispensing pharmacist attests it in the same
      * request ({@code verifiedBy} = themselves, already checked against the
-     * session) and it is stamped on the prescription; a controlled or co-sign
-     * prescription still needs the separate verification step first
+     * session) and it is stamped on the prescription. QA D1028: that holds
+     * for a controlled or co-sign prescription too; without the attest it
+     * needs the separate verification step first
      * ({@link #loadAndValidatePrescription}).
      */
     private void requirePharmacistVerification(Prescription prescription, ActorPair actors) {

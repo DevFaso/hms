@@ -25,6 +25,7 @@ import { ToastService } from '../core/toast.service';
 import { PermissionService } from '../core/permission.service';
 import { RoleContextService } from '../core/role-context.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { CashClosingComponent } from './cash-closing/cash-closing.component';
 import { formatCfa } from '../shared/i18n/app-locale';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
@@ -44,6 +45,7 @@ type BillingTab = 'all' | 'outstanding' | 'paid' | 'overdue';
     EnumLabelPipe,
     PatientPickerComponent,
     DialogA11yDirective,
+    CashClosingComponent,
   ],
   templateUrl: './billing.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -57,6 +59,12 @@ export class BillingComponent implements OnInit {
   private readonly translate = inject(TranslateService);
 
   // Permission-gated action flags
+  /** QA D1059: the cashier's daily cash closing, opened from the page header. */
+  readonly showCashClosing = signal(false);
+
+  /** QA D1059: the date range of the last search run, which the KPI tiles follow. */
+  private appliedRange: { fromDate?: string; toDate?: string } = {};
+
   readonly canCreate = this.permissions.hasAnyPermission('Create Invoice', 'Manage Billing');
   readonly canEdit = this.permissions.hasAnyPermission('Create Invoice', 'Manage Billing');
   /** QA D181: the server deletes only for SUPER_ADMIN and HOSPITAL_ADMIN, so a
@@ -278,6 +286,9 @@ export class BillingComponent implements OnInit {
     // QA D974: settled by a waiver with no money received: a mistaken waiver is undone by cancelling.
     if (current === 'PAID' && this.editingPaid() === 0) return ['PAID', 'CANCELLED'];
     if (current === 'PAID' || current === 'PARTIALLY_PAID') return [current];
+    // QA D1057: an issued invoice never goes back to DRAFT (the server refuses
+    // it: billing.invoice.noReturnToDraft); it stays as it is or is cancelled.
+    if (current && current !== 'DRAFT') return [current, 'CANCELLED'];
     return ['DRAFT', 'SENT', 'CANCELLED'];
   }
 
@@ -481,12 +492,17 @@ ${this.translate.instant('BILLING.SUPPLEMENTARY_CONFIRM')}`)
           : this.filterStatus()
             ? [this.filterStatus() as InvoiceStatus]
             : undefined;
+    // QA D1059: the tiles follow the range of the search actually run (an
+    // inverted one is not a range: the tiles then cover every invoice).
+    const fromDate = this.filterFromDate() || undefined;
+    const toDate = this.filterToDate() || undefined;
+    this.appliedRange = fromDate && toDate && fromDate > toDate ? {} : { fromDate, toDate };
     this.billingService
       .searchInvoices(
         {
           statuses,
-          fromDate: this.filterFromDate() || undefined,
-          toDate: this.filterToDate() || undefined,
+          fromDate,
+          toDate,
           query: this.searchTerm.trim() || undefined,
         },
         page,
@@ -515,7 +531,8 @@ ${this.translate.instant('BILLING.SUPPLEMENTARY_CONFIRM')}`)
    * page of 20 rows undercounted revenue and money owed.
    */
   private refreshStats(): void {
-    this.billingService.getSummary().subscribe({
+    // QA D1059: the tiles follow the list's date filter (the invoice date, as the search reads it).
+    this.billingService.getSummary(this.appliedRange).subscribe({
       next: (summary) =>
         this.stats.set({
           total: Number(summary?.total ?? 0),

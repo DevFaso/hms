@@ -147,6 +147,8 @@
                   </td>
                   <td>
                     <span class="result-value">{{ r.resultValue | labValue }}</span>
+                    <!-- QA D1016: a correction of a value already released -->
+                    <app-lab-correction-badge [corrected]="r.corrected" />
                     @if (directionKey(r); as dirKey) {
                       <span class="result-direction">{{ dirKey | translate }}</span>
                     }

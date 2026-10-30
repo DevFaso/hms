@@ -54,7 +54,7 @@ public class InvoiceNumberAllocator {
     }
 
     /** The hospital code reduced to letters and digits, or INV when it has none. */
-    static String prefixOf(Hospital hospital) {
+    public static String prefixOf(Hospital hospital) {
         String code = hospital.getCode() == null ? "" : hospital.getCode();
         String cleaned = code.toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9]", "");
         if (cleaned.isEmpty()) {

@@ -82,8 +82,45 @@ const KEYDOWN_ATTR = /^\(keydown\)$/;
 const ESCAPE_KEY = /['"]Escape['"]/;
 const ESCAPE_IN_MARKUP = /\(keydown\.esc(?:ape)?\)=/;
 
+/**
+ * QA D1030 (D968's class): `(keydown.escape)="$event.stopPropagation()"` on
+ * the dialog does not close it, it SWALLOWS the key, so a close bound on the
+ * backdrop around it never fires. Such a binding is not an Escape handler,
+ * and it hides every handler above it.
+ */
+const SWALLOW_ONLY = /^\s*\$event\.stopPropagation\(\)\s*;?\s*$/;
+
+function escapeBindings(tag) {
+  return [...tag.attrs.keys()]
+    .filter((k) => ESCAPE_ATTR.test(k))
+    .map((k) => tag.attrs.get(k) ?? '');
+}
+
 function hasEscapeAttr(tag) {
-  return [...tag.attrs.keys()].some((k) => ESCAPE_ATTR.test(k));
+  return escapeBindings(tag).some((binding) => !SWALLOW_ONLY.test(binding));
+}
+
+function swallowsEscape(tag) {
+  const bindings = escapeBindings(tag);
+  if (bindings.length > 0 && bindings.every((binding) => SWALLOW_ONLY.test(binding))) return true;
+  // `(keydown)="$event.stopPropagation()"` swallows every key, Escape included.
+  return [...tag.attrs.keys()].some(
+    (k) => KEYDOWN_ATTR.test(k) && SWALLOW_ONLY.test(tag.attrs.get(k) ?? ''),
+  );
+}
+
+/**
+ * QA D1030 / D968: a hand-built dialog must move focus into itself, keep Tab
+ * inside and give focus back - the shared directives do (appModalDialog,
+ * appDialogA11y, appDialogFocus), as do a CDK focus trap and the CDK/Material
+ * dialog service. A native <dialog> opened with showModal() does it itself.
+ */
+const SHOW_MODAL = /\.showModal\(\)/;
+const FOCUS_DIRECTIVE = /^(?:appModalDialog|appDialogA11y|appDialogFocus|cdkTrapFocus)$/;
+const COMPONENT_FOCUS = /MatDialog|@angular\/cdk\/dialog|\bDialogRef\b|\bFocusTrapFactory\b/;
+
+function hasFocusDirective(tag) {
+  return [...tag.attrs.keys()].some((k) => FOCUS_DIRECTIVE.test(k));
 }
 
 /**
@@ -162,9 +199,14 @@ export function dialogFindings(html, componentSource = html, dialogSelectors = n
     const role = attrValue(tag, 'role') ?? (directive ? 'dialog' : undefined);
     // A native <dialog> has the implicit role, is modal when opened with
     // showModal() and closes on Escape by itself: only its NAME is checked.
-    const nativeDialog = tag.name === 'dialog';
+    // QA D1030: only when the component opens it with showModal(). A
+    // `<dialog [open]="...">` is NOT modal: no inert page behind, no Escape,
+    // no focus moved in. It is checked like a hand-built dialog. (Coarse on
+    // purpose: one showModal() call in the component exempts its <dialog>s.)
+    const nativeDialog = tag.name === 'dialog' && SHOW_MODAL.test(componentSource);
     const isDialog =
-      nativeDialog || (role !== undefined && DIALOG_ROLES.has(role.replace(/['"]/g, '').trim()));
+      tag.name === 'dialog' ||
+      (role !== undefined && DIALOG_ROLES.has(role.replace(/['"]/g, '').trim()));
     // innerHtml walks forward to the matching close tag; only a dialog or a
     // container needs it, not every <td> of a worklist.
     if (isDialog) {
@@ -180,7 +222,7 @@ export function dialogFindings(html, componentSource = html, dialogSelectors = n
           line: tag.line,
           rule: 'modal',
           anchor: a,
-          message: `role="${role}" without aria-modal="true": the page behind stays in the reading order`,
+          message: `${tag.name === 'dialog' ? '<dialog> not opened with showModal()' : `role="${role}"`} without aria-modal="true": the page behind stays in the reading order`,
         });
       }
       const named = ['aria-labelledby', 'aria-label'].some((n) => {
@@ -202,7 +244,8 @@ export function dialogFindings(html, componentSource = html, dialogSelectors = n
         componentEscape ||
         hasEscapeAttr(tag) ||
         hasKeydownEscape(tag, componentSource) ||
-        stack.some((s) => s.escape) ||
+        // QA D1030: a dialog that swallows Escape never lets the backdrop's close fire.
+        (!swallowsEscape(tag) && stack.some((s) => s.escape)) ||
         (inner != null && ESCAPE_IN_MARKUP.test(inner));
       if (!hasEscape) {
         out.push({
@@ -211,6 +254,23 @@ export function dialogFindings(html, componentSource = html, dialogSelectors = n
           anchor: a,
           message:
             'dialog in a component with no Escape handler ((keydown.escape) or a document:keydown.escape HostListener)',
+        });
+      }
+      const managesFocus =
+        nativeDialog ||
+        directive !== null ||
+        hasFocusDirective(tag) ||
+        stack.some((s) => s.focus) ||
+        COMPONENT_FOCUS.test(componentSource) ||
+        (inner != null &&
+          /\b(?:appModalDialog|appDialogA11y|appDialogFocus|cdkTrapFocus)\b/.test(inner));
+      if (!managesFocus) {
+        out.push({
+          line: tag.line,
+          rule: 'focus',
+          anchor: a,
+          message:
+            'hand-built dialog with no focus management: add appModalDialog (focus in, Tab kept inside, focus back on close)',
         });
       }
     } else if ([...classTokens(tag)].some((t) => CONTAINER_TOKEN.test(t))) {
@@ -238,6 +298,7 @@ export function dialogFindings(html, componentSource = html, dialogSelectors = n
         name: tag.name,
         isDialog,
         escape: hasEscapeAttr(tag) || hasKeydownEscape(tag, componentSource),
+        focus: hasFocusDirective(tag),
       });
     }
   });

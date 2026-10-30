@@ -13,13 +13,6 @@ const STAFF_ACCOUNT_SCREENS = new Map([
   ['src/app/staff/staff-list.html', 'a user account (no middle name on User)'],
   ['src/app/super-admin/emergency/emergency.html', 'a user account (no middle name on User)'],
   ['src/app/users/user-list.html', 'a user account (no middle name on User)'],
-  // D1036 class, not fixed here: the lines are the ones fix/r17-lab-pharmacy-billing
-  // rewrites for D1052 ("Patient: …" colons); that branch switches them to
-  // `| personName` and deletes this entry (flagged in the hand-back).
-  [
-    'src/app/pharmacy/dispensing.html',
-    'D1036 sibling owned by fix/r17-lab-pharmacy-billing (D1052 lines)',
-  ],
 ]);
 
 const FIRST_LAST = /\{\{\s*([\w.?!]+)\.firstName\s*\}\}\s*\{\{\s*\1\.lastName\s*\}\}/g;

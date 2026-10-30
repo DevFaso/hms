@@ -36,6 +36,8 @@ public class Hl7v2MessageBuilder {
     private static final String OBX_STATUS_FINAL = "F";
     /** OBX-11: recorded but not released — the bench is not finished with it. */
     private static final String OBX_STATUS_PRELIMINARY = "P";
+    /** QA D1016: HL7 v2 OBX-11 "C" - a correction of a final result, replacing it. */
+    private static final String OBX_STATUS_CORRECTED = "C";
 
     // ── Outbound OML^O21 – New Lab Order sent to instrument ──────────────────
 
@@ -85,11 +87,11 @@ public class Hl7v2MessageBuilder {
      * {@code LabResultServiceImpl.createLabResult} enqueues an outbound
      * ORU for every result, released or not, so a hard-coded {@code F}
      * published unverified values as final — the outbound mirror of the
-     * ingest bug fixed alongside it. {@code C} (corrected) is not emitted
-     * because the model has no correction concept: nothing on
-     * {@code LabResult} distinguishes an amended result from a first one.
-     * A release enqueues a second ORU, so a receiver that saw the {@code P}
-     * gets the {@code F}.
+     * ingest bug fixed alongside it. QA D1016: a released correction (a
+     * result that names the released one it replaces, supersedesResultId) is
+     * sent {@code C}, so the receiver replaces the value instead of filing a
+     * second final one. A release enqueues a second ORU, so a receiver that
+     * saw the {@code P} gets the {@code F} (or the {@code C}).
      */
     public String buildOruR01(LabResult result) {
         LabOrder order = result.getLabOrder();
@@ -109,7 +111,14 @@ public class Hl7v2MessageBuilder {
             ? encodeEscapes(order.getLabTestDefinition().getName()) : "";
         String resultDate = result.getResultDate() != null ? result.getResultDate().format(HL7_DT) : now;
         String abnormalFlag = toHl7AbnormalFlag(result.getAbnormalFlag());
-        String resultStatus = result.isReleased() ? OBX_STATUS_FINAL : OBX_STATUS_PRELIMINARY;
+        String resultStatus;
+        if (!result.isReleased()) {
+            resultStatus = OBX_STATUS_PRELIMINARY;
+        } else if (com.example.hms.service.lab.LabResultCorrections.isCorrection(result)) {
+            resultStatus = OBX_STATUS_CORRECTED;
+        } else {
+            resultStatus = OBX_STATUS_FINAL;
+        }
         String orderId = order.getId() != null ? encodeEscapes(order.getId().toString()) : "";
 
         return msh("ORU^R01^ORU_R01", msgId, now) +

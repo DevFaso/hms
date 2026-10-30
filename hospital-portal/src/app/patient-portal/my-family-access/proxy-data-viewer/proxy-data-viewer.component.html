@@ -164,6 +164,7 @@
                         {{ 'PORTAL.LAB_RESULTS.PENDING_RESULT' | translate }}
                       } @else {
                         {{ l.result }} {{ l.unit }}
+                        <app-lab-correction-badge [corrected]="l.corrected" audience="patient" />
                         @if (l.isAbnormal) {
                           <span class="material-symbols-outlined abnormal-flag">warning</span>
                         }
@@ -271,6 +272,7 @@
                         {{ 'PORTAL.LAB_RESULTS.PENDING_RESULT' | translate }}
                       } @else {
                         {{ l.result }} {{ l.unit }}
+                        <app-lab-correction-badge [corrected]="l.corrected" audience="patient" />
                       }
                     </li>
                   }

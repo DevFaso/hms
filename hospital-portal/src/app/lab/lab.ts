@@ -828,8 +828,13 @@ export class LabComponent implements OnInit {
           this.specimenSaving.set(false);
           this.loadSpecimens(order.id);
         },
-        error: () => {
-          this.toast.error(this.translate.instant('LAB.TOAST.SPECIMEN_COLLECT_FAILED'));
+        error: (err: { error?: { errors?: Record<string, string>; message?: string } }) => {
+          // QA D1050: the server's own reason (a field too long), in the reader's
+          // language, instead of a generic failure; the form keeps what was typed.
+          const fieldMessage = Object.values(err?.error?.errors ?? {})[0];
+          this.toast.error(
+            fieldMessage ?? this.translate.instant('LAB.TOAST.SPECIMEN_COLLECT_FAILED'),
+          );
           this.specimenSaving.set(false);
         },
       });

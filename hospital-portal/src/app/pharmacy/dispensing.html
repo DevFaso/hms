@@ -74,14 +74,16 @@
       </div>
 
       <div class="rx-summary">
-        <span class="rx-label">{{ 'PHARMACY.PRESCRIPTION' | translate }}:</span>
+        <span class="rx-label"
+          >{{ 'PHARMACY.PRESCRIPTION' | translate }}{{ 'COMMON.COLON' | translate }}</span
+        >
         <strong>{{ selectedPrescription?.medicationName }}</strong>
         <span class="rx-meta">
           {{ selectedPrescription?.dosage }} · {{ selectedPrescription?.frequency }}
         </span>
         <span class="rx-meta">
-          {{ 'PHARMACY.PATIENT' | translate }}: {{ selectedPrescription?.patient?.firstName }}
-          {{ selectedPrescription?.patient?.lastName }}
+          {{ 'PHARMACY.PATIENT' | translate }}{{ 'COMMON.COLON' | translate }}
+          {{ selectedPrescription?.patient | personName }}
         </span>
       </div>
 
@@ -164,6 +166,28 @@
                 required
               />
             </div>
+          }
+          <!-- QA D1029: a fill larger than the shortest-dated lot empties it
+               first and takes the rest from the next lot, one fill per lot. -->
+          @if (fefoSplit(); as split) {
+            @if (split.length > 1) {
+              <div class="field full-width" data-testid="fefo-split">
+                <small class="field-hint" role="status">
+                  {{ 'PHARMACY.FEFO_SPLIT_HINT' | translate }}
+                  @for (part of split; track part.lot.id; let last = $last) {
+                    {{
+                      'PHARMACY.FEFO_SPLIT_PART'
+                        | translate
+                          : {
+                              quantity: part.quantity,
+                              lot: part.lot.lotNumber,
+                              date: (part.lot.expiryDate | serverTime | date: 'MMM yyyy'),
+                            }
+                    }}{{ last ? '' : ', ' }}
+                  }
+                </small>
+              </div>
+            }
           }
           <!-- QA D654: a controlled substance leaves the shelf in front of a witness -->
           @if (lotIsControlled()) {
@@ -300,7 +324,11 @@
               class="btn-secondary"
               data-testid="mark-ready"
               [disabled]="
-                saving() || form.quantityDispensed <= 0 || !verifyAttested() || fefoReasonMissing()
+                saving() ||
+                form.quantityDispensed <= 0 ||
+                !verifyAttested() ||
+                fefoReasonMissing() ||
+                fefoSplit().length > 1
               "
               (click)="submitReady()"
             >
@@ -337,8 +365,8 @@
       <div class="rx-summary">
         <strong>{{ action.rx.medicationName }}</strong>
         <span class="rx-meta">
-          {{ 'PHARMACY.PATIENT' | translate }}: {{ action.rx.patient?.firstName }}
-          {{ action.rx.patient?.lastName }}
+          {{ 'PHARMACY.PATIENT' | translate }}{{ 'COMMON.COLON' | translate }}
+          {{ action.rx.patient | personName }}
         </span>
       </div>
       @if (action.kind === 'handOver') {
@@ -409,6 +437,9 @@
     <div
       class="form-card form-card-accent"
       role="alertdialog"
+      aria-modal="true"
+      appDialogFocus
+      (dialogDismiss)="cancelClaimAction()"
       aria-labelledby="claim-take-over-title"
       aria-describedby="claim-take-over-text"
       data-testid="claim-take-over"
@@ -422,8 +453,8 @@
       <div class="rx-summary">
         <strong>{{ action.rx.medicationName }}</strong>
         <span class="rx-meta">
-          {{ 'PHARMACY.PATIENT' | translate }}: {{ action.rx.patient?.firstName }}
-          {{ action.rx.patient?.lastName }}
+          {{ 'PHARMACY.PATIENT' | translate }}{{ 'COMMON.COLON' | translate }}
+          {{ action.rx.patient | personName }}
         </span>
       </div>
       <p id="claim-take-over-text" data-testid="claim-take-over-text">
@@ -511,7 +542,7 @@
           <tbody>
             @for (rx of workQueue(); track rx.id) {
               <tr>
-                <td>{{ rx.patient?.firstName }} {{ rx.patient?.lastName }}</td>
+                <td>{{ rx.patient | personName }}</td>
                 <td>{{ rx.medicationName }}</td>
                 <td>{{ rx.dosage }}</td>
                 <td>
@@ -625,7 +656,7 @@
                     <span class="refill-note">{{ 'PHARMACY.REFILL_NONE' | translate }}</span>
                   }
                 </td>
-                <td>{{ rx.staff?.user?.firstName }} {{ rx.staff?.user?.lastName }}</td>
+                <td>{{ rx.staff?.user | personName }}</td>
                 <td>
                   @if (rx.readyForCollection) {
                     <!-- G15: a prepared fill is handed over or its preparation

@@ -2,6 +2,7 @@ import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@ang
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { actionRoles } from '../core/action-permissions';
@@ -20,7 +21,14 @@ import { serverDateOrInstant } from '../shared/date-utils';
 @Component({
   selector: 'app-inventory-dashboard',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, CfaPipe],
+  imports: [
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    CfaPipe,
+    ModalDialogDirective,
+  ],
   templateUrl: './inventory-dashboard.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './inventory-dashboard.scss',

@@ -1,6 +1,10 @@
 package com.example.hms.service;
 
 import com.example.hms.enums.InvoiceStatus;
+import com.example.hms.enums.PaymentMethod;
+import com.example.hms.enums.PaymentStatus;
+import com.example.hms.exception.BusinessException;
+import com.example.hms.model.PaymentTransaction;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.BillingInvoiceMapper;
 import com.example.hms.model.BillingInvoice;
@@ -36,6 +40,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -1956,6 +1961,71 @@ class BillingInvoiceServiceImplTest {
 
         verify(pdfInvoiceService).generateReceiptPdf(eq(invoice), eq(later), eq("GH-2026-000021-R2"),
             eq(new BigDecimal("100")), any());
+    }
+
+    @Test
+    void aPaymentReceivedBeforeTheInvoiceExistedIsAFoldedCopay_D1056() {
+        BillingInvoice visit = new BillingInvoice();
+        visit.setCreatedAt(java.time.LocalDateTime.of(2026, 10, 29, 10, 0));
+        PaymentTransaction copay = PaymentTransaction.builder().build();
+        copay.setCreatedAt(java.time.LocalDateTime.of(2026, 10, 29, 8, 30));
+        PaymentTransaction desk = PaymentTransaction.builder().build();
+        desk.setCreatedAt(java.time.LocalDateTime.of(2026, 10, 29, 11, 0));
+        assertTrue(BillingInvoiceServiceImpl.isFoldedPayment(visit, copay));
+        assertFalse(BillingInvoiceServiceImpl.isFoldedPayment(visit, desk));
+    }
+
+    @Test
+    void summarize_overADateRangeReadsOnlyTheInvoicesDatedInIt_D1059() {
+        List<Object[]> rows = new java.util.ArrayList<>();
+        rows.add(new Object[] {3L, 1L, 2L, 0L, new BigDecimal("1500"), new BigDecimal("6000")});
+        LocalDate day = LocalDate.of(2026, 10, 29);
+        when(invoiceRepository.summarizeBetween(any(), any(), eq(day), eq(day))).thenReturn(rows);
+
+        com.example.hms.payload.dto.BillingSummaryDTO sum = billingInvoiceService.summarize(day, day, Locale.ENGLISH);
+
+        assertEquals(3L, sum.getTotal());
+        assertEquals(0, new BigDecimal("1500").compareTo(sum.getTotalRevenue()));
+        verify(invoiceRepository, never()).summarize(any(), any());
+    }
+
+    @Test
+    void summarize_anOpenBoundReadsTheWidestRangeAndAnInvertedOneIsRefused_D1059() {
+        when(invoiceRepository.summarizeBetween(any(), any(), any(), any())).thenReturn(List.of());
+        billingInvoiceService.summarize(LocalDate.of(2026, 10, 1), null, Locale.ENGLISH);
+        verify(invoiceRepository).summarizeBetween(any(), any(), eq(LocalDate.of(2026, 10, 1)), eq(LocalDate.of(9999, 12, 31)));
+        LocalDate later = LocalDate.of(2026, 10, 30);
+        LocalDate earlier = LocalDate.of(2026, 10, 1);
+        assertThrows(BusinessException.class, () -> billingInvoiceService.summarize(later, earlier, Locale.ENGLISH));
+    }
+
+    @Test
+    void cashClosing_totalsTheCashiersDayPerMethodAndKeepsAReversalOutOfTheTill_D1059() {
+        UUID cashier = UUID.randomUUID();
+        when(roleValidator.getCurrentUserId()).thenReturn(cashier);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(HOSPITAL_ID);
+        LocalDate day = LocalDate.of(2026, 10, 29);
+        PaymentTransaction cash = PaymentTransaction.builder().amount(new BigDecimal("1500"))
+            .paymentMethod(PaymentMethod.CASH).status(PaymentStatus.CONFIRMED).build();
+        cash.setCreatedAt(day.atTime(9, 0));
+        PaymentTransaction momo = PaymentTransaction.builder().amount(new BigDecimal("3000"))
+            .paymentMethod(PaymentMethod.MOBILE_MONEY).referenceNumber("OM-1").status(PaymentStatus.CONFIRMED).build();
+        momo.setCreatedAt(day.atTime(10, 0));
+        PaymentTransaction reversed = PaymentTransaction.builder().amount(new BigDecimal("500"))
+            .paymentMethod(PaymentMethod.CASH).status(PaymentStatus.REVERSED).build();
+        reversed.setCreatedAt(day.atTime(11, 0));
+        when(paymentTransactionRepository.findReceivedByCashier(cashier, HOSPITAL_ID, day.atStartOfDay(),
+            day.plusDays(1).atStartOfDay())).thenReturn(List.of(cash, momo, reversed));
+
+        com.example.hms.payload.dto.CashClosingDTO closing = billingInvoiceService.cashClosing(day, Locale.FRENCH);
+
+        assertEquals(day, closing.getDate());
+        assertEquals(2L, closing.getReceivedCount());
+        assertEquals(0, new BigDecimal("4500").compareTo(closing.getReceivedAmount()));
+        assertEquals(1L, closing.getReversedCount());
+        assertEquals(0, new BigDecimal("500").compareTo(closing.getReversedAmount()));
+        assertEquals(2, closing.getByMethod().size());
+        assertEquals(3, closing.getEntries().size());
     }
 
     @Test

@@ -253,7 +253,11 @@ describe('BillingComponent', () => {
     expect(date?.disabled).toBeTrue();
     expect(el.querySelector<HTMLInputElement>('#bill-dueDate')?.disabled).toBeTrue();
     expect(el.querySelector<HTMLInputElement>('#bill-encounter')?.disabled).toBeTrue();
-    expect(el.querySelector<HTMLTextAreaElement>('#bill-notes')?.disabled).toBeFalse();
+    // QA D1057: the notes are locked too (the server refuses a change, D656);
+    // they used to stay editable and the cashier's cancellation reason was refused.
+    expect(el.querySelector<HTMLTextAreaElement>('#bill-notes')?.disabled).toBeTrue();
+    // QA D1057: an issued invoice never offers DRAFT, only itself or a cancellation.
+    expect(component.statusOptions()).toEqual(['SENT', 'CANCELLED']);
   });
 
   it('QA D621: amounts read "F CFA" whatever the language', () => {
@@ -528,6 +532,21 @@ describe('BillingComponent', () => {
     expect(stats.total).toBe(32);
     expect(stats.totalRevenue).toBe(157200);
     expect(stats.balance).toBe(12900);
+  });
+
+  it('QA D1059: the KPI tiles follow the date filter', () => {
+    billingSpy.getSummary.and.returnValue(
+      of({ total: 3, paid: 1, outstanding: 2, overdue: 0, totalRevenue: 1500, balance: 6000 }),
+    );
+    billingSpy.searchInvoices.and.returnValue(of(mockPage([])));
+    fixture.detectChanges();
+    component.filterFromDate.set('2026-10-29');
+    component.filterToDate.set('2026-10-29');
+    component.applyServerFilters();
+    expect(billingSpy.getSummary).toHaveBeenCalledWith({
+      fromDate: '2026-10-29',
+      toDate: '2026-10-29',
+    });
   });
 
   it('QA D325: the All tab counts every invoice in scope, not the loaded page', () => {

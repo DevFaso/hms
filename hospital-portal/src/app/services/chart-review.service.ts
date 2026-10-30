@@ -53,6 +53,8 @@ export interface ChartReviewResult {
   orderingStaffName?: string | null;
   acknowledged: boolean;
   released: boolean;
+  /** QA D1016: the result corrects a released value. */
+  corrected?: boolean;
 }
 
 export interface ChartReviewMedication {

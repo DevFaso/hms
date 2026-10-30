@@ -11,6 +11,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { LabCorrectionBadgeComponent } from '../../lab/shared/lab-correction-badge.component';
 import { Subject, Subscription, takeUntil } from 'rxjs';
 
 import {
@@ -54,6 +55,7 @@ const ABNORMAL_DANGER = new Set(['CRITICAL', 'ABNORMAL']);
   selector: 'app-chart-review',
   standalone: true,
   imports: [
+    LabCorrectionBadgeComponent,
     ServerTimePipe,
     CommonModule,
     TranslateModule,

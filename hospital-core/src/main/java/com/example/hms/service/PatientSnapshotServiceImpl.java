@@ -490,6 +490,7 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
                             .flag(labResultFlag(r))
                             .abnormalDirection(r.getAbnormalFlag() != null ? r.getAbnormalFlag().direction() : null)
                             .date(r.getResultDate() != null ? r.getResultDate().format(DATE_FMT) : "")
+                            .corrected(com.example.hms.service.lab.LabResultCorrections.isCorrection(r))
                             .build()));
         } catch (Exception e) {
             log.debug("Lab results query error: {}", e.getMessage());

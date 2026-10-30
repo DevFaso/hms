@@ -271,6 +271,8 @@
                     </td>
                     <td>
                       {{ r.resultValue | labValue }}
+                      <!-- QA D1016: a correction of a released value -->
+                      <app-lab-correction-badge [corrected]="r.corrected" />
                       @if (r.resultUnit) {
                         <span class="chart-review__muted">{{ r.resultUnit }}</span>
                       }

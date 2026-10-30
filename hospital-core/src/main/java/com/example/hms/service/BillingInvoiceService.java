@@ -110,4 +110,11 @@ public interface BillingInvoiceService {
         java.math.BigDecimal amount, com.example.hms.enums.PaymentMethod method, String reference, UUID recordedBy);
     /** QA D209: KPI totals over every invoice in the caller's scope. */
     com.example.hms.payload.dto.BillingSummaryDTO summarize(Locale locale);
+
+    /** QA D1059: the KPIs over the invoices dated in the range (either bound may be open). */
+    com.example.hms.payload.dto.BillingSummaryDTO summarize(java.time.LocalDate fromDate, java.time.LocalDate toDate,
+                                                            Locale locale);
+
+    /** QA D1059: the signed-in cashier's cash closing for {@code date} (today when null). */
+    com.example.hms.payload.dto.CashClosingDTO cashClosing(java.time.LocalDate date, Locale locale);
 }

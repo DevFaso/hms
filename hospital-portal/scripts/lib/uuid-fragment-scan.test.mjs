@@ -68,3 +68,15 @@ test("the first UUID group (id.split('-')[0]) and a parenthesised id are the sam
     ['slice-call:(row.patientId.slice', 'slice-call:order.id.split'],
   );
 });
+
+test('QA D1032: a slice taken after the dashes are stripped is a UUID fragment, whatever the receiver', () => {
+  const text = `return (id ?? '').replace(/-/g, '').substring(0, 10).toUpperCase();
+    const a = ref.replaceAll('-', '').slice(0, 8);
+    const b = row.key.split("-").join("").toUpperCase().substr(0, 12);
+    const whole = uuid.replace(/-/g, '').slice(0, 40);
+    const phone = phone.replace(/ /g, '').slice(0, 8);`;
+  assert.deepEqual(
+    uuidFragmentFindings(text).map((f) => f.rule),
+    ['strip-slice', 'strip-slice', 'strip-slice'],
+  );
+});

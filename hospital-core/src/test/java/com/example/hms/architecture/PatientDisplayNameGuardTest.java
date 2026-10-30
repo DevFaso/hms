@@ -41,7 +41,6 @@ class PatientDisplayNameGuardTest {
         "bootstrap/DevSyntheticDataSeeder.java", 1, "dev fixture text, never shown to a reader",
         "service/ClinicalDashboardServiceImpl.java", 1, "QA D1036 class; fix/r17-clinical-workflow owns the file",
         "service/DoctorWorklistServiceImpl.java", 3, "QA D1036 class; fix/r17-clinical-workflow owns the file",
-        "service/LabResultServiceImpl.java", 1, "QA D1036 class; fix/r17-lab-pharmacy-billing owns the file",
         "service/PatientFlowServiceImpl.java", 2, "QA D1036 class, pre-existing (patient flow board)",
         "service/PatientSnapshotServiceImpl.java", 1, "QA D1036 class, pre-existing (clinical snapshot)",
         "service/ResultReviewServiceImpl.java", 1, "QA D1036 class, pre-existing (result review)",

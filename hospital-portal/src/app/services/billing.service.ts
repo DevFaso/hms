@@ -193,6 +193,29 @@ export interface BillingSummary {
   balance: number;
 }
 
+/** QA D1059: one cashier's money received on one day (BillingInvoiceService.cashClosing). */
+export interface CashClosing {
+  date: string;
+  cashierId?: string;
+  cashierName?: string | null;
+  byMethod: { source: 'BILLING' | 'PHARMACY'; method: string; count: number; amount: number }[];
+  entries: {
+    id: string;
+    source: 'BILLING' | 'PHARMACY';
+    receivedAt?: string | null;
+    document?: string | null;
+    patientName?: string | null;
+    method?: string | null;
+    reference?: string | null;
+    amount: number;
+    status: string;
+  }[];
+  receivedCount: number;
+  receivedAmount: number;
+  reversedCount: number;
+  reversedAmount: number;
+}
+
 export interface InvoicePage {
   content: BillingInvoiceResponse[];
   totalElements: number;
@@ -219,8 +242,19 @@ export class BillingService {
     return this.http.post<InvoicePage>('/billing-invoices/search', body, { params });
   }
 
-  getSummary(): Observable<BillingSummary> {
-    return this.http.get<BillingSummary>('/billing-invoices/summary');
+  /** QA D1059: the KPIs over the invoices dated in the list's date filter (either bound optional). */
+  getSummary(range?: { fromDate?: string; toDate?: string }): Observable<BillingSummary> {
+    let params = new HttpParams();
+    if (range?.fromDate) params = params.set('fromDate', range.fromDate);
+    if (range?.toDate) params = params.set('toDate', range.toDate);
+    return this.http.get<BillingSummary>('/billing-invoices/summary', { params });
+  }
+
+  /** QA D1059: the signed-in cashier's daily cash closing (today when no date). */
+  getCashClosing(date?: string): Observable<CashClosing> {
+    let params = new HttpParams();
+    if (date) params = params.set('date', date);
+    return this.http.get<CashClosing>('/billing-invoices/cash-closing', { params });
   }
 
   getInvoice(id: string): Observable<BillingInvoiceResponse> {

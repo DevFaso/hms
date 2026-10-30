@@ -70,6 +70,8 @@ public class LabSpecimenRejectionNotifier {
         TransactionCallbacks.afterCommit(() -> deliver(item, username, args, specimenId));
     }
 
+    static final String IN_BASKET_TITLE_KEY = "lab.specimen.rejected.inBasketTitle";
+
     /** The urgent in-basket item for the ordering clinician, built inside the rejecting transaction. */
     private static CreateInBasketItemRequest inBasketItem(LabOrder order, UUID specimenId, String reason,
                                                           Object testName, User clinician) {
@@ -79,9 +81,13 @@ public class LabSpecimenRejectionNotifier {
         item.setHospitalId(order.getHospital().getId());
         item.setItemType(InBasketItemType.ORDER);
         item.setPriority(InBasketPriority.URGENT);
-        item.setTitle(MessageUtil.resolve(NotificationLocales.STAFF, "lab.specimen.rejected.inBasketTitle",
+        item.setTitle(MessageUtil.resolve(NotificationLocales.STAFF, IN_BASKET_TITLE_KEY,
             testName instanceof String name ? name
                 : MessageUtil.resolve(NotificationLocales.STAFF, com.example.hms.mapper.LabOrderMapper.DELETED_TEST_LABEL)));
+        // QA D1053: the key too, so each reader sees the title in their language.
+        item.setTitleKey(IN_BASKET_TITLE_KEY);
+        // A deleted test arrives as a key (testNameOf) and is rendered in the reader's language.
+        item.setTitleArgs(new Object[] {testName});
         item.setBody(reason);
         item.setReferenceId(specimenId);
         item.setReferenceType(REFERENCE_TYPE);

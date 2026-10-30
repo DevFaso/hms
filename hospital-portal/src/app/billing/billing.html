@@ -5,6 +5,19 @@
       <p class="page-subtitle">{{ 'BILLING.SUBTITLE' | translate }}</p>
     </div>
     <div class="page-actions">
+      <!-- QA D1059: the cashier's daily cash closing -->
+      @if (canRecordPayment) {
+        <button
+          type="button"
+          class="btn-secondary"
+          data-testid="cash-closing-toggle"
+          [attr.aria-expanded]="showCashClosing()"
+          (click)="showCashClosing.set(!showCashClosing())"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">point_of_sale</span>
+          {{ 'BILLING.CASH_CLOSING.OPEN' | translate }}
+        </button>
+      }
       @if (canCreate) {
         <button class="btn-primary" (click)="openCreate()">
           <span class="material-symbols-outlined">add</span> {{ 'BILLING.NEW_INVOICE' | translate }}
@@ -12,6 +25,10 @@
       }
     </div>
   </div>
+
+  @if (showCashClosing()) {
+    <app-cash-closing />
+  }
 
   <div class="summary-cards">
     <div class="summary-card">
@@ -820,9 +837,13 @@
         </div>
         <div class="field">
           <label for="bill-notes">{{ 'BILLING.NOTES' | translate }}</label>
+          <!-- QA D1057: an issued invoice's notes are locked like its dates and
+               total (the server refuses a change: QA D656); a cancellation
+               reason is not typed here. -->
           <textarea
             id="bill-notes"
             [(ngModel)]="form.notes"
+            [disabled]="issuedContentLocked()"
             rows="3"
             [placeholder]="'BILLING.NOTES_PLACEHOLDER' | translate"
           ></textarea>
@@ -1000,7 +1021,7 @@
       </div>
       <div class="modal-body">
         <p class="payment-balance">
-          {{ 'BILLING.BALANCE_DUE' | translate }}:
+          {{ 'BILLING.BALANCE_DUE' | translate }}{{ 'COMMON.COLON' | translate }}
           <strong>{{ formatCurrency(inv.balanceDue) }}</strong>
         </p>
         @if (paymentPending() > 0) {

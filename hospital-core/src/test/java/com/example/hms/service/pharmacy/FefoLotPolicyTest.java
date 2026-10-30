@@ -84,9 +84,19 @@ class FefoLotPolicyTest {
                 .extracting("messageKey").isEqualTo("pharmacy.fefo.reasonRequired");
     }
 
+    /**
+     * QA D1029 (round 17) inverts the round-16 rule "a shorter-dated lot that
+     * cannot cover the movement does not count": 130 tablets left the 2028 lot
+     * while 120 sat in the 2027 lot, with no reason asked. Any stock left on a
+     * shorter-dated lot comes first; the screen splits the fill across lots.
+     */
     @Test
-    void aShorterDatedLotThatCannotCoverTheMovementDoesNotCount() {
-        assertThat(policy.requireFefoOrReason(longDated, new BigDecimal("150"), null)).isNull();
+    void aShorterDatedLotThatCannotCoverTheMovementStillComesFirst_D1029() {
+        BigDecimal hundredFifty = new BigDecimal("150");
+        assertThatThrownBy(() -> policy.requireFefoOrReason(longDated, hundredFifty, null))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(e -> assertThat(((BusinessException) e).getArgs()[0]).isEqualTo("R16-PCM-COURT"));
+        assertThat(policy.requireFefoOrReason(longDated, hundredFifty, "patient part en brousse")).isNotNull();
     }
 
     @Test

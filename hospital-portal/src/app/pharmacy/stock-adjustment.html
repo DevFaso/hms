@@ -340,7 +340,9 @@
 
   <!-- Filter -->
   <div class="filter-bar">
-    <label for="txFilterType">{{ 'PHARMACY.FILTER_BY_TYPE' | translate }}:</label>
+    <label for="txFilterType"
+      >{{ 'PHARMACY.FILTER_BY_TYPE' | translate }}{{ 'COMMON.COLON' | translate }}</label
+    >
     <select id="txFilterType" [(ngModel)]="filterType" (ngModelChange)="onFilterChange()">
       <option value="">{{ 'COMMON.ALL' | translate }}</option>
       @for (t of transactionTypes; track t) {

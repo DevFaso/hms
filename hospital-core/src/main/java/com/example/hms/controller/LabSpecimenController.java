@@ -45,7 +45,7 @@ public class LabSpecimenController {
     @ApiResponse(responseCode = "404", description = "Lab order not found")
     public ResponseEntity<ApiResponseWrapper<LabSpecimenResponseDTO>> collectSpecimen(
         @PathVariable UUID id,
-        @RequestBody LabSpecimenRequestDTO requestDTO,
+        @jakarta.validation.Valid @RequestBody LabSpecimenRequestDTO requestDTO,
         @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
 
         // Override labOrderId with path variable to avoid inconsistency

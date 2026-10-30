@@ -18,11 +18,17 @@ import java.util.Optional;
  * no warning.
  *
  * <p>The rule: when another usable lot of the same item (stock left, not
- * expired) expires before the chosen one and holds enough for this movement,
- * taking the later lot needs a reason. The reason is returned so the caller
- * records it with the movement; without one the movement is refused, naming
- * the lot to take. A shorter-dated lot that cannot cover the movement on its
- * own does not count: one movement comes from one lot.
+ * expired) expires before the chosen one, taking the later lot needs a
+ * reason. The reason is returned so the caller records it with the movement;
+ * without one the movement is refused, naming the lot to take.
+ *
+ * <p>QA D1029 (D964's class, round 17): the rule used to count a shorter-dated
+ * lot only when it could cover the whole movement on its own, so 130 tablets
+ * left the 2028 lot while 120 sat in the 2027 lot, with no reason asked. Any
+ * shorter-dated lot with stock left now counts: the earliest lot is emptied
+ * first and the remainder comes from the next (a counter sale does it in its
+ * lines; the dispensing screen does it in one fill per lot), or a reason is
+ * given.
  */
 @Component
 @RequiredArgsConstructor
@@ -34,9 +40,10 @@ public class FefoLotPolicy {
     private final StockLotRepository stockLotRepository;
 
     /**
-     * The shorter-dated usable lot of the same item that could serve
-     * {@code quantity} instead of {@code chosen}, if any (the shortest-dated
-     * first).
+     * The shorter-dated usable lot of the same item, with stock left, that
+     * should be emptied before {@code chosen} is touched, if any (the
+     * shortest-dated first). {@code quantity} is kept for the callers' shape;
+     * QA D1029: the earlier lot no longer has to cover it.
      */
     public Optional<StockLot> earlierLot(StockLot chosen, BigDecimal quantity) {
         return earlierLot(chosen, quantity, java.util.Map.of());
@@ -54,7 +61,6 @@ public class FefoLotPolicy {
         if (chosen == null || chosen.getInventoryItem() == null || chosen.getExpiryDate() == null) {
             return Optional.empty();
         }
-        BigDecimal needed = quantity != null ? quantity : BigDecimal.ZERO;
         List<StockLot> usable = stockLotRepository.findAvailableLotsByFEFO(chosen.getInventoryItem().getId());
         if (usable == null) {
             return Optional.empty();
@@ -62,8 +68,9 @@ public class FefoLotPolicy {
         return usable.stream()
                 .filter(lot -> lot.getId() != null && !lot.getId().equals(chosen.getId()))
                 .filter(lot -> lot.getExpiryDate() != null && lot.getExpiryDate().isBefore(chosen.getExpiryDate()))
+                // QA D1029: any stock left on the earlier lot, not only enough for the whole movement.
                 .filter(lot -> lot.getRemainingQuantity() != null && lot.getRemainingQuantity()
-                        .subtract(alreadyTaken.getOrDefault(lot.getId(), BigDecimal.ZERO)).compareTo(needed) >= 0)
+                        .subtract(alreadyTaken.getOrDefault(lot.getId(), BigDecimal.ZERO)).signum() > 0)
                 .findFirst();
     }
 

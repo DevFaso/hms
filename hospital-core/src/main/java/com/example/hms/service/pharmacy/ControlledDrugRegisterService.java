@@ -411,7 +411,7 @@ public class ControlledDrugRegisterService {
             return label(locale, "pharmacy.register.reason.receipt", r.substring(RECEIPT_PREFIX.length()));
         }
         if (r.startsWith(RETURN_PREFIX)) {
-            return label(locale, "pharmacy.register.reason.return", r.substring(RETURN_PREFIX.length()));
+            return returnReason(locale, r.substring(RETURN_PREFIX.length()).trim());
         }
         if (r.startsWith(TRANSFER_PREFIX)) {
             return label(locale, "pharmacy.register.reason.transfer", r.substring(TRANSFER_PREFIX.length()));
@@ -419,10 +419,37 @@ public class ControlledDrugRegisterService {
         Matcher m = ADJUSTMENT_REASON.matcher(r);
         if (m.matches() && ADJUSTMENT_CODES.containsKey(m.group(1))) {
             String code = label(locale, "pharmacy.register.adjustment." + ADJUSTMENT_CODES.get(m.group(1)));
-            return m.group(2) == null || m.group(2).isBlank() ? code : code + " : " + m.group(2).trim();
+            // QA D1051: the colon is the reader's ("Dommage : x", "Damage: x", "Daño: x").
+            return m.group(2) == null || m.group(2).isBlank() ? code
+                : label(locale, "pharmacy.register.labelValue", code, m.group(2).trim());
         }
         return r;
     }
+
+    /**
+     * QA D1051: a return booked against a fill stores its lot and the minute
+     * the fill was given as data ("LOT-A-01b 2026-10-28T23:58"; rows written
+     * before: "lot LOT-A-01b 2026-10-28 23:58"). The words and the date are the
+     * reader's, never a raw ISO timestamp or the English "lot"; a reference the
+     * pharmacist typed is kept as typed.
+     */
+    static String returnReason(Locale locale, String ref) {
+        Matcher fill = RETURN_FILL_REF.matcher(ref);
+        if (!fill.matches()) {
+            return label(locale, "pharmacy.register.reason.return", ref);
+        }
+        java.time.LocalDateTime at = java.time.LocalDateTime.parse(fill.group(2) + "T" + fill.group(3));
+        String date = java.time.format.DateTimeFormatter
+            .ofLocalizedDateTime(java.time.format.FormatStyle.SHORT)
+            .withLocale(locale != null ? locale : Locale.FRENCH)
+            .format(at);
+        return fill.group(1) != null
+            ? label(locale, "pharmacy.register.reason.returnFill", fill.group(1), date)
+            : label(locale, "pharmacy.register.reason.returnFillDate", date);
+    }
+
+    private static final Pattern RETURN_FILL_REF = Pattern.compile(
+        "^(?:(?i:lot)\\s+)?(?:(\\S+)\\s+)?(\\d{4}-\\d{2}-\\d{2})[T ](\\d{2}:\\d{2})$");
 
     private static String movementLabel(Locale locale, String type) {
         return type == null ? "" : label(locale, "pharmacy.register.movement." + type);

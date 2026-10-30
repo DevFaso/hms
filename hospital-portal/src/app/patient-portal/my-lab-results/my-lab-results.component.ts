@@ -1,6 +1,7 @@
 import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
+import { LabCorrectionBadgeComponent } from '../../lab/shared/lab-correction-badge.component';
 import { PatientPortalService, LabResultSummary } from '../../services/patient-portal.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { localizeDecimals } from '../../shared/i18n/app-locale';
@@ -9,7 +10,14 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 @Component({
   selector: 'app-my-lab-results',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, DatePipe, EnumLabelPipe, TranslateModule],
+  imports: [
+    LabCorrectionBadgeComponent,
+    ServerTimePipe,
+    CommonModule,
+    DatePipe,
+    EnumLabelPipe,
+    TranslateModule,
+  ],
   templateUrl: './my-lab-results.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./my-lab-results.component.scss', '../patient-portal-pages.scss'],

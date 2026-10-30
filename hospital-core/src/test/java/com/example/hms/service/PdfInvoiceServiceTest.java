@@ -232,6 +232,28 @@ class PdfInvoiceServiceTest {
             .doesNotContain(payment.getId().toString());
     }
 
+    /**
+     * QA D1056: a check-in copay folded onto the visit invoice carried the
+     * copay's own total (1 500), so its receipt under the visit invoice's
+     * number read "Total 1 500, nothing due" while 1 000 was owed. It now
+     * prints this invoice's total and says the money was carried over.
+     */
+    @Test
+    void aFoldedCopayReceiptShowsThisInvoicesTotalAndSaysItWasCarriedOver_D1056() throws Exception {
+        invoice.setTotalAmount(new BigDecimal("3450.00"));
+        PaymentTransaction copay = PaymentTransaction.builder()
+            .amount(new BigDecimal("1500.00")).paymentDate(LocalDate.of(2026, 10, 29))
+            .paymentMethod(PaymentMethod.CASH).status(PaymentStatus.CONFIRMED)
+            .invoiceTotalAtReceipt(new BigDecimal("1500.00")).build();
+        copay.setId(UUID.randomUUID());
+
+        String text = textOf(service.generateReceiptPdf(invoice, copay, "INV-2042-R1", new BigDecimal("1500.00"),
+            new BigDecimal("3450.00"), true, Locale.ENGLISH));
+
+        assertThat(text).contains("3 450 F CFA", "pdf.invoice.balanceDue 1 950 F CFA", "pdf.receipt.carriedOver")
+            .doesNotContain("pdf.invoice.balanceDue 0 F CFA");
+    }
+
     /** QA D228 (not fixed in round 4): the total printed is the one when the money came in. */
     @Test
     void receiptKeepsTheTotalOfItsTimeAfterTheInvoiceGrows_D228() throws Exception {
