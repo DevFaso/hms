@@ -52,13 +52,10 @@ class CdsCardLocaleFormatGuardTest {
 
     /**
      * Sites that still format a card value by hand, each with why. Shrink only.
-     * PediatricDoseRule belongs to fix/r18-clinical-reference (dose checks are
-     * that branch's, round 18 brief): flagged there as a D1078-class sibling.
+     * Empty since the round-18 merge: PediatricDoseRule (the paediatric mg/kg
+     * card) now writes its values through CdsCardText.decimal(…).
      */
-    private static final Map<String, Allowance> ALLOWED = GuardAllowlist.allow(
-        "cdshooks/rules/PediatricDoseRule.java", 3,
-        "D1078 class, owned by fix/r18-clinical-reference (paediatric mg/kg card): the mg/kg value, the "
-            + "ceiling and the dose/weight are formatted with Locale.ROOT; flagged to that branch");
+    private static final Map<String, Allowance> ALLOWED = GuardAllowlist.allow();
 
     @Test
     @DisplayName("no card text formats a date or a decimal by hand")

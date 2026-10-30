@@ -15,7 +15,6 @@ import java.time.Period;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -238,7 +237,7 @@ public class PediatricDoseRule implements CdsRule {
             if (perDose != null && mgPerKg > perDose.doubleValue()) {
                 cards.add(softStop(text.get("cds.pediatric.ceiling.summary",
                     "Pediatric dose exceeds ceiling: {0} mg/kg > {1} mg/kg max for {2}",
-                    number(mgPerKg), perDose.toPlainString(), medication())));
+                    number(mgPerKg), number(perDose), medication())));
             }
             BigDecimal single = item.getPediatricMaxSingleDoseMg();
             if (single != null && doseMg > single.doubleValue()) {
@@ -329,15 +328,21 @@ public class PediatricDoseRule implements CdsRule {
         );
     }
 
-    private static String number(Double v) {
-        return v == null ? "?" : String.format(Locale.ROOT, "%.2f", v);
+    /*
+     * QA D1078 / D1049 class (round 18): a measured value on the card carries the
+     * reader's decimal separator ("12,50 mg/kg" in French and Spanish) through
+     * CdsCardText.decimal, never a Locale.ROOT point. A computed value keeps two
+     * decimals; a configured limit keeps the decimals it was entered with.
+     */
+    private String number(Double v) {
+        return v == null ? "?" : text.decimal(v, 2);
     }
 
-    private static String number(BigDecimal v) {
-        return v == null ? "?" : v.stripTrailingZeros().toPlainString();
+    private String number(BigDecimal v) {
+        return v == null ? "?" : text.decimal(v, Math.max(0, v.stripTrailingZeros().scale()));
     }
 
-    private static String number(double v) {
-        return String.format(Locale.ROOT, "%.2f", v);
+    private String number(double v) {
+        return text.decimal(v, 2);
     }
 }

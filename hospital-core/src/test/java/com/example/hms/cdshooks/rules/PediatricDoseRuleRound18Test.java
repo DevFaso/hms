@@ -6,12 +6,15 @@ import com.example.hms.model.Patient;
 import com.example.hms.model.medication.MedicationCatalogItem;
 import com.example.hms.model.medication.PediatricWeightBand;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.i18n.LocaleContextHolder;
+import org.springframework.context.support.ReloadableResourceBundleMessageSource;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -256,5 +259,45 @@ class PediatricDoseRuleRound18Test {
         assertThat(CdsRuleEngine.parseDoseUnits("2 comprimés")).isEqualTo(2.0);
         assertThat(CdsRuleEngine.parseDoseUnits("2")).isEqualTo(2.0);
         assertThat(CdsRuleEngine.parseDoseUnits("500 mg")).isNull();
+    }
+
+    /**
+     * Round-18 merge (QA D1078 / D1049 class): the paediatric card's values carry
+     * the reader's decimal separator - the mg/kg computed for the child, the
+     * configured ceiling and the weight - through CdsCardText.decimal, never the
+     * Locale.ROOT point the rule wrote before.
+     */
+    @Test
+    void theCardsDecimalsAreWrittenForTheReader() {
+        ReloadableResourceBundleMessageSource source = new ReloadableResourceBundleMessageSource();
+        source.setBasenames(com.example.hms.config.MessageBundles.basenames());
+        source.setDefaultEncoding("UTF-8");
+        source.setFallbackToSystemLocale(false);
+        source.setAlwaysUseMessageFormat(true);
+        PediatricDoseRule localized = new PediatricDoseRule();
+        localized.setCardText(new com.example.hms.cdshooks.CdsCardText(source));
+        MedicationCatalogItem morphine = MedicationCatalogItem.builder()
+            .nameFr("Morphine").genericName("Morphine").strength("10").strengthUnit("mg")
+            .pediatricMaxDoseMgPerKg(new BigDecimal("0.1"))
+            .pediatricDoseSource("WHO persisting pain in children 2012")
+            .build();
+        // 5 mg for a 2-year-old of 10.5 kg: 0.48 mg/kg, above the 0.1 mg/kg ceiling.
+        CdsRuleContext order = ctx(childAged(2, 0, 0), morphine, "5 mg", "q4h", 10.5, LocalDateTime.now());
+        try {
+            for (Locale reader : List.of(Locale.FRENCH, Locale.forLanguageTag("es"))) {
+                LocaleContextHolder.setLocale(reader);
+                CdsCard ceiling = localized.evaluate(order).stream()
+                    .filter(c -> c.summary().contains("mg/kg")).findFirst().orElseThrow();
+                assertThat(ceiling.summary()).as(reader.toString())
+                    .contains("0,48 mg/kg").contains("0,1 mg/kg").doesNotContain("0.48").doesNotContain("0.1 ");
+                assertThat(ceiling.detail()).as(reader.toString()).contains("10,50").doesNotContain("10.50");
+            }
+            LocaleContextHolder.setLocale(Locale.ENGLISH);
+            CdsCard english = localized.evaluate(order).stream()
+                .filter(c -> c.summary().contains("mg/kg")).findFirst().orElseThrow();
+            assertThat(english.summary()).contains("0.48 mg/kg").contains("0.1 mg/kg");
+        } finally {
+            LocaleContextHolder.resetLocaleContext();
+        }
     }
 }

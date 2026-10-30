@@ -2210,9 +2210,11 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   (refund due) and puts the stock back with no reason asked; the ledger and the payment store the English
   literals "Dispense cancelled ..." (read through the register's reason labels). Needs a reason field in the
   dispensing cancel panel and on `DispenseCancelRequestDTO`, stored on the payment void and the ledger row.
-  (2) D1084 sibling: `PdfLabels.fmt(LocalDateTime)` prints the payment time on the invoice PDF and the receipt
-  in the server's zone; `PdfInvoiceService` (front-desk branch) must convert through
-  `HospitalTime.at(t, invoice.getHospital())` — pinned in `ServerComposedTimeGuardTest`.
+  (2) D1084 sibling: at the round-18 merge (#976) `PdfInvoiceService` was confirmed to print dates only
+  (`PaymentTransaction.paymentDate` is a `LocalDate`), so no billing time reaches `PdfLabels`. Still owed:
+  `PdfLabels.fmt(LocalDateTime)` serves the clinical PDFs (`PatientRecordPdfService` "generated at"
+  `LocalDateTime.now(ZoneOffset.UTC)` and chart rows, `WristbandPdfService` specimen collection time) in the
+  server's zone; give them the hospital's zone, then delete the `PdfLabels` pin in `ServerComposedTimeGuardTest`.
   (3) D972: an ultrasound order has no encounter link, so it cannot reach the visit invoice; it needs a charge
   at completion (as `DeliveryChargeService` does for a birth) or an encounter column.
   (4) D972 decision recorded: an in-house specialist consultation and an immunization are not separate visit
@@ -5913,5 +5915,5 @@ ships*, not for building — and check the shipped surface before trusting a
   for every row of a procedure list (up to two role queries per row): resolve it once per distinct
   (author, hospital) in the list methods. `MaternalHistoryServiceImpl#toDto` looks up the delivery
   (D1067 `deliveredAt`) once per row on the paged hospital lists: batch it per page.
-  `PediatricDoseRule` (fix/r18-clinical-reference) still formats card decimals with `Locale.ROOT`
-  (allowlisted in `CdsCardLocaleFormatGuardTest`).
+  `PediatricDoseRule` card decimals: done at the round-18 merge (#976): `CdsCardText.decimal`, the
+  `CdsCardLocaleFormatGuardTest` allowance deleted, `PediatricDoseRuleRound18Test` asserts FR/ES commas.
