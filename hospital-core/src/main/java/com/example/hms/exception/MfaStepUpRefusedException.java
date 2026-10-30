@@ -32,7 +32,17 @@ public class MfaStepUpRefusedException extends RuntimeException {
         /** A current code, but one already accepted (a sign-in, an earlier step-up): wait for the next. */
         REUSED("mfa.stepup.reused"),
         /** Support acting as the user: never binds or changes the user's own authenticator. */
-        IMPERSONATION("mfa.stepup.impersonation");
+        IMPERSONATION("mfa.stepup.impersonation"),
+        /** Round 18: signing a controlled drug without an authenticator needs the password; none was sent. */
+        PASSWORD_REQUIRED("mfa.stepup.passwordRequired"),
+        /** Round 18: the password given to sign a controlled drug is wrong. */
+        PASSWORD_INVALID("mfa.stepup.passwordInvalid"),
+        /** Round 18: too many wrong passwords at signing; locked for a while. */
+        PASSWORD_LOCKED("mfa.stepup.passwordLocked"),
+        /** Round 18: support acting as a prescriber never signs a controlled drug in their name. */
+        SIGNING_IMPERSONATION("mfa.stepup.signingImpersonation"),
+        /** Round 18: an account whose password HMS does not hold must enrol an authenticator to sign. */
+        SIGNING_NOT_ENROLLED("mfa.stepup.signingNotEnrolled");
 
         private final String code;
 

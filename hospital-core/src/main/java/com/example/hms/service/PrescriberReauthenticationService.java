@@ -82,7 +82,7 @@ public class PrescriberReauthenticationService {
         }
         // Support acting as the prescriber never signs a controlled order in their name.
         if (com.example.hms.security.context.ImpersonationContextHolder.isImpersonating()) {
-            throw refused(userId, prescriptionId, null, MfaStepUpRefusedException.Reason.IMPERSONATION);
+            throw refused(userId, prescriptionId, null, MfaStepUpRefusedException.Reason.SIGNING_IMPERSONATION);
         }
         if (mfaService.isMfaEnabled(userId)) {
             try {
@@ -100,10 +100,10 @@ public class PrescriberReauthenticationService {
         }
         String source = user.getAuthSource() == null ? "internal" : user.getAuthSource().trim().toLowerCase(Locale.ROOT);
         if (!"internal".equals(source) || !StringUtils.hasText(user.getPasswordHash())) {
-            throw refused(userId, prescriptionId, METHOD_PASSWORD, MfaStepUpRefusedException.Reason.NOT_ENROLLED);
+            throw refused(userId, prescriptionId, METHOD_PASSWORD, MfaStepUpRefusedException.Reason.SIGNING_NOT_ENROLLED);
         }
         if (!StringUtils.hasText(password)) {
-            throw refused(userId, prescriptionId, METHOD_PASSWORD, MfaStepUpRefusedException.Reason.REQUIRED);
+            throw refused(userId, prescriptionId, METHOD_PASSWORD, MfaStepUpRefusedException.Reason.PASSWORD_REQUIRED);
         }
         String key = PASSWORD_KEY_PREFIX + userId;
         // The attempt is counted BEFORE the password is compared (atomically in
@@ -113,10 +113,10 @@ public class PrescriberReauthenticationService {
             && attemptStore.recordFailure(key, MAX_PASSWORD_FAILURES, PASSWORD_WINDOW_MS, PASSWORD_LOCK_MS)
                 <= MAX_PASSWORD_FAILURES;
         if (!allowed) {
-            throw refused(userId, prescriptionId, METHOD_PASSWORD, MfaStepUpRefusedException.Reason.LOCKED);
+            throw refused(userId, prescriptionId, METHOD_PASSWORD, MfaStepUpRefusedException.Reason.PASSWORD_LOCKED);
         }
         if (!passwordEncoder.matches(password, user.getPasswordHash())) {
-            throw refused(userId, prescriptionId, METHOD_PASSWORD, MfaStepUpRefusedException.Reason.INVALID);
+            throw refused(userId, prescriptionId, METHOD_PASSWORD, MfaStepUpRefusedException.Reason.PASSWORD_INVALID);
         }
         attemptStore.clear(key);
         audit(userId, prescriptionId, METHOD_PASSWORD, AuditStatus.SUCCESS, null);

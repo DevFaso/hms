@@ -446,6 +446,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // order as its two-factor verification, for this signature only; the
         // tick-keyed safeguard below then has the step it waited for.
         if (controlledResolver.isControlled(prescription)) {
+            controlledSubstanceGuard.requireCosignedFor(prescription, PrescriptionStatus.SIGNED);
             UUID signerUserId = signer.getUser() != null ? signer.getUser().getId() : null;
             PrescriberReauthenticationService.Verified verified =
                 prescriberReauthentication.requireForControlledSigning(signerUserId, prescription.getId(),
@@ -1158,13 +1159,13 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // stay withdrawable; the dispense refuses it until a quantity is set.
         applyAllergyOverrideOnUpdate(existing, allergyOverride, overrideBefore, currentUserId);
         String cdsOverride = cdsOverrideReason(request, advisories);
-        if (cdsOverride == null && !existing.isAllergiesReviewed()) {
-            // Round 18: an edit that no longer overrides a critical alert drops
-            // the stale CDS reason; it vouched for a dose no longer ordered (an
-            // allergy reason is the allergy logic's, above).
-            existing.setOverrideReason(null);
+        if (!existing.isAllergiesReviewed()) {
+            // Round 18: with no allergy override the field is the CDS reason's:
+            // an edit writes its own reason, or drops a stale one that vouched
+            // for a dose no longer ordered (an allergy reason is the allergy
+            // logic's, above, and is never overwritten).
+            existing.setOverrideReason(cdsOverride);
         }
-        recordCdsOverride(existing, cdsOverride);
         if (cdsOverride != null) {
             auditCdsOverrideAfterCommit(existing, currentUserId, cdsOverride, advisories,
                 "Critical decision-support alert overridden on edit");

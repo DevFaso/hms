@@ -168,6 +168,22 @@ class LabRangeDemographicGradingTest {
         assertThat(mapper.severityFlagOf(inMmol)).isEqualTo(LabResultMapper.FLAG_CRITICAL);
     }
 
+    /**
+     * Review of round 18: the patient's own range is in another unit; the only
+     * range in the result's unit is the other sex's. The value is still graded
+     * (and a critical one alerted), never "not graded: units differ".
+     */
+    @Test
+    void aCriticalValueIsNeverHiddenByTheDemographicFilter() {
+        List<LabTestReferenceRange> mixed = List.of(
+            range(3.5, 5.0, "mEq/L", "FEMALE", 18, 150, "YEARS", 2.5, 6.49),
+            range(3.5, 5.0, "mmol/L", "MALE", 18, 150, "YEARS", 2.5, 6.49));
+        LabResult woman = result("7.2", "mmol/L", mixed, "F", LocalDate.of(1980, 1, 1));
+
+        assertThat(mapper.isUngradedForUnitMismatch(woman)).isFalse();
+        assertThat(mapper.raisesCriticalAlert(mapper.severityFlagOf(woman))).isTrue();
+    }
+
     @Test
     void ageIsCountedInCompletedUnitsInclusiveBounds() {
         LocalDate dob = LocalDate.of(2026, 1, 31);

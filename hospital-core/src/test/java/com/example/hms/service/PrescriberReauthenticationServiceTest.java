@@ -124,7 +124,7 @@ class PrescriberReauthenticationServiceTest {
 
         assertThatThrownBy(() -> service.requireForControlledSigning(userId, rxId, "wrong", null))
             .isInstanceOfSatisfying(MfaStepUpRefusedException.class,
-                ex -> assertThat(ex.getReason()).isEqualTo(MfaStepUpRefusedException.Reason.INVALID));
+                ex -> assertThat(ex.getReason()).isEqualTo(MfaStepUpRefusedException.Reason.PASSWORD_INVALID));
         verify(attemptStore).recordFailure(eq("rx-sign-password:" + userId), eq(5), anyLong(), anyLong());
         verify(attemptStore, never()).clear(any());
         assertThat(lastAudit().getStatus()).isEqualTo(AuditStatus.FAILURE);
@@ -136,7 +136,7 @@ class PrescriberReauthenticationServiceTest {
 
         assertThatThrownBy(() -> service.requireForControlledSigning(userId, rxId, "right-password", null))
             .isInstanceOfSatisfying(MfaStepUpRefusedException.class,
-                ex -> assertThat(ex.getReason()).isEqualTo(MfaStepUpRefusedException.Reason.LOCKED));
+                ex -> assertThat(ex.getReason()).isEqualTo(MfaStepUpRefusedException.Reason.PASSWORD_LOCKED));
         verify(passwordEncoder, never()).matches(any(), any());
     }
 
@@ -144,7 +144,7 @@ class PrescriberReauthenticationServiceTest {
     void aBlankPasswordIsRequired() {
         assertThatThrownBy(() -> service.requireForControlledSigning(userId, rxId, "  ", null))
             .isInstanceOfSatisfying(MfaStepUpRefusedException.class,
-                ex -> assertThat(ex.getReason()).isEqualTo(MfaStepUpRefusedException.Reason.REQUIRED));
+                ex -> assertThat(ex.getReason()).isEqualTo(MfaStepUpRefusedException.Reason.PASSWORD_REQUIRED));
     }
 
     @Test
@@ -153,7 +153,20 @@ class PrescriberReauthenticationServiceTest {
 
         assertThatThrownBy(() -> service.requireForControlledSigning(userId, rxId, "any", null))
             .isInstanceOfSatisfying(MfaStepUpRefusedException.class,
-                ex -> assertThat(ex.getReason()).isEqualTo(MfaStepUpRefusedException.Reason.NOT_ENROLLED));
+                ex -> assertThat(ex.getReason()).isEqualTo(MfaStepUpRefusedException.Reason.SIGNING_NOT_ENROLLED));
+        verify(passwordEncoder, never()).matches(any(), any());
+    }
+
+    @Test
+    void aSupportSessionNeverSignsForThePrescriber() {
+        try (org.mockito.MockedStatic<com.example.hms.security.context.ImpersonationContextHolder> holder =
+                 org.mockito.Mockito.mockStatic(com.example.hms.security.context.ImpersonationContextHolder.class)) {
+            holder.when(com.example.hms.security.context.ImpersonationContextHolder::isImpersonating).thenReturn(true);
+
+            assertThatThrownBy(() -> service.requireForControlledSigning(userId, rxId, "right-password", null))
+                .isInstanceOfSatisfying(MfaStepUpRefusedException.class, ex -> assertThat(ex.getReason())
+                    .isEqualTo(MfaStepUpRefusedException.Reason.SIGNING_IMPERSONATION));
+        }
         verify(passwordEncoder, never()).matches(any(), any());
     }
 

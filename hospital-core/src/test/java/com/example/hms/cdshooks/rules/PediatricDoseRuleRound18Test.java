@@ -109,6 +109,15 @@ class PediatricDoseRuleRound18Test {
             .contains("6000.00 mg").contains("4000");
     }
 
+    /** Review of round 18: an unreadable frequency still counts the dose itself against the daily cap. */
+    @Test
+    void oneDoseAboveTheDailyCapIsAHardStopWhateverTheFrequency() {
+        List<CdsCard> cards = rule.evaluate(ctx(childAged(6, 0, 0), paracetamol(), "5 g", "si douleur",
+            19.0, LocalDateTime.now()));
+
+        assertThat(anyHardStop(cards)).isTrue();
+    }
+
     @Test
     void correctDosesRaiseNothing() {
         Patient child = childAged(6, 0, 0);

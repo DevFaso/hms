@@ -77,13 +77,19 @@ class MedicationCatalogItemDtoCoverageTest {
             .containsAll(paediatric);
     }
 
+    /**
+     * Round 18 (changed): the general create no longer carries the paediatric
+     * ceiling (the pharmacy's audited dosing endpoint is its only writer); the
+     * response still shows what the item holds.
+     */
     @Test
-    void thePaediatricCeilingRoundTripsThroughTheMapper() {
+    void thePaediatricCeilingIsReadOnTheResponseAndWrittenOnlyByThePharmacy() {
         MedicationCatalogItemMapper mapper = new MedicationCatalogItemMapper();
+        assertThat(fields(MedicationCatalogItemRequestDTO.class)).doesNotContain("pediatricMaxDoseMgPerKg");
         MedicationCatalogItem item = mapper.toEntity(MedicationCatalogItemRequestDTO.builder()
-            .nameFr("Paracétamol sirop").genericName("paracetamol")
-            .pediatricMaxDoseMgPerKg(new BigDecimal("15.000")).build());
-        assertThat(item.getPediatricMaxDoseMgPerKg()).isEqualByComparingTo("15");
+            .nameFr("Paracétamol sirop").genericName("paracetamol").build());
+        assertThat(item.getPediatricMaxDoseMgPerKg()).isNull();
+        item.setPediatricMaxDoseMgPerKg(new BigDecimal("15.000"));
         assertThat(mapper.toResponseDTO(item).getPediatricMaxDoseMgPerKg()).isEqualByComparingTo("15");
     }
 }

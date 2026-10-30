@@ -60,7 +60,6 @@ public class MedicationCatalogItemMapper {
                 .category(dto.getCategory())
                 .essentialList(dto.isEssentialList())
                 .controlled(dto.isControlled())
-                .pediatricMaxDoseMgPerKg(dto.getPediatricMaxDoseMgPerKg())
                 .active(dto.isActive())
                 .description(dto.getDescription())
                 .build();

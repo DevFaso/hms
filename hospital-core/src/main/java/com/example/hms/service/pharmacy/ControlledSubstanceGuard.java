@@ -73,6 +73,20 @@ public class ControlledSubstanceGuard {
     }
 
     /**
+     * Review of round 18: the co-sign half of {@link #requireSafeguardsFor},
+     * checked by the signature BEFORE the prescriber re-authenticates, so a
+     * refusal for a missing co-signature never spends their TOTP step or a
+     * backup code on a signature that cannot happen.
+     */
+    public void requireCosignedFor(Prescription prescription, PrescriptionStatus targetStatus) {
+        if (prescription.isRequiresCosign()
+                && (prescription.getCosignedAt() == null || prescription.getCosignedBy() == null)) {
+            throw new BusinessException("prescription.safeguard.COSIGN_REQUIRED.status",
+                targetStatus.localizedLabel());
+        }
+    }
+
+    /**
      * The dispense-side check. Dispense is the irreversible step — a wrongly
      * signed prescription can be cancelled, medication handed to a patient
      * cannot be recalled — and status can be reached by paths that never pass

@@ -151,10 +151,13 @@ public class PediatricDoseRule implements CdsRule {
         Optional<CdsCard> hardStop() {
             BigDecimal cap = item == null ? null : item.getPediatricMaxDailyMg();
             Double doseMg = context.proposedDoseMg();
-            if (cap == null || doseMg == null || dosesPerDay == null) {
+            if (cap == null || doseMg == null) {
                 return Optional.empty();
             }
-            double daily = doseMg * dosesPerDay;
+            // Review of round 18: an unreadable frequency (PRN, STAT, free text)
+            // still counts at least this one dose: a single dose above the daily
+            // cap is a hard stop whatever the frequency says.
+            double daily = dosesPerDay == null ? doseMg : doseMg * dosesPerDay;
             if (daily <= cap.doubleValue()) {
                 return Optional.empty();
             }

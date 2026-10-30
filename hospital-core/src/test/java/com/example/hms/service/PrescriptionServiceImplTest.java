@@ -1550,6 +1550,23 @@ class PrescriptionServiceImplTest {
         verify(prescriptionRepository, never()).save(any());
     }
 
+    /** Review of round 18: a missing co-signature is refused before the prescriber's code is spent. */
+    @Test
+    void aMissingCosignatureIsRefusedBeforeTheReAuthentication() {
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(prescriberUserId);
+        rx.setRequiresCosign(true);
+        when(prescriptionRepository.findById(rx.getId())).thenReturn(java.util.Optional.of(rx));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(rx.getHospital().getId());
+        when(roleValidator.getCurrentUserId()).thenReturn(prescriberUserId);
+        when(controlledResolver.isControlled(rx)).thenReturn(true);
+
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rx.getId(),
+            com.example.hms.payload.dto.SignPrescriptionRequestDTO.builder().mfaCode("123456").build(), Locale.ENGLISH))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class);
+        verify(prescriberReauthentication, never()).requireForControlledSigning(any(), any(), any(), any());
+    }
+
     /** Round 18: an ordinary drug signs without any re-authentication. */
     @Test
     void anOrdinaryOrderSignsWithoutReAuthentication() {

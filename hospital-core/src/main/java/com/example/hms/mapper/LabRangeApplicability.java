@@ -30,10 +30,11 @@ import java.util.Set;
  *       range, an age band containing the patient before an unbounded range,
  *       then the configured order.</li>
  *   <li>Missing data never hides a result: an unknown sex or date of birth
- *       matches any range, ranked below a real match; and when no range
- *       applies at all (a child, but only adult ranges configured), every
- *       range is a candidate, as before this change, so a critical value is
- *       still graded and alerted.</li>
+ *       matches any range, ranked below a real match; and the ranges that do
+ *       not apply follow the applicable ones in configured order (all of them,
+ *       when none applies: a child, but only adult ranges configured), so the
+ *       unit rule can always fall back and a critical value is still graded
+ *       and alerted.</li>
  * </ul>
  */
 public final class LabRangeApplicability {
@@ -92,7 +93,17 @@ public final class LabRangeApplicability {
             return ranges;
         }
         applicable.sort(Comparator.comparingInt(Ranked::rank).reversed().thenComparingInt(Ranked::order));
-        return applicable.stream().map(Ranked::range).toList();
+        // Review of round 18: the ranges that do not apply follow, in their
+        // configured order, so the unit rule can still fall back to them when
+        // no applicable range is in the result's unit: a critical value must
+        // never become "not graded: units differ" because of the filter.
+        List<LabTestReferenceRange> ordered = new ArrayList<>(applicable.stream().map(Ranked::range).toList());
+        for (LabTestReferenceRange range : ranges) {
+            if (range != null && !ordered.contains(range)) {
+                ordered.add(range);
+            }
+        }
+        return ordered;
     }
 
     private record Ranked(LabTestReferenceRange range, int rank, int order) {}
