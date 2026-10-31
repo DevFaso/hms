@@ -561,23 +561,11 @@ public class CriticalValueNotificationService {
 
     /**
      * QA D349: a numeric result in the reader's notation ("5,0" in French),
-     * keeping the scale the laboratory reported. Anything that is not a plain
-     * number ("Positif", "&lt;0.5") is shown as entered.
+     * keeping the scale the laboratory reported; a comparator is kept
+     * ("&lt;0.5" reads "&lt;0,5", round 19). Words ("Positif") are shown as entered.
      */
     public static String localizedValue(String raw, java.util.Locale locale) {
-        if (raw == null) {
-            return "";
-        }
-        try {
-            java.math.BigDecimal number = new java.math.BigDecimal(raw.trim());
-            java.text.NumberFormat format = java.text.NumberFormat.getNumberInstance(locale);
-            int scale = Math.max(number.scale(), 0);
-            format.setGroupingUsed(false);
-            format.setMinimumFractionDigits(scale);
-            format.setMaximumFractionDigits(scale);
-            return format.format(number);
-        } catch (NumberFormatException notANumber) {
-            return raw;
-        }
+        // D1002 class: one server number formatter (utility/DisplayNumbers).
+        return com.example.hms.utility.DisplayNumbers.labValue(raw, locale);
     }
 }

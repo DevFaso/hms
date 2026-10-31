@@ -720,6 +720,28 @@ class ChartReviewServiceImplTest {
             });
     }
 
+    @Test
+    void qaD1106_theChronologyTitleWritesTheValueInTheReadersNotation() {
+        // Round 19: "Kaliémie 5.9 mmol/L Corrigé" in a French and a Spanish Chronologie.
+        LabResult r = handEnteredPotassium("5.9");
+        r.setReleased(true);
+        when(labResultRepo.findPatientResultsReadableAt(
+            any(UUID.class), any(), any(), anyBoolean(), any(Pageable.class)))
+            .thenReturn(List.of(r));
+        for (java.util.Locale locale : List.of(java.util.Locale.FRENCH, java.util.Locale.forLanguageTag("es"))) {
+            org.springframework.context.i18n.LocaleContextHolder.setLocale(locale);
+            try {
+                ChartReviewDTO dto = service.getChartReview(PATIENT_ID, HOSPITAL_ID, null);
+                assertThat(dto.getTimeline())
+                    .filteredOn(e -> e.getSection() == Section.RESULT)
+                    .singleElement()
+                    .satisfies(e -> assertThat(e.getTitle()).contains("5,9").doesNotContain("5.9"));
+            } finally {
+                org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+            }
+        }
+    }
+
     /**
      * QA D1016/D931 (round 18, third round NOT_FIXED): the Results tab said
      * "Corrigé" but the Chronologie built from the same row did not.

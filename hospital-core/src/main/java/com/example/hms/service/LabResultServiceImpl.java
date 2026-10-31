@@ -2325,7 +2325,9 @@ public class LabResultServiceImpl implements LabResultService {
             String interpretation = generateInterpretation(currentNum, previousNum, absoluteChange, percentageChange, daysBetween, current.getResultUnit());
 
             return LabResultComparisonDTO.ComparisonMetadata.builder()
-                .absoluteChange(String.format("%.2f %s", absoluteChange, current.getResultUnit() != null ? current.getResultUnit() : ""))
+                .absoluteChange((com.example.hms.utility.DisplayNumbers.decimal(absoluteChange, 2,
+                    com.example.hms.utility.DisplayNumbers.requestLocale()) + " "
+                    + (current.getResultUnit() != null ? current.getResultUnit() : "")).trim())
                 .percentageChange(percentageChange)
                 .trendDirection(direction)
                 .daysBetween(daysBetween)
@@ -2406,9 +2408,10 @@ public class LabResultServiceImpl implements LabResultService {
         String unitStr = unit != null ? " " + unit : "";
         java.util.Locale locale = org.springframework.context.i18n.LocaleContextHolder.getLocale();
         return com.example.hms.utility.MessageUtil.resolve(key,
-            String.format(locale, "%.2f", Math.abs(absoluteChange)), unitStr,
-            String.format(locale, "%.1f", Math.abs(percentageChange)), String.valueOf(daysBetween),
-            String.format(locale, "%.2f", previous), String.format(locale, "%.2f", current));
+            com.example.hms.utility.DisplayNumbers.decimal(Math.abs(absoluteChange), 2, locale), unitStr,
+            com.example.hms.utility.DisplayNumbers.decimal(Math.abs(percentageChange), 1, locale), String.valueOf(daysBetween),
+            com.example.hms.utility.DisplayNumbers.decimal(previous, 2, locale),
+            com.example.hms.utility.DisplayNumbers.decimal(current, 2, locale));
     }
 
     private List<LabResultReferenceRangeDTO> extractReferenceRanges(LabOrder labOrder) {

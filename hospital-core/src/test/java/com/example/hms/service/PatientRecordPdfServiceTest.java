@@ -398,4 +398,21 @@ class PatientRecordPdfServiceTest {
             chart, null, PdfLabels.of(messageSource, Locale.FRENCH));
         assertThat(textOf(pdf)).contains("pdf.record.medication.controlled");
     }
+    @Test
+    void qaD1106AReleasedLabValuePrintsWithTheReadersDecimalSeparator() throws Exception {
+        // Round 19: record.pdf printed "Kaliémie (K) - 2.5 mmol/L" in a French export.
+        echoKeys();
+        ChartReviewDTO.ResultEntryDTO r = new ChartReviewDTO.ResultEntryDTO();
+        r.setTestName("Kaliemie");
+        r.setTestCode("K");
+        r.setResultValue("2.5");
+        r.setResultUnit("mmol/L");
+        r.setReleased(true);
+        ChartReviewDTO chart = ChartReviewDTO.builder().results(List.of(r)).build();
+        PatientStoryboardDTO board = PatientStoryboardDTO.builder().allergies(List.of()).build();
+        assertThat(textOf(PatientRecordPdfService.write(board, chart, null, PdfLabels.of(messageSource, Locale.FRENCH))))
+            .contains("2,5 mmol/L").doesNotContain("2.5");
+        assertThat(textOf(PatientRecordPdfService.write(board, chart, null, PdfLabels.of(messageSource, Locale.ENGLISH))))
+            .contains("2.5 mmol/L");
+    }
 }

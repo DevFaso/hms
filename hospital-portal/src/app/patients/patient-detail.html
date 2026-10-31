@@ -677,7 +677,7 @@
                   <div class="vital-metric">
                     <span class="material-symbols-outlined">thermostat</span>
                     <div>
-                      <strong>{{ v.temperatureCelsius }}</strong
+                      <strong>{{ v.temperatureCelsius | localeNumber }}</strong
                       ><small> °C</small>
                     </div>
                     <span class="vital-label">{{ 'PATIENTS.TEMPERATURE' | translate }}</span>
@@ -717,7 +717,7 @@
                   <div class="vital-metric">
                     <span class="material-symbols-outlined">monitor_weight</span>
                     <div>
-                      <strong>{{ v.weightKg }}</strong
+                      <strong>{{ v.weightKg | localeNumber }}</strong
                       ><small> kg</small>
                     </div>
                     <span class="vital-label">{{ 'PATIENTS.WEIGHT' | translate }}</span>
@@ -727,7 +727,7 @@
                   <div class="vital-metric">
                     <span class="material-symbols-outlined">height</span>
                     <div>
-                      <strong>{{ v.heightCm }}</strong
+                      <strong>{{ v.heightCm | localeNumber }}</strong
                       ><small> cm</small>
                     </div>
                     <span class="vital-label">{{ 'PATIENTS.HEIGHT' | translate }}</span>
@@ -737,7 +737,7 @@
                   <div class="vital-metric">
                     <span class="material-symbols-outlined">child_care</span>
                     <div>
-                      <strong>{{ v.headCircumferenceCm }}</strong
+                      <strong>{{ v.headCircumferenceCm | localeNumber }}</strong
                       ><small> cm</small>
                     </div>
                     <span class="vital-label">{{ 'PATIENTS.HEAD_CIRCUMFERENCE' | translate }}</span>

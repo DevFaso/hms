@@ -264,7 +264,7 @@
                 {{ entry.liquorColour ? ('LABOR.LIQUOR_' + entry.liquorColour | translate) : '—' }}
               </td>
               <td>
-                {{ entry.cervicalDilationCm !== null ? entry.cervicalDilationCm + ' cm' : '—' }}
+                {{ entry.cervicalDilationCm | measure: 'cm' }}
               </td>
               <td>{{ entry.descentFifths !== null ? entry.descentFifths + '/5' : '—' }}</td>
               <td>

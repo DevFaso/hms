@@ -153,7 +153,8 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
             // FEFO credit for stock that is not there.
             BigDecimal taken = takenByLot.getOrDefault(lot.getId(), lineDto.getQuantity());
             if (lot.getRemainingQuantity() != null && taken.compareTo(lot.getRemainingQuantity()) > 0) {
-                throw new BusinessException("stock.lot.insufficient", lot.getLotNumber(), taken.toPlainString());
+                throw new BusinessException("stock.lot.insufficient", lot.getLotNumber(),
+                        com.example.hms.utility.DisplayNumbers.quantity(taken));
             }
         }
         String lineNotes = lot == null ? lineDto.getNotes() : notesWithFefoReason(lineDto, lot, takenByLot);

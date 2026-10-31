@@ -7,6 +7,7 @@ import {
   GrowthPoint,
   VitalSignService,
 } from '../../services/vital-sign.service';
+import { resetStoredLangForTests } from '../../shared/i18n/app-locale';
 
 describe('GrowthChartTabComponent', () => {
   let fixture: ComponentFixture<GrowthChartTabComponent>;
@@ -172,5 +173,63 @@ describe('GrowthChartTabComponent', () => {
 
     const rows = fixture.nativeElement.querySelectorAll('[data-testid="growth-table"] tbody tr');
     expect(rows.length).toBe(3);
+  });
+  describe('in French (QA D1115, D1117)', () => {
+    let previousLang: string | null;
+    beforeEach(() => {
+      previousLang = localStorage.getItem('lang');
+      localStorage.setItem('lang', 'fr');
+      resetStoredLangForTests();
+    });
+    afterEach(() => {
+      if (previousLang === null) localStorage.removeItem('lang');
+      else localStorage.setItem('lang', previousLang);
+      resetStoredLangForTests();
+    });
+
+    it('D1115: writes the table and the axis with a decimal comma', () => {
+      vitalServiceSpy.getGrowthChart.and.returnValue(
+        of(
+          chart([
+            point({ ageDays: 31, weightKg: 4.8, heightCm: 54.5 }),
+            point({ ageDays: 60, weightKg: 4.6 }),
+          ]),
+        ),
+      );
+      fixture.detectChanges();
+      const table: HTMLElement = fixture.nativeElement.querySelector(
+        '[data-testid="growth-table"]',
+      );
+      expect(table.textContent).toContain('4,8 kg');
+      expect(table.textContent).toContain('54,5 cm');
+      expect(table.textContent).not.toMatch(/\d\.\d/);
+      const labels = component.chartModel()!.yTicks.map((t) => t.label);
+      expect(labels.some((l) => l.includes(','))).toBeTrue();
+      expect(labels.every((l) => !l.includes('.'))).toBeTrue();
+    });
+
+    it('D1117: names every source in words, never the code', () => {
+      vitalServiceSpy.getGrowthChart.and.returnValue(
+        of(
+          chart([
+            point({ ageDays: 0, weightKg: 3.2, source: 'DELIVERY' }),
+            point({ ageDays: 31, weightKg: 4.1, source: 'TRIAGE' }),
+            point({ ageDays: 60, weightKg: 4.6, source: 'NURSE_STATION' }),
+            point({ ageDays: 90, weightKg: 5.1, source: null }),
+          ]),
+        ),
+      );
+      fixture.detectChanges();
+      const cells = Array.from(
+        fixture.nativeElement.querySelectorAll(
+          '[data-testid="growth-table"] tbody tr td:last-child',
+        ),
+      ).map((td) => (td as HTMLElement).textContent!.trim());
+      expect(cells.length).toBe(4);
+      for (const cell of cells) {
+        expect(cell).not.toMatch(/^[A-Z_]+$/);
+      }
+      expect(cells[3]).toBe('—');
+    });
   });
 });

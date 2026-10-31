@@ -1,3 +1,4 @@
+import { LabValuePipe, LabRangePipe } from '../../../shared/pipes/lab-value.pipe';
 import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { CfaPipe } from '../../../shared/pipes/cfa.pipe';
@@ -51,6 +52,8 @@ function normalizeScopes(csv: string | null | undefined): Set<string> {
   selector: 'app-proxy-data-viewer',
   standalone: true,
   imports: [
+    LabValuePipe,
+    LabRangePipe,
     LabCorrectionBadgeComponent,
     ClockTimePipe,
     ServerTimePipe,

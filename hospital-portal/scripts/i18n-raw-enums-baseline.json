@@ -138,7 +138,6 @@
     "src/app/patients/coverage-tab/coverage-tab.component.html::g.relationship",
     "src/app/patients/coverage-tab/coverage-tab.component.html::i.subscriberRelationship",
     "src/app/patients/fluid-balance/fluid-balance-tab.component.html::entry.route",
-    "src/app/patients/growth-chart/growth-chart-tab.component.html::p.source",
     "src/app/patients/medical-history-tab/medical-history-tab.component.html::f.conditionCategory",
     "src/app/patients/medical-history-tab/medical-history-tab.component.html::f.relationship",
     "src/app/patients/medical-history-tab/medical-history-tab.component.html::s.alcoholFrequency",

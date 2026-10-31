@@ -10,7 +10,6 @@ import java.util.Locale;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.FormatStyle;
-import java.text.NumberFormat;
 
 /**
  * The words on a CDS card, in the caller's language (D61).
@@ -69,11 +68,7 @@ public class CdsCardText {
         if (value == null) {
             return "—";
         }
-        NumberFormat format = NumberFormat.getNumberInstance(locale());
-        format.setGroupingUsed(false);
-        format.setMinimumFractionDigits(fractionDigits);
-        format.setMaximumFractionDigits(fractionDigits);
-        return format.format(value);
+        return com.example.hms.utility.DisplayNumbers.decimal(value, fractionDigits, locale());
     }
 
     /** The language the card is written in: the request's, or English outside Spring. */

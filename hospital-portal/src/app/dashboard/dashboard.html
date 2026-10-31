@@ -3004,10 +3004,10 @@
                     }}</span>
                   } @else {
                     <span class="lab-value"
-                      >{{ lab.result }}
+                      >{{ lab.result | labValue }}
                       <app-lab-correction-badge [corrected]="lab.corrected" audience="patient" />
                       @if (lab.referenceRange) {
-                        <span class="lab-range">({{ lab.referenceRange }})</span>
+                        <span class="lab-range">({{ lab.referenceRange | labRange }})</span>
                       }
                     </span>
                   }
