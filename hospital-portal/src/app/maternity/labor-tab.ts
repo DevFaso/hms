@@ -33,6 +33,7 @@ import { fromServerDateTime, localInputInstant, withServerDateTimes } from '../s
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 /**
  * QA D808: the bounds PartographEntryRequestDTO puts on each number. The
  * server refused a dilation of 15 with a bare "≤ 10"; the form now refuses it
@@ -87,6 +88,7 @@ const EPISODE_LABELS: Record<string, string> = {
   selector: 'app-labor-tab',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     ModalDialogDirective,
     ServerTimePipe,
     MeasurePipe,

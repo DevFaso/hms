@@ -72,7 +72,8 @@
           type="button"
           class="screen-btn"
           (click)="submit()"
-          [disabled]="submitting() || !instrument()"
+          [disabled]="submitting()"
+          [appSubmitGuard]="!instrument() && ('SUBMIT_GUARD.LOADING' | translate)"
         >
           {{ (submitting() ? 'PRO.MY.SUBMITTING' : 'PRO.MY.SUBMIT') | translate }}
         </button>

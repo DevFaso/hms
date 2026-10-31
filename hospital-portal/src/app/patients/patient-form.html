@@ -121,7 +121,8 @@
               <button
                 type="button"
                 class="btn-secondary btn-otp"
-                [disabled]="otpConfirming || otpCode.trim().length < 4"
+                [disabled]="otpConfirming"
+                [appSubmitGuard]="otpCode.trim().length < 4"
                 (click)="confirmPhoneVerification()"
               >
                 @if (otpConfirming) {
@@ -141,7 +142,8 @@
               <button
                 type="button"
                 class="btn-secondary btn-otp"
-                [disabled]="otpSending || (form.phoneNumberPrimary || '').trim().length < 8"
+                [disabled]="otpSending"
+                [appSubmitGuard]="(form.phoneNumberPrimary || '').trim().length < 8"
                 (click)="sendPhoneVerification()"
               >
                 @if (otpSending) {

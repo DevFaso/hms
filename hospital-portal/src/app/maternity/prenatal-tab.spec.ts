@@ -13,6 +13,7 @@ import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 import { roleContextStub } from '../testing/role-context.stub';
+import { isSubmitBlocked } from '../shared/forms/submit-guard.testing';
 
 /**
  * The prenatal schedule generator. Asserted through the rendered DOM in French
@@ -118,7 +119,7 @@ describe('PrenatalTabComponent', () => {
   it('shows nothing but the form until a schedule is generated', () => {
     expect(host().querySelector('table')).toBeNull();
     const generate = host().querySelector('.modal-actions .btn-primary') as HTMLButtonElement;
-    expect(generate.disabled).toBeTrue();
+    expect(isSubmitBlocked(generate)).toBeTrue();
   });
 
   it('refuses to generate without a patient and an LMP, in French', () => {

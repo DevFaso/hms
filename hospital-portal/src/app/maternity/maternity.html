@@ -953,11 +953,9 @@
         </button>
         <button
           class="btn-primary"
-          [disabled]="
-            historySaving() ||
-            !historyForm.patientId ||
-            (!editingHistoryId() && (!!existingHistory() || historyHeldElsewhere()))
-          "
+          [disabled]="historySaving()"
+          [appSubmitGuard]="historyBlockReason()"
+          [submitGuardFields]="['history-patient']"
           (click)="submitHistory()"
         >
           {{ 'COMMON.SAVE' | translate }}
@@ -1090,7 +1088,9 @@
         </button>
         <button
           class="btn-primary"
-          [disabled]="referralSaving() || !referralForm.patientId || !referralForm.referralReason"
+          [disabled]="referralSaving()"
+          [appSubmitGuard]="!referralForm.patientId || !referralForm.referralReason"
+          [submitGuardFields]="['referral-patient', 'referral-reason']"
           (click)="submitReferral()"
         >
           {{ 'MATERNITY.SUBMIT_REFERRAL' | translate }}
@@ -1228,7 +1228,9 @@
               </button>
               <button
                 class="btn-primary"
-                [disabled]="referralActionBusy() || !referralActionText.trim()"
+                [disabled]="referralActionBusy()"
+                [appSubmitGuard]="!referralActionText.trim()"
+                [submitGuardFields]="['referral-action-text']"
                 (click)="submitReferralAction()"
               >
                 {{ 'COMMON.CONFIRM' | translate }}
@@ -1269,7 +1271,8 @@
               <button
                 [attr.aria-label]="'MATERNITY.SEND' | translate"
                 class="btn-primary btn-sm"
-                [disabled]="messageSending() || !messageDraft.trim()"
+                [disabled]="messageSending()"
+                [appSubmitGuard]="!messageDraft.trim() && ('SUBMIT_GUARD.MESSAGE' | translate)"
                 (click)="sendMessage()"
                 [title]="'MATERNITY.SEND' | translate"
               >

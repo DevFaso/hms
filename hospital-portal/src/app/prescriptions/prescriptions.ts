@@ -59,6 +59,7 @@ import { isStepUpRefusal } from '../services/step-up';
 import { MfaService } from '../auth/mfa.service';
 import { refuseFields } from '../shared/forms/invalid-fields';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 /**
  * The prescriber's list tabs (gap G10).
  *
@@ -156,6 +157,7 @@ export const PRESCRIPTION_TABS: readonly { id: PrescriptionTab; labelKey: string
   selector: 'app-prescriptions',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     PersonNamePipe,
     ModalDialogDirective,
     PatientSublinePipe,
@@ -1027,16 +1029,18 @@ export class PrescriptionsComponent implements OnInit {
     const target = this.doseReviewTarget();
     if (!target || this.doseReviewSaving()) return;
     if (!this.doseReviewReason.trim()) {
-      const message = this.translate.instant('PRESCRIPTIONS.DOSE_REVIEW.REASON_REQUIRED');
-      this.doseReviewError.set(message);
+      // QA D1143: said once, under the reason box (the dialog-level alert is
+      // kept for the server's refusals), not twice.
+      this.doseReviewError.set('');
       refuseFields(
         this.host.nativeElement,
         [DOSE_REVIEW_REASON_ID],
         [DOSE_REVIEW_REASON_ID],
-        message,
+        this.translate.instant('PRESCRIPTIONS.DOSE_REVIEW.REASON_REQUIRED'),
       );
       return;
     }
+    refuseFields(this.host.nativeElement, [], [DOSE_REVIEW_REASON_ID], '');
     this.doseReviewSaving.set(true);
     this.prescriptionService.recordPediatricDoseReview(target.id, this.doseReviewReason).subscribe({
       next: () => {
@@ -1183,6 +1187,13 @@ export class PrescriptionsComponent implements OnInit {
         this.closeSignReauth();
         this.actionError.set(text);
         this.toast.error(text);
+        // QA D1142: a business refusal (400) can leave state behind on the
+        // order — one saved before the paediatric dose-review gate is now
+        // flagged as awaiting its review — so that row is read again and the
+        // reviewer's "Record the dose review" action appears on it.
+        if (err instanceof HttpErrorResponse && err.status === 400) {
+          this.refreshRow(p.id);
+        }
       },
     });
   }
@@ -1217,6 +1228,22 @@ export class PrescriptionsComponent implements OnInit {
    * truncated.
    */
   private readonly pageRowCount = signal(0);
+
+  /** Re-reads one order and puts it back in place (the rest of the page is untouched). */
+  private refreshRow(id: string): void {
+    this.prescriptionService
+      .getById(id)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (fresh) => {
+          if (!fresh?.id) return;
+          this.prescriptions.update((rows) => rows.map((r) => (r.id === fresh.id ? fresh : r)));
+          this.applyFilter();
+        },
+        // The refusal is already shown; a failed re-read changes nothing.
+        error: () => undefined,
+      });
+  }
 
   load(): void {
     this.loading.set(true);

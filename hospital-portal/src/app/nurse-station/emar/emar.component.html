@@ -228,7 +228,8 @@
                 type="button"
                 class="emar__btn emar__btn--primary"
                 data-testid="emar-verify"
-                [disabled]="!canVerify() || verifyInFlight()"
+                [disabled]="verifyInFlight()"
+                [appSubmitGuard]="!canVerify() && ('SUBMIT_GUARD.VERIFY_FIELDS' | translate)"
                 (click)="verify()"
               >
                 @if (verifyInFlight()) {
@@ -288,7 +289,9 @@
                 type="button"
                 class="emar__btn emar__btn--success"
                 data-testid="emar-administer-given"
-                [disabled]="!canAdminister() || administerInFlight()"
+                [disabled]="administerInFlight()"
+                [appSubmitGuard]="administerBlockReason()"
+                [submitGuardFields]="['emar-witness']"
                 [attr.title]="
                   blockedPendingPharmacist() ? ('EMAR.PHARMACIST_BLOCKED_TITLE' | translate) : null
                 "

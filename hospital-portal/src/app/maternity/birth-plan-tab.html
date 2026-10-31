@@ -457,7 +457,11 @@
         </div>
         <div class="field checkbox-field">
           <label>
-            <input type="checkbox" [(ngModel)]="planForm.flexibilityAcknowledgment" />
+            <input
+              id="bp-flexibility"
+              type="checkbox"
+              [(ngModel)]="planForm.flexibilityAcknowledgment"
+            />
             {{ 'BIRTH_PLAN.FLEXIBILITY' | translate }} *
           </label>
           <label>
@@ -472,7 +476,9 @@
         </button>
         <button
           class="btn-primary"
-          [disabled]="planSaving() || !planForm.patientId || !planForm.flexibilityAcknowledgment"
+          [disabled]="planSaving()"
+          [appSubmitGuard]="!planForm.patientId || !planForm.flexibilityAcknowledgment"
+          [submitGuardFields]="['bp-patient', 'bp-flexibility']"
           (click)="submitPlan()"
         >
           {{ 'COMMON.SAVE' | translate }}
@@ -527,7 +533,9 @@
         </button>
         <button
           class="btn-primary"
-          [disabled]="reviewBusy() || !reviewSignature.trim()"
+          [disabled]="reviewBusy()"
+          [appSubmitGuard]="!reviewSignature.trim()"
+          [submitGuardFields]="['bp-signature']"
           (click)="submitReview()"
         >
           {{ 'COMMON.CONFIRM' | translate }}

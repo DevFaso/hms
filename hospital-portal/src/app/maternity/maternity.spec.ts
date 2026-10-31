@@ -15,6 +15,7 @@ import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextStub, roleContextStub } from '../testing/role-context.stub';
+import { isSubmitBlocked } from '../shared/forms/submit-guard.testing';
 
 /**
  * The maternity page's tab strip: which tabs a role sees, where it lands and
@@ -244,7 +245,7 @@ describe('MaternityComponent — new history for a patient who already has one (
     expect(maternity.currentForPatient).toHaveBeenCalledWith('p-fatimata');
     expect(notice()?.textContent).toContain('Cette patiente a déjà un historique maternel');
     expect(notice()?.textContent).toContain("Ouvrir et mettre à jour l'historique");
-    expect(saveButton().disabled).toBeTrue();
+    expect(isSubmitBlocked(saveButton())).toBeTrue();
 
     (notice()!.querySelector('button') as HTMLButtonElement).click();
     fixture.detectChanges();
@@ -278,7 +279,7 @@ describe('MaternityComponent — new history for a patient who already has one (
     fixture.detectChanges();
 
     expect(notice()).toBeNull();
-    expect(saveButton().disabled).toBeFalse();
+    expect(isSubmitBlocked(saveButton())).toBeFalse();
   });
 
   it('QA D1082: a patient with no history (204, a null body) keeps the create open', () => {
@@ -288,7 +289,7 @@ describe('MaternityComponent — new history for a patient who already has one (
     fixture.detectChanges();
 
     expect(notice()).toBeNull();
-    expect(saveButton().disabled).toBeFalse();
+    expect(isSubmitBlocked(saveButton())).toBeFalse();
   });
 
   it('QA D1067: the history list shows a delivered woman as delivered, never a running term', () => {
@@ -344,7 +345,7 @@ describe('MaternityComponent — new history for a patient who already has one (
     expect(notice()).toBeNull();
     expect(heldElsewhere()?.textContent).toContain('détenu par un autre établissement');
     expect(heldElsewhere()?.querySelector('button')).toBeNull();
-    expect(saveButton().disabled).toBeTrue();
+    expect(isSubmitBlocked(saveButton())).toBeTrue();
 
     fixture.componentInstance.submitHistory();
     expect(maternity.create).not.toHaveBeenCalled();
@@ -365,7 +366,7 @@ describe('MaternityComponent — new history for a patient who already has one (
     );
     fixture.componentInstance.onHistoryPatientPicked({ id: 'p-fatimata' } as never);
     fixture.detectChanges();
-    expect(saveButton().disabled).toBeFalse();
+    expect(isSubmitBlocked(saveButton())).toBeFalse();
 
     fixture.componentInstance.submitHistory();
     fixture.detectChanges();
@@ -376,7 +377,7 @@ describe('MaternityComponent — new history for a patient who already has one (
     expect(toast.error).not.toHaveBeenCalledWith(jasmine.stringContaining('Ouvrez-le'));
     expect(notice()).toBeNull();
     expect(heldElsewhere()).not.toBeNull();
-    expect(saveButton().disabled).toBeTrue();
+    expect(isSubmitBlocked(saveButton())).toBeTrue();
 
     fixture.componentInstance.submitHistory();
     expect(maternity.create).toHaveBeenCalledTimes(1);
@@ -398,7 +399,7 @@ describe('MaternityComponent — new history for a patient who already has one (
     );
     expect(notice()).toBeNull();
     expect(heldElsewhere()).not.toBeNull();
-    expect(saveButton().disabled).toBeTrue();
+    expect(isSubmitBlocked(saveButton())).toBeTrue();
   });
 });
 

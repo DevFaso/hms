@@ -15,6 +15,7 @@ import { RoleContextService } from '../../../core/role-context.service';
 import { refusalReason } from '../../../shared/refusal-reason';
 import { ToastService } from '../../../core/toast.service';
 
+import { SubmitGuardDirective } from '../../../shared/forms/submit-guard.directive';
 /**
  * Per-hospital editor for HMS-concept-code → DHIS2-dataElement-UID
  * mappings. Filters by datasetUid because DHIS2 dataElements live
@@ -23,7 +24,7 @@ import { ToastService } from '../../../core/toast.service';
 @Component({
   selector: 'app-dhis2-mapping-editor',
   standalone: true,
-  imports: [FormsModule, TranslateModule],
+  imports: [SubmitGuardDirective, FormsModule, TranslateModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="dhis2-mappings" data-testid="dhis2-mapping-editor">
@@ -162,7 +163,8 @@ import { ToastService } from '../../../core/toast.service';
           type="submit"
           class="btn-primary"
           data-testid="dhis2-mapping-add-submit"
-          [disabled]="!canAdd() || saving()"
+          [disabled]="saving()"
+          [appSubmitGuard]="!canAdd()"
         >
           {{ 'COMMON.ADD' | translate }}
         </button>

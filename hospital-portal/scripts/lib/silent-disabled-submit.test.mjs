@@ -1,19 +1,26 @@
-// QA D1089 / D1069 guard (round 19): a button is never disabled because an
-// amount (or, in billing and pharmacy, a cancel / void reason) is empty.
+// QA D1124 / D1089 / D1069 guard (rounds 19 and 20): no control is silently
+// disabled.
 //
-// PR #981 promised "Saisissez un montant supérieur à zéro" in the patient's pay
-// dialog, and the component did show it, but "Payer" was bound to
+// Round 19 (D1089): PR #981 promised "Saisissez un montant supérieur à zéro"
+// in the patient's pay dialog, but "Payer" was bound to
 // `[disabled]="payProcessing() || !payAmount || payAmount <= 0"`, so the
-// handler that shows the message could never run (round 19, NOT_FIXED). The
-// same dead button sat on the desk's payment dialog, the invoice line forms
-// and the payment-reversal and invoice-cancel reasons. The rule: the button
-// stays clickable (only a request in flight disables it) and the handler
-// refuses with the message, through `refuseFields` / `cfaAmountProblem`.
+// handler that shows the message could never run. The round-19 guard looked
+// only at amount-shaped names (and reasons on billing / pharmacy screens).
 //
-// Scan: every `[disabled]` binding on a `<button>` in every template (`.html`
-// and inline `template:`); the identifiers it reads, and the bodies of the
-// component methods it calls, must not name an amount (amount, price, copay,
-// fee); in billing and pharmacy screens, nor a reason. Pins: none.
+// Round 20 (D1124, NOT_FIXED twice): the same dead button sat on every staff
+// area and the portal behind names that guard could not see — `canSubmit`,
+// `quantityDispensed`, `verifyAttested`, `patientId`, an acknowledgement flag,
+// a lab void / reject / collect reason, the MAR reasons.
+//
+// The rule now (scripts/lib/disabled-control-scan.mjs): every way a control
+// is switched off (`disabled`, `[disabled]`, `[attr.disabled]`,
+// `aria-disabled`, `[class.disabled]`, an `[ngClass]` naming `disabled`, a
+// `disabled` class, a disabled `<fieldset>`) may read only "a request is in
+// flight" (`saving()`, `busy`, `actingOnId() === row.id`) or "a pager is at its
+// end", followed into the component members it calls. Anything else stays
+// clickable behind `appSubmitGuard` (shared/forms/submit-guard.directive.ts),
+// which refuses the click, marks the blank fields and says why next to the
+// button — or carries an `aria-describedby` naming the visible reason.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
@@ -21,98 +28,144 @@ import { join, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { templatesIn } from './inline-templates.mjs';
+import {
+  countDisablings,
+  disablings,
+  inFlight,
+  silentDisabledFindings,
+  silentReason,
+} from './disabled-control-scan.mjs';
+import { tags } from './html-tags.mjs';
 
 const appDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'src', 'app');
 
-/** An identifier that holds money typed by the user. */
-const AMOUNT = /^[a-z]\w*(?:Amount|Price|Copay|Fee)\b|^(?:amount|price|copay|fee)\b/;
-/** An identifier that holds a typed reason. */
-const REASON = /^[a-z]\w*Reason\b|^reason\b/;
-/** Screens where a void without a reason moves money or stock (QA D1069). */
-const MONEY_SCREENS =
-  /^(billing|pharmacy|reception\/payment-pending-panel|patient-portal\/my-billing)\//;
+/**
+ * Files another round-20 branch owns (fix/r20-portal-overlays-display), left
+ * untouched here to avoid a merge conflict. Each is a real instance of the
+ * class, listed in the hand-back with its fix; the pin is removed when that
+ * fix lands. A pin whose file no longer offends fails the test, so this list
+ * can only shrink.
+ */
+const PINS = new Map([
+  [
+    'admissions/admissions.html',
+    'D1124: bed assign, admit and discharge (fix/r20-portal-overlays-display owns admissions.html)',
+  ],
+  [
+    'appointments/appointment-detail.html',
+    'D1124: start / complete before the appointment started (owned by fix/r20-portal-overlays-display)',
+  ],
+  [
+    'bed-board/bed-board.html',
+    'D1124: precaution reason and transfer (owned by fix/r20-portal-overlays-display)',
+  ],
+  [
+    'nurse-station/nursing-intake-form/nursing-intake-form.component.html',
+    'D1124: intake submit and reconciled row (owned by fix/r20-portal-overlays-display)',
+  ],
+]);
 
-/** The `[disabled]="…"` values of the `<button>` tags of one template. */
-export function disabledBindings(html) {
-  const out = [];
-  for (const tag of html.matchAll(/<button\b[^>]*>/gs)) {
-    const m = /\[disabled\]\s*=\s*"([^"]*)"/s.exec(tag[0]);
-    if (m) out.push(m[1]);
-  }
-  return out;
-}
-
-/** The body of member `name` in a component's source ('' when absent). */
-function memberBody(ts, name) {
-  const header = new RegExp(
-    `^ {2}(?:(?:public|private|protected|readonly|get)\\s+)*${name}\\s*\\([^)]*\\)[^{;]*\\{`,
-    'm',
-  );
-  const m = header.exec(ts);
-  if (!m) return '';
-  let depth = 0;
-  for (let i = m.index + m[0].length - 1; i < ts.length; i++) {
-    if (ts[i] === '{') depth++;
-    else if (ts[i] === '}' && --depth === 0) return ts.slice(m.index, i + 1);
-  }
-  return '';
-}
-
-/** The identifiers an expression reads (`this.` dropped, member access split). */
-function identifiers(expr) {
-  return [...expr.matchAll(/[A-Za-z_$][\w$]*/g)].map((m) => m[0]);
-}
-
-/** Whether a `[disabled]` expression waits on a typed amount (or reason). */
-export function deadOnEmpty(expr, componentTs = '', moneyScreen = false) {
-  const words = new Set(identifiers(expr));
-  for (const call of expr.matchAll(/([A-Za-z_$][\w$]*)\s*\(/g)) {
-    const body = memberBody(componentTs, call[1]);
-    for (const w of identifiers(body)) words.add(w);
-  }
-  for (const w of words) {
-    if (AMOUNT.test(w)) return w;
-    if (moneyScreen && REASON.test(w)) return w;
-  }
-  return null;
-}
-
-test('QA D1089 / D1069: no button is disabled by an empty amount or a missing void reason', () => {
-  const offenders = [];
+function scanApp() {
+  const offenders = new Map();
   let bindings = 0;
-  for (const { file, text } of templatesIn(appDir)) {
+  for (const { file, text, lineOffset } of templatesIn(appDir)) {
     const rel = relative(appDir, file).replaceAll('\\', '/');
     const tsFile = file.endsWith('.html') ? file.replace(/\.html$/, '.ts') : file;
     const componentTs = existsSync(tsFile) ? readFileSync(tsFile, 'utf8') : '';
-    for (const expr of disabledBindings(text)) {
-      bindings++;
-      const word = deadOnEmpty(expr, componentTs, MONEY_SCREENS.test(rel));
-      if (word)
-        offenders.push(`${rel}: [disabled]="${expr.replace(/\s+/g, ' ').trim()}" waits on ${word}`);
+    bindings += countDisablings(text);
+    for (const f of silentDisabledFindings(text, componentTs)) {
+      const expr = (f.expr ?? '').replace(/\s+/g, ' ').trim();
+      const list = offenders.get(rel) ?? [];
+      list.push(`${rel}:${f.line + lineOffset}: ${f.how}="${expr}" waits on ${f.word}`);
+      offenders.set(rel, list);
     }
   }
-  assert.ok(bindings > 100, `scanned ${bindings} [disabled] bindings`);
+  return { offenders, bindings };
+}
+
+test('QA D1124 / D1089: no control is disabled for anything but a request in flight or a pager end', () => {
+  const { offenders, bindings } = scanApp();
+  assert.ok(bindings > 400, `scanned ${bindings} disabling bindings — the scan went blind`);
+  const unpinned = [...offenders].filter(([rel]) => !PINS.has(rel)).flatMap(([, list]) => list);
   assert.deepEqual(
-    offenders,
+    unpinned,
     [],
-    'a dead button hides the message its handler would show: disable only while a request runs, and refuse in the handler',
+    'a disabled button hides why: keep [disabled] for the request in flight and move the rest to [appSubmitGuard] (shared/forms/submit-guard.directive.ts)',
   );
+  const stale = [...PINS.keys()].filter((rel) => !offenders.has(rel));
+  assert.deepEqual(stale, [], 'a pinned file no longer offends: remove its pin');
 });
 
-test('QA D1089 guard: the scan sees the shapes the defect had', () => {
-  assert.equal(deadOnEmpty('payProcessing() || !payAmount || payAmount <= 0'), 'payAmount');
+test('QA D1124 guard: the scan sees every shape the defect had', () => {
+  // Round 19 (amounts) and round 20 (fields, flags, reasons, getters, computeds).
+  assert.equal(silentReason('payProcessing() || !payAmount || payAmount <= 0'), 'payAmount');
+  assert.equal(silentReason('saving() || !form.medicationName'), 'form.medicationName');
   assert.equal(
-    deadOnEmpty(
-      '!canAddItem()',
-      '  canAddItem(): boolean {\n    return !!this.newItemUnitPrice();\n  }\n',
+    silentReason('saving() || form.quantityDispensed <= 0 || !verifyAttested()'),
+    'form.quantityDispensed',
+  );
+  assert.equal(silentReason('voiding() || !voidReason().trim()'), 'voidReason');
+  assert.equal(
+    silentReason(
+      '!canSubmit',
+      '  get canSubmit(): boolean {\n    return this.consentAcknowledged && !this.saving();\n  }\n',
     ),
-    'newItemUnitPrice',
+    'canSubmit → consentAcknowledged',
   );
   assert.equal(
-    deadOnEmpty('paymentActionBusy() || !reversalReason().trim()', '', true),
-    'reversalReason',
+    silentReason(
+      '!canVerify()',
+      '  protected readonly canVerify = computed(() => this.patientScan().trim().length > 0);\n',
+    ),
+    'canVerify → patientScan',
   );
-  assert.equal(deadOnEmpty('paymentActionBusy() || !reversalReason().trim()', '', false), null);
-  assert.equal(deadOnEmpty('payProcessing()', '  payProcessing = signal(false);\n'), null);
-  assert.deepEqual(disabledBindings('<button class="x" [disabled]="saving()">'), ['saving()']);
+  // What may disable a control.
+  assert.equal(silentReason('saving()'), null);
+  assert.equal(silentReason('addendumSaving() || !!signingId()'), null);
+  assert.equal(silentReason('actingOnId() === row.id'), null);
+  assert.equal(silentReason('state.busy || logoutPanel().busy'), null);
+  assert.equal(silentReason('page() === 0'), null);
+  assert.equal(silentReason('currentPage() >= totalPages() - 1'), null);
+  // A gerund that names data is not a request in flight.
+  assert.equal(inFlight('pendingAttachments'), false);
+  assert.equal(inFlight('existingHistory'), false);
+  assert.equal(inFlight('uploadingPhoto'), true);
+});
+
+test('QA D1124 guard: every way of switching a control off is read', () => {
+  const kinds = (html) =>
+    tags(html)
+      .filter((t) => t.type === 'open')
+      .flatMap((t) => disablings(t).map((d) => d.how));
+  assert.deepEqual(kinds('<button [disabled]="x">'), ['[disabled]']);
+  assert.deepEqual(kinds('<button [attr.disabled]="x ? true : null">'), ['[attr.disabled]']);
+  assert.deepEqual(kinds('<a [attr.aria-disabled]="!ok">'), ['[attr.aria-disabled]']);
+  assert.deepEqual(kinds('<button aria-disabled="true">'), ['aria-disabled']);
+  assert.deepEqual(kinds('<button aria-disabled="false">'), []);
+  assert.deepEqual(kinds('<button disabled>'), ['disabled']);
+  assert.deepEqual(kinds('<button [class.disabled]="!ok">'), ['[class.disabled]']);
+  assert.deepEqual(kinds('<a class="btn disabled">'), ['class="disabled"']);
+  assert.deepEqual(kinds('<button [ngClass]="{ disabled: !ok }">'), ['[ngClass]']);
+
+  // Found on a button, a link, an input of type submit, a role="button" and a fieldset.
+  const found = (html) => silentDisabledFindings(html).map((f) => f.how);
+  assert.deepEqual(found('<button [disabled]="!form.patientId">x</button>'), ['[disabled]']);
+  assert.deepEqual(found('<a role="button" [class.disabled]="!ready">x</a>'), ['[class.disabled]']);
+  assert.deepEqual(found('<input type="submit" [attr.disabled]="!ok ? true : null">'), [
+    '[attr.disabled]',
+  ]);
+  assert.deepEqual(found('<span role="button" aria-disabled="true">x</span>'), ['aria-disabled']);
+  assert.deepEqual(found('<fieldset [disabled]="!scopeReady()"></fieldset>'), ['[disabled]']);
+  assert.deepEqual(found('<button disabled>x</button>'), ['disabled']);
+  // The two ways out: in flight only, or a visible reason named.
+  assert.deepEqual(found('<button [disabled]="saving()" [appSubmitGuard]="!x">x</button>'), []);
+  assert.deepEqual(
+    found('<button disabled aria-describedby="why">x</button><p id="why">Bientôt</p>'),
+    [],
+  );
+  assert.deepEqual(
+    found('<button disabled aria-describedby="nowhere">x</button>'),
+    ['disabled'],
+    'an aria-describedby that names nothing on the page is not a visible reason',
+  );
 });

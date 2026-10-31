@@ -222,7 +222,8 @@
         type="button"
         class="btn-primary"
         data-testid="submit-intake"
-        [disabled]="!intakeValid() || saving()"
+        [disabled]="saving()"
+        [appSubmitGuard]="!intakeValid()"
         (click)="submitIntake()"
       >
         {{ 'ROI.LOG_CONFIRM' | translate }}
@@ -302,7 +303,8 @@
         class="btn-primary"
         [class.danger]="d.kind === 'deny'"
         data-testid="submit-decision"
-        [disabled]="!decisionValid() || saving()"
+        [disabled]="saving()"
+        [appSubmitGuard]="!decisionValid()"
         (click)="submitDecision()"
       >
         {{ decisionActionKey(d.kind) | translate }}

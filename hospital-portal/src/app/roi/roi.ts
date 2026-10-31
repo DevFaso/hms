@@ -31,6 +31,7 @@ import { ToastService } from '../core/toast.service';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 type DecisionKind = 'fulfil' | 'deny' | 'cancel';
 
 /**
@@ -50,6 +51,7 @@ type DecisionKind = 'fulfil' | 'deny' | 'cancel';
   selector: 'app-roi',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     ServerTimePipe,
     CommonModule,
     FormsModule,

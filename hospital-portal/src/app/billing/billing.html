@@ -980,7 +980,9 @@
         <button
           class="btn-primary"
           (click)="submitForm()"
-          [disabled]="saving() || !form.patientId || !form.invoiceDate || !form.dueDate"
+          [disabled]="saving()"
+          [appSubmitGuard]="!form.patientId || !form.invoiceDate || !form.dueDate"
+          [submitGuardFields]="['bill-patient', 'bill-invoiceDate', 'bill-dueDate']"
         >
           {{
             saving()

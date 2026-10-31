@@ -26,6 +26,7 @@ import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { currentLocale, formatDecimal } from '../../shared/i18n/app-locale';
 import { serverInstant, localDateString } from '../../shared/date-utils';
 
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 interface QcPoint {
   x: number;
   y: number;
@@ -62,6 +63,7 @@ interface QcChartGroup {
   selector: 'app-lab-approval-queue',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     CdkTrapFocus,
     ServerTimePipe,
     CommonModule,

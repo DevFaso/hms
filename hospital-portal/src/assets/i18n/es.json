@@ -2370,7 +2370,8 @@
     "MISSING_REQUIRED_FIELDS": "Faltan campos obligatorios: {{fields}}",
     "REMOVE_FILTER": "Quitar el filtro",
     "SHOW_DETAILS": "Mostrar u ocultar los detalles",
-    "FIELD_REQUIRED": "Este campo es obligatorio."
+    "FIELD_REQUIRED": "Este campo es obligatorio.",
+    "SUBMIT_BLOCKED_REQUIRED": "Complete primero los campos obligatorios (marcados con *)."
   },
   "CONSULTATIONS": {
     "ACKNOWLEDGE": "Acusar recibo",
@@ -3168,7 +3169,10 @@
     "STARTED": "Consulta iniciada",
     "CHECK_OUT": "Dar el alta",
     "NOT_FOUND": "Consulta no encontrada",
-    "NOTE_EARLIER_ENTRIES": "Entradas anteriores de esta estancia"
+    "NOTE_EARLIER_ENTRIES": "Entradas anteriores de esta estancia",
+    "ADDENDUM_DISCARD_ASK": "¿Descartar el addendum escrito?",
+    "ADDENDUM_KEEP": "Seguir escribiendo",
+    "ADDENDUM_DISCARD": "Descartar el texto"
   },
   "FCP": {
     "CONFIRM_PASSWORD": "Confirmar contraseña",
@@ -12341,5 +12345,33 @@
     "RELEASE_REASON": "Motivo de la liberación",
     "RELEASE_REASON_REQUIRED": "Indique por qué se libera la cama.",
     "RELEASE_ACTION": "Liberar la cama"
+  },
+  "SUBMIT_GUARD": {
+    "ATTESTATION": "Marque primero «He verificado esta receta».",
+    "CODE": "Introduzca el código completo.",
+    "CONSENT": "Marque la casilla de consentimiento para enviar.",
+    "EMAIL_PENDING": "Confirme primero el código enviado a su nueva dirección de correo.",
+    "ENCOUNTER": "Elija primero una visita.",
+    "FILE": "Elija primero un archivo.",
+    "LOADING": "Espere: cargando.",
+    "MESSAGE": "Escriba primero un mensaje (o adjunte un archivo).",
+    "NOT_ON_FORMULARY": "Esta farmacia asociada no dispone de este medicamento.",
+    "NOT_ROUTABLE": "Esta receta no puede derivarse en su estado actual.",
+    "NO_CHANGES": "No hay cambios que guardar.",
+    "OVERRIDE_REASON": "Indique primero el motivo de la excepción.",
+    "PATIENT": "Elija primero un paciente.",
+    "PATIENT_AND_CLINICIAN": "Elija primero el paciente y el profesional.",
+    "PAYMENT_REFERENCE": "Introduzca la referencia de la transacción.",
+    "PERIOD": "Elija un período válido (inicio antes del fin).",
+    "PERMISSION": "Elija al menos un permiso.",
+    "PHARMACY": "Elija primero una farmacia.",
+    "PRESCRIPTION": "Elija primero una receta.",
+    "QUANTITY": "Introduzca una cantidad mayor que cero.",
+    "READY_SPLIT": "Una preparación para recoger sale de un solo lote; esta cantidad necesita dos. Dispénsela directamente.",
+    "SCOPE": "Elija primero un establecimiento.",
+    "UNIT": "Indique la unidad (comprimidos, ml…).",
+    "VERIFY_FIELDS": "Complete primero el paciente, el medicamento, la dosis y la vía.",
+    "VERIFY_FIRST": "Verifique primero los cinco correctos.",
+    "WITNESS": "Elija el testigo (un segundo profesional de este establecimiento)."
   }
 }

@@ -19,6 +19,7 @@ import {
 } from '../../shared/pro-instrument-form/pro-instrument-form.component';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 /**
  * A mother answers her own mental-health screening (EPDS) from home while a
  * postpartum plan is open for her (Tier 2 item 47).
@@ -33,6 +34,7 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
   selector: 'app-my-screenings',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     ServerTimePipe,
     CommonModule,
     DatePipe,

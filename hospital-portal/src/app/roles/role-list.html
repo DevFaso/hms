@@ -263,7 +263,10 @@
           <button
             type="button"
             class="btn-primary"
-            [disabled]="saving() || allPermissions().length === 0"
+            [disabled]="saving()"
+            [appSubmitGuard]="
+              allPermissions().length === 0 && ('SUBMIT_GUARD.PERMISSION' | translate)
+            "
             (click)="savePermissions()"
           >
             {{ saving() ? ('COMMON.SAVING' | translate) : ('ROLES.SAVE_PERMISSIONS' | translate) }}

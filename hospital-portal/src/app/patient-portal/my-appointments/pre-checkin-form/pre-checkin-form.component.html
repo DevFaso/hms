@@ -359,6 +359,7 @@
         <div class="consent-row">
           <label>
             <input
+              id="preCheckinConsent"
               type="checkbox"
               [(ngModel)]="consentAcknowledged"
               [title]="'PRE_CHECKIN.CONSENT_TITLE' | translate"
@@ -371,7 +372,13 @@
           <button class="btn-secondary" (click)="goToStep('questionnaires')">
             {{ 'PRE_CHECKIN.BACK' | translate }}
           </button>
-          <button class="btn-primary" [disabled]="!canSubmit" (click)="submit()">
+          <button
+            class="btn-primary"
+            [disabled]="saving()"
+            [appSubmitGuard]="!consentAcknowledged && ('SUBMIT_GUARD.CONSENT' | translate)"
+            [submitGuardFields]="['preCheckinConsent']"
+            (click)="submit()"
+          >
             @if (saving()) {
               {{ 'PRE_CHECKIN.SUBMITTING' | translate }}
             } @else {

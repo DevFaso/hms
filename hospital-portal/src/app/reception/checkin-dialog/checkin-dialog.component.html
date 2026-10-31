@@ -77,6 +77,7 @@
       <div class="form-group checkbox-group">
         <label>
           <input
+            id="checkinIdentityConfirmed"
             type="checkbox"
             [checked]="identityConfirmed()"
             (change)="identityConfirmed.set($any($event.target).checked)"
@@ -206,7 +207,13 @@
         <button type="button" class="btn btn-secondary" (click)="dismissed.emit()">
           {{ 'COMMON.CANCEL' | translate }}
         </button>
-        <button type="submit" class="btn btn-primary" [disabled]="!canSubmit">
+        <button
+          type="submit"
+          class="btn btn-primary"
+          [disabled]="saving()"
+          [appSubmitGuard]="submitBlockReason()"
+          [submitGuardFields]="['checkinIdentityConfirmed', 'copayReference']"
+        >
           @if (saving()) {
             <span>{{ 'COMMON.SAVING' | translate }}...</span>
           }

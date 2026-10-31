@@ -285,7 +285,9 @@
         <button
           type="button"
           class="btn-primary"
-          [disabled]="formSaving() || (!editingRegistration() && !form.patientId)"
+          [disabled]="formSaving()"
+          [appSubmitGuard]="!editingRegistration() && !form.patientId"
+          [submitGuardFields]="['reg-patient']"
           (click)="submitForm()"
         >
           {{ 'COMMON.SAVE' | translate }}

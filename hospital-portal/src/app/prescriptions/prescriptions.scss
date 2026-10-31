@@ -625,3 +625,15 @@
   background: #fffbeb;
   color: #78350f;
 }
+
+/* QA D1143: a dialog field reads label, then box, at full width. */
+.form-field--stacked {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+
+  textarea {
+    width: 100%;
+    box-sizing: border-box;
+  }
+}

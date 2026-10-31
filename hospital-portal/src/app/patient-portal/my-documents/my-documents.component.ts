@@ -11,6 +11,7 @@ import { ToastService } from '../../core/toast.service';
 import { currentLocale } from '../../shared/i18n/app-locale';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 /**
  * The largest file the upload endpoint accepts: spring.servlet.multipart
  * max-file-size is 10MB (the backend is being aligned on this one number).
@@ -34,7 +35,14 @@ const DOCUMENT_TYPES: { value: PatientDocumentType; labelKey: string }[] = [
 @Component({
   selector: 'app-my-documents',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, DatePipe, FormsModule, TranslateModule],
+  imports: [
+    SubmitGuardDirective,
+    ServerTimePipe,
+    CommonModule,
+    DatePipe,
+    FormsModule,
+    TranslateModule,
+  ],
   templateUrl: './my-documents.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./my-documents.component.scss', '../patient-portal-pages.scss'],

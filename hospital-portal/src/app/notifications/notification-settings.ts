@@ -9,6 +9,7 @@ import {
 } from '../services/notification.service';
 import { ToastService } from '../core/toast.service';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 const NOTIFICATION_TYPES = [
   'APPOINTMENT_REMINDER',
   'LAB_RESULT',
@@ -32,7 +33,7 @@ interface PrefRow {
 @Component({
   selector: 'app-notification-settings',
   standalone: true,
-  imports: [FormsModule, RouterLink, TranslateModule],
+  imports: [SubmitGuardDirective, FormsModule, RouterLink, TranslateModule],
   template: `
     <div class="settings-page">
       <div class="settings-header">
@@ -85,7 +86,12 @@ interface PrefRow {
         </table>
 
         <div class="settings-actions">
-          <button class="btn-primary" (click)="save()" [disabled]="saving() || !dirty()">
+          <button
+            class="btn-primary"
+            (click)="save()"
+            [disabled]="saving()"
+            [appSubmitGuard]="!dirty() && ('SUBMIT_GUARD.NO_CHANGES' | translate)"
+          >
             {{
               saving()
                 ? ('NOTIFICATIONS.SAVING' | translate)

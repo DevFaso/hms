@@ -30,6 +30,7 @@ import { refusalReason } from '../shared/refusal-reason';
 import { AuthorshipService } from '../shared/authorship.service';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 type Worklist = 'all' | 'pending-consent' | ProcedureOrderStatus;
 
 /**
@@ -43,6 +44,7 @@ type Worklist = 'all' | 'pending-consent' | ProcedureOrderStatus;
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    SubmitGuardDirective,
     ServerTimePipe,
     CommonModule,
     FormsModule,

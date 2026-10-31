@@ -450,7 +450,13 @@
         <button class="btn-secondary" (click)="closeRequest()">
           {{ 'COMMON.CANCEL' | translate }}
         </button>
-        <button class="btn-primary" [disabled]="!canSubmitRequest()" (click)="submitRequest()">
+        <button
+          class="btn-primary"
+          [disabled]="requestSubmitting()"
+          [appSubmitGuard]="requestBlockReason()"
+          [submitGuardFields]="['request-patient']"
+          (click)="submitRequest()"
+        >
           {{ 'DISCHARGE.SUBMIT_REQUEST' | translate }}
         </button>
       </div>

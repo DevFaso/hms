@@ -38,6 +38,7 @@ import { PatientResponse, PatientService } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
+import { isSubmitBlocked } from '../shared/forms/submit-guard.testing';
 
 /**
  * Regression guard for the "Send prescription by SMS" dialog.
@@ -324,6 +325,7 @@ describe('PrescriptionsComponent — signing', () => {
       'cosign',
       'update',
       'create',
+      'getById',
     ]);
     prescriptionService.list.and.returnValue(of([]));
     prescriptionService.sign.and.returnValue(of(rx('rx-1', 'SIGNED')));
@@ -597,13 +599,13 @@ describe('PrescriptionsComponent — signing', () => {
     expect(el.querySelector('[data-testid="rx-withdrawal-reason"]')).not.toBeNull();
 
     const save = el.querySelector('.modal-actions .btn-primary') as HTMLButtonElement;
-    expect(save.disabled).withContext('nothing chosen yet').toBeTrue();
+    expect(isSubmitBlocked(save)).withContext('nothing chosen yet').toBeTrue();
     component.form.status = 'CANCELLED';
     fixture.detectChanges();
-    expect(save.disabled).withContext('no reason yet').toBeTrue();
+    expect(isSubmitBlocked(save)).withContext('no reason yet').toBeTrue();
     component.form.withdrawalReason = 'Wrong patient';
     fixture.detectChanges();
-    expect(save.disabled).toBeFalse();
+    expect(isSubmitBlocked(save)).toBeFalse();
 
     component.closeModal();
     component.openEdit(rx('d', 'DRAFT'));
@@ -631,10 +633,10 @@ describe('PrescriptionsComponent — signing', () => {
     component.form.status = 'CANCELLED';
     fixture.detectChanges();
     expect(el.querySelector('[data-testid="rx-withdrawal-reason"]')).not.toBeNull();
-    expect(save.disabled).withContext('no reason yet').toBeTrue();
+    expect(isSubmitBlocked(save)).withContext('no reason yet').toBeTrue();
     component.form.withdrawalReason = 'Contre-indiqué';
     fixture.detectChanges();
-    expect(save.disabled).toBeFalse();
+    expect(isSubmitBlocked(save)).toBeFalse();
   });
 
   it('does not offer SIGNED in the editable status list', () => {
@@ -901,6 +903,37 @@ describe('PrescriptionsComponent — signing', () => {
     component.signPrescription(rx('rx-1', 'DRAFT'));
 
     expect(toast.error).toHaveBeenCalledWith('t:PRESCRIPTIONS.TOAST.SIGN_FAILED');
+  });
+
+  it('QA D1142: a refused signature re-reads the order, so an infant order newly awaiting its dose review offers the review', () => {
+    const legacy = { ...rx('rx-infant', 'DRAFT'), pediatricDoseReviewRequired: false };
+    component.prescriptions.set([legacy as PrescriptionResponse]);
+    prescriptionService.sign.and.returnValue(
+      throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 400,
+            error: { message: 'Enregistrez la revue de dose avant de signer.' },
+          }),
+      ),
+    );
+    prescriptionService.getById.and.returnValue(
+      of({ ...legacy, pediatricDoseReviewRequired: true } as PrescriptionResponse),
+    );
+
+    component.signPrescription(legacy as PrescriptionResponse);
+
+    expect(prescriptionService.getById).toHaveBeenCalledWith('rx-infant');
+    const row = component.prescriptions().find((r) => r.id === 'rx-infant')!;
+    expect(component.awaitsDoseReview(row)).toBeTrue();
+  });
+
+  it('QA D1142: a refusal that is not a business rule (403) leaves the list as it was', () => {
+    prescriptionService.sign.and.returnValue(
+      throwError(() => new HttpErrorResponse({ status: 403, error: { message: 'Accès refusé' } })),
+    );
+    component.signPrescription(rx('rx-2', 'DRAFT'));
+    expect(prescriptionService.getById).not.toHaveBeenCalled();
   });
 });
 
@@ -1184,9 +1217,16 @@ describe('PrescriptionsComponent — pharmacist verification', () => {
     submit.click();
     fixture.detectChanges();
     expect(prescriptionService.recordPediatricDoseReview).not.toHaveBeenCalled();
-    expect(
-      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="rx-dose-review-error"]'),
-    ).not.toBeNull();
+    // QA D1143: the message is said once, under the reason box (it was also
+    // repeated in the dialog-level alert).
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('#rx-dose-review-reason-invalid-msg')).not.toBeNull();
+    expect(host.querySelector('[data-testid="rx-dose-review-error"]')).toBeNull();
+    const dialog = host.querySelector('[data-testid="rx-dose-review-modal"]') as HTMLElement;
+    expect(dialog.querySelectorAll('[role="alert"]').length).toBe(1);
+    // ... and the label sits above its box (the field is stacked, not inline).
+    const label = host.querySelector('label[for="rx-dose-review-reason"]');
+    expect(label?.parentElement?.classList).toContain('form-field--stacked');
   });
 
   it('QA D1096: the review is sent with its reason; a refusal stays in the dialog', () => {

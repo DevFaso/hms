@@ -146,7 +146,8 @@
         <!-- Submit button -->
         <button
           class="rw-btn rw-btn--primary rw-btn--full"
-          [disabled]="!isCodeComplete || verifying"
+          [disabled]="verifying"
+          [appSubmitGuard]="!isCodeComplete && ('SUBMIT_GUARD.CODE' | translate)"
           (click)="submitCode()"
         >
           @if (verifying) {

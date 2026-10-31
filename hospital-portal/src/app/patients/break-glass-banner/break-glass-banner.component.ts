@@ -25,6 +25,7 @@ import { AuthService } from '../../auth/auth.service';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 const SERVER_TIME = new ServerTimePipe();
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'error';
@@ -40,7 +41,7 @@ type LoadState = 'idle' | 'loading' | 'ready' | 'error';
 @Component({
   selector: 'app-break-glass-banner',
   standalone: true,
-  imports: [ModalDialogDirective, FormsModule, TranslateModule],
+  imports: [SubmitGuardDirective, ModalDialogDirective, FormsModule, TranslateModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './break-glass-banner.component.html',
   styleUrl: './break-glass-banner.component.scss',

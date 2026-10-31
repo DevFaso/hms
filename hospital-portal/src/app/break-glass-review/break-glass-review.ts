@@ -21,6 +21,7 @@ import {
 import { HospitalScopeHintComponent } from '../shared/hospital-scope-chip/hospital-scope-hint.component';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 /**
  * E8 #54 — the compliance review of break-the-glass sessions. Works the
  * hospital's register as a queue: unreviewed sessions first, each signed off
@@ -31,6 +32,7 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
   selector: 'app-break-glass-review',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     ServerTimePipe,
     DatePipe,
     SlicePipe,

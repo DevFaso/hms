@@ -1164,12 +1164,13 @@
         <button
           class="btn-primary"
           (click)="submitForm()"
-          [disabled]="
-            saving() ||
+          [disabled]="saving()"
+          [appSubmitGuard]="
             !form.medicationName ||
             (form.forceOverride && !form.overrideReason?.trim()) ||
             signedWithdrawalIncomplete()
           "
+          [submitGuardFields]="['rx-medName', 'cds-override-reason', 'rx-withdrawalReason']"
         >
           {{
             saving()
@@ -1267,6 +1268,7 @@
         <label class="form-field">
           <span>{{ 'PRESCRIPTIONS.DISPATCH_PHARMACY' | translate }}</span>
           <select
+            id="rx-dispatch-pharmacy"
             [(ngModel)]="dispatchPharmacyId"
             name="dispatchPharmacyId"
             required
@@ -1303,7 +1305,9 @@
         <button
           type="button"
           class="btn-primary"
-          [disabled]="!dispatchPharmacyId || dispatching()"
+          [disabled]="dispatching()"
+          [appSubmitGuard]="!dispatchPharmacyId"
+          [submitGuardFields]="['rx-dispatch-pharmacy']"
           (click)="submitDispatch()"
           data-testid="rx-dispatch-submit"
         >
@@ -1449,8 +1453,11 @@
           — {{ reviewRx.dosage }} {{ reviewRx.frequency }}
         </p>
         <p class="muted">{{ 'PRESCRIPTIONS.DOSE_REVIEW.HINT' | translate }}</p>
-        <label class="form-field">
-          <span>{{ 'PRESCRIPTIONS.DOSE_REVIEW.REASON' | translate }} *</span>
+        <!-- QA D1143: the label above its box, not squeezed beside it. -->
+        <div class="form-field form-field--stacked">
+          <label for="rx-dose-review-reason"
+            >{{ 'PRESCRIPTIONS.DOSE_REVIEW.REASON' | translate }} *</label
+          >
           <textarea
             rows="3"
             maxlength="1000"
@@ -1459,7 +1466,7 @@
             id="rx-dose-review-reason"
             data-testid="rx-dose-review-reason"
           ></textarea>
-        </label>
+        </div>
         @if (doseReviewError()) {
           <p class="form-error" role="alert" data-testid="rx-dose-review-error">
             {{ doseReviewError() }}
@@ -1557,7 +1564,9 @@
           <button
             type="submit"
             class="btn-primary"
-            [disabled]="!signReauthSecret.trim() || !!signingId()"
+            [disabled]="!!signingId()"
+            [appSubmitGuard]="!signReauthSecret.trim()"
+            [submitGuardFields]="['rx-sign-reauth-secret']"
           >
             {{ 'PRESCRIPTIONS.SIGN_REAUTH.SUBMIT' | translate }}
           </button>

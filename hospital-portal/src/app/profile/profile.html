@@ -484,7 +484,12 @@
                   <button
                     type="submit"
                     class="btn btn-primary"
-                    [disabled]="!formDirty() || saving() || !!pendingEmail()"
+                    [disabled]="saving()"
+                    [appSubmitGuard]="
+                      pendingEmail()
+                        ? ('SUBMIT_GUARD.EMAIL_PENDING' | translate)
+                        : !formDirty() && ('SUBMIT_GUARD.NO_CHANGES' | translate)
+                    "
                   >
                     @if (saving()) {
                       <span class="material-symbols-outlined spinning">progress_activity</span>
@@ -537,7 +542,11 @@
                     <button
                       type="submit"
                       class="btn btn-primary"
-                      [disabled]="confirmingEmail() || emailCode().trim().length < 6"
+                      [disabled]="confirmingEmail()"
+                      [appSubmitGuard]="
+                        emailCode().trim().length < 6 && ('SUBMIT_GUARD.CODE' | translate)
+                      "
+                      [submitGuardFields]="['emailChangeCode']"
                     >
                       {{ 'PROFILE.VERIFY' | translate }}
                     </button>
@@ -630,7 +639,9 @@
                   <button
                     type="submit"
                     class="btn btn-primary"
-                    [disabled]="changingPassword() || !pwdCurrent() || !pwdNew() || !pwdConfirm()"
+                    [disabled]="changingPassword()"
+                    [appSubmitGuard]="!pwdCurrent() || !pwdNew() || !pwdConfirm()"
+                    [submitGuardFields]="['pwdCurrent', 'pwdNew', 'pwdConfirm']"
                   >
                     <span class="material-symbols-outlined">key</span>
                     {{ 'PROFILE.SAVE_NEW_PASSWORD' | translate }}
@@ -958,7 +969,11 @@
                             <button
                               class="btn-primary"
                               (click)="submitVerificationCode()"
-                              [disabled]="verificationSending() || verificationCode().length < 6"
+                              [disabled]="verificationSending()"
+                              [appSubmitGuard]="
+                                verificationCode().length < 6 && ('SUBMIT_GUARD.CODE' | translate)
+                              "
+                              [submitGuardFields]="['verification-code']"
                             >
                               {{
                                 (verificationSending()

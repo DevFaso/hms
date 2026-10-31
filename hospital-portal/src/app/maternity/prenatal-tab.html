@@ -38,7 +38,9 @@
   <div class="modal-actions">
     <button
       class="btn-primary"
-      [disabled]="generating() || !patient() || !lmpDate"
+      [disabled]="generating()"
+      [appSubmitGuard]="!patient() || !lmpDate"
+      [submitGuardFields]="['pn-patient', 'pn-lmp']"
       (click)="generate()"
     >
       {{ 'PRENATAL.GENERATE' | translate }}
@@ -234,7 +236,9 @@
         </button>
         <button
           class="btn-primary"
-          [disabled]="rescheduleBusy() || !rescheduleDate || !rescheduleTime"
+          [disabled]="rescheduleBusy()"
+          [appSubmitGuard]="!rescheduleDate || !rescheduleTime"
+          [submitGuardFields]="['pn-new-date', 'pn-new-time']"
           (click)="submitReschedule()"
         >
           {{ 'COMMON.CONFIRM' | translate }}

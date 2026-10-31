@@ -76,7 +76,7 @@
             type="button"
             class="btn-primary"
             data-test="save"
-            [disabled]="!canSave()"
+            [appSubmitGuard]="!canSave()"
             (click)="save()"
           >
             @if (saving()) {

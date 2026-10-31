@@ -766,6 +766,66 @@ describe('EncountersComponent', () => {
     expect(encounterSpy.addAddendum.calls.mostRecent().args[2]).toBe('note-b');
   });
 
+  it('QA D1131: the addendum takes focus, Escape closes only it and never drops typed text unasked', fakeAsync(() => {
+    const fixture = TestBed.createComponent(EncountersComponent);
+    const page = fixture.componentInstance;
+    page.selectEncounter(mockEncounter({ note: entryB, noteEntries: [draftA, entryB] }));
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    document.body.appendChild(host);
+    const escape = (target: Element) => {
+      target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      fixture.detectChanges();
+      tick();
+      fixture.detectChanges();
+    };
+    try {
+      host.querySelector<HTMLButtonElement>('[data-testid="addendum-current-entry"]')!.click();
+      fixture.detectChanges();
+      tick();
+      const box = host.querySelector<HTMLTextAreaElement>('[data-testid="addendum-content"]')!;
+      // Focus moves into the addendum, not to the page body.
+      expect(document.activeElement).toBe(box);
+
+      // Typed text: Escape asks, the panel stays open, the text is kept.
+      page.addendumContent = 'Correction : T 38.4';
+      fixture.detectChanges();
+      escape(box);
+      expect(page.selectedEncounter()).not.toBeNull();
+      expect(page.showAddendumForm()).toBeTrue();
+      expect(page.addendumContent).toBe('Correction : T 38.4');
+      expect(host.querySelector('[data-testid="addendum-discard-ask"]')).not.toBeNull();
+      expect(document.activeElement).toBe(host.querySelector('[data-testid="addendum-keep"]'));
+
+      // Escape on the question goes back to the text, intact.
+      escape(document.activeElement!);
+      expect(host.querySelector('[data-testid="addendum-discard-ask"]')).toBeNull();
+      expect(page.addendumContent).toBe('Correction : T 38.4');
+      expect(document.activeElement).toBe(host.querySelector('[data-testid="addendum-content"]'));
+
+      // Discarding is a deliberate click; the keyboard returns to the opener.
+      escape(document.activeElement!);
+      host.querySelector<HTMLButtonElement>('[data-testid="addendum-discard"]')!.click();
+      fixture.detectChanges();
+      tick();
+      expect(page.showAddendumForm()).toBeFalse();
+      expect(page.selectedEncounter()).not.toBeNull();
+      expect(document.activeElement).toBe(
+        host.querySelector('[data-testid="addendum-current-entry"]'),
+      );
+
+      // An empty addendum: Escape closes the addendum alone.
+      host.querySelector<HTMLButtonElement>('[data-testid="addendum-current-entry"]')!.click();
+      fixture.detectChanges();
+      tick();
+      escape(host.querySelector('[data-testid="addendum-content"]')!);
+      expect(page.showAddendumForm()).toBeFalse();
+      expect(page.selectedEncounter()).not.toBeNull();
+    } finally {
+      host.remove();
+    }
+  }));
+
   it('QA D831: a save that starts a new stay entry keeps the previous one listed', () => {
     encounterSpy.addNote.and.returnValue(of(entryB));
     component.selectEncounter(mockEncounter({ note: draftA }));

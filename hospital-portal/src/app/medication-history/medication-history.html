@@ -458,7 +458,9 @@
         <button
           type="button"
           class="btn-primary"
-          [disabled]="fillSaving() || !fillForm.medicationName || !fillForm.fillDate"
+          [disabled]="fillSaving()"
+          [appSubmitGuard]="!fillForm.medicationName || !fillForm.fillDate"
+          [submitGuardFields]="['fill-medication', 'fill-date']"
           (click)="submitFill()"
         >
           {{ 'COMMON.SAVE' | translate }}

@@ -24,10 +24,12 @@ import { ServerTimePipe } from '../../../shared/pipes/server-time.pipe';
 import { ClockTimePipe } from '../../../shared/pipes/clock-time.pipe';
 import { DialogA11yDirective } from '../../../shared/a11y/dialog-a11y.directive';
 
+import { SubmitGuardDirective } from '../../../shared/forms/submit-guard.directive';
 @Component({
   selector: 'app-pre-checkin-form',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     ClockTimePipe,
     ServerTimePipe,
     CommonModule,

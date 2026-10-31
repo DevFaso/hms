@@ -28,6 +28,7 @@ import { ToastService } from '../core/toast.service';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 /**
  * Panel management (Tier 2 item 37).
  *
@@ -46,6 +47,7 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
   selector: 'app-panel',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     ModalDialogDirective,
     ServerTimePipe,
     CommonModule,

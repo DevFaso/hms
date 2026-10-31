@@ -30,6 +30,7 @@ import { MedicationRoutePipe } from '../../shared/pipes/medication-route.pipe';
 import { isServerTimeToday } from '../../shared/date-utils';
 import { WitnessPickerComponent } from '../witness-picker/witness-picker.component';
 
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 type LoadState = 'loading' | 'ready' | 'empty' | 'error';
 type ScanField = 'patient' | 'medication';
 
@@ -66,6 +67,7 @@ const FIVE_RIGHTS_LABEL_KEYS: Record<FiveRightsCheck, string> = {
   selector: 'app-emar',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     CommonModule,
     FormsModule,
     TranslateModule,
@@ -154,6 +156,25 @@ export class EmarComponent implements OnInit, OnDestroy {
     if (v.allPassed) return true;
     return this.overrideReason().trim().length > 0;
   });
+
+  /**
+   * QA D1124: why "Record given" refuses, shown next to it; null when the
+   * dose may be recorded. The button is never silently disabled.
+   */
+  protected administerBlockReason(): string | null {
+    if (this.blockedPendingPharmacist()) {
+      return this.translate.instant('EMAR.PHARMACIST_BLOCKED_TITLE');
+    }
+    if (this.needsWitness() && !this.witnessUserId()) {
+      return this.translate.instant('SUBMIT_GUARD.WITNESS');
+    }
+    const v = this.verification();
+    if (!v) return this.translate.instant('SUBMIT_GUARD.VERIFY_FIRST');
+    if (!v.allPassed && this.overrideReason().trim().length === 0) {
+      return this.translate.instant('SUBMIT_GUARD.OVERRIDE_REASON');
+    }
+    return null;
+  }
 
   @ViewChild('scannerVideo') protected scannerVideo?: ElementRef<HTMLVideoElement>;
 

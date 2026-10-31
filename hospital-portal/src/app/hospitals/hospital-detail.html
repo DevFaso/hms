@@ -225,7 +225,8 @@
               type="button"
               class="confirm-btn"
               data-test="dialog-confirm"
-              [disabled]="state.busy || !isReasonValid(state) || !isPurgeDateValid(state)"
+              [disabled]="state.busy"
+              [appSubmitGuard]="!isReasonValid(state) || !isPurgeDateValid(state)"
               (click)="submitDialog()"
             >
               @if (state.busy) {

@@ -232,6 +232,40 @@ describe('DispensingComponent', () => {
     expect(component.form.medicationName).toBe('Amoxicillin');
   });
 
+  it('QA D1141: the dispense form starts with the unit the order was written in', () => {
+    component.selectPrescription({
+      ...mockWorkQueue.data.content[0],
+      quantityUnit: 'comprimé',
+    } as any);
+    expect(component.form.unit).toBe('comprimé');
+  });
+
+  it('QA D1124 / D1141: "Dispenser" stays clickable and says why it refuses (no unit, no attestation)', () => {
+    component.selectPrescription({ ...mockWorkQueue.data.content[0], quantityUnit: '' } as any);
+    component.form.quantityDispensed = 30;
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    const submit = el.querySelector<HTMLButtonElement>('[data-testid="dispense-submit"]')!;
+    expect(submit.disabled).toBeFalse();
+
+    submit.click();
+    fixture.detectChanges();
+    expect(pharmacySvc.createDispense).not.toHaveBeenCalled();
+    expect(el.querySelector('[data-testid="submit-guard-reason"]')?.textContent).toBe(
+      'SUBMIT_GUARD.UNIT',
+    );
+    expect(el.querySelector('#unit')!.getAttribute('aria-invalid')).toBe('true');
+
+    component.form.unit = 'comprimé';
+    fixture.detectChanges();
+    submit.click();
+    fixture.detectChanges();
+    expect(pharmacySvc.createDispense).not.toHaveBeenCalled();
+    expect(el.querySelector('[data-testid="submit-guard-reason"]')?.textContent).toBe(
+      'SUBMIT_GUARD.ATTESTATION',
+    );
+  });
+
   it('should close form', () => {
     component.showForm.set(true);
     component.closeForm();
@@ -815,6 +849,25 @@ describe('DispensingComponent', () => {
     );
     component.onPharmacyChange();
     expect(component.recentDispenses().map((d) => d.id)).toEqual(['d-pending', 'd-old']);
+  });
+
+  it('QA D1128: each recent fill names its patient, so a wrong fill made today is found and cancelled', () => {
+    component.recentDispenses.set([
+      {
+        id: 'd-today',
+        patientName: 'Awa Kaboré',
+        medicationName: 'Amoxicilline',
+        quantityDispensed: 10,
+        unit: 'gélule',
+        status: 'COMPLETED',
+        dispensedAt: '2026-10-31T16:22:00',
+      },
+    ] as any);
+    fixture.detectChanges();
+    const cell = fixture.debugElement.query(By.css('[data-testid="recent-dispense-patient"]'));
+    expect(cell.nativeElement.textContent.trim()).toBe('Awa Kaboré');
+    const row = cell.parent!;
+    expect(row.query(By.css('.btn-action.danger'))).not.toBeNull();
   });
 });
 

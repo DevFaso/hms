@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  computed,
   EventEmitter,
   OnChanges,
   OnDestroy,
@@ -132,7 +133,7 @@ type State = 'idle' | 'searching' | 'ready' | 'applying' | 'applied' | 'error';
             type="button"
             class="btn-primary"
             data-testid="order-set-picker-apply"
-            [disabled]="state() === 'applying'"
+            [disabled]="applying()"
             (click)="apply(sel)"
           >
             {{ 'ORDER_SETS.APPLY' | translate }}
@@ -215,6 +216,8 @@ export class OrderSetPickerComponent implements OnChanges, OnDestroy {
   @Output() readonly applied = new EventEmitter<AppliedOrderSetSummary>();
 
   protected readonly state = signal<State>('idle');
+  /** A request to apply the order set is in flight (the only reason "Apply" is disabled). */
+  protected readonly applying = computed(() => this.state() === 'applying');
   protected readonly results = signal<OrderSetSummary[]>([]);
   protected readonly selected = signal<OrderSetSummary | null>(null);
   protected readonly searchTerm = signal<string>('');

@@ -5,6 +5,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  ElementRef,
   inject,
   OnInit,
   signal,
@@ -57,6 +58,8 @@ import {
 } from './pregnancy-dates';
 import { AuthorshipService } from '../shared/authorship.service';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { focusWhenRendered } from '../shared/a11y/focus-when-rendered';
 /** The history form's fields the server names under `fieldErrors`. */
 const HISTORY_LABELS: Record<string, string> = {
   recordedDate: 'MATERNITY.RECORDED',
@@ -114,6 +117,7 @@ type MaternityTab =
   selector: 'app-maternity',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     ModalDialogDirective,
     ServerTimePipe,
     CommonModule,
@@ -132,6 +136,7 @@ type MaternityTab =
 })
 export class MaternityComponent implements OnInit {
   private readonly maternityService = inject(MaternityService);
+  private readonly hostEl = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly authorship = inject(AuthorshipService);
   private readonly referralService = inject(ObgynReferralService);
   private readonly patientService = inject(PatientService);
@@ -569,6 +574,19 @@ export class MaternityComponent implements OnInit {
     this.showHistoryModal.set(false);
   }
 
+  /**
+   * QA D1124: why the history form refuses, shown next to "Save"; null when
+   * it may be sent. The button is never silently disabled.
+   */
+  historyBlockReason(): string | null {
+    if (!this.historyForm.patientId) return this.translate.instant('SUBMIT_GUARD.PATIENT');
+    if (this.editingHistoryId()) return null;
+    if (this.existingHistory()) return this.translate.instant('MATERNITY.HISTORY_ALREADY_EXISTS');
+    if (this.historyHeldElsewhere())
+      return this.translate.instant('MATERNITY.HISTORY_HELD_ELSEWHERE');
+    return null;
+  }
+
   onHistoryPatientPicked(p: PatientResponse | null): void {
     this.selectedPatient.set(p);
     this.historyForm.patientId = p?.id ?? '';
@@ -907,6 +925,8 @@ export class MaternityComponent implements OnInit {
     this.referralAction.set(action);
     this.referralActionText = '';
     this.referralActionUpdateCareTeam = false;
+    // QA D1144 sibling: the keyboard goes to the reason the action asks for.
+    focusWhenRendered(this.hostEl.nativeElement, '#referral-action-text');
   }
 
   /** QA D1081: an OB/GYN referral is cancelled by the midwife who sent it. */

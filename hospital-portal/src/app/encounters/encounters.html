@@ -366,28 +366,61 @@
           }
 
           <!-- QA D831 (#965 review): one addendum form, shown under the entry it corrects. -->
+          <!-- QA D1131: focus moves into the addendum when it opens; Escape inside it
+               closes only the addendum (never the visit panel), and asks before
+               discarding typed text. -->
           <ng-template #addendumForm>
-            <h3>{{ 'ENCOUNTERS.ADD_ADDENDUM' | translate }}</h3>
-            <textarea
-              class="note-input"
-              data-testid="addendum-content"
-              [(ngModel)]="addendumContent"
-              rows="3"
-              [attr.aria-label]="'ENCOUNTERS.ADDENDUM_ARIA' | translate"
-              [placeholder]="'ENCOUNTERS.ADDENDUM_PLACEHOLDER' | translate"
-            ></textarea>
-            <div class="note-actions">
-              <button
-                class="btn-primary"
-                data-testid="addendum-save"
-                (click)="addAddendum()"
-                [disabled]="!addendumContent.trim() || addendumSaving()"
-              >
-                {{ 'COMMON.SAVE' | translate }}
-              </button>
-              <button class="btn-secondary" (click)="closeAddendumForm()">
-                {{ 'COMMON.CANCEL' | translate }}
-              </button>
+            <div
+              class="addendum-form"
+              role="group"
+              aria-labelledby="addendum-form-title"
+              data-testid="addendum-form"
+              (keydown.escape)="onAddendumEscape($event)"
+            >
+              <h3 id="addendum-form-title">{{ 'ENCOUNTERS.ADD_ADDENDUM' | translate }}</h3>
+              <textarea
+                id="addendum-content"
+                class="note-input"
+                data-testid="addendum-content"
+                [(ngModel)]="addendumContent"
+                rows="3"
+                [attr.aria-label]="'ENCOUNTERS.ADDENDUM_ARIA' | translate"
+                [placeholder]="'ENCOUNTERS.ADDENDUM_PLACEHOLDER' | translate"
+              ></textarea>
+              <div class="note-actions">
+                <button
+                  class="btn-primary"
+                  data-testid="addendum-save"
+                  (click)="addAddendum()"
+                  [disabled]="addendumSaving()"
+                  [appSubmitGuard]="!addendumContent.trim()"
+                  [submitGuardFields]="['addendum-content']"
+                >
+                  {{ 'COMMON.SAVE' | translate }}
+                </button>
+                <button class="btn-secondary" (click)="closeAddendumForm(true)">
+                  {{ 'COMMON.CANCEL' | translate }}
+                </button>
+              </div>
+              @if (addendumDiscardAsk()) {
+                <div class="addendum-discard" role="alert" data-testid="addendum-discard-ask">
+                  <p>{{ 'ENCOUNTERS.ADDENDUM_DISCARD_ASK' | translate }}</p>
+                  <button
+                    class="btn-secondary"
+                    data-testid="addendum-keep"
+                    (click)="keepAddendum()"
+                  >
+                    {{ 'ENCOUNTERS.ADDENDUM_KEEP' | translate }}
+                  </button>
+                  <button
+                    class="btn-danger"
+                    data-testid="addendum-discard"
+                    (click)="closeAddendumForm(true)"
+                  >
+                    {{ 'ENCOUNTERS.ADDENDUM_DISCARD' | translate }}
+                  </button>
+                </div>
+              }
             </div>
           </ng-template>
 
@@ -462,6 +495,7 @@
                     <button
                       class="btn-secondary"
                       data-testid="addendum-note-entry"
+                      [attr.data-addendum-for]="view.entry.id"
                       (click)="openAddendumForm(view.entry.id)"
                     >
                       <span class="material-symbols-outlined" aria-hidden="true">post_add</span>
@@ -622,6 +656,7 @@
               <button
                 class="btn-secondary"
                 data-testid="addendum-current-entry"
+                data-addendum-for="current"
                 [title]="'ENCOUNTERS.ADD_ADDENDUM' | translate"
                 (click)="openAddendumForm(noteState()?.id)"
               >
@@ -933,14 +968,15 @@
         <button
           class="btn-primary"
           (click)="submitForm()"
-          [disabled]="
-            saving() ||
+          [disabled]="saving()"
+          [appSubmitGuard]="
             !form.patientId ||
             !form.staffId ||
             !form.hospitalId ||
             !form.encounterDate ||
             !form.departmentId
           "
+          [submitGuardFields]="['enc-staffId', 'enc-hospitalId', 'enc-date', 'enc-deptId']"
         >
           {{
             saving()

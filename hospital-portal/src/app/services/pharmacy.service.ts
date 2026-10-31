@@ -400,7 +400,7 @@ export interface DispenseResponse {
   id: string;
   prescriptionId: string;
   patientId: string;
-  /** The patient as a person reads them; sent by GET /pharmacy/dispense/{id} only (QA D102). */
+  /** The patient as a person reads them (QA D102); on every dispense read since QA D1058. */
   patientName?: string;
   /** The pharmacy name; GET /pharmacy/dispense/{id} only (QA D102). */
   pharmacyName?: string;

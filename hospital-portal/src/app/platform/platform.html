@@ -415,16 +415,22 @@
             </div>
 
             <div class="catalog-actions">
-              <button
-                class="btn btn-sm btn-primary"
-                data-test="catalog-provision"
-                (click)="openCatalogDetail(item)"
-                [disabled]="!item.enabled"
-                [title]="item.enabled ? '' : ('PLATFORM.PROVISION_DISABLED_HINT' | translate)"
-              >
-                <span class="material-icons">add_circle</span>
-                {{ 'PLATFORM.PROVISION' | translate }}
-              </button>
+              <!-- QA D1124: a catalogue item that is switched off says so in words,
+                   instead of a dead "Provision" button with a hover-only title. -->
+              @if (item.enabled) {
+                <button
+                  class="btn btn-sm btn-primary"
+                  data-test="catalog-provision"
+                  (click)="openCatalogDetail(item)"
+                >
+                  <span class="material-icons">add_circle</span>
+                  {{ 'PLATFORM.PROVISION' | translate }}
+                </button>
+              } @else {
+                <small class="catalog-disabled-hint" data-test="catalog-provision-disabled">{{
+                  'PLATFORM.PROVISION_DISABLED_HINT' | translate
+                }}</small>
+              }
               @if (docsUrl(item)) {
                 <button class="btn btn-sm btn-outline" (click)="openDocs(item)">
                   <span class="material-icons">description</span> {{ 'PLATFORM.DOCS' | translate }}
@@ -683,7 +689,8 @@
                   class="btn btn-sm"
                   [class.btn-primary]="st === selectedService()!.status"
                   [class.btn-outline]="st !== selectedService()!.status"
-                  [disabled]="st === selectedService()!.status || saving()"
+                  [attr.aria-pressed]="st === selectedService()!.status"
+                  [disabled]="saving()"
                   (click)="changeServiceStatus(selectedService()!, st)"
                 >
                   {{ st | enumLabel: 'platformServiceStatus' }}
@@ -1294,7 +1301,9 @@
             class="btn btn-primary"
             data-test="provision-submit"
             (click)="provisionCatalogItem(item)"
-            [disabled]="saving() || !item.enabled || !provisionOrgId()"
+            [disabled]="saving()"
+            [appSubmitGuard]="!item.enabled || !provisionOrgId()"
+            [submitGuardFields]="['provisionOrg']"
           >
             <span class="material-icons">add_circle</span>
             @if (provisionOrgId()) {

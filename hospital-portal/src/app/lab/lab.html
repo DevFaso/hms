@@ -597,8 +597,8 @@
         <button
           class="btn-primary"
           (click)="submitForm()"
-          [disabled]="
-            saving() ||
+          [disabled]="saving()"
+          [appSubmitGuard]="
             !form.patientId ||
             !form.hospitalId ||
             !form.labTestDefinitionId ||
@@ -608,6 +608,12 @@
             !form.primaryDiagnosisCode ||
             !form.providerSignature
           "
+          [submitGuardFields]="[
+            'lab-testDef',
+            'lab-clinicalIndication',
+            'lab-medNecessity',
+            'lab-diagnosisCode',
+          ]"
         >
           {{
             saving()
@@ -672,7 +678,9 @@
           class="btn-danger"
           data-testid="lab-void-confirm"
           (click)="executeVoid()"
-          [disabled]="voiding() || !voidReason().trim()"
+          [disabled]="voiding()"
+          [appSubmitGuard]="!voidReason().trim()"
+          [submitGuardFields]="['lab-void-reason']"
         >
           {{ 'LAB.VOID.CONFIRM' | translate }}
         </button>
@@ -894,7 +902,9 @@
           <button
             class="btn-primary"
             (click)="collectSpecimen()"
-            [disabled]="specimenSaving() || !specimenForm.specimenType.trim()"
+            [disabled]="specimenSaving()"
+            [appSubmitGuard]="!specimenForm.specimenType.trim()"
+            [submitGuardFields]="['specimen-type']"
           >
             {{ 'LAB.COLLECT' | translate }}
           </button>
@@ -960,7 +970,9 @@
           class="btn-danger"
           data-testid="lab-reject-confirm"
           (click)="executeReject()"
-          [disabled]="rejecting() || !rejectReason().trim()"
+          [disabled]="rejecting()"
+          [appSubmitGuard]="!rejectReason().trim()"
+          [submitGuardFields]="['lab-reject-reason']"
         >
           {{ 'LAB.REJECT_SPECIMEN.CONFIRM' | translate }}
         </button>

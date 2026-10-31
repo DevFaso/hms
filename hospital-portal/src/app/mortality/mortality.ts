@@ -22,6 +22,7 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { toServerDateTime } from '../shared/date-utils';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 /**
  * The mortality register (Tier 2 item 29) — the first and only caller of every
  * `/mortality` endpoint.
@@ -34,6 +35,7 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
   selector: 'app-mortality',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     ModalDialogDirective,
     ServerTimePipe,
     CommonModule,

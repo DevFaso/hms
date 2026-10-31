@@ -31,10 +31,12 @@ import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 @Component({
   selector: 'app-checkout-dialog',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     ModalDialogDirective,
     ServerTimePipe,
     CommonModule,

@@ -114,12 +114,16 @@
             />
           </div>
           <div class="field">
-            <label for="unit">{{ 'PHARMACY.UNIT' | translate }}</label>
+            <!-- QA D1141: prefilled from the order's unit, and required (the
+                 server refuses a fill without one too). -->
+            <label for="unit">{{ 'PHARMACY.UNIT' | translate }} *</label>
             <input
               id="unit"
               type="text"
+              maxlength="60"
               [(ngModel)]="form.unit"
               name="unit"
+              required
               [placeholder]="'PHARMACY.UNIT_PLACEHOLDER' | translate"
             />
           </div>
@@ -244,6 +248,7 @@
           <div class="field checkbox-field">
             <label>
               <input
+                id="verifyAttest"
                 type="checkbox"
                 data-testid="verify-attest"
                 [ngModel]="verifyAttested()"
@@ -334,7 +339,10 @@
           <button
             type="submit"
             class="btn-primary"
-            [disabled]="saving() || form.quantityDispensed <= 0 || !verifyAttested()"
+            data-testid="dispense-submit"
+            [disabled]="saving()"
+            [appSubmitGuard]="dispenseBlockReason(false)"
+            [submitGuardFields]="['qtyDispensed', 'unit', 'verifyAttest']"
           >
             @if (saving()) {
               <span class="spinner"></span>
@@ -348,12 +356,9 @@
               type="button"
               class="btn-secondary"
               data-testid="mark-ready"
-              [disabled]="
-                saving() ||
-                form.quantityDispensed <= 0 ||
-                !verifyAttested() ||
-                fefoSplit().length > 1
-              "
+              [disabled]="saving()"
+              [appSubmitGuard]="dispenseBlockReason(true)"
+              [submitGuardFields]="['qtyDispensed', 'unit', 'verifyAttest']"
               (click)="submitReady()"
             >
               {{ 'PHARMACY.MARK_READY' | translate }}
@@ -885,6 +890,9 @@
         <table class="data-table">
           <thead>
             <tr>
+              <!-- QA D1128: newest first (the server's order), with the patient, so
+                   a wrong fill made today is found and cancelled here. -->
+              <th>{{ 'PHARMACY.PATIENT' | translate }}</th>
               <th>{{ 'PHARMACY.MEDICATION' | translate }}</th>
               <th>{{ 'PHARMACY.QTY_DISPENSED' | translate }}</th>
               <th>{{ 'PHARMACY.STATUS' | translate }}</th>
@@ -897,6 +905,7 @@
           <tbody>
             @for (d of recentDispenses(); track d.id) {
               <tr>
+                <td data-testid="recent-dispense-patient">{{ d.patientName || '—' }}</td>
                 <td>{{ d.medicationName }}</td>
                 <td>{{ d.quantityDispensed }} {{ d.unit }}</td>
                 <td>

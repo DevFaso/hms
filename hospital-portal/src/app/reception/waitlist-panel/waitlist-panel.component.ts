@@ -34,12 +34,14 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { serverInstant } from '../../shared/date-utils';
 import { PatientSublinePipe } from '../../shared/patient-picker/patient-subline';
 
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 type WaitlistStatus = 'ALL' | 'WAITING' | 'OFFERED' | 'CLOSED';
 
 @Component({
   selector: 'app-waitlist-panel',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     PersonNamePipe,
     DialogFocusDirective,
     PatientSublinePipe,

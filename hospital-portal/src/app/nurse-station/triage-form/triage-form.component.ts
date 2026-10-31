@@ -26,12 +26,20 @@ import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 import { PatientService } from '../../services/patient.service';
 import { offersFundalHeight } from '../../shared/patient-measures';
 
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 type ConsciousnessOption = 'ALERT' | 'NEW_CONFUSION' | 'VOICE' | 'PAIN' | 'UNRESPONSIVE';
 
 @Component({
   selector: 'app-triage-form',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, RovingFocusDirective, ModalDialogDirective],
+  imports: [
+    SubmitGuardDirective,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    RovingFocusDirective,
+    ModalDialogDirective,
+  ],
   templateUrl: './triage-form.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './triage-form.component.scss',

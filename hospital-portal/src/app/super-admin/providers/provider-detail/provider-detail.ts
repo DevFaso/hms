@@ -39,6 +39,7 @@ import { lifecycleBadgeClass, verificationBadgeClass } from '../provider-status'
 import { ServerTimePipe } from '../../../shared/pipes/server-time.pipe';
 import { ModalDialogDirective } from '../../../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../../../shared/forms/submit-guard.directive';
 /** A verification decision taken with a reason. */
 type DecisionKind = 'reject' | 'revoke';
 
@@ -66,6 +67,7 @@ const LIFECYCLE_REASON_MIN = 5;
   selector: 'app-provider-detail',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     ServerTimePipe,
     DatePipe,
     FormsModule,

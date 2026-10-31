@@ -23,12 +23,20 @@ import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
 import { PatientSublinePipe } from '../../shared/patient-picker/patient-subline';
 
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 type EncounterType = 'CONSULTATION' | 'FOLLOW_UP' | 'EMERGENCY' | 'OUTPATIENT' | 'INPATIENT';
 
 @Component({
   selector: 'app-walkin-dialog',
   standalone: true,
-  imports: [PersonNamePipe, DialogFocusDirective, PatientSublinePipe, FormsModule, TranslateModule],
+  imports: [
+    SubmitGuardDirective,
+    PersonNamePipe,
+    DialogFocusDirective,
+    PatientSublinePipe,
+    FormsModule,
+    TranslateModule,
+  ],
   templateUrl: './walkin-dialog.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './walkin-dialog.component.scss',

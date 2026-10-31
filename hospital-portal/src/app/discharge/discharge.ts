@@ -26,6 +26,7 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { AuthorshipService } from '../shared/authorship.service';
 import { refusalReason } from '../shared/refusal-reason';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 type ApprovalFilter = DischargeStatus | 'ALL';
 type SummaryFilter = 'unfinalized' | 'pending-results' | 'range';
 
@@ -33,6 +34,7 @@ type SummaryFilter = 'unfinalized' | 'pending-results' | 'range';
   selector: 'app-discharge',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     ModalDialogDirective,
     ServerTimePipe,
     CommonModule,
@@ -412,6 +414,20 @@ export class DischargeComponent implements OnInit {
   }
 
   /** Whether the request can be sent for the picked patient. */
+  /**
+   * QA D1124: why "Request discharge" refuses, shown next to it; null when it
+   * may be sent. The button is never silently disabled.
+   */
+  requestBlockReason(): string | null {
+    if (!this.selectedPatient()) return this.translate.instant('SUBMIT_GUARD.PATIENT');
+    const stay = this.requestStay();
+    if (stay === 'not-admitted') return this.translate.instant('DISCHARGE.NOT_ADMITTED');
+    if (stay !== 'admitted' && stay !== 'unknown') {
+      return this.translate.instant('SUBMIT_GUARD.LOADING');
+    }
+    return null;
+  }
+
   canSubmitRequest(): boolean {
     const stay = this.requestStay();
     return (

@@ -719,7 +719,9 @@
         </button>
         <button
           class="btn-primary"
-          [disabled]="savingStudy() || !studyForm.studyType || !studyForm.studyDate"
+          [disabled]="savingStudy()"
+          [appSubmitGuard]="!studyForm.studyType || !studyForm.studyDate"
+          [submitGuardFields]="['study-type', 'study-date']"
           (click)="saveStudy()"
         >
           @if (savingStudy()) {
@@ -814,9 +816,9 @@
         </button>
         <button
           class="btn-primary"
-          [disabled]="
-            processingApproval() || (approvalAction() === 'REJECT' && !approvalRejectionReason())
-          "
+          [disabled]="processingApproval()"
+          [appSubmitGuard]="approvalAction() === 'REJECT' && !approvalRejectionReason()"
+          [submitGuardFields]="['rejection-reason']"
           (click)="submitApprovalAction()"
         >
           @if (processingApproval()) {

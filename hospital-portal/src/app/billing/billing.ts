@@ -42,6 +42,7 @@ import { cfaAmountMessageKey, cfaAmountProblem } from '../shared/cfa-amount';
 import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
 import { refuseFields } from '../shared/forms/invalid-fields';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 type BillingTab = 'all' | 'outstanding' | 'paid' | 'overdue';
 
 /** The cancellation reason's field (QA D1069), marked when it is refused (QA D1072). */
@@ -51,6 +52,7 @@ const CANCEL_REASON_ID = 'bill-cancel-reason';
   selector: 'app-billing',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     ServerTimePipe,
     PersonNamePipe,
     CommonModule,

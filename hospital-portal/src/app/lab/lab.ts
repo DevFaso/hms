@@ -44,10 +44,12 @@ import { serverInstant } from '../shared/date-utils';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
 import { ActivatedRoute } from '@angular/router';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 @Component({
   selector: 'app-lab',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     PersonNamePipe,
     CdkTrapFocus,
     PatientSublinePipe,

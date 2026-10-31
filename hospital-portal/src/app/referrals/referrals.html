@@ -283,7 +283,7 @@
                 <button
                   type="button"
                   class="action-link open-chart"
-                  [disabled]="chartCheck() === 'checking'"
+                  [disabled]="chartChecking()"
                   (click)="openPatientChart(ref)"
                 >
                   {{ 'REFERRALS.OPEN_CHART' | translate }}
@@ -885,7 +885,9 @@
         <button
           class="btn-primary"
           (click)="executeAcknowledge()"
-          [disabled]="actionLoading() || !acknowledgeNotes.trim()"
+          [disabled]="actionLoading()"
+          [appSubmitGuard]="!acknowledgeNotes.trim()"
+          [submitGuardFields]="['ack-notes']"
         >
           {{
             actionLoading()
@@ -956,7 +958,9 @@
         <button
           class="btn-primary"
           (click)="executeSchedule()"
-          [disabled]="actionLoading() || !scheduleAppointmentTime"
+          [disabled]="actionLoading()"
+          [appSubmitGuard]="!scheduleAppointmentTime"
+          [submitGuardFields]="['schedule-time']"
         >
           {{
             actionLoading()
@@ -1023,7 +1027,9 @@
         <button
           class="btn-danger"
           (click)="executeReject()"
-          [disabled]="actionLoading() || !rejectReason.trim()"
+          [disabled]="actionLoading()"
+          [appSubmitGuard]="!rejectReason.trim()"
+          [submitGuardFields]="['reject-reason']"
         >
           {{
             actionLoading()
@@ -1100,7 +1106,9 @@
         <button
           class="btn-primary"
           (click)="executeComplete()"
-          [disabled]="actionLoading() || !completeSummary.trim()"
+          [disabled]="actionLoading()"
+          [appSubmitGuard]="!completeSummary.trim()"
+          [submitGuardFields]="['complete-summary']"
         >
           {{
             actionLoading()

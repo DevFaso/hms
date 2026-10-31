@@ -26,7 +26,7 @@
         <button
           type="button"
           class="bg-banner__btn"
-          [disabled]="!canInvokeDeclare()"
+          [appSubmitGuard]="!canInvokeDeclare() && ('BREAK_GLASS.NEED_HOSPITAL' | translate)"
           [title]="!hospitalId() ? ('BREAK_GLASS.NEED_HOSPITAL' | translate) : null"
           (click)="openModal()"
         >

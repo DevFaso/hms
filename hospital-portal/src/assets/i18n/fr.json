@@ -2370,7 +2370,8 @@
     "MISSING_REQUIRED_FIELDS": "Champs obligatoires manquants : {{fields}}",
     "REMOVE_FILTER": "Retirer le filtre",
     "SHOW_DETAILS": "Afficher ou masquer les détails",
-    "FIELD_REQUIRED": "Ce champ est obligatoire."
+    "FIELD_REQUIRED": "Ce champ est obligatoire.",
+    "SUBMIT_BLOCKED_REQUIRED": "Complétez d’abord les champs obligatoires (marqués *)."
   },
   "CONSULTATIONS": {
     "ACKNOWLEDGE": "Accuser Réception",
@@ -3168,7 +3169,10 @@
     "STARTED": "Consultation commencée",
     "CHECK_OUT": "Sortie du patient",
     "NOT_FOUND": "Consultation introuvable",
-    "NOTE_EARLIER_ENTRIES": "Entrées précédentes de ce séjour"
+    "NOTE_EARLIER_ENTRIES": "Entrées précédentes de ce séjour",
+    "ADDENDUM_DISCARD_ASK": "Abandonner l’addendum saisi ?",
+    "ADDENDUM_KEEP": "Continuer la saisie",
+    "ADDENDUM_DISCARD": "Abandonner le texte"
   },
   "FCP": {
     "CONFIRM_PASSWORD": "Confirmer le mot de passe",
@@ -12341,5 +12345,33 @@
     "RELEASE_REASON": "Motif de la libération",
     "RELEASE_REASON_REQUIRED": "Indiquez pourquoi le lit est libéré.",
     "RELEASE_ACTION": "Libérer le lit"
+  },
+  "SUBMIT_GUARD": {
+    "ATTESTATION": "Cochez d’abord « J’ai vérifié cette ordonnance ».",
+    "CODE": "Saisissez le code complet.",
+    "CONSENT": "Cochez la case de consentement pour envoyer.",
+    "EMAIL_PENDING": "Confirmez d’abord le code envoyé à votre nouvelle adresse e-mail.",
+    "ENCOUNTER": "Choisissez d’abord une visite.",
+    "FILE": "Choisissez d’abord un fichier.",
+    "LOADING": "Patientez : chargement en cours.",
+    "MESSAGE": "Écrivez d’abord un message (ou joignez un fichier).",
+    "NOT_ON_FORMULARY": "Cette pharmacie partenaire ne référence pas ce médicament.",
+    "NOT_ROUTABLE": "Cette ordonnance ne peut pas être orientée dans son état actuel.",
+    "NO_CHANGES": "Aucune modification à enregistrer.",
+    "OVERRIDE_REASON": "Indiquez d’abord le motif de dérogation.",
+    "PATIENT": "Choisissez d’abord un patient.",
+    "PATIENT_AND_CLINICIAN": "Choisissez d’abord le patient et le soignant.",
+    "PAYMENT_REFERENCE": "Saisissez la référence de la transaction.",
+    "PERIOD": "Choisissez une période valide (début avant fin).",
+    "PERMISSION": "Choisissez au moins une permission.",
+    "PHARMACY": "Choisissez d’abord une pharmacie.",
+    "PRESCRIPTION": "Choisissez d’abord une ordonnance.",
+    "QUANTITY": "Saisissez une quantité supérieure à zéro.",
+    "READY_SPLIT": "Une préparation à retirer vient d’un seul lot ; cette quantité en demande deux. Délivrez-la directement.",
+    "SCOPE": "Choisissez d’abord un établissement.",
+    "UNIT": "Indiquez l’unité (comprimés, ml…).",
+    "VERIFY_FIELDS": "Renseignez d’abord le patient, le médicament, la dose et la voie.",
+    "VERIFY_FIRST": "Vérifiez d’abord les cinq B.",
+    "WITNESS": "Choisissez le témoin (un second soignant de cet établissement)."
   }
 }

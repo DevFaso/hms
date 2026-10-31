@@ -13,6 +13,7 @@ import {
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 /** ISO date (YYYY-MM-DD) in the browser's calendar. */
 function localIsoDate(d: Date): string {
   const mm = String(d.getMonth() + 1).padStart(2, '0');
@@ -31,7 +32,14 @@ function localIsoDate(d: Date): string {
 @Component({
   selector: 'app-controlled-register',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, ServerTimePipe, EnumLabelPipe],
+  imports: [
+    SubmitGuardDirective,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    ServerTimePipe,
+    EnumLabelPipe,
+  ],
   templateUrl: './controlled-register.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './controlled-register.scss',
