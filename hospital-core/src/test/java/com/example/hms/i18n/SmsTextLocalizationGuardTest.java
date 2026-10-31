@@ -38,8 +38,11 @@ class SmsTextLocalizationGuardTest {
 
     private static final Path MAIN = Paths.get("src/main/java");
     private static final Pattern HOLDS_SMS = Pattern.compile("\\bSmsService\\b");
-    private static final Pattern FORMAT_PROSE =
-        Pattern.compile("String\\.format\\(\\s*\"([^\"]*[A-Za-z]{2,} [A-Za-z]{2,}[^\"]*)\"");
+    /** A {@code String.format} whose format is a string literal; the literal is group 1 (possessive: linear). */
+    private static final Pattern FORMAT_LITERAL =
+        Pattern.compile("String\\.format\\(\\s*+\"([^\"]*+)\"");
+    /** Prose: two words of two letters or more, side by side ("Your username", "Temp password"). */
+    private static final Pattern TWO_WORDS = Pattern.compile("[A-Za-z]{2} [A-Za-z]{2}");
     /** Read against ONE string literal's content at a time (see {@link #passwordLabels}). */
     private static final Pattern PASSWORD_LABEL =
         Pattern.compile("(?i:password|mot de passe|contrase\\S*)\\s*[:=]");
@@ -60,7 +63,7 @@ class SmsTextLocalizationGuardTest {
                 }
                 classesRead++;
                 int[] starts = SourceScan.statementStarts(source);
-                collect(file, source, starts, FORMAT_PROSE, "English String.format", offenders);
+                collect(file, source, starts, "English String.format", offenders);
                 passwordLabels(file, source, starts, offenders);
             }
         }
@@ -90,10 +93,12 @@ class SmsTextLocalizationGuardTest {
         }
     }
 
-    private static void collect(Path file, String source, int[] starts, Pattern pattern, String what,
-                                List<String> offenders) {
-        Matcher m = pattern.matcher(source);
+    private static void collect(Path file, String source, int[] starts, String what, List<String> offenders) {
+        Matcher m = FORMAT_LITERAL.matcher(source);
         while (m.find()) {
+            if (!TWO_WORDS.matcher(m.group(1)).find()) {
+                continue;
+            }
             int start = SourceScan.statementStartBefore(starts, m.start());
             String statement = source.substring(start, Math.min(source.length(), m.end()));
             if (EXEMPT_STATEMENT.matcher(statement).find()) {

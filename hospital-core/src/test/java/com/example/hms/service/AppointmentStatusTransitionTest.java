@@ -480,9 +480,10 @@ class AppointmentStatusTransitionTest {
     @Test
     void qaD1126_anOverLongReasonIsRefused() {
         givenAppointment(AppointmentStatus.CONFIRMED, LocalDate.now().minusDays(1));
+        String overLong = "x".repeat(501);
 
         assertThatThrownBy(() ->
-            appointmentService.confirmOrCancelAppointment(appointmentId, "cancel", "x".repeat(501), null, "doctor_b"))
+            appointmentService.confirmOrCancelAppointment(appointmentId, "cancel", overLong, null, "doctor_b"))
             .isInstanceOf(BusinessException.class)
             .satisfies(ex -> org.assertj.core.api.Assertions.assertThat(((BusinessException) ex).getMessageKey())
                 .isEqualTo("appointment.status.reasonTooLong"));

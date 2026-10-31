@@ -74,6 +74,7 @@ import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import java.util.Locale;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -3655,7 +3656,7 @@ class EncounterServiceImplTest {
         void qaD1126_closeUnseenKeepsTheReasonOnTheAppointment() {
             Encounter encounter = visit(EncounterStatus.ARRIVED);
             com.example.hms.repository.BillingInvoiceRepository invoices =
-                org.mockito.Mockito.mock(com.example.hms.repository.BillingInvoiceRepository.class);
+                mock(com.example.hms.repository.BillingInvoiceRepository.class);
             service.setBillingInvoiceRepository(invoices);
             when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
             when(encounterMapper.toEncounterResponseDTO(any())).thenReturn(new EncounterResponseDTO());
@@ -3677,7 +3678,7 @@ class EncounterServiceImplTest {
         void qaD1126_aPaidCopayIsReversedBeforeTheVisitIsClosed(com.example.hms.enums.UnseenVisitOutcome outcome) {
             Encounter encounter = visit(EncounterStatus.ARRIVED);
             com.example.hms.repository.BillingInvoiceRepository invoices =
-                org.mockito.Mockito.mock(com.example.hms.repository.BillingInvoiceRepository.class);
+                mock(com.example.hms.repository.BillingInvoiceRepository.class);
             com.example.hms.model.BillingInvoice copay = new com.example.hms.model.BillingInvoice();
             copay.setInvoiceNumber("CHW-2026-000063");
             when(invoices.findByEncounter_IdAndCheckInCopayTrueAndStatus(encounter.getId(),

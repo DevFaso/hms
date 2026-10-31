@@ -148,10 +148,10 @@ class ActivationSmsD1123Test {
         service.sendNotifications(assignment.getId());
 
         String sms = smsTo("+22670003201");
-        assertThat(sms).contains(sentence).contains(CODE).contains(LINK);
-        assertThat(sms).as("no raw role code").doesNotContain("ROLE_").doesNotContain("PATIENT");
-        assertThat(sms).as("no secret beyond the one-time code").doesNotContain(TEMP_PASSWORD);
-        assertThat(sms).as("no emoji: they force UCS-2 and split the SMS").matches("[\\x{0000}-\\x{FFFF}]*");
+        assertThat(sms).contains(sentence).contains(CODE).contains(LINK)
+            .as("no raw role code").doesNotContain("ROLE_").doesNotContain("PATIENT")
+            .as("no secret beyond the one-time code").doesNotContain(TEMP_PASSWORD)
+            .as("no emoji: they force UCS-2 and split the SMS").matches("[\\x{0000}-\\x{FFFF}]*");
         assertThat(sms.length()).as("one SMS segment for a short hospital name").isLessThanOrEqualTo(160);
     }
 

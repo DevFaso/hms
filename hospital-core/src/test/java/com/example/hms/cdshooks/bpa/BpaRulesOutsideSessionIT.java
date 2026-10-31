@@ -238,8 +238,8 @@ class BpaRulesOutsideSessionIT extends BaseIT {
                 .as("D1114: the reading time is the hospital's wall clock")
                 .contains(febrileTime));
         assertThat(pregnantCards).hasSizeGreaterThanOrEqualTo(2)
-            .allSatisfy(card -> assertThat(card.detail()).contains(pregnantTime));
-        assertThat(pregnantCards).anySatisfy(card ->
+            .allSatisfy(card -> assertThat(card.detail()).contains(pregnantTime))
+            .anySatisfy(card ->
             assertThat(card.indicator()).isEqualTo(CdsCard.Indicator.CRITICAL));
     }
 

@@ -2657,6 +2657,18 @@ public class EncounterServiceImpl implements EncounterService {
      * exception would mark it rollback-only); when one is missing the recall
      * alone carries the follow-up. Time is a placeholder the desk confirms.
      */
+    /** The follow-up's preferred day, or null when it is blank or not an ISO date. */
+    private static java.time.LocalDate parseFollowUpDate(String preferredDate) {
+        if (preferredDate == null || preferredDate.isBlank()) {
+            return null;
+        }
+        try {
+            return java.time.LocalDate.parse(preferredDate.trim());
+        } catch (java.time.format.DateTimeParseException ex) {
+            return null;
+        }
+    }
+
     private UUID createFollowUpAppointmentFromCheckout(
             Encounter encounter,
             com.example.hms.payload.dto.clinical.CheckOutRequestDTO request) {
@@ -2664,13 +2676,8 @@ public class EncounterServiceImpl implements EncounterService {
             return null;
         }
         var followUp = request.getFollowUpAppointment();
-        if (followUp.getPreferredDate() == null || followUp.getPreferredDate().isBlank()) {
-            return null;
-        }
-        java.time.LocalDate date;
-        try {
-            date = java.time.LocalDate.parse(followUp.getPreferredDate().trim());
-        } catch (java.time.format.DateTimeParseException ex) {
+        java.time.LocalDate date = parseFollowUpDate(followUp.getPreferredDate());
+        if (date == null) {
             return null;
         }
         com.example.hms.model.Hospital hospital = encounter.getHospital();

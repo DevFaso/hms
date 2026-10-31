@@ -809,15 +809,6 @@ public class DispenseServiceImpl implements DispenseService {
     }
 
     /**
-     * Everything the one-step fill and the ready path check before any stock
-     * moves: quantities, the locked prescription (rule 1) and its open
-     * preparation, patient, pharmacy scope and type, CDS, actors, catalogue
-     * item, the lot, and the counter-side verification.
-     *
-     * @param openPreparationKey the 409 message when the prescription already
-     *                           has an open preparation
-     */
-    /**
      * QA D1141: the unit of a fill. The screen saved fills with no unit (129,
      * 150 and 21 of what?), so the register and the receipt could not say
      * what left the shelf. The unit typed wins; a blank one is the order's
@@ -834,6 +825,15 @@ public class DispenseServiceImpl implements DispenseService {
         return unit;
     }
 
+    /**
+     * Everything the one-step fill and the ready path check before any stock
+     * moves: quantities, the locked prescription (rule 1) and its open
+     * preparation, patient, pharmacy scope and type, CDS, actors, catalogue
+     * item, the lot, and the counter-side verification.
+     *
+     * @param openPreparationKey the 409 message when the prescription already
+     *                           has an open preparation
+     */
     private FillContext validateFill(DispenseRequestDTO dto, String openPreparationKey) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
 

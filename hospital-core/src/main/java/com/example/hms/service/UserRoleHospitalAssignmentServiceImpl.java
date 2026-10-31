@@ -2312,8 +2312,8 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
     private static final Set<String> SMS_LANGUAGES = Set.of("fr", "en", "es");
 
     static Locale smsLocale() {
-        Locale requested = LocaleContextHolder.getLocale();
-        String language = requested != null ? requested.getLanguage() : "";
+        // LocaleContextHolder never answers null (it falls back to the JVM default).
+        String language = LocaleContextHolder.getLocale().getLanguage();
         return SMS_LANGUAGES.contains(language) ? Locale.forLanguageTag(language) : Locale.FRENCH;
     }
 

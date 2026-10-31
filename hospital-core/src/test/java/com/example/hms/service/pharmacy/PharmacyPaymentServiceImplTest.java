@@ -39,6 +39,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -238,7 +239,7 @@ class PharmacyPaymentServiceImplTest {
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
-        org.mockito.Mockito.doThrow(new BusinessException("billing.payment.duplicateReference"))
+        doThrow(new BusinessException("billing.payment.duplicateReference"))
                 .when(referenceRegistry).requireUnused(hospitalId, "OM-R20-77812");
 
         assertThatThrownBy(() -> service.createPayment(dto))

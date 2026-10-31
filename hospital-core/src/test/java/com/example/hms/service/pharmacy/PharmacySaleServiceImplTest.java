@@ -39,6 +39,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -130,7 +131,7 @@ class PharmacySaleServiceImplTest {
         dto.setPaymentMethod(PharmacyPaymentMethod.MOBILE_MONEY);
         dto.setReferenceNumber("OM-R20-55123");
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
-        org.mockito.Mockito.doThrow(new BusinessException("billing.payment.duplicateReference"))
+        doThrow(new BusinessException("billing.payment.duplicateReference"))
                 .when(referenceRegistry).requireUnused(hospitalId, "OM-R20-55123");
 
         assertThatThrownBy(() -> service.createSale(dto))

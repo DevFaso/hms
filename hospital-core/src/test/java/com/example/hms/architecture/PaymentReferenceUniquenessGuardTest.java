@@ -64,8 +64,7 @@ class PaymentReferenceUniquenessGuardTest {
         Set<String> writers = scan.keySet().stream()
             .filter(k -> !k.startsWith("#"))
             .collect(java.util.stream.Collectors.toCollection(TreeSet::new));
-        assertThat(writers).as("payment reference writers found").hasSizeGreaterThanOrEqualTo(3);
-        assertThat(writers)
+        assertThat(writers).as("payment reference writers found").hasSizeGreaterThanOrEqualTo(3)
             .as("a method that stores a payment's provider reference is not listed (QA D1129): route it through"
                 + " PaymentReferenceRegistry.requireUnused, or say why it records no new transaction")
             .isEqualTo(new TreeSet<>(WRITERS.keySet()));
