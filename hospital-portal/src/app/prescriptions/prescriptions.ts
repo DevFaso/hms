@@ -396,6 +396,8 @@ export class PrescriptionsComponent implements OnInit {
    * with a reason. Every other field is read-only; the server refuses them.
    */
   editingSigned = signal(false);
+  /** QA D1098 class: an order awaiting the pharmacist's clarification was signed. */
+  editingClarification = signal(false);
 
   /** QA D670: the prescriber of record shown on a signed order's withdrawal form. */
   editingPrescriberName = signal('');
@@ -637,6 +639,7 @@ export class PrescriptionsComponent implements OnInit {
     this.editingId.set(null);
     this.editingWithdrawn.set(false);
     this.editingSigned.set(false);
+    this.editingClarification.set(false);
     this.selectedPatient.set(null);
     this.patientQuery.set('');
     this.formError.set('');
@@ -680,6 +683,7 @@ export class PrescriptionsComponent implements OnInit {
     this.editingWithdrawn.set(isWithdrawnStatus(p.status));
     const signed = p.status === 'SIGNED';
     this.editingSigned.set(signed);
+    this.editingClarification.set(p.status === 'PENDING_CLARIFICATION');
     this.editingPrescriberName.set(p.staffFullName ?? '');
     if (signed) {
       // No withdrawal is pre-selected: the prescriber chooses one, deliberately.
@@ -690,8 +694,23 @@ export class PrescriptionsComponent implements OnInit {
     this.showModal.set(true);
   }
 
+  /**
+   * QA D660 / D1098 class: the withdrawal reason is asked of a signed order,
+   * and of an order awaiting clarification (signed before the pharmacist's
+   * question) once Cancelled or Discontinued is chosen; the server refuses
+   * either withdrawal without it.
+   */
+  withdrawalReasonShown(): boolean {
+    return (
+      this.editingSigned() || (this.editingClarification() && isWithdrawnStatus(this.form.status))
+    );
+  }
+
   /** QA D660: what the Save button waits for on a signed prescription. */
   signedWithdrawalIncomplete(): boolean {
+    if (this.editingClarification()) {
+      return isWithdrawnStatus(this.form.status) && !this.form.withdrawalReason?.trim();
+    }
     return (
       this.editingSigned() &&
       (!isWithdrawnStatus(this.form.status) || !this.form.withdrawalReason?.trim())

@@ -968,6 +968,14 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             return;
         }
         if (requested == PrescriptionStatus.CANCELLED || requested == PrescriptionStatus.DISCONTINUED) {
+            // QA D1098 class (round 19): an order awaiting clarification was
+            // signed, so its withdrawal states why, as a SIGNED withdrawal
+            // does (D660); it used to go through with no reason at all.
+            String reason = request.getWithdrawalReason() == null ? null : request.getWithdrawalReason().trim();
+            if (reason == null || reason.isEmpty()) {
+                throw new BusinessException("prescription.signed.withdrawalReason.required");
+            }
+            existing.setWithdrawalReason(reason);
             closeClarificationOnWithdrawal(existing);
             return;
         }

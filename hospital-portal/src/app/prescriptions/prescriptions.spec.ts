@@ -614,6 +614,29 @@ describe('PrescriptionsComponent — signing', () => {
     expect((el.querySelector('#rx-dosage') as HTMLInputElement).readOnly).toBeFalse();
   });
 
+  it('QA D1098 class: withdrawing an order awaiting clarification asks for the reason the server requires', async () => {
+    component.openEdit({
+      ...rx('c1a2', 'PENDING_CLARIFICATION'),
+      medicationName: 'amoxicilline',
+    } as PrescriptionResponse);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const el: HTMLElement = fixture.nativeElement;
+    expect(el.querySelector('[data-testid="rx-withdrawal-reason"]'))
+      .withContext('no withdrawal chosen: no reason asked')
+      .toBeNull();
+    const save = el.querySelector('.modal-actions .btn-primary') as HTMLButtonElement;
+    component.form.status = 'CANCELLED';
+    fixture.detectChanges();
+    expect(el.querySelector('[data-testid="rx-withdrawal-reason"]')).not.toBeNull();
+    expect(save.disabled).withContext('no reason yet').toBeTrue();
+    component.form.withdrawalReason = 'Contre-indiqué';
+    fixture.detectChanges();
+    expect(save.disabled).toBeFalse();
+  });
+
   it('does not offer SIGNED in the editable status list', () => {
     // The whole point of the ceremony: this status is reachable only by signing.
     expect(component.prescriptionStatuses.map((s) => s.value)).not.toContain('SIGNED');

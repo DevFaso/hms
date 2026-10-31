@@ -3770,6 +3770,7 @@ class PrescriptionServiceImplTest {
             .dosage(TEST_DOSAGE)
             .frequency(TEST_FREQUENCY)
             .status(com.example.hms.enums.PrescriptionStatus.CANCELLED)
+            .withdrawalReason("Contre-indiqué, remplacé par une autre molécule")
             .controlledSubstance(false)
             .build();
 
@@ -3785,6 +3786,35 @@ class PrescriptionServiceImplTest {
         assertThat(existing.getClarificationResolvedAt()).isNotNull();
         assertThat(existing.getClarificationResolvedByUserId()).isEqualTo(doctorUserId);
         assertThat(existing.getClarificationReason()).isEqualTo("Dose au-dessus du plafond rénal");
+    }
+
+    @Test
+    void updatePrescriptionRefusesAWithdrawalWithoutReasonWhileAwaitingClarification_D1098() {
+        // QA D1098 class: the order was signed before the pharmacist asked;
+        // withdrawing it states why, exactly as a SIGNED withdrawal does.
+        UUID rxId = UUID.randomUUID();
+        Prescription existing = new Prescription();
+        existing.setId(rxId);
+        existing.setStatus(com.example.hms.enums.PrescriptionStatus.PENDING_CLARIFICATION);
+
+        PrescriptionRequestDTO request = PrescriptionRequestDTO.builder()
+            .patientId(patientId)
+            .medicationName(TEST_MEDICATION)
+            .dosage(TEST_DOSAGE)
+            .frequency(TEST_FREQUENCY)
+            .status(com.example.hms.enums.PrescriptionStatus.CANCELLED)
+            .withdrawalReason("   ")
+            .build();
+
+        when(prescriptionRepository.findByIdForUpdate(rxId)).thenReturn(Optional.of(existing));
+
+        assertThatThrownBy(() -> prescriptionService.updatePrescription(rxId, request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey())
+            .isEqualTo("prescription.signed.withdrawalReason.required");
+        assertThat(existing.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.PENDING_CLARIFICATION);
+        assertThat(existing.getClarificationResolvedAt()).isNull();
+        verify(prescriptionRepository, never()).save(any());
     }
 
     @Test

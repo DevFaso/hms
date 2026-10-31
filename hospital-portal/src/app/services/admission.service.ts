@@ -143,7 +143,7 @@ export class AdmissionService {
 
   /** QA D1100: freeing an inpatient's bed states why (required, audited by the server). */
   unassignBed(id: string, reason: string): Observable<AdmissionResponse> {
-    return this.http.delete<AdmissionResponse>(`${this.baseUrl}/${id}/bed`, { params: { reason } });
+    return this.http.delete<AdmissionResponse>(`${this.baseUrl}/${id}/bed`, { body: { reason } });
   }
 
   getByPatient(patientId: string): Observable<AdmissionResponse[]> {

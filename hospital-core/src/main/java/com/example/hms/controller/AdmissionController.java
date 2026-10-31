@@ -109,8 +109,9 @@ public class AdmissionController {
         description = "Detach the admission's bed and make it available again. A reason is required (QA D1100).")
     public ResponseEntity<AdmissionResponseDTO> unassignBed(
         @PathVariable UUID admissionId,
-        @RequestParam(required = false) String reason
+        @RequestBody(required = false) com.example.hms.payload.dto.BedReleaseRequestDTO request
     ) {
+        String reason = request != null ? request.reason() : null;
         return ResponseEntity.ok(admissionService.unassignBed(admissionId, reason));
     }
 
