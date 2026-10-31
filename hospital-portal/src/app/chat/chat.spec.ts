@@ -7,6 +7,7 @@ import { ChatComponent } from './chat';
 import { AuthService } from '../auth/auth.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { ActivatedRoute, convertToParamMap } from '@angular/router';
 
 /**
  * #776 closed `GET /users` (the staff directory) to patients, and the
@@ -312,5 +313,55 @@ describe('ChatComponent new-conversation picker', () => {
       );
       expect(component.sendingMessage()).toBeFalse();
     });
+  });
+});
+
+/** QA D983: arriving from a "new message" notification opens that conversation. */
+describe('ChatComponent opened from a chat notification (QA D983)', () => {
+  it('selects the conversation with the unread message', () => {
+    const auth = jasmine.createSpyObj('AuthService', ['getUserId', 'getUserProfile', 'getRoles']);
+    auth.getUserId.and.returnValue('user-self');
+    auth.getRoles.and.returnValue(['ROLE_PATIENT']);
+    TestBed.configureTestingModule({
+      imports: [ChatComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: AuthService, useValue: auth },
+        {
+          provide: ToastService,
+          useValue: jasmine.createSpyObj('ToastService', ['error', 'warning', 'success', 'info']),
+        },
+        {
+          provide: ActivatedRoute,
+          useValue: { snapshot: { queryParamMap: convertToParamMap({ open: 'unread' }) } },
+        },
+      ],
+    });
+    const httpMock = TestBed.inject(HttpTestingController);
+    const fixture = TestBed.createComponent(ChatComponent);
+    fixture.detectChanges();
+    httpMock
+      .expectOne((r) => r.url === '/chat/conversations/user-self')
+      .flush([
+        {
+          conversationUserId: 'dr-read',
+          conversationUserName: 'Dr Lu',
+          lastMessageContent: 'ok',
+          lastMessageTimestamp: '2026-10-27T09:00:00',
+          lastMessageRead: true,
+          unreadCount: 0,
+        },
+        {
+          conversationUserId: 'dr-new',
+          conversationUserName: 'Dr Neuf',
+          lastMessageContent: 'Vos résultats sont prêts',
+          lastMessageTimestamp: '2026-10-27T08:00:00',
+          lastMessageRead: false,
+          unreadCount: 1,
+        },
+      ]);
+    expect(fixture.componentInstance.activeConversation()?.conversationUserId).toBe('dr-new');
+    httpMock.match(() => true).forEach((req) => req.flush([]));
   });
 });

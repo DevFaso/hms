@@ -1502,6 +1502,7 @@
     "WRITE_DELETE": "Deleted: {{entity}}",
     "WRITE_ENTITY_UNKNOWN": "record",
     "DESC": {
+      "INVOICE_ADJUSTMENT": "{{kind}} on invoice {{invoice}}",
       "PATIENT_RECORD_VIEWED": "Patient record viewed",
       "USER_PROFILE_UPDATED": "User profile updated",
       "USER_CREATED": "New user account created",
@@ -1983,9 +1984,25 @@
       "EMERGENCY_FORCE_LOGOUT_ALL": "Emergency sign-out of everyone",
       "EMERGENCY_FORCE_MFA_REENROL": "Emergency two-factor reset",
       "EMERGENCY_KILL_FEATURE": "Emergency feature switch-off"
+    },
+    "INVOICE_ADJUSTMENT": {
+      "CREDIT_NOTE": "Credit note",
+      "DISCOUNT": "Discount",
+      "WAIVER": "Waiver"
     }
   },
   "BILLING": {
+    "ADJUSTMENTS": "Discounts, waivers and credit notes",
+    "ADJUSTMENT_AMOUNT": "Amount (F CFA)",
+    "ADJUSTMENT_AMOUNT_HINT": "Leave empty to credit what is left on the line.",
+    "ADJUSTMENT_FAILED": "The adjustment could not be saved.",
+    "ADJUSTMENT_LINE": "Line reversed",
+    "ADJUSTMENT_LINE_REQUIRED": "Choose the line the credit note reverses.",
+    "ADJUSTMENT_REASON": "Reason",
+    "ADJUSTMENT_REASON_REQUIRED": "Give the reason for the discount, waiver or credit note.",
+    "ADJUSTMENT_SAVED": "Invoice adjusted.",
+    "ADJUSTMENT_SUBMIT": "Apply",
+    "ADJUSTMENT_TYPE": "Kind",
     "ALL_STATUSES": "All statuses",
     "AMOUNT": "Amount",
     "AMOUNT_PAID": "Amount Paid",
@@ -2026,7 +2043,12 @@
     "NEW_INVOICE": "New Invoice",
     "NOTES": "Notes",
     "NOTES_PLACEHOLDER": "Invoice notes…",
+    "NO_ADJUSTMENTS": "No discount, waiver or credit note.",
     "NO_INVOICES": "No invoices found",
+    "OPEN_COPAYS_INTRO": "This patient paid a copay at check-in that no invoice has taken yet. Link its visit so the copay is deducted and the patient does not pay twice:",
+    "OPEN_COPAY_LINE": "{{amount}} for visit {{visit}} (invoice {{invoice}})",
+    "OPEN_COPAY_LINK": "Link this visit",
+    "OPEN_COPAY_LINKED": "Linked: the copay will be deducted",
     "OUTSTANDING": "Outstanding",
     "OUTSTANDING_COUNT": "Outstanding",
     "OVERDUE": "Overdue",
@@ -2039,6 +2061,7 @@
     "PAYMENT_METHOD": "Payment Method",
     "PAYMENT_NOTE": "Payments apply to issued or partially paid invoices, up to the balance due, in whole francs.",
     "PAYMENT_RECORDED": "Payment recorded",
+    "PAYMENT_REFERENCE_REQUIRED": "Enter the transaction reference for a mobile money, transfer or insurance payment.",
     "PAYMENT_TITLE": "Record payment — {{invoice}}",
     "PDF_FAILED": "Failed to download PDF",
     "PENDING": "Pending",
@@ -2118,7 +2141,12 @@
       "REVERSED": "Reversed"
     },
     "PAYMENT_PENDING_DECLARED": "A payment of {{amount}} declared by the patient is awaiting confirmation. Confirm or reject it before taking that amount again.",
-    "PATIENT_LOCKED_ISSUED": "This invoice has been issued: its patient cannot be changed. Cancel it and issue a new invoice."
+    "PATIENT_LOCKED_ISSUED": "This invoice has been issued: its patient cannot be changed. Cancel it and issue a new invoice.",
+    "ADJUSTMENT_TYPES": {
+      "CREDIT_NOTE": "Credit note",
+      "DISCOUNT": "Discount",
+      "WAIVER": "Waiver (free care)"
+    }
   },
   "CHAT": {
     "ACCESS_DENIED": "You do not have permission to access chat.",
@@ -5132,6 +5160,8 @@
   },
   "PORTAL": {
     "VITALS": {
+      "ABOVE_NORMAL": "Above normal",
+      "BELOW_NORMAL": "Below normal",
       "TITLE": "My Vitals",
       "LOADING": "Loading vitals...",
       "EMPTY_TITLE": "No vital signs recorded",
@@ -5167,6 +5197,7 @@
       "GENERAL_VISIT": "General Visit",
       "GENERAL": "General",
       "BOOKING": {
+        "PRECHECKIN_OPENS_ON": "Online pre-check-in opens on {{date}}, 7 days before the appointment.",
         "TITLE": "Schedule Appointment",
         "FORM_TITLE": "Schedule a New Appointment",
         "SUCCESS": "Appointment scheduled successfully!",
@@ -5266,6 +5297,7 @@
       "PENDING_INTERPRETATION": "In progress — your result will appear here once the laboratory has released it."
     },
     "VISITS": {
+      "ASSESSMENT": "Doctor's assessment",
       "TITLE": "Visit History",
       "LOADING": "Loading visit history...",
       "EMPTY_TITLE": "No visit records",
@@ -5274,14 +5306,27 @@
       "DATE": "Date",
       "PROVIDER": "Provider",
       "DEPARTMENT": "Department",
-      "CHIEF_COMPLAINT": "Chief Complaint",
-      "DIAGNOSIS": "Diagnosis",
+      "CHIEF_COMPLAINT": "Reason for the visit",
       "STATUS": "Status",
       "NOT_ASSIGNED": "Not assigned",
       "GENERAL": "General",
       "HOSPITAL_NAME_LABEL": "Hospital"
     },
     "BILLING": {
+      "DETAIL_FAILED": "The invoice could not be loaded. Try again.",
+      "DOWNLOAD_FAILED": "The file could not be downloaded. Try again.",
+      "DOWNLOAD_INVOICE": "Download the invoice (PDF)",
+      "DOWNLOAD_RECEIPT": "Receipt (PDF)",
+      "HIDE_DETAIL": "Hide details",
+      "LINES": "What was billed",
+      "LINE_DESCRIPTION": "Service",
+      "LINE_QUANTITY": "Qty",
+      "LINE_TOTAL": "Line total",
+      "LINE_UNIT_PRICE": "Unit price",
+      "NO_LINES": "This invoice has no detailed lines.",
+      "NO_PAYMENTS": "No payment yet.",
+      "PAYMENTS": "Payments",
+      "SHOW_DETAIL": "See details",
       "TITLE": "Billing & Payments",
       "LOADING": "Loading billing information...",
       "EMPTY_TITLE": "No billing statements",
@@ -5296,7 +5341,7 @@
       "MAKE_PAYMENT": "Make a Payment",
       "AMOUNT": "Amount",
       "PAYMENT_METHOD": "Payment Method",
-      "REFERENCE": "Reference / Transaction ID (optional)",
+      "REFERENCE": "Reference / Transaction ID",
       "REFERENCE_PLACEHOLDER": "e.g. TXN-123456",
       "REFERENCE_REQUIRED": "Enter the payment reference for a card, transfer or mobile money payment.",
       "ENTER_AMOUNT": "Enter amount",
@@ -6285,8 +6330,12 @@
         "SCHEDULED": "Scheduled"
       },
       "NOTIFICATION_TYPE": {
+        "ADMIN_MESSAGE": "Message from the administration",
+        "ANNOUNCEMENT": "Announcement",
         "APPOINTMENT_REMINDER": "Appointment Reminder",
         "BREAK_GLASS_OPT_OUT_OVERRIDE": "Emergency access to your record",
+        "CHAT_MESSAGE": "New message",
+        "CONSULTATION_UPDATE": "Specialist consultation",
         "CRITICAL_IMAGING_FINDING": "Critical Imaging Finding",
         "CRITICAL_IMAGING_FINDING_ESCALATION": "Critical Imaging Finding Escalation",
         "CRITICAL_LAB_RESULT": "Critical Lab Result",
@@ -6294,12 +6343,14 @@
         "DISCHARGE_SUMMARY": "Discharge Summary",
         "LAB_ORDER_RECEIVED": "Lab order received",
         "LICENSE_EXPIRY": "License Expiry",
+        "MATERNITY_ALERT": "Maternity alert",
         "MEDICATION_REFILL": "Medication Refill",
         "NEWS2_ESCALATION": "NEWS2 escalation",
         "OBSTETRIC_ALERT": "Urgent Obstetric Alert",
         "OBSTETRIC_ALERT_ESCALATION": "Urgent Obstetric Alert Escalation",
         "PHARMACY_EVENT": "Pharmacy update",
         "POSITIVE_CULTURE_RESULT": "Positive Culture Result",
+        "PRENATAL_REMINDER": "Antenatal visit reminder",
         "PRO_CRITICAL_ITEM": "Critical PRO Item",
         "PRO_CRITICAL_ITEM_ESCALATION": "Critical PRO Item Escalation",
         "PRO_SCREEN_POSITIVE": "Positive PRO Screen",
@@ -6694,11 +6745,15 @@
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Allergy",
+        "DIAGNOSIS": "Diagnosis",
         "ENCOUNTER": "Encounter",
         "IMAGING": "Imaging",
+        "LAB_ORDER": "Lab test ordered",
         "LAB_RESULT": "Lab result",
+        "NOTE": "Clinical note",
         "PRESCRIPTION": "Prescription",
-        "PROCEDURE": "Procedure"
+        "PROCEDURE": "Procedure",
+        "REFERRAL": "Referral"
       },
       "SPECIMEN_TYPE": {
         "BLOOD": "Blood",
@@ -7179,6 +7234,7 @@
     "PROFILE_PICTURE": "Profile Picture",
     "PUSH_NOTIFICATIONS": "Push Notifications",
     "RECENT_ACTIVITY": "Recent Activity",
+    "RECORD_PHONE_SYNC_FAILED": "Your account phone was saved, but your patient record could not be updated. Ask the reception desk to change it.",
     "RECOVERY_ADDED": "Recovery contact added.",
     "RECOVERY_CONTACT": "Recovery Contact",
     "RECOVERY_CONTACTS": "Recovery Contacts",

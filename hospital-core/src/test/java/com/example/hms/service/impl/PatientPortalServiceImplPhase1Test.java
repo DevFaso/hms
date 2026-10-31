@@ -876,7 +876,7 @@ class PatientPortalServiceImplPhase1Test {
                     .timestamp(LocalDateTime.now())
                     .build();
 
-            when(disclosureAccountingService.getEntries(patientId, null, null, pageable))
+            when(disclosureAccountingService.getEntriesAsPatientSees(patientId, null, null, pageable))
                     .thenReturn(new PageImpl<>(List.of(entry)));
 
             Page<AccessLogEntryDTO> result = service.getMyAccessLog(auth, pageable);

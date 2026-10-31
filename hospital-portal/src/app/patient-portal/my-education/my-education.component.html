@@ -203,12 +203,15 @@
     >
       <div
         class="booking-form-card edu-reader-card"
+        appDialogA11y
         tabindex="-1"
+        aria-labelledby="edu-dialog-title-1"
+        (dialogClose)="closeReader()"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="closeReader()"
+        (keydown.escape)="$event.stopPropagation()"
       >
         <div class="booking-header">
-          <h2>{{ item.title }}</h2>
+          <h2 id="edu-dialog-title-1">{{ item.title }}</h2>
           <button
             class="booking-close"
             (click)="closeReader()"
@@ -310,12 +313,15 @@
     >
       <div
         class="booking-form-card"
+        appDialogA11y
         tabindex="-1"
+        aria-labelledby="edu-dialog-title-2"
+        (dialogClose)="closeAsk()"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="closeAsk()"
+        (keydown.escape)="$event.stopPropagation()"
       >
         <div class="booking-header">
-          <h2>{{ 'PORTAL.EDUCATION.ASK_QUESTION' | translate }}</h2>
+          <h2 id="edu-dialog-title-2">{{ 'PORTAL.EDUCATION.ASK_QUESTION' | translate }}</h2>
           <button
             class="booking-close"
             (click)="closeAsk()"

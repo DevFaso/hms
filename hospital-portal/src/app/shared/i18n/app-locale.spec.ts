@@ -21,7 +21,10 @@ describe('formatCfa (QA D621)', () => {
   it('reads "F CFA" after the amount in every language', () => {
     expect(plain(formatCfa(4000, 'XOF', 'fr-FR'))).toBe('4 000 F CFA');
     expect(plain(formatCfa(4000, 'XOF', 'en-US'))).toBe('4,000 F CFA');
-    expect(plain(formatCfa(4000, 'XOF', 'es-ES'))).toMatch(/^4\.?000 F CFA$/);
+    // QA D1008: four digits are grouped in Spanish too, like five.
+    expect(plain(formatCfa(4000, 'XOF', 'es-ES'))).toBe('4.000 F CFA');
+    expect(plain(formatCfa(8225, 'XOF', 'es-ES'))).toBe('8.225 F CFA');
+    expect(plain(formatCfa(19875, 'XOF', 'es-ES'))).toBe('19.875 F CFA');
     for (const locale of ['fr-FR', 'en-US', 'es-ES']) {
       expect(formatCfa(4000, 'XOF', locale)).not.toContain('XOF');
     }

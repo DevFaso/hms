@@ -8,6 +8,7 @@ import {
   viewChild,
   ChangeDetectionStrategy,
 } from '@angular/core';
+import { saveBlob } from '../shared/download-file';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -338,12 +339,8 @@ export class PatientDetailComponent implements OnInit {
     this.patientService.downloadRecordPdf(this.patientId).subscribe({
       next: (blob) => {
         this.recordDownloadLoading.set(false);
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `patient-record-${this.patientId}.pdf`;
-        a.click();
-        URL.revokeObjectURL(url);
+        // QA D1009: named by the MRN the user can read, not the patient's database id.
+        saveBlob(blob, `patient-record-${this.patient()?.mrn || 'export'}.pdf`);
       },
       error: (err: HttpErrorResponse) => {
         this.recordDownloadLoading.set(false);

@@ -2608,6 +2608,28 @@ user, data steps, and the residuals each PR recorded (the bullets dated
 
 ### The items
 
+- **Chronology rows of another hospital for the visit categories (QA round 16 (D959)).**
+  The doctor's chronology now lists diagnoses, lab orders still waiting,
+  imaging orders, signed notes with their plan and referrals
+  (`VisitTimelineRows`), but only the acting hospital's own rows. Reading
+  another hospital's rows in these categories needs the same treatment-
+  relationship and sensitive-category accounting the shared categories have
+  (E8 #49/#51, decision D3, RECORD_SHARE per source): a problem carries its
+  own sensitivity category, a note and a lab order ride on their encounter,
+  a referral and an imaging order have neither. Until then they are not read
+  across hospitals at all.
+
+- **Invoice adjustments after this round (QA round 16 (D974)).** Discounts,
+  waivers and credit notes (V242, `POST /billing-invoices/{id}/adjustments`)
+  lower an issued invoice with a mandatory reason, an audit row and the line
+  on the PDF; a credit note reverses a line. Still owed: a refund when a credit
+  note would leave the invoice below what was already paid (today the payment
+  is reversed first), a report of adjustments per period for the
+  accountant, and a status of its own for an invoice settled by a waiver
+  (today it ends PAID with amountPaid 0: nothing is owed and revenue sums
+  amountPaid, but the paid tab and paid counts include it; a WAIVED status
+  needs a product decision and a migration of the status column users).
+
 - **~~Device-only history notes are filed under a different identity per login path
   (#709 iOS, #710 Android).~~ Closed by #791** (2026-10-03): both apps resolve
   one HMS user id at sign-in, for every login path, and key the notes on it.

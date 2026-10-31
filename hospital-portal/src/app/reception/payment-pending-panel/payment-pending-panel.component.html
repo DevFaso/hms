@@ -73,7 +73,7 @@
             @for (inv of openInvoices(); track inv.id) {
               <option [value]="inv.id">
                 {{ inv.invoiceNumber }} — {{ 'RECEPTION.BALANCE' | translate }}:
-                {{ inv.balanceDue | number: '1.2-2' }}
+                {{ inv.balanceDue | cfa }}
               </option>
             }
           </select>
