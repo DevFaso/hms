@@ -21,7 +21,7 @@ class PatientMeasureRulesTest {
 
     @Test
     void aFundalHeightIsRefusedForAMan() {
-        for (String male : new String[] {"MALE", "M", "male"}) {
+        for (String male : new String[] {"MALE", "M", "male", "Homme", "masculin", "H"}) {
             var man = patient(male, null);
             assertThatThrownBy(() -> PatientMeasureRules.requireFundalHeightApplicable(man, 28))
                 .isInstanceOf(BusinessException.class).hasMessage("vitals.fundalHeight.notApplicable");
@@ -48,5 +48,22 @@ class PatientMeasureRulesTest {
                 patient("F", today.minusYears(19).minusDays(364)), 54.0, today)).doesNotThrowAnyException();
         assertThatCode(() -> PatientMeasureRules.requireHeadCircumferenceApplicable(
                 patient("F", null), 54.0, today)).doesNotThrowAnyException();
+    }
+
+    /** QA D1077 (round 19): the one check every vitals write runs before the save. */
+    @Test
+    void theVitalSignRuleChecksBothMeasuresAgainstTheRowsPatient() {
+        LocalDate today = LocalDate.of(2026, 10, 31);
+        com.example.hms.model.PatientVitalSign adultRow = com.example.hms.model.PatientVitalSign.builder()
+            .patient(patient("MALE", today.minusYears(67))).headCircumferenceCm(56.0).build();
+        assertThatThrownBy(() -> PatientMeasureRules.requireVitalSignApplicable(adultRow, null, today))
+            .isInstanceOf(BusinessException.class).hasMessage("vitals.headCircumference.notApplicable");
+        com.example.hms.model.PatientVitalSign manRow = com.example.hms.model.PatientVitalSign.builder()
+            .patient(patient("MALE", today.minusYears(30))).build();
+        assertThatThrownBy(() -> PatientMeasureRules.requireVitalSignApplicable(manRow, 28, today))
+            .isInstanceOf(BusinessException.class).hasMessage("vitals.fundalHeight.notApplicable");
+        com.example.hms.model.PatientVitalSign childRow = com.example.hms.model.PatientVitalSign.builder()
+            .patient(patient("FEMALE", today.minusYears(2))).headCircumferenceCm(47.0).build();
+        assertThatCode(() -> PatientMeasureRules.requireVitalSignApplicable(childRow, 20, today)).doesNotThrowAnyException();
     }
 }

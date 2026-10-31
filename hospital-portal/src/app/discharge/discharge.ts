@@ -24,6 +24,7 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { serverLocalDate } from '../shared/date-utils';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { AuthorshipService } from '../shared/authorship.service';
+import { refusalReason } from '../shared/refusal-reason';
 
 type ApprovalFilter = DischargeStatus | 'ALL';
 type SummaryFilter = 'unfinalized' | 'pending-results' | 'range';
@@ -312,8 +313,10 @@ export class DischargeComponent implements OnInit {
         this.closeDecision();
         this.loadApprovals();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('DISCHARGE.DECISION_ERROR'));
+      error: (err: unknown) => {
+        // QA D1111: the server's localized reason (a second request, a colleague's
+        // record…), the generic text only when it gives none.
+        this.toast.error(refusalReason(err) ?? this.translate.instant('DISCHARGE.DECISION_ERROR'));
         this.decisionSubmitting.set(false);
       },
     });
@@ -356,8 +359,10 @@ export class DischargeComponent implements OnInit {
           this.closeCancel();
           this.loadApprovals();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('DISCHARGE.CANCEL_ERROR'));
+        error: (err: unknown) => {
+          // QA D1111: the server's localized reason (a second request, a colleague's
+          // record…), the generic text only when it gives none.
+          this.toast.error(refusalReason(err) ?? this.translate.instant('DISCHARGE.CANCEL_ERROR'));
           this.cancelSubmitting.set(false);
         },
       });
@@ -446,8 +451,12 @@ export class DischargeComponent implements OnInit {
               this.closeRequest();
               this.loadApprovals();
             },
-            error: () => {
-              this.toast.error(this.translate.instant('DISCHARGE.REQUEST_ERROR'));
+            error: (err: unknown) => {
+              // QA D1111: the server's localized reason (a second request, a colleague's
+              // record…), the generic text only when it gives none.
+              this.toast.error(
+                refusalReason(err) ?? this.translate.instant('DISCHARGE.REQUEST_ERROR'),
+              );
               this.requestSubmitting.set(false);
             },
           });
@@ -593,8 +602,12 @@ export class DischargeComponent implements OnInit {
         this.closeSummaryModal();
         this.loadSummaries();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('DISCHARGE.SUMMARY_SAVE_ERROR'));
+      error: (err: unknown) => {
+        // QA D1111: the server's localized reason (a second request, a colleague's
+        // record…), the generic text only when it gives none.
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('DISCHARGE.SUMMARY_SAVE_ERROR'),
+        );
         this.summarySaving.set(false);
       },
     });
@@ -639,8 +652,12 @@ export class DischargeComponent implements OnInit {
           this.closeFinalize();
           this.loadSummaries();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('DISCHARGE.FINALIZE_ERROR'));
+        error: (err: unknown) => {
+          // QA D1111: the server's localized reason (a second request, a colleague's
+          // record…), the generic text only when it gives none.
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('DISCHARGE.FINALIZE_ERROR'),
+          );
           this.finalizeSubmitting.set(false);
         },
       });
@@ -668,8 +685,10 @@ export class DischargeComponent implements OnInit {
         this.closeDelete();
         this.loadSummaries();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('DISCHARGE.DELETE_ERROR'));
+      error: (err: unknown) => {
+        // QA D1111: the server's localized reason (a second request, a colleague's
+        // record…), the generic text only when it gives none.
+        this.toast.error(refusalReason(err) ?? this.translate.instant('DISCHARGE.DELETE_ERROR'));
         this.deleteSubmitting.set(false);
       },
     });

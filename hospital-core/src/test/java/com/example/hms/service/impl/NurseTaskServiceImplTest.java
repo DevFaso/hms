@@ -2044,6 +2044,29 @@ class NurseTaskServiceImplTest {
             .hasMessageContaining("Hospital context");
     }
 
+    /** QA D1077: the nurse station refuses a head circumference for an adult, before any row is saved. */
+    @Test
+    void captureVitalsRefusesAHeadCircumferenceForAnAdult_D1077() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Patient pat = Patient.builder().build();
+        pat.setId(patientId);
+        pat.setDateOfBirth(java.time.LocalDate.now().minusYears(46));
+        Hospital hosp = Hospital.builder().build();
+        hosp.setId(hospitalId);
+        registerPatientAtHospital(pat, hosp);
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(pat));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hosp));
+        NurseVitalCaptureRequestDTO req = NurseVitalCaptureRequestDTO.builder()
+            .heartRateBpm(72).headCircumferenceCm(57.0).build();
+
+        UUID nurseId = UUID.randomUUID();
+        assertThatThrownBy(() -> service.captureVitals(patientId, nurseId, hospitalId, req))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("vitals.headCircumference.notApplicable");
+        verify(vitalSignRepository, never()).save(any());
+    }
+
     @Test
     void captureVitalsSavesNormalVitals() {
         UUID patientId = UUID.randomUUID();

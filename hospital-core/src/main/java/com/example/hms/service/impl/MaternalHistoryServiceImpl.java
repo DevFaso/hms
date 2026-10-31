@@ -351,7 +351,9 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
         // the hospital. Only the clinician who recorded it (or a super-admin in
         // global view) deletes it; everyone else updates it, which keeps a version.
         if (maternalHistory.getRecordedBy() != null) {
-            com.example.hms.security.CallerIdentity.requireCallerUnlessSuperAdmin(maternalHistory.getRecordedBy());
+            // QA D1112: the authorship rule, not "act in your own name".
+            com.example.hms.security.CallerIdentity.requireAuthorUnlessSuperAdmin(maternalHistory.getRecordedBy(),
+                "maternalHistory.delete.recorderOnly");
         }
         maternalHistoryRepository.delete(maternalHistory);
         

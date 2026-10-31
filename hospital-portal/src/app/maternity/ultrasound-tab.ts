@@ -1,5 +1,14 @@
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
-import { ChangeDetectionStrategy, Component, inject, OnInit, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  inject,
+  OnInit,
+  signal,
+} from '@angular/core';
+import { CANCEL_REASON_REQUIRED_KEY, isOrderCancellable } from '../shared/order-lifecycle';
+import { refuseFields } from '../shared/forms/invalid-fields';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -48,6 +57,7 @@ export class UltrasoundTabComponent implements OnInit {
   private readonly roleContext = inject(RoleContextService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   private hospitalId: string | null = null;
 
@@ -55,6 +65,11 @@ export class UltrasoundTabComponent implements OnInit {
   /** QA D1081: an ultrasound order is rewritten or cancelled by its author only. */
   isOrderAuthor(o: UltrasoundOrderResponse): boolean {
     return this.authorship.isAuthor(o);
+  }
+
+  /** QA D1098: the author cancels an order that has no report yet, on the shared rule. */
+  canCancelThisOrder(o: UltrasoundOrderResponse): boolean {
+    return this.canOrder && isOrderCancellable(o.status) && this.isOrderAuthor(o);
   }
 
   readonly canOrder = this.roleContext.hasAnyActiveRole([
@@ -310,8 +325,15 @@ export class UltrasoundTabComponent implements OnInit {
   submitCancel(): void {
     const order = this.viewedOrder();
     if (!order) return;
+    const reason = this.cancelReason.trim();
+    if (!reason) {
+      // QA D1098: every cancel states why (the server refuses a blank reason too).
+      const message = this.translate.instant(CANCEL_REASON_REQUIRED_KEY);
+      refuseFields(this.host.nativeElement, ['us-cancel-reason'], ['us-cancel-reason'], message);
+      return;
+    }
     this.cancelBusy.set(true);
-    this.ultrasoundService.cancelOrder(order.id, this.cancelReason.trim() || undefined).subscribe({
+    this.ultrasoundService.cancelOrder(order.id, reason).subscribe({
       next: (updated) => {
         this.toast.success(this.translate.instant('ULTRASOUND.ORDER_CANCELLED'));
         this.cancelBusy.set(false);
@@ -439,8 +461,10 @@ export class UltrasoundTabComponent implements OnInit {
         this.closeReportModal();
         this.load();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('ULTRASOUND.REPORT_SAVE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('ULTRASOUND.REPORT_SAVE_ERROR'),
+        );
         this.reportSaving.set(false);
       },
     });
@@ -455,8 +479,10 @@ export class UltrasoundTabComponent implements OnInit {
         this.load();
         this.closeOrder();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('ULTRASOUND.REPORT_ACTION_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('ULTRASOUND.REPORT_ACTION_ERROR'),
+        );
         this.reportActionBusy.set(false);
       },
     });
@@ -471,8 +497,10 @@ export class UltrasoundTabComponent implements OnInit {
         this.load();
         this.closeOrder();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('ULTRASOUND.REPORT_ACTION_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('ULTRASOUND.REPORT_ACTION_ERROR'),
+        );
         this.reportActionBusy.set(false);
       },
     });

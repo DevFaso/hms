@@ -580,6 +580,30 @@ class EncounterServiceImplTest {
         verify(encounterRepository).save(any(Encounter.class));
     }
 
+    /** QA D1077: the triage path refuses a fundal height for a man, before any row is saved. */
+    @Test
+    void submitTriage_refusesAFundalHeightForAMan_D1077() {
+        UUID encounterId = UUID.randomUUID();
+        Hospital hospital = new Hospital();
+        hospital.setId(UUID.randomUUID());
+        Patient patient = new Patient();
+        patient.setId(UUID.randomUUID());
+        patient.setGender("Homme");
+        Encounter encounter = new Encounter();
+        encounter.setId(encounterId);
+        encounter.setStatus(EncounterStatus.ARRIVED);
+        encounter.setHospital(hospital);
+        encounter.setPatient(patient);
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        TriageSubmissionRequestDTO request = TriageSubmissionRequestDTO.builder()
+                .esiScore(3).heartRateBpm(80).fundalHeightCm(28).build();
+
+        assertThatThrownBy(() -> service.submitTriage(encounterId, request, "nurse1", true, null))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("vitals.fundalHeight.notApplicable");
+        verify(patientVitalSignRepository, never()).save(any(PatientVitalSign.class));
+    }
+
     @Test
     void submitTriage_routesTheVitalsThroughTheNews2Escalation_D265() {
         UUID encounterId = UUID.randomUUID();
@@ -1083,7 +1107,8 @@ class EncounterServiceImplTest {
         nurse.setUser(nurseUser);
         Encounter encounter = new Encounter();
         encounter.setId(encounterId);
-        encounter.setStatus(EncounterStatus.IN_PROGRESS);
+        // QA D1099: the nurse who examined has ended her examination; the doctor checks the visit out.
+        encounter.setStatus(EncounterStatus.READY_FOR_DISCHARGE);
         encounter.setHospital(hospital);
         encounter.setPatient(patient);
         encounter.setStaff(nurse);
@@ -1135,7 +1160,8 @@ class EncounterServiceImplTest {
         nurse.setUser(nurseUser);
         Encounter encounter = new Encounter();
         encounter.setId(encounterId);
-        encounter.setStatus(EncounterStatus.IN_PROGRESS);
+        // QA D1099: the nurse who examined has ended her examination; the doctor checks the visit out.
+        encounter.setStatus(EncounterStatus.READY_FOR_DISCHARGE);
         encounter.setHospital(hospital);
         encounter.setPatient(patient);
         encounter.setStaff(nurse);
@@ -1862,6 +1888,89 @@ class EncounterServiceImplTest {
         assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.WAITING_FOR_PHYSICIAN);
     }
 
+    // ---------- QA D1099: the examining clinician ends the examination ----------
+
+    /** A doctor's visit in progress, and the caller signed in as a midwife who is not that doctor. */
+    private Encounter doctorsVisitInProgressSeenByAMidwife(UUID encounterId, Hospital hospital) {
+        Staff doctor = new Staff();
+        com.example.hms.model.User doctorUser = new com.example.hms.model.User();
+        doctorUser.setId(UUID.randomUUID());
+        doctor.setUser(doctorUser);
+        Encounter encounter = new Encounter();
+        encounter.setId(encounterId);
+        encounter.setStatus(EncounterStatus.IN_PROGRESS);
+        encounter.setHospital(hospital);
+        encounter.setStaff(doctor);
+        com.example.hms.model.User midwife = new com.example.hms.model.User();
+        midwife.setId(UUID.randomUUID());
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(midwife, null,
+                org.springframework.security.core.authority.AuthorityUtils.createAuthorityList("ROLE_MIDWIFE")));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        return encounter;
+    }
+
+    @Test
+    void completeExamination_refusesAnyoneButTheExaminingClinician_D1099() {
+        UUID encounterId = UUID.randomUUID();
+        Hospital hospital = new Hospital(); hospital.setId(UUID.randomUUID());
+        Encounter encounter = doctorsVisitInProgressSeenByAMidwife(encounterId, hospital);
+
+        assertThatThrownBy(() -> service.completeExamination(encounterId, false, hospital.getId()))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey())
+            .isEqualTo("encounter.exam.notExaminingClinician");
+        assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.IN_PROGRESS);
+        verify(encounterRepository, never()).save(any());
+    }
+
+    @Test
+    void completeExamination_theAssignedClinicianEndsIt_D1099() {
+        UUID encounterId = UUID.randomUUID();
+        Hospital hospital = new Hospital(); hospital.setId(UUID.randomUUID());
+        Encounter encounter = doctorsVisitInProgressSeenByAMidwife(encounterId, hospital);
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                encounter.getStaff().getUser(), null,
+                org.springframework.security.core.authority.AuthorityUtils.createAuthorityList("ROLE_DOCTOR")));
+        when(labOrderRepository.existsByEncounter_IdAndStatusNotIn(any(UUID.class), any())).thenReturn(false);
+        when(procedureOrderRepository.existsByEncounter_IdAndStatusNotIn(any(UUID.class), any())).thenReturn(false);
+        when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(encounterMapper.toEncounterResponseDTO(any(Encounter.class))).thenReturn(new EncounterResponseDTO());
+
+        service.completeExamination(encounterId, false, hospital.getId());
+
+        assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.READY_FOR_DISCHARGE);
+    }
+
+    @Test
+    void markReadyForDischargeFromInProgress_refusesAnyoneButTheExaminingClinician_D1099() {
+        UUID encounterId = UUID.randomUUID();
+        Hospital hospital = new Hospital(); hospital.setId(UUID.randomUUID());
+        Encounter encounter = doctorsVisitInProgressSeenByAMidwife(encounterId, hospital);
+
+        assertThatThrownBy(() -> service.markReadyForDischarge(encounterId, false, hospital.getId()))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey())
+            .isEqualTo("encounter.exam.notExaminingClinician");
+        assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.IN_PROGRESS);
+    }
+
+    @Test
+    void checkOutOfAVisitInProgress_refusesAnyoneButTheExaminingClinician_D1099() {
+        UUID encounterId = UUID.randomUUID();
+        Hospital hospital = new Hospital(); hospital.setId(UUID.randomUUID());
+        Encounter encounter = doctorsVisitInProgressSeenByAMidwife(encounterId, hospital);
+
+        assertThatThrownBy(() -> service.checkOut(encounterId,
+                com.example.hms.payload.dto.clinical.CheckOutRequestDTO.builder().build(), "midwife1", false,
+                hospital.getId()))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey())
+            .isEqualTo("encounter.exam.notExaminingClinician");
+        assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.IN_PROGRESS);
+    }
+
     // ---------- completeExamination ----------
 
     @Test
@@ -2113,6 +2222,10 @@ class EncounterServiceImplTest {
         existing.setHospital(hospital);
         existing.setPatient(patient);
         existing.setStaff(staff);
+        // QA D1099: the attending ends his own consultation through the edit.
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(staffUser, null,
+                org.springframework.security.core.authority.AuthorityUtils.createAuthorityList("ROLE_DOCTOR")));
         existing.setAssignment(assignment);
         existing.setEncounterDate(LocalDateTime.now().minusHours(1));
 
@@ -2347,6 +2460,74 @@ class EncounterServiceImplTest {
         verify(emailService, never()).sendHtml(any(), any(), any(), anyString(), anyString());
         verify(eventPublisher, never()).publishEvent(any(com.example.hms.event.EncounterCheckedOutEvent.class));
         assertThat(merged.getCheckoutTimestamp()).isNull();
+    }
+
+    /** QA D1099: PUT /encounters/{id} ending an examination in progress is the examining clinician's too. */
+    @Test
+    void updateEncounter_endingAnExaminationIsTheExaminingClinicians_D1099() {
+        UUID encounterId = UUID.randomUUID();
+        UUID patientId = UUID.randomUUID();
+        UUID staffId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID departmentId = UUID.randomUUID();
+        Hospital hospital = new Hospital();
+        hospital.setId(hospitalId);
+        com.example.hms.model.Department department = new com.example.hms.model.Department();
+        department.setId(departmentId);
+        department.setHospital(hospital);
+        hospital.setDepartments(java.util.Set.of(department));
+        Patient patient = new Patient();
+        patient.setId(patientId);
+        User staffUser = User.builder().username("dr.smith").build();
+        staffUser.setId(UUID.randomUUID());
+        Staff staff = Staff.builder().user(staffUser).hospital(hospital).build();
+        staff.setId(staffId);
+        UserRoleHospitalAssignment assignment = new UserRoleHospitalAssignment();
+        assignment.setId(UUID.randomUUID());
+        Encounter existing = new Encounter();
+        existing.setId(encounterId);
+        existing.setStatus(EncounterStatus.IN_PROGRESS);
+        existing.setHospital(hospital);
+        existing.setPatient(patient);
+        existing.setStaff(staff);
+        existing.setAssignment(assignment);
+        existing.setEncounterDate(LocalDateTime.now().minusHours(1));
+        Encounter merged = new Encounter();
+        merged.setId(encounterId);
+        merged.setStatus(EncounterStatus.READY_FOR_DISCHARGE);
+        merged.setHospital(hospital);
+        merged.setPatient(patient);
+        merged.setStaff(staff);
+        merged.setAssignment(assignment);
+        merged.setEncounterDate(existing.getEncounterDate());
+        com.example.hms.payload.dto.EncounterRequestDTO request = new com.example.hms.payload.dto.EncounterRequestDTO();
+        request.setPatientId(patientId);
+        request.setStaffId(staffId);
+        request.setHospitalId(hospitalId);
+        request.setDepartmentId(departmentId);
+        request.setEncounterDate(existing.getEncounterDate());
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(existing));
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId))
+            .thenReturn(true);
+        when(encounterMapper.mergeEncounter(
+                any(com.example.hms.payload.dto.EncounterRequestDTO.class), any(Encounter.class), any(Patient.class),
+                any(Staff.class), any(Hospital.class), org.mockito.ArgumentMatchers.<Appointment>isNull(),
+                any(UserRoleHospitalAssignment.class)))
+            .thenReturn(merged);
+        User midwife = new User();
+        midwife.setId(UUID.randomUUID());
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(midwife, null,
+                org.springframework.security.core.authority.AuthorityUtils.createAuthorityList("ROLE_MIDWIFE")));
+
+        assertThatThrownBy(() -> service.updateEncounter(encounterId, request, locale, true, null))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey())
+            .isEqualTo("encounter.exam.notExaminingClinician");
+        verify(encounterRepository, never()).save(any());
     }
 
     // =====================================================================

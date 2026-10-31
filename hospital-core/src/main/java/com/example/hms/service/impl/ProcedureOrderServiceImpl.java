@@ -253,9 +253,13 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
         // is applied. A cancelled order is locked above for everyone, so
         // there is no way back out of CANCELLED to gate.
         boolean cancelling = updateDTO.getStatus() == ProcedureOrderStatus.CANCELLED;
+        // QA D1098 (round 19): every cancel states why, on this path as on POST /cancel.
         if (cancelling) {
             requireCancelAuthor(procedureOrder);
         }
+        String cancellationReason = cancelling
+            ? com.example.hms.service.support.CancelledOrders.requireCancelReason(updateDTO.getCancellationReason())
+            : null;
 
         // QA D857: a reschedule to a past date was accepted (01/01/2020 made
         // the order "Planifié" and offered "Débuter la procédure"). Checked
@@ -275,7 +279,7 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
             // CANCELLED with no time and no reason.
             if (cancelling) {
                 procedureOrder.setCancelledAt(LocalDateTime.now());
-                procedureOrder.setCancellationReason(updateDTO.getCancellationReason());
+                procedureOrder.setCancellationReason(cancellationReason);
             }
         }
 
@@ -310,10 +314,12 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
         if (procedureOrder.getStatus() == ProcedureOrderStatus.CANCELLED) {
             throw new BusinessException("procedureOrder.alreadyCancelled");
         }
+        // QA D1098: a blank reason passed the required request parameter.
+        String reason = com.example.hms.service.support.CancelledOrders.requireCancelReason(cancellationReason);
 
         procedureOrder.setStatus(ProcedureOrderStatus.CANCELLED);
         procedureOrder.setCancelledAt(LocalDateTime.now());
-        procedureOrder.setCancellationReason(cancellationReason);
+        procedureOrder.setCancellationReason(reason);
 
         ProcedureOrder saved = procedureOrderRepository.save(procedureOrder);
         log.info("Procedure order {} cancelled: {}", orderId, cancellationReason);

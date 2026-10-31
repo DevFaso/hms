@@ -673,7 +673,10 @@ class TreatmentPlanServiceImplTest {
         org.mockito.Mockito.lenient().when(staffRepository.findById(signOffId)).thenReturn(Optional.of(signOff));
 
         assertThatThrownBy(() -> service.update(planId, requestDTO))
-                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class)
+                // QA D1112: the authorship rule, not "act in your own name" (identity.notCaller).
+                .satisfies(e -> org.assertj.core.api.Assertions.assertThat(e.getMessage())
+                    .containsAnyOf("treatmentPlan.authorOnly", "Only the clinician who wrote this treatment plan", "Seul le clinicien qui a rédigé ce plan"));
         verify(treatmentPlanRepository, never()).save(any());
     }
 

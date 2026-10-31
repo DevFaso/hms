@@ -102,7 +102,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
 
         // Check if discharge summary already exists for this encounter
         if (dischargeSummaryRepository.existsByEncounter_Id(request.getEncounterId())) {
-            throw new BusinessException("Discharge summary already exists for this encounter");
+            throw new BusinessException("dischargeSummary.alreadyExists");
         }
 
         // Fetch required entities
@@ -224,7 +224,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
 
         // Cannot update finalized summaries
         if (Boolean.TRUE.equals(existing.getIsFinalized())) {
-            throw new BusinessException("Cannot update a finalized discharge summary");
+            throw new BusinessException("dischargeSummary.finalized.noUpdate");
         }
         takeOverFromNonPhysician(existing);
 
@@ -291,7 +291,9 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
         // QA D503: the signer is the signed-in user, never the providerId on the
         // request. Only the discharging provider finalizes, in their own name;
         // a providerId naming anyone else is refused rather than ignored.
-        com.example.hms.security.CallerIdentity.requireCaller(dischargeSummary.getDischargingProvider());
+        // QA D1112: a colleague's summary is refused with the authorship rule, not "act in your own name".
+        com.example.hms.security.CallerIdentity.requireAuthor(dischargeSummary.getDischargingProvider(),
+            "dischargeSummary.finalize.authorOnly");
         if (providerId != null && !dischargeSummary.getDischargingProvider().getId().equals(providerId)) {
             throw new com.example.hms.exception.ClientSafeAccessDeniedException(
                 com.example.hms.utility.MessageUtil.resolveOrRaw("identity.notCaller"));
@@ -299,7 +301,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
 
         // Check if already finalized
         if (Boolean.TRUE.equals(dischargeSummary.getIsFinalized())) {
-            throw new BusinessException("Discharge summary is already finalized");
+            throw new BusinessException("dischargeSummary.alreadyFinalized");
         }
 
         // Finalize
@@ -421,7 +423,7 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
 
         // Cannot delete finalized summaries
         if (Boolean.TRUE.equals(dischargeSummary.getIsFinalized())) {
-            throw new BusinessException("Cannot delete a finalized discharge summary");
+            throw new BusinessException("dischargeSummary.finalized.noDelete");
         }
 
         dischargeSummaryRepository.delete(dischargeSummary);
@@ -448,8 +450,9 @@ public class DischargeSummaryServiceImpl implements DischargeSummaryService {
                     && TreatingClinician.isCaller(summary.getEncounter(), encounterNoteRepository))) {
             return;
         }
+        // QA D1112: the authorship rule, not "act in your own name".
         throw new com.example.hms.exception.ClientSafeAccessDeniedException(
-            com.example.hms.utility.MessageUtil.resolveOrRaw("identity.notCaller"));
+            com.example.hms.utility.MessageUtil.resolveOrRaw("dischargeSummary.authorOnly"));
     }
 
     /**

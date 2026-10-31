@@ -250,10 +250,26 @@ class ObgynReferralServiceImplTest {
         assertThat(result.getStatus()).isEqualTo(ObgynReferralStatus.CANCELLED);
     }
 
+    /** QA D1098: the service states why too, whatever the caller (the DTO checks only the HTTP edge). */
+    @Test void cancelReferral_refusesABlankReason_D1098() {
+        signInAs(user);
+        ObgynReferralCancelRequestDTO req = new ObgynReferralCancelRequestDTO();
+        req.setReason(" ");
+        ObgynReferralStatus before = referral.getStatus();
+        when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
+        assertThatThrownBy(() -> service.cancelReferral(referralId, req, "admin"))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .extracting(e -> ((com.example.hms.exception.BusinessException) e).getMessageKey())
+            .isEqualTo("order.lifecycle.cancelReasonRequired");
+        assertThat(referral.getStatus()).isEqualTo(before);
+    }
+
     @Test void cancelReferral_alreadyClosed_throws() {
         signInAs(user);
         referral.setStatus(ObgynReferralStatus.COMPLETED);
         ObgynReferralCancelRequestDTO req = new ObgynReferralCancelRequestDTO();
+        // QA D1098: a cancel now states its reason first; this test is about the terminal refusal.
+        req.setReason("Patient transferred");
         when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
         assertThatThrownBy(() -> service.cancelReferral(referralId, req, "admin"))
             .isInstanceOf(IllegalStateException.class)

@@ -12298,5 +12298,16 @@
     "TYPE_ATTENDANCE": "Certificado de asistencia",
     "TYPE_GENERAL": "Certificado médico",
     "TYPE_SICK_LEAVE": "Baja laboral"
+  },
+  "ORDER_LIFECYCLE": {
+    "CANCEL_REASON_LABEL": "Motivo de la cancelación",
+    "CANCEL_REASON_REQUIRED": "Indique el motivo de la cancelación."
+  },
+  "ADMISSION_BED": {
+    "RELEASE_TITLE": "Liberar la cama",
+    "RELEASE_CONFIRM": "¿Liberar la cama {{bed}} ocupada por {{name}}? El paciente sale del tablero de camas.",
+    "RELEASE_REASON": "Motivo de la liberación",
+    "RELEASE_REASON_REQUIRED": "Indique por qué se libera la cama.",
+    "RELEASE_ACTION": "Liberar la cama"
   }
 }

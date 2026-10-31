@@ -42,6 +42,9 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
 
     /** QA D1066: refused on any write to a cancelled order. */
     private static final String IMAGING_ORDER_CANCELLED_LOCKED = "imaging.order.cancelled.locked";
+    /** QA D1098: an imaging order's resulted states, in lifecycle order. */
+    private static final List<ImagingOrderStatus> RESULTED_STATES =
+        List.of(ImagingOrderStatus.COMPLETED, ImagingOrderStatus.RESULTS_AVAILABLE);
 
     private static final int DEFAULT_DUPLICATE_LOOKBACK_DAYS = 30;
 
@@ -209,9 +212,16 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         com.example.hms.service.support.CancelledOrders.requireNotCancelled(order.getStatus(),
             IMAGING_ORDER_CANCELLED_LOCKED);
         boolean cancelling = request.getStatus() == ImagingOrderStatus.CANCELLED;
+        // QA D1098 (round 19): a resulted order is closed - it is neither
+        // cancelled nor sent back to ORDERED - and every cancel states why.
+        com.example.hms.service.support.CancelledOrders.requireResultStaysClosed(order.getStatus(),
+            request.getStatus(), RESULTED_STATES);
         if (cancelling) {
             requireCancelAuthor(order);
         }
+        String cancellationReason = cancelling
+            ? com.example.hms.service.support.CancelledOrders.requireCancelReason(request.getCancellationReason())
+            : null;
 
         requireNotInThePast(request.getScheduledDate(), order.getScheduledDate());
         order.setStatus(request.getStatus());
@@ -229,7 +239,7 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         order.setStatusUpdatedBy(actorId);
 
         if (cancelling) {
-            order.setCancellationReason(request.getCancellationReason());
+            order.setCancellationReason(cancellationReason);
             order.setCancelledAt(LocalDateTime.now());
             order.setCancelledByUserId(actorId);
             order.setCancelledByName(actor != null ? displayName(actor) : null);

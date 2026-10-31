@@ -271,6 +271,28 @@ class ImagingReportServiceImplTest {
         assertThat(report.getCriticalResultFlaggedAt()).isEqualTo(flaggedAt);
     }
 
+    /** QA D1098 (round 19): reports were written and signed FINAL on cancelled orders. */
+    @Test
+    void noReportIsWrittenRevisedOrSignedOnACancelledOrder_D1098() {
+        imagingOrder.setStatus(ImagingOrderStatus.CANCELLED);
+        ImagingReport report = persistedReport();
+        report.setImpression("Normal study.");
+
+        assertThatThrownBy(() -> imagingReportService.createReport(ImagingReportUpsertRequestDTO.builder()
+            .imagingOrderId(orderId).findings("x").build()))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("imaging.order.cancelled.locked");
+        assertThatThrownBy(() -> imagingReportService.updateReport(reportId,
+            ImagingReportUpsertRequestDTO.builder().findings("revised").build()))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("imaging.order.cancelled.locked");
+        assertThatThrownBy(() -> imagingReportService.signReport(reportId))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("imaging.order.cancelled.locked");
+        assertThat(report.getSignedAt()).isNull();
+        assertThat(imagingOrder.getStatus()).isEqualTo(ImagingOrderStatus.CANCELLED);
+    }
+
     // ── Signing ──────────────────────────────────────────────────────────
 
     @Test
@@ -328,8 +350,12 @@ class ImagingReportServiceImplTest {
         report.setImpression("Study aborted, patient could not tolerate.");
         imagingOrder.setStatus(ImagingOrderStatus.CANCELLED);
 
-        imagingReportService.signReport(reportId);
+        // QA D1098 (round 19): the signature itself is now refused on a cancelled
+        // order (it used to be accepted, the order merely staying cancelled).
+        assertThatThrownBy(() -> imagingReportService.signReport(reportId))
+            .isInstanceOf(BusinessException.class);
 
+        assertThat(report.getSignedAt()).isNull();
         assertThat(imagingOrder.getStatus()).isEqualTo(ImagingOrderStatus.CANCELLED);
         verify(imagingOrderRepository, never()).save(any(ImagingOrder.class));
     }

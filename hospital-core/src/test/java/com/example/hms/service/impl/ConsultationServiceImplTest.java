@@ -252,6 +252,18 @@ class ConsultationServiceImplTest {
         assertThat(r.getCancellationReason()).isEqualTo("No longer needed");
     }
 
+    /** QA D1098: the service states why too, whatever the caller (the DTO checks only the HTTP edge). */
+    @Test void cancelConsultation_refusesABlankReason_D1098() {
+        Consultation requested = buildConsultation(ConsultationStatus.REQUESTED);
+        requested.setRequestingProvider(staff);
+        when(roleValidator.getCurrentUserId()).thenReturn(staff.getUser().getId());
+        when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(requested));
+        assertThatThrownBy(() -> service.cancelConsultation(consultationId, ""))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("order.lifecycle.cancelReasonRequired");
+        assertThat(requested.getStatus()).isEqualTo(ConsultationStatus.REQUESTED);
+    }
+
     @Test void cancelConsultation_alreadyCompleted() {
         when(consultationRepository.findById(consultationId)).thenReturn(Optional.of(buildConsultation(ConsultationStatus.COMPLETED)));
         assertThatThrownBy(() -> service.cancelConsultation(consultationId, "r")).isInstanceOf(BusinessException.class);

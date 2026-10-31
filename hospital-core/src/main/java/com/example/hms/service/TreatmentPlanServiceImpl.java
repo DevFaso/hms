@@ -120,7 +120,9 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
         // check above, so any colleague could rewrite the plan. The plan is
         // rewritten by its author only (or a super-admin in global view).
         if (plan.getAuthor() != null) {
-            com.example.hms.security.CallerIdentity.requireCallerUnlessSuperAdmin(plan.getAuthor());
+            // QA D1112: the authorship rule, not "act in your own name".
+            com.example.hms.security.CallerIdentity.requireAuthorUnlessSuperAdmin(plan.getAuthor(),
+                "treatmentPlan.authorOnly");
         }
         validateEncounterContext(encounter, hospital, patient);
         // QA D401: the patient must be registered at the hospital the row is written in.

@@ -1,4 +1,5 @@
 import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
+import { isOrderCancellable } from '../shared/order-lifecycle';
 import { textMatches } from '../shared/person-search';
 import {
   Component,
@@ -35,7 +36,7 @@ import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { serverInstant, toServerDateTime } from '../shared/date-utils';
 import { missingRequiredMessage } from '../shared/required-fields';
-import { labelledRefusalReason } from '../shared/refusal-reason';
+import { labelledRefusalReason, refusalReason } from '../shared/refusal-reason';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { AuthorshipService } from '../shared/authorship.service';
@@ -372,9 +373,7 @@ export class ConsultationsComponent implements OnInit {
 
   /** QA D1081: a consultation request is withdrawn by the clinician who made it. */
   canCancelConsultation(c: ConsultationResponse): boolean {
-    return (
-      !['COMPLETED', 'CANCELLED', 'DECLINED'].includes(c.status) && this.authorship.isAuthor(c)
-    );
+    return isOrderCancellable(c.status) && this.authorship.isAuthor(c);
   }
 
   confirmCancel(c: ConsultationResponse): void {
@@ -400,8 +399,10 @@ export class ConsultationsComponent implements OnInit {
         this.deleting.set(false);
         this.reload();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('CONSULTATIONS.CANCEL_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('CONSULTATIONS.CANCEL_FAILED'),
+        );
         this.deleting.set(false);
       },
     });
@@ -590,8 +591,10 @@ export class ConsultationsComponent implements OnInit {
           this.assigning.set(false);
           this.reload();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('CONSULTATIONS.REASSIGN_FAILED'));
+        error: (err: unknown) => {
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('CONSULTATIONS.REASSIGN_FAILED'),
+          );
           this.assigning.set(false);
         },
       });
@@ -603,8 +606,10 @@ export class ConsultationsComponent implements OnInit {
           this.assigning.set(false);
           this.reload();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('CONSULTATIONS.ASSIGN_FAILED'));
+        error: (err: unknown) => {
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('CONSULTATIONS.ASSIGN_FAILED'),
+          );
           this.assigning.set(false);
         },
       });
@@ -696,8 +701,10 @@ export class ConsultationsComponent implements OnInit {
           this.scheduling.set(false);
           this.reload();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('CONSULTATIONS.SCHEDULE_FAILED'));
+        error: (err: unknown) => {
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('CONSULTATIONS.SCHEDULE_FAILED'),
+          );
           this.scheduling.set(false);
         },
       });
@@ -710,7 +717,8 @@ export class ConsultationsComponent implements OnInit {
         this.toast.success(this.translate.instant('CONSULTATIONS.ACK_SUCCESS'));
         this.reload();
       },
-      error: () => this.toast.error(this.translate.instant('CONSULTATIONS.ACK_FAILED')),
+      error: (err: unknown) =>
+        this.toast.error(refusalReason(err) ?? this.translate.instant('CONSULTATIONS.ACK_FAILED')),
     });
   }
 
@@ -721,7 +729,10 @@ export class ConsultationsComponent implements OnInit {
         this.toast.success(this.translate.instant('CONSULTATIONS.START_SUCCESS'));
         this.reload();
       },
-      error: () => this.toast.error(this.translate.instant('CONSULTATIONS.START_FAILED')),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('CONSULTATIONS.START_FAILED'),
+        ),
     });
   }
 
@@ -762,8 +773,10 @@ export class ConsultationsComponent implements OnInit {
           this.completing.set(false);
           this.reload();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('CONSULTATIONS.COMPLETE_FAILED'));
+        error: (err: unknown) => {
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('CONSULTATIONS.COMPLETE_FAILED'),
+          );
           this.completing.set(false);
         },
       });
@@ -795,8 +808,10 @@ export class ConsultationsComponent implements OnInit {
         this.declining.set(false);
         this.reload();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('CONSULTATIONS.DECLINE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('CONSULTATIONS.DECLINE_FAILED'),
+        );
         this.declining.set(false);
       },
     });
