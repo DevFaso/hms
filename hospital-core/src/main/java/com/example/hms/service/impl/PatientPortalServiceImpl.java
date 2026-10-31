@@ -607,15 +607,22 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             if (available.isEmpty()) {
                 throw new BusinessException(MessageUtil.resolve("portal.booking.noProvider"));
             }
-            staff = available.get(0); // assign first available
+            // QA D1093: "any clinician" is a clinician whose published slot
+            // starts then, never the first provider of the list whatever their rota.
+            staff = clinicianWithPublishedSlot(available, dto);
         }
 
-        // QA D1060: the slot rules decide how long the visit lasts, never the
-        // patient: a self-booking took a clinician's whole day. Any end time
-        // the client sends is ignored.
-        java.time.LocalTime endTime = slotPolicy.endFor(staff.getId(), dto.getDate(), dto.getStartTime());
         java.time.LocalDateTime requestedStart = java.time.LocalDateTime.of(dto.getDate(), dto.getStartTime());
-        java.time.LocalDateTime requestedEnd = java.time.LocalDateTime.of(dto.getDate(), endTime);
+        // QA D1093: a patient's own booking takes exactly one published, free
+        // slot of the clinician, at this hospital and department. The time
+        // input took any minute, so a 10:10 booking straddled two slots and a
+        // weekend or an afternoon with no session was booked.
+        com.example.hms.model.scheduling.AppointmentSlot slot = slotPolicy.requirePublishedFreeSlot(
+                staff.getId(), requestedStart, dto.getHospitalId(), dto.getDepartmentId());
+        // QA D1060: the slot decides how long the visit lasts, never the
+        // patient: any end time the client sends is ignored.
+        java.time.LocalTime endTime = slot.getEndAt().toLocalTime();
+        java.time.LocalDateTime requestedEnd = slot.getEndAt();
 
         // QA D978: a patient books a future time within the patient booking day.
         com.example.hms.service.AppointmentSlotRules.requirePatientBookable(
@@ -658,6 +665,8 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         appointment.setAssignment(assignment);
 
         Appointment saved = appointmentRepository.save(appointment);
+        // QA D1093: the slot is taken, so nobody else is offered it.
+        slotPolicy.takeSlot(slot, saved);
         // QA D985: a recall the patient answers by booking is scheduled.
         if (recallService != null) {
             recallService.scheduleOpenRecallFor(saved, null);
@@ -666,6 +675,97 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 patientId, saved.getId(), hospital.getName(), department.getName());
 
         return appointmentMapper.toAppointmentResponseDTO(saved);
+    }
+
+    /**
+     * QA D1093: the bookable clinician of the department whose published,
+     * free slot starts at the requested time, in rota order. No such slot is
+     * the same refusal as a picked clinician with none.
+     */
+    private Staff clinicianWithPublishedSlot(List<Staff> available, PortalBookAppointmentRequestDTO dto) {
+        java.time.LocalDateTime start = java.time.LocalDateTime.of(dto.getDate(), dto.getStartTime());
+        java.util.Map<UUID, com.example.hms.model.scheduling.AppointmentSlot> slotted = new java.util.HashMap<>();
+        for (com.example.hms.model.scheduling.AppointmentSlot s : slotPolicy.offerableAt(dto.getDepartmentId(), start)) {
+            slotted.putIfAbsent(s.getStaff().getId(), s);
+        }
+        return available.stream()
+                .filter(st -> slotted.containsKey(st.getId()))
+                .filter(st -> !com.example.hms.service.AppointmentSlotRules.overlapsHeldSlot(
+                        appointmentRepository.findByStaff_IdAndAppointmentDate(st.getId(), dto.getDate()),
+                        null, start, slotted.get(st.getId()).getEndAt()))
+                .findFirst()
+                .orElseThrow(() -> new BusinessException("portal.booking.notAPublishedSlot"));
+    }
+
+    /** At most this many slots are offered for one day: a list of times, not an export. */
+    private static final int MAX_OPEN_SLOTS = 200;
+
+    /**
+     * QA D1093: the published slots a patient may take on {@code date}:
+     * generated, free now, in the future at the hospital's clock, within the
+     * patient booking day, and with no other booking of the clinician over
+     * them ({@code movingAppointmentId}, when set, is the visit being moved,
+     * which never blocks itself). The portal offers exactly these; the
+     * booking and the reschedule refuse anything else.
+     */
+    private List<Map<String, Object>> openSlotsFor(UUID hospitalId, UUID departmentId, UUID staffId,
+                                                   java.time.LocalDate date, UUID movingAppointmentId,
+                                                   java.time.LocalDateTime hospitalNow) {
+        if (date == null) {
+            throw new BusinessException("portal.booking.dateRequired");
+        }
+        java.util.Set<UUID> bookable = staffId != null ? null
+                : staffRepository.findActiveProvidersByHospitalAndDepartment(hospitalId, departmentId).stream()
+                        .map(Staff::getId).collect(java.util.stream.Collectors.toSet());
+        Map<UUID, List<Appointment>> booked = new java.util.HashMap<>();
+        return slotPolicy.openOn(hospitalId, departmentId, staffId, date, hospitalNow, MAX_OPEN_SLOTS)
+                .stream()
+                .filter(s -> s.getStaff() != null && (bookable == null || bookable.contains(s.getStaff().getId())))
+                .filter(s -> com.example.hms.service.AppointmentSlotRules.isPatientBookable(
+                        s.getStartAt(), s.getEndAt(), hospitalNow))
+                .filter(s -> !com.example.hms.service.AppointmentSlotRules.overlapsHeldSlot(
+                        booked.computeIfAbsent(s.getStaff().getId(),
+                                id -> appointmentRepository.findByStaff_IdAndAppointmentDate(id, date)),
+                        movingAppointmentId, s.getStartAt(), s.getEndAt()))
+                .map(s -> {
+                    Map<String, Object> m = new java.util.LinkedHashMap<>();
+                    m.put("slotId", s.getId());
+                    m.put("staffId", s.getStaff().getId());
+                    m.put("staffName", s.getStaff().getName());
+                    m.put("date", s.getSlotDate());
+                    m.put("startTime", s.getStartAt().toLocalTime());
+                    m.put("endTime", s.getEndAt().toLocalTime());
+                    return m;
+                })
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> getOpenSlots(Authentication auth, UUID hospitalId, UUID departmentId,
+                                                  UUID staffId, java.time.LocalDate date) {
+        requireActiveRegistration(auth, hospitalId);
+        Department department = departmentRepository.findById(departmentId)
+                .orElseThrow(() -> new ResourceNotFoundException("department.notFound", departmentId));
+        if (department.getHospital() == null || !hospitalId.equals(department.getHospital().getId())) {
+            throw new ResourceNotFoundException("department.notFound", departmentId);
+        }
+        return openSlotsFor(hospitalId, departmentId, staffId, date, null, nowAt(department.getHospital()));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Map<String, Object>> getRescheduleSlots(Authentication auth, UUID appointmentId,
+                                                        java.time.LocalDate date) {
+        UUID patientId = resolvePatientId(auth);
+        Appointment appointment = appointmentRepository.findById(appointmentId)
+                .orElseThrow(() -> new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_KEY, appointmentId));
+        requirePatientOwnership(appointment, patientId);
+        if (appointment.getStaff() == null || appointment.getHospital() == null) {
+            return List.of();
+        }
+        return openSlotsFor(appointment.getHospital().getId(), null, appointment.getStaff().getId(), date,
+                appointment.getId(), nowAt(appointment.getHospital()));
     }
 
     // ── Booking-form lookups ─────────────────────────────────────────────
@@ -853,15 +953,18 @@ public class PatientPortalServiceImpl implements PatientPortalService {
 
         requirePatientOwnership(appointment, patientId);
         requirePatientReschedulable(appointment);
-        // QA D1060: the slot rules set the length at the new time; the patient
+        java.time.LocalDateTime newStart = java.time.LocalDateTime.of(dto.getNewDate(), dto.getNewStartTime());
+        // QA D1093: the new time is a published, free slot of the same
+        // clinician at the same hospital, as a new booking must be.
+        com.example.hms.model.scheduling.AppointmentSlot newSlot = slotPolicy.requirePublishedFreeSlot(
+                appointment.getStaff() != null ? appointment.getStaff().getId() : null, newStart,
+                appointment.getHospital() != null ? appointment.getHospital().getId() : null, null);
+        // QA D1060: the slot sets the length at the new time; the patient
         // never chooses it (the dialog's free end field saved 08:20-09:20).
-        java.time.LocalTime newEndTime = slotPolicy.endFor(
-                appointment.getStaff() != null ? appointment.getStaff().getId() : null,
-                dto.getNewDate(), dto.getNewStartTime());
+        java.time.LocalTime newEndTime = newSlot.getEndAt().toLocalTime();
         // QA D978 / D937: the new slot obeys the same rules as a new booking:
         // in the future, within the patient booking day, and free.
-        java.time.LocalDateTime newStart = java.time.LocalDateTime.of(dto.getNewDate(), dto.getNewStartTime());
-        java.time.LocalDateTime newEnd = java.time.LocalDateTime.of(dto.getNewDate(), newEndTime);
+        java.time.LocalDateTime newEnd = newSlot.getEndAt();
         com.example.hms.service.AppointmentSlotRules.requirePatientBookable(
                 newStart, newEnd, nowAt(appointment.getHospital()));
         if (appointment.getStaff() != null) {
@@ -886,6 +989,9 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                     + "Patient rescheduled: " + dto.getReason());
         }
         appointmentRepository.save(appointment);
+        // QA D1093: the old slot goes back on offer and the new one is taken.
+        slotInventoryService.releaseForAppointment(appointment.getId());
+        slotPolicy.takeSlot(newSlot, appointment);
         // Outbound webhooks (Tier 2 item 45): same rule as the desk path.
         if (appointment.getHospital() != null) {
             webhookPublisher.publish(appointment.getHospital().getId(),

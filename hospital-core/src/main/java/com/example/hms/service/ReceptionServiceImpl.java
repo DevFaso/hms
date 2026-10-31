@@ -743,7 +743,9 @@ public class ReceptionServiceImpl implements ReceptionService {
         int score = 0;
         if (name != null && !name.isBlank()
                 && (PatientMatchKeys.nameContains(p.getFirstName() + " " + p.getLastName(), name)
-                    || PatientMatchKeys.nameContains(p.getLastName() + " " + p.getFirstName(), name))) {
+                    || PatientMatchKeys.nameContains(p.getLastName() + " " + p.getFirstName(), name)
+                    // QA D1103: the name as displayed, middle name included, is the same name.
+                    || PatientMatchKeys.nameContains(p.getFullName(), name))) {
             score += 50;
         }
         if (dob != null && p.getDateOfBirth() != null && p.getDateOfBirth().toString().equals(dob)) {

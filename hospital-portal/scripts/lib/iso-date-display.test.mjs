@@ -12,16 +12,18 @@
 // list only shrinks.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { join, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { walk } from './walk.mjs';
+import { templatesIn } from './inline-templates.mjs';
 
 const appDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'src', 'app');
 
+// QA D1119 (round 19): a range bound (`requestedDateFrom`, `requestedDateTo`,
+// `validDateUntil`) and a bare `.date` field are dates too; the waitlist showed
+// "2026-11-02 → 2026-11-13" because `requestedDateFrom` ended in "From".
 const DATE_FIELD =
-  /(?:\.|\b)[a-zA-Z]*(?:Date|At|Datetime|DateTime|Timestamp)\b|\bdateOfBirth\b|\bdob\b/;
+  /(?:\.|\b)[a-zA-Z]*(?:Date|At|Datetime|DateTime|Timestamp)(?:From|To|Start|End|Until)?\b|\bdateOfBirth\b|\bdob\b|\.date\b/;
 const FORMATTED = /\|\s*date\b|\bformat\w*\(|\bfmt\w*\(|\|\s*(?:relativeTime|timeAgo|age)\b/;
 
 /** The ISO dates one template interpolates unformatted. */
@@ -55,8 +57,9 @@ export function isoDateOffenders(html, file = 'template') {
 const PINNED = {};
 
 test('QA D1049: every date a template shows is formatted for the reader', () => {
-  const found = walk(appDir, ['.html']).flatMap((f) =>
-    isoDateOffenders(readFileSync(f, 'utf8'), relative(appDir, f).replaceAll('\\', '/')),
+  // QA D1119: the inline `template:` of a component too, not only `.html`.
+  const found = templatesIn(appDir).flatMap(({ file, text }) =>
+    isoDateOffenders(text, relative(appDir, file).replaceAll('\\', '/')),
   );
   const counts = {};
   for (const o of found) counts[o] = (counts[o] ?? 0) + 1;
@@ -70,6 +73,18 @@ test('QA D1049 guard: the scan sees the shapes the defect had', () => {
   assert.equal(isoDateOffenders('<span>{{ p.dateOfBirth }}</span>').length, 1);
   assert.equal(isoDateOffenders('<p>{{ summary.followUpAppointmentDate }}</p>').length, 1);
   assert.equal(isoDateOffenders('<td>{{ r.completedAt ?? r.requestedAt }}</td>').length, 1);
+  // QA D1119: the waitlist's requested range, and a bare `.date` field.
+  assert.equal(
+    isoDateOffenders(
+      "<td>{{ entry.requestedDateFrom ?? '?' }} → {{ entry.requestedDateTo ?? '?' }}</td>",
+    ).length,
+    2,
+  );
+  assert.equal(isoDateOffenders('<td>{{ appt.date }}</td>').length, 1);
+  assert.deepEqual(
+    isoDateOffenders("<td>{{ entry.requestedDateFrom | date: 'mediumDate' }}</td>"),
+    [],
+  );
   assert.deepEqual(
     isoDateOffenders(
       "{{ p.dateOfBirth | date: 'mediumDate' }} {{ a.createdAt | serverTime | date: 'short' }} {{ formatDate(x.dueDate) }}",

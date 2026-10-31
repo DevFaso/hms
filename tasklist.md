@@ -2205,8 +2205,17 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 
 ## Standing platform debt — owed, not parity
 
+- **QA round 19 residuals (fix/r19-scheduling-frontdesk-billing).**
+  (1) D1093: the two native patient apps (`patient-android-app`, `patient-ios-app`) book and reschedule
+  through the same endpoints with a free time; the server now refuses any time that is not a published,
+  free slot (`portal.booking.notAPublishedSlot`), so the apps must offer the slots of
+  `GET /me/patient/booking/hospitals/{h}/departments/{d}/slots?date=` and
+  `GET /me/patient/appointments/{id}/reschedule-slots?date=` instead of a time picker (CI is the only
+  Swift compiler; own PR). (2) A hospital with no session templates offers no online booking at all now
+  (the desk books as before); the clinics must generate slots before patients can self-book.
 - **QA round 18 residuals (fix/r18-billing-pharmacy), noted, not fixed there.**
-  (1) D1069 sibling: cancelling a completed dispense (`POST /pharmacy/dispense/{id}/cancel`) voids its payment
+  (1) *(Fixed by fix/r19-scheduling-frontdesk-billing, QA D1069 round 19: the reason is mandatory on the
+  dispense cancel, kept on the dispense and the voided payment, asked for in the dispensing panel.)* D1069 sibling: cancelling a completed dispense (`POST /pharmacy/dispense/{id}/cancel`) voids its payment
   (refund due) and puts the stock back with no reason asked; the ledger and the payment store the English
   literals "Dispense cancelled ..." (read through the register's reason labels). Needs a reason field in the
   dispensing cancel panel and on `DispenseCancelRequestDTO`, stored on the payment void and the ledger row.

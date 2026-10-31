@@ -201,6 +201,48 @@ class PdfInvoiceServiceTest {
      * sometimes no total; a paid invoice with no lines had headers only.
      */
     @Test
+    void aCancelledInvoiceOwesNothingAndSaysWhy_D1104() throws Exception {
+        // QA D1104: -000042 printed "Statut : Annulée" then "Reste à payer : 1 500 F CFA", with no reason.
+        invoice.setStatus(InvoiceStatus.CANCELLED);
+        invoice.setCancelReason("Facture émise sur le mauvais dossier");
+
+        String text = textOf(service.generateInvoicePdf(invoice, items, List.of(), List.of(), Locale.FRENCH));
+
+        assertThat(text).contains(
+            "pdf.invoice.status pdf.invoice.statusValue.CANCELLED",
+            "pdf.invoice.cancelReason Facture émise sur le mauvais dossier",
+            "pdf.invoice.balanceDue 0 F CFA")
+            .doesNotContain("pdf.invoice.balanceDue 1 500 F CFA");
+    }
+
+    @Test
+    void aFoldedCopayInvoiceSaysWhereTheMoneyWent_D1104() throws Exception {
+        // QA D1104: -000033, the check-in copay folded onto the visit invoice,
+        // printed "Reste à payer : 1 000" and nothing about the carry-over.
+        BillingInvoice visit = BillingInvoice.builder().invoiceNumber("INV-2043").build();
+        invoice.setStatus(InvoiceStatus.CANCELLED);
+        invoice.setTotalAmount(new BigDecimal("1000.00"));
+        invoice.setAmountPaid(BigDecimal.ZERO);
+        invoice.setCreditedToInvoice(visit);
+
+        String text = textOf(service.generateInvoicePdf(invoice, List.of(), List.of(), List.of(), Locale.FRENCH));
+
+        assertThat(text).contains("pdf.invoice.carriedOver INV-2043", "pdf.invoice.balanceDue 0 F CFA")
+            .doesNotContain("pdf.invoice.cancelReason");
+    }
+
+    @Test
+    void anIssuedInvoiceStillShowsWhatIsOwed_D1104() throws Exception {
+        invoice.setStatus(InvoiceStatus.SENT);
+        invoice.setAmountPaid(new BigDecimal("500.00"));
+
+        String text = textOf(service.generateInvoicePdf(invoice, items, List.of(), List.of(), Locale.FRENCH));
+
+        assertThat(text).contains("pdf.invoice.balanceDue 1 000 F CFA")
+            .doesNotContain("pdf.invoice.cancelReason", "pdf.invoice.carriedOver");
+    }
+
+    @Test
     void paidInvoiceShowsCurrencyTotalPaidBalanceStatusAndPayments_D141() throws Exception {
         invoice.setAmountPaid(new BigDecimal("1500.00"));
         invoice.setStatus(InvoiceStatus.PAID);

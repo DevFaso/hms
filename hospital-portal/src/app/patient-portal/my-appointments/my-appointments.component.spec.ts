@@ -22,8 +22,12 @@ describe('MyAppointmentsComponent', () => {
       'getSchedulingDepartments',
       'getSchedulingProviders',
       'bookAppointment',
+      'getOpenSlots',
+      'getRescheduleSlots',
     ]);
     queryParams = {};
+    spy.getOpenSlots.and.returnValue(of([]));
+    spy.getRescheduleSlots.and.returnValue(of([]));
     spy.getMyAppointments.and.returnValue(of([]));
     spy.getSchedulingHospitals.and.returnValue(of([]));
     spy.getSchedulingDepartments.and.returnValue(of([]));
@@ -144,6 +148,75 @@ describe('MyAppointmentsComponent', () => {
       // No role on the assignment means no dash and no empty label.
       expect(options).toContain('Awa Sawadogo');
       expect(options.join(' ')).not.toContain('DOCTOR');
+    });
+  });
+
+  describe('QA D1093: the time is a published, free slot, never typed', () => {
+    const slot = (start: string, end: string, staffId = 's1') => ({
+      slotId: `slot-${start}-${staffId}`,
+      staffId,
+      staffName: 'Dr Ouédraogo',
+      date: '2026-11-12',
+      startTime: start,
+      endTime: end,
+    });
+
+    it('offers no free time input, only the slots the server published for the day', () => {
+      portalService.getOpenSlots.and.returnValue(
+        of([slot('10:00:00', '10:20:00'), slot('10:20:00', '10:40:00')]),
+      );
+      component.openBookingForm();
+      component.selectedHospitalId = 'h1';
+      component.selectedDepartmentId = 'd1';
+      component.selectedDate = '2026-11-12';
+      component.loadSlots();
+      fixture.detectChanges();
+
+      const el = fixture.nativeElement as HTMLElement;
+      expect(el.querySelector('input[type="time"]')).toBeNull();
+      const options = Array.from(el.querySelectorAll<HTMLOptionElement>('#apptTime option')).filter(
+        (o) => o.value,
+      );
+      expect(options.map((o) => o.value)).toEqual(['10:00:00', '10:20:00']);
+      expect(options[0].textContent).toContain('10:00');
+      expect(options[0].textContent).toContain('10:20');
+      expect(portalService.getOpenSlots).toHaveBeenCalledWith('h1', 'd1', '2026-11-12', undefined);
+    });
+
+    it('with any clinician, one time is offered once; a chosen clinician narrows the search', () => {
+      portalService.getOpenSlots.and.returnValue(
+        of([slot('10:00:00', '10:20:00', 's1'), slot('10:00:00', '10:20:00', 's2')]),
+      );
+      component.selectedHospitalId = 'h1';
+      component.selectedDepartmentId = 'd1';
+      component.selectedDate = '2026-11-12';
+      component.loadSlots();
+      expect(component.openSlots().length).toBe(1);
+
+      component.selectedProviderId = 's2';
+      component.loadSlots();
+      expect(portalService.getOpenSlots).toHaveBeenCalledWith('h1', 'd1', '2026-11-12', 's2');
+    });
+
+    it('a day with no session says so', () => {
+      component.openBookingForm();
+      component.selectedHospitalId = 'h1';
+      component.selectedDepartmentId = 'd1';
+      component.selectedDate = '2026-11-14';
+      component.loadSlots();
+      fixture.detectChanges();
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('[data-testid="booking-no-slots"]'),
+      ).not.toBeNull();
+    });
+
+    it('changing the date, the department or the clinician drops the time chosen before', () => {
+      component.selectedHospitalId = 'h1';
+      component.selectedDepartmentId = 'd1';
+      component.selectedDate = '2026-11-12';
+      component.selectedTime = '10:00:00';
+      component.loadSlots();
+      expect(component.selectedTime).toBe('');
     });
   });
 
@@ -360,8 +433,12 @@ describe('MyAppointmentsComponent — cancel and reschedule', () => {
       'getSchedulingDepartments',
       'getSchedulingProviders',
       'bookAppointment',
+      'getOpenSlots',
+      'getRescheduleSlots',
     ]);
     portal.getMyAppointments.and.returnValue(of([]));
+    portal.getOpenSlots.and.returnValue(of([]));
+    portal.getRescheduleSlots.and.returnValue(of([]));
 
     await TestBed.configureTestingModule({
       imports: [MyAppointmentsComponent, TranslateModule.forRoot()],
@@ -505,6 +582,34 @@ describe('MyAppointmentsComponent — cancel and reschedule', () => {
     const el = fixture.nativeElement as HTMLElement;
     expect(el.querySelector('#reschedEnd')).toBeNull();
     expect(el.querySelector('[data-testid="reschedule-duration-note"]')).not.toBeNull();
+  });
+
+  it("QA D1093: the reschedule dialog offers the published, free slots of the visit's clinician", () => {
+    portal.getRescheduleSlots.and.returnValue(
+      of([
+        {
+          slotId: 'x1',
+          staffId: 's1',
+          date: '2027-02-02',
+          startTime: '14:00:00',
+          endTime: '14:20:00',
+        },
+      ]),
+    );
+    component.openReschedule(appt({ id: 'a-9', date: '2027-02-01' }));
+    expect(portal.getRescheduleSlots).toHaveBeenCalledWith('a-9', '2027-02-01');
+    component.rescheduleDate = '2027-02-02';
+    component.onRescheduleDateChange();
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(portal.getRescheduleSlots).toHaveBeenCalledWith('a-9', '2027-02-02');
+    expect(el.querySelector('#reschedStart')?.tagName).toBe('SELECT');
+    expect(
+      Array.from(el.querySelectorAll<HTMLOptionElement>('#reschedStart option'))
+        .map((o) => o.value)
+        .filter(Boolean),
+    ).toEqual(['14:00:00']);
+    expect(component.rescheduleStartTime).toBe('');
   });
 
   it('submitReschedule rejects a past date', () => {

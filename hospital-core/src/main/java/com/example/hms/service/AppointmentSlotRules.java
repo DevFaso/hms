@@ -78,11 +78,25 @@ public final class AppointmentSlotRules {
         if (!start.isAfter(now)) {
             throw new BusinessException("portal.booking.pastTime");
         }
-        if (start.toLocalTime().isBefore(PATIENT_DAY_START)
-                || end.toLocalTime().isAfter(PATIENT_DAY_END)
-                || !end.toLocalDate().equals(start.toLocalDate())) {
+        if (!withinPatientDay(start, end)) {
             throw new BusinessException("portal.booking.outsideHours",
                 PATIENT_DAY_START.toString(), PATIENT_DAY_END.toString());
         }
+    }
+
+    /**
+     * QA D1093: whether a slot is one a patient may book for themselves at
+     * {@code now} (the hospital's clock): the same two rules as
+     * {@link #requirePatientBookable}, as a test, so the slots the portal
+     * offers are exactly the ones the booking accepts.
+     */
+    public static boolean isPatientBookable(LocalDateTime start, LocalDateTime end, LocalDateTime now) {
+        return start.isAfter(now) && withinPatientDay(start, end);
+    }
+
+    private static boolean withinPatientDay(LocalDateTime start, LocalDateTime end) {
+        return !start.toLocalTime().isBefore(PATIENT_DAY_START)
+            && !end.toLocalTime().isAfter(PATIENT_DAY_END)
+            && end.toLocalDate().equals(start.toLocalDate());
     }
 }

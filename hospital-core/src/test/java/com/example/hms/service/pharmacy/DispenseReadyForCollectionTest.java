@@ -84,6 +84,9 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class DispenseReadyForCollectionTest {
 
+    /** QA D1069: every cancel of a fill names why (the service refuses one without). */
+    private static final String CANCEL_REASON = "Erreur de délivrance : mauvais dosage";
+
     @Mock private DispenseRepository dispenseRepository;
     @Mock private PrescriptionRepository prescriptionRepository;
     @Mock private PatientRepository patientRepository;
@@ -1138,7 +1141,7 @@ class DispenseReadyForCollectionTest {
             when(prescriptionRepository.findByIdForUpdate(prescriptionId)).thenReturn(Optional.of(prescription));
             when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(d));
 
-            assertThatThrownBy(() -> service.cancelDispense(dispenseId))
+            assertThatThrownBy(() -> service.cancelDispense(dispenseId, null, CANCEL_REASON))
                     .isInstanceOf(BusinessException.class)
                     .hasMessageContaining("Only completed or partial");
         }

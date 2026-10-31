@@ -19,6 +19,7 @@ import {
   SchedulingHospital,
   SchedulingDepartment,
   SchedulingProvider,
+  PortalOpenSlot,
 } from '../../services/patient-portal.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { DialogA11yDirective } from '../../shared/a11y/dialog-a11y.directive';
@@ -96,6 +97,17 @@ export class MyAppointmentsComponent implements OnInit {
   rescheduleDate = '';
   rescheduleStartTime = '';
   rescheduleReason = '';
+  /** QA D1093: the published, free slots the visit can move to on the chosen day. */
+  rescheduleSlots = signal<PortalOpenSlot[]>([]);
+  rescheduleSlotsLoaded = signal(false);
+
+  /**
+   * QA D1093: the published, free slots of the chosen day. The time is picked
+   * from these, never typed: a free time input booked 10:10 across two slots,
+   * and a Saturday or an afternoon with no session.
+   */
+  openSlots = signal<PortalOpenSlot[]>([]);
+  slotsLoaded = signal(false);
 
   hospitals = signal<SchedulingHospital[]>([]);
   departments = signal<SchedulingDepartment[]>([]);
@@ -284,6 +296,32 @@ export class MyAppointmentsComponent implements OnInit {
     this.rescheduleStartTime = appt.rawStartTime;
     this.rescheduleReason = '';
     this.rescheduleError.set(null);
+    this.loadRescheduleSlots();
+  }
+
+  /** QA D1093: the slots of the visit's clinician on the chosen day. */
+  loadRescheduleSlots(): void {
+    const appt = this.rescheduleTarget();
+    this.rescheduleSlots.set([]);
+    this.rescheduleSlotsLoaded.set(false);
+    if (!appt || !this.rescheduleDate) return;
+    this.portal.getRescheduleSlots(appt.id, this.rescheduleDate).subscribe({
+      next: (slots) => {
+        this.rescheduleSlots.set(slots);
+        this.rescheduleSlotsLoaded.set(true);
+      },
+      error: (err) => {
+        this.rescheduleSlotsLoaded.set(true);
+        this.rescheduleError.set(
+          err?.error?.message ?? this.translate.instant('PORTAL.APPOINTMENTS.SLOTS_FAILED'),
+        );
+      },
+    });
+  }
+
+  onRescheduleDateChange(): void {
+    this.rescheduleStartTime = '';
+    this.loadRescheduleSlots();
   }
 
   closeReschedule(): void {
@@ -363,6 +401,7 @@ export class MyAppointmentsComponent implements OnInit {
     this.selectedProviderId = '';
     this.departments.set([]);
     this.providers.set([]);
+    this.loadSlots();
     if (this.selectedHospitalId) {
       this.portal.getSchedulingDepartments(this.selectedHospitalId).subscribe({
         next: (d) => this.departments.set(d),
@@ -373,6 +412,7 @@ export class MyAppointmentsComponent implements OnInit {
   onDepartmentChange(): void {
     this.selectedProviderId = '';
     this.providers.set([]);
+    this.loadSlots();
     if (this.selectedHospitalId && this.selectedDepartmentId) {
       this.portal
         .getSchedulingProviders(this.selectedHospitalId, this.selectedDepartmentId)
@@ -380,6 +420,45 @@ export class MyAppointmentsComponent implements OnInit {
           next: (p) => this.providers.set(p),
         });
     }
+  }
+
+  /**
+   * QA D1093: the free slots of the chosen day, once a hospital, a department
+   * and a date are chosen (narrowed to the clinician when one is picked).
+   * With "any clinician", one time is offered once: the server books the
+   * first clinician whose slot starts then.
+   */
+  loadSlots(): void {
+    this.selectedTime = '';
+    this.openSlots.set([]);
+    this.slotsLoaded.set(false);
+    if (!this.selectedHospitalId || !this.selectedDepartmentId || !this.selectedDate) return;
+    this.portal
+      .getOpenSlots(
+        this.selectedHospitalId,
+        this.selectedDepartmentId,
+        this.selectedDate,
+        this.selectedProviderId || undefined,
+      )
+      .subscribe({
+        next: (slots) => {
+          const seen = new Set<string>();
+          this.openSlots.set(
+            slots.filter((s) => {
+              if (seen.has(s.startTime)) return false;
+              seen.add(s.startTime);
+              return true;
+            }),
+          );
+          this.slotsLoaded.set(true);
+        },
+        error: (err) => {
+          this.slotsLoaded.set(true);
+          this.bookingError.set(
+            err?.error?.message ?? this.translate.instant('PORTAL.APPOINTMENTS.SLOTS_FAILED'),
+          );
+        },
+      });
   }
 
   submitBooking(): void {
@@ -447,6 +526,8 @@ export class MyAppointmentsComponent implements OnInit {
     this.appointmentNotes = '';
     this.departments.set([]);
     this.providers.set([]);
+    this.openSlots.set([]);
+    this.slotsLoaded.set(false);
     this.bookingError.set(null);
     this.bookingSuccess.set(false);
     this.bookedAppointment.set(null);

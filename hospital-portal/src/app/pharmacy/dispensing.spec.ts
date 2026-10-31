@@ -302,14 +302,49 @@ describe('DispensingComponent', () => {
   });
 
   it('should cancel dispense', () => {
-    spyOn(window, 'confirm').and.returnValue(true);
+    // QA D1069 (declared change): the cancel is no longer a bare confirm(); it
+    // opens the panel that asks why, and sends the reason.
+    const confirmSpy = spyOn(window, 'confirm').and.returnValue(true);
     const mockResponse = { data: { id: 'd-1', status: 'CANCELLED' } };
     pharmacySvc.cancelDispense.and.returnValue(of(mockResponse as any));
 
     component.cancelDispense('d-1');
+    expect(confirmSpy).not.toHaveBeenCalled();
+    expect(pharmacySvc.cancelDispense).not.toHaveBeenCalled();
+    component.dispenseCancelReason = '  Erreur de patient  ';
+    component.confirmWitnessedCancel();
 
-    expect(pharmacySvc.cancelDispense).toHaveBeenCalledWith('d-1', undefined);
+    expect(pharmacySvc.cancelDispense).toHaveBeenCalledWith('d-1', 'Erreur de patient', undefined);
     expect(toastSvc.success).toHaveBeenCalledWith('PHARMACY.DISPENSE_CANCELLED');
+  });
+
+  it('QA D1069: a cancel with no reason is refused where the reason is typed, never sent', () => {
+    pharmacySvc.cancelDispense.and.returnValue(of({ data: { id: 'd-1' } } as any));
+    component.recentDispenses.set([
+      { id: 'd-1', medicationName: 'Amoxicillin', status: 'COMPLETED' } as any,
+    ]);
+    fixture.detectChanges();
+
+    component.cancelDispense('d-1');
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement;
+    const reason = el.querySelector<HTMLTextAreaElement>(
+      '[data-testid="cancel-witness"] #dispenseCancelReason',
+    );
+    expect(reason).not.toBeNull();
+    // An ordinary fill asks for no witness.
+    expect(el.querySelector('#cancelWitness')).toBeNull();
+    const confirmButton = Array.from(
+      el.querySelectorAll<HTMLButtonElement>('[data-testid="cancel-witness"] button'),
+    ).find((b) => b.textContent?.includes('COMMON.CONFIRM'))!;
+    expect(confirmButton.disabled).toBeFalse();
+
+    confirmButton.click();
+    fixture.detectChanges();
+
+    expect(pharmacySvc.cancelDispense).not.toHaveBeenCalled();
+    expect(toastSvc.error).toHaveBeenCalledWith('PHARMACY.CANCEL_REASON_REQUIRED');
+    expect(reason!.getAttribute('aria-invalid')).toBe('true');
   });
 
   // ── QA D654: a controlled substance moves only in front of a witness ──
@@ -338,6 +373,8 @@ describe('DispensingComponent', () => {
 
     component.form.stockLotId = 'lot-fresh';
     component.onLotChange();
+    // QA D964: a later lot needs its reason; the dispense now refuses without one (round 19).
+    component.form.fefoOverrideReason = 'Lot entamé à finir';
     fixture.detectChanges();
     const picker = el.querySelector<HTMLSelectElement>('#dispWitness');
     expect(picker).not.toBeNull();
@@ -352,12 +389,33 @@ describe('DispensingComponent', () => {
     expect(pharmacySvc.createDispense.calls.mostRecent().args[0].witnessedBy).toBe('user-2');
   });
 
+  it('QA D1089 class: a later lot with no FEFO reason is refused under the reason, not by a dead button', () => {
+    component.selectPrescription(mockWorkQueue.data.content[0] as any);
+    component.form.quantityDispensed = 30;
+    component.form.stockLotId = 'lot-fresh';
+    component.onLotChange();
+    component.verifyAttested.set(true);
+    fixture.detectChanges();
+    expect(component.fefoReasonMissing()).toBeTrue();
+    const el: HTMLElement = fixture.nativeElement;
+    const submit = el.querySelector<HTMLButtonElement>('.form-actions button[type="submit"]')!;
+    expect(submit.disabled).toBeFalse();
+
+    component.submitDispense();
+    fixture.detectChanges();
+
+    expect(pharmacySvc.createDispense).not.toHaveBeenCalled();
+    expect(el.querySelector('#fefoReason')!.getAttribute('aria-invalid')).toBe('true');
+  });
+
   it('QA D654: an ordinary lot sends no witness', () => {
     pharmacySvc.createDispense.and.returnValue(of({ data: { id: 'd-new' } } as any));
     component.selectPrescription(mockWorkQueue.data.content[0]);
     component.form.stockLotId = 'lot-fresh';
     component.form.witnessedBy = 'user-2';
     component.onLotChange();
+    // QA D964: a later lot needs its reason; the dispense now refuses without one (round 19).
+    component.form.fefoOverrideReason = 'Lot entamé à finir';
     fixture.detectChanges();
 
     expect(fixture.nativeElement.querySelector('#dispWitness')).toBeNull();
@@ -387,6 +445,7 @@ describe('DispensingComponent', () => {
     expect(pharmacySvc.cancelDispense).not.toHaveBeenCalled();
     expect(el.querySelector('[data-testid="cancel-witness"] #cancelWitness')).not.toBeNull();
 
+    component.dispenseCancelReason = 'Mauvais lot';
     component.confirmWitnessedCancel();
     expect(pharmacySvc.cancelDispense).not.toHaveBeenCalled();
     expect(toastSvc.error).toHaveBeenCalledWith('PHARMACY.WITNESS_REQUIRED');
@@ -394,7 +453,7 @@ describe('DispensingComponent', () => {
     component.cancelWitnessId = 'user-2';
     component.confirmWitnessedCancel();
     fixture.detectChanges();
-    expect(pharmacySvc.cancelDispense).toHaveBeenCalledWith('d-1', 'user-2');
+    expect(pharmacySvc.cancelDispense).toHaveBeenCalledWith('d-1', 'Mauvais lot', 'user-2');
     expect(el.querySelector('[data-testid="cancel-witness"]')).toBeNull();
   });
 
@@ -469,6 +528,8 @@ describe('DispensingComponent', () => {
     component.form.quantityDispensed = 30;
     component.form.stockLotId = 'lot-fresh';
     component.onLotChange();
+    // QA D964: a later lot needs its reason; the dispense now refuses without one (round 19).
+    component.form.fefoOverrideReason = 'Lot entamé à finir';
     component.form.patientScanValue = 'pat-1';
     component.form.productScanValue = 'LOT-4f2a91c07b3e';
 

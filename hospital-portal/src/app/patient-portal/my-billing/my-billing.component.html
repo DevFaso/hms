@@ -336,11 +336,7 @@
               >
                 {{ 'PORTAL.BILLING.CANCEL' | translate }}
               </button>
-              <button
-                class="pay-submit-btn"
-                (click)="submitPayment()"
-                [disabled]="payProcessing() || !payAmount || payAmount <= 0"
-              >
+              <button class="pay-submit-btn" (click)="submitPayment()" [disabled]="payProcessing()">
                 @if (payProcessing()) {
                   <span class="pay-spinner"></span> {{ 'PORTAL.BILLING.PROCESSING' | translate }}
                 } @else {

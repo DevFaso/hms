@@ -1739,7 +1739,8 @@
       "DOSE_LIMITS_APPROVED": "Límites de dosis pediátricos aprobados en el artículo del catálogo {{item}}",
       "DOSE_LIMITS_DEFAULT": "Límites de dosis pediátricos definidos por defecto, pendientes de aprobación, en el artículo del catálogo {{item}}",
       "RX_SIGN_REAUTH_VERIFIED": "Identidad confirmada para firmar una receta de estupefaciente ({{method}})",
-      "RX_SIGN_REAUTH_REFUSED": "Identidad no confirmada para firmar una receta de estupefaciente ({{reason}})"
+      "RX_SIGN_REAUTH_REFUSED": "Identidad no confirmada para firmar una receta de estupefaciente ({{reason}})",
+      "INVOICE_ADJUSTMENT_REVERSED": "{{kind}} {{adjustment}} anulado en la factura {{invoice}}, motivo registrado"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "ningún rol activo en este hospital",
@@ -2206,7 +2207,14 @@
     "CANCEL_REASON_REQUIRED": "Indique el motivo de la anulación de esta factura emitida.",
     "ADJUSTMENT_AMOUNT_REQUIRED": "Indique el importe del descuento o de la exoneración (mayor que cero).",
     "EDIT_LINE": "Tarifar o corregir esta línea",
-    "ITEM_UPDATED": "Línea actualizada"
+    "ITEM_UPDATED": "Línea actualizada",
+    "ADJUSTMENT_REVERSE": "Anular el ajuste",
+    "ADJUSTMENT_REVERSED": "Ajuste anulado",
+    "ADJUSTMENT_REVERSED_BADGE": "Anulado el",
+    "ADJUSTMENT_REVERSAL_REASON": "Motivo de la anulación",
+    "ADJUSTMENT_REVERSAL_REASON_REQUIRED": "Indique el motivo de la anulación de este ajuste.",
+    "ADJUSTMENT_REVERSAL_NOTE": "El importe vuelve a lo que se adeuda. El dinero ya recibido, como el copago pagado en la admisión, sigue registrado.",
+    "ADJUSTMENT_REVERSAL_FAILED": "No se pudo anular el ajuste."
   },
   "CHAT": {
     "ACCESS_DENIED": "No tiene permiso para acceder a la mensajería.",
@@ -5015,7 +5023,13 @@
     "PHONE_GUARDIAN_HINT": "Para un niño, puede dejarlo vacío e indicar el teléfono del padre, la madre o el tutor en Contacto de emergencia.",
     "PHONE_FROM_GUARDIAN": "Vacío: el teléfono del padre, la madre o el tutor (Contacto de emergencia) se registrará como contacto de este paciente.",
     "SHARED_CONTACT_NOTE": "Este número de teléfono ya es el contacto de otro paciente (por ejemplo, un padre o una madre). Está permitido: este registro crea un expediente distinto.",
-    "MATCHED_ON_IDENTITY": "mismo nombre y fecha de nacimiento"
+    "MATCHED_ON_IDENTITY": "mismo nombre y fecha de nacimiento",
+    "EXISTING_MATCH_DESC_IDENTITY": "Ya existe en otro hospital un expediente con el mismo nombre y la misma fecha de nacimiento. Vincúlelo aquí en lugar de crear un duplicado.",
+    "EXISTING_MATCH_DESC_IDENTITY_HERE": "Ya hay en este hospital un expediente con el mismo nombre y la misma fecha de nacimiento. Ábralo en lugar de crear un duplicado.",
+    "EXISTING_MATCH_DESC_IDENTITY_MIXED": "Ya existen expedientes con el mismo nombre y la misma fecha de nacimiento, aquí o en otro hospital. Abra o vincule el expediente correcto en lugar de crear un duplicado.",
+    "EXISTING_MATCH_DESC_BOTH": "Ya existen en otro hospital expedientes con el mismo nombre y fecha de nacimiento, o con este teléfono o correo. Vincule aquí el expediente correcto en lugar de crear un duplicado.",
+    "EXISTING_MATCH_DESC_BOTH_HERE": "Ya hay en este hospital expedientes con el mismo nombre y fecha de nacimiento, o con este teléfono o correo. Abra el expediente correcto en lugar de crear un duplicado.",
+    "EXISTING_MATCH_DESC_BOTH_MIXED": "Ya existen expedientes con el mismo nombre y fecha de nacimiento, o con este teléfono o correo, aquí o en otro hospital. Abra o vincule el expediente correcto en lugar de crear un duplicado."
   },
   "PLATFORM": {
     "ACCESS_LOGS": "Registros de acceso",
@@ -5351,7 +5365,10 @@
         "SUBMIT": "Reprogramar la cita",
         "TITLE": "Reprogramar la cita"
       },
-      "DURATION_NOTE": "La duración de su cita la fijan los turnos de la clínica."
+      "DURATION_NOTE": "La duración de su cita la fijan los turnos de la clínica.",
+      "CHOOSE_SLOT": "Elija un horario libre",
+      "NO_SLOTS": "No hay horarios libres ese día. Elija otra fecha u otro profesional.",
+      "SLOTS_FAILED": "No se pudieron cargar los horarios libres. Inténtelo de nuevo."
     },
     "MEDICATIONS": {
       "TITLE": "Mis medicamentos",
@@ -9553,7 +9570,9 @@
       "BADGE_APPROVED": "Límites pediátricos aprobados",
       "SAVED": "Límites de dosis pediátricos guardados",
       "SAVE_FAILED": "No se pudieron guardar los límites de dosis pediátricos"
-    }
+    },
+    "CANCEL_REASON": "Motivo de la anulación",
+    "CANCEL_REASON_REQUIRED": "Indique el motivo de la anulación: anula el pago y devuelve el stock."
   },
   "LAB_QC": {
     "TITLE": "Panel de control de calidad",

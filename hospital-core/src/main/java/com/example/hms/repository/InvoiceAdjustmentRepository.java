@@ -14,9 +14,19 @@ public interface InvoiceAdjustmentRepository extends JpaRepository<InvoiceAdjust
 
     List<InvoiceAdjustment> findByInvoice_IdOrderByCreatedAtAsc(UUID invoiceId);
 
-    @Query("SELECT COALESCE(SUM(a.amount), 0) FROM InvoiceAdjustment a WHERE a.invoice.id = :invoiceId")
+    /**
+     * QA D1105: the adjustments that still lower the invoice (not reversed),
+     * the ones printed on the PDF, mailed and shown to the patient.
+     */
+    List<InvoiceAdjustment> findByInvoice_IdAndReversedAtIsNullOrderByCreatedAtAsc(UUID invoiceId);
+
+    /** QA D1105: a reversed adjustment no longer counts. */
+    @Query("SELECT COALESCE(SUM(a.amount), 0) FROM InvoiceAdjustment a WHERE a.invoice.id = :invoiceId"
+        + " AND a.reversedAt IS NULL")
     BigDecimal sumByInvoiceId(@Param("invoiceId") UUID invoiceId);
 
-    @Query("SELECT COALESCE(SUM(a.amount), 0) FROM InvoiceAdjustment a WHERE a.invoiceItem.id = :itemId")
+    /** QA D1105: a reversed credit note gives the line back. */
+    @Query("SELECT COALESCE(SUM(a.amount), 0) FROM InvoiceAdjustment a WHERE a.invoiceItem.id = :itemId"
+        + " AND a.reversedAt IS NULL")
     BigDecimal sumByInvoiceItemId(@Param("itemId") UUID itemId);
 }

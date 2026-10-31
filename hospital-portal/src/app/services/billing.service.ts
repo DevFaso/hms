@@ -177,6 +177,10 @@ export interface InvoiceAdjustmentRow {
   invoiceItemId?: string | null;
   invoiceItemDescription?: string | null;
   createdAt?: string | null;
+  /** QA D1105: when the adjustment was reversed; null while it stands. */
+  reversedAt?: string | null;
+  /** QA D1105: why it was reversed (billing staff only). */
+  reversalReason?: string | null;
 }
 
 export interface InvoiceSearchFilters {
@@ -383,6 +387,21 @@ export class BillingService {
   ): Observable<BillingInvoiceResponse> {
     return this.http.post<BillingInvoiceResponse>(
       `/billing-invoices/${invoiceId}/payments/${paymentId}/reverse`,
+      { reason },
+    );
+  }
+
+  /**
+   * QA D1105: undo a mistaken discount, waiver or credit note, with a reason;
+   * the money already received (a folded check-in copay) stays recorded.
+   */
+  reverseAdjustment(
+    invoiceId: string,
+    adjustmentId: string,
+    reason: string,
+  ): Observable<BillingInvoiceResponse> {
+    return this.http.post<BillingInvoiceResponse>(
+      `/billing-invoices/${invoiceId}/adjustments/${adjustmentId}/reverse`,
       { reason },
     );
   }

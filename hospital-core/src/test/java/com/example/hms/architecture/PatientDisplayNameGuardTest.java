@@ -61,8 +61,6 @@ class PatientDisplayNameGuardTest {
     private static final Map<String, GuardAllowlist.Allowance> ALLOWED = GuardAllowlist.allow(
         "empi/probabilistic/EmpiProbabilisticMatcher.java", 2,
             "a probabilistic name MATCH (Jaro-Winkler on first and last), not a display",
-        "service/ReceptionServiceImpl.java", 1,
-            "PatientMatchKeys.nameContains: a name MATCH, not a display (search by first+last finds the patient)",
         "service/UserServiceImpl.java", 1,
             "isSamePerson: the registration identity MATCH on the request's names (QA D1061), not a display",
         "utility/PatientMatchKeys.java", 1,

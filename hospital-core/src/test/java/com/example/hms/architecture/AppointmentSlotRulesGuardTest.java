@@ -239,6 +239,104 @@ class AppointmentSlotRulesGuardTest {
         assertThat(anonymous).as("an appointment created without its creator (QA D1073)").isEmpty();
     }
 
+    /**
+     * QA D1093 (class guard): every write a PATIENT may make that gives them a
+     * clinician's time (a booking, a reschedule, from the portal or any other
+     * patient endpoint) takes exactly one published, free slot:
+     * {@code AppointmentSlotPolicy.requirePublishedFreeSlot}, or the slot
+     * inventory's own {@code book}. The scan starts from the controllers:
+     * every POST/PUT/PATCH handler whose {@code @PreAuthorize} admits
+     * ROLE_PATIENT, the service methods it calls, and (to a fixpoint) the
+     * same-file helpers those call. Any of those that builds or moves an
+     * appointment without the published-slot check fails. The portal's time
+     * input took any minute between 07:00 and 19:00, any day.
+     */
+    @Test
+    void everyPatientBookingPathTakesAPublishedSlot() throws IOException {
+        java.util.Set<String> patientCalls = new java.util.TreeSet<>();
+        java.util.regex.Pattern handler = java.util.regex.Pattern.compile(
+            "@(Post|Put|Patch)Mapping");
+        java.util.regex.Pattern serviceCall = java.util.regex.Pattern.compile("\\b\\w*[Ss]ervice\\.(\\w+)\\(");
+        for (Path f : javaFiles()) {
+            String rel = MAIN.relativize(f).toString().replace('\\', '/');
+            if (!rel.startsWith("controller/")) {
+                continue;
+            }
+            String src = com.example.hms.testsupport.SourceScan.stripComments(read(f));
+            java.util.regex.Matcher m = handler.matcher(src);
+            while (m.find()) {
+                int open = src.indexOf('{', m.end());
+                String head = src.substring(Math.max(0, m.start() - 400), open);
+                String annotations = head.substring(Math.max(0, head.lastIndexOf('}')));
+                if (!annotations.contains("@PreAuthorize(")
+                        || !(annotations.contains("ROLE_PATIENT") || annotations.contains("'PATIENT'"))) {
+                    continue;
+                }
+                String body = src.substring(open, com.example.hms.testsupport.SourceScan.closingBrace(src, open));
+                java.util.regex.Matcher c = serviceCall.matcher(body);
+                while (c.find()) {
+                    patientCalls.add(c.group(1) + "(");
+                }
+            }
+        }
+        assertThat(patientCalls).as("patient write handlers found").contains("scheduleMyAppointment(",
+            "rescheduleMyAppointment(");
+
+        List<String> unchecked = new java.util.ArrayList<>();
+        int bookingPaths = 0;
+        for (Path f : javaFiles()) {
+            String rel = MAIN.relativize(f).toString().replace('\\', '/');
+            if (!rel.startsWith("service/")) {
+                continue;
+            }
+            String src = com.example.hms.testsupport.SourceScan.stripComments(read(f));
+            List<String> writers = checksIn(src, BOOKING_WRITES);
+            List<String> published = checksIn(src, PUBLISHED_SLOT_CHECKS);
+            for (String call : patientCalls) {
+                for (int at = src.indexOf(" " + call); at >= 0; at = src.indexOf(" " + call, at + 1)) {
+                    int open = com.example.hms.testsupport.SourceScan.indexOfOutsideLiterals(src, '{', at);
+                    int semi = com.example.hms.testsupport.SourceScan.indexOfOutsideLiterals(src, ';', at);
+                    String header = src.substring(src.lastIndexOf('\n', at) + 1, at);
+                    if (open < 0 || (semi >= 0 && semi < open) || !header.startsWith("    public ")) {
+                        continue;
+                    }
+                    String body = src.substring(open, com.example.hms.testsupport.SourceScan.closingBrace(src, open));
+                    if (writers.stream().noneMatch(body::contains)) {
+                        continue;
+                    }
+                    bookingPaths++;
+                    if (published.stream().noneMatch(body::contains)) {
+                        unchecked.add(rel + ":" + com.example.hms.testsupport.SourceScan.lineOf(src, at) + " " + call);
+                    }
+                }
+            }
+        }
+        assertThat(bookingPaths).as("patient booking paths found (book + reschedule)").isGreaterThanOrEqualTo(2);
+        assertThat(unchecked)
+            .as("a patient books or moves a visit off the published slots (QA D1093): call "
+                + "AppointmentSlotPolicy.requirePublishedFreeSlot in it")
+            .isEmpty();
+    }
+
+    @Test
+    void thePublishedSlotScanSeesAFreeTimeBooking() {
+        String src = """
+            class X {
+                public Appointment scheduleMine(Request r) {
+                    Appointment a = new Appointment();
+                    a.setEndTime(slotPolicy.endFor(id, r.getDate(), r.getStartTime()));
+                    return a;
+                }
+            }
+            """;
+        String body = enclosingMethod(src, src.indexOf("new Appointment()"));
+        assertThat(checksIn(src, BOOKING_WRITES).stream().anyMatch(body::contains)).isTrue();
+        assertThat(checksIn(src, PUBLISHED_SLOT_CHECKS).stream().noneMatch(body::contains)).isTrue();
+    }
+
+    private static final List<String> PUBLISHED_SLOT_CHECKS =
+        List.of("slotPolicy.requirePublishedFreeSlot(", "slotInventoryService.book(");
+
     @Test
     void theSlotRuleScanSeesAClientEndTime() {
         String src = """
