@@ -252,6 +252,7 @@
 @if (showIssue()) {
   <div class="modal-backdrop" (click)="closeIssue()" aria-hidden="true"></div>
   <div
+    appModalDialog
     #issueDialog
     class="modal"
     role="dialog"
@@ -305,6 +306,7 @@
 @if (showEndpointForm()) {
   <div class="modal-backdrop" (click)="closeEndpointForm()" aria-hidden="true"></div>
   <div
+    appModalDialog
     #endpointDialog
     class="modal"
     role="dialog"
@@ -379,6 +381,7 @@
 @if (revealed(); as r) {
   <div class="modal-backdrop" aria-hidden="true"></div>
   <div
+    appModalDialog
     #revealDialog
     class="modal"
     role="dialog"
@@ -407,6 +410,7 @@
 @if (confirming(); as c) {
   <div class="modal-backdrop" (click)="closeConfirm()" aria-hidden="true"></div>
   <div
+    appModalDialog
     #confirmDialog
     class="modal"
     role="dialog"

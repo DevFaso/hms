@@ -1728,6 +1728,8 @@
       "QUEUE_CLAIM_RELEASED_BY_OTHER": "Elemento de la cola de trabajo del usuario {{user}} (tomado el {{claimed}}) liberado ({{why}}), receta {{rx}}",
       "QUEUE_CLAIM_EXPIRED": "Elemento de la cola de trabajo del usuario {{user}} (tomado el {{claimed}}) caducado a las {{expired}}, detectado el {{found}}, receta {{rx}}",
       "QUEUE_CLAIM_RELEASED": "Elemento de la cola de trabajo liberado ({{why}}), tomado el {{claimed}}, receta {{rx}}",
+      "ADMISSION_BED_RELEASED": "Cama {{bed}} liberada de la hospitalización {{admission}}",
+      "PRESCRIPTION_PEDIATRIC_DOSE_REVIEWED": "Revisión de dosis pediátrica registrada",
       "PAYMENT_EVENT": "{{what}}: pago {{payment}} en la factura {{invoice}}",
       "STATUS_WAS": "{{what}} (estaba {{previous}})",
       "PLATFORM_SERVICE_UPDATED": "Servicio de plataforma modificado: {{details}}",
@@ -6366,7 +6368,9 @@
         "LAB_ORDER_ENTERED_IN_ERROR": "Orden de laboratorio registrada por error",
         "MEDICATION_DOSE_LIMITS_UPDATED": "Límites de dosis pediátricos modificados",
         "PRESCRIPTION_CDS_OVERRIDDEN": "Alerta de apoyo a la decisión anulada en una receta",
-        "PRESCRIPTION_SIGN_REAUTHENTICATION": "Reautenticación para firmar una receta de estupefaciente"
+        "PRESCRIPTION_SIGN_REAUTHENTICATION": "Reautenticación para firmar una receta de estupefaciente",
+        "PRESCRIPTION_PEDIATRIC_DOSE_REVIEWED": "Revisión de dosis pediátrica registrada",
+        "ADMISSION_BED_RELEASED": "Cama de hospitalización liberada"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelada",
@@ -7296,6 +7300,23 @@
       "CODE": "Código de su aplicación de autenticación (o un código de respaldo)",
       "SUBMIT": "Firmar",
       "FAILED": "No se pudo confirmar su identidad. La receta no está firmada."
+    },
+    "DOSE_REVIEW": {
+      "DUE": "Se requiere revisión de dosis por un farmacéutico o un médico",
+      "ACTION": "Registrar la revisión de dosis",
+      "TITLE": "Registrar la revisión de dosis pediátrica",
+      "HINT": "El control de dosis no puede valorar la dosis de este niño. Como farmacéutico o médico distinto del prescriptor, indique por qué la acepta; la receta podrá firmarse una vez registrada la revisión.",
+      "REASON": "Motivo para aceptar la dosis",
+      "REASON_REQUIRED": "Indique el motivo por el que acepta esta dosis.",
+      "CONFIRM": "Registrar la revisión",
+      "RECORDED": "Revisión de dosis registrada",
+      "FAILED": "No se pudo registrar la revisión de dosis.",
+      "STATE": "Revisión de dosis pediátrica",
+      "REVIEWED_BY": "Revisada por"
+    },
+    "OVERRIDE": {
+      "ALLERGY_REASON": "Motivo de la excepción por alergia",
+      "CDS_REASON": "Motivo para anular la alerta crítica"
     }
   },
   "PROFILE": {
@@ -9553,7 +9574,12 @@
       "BADGE_APPROVED": "Límites pediátricos aprobados",
       "SAVED": "Límites de dosis pediátricos guardados",
       "SAVE_FAILED": "No se pudieron guardar los límites de dosis pediátricos"
-    }
+    },
+    "CDS_OVERRIDE": {
+      "LABEL": "Motivo de anulación (interacción)",
+      "HINT": "Una interacción grave detiene esta dispensación: indique el motivo para dispensar de todos modos. Se registra con la dispensación."
+    },
+    "ALERT_OVERRIDDEN": "Alerta anulada por el prescriptor: vea el motivo en la receta"
   },
   "LAB_QC": {
     "TITLE": "Panel de control de calidad",
@@ -12275,5 +12301,16 @@
     "TYPE_ATTENDANCE": "Certificado de asistencia",
     "TYPE_GENERAL": "Certificado médico",
     "TYPE_SICK_LEAVE": "Baja laboral"
+  },
+  "ORDER_LIFECYCLE": {
+    "CANCEL_REASON_LABEL": "Motivo de la cancelación",
+    "CANCEL_REASON_REQUIRED": "Indique el motivo de la cancelación."
+  },
+  "ADMISSION_BED": {
+    "RELEASE_TITLE": "Liberar la cama",
+    "RELEASE_CONFIRM": "¿Liberar la cama {{bed}} ocupada por {{name}}? El paciente sale del tablero de camas.",
+    "RELEASE_REASON": "Motivo de la liberación",
+    "RELEASE_REASON_REQUIRED": "Indique por qué se libera la cama.",
+    "RELEASE_ACTION": "Liberar la cama"
   }
 }

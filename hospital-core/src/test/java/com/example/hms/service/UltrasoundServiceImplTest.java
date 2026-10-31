@@ -587,6 +587,31 @@ class UltrasoundServiceImplTest {
             .hasMessageContaining("completed");
     }
 
+    /** QA D1098 (round 19): an order whose report is available is resulted too. */
+    @Test
+    void cancelOrder_refusesAnOrderWithItsReport_D1098() {
+        UltrasoundOrder order = new UltrasoundOrder();
+        order.setStatus(UltrasoundOrderStatus.REPORT_AVAILABLE);
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+
+        assertThatThrownBy(() -> ultrasoundService.cancelOrder(orderId, "reason"))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("ultrasound.order.completedNoCancel");
+        assertThat(order.getStatus()).isEqualTo(UltrasoundOrderStatus.REPORT_AVAILABLE);
+    }
+
+    @Test
+    void cancelOrder_refusesABlankReason_D1098() {
+        UltrasoundOrder order = new UltrasoundOrder();
+        order.setStatus(UltrasoundOrderStatus.ORDERED);
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+
+        assertThatThrownBy(() -> ultrasoundService.cancelOrder(orderId, "  "))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("order.lifecycle.cancelReasonRequired");
+        assertThat(order.getStatus()).isEqualTo(UltrasoundOrderStatus.ORDERED);
+    }
+
     @Test
     void updateOrder_changesHospitalAndDelegatesToMapper() {
         UUID newHospitalId = UUID.randomUUID();

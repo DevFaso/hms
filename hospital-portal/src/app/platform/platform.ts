@@ -922,11 +922,13 @@ export class PlatformComponent implements OnInit {
     const body = (err as { error?: ApiErrorBody | null } | null)?.error;
     const fieldErrors = body?.fieldErrors;
     if (fieldErrors && Object.keys(fieldErrors).length > 0) {
+      // QA D1079: the colon is the reader's ("Fournisseur : …" in French).
+      const colon = this.translate.instant('COMMON.COLON');
       const details = Object.entries(fieldErrors)
         .map(([field, message]) => {
           const labelKey = FIELD_LABEL_KEYS[field];
           const label = labelKey ? this.translate.instant(labelKey) : field;
-          return `${label}: ${message}`;
+          return `${label}${colon} ${message}`;
         })
         .join('; ');
       return this.translate.instant('PLATFORM.TOAST.VALIDATION_FAILED', { errors: details });

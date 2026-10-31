@@ -24,13 +24,21 @@ import { SessionScopeService } from '../core/session-scope.service';
 import { BrandMarkComponent } from '../shared/brand-mark/brand-mark.component';
 import { toE164 } from '../shared/phone-number';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 const SUPER_ADMIN_ROLE = 'ROLE_SUPER_ADMIN';
 
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [FormsModule, RouterModule, TranslateModule, BrandMarkComponent, RoleLabelPipe],
+  imports: [
+    ModalDialogDirective,
+    FormsModule,
+    RouterModule,
+    TranslateModule,
+    BrandMarkComponent,
+    RoleLabelPipe,
+  ],
   templateUrl: './login.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./login.scss'],

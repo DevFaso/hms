@@ -12,6 +12,7 @@ import {
   ChangeDetectionStrategy,
   DestroyRef,
 } from '@angular/core';
+import { isNeverSeenVisit } from '../core/encounter-start';
 import { firstImplausibleVital } from '../shared/vital-sign-limits';
 import { glucoseMmolToMgDl } from '../shared/glucose-units';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
@@ -1082,6 +1083,9 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
    * (the reception's close-unseen dialog, reused; the endpoint admits the nurse).
    */
   readonly closeUnseenEncounter = signal<EncounterResponse | null>(null);
+
+  /** QA D1108: LWBS is offered until the patient is seen, the server's rule. */
+  readonly isNeverSeenVisit = isNeverSeenVisit;
 
   openCloseUnseen(encounter: EncounterResponse): void {
     this.closeUnseenEncounter.set(encounter);

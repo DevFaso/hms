@@ -92,6 +92,69 @@ export function localizeDecimals(text: string, locale: string = currentLocale())
   return separator === '.' ? text : text.replaceAll(/(\d)\.(\d)/g, `$1${separator}$2`);
 }
 
+/** A number as typed: an optional comparator, a sign, digits, an optional decimal part. */
+const TYPED_NUMBER = /^([<>≤≥]=?\s*)?(-?\d+)(?:[.,](\d+))?$/;
+
+/**
+ * QA D1002 / D1106 / D1115 / D1116: THE formatter for a measured value a
+ * person reads — a lab value, a reference range, a vital, a growth
+ * measurement. Every template goes through it (`| labValue`, `| labRange`,
+ * `| localeNumber`, `| measure`), and `scripts/lib/lab-locale-format.test.mjs`
+ * fails on a decimal interpolated any other way.
+ *
+ * A number keeps exactly the precision it was entered with ("0.32" reads
+ * "0,32" in French, "0.320" keeps three decimals: a lab value is never
+ * rounded for display), and its comparator ("< 0.5" reads "< 0,5"). Text
+ * that is not one number ("Positif", "1/64", "3.5 - 5") keeps its words and
+ * only takes the reader's decimal separator.
+ */
+export function formatLabNumber(
+  value: string | number | null | undefined,
+  locale: string = currentLocale(),
+): string {
+  if (value === null || value === undefined) return '';
+  const raw = String(value).trim();
+  const m = TYPED_NUMBER.exec(raw);
+  if (!m) return localizeDecimals(raw, locale);
+  const [, comparator = '', whole, fraction = ''] = m;
+  const formatted = new Intl.NumberFormat(locale, {
+    minimumFractionDigits: fraction.length,
+    maximumFractionDigits: fraction.length,
+  }).format(Number(`${whole}.${fraction || '0'}`));
+  return `${comparator}${formatted}`;
+}
+
+/**
+ * A reference range as the reader writes it: "12 - 15.5 g/dL" reads
+ * "12 – 15,5 g/dL" in French (the locale's separator, an en dash between
+ * the two limits, QA D1106). Empty for null.
+ */
+export function formatLabRange(
+  range: string | null | undefined,
+  locale: string = currentLocale(),
+): string {
+  if (range === null || range === undefined) return '';
+  return localizeDecimals(range.trim(), locale).replaceAll(/(\d)\s*[-–]\s*(\d)/g, '$1 – $2');
+}
+
+/**
+ * QA D811 / D1115: a measurement followed by its unit ("37,5 °C", "7 000 g"),
+ * at most `maxFractionDigits` decimals, and a bare "—" when nothing was
+ * measured, never a dash with a unit.
+ */
+export function formatMeasure(
+  value: number | null | undefined,
+  unit: string,
+  maxFractionDigits = 1,
+  locale: string = currentLocale(),
+): string {
+  if (value === null || value === undefined || Number.isNaN(value)) return '—';
+  const number = new Intl.NumberFormat(locale, { maximumFractionDigits: maxFractionDigits }).format(
+    value,
+  );
+  return unit === '%' && locale.startsWith('en') ? `${number}%` : `${number} ${unit}`;
+}
+
 /** Specs that set `localStorage.lang` between cases must drop the cache. */
 export function resetStoredLangForTests(): void {
   cached = undefined;

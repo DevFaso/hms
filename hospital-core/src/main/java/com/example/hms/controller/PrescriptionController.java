@@ -146,6 +146,28 @@ public class PrescriptionController {
     }
 
     /**
+     * Round 19 (QA D1096): the paediatric dose review the decision support
+     * asked for ("a pharmacist or physician must review the dose"). A
+     * pharmacist, or a signing physician of the order's hospital who is not
+     * its prescriber, records it with a reason; the order is not signed until
+     * then. The service checks the hospital role and the prescriber.
+     */
+    @PostMapping("/{id}/pediatric-dose-review")
+    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_PHARMACY_VERIFIER','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
+    @Operation(summary = "Record the paediatric dose review an order needs before it is signed",
+        description = "For a child under the medication's manual-review age, or outside every weight band, "
+            + "the dose check gives no automatic verdict. A pharmacist or a physician other than the "
+            + "prescriber records the review with a mandatory reason; the signer cannot be the reviewer. "
+            + "Any later edit of the order clears the review.")
+    public ResponseEntity<PrescriptionResponseDTO> pediatricDoseReview(
+        @PathVariable UUID id,
+        @RequestBody(required = false) com.example.hms.payload.dto.PediatricDoseReviewRequestDTO request,
+        Locale locale) {
+        String reason = request != null ? request.getReason() : null;
+        return ResponseEntity.ok(prescriptionService.recordPediatricDoseReview(id, reason, locale));
+    }
+
+    /**
      * Gap G5 — the pharmacist sends an order back with a question.
      *
      * <p>Pharmacist roles, mirroring {@link #pharmacistVerify}. No

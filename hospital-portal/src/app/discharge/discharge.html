@@ -832,7 +832,7 @@
             <ul>
               @for (t of s.pendingTestResults; track $index) {
                 <li>
-                  {{ t.testType }}: {{ t.testName }}
+                  {{ t.testType }}{{ 'COMMON.COLON' | translate }} {{ t.testName }}
                   @if (t.expectedResultDate) {
                     ({{ t.expectedResultDate | serverTime | date: 'mediumDate' }})
                   }

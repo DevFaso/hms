@@ -28,11 +28,12 @@ import {
 
 import { currentLocale } from '../shared/i18n/app-locale';
 import { serverInstant, toServerDateTime } from '../shared/date-utils';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 @Component({
   selector: 'app-digital-signatures',
   standalone: true,
-  imports: [FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [ModalDialogDirective, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './digital-signatures.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './digital-signatures.scss',

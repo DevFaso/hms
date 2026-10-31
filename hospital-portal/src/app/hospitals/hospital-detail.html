@@ -151,8 +151,15 @@
 
     @if (dialog(); as state) {
       <div class="dialog-backdrop" data-test="dialog-backdrop">
-        <div class="dialog">
-          <h2>{{ 'HOSPITAL_LIFECYCLE.DIALOG.' + state.kind.toUpperCase() | translate }}</h2>
+        <div
+          class="dialog"
+          appModalDialog
+          aria-labelledby="hospital-detail-dialog-1-title"
+          (escaped)="!state.busy && closeDialog()"
+        >
+          <h2 id="hospital-detail-dialog-1-title">
+            {{ 'HOSPITAL_LIFECYCLE.DIALOG.' + state.kind.toUpperCase() | translate }}
+          </h2>
           <p class="dialog-confirm">
             {{ 'HOSPITAL_LIFECYCLE.DIALOG.CONFIRM_PREFIX' | translate }}
             <strong>{{ hospital()?.name }}</strong

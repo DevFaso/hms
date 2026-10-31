@@ -292,9 +292,14 @@
       (click)="closeModal()"
       (keydown.escape)="closeModal()"
     ></div>
-    <div class="modal modal-lg">
+    <div
+      appModalDialog
+      aria-labelledby="treatment-plans-dialog-form-title"
+      (escaped)="closeModal()"
+      class="modal modal-lg"
+    >
       <div class="modal-header">
-        <h2>
+        <h2 id="treatment-plans-dialog-form-title">
           {{ editing() ? ('COMMON.EDIT' | translate) : ('TREATMENT.NEW' | translate) }}
           {{ 'TREATMENT.TREATMENT_PLAN' | translate }}
         </h2>

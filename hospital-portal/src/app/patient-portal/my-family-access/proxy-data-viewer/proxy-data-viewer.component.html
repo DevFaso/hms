@@ -163,14 +163,14 @@
                       @if (l.isPending) {
                         {{ 'PORTAL.LAB_RESULTS.PENDING_RESULT' | translate }}
                       } @else {
-                        {{ l.result }} {{ l.unit }}
+                        {{ l.result | labValue }} {{ l.unit }}
                         <app-lab-correction-badge [corrected]="l.corrected" audience="patient" />
                         @if (l.isAbnormal) {
                           <span class="material-symbols-outlined abnormal-flag">warning</span>
                         }
                       }
                     </td>
-                    <td>{{ l.referenceRange || '—' }}</td>
+                    <td>{{ l.referenceRange | labRange }}</td>
                     <td>{{ l.collectedDate | serverTime | date: 'mediumDate' }}</td>
                   </tr>
                 }
@@ -267,11 +267,11 @@
                 <ul>
                   @for (l of summary.recentLabResults; track l.id) {
                     <li>
-                      {{ l.testName }}:
+                      {{ l.testName }}{{ 'COMMON.COLON' | translate }}
                       @if (l.isPending) {
                         {{ 'PORTAL.LAB_RESULTS.PENDING_RESULT' | translate }}
                       } @else {
-                        {{ l.result }} {{ l.unit }}
+                        {{ l.result | labValue }} {{ l.unit }}
                         <app-lab-correction-badge [corrected]="l.corrected" audience="patient" />
                       }
                     </li>

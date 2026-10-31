@@ -497,9 +497,32 @@ describe('AdmissionsComponent', () => {
       component.submitBedAssign();
       expect(toast.success).toHaveBeenCalledWith('ADMISSIONS.BED_ASSIGNED');
       expect(component.bedAssignFor()).toBeNull();
+      // QA D1100: freeing the bed goes through a dialog with a reason.
       admissionService.unassignBed.and.returnValue(of(adm()));
-      component.unassignBed(adm());
+      component.openUnassignBed(adm());
+      component.unassignReason.set('Transfert en réanimation');
+      component.confirmUnassignBed();
+      expect(admissionService.unassignBed).toHaveBeenCalledWith(
+        adm().id,
+        'Transfert en réanimation',
+      );
       expect(toast.success).toHaveBeenCalledWith('ADMISSIONS.BED_UNASSIGNED');
+      expect(component.unassigningAdm()).toBeNull();
+    });
+
+    // QA D1100 (round 19): "Retirer le lit" freed an inpatient's bed in one click.
+    it('QA D1100: freeing a bed asks for confirmation and a reason first', () => {
+      component.openUnassignBed(adm());
+      expect(component.unassigningAdm()).withContext('the dialog opens').toBeTruthy();
+      expect(admissionService.unassignBed).not.toHaveBeenCalled();
+      component.unassignReason.set('   ');
+      component.confirmUnassignBed();
+      expect(admissionService.unassignBed)
+        .withContext('no reason, no release')
+        .not.toHaveBeenCalled();
+      component.closeUnassignBed();
+      expect(component.unassigningAdm()).toBeNull();
+      expect(admissionService.unassignBed).not.toHaveBeenCalled();
     });
 
     it('reports bed failures', () => {
@@ -511,7 +534,9 @@ describe('AdmissionsComponent', () => {
       component.submitBedAssign();
       expect(component.bedAssigning()).toBeFalse();
       admissionService.unassignBed.and.returnValue(throwError(() => new Error('x')));
-      component.unassignBed(adm());
+      component.openUnassignBed(adm());
+      component.unassignReason.set('Erreur de lit');
+      component.confirmUnassignBed();
       expect(toast.error).toHaveBeenCalledWith('ADMISSIONS.BED_ASSIGN_FAILED');
     });
   });

@@ -2,6 +2,7 @@ import { textMatches } from '../shared/person-search';
 import {
   Component,
   computed,
+  ElementRef,
   inject,
   OnInit,
   signal,
@@ -33,6 +34,11 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { refusalReason } from '../shared/refusal-reason';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { AuthorshipService } from '../shared/authorship.service';
+import { CANCEL_REASON_REQUIRED_KEY, isOrderCancellable } from '../shared/order-lifecycle';
+import { refuseFields } from '../shared/forms/invalid-fields';
+
+/** The cancellation reason's field (QA D1098), marked when it is refused. */
+const CANCEL_REASON_ID = 'imaging-cancel-reason';
 
 type ImagingForm = Omit<ImagingOrderRequest, 'laterality'> & {
   laterality?: ImagingLaterality | '';
@@ -92,6 +98,11 @@ export class ImagingComponent implements OnInit {
   private readonly roleContext = inject(RoleContextService);
   private readonly auth = inject(AuthService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  /** QA D1098: the shared rule for which orders still offer edit and cancel. */
+  readonly isOrderCancellable = isOrderCancellable;
+  /** QA D1098: why the order is cancelled (required, kept on the order). */
+  readonly cancelReason = signal('');
 
   orders = signal<ImagingOrderResponse[]>([]);
   filtered = signal<ImagingOrderResponse[]>([]);
@@ -224,6 +235,8 @@ export class ImagingComponent implements OnInit {
   canCancelThisOrder(o: ImagingOrderResponse): boolean {
     return (
       this.canCancelOrder() &&
+      // QA D1098: a resulted order (RESULTS_AVAILABLE) offered "Annuler la demande".
+      isOrderCancellable(o.status) &&
       this.authorship.isAuthor({ authorUserId: o.authorUserId ?? o.orderingProviderUserId })
     );
   }
@@ -381,6 +394,7 @@ export class ImagingComponent implements OnInit {
 
   confirmCancel(o: ImagingOrderResponse): void {
     this.deletingItem.set(o);
+    this.cancelReason.set('');
     this.showDeleteConfirm.set(true);
   }
   cancelDeleteAction(): void {
@@ -388,10 +402,18 @@ export class ImagingComponent implements OnInit {
     this.deletingItem.set(null);
   }
   executeCancel(): void {
+    const reason = this.cancelReason().trim();
+    if (!reason) {
+      // QA D1098: the server refuses a cancel without a reason; the field says so first.
+      const message = this.translate.instant(CANCEL_REASON_REQUIRED_KEY);
+      refuseFields(this.host.nativeElement, [CANCEL_REASON_ID], [CANCEL_REASON_ID], message);
+      return;
+    }
     this.deleting.set(true);
     this.imagingService
       .updateOrderStatus(this.deletingItem()!.id, {
         status: 'CANCELLED',
+        cancellationReason: reason,
         // Stored on the order and read back by everyone, so it stays canonical
         // English: translating it would bake the cancelling user's locale
         // into the record and give the same note three spellings.
@@ -610,8 +632,10 @@ export class ImagingComponent implements OnInit {
         this.selectedReport.set(updated);
         this.loadReports();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('IMAGING.CRITICAL_ACK_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('IMAGING.CRITICAL_ACK_ERROR'),
+        );
         this.acknowledging.set(false);
       },
     });
@@ -710,8 +734,8 @@ export class ImagingComponent implements OnInit {
         this.selectedReport.set(saved);
         this.loadReports();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('IMAGING.REPORT_SAVE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('IMAGING.REPORT_SAVE_ERROR'));
         this.reportSubmitting.set(false);
       },
     });
@@ -814,6 +838,14 @@ export class ImagingComponent implements OnInit {
       criticalFinding: false,
       reportStatus: 'PRELIMINARY',
     };
+  }
+
+  /**
+   * QA D1098: a draft read on a cancelled order is neither revised nor signed
+   * (the server refuses both); the order is looked up in the loaded list.
+   */
+  reportOrderCancelled(report: ImagingReportResponse): boolean {
+    return this.orders().some((o) => o.id === report.imagingOrderId && o.status === 'CANCELLED');
   }
 
   /** An order can only be read once the study has actually been acquired. */

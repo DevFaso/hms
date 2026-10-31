@@ -162,7 +162,10 @@
     >
       <div
         class="modal"
+        appModalDialog
+        aria-labelledby="organization-detail-dialog-1-title"
         role="dialog"
+        (escaped)="closeModal()"
         (click)="$event.stopPropagation()"
         (keydown)="$event.stopPropagation()"
       >
@@ -170,7 +173,7 @@
           <span class="material-symbols-outlined" [class.danger]="cfg.destructive">{{
             cfg.iconKey
           }}</span>
-          <h3>{{ cfg.titleKey | translate }}</h3>
+          <h3 id="organization-detail-dialog-1-title">{{ cfg.titleKey | translate }}</h3>
         </header>
 
         <p class="modal-desc">{{ cfg.descKey | translate }}</p>

@@ -102,6 +102,10 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
             .build();
 
         vitalSignMapper.applyRequestToEntity(request, entity);
+        // QA D1077 (round 19): this endpoint stored a head circumference for a
+        // 67-year-old; the nurse station's rule now holds on every vitals write.
+        com.example.hms.service.support.PatientMeasureRules.requireVitalSignApplicable(
+            entity, null, java.time.LocalDate.now(java.time.ZoneId.systemDefault()));
 
         // NEWS2 MEDIUM+ auto-flags the bundle significant (P3 #25b): the
         // aggregate catches multi-parameter deterioration that no single

@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { isOrderCancellable } from '../shared/order-lifecycle';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -27,6 +28,7 @@ import {
 } from '../shared/date-utils';
 import { refusalReason } from '../shared/refusal-reason';
 import { AuthorshipService } from '../shared/authorship.service';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 type Worklist = 'all' | 'pending-consent' | ProcedureOrderStatus;
 
@@ -47,6 +49,7 @@ type Worklist = 'all' | 'pending-consent' | ProcedureOrderStatus;
     TranslateModule,
     PatientPickerComponent,
     EnumLabelPipe,
+    ModalDialogDirective,
   ],
   templateUrl: './procedure-orders.html',
   styleUrl: './procedure-orders.scss',
@@ -75,7 +78,11 @@ export class ProcedureOrdersComponent implements OnInit {
    * or a midwife's order (ProcedureOrderServiceImpl.requireCancelAuthor).
    */
   canCancelOrder(o: ProcedureOrderResponse): boolean {
-    return this.canCancel && (this.authorship.isAuthor(o) || o.authorIsPhysician === false);
+    return (
+      this.canCancel &&
+      isOrderCancellable(o.status) &&
+      (this.authorship.isAuthor(o) || o.authorIsPhysician === false)
+    );
   }
 
   worklist = signal<Worklist>('all');

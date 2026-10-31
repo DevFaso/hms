@@ -183,6 +183,28 @@ ${service}`,
   );
 });
 
+test("QA D1004 (round 19): a NESTED dialog's directive does not manage focus for the dialog around it", () => {
+  // The outer form keeps focus on its opener; only the confirmation inside it is a modal.
+  const outer = `<div class="modal" role="dialog" aria-modal="true" aria-labelledby="t" (keydown.escape)="c()">
+    <h2 id="t">Form</h2>
+    @if (confirm()) {
+      <div class="modal" appModalDialog aria-labelledby="u" (escaped)="d()"><h3 id="u">Sure?</h3></div>
+    }
+  </div>`;
+  assert.deepEqual(
+    scan(outer, outer).map((f) => `${f.rule}:${f.line}`),
+    ['focus:1'],
+  );
+});
+
+test('QA D1004 (round 19): a (keydown.escape) on a control INSIDE a dialog does not close the dialog', () => {
+  // A typeahead that clears its list on Escape is not the dialog's Escape handler.
+  const typeahead = `<div class="modal" role="dialog" aria-modal="true" aria-labelledby="t" cdkTrapFocus>
+    <h2 id="t">Search</h2><input (keydown.escape)="clearSuggestions()" />
+  </div>`;
+  assert.deepEqual(rules(typeahead, typeahead), ['escape']);
+});
+
 test('parts of a dialog (header, body, footer, backdrop, button) are not containers', () => {
   const html = `<div class="modal-backdrop"></div><div class="modal-header"></div>
     <div class="modal-body"></div><div class="modal-footer"></div><button class="modal-close"></button>

@@ -802,7 +802,7 @@ public class DispenseServiceImpl implements DispenseService {
     private static void requireAtMost(BigDecimal requested, BigDecimal remaining, BigDecimal stated) {
         if (requested != null && remaining != null && requested.compareTo(remaining) > 0) {
             throw new BusinessException("pharmacy.dispense.exceedsPrescribed",
-                    stated.stripTrailingZeros().toPlainString());
+                    com.example.hms.utility.DisplayNumbers.quantity(stated));
         }
     }
 
@@ -845,7 +845,14 @@ public class DispenseServiceImpl implements DispenseService {
         }
         if (cdsResult.requiresOverride()
                 && (dto.getCdsOverrideReason() == null || dto.getCdsOverrideReason().isBlank())) {
-            throw new BusinessException("pharmacy.dispense.cdsOverrideRequired", String.join(" | ", cdsResult.alerts()));
+            // QA D1102 class (round 19): a sentence that tells the pharmacist
+            // which field to fill, and the alerts as cards the dispensing
+            // screen shows beside that field - the screen had no field, so a
+            // serious interaction stopped the dispense for good.
+            throw new com.example.hms.cdshooks.CdsCriticalBlockException(
+                    MessageUtil.resolveOrRaw("pharmacy.dispense.cdsOverrideRequired",
+                            String.join(" | ", cdsResult.alerts())),
+                    DispenseAlertCards.of(cdsResult));
         }
 
         ActorPair actors = resolveActors(dto);
@@ -1924,6 +1931,8 @@ public class DispenseServiceImpl implements DispenseService {
                 .needsAttention(attentionReason != null)
                 .attentionReason(attentionReason)
                 .clarificationResolvedAt(unactedAnswer)
+                // QA D1101: a cue, no text - the reason is read on the order.
+                .alertOverridden(p.getOverrideReason() != null && !p.getOverrideReason().isBlank() ? Boolean.TRUE : null)
                 .build();
     }
 

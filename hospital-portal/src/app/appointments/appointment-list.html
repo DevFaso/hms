@@ -191,7 +191,7 @@
     <div class="active-chips">
       @if (dateFrom) {
         <span class="filter-chip">
-          {{ 'APPOINTMENTS.FROM' | translate }}: {{ dateFrom }}
+          {{ 'APPOINTMENTS.FROM' | translate }}{{ 'COMMON.COLON' | translate }} {{ dateFrom }}
           <button
             type="button"
             class="chip-remove"
@@ -204,7 +204,7 @@
       }
       @if (dateTo) {
         <span class="filter-chip">
-          {{ 'APPOINTMENTS.TO' | translate }}: {{ dateTo }}
+          {{ 'APPOINTMENTS.TO' | translate }}{{ 'COMMON.COLON' | translate }} {{ dateTo }}
           <button
             type="button"
             class="chip-remove"

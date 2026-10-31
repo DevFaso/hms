@@ -44,11 +44,18 @@ public class ControlledSubstanceGuard {
      * prescription can be drafted and saved freely, exactly as a paper one can
      * be written before it is signed. DRAFT and PENDING_SIGNATURE are always
      * permitted; everything beyond them is an actionable state.
+     *
+     * <p>QA D1097 (round 19): CANCELLED and DISCONTINUED are never actionable
+     * either - a withdrawal takes authority away, it gives nobody leave to act
+     * on the order - so they are permitted too. An unsigned morphine order
+     * used to be refused its cancellation until its author passed the
+     * step-up re-authentication, which exists for the signature only, and
+     * stayed stuck in PENDING_SIGNATURE. Who may withdraw is still the
+     * caller's rule (the author of an unsigned order, QA D930; the prescriber
+     * or a doctor for a signed one, QA D670).
      */
     public void requireSafeguardsFor(Prescription prescription, PrescriptionStatus targetStatus) {
-        if (targetStatus == null
-                || targetStatus == PrescriptionStatus.DRAFT
-                || targetStatus == PrescriptionStatus.PENDING_SIGNATURE) {
+        if (!isActionable(targetStatus)) {
             return;
         }
         Objects.requireNonNull(prescription, "prescription");
@@ -76,6 +83,18 @@ public class ControlledSubstanceGuard {
             throw new BusinessException("prescription.safeguard.COSIGN_REQUIRED.status",
                 targetStatus.localizedLabel());
         }
+    }
+
+    /**
+     * Whether reaching {@code status} authorises somebody to act on the order:
+     * every status except the unsigned ones (DRAFT, PENDING_SIGNATURE) and the
+     * withdrawn ones (CANCELLED, DISCONTINUED, QA D1097).
+     */
+    public static boolean isActionable(PrescriptionStatus status) {
+        return status != null
+            && status != PrescriptionStatus.DRAFT
+            && status != PrescriptionStatus.PENDING_SIGNATURE
+            && !status.isWithdrawn();
     }
 
     /**
@@ -110,6 +129,14 @@ public class ControlledSubstanceGuard {
         if (prescription.isRequiresCosign()
                 && (prescription.getCosignedAt() == null || prescription.getCosignedBy() == null)) {
             throw new BusinessException("prescription.safeguard.COSIGN_REQUIRED.dispense");
+        }
+
+        // QA D1096 (round 19): an order the paediatric dose check held for a
+        // review is signed only once it is recorded; an order whose dose was
+        // changed after its signature (a clarification edit) needs it again
+        // before anything leaves the counter.
+        if (prescription.isPediatricDoseReviewRequired() && prescription.getPediatricDoseReviewedAt() == null) {
+            throw new BusinessException("prescription.safeguard.PEDIATRIC_DOSE_REVIEW.dispense");
         }
     }
 }

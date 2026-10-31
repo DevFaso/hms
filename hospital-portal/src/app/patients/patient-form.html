@@ -498,10 +498,17 @@
 <!-- MVP 11: Duplicate confirmation modal -->
 @if (showDuplicateWarning) {
   <div class="dup-modal-backdrop"></div>
-  <div class="dup-modal" role="alertdialog" aria-modal="true">
+  <div
+    class="dup-modal"
+    role="alertdialog"
+    aria-modal="true"
+    appModalDialog
+    aria-labelledby="patient-form-dialog-1-title"
+    (escaped)="showDuplicateWarning = false"
+  >
     <div class="dup-modal-header">
       <span class="material-symbols-outlined warn-icon">warning</span>
-      <h2>{{ 'PATIENTS.POSSIBLE_DUPLICATES' | translate }}</h2>
+      <h2 id="patient-form-dialog-1-title">{{ 'PATIENTS.POSSIBLE_DUPLICATES' | translate }}</h2>
     </div>
     <p class="dup-modal-desc">
       {{ 'PATIENTS.DUPLICATE_DESC' | translate }}

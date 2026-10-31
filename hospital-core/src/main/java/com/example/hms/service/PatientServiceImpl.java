@@ -2861,7 +2861,7 @@ public class PatientServiceImpl implements PatientService {
                 .append(com.example.hms.utility.MessageUtil.resolveOrRaw("lab.result.pendingRelease"))
                 .toString();
         }
-        summary.append(": ").append(result.getResultValue());
+        summary.append(": ").append(com.example.hms.utility.DisplayNumbers.labValue(result.getResultValue()));
         // QA D1016: the timeline says the value corrects a released one.
         if (com.example.hms.service.lab.LabResultCorrections.isCorrection(result)) {
             summary.append(" (").append(com.example.hms.utility.MessageUtil.resolveOrRaw("lab.result.correctedLabel")).append(")");

@@ -674,6 +674,62 @@ class ImagingOrderServiceImplTest {
         assertThat(order.getCancelledAt()).isNull();
     }
 
+    /** QA D1098 (round 19): a resulted order is closed to a cancel and to a step back. */
+    @Test
+    void updateOrderStatus_refusesToCancelOrResetAResultedOrder_D1098() {
+        ImagingOrder order = new ImagingOrder();
+        order.setId(orderId);
+        order.setStatus(ImagingOrderStatus.RESULTS_AVAILABLE);
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+
+        for (ImagingOrderStatus target : new ImagingOrderStatus[] {
+                ImagingOrderStatus.CANCELLED, ImagingOrderStatus.ORDERED, ImagingOrderStatus.COMPLETED}) {
+            ImagingOrderStatusUpdateRequestDTO request = ImagingOrderStatusUpdateRequestDTO.builder()
+                .status(target).cancellationReason("Duplicate").build();
+            org.assertj.core.api.Assertions.assertThatThrownBy(
+                    () -> imagingOrderService.updateOrderStatus(orderId, request))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .extracting(e -> ((com.example.hms.exception.BusinessException) e).getMessageKey())
+                .isEqualTo("order.lifecycle.resultedLocked");
+        }
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.RESULTS_AVAILABLE);
+        verify(imagingOrderRepository, never()).save(any());
+    }
+
+    @Test
+    void updateOrderStatus_aCompletedOrderStillMovesToResultsAvailable_D1098() {
+        ImagingOrder order = new ImagingOrder();
+        order.setId(orderId);
+        order.setStatus(ImagingOrderStatus.COMPLETED);
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(imagingOrderRepository.save(order)).thenReturn(order);
+        when(imagingOrderMapper.toResponseDTO(order)).thenReturn(ImagingOrderResponseDTO.builder().id(orderId).build());
+
+        imagingOrderService.updateOrderStatus(orderId, ImagingOrderStatusUpdateRequestDTO.builder()
+            .status(ImagingOrderStatus.RESULTS_AVAILABLE).build());
+
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.RESULTS_AVAILABLE);
+    }
+
+    @Test
+    void updateOrderStatus_refusesACancelWithoutAReason_D1098() {
+        ImagingOrder order = new ImagingOrder();
+        order.setId(orderId);
+        order.setStatus(ImagingOrderStatus.ORDERED);
+        when(imagingOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+
+        for (String blank : new String[] {null, "", "   "}) {
+            ImagingOrderStatusUpdateRequestDTO request = ImagingOrderStatusUpdateRequestDTO.builder()
+                .status(ImagingOrderStatus.CANCELLED).cancellationReason(blank).build();
+            org.assertj.core.api.Assertions.assertThatThrownBy(
+                    () -> imagingOrderService.updateOrderStatus(orderId, request))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .extracting(e -> ((com.example.hms.exception.BusinessException) e).getMessageKey())
+                .isEqualTo("order.lifecycle.cancelReasonRequired");
+        }
+        assertThat(order.getStatus()).isEqualTo(ImagingOrderStatus.ORDERED);
+    }
+
     @Test
     void normalizeBodyRegionReturnsNullForNull() {
         when(imagingOrderRepository.findPotentialDuplicates(eq(patientId), eq(ImagingModality.CT), isNull(), any(LocalDateTime.class)))

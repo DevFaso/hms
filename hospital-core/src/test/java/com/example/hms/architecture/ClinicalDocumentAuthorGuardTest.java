@@ -74,7 +74,8 @@ class ClinicalDocumentAuthorGuardTest {
      * author check, so it does not count).
      */
     private static final Pattern AUTHOR_CHECK = Pattern.compile(
-        "CallerIdentity\\.(?:requireCaller|requireCallerUnlessSuperAdmin|isCaller)\\(|requireAuthor\\("
+        // QA D1112: requireAuthor / requireAuthorUnlessSuperAdmin are the authorship checks with their own key.
+        "CallerIdentity\\.(?:requireCaller|requireCallerUnlessSuperAdmin|isCaller|requireAuthorUnlessSuperAdmin)\\(|requireAuthor\\("
             + "|requireCallerIsReferrer\\(|requireUpdater\\(|requireRequesterOrSuperAdmin\\("
             // Round 16 siblings: each helper below compares the caller with the
             // record's author (prescriber, ordering clinician, interpreting

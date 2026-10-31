@@ -168,6 +168,7 @@
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="closePlan(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
         <h2 id="birth-plan-tab-dialog-1-title">
@@ -185,14 +186,15 @@
         <div class="view-section">
           <h3>{{ 'BIRTH_PLAN.SECTION_INTRO' | translate }}</h3>
           <p>
-            {{ 'MATERNITY.EDD' | translate }}:
+            {{ 'MATERNITY.EDD' | translate }}{{ 'COMMON.COLON' | translate }}
             {{
               p.introduction?.expectedDueDate
                 ? (p.introduction.expectedDueDate | serverTime | date: 'mediumDate')
                 : '—'
             }}
-            · {{ 'BIRTH_PLAN.PLACE' | translate }}: {{ p.introduction?.placeOfBirth || '—' }} ·
-            {{ 'BIRTH_PLAN.PROVIDER' | translate }}: {{ p.introduction?.healthcareProvider || '—' }}
+            · {{ 'BIRTH_PLAN.PLACE' | translate }}{{ 'COMMON.COLON' | translate }}
+            {{ p.introduction?.placeOfBirth || '—' }} · {{ 'BIRTH_PLAN.PROVIDER' | translate
+            }}{{ 'COMMON.COLON' | translate }} {{ p.introduction?.healthcareProvider || '—' }}
           </p>
           @if (p.introduction?.medicalConditions) {
             <p class="muted">{{ p.introduction.medicalConditions }}</p>
@@ -203,7 +205,7 @@
           <p>
             {{ p.deliveryPreferences?.preferredDeliveryMethod || '—' }}
             @if (p.deliveryPreferences?.backupDeliveryMethod) {
-              ({{ 'BIRTH_PLAN.BACKUP' | translate }}:
+              ({{ 'BIRTH_PLAN.BACKUP' | translate }}{{ 'COMMON.COLON' | translate }}
               {{ p.deliveryPreferences.backupDeliveryMethod }})
             }
           </p>
@@ -225,7 +227,7 @@
           <h3>{{ 'BIRTH_PLAN.SECTION_ENVIRONMENT' | translate }}</h3>
           @if (p.deliveryRoomEnvironment?.supportPersons?.length) {
             <p>
-              {{ 'BIRTH_PLAN.SUPPORT_PERSONS' | translate }}:
+              {{ 'BIRTH_PLAN.SUPPORT_PERSONS' | translate }}{{ 'COMMON.COLON' | translate }}
               {{ p.deliveryRoomEnvironment.supportPersons.join(', ') }}
             </p>
           }
@@ -236,7 +238,7 @@
         <div class="view-section">
           <h3>{{ 'BIRTH_PLAN.SECTION_POSTPARTUM' | translate }}</h3>
           <p>
-            {{ 'BIRTH_PLAN.FEEDING' | translate }}:
+            {{ 'BIRTH_PLAN.FEEDING' | translate }}{{ 'COMMON.COLON' | translate }}
             {{ p.postpartumPreferences?.feedingMethod || '—' }}
             @if (p.postpartumPreferences?.skinToSkinContact) {
               · {{ 'BIRTH_PLAN.SKIN_TO_SKIN' | translate }}
@@ -302,6 +304,7 @@
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="closePlanModal(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
         <h2 id="birth-plan-tab-dialog-2-title">
@@ -495,6 +498,7 @@
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="closeReview(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
         <h2 id="birth-plan-tab-dialog-3-title">{{ 'BIRTH_PLAN.REVIEW_TITLE' | translate }}</h2>
@@ -549,6 +553,7 @@
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="closeDelete(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
         <h2 id="birth-plan-tab-dialog-4-title">{{ 'BIRTH_PLAN.DELETE_TITLE' | translate }}</h2>

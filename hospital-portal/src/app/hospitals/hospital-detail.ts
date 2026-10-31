@@ -23,6 +23,7 @@ import { isStepUpAction, isStepUpRefusal, stepUpRefusalKey } from '../services/s
 import { localDateString } from '../shared/date-utils';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { OrgTextPipe } from '../shared/pipes/org-text.pipe';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 type ActionKind = 'suspend' | 'restore' | 'archive' | 'schedule-purge' | 'cancel-purge';
 
@@ -40,6 +41,7 @@ interface ActionDialog {
   selector: 'app-hospital-detail',
   standalone: true,
   imports: [
+    ModalDialogDirective,
     ServerTimePipe,
     CommonModule,
     FormsModule,

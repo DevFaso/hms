@@ -178,7 +178,7 @@
                     [class.lab-abnormal]="lab.flag === 'ABNORMAL' || lab.flag === 'CRITICAL'"
                     [class.lab-critical]="lab.flag === 'CRITICAL'"
                   >
-                    {{ lab.value }}
+                    {{ lab.value | labValue }}
                   </span>
                   <app-lab-correction-badge [corrected]="lab.corrected" />
                 </div>

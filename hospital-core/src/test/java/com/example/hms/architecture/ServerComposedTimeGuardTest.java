@@ -23,6 +23,13 @@ import static org.assertj.core.api.Assertions.assertThat;
  * clock. The controlled register's reason said "dispensed 30/10 17:09" while
  * its time column, converted by the portal, said 13:09.
  *
+ * <p>QA D1114 (round 19): the decision-support cards ({@code cdshooks/}, the
+ * CDS rules, the BPA protocols and {@code CdsCardText}) are in scope too: a
+ * malaria BPA card read "31/10/2026 00:54" (UTC) for a temperature the vitals
+ * tab showed at 20:54. There a card also must not take the calendar day of a
+ * stored timestamp ({@code getCreatedAt().toLocalDate()}) without converting
+ * it: near midnight it is the server's day, not the hospital's.
+ *
  * <p>A pharmacy or billing source that builds a date-and-time formatter
  * ({@code ofLocalizedDateTime}, or a pattern with hours) must convert what it
  * prints through {@code HospitalTime}. A date alone is not checked (a stored
@@ -35,6 +42,8 @@ class ServerComposedTimeGuardTest {
     private static final Pattern DATE_TIME_FORMATTER = Pattern.compile(
         "ofLocalizedDateTime\\(|(?:ofPattern|appendPattern)\\(\\s*+\"[^\"H]*+H[^\"]*+\"");
     private static final Pattern CONVERTS = Pattern.compile("\\bHospitalTime\\.");
+    /** QA D1114: the server's calendar day of a stored timestamp, in a card. */
+    private static final Pattern SERVER_DAY = Pattern.compile("\\.get\\w*(?:At|Time)\\(\\)\\.toLocalDate\\(\\)");
 
     /** Known sources that print server time as stored, each with why it is not fixed here. Shrink only. */
     private static final Map<String, String> ALLOWED = Map.of(
@@ -58,6 +67,8 @@ class ServerComposedTimeGuardTest {
                 String source = SourceScan.stripComments(Files.readString(file, StandardCharsets.UTF_8));
                 if (DATE_TIME_FORMATTER.matcher(source).find() && !CONVERTS.matcher(source).find()) {
                     offenders.add(rel);
+                } else if (rel.startsWith("cdshooks/") && SERVER_DAY.matcher(source).find()) {
+                    offenders.add(rel);
                 }
             }
         }
@@ -69,6 +80,19 @@ class ServerComposedTimeGuardTest {
     }
 
     @Test
+    @DisplayName("the CDS and BPA cards are in scope (QA D1114)")
+    void cardsAreInScope() {
+        assertThat(inScope("cdshooks/bpa/BpaCardText.java")).isTrue();
+        assertThat(inScope("cdshooks/CdsCardText.java")).isTrue();
+        assertThat(inScope("cdshooks/rules/DuplicateMedicationOrderRule.java")).isTrue();
+        String before = "private static final DateTimeFormatter WHEN = DateTimeFormatter.ofPattern(\"dd/MM/yyyy HH:mm\");"
+            + " static String when(LocalDateTime at) { return at.format(WHEN); }";
+        assertThat(DATE_TIME_FORMATTER.matcher(before).find() && !CONVERTS.matcher(before).find()).isTrue();
+        assertThat(SERVER_DAY.matcher("text.date(existing.getCreatedAt().toLocalDate())").find()).isTrue();
+        assertThat(SERVER_DAY.matcher("text.date(existing.getCreatedAt(), zone)").find()).isFalse();
+    }
+
+    @Test
     @DisplayName("the scan catches the D1084 shape")
     void catchesTheOldShape() {
         String before = "String date = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT).format(at);";
@@ -77,9 +101,12 @@ class ServerComposedTimeGuardTest {
         assertThat(DATE_TIME_FORMATTER.matcher(after).find() && !CONVERTS.matcher(after).find()).isFalse();
     }
 
-    /** Pharmacy and billing: their packages, and the billing services, mappers and PDF labels at the root. */
+    /**
+     * Pharmacy and billing: their packages, and the billing services, mappers and PDF labels at the root;
+     * and the CDS / BPA cards (QA D1114).
+     */
     static boolean inScope(String rel) {
-        return rel.startsWith("service/pharmacy/") || rel.startsWith("service/billing/")
+        return rel.startsWith("cdshooks/") || rel.startsWith("service/pharmacy/") || rel.startsWith("service/billing/")
             || rel.startsWith("mapper/pharmacy/") || rel.startsWith("controller/pharmacy/")
             || rel.matches("(service|mapper|controller)/(Billing|Invoice|Payment|Pharmacy|Pdf)\\w*\\.java");
     }

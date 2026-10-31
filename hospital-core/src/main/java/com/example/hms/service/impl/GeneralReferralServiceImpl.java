@@ -383,10 +383,12 @@ public class GeneralReferralServiceImpl implements GeneralReferralService {
         // submit — a colleague at the same hospital cancelled DOCTOR_A's referral.
         requireSendingSide(referral);
         requireCallerIsReferrer(referral, "generalReferral.cancel.referrerOnly");
+        // QA D1098: a blank reason passed the required request parameter.
+        String cancelReason = com.example.hms.service.support.CancelledOrders.requireCancelReason(reason);
         ReferralStatus before = referral.getStatus();
-        referral.cancel(reason);
+        referral.cancel(cancelReason);
         referral = referralRepository.save(referral);
-        eventRecorder.recordUserEvent(referral, ReferralEventType.CANCEL, before, reason);
+        eventRecorder.recordUserEvent(referral, ReferralEventType.CANCEL, before, cancelReason);
         auditStep(referral, "CANCEL", before);
     }
 

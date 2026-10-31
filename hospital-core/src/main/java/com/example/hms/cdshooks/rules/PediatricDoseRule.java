@@ -29,8 +29,9 @@ import java.util.UUID;
  *       card is {@code critical} with {@code hardStop}: no override passes it.</li>
  *   <li><strong>Manual review</strong>: below the item's manual-review age
  *       (3 months by default; the catalogue sets 12 for morphine) no
- *       automatic mg/kg verdict is given; a {@code warning} asks for a
- *       pharmacist or physician review.</li>
+ *       automatic mg/kg verdict is given; a {@code warning} with
+ *       {@code reviewRequired} holds the signature until a pharmacist or
+ *       another physician records the review (round 19, QA D1096).</li>
  *   <li><strong>Weight</strong>: no weight on file means no mg/kg check (a
  *       {@code warning}); a weight older than 30 days is flagged, and the
  *       checks still run on it.</li>
@@ -86,7 +87,7 @@ public class PediatricDoseRule implements CdsRule {
         check.hardStop().ifPresent(cards::add);
 
         if (check.ageMonths < check.manualReviewUnderMonths()) {
-            cards.add(warning(text.get("cds.pediatric.manualReview.summary",
+            cards.add(reviewRequired(text.get("cds.pediatric.manualReview.summary",
                 "{0}: child under {1} months - no automatic mg/kg check; a pharmacist or physician must review the dose",
                 check.medication(), String.valueOf(check.manualReviewUnderMonths())), check.limitBasis()));
             return cards;
@@ -193,7 +194,7 @@ public class PediatricDoseRule implements CdsRule {
                 .filter(b -> b != null && b.contains(weight))
                 .findFirst().orElse(null);
             if (band == null) {
-                return List.of(warning(text.get("cds.pediatric.band.none.summary",
+                return List.of(reviewRequired(text.get("cds.pediatric.band.none.summary",
                     "{0}: no weight band covers {1} kg - a pharmacist or physician must review the dose",
                     medication(), number(weight)), limitBasis()));
             }
@@ -313,6 +314,25 @@ public class PediatricDoseRule implements CdsRule {
     private CdsCard warning(String summary, String limitBasis) {
         String detail = text.get("cds.pediatric.warning.detail", "Limit: {0}.", limitBasis);
         return card(summary, detail, CdsCard.Indicator.WARNING, null);
+    }
+
+    /**
+     * Round 19 (QA D1096): "a pharmacist or physician must review the dose"
+     * was a plain warning, so a 174 mg/kg/day paracetamol order for a
+     * 7-week-old signed and reached the pharmacy as an ordinary order. The
+     * card now carries {@code reviewRequired}: the order is saved, and is not
+     * signed until a pharmacist or another physician records the review with
+     * a reason (PrescriptionServiceImpl.recordPediatricDoseReview).
+     */
+    private CdsCard reviewRequired(String summary, String limitBasis) {
+        String detail = text.get("cds.pediatric.review.detail",
+            "The order can be saved, but it is signed only once a pharmacist or another physician has recorded the dose review, with a reason. Limit: {0}.",
+            limitBasis);
+        return new CdsCard(
+            summary, detail, CdsCard.Indicator.WARNING,
+            new Source(text.get("cds.source.pediatricDose", SOURCE_LABEL), null, null),
+            null, null, null, UUID.randomUUID().toString(), null, Boolean.TRUE
+        );
     }
 
     private CdsCard softAdvisory(CdsRuleContext context, int ageYears) {

@@ -459,6 +459,7 @@
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="closeHistoryDetail(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
         <h2 id="maternity-dialog-1-title">
@@ -482,7 +483,8 @@
                 : ('MATERNITY.RISK_UNSCORED' | translate)
             }}
             @if (h.calculatedRiskScore !== null && h.calculatedRiskScore !== undefined) {
-              — {{ 'MATERNITY.SCORE' | translate }}: {{ h.calculatedRiskScore }}
+              — {{ 'MATERNITY.SCORE' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ h.calculatedRiskScore }}
             }
           </span>
         </div>
@@ -501,7 +503,7 @@
             P{{ h.obstetricHistory?.pretermBirths ?? '—' }} A{{
               h.obstetricHistory?.abortions ?? '—'
             }}
-            L{{ h.obstetricHistory?.livingChildren ?? '—' }} · C/S:
+            L{{ h.obstetricHistory?.livingChildren ?? '—' }} · C/S{{ 'COMMON.COLON' | translate }}
             {{ h.obstetricHistory?.previousCesareanSections ?? '—' }}
           </p>
           @if (h.obstetricHistory?.previousPregnancyComplications) {
@@ -512,13 +514,13 @@
           <div class="view-section">
             <h3>{{ 'MATERNITY.SECTION_DATES' | translate }}</h3>
             <p>
-              {{ 'MATERNITY.LMP' | translate }}:
+              {{ 'MATERNITY.LMP' | translate }}{{ 'COMMON.COLON' | translate }}
               {{
                 h.menstrualHistory.lastMenstrualPeriod
                   ? (h.menstrualHistory.lastMenstrualPeriod | serverTime | date: 'mediumDate')
                   : '—'
               }}
-              · {{ 'MATERNITY.EDD' | translate }}:
+              · {{ 'MATERNITY.EDD' | translate }}{{ 'COMMON.COLON' | translate }}
               {{
                 h.menstrualHistory.estimatedDueDate
                   ? (h.menstrualHistory.estimatedDueDate | serverTime | date: 'mediumDate')
@@ -604,6 +606,7 @@
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="closeHistoryModal(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
         <h2 id="maternity-dialog-2-title">
@@ -980,6 +983,7 @@
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="closeReferralModal(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
         <h2 id="maternity-dialog-3-title">{{ 'MATERNITY.NEW_REFERRAL' | translate }}</h2>
@@ -1112,6 +1116,7 @@
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="closeReferral(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
         <h2 id="maternity-dialog-4-title">
@@ -1142,7 +1147,8 @@
           </p>
           @if (r.slaDueAt) {
             <p class="muted">
-              {{ 'MATERNITY.SLA_DUE' | translate }}: {{ r.slaDueAt | serverTime | date: 'medium' }}
+              {{ 'MATERNITY.SLA_DUE' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ r.slaDueAt | serverTime | date: 'medium' }}
               @if (isOverdue(r)) {
                 <span class="risk-badge risk-high">{{ 'MATERNITY.OVERDUE' | translate }}</span>
               }
@@ -1150,12 +1156,14 @@
           }
           @if (r.midwife?.displayName) {
             <p class="muted">
-              {{ 'MATERNITY.REFERRED_BY' | translate }}: {{ r.midwife.displayName }}
+              {{ 'MATERNITY.REFERRED_BY' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ r.midwife.displayName }}
             </p>
           }
           @if (r.obgyn?.displayName) {
             <p class="muted">
-              {{ 'MATERNITY.ASSIGNED_OBGYN' | translate }}: {{ r.obgyn.displayName }}
+              {{ 'MATERNITY.ASSIGNED_OBGYN' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ r.obgyn.displayName }}
             </p>
           }
         </div>

@@ -278,7 +278,8 @@
               }
               @if (leave.reviewedByName) {
                 <span class="reviewed-by"
-                  >{{ 'SCHEDULING.REVIEWED' | translate }}: {{ leave.reviewedByName }}</span
+                  >{{ 'SCHEDULING.REVIEWED' | translate }}{{ 'COMMON.COLON' | translate }}
+                  {{ leave.reviewedByName }}</span
                 >
               }
               @if (leave.managerNote) {
@@ -294,7 +295,13 @@
 
 <!-- ═══ BULK SCHEDULE MODAL ═══ -->
 @if (bulkModalOpen() && isSchedulingAdmin && canManageSchedules()) {
-  <dialog class="modal-panel" open aria-labelledby="bulk-modal-title">
+  <dialog
+    appModalDialog
+    (escaped)="closeBulkModal()"
+    class="modal-panel"
+    open
+    aria-labelledby="bulk-modal-title"
+  >
     <!-- Header -->
     <div class="modal-header">
       <div class="modal-title-group">

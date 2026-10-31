@@ -716,9 +716,50 @@ class AdmissionServiceImplTest {
         when(admissionRepository.save(admission)).thenReturn(admission);
         when(admissionMapper.toResponseDTO(admission)).thenReturn(new AdmissionResponseDTO());
 
-        service.unassignBed(admissionId);
+        // QA D1100: the release now states its reason (the call had none).
+        service.unassignBed(admissionId, "Transfert en réanimation");
 
         verify(bedAssignmentService).unassignBed(admission);
+    }
+
+    /** QA D1100 (round 19): "Retirer le lit" freed an inpatient's bed with no reason. */
+    @Test
+    void unassignBed_refusesABlankReason_D1100() {
+        for (String blank : new String[] {null, "", "   "}) {
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.unassignBed(admissionId, blank))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .extracting(e -> ((com.example.hms.exception.BusinessException) e).getMessageKey())
+                .isEqualTo("admission.bed.unassignReasonRequired");
+        }
+        org.mockito.Mockito.verifyNoInteractions(bedAssignmentService);
+    }
+
+    @Test
+    void unassignBed_auditsTheReleaseWithItsReason_D1100() {
+        com.example.hms.service.AuditEventLogService audit =
+            org.mockito.Mockito.mock(com.example.hms.service.AuditEventLogService.class);
+        service.setAuditEventLogService(audit);
+        Admission admission = new Admission();
+        admission.setId(admissionId);
+        admission.setHospital(hospital);
+        com.example.hms.model.Bed bed = new com.example.hms.model.Bed();
+        bed.setBedNumber("B-12");
+        admission.setBed(bed);
+        when(admissionRepository.findById(admissionId)).thenReturn(Optional.of(admission));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(admissionRepository.save(admission)).thenReturn(admission);
+        when(admissionMapper.toResponseDTO(admission)).thenReturn(new AdmissionResponseDTO());
+
+        // No transaction here: TransactionCallbacks runs the after-commit action at once.
+        service.unassignBed(admissionId, "  Transfert en réanimation ");
+
+        org.mockito.ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> event =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(audit).logEvent(event.capture());
+        assertThat(event.getValue().getEventType()).isEqualTo(com.example.hms.enums.AuditEventType.ADMISSION_BED_RELEASED);
+        assertThat(event.getValue().getResourceId()).isEqualTo(admissionId.toString());
+        assertThat(event.getValue().getDetails()).isEqualTo(java.util.Map.of("bed", "/B-12", "reason", "Transfert en réanimation"));
+        assertThat(event.getValue().getEventDescription()).doesNotContain("réanimation");
     }
 
     @Test

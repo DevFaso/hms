@@ -47,6 +47,9 @@ class CdsCheckServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        // QA D1102 class: the alerts are resolved in the pharmacist's language.
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
         hospital = new Hospital();
         hospital.setId(hospitalId);
     }
@@ -226,5 +229,38 @@ class CdsCheckServiceImplTest {
 
         // No active overlap, no interactions queried
         assertThat(result.severity()).isEqualTo(CdsAlertSeverity.NONE);
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void resetLocale() {
+        org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+    }
+
+    /**
+     * QA D1102 class (round 19): the dispense-time alerts were French literals
+     * with the raw severity code ("[MAJOR] … : Interaction médicamenteuse
+     * détectée") whatever the pharmacist's language.
+     */
+    @Test
+    @DisplayName("the dispense alerts are in the pharmacist's language, the severity in words")
+    void alertsAreInThePharmacistsLanguage() {
+        Prescription p = rx("DRUG-A", "Drug A");
+        Prescription existing = rx("DRUG-B", "Drug B");
+        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+                .thenReturn(List.of(existing));
+        when(drugInteractionRepository.findInteractionsAmongDrugs(anyList()))
+                .thenReturn(List.of(interaction("DRUG-A", "Drug A", "DRUG-B", "Drug B",
+                        InteractionSeverity.MAJOR)));
+
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.forLanguageTag("es"));
+        assertThat(service.checkAtDispense(p, patientId).alerts()).singleElement()
+                .satisfies(a -> assertThat(a).doesNotContain("MAJOR").doesNotContain("Interaction médicamenteuse"));
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
+        assertThat(service.checkAtDispense(p, patientId).alerts()).singleElement()
+                .satisfies(a -> assertThat(a).doesNotContain("[MAJOR]").contains("Drug A ↔ Drug B"));
+
+        Prescription noCode = rx(null, "Drug X");
+        assertThat(service.checkAtDispense(noCode, patientId).alerts()).singleElement()
+                .satisfies(a -> assertThat(a).contains("interaction check").doesNotContain("Aucun"));
     }
 }

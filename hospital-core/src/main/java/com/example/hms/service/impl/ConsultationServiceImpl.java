@@ -518,10 +518,12 @@ public class ConsultationServiceImpl implements ConsultationService {
             throw new BusinessException("consultation.cancel.alreadyCancelled");
         }
         requireRequesterOrSuperAdmin(consultation);
+        // QA D1098: the request DTO's @NotBlank holds at the edge; any other caller states why too.
+        String reason = com.example.hms.service.support.CancelledOrders.requireCancelReason(cancellationReason);
 
         consultation.setStatus(ConsultationStatus.CANCELLED);
         consultation.setCancelledAt(LocalDateTime.now(clock));
-        consultation.setCancellationReason(cancellationReason);
+        consultation.setCancellationReason(reason);
 
         Consultation saved = consultationRepository.save(consultation);
         log.info("Consultation {} cancelled: {}", consultationId, cancellationReason);

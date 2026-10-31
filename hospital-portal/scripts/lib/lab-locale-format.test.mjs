@@ -90,3 +90,72 @@ test('QA D1002 guard: the scan sees the shapes the defect had', () => {
     [],
   );
 });
+
+/**
+ * Round 19 (D1106, D1115, D1116): the D1002 class outside the lab. The chart's
+ * vitals tab printed "37.9 °C", the growth table and axis "4.8 kg" / "4.6",
+ * the portal dashboard and the proxy viewer "0.7 - 0.99 g/L", the chart's
+ * Laboratoire table "6.8" — none had a `.resultValue`, so the scans above
+ * never read them. This one reads EVERY template (inline ones too) and every
+ * `.ts` for a decimal shown without the shared formatter
+ * (shared/i18n/app-locale.ts): rules in lib/decimal-scan.mjs. No baseline.
+ */
+import { decimalTemplateFindings, decimalCodeFindings } from './decimal-scan.mjs';
+import { loadTemplates } from './template-gate.mjs';
+import { componentSources } from './component-sources.mjs';
+
+test('QA D1106/D1115/D1116: every decimal on every screen goes through the shared formatter', () => {
+  const templates = loadTemplates();
+  assert.ok(templates.length > 200, `read ${templates.length} templates`);
+  const offenders = [
+    ...templates.flatMap((t) =>
+      decimalTemplateFindings(t.text, t.componentSource).map(
+        (f) => `${t.rel}:${f.line + t.lineOffset} ${f.message}`,
+      ),
+    ),
+    ...componentSources()
+      .filter((c) => !c.file.endsWith('app-locale.ts'))
+      .flatMap((c) => decimalCodeFindings(c.text).map((f) => `${c.file}:${f.line} ${f.message}`)),
+  ];
+  assert.deepEqual(offenders, []);
+});
+
+test('QA D1106/D1115/D1116 guard: the scan sees the round-19 shapes and passes the fixed ones', () => {
+  const rawShapes = [
+    '<strong>{{ v.temperatureCelsius }}</strong><small> °C</small>',
+    '@for (r of labResults(); track r.id) { <td>{{ r.value || "—" }}</td> }',
+    "<td>{{ l.referenceRange || '—' }}</td>",
+    '<span>{{ lab.result }}</span>',
+    "{{ entry.cervicalDilationCm !== null ? entry.cervicalDilationCm + ' cm' : '—' }}",
+    '{{ v.weightKg.toFixed(1) }}',
+  ];
+  for (const html of rawShapes) {
+    assert.ok(decimalTemplateFindings(html).length >= 1, html);
+  }
+  // The growth table's own helper wrote `${value} ${unit}`: a wrapper is only
+  // trusted when its body calls the shared formatter.
+  const handMade =
+    'formatMeasure(v: number | null, unit: string): string { return `${v} ${unit}`; }';
+  const shared =
+    'formatMeasure(v: number | null, unit: string): string { return `${formatLabNumber(v)} ${unit}`; }';
+  const growthRow = "<td>{{ formatMeasure(p.weightKg, 'kg') }}</td>";
+  assert.equal(decimalTemplateFindings(growthRow, handMade).length, 1);
+  assert.deepEqual(decimalTemplateFindings(growthRow, shared), []);
+  assert.deepEqual(
+    decimalTemplateFindings(
+      '{{ v.temperatureCelsius | localeNumber }} {{ r.value | labValue: r.unit }} ' +
+        "{{ l.referenceRange | labRange }} {{ e.cervicalDilationCm | measure: 'cm' }} " +
+        '{{ v.heartRateBpm }} {{ card.value }} {{ s.totalIntakeMl }} {{ p.bmi | number: "1.1-1" }}',
+    ),
+    [],
+  );
+  assert.equal(
+    decimalCodeFindings('label: (Math.round(value * 10) / 10).toString(),\nconst t = v.toFixed(1);')
+      .length,
+    2,
+  );
+  assert.deepEqual(
+    decimalCodeFindings('points.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`)'),
+    [],
+  );
+});

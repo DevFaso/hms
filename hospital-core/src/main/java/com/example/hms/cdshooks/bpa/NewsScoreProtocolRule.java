@@ -84,7 +84,7 @@ public class NewsScoreProtocolRule implements BpaRule {
         Optional<BpaProtocol> protocol = protocolRepository.findByProtocolCodeAndActiveTrue(PROTOCOL_CODE);
         if (protocol.isEmpty()) return List.of();
 
-        return List.of(buildCard(protocol.get(), score, latest.get()));
+        return List.of(buildCard(protocol.get(), score, latest.get(), text.zoneOf(context.hospitalId())));
     }
 
     /** Most recent non-home bundle inside the lookback (vitals arrive DESC). */
@@ -97,12 +97,12 @@ public class NewsScoreProtocolRule implements BpaRule {
     }
 
     private CdsCard buildCard(BpaProtocol protocol, NewsScoreResult score,
-                                     PatientVitalSign vitals) {
+                                     PatientVitalSign vitals, java.time.ZoneId zone) {
         StringBuilder detail = new StringBuilder(BpaCardText.summary(text, protocol))
             .append("\n\n").append(text.get("cds.bpa.news2.score", "NEWS2: {0} ({1} risk) — vitals recorded {2}",
                 String.valueOf(score.total()),
                 text.get("cds.bpa.news2.band." + score.riskBand().name(), score.riskBand().name().replace('_', '-')),
-                BpaCardText.when(vitals.getRecordedAt())));
+                BpaCardText.when(text, vitals.getRecordedAt(), zone)));
         if (!score.complete()) {
             detail.append("\n").append(text.get("cds.bpa.news2.incomplete",
                 "⚠ Score is INCOMPLETE — not recorded: {0}. The true score can only be equal or higher.",

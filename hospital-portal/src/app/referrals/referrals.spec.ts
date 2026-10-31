@@ -264,6 +264,8 @@ describe('ReferralsComponent', () => {
     fixture.detectChanges();
     flushInitRequests();
     component.confirmCancel({ id: 'r-3', status: 'DRAFT', referringProviderId: 'staff-1' } as any);
+    // QA D1098: the cancel states its reason (it sent "Cancelled by admin" before).
+    component.cancelReason.set('Orientation en double');
     component.executeCancel();
     const reason = "Seul le soignant qui a rédigé cette orientation peut l'annuler.";
     httpMock

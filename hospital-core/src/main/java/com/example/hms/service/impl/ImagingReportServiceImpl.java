@@ -110,6 +110,9 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         }
 
         ImagingOrder imagingOrder = loadOrderScoped(request.getImagingOrderId());
+        // QA D1098 (round 19): reports were written and signed FINAL on
+        // cancelled orders. A cancelled order takes no result: place a new one.
+        requireOrderNotCancelled(imagingOrder);
         Hospital hospital = imagingOrder.getHospital();
         if (hospital == null) {
             throw new BusinessException("Imaging order has no hospital context; a report cannot be filed against it.");
@@ -166,6 +169,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         if (imagingOrder == null) {
             throw new BusinessException("Imaging report must remain associated with an imaging order.");
         }
+        requireOrderNotCancelled(imagingOrder);
         if (request.getImagingOrderId() != null
             && !Objects.equals(imagingOrder.getId(), request.getImagingOrderId())) {
             // Re-pointing a report at a different order would move it between
@@ -199,6 +203,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         ImagingReport report = loadReportScoped(reportId);
         // QA D930 class: a colleague does not sign another clinician's read.
         requireReportAuthor(report);
+        requireOrderNotCancelled(report.getImagingOrder());
 
         if (report.isSigned()) {
             throw new BusinessException(
@@ -535,6 +540,14 @@ public class ImagingReportServiceImpl implements ImagingReportService {
     private boolean hasSignedReport(UUID imagingOrderId) {
         return imagingReportRepository.findByImagingOrder_IdOrderByReportVersionDesc(imagingOrderId).stream()
             .anyMatch(ImagingReport::isSigned);
+    }
+
+    /** QA D1098: no report is written, revised or signed on a cancelled order. */
+    private static void requireOrderNotCancelled(ImagingOrder order) {
+        if (order != null) {
+            com.example.hms.service.support.CancelledOrders.requireNotCancelled(order.getStatus(),
+                "imaging.order.cancelled.locked");
+        }
     }
 
     private void promoteOrderToResultsAvailable(ImagingOrder order) {

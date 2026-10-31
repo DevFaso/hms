@@ -438,6 +438,8 @@ public class EncounterServiceImpl implements EncounterService {
         String previousValues = serializeEncounter(existing);
         // Snapshot the pre-merge status so we can detect a transition into COMPLETED below.
         EncounterStatus previousStatus = existing.getStatus();
+        // QA D1099: the examiner as the visit stood, before the edit can reassign it.
+        UUID examinerBefore = EncounterClosureRules.assignedClinicianUserId(existing);
 
         Encounter merged = encounterMapper.mergeEncounter(
             request,
@@ -457,6 +459,12 @@ public class EncounterServiceImpl implements EncounterService {
         // QA D788: a status written here obeys the closing rules of the check-out.
         EncounterClosureRules.requireDirectTransition(previousStatus, merged.getStatus(),
             EncounterClosureRules.callerIsClinician());
+        // QA D1099: a status write that ends an examination in progress is the
+        // examining clinician's, as on the workflow endpoints.
+        if (previousStatus == EncounterStatus.IN_PROGRESS
+                && EncounterClosureRules.EXAMINATION_ENDED.contains(merged.getStatus())) {
+            EncounterClosureRules.requireExaminingClinicianUser(examinerBefore);
+        }
 
         // If this update is the one transitioning the encounter into COMPLETED and the
         // dedicated /checkout endpoint was bypassed, ensure a checkout timestamp is set.
@@ -2074,12 +2082,12 @@ public class EncounterServiceImpl implements EncounterService {
         if (request == null || request.getEsiScore() == null) {
             throw new BusinessException("triage.esi.required");
         }
-        // QA D1077: no fundal height for a man (sibling fix in branch 3's file, one call).
-        com.example.hms.service.support.PatientMeasureRules.requireFundalHeightApplicable(
-            encounter.getPatient(), request.getFundalHeightCm());
-
         // (a) Record vital signs as PatientVitalSign
         com.example.hms.model.PatientVitalSign vital = buildVitalSign(encounter, request, actorUsername);
+        // QA D1077: no fundal height for a man, no head circumference for an
+        // adult: the one rule every vitals write goes through before it is saved.
+        com.example.hms.service.support.PatientMeasureRules.requireVitalSignApplicable(
+            vital, request.getFundalHeightCm(), java.time.LocalDate.now(java.time.ZoneId.systemDefault()));
         com.example.hms.model.PatientVitalSign savedVital = patientVitalSignRepository.save(vital);
         // QA D265 (D207 on the triage path): a triage set scoring MEDIUM/HIGH
         // alerts the triage nurse and the visit's clinician, through the same
@@ -2406,6 +2414,11 @@ public class EncounterServiceImpl implements EncounterService {
         // QA D788: and only once the clinician has completed the examination. A
         // visit nobody saw is closed through closeUnseen, never as a consultation.
         EncounterClosureRules.requireCheckoutable(current, EncounterClosureRules.callerIsClinician());
+        // QA D1099: the check-out of a visit still IN_PROGRESS ends the
+        // examination ("Sortie" on the tracker): the examining clinician's.
+        if (current == EncounterStatus.IN_PROGRESS) {
+            EncounterClosureRules.requireExaminingClinician(encounter);
+        }
 
         LocalDateTime now = LocalDateTime.now();
 
@@ -3317,6 +3330,9 @@ public class EncounterServiceImpl implements EncounterService {
         if (current != EncounterStatus.IN_PROGRESS) {
             throw new BusinessException("encounter.exam.wrongStatus", EncounterStatus.labelOf(current));
         }
+        // QA D1099 (round 19): the examining clinician ends the examination,
+        // the mirror of who starts it (D1085); a midwife ended a doctor's.
+        EncounterClosureRules.requireExaminingClinician(encounter);
 
         boolean hasPendingOrders = hasPendingOrdersForEncounter(encounterId);
         EncounterStatus next = hasPendingOrders
@@ -3353,6 +3369,10 @@ public class EncounterServiceImpl implements EncounterService {
         // AVS, skipping the examination. The desk keeps AWAITING_RESULTS.
         if (current == EncounterStatus.IN_PROGRESS && !EncounterClosureRules.callerIsClinician()) {
             throw new BusinessException("encounter.readyForDischarge.examinationNotCompleted", EncounterStatus.labelOf(current));
+        }
+        // QA D1099: and from IN_PROGRESS it is the examining clinician's own step.
+        if (current == EncounterStatus.IN_PROGRESS) {
+            EncounterClosureRules.requireExaminingClinician(encounter);
         }
 
         encounter.setStatus(EncounterStatus.READY_FOR_DISCHARGE);

@@ -512,6 +512,7 @@
       (keydown.escape)="closeModal()"
     ></div>
     <div
+      appModalDialog
       class="modal modal-lg"
       role="dialog"
       aria-modal="true"
@@ -765,6 +766,7 @@
       (keydown.escape)="cancelDeleteAction()"
     ></div>
     <div
+      appModalDialog
       class="modal"
       role="dialog"
       aria-modal="true"
@@ -795,6 +797,21 @@
             }}
           </p>
         </div>
+        <!-- QA D1098: every cancel states why; it used to send "Cancelled by admin". -->
+        <div class="form-group">
+          <label for="referral-cancel-reason"
+            >{{ 'ORDER_LIFECYCLE.CANCEL_REASON_LABEL' | translate }} *</label
+          >
+          <textarea
+            id="referral-cancel-reason"
+            rows="3"
+            maxlength="500"
+            required
+            aria-required="true"
+            [ngModel]="cancelReason()"
+            (ngModelChange)="cancelReason.set($event)"
+          ></textarea>
+        </div>
         @if (cancelError()) {
           <p class="form-error" role="alert">{{ cancelError() }}</p>
         }
@@ -823,6 +840,7 @@
       (keydown.escape)="closeAcknowledgeModal()"
     ></div>
     <div
+      appModalDialog
       class="modal"
       role="dialog"
       aria-modal="true"
@@ -888,6 +906,7 @@
       (keydown.escape)="closeScheduleModal()"
     ></div>
     <div
+      appModalDialog
       class="modal"
       role="dialog"
       aria-modal="true"
@@ -958,6 +977,7 @@
       (keydown.escape)="closeRejectModal()"
     ></div>
     <div
+      appModalDialog
       class="modal"
       role="dialog"
       aria-modal="true"
@@ -1024,6 +1044,7 @@
       (keydown.escape)="closeCompleteModal()"
     ></div>
     <div
+      appModalDialog
       class="modal"
       role="dialog"
       aria-modal="true"

@@ -172,11 +172,28 @@ describe('ImagingComponent', () => {
     component.ngOnInit();
     imagingSpy.updateOrderStatus.and.returnValue(of(mockOrder({ status: 'CANCELLED' })));
     component.confirmCancel(component.orders()[0]);
+    // QA D1098: the cancel states its reason (the test sent none before).
+    component.cancelReason.set('Examen en double');
     component.executeCancel();
     const [id, req] = imagingSpy.updateOrderStatus.calls.mostRecent().args;
     expect(id).toBe('o1');
     expect(req['status']).toBe('CANCELLED');
+    expect(req['cancellationReason']).toBe('Examen en double');
     expect(component.showDeleteConfirm()).toBeFalse();
+  });
+
+  // QA D1098 (round 19): a resulted order offered "Annuler la demande" and sent no reason.
+  it('QA D1098: no cancel without a reason, and none on a resulted order', () => {
+    component.ngOnInit();
+    component.confirmCancel(component.orders()[0]);
+    component.executeCancel();
+    expect(imagingSpy.updateOrderStatus).not.toHaveBeenCalled();
+    expect(component.showDeleteConfirm()).toBeTrue();
+    for (const status of ['RESULTS_AVAILABLE', 'COMPLETED', 'CANCELLED'] as const) {
+      expect(component.canCancelThisOrder(mockOrder({ status })))
+        .withContext(status)
+        .toBeFalse();
+    }
   });
 
   it('setView(results) lazily loads reports scoped to the active hospital', () => {

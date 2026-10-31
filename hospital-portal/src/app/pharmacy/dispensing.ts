@@ -195,6 +195,13 @@ export class DispensingComponent implements OnInit, OnDestroy {
   saving = signal(false);
   selectedPrescription: WorkQueuePrescription | null = null;
   form: DispenseRequest = this.emptyForm();
+  /**
+   * QA D1102 class: the serious interaction alerts the server refused the
+   * last fill with. While set, the form shows them and asks for the
+   * pharmacist's override reason; the screen had no such field, so the fill
+   * could never go through.
+   */
+  readonly cdsAlerts = signal<string[]>([]);
 
   // Recent dispenses
   recentDispenses = signal<DispenseResponse[]>([]);
@@ -860,6 +867,7 @@ export class DispensingComponent implements OnInit, OnDestroy {
     this.form.quantityDispensed = owed;
     this.form.dispensedBy = this.auth.currentProfile()?.id ?? '';
     this.verifyAttested.set(false);
+    this.cdsAlerts.set([]);
     this.showForm.set(true);
     this.loadStockLots();
   }
@@ -877,6 +885,12 @@ export class DispensingComponent implements OnInit, OnDestroy {
     }
     if (this.verifyAttested()) {
       body.verifiedBy = this.form.dispensedBy;
+    }
+    // QA D1102 class: the interaction override travels once the server asked for it.
+    if (this.cdsAlerts().length > 0) {
+      body.cdsOverrideReason = this.form.cdsOverrideReason?.trim();
+    } else {
+      delete body.cdsOverrideReason;
     }
     // QA D964: the reason travels only when a shorter-dated lot was skipped.
     if (this.earlierLot()) {
@@ -916,9 +930,24 @@ export class DispensingComponent implements OnInit, OnDestroy {
       },
       error: (err) => {
         this.saving.set(false);
+        this.noteCdsAlerts(err);
         this.toast.error(err?.error?.message ?? this.translate.instant('PHARMACY.DISPENSE_FAILED'));
       },
     });
+  }
+
+  /** QA D1102 class: the alerts a refused fill came back with, kept for the override field. */
+  private noteCdsAlerts(err: unknown): void {
+    const cards = (err as { error?: { cdsAdvisories?: { summary?: string }[] } } | null)?.error
+      ?.cdsAdvisories;
+    if (Array.isArray(cards) && cards.length > 0) {
+      this.cdsAlerts.set(cards.map((c) => c.summary ?? '').filter((s) => s.length > 0));
+    }
+  }
+
+  /** The override reason is asked for and still empty: said before the server says it. */
+  cdsOverrideMissing(): boolean {
+    return this.cdsAlerts().length > 0 && !this.form.cdsOverrideReason?.trim();
   }
 
   /**
@@ -984,6 +1013,7 @@ export class DispensingComponent implements OnInit, OnDestroy {
       },
       error: (err) => {
         this.saving.set(false);
+        this.noteCdsAlerts(err);
         this.toast.error(err?.error?.message ?? this.translate.instant('PHARMACY.READY_FAILED'));
       },
     });

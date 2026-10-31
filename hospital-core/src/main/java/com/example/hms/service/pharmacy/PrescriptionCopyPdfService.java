@@ -154,11 +154,11 @@ public class PrescriptionCopyPdfService {
         pdf.field(label(locale, "pdf.rxcopy.frequency"), rx.getFrequency(), 11f);
         pdf.field(label(locale, "pdf.rxcopy.duration"), rx.getDuration(), 11f);
         pdf.field(label(locale, "pdf.rxcopy.quantityToDispense"),
-                FillAccounting.remainingLabel(remaining, rx.getQuantityUnit()), 12f);
+                FillAccounting.remainingLabel(remaining, rx.getQuantityUnit(), locale), 12f);
         BigDecimal perFill = FillAccounting.perFillQuantity(rx);
         if (remaining != null && perFill != null && remaining.compareTo(FillAccounting.expectedLifetimeQuantity(rx)) < 0) {
             pdf.paragraph(PharmacyPdfWriter.REGULAR, 10f, label(locale, "pdf.rxcopy.partlyDispensed",
-                    FillAccounting.remainingLabel(FillAccounting.expectedLifetimeQuantity(rx), rx.getQuantityUnit())));
+                    FillAccounting.remainingLabel(FillAccounting.expectedLifetimeQuantity(rx), rx.getQuantityUnit(), locale)));
         }
         if (rx.getInstructions() != null && !rx.getInstructions().isBlank()) {
             pdf.field(label(locale, "pdf.rxcopy.instructions"), rx.getInstructions(), 11f);

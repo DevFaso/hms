@@ -106,11 +106,13 @@
         class="modal modal-lg"
         [open]="showModal()"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="closeModal()"
+        (keydown.escape)="closeModal(); $event.stopPropagation()"
         tabindex="-1"
+        appModalDialog
+        aria-labelledby="department-list-dialog-2-title"
       >
         <div class="modal-header">
-          <h2>
+          <h2 id="department-list-dialog-2-title">
             {{ editing() ? ('DEPARTMENTS.EDIT' | translate) : ('DEPARTMENTS.CREATE' | translate) }}
           </h2>
           <button
@@ -278,11 +280,13 @@
         class="modal"
         [open]="showDeleteConfirm()"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="cancelDelete()"
+        (keydown.escape)="cancelDelete(); $event.stopPropagation()"
         tabindex="-1"
+        appModalDialog
+        aria-labelledby="department-list-dialog-1-title"
       >
         <div class="modal-header">
-          <h2>{{ 'DEPARTMENTS.DELETE' | translate }}</h2>
+          <h2 id="department-list-dialog-1-title">{{ 'DEPARTMENTS.DELETE' | translate }}</h2>
           <button
             [attr.aria-label]="'COMMON.CLOSE' | translate"
             class="modal-close"

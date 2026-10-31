@@ -186,13 +186,15 @@
     >
       <dialog
         class="modal"
+        appModalDialog
+        aria-labelledby="organization-list-dialog-2-title"
         [open]="showCreate()"
         (click)="$event.stopPropagation()"
         (keydown.escape)="closeCreate()"
         tabindex="-1"
       >
         <div class="modal-header">
-          <h2>
+          <h2 id="organization-list-dialog-2-title">
             {{
               editing() ? ('ORGANIZATIONS.EDIT' | translate) : ('ORGANIZATIONS.CREATE' | translate)
             }}
@@ -324,13 +326,15 @@
     >
       <dialog
         class="modal"
+        appModalDialog
+        aria-labelledby="organization-list-dialog-1-title"
         [open]="showDeleteConfirm()"
         (click)="$event.stopPropagation()"
         (keydown.escape)="cancelDelete()"
         tabindex="-1"
       >
         <div class="modal-header">
-          <h2>{{ 'ORGANIZATIONS.DELETE' | translate }}</h2>
+          <h2 id="organization-list-dialog-1-title">{{ 'ORGANIZATIONS.DELETE' | translate }}</h2>
           <button
             [attr.aria-label]="'COMMON.CLOSE' | translate"
             class="modal-close"

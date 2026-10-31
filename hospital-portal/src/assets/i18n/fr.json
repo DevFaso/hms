@@ -1728,6 +1728,8 @@
       "QUEUE_CLAIM_RELEASED_BY_OTHER": "Élément de la file de travail de l’utilisateur {{user}} (pris le {{claimed}}) libéré ({{why}}), ordonnance {{rx}}",
       "QUEUE_CLAIM_EXPIRED": "Élément de la file de travail de l’utilisateur {{user}} (pris le {{claimed}}) expiré à {{expired}}, constaté le {{found}}, ordonnance {{rx}}",
       "QUEUE_CLAIM_RELEASED": "Élément de la file de travail libéré ({{why}}), pris le {{claimed}}, ordonnance {{rx}}",
+      "ADMISSION_BED_RELEASED": "Lit {{bed}} libéré de l’hospitalisation {{admission}}",
+      "PRESCRIPTION_PEDIATRIC_DOSE_REVIEWED": "Revue de dose pédiatrique enregistrée",
       "PAYMENT_EVENT": "{{what}} : paiement {{payment}} sur la facture {{invoice}}",
       "STATUS_WAS": "{{what}} (était {{previous}})",
       "PLATFORM_SERVICE_UPDATED": "Service de plateforme modifié : {{details}}",
@@ -6332,7 +6334,9 @@
         "LAB_ORDER_ENTERED_IN_ERROR": "Demande d'examen saisie par erreur",
         "MEDICATION_DOSE_LIMITS_UPDATED": "Limites de dose pédiatriques modifiées",
         "PRESCRIPTION_CDS_OVERRIDDEN": "Alerte d’aide à la décision outrepassée sur une ordonnance",
-        "PRESCRIPTION_SIGN_REAUTHENTICATION": "Réauthentification pour signer une ordonnance de stupéfiant"
+        "PRESCRIPTION_SIGN_REAUTHENTICATION": "Réauthentification pour signer une ordonnance de stupéfiant",
+        "PRESCRIPTION_PEDIATRIC_DOSE_REVIEWED": "Revue de dose pédiatrique enregistrée",
+        "ADMISSION_BED_RELEASED": "Lit d’hospitalisation libéré"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Annulée",
@@ -7296,6 +7300,23 @@
       "CODE": "Code de votre application d’authentification (ou un code de secours)",
       "SUBMIT": "Signer",
       "FAILED": "Votre identité n’a pas pu être confirmée. L’ordonnance n’est pas signée."
+    },
+    "DOSE_REVIEW": {
+      "DUE": "Revue de dose par un pharmacien ou un médecin requise",
+      "ACTION": "Enregistrer la revue de dose",
+      "TITLE": "Enregistrer la revue de dose pédiatrique",
+      "HINT": "Le contrôle de dose ne peut pas juger la dose de cet enfant. En tant que pharmacien ou médecin autre que le prescripteur, indiquez pourquoi vous l’acceptez ; l’ordonnance pourra être signée une fois la revue enregistrée.",
+      "REASON": "Motif d’acceptation de la dose",
+      "REASON_REQUIRED": "Indiquez le motif pour lequel vous acceptez cette dose.",
+      "CONFIRM": "Enregistrer la revue",
+      "RECORDED": "Revue de dose enregistrée",
+      "FAILED": "La revue de dose n’a pas pu être enregistrée.",
+      "STATE": "Revue de dose pédiatrique",
+      "REVIEWED_BY": "Revue par"
+    },
+    "OVERRIDE": {
+      "ALLERGY_REASON": "Motif de la dérogation à l’allergie",
+      "CDS_REASON": "Motif du passage outre l’alerte critique"
     }
   },
   "PROFILE": {
@@ -9553,7 +9574,12 @@
       "BADGE_APPROVED": "Limites pédiatriques validées",
       "SAVED": "Limites de dose pédiatriques enregistrées",
       "SAVE_FAILED": "Les limites de dose pédiatriques n’ont pas pu être enregistrées"
-    }
+    },
+    "CDS_OVERRIDE": {
+      "LABEL": "Motif de dérogation (interaction)",
+      "HINT": "Une interaction grave arrête cette délivrance : indiquez le motif pour délivrer malgré tout. Il est enregistré avec la délivrance."
+    },
+    "ALERT_OVERRIDDEN": "Alerte outrepassée par le prescripteur : voir le motif sur l’ordonnance"
   },
   "LAB_QC": {
     "TITLE": "Tableau de bord du contrôle qualité",
@@ -12275,5 +12301,16 @@
     "TYPE_ATTENDANCE": "Certificat de présence",
     "TYPE_GENERAL": "Certificat médical",
     "TYPE_SICK_LEAVE": "Arrêt de travail"
+  },
+  "ORDER_LIFECYCLE": {
+    "CANCEL_REASON_LABEL": "Motif de l’annulation",
+    "CANCEL_REASON_REQUIRED": "Indiquez le motif de l’annulation."
+  },
+  "ADMISSION_BED": {
+    "RELEASE_TITLE": "Libérer le lit",
+    "RELEASE_CONFIRM": "Libérer le lit {{bed}} occupé par {{name}} ? Le patient quitte le tableau des lits.",
+    "RELEASE_REASON": "Motif de la libération",
+    "RELEASE_REASON_REQUIRED": "Indiquez pourquoi le lit est libéré.",
+    "RELEASE_ACTION": "Libérer le lit"
   }
 }

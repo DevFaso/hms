@@ -151,6 +151,53 @@ class PatientVitalSignServiceImplTest {
         assertThat(captor.getValue().getRecordedByAssignment()).isEqualTo(staffAssignment);
     }
 
+    /** QA D1077 (round 19): POST /patients/{id}/vitals stored 56 cm for a 67-year-old. */
+    @Test
+    void recordVital_refusesAHeadCircumferenceForAnAdult_D1077() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID recorderUserId = UUID.randomUUID();
+        Patient patient = minimalPatient(patientId);
+        patient.setDateOfBirth(java.time.LocalDate.now().minusYears(67));
+        Hospital hospital = minimalHospital(hospitalId);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId))
+            .thenReturn(Optional.of(minimalRegistration(patient, hospital)));
+        when(staffRepository.findByUserIdAndHospitalId(recorderUserId, hospitalId))
+            .thenReturn(Optional.of(minimalStaff(recorderUserId, hospital, minimalAssignment(hospital, true))));
+        PatientVitalSignRequestDTO request = PatientVitalSignRequestDTO.builder()
+            .hospitalId(hospitalId).recordedAt(LocalDateTime.now()).headCircumferenceCm(56.0).build();
+
+        assertThatThrownBy(() -> service.recordVital(patientId, request, recorderUserId))
+            .isInstanceOf(BusinessException.class)
+            .hasMessage("vitals.headCircumference.notApplicable");
+        verify(vitalSignRepository, never()).save(any());
+    }
+
+    @Test
+    void recordVital_keepsAChildsHeadCircumference_D1077() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        UUID recorderUserId = UUID.randomUUID();
+        Patient patient = minimalPatient(patientId);
+        patient.setDateOfBirth(java.time.LocalDate.now().minusYears(2));
+        Hospital hospital = minimalHospital(hospitalId);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId))
+            .thenReturn(Optional.of(minimalRegistration(patient, hospital)));
+        when(staffRepository.findByUserIdAndHospitalId(recorderUserId, hospitalId))
+            .thenReturn(Optional.of(minimalStaff(recorderUserId, hospital, minimalAssignment(hospital, true))));
+        when(vitalSignRepository.save(any(PatientVitalSign.class))).thenAnswer(inv -> inv.getArgument(0));
+        PatientVitalSignRequestDTO request = PatientVitalSignRequestDTO.builder()
+            .hospitalId(hospitalId).recordedAt(LocalDateTime.now()).headCircumferenceCm(47.0).build();
+
+        service.recordVital(patientId, request, recorderUserId);
+
+        ArgumentCaptor<PatientVitalSign> captor = ArgumentCaptor.forClass(PatientVitalSign.class);
+        verify(vitalSignRepository).save(captor.capture());
+        assertThat(captor.getValue().getHeadCircumferenceCm()).isEqualTo(47.0);
+    }
+
     @Test
     void recordVitalThrowsWhenAssignmentHospitalMismatch() {
         UUID patientId = UUID.randomUUID();

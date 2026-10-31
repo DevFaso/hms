@@ -1,7 +1,10 @@
 import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
+import { CANCEL_REASON_REQUIRED_KEY, isOrderCancellable } from '../shared/order-lifecycle';
+import { refuseFields } from '../shared/forms/invalid-fields';
 import { textMatches } from '../shared/person-search';
 import {
   Component,
+  ElementRef,
   computed,
   inject,
   OnInit,
@@ -67,6 +70,9 @@ export class ReferralsComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly scopeUrl = inject(HospitalScopeUrlService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  /** QA D1098: why the referral is cancelled (required, kept on the referral). */
+  readonly cancelReason = signal('');
   private readonly router = inject(Router);
 
   /**
@@ -512,7 +518,7 @@ export class ReferralsComponent implements OnInit {
     const staffId = this.auth.getUserProfile()?.staffId;
     return (
       this.canAct().cancel &&
-      !['COMPLETED', 'CANCELLED', 'REJECTED', 'EXPIRED'].includes(r.status) &&
+      isOrderCancellable(r.status) &&
       !!staffId &&
       r.referringProviderId === staffId
     );
@@ -538,6 +544,7 @@ export class ReferralsComponent implements OnInit {
 
   confirmCancel(r: ReferralResponse): void {
     this.cancelError.set('');
+    this.cancelReason.set('');
     this.deletingRef.set(r);
     this.showDeleteConfirm.set(true);
   }
@@ -546,8 +553,20 @@ export class ReferralsComponent implements OnInit {
     this.deletingRef.set(null);
   }
   executeCancel(): void {
+    const reason = this.cancelReason().trim();
+    if (!reason) {
+      // QA D1098: every cancel states why (the server refuses a blank reason too).
+      const message = this.translate.instant(CANCEL_REASON_REQUIRED_KEY);
+      refuseFields(
+        this.host.nativeElement,
+        ['referral-cancel-reason'],
+        ['referral-cancel-reason'],
+        message,
+      );
+      return;
+    }
     this.deleting.set(true);
-    this.referralService.cancel(this.deletingRef()!.id, 'Cancelled by admin').subscribe({
+    this.referralService.cancel(this.deletingRef()!.id, reason).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('REFERRALS.CANCEL_SUCCESS'));
         this.cancelDeleteAction();

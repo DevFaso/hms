@@ -15,6 +15,8 @@ import {
   VitalSignService,
 } from '../../services/vital-sign.service';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
+import { formatLabNumber } from '../../shared/i18n/app-locale';
 import {
   DAYS_PER_MONTH,
   DAYS_PER_YEAR,
@@ -60,7 +62,7 @@ interface ChartModel {
 @Component({
   selector: 'app-growth-chart-tab',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, TranslateModule],
+  imports: [ServerTimePipe, EnumLabelPipe, CommonModule, TranslateModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './growth-chart-tab.component.html',
   styleUrl: './growth-chart-tab.component.scss',
@@ -136,7 +138,8 @@ export class GrowthChartTabComponent implements OnInit {
       const value = yMin + ((yMax - yMin) * i) / 4;
       yTicks.push({
         y: this.yFor(value, yMin, yMax),
-        label: (Math.round(value * 10) / 10).toString(),
+        // QA D1115: "4,6" in French and Spanish, never the "4.6" toString() gave.
+        label: formatLabNumber(Math.round(value * 10) / 10),
       });
     }
 
@@ -219,14 +222,9 @@ export class GrowthChartTabComponent implements OnInit {
     return this.translate.instant('GROWTH.AGE_YEARS_MONTHS', { years, months });
   }
 
+  /** QA D1115: "4,8 kg" in French and Spanish, at the precision it was recorded. */
   formatMeasure(value: number | null | undefined, unit: string): string {
-    return value === null || value === undefined ? '—' : `${value} ${unit}`;
-  }
-
-  sourceLabel(source: string | null): string {
-    return source === 'DELIVERY'
-      ? this.translate.instant('GROWTH.SOURCE_DELIVERY')
-      : (source ?? '—');
+    return value === null || value === undefined ? '—' : `${formatLabNumber(value)} ${unit}`;
   }
 
   private metricValue(p: GrowthPoint, metric: GrowthMetric): number | null {

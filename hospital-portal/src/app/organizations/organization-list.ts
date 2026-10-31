@@ -25,11 +25,19 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { EnumLabelService } from '../core/enum-label.service';
 import { OrgTextPipe, seededOrgTextKey } from '../shared/pipes/org-text.pipe';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 @Component({
   selector: 'app-organization-list',
   standalone: true,
-  imports: [FormsModule, RouterLink, TranslateModule, EnumLabelPipe, OrgTextPipe],
+  imports: [
+    ModalDialogDirective,
+    FormsModule,
+    RouterLink,
+    TranslateModule,
+    EnumLabelPipe,
+    OrgTextPipe,
+  ],
   templateUrl: './organization-list.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './organization-list.scss',

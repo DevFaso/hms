@@ -194,8 +194,10 @@
         tabindex="-1"
         (click)="$event.stopPropagation()"
         (keydown.escape)="closeView(); $event.stopPropagation()"
+        appModalDialog
+        aria-labelledby="matrix-tab-dialog-2-title"
       >
-        <h2>
+        <h2 id="matrix-tab-dialog-2-title">
           {{ 'ADMIN_GOV.ENV_' + snap.environment | translate }} · v{{ snap.version }}
           @if (snap.label) {
             — {{ snap.label }}
@@ -248,8 +250,10 @@
         tabindex="-1"
         (click)="$event.stopPropagation()"
         (keydown.escape)="closeCreate(); $event.stopPropagation()"
+        appModalDialog
+        aria-labelledby="matrix-tab-dialog-1-title"
       >
-        <h2>{{ 'ADMIN_GOV.NEW_SNAPSHOT' | translate }}</h2>
+        <h2 id="matrix-tab-dialog-1-title">{{ 'ADMIN_GOV.NEW_SNAPSHOT' | translate }}</h2>
         <div class="form-row">
           <label class="form-field">
             <span>{{ 'ADMIN_GOV.ENVIRONMENT' | translate }} *</span>

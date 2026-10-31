@@ -156,6 +156,147 @@ test('QA D1081: an action that ends a clinical record is offered per row on the 
   );
 });
 
+/**
+ * QA D1098 (round 19): a cancel button offered on an order that already has
+ * its result. The imaging list hid it for COMPLETED/FINAL/CANCELLED but not
+ * RESULTS_AVAILABLE; every order list kept its own list of closed statuses.
+ * A cancel of an ORDER must also sit behind the shared status rule,
+ * `isOrderCancellable` (src/app/shared/order-lifecycle.ts). The records that
+ * are not orders are listed with their reason.
+ */
+const NOT_AN_ORDER = {
+  'appointments/appointment-detail.html :: openCancelConfirm':
+    'an appointment, not an order (appointment policy)',
+  'patient-portal/my-appointments/my-appointments.component.html :: openCancel':
+    'the patient’s own appointment, not an order',
+  'pharmacy/dispensing.html :: openCancelReady(rx)':
+    'a ready-for-pickup fill released by the pharmacy, not the order itself',
+  'lab/lab.html :: openVoid(order)':
+    'the void as entered in error IS the correction path of a resulted lab order (isVoidable decides)',
+  'discharge/discharge.html :: openCancel(a)':
+    'a pending discharge approval request, not an order (canCancelApproval admits only PENDING)',
+};
+
+/** True when the condition (or a predicate it calls, one level down) asks `isOrderCancellable`. */
+export function asksCancellableRule(conditions, source, depth = 0) {
+  for (const cond of conditions) {
+    if (/\bisOrderCancellable\(/.test(cond)) return true;
+    for (const [, name] of cond.matchAll(/\b(\w+)\s*\(/g)) {
+      const body = methodBody(source, name);
+      if (/\bisOrderCancellable\(/.test(body)) return true;
+      if (
+        depth < 1 &&
+        body &&
+        asksCancellableRule([body.slice(body.indexOf('{'))], source, depth + 1)
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+test('QA D1098: a cancel of an order is offered only while the order has no result', () => {
+  const problems = [];
+  const seen = new Set();
+  for (const { file, text } of templatesIn(appDir)) {
+    const rel = relative(appDir, file).replaceAll('\\', '/');
+    const source = componentSourceFor(file, text);
+    for (const action of endingActions(text)) {
+      const handlerName = action.handler.split('(')[0];
+      if (/^(cancelAction|cancelDelete|cancelEdit|cancelForm|cancelHoldRefuse)\b/.test(handlerName))
+        continue;
+      const key = `${rel} :: ${action.handler}`;
+      const keyByName = `${rel} :: ${handlerName}`;
+      const listed = NOT_AN_ORDER[key] ? key : NOT_AN_ORDER[keyByName] ? keyByName : null;
+      if (listed) {
+        seen.add(listed);
+        continue;
+      }
+      if (!asksCancellableRule(enclosingConditions(text, action.index), source)) {
+        problems.push(
+          `${rel}:${action.line}: "${action.handler}" is offered without the shared status rule ` +
+            '(gate it on a predicate that calls isOrderCancellable(row.status) from shared/order-lifecycle, ' +
+            'or list it with the reason the record is not an order)',
+        );
+      }
+    }
+  }
+  for (const key of Object.keys(NOT_AN_ORDER)) {
+    if (!seen.has(key)) problems.push(`stale entry: ${key} no longer exists — delete it`);
+  }
+  assert.deepEqual(
+    problems,
+    [],
+    problems.join('\n') +
+      '\n\nFixing a QA defect? Read docs/qa/regression-guards.md ("How a fix PR uses these guards").',
+  );
+});
+
+test('QA D1098 guard: the scan sees the resulted-order shape', () => {
+  const before = `@if (!['COMPLETED', 'FINAL', 'CANCELLED'].includes(o.status)) {\n  @if (canCancelThisOrder(o)) {\n    <button (click)="confirmCancel(o)">x</button>\n  }\n}`;
+  const src = `\n  canCancelThisOrder(o: X): boolean {\n    return this.authorship.isAuthor(o);\n  }`;
+  const [a] = endingActions(before);
+  assert.equal(asksCancellableRule(enclosingConditions(before, a.index), src), false);
+  const fixed = `\n  canCancelThisOrder(o: X): boolean {\n    return isOrderCancellable(o.status) && this.authorship.isAuthor(o);\n  }`;
+  assert.equal(asksCancellableRule(enclosingConditions(before, a.index), fixed), true);
+});
+
+/**
+ * QA D1108 (round 19): "Parti sans être vu" offered on fewer visits than the
+ * server accepts. The tracker showed it only in the arrival and triage
+ * columns; the close-unseen endpoint accepts a visit until a clinician sees it
+ * (EncounterClosureRules.NEVER_SEEN). Every LWBS button must sit behind the
+ * one rule, `isNeverSeenVisit` (src/app/core/encounter-start.ts), directly or
+ * through a predicate that calls it.
+ */
+const LWBS_CLICK = /\(click\)="\s*(openCloseUnseen\w*\s*\([^"]*\))/g;
+
+function asksRule(conditions, source, rule, depth = 0) {
+  for (const cond of conditions) {
+    if (rule.test(cond)) return true;
+    for (const [, name] of cond.matchAll(/\b(\w+)\s*\(/g)) {
+      const body = methodBody(source, name);
+      if (rule.test(body)) return true;
+      if (depth < 1 && body && asksRule([body.slice(body.indexOf('{'))], source, rule, depth + 1)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+test('QA D1108: every LWBS button is offered on the one never-seen rule', () => {
+  const problems = [];
+  let sites = 0;
+  for (const { file, text } of templatesIn(appDir)) {
+    const rel = relative(appDir, file).replaceAll('\\', '/');
+    const source = componentSourceFor(file, text);
+    for (const m of text.matchAll(LWBS_CLICK)) {
+      sites++;
+      const conditions = enclosingConditions(text, m.index);
+      if (!asksRule(conditions, source, /\bisNeverSeenVisit\b/)) {
+        const line = text.slice(0, m.index).split('\n').length;
+        problems.push(
+          `${rel}:${line}: "${m[1]}" is offered without isNeverSeenVisit(status) from core/encounter-start ` +
+            '(the server accepts LWBS until the patient is seen, QA D1108)',
+        );
+      }
+    }
+  }
+  assert.ok(sites >= 3, `LWBS buttons found: ${sites} (tracker, nurse station, visit detail)`);
+  assert.deepEqual(problems, [], problems.join('\n'));
+});
+
+test('QA D1108 guard: the scan sees the before-triage-only shape', () => {
+  const before = `@if (col.key === 'triage' || col.key === 'arrived') {\n  <button (click)="openCloseUnseen(item)">x</button>\n}`;
+  const [m] = [...before.matchAll(LWBS_CLICK)];
+  assert.equal(asksRule(enclosingConditions(before, m.index), '', /\bisNeverSeenVisit\b/), false);
+  const after = `@if (canCloseUnseen && isNeverSeenVisit(item.currentStatus)) {\n  <button (click)="openCloseUnseen(item)">x</button>\n}`;
+  const [n] = [...after.matchAll(LWBS_CLICK)];
+  assert.equal(asksRule(enclosingConditions(after, n.index), '', /\bisNeverSeenVisit\b/), true);
+});
+
 test('QA D1081 guard: the scan sees the shapes the defect had', () => {
   const ungated = `@if (canCancelOrder()) {\n  <button (click)="confirmCancel(o)">x</button>\n}`;
   const source = `\n  readonly canCancelOrder = computed(() => true);\n  }`;

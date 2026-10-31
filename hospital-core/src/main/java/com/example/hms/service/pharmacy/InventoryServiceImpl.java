@@ -220,7 +220,7 @@ public class InventoryServiceImpl implements InventoryService {
         if (dto.getInitialQuantity().compareTo(MAX_RECEIPT_QUANTITY) > 0) {
             throw new BusinessException(
                 com.example.hms.utility.MessageUtil.resolve("stockLot.quantity.tooLarge",
-                    MAX_RECEIPT_QUANTITY.toPlainString()));
+                    com.example.hms.utility.DisplayNumbers.quantity(MAX_RECEIPT_QUANTITY)));
         }
         // QA D334: a delivery cannot have been received in the future. #948
         // review: the portal defaults it to the reader's today, which east of
