@@ -1728,6 +1728,8 @@
       "QUEUE_CLAIM_RELEASED_BY_OTHER": "Work-queue item of user {{user}} (taken {{claimed}}) released ({{why}}), prescription {{rx}}",
       "QUEUE_CLAIM_EXPIRED": "Work-queue item of user {{user}} (taken {{claimed}}) expired at {{expired}}, found {{found}}, prescription {{rx}}",
       "QUEUE_CLAIM_RELEASED": "Work-queue item released ({{why}}), taken {{claimed}}, prescription {{rx}}",
+      "ADMISSION_BED_RELEASED": "Bed {{bed}} released from admission {{admission}}",
+      "PRESCRIPTION_PEDIATRIC_DOSE_REVIEWED": "Paediatric dose review recorded",
       "PAYMENT_EVENT": "{{what}}: payment {{payment}} on invoice {{invoice}}",
       "STATUS_WAS": "{{what}} (was {{previous}})",
       "PLATFORM_SERVICE_UPDATED": "Platform service updated: {{details}}",

@@ -228,6 +228,8 @@ class GuardDriftRatchetTest {
         listed.put("PatientController.getDoctorTimeline", PATIENTCONTROLLER_REASON);
         listed.put("PatientController.updatePatientDiagnosis", PATIENTCONTROLLER_REASON);
         listed.put("PrescriptionController.cosign", PRESCRIPTIONCONTROLLER_REASON);
+        listed.put("PrescriptionController.pediatricDoseReview",
+            "QA D1096: the paediatric dose review the decision support asks of 'a pharmacist or physician'; a nurse does not judge a dose");
         listed.put("PrescriptionController.resolveClarification", PRESCRIPTIONCONTROLLER_REASON);
         listed.put("PrescriptionController.sign", PRESCRIPTIONCONTROLLER_REASON);
         listed.put("RoiWorklistController.deny", ROIWORKLISTCONTROLLER_REASON);

@@ -1728,6 +1728,8 @@
       "QUEUE_CLAIM_RELEASED_BY_OTHER": "Elemento de la cola de trabajo del usuario {{user}} (tomado el {{claimed}}) liberado ({{why}}), receta {{rx}}",
       "QUEUE_CLAIM_EXPIRED": "Elemento de la cola de trabajo del usuario {{user}} (tomado el {{claimed}}) caducado a las {{expired}}, detectado el {{found}}, receta {{rx}}",
       "QUEUE_CLAIM_RELEASED": "Elemento de la cola de trabajo liberado ({{why}}), tomado el {{claimed}}, receta {{rx}}",
+      "ADMISSION_BED_RELEASED": "Cama {{bed}} liberada de la hospitalización {{admission}}",
+      "PRESCRIPTION_PEDIATRIC_DOSE_REVIEWED": "Revisión de dosis pediátrica registrada",
       "PAYMENT_EVENT": "{{what}}: pago {{payment}} en la factura {{invoice}}",
       "STATUS_WAS": "{{what}} (estaba {{previous}})",
       "PLATFORM_SERVICE_UPDATED": "Servicio de plataforma modificado: {{details}}",

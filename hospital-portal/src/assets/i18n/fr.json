@@ -1728,6 +1728,8 @@
       "QUEUE_CLAIM_RELEASED_BY_OTHER": "Élément de la file de travail de l’utilisateur {{user}} (pris le {{claimed}}) libéré ({{why}}), ordonnance {{rx}}",
       "QUEUE_CLAIM_EXPIRED": "Élément de la file de travail de l’utilisateur {{user}} (pris le {{claimed}}) expiré à {{expired}}, constaté le {{found}}, ordonnance {{rx}}",
       "QUEUE_CLAIM_RELEASED": "Élément de la file de travail libéré ({{why}}), pris le {{claimed}}, ordonnance {{rx}}",
+      "ADMISSION_BED_RELEASED": "Lit {{bed}} libéré de l’hospitalisation {{admission}}",
+      "PRESCRIPTION_PEDIATRIC_DOSE_REVIEWED": "Revue de dose pédiatrique enregistrée",
       "PAYMENT_EVENT": "{{what}} : paiement {{payment}} sur la facture {{invoice}}",
       "STATUS_WAS": "{{what}} (était {{previous}})",
       "PLATFORM_SERVICE_UPDATED": "Service de plateforme modifié : {{details}}",
