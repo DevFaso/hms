@@ -5926,3 +5926,8 @@ ships*, not for building — and check the shipped surface before trusting a
   (D1067 `deliveredAt`) once per row on the paged hospital lists: batch it per page.
   `PediatricDoseRule` card decimals: done at the round-18 merge (#976): `CdsCardText.decimal`, the
   `CdsCardLocaleFormatGuardTest` allowance deleted, `PediatricDoseRuleRound18Test` asserts FR/ES commas.
+
+## Standing debt — round 20 (fix/r20-portal-overlays-display, PR #998)
+- [ ] `POST /assignments/public/activate-by-phone`: an unknown number answers slightly faster than a wrong code (no assignment query); bounded by the per-IP rate limit and the per-number lockout. Equalise if it matters.
+- [ ] The per-number wrong-code lockout is in memory, per instance; move it to a shared store for a multi-instance deploy.
+- [ ] D1140 / D1138 siblings in fix/r20-portal-forms files: `waitlist-panel.component.html:349` (`'EEE d MMM, HH:mm'`) and `birth-plan-tab.html` (`{{ patientName }}?`), pinned in `iso-date-display.test.mjs` and `glued-colon-baseline.json`; delete the pins when keyed.
