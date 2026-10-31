@@ -3232,4 +3232,16 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- V253 (round 19): QA D1096, the paediatric manual dose review is a
+         real stop. clinical.prescriptions records that a review is required
+         (pediatric_dose_review_required) and who reviewed it, when and why
+         (pediatric_dose_reviewed_by / _at / _review_reason, the reason
+         encrypted by the entity). Plain statements, no DO block. Idempotent. -->
+    <changeSet id="V253-prescription-pediatric-dose-review" author="hms-team" runOnChange="false">
+        <sqlFile path="V253__prescription_pediatric_dose_review.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

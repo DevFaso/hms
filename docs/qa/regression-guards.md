@@ -217,6 +217,17 @@ arbitrary URL.
 | `scripts/lib/maternity-notes-shown.test.mjs` | D1068: a free-text field a maternity form saves that no read surface renders. | Maternity templates; the two `recentDeliveryOverrideReason` confirmations excused |
 | `guard:a11y-dialogs`, `glued-colon` (shrunk) | D1004, D1079. | a11y-dialogs 247 → 210 pins; glued colons 113 sites in 41 files → 92 in 32 |
 
+## Guards added or widened by the round-19 rx slice (fix/r19-orders-encounters-clinical-ui; extend these too)
+
+| Guard | Class | Scope / allowlist |
+|---|---|---|
+| `architecture/CdsReviewCardGuardTest` (new) | D1096: a decision-support card whose sentence asks for a pharmacist or physician review ("must review") built as a plain warning, so the order signs and reaches the pharmacy as an ordinary one. Such a card must be built by `reviewRequired(…)` (sets `CdsCard.reviewRequired`; the signature then holds the order until the review is recorded). | Every card sentence under `cdshooks/`; 2 review cards today (`cds.pediatric.manualReview.summary`, `cds.pediatric.band.none.summary`); no allowlist |
+| `architecture/ControlledSigningReauthenticationGuardTest#theSignatureRequiresTheRecordedDoseReviewBeforeReAuthenticatingOrSigning` (widened) | D1096: the signature checks the recorded paediatric dose review before the re-authentication and before SIGNED. The class test above still lists every SIGNED writer (refill, stock-out return: re-sign an order that already passed the signature). | `PrescriptionServiceImpl#signPrescription` |
+| `i18n/CdsRefusalTextGuardTest` (new) | D1102: a CDS refusal shown as developer text - a `CdsCriticalBlockException` built from a literal or a concatenation ("CDS ALERT: … set forceOverride …"), or a CDS refusal/card sentence in any bundle naming an API field (`forceOverride`) or a developer token (`CDS_CRITICAL`). | Every `new CdsCriticalBlockException(` in `src/main`; every `cds.*`, `prescription.(cds\|allergy\|pediatricReview\|safeguard).*`, `pharmacy.(dispense.cds\|cds.)*`, `nurse.mar.(override\|fiveRights)*` key in 4 locales of 5 bundles; clinical abbreviations mmHg, qSOFA, sBP, eMAR allowed; no allowlist |
+| `i18n/ExceptionProseRatchetTest` (widened) | D1102: now also counts `CdsCriticalBlockException` with an English literal. | Baseline unchanged (the one literal, `PrescriptionServiceImpl` "CDS ALERT", was keyed before the pattern widened) |
+| `architecture/ServerComposedTimeGuardTest` (widened) | D1114 (D1084 class): the CDS and BPA cards (`cdshooks/`) are in scope - a date-time formatter there must convert through `HospitalTime` (the BPA card printed server UTC), and a card must not take the calendar day of a stored timestamp (`getCreatedAt().toLocalDate()`) without converting it. | `cdshooks/` added to the pharmacy/billing scope; still 1 allowed (`service/PdfLabels.java`, unchanged) |
+| `service/pharmacy/ControlledSubstanceGateTest#onlyTheActionableStatusesNeedTheProof` (new, parameterised over every `PrescriptionStatus`) | D1097: the step-up proof (and the co-signature) gate only the statuses that authorise somebody to act; DRAFT, PENDING_SIGNATURE, CANCELLED and DISCONTINUED never need it. | Every status |
+
 ## What is not guarded (and why)
 
 - **Bean Validation default messages** (D925 "providerName: must not be

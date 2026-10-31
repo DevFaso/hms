@@ -913,9 +913,11 @@ describe('PrescriptionsComponent — pharmacist verification', () => {
     prescriptionService = jasmine.createSpyObj<PrescriptionService>('PrescriptionService', [
       'list',
       'pharmacistVerify',
+      'recordPediatricDoseReview',
     ]);
     prescriptionService.list.and.returnValue(of([]));
     prescriptionService.pharmacistVerify.and.returnValue(of(verifiable()));
+    prescriptionService.recordPediatricDoseReview.and.returnValue(of(verifiable()));
 
     const staffService = jasmine.createSpyObj<StaffService>('StaffService', ['list']);
     staffService.list.and.returnValue(of([]));
@@ -1109,6 +1111,106 @@ describe('PrescriptionsComponent — pharmacist verification', () => {
     // pharmacist may want to keep while they resolve the refusal.
     expect(component.showVerifyModal()).toBeTrue();
     expect(component.verifying()).toBeFalse();
+  });
+
+  /* ── QA D1096: the paediatric dose review ─────────────────────────── */
+
+  function awaitingReview(id = 'rx-neo'): PrescriptionResponse {
+    return rx(id, 'PENDING_SIGNATURE', {
+      pediatricDoseReviewRequired: true,
+      staffId: 'staff-prescriber',
+    });
+  }
+
+  it('QA D1096: a pharmacist and a physician are offered the dose review; a nurse is not', () => {
+    expect(component.canRecordDoseReview(awaitingReview())).toBeTrue();
+    activeRoles = ['ROLE_DOCTOR'];
+    expect(component.canRecordDoseReview(awaitingReview())).toBeTrue();
+    activeRoles = ['ROLE_NURSE'];
+    expect(component.canRecordDoseReview(awaitingReview())).toBeFalse();
+    activeRoles = ['ROLE_PHARMACIST'];
+    expect(
+      component.canRecordDoseReview(
+        rx('done', 'PENDING_SIGNATURE', {
+          pediatricDoseReviewRequired: true,
+          pediatricDoseReviewedAt: '2026-10-31T10:00:00',
+        }),
+      ),
+    ).toBeFalse();
+    expect(
+      component.canRecordDoseReview(rx('gone', 'CANCELLED', { pediatricDoseReviewRequired: true })),
+    ).toBeFalse();
+  });
+
+  it('QA D1096: the row says the review is due and offers the action', () => {
+    component.filtered.set([awaitingReview('rx-neo'), rx('rx-plain', 'PENDING_SIGNATURE')]);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="rx-dose-review-due-rx-neo"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="rx-dose-review-rx-neo"]')).not.toBeNull();
+    expect(host.querySelector('[data-testid="rx-dose-review-rx-plain"]')).toBeNull();
+  });
+
+  it('QA D1096: a missing reason is said in the dialog, the button stays usable, nothing is sent', () => {
+    component.openDoseReview(awaitingReview());
+    fixture.detectChanges();
+    const submit = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="rx-dose-review-submit"]',
+    ) as HTMLButtonElement;
+    expect(submit.disabled).toBeFalse();
+    submit.click();
+    fixture.detectChanges();
+    expect(prescriptionService.recordPediatricDoseReview).not.toHaveBeenCalled();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="rx-dose-review-error"]'),
+    ).not.toBeNull();
+  });
+
+  it('QA D1096: the review is sent with its reason; a refusal stays in the dialog', () => {
+    component.openDoseReview(awaitingReview());
+    component.doseReviewReason = 'Neonatal dose checked: 10 mg/kg q6h';
+    component.submitDoseReview();
+    expect(prescriptionService.recordPediatricDoseReview).toHaveBeenCalledWith(
+      'rx-neo',
+      'Neonatal dose checked: 10 mg/kg q6h',
+    );
+    expect(component.doseReviewTarget()).toBeNull();
+
+    const message =
+      'The prescriber cannot review their own order: ask a pharmacist or another physician.';
+    prescriptionService.recordPediatricDoseReview.and.returnValue(
+      throwError(() => ({ error: { message } }) as unknown),
+    );
+    component.openDoseReview(awaitingReview());
+    component.doseReviewReason = 'ok';
+    component.submitDoseReview();
+    expect(component.doseReviewError()).toBe(message);
+    expect(component.doseReviewTarget()).not.toBeNull();
+  });
+
+  /* ── QA D1101: the override reason is shown again ─────────────────── */
+
+  it('QA D1101: the detail and the verification dialog show why the alert was passed', () => {
+    const overridden = rx('rx-over', 'SIGNED', {
+      requiresPharmacistVerification: true,
+      overrideReason: 'Severe malaria, dose confirmed with the paediatrician',
+      allergyOverride: false,
+    });
+    component.selectedPrescription.set(overridden);
+    fixture.detectChanges();
+    const detail = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="rx-override-reason"]',
+    ) as HTMLElement;
+    expect(detail.textContent).toContain('Severe malaria, dose confirmed with the paediatrician');
+    expect(detail.textContent).toContain('PRESCRIPTIONS.OVERRIDE.CDS_REASON');
+
+    component.selectedPrescription.set(null);
+    component.openVerifyModal(overridden);
+    fixture.detectChanges();
+    const inDialog = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="rx-verify-override-reason"]',
+    ) as HTMLElement;
+    expect(inDialog.textContent).toContain('Severe malaria');
   });
 
   it('renders the verification state in the detail panel, pending included', () => {

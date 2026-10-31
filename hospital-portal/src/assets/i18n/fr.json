@@ -6332,7 +6332,8 @@
         "LAB_ORDER_ENTERED_IN_ERROR": "Demande d'examen saisie par erreur",
         "MEDICATION_DOSE_LIMITS_UPDATED": "Limites de dose pédiatriques modifiées",
         "PRESCRIPTION_CDS_OVERRIDDEN": "Alerte d’aide à la décision outrepassée sur une ordonnance",
-        "PRESCRIPTION_SIGN_REAUTHENTICATION": "Réauthentification pour signer une ordonnance de stupéfiant"
+        "PRESCRIPTION_SIGN_REAUTHENTICATION": "Réauthentification pour signer une ordonnance de stupéfiant",
+        "PRESCRIPTION_PEDIATRIC_DOSE_REVIEWED": "Revue de dose pédiatrique enregistrée"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Annulée",
@@ -7296,6 +7297,23 @@
       "CODE": "Code de votre application d’authentification (ou un code de secours)",
       "SUBMIT": "Signer",
       "FAILED": "Votre identité n’a pas pu être confirmée. L’ordonnance n’est pas signée."
+    },
+    "DOSE_REVIEW": {
+      "DUE": "Revue de dose par un pharmacien ou un médecin requise",
+      "ACTION": "Enregistrer la revue de dose",
+      "TITLE": "Enregistrer la revue de dose pédiatrique",
+      "HINT": "Le contrôle de dose ne peut pas juger la dose de cet enfant. En tant que pharmacien ou médecin autre que le prescripteur, indiquez pourquoi vous l’acceptez ; l’ordonnance pourra être signée une fois la revue enregistrée.",
+      "REASON": "Motif d’acceptation de la dose",
+      "REASON_REQUIRED": "Indiquez le motif pour lequel vous acceptez cette dose.",
+      "CONFIRM": "Enregistrer la revue",
+      "RECORDED": "Revue de dose enregistrée",
+      "FAILED": "La revue de dose n’a pas pu être enregistrée.",
+      "STATE": "Revue de dose pédiatrique",
+      "REVIEWED_BY": "Revue par"
+    },
+    "OVERRIDE": {
+      "ALLERGY_REASON": "Motif de la dérogation à l’allergie",
+      "CDS_REASON": "Motif du passage outre l’alerte critique"
     }
   },
   "PROFILE": {
@@ -9553,7 +9571,12 @@
       "BADGE_APPROVED": "Limites pédiatriques validées",
       "SAVED": "Limites de dose pédiatriques enregistrées",
       "SAVE_FAILED": "Les limites de dose pédiatriques n’ont pas pu être enregistrées"
-    }
+    },
+    "CDS_OVERRIDE": {
+      "LABEL": "Motif de dérogation (interaction)",
+      "HINT": "Une interaction grave arrête cette délivrance : indiquez le motif pour délivrer malgré tout. Il est enregistré avec la délivrance."
+    },
+    "ALERT_OVERRIDDEN": "Alerte outrepassée par le prescripteur : voir le motif sur l’ordonnance"
   },
   "LAB_QC": {
     "TITLE": "Tableau de bord du contrôle qualité",

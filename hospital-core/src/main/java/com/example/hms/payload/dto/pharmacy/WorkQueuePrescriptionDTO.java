@@ -84,6 +84,14 @@ public class WorkQueuePrescriptionDTO {
     private LocalDateTime clarificationResolvedAt;
 
     /**
+     * QA D1101 (round 19): true when the prescriber passed an allergy or a
+     * critical decision-support alert with a reason. A cue only - like the
+     * clarification above, the reason is clinical narrative and is read on
+     * the order ({@code GET /prescriptions/{id}}), not in this projection.
+     */
+    private Boolean alertOverridden;
+
+    /**
      * Refill context for the dispensing decision. Null on a prescription that
      * has never had a refill request, which keeps the payload unchanged for
      * first fills.

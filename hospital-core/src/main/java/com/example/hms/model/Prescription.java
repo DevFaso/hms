@@ -64,7 +64,8 @@ import java.util.Objects;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@ToString(exclude = {"patient", "staff", "encounter", "assignment", "hospital", "structuredInstructions", "alerts", "transmissions"})
+@ToString(exclude = {"patient", "staff", "encounter", "assignment", "hospital", "structuredInstructions", "alerts", "transmissions",
+    "pediatricDoseReviewedBy", "pediatricDoseReviewReason"})
 @EqualsAndHashCode(callSuper = true, onlyExplicitlyIncluded = true)
 public class Prescription extends BaseEntity {
 
@@ -291,6 +292,35 @@ public class Prescription extends BaseEntity {
 
     @Column(name = "cosigned_at")
     private LocalDateTime cosignedAt;
+
+    /* ── Paediatric manual dose review (round 19, QA D1096, V253) ──────── */
+
+    /**
+     * The paediatric dose check could not give an automatic verdict (a child
+     * under the item's manual-review age, or outside every weight band) and
+     * asked for a pharmacist or physician review. Set from the decision-support
+     * cards on every create, edit and signature; the order is not signed while
+     * it is set and no review is recorded.
+     */
+    @Builder.Default
+    @Column(name = "pediatric_dose_review_required", nullable = false)
+    private boolean pediatricDoseReviewRequired = false;
+
+    /** When the review was recorded; null while none is, and cleared by any edit of the order. */
+    @Column(name = "pediatric_dose_reviewed_at")
+    private LocalDateTime pediatricDoseReviewedAt;
+
+    /** The reviewing pharmacist or physician. Never the prescriber, nor later the signer. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "pediatric_dose_reviewed_by",
+        foreignKey = @ForeignKey(name = "fk_rx_pediatric_dose_reviewed_by"))
+    private User pediatricDoseReviewedBy;
+
+    /** Why the reviewer accepts the dose. Clinical narrative, encrypted like {@code withdrawalReason}. */
+    @Size(max = 1000)
+    @Column(name = "pediatric_dose_review_reason", columnDefinition = "TEXT")
+    @Convert(converter = EncryptedStringConverter.class)
+    private String pediatricDoseReviewReason;
 
     /* ── Pharmacist clarification (pharmacy flow gap G5, V162) ──────────── */
 

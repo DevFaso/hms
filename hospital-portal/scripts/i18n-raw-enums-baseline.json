@@ -218,6 +218,10 @@
     "src/app/super-admin/providers/provider-detail/provider-detail.html::p.decisionReason",
     "src/app/super-admin/providers/provider-detail/provider-detail.html::row.decisionReason",
     "src/app/transfusion/transfusion.html::<option>a",
-    "src/app/transfusion/transfusion.html::u.source"
+    "src/app/transfusion/transfusion.html::u.source",
+    "src/app/prescriptions/prescriptions.html::rx.pediatricDoseReviewReason",
+    "src/app/prescriptions/prescriptions.html::verifyTarget()?.overrideReason",
+    "src/app/prescriptions/prescriptions.html::reviewRx.frequency",
+    "src/app/prescriptions/prescriptions.html::rx.overrideReason"
   ]
 }

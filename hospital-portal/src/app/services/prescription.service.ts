@@ -140,6 +140,22 @@ export interface PrescriptionResponse {
   clarificationRequestedAt?: string | null;
   clarificationResponse?: string | null;
   clarificationResolvedAt?: string | null;
+
+  /* ── Overrides and the paediatric dose review (round 19) ─────────── */
+
+  /**
+   * QA D1101: why the prescriber passed an alert - a documented allergy
+   * (`allergyOverride` true) or a critical decision-support alert such as a
+   * paediatric dose soft stop. Absent when nothing was overridden, and from
+   * the patient's copy.
+   */
+  overrideReason?: string | null;
+  allergyOverride?: boolean | null;
+  /** QA D1096: the paediatric dose check asked for a recorded review before signing. */
+  pediatricDoseReviewRequired?: boolean | null;
+  pediatricDoseReviewedAt?: string | null;
+  pediatricDoseReviewedByName?: string | null;
+  pediatricDoseReviewReason?: string | null;
 }
 
 /**
@@ -330,6 +346,17 @@ export class PrescriptionService {
    * <p>The note is optional by design — the common case is a clean check with
    * nothing to add, and a mandatory field there trains people to type "ok".
    */
+  /**
+   * QA D1096: a pharmacist or a physician other than the prescriber records
+   * the paediatric dose review the decision support asked for. The reason is
+   * mandatory; the order is not signed until the review is recorded.
+   */
+  recordPediatricDoseReview(id: string, reason: string): Observable<PrescriptionResponse> {
+    return this.http.post<PrescriptionResponse>(`${this.baseUrl}/${id}/pediatric-dose-review`, {
+      reason: reason.trim(),
+    });
+  }
+
   pharmacistVerify(id: string, note?: string): Observable<PrescriptionResponse> {
     return this.http.post<PrescriptionResponse>(`${this.baseUrl}/${id}/pharmacist-verify`, {
       note: note?.trim() || undefined,

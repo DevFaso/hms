@@ -4,7 +4,7 @@ import com.example.hms.cdshooks.CdsCardText;
 import com.example.hms.model.BpaProtocol;
 
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
+import java.time.ZoneId;
 
 /**
  * QA D217: the shared words of a Best-Practice Advisory card. A protocol's
@@ -13,8 +13,6 @@ import java.time.format.DateTimeFormatter;
  * fallback so an edited protocol still reads.
  */
 final class BpaCardText {
-
-    private static final DateTimeFormatter WHEN = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
 
     private BpaCardText() {
     }
@@ -31,8 +29,13 @@ final class BpaCardText {
         return value ? text.get("cds.bpa.yes", "yes") : text.get("cds.bpa.no", "no");
     }
 
-    static String when(LocalDateTime at) {
-        return at == null ? "—" : at.format(WHEN);
+    /**
+     * QA D1114 (round 19): a reading's time on the hospital's wall clock. It
+     * was formatted as stored, the server's UTC, so a malaria card read
+     * "31/10/2026 00:54" for a temperature the vitals tab showed at 20:54.
+     */
+    static String when(CdsCardText text, LocalDateTime at, ZoneId hospitalZone) {
+        return text.dateTime(at, hospitalZone);
     }
 
     private static String nullToEmpty(String s) {
