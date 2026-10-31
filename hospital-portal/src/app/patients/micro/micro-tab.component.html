@@ -67,21 +67,25 @@
           <div class="culture-meta">
             @if (culture.collectedAt) {
               <span>
-                {{ 'MICRO.COLLECTED_AT' | translate }}:
+                {{ 'MICRO.COLLECTED_AT' | translate }}{{ 'COMMON.COLON' | translate }}
                 {{ culture.collectedAt | serverTime | date: 'short' }}
               </span>
             }
             @if (culture.specimenAccessionNumber) {
               <span
-                >{{ 'MICRO.ACCESSION' | translate }}: {{ culture.specimenAccessionNumber }}</span
+                >{{ 'MICRO.ACCESSION' | translate }}{{ 'COMMON.COLON' | translate }}
+                {{ culture.specimenAccessionNumber }}</span
               >
             }
             @if (culture.reportedByName) {
-              <span>{{ 'MICRO.REPORTED_BY' | translate }}: {{ culture.reportedByName }}</span>
+              <span
+                >{{ 'MICRO.REPORTED_BY' | translate }}{{ 'COMMON.COLON' | translate }}
+                {{ culture.reportedByName }}</span
+              >
             }
             @if (culture.finalizedAt) {
               <span>
-                {{ 'MICRO.FINALIZED_AT' | translate }}:
+                {{ 'MICRO.FINALIZED_AT' | translate }}{{ 'COMMON.COLON' | translate }}
                 {{ culture.finalizedAt | serverTime | date: 'short' }}
                 @if (culture.finalizedByName) {
                   ({{ culture.finalizedByName }})
@@ -92,7 +96,8 @@
 
           @if (culture.gramStain) {
             <p class="gram-stain">
-              <strong>{{ 'MICRO.GRAM_STAIN' | translate }}:</strong> {{ culture.gramStain }}
+              <strong>{{ 'MICRO.GRAM_STAIN' | translate }}{{ 'COMMON.COLON' | translate }}</strong>
+              {{ culture.gramStain }}
             </p>
           }
           @if (culture.notes) {

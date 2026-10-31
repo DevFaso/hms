@@ -482,7 +482,8 @@
                 : ('MATERNITY.RISK_UNSCORED' | translate)
             }}
             @if (h.calculatedRiskScore !== null && h.calculatedRiskScore !== undefined) {
-              — {{ 'MATERNITY.SCORE' | translate }}: {{ h.calculatedRiskScore }}
+              — {{ 'MATERNITY.SCORE' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ h.calculatedRiskScore }}
             }
           </span>
         </div>
@@ -501,7 +502,7 @@
             P{{ h.obstetricHistory?.pretermBirths ?? '—' }} A{{
               h.obstetricHistory?.abortions ?? '—'
             }}
-            L{{ h.obstetricHistory?.livingChildren ?? '—' }} · C/S:
+            L{{ h.obstetricHistory?.livingChildren ?? '—' }} · C/S{{ 'COMMON.COLON' | translate }}
             {{ h.obstetricHistory?.previousCesareanSections ?? '—' }}
           </p>
           @if (h.obstetricHistory?.previousPregnancyComplications) {
@@ -512,13 +513,13 @@
           <div class="view-section">
             <h3>{{ 'MATERNITY.SECTION_DATES' | translate }}</h3>
             <p>
-              {{ 'MATERNITY.LMP' | translate }}:
+              {{ 'MATERNITY.LMP' | translate }}{{ 'COMMON.COLON' | translate }}
               {{
                 h.menstrualHistory.lastMenstrualPeriod
                   ? (h.menstrualHistory.lastMenstrualPeriod | serverTime | date: 'mediumDate')
                   : '—'
               }}
-              · {{ 'MATERNITY.EDD' | translate }}:
+              · {{ 'MATERNITY.EDD' | translate }}{{ 'COMMON.COLON' | translate }}
               {{
                 h.menstrualHistory.estimatedDueDate
                   ? (h.menstrualHistory.estimatedDueDate | serverTime | date: 'mediumDate')
@@ -1142,7 +1143,8 @@
           </p>
           @if (r.slaDueAt) {
             <p class="muted">
-              {{ 'MATERNITY.SLA_DUE' | translate }}: {{ r.slaDueAt | serverTime | date: 'medium' }}
+              {{ 'MATERNITY.SLA_DUE' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ r.slaDueAt | serverTime | date: 'medium' }}
               @if (isOverdue(r)) {
                 <span class="risk-badge risk-high">{{ 'MATERNITY.OVERDUE' | translate }}</span>
               }
@@ -1150,12 +1152,14 @@
           }
           @if (r.midwife?.displayName) {
             <p class="muted">
-              {{ 'MATERNITY.REFERRED_BY' | translate }}: {{ r.midwife.displayName }}
+              {{ 'MATERNITY.REFERRED_BY' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ r.midwife.displayName }}
             </p>
           }
           @if (r.obgyn?.displayName) {
             <p class="muted">
-              {{ 'MATERNITY.ASSIGNED_OBGYN' | translate }}: {{ r.obgyn.displayName }}
+              {{ 'MATERNITY.ASSIGNED_OBGYN' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ r.obgyn.displayName }}
             </p>
           }
         </div>

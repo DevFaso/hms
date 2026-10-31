@@ -59,7 +59,7 @@
       {{ 'PRENATAL.RESULT_TITLE' | translate }} — {{ 'PRENATAL.CURRENT_WEEK' | translate }}
       {{ s.currentGestationalWeek }}
       @if (s.estimatedDueDate) {
-        · {{ 'MATERNITY.EDD' | translate }}:
+        · {{ 'MATERNITY.EDD' | translate }}{{ 'COMMON.COLON' | translate }}
         {{ s.estimatedDueDate | serverTime | date: 'mediumDate' }}
       }
       <!-- QA D1031: the antenatal contacts already held, and the number of the next one. -->

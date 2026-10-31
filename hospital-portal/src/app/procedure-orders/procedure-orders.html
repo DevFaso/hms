@@ -164,20 +164,21 @@
             </span>
           </p>
           <p class="muted">
-            {{ 'PROCEDURES.ORDERED_BY' | translate }}: {{ o.orderingProviderName || '—' }}
+            {{ 'PROCEDURES.ORDERED_BY' | translate }}{{ 'COMMON.COLON' | translate }}
+            {{ o.orderingProviderName || '—' }}
             @if (o.orderedAt) {
               — {{ o.orderedAt | serverTime | date: 'medium' }}
             }
           </p>
           @if (o.scheduledDatetime) {
             <p>
-              {{ 'PROCEDURES.SCHEDULED_FOR' | translate }}:
+              {{ 'PROCEDURES.SCHEDULED_FOR' | translate }}{{ 'COMMON.COLON' | translate }}
               {{ o.scheduledDatetime | serverTime | date: 'medium' }}
             </p>
           }
           @if (o.laterality) {
             <p class="muted">
-              {{ 'PROCEDURES.LATERALITY' | translate }}:
+              {{ 'PROCEDURES.LATERALITY' | translate }}{{ 'COMMON.COLON' | translate }}
               {{ 'PROCEDURES.LATERALITY_' + o.laterality | translate }}
               @if (o.siteMarked) {
                 · {{ 'PROCEDURES.SITE_MARKED' | translate }}
@@ -209,13 +210,15 @@
               @if (o.requiresAnesthesia) {
                 <span class="flag-badge">
                   {{ 'PROCEDURES.ANESTHESIA' | translate
-                  }}{{ o.anesthesiaType ? ': ' + o.anesthesiaType : '' }}
+                  }}{{
+                    o.anesthesiaType ? ('COMMON.COLON' | translate) + ' ' + o.anesthesiaType : ''
+                  }}
                 </span>
               }
               @if (o.requiresSedation) {
                 <span class="flag-badge">
                   {{ 'PROCEDURES.SEDATION' | translate
-                  }}{{ o.sedationType ? ': ' + o.sedationType : '' }}
+                  }}{{ o.sedationType ? ('COMMON.COLON' | translate) + ' ' + o.sedationType : '' }}
                 </span>
               }
               @if (o.bloodProductsRequired) {

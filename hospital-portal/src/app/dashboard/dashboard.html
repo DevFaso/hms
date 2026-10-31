@@ -677,7 +677,7 @@
                     justify-content: flex-end;
                     height: 100%;
                   "
-                  [title]="point.date + ': ' + (point.amount | cfa)"
+                  [title]="point.date + ('COMMON.COLON' | translate) + ' ' + (point.amount | cfa)"
                 >
                   <div
                     style="
@@ -911,8 +911,9 @@
                     >{{ alert.jobTitle | enumLabel: 'jobTitle' }} — {{ alert.departmentName }}</span
                   >
                   <span class="sched-reason"
-                    >{{ 'CREDENTIALING.LICENSE_NUMBER' | translate }}: {{ alert.licenseNumber }} —
-                    {{ 'DASHBOARD.EXPIRES' | translate }}:
+                    >{{ 'CREDENTIALING.LICENSE_NUMBER' | translate
+                    }}{{ 'COMMON.COLON' | translate }} {{ alert.licenseNumber }} —
+                    {{ 'DASHBOARD.EXPIRES' | translate }}{{ 'COMMON.COLON' | translate }}
                     {{ alert.licenseExpiryDate | serverTime | date: 'mediumDate' }}</span
                   >
                 </div>

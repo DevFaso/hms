@@ -50,7 +50,7 @@
           <div class="summary-block">
             <h4>{{ 'MED_HISTORY.SUBSTANCES' | translate }}</h4>
             <p>
-              {{ 'MED_HISTORY.TOBACCO' | translate }}:
+              {{ 'MED_HISTORY.TOBACCO' | translate }}{{ 'COMMON.COLON' | translate }}
               {{ (s.tobaccoUse ? 'COMMON.YES' : 'COMMON.NO') | translate }}
               @if (s.tobaccoUse) {
                 ({{ s.tobaccoType || '—' }}, {{ s.tobaccoPacksPerDay ?? '—' }}
@@ -58,14 +58,14 @@
               }
             </p>
             <p>
-              {{ 'MED_HISTORY.ALCOHOL' | translate }}:
+              {{ 'MED_HISTORY.ALCOHOL' | translate }}{{ 'COMMON.COLON' | translate }}
               {{ (s.alcoholUse ? 'COMMON.YES' : 'COMMON.NO') | translate }}
               @if (s.alcoholUse) {
                 ({{ s.alcoholFrequency || '—' }})
               }
             </p>
             <p>
-              {{ 'MED_HISTORY.DRUGS' | translate }}:
+              {{ 'MED_HISTORY.DRUGS' | translate }}{{ 'COMMON.COLON' | translate }}
               {{ (s.recreationalDrugUse ? 'COMMON.YES' : 'COMMON.NO') | translate }}
               @if (s.recreationalDrugUse) {
                 ({{ s.drugTypesUsed || '—' }})
@@ -75,14 +75,19 @@
           <div class="summary-block">
             <h4>{{ 'MED_HISTORY.LIFESTYLE' | translate }}</h4>
             <p>
-              {{ 'MED_HISTORY.EXERCISE' | translate }}: {{ s.exerciseFrequency || '—' }}
+              {{ 'MED_HISTORY.EXERCISE' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ s.exerciseFrequency || '—' }}
               @if (s.exerciseMinutesPerWeek) {
                 ({{ s.exerciseMinutesPerWeek }} {{ 'MED_HISTORY.MIN_WEEK' | translate }})
               }
             </p>
-            <p>{{ 'MED_HISTORY.DIET' | translate }}: {{ s.dietType || '—' }}</p>
             <p>
-              {{ 'MED_HISTORY.OCCUPATION' | translate }}: {{ s.occupation || '—' }}
+              {{ 'MED_HISTORY.DIET' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ s.dietType || '—' }}
+            </p>
+            <p>
+              {{ 'MED_HISTORY.OCCUPATION' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ s.occupation || '—' }}
               @if (s.employmentStatus) {
                 ({{ s.employmentStatus }})
               }
@@ -91,14 +96,19 @@
           <div class="summary-block">
             <h4>{{ 'MED_HISTORY.SOCIAL_CONTEXT' | translate }}</h4>
             <p>
-              {{ 'MED_HISTORY.LIVING' | translate }}: {{ s.livingArrangement || '—' }}
+              {{ 'MED_HISTORY.LIVING' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ s.livingArrangement || '—' }}
               @if (s.householdMembers) {
                 ({{ s.householdMembers }} {{ 'MED_HISTORY.MEMBERS' | translate }})
               }
             </p>
-            <p>{{ 'MED_HISTORY.EDUCATION' | translate }}: {{ s.educationLevel || '—' }}</p>
             <p>
-              {{ 'MED_HISTORY.LANGUAGE' | translate }}: {{ s.preferredLanguage || '—' }}
+              {{ 'MED_HISTORY.EDUCATION' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ s.educationLevel || '—' }}
+            </p>
+            <p>
+              {{ 'MED_HISTORY.LANGUAGE' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ s.preferredLanguage || '—' }}
               @if (s.interpreterNeeded) {
                 <span class="flag-badge">{{ 'MED_HISTORY.INTERPRETER' | translate }}</span>
               }
@@ -107,7 +117,7 @@
           <div class="summary-block">
             <h4>{{ 'MED_HISTORY.SAFETY' | translate }}</h4>
             <p>
-              {{ 'MED_HISTORY.FEELS_SAFE' | translate }}:
+              {{ 'MED_HISTORY.FEELS_SAFE' | translate }}{{ 'COMMON.COLON' | translate }}
               {{
                 s.feelsSafeAtHome === false
                   ? ('COMMON.NO' | translate)
@@ -119,7 +129,10 @@
                 <span class="flag-badge danger">{{ 'MED_HISTORY.SAFETY_FLAG' | translate }}</span>
               }
             </p>
-            <p>{{ 'MED_HISTORY.STRESS' | translate }}: {{ s.stressLevel || '—' }}</p>
+            <p>
+              {{ 'MED_HISTORY.STRESS' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ s.stressLevel || '—' }}
+            </p>
             @if (s.socialIsolationRisk) {
               <p>
                 <span class="flag-badge">{{ 'MED_HISTORY.ISOLATION_RISK' | translate }}</span>

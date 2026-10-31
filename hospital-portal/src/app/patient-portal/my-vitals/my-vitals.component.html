@@ -82,8 +82,8 @@
                       }
                       @if (getNormalRange(v.type)) {
                         <span class="vc-range"
-                          >{{ 'PORTAL.VITALS.NORMAL_PREFIX' | translate }}:
-                          {{ getNormalRange(v.type) }}</span
+                          >{{ 'PORTAL.VITALS.NORMAL_PREFIX' | translate
+                          }}{{ 'COMMON.COLON' | translate }} {{ getNormalRange(v.type) }}</span
                         >
                       }
                     </div>

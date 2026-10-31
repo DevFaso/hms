@@ -31,30 +31,40 @@
     @if (queueItem) {
       <div class="checkin-dialog__patient-info">
         <div class="info-row">
-          <span class="label">{{ 'RECEPTION.PATIENT_NAME' | translate }}:</span>
+          <span class="label"
+            >{{ 'RECEPTION.PATIENT_NAME' | translate }}{{ 'COMMON.COLON' | translate }}</span
+          >
           <span class="value">{{ queueItem.patientName }}</span>
         </div>
         @if (queueItem.mrn) {
           <div class="info-row">
-            <span class="label">{{ 'RECEPTION.MRN' | translate }}:</span>
+            <span class="label"
+              >{{ 'RECEPTION.MRN' | translate }}{{ 'COMMON.COLON' | translate }}</span
+            >
             <span class="value">{{ queueItem.mrn }}</span>
           </div>
         }
         @if (queueItem.appointmentTime) {
           <div class="info-row">
-            <span class="label">{{ 'RECEPTION.APPOINTMENT_TIME' | translate }}:</span>
+            <span class="label"
+              >{{ 'RECEPTION.APPOINTMENT_TIME' | translate }}{{ 'COMMON.COLON' | translate }}</span
+            >
             <span class="value">{{ queueItem.appointmentTime }}</span>
           </div>
         }
         @if (queueItem.providerName) {
           <div class="info-row">
-            <span class="label">{{ 'RECEPTION.PROVIDER' | translate }}:</span>
+            <span class="label"
+              >{{ 'RECEPTION.PROVIDER' | translate }}{{ 'COMMON.COLON' | translate }}</span
+            >
             <span class="value">{{ queueItem.providerName }}</span>
           </div>
         }
         @if (queueItem.departmentName) {
           <div class="info-row">
-            <span class="label">{{ 'RECEPTION.DEPARTMENT' | translate }}:</span>
+            <span class="label"
+              >{{ 'RECEPTION.DEPARTMENT' | translate }}{{ 'COMMON.COLON' | translate }}</span
+            >
             <span class="value">{{ queueItem.departmentName }}</span>
           </div>
         }

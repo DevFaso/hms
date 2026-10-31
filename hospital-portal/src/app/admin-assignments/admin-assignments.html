@@ -251,7 +251,7 @@
           </label>
         } @else {
           <p class="form-static">
-            <strong>{{ 'ASSIGN_ADMIN.USER' | translate }}:</strong>
+            <strong>{{ 'ASSIGN_ADMIN.USER' | translate }}{{ 'COMMON.COLON' | translate }}</strong>
             {{ selected()?.userName || selected()?.userEmail }}
           </p>
         }
@@ -401,13 +401,16 @@
         } @else {
           <div class="result-summary">
             <span class="badge badge-info">
-              {{ 'ASSIGN_ADMIN.REQUESTED' | translate }}: {{ multiResult()!.requestedAssignments }}
+              {{ 'ASSIGN_ADMIN.REQUESTED' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ multiResult()!.requestedAssignments }}
             </span>
             <span class="badge badge-success">
-              {{ 'ASSIGN_ADMIN.CREATED_N' | translate }}: {{ multiResult()!.createdAssignments }}
+              {{ 'ASSIGN_ADMIN.CREATED_N' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ multiResult()!.createdAssignments }}
             </span>
             <span class="badge badge-muted">
-              {{ 'ASSIGN_ADMIN.SKIPPED' | translate }}: {{ multiResult()!.skippedAssignments }}
+              {{ 'ASSIGN_ADMIN.SKIPPED' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ multiResult()!.skippedAssignments }}
             </span>
           </div>
           @if (multiResult()!.failures.length > 0) {
@@ -500,7 +503,9 @@
         </div>
         @if (row.profileCompletionUrl) {
           <p class="form-static">
-            <strong>{{ 'ASSIGN_ADMIN.PROFILE_URL' | translate }}:</strong>
+            <strong
+              >{{ 'ASSIGN_ADMIN.PROFILE_URL' | translate }}{{ 'COMMON.COLON' | translate }}</strong
+            >
             <code class="wrap-code">{{ row.profileCompletionUrl }}</code>
           </p>
         }
@@ -665,16 +670,20 @@
         } @else {
           <div class="result-summary">
             <span class="badge badge-info">
-              {{ 'ASSIGN_ADMIN.PROCESSED' | translate }}: {{ importResult()!.processed }}
+              {{ 'ASSIGN_ADMIN.PROCESSED' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ importResult()!.processed }}
             </span>
             <span class="badge badge-success">
-              {{ 'ASSIGN_ADMIN.CREATED_N' | translate }}: {{ importResult()!.created }}
+              {{ 'ASSIGN_ADMIN.CREATED_N' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ importResult()!.created }}
             </span>
             <span class="badge badge-muted">
-              {{ 'ASSIGN_ADMIN.SKIPPED' | translate }}: {{ importResult()!.skipped }}
+              {{ 'ASSIGN_ADMIN.SKIPPED' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ importResult()!.skipped }}
             </span>
             <span class="badge badge-danger">
-              {{ 'ASSIGN_ADMIN.FAILED' | translate }}: {{ importResult()!.failed }}
+              {{ 'ASSIGN_ADMIN.FAILED' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ importResult()!.failed }}
             </span>
           </div>
           <div class="table-wrap result-table">

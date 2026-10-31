@@ -267,7 +267,7 @@
                 <ul>
                   @for (l of summary.recentLabResults; track l.id) {
                     <li>
-                      {{ l.testName }}:
+                      {{ l.testName }}{{ 'COMMON.COLON' | translate }}
                       @if (l.isPending) {
                         {{ 'PORTAL.LAB_RESULTS.PENDING_RESULT' | translate }}
                       } @else {

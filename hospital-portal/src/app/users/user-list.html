@@ -605,11 +605,11 @@
         <div class="modal-body">
           <p>{{ 'USERS.CREDENTIALS_ONCE_HINT' | translate }}</p>
           <p>
-            {{ 'USERS.USERNAME' | translate }} :
+            {{ 'USERS.USERNAME' | translate }}{{ 'COMMON.COLON' | translate }}
             <strong data-test="issued-username">{{ creds.username }}</strong>
           </p>
           <p>
-            {{ 'USERS.TEMPORARY_PASSWORD' | translate }} :
+            {{ 'USERS.TEMPORARY_PASSWORD' | translate }}{{ 'COMMON.COLON' | translate }}
             <strong data-test="issued-password">{{ creds.password }}</strong>
           </p>
         </div>

@@ -227,7 +227,8 @@
           }
           @if (o.cancellationReason) {
             <p class="muted">
-              {{ 'MATERNITY.CANCELLATION_REASON' | translate }}: {{ o.cancellationReason }}
+              {{ 'MATERNITY.CANCELLATION_REASON' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ o.cancellationReason }}
             </p>
           }
         </div>
@@ -263,7 +264,8 @@
             }
             @if (rep.followUpRequired) {
               <p class="muted">
-                {{ 'ULTRASOUND.FOLLOW_UP' | translate }}: {{ rep.followUpRecommendations || '—' }}
+                {{ 'ULTRASOUND.FOLLOW_UP' | translate }}{{ 'COMMON.COLON' | translate }}
+                {{ rep.followUpRecommendations || '—' }}
               </p>
             }
           </div>

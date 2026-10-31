@@ -278,7 +278,8 @@
               }
               @if (leave.reviewedByName) {
                 <span class="reviewed-by"
-                  >{{ 'SCHEDULING.REVIEWED' | translate }}: {{ leave.reviewedByName }}</span
+                  >{{ 'SCHEDULING.REVIEWED' | translate }}{{ 'COMMON.COLON' | translate }}
+                  {{ leave.reviewedByName }}</span
                 >
               }
               @if (leave.managerNote) {

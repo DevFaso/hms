@@ -131,7 +131,8 @@
             @if (doc.uploadedByDisplayName) {
               <span>
                 <span class="material-symbols-outlined detail-icon">person</span>
-                {{ 'PORTAL.DOCUMENTS.UPLOADED_BY' | translate }}: {{ doc.uploadedByDisplayName }}
+                {{ 'PORTAL.DOCUMENTS.UPLOADED_BY' | translate }}{{ 'COMMON.COLON' | translate }}
+                {{ doc.uploadedByDisplayName }}
               </span>
             }
           </div>

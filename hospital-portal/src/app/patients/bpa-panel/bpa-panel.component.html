@@ -42,7 +42,8 @@
       }
       @if (critical.source.label) {
         <p class="bpa-modal__source">
-          {{ 'CDS.SECTION_LABEL' | translate }}: {{ critical.source.label }}
+          {{ 'CDS.SECTION_LABEL' | translate }}{{ 'COMMON.COLON' | translate }}
+          {{ critical.source.label }}
         </p>
       }
       <label class="bpa-modal__reason">
