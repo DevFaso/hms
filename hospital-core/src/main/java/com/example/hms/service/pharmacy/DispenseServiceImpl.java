@@ -802,7 +802,7 @@ public class DispenseServiceImpl implements DispenseService {
     private static void requireAtMost(BigDecimal requested, BigDecimal remaining, BigDecimal stated) {
         if (requested != null && remaining != null && requested.compareTo(remaining) > 0) {
             throw new BusinessException("pharmacy.dispense.exceedsPrescribed",
-                    stated.stripTrailingZeros().toPlainString());
+                    com.example.hms.utility.DisplayNumbers.quantity(stated));
         }
     }
 

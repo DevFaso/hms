@@ -138,6 +138,9 @@ class RoundSixFrenchTextTest {
             "localizedValue", "12", Locale.FRENCH)).isEqualTo("12");
         assertThat(ReflectionTestUtils.<String>invokeMethod(CriticalValueNotificationService.class,
             "localizedValue", "Positif", Locale.FRENCH)).isEqualTo("Positif");
+        // Round 19 (D1106): one server formatter, so a comparator keeps the reader's comma too.
+        assertThat(ReflectionTestUtils.<String>invokeMethod(CriticalValueNotificationService.class,
+            "localizedValue", "<0.5", Locale.FRENCH)).isEqualTo("<0,5");
         assertThat(MessageUtil.resolve("lab.critical.escalation", "Glycémie", "5,0 mmol/L", "A. B."))
             .endsWith("Vérifiez et acquittez dans e-Keneya.")
             .doesNotContain("HMS");

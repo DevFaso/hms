@@ -381,7 +381,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
         BigDecimal returnable = nz(issued).subtract(nz(returned));
         if (quantity.compareTo(returnable) > 0) {
             throw new BusinessException("stockTransaction.return.exceedsIssued",
-                    returnable.max(BigDecimal.ZERO).stripTrailingZeros().toPlainString());
+                    com.example.hms.utility.DisplayNumbers.quantity(returnable.max(BigDecimal.ZERO)));
         }
     }
 
@@ -425,7 +425,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
                 stockTransactionRepository.sumQuantityForReference(dispense.getId(), RETURNED_TYPES)));
         if (dto.getQuantity().compareTo(returnable) > 0) {
             throw new BusinessException("stockTransaction.return.exceedsDispensed",
-                    returnable.max(BigDecimal.ZERO).stripTrailingZeros().toPlainString());
+                    com.example.hms.utility.DisplayNumbers.quantity(returnable.max(BigDecimal.ZERO)));
         }
     }
 
@@ -451,7 +451,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
                 stockTransactionRepository.sumQuantityForReference(transfer.getId(), RETURNED_TYPES)));
         if (dto.getQuantity().compareTo(returnable) > 0) {
             throw new BusinessException("stockTransaction.return.exceedsDispensed",
-                    returnable.max(BigDecimal.ZERO).stripTrailingZeros().toPlainString());
+                    com.example.hms.utility.DisplayNumbers.quantity(returnable.max(BigDecimal.ZERO)));
         }
     }
 
