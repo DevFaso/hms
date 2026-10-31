@@ -269,6 +269,8 @@ class DispenseServiceImplTest {
                 .medicationName("Amoxicillin")
                 .quantityRequested(BigDecimal.TEN)
                 .quantityDispensed(BigDecimal.TEN)
+                // QA D1141: every fill carries its unit (the server refuses one without).
+                .unit("capsule")
                 .build();
     }
 
@@ -429,6 +431,68 @@ class DispenseServiceImplTest {
             assertThat(service.getWorkQueue(pageable, com.example.hms.enums.QueueClaimFilter.MINE).getContent())
                     .hasSize(1);
             verify(prescriptionRepository, never()).findWorkQueueClaimedBy(any(), any(), any(), any(), any());
+        }
+    }
+
+    @Nested
+    @DisplayName("QA D1141: the unit of a fill")
+    class FillUnit {
+
+        @Test
+        @DisplayName("the unit typed wins, a blank one is the order's unit, neither is refused")
+        void unitResolution() {
+            Prescription withUnit = new Prescription();
+            withUnit.setQuantityUnit(" comprimé ");
+            assertThat(DispenseServiceImpl.requireUnit(" ml ", withUnit)).isEqualTo("ml");
+            assertThat(DispenseServiceImpl.requireUnit("  ", withUnit)).isEqualTo("comprimé");
+            assertThat(DispenseServiceImpl.requireUnit(null, withUnit)).isEqualTo("comprimé");
+
+            Prescription withoutUnit = new Prescription();
+            assertThatThrownBy(() -> DispenseServiceImpl.requireUnit(" ", withoutUnit))
+                .isInstanceOf(BusinessException.class)
+                .extracting("messageKey").isEqualTo("dispense.unit.required");
+        }
+
+        @Test
+        @DisplayName("a fill with no unit, of an order with none, is refused before anything is written")
+        void aFillWithoutAUnitIsRefused() {
+            DispenseRequestDTO dto = buildRequest();
+            dto.setUnit(null);
+            prescription.setQuantityUnit(null);
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any()))
+                .thenReturn(Optional.of(prescription));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                .isInstanceOf(BusinessException.class)
+                .extracting("messageKey").isEqualTo("dispense.unit.required");
+            verify(dispenseRepository, never()).save(any(Dispense.class));
+        }
+
+        @Test
+        @DisplayName("a fill with no unit takes the order's unit")
+        void aBlankUnitTakesTheOrdersUnit() {
+            DispenseRequestDTO dto = buildRequest();
+            dto.setUnit("");
+            prescription.setQuantityUnit("gélule");
+            Dispense entity = buildDispense(DispenseStatus.COMPLETED);
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any()))
+                .thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
+            when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);
+            when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseRepository.NOT_A_FILL))
+                .thenReturn(BigDecimal.TEN);
+            when(prescriptionRepository.save(any(Prescription.class))).thenReturn(prescription);
+            when(dispenseMapper.toResponseDTO(entity)).thenReturn(DispenseResponseDTO.builder().build());
+            when(roleValidator.getCurrentUserId()).thenReturn(userId);
+
+            service.createDispense(dto);
+
+            assertThat(dto.getUnit()).isEqualTo("gélule");
         }
     }
 

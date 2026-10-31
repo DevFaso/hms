@@ -817,6 +817,23 @@ public class DispenseServiceImpl implements DispenseService {
      * @param openPreparationKey the 409 message when the prescription already
      *                           has an open preparation
      */
+    /**
+     * QA D1141: the unit of a fill. The screen saved fills with no unit (129,
+     * 150 and 21 of what?), so the register and the receipt could not say
+     * what left the shelf. The unit typed wins; a blank one is the order's
+     * own unit; a fill with neither is refused.
+     */
+    static String requireUnit(String given, Prescription prescription) {
+        String unit = given == null ? "" : given.trim();
+        if (unit.isEmpty() && prescription != null && prescription.getQuantityUnit() != null) {
+            unit = prescription.getQuantityUnit().trim();
+        }
+        if (unit.isEmpty()) {
+            throw new BusinessException("dispense.unit.required");
+        }
+        return unit;
+    }
+
     private FillContext validateFill(DispenseRequestDTO dto, String openPreparationKey) {
         UUID hospitalId = roleValidator.requireActiveHospitalId();
 
@@ -824,6 +841,8 @@ public class DispenseServiceImpl implements DispenseService {
         validateQuantities(dto.getQuantityRequested(), dto.getQuantityDispensed());
 
         Prescription prescription = loadAndValidatePrescription(dto, hospitalId);
+        // QA D1141: every fill (one-step or prepared) carries its unit.
+        dto.setUnit(requireUnit(dto.getUnit(), prescription));
         // Checked under the prescription lock taken just above.
         requireNoOpenPreparation(prescription, openPreparationKey);
         requireWithinPrescribedQuantity(prescription, dto);
