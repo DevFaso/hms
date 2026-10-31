@@ -201,6 +201,8 @@
     (keydown.escape)="closeFormModal()"
   >
     <div
+      appModalDialog
+      aria-labelledby="registrations-dialog-1-title"
       class="modal"
       role="dialog"
       aria-modal="true"
@@ -209,7 +211,7 @@
       (keydown.escape)="closeFormModal(); $event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="registrations-dialog-1-title">
           {{ (editingRegistration() ? 'REGISTRATIONS.EDIT' : 'REGISTRATIONS.NEW') | translate }}
         </h2>
         <button
@@ -302,6 +304,8 @@
     (keydown.escape)="closeDelete()"
   >
     <div
+      appModalDialog
+      aria-labelledby="registrations-dialog-2-title"
       class="modal"
       role="dialog"
       aria-modal="true"
@@ -310,7 +314,7 @@
       (keydown.escape)="closeDelete(); $event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'REGISTRATIONS.DELETE_TITLE' | translate }}</h2>
+        <h2 id="registrations-dialog-2-title">{{ 'REGISTRATIONS.DELETE_TITLE' | translate }}</h2>
         <button
           type="button"
           class="modal-close"

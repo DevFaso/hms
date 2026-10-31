@@ -11,6 +11,7 @@ import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { HttpClient } from '@angular/common/http';
 import { ToastService } from '../core/toast.service';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 interface FeatureFlag {
   key: string;
@@ -31,7 +32,7 @@ interface FlagOverride {
 @Component({
   selector: 'app-feature-flags',
   standalone: true,
-  imports: [FormsModule, TranslateModule],
+  imports: [ModalDialogDirective, FormsModule, TranslateModule],
   templateUrl: './feature-flags.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './feature-flags.scss',

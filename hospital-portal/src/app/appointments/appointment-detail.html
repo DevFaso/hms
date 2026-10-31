@@ -247,9 +247,12 @@
       appDialogFocus
       (dialogDismiss)="closeReschedule()"
       tabindex="-1"
+      aria-labelledby="appointment-detail-dialog-2-title"
     >
       <div class="modal-header">
-        <h2>{{ 'APPOINTMENTS.RESCHEDULE_APPOINTMENT' | translate }}</h2>
+        <h2 id="appointment-detail-dialog-2-title">
+          {{ 'APPOINTMENTS.RESCHEDULE_APPOINTMENT' | translate }}
+        </h2>
         <button
           type="button"
           class="modal-close"
@@ -367,9 +370,12 @@
       appDialogFocus
       (dialogDismiss)="closeCancelConfirm()"
       tabindex="-1"
+      aria-labelledby="appointment-detail-dialog-1-title"
     >
       <div class="modal-header">
-        <h2>{{ 'APPOINTMENTS.CANCEL_APPOINTMENT' | translate }}</h2>
+        <h2 id="appointment-detail-dialog-1-title">
+          {{ 'APPOINTMENTS.CANCEL_APPOINTMENT' | translate }}
+        </h2>
         <button
           type="button"
           class="modal-close"

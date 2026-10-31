@@ -368,13 +368,15 @@
     >
       <div
         class="modal"
+        appModalDialog
+        aria-labelledby="microbiology-dialog-3-title"
         role="dialog"
         aria-modal="true"
         tabindex="-1"
         (click)="$event.stopPropagation()"
         (keydown.escape)="closeCreateModal()"
       >
-        <h3>{{ 'MICRO.CREATE_TITLE' | translate }}</h3>
+        <h3 id="microbiology-dialog-3-title">{{ 'MICRO.CREATE_TITLE' | translate }}</h3>
 
         <div class="form-field">
           <label for="create-order">{{ 'MICRO.FIELD_ORDER' | translate }}</label>
@@ -475,13 +477,15 @@
     >
       <div
         class="modal"
+        appModalDialog
+        aria-labelledby="microbiology-dialog-2-title"
         role="dialog"
         aria-modal="true"
         tabindex="-1"
         (click)="$event.stopPropagation()"
         (keydown.escape)="closeIsolateModal()"
       >
-        <h3>{{ 'MICRO.ISOLATE_TITLE' | translate }}</h3>
+        <h3 id="microbiology-dialog-2-title">{{ 'MICRO.ISOLATE_TITLE' | translate }}</h3>
 
         <div class="form-field">
           <label for="iso-organism">{{ 'MICRO.FIELD_ORGANISM' | translate }}</label>
@@ -565,13 +569,15 @@
     >
       <div
         class="modal"
+        appModalDialog
+        aria-labelledby="microbiology-dialog-1-title"
         role="dialog"
         aria-modal="true"
         tabindex="-1"
         (click)="$event.stopPropagation()"
         (keydown.escape)="closeSuscModal()"
       >
-        <h3>{{ 'MICRO.SUSC_TITLE' | translate }}</h3>
+        <h3 id="microbiology-dialog-1-title">{{ 'MICRO.SUSC_TITLE' | translate }}</h3>
 
         <div class="form-field">
           <label for="susc-antibiotic">{{ 'MICRO.FIELD_ANTIBIOTIC' | translate }}</label>

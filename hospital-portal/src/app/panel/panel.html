@@ -159,6 +159,7 @@
 @if (showAssign()) {
   <div class="modal-backdrop" (click)="closeAssign()" aria-hidden="true"></div>
   <div
+    appModalDialog
     #assignDialog
     class="modal"
     role="dialog"
@@ -243,6 +244,7 @@
 @if (ending(); as row) {
   <div class="modal-backdrop" (click)="closeEnd()" aria-hidden="true"></div>
   <div
+    appModalDialog
     #endDialog
     class="modal"
     role="dialog"

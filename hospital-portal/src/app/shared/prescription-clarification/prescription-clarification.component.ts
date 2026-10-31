@@ -22,6 +22,7 @@ import { expandRoleEquivalents, roleSatisfies } from '../../core/role-equivalenc
 import { ToastService } from '../../core/toast.service';
 import { PrescriptionService } from '../../services/prescription.service';
 import { ServerTimePipe } from '../pipes/server-time.pipe';
+import { ModalDialogDirective } from '../a11y/modal-dialog.directive';
 
 /** Which half of the exchange this instance offers. */
 export type ClarificationMode = 'PHARMACY' | 'PRESCRIBER';
@@ -82,7 +83,7 @@ const HIDDEN_ANSWER = {
 @Component({
   selector: 'app-prescription-clarification',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule],
+  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, ModalDialogDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './prescription-clarification.component.html',
   styleUrl: './prescription-clarification.component.scss',

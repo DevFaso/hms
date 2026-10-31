@@ -158,12 +158,14 @@
       <dialog
         class="modal modal-lg"
         [open]="showModal()"
+        appModalDialog
+        aria-labelledby="hospital-list-dialog-1-title"
         (click)="$event.stopPropagation()"
         (keydown.escape)="closeModal()"
         tabindex="-1"
       >
         <div class="modal-header">
-          <h2>
+          <h2 id="hospital-list-dialog-1-title">
             {{ editing() ? ('HOSPITALS.EDIT' | translate) : ('HOSPITALS.CREATE' | translate) }}
           </h2>
           <button
@@ -403,12 +405,14 @@
       <dialog
         class="modal"
         [open]="showDeleteConfirm()"
+        appModalDialog
+        aria-labelledby="hospital-list-dialog-2-title"
         (click)="$event.stopPropagation()"
         (keydown.escape)="cancelDelete()"
         tabindex="-1"
       >
         <div class="modal-header">
-          <h2>{{ 'HOSPITALS.DELETE' | translate }}</h2>
+          <h2 id="hospital-list-dialog-2-title">{{ 'HOSPITALS.DELETE' | translate }}</h2>
           <button
             [attr.aria-label]="'COMMON.CLOSE' | translate"
             class="modal-close"

@@ -186,8 +186,10 @@
         tabindex="-1"
         (click)="$event.stopPropagation()"
         (keydown.escape)="closeBaseline(); $event.stopPropagation()"
+        appModalDialog
+        aria-labelledby="security-tab-dialog-2-title"
       >
-        <h2>{{ 'ADMIN_GOV.NEW_BASELINE' | translate }}</h2>
+        <h2 id="security-tab-dialog-2-title">{{ 'ADMIN_GOV.NEW_BASELINE' | translate }}</h2>
         <label class="form-field">
           <span>{{ 'ADMIN_GOV.BASELINE_TITLE' | translate }} *</span>
           <input
@@ -258,8 +260,12 @@
         tabindex="-1"
         (click)="$event.stopPropagation()"
         (keydown.escape)="closeSimulation(); $event.stopPropagation()"
+        appModalDialog
+        aria-labelledby="security-tab-dialog-1-title"
       >
-        <h2>{{ 'ADMIN_GOV.SIMULATE_TITLE' | translate: { title: template.title } }}</h2>
+        <h2 id="security-tab-dialog-1-title">
+          {{ 'ADMIN_GOV.SIMULATE_TITLE' | translate: { title: template.title } }}
+        </h2>
         @if (!simResult()) {
           <label class="form-field">
             <span>{{ 'ADMIN_GOV.SCENARIO' | translate }} *</span>

@@ -28,9 +28,11 @@
   <div class="bpa-modal-backdrop" data-testid="bpa-critical-modal">
     <div
       class="bpa-modal"
+      appModalDialog
       role="dialog"
       aria-modal="true"
       aria-labelledby="bpa-critical-modal-title"
+      (escaped)="refuseEscape()"
     >
       <header class="bpa-modal__header">
         <span class="bpa-modal__indicator" aria-hidden="true">!</span>

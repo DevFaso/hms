@@ -22,6 +22,7 @@ import {
 } from '../../services/eligibility.service';
 import { ToastService } from '../../core/toast.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
+import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 
 interface SchemeOption {
   value: EligibilityScheme;
@@ -38,7 +39,14 @@ interface SchemeOption {
 @Component({
   selector: 'app-eligibility-check-dialog',
   standalone: true,
-  imports: [FormsModule, TranslateModule, EnumLabelPipe, DatePipe, ServerTimePipe],
+  imports: [
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+    DatePipe,
+    ServerTimePipe,
+    ModalDialogDirective,
+  ],
   templateUrl: './eligibility-check-dialog.component.html',
   styleUrl: './eligibility-check-dialog.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

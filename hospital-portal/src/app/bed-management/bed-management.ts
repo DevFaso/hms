@@ -22,6 +22,7 @@ import { ToastService } from '../core/toast.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { DepartmentLookupService, DepartmentOption } from '../services/department-lookup.service';
 import { RoleContextService } from '../core/role-context.service';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 /**
  * Ward & bed administration (P0 #4). First writer for the V25 ward/bed
@@ -30,7 +31,7 @@ import { RoleContextService } from '../core/role-context.service';
 @Component({
   selector: 'app-bed-management',
   standalone: true,
-  imports: [FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [ModalDialogDirective, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './bed-management.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './bed-management.scss',

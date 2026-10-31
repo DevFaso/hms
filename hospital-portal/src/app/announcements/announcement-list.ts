@@ -6,11 +6,12 @@ import { AnnouncementService, AnnouncementResponse } from '../services/announcem
 import { ToastService } from '../core/toast.service';
 import { AuthService } from '../auth/auth.service';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 @Component({
   selector: 'app-announcement-list',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule],
+  imports: [ModalDialogDirective, ServerTimePipe, CommonModule, FormsModule, TranslateModule],
   templateUrl: './announcement-list.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './announcement-list.scss',

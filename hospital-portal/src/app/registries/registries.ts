@@ -28,6 +28,7 @@ import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 type StatusFilter = 'ACTIVE' | ProgramEnrollmentStatus;
 
@@ -55,7 +56,14 @@ interface RegistryLoad {
 @Component({
   selector: 'app-registries',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, PatientPickerComponent],
+  imports: [
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    PatientPickerComponent,
+    ModalDialogDirective,
+  ],
   templateUrl: './registries.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './registries.scss',
