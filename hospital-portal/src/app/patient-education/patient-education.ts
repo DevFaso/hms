@@ -26,6 +26,7 @@ import { ToastService } from '../core/toast.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { MeasurePipe } from '../shared/pipes/measure.pipe';
 
 /**
  * Patient-education workspace (Phase 3 task 18): resource library + assign/
@@ -39,6 +40,7 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    MeasurePipe,
     ModalDialogDirective,
     ServerTimePipe,
     CommonModule,

@@ -540,7 +540,7 @@
                   [class.low]="c.confidenceScore < 50"
                 ></span>
               </span>
-              {{ c.confidenceScore }}%
+              {{ c.confidenceScore | measure: '%' }}
             </td>
           </tr>
         }

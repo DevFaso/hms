@@ -28,6 +28,7 @@ import { of } from 'rxjs';
 import { labelledRefusalReason } from '../shared/refusal-reason';
 import { blankFields, focusFirstInvalid } from '../shared/forms/invalid-fields';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { MeasurePipe } from '../shared/pipes/measure.pipe';
 
 /**
  * QA D1118: the card names what the match is really on. A record found by the
@@ -64,6 +65,7 @@ export function matchBasisSuffix(matches: readonly Pick<RegistrationMatch, 'matc
   selector: 'app-patient-form',
   standalone: true,
   imports: [
+    MeasurePipe,
     ModalDialogDirective,
     FormsModule,
     RouterLink,

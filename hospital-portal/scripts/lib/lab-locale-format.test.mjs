@@ -223,3 +223,22 @@ test('QA D1095 guard: the scan sees a value shown without its unit', () => {
     [],
   );
 });
+
+test('QA D1135 / D1106 guard: a percentage takes its sign from the formatter', () => {
+  // round 20: the bed board's "16.7%" in French and Spanish
+  const raw = [
+    '<span class="census-value">{{ b.census.occupancyRate }}%</span>',
+    "<span>{{ rate | number: '1.1-1' }}%</span>",
+    "{{ (match.score * 100 | number: '1.0-1') + '%' }}",
+    "{{ 'BED_BOARD.WARD_STATS' | translate: { occupied: o, total: t, rate: ward.occupancyRate } }}",
+  ];
+  for (const html of raw) assert.ok(decimalTemplateFindings(html).length >= 1, html);
+  const clean = [
+    "<span>{{ b.census.occupancyRate | measure: '%' }}</span>",
+    "{{ 'X' | translate: { rate: (ward.occupancyRate | number: '1.0-1') } }}",
+  ];
+  for (const html of clean) assert.deepEqual(decimalTemplateFindings(html), [], html);
+  assert.equal(decimalCodeFindings("const label = pct + '%';").length, 1);
+  assert.equal(decimalCodeFindings('const s = `${pct}%`;').length, 1);
+  assert.deepEqual(decimalCodeFindings('barHeight(n: number) { return `${n * 100}%`; }'), []);
+});

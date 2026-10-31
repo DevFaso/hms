@@ -41,6 +41,7 @@ import {
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { labSeverityFlag, labSeverityTone } from '../shared/lab-severity';
 import { LabValuePipe, formatLabNumber } from '../shared/lab-value.pipe';
+import { MeasurePipe } from '../../shared/pipes/measure.pipe';
 
 /**
  * D49: the order code the API sends is the order's UUID. Readers get its first
@@ -55,6 +56,7 @@ export { toServerDateTime, toLocalInputValue };
   selector: 'app-lab-results',
   standalone: true,
   imports: [
+    MeasurePipe,
     LabCorrectionBadgeComponent,
     CdkTrapFocus,
     LabValuePipe,

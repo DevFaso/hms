@@ -129,6 +129,33 @@ export function decimalTemplateFindings(html, componentSource = '') {
       });
       continue;
     }
+    // QA D1135 / D1106 (round 20): a percentage with the "%" typed after it.
+    // `{{ rate }}%` printed "16.7%" in French; even `{{ rate | number }}%`
+    // glues the sign ("16,7%" where French writes "16,7 %"). The sign belongs
+    // to the formatter: `| measure: '%'` (formatMeasure).
+    const after = html.slice(m.index + m[0].length, m.index + m[0].length + 3);
+    if ((/^\s*%/.test(after) || /\+\s*'\s?%'/.test(expr)) && !/\|\s*measure\s*:\s*'%'/.test(expr)) {
+      findings.push({
+        line,
+        rule: 'percent',
+        anchor: expr.trim(),
+        message: `percentage with a typed "%": use | measure: '%' — {{${expr}}}%`,
+      });
+      continue;
+    }
+    // The bed board's ward line handed the raw rate to its sentence
+    // (`translate: { rate: ward.occupancyRate }` -> "16.7 %" in French): a
+    // rate/percentage translation parameter goes through a number formatter.
+    for (const p of expr.matchAll(PERCENT_PARAM)) {
+      if (!FORMATTER_PIPE.test(p[2])) {
+        findings.push({
+          line,
+          rule: 'percent-param',
+          anchor: `${p[1]}: ${p[2].trim()}`,
+          message: `percentage parameter ${p[1]} handed to a sentence unformatted: pipe it through | number / | measure`,
+        });
+      }
+    }
     if (FORMATTER_PIPE.test(expr)) continue;
     for (const field of decimalFields(expr, labLoopVars)) {
       const call = enclosingCall(expr, field.index);
@@ -143,6 +170,9 @@ export function decimalTemplateFindings(html, componentSource = '') {
   }
   return findings;
 }
+
+/** A translation parameter named for a rate or a percentage, and its value (up to `,` or `}`). */
+const PERCENT_PARAM = /\b(rate|pct|percent\w*|percentage\w*)\s*:\s*([^,}]+)/gi;
 
 const COORDINATE = /(?:^|[^\w$.])(?:[\w$]+\.)?(?:x|y|cx|cy|x1|x2|y1|y2)\s*$/;
 
@@ -173,5 +203,19 @@ export function decimalCodeFindings(source) {
         'a rounded number turned into text with toString(): use formatLabNumber / formatDecimal',
     });
   }
+  // QA D1135: a percentage composed in code (`x + '%'`, `${x}%`). A CSS
+  // length (a bar's height or width) is not display text.
+  for (const m of source.matchAll(/\+\s*' ?%'|\}%`/g)) {
+    const before = source.slice(Math.max(0, m.index - 160), m.index);
+    if (CSS_CONTEXT.test(before)) continue;
+    findings.push({
+      line: lineAt(source, m.index),
+      rule: 'percent',
+      anchor: source.slice(Math.max(0, m.index - 30), m.index + 4).trim(),
+      message: "a percentage composed with a typed '%': use formatMeasure(value, '%')",
+    });
+  }
   return findings;
 }
+
+const CSS_CONTEXT = /(?:height|width|left|top|right|bottom|style|offset|size|translate)\w*\s*(?:\(|=|:)[^;]*$/i;

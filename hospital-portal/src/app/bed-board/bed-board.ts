@@ -35,6 +35,7 @@ import { finalize } from 'rxjs';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { MeasurePipe } from '../shared/pipes/measure.pipe';
 
 /**
  * The ward board (Tier 2 items 30, 31 and 32).
@@ -55,6 +56,7 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
   selector: 'app-bed-board',
   standalone: true,
   imports: [
+    MeasurePipe,
     ServerTimePipe,
     CommonModule,
     FormsModule,

@@ -1,3 +1,4 @@
+import { resetStoredLangForTests } from '../shared/i18n/app-locale';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { HttpErrorResponse, provideHttpClient, withXhr } from '@angular/common/http';
@@ -688,4 +689,31 @@ describe('BedBoardComponent', () => {
       ?.textContent?.trim();
     expect(title).toBe('Isolation precautions —');
   });
+
+  // QA D1135 / D1106 (NOT_FIXED r19, r20): the occupancy tile read "16.7%"
+  // in French and Spanish.
+  for (const [lang, expected] of [
+    ['fr', '16,7 %'],
+    ['es', '16,7 %'],
+    ['en', '16.7%'],
+  ]) {
+    it(`shows the occupancy in the reader's notation (${lang}: ${expected})`, () => {
+      localStorage.setItem('lang', lang);
+      resetStoredLangForTests();
+      try {
+        boardSpy.getBoard.and.returnValue(
+          of(board({ census: { ...board().census, occupancyRate: 16.7 } })),
+        );
+        const fixture = TestBed.createComponent(BedBoardComponent);
+        fixture.detectChanges();
+        const values = Array.from(
+          (fixture.nativeElement as HTMLElement).querySelectorAll('.census-value'),
+        ).map((e) => e.textContent?.trim());
+        expect(values).toContain(expected);
+      } finally {
+        localStorage.removeItem('lang');
+        resetStoredLangForTests();
+      }
+    });
+  }
 });

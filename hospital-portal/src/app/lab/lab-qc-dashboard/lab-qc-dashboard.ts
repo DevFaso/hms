@@ -19,6 +19,7 @@ import { ToastService } from '../../core/toast.service';
 import { currentLocale, formatDecimal } from '../../shared/i18n/app-locale';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { serverInstant } from '../../shared/date-utils';
+import { MeasurePipe } from '../../shared/pipes/measure.pipe';
 
 interface QcPoint {
   x: number;
@@ -55,7 +56,7 @@ interface QcChartGroup {
 @Component({
   selector: 'app-lab-qc-dashboard',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, TranslateModule],
+  imports: [MeasurePipe, ServerTimePipe, CommonModule, TranslateModule],
   templateUrl: './lab-qc-dashboard.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lab-qc-dashboard.scss',

@@ -32,12 +32,13 @@ import { currentLocale } from '../shared/i18n/app-locale';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 import { serverInstant } from '../shared/date-utils';
 import { PatientPortalService } from '../services/patient-portal.service';
+import { MeasurePipe } from '../shared/pipes/measure.pipe';
 type ProfileTab = 'overview' | 'edit' | 'security' | 'activity';
 
 @Component({
   selector: 'app-profile',
   standalone: true,
-  imports: [FormsModule, TranslateModule, EnumLabelPipe, RoleLabelPipe],
+  imports: [MeasurePipe, FormsModule, TranslateModule, EnumLabelPipe, RoleLabelPipe],
   templateUrl: './profile.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './profile.scss',

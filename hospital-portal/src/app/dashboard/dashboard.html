@@ -570,7 +570,7 @@
             "
           >
             <span class="kv-label">{{ 'DASHBOARD.OCCUPANCY_RATE' | translate }}</span>
-            <span class="kv-value">{{ bedOccupancy()!.occupancyRate | number: '1.1-1' }}%</span>
+            <span class="kv-value">{{ bedOccupancy()!.occupancyRate | measure: '%' }}</span>
           </div>
         </section>
       }
@@ -645,9 +645,9 @@
               <span style="font-size: 13px; color: #475569; font-weight: 500">{{
                 'DASHBOARD.COLLECTION_RATE' | translate
               }}</span>
-              <span style="font-size: 16px; font-weight: 700; color: #059669"
-                >{{ paymentCollectionRate() | number: '1.1-1' }}%</span
-              >
+              <span style="font-size: 16px; font-weight: 700; color: #059669">{{
+                paymentCollectionRate() | measure: '%'
+              }}</span>
             </div>
           </div>
         </section>
@@ -1097,7 +1097,7 @@
                             : '#059669'
                       "
                     >
-                      {{ row.occupancyRate | number: '1.1-1' }}%
+                      {{ row.occupancyRate | measure: '%' }}
                     </td>
                   </tr>
                 }
@@ -2366,7 +2366,7 @@
               <div class="stat-body">
                 <span class="stat-value" style="color: #059669">
                   @if ((qualityManagerDashboard()?.qualityPassRate ?? null) !== null) {
-                    {{ qualityManagerDashboard()!.qualityPassRate! | number: '1.1-1' }}%
+                    {{ qualityManagerDashboard()!.qualityPassRate! | measure: '%' }}
                   } @else {
                     N/A
                   }
