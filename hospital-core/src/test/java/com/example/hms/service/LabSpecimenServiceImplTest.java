@@ -418,4 +418,44 @@ class LabSpecimenServiceImplTest {
         assertThatThrownBy(() -> service.receiveSpecimen(specimenId, Locale.ENGLISH))
             .isInstanceOf(ResourceNotFoundException.class);
     }
+
+    /**
+     * QA D1109: an order that already has a result, or is cancelled, takes no
+     * new specimen (the collection on a released order left a dangling tube
+     * with an accession number nobody would run).
+     */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = LabOrderStatus.class,
+        names = {"RESULTED", "VERIFIED", "COMPLETED", "CANCELLED"})
+    void d1109_anAnsweredOrCancelledOrderTakesNoNewSpecimen(LabOrderStatus status) {
+        labOrder.setStatus(status);
+        LabSpecimenRequestDTO request = LabSpecimenRequestDTO.builder()
+            .labOrderId(labOrderId)
+            .specimenType("BLOOD")
+            .build();
+        when(labOrderRepository.findById(labOrderId)).thenReturn(Optional.of(labOrder));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        assertThatThrownBy(() -> service.createSpecimen(request, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("new specimen");
+        verify(labSpecimenRepository, never()).save(any());
+    }
+
+    /** QA D1109: a tube collected before its order was cancelled is not received. */
+    @Test
+    void d1109_aSpecimenOfACancelledOrderIsNotReceived() {
+        labOrder.setStatus(LabOrderStatus.CANCELLED);
+        LabSpecimen specimen = LabSpecimen.builder()
+            .labOrder(labOrder)
+            .status(LabSpecimenStatus.COLLECTED)
+            .build();
+        when(labSpecimenRepository.findById(specimenId)).thenReturn(Optional.of(specimen));
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+
+        assertThatThrownBy(() -> service.receiveSpecimen(specimenId, Locale.ENGLISH))
+            .isInstanceOf(BusinessException.class)
+            .hasMessageContaining("cancelled");
+        verify(labSpecimenRepository, never()).save(any());
+    }
 }

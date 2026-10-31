@@ -217,6 +217,19 @@ arbitrary URL.
 | `scripts/lib/maternity-notes-shown.test.mjs` | D1068: a free-text field a maternity form saves that no read surface renders. | Maternity templates; the two `recentDeliveryOverrideReason` confirmations excused |
 | `guard:a11y-dialogs`, `glued-colon` (shrunk) | D1004, D1079. | a11y-dialogs 247 → 210 pins; glued colons 113 sites in 41 files → 92 in 32 |
 
+## Guards added by fix/r19-lab-results-chart (round 19; extend these too)
+
+| Guard | Class | Scope / allowlist |
+|---|---|---|
+| `architecture/LabResultChartRound19GuardTest#d1095_*` | D1095: a lab value written out without its unit (a blank stored unit printed as "0,40"). The stored unit is read only through `LabResultMapper.unitOf` (the test definition's unit when none was typed); every class reading `getResultValue()` reads the unit too. | All of `src/main`; 4 named readers of the stored column, each with its reason (the mapper, the write path, two readers of the `ResultEntryDTO` built from `unitOf`) |
+| `architecture/LabResultChartRound19GuardTest#d1092_*` + `mapper/LabUnitConversionGradingTest` | D1092: a result released without asking whether any range could grade it (a mg/dL glucose on g/L ranges released ungraded, no critical alert). Every class that sets `released` asks `isUngradedForUnitMismatch`; mass and molar units convert by a power of ten (`LabUnitConversion`), nothing that needs the analyte is converted. | Every `setReleased(true)` in `src/main` (auto-verification, manual release, MLLP inbound); 0 allowed |
+| `architecture/LabResultChartRound19GuardTest#d1094_*` | D1094: an entity invariant that ties an order to the visit's clinician of record (`encounter.getStaff().getId()` in `model/`), answering a colleague with a 500. | All of `model/`; 1 allowed: `Prescription` (other branch's file; the service refuses first with a translated 400; flagged) |
+| `architecture/LabResultChartRound19GuardTest#d1109_*` + `LabOrderLifecycleTest#d1109_*` | D1109: a specimen write that ignores the order's lifecycle (a collection on a released order). Each of the three specimen writes calls its `LabOrderLifecycle.accepts…`; a fourth `save` fails the guard. | `LabSpecimenServiceImpl`; every `LabOrderStatus` decided |
+| `architecture/LabResultChartRound19GuardTest#d1120_*` | D1120: a lab test definition written without the duplicate-code check (`requireCodeFree`) — versions link instead. | Every `LabTestDefinition.builder()`; the service, its mapper (called by create only) and the dev seeder (looks the code up first) |
+| `architecture/LabResultChartRound19GuardTest#d1113_*` | D1113: an immunization reader that attributes a hospital (timeline provenance, FHIR `primarySource`) without asking whether the dose was transcribed. | All of `src/main`; 0 allowed |
+| `scripts/lib/lab-locale-format.test.mjs` (widened, `QA D1095`) | D1095: a template showing a lab value (`.resultValue`, the portal's `lab.result`, a `class="lab-value"` element) without its unit in the same expression or cell. | Every template; 0 allowed |
+| `scripts/lib/notification-destinations.test.mjs` (new) | D1110 (D983 class): a notification type the server writes with no decided destination. Each type (every `createNotification` type argument, literal or same-file constant) is a key of the portal's `DESTINATIONS` or in `NO_DESTINATION` with its reason; stale entries fail too. | 19 staff-only / informational types declared, each with its reason |
+
 ## What is not guarded (and why)
 
 - **Bean Validation default messages** (D925 "providerName: must not be

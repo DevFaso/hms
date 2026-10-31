@@ -90,6 +90,15 @@ public interface LabResultService {
      */
     LabResultResponseDTO releaseLabResult(UUID id, boolean selfReleaseConfirmed, Locale locale);
 
+    /**
+     * QA D1092: as {@link #releaseLabResult(UUID, boolean, Locale)}; a result
+     * no range can grade (its unit matches no range and converts to none) is
+     * released only with {@code ungradedConfirmed}, and its in-basket item
+     * reaches the ordering clinician flagged for review.
+     */
+    LabResultResponseDTO releaseLabResult(UUID id, boolean selfReleaseConfirmed, boolean ungradedConfirmed,
+                                          Locale locale);
+
     /** A release that has not confirmed a self-release. */
     LabResultResponseDTO releaseLabResult(UUID id, Locale locale);
 

@@ -2096,4 +2096,122 @@ class LabTestDefinitionServiceImplTest {
             assertThat(definition.getApprovalStatus()).isEqualTo(LabTestDefinitionApprovalStatus.REJECTED);
         }
     }
+
+    // ── QA D1120: versions and duplicate codes ───────────────────────────
+
+    /** A second live definition with the same code is refused clearly, not accepted silently. */
+    @Test
+    void d1120_aDuplicateCodeIsRefused() {
+        LabTestDefinition live = LabTestDefinition.builder().testCode("CBC").name("CBC").build();
+        live.setId(UUID.randomUUID());
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("admin");
+            when(userRepository.findByUsername("admin")).thenReturn(Optional.of(currentUser));
+            when(assignmentRepository.findById(assignmentUUID)).thenReturn(Optional.of(assignment));
+            assignment.setUser(currentUser);
+            managesHospital(currentUser);
+            when(repository.findLiveByCodeAtHospital("CBC", hospitalId)).thenReturn(List.of(live));
+
+            assertThatThrownBy(() -> service.create(requestDTO))
+                .isInstanceOf(com.example.hms.exception.ConflictException.class)
+                .hasMessageContaining("CBC")
+                .hasMessageContaining("new version");
+            verify(repository, never()).save(any());
+        }
+    }
+
+    /** An ACTIVE definition gets a linked DRAFT copy: same code, ranges copied, version + 1. */
+    @Test
+    void d1120_aNewVersionIsALinkedDraftCopy() {
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.ACTIVE);
+        definition.setUnit("g/L");
+        definition.setPointOfCare(true);
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("admin");
+            when(userRepository.findByUsername("admin")).thenReturn(Optional.of(currentUser));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            lenient().when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+                eq(currentUser.getId()), eq(hospitalId), anySet())).thenReturn(true);
+            actingAt(hospitalId);
+            when(repository.findBySupersedesDefinitionId(defId)).thenReturn(List.of());
+            when(repository.save(any(LabTestDefinition.class))).thenAnswer(inv -> inv.getArgument(0));
+
+            service.createNewVersion(defId);
+
+            org.mockito.ArgumentCaptor<LabTestDefinition> saved =
+                org.mockito.ArgumentCaptor.forClass(LabTestDefinition.class);
+            verify(repository).save(saved.capture());
+            LabTestDefinition next = saved.getValue();
+            assertThat(next.getTestCode()).isEqualTo("CBC");
+            assertThat(next.getApprovalStatus()).isEqualTo(LabTestDefinitionApprovalStatus.DRAFT);
+            assertThat(next.isActive()).isFalse();
+            assertThat(next.getSupersedesDefinitionId()).isEqualTo(defId);
+            assertThat(next.getVersionNumber()).isEqualTo(2);
+            assertThat(next.getHospital()).isSameAs(hospital);
+            assertThat(next.getUnit()).isEqualTo("g/L");
+            assertThat(next.isPointOfCare()).isTrue();
+            assertThat(next.getReferenceRanges()).hasSize(1);
+            assertThat(next.getReferenceRanges().get(0)).as("a copy, never the live range itself")
+                .isNotSameAs(definition.getReferenceRanges().get(0))
+                .isEqualTo(definition.getReferenceRanges().get(0));
+            assertThat(definition.getApprovalStatus())
+                .as("the live version stays live until the new one is activated")
+                .isEqualTo(LabTestDefinitionApprovalStatus.ACTIVE);
+        }
+    }
+
+    @Test
+    void d1120_onlyAnActiveDefinitionIsVersioned_andOneAtATime() {
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("admin");
+            when(userRepository.findByUsername("admin")).thenReturn(Optional.of(currentUser));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            lenient().when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+                eq(currentUser.getId()), eq(hospitalId), anySet())).thenReturn(true);
+            actingAt(hospitalId);
+
+            definition.setApprovalStatus(LabTestDefinitionApprovalStatus.DRAFT);
+            assertThatThrownBy(() -> service.createNewVersion(defId))
+                .isInstanceOf(com.example.hms.exception.ConflictException.class);
+
+            definition.setApprovalStatus(LabTestDefinitionApprovalStatus.ACTIVE);
+            LabTestDefinition inProgress = LabTestDefinition.builder().testCode("CBC").name("CBC")
+                .approvalStatus(LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW).build();
+            when(repository.findBySupersedesDefinitionId(defId)).thenReturn(List.of(inProgress));
+            assertThatThrownBy(() -> service.createNewVersion(defId))
+                .isInstanceOf(com.example.hms.exception.ConflictException.class)
+                .hasMessageContaining("already in progress");
+            verify(repository, never()).save(any());
+        }
+    }
+
+    /** Activating a version retires the one it replaces, so the code is live once. */
+    @Test
+    void d1120_activatingAVersionRetiresTheOneItReplaces() {
+        LabTestDefinition previous = LabTestDefinition.builder().testCode("CBC").name("CBC")
+            .approvalStatus(LabTestDefinitionApprovalStatus.ACTIVE).active(true).build();
+        UUID previousId = UUID.randomUUID();
+        previous.setId(previousId);
+        previous.setHospital(hospital);
+        definition.setApprovalStatus(LabTestDefinitionApprovalStatus.APPROVED);
+        definition.setSupersedesDefinitionId(previousId);
+        definition.setVersionNumber(2);
+        User director = userWithRole("ROLE_LAB_DIRECTOR");
+        holdsRolesAtHospital(director);
+
+        try (MockedStatic<SecurityUtils> sec = mockStatic(SecurityUtils.class)) {
+            sec.when(SecurityUtils::getCurrentUsername).thenReturn("tester");
+            when(userRepository.findByUsername("tester")).thenReturn(Optional.of(director));
+            when(repository.findById(defId)).thenReturn(Optional.of(definition));
+            when(repository.findById(previousId)).thenReturn(Optional.of(previous));
+            when(repository.save(any(LabTestDefinition.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(mapper.toDto(definition)).thenReturn(responseDTO);
+
+            service.processApprovalAction(defId, approvalReq("ACTIVATE"));
+
+            assertThat(definition.getApprovalStatus()).isEqualTo(LabTestDefinitionApprovalStatus.ACTIVE);
+            assertThat(previous.getApprovalStatus()).isEqualTo(LabTestDefinitionApprovalStatus.RETIRED);
+            assertThat(previous.isActive()).isFalse();
+        }
+    }
 }

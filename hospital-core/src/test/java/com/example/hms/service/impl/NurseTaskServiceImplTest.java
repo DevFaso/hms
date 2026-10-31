@@ -2513,6 +2513,9 @@ class NurseTaskServiceImplTest {
         ArgumentCaptor<NursingNote> savedNote = ArgumentCaptor.forClass(NursingNote.class);
         verify(nursingNoteRepository).save(savedNote.capture());
         assertThat(savedNote.getValue().getTitle()).isEqualTo("Réévaluation douleur post-morphine");
+        // QA D1107: the dialog has no draft state; the saved note is final, signed by its author.
+        assertThat(savedNote.getValue().getSignedAt()).isEqualTo(savedNote.getValue().getDocumentedAt()).isNotNull();
+        assertThat(savedNote.getValue().getSignedByName()).isEqualTo("Jane RN");
         assertThat(result.getTitle()).isEqualTo("Réévaluation douleur post-morphine");
         assertThat(result.getTemplate()).isEqualTo("DAR");
         assertThat(result.getAuthorName()).isEqualTo("Jane RN");

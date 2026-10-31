@@ -401,8 +401,13 @@ public class VisitTimelineRows {
         putIfNotNull(metadata, META_CLINICIAN, firstNonBlank(note.getSignedByName(), note.getAuthorName()));
         String template = note.getTemplate() != null ? label(note.getTemplate()) : "—";
         String summary = MessageUtil.resolveOrRaw("timeline.nursingNote.summary", template);
+        // QA D1107: the title the nurse gave the note leads its row.
+        String title = blankToNull(note.getTitle());
+        if (title != null) {
+            summary = summary + " — " + title.strip();
+        }
         String body = truncate(firstNonBlank(note.getNarrative(), note.getDataAssessment(), note.getActionSummary(),
-            note.getResponseSummary(), note.getDataSubjective(), note.getTitle()));
+            note.getResponseSummary(), note.getDataSubjective()));
         if (body != null) {
             summary = summary + " — " + body;
         }
@@ -423,12 +428,51 @@ public class VisitTimelineRows {
         if (dose.getDoseNumber() != null) {
             summary = summary + " · " + MessageUtil.resolveOrRaw("timeline.immunization.dose", dose.getDoseNumber());
         }
+        // QA D1113: a dose transcribed from a card, another facility's record
+        // or the family's word was not given here. The row names its source,
+        // and the hospital that typed it in is where it was RECORDED, not
+        // where it was given (it read "domain Centre Hospitalier Wend-Panga"
+        // for a BCG given years earlier elsewhere).
+        String source = transcribedSourceOf(dose);
+        if (source != null) {
+            summary = summary + " · " + immunizationSourceLabel(source);
+        }
         summary = TimelineStatus.withStatusLabel(summary, status != null ? immunizationStatusLabel(status) : null);
+        Map<String, Object> provenance = provenance(metadata, dose.getHospital(), acting);
+        if (source != null) {
+            provenance.put("transcribed", true);
+            provenance.put("sourceOfRecord", source);
+            Object recordedAt = provenance.remove("sourceHospitalName");
+            putIfNotNull(provenance, "recordedAtHospitalName", recordedAt);
+        }
         return row(dose.getId(), CATEGORY_IMMUNIZATION,
             atStartOfDay(dose.getAdministrationDate()),
             summary,
             sensitive(dose.getEncounter()),
-            provenance(metadata, dose.getHospital(), acting));
+            provenance);
+    }
+
+    /** The dose given here, by the portal's own code for it. */
+    static final String SOURCE_GIVEN_HERE = "GIVEN_HERE";
+
+    /**
+     * QA D1113: the source of a dose that was NOT given here (VACCINATION_CARD,
+     * EXTERNAL_RECORD, PATIENT_REPORT, a registry), trimmed and upper-cased;
+     * null for a dose given here or with no source recorded.
+     */
+    public static String transcribedSourceOf(PatientImmunization dose) {
+        String source = dose != null ? blankToNull(dose.getSourceOfRecord()) : null;
+        if (source == null) {
+            return null;
+        }
+        String code = source.trim().toUpperCase(Locale.ROOT);
+        return SOURCE_GIVEN_HERE.equals(code) ? null : code;
+    }
+
+    /** The source in the reader's language; the text as typed when it is not one of the known codes. */
+    private static String immunizationSourceLabel(String code) {
+        String label = MessageUtil.resolveOrNull(null, "timeline.immunization.source." + code);
+        return label != null ? label : code;
     }
 
     /** An immunization's free-text status in the reader's language (a String column, not an enum). */

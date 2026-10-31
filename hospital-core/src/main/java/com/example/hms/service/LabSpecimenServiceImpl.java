@@ -75,6 +75,11 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
         if (labOrder.getStatus() == LabOrderStatus.ENTERED_IN_ERROR) {
             throw new BusinessException("lab.order.enteredInError");
         }
+        // QA D1109: nor does an order already answered (a result exists) or
+        // cancelled: the collection left a dangling tube on a released order.
+        if (!com.example.hms.service.lab.LabOrderLifecycle.acceptsNewSpecimen(labOrder.getStatus())) {
+            throw new BusinessException("lab.specimen.orderClosed");
+        }
 
         // QA D637: a specimen cannot be collected before the test was ordered
         // (a few minutes of clock skew between devices are tolerated).
@@ -152,6 +157,10 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
         // (OML^O21) for an order that no longer exists clinically.
         if (specimen.getLabOrder().getStatus() == LabOrderStatus.ENTERED_IN_ERROR) {
             throw new BusinessException("lab.order.enteredInError");
+        }
+        // QA D1109: nor on a cancelled order.
+        if (!com.example.hms.service.lab.LabOrderLifecycle.acceptsSpecimenReceipt(specimen.getLabOrder().getStatus())) {
+            throw new BusinessException("lab.specimen.orderCancelled");
         }
 
         if (specimen.getStatus() != LabSpecimenStatus.COLLECTED

@@ -157,6 +157,21 @@ public class LabTestDefinitionController {
         return ResponseEntity.ok(ApiResponseWrapper.success(service.processApprovalAction(id, dto)));
     }
 
+    /**
+     * QA D1120: a new DRAFT version of an ACTIVE definition, linked to it. It
+     * is approved like any definition and, on ACTIVATE, retires the version it
+     * replaces. 409 for a definition that is not ACTIVE or already has a
+     * version in progress.
+     */
+    @PostMapping("/{id}/new-version")
+    @PreAuthorize(MANAGE_ROLES)
+    @com.example.hms.security.audit.WriteAudited(skip = true,
+        reason = "QA D1120: the service writes one CONFIGURATION_CHANGED row naming the NEW_VERSION step")
+    @Operation(summary = "Create a new draft version of an active Lab Test Definition")
+    public ResponseEntity<ApiResponseWrapper<LabTestDefinitionResponseDTO>> createNewVersion(@PathVariable UUID id) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(service.createNewVersion(id)));
+    }
+
     @PutMapping("/{id}/reference-ranges")
     @PreAuthorize(MANAGE_ROLES)
     @Operation(summary = "Update reference ranges for a Lab Test Definition")

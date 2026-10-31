@@ -133,6 +133,8 @@ import com.example.hms.service.recordaccess.BreakGlassGate;
 @RequiredArgsConstructor
 @Slf4j
 public class PatientServiceImpl implements PatientService {
+    /** QA D1079: "label: value" in the reader's typography (a space before the colon in French). */
+    static final String LAB_SUMMARY_LABEL_VALUE_KEY = "timeline.labResult.labelValue";
     private static final String USER_NOT_FOUND_KEY = "user.notFound";
     private static final String HOSPITAL_NOT_FOUND_KEY = "hospital.notFound";
 
@@ -2263,7 +2265,7 @@ public class PatientServiceImpl implements PatientService {
         return admitted.stream()
             .map(result -> {
                 Map<String, Object> metadata = new HashMap<>();
-                putIfNotNull(metadata, "unit", result.getResultUnit());
+                putIfNotNull(metadata, "unit", com.example.hms.mapper.LabResultMapper.unitOf(result));
                 putIfNotNull(metadata, "acknowledged", result.isAcknowledged());
                 putIfNotNull(metadata, "released", result.isReleased());
                 // E8 #50: the ordering clinician, NOT releasedByDisplay. The
@@ -2853,28 +2855,31 @@ public class PatientServiceImpl implements PatientService {
             .orElse(null);
         String testName = test == null ? null
             : Optional.ofNullable(test.getName()).filter(s -> !s.isBlank()).orElse(test.getTestCode());
-        StringBuilder summary = new StringBuilder(testName != null && !testName.isBlank() ? testName
-            : com.example.hms.utility.MessageUtil.resolveOrRaw("timeline.category.LAB_RESULT"));
+        String label = testName != null && !testName.isBlank() ? testName
+            : com.example.hms.utility.MessageUtil.resolveOrRaw("timeline.category.LAB_RESULT");
         // QA D740: an unreleased value stays in the laboratory.
+        // QA D1079: the label and its value are joined by the reader's
+        // typography ("Glycémie à jeun : 5,6 g/L" in French), not a glued colon.
         if (!ClinicalLabResultView.showsValue(result)) {
-            return summary.append(": ")
-                .append(com.example.hms.utility.MessageUtil.resolveOrRaw("lab.result.pendingRelease"))
-                .toString();
+            return labelValue(label, com.example.hms.utility.MessageUtil.resolveOrRaw("lab.result.pendingRelease"));
         }
-        summary.append(": ").append(result.getResultValue());
+        StringBuilder summary = new StringBuilder(labelValue(label, result.getResultValue()));
         // QA D1016: the timeline says the value corrects a released one.
         if (com.example.hms.service.lab.LabResultCorrections.isCorrection(result)) {
             summary.append(" (").append(com.example.hms.utility.MessageUtil.resolveOrRaw("lab.result.correctedLabel")).append(")");
         }
-        // QA D958: the unit of the result, else the test's own unit.
-        String unit = result.getResultUnit();
-        if ((unit == null || unit.isBlank()) && test != null) {
-            unit = test.getUnit();
-        }
-        if (unit != null && !unit.isBlank()) {
+        // QA D958 / D1095: the unit of the result, else the test's own unit.
+        String unit = com.example.hms.mapper.LabResultMapper.unitOf(result);
+        if (unit != null) {
             summary.append(" ").append(unit);
         }
         return summary.toString();
+    }
+
+    /** QA D1079: "label: value" from the bundle (FR "label : value"); plain "label: value" with no bundle. */
+    static String labelValue(String label, String value) {
+        String joined = com.example.hms.utility.MessageUtil.resolveOrRaw(LAB_SUMMARY_LABEL_VALUE_KEY, label, value);
+        return LAB_SUMMARY_LABEL_VALUE_KEY.equals(joined) ? label + ": " + value : joined;
     }
 
     private String formatAllergySummary(PatientAllergy allergy) {

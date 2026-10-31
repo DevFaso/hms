@@ -113,9 +113,124 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
         }
 
         dto.setLoincCode(TerminologyCodes.normalizeAndRequireValidLoinc(dto.getLoincCode()));
+        // QA D1120: a code already live in this catalogue is refused, not
+        // silently duplicated; a changed test is a new version of it.
+        requireCodeFree(dto.getTestCode(), hospital != null ? hospital.getId() : null, null);
         LabTestDefinition entity = mapper.toEntity(dto, assignment);
         entity.setHospital(hospital);
         return mapper.toDto(repository.save(entity));
+    }
+
+    /**
+     * QA D1120: refuses {@code testCode} when a definition that is not
+     * retired already carries it in the same catalogue (the hospital's, or the
+     * global one for a null hospital), other than {@code selfId}. A second
+     * "K" was accepted silently and linked to nothing, so a live range could
+     * be changed only by retiring the old definition and starting again.
+     */
+    private void requireCodeFree(String testCode, UUID hospitalId, UUID selfId) {
+        if (testCode == null || testCode.isBlank()) {
+            return;
+        }
+        String code = testCode.trim();
+        List<LabTestDefinition> live = hospitalId != null
+            ? repository.findLiveByCodeAtHospital(code, hospitalId)
+            : repository.findLiveGlobalByCode(code);
+        boolean taken = live != null && live.stream().anyMatch(other -> !Objects.equals(other.getId(), selfId));
+        if (taken) {
+            throw new com.example.hms.exception.ConflictException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("lab.definition.duplicateCode",
+                    code.toUpperCase(Locale.ROOT)));
+        }
+    }
+
+    @Override
+    @org.springframework.transaction.annotation.Transactional
+    public LabTestDefinitionResponseDTO createNewVersion(UUID id) {
+        String username = SecurityUtils.getCurrentUsername();
+        if (username == null) {
+            throw new AccessDeniedException("Unauthenticated access to lab test versioning");
+        }
+        User currentUser = userRepository.findByUsername(username)
+            .orElseThrow(() -> new AccessDeniedException(CURRENT_USER_RESOLUTION_ERROR));
+        LabTestDefinition current = repository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException(LAB_TEST_DEFINITION_NOT_FOUND));
+        // Authored like a new definition, at the definition's own hospital.
+        assertCanManage(currentUser, current);
+        // Only the live version is versioned: a draft is edited in place, and a
+        // retired one is history.
+        if (current.getApprovalStatus() != LabTestDefinitionApprovalStatus.ACTIVE) {
+            throw new com.example.hms.exception.ConflictException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("lab.definition.versionOnlyActive"));
+        }
+        // One version in progress at a time: a second one would race the first
+        // to replace the same live definition.
+        boolean inProgress = repository.findBySupersedesDefinitionId(current.getId()).stream()
+            .anyMatch(next -> next.getApprovalStatus() != LabTestDefinitionApprovalStatus.RETIRED);
+        if (inProgress) {
+            throw new com.example.hms.exception.ConflictException(
+                com.example.hms.utility.MessageUtil.resolveOrRaw("lab.definition.versionInProgress"));
+        }
+        LabTestDefinition next = LabTestDefinition.builder()
+            .testCode(current.getTestCode())
+            .name(current.getName())
+            .category(current.getCategory())
+            .description(current.getDescription())
+            .sampleType(current.getSampleType())
+            .unit(current.getUnit())
+            .loincCode(current.getLoincCode())
+            .loincDisplay(current.getLoincDisplay())
+            .preparationInstructions(current.getPreparationInstructions())
+            .turnaroundTimeMinutes(current.getTurnaroundTimeMinutes())
+            .expectedResult(current.getExpectedResult())
+            .pointOfCare(current.isPointOfCare())
+            .referenceRanges(copyRanges(current.getReferenceRanges()))
+            .assignment(current.getAssignment())
+            .hospital(current.getHospital())
+            // A DRAFT, not orderable, through the same four-eyes approval.
+            .active(false)
+            .approvalStatus(LabTestDefinitionApprovalStatus.DRAFT)
+            .supersedesDefinitionId(current.getId())
+            .versionNumber((current.getVersionNumber() != null ? current.getVersionNumber() : 1) + 1)
+            .build();
+        LabTestDefinition saved = repository.save(next);
+        auditApprovalStep(currentUser, saved, "NEW_VERSION", false);
+        return mapper.toDto(saved);
+    }
+
+    private static UUID hospitalIdOf(LabTestDefinition definition) {
+        return definition.getHospital() != null ? definition.getHospital().getId() : null;
+    }
+
+    /** QA D1120: the ranges as independent copies, every field kept, so editing the draft never touches the live ones. */
+    private static List<com.example.hms.model.LabTestReferenceRange> copyRanges(
+            List<com.example.hms.model.LabTestReferenceRange> ranges) {
+        List<com.example.hms.model.LabTestReferenceRange> copies = new java.util.ArrayList<>();
+        if (ranges != null) {
+            ranges.stream().filter(Objects::nonNull).forEach(range -> copies.add(range.toBuilder().build()));
+        }
+        return copies;
+    }
+
+    /**
+     * QA D1120: activating a version retires the one it replaces, in the same
+     * transaction, so the test code is live exactly once. Its orders and
+     * results keep pointing at it: they were graded against it as it stood.
+     */
+    private void retireSupersededVersion(User currentUser, LabTestDefinition activated) {
+        if (activated.getSupersedesDefinitionId() == null) {
+            return;
+        }
+        repository.findById(activated.getSupersedesDefinitionId())
+            .filter(previous -> previous.getApprovalStatus() != LabTestDefinitionApprovalStatus.RETIRED)
+            // Only in the same catalogue: a link never reaches another hospital's definition.
+            .filter(previous -> Objects.equals(hospitalIdOf(previous), hospitalIdOf(activated)))
+            .ifPresent(previous -> {
+                previous.setApprovalStatus(LabTestDefinitionApprovalStatus.RETIRED);
+                previous.setActive(false);
+                LabTestDefinition retired = repository.save(previous);
+                auditApprovalStep(currentUser, retired, "RETIRE_SUPERSEDED", false);
+            });
     }
 
     @Override
@@ -203,6 +318,16 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             assertRangesEditable(existing, mapper.mapRangeDtosToEntities(dto.getReferenceRanges()));
         }
         assertClinicalFieldsEditable(existing, dto);
+        // QA D1120: a version keeps the code of the test it replaces; any
+        // other changed code must not already be live in the catalogue.
+        if (dto.getTestCode() != null && !sameText(existing.getTestCode(), dto.getTestCode())) {
+            if (existing.getSupersedesDefinitionId() != null) {
+                throw new com.example.hms.exception.ConflictException(
+                    com.example.hms.utility.MessageUtil.resolveOrRaw("lab.definition.versionCodeFixed"));
+            }
+            requireCodeFree(dto.getTestCode(), existing.getHospital() != null ? existing.getHospital().getId() : null,
+                existing.getId());
+        }
         // Activation belongs to the approval workflow: an edit may switch a
         // definition off, never on (QA D159, same bypass as the ranges).
         if (Boolean.TRUE.equals(dto.getActive()) && !existing.isActive()) {
@@ -531,6 +656,8 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
                 }
                 definition.setApprovalStatus(LabTestDefinitionApprovalStatus.ACTIVE);
                 definition.setActive(true);
+                // QA D1120: a new version replaces the live one on activation.
+                retireSupersededVersion(currentUser, definition);
             }
             case "REJECT" -> {
                 assertHasAnyRoleAt(currentUser, definition, Set.of(ROLE_LAB_DIRECTOR, ROLE_QUALITY_MANAGER, ROLE_SUPER_ADMIN));

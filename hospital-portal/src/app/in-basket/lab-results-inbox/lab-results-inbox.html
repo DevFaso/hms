@@ -146,7 +146,7 @@
                     </a>
                   </td>
                   <td>
-                    <span class="result-value">{{ r.resultValue | labValue }}</span>
+                    <span class="result-value">{{ r.resultValue | labValue: r.resultUnit }}</span>
                     <!-- QA D1016: a correction of a value already released -->
                     <app-lab-correction-badge [corrected]="r.corrected" />
                     @if (directionKey(r); as dirKey) {

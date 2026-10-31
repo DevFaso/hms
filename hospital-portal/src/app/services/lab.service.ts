@@ -18,6 +18,8 @@ export interface LabOrderResponse {
   labTestCode: string;
   /** QA D645/D648: the test definition was deleted; labTestName is the "deleted test" label. */
   labTestDefinitionMissing?: boolean;
+  /** QA D1095: the test definition's unit, prefilled when a result is entered. */
+  labTestUnit?: string | null;
   orderDatetime: string;
   status: string;
   clinicalIndication: string;
@@ -161,6 +163,10 @@ export interface LabTestDefinition {
   reviewerMayApprove?: boolean | null;
   reviewedAt: string | null;
   rejectionReason: string | null;
+  /** QA D1120: the ACTIVE definition this version replaces on activation (null for a first version). */
+  supersedesDefinitionId?: string | null;
+  /** QA D1120: 1 for a first definition. */
+  versionNumber?: number | null;
   unit: string | null;
   loincCode: string | null;
   loincDisplay: string | null;
@@ -570,9 +576,20 @@ export class LabService {
    * releases it without a second reviewer. Without it the API answers 409 for
    * a self-release.
    */
-  releaseResult(id: string, selfRelease = false): Observable<LabResultResponse> {
-    const params = selfRelease ? new HttpParams().set('selfRelease', 'true') : undefined;
-    return this.http.post<LabResultResponse>(`/lab-results/${id}/release`, {}, { params });
+  releaseResult(
+    id: string,
+    selfRelease = false,
+    ungradedConfirmed = false,
+  ): Observable<LabResultResponse> {
+    let params = new HttpParams();
+    if (selfRelease) params = params.set('selfRelease', 'true');
+    // QA D1092: the releaser confirms they reviewed a value no range could grade.
+    if (ungradedConfirmed) params = params.set('ungradedConfirmed', 'true');
+    return this.http.post<LabResultResponse>(
+      `/lab-results/${id}/release`,
+      {},
+      params.keys().length ? { params } : {},
+    );
   }
 
   // ── Lab Test Definition CRUD ─────────────────────────────────────────
@@ -586,6 +603,16 @@ export class LabService {
   updateTestDefinition(id: string, req: LabTestDefinitionRequest): Observable<LabTestDefinition> {
     return this.http
       .put<ApiWrapper<LabTestDefinition>>(`/lab-test-definitions/${id}`, req)
+      .pipe(map((res) => res.data));
+  }
+
+  /**
+   * QA D1120: a new DRAFT version of an ACTIVE definition, linked to it. It is
+   * approved like any definition and replaces the active one on activation.
+   */
+  createTestDefinitionVersion(id: string): Observable<LabTestDefinition> {
+    return this.http
+      .post<ApiWrapper<LabTestDefinition>>(`/lab-test-definitions/${id}/new-version`, {})
       .pipe(map((res) => res.data));
   }
 

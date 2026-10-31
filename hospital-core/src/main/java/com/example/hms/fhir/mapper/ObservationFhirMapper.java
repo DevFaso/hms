@@ -132,8 +132,9 @@ public class ObservationFhirMapper {
             return;
         }
         Quantity q = new Quantity().setValue(numeric);
-        if (src.getResultUnit() != null && !src.getResultUnit().isBlank()) {
-            String unit = src.getResultUnit().trim();
+        // QA D1095: the definition's unit when none was typed.
+        String unit = com.example.hms.mapper.LabResultMapper.unitOf(src);
+        if (unit != null) {
             q.setUnit(unit).setSystem(UCUM).setCode(unit);
         }
         o.setValue(q);

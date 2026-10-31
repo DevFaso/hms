@@ -121,10 +121,9 @@ public class LabResultReleaseNotifier {
 
     /** The value as the clinician reads it: the staff language's number format, then the unit. */
     public static String valueOf(LabResult result) {
-        String value = CriticalValueNotificationService.localizedValue(result.getResultValue(), NotificationLocales.STAFF);
-        return result.getResultUnit() != null && !result.getResultUnit().isBlank()
-            ? value + " " + result.getResultUnit()
-            : value;
+        // QA D1095: the definition's unit when none was typed.
+        return CriticalValueNotificationService.withUnit(
+            CriticalValueNotificationService.localizedValue(result.getResultValue(), NotificationLocales.STAFF), result);
     }
 
     private void deliverToPatient(UUID resultId, UUID userId, String username, Object testName, String messageKey) {

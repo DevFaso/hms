@@ -612,6 +612,13 @@
                     {{ hospital }}
                   </span>
                 }
+                @if (entryRecordedAt(e); as recordedAt) {
+                  <!-- QA D1113: a transcribed dose was recorded here, not given here -->
+                  <span class="provenance-hospital" data-testid="timeline-transcribed">
+                    <span class="material-symbols-outlined" aria-hidden="true">edit_note</span>
+                    {{ 'CHART.TIMELINE_TRANSCRIBED_AT' | translate: { hospital: recordedAt } }}
+                  </span>
+                }
                 @if (entryClinician(e); as clinician) {
                   <span class="provenance-clinician">
                     <span class="material-symbols-outlined" aria-hidden="true">person</span>

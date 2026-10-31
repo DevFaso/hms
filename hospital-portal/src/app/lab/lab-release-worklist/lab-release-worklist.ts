@@ -264,7 +264,9 @@ export class LabReleaseWorklistComponent implements OnInit {
     this.releasingId.set(target.id);
     this.releaseError.set(null);
     const selfRelease = this.isSelfRelease(target);
-    this.labService.releaseResult(target.id, selfRelease).subscribe({
+    // QA D1092: the dialog shows the "not graded" warning for such a result,
+    // so confirming it is the reviewed release the API asks for.
+    this.labService.releaseResult(target.id, selfRelease, !!target.unitMismatch).subscribe({
       next: () => {
         this.releasingId.set(null);
         this.releaseTarget.set(null);

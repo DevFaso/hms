@@ -87,6 +87,8 @@ public class ChartReviewDTO {
         private UUID encounterId;
         private String encounterCode;
         private String template;
+        /** QA D1107: the title the author gave the note (a nursing note's), when there is one. */
+        private String title;
         private String authorName;
         private String authorCredentials;
         private LocalDateTime documentedAt;

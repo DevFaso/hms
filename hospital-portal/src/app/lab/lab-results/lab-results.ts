@@ -378,13 +378,30 @@ export class LabResultsComponent implements OnInit {
     const order = this.orders().find((o) => o.id === orderId);
     if (order) {
       this.form.patientId = order.patientId ?? '';
+      // QA D1095: units come from the test definition. The field is
+      // prefilled with it (and required when the test has one), so a value is
+      // never saved bare.
+      this.form.resultUnit = order.labTestUnit ?? '';
     }
+  }
+
+  /** QA D1095: the selected order's test unit, which the unit field requires. */
+  selectedTestUnit(): string {
+    return (
+      this.orders()
+        .find((o) => o.id === this.form.labOrderId)
+        ?.labTestUnit?.trim() ?? ''
+    );
   }
 
   submitForm(): void {
     const selectedOrder = this.orders().find((o) => o.id === this.form.labOrderId);
     this.form.assignmentId = this.activeAssignmentId;
     this.form.patientId = selectedOrder?.patientId ?? this.form.patientId ?? '';
+    // QA D1095: a test with a unit takes its result in a unit (blank was saved as "0,40").
+    if (!this.form.resultUnit?.trim() && this.selectedTestUnit()) {
+      this.form.resultUnit = this.selectedTestUnit();
+    }
     if (!this.form.labOrderId || !this.form.assignmentId || !this.form.patientId) {
       this.toast.error(this.translate.instant('LAB_RESULTS.SAVE_VALIDATION_ERROR'));
       return;
@@ -494,7 +511,9 @@ export class LabResultsComponent implements OnInit {
   }
 
   releaseResult(r: LabResultResponse): void {
-    if (this.isSelfRelease(r)) {
+    // QA D1092: a value no range can grade is released only once someone
+    // has read the warning, in the same confirmation dialog.
+    if (this.isSelfRelease(r) || r.unitMismatch) {
       this.selfReleaseTarget.set(r);
       return;
     }
@@ -505,15 +524,15 @@ export class LabResultsComponent implements OnInit {
     const target = this.selfReleaseTarget();
     if (!target) return;
     this.selfReleaseTarget.set(null);
-    this.sendRelease(target, true);
+    this.sendRelease(target, this.isSelfRelease(target), !!target.unitMismatch);
   }
 
   cancelSelfRelease(): void {
     this.selfReleaseTarget.set(null);
   }
 
-  private sendRelease(r: LabResultResponse, selfRelease: boolean): void {
-    this.labService.releaseResult(r.id, selfRelease).subscribe({
+  private sendRelease(r: LabResultResponse, selfRelease: boolean, ungradedConfirmed = false): void {
+    this.labService.releaseResult(r.id, selfRelease, ungradedConfirmed).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('LAB_RESULTS.RELEASED'));
         this.loadResults();

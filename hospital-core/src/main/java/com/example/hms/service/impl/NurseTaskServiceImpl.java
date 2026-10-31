@@ -2092,14 +2092,23 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         }
 
         String authorName = formatFullName(author.getFirstName(), author.getLastName(), author.getUsername());
+        LocalDateTime documentedAt = LocalDateTime.now();
 
         NursingNote.NursingNoteBuilder noteBuilder = NursingNote.builder()
             .patient(patient)
             .hospital(hospital)
             .author(author)
+            .authorStaff(staffRepository.findByUserIdAndHospitalId(nurseUserId, hospitalId).orElse(null))
             .authorName(authorName)
             .template(template)
-            .documentedAt(LocalDateTime.now())
+            .documentedAt(documentedAt)
+            // QA D1107: the care-note dialog has no draft state and no sign
+            // step - the nurse saves the note and attests it (attestAccuracy
+            // below). Saved, it is final and signed by its author, as a
+            // nursing note is in a real ward; a later change is an addendum.
+            // Left unsigned, every doctor read it as "Brouillon".
+            .signedAt(documentedAt)
+            .signedByName(authorName)
             .narrative(request.getNarrative())
             // QA D1044: the title the nurse typed is kept with the note.
             .title(request.getTitle() != null && !request.getTitle().isBlank()

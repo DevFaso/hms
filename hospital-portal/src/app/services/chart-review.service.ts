@@ -29,6 +29,8 @@ export interface ChartReviewNote {
   encounterId?: string | null;
   encounterCode?: string | null;
   template?: string | null;
+  /** QA D1107: the title the author gave the note (a nursing note's). */
+  title?: string | null;
   authorName?: string | null;
   authorCredentials?: string | null;
   documentedAt?: string | null;

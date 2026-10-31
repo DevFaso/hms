@@ -101,7 +101,15 @@
         <tbody>
           @for (def of definitions(); track def.id) {
             <tr>
-              <td class="code-cell">{{ def.testCode }}</td>
+              <td class="code-cell">
+                {{ def.testCode }}
+                @if ((def.versionNumber ?? 1) > 1) {
+                  <!-- QA D1120: the version, linked to the one it replaces -->
+                  <span class="cell-secondary" data-testid="def-version">{{
+                    'LAB_TEST_CONFIG.VERSION_LABEL' | translate: { version: def.versionNumber }
+                  }}</span>
+                }
+              </td>
               <td>{{ def.testName }}</td>
               <td>{{ def.category }}</td>
               <td>{{ def.unit }}</td>
@@ -133,6 +141,18 @@
                     [attr.aria-label]="'LAB_TEST_CONFIG.EDIT_DEF' | translate"
                   >
                     <span class="material-symbols-outlined">edit</span>
+                  </button>
+                }
+                @if (canCreateVersion(def)) {
+                  <button
+                    class="btn-icon"
+                    data-testid="new-version-def"
+                    (click)="createVersion(def)"
+                    [disabled]="creatingVersionId() === def.id"
+                    [title]="'LAB_TEST_CONFIG.NEW_VERSION' | translate"
+                    [attr.aria-label]="'LAB_TEST_CONFIG.NEW_VERSION' | translate"
+                  >
+                    <span class="material-symbols-outlined" aria-hidden="true">history_edu</span>
                   </button>
                 }
                 @if (isEditableDraft(def)) {

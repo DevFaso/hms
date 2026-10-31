@@ -540,14 +540,13 @@ public class CriticalValueNotificationService {
         Object patientName = order != null && order.getPatient() != null
             ? order.getPatient().getFullName()
             : NotificationLocalizer.key("patient.fallback.generic");
-        String value = localizedValue(result.getResultValue(), locale)
-            + (result.getResultUnit() != null ? " " + result.getResultUnit() : "");
+        // QA D1095: the value is never sent without its unit (the definition's when none was typed).
+        String value = withUnit(localizedValue(result.getResultValue(), locale), result);
         // QA D931: a critical CORRECTION says so, and names the value it
         // replaces; the clinician may have acted on that one.
         if (!escalation && result.getSupersedesResultId() != null) {
             String replaced = labResultRepository.findById(result.getSupersedesResultId())
-                .map(old -> localizedValue(old.getResultValue(), locale)
-                    + (old.getResultUnit() != null ? " " + old.getResultUnit() : ""))
+                .map(old -> withUnit(localizedValue(old.getResultValue(), locale), old))
                 .orElse(null);
             if (replaced != null) {
                 return NotificationText.of("lab.critical.correction.notification",
@@ -564,6 +563,12 @@ public class CriticalValueNotificationService {
      * keeping the scale the laboratory reported. Anything that is not a plain
      * number ("Positif", "&lt;0.5") is shown as entered.
      */
+    /** QA D1095: the value, a space and its unit; the value alone for a test with no unit (no double space). */
+    public static String withUnit(String value, LabResult result) {
+        String unit = com.example.hms.mapper.LabResultMapper.unitOf(result);
+        return unit != null ? value + " " + unit : value;
+    }
+
     public static String localizedValue(String raw, java.util.Locale locale) {
         if (raw == null) {
             return "";
