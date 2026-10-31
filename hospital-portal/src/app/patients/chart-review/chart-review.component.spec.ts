@@ -502,6 +502,74 @@ describe('ChartReviewComponent', () => {
     expect(panel.textContent).toContain('Note DAR');
   });
 
+  // QA D1107 (NOT_FIXED r19, r20): the Chronologie row dropped the nursing
+  // note's title. QA D1136: the author's job title read "Nurse" in French, with
+  // a stray space before the comma. QA D1137: "6,8 [Corrigé] g/dL".
+  it('QA D1107 / D1136 / D1137: title in the Chronologie, job title in French, badge after the unit', () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', fr);
+    translate.use('fr');
+    const chart = populatedChart();
+    chart.notes = [
+      {
+        id: 'nn-2',
+        template: 'DAR',
+        source: 'NURSING',
+        title: 'Surveillance post-opératoire',
+        authorName: 'Roger Bationo',
+        authorCredentials: 'NURSE',
+        documentedAt: '2026-10-30T09:00:00',
+        signedAt: '2026-10-30T09:00:00',
+        signed: true,
+        lateEntry: false,
+        preview: 'Patient calme.',
+      },
+    ];
+    chart.timeline = [
+      {
+        id: 'nn-2',
+        section: 'NOTE',
+        occurredAt: '2026-10-30T09:00:00',
+        title: 'x',
+        status: 'SIGNED',
+      },
+    ];
+    chart.results = [{ ...chart.results[0], resultValue: '6.8', corrected: true }];
+    chartSpy.getChartReview.and.returnValue(of(chart));
+    setPatient('p-1');
+
+    const title = (
+      fixture.nativeElement.querySelector('[data-testid="timeline-note-title"]') as HTMLElement
+    ).textContent!.replace(/\s+/g, ' ');
+    expect(title).toContain('Surveillance post-opératoire');
+
+    const tab = (id: string) =>
+      Array.from(fixture.nativeElement.querySelectorAll('[role="tab"]') as NodeListOf<HTMLElement>)
+        .find((t) => t.id.includes(id))!
+        .click();
+    tab('notes');
+    fixture.detectChanges();
+    const notes = (
+      fixture.nativeElement.querySelector('[data-testid="chart-review-panel-notes"]') as HTMLElement
+    ).textContent!.replace(/\s+/g, ' ');
+    expect(notes).toContain('Roger Bationo, Infirmier(ère)');
+    expect(notes).not.toContain('NURSE');
+    expect(notes).not.toContain('Bationo ,');
+
+    tab('results');
+    fixture.detectChanges();
+    const cell = Array.from(
+      (
+        fixture.nativeElement.querySelector(
+          '[data-testid="chart-review-panel-results"]',
+        ) as HTMLElement
+      ).querySelectorAll('td'),
+    )
+      .map((td) => td.textContent!.replace(/\s+/g, ' ').trim())
+      .find((t) => t.startsWith('6,8'))!;
+    expect(cell.startsWith('6,8 g/dL')).withContext(cell).toBeTrue();
+  });
+
   it('QA D777: shows the zone-less UTC server time in the reader zone, like every other screen', () => {
     const chart = populatedChart();
     chart.timeline = [

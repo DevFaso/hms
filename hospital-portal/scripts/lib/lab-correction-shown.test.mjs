@@ -244,3 +244,30 @@ test('QA D1016 round 18: a trend history row printing resultValue is a lab value
   );
   assert.equal(correctionShape(badgeElsewhere + fixed).marksCorrection, true);
 });
+
+// QA D1137 (round 20): the chart review's Résultats placed the "Corrigé"
+// badge between the value and its unit ("6,8 [Corrigé] g/dL", read aloud
+// "6,8 Corrigég/dL"). The badge comes after the unit: no unit may follow a
+// badge inside the same cell or line.
+export function badgeBeforeUnit(html) {
+  const out = [];
+  for (const m of html.matchAll(/<app-lab-correction-badge[\s\S]*?\/>/g)) {
+    const after = html.slice(m.index + m[0].length, m.index + m[0].length + 300);
+    const cell = after.split(/<\/(?:td|p|div|li|dd)>/)[0];
+    if (/[Uu]nit\b/.test(cell)) out.push(cell.replace(/\s+/g, ' ').trim().slice(0, 80));
+  }
+  return out;
+}
+
+test('QA D1137: the correction badge never sits between a value and its unit', () => {
+  const offenders = templatesIn(appDir).flatMap(({ file, text }) =>
+    badgeBeforeUnit(text).map((c) => `${relative(appDir, file).replaceAll('\\', '/')}: ${c}`),
+  );
+  assert.deepEqual(offenders, []);
+  assert.equal(
+    badgeBeforeUnit(
+      '<td>{{ r.resultValue | labValue }} <app-lab-correction-badge [corrected]="r.corrected" /> @if (r.resultUnit) { <span>{{ r.resultUnit }}</span> }</td>',
+    ).length,
+    1,
+  );
+});

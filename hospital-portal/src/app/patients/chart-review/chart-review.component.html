@@ -107,10 +107,13 @@
                         @if (note.source === 'NURSING') {
                           {{ 'CHART_REVIEW.NURSING_NOTE' | translate }} ·
                         }
+                        <!-- QA D1107: the title the nurse typed, as on the Notes tab -->
                         {{
-                          note.template
-                            ? (note.template | enumLabel: 'noteTemplate')
-                            : ('CHART_REVIEW.SECTION.NOTE' | translate)
+                          note.title
+                            ? note.title
+                            : note.template
+                              ? (note.template | enumLabel: 'noteTemplate')
+                              : ('CHART_REVIEW.SECTION.NOTE' | translate)
                         }}{{ note.authorName ? ' — ' + note.authorName : '' }}
                       </p>
                     } @else if (event.title) {
@@ -253,10 +256,11 @@
                   @if (n.authorName) {
                     <p class="chart-review__card-meta">
                       {{ 'CHART_REVIEW.AUTHOR' | translate }}{{ 'COMMON.COLON' | translate }}
-                      {{ n.authorName }}
+                      <!-- QA D1136: the comma follows the name directly; the job title in the reader's language -->
+                      <span>{{ n.authorName }}</span>
                       @if (n.authorCredentials) {
                         <span class="chart-review__card-credentials"
-                          >, {{ n.authorCredentials }}</span
+                          >, {{ n.authorCredentials | credentialsLabel }}</span
                         >
                       }
                     </p>
@@ -304,10 +308,14 @@
                     </td>
                     <td>
                       {{ r.resultValue | labValue }}
-                      <!-- QA D1016: a correction of a released value -->
-                      <app-lab-correction-badge [corrected]="r.corrected" />
                       @if (r.resultUnit) {
                         <span class="chart-review__muted">{{ r.resultUnit }}</span>
+                      }
+                      <!-- QA D1016: a correction of a released value. QA D1137: after the
+                           unit, never between the value and its unit ("6,8 [Corrigé] g/dL"),
+                           and a space before it so it is not read "g/dLCorrigé" -->
+                      @if (r.corrected) {
+                        &ngsp;<app-lab-correction-badge [corrected]="r.corrected" />
                       }
                     </td>
                     <td>

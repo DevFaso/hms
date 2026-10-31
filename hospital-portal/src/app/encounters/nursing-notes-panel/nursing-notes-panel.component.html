@@ -29,7 +29,7 @@
             @if (note.authorName) {
               — {{ note.authorName }}
               @if (note.authorCredentials) {
-                ({{ note.authorCredentials }})
+                ({{ note.authorCredentials | credentialsLabel }})
               }
             }
             @if (note.lateEntry) {
