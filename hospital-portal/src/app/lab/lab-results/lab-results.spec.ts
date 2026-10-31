@@ -984,11 +984,20 @@ describe('LabResultsComponent — rendered delete gate and order picker', () => 
   });
 
   it('QA D1095: choosing an order prefills the unit from its test, and a blank unit is filled on save', () => {
-    fixture.detectChanges();
-    flushInit();
-    component.orders.set([
-      { id: 'o-glu', patientId: 'patient-1', labTestUnit: 'g/L' } as LabOrderResponse,
-    ]);
+    setup(['ROLE_LAB_SCIENTIST']);
+    flushInit(
+      [],
+      [
+        {
+          id: 'o-glu',
+          labOrderCode: 'o-glu',
+          patientId: 'patient-1',
+          labTestName: 'Glucose',
+          labTestCode: 'GLU',
+          labTestUnit: 'g/L',
+        },
+      ],
+    );
 
     component.form.labOrderId = 'o-glu';
     component.onOrderChange('o-glu');
@@ -1003,13 +1012,13 @@ describe('LabResultsComponent — rendered delete gate and order picker', () => 
   });
 
   it('QA D1092: a result no range can grade is released only after the warning is confirmed', () => {
-    fixture.detectChanges();
+    setup(['ROLE_LAB_SCIENTIST']);
     const ungraded = mockResult({
       unitMismatch: true,
       enteredByUserId: 'user-2',
       resultUnit: 'mEq/L',
     });
-    flushInit([ungraded]);
+    flushInit([ungraded], []);
 
     component.releaseResult(ungraded as unknown as LabResultResponse);
     fixture.detectChanges();
