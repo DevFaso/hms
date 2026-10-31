@@ -77,7 +77,9 @@ public class LabResultMapper {
                 : com.example.hms.utility.MessageUtil.resolveOrRaw(LabOrderMapper.DELETED_TEST_LABEL))
             .labTestDefinitionMissing(definitionMissing(result.getLabOrder()))
             .resultValue(result.getResultValue())
-            .resultUnit(result.getResultUnit())
+            // QA D1095: the unit the value is in, the definition's when none was typed
+            // (read from the context, so an unloaded order is not fetched here).
+            .resultUnit(rawUnitOf(result.getResultUnit(), context.testUnit()))
             .resultDate(result.getResultDate())
             .notes(result.getNotes())
             .referenceRanges(referenceRanges)
@@ -142,7 +144,7 @@ public class LabResultMapper {
             .labOrderCode(context.labOrderCode())
             .resultDate(result.getResultDate())
             .resultValue(result.getResultValue())
-            .resultUnit(result.getResultUnit())
+            .resultUnit(rawUnitOf(result.getResultUnit(), context.testUnit()))
             .severityFlag(severityFlag)
             .corrected(com.example.hms.service.lab.LabResultCorrections.isCorrection(result))
             .build();
@@ -277,7 +279,9 @@ public class LabResultMapper {
      * <p>One selection, {@link #gradingOf}, serves the grading, the critical
      * alerting that reads it, the release gate and this, so they cannot drift.
      *
-     * <p><b>A range in another unit is never used.</b> A range with no unit
+     * <p><b>A range in another unit is used only when the value converts to
+     * it</b> (QA D1092, {@link LabUnitConversion}: mass to mass, molar to molar),
+     * and it is then returned restated in the value's own unit. A range with no unit
      * of its own is stated in the test definition's unit. When no range is in
      * the result's unit and none has a unit at all (neither its own nor the
      * test's), the result is NOT graded: no range is returned here, the
@@ -332,9 +336,12 @@ public class LabResultMapper {
      * leaves a range's unit empty means the test's unit, and a glucose range
      * of 70-110 on a mg/dL test must not grade 5.4 mmol/L. A result that
      * states no unit is likewise in the test's unit. Units compare trimmed and
-     * case-insensitively; nothing is converted.
+     * case-insensitively.
      * <ol>
      *   <li>the first range whose effective unit is the result's effective unit;</li>
+     *   <li>else (QA D1092) the first range whose effective unit converts to the
+     *       result's without knowing the analyte (mg/dL and g/L, mmol/L and
+     *       µmol/L), restated in the result's unit;</li>
      *   <li>else the first range with no effective unit at all (neither the
      *       range nor the test states one: bare limits);</li>
      *   <li>else, when neither the result nor the test states a unit, the
@@ -358,6 +365,13 @@ public class LabResultMapper {
             result = normalisedUnit(testUnit);
         }
         LabTestReferenceRange chosen = result != null ? firstInUnit(referenceRanges, result, testUnit) : null;
+        if (chosen == null && result != null) {
+            // QA D1092: a range in a unit the value converts to without
+            // knowing the analyte (g/L for a value in mg/dL), restated in the
+            // value's own unit, so 510 mg/dL is graded on 0.45-5.0 g/L's
+            // critical limits as 45-500 mg/dL.
+            chosen = firstConvertible(referenceRanges, rawUnitOf(resultUnit, testUnit), testUnit);
+        }
         if (chosen == null) {
             chosen = firstWithoutUnit(referenceRanges, testUnit);
         }
@@ -377,6 +391,77 @@ public class LabResultMapper {
             .filter(range -> range != null && unit.equals(effectiveUnit(range, testUnit)))
             .findFirst()
             .orElse(null);
+    }
+
+    /**
+     * Step 1b (QA D1092): the first range whose effective unit converts to the
+     * result's ({@link LabUnitConversion}: mass to mass, molar to molar, by a
+     * power of ten), as a copy restated in the result's unit. The copy keeps
+     * every other field of the range (sex, age band, source).
+     */
+    private static LabTestReferenceRange firstConvertible(List<LabTestReferenceRange> ranges, String resultUnit,
+                                                          String testUnit) {
+        if (resultUnit == null) {
+            return null;
+        }
+        for (LabTestReferenceRange range : ranges) {
+            if (range == null) {
+                continue;
+            }
+            String rangeUnit = rawUnitOf(range.getUnit(), testUnit);
+            java.util.Optional<java.math.BigDecimal> factor = LabUnitConversion.factor(rangeUnit, resultUnit);
+            if (factor.isPresent()) {
+                java.math.BigDecimal f = factor.get();
+                return range.toBuilder()
+                    .minValue(LabUnitConversion.scale(range.getMinValue(), f))
+                    .maxValue(LabUnitConversion.scale(range.getMaxValue(), f))
+                    .criticalLow(LabUnitConversion.scale(range.getCriticalLow(), f))
+                    .criticalHigh(LabUnitConversion.scale(range.getCriticalHigh(), f))
+                    .unit(resultUnit)
+                    .build();
+            }
+        }
+        return null;
+    }
+
+    /**
+     * QA D1095: the unit a result is in - the one it states, else its test
+     * definition's (the grading already reads a unit-less result in the test's
+     * unit). Every surface that prints a lab value prints this beside it, so a
+     * bare "2,4" on a test with ranges in g/L and mmol/L never appears.
+     * Null when neither states one (a ratio such as the INR has no unit).
+     */
+    public static String unitOf(LabResult result) {
+        if (result == null) {
+            return null;
+        }
+        if (result.getResultUnit() != null && !result.getResultUnit().isBlank()) {
+            return result.getResultUnit().trim();
+        }
+        LabOrder order = result.getLabOrder();
+        try {
+            return unitOrTestUnit(null, order != null ? order.getLabTestDefinition() : null);
+        } catch (org.hibernate.LazyInitializationException ex) {
+            // Read after the session closed: the definition cannot be reached.
+            return null;
+        }
+    }
+
+    /**
+     * QA D1095: the unit to store on a hand-entered result - the one typed, else
+     * the test definition's. Units come from the test definition; a technician
+     * who leaves the field blank meant it, never "no unit".
+     */
+    public static String unitOrTestUnit(String typed, LabTestDefinition definition) {
+        return rawUnitOf(typed, definition != null ? definition.getUnit() : null);
+    }
+
+    /** The unit as typed (trimmed), or the fallback's when blank; null when neither states one. */
+    private static String rawUnitOf(String unit, String fallback) {
+        if (unit != null && !unit.isBlank()) {
+            return unit.trim();
+        }
+        return fallback == null || fallback.isBlank() ? null : fallback.trim();
     }
 
     /** Step 2: the first range with no effective unit at all (bare limits). */

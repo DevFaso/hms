@@ -1222,6 +1222,18 @@ export class PatientChartComponent implements OnInit, OnChanges {
     return entry.metadata?.sourceHospitalName ?? null;
   }
 
+  /**
+   * QA D1113: a dose transcribed from a vaccination card or another
+   * facility's record names the hospital that RECORDED it; the server sends
+   * no source hospital for it, because it was not given there.
+   */
+  entryRecordedAt(entry: TimelineEntry): string | null {
+    const recordedAt = entry.metadata?.['recordedAtHospitalName'];
+    return entry.metadata?.['transcribed'] === true && typeof recordedAt === 'string' && recordedAt
+      ? recordedAt
+      : null;
+  }
+
   /** Attending, prescriber, or the clinician who ORDERED the result. */
   entryClinician(entry: TimelineEntry): string | null {
     return entry.metadata?.clinician ?? null;

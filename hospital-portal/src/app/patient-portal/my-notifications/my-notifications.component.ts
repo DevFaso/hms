@@ -24,13 +24,17 @@ export class MyNotificationsComponent implements OnInit {
   /**
    * QA D983: where a notification leads. Clicking a chat notification only
    * marked it read; it now opens the conversation, and the others open the
-   * page they are about.
+   * page they are about. QA D1110: every type the server writes is either
+   * here or declared without a page, with its reason, in
+   * scripts/lib/notification-destinations.test.mjs.
    */
   private static readonly DESTINATIONS: Record<
     string,
     { path: string; query?: Record<string, string> }
   > = {
     CHAT_MESSAGE: { path: '/chat', query: { open: 'unread' } },
+    // QA D1110: a released (or corrected) lab result opens the patient's results.
+    LAB_RESULT: { path: '/my-lab-results' },
     APPOINTMENT_REMINDER: { path: '/my-appointments' },
     PRENATAL_REMINDER: { path: '/my-appointments' },
     MEDICATION_REFILL: { path: '/my-medications' },

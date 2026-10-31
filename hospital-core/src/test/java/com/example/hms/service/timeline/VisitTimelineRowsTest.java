@@ -499,4 +499,67 @@ class VisitTimelineRowsTest {
 
         assertThat(rows.collect(patientId, here.getId(), Set.of("DEATH"))).isEmpty();
     }
+
+    /**
+     * QA D1113: a dose transcribed from a vaccination card, another facility's
+     * record or the family's word was placed "at" the hospital that typed it in
+     * ("… 20 sept. 2021 · domain Centre Hospitalier Wend-Panga"). The row names
+     * its source, and the hospital is the one that RECORDED it, not a place it
+     * was given. A dose given here keeps its hospital.
+     */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.CsvSource({
+        "VACCINATION_CARD, d’après le carnet de vaccination",
+        "EXTERNAL_RECORD, d’après le dossier d’un autre établissement",
+        "PATIENT_REPORT, déclaré par le patient ou la famille",
+    })
+    void d1113_aTranscribedDoseNamesItsSourceAndIsNotPlacedHere(String source, String label) {
+        com.example.hms.model.PatientImmunization dose = new com.example.hms.model.PatientImmunization();
+        dose.setId(UUID.randomUUID());
+        dose.setHospital(here);
+        dose.setVaccineDisplay("BCG");
+        dose.setSourceOfRecord(source);
+        dose.setAdministrationDate(java.time.LocalDate.of(2021, 9, 20));
+        com.example.hms.model.PatientImmunization givenHere = new com.example.hms.model.PatientImmunization();
+        givenHere.setId(UUID.randomUUID());
+        givenHere.setHospital(here);
+        givenHere.setVaccineDisplay("VPO");
+        givenHere.setSourceOfRecord("GIVEN_HERE");
+        givenHere.setAdministrationDate(java.time.LocalDate.now().minusDays(1));
+        when(immunizations.findByPatient_IdAndHospital_IdOrderByAdministrationDateDesc(patientId, here.getId()))
+            .thenReturn(List.of(dose, givenHere));
+
+        List<PatientTimelineEntryDTO> visit = rows.collect(patientId, here.getId(), Set.of("IMMUNIZATION"));
+
+        PatientTimelineEntryDTO transcribed = visit.stream()
+            .filter(r -> r.getEntryId().equals(dose.getId().toString())).findFirst().orElseThrow();
+        assertThat(transcribed.getSummary().replace('\'', '’')).contains("BCG").contains(label);
+        assertThat(transcribed.getMetadata())
+            .doesNotContainKey("sourceHospitalName")
+            .containsEntry("recordedAtHospitalName", "CHU QA")
+            .containsEntry("transcribed", true)
+            .containsEntry("sourceOfRecord", source);
+        PatientTimelineEntryDTO local = visit.stream()
+            .filter(r -> r.getEntryId().equals(givenHere.getId().toString())).findFirst().orElseThrow();
+        assertThat(local.getMetadata()).containsEntry("sourceHospitalName", "CHU QA")
+            .doesNotContainKey("transcribed");
+    }
+
+    /** QA D1107: a nursing note's row leads with the title the nurse gave it. */
+    @Test
+    void d1107_aNursingNoteRowShowsItsTitle() {
+        com.example.hms.model.NursingNote note = new com.example.hms.model.NursingNote();
+        note.setId(UUID.randomUUID());
+        note.setHospital(here);
+        note.setTemplate(com.example.hms.model.NursingNoteTemplate.DAR);
+        note.setTitle("Réévaluation douleur");
+        note.setDataAssessment("Patient calme");
+        note.setDocumentedAt(LocalDateTime.now().minusHours(1));
+        when(nursingNotes.findTop50ByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(patientId, Set.of(here.getId())))
+            .thenReturn(List.of(note));
+
+        assertThat(rows.collect(patientId, here.getId(), Set.of("NURSING_NOTE")))
+            .extracting(PatientTimelineEntryDTO::getSummary)
+            .containsExactly("Note infirmière (DAR) — Réévaluation douleur — Patient calme");
+    }
 }

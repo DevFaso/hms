@@ -72,6 +72,13 @@ describe('MyNotificationsComponent', () => {
       expect(navigate).toHaveBeenCalledWith(['/my-appointments'], { queryParams: undefined });
     });
 
+    it('QA D1110: a lab-result notification opens the patient results', () => {
+      const navigate = spyOn(TestBed.inject(Router), 'navigate').and.resolveTo(true);
+      component.open({ ...makeNotification('l1', false), type: 'LAB_RESULT' });
+      expect(portalService.markNotificationRead).toHaveBeenCalledWith('l1');
+      expect(navigate).toHaveBeenCalledWith(['/my-lab-results'], { queryParams: undefined });
+    });
+
     it('stays on the page for a notification about nothing in particular', () => {
       const navigate = spyOn(TestBed.inject(Router), 'navigate').and.resolveTo(true);
       component.open({ ...makeNotification('a1', false), type: 'ANNOUNCEMENT' });

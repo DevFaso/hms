@@ -285,6 +285,33 @@ describe('LabComponent — performing laboratory', () => {
     expect(host.querySelector('#specimen-type')).not.toBeNull();
   });
 
+  it('QA D1109: an answered or cancelled order offers no Collect, and says why', async () => {
+    await setup(['ROLE_LAB_SCIENTIST'], []);
+    labService.listSpecimens.and.returnValue(of([]));
+    const host = fixture.nativeElement as HTMLElement;
+
+    for (const status of ['RESULTED', 'VERIFIED', 'COMPLETED', 'CANCELLED']) {
+      component.openSpecimens(order({ id: 'o-' + status, status }));
+      fixture.detectChanges();
+      expect(component.specimensOrderAcceptsSpecimens()).withContext(status).toBeFalse();
+      expect(host.querySelector('#specimen-type'))
+        .withContext(status + ': no collect form')
+        .toBeNull();
+      expect(host.querySelector('[data-testid="specimen-order-closed"]'))
+        .withContext(status + ': the reason is shown')
+        .not.toBeNull();
+      component.closeSpecimens();
+    }
+
+    for (const status of ['ORDERED', 'PENDING', 'COLLECTED', 'RECEIVED', 'IN_PROGRESS']) {
+      component.openSpecimens(order({ id: 'o-' + status, status }));
+      fixture.detectChanges();
+      expect(component.specimensOrderAcceptsSpecimens()).withContext(status).toBeTrue();
+      expect(host.querySelector('#specimen-type')).withContext(status).not.toBeNull();
+      component.closeSpecimens();
+    }
+  });
+
   describe('QA D963: priority and channel are labelled, and STAT stands out', () => {
     it('offers exactly the priorities the server accepts, labelled, never the raw code', async () => {
       await setup(['ROLE_DOCTOR'], []);

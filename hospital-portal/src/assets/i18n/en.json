@@ -3592,7 +3592,8 @@
       "REASON_VALUE": "Reason: {{reason}}",
       "REJECTED_ON_ORDER": "Specimen rejected by the laboratory: a new sample is needed",
       "TITLE": "Reject the specimen"
-    }
+    },
+    "SPECIMEN_ORDER_CLOSED": "This order already has a result or is cancelled: it takes no new specimen. A repeat test is a new order."
   },
   "LAB_STAFF": {
     "TITLE": "Lab Staff Management",
@@ -3730,7 +3731,11 @@
     "AGE_UNIT_YEARS": "years",
     "AGE_UNIT_MONTHS": "months",
     "AGE_UNIT_DAYS": "days",
-    "RANGE_SOURCE": "Source"
+    "RANGE_SOURCE": "Source",
+    "VERSION_LABEL": "v{{version}}",
+    "NEW_VERSION": "New version (goes through approval)",
+    "VERSION_CREATED": "New draft version created. It replaces the active one once approved and activated.",
+    "VERSION_ERROR": "The new version could not be created."
   },
   "LAB_RESULTS": {
     "ALL_AGES": "All ages",
@@ -3824,7 +3829,10 @@
     "EXPECTED_RESULT": "Expected result",
     "CORRECTED_HINT_PATIENT": "The laboratory corrected this result after first releasing it. This is the value that counts; your care team has been told.",
     "RANGE_APPLIED": "Range applied to this patient",
-    "RANGE_SOURCE": "Source"
+    "RANGE_SOURCE": "Source",
+    "UNIT_FROM_TEST": "Unit of the test: {{unit}}. A value in another unit may not be graded.",
+    "UNGRADED_RELEASE_TITLE": "Release a result that is not graded",
+    "UNGRADED_RELEASE_CONFIRM": "I reviewed it, release"
   },
   "LAB_RELEASE": {
     "FLAG_ABNORMAL": "Abnormal",
@@ -3867,7 +3875,8 @@
     "PAGE_OF": "Page {{page}} of {{total}}",
     "SELF_RELEASE_NOTE": "You entered this result yourself. Releasing it without a second reviewer is allowed, and it is recorded as a self-release.",
     "SELF_RELEASE_CONFIRM": "Release it myself",
-    "CONFIRM_CORRECTION": "This result is a correction: validating it replaces a value already validated and sent to the clinician and the patient."
+    "CONFIRM_CORRECTION": "This result is a correction: validating it replaces a value already validated and sent to the clinician and the patient.",
+    "UNGRADED_NOTE": "Not graded: no reference range is in this value’s unit ({{unit}}) or converts to it, so no critical alert can be raised. By releasing it you confirm you reviewed it; the ordering clinician will be asked to review it."
   },
   "LAB_INSTRUMENTS": {
     "TITLE": "Lab Instruments",
@@ -9098,7 +9107,8 @@
     "LAB_STATUS_QUALITATIVE": "Qualitative result: read by your clinician",
     "LAB_STATUS_NOT_INTERPRETED": "Not interpreted: no reference range",
     "CODE_PLACEHOLDER": "e.g. B54 (malaria)",
-    "PREGNANCY": "Ongoing pregnancy: {{weeks}} weeks + {{days}} days"
+    "PREGNANCY": "Ongoing pregnancy: {{weeks}} weeks + {{days}} days",
+    "TIMELINE_TRANSCRIBED_AT": "Transcribed at {{hospital}}"
   },
   "PHARMACY": {
     "QUEUE_CLAIM": {

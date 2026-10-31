@@ -71,6 +71,8 @@ public class LabOrderMapper {
         .labTestName(labTestName)
         .labTestDefinitionMissing(definitionMissing)
             .labTestCode(labTestDefinition != null ? labTestDefinition.getTestCode() : null)
+            // QA D1095: the unit a result of this test is entered in (prefilled on entry).
+            .labTestUnit(labTestDefinition != null ? labTestDefinition.getUnit() : null)
         .orderDatetime(labOrder.getOrderDatetime())
         .status(status)
             .priority(labOrder.getPriority())

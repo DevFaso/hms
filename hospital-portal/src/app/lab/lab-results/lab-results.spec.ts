@@ -982,4 +982,62 @@ describe('LabResultsComponent — rendered delete gate and order picker', () => 
 
     expect(component.orders().map((o) => o.id)).toEqual(['o-glu']);
   });
+
+  it('QA D1095: choosing an order prefills the unit from its test, and a blank unit is filled on save', () => {
+    setup(['ROLE_LAB_SCIENTIST']);
+    flushInit(
+      [],
+      [
+        {
+          id: 'o-glu',
+          labOrderCode: 'o-glu',
+          patientId: 'patient-1',
+          labTestName: 'Glucose',
+          labTestCode: 'GLU',
+          labTestUnit: 'g/L',
+        },
+      ],
+    );
+
+    component.form.labOrderId = 'o-glu';
+    component.onOrderChange('o-glu');
+    expect(component.form.resultUnit).toBe('g/L');
+    expect(component.selectedTestUnit()).toBe('g/L');
+
+    component.form.resultUnit = '   ';
+    component.form.resultValue = '0,40';
+    component.submitForm();
+    const req = httpMock.expectOne((r) => r.url === '/lab-results' && r.method === 'POST');
+    expect(req.request.body.resultUnit).toBe('g/L');
+  });
+
+  it('QA D1092: a result no range can grade is released only after the warning is confirmed', () => {
+    setup(['ROLE_LAB_SCIENTIST']);
+    const ungraded = mockResult({
+      unitMismatch: true,
+      enteredByUserId: 'user-2',
+      resultUnit: 'mEq/L',
+    });
+    flushInit([ungraded], []);
+
+    component.releaseResult(ungraded as unknown as LabResultResponse);
+    fixture.detectChanges();
+    httpMock.expectNone((r) => r.method === 'POST');
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="release-ungraded-note"]')).not.toBeNull();
+
+    component.confirmSelfRelease();
+    const req = httpMock.expectOne(
+      (r) => r.url === '/lab-results/result-1/release' && r.method === 'POST',
+    );
+    expect(req.request.params.get('ungradedConfirmed')).toBe('true');
+    expect(req.request.params.has('selfRelease')).toBeFalse();
+    req.flush({ ...ungraded, released: true });
+    httpMock
+      .expectOne((r) => r.url === '/lab-results' && r.method === 'GET')
+      .flush({
+        data: { content: [], totalElements: 0, totalPages: 1, number: 0 },
+        success: true,
+      });
+  });
 });

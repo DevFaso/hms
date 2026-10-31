@@ -845,6 +845,12 @@
           </div>
         }
 
+        @if (!specimensOrderAcceptsSpecimens()) {
+          <!-- QA D1109: an answered or cancelled order takes no new specimen -->
+          <p class="cell-secondary" role="note" data-testid="specimen-order-closed">
+            {{ 'LAB.SPECIMEN_ORDER_CLOSED' | translate }}
+          </p>
+        }
         @if (specimensOrderAcceptsSpecimens()) {
           <h3 class="specimen-form-title">{{ 'LAB.COLLECT_SPECIMEN' | translate }}</h3>
           <div class="form-row">

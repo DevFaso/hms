@@ -13,7 +13,7 @@ import java.io.Serializable;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
+@Builder(toBuilder = true)
 public class LabTestReferenceRange implements Serializable {
     private Double minValue;
     private Double maxValue;

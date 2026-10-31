@@ -197,6 +197,30 @@ public final class LabOrderLifecycle {
     }
 
     /**
+     * QA D1109: whether an order at {@code current} takes a NEW specimen.
+     * Only while it awaits or is in analysis (ORDERED to IN_PROGRESS): once a
+     * result exists (RESULTED, VERIFIED, COMPLETED) the order is answered - a
+     * repeat analysis is a new order, a wrong value a correction - and a
+     * cancelled or voided order takes nothing. A collection on a released
+     * order left a dangling tube with an accession number nobody would run.
+     */
+    public static boolean acceptsNewSpecimen(LabOrderStatus current) {
+        // A null status is an order not yet stamped (@PrePersist makes it
+        // ORDERED); there is nothing to refuse it on.
+        return current == null || (!TERMINAL.contains(current)
+            && current != LabOrderStatus.RESULTED && current != LabOrderStatus.VERIFIED);
+    }
+
+    /**
+     * QA D1109: whether a specimen already collected for an order at
+     * {@code current} may still be received: not on a cancelled or voided
+     * order (the receipt queues an analyser work order for it).
+     */
+    public static boolean acceptsSpecimenReceipt(LabOrderStatus current) {
+        return current != LabOrderStatus.CANCELLED && current != LabOrderStatus.ENTERED_IN_ERROR;
+    }
+
+    /**
      * QA D962: what the rejection of the order's last live specimen moves
      * {@code current} to — back to ORDERED, awaiting a new collection — or
      * {@code null} when it should not move (already awaiting collection,

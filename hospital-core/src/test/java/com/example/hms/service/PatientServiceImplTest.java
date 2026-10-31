@@ -964,8 +964,9 @@ class PatientServiceImplTest {
                 .filteredOn(entry -> "LAB_RESULT".equals(entry.getCategory()))
                 .singleElement()
                 .extracting(PatientTimelineEntryDTO::getSummary)
-                // QA D1106 (round 19): the value in the reader's notation ("0,92", was "0.92").
-                .isEqualTo("Glycémie à jeun: 0,92 g/L");
+                // QA D1079 + D1106 (round 19): French colon spacing and the
+                // value in the reader's notation ("0,92", was "0.92").
+                .isEqualTo("Glycémie à jeun : 0,92 g/L");
             assertThat(response.getEntries())
                 .filteredOn(entry -> "ENCOUNTER".equals(entry.getCategory()))
                 .singleElement()

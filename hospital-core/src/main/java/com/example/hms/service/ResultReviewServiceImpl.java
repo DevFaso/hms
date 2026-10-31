@@ -500,6 +500,7 @@ public class ResultReviewServiceImpl implements ResultReviewService {
                 .patientId(order.getPatient().getId())
                 .testName(testName)
                 .resultValue(result.getResultValue())
+                .resultUnit(com.example.hms.mapper.LabResultMapper.unitOf(result))
                 .abnormalFlag(abnormalFlag)
                 .resultedAt(result.getResultDate())
                 .orderingContext(order.getClinicalIndication())

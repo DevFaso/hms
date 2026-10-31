@@ -69,6 +69,8 @@ public class LabTestDefinitionMapper {
                 .reviewedById(entity.getReviewedById())
                 .reviewedAt(entity.getReviewedAt())
                 .rejectionReason(entity.getRejectionReason())
+                .supersedesDefinitionId(entity.getSupersedesDefinitionId())
+                .versionNumber(entity.getVersionNumber() != null ? entity.getVersionNumber() : 1)
                 .referenceRanges(mapToDtoRanges(entity.getReferenceRanges()))
                 .createdAt(entity.getCreatedAt())
                 .updatedAt(entity.getUpdatedAt())

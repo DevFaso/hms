@@ -159,3 +159,67 @@ test('QA D1106/D1115/D1116 guard: the scan sees the round-19 shapes and passes t
     [],
   );
 });
+
+/**
+ * QA D1095 (round 19): a lab value is never shown without its unit. The
+ * worklist read "Glycémie à jeun = 0,40", the doctor's critical list "2,4"
+ * and the portal "Résultat : 2,5" while ranges existed in both g/L and mmol/L.
+ * Every interpolation of a lab result value — `.resultValue`, the portal's
+ * `lab.result` / `displayResult(...)` — must carry its unit: `| labValue:` with
+ * a unit argument, the unit in the same expression, or a unit field printed
+ * right after it (within the same cell).
+ */
+// The server writes a reference range with its unit ("3,5 - 5 mmol/L"), so
+// `displayResult(lab.referenceRange)` is not a bare value.
+const RESULT_VALUE = /\.resultValue\b|\b(lab|l)\.result\b/;
+/** An interpolation that opens an element styled as a lab value (`class="lab-value"`). */
+const LAB_VALUE_ELEMENT = /class="[^"]*\blab-value\b[^"]*"[^>]*>\s*$/;
+const UNIT_NEARBY = /\b(resultUnit|unit)\b/;
+
+export function unitOffenders(html, file = 'template') {
+  const offenders = [];
+  const at = (index) => `${file}:${html.slice(0, index).split('\n').length}`;
+  for (const m of html.matchAll(/\{\{([\s\S]*?)\}\}/g)) {
+    const expr = m[1];
+    const before = html.slice(Math.max(0, m.index - 200), m.index);
+    const labValueElement = LAB_VALUE_ELEMENT.test(before) && !/\|\s*translate\b/.test(expr);
+    if (!RESULT_VALUE.test(expr) && !labValueElement) continue;
+    if (/\|\s*labValue\s*:/.test(expr) || UNIT_NEARBY.test(expr)) continue;
+    // A unit printed right after the value, before the cell or element closes.
+    const after = html.slice(m.index + m[0].length, m.index + m[0].length + 400);
+    const cellEnd = after.search(/<\/(td|strong|dd|li|p)>/);
+    const window = cellEnd >= 0 ? after.slice(0, cellEnd) : after;
+    if (UNIT_NEARBY.test(window)) continue;
+    offenders.push(`${at(m.index)} lab value without its unit: ${expr.trim()}`);
+  }
+  return offenders;
+}
+
+test('QA D1095: every template shows a lab value with its unit', () => {
+  const files = walk(appDir, ['.html']).filter((f) => {
+    const html = readFileSync(f, 'utf8');
+    return RESULT_VALUE.test(html) || /\blab-value\b/.test(html);
+  });
+  assert.ok(files.length >= 8, `found ${files.length} templates showing a lab value`);
+  const offenders = files.flatMap((f) =>
+    unitOffenders(readFileSync(f, 'utf8'), relative(appDir, f).replaceAll('\\', '/')),
+  );
+  assert.deepEqual(offenders, []);
+});
+
+test('QA D1095 guard: the scan sees a value shown without its unit', () => {
+  assert.equal(unitOffenders('<td>{{ r.resultValue | labValue }}</td>').length, 1);
+  assert.equal(unitOffenders('<strong>{{ displayResult(lab.result) }}</strong>').length, 1);
+  assert.equal(unitOffenders('<span class="lab-value">{{ x.value }}</span></td>').length, 1);
+  assert.deepEqual(unitOffenders('<td>{{ r.resultValue | labValue: r.resultUnit }}</td>'), []);
+  assert.deepEqual(
+    unitOffenders('<td>{{ r.resultValue | labValue }} {{ r.resultUnit || "—" }}</td>'),
+    [],
+  );
+  assert.deepEqual(
+    unitOffenders(
+      '<strong>{{ displayResult(lab.result) }}{{ lab.unit ? " " + lab.unit : "" }}</strong>',
+    ),
+    [],
+  );
+});

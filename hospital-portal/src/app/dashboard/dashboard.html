@@ -3005,6 +3005,10 @@
                   } @else {
                     <span class="lab-value"
                       >{{ lab.result | labValue }}
+                      <!-- QA D1095: the value is never shown without its unit -->
+                      @if (lab.unit) {
+                        <span class="lab-unit">{{ lab.unit }}</span>
+                      }
                       <app-lab-correction-badge [corrected]="lab.corrected" audience="patient" />
                       @if (lab.referenceRange) {
                         <span class="lab-range">({{ lab.referenceRange | labRange }})</span>

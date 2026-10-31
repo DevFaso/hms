@@ -125,13 +125,16 @@ class StayOrderEncounterStaffTest {
         assertThatCode(() -> ReflectionTestUtils.invokeMethod(order, "validate")).doesNotThrowAnyException();
     }
 
+    /**
+     * QA D1094 (round 19, behaviour change): a colleague's open visit takes a
+     * lab order too, as in a real hospital. This invariant answered it with a
+     * 500; the service now decides (open visit, same patient, translated 400).
+     */
     @Test
-    void aLabOrderOnSomeoneElsesOutpatientVisitIsStillRefused() {
+    void aLabOrderOnAColleaguesOutpatientVisitIsAccepted() {
         LabOrder order = labOrderBy(admitting, visitOf(attending));
 
-        assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(order, "validate"))
-            .isInstanceOf(IllegalStateException.class)
-            .hasMessageContaining("Encounter.staff");
+        assertThatCode(() -> ReflectionTestUtils.invokeMethod(order, "validate")).doesNotThrowAnyException();
     }
 
     /**

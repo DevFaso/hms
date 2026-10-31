@@ -244,6 +244,12 @@
                       </span>
                     }
                   </header>
+                  @if (n.title) {
+                    <!-- QA D1107: the title the author gave the note -->
+                    <p class="chart-review__card-title" data-testid="note-title">
+                      <strong>{{ n.title }}</strong>
+                    </p>
+                  }
                   @if (n.authorName) {
                     <p class="chart-review__card-meta">
                       {{ 'CHART_REVIEW.AUTHOR' | translate }}{{ 'COMMON.COLON' | translate }}

@@ -3592,7 +3592,8 @@
       "REASON_VALUE": "Motif : {{reason}}",
       "REJECTED_ON_ORDER": "Échantillon rejeté par le laboratoire : un nouveau prélèvement est nécessaire",
       "TITLE": "Rejeter l’échantillon"
-    }
+    },
+    "SPECIMEN_ORDER_CLOSED": "Cette demande a déjà un résultat ou est annulée : elle ne prend plus de nouvel échantillon. Un nouveau test se fait par une nouvelle demande."
   },
   "LAB_STAFF": {
     "TITLE": "Gestion du personnel de laboratoire",
@@ -3730,7 +3731,11 @@
     "AGE_UNIT_YEARS": "ans",
     "AGE_UNIT_MONTHS": "mois",
     "AGE_UNIT_DAYS": "jours",
-    "RANGE_SOURCE": "Source"
+    "RANGE_SOURCE": "Source",
+    "VERSION_LABEL": "v{{version}}",
+    "NEW_VERSION": "Nouvelle version (soumise à l'approbation)",
+    "VERSION_CREATED": "Nouvelle version brouillon créée. Elle remplacera la version active une fois approuvée et activée.",
+    "VERSION_ERROR": "La nouvelle version n'a pas pu être créée."
   },
   "LAB_RESULTS": {
     "ALL_AGES": "Tous âges",
@@ -3824,7 +3829,10 @@
     "EXPECTED_RESULT": "Résultat attendu",
     "CORRECTED_HINT_PATIENT": "Le laboratoire a corrigé ce résultat après l’avoir communiqué. C’est cette valeur qui compte ; votre équipe soignante en est informée.",
     "RANGE_APPLIED": "Intervalle appliqué à ce patient",
-    "RANGE_SOURCE": "Source"
+    "RANGE_SOURCE": "Source",
+    "UNIT_FROM_TEST": "Unité de l'examen : {{unit}}. Une valeur dans une autre unité risque de ne pas être évaluée.",
+    "UNGRADED_RELEASE_TITLE": "Valider un résultat non évalué",
+    "UNGRADED_RELEASE_CONFIRM": "Je l'ai vérifié, valider"
   },
   "LAB_RELEASE": {
     "FLAG_ABNORMAL": "Anormal",
@@ -3867,7 +3875,8 @@
     "PAGE_OF": "Page {{page}} sur {{total}}",
     "SELF_RELEASE_NOTE": "Vous avez saisi ce résultat vous-même. Le valider sans second relecteur est permis, et la validation est enregistrée comme « Validé par son auteur ».",
     "SELF_RELEASE_CONFIRM": "Le valider moi-même",
-    "CONFIRM_CORRECTION": "Ce résultat est une correction : le valider remplace une valeur déjà validée et communiquée au clinicien et au patient."
+    "CONFIRM_CORRECTION": "Ce résultat est une correction : le valider remplace une valeur déjà validée et communiquée au clinicien et au patient.",
+    "UNGRADED_NOTE": "Non évalué : aucun intervalle de référence n'est dans l'unité de cette valeur ({{unit}}) ni convertible, aucune alerte critique ne peut donc être levée. En la validant, vous confirmez l'avoir vérifiée ; le prescripteur sera invité à la revoir."
   },
   "LAB_INSTRUMENTS": {
     "TITLE": "Instruments de laboratoire",
@@ -9098,7 +9107,8 @@
     "LAB_STATUS_QUALITATIVE": "Résultat qualitatif : à interpréter par le clinicien",
     "LAB_STATUS_NOT_INTERPRETED": "Non interprété : aucun intervalle de référence",
     "CODE_PLACEHOLDER": "ex. B54 (paludisme)",
-    "PREGNANCY": "Grossesse en cours : {{weeks}} SA + {{days}} j"
+    "PREGNANCY": "Grossesse en cours : {{weeks}} SA + {{days}} j",
+    "TIMELINE_TRANSCRIBED_AT": "Transcrit à {{hospital}}"
   },
   "PHARMACY": {
     "QUEUE_CLAIM": {

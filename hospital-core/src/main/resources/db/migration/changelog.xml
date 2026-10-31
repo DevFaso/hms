@@ -3232,6 +3232,18 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- V252 (round 19): QA D1120, lab test definitions are versioned
+         (supersedes_definition_id, version_number on lab.lab_test_definitions);
+         QA D1107, care notes saved by the nurse-station dialog are signed by
+         their author (backfill of clinical.nursing_notes). Plain statements,
+         no DO block. Idempotent. -->
+    <changeSet id="V252-lab-definition-versions-and-care-note-signature" author="hms-team" runOnChange="false">
+        <sqlFile path="V252__lab_definition_versions_and_care_note_signature.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
     <!-- V253 (round 19): QA D1096, the paediatric manual dose review is a
          real stop. clinical.prescriptions records that a review is required
          (pediatric_dose_review_required) and who reviewed it, when and why
