@@ -89,13 +89,14 @@ class SaveThenRefreshGuardTest {
             // refresh is stepped over, and a save inside an `if` is still followed by the
             // refresh after it: a log line or a mapper call between the two changes
             // nothing about what the refresh discards.
-            // …unless the save's own block returns: `if (isNew) { return repo.save(fresh); }`
-            // and a refresh after the block never run together, so only the block counts.
+            // …unless the save's own block returns (an if-block whose body returns the
+            // saved row): that block and a refresh after it never run together, so only
+            // the block counts.
             int blockEnd = endOfEnclosingBlock(source, semicolon + 1);
-            // Only a `return` that always runs counts: one at the block's own level that
-            // starts a statement, not one inside a nested `if { … }`, a lambda or a
-            // brace-less `if (x) return y;`.
-            // A save inside a `return` statement (`if (isNew) return repo.save(fresh);`)
+            // Only a return that always runs counts: one at the block's own level that
+            // starts a statement, not one inside a nested if-block, a lambda or a
+            // brace-less if that returns.
+            // A save inside a return statement (a brace-less if returning the saved row)
             // leaves the method itself: nothing after it ever runs after this save.
             boolean returnsTheSave =
                 RETURN.matcher(source.substring(SourceScan.statementStart(source, m.start()), semicolon)).find();
@@ -108,10 +109,10 @@ class SaveThenRefreshGuardTest {
             // another row before the saved one does not clear the saved one.
             Matcher refresh = REFRESH.matcher(rest);
             // A flush clears the pending update only when it always runs before the
-            // refresh: one inside an `if (audit) { em.flush(); }` does not.
+            // refresh: a flush inside a conditional block does not.
             int flush = unconditional(rest, FLUSH, false);
-            // `if (dirty) { save(x); } else { refresh(x); }`: the else chain of the save's
-            // own `if` never runs after the save.
+            // A save in an if-block and a refresh in its else-block: the else chain of
+            // the save's own if never runs after the save.
             int[] exclusive = elseChain(source, blockEnd);
             while (refresh.find()) {
                 if (flush >= 0 && flush < refresh.start()) {
@@ -235,15 +236,24 @@ class SaveThenRefreshGuardTest {
 
     /** {@code "file:12: save(existing) then refresh(saved) — …"} → {@code "file save(existing) refresh(saved)"}. */
     static String siteKey(String hit) {
-        Matcher m = HIT.matcher(hit);
-        if (!m.find()) {
+        // The first ":<line>: save(" ends the file; the last ") then refresh(" ends the
+        // save argument (which may itself hold parentheses).
+        Matcher head = HIT_HEAD.matcher(hit);
+        int tail = hit.lastIndexOf(HIT_TAIL_START);
+        if (!head.find() || head.start() == 0 || tail < head.end()) {
             throw new IllegalStateException("unparseable hit: " + hit);
         }
-        return m.group(1) + " save(" + m.group(2) + ") refresh(" + m.group(3) + ")";
+        Matcher refreshed = HIT_TAIL.matcher(hit).region(tail, hit.length());
+        if (!refreshed.lookingAt()) {
+            throw new IllegalStateException("unparseable hit: " + hit);
+        }
+        return hit.substring(0, head.start()) + " save(" + hit.substring(head.end(), tail)
+            + ") refresh(" + refreshed.group(1) + ")";
     }
 
-    private static final Pattern HIT =
-        Pattern.compile("^(.+?):\\d+: save\\((.*)\\) then refresh\\((\\w+)\\) — ", Pattern.DOTALL);
+    private static final Pattern HIT_HEAD = Pattern.compile(":\\d++: save\\(");
+    private static final String HIT_TAIL_START = ") then refresh(";
+    private static final Pattern HIT_TAIL = Pattern.compile("\\) then refresh\\((\\w++)\\) — ");
 
     /** Whether {@code argument} is {@code name} or names it: {@code mapper.apply(existing, request)} names {@code existing}. */
     static boolean namesIdentifier(String argument, String name) {
@@ -288,12 +298,13 @@ class SaveThenRefreshGuardTest {
     /** Whether the `{` at {@code open} follows a parameter list (or `throws` clause) of a method, not a control block. */
     static boolean opensMethodBody(String source, int open) {
         String before = source.substring(Math.max(0, open - 400), open).stripTrailing();
-        String head = before.replaceFirst("\\bthrows\\s+[\\w.,\\s<>]+$", "").stripTrailing();
+        String head = before.replaceFirst("\\bthrows\\s[\\w.,\\s<>]++$", "").stripTrailing();
         if (!head.endsWith(")")) {
             return false;
         }
-        // The `(` that matches the final `)` — not the last `(`, which may belong to a
-        // nested call (`if (x.isNew())`) or an annotation (`@RequestBody(required = false)`).
+        // The opening parenthesis that matches the final closing one, not the last
+        // opening one, which may belong to a nested call in a condition or to an
+        // annotation with arguments on a parameter.
         int depth = 0;
         int paren = -1;
         for (int i = head.length() - 1; i >= 0; i--) {
@@ -429,6 +440,25 @@ class SaveThenRefreshGuardTest {
             entityManager.refresh(lot);
             entityManager.refresh(saved);
             """;
+        assertThat(offenders("x", old)).hasSize(1);
+        assertThat(offenders("x", plain)).hasSize(1);
+        assertThat(offenders("x", expression)).hasSize(1);
+        assertThat(offenders("x", expressionUnassigned)).hasSize(1);
+        assertThat(offenders("x", statementBetween)).hasSize(1);
+        assertThat(offenders("x", nestedBlockBetween)).hasSize(1);
+        assertThat(offenders("x", qualifiedReceiver)).hasSize(1);
+        assertThat(offenders("x", throughHelper)).hasSize(1);
+        assertThat(offenders("x", otherRefreshFirst)).hasSize(1);
+        assertThat(offenders("x", flushed)).isEmpty();
+        assertThat(offenders("x", unrelated)).isEmpty();
+        assertThat(offenders("x", commented)).isEmpty();
+        assertThat(offenders("x", flushBetween)).isEmpty();
+        assertThat(offenders("x", nextBlock)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("the scan follows blocks, returns and flushes: a save inside an if, a return that always runs, an else chain, a conditional flush")
+    void theScanFollowsBlocksReturnsAndFlushes() {
         String saveInsideIf = """
                 public Appointment update(UUID id, AppointmentRequestDTO request) {
                     Appointment existing = load(id);
@@ -534,19 +564,5 @@ class SaveThenRefreshGuardTest {
         assertThat(offenders("x", conditionalFlush)).hasSize(1);
         assertThat(siteKey(offenders("service/A.java", writerFlush).get(0)))
             .isEqualTo("service/A.java save(existing) refresh(saved)");
-        assertThat(offenders("x", old)).hasSize(1);
-        assertThat(offenders("x", plain)).hasSize(1);
-        assertThat(offenders("x", expression)).hasSize(1);
-        assertThat(offenders("x", expressionUnassigned)).hasSize(1);
-        assertThat(offenders("x", statementBetween)).hasSize(1);
-        assertThat(offenders("x", nestedBlockBetween)).hasSize(1);
-        assertThat(offenders("x", qualifiedReceiver)).hasSize(1);
-        assertThat(offenders("x", throughHelper)).hasSize(1);
-        assertThat(offenders("x", otherRefreshFirst)).hasSize(1);
-        assertThat(offenders("x", flushed)).isEmpty();
-        assertThat(offenders("x", unrelated)).isEmpty();
-        assertThat(offenders("x", commented)).isEmpty();
-        assertThat(offenders("x", flushBetween)).isEmpty();
-        assertThat(offenders("x", nextBlock)).isEmpty();
     }
 }

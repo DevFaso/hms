@@ -166,11 +166,13 @@ class StoredTextProseGuardTest {
                 continue;
             }
             char ch = chain.charAt(i);
-            if (ch == '(' && depth++ == 0) {
-                out.append(ch);
-            } else if (ch == ')' && --depth == 0) {
-                out.append(ch);
-            } else if (depth == 0) {
+            if (ch == '(') {
+                depth++;
+            } else if (ch == ')') {
+                depth--;
+            }
+            // What lies outside every parenthesis, plus the outermost pair itself.
+            if (depth == 0 || (ch == '(' && depth == 1)) {
                 out.append(ch);
             }
         }

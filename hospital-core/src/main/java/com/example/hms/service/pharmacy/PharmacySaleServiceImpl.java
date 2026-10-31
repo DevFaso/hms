@@ -196,7 +196,7 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
     private String notesWithFefoReason(SaleLineRequestDTO lineDto, StockLot lot,
                                        java.util.Map<java.util.UUID, BigDecimal> takenByLot) {
         String lineNotes = lineDto.getNotes();
-        String fefoReason = fefoLotPolicy.requireFefoOrReason(lot, lineDto.getQuantity(),
+        String fefoReason = fefoLotPolicy.requireFefoOrReason(lot,
                 lineDto.getFefoOverrideReason(), takenByLot);
         if (fefoReason == null) {
             return lineNotes;

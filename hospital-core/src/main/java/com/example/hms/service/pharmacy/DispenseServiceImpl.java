@@ -925,7 +925,7 @@ public class DispenseServiceImpl implements DispenseService {
      * notes ("FEFO: ..."), so the dispense record says why.
      */
     private void recordFefoOverride(DispenseRequestDTO dto, StockLot stockLot) {
-        String reason = fefoLotPolicy.requireFefoOrReason(stockLot, dto.getQuantityDispensed(),
+        String reason = fefoLotPolicy.requireFefoOrReason(stockLot,
                 dto.getFefoOverrideReason());
         if (reason == null) {
             return;

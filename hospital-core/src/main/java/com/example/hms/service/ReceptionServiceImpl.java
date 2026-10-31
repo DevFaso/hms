@@ -527,7 +527,14 @@ public class ReceptionServiceImpl implements ReceptionService {
      * shows what happened on it.
      */
     private List<Encounter> carriedOverVisits(UUID hospitalId, LocalDate date) {
-        if (hospitalId == null || date == null || !date.equals(LocalDate.now())) {
+        if (hospitalId == null || date == null) {
+            return List.of();
+        }
+        // "Today" is the hospital's calendar day (its organisation's zone),
+        // the day the desk asked for, not the server's.
+        LocalDate hospitalToday = com.example.hms.utility.HospitalCalendar.today(
+                hospitalRepo.findById(hospitalId).orElse(null), java.time.Clock.systemDefaultZone());
+        if (!date.equals(hospitalToday)) {
             return List.of();
         }
         return encounterRepo.findOpenStartedBefore(hospitalId, date.atStartOfDay(), OPEN_VISIT_STATUSES);

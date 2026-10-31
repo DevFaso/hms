@@ -185,8 +185,9 @@ class PatientMatchKeysGuardTest {
     @Test
     void noRequestCapsAWrittenPhoneNumberBelowItsWrittenLength() throws IOException {
         java.util.regex.Pattern capped = java.util.regex.Pattern.compile(
-            "@(?:jakarta\\.validation\\.constraints\\.)?Size\\(\\s*max\\s*=\\s*(\\d+)[^)]*\\)\\s*"
-                + "(?:@[\\w.]+(?:\\([^)]*\\))?\\s*)*private\\s+String\\s+(\\w*[Pp]hone\\w*)\\s*;");
+            "@(?:jakarta\\.validation\\.constraints\\.)?Size\\(\\s*+max\\s*+=\\s*+(\\d++)[^)]*+\\)\\s*+"
+                + "(?:@[\\w.]++(?:\\([^)]*+\\))?+\\s*+)*+private\\s++String\\s++"
+                + "((?:[a-oq-zA-OQ-Z0-9_]|[Pp](?!hone))*+[Pp]hone\\w*+)\\s*+;");
         List<String> tooShort = new java.util.ArrayList<>();
         int phoneFields = 0;
         for (Path f : javaFiles()) {

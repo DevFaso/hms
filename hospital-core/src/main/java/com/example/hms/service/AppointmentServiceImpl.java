@@ -811,9 +811,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         // start and clinician keeps its own end (an edit of the notes or the
         // status never re-times it); a moved one takes the slot length where
         // it lands. The end time in the request is ignored.
-        boolean moved = !request.getAppointmentDate().equals(existing.getAppointmentDate())
-            || !request.getStartTime().equals(existing.getStartTime())
-            || existing.getStaff() == null || !staff.getId().equals(existing.getStaff().getId());
+        boolean moved = movesTheVisit(request, existing, staff);
         request.setEndTime(moved || existing.getEndTime() == null
             ? slotPolicy.endFor(staff.getId(), request.getAppointmentDate(), request.getStartTime())
             : existing.getEndTime());
@@ -824,33 +822,8 @@ public class AppointmentServiceImpl implements AppointmentService {
             slotPolicy.requireNoLiveHold(staff.getId(), requestedStart, requestedEnd);
         }
 
-        // --- Staff Schedule Check ---
-        boolean staffAvailable = staffAvailabilityService.isStaffAvailable(staff.getId(), requestedStart);
-        if (!staffAvailable) {
-            throw new BusinessException(messageSource.getMessage(
-                "appointment.staff.unavailable.schedule",
-                new Object[]{staff.getId(), request.getAppointmentDate(), request.getStartTime()},
-                locale
-            ));
-        }
-
-        // QA D937: the appointment being moved, a cancelled booking and a
-        // no-show never conflict. Nor does the edit itself when the visit
-        // ends up not holding its slot (review round 9): a missed or cancelled
-        // visit whose freed time was rebooked can still take a note or a cancel.
-        AppointmentStatus resultingStatus = request.getStatus() != null ? request.getStatus() : existing.getStatus();
-        boolean hasConflict = AppointmentStatus.holdsSlot(resultingStatus)
-            && AppointmentSlotRules.overlapsHeldSlot(
-                appointmentRepository.findByStaff_IdAndAppointmentDate(staff.getId(), request.getAppointmentDate()),
-                id, requestedStart, requestedEnd);
-
-        if (hasConflict) {
-            throw new BusinessException(messageSource.getMessage(
-                "appointment.staff.unavailable",
-                new Object[]{staff.getId(), request.getAppointmentDate(), request.getStartTime(), request.getEndTime()},
-                locale
-            ));
-        }
+        requireStaffScheduledForEdit(staff, request, requestedStart, locale);
+        requireNoConflictForEdit(id, existing, staff, request, requestedStart, requestedEnd, locale);
 
         // Capture old schedule before mapper overwrites fields
         LocalDate   oldDate  = existing.getAppointmentDate();
@@ -913,7 +886,58 @@ public class AppointmentServiceImpl implements AppointmentService {
         // regardless of which write path moved it.
         publishRescheduleIfMoved(saved, oldDate, oldStart, oldEnd);
 
-        // Notify patient when date/time changes (treat as reschedule)
+        sendRescheduleEmailIfMoved(saved, oldDate, oldStart, oldEnd);
+
+        return appointmentMapper.toAppointmentResponseDTO(saved);
+    }
+
+    /**
+     * QA D1060: whether an edit moves the visit (another date, start or
+     * clinician); a moved visit takes the slot length where it lands.
+     */
+    private static boolean movesTheVisit(AppointmentRequestDTO request, Appointment existing, Staff staff) {
+        return !request.getAppointmentDate().equals(existing.getAppointmentDate())
+            || !request.getStartTime().equals(existing.getStartTime())
+            || existing.getStaff() == null || !staff.getId().equals(existing.getStaff().getId());
+    }
+
+    /** The clinician's schedule must cover the edited start. */
+    private void requireStaffScheduledForEdit(Staff staff, AppointmentRequestDTO request,
+                                              LocalDateTime requestedStart, Locale locale) {
+        if (!staffAvailabilityService.isStaffAvailable(staff.getId(), requestedStart)) {
+            throw new BusinessException(messageSource.getMessage(
+                "appointment.staff.unavailable.schedule",
+                new Object[]{staff.getId(), request.getAppointmentDate(), request.getStartTime()},
+                locale
+            ));
+        }
+    }
+
+    /**
+     * QA D937: the appointment being moved, a cancelled booking and a
+     * no-show never conflict. Nor does the edit itself when the visit
+     * ends up not holding its slot (review round 9): a missed or cancelled
+     * visit whose freed time was rebooked can still take a note or a cancel.
+     */
+    private void requireNoConflictForEdit(UUID id, Appointment existing, Staff staff, AppointmentRequestDTO request,
+                                          LocalDateTime requestedStart, LocalDateTime requestedEnd, Locale locale) {
+        AppointmentStatus resultingStatus = request.getStatus() != null ? request.getStatus() : existing.getStatus();
+        boolean hasConflict = AppointmentStatus.holdsSlot(resultingStatus)
+            && AppointmentSlotRules.overlapsHeldSlot(
+                appointmentRepository.findByStaff_IdAndAppointmentDate(staff.getId(), request.getAppointmentDate()),
+                id, requestedStart, requestedEnd);
+        if (hasConflict) {
+            throw new BusinessException(messageSource.getMessage(
+                "appointment.staff.unavailable",
+                new Object[]{staff.getId(), request.getAppointmentDate(), request.getStartTime(), request.getEndTime()},
+                locale
+            ));
+        }
+    }
+
+    /** Notify the patient when the date or time changed (treated as a reschedule). */
+    private void sendRescheduleEmailIfMoved(Appointment saved, LocalDate oldDate,
+                                            LocalTime oldStart, LocalTime oldEnd) {
         boolean dateChanged  = !saved.getAppointmentDate().equals(oldDate);
         boolean startChanged = !saved.getStartTime().equals(oldStart);
         boolean endChanged   = !saved.getEndTime().equals(oldEnd);
@@ -938,8 +962,6 @@ public class AppointmentServiceImpl implements AppointmentService {
                 log.warn("Failed to send reschedule email for appointment {}: {}", saved.getId(), e.getMessage());
             }
         }
-
-        return appointmentMapper.toAppointmentResponseDTO(saved);
     }
 
     /** Emits the item-45 reschedule event iff the schedule actually moved. */

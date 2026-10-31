@@ -378,8 +378,31 @@ class ReceptionServiceImplTest {
                     .thenReturn(Collections.emptyList());
 
             assertThat(service.getQueue(yesterday, hospitalId, "ALL", null, null)).isEmpty();
-            org.mockito.Mockito.verify(encounterRepo, org.mockito.Mockito.never())
-                    .findOpenStartedBefore(any(), any(), any());
+            verify(encounterRepo, never()).findOpenStartedBefore(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("QA D1021: 'today' for the carry-over is the hospital's calendar day, not the server's")
+        void theCarryOverDayIsTheHospitalsToday_D1021() {
+            // Kiritimati (UTC+14) and Pago Pago (UTC-11) are 25 hours apart:
+            // their calendar days always differ, whatever the server's zone.
+            com.example.hms.model.Organization org = mock(com.example.hms.model.Organization.class);
+            when(org.getDefaultTimezone()).thenReturn("Pacific/Kiritimati");
+            Hospital zoned = mock(Hospital.class);
+            when(zoned.getOrganization()).thenReturn(org);
+            when(hospitalRepo.findById(hospitalId)).thenReturn(Optional.of(zoned));
+            LocalDate hospitalToday = LocalDate.now(java.time.ZoneId.of("Pacific/Kiritimati"));
+            LocalDate otherDay = LocalDate.now(java.time.ZoneId.of("Pacific/Pago_Pago"));
+            when(appointmentRepo.findByHospital_IdAndAppointmentDate(eq(hospitalId), any())).thenReturn(List.of());
+            when(encounterRepo.findWalkInsForHospitalAndPeriod(eq(hospitalId), any(), any()))
+                    .thenReturn(Collections.emptyList());
+            when(encounterRepo.findOpenStartedBefore(any(), any(), any())).thenReturn(List.of());
+
+            service.getQueue(otherDay, hospitalId, "ALL", null, null);
+            verify(encounterRepo, never()).findOpenStartedBefore(any(), any(), any());
+
+            service.getQueue(hospitalToday, hospitalId, "ALL", null, null);
+            verify(encounterRepo).findOpenStartedBefore(eq(hospitalId), eq(hospitalToday.atStartOfDay()), any());
         }
 
         @Test
@@ -1790,7 +1813,7 @@ class ReceptionServiceImplTest {
             // QA D936: the appointment is read under a row lock.
             verify(appointmentRepo).lockById(appointmentId);
             // No consent fields on the request — nothing recorded (P3 #21).
-            verify(treatmentConsentService, org.mockito.Mockito.never())
+            verify(treatmentConsentService, never())
                 .record(any(), any(), any(), any(), any());
         }
 

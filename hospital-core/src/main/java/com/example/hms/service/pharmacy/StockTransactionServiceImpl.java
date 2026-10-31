@@ -339,7 +339,7 @@ public class StockTransactionServiceImpl implements StockTransactionService {
         if (dto.getTransactionType() != StockTransactionType.TRANSFER || lot == null) {
             return;
         }
-        String reason = fefoLotPolicy.requireFefoOrReason(lot, dto.getQuantity(), dto.getFefoOverrideReason());
+        String reason = fefoLotPolicy.requireFefoOrReason(lot, dto.getFefoOverrideReason());
         if (reason != null) {
             String combined = dto.getReason().trim() + FEFO_LEDGER_SEPARATOR + reason;
             if (combined.length() > 500) {

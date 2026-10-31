@@ -389,7 +389,7 @@ class StockTransactionServiceImplTest {
             when(inventoryItemRepository.findById(inventoryItemId)).thenReturn(Optional.of(inventoryItem));
             stubHospitalScope();
             when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
-            when(fefoLotPolicy.requireFefoOrReason(eq(stockLot), any(), org.mockito.ArgumentMatchers.isNull()))
+            when(fefoLotPolicy.requireFefoOrReason(eq(stockLot), org.mockito.ArgumentMatchers.isNull()))
                     .thenThrow(new BusinessException("pharmacy.fefo.reasonRequired", "LOT-COURT", "1 déc. 2026"));
 
             assertThatThrownBy(() -> service.recordTransaction(dto))
@@ -405,7 +405,7 @@ class StockTransactionServiceImplTest {
             StockTransactionRequestDTO dto = buildRequest(StockTransactionType.TRANSFER, new BigDecimal("15"));
             dto.setFefoOverrideReason("lot court promis au CSPS");
             stubCommonMocks(dto, true);
-            when(fefoLotPolicy.requireFefoOrReason(stockLot, new BigDecimal("15"), "lot court promis au CSPS"))
+            when(fefoLotPolicy.requireFefoOrReason(stockLot, "lot court promis au CSPS"))
                     .thenReturn("lot court promis au CSPS");
 
             service.recordTransaction(dto);

@@ -125,8 +125,6 @@ class GuardDriftRatchetTest {
         "Diagnoses are made by physicians; the doctor record and timeline are the physician's own views";
     private static final String PRESCRIPTIONCONTROLLER_REASON =
         "Signing, co-signing and resolving a clarification are prescribing acts";
-    private static final String PROCEDUREORDERCONTROLLER_REASON =
-        "The ordering provider cancels the order";
     private static final String ROIWORKLISTCONTROLLER_REASON =
         "Release-of-information decisions; as found 2026-09-26, pending the clinical decision in tasklist \"Nurse/midwife read drift\"";
     private static final String STOCKOUTROUTINGCONTROLLER_REASON =

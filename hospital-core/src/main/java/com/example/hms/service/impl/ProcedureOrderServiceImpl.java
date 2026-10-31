@@ -272,13 +272,13 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
         if (updateDTO.getStatus() != null) {
             procedureOrder.setStatus(updateDTO.getStatus());
             if (updateDTO.getStatus() == ProcedureOrderStatus.COMPLETED) {
-                procedureOrder.setCompletedAt(LocalDateTime.now());
+                procedureOrder.setCompletedAt(LocalDateTime.now(java.time.ZoneId.systemDefault()));
             }
             // The stamp belongs to the transition (the order was not cancelled,
             // checked above), as POST /cancel writes it; this path used to set
             // CANCELLED with no time and no reason.
             if (cancelling) {
-                procedureOrder.setCancelledAt(LocalDateTime.now());
+                procedureOrder.setCancelledAt(LocalDateTime.now(java.time.ZoneId.systemDefault()));
                 procedureOrder.setCancellationReason(cancellationReason);
             }
         }

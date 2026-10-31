@@ -2648,7 +2648,7 @@ public class EncounterServiceImpl implements EncounterService {
             return null;
         }
         java.time.LocalTime[] slot = freeFollowUpSlot(staff.getId(), date);
-        if (slot == null) {
+        if (slot.length == 0) {
             return null;
         }
         java.time.LocalTime start = slot[0];
@@ -2693,7 +2693,7 @@ public class EncounterServiceImpl implements EncounterService {
     /**
      * The first half-hour from 08:00 the clinician has nothing booked at, so
      * the placeholder never collides with uq_appt_staff_slot at flush (which
-     * would fail the whole checkout), as {start, end}; null when the day is
+     * would fail the whole checkout), as {start, end}; empty when the day is
      * full. QA D1060: the end is the slot rules' (it was a flat 30 minutes);
      * QA D1063: a slot held for a waitlist offer is skipped.
      */
@@ -2712,7 +2712,7 @@ public class EncounterServiceImpl implements EncounterService {
                 return new java.time.LocalTime[] {t, endTime};
             }
         }
-        return null;
+        return new java.time.LocalTime[0];
     }
 
     /** The follow-up date asked at checkout, or two weeks out when absent or unparseable. */

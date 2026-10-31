@@ -358,7 +358,7 @@ class DispenseReadyForCollectionTest {
             when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
             DispenseRequestDTO dto = request();
             dto.setStockLotId(stockLotId);
-            when(fefoLotPolicy.requireFefoOrReason(eq(stockLot), any(), org.mockito.ArgumentMatchers.isNull()))
+            when(fefoLotPolicy.requireFefoOrReason(eq(stockLot), org.mockito.ArgumentMatchers.isNull()))
                     .thenThrow(new BusinessException("pharmacy.fefo.reasonRequired", "R16-MOR-COURT", "1 déc. 2026"));
 
             assertThatThrownBy(() -> service.markReadyForCollection(dto))

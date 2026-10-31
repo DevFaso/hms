@@ -828,7 +828,7 @@ class DispenseServiceImplTest {
             org.mockito.Mockito.lenient().when(roleValidator.getCurrentUserId()).thenReturn(userId);
             org.mockito.Mockito.lenient().when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
-            when(fefoLotPolicy.requireFefoOrReason(eq(stockLot), eq(BigDecimal.TEN), org.mockito.ArgumentMatchers.isNull()))
+            when(fefoLotPolicy.requireFefoOrReason(eq(stockLot), org.mockito.ArgumentMatchers.isNull()))
                     .thenThrow(new BusinessException("pharmacy.fefo.reasonRequired", "R16-PCM-COURT", "10 nov. 2026"));
 
             assertThatThrownBy(() -> service.createDispense(dto))
@@ -852,7 +852,7 @@ class DispenseServiceImplTest {
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
             when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
-            when(fefoLotPolicy.requireFefoOrReason(stockLot, BigDecimal.TEN, "lot court réservé au service des urgences"))
+            when(fefoLotPolicy.requireFefoOrReason(stockLot, "lot court réservé au service des urgences"))
                     .thenReturn("lot court réservé au service des urgences");
             when(dispenseMapper.toEntity(eq(dto), any())).thenReturn(entity);
             when(dispenseRepository.save(any(Dispense.class))).thenReturn(entity);

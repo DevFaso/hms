@@ -1,6 +1,5 @@
 package com.example.hms.service;
 
-import com.example.hms.exception.BusinessException;
 import com.example.hms.model.Appointment;
 import com.example.hms.model.Hospital;
 import com.example.hms.model.Role;

@@ -3,7 +3,6 @@ package com.example.hms.security;
 import com.example.hms.config.SecurityConstants;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.nio.charset.StandardCharsets;
@@ -96,7 +95,7 @@ class ShellStartupEndpointRolesTest {
                 .contains("ROLE_RECEPTIONIST");
     }
 
-    private static Set<String> roles(String list) throws IOException {
+    private static Set<String> roles(String list) {
         Set<String> out = new TreeSet<>();
         Matcher role = QUOTED_ROLE.matcher(list);
         while (role.find()) {

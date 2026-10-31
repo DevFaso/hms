@@ -66,8 +66,8 @@ class ClinicalDocumentAuthorGuardTest {
         "impl/ProcedureOrderServiceImpl.java");
     /** Round 16 siblings: sign, void and an order's signature capture are writes on the author's record too. */
     private static final Pattern WRITE_METHOD = Pattern.compile(
-        "\\n    public [A-Za-z<>.?, ]+ ((?:update|delete|cancel|finalize|amend|withdraw|sign|void"
-            + "|capture\\w*Signature)\\w*)\\(");
+        "\\n    public (?:[A-Za-z<>.?,]++ ++)++((?:update|delete|cancel|finalize|amend|withdraw|sign|void"
+            + "|capture(?:[A-RT-Za-z0-9_]|S(?!ignature))*+Signature)\\w*+)\\(");
     /**
      * Calls that decide who may act on an existing record (review of #971:
      * {@code CallerIdentity.requireAtHospital} is a hospital check, not an
@@ -217,16 +217,16 @@ class ClinicalDocumentAuthorGuardTest {
         assertThat(offenders).as("cancellation stamps written on every request that carries the status").isEmpty();
     }
 
-    /**
-     * A write may delegate the check to a private helper of the same class
-     * (cancelConsultation, for one); follow one level of private calls.
-     */
     /** The body of the method whose parameter list opens at {@code paren}: from its {@code {} to the matching {@code }}. */
     private static String methodBody(String src, int paren) {
         int open = src.indexOf('{', com.example.hms.testsupport.SourceScan.closingParen(src, paren));
         return src.substring(open, com.example.hms.testsupport.SourceScan.closingBrace(src, open));
     }
 
+    /**
+     * A write may delegate the check to a private helper of the same class
+     * (cancelConsultation, for one); follow one level of private calls.
+     */
     private static boolean callsCheckedHelper(String src, String body) {
         Matcher call = Pattern.compile("\\b(require\\w+)\\(").matcher(body);
         while (call.find()) {

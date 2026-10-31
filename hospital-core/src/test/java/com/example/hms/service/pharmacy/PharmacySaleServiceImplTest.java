@@ -258,7 +258,7 @@ class PharmacySaleServiceImplTest {
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(catalogItemRepository.findById(itemId)).thenReturn(Optional.of(item));
         when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(lot));
-        when(fefoLotPolicy.requireFefoOrReason(lot, BigDecimal.ONE, null, java.util.Map.of(stockLotId, BigDecimal.ONE)))
+        when(fefoLotPolicy.requireFefoOrReason(lot, null, java.util.Map.of(stockLotId, BigDecimal.ONE)))
                 .thenThrow(new BusinessException("pharmacy.fefo.reasonRequired", "LOT-COURT", "1 déc. 2026"));
 
         assertThatThrownBy(() -> service.createSale(dto))
@@ -323,8 +323,8 @@ class PharmacySaleServiceImplTest {
 
         java.util.Map<UUID, BigDecimal> wholeSale =
                 java.util.Map.of(shortLot.getId(), BigDecimal.TEN, longLot.getId(), new BigDecimal("5"));
-        verify(fefoLotPolicy).requireFefoOrReason(longLot, new BigDecimal("5"), null, wholeSale);
-        verify(fefoLotPolicy).requireFefoOrReason(shortLot, BigDecimal.TEN, null, wholeSale);
+        verify(fefoLotPolicy).requireFefoOrReason(longLot, null, wholeSale);
+        verify(fefoLotPolicy).requireFefoOrReason(shortLot, null, wholeSale);
     }
 
     @Test
@@ -347,7 +347,7 @@ class PharmacySaleServiceImplTest {
         when(userRepository.findById(userId)).thenReturn(Optional.of(user));
         when(catalogItemRepository.findById(itemId)).thenReturn(Optional.of(item));
         when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(lot));
-        when(fefoLotPolicy.requireFefoOrReason(lot, BigDecimal.ONE, "r".repeat(150), java.util.Map.of(stockLotId, BigDecimal.ONE))).thenReturn("r".repeat(150));
+        when(fefoLotPolicy.requireFefoOrReason(lot, "r".repeat(150), java.util.Map.of(stockLotId, BigDecimal.ONE))).thenReturn("r".repeat(150));
 
         assertThatThrownBy(() -> service.createSale(dto))
                 .isInstanceOf(BusinessException.class)

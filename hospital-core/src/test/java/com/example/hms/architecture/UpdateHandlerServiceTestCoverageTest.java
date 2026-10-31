@@ -58,10 +58,34 @@ class UpdateHandlerServiceTestCoverageTest {
      * The handler signature once the annotations after the mapping are skipped:
      * {@code [public|protected] <type> name(} — a package-private handler is a handler too.
      */
-    static final Pattern SIGNATURE = Pattern.compile("(?:(?:public|protected)\\s+)?[^;{()]*?\\s+(\\w+)\\s*\\(");
+    static final Pattern SIGNATURE = Pattern.compile("[^;{()]*+\\(");
 
     /** {@code something[sS]ervice.method(} inside the handler body. */
-    static final Pattern SERVICE_CALL = Pattern.compile("\\b(\\w*[sS]ervice\\w*)\\s*\\.\\s*(\\w+)\\s*\\(");
+    static final Pattern SERVICE_CALL = Pattern.compile(
+        "\\b((?:[a-rt-zA-RT-Z0-9_]|[sS](?!ervice))*+[sS]ervice\\w*+)\\s*+\\.\\s*+(\\w++)\\s*+\\(");
+
+    /**
+     * The handler's name in its signature head (the text up to its parameter list):
+     * the last word, preceded by whitespace; null when the head is not a signature.
+     */
+    static String handlerName(String head) {
+        int end = head.length();
+        while (end > 0 && Character.isWhitespace(head.charAt(end - 1))) {
+            end--;
+        }
+        int start = end;
+        while (start > 0 && isWordChar(head.charAt(start - 1))) {
+            start--;
+        }
+        if (start == end || start == 0 || !Character.isWhitespace(head.charAt(start - 1))) {
+            return null;
+        }
+        return head.substring(start, end);
+    }
+
+    private static boolean isWordChar(char ch) {
+        return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_';
+    }
 
     private static final String DARK = "no test names this service method; add one that reads the row back after the update";
     private static final String NO_SERVICE =
@@ -115,7 +139,8 @@ class UpdateHandlerServiceTestCoverageTest {
         while (mapping.find()) {
             int at = SourceScan.skipAnnotations(source, mapping.end());
             Matcher signature = SIGNATURE.matcher(source).region(at, source.length());
-            int params = signature.lookingAt() ? signature.end() - 1 : -1;
+            String name = signature.lookingAt() ? handlerName(source.substring(at, signature.end() - 1)) : null;
+            int params = name == null ? -1 : signature.end() - 1;
             int open = params < 0 ? -1 : source.indexOf('{', SourceScan.closingParen(source, params));
             if (open < 0) {
                 // Reported, not skipped: the assertion names the controller and line
@@ -124,7 +149,7 @@ class UpdateHandlerServiceTestCoverageTest {
                 out.add(new Delegation(mapping.start(), where, "<unparsed>", "<none>", "<unparsed>"));
                 continue;
             }
-            String handler = controller + "#" + signature.group(1);
+            String handler = controller + "#" + name;
             String body = source.substring(open, SourceScan.closingBrace(source, open));
             Set<String> seen = new TreeSet<>();
             Matcher c = SERVICE_CALL.matcher(body);
@@ -185,21 +210,54 @@ class UpdateHandlerServiceTestCoverageTest {
      * A call on the CONTROLLER itself in a slice test ({@code controller.updateBed(id, request)}
      * with the service mocked) exercises no service method: its name is blanked too.
      */
-    private static final Pattern CONTROLLER_CALL = Pattern.compile("\\b\\w*[cC]ontroller\\w*\\s*\\.\\s*(\\w+)\\s*\\(");
+    private static final Pattern CONTROLLER_CALL = Pattern.compile(
+        "\\b(?:[abd-zABD-Z0-9_]|[cC](?!ontroller))*+[cC]ontroller\\w*+\\s*+\\.\\s*+(\\w++)\\s*+\\(");
 
     /**
      * A method DECLARATION in test code ({@code @Test void updatePermission() {}}): the
      * name is the test's, not a call to the service, and must not count as one.
      */
     private static final Pattern DECLARATION = Pattern.compile(
-        "(?m)^\\s*(?:(?:public|private|protected|static|final|default)\\s+)*(?:void|[\\w<>\\[\\],.? ]+?)\\s+(\\w+)\\s*\\([^;{)]*\\)\\s*(?:throws[^{;]*)?\\{");
+        "(?m)^\\s*+((?:[\\w<>\\[\\],.?]++\\s*+)++)\\([^;{)]*+\\)\\s*+(?:throws[^{;]*+)?+\\{");
+    /** One word of a declaration head: its modifiers, its type and, last, its name. */
+    private static final Pattern HEAD_WORD = Pattern.compile("[\\w<>\\[\\],.?]++");
+    private static final Pattern NAME = Pattern.compile("\\w++");
+
+    /**
+     * The declared name's {start, end} in {@code source}: the last word of the head
+     * (group 1), when it is a plain identifier preceded by at least one other word
+     * (a type, {@code void}, a modifier); empty otherwise. A lone word indented by a
+     * space and more whitespace ({@code if (x) {}, {@code for (…) {}) is blanked too,
+     * as the earlier pattern did (its type class held a space): a keyword, never a
+     * method name, so it changes nothing.
+     */
+    static int[] declaredName(Matcher declaration) {
+        Matcher word = HEAD_WORD.matcher(declaration.group(1));
+        int words = 0;
+        int start = -1;
+        int end = -1;
+        while (word.find()) {
+            words++;
+            start = word.start();
+            end = word.end();
+        }
+        String lead = declaration.group().substring(0, declaration.start(1) - declaration.start());
+        boolean indentedLoneWord = words == 1 && lead.indexOf(' ') >= 0 && lead.indexOf(' ') < lead.length() - 1;
+        if ((words < 2 && !indentedLoneWord) || !NAME.matcher(declaration.group(1).substring(start, end)).matches()) {
+            return new int[0];
+        }
+        return new int[] {declaration.start(1) + start, declaration.start(1) + end};
+    }
 
     static String withoutStubs(String source) {
         StringBuilder out = new StringBuilder(source);
         Matcher declaration = DECLARATION.matcher(source);
         while (declaration.find()) {
-            for (int i = declaration.start(1); i < declaration.end(1); i++) {
-                out.setCharAt(i, ' ');
+            int[] name = declaredName(declaration);
+            if (name.length == 2) {
+                for (int i = name[0]; i < name[1]; i++) {
+                    out.setCharAt(i, ' ');
+                }
             }
         }
         Matcher m = STUB_CALL.matcher(source);
@@ -444,11 +502,13 @@ class UpdateHandlerServiceTestCoverageTest {
         String guard = "String fixture = " + tq + "\n    advanceDirectiveService.update(id, request);\n    " + tq + ";\n"
             + "String one = \"wardService.renameWard(id)\";\n";
         // A behaviour test that also reads one production file still calls the service in code.
-        String behaviour = "String src = Files.readString(Path.of(\"src/main/java/A.java\"));\n"
-            + "service.pause(auth, refillId, null);\n";
+        String behaviour = """
+            String src = Files.readString(Path.of("src/main/java/A.java"));
+            service.pause(auth, refillId, null);
+            """;
         String blanked = withoutLiterals(guard);
-        assertThat(blanked).doesNotContain("update(", "renameWard(").contains(tq).contains("\n");
-        assertThat(blanked).hasSameSizeAs(guard);
+        assertThat(blanked).doesNotContain("update(", "renameWard(").contains(tq).contains("\n")
+            .hasSameSizeAs(guard);
         assertThat(withoutLiterals(behaviour)).contains("service.pause(").doesNotContain("src/main");
     }
 

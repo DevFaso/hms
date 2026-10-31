@@ -48,8 +48,7 @@ class FefoLotPolicyTest {
 
     @Test
     void takingTheLaterLotWhileTheShorterOneCanServeNeedsAReasonAndNamesTheLotToTake() {
-        BigDecimal twenty = new BigDecimal("20");
-        assertThatThrownBy(() -> policy.requireFefoOrReason(longDated, twenty, "  "))
+        assertThatThrownBy(() -> policy.requireFefoOrReason(longDated, "  "))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(e -> {
                     assertThat(((BusinessException) e).getMessageKey()).isEqualTo("pharmacy.fefo.reasonRequired");
@@ -59,13 +58,13 @@ class FefoLotPolicyTest {
 
     @Test
     void aReasonLetsTheLaterLotGoAndIsReturnedToBeRecorded() {
-        assertThat(policy.requireFefoOrReason(longDated, new BigDecimal("20"), "  lot court réservé  "))
+        assertThat(policy.requireFefoOrReason(longDated, "  lot court réservé  "))
                 .isEqualTo("lot court réservé");
     }
 
     @Test
     void theShortestDatedLotNeedsNoReasonAndAReasonSentAnywayIsNotRecorded() {
-        assertThat(policy.requireFefoOrReason(shortDated, new BigDecimal("20"), "rien")).isNull();
+        assertThat(policy.requireFefoOrReason(shortDated, "rien")).isNull();
     }
 
     /**
@@ -76,12 +75,11 @@ class FefoLotPolicyTest {
      */
     @Test
     void theRefusalNamesWhatIsLeftOnTheEarlierLot_D1083() {
-        BigDecimal hundredFifty = new BigDecimal("150");
-        assertThatThrownBy(() -> policy.requireFefoOrReason(longDated, hundredFifty, null))
+        assertThatThrownBy(() -> policy.requireFefoOrReason(longDated, null))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(e -> assertThat(((BusinessException) e).getArgs()[2]).isEqualTo("100"));
         java.util.Map<UUID, BigDecimal> partly = java.util.Map.of(shortDated.getId(), new BigDecimal("90"));
-        assertThatThrownBy(() -> policy.requireFefoOrReason(longDated, BigDecimal.ONE, null, partly))
+        assertThatThrownBy(() -> policy.requireFefoOrReason(longDated, null, partly))
                 .satisfies(e -> assertThat(((BusinessException) e).getArgs()[2]).isEqualTo("10"));
     }
 
@@ -120,10 +118,9 @@ class FefoLotPolicyTest {
     @Test
     void whatEarlierLinesTakeIsNotCountedAsStillOnTheShorterLot() {
         java.util.Map<UUID, BigDecimal> taken = java.util.Map.of(shortDated.getId(), new BigDecimal("100"));
-        assertThat(policy.requireFefoOrReason(longDated, new BigDecimal("5"), null, taken)).isNull();
+        assertThat(policy.requireFefoOrReason(longDated, null, taken)).isNull();
         java.util.Map<UUID, BigDecimal> partly = java.util.Map.of(shortDated.getId(), new BigDecimal("90"));
-        BigDecimal five = new BigDecimal("5");
-        assertThatThrownBy(() -> policy.requireFefoOrReason(longDated, five, null, partly))
+        assertThatThrownBy(() -> policy.requireFefoOrReason(longDated, null, partly))
                 .isInstanceOf(BusinessException.class)
                 .extracting("messageKey").isEqualTo("pharmacy.fefo.reasonRequired");
     }
@@ -136,24 +133,23 @@ class FefoLotPolicyTest {
      */
     @Test
     void aShorterDatedLotThatCannotCoverTheMovementStillComesFirst_D1029() {
-        BigDecimal hundredFifty = new BigDecimal("150");
-        assertThatThrownBy(() -> policy.requireFefoOrReason(longDated, hundredFifty, null))
+        assertThatThrownBy(() -> policy.requireFefoOrReason(longDated, null))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(e -> assertThat(((BusinessException) e).getArgs()[0]).isEqualTo("R16-PCM-COURT"));
-        assertThat(policy.requireFefoOrReason(longDated, hundredFifty, "patient part en brousse")).isNotNull();
+        assertThat(policy.requireFefoOrReason(longDated, "patient part en brousse")).isNotNull();
     }
 
     @Test
     void anOverlongReasonIsRefused() {
         String overlong = "x".repeat(301);
-        assertThatThrownBy(() -> policy.requireFefoOrReason(longDated, BigDecimal.ONE, overlong))
+        assertThatThrownBy(() -> policy.requireFefoOrReason(longDated, overlong))
                 .isInstanceOf(BusinessException.class)
                 .extracting("messageKey").isEqualTo("pharmacy.fefo.reasonTooLong");
     }
 
     @Test
     void noLotMeansNoRule() {
-        assertThat(policy.requireFefoOrReason(null, BigDecimal.ONE, null)).isNull();
+        assertThat(policy.requireFefoOrReason(null, null)).isNull();
     }
 
     /**

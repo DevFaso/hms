@@ -1371,8 +1371,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             // The bedside verify call already materialised this dose: finalise
             // that row so its five-rights scan counts, instead of demanding an
             // override as if nothing had been scanned (D78).
-            return finalizeVerifiedRow(rx, verified.get(), nurseUserId, hospitalId, status, note, overrideReason,
-                witness);
+            return finalizeVerifiedRow(rx, verified.get(), nurseUserId, hospitalId,
+                new AdministrationOutcome(status, note, overrideReason, witness));
         }
         MedicationAdministrationRecord marRecord = MedicationAdministrationRecord.builder()
             .prescription(rx)
@@ -1427,10 +1427,19 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .build();
     }
 
+    /** What the nurse records on a dose: its status, the note, the override reason and the witness. */
+    private record AdministrationOutcome(
+        MedicationAdministrationStatus status, String note, String overrideReason, User witness) {
+    }
+
     private NurseMedicationTaskResponseDTO finalizeVerifiedRow(
         Prescription rx, MedicationAdministrationRecord marRecord, UUID nurseUserId, UUID hospitalId,
-        MedicationAdministrationStatus status, String note, String overrideReason, User witness
+        AdministrationOutcome outcome
     ) {
+        MedicationAdministrationStatus status = outcome.status();
+        String note = outcome.note();
+        User witness = outcome.witness();
+        String overrideReason = outcome.overrideReason();
         requireScanByAdministeringNurse(marRecord, status, nurseUserId, hospitalId);
         marRecord.setWitnessUser(witness);
         marRecord.setStatus(status);

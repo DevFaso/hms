@@ -44,7 +44,7 @@ class DischargedPatientStaysFindableGuardTest {
 
     private static final Pattern ENTITY_CLEARS = Pattern.compile("\\bthis\\.active\\s*=\\s*false");
     private static final Pattern SETTER_CLEARS = Pattern.compile(
-        "\\b(\\w*[Rr]eg\\w*)\\s*\\.\\s*setActive\\(\\s*(false|Boolean\\.FALSE)\\s*\\)");
+        "\\b((?:[a-qs-zA-QS-Z0-9_]|[Rr](?!eg))*+[Rr]eg\\w*+)\\s*+\\.\\s*+setActive\\(\\s*+(false|Boolean\\.FALSE)\\s*+\\)");
     private static final Pattern QUERY_CLEARS = Pattern.compile(
         "(?is)update\\s+(PatientHospitalRegistration|clinical\\.patient_hospital_registrations)\\b[^\"]*?"
             + "\\b(active|is_active)\\s*=\\s*(false|0)");
