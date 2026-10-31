@@ -63,4 +63,23 @@ public class InvoiceAdjustment extends BaseEntity {
 
     @Column(name = "created_by")
     private UUID createdBy;
+
+    /**
+     * QA D1105 (V254): when the adjustment was reversed (a mistaken waiver
+     * undone), by whom and why. A reversed row stays on the ledger and no
+     * longer lowers the total. Null while the adjustment stands.
+     */
+    @Column(name = "reversed_at")
+    private java.time.LocalDateTime reversedAt;
+
+    @Column(name = "reversed_by")
+    private UUID reversedBy;
+
+    @Column(name = "reversal_reason", length = 500)
+    private String reversalReason;
+
+    /** Whether the adjustment still lowers what is owed. */
+    public boolean isLive() {
+        return reversedAt == null;
+    }
 }

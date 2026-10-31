@@ -36,6 +36,15 @@ public interface BillingInvoiceService {
     /** QA D974: the discounts, waivers and credit notes of an invoice in the caller's scope. */
     List<com.example.hms.payload.dto.InvoiceAdjustmentResponseDTO> listAdjustments(UUID invoiceId);
 
+    /**
+     * QA D1105: reverses one discount, waiver or credit note with its
+     * mandatory reason: the amount goes back on the total and the status
+     * follows the money already received, which stays recorded (a folded
+     * check-in copay is never touched). Audited, ids only.
+     */
+    BillingInvoiceResponseDTO reverseAdjustment(UUID invoiceId, UUID adjustmentId, String reason, UUID staffId,
+                                                Locale locale);
+
     /** QA D982: one of the patient's issued invoices with its lines and payments; another's answers 404. */
     com.example.hms.payload.dto.portal.PortalInvoiceDetailDTO getPortalInvoiceDetail(UUID invoiceId, UUID patientId);
 

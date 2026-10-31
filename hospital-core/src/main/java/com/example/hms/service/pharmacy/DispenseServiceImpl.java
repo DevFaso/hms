@@ -165,6 +165,8 @@ public class DispenseServiceImpl implements DispenseService {
 
     private static final String AUDIT_ENTITY = "DISPENSE";
     private static final String DISPENSE_NOT_FOUND = "dispense.notfound";
+    /** QA D1069: the longest cancel reason kept (the column is 500). */
+    static final int CANCEL_NOTE_MAX = 500;
     private static final String READY_NOT_PENDING = "dispense.ready.notPending";
     private static final String PHARMACY_NOT_FOUND = "pharmacy.notfound";
     private static final String PRESCRIPTION_NOT_FOUND = "prescription.notfound";
@@ -1399,7 +1401,16 @@ public class DispenseServiceImpl implements DispenseService {
 
     @Override
     @Transactional
-    public DispenseResponseDTO cancelDispense(UUID id, UUID witnessedBy) {
+    public DispenseResponseDTO cancelDispense(UUID id, UUID witnessedBy, String reason) {
+        // QA D1069: a cancel voids the payment and returns the stock; it says
+        // why, as an invoice cancel, a payment reversal and an adjustment do.
+        String why = reason == null ? "" : reason.trim();
+        if (why.isEmpty()) {
+            throw new BusinessException("pharmacy.dispense.cancelReasonRequired");
+        }
+        if (why.length() > CANCEL_NOTE_MAX) {
+            throw new BusinessException("pharmacy.dispense.cancelReasonTooLong", CANCEL_NOTE_MAX);
+        }
         Dispense dispense = dispenseRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(DISPENSE_NOT_FOUND));
         // Cancelling reverses a stock lot and rewrites the prescription's
@@ -1429,6 +1440,7 @@ public class DispenseServiceImpl implements DispenseService {
         }
 
         dispense.setStatus(DispenseStatus.CANCELLED);
+        dispense.setCancelNote(why);
 
         // Reverse stock if a lot was used. QA D604: only what was not
         // already returned against this fill goes back (a 4-unit fill with
@@ -1466,7 +1478,8 @@ public class DispenseServiceImpl implements DispenseService {
 
         Dispense saved = dispenseRepository.save(dispense);
         // QA D404: the money follows the stock back, in this transaction.
-        paymentVoider.voidForCancelledDispense(saved, "Dispense cancelled");
+        // QA D1069: the voided payment carries the pharmacist's reason, not a stock phrase.
+        paymentVoider.voidForCancelledDispense(saved, why);
 
         // Recompute the prescription status from remaining non-cancelled
         // dispenses — but only from a fill state. A cancellation never

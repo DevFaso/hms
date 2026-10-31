@@ -68,6 +68,7 @@ public class DispenseMapper {
             .preparedByName(displayNameOf(entity.getPreparedByUser()))
             .readyAt(entity.getPreparedByUser() != null ? entity.getCreatedAt() : null)
             .cancelReason(entity.getCancelReason() != null ? entity.getCancelReason().name() : null)
+            .cancelNote(entity.getCancelNote())
             .createdAt(entity.getCreatedAt())
             .updatedAt(entity.getUpdatedAt())
             .build();

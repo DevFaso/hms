@@ -73,6 +73,9 @@ import static org.mockito.Mockito.when;
 @org.junit.jupiter.api.extension.ExtendWith(com.example.hms.i18n.EnglishMessageBundles.class)
 class DispenseServiceImplTest {
 
+    /** QA D1069: every cancel of a fill names why (the service refuses one without). */
+    private static final String CANCEL_REASON = "Erreur de délivrance : mauvais dosage";
+
     @Mock private DispenseRepository dispenseRepository;
     @Mock private PrescriptionRepository prescriptionRepository;
     @Mock private PatientRepository patientRepository;
@@ -1941,7 +1944,7 @@ class DispenseServiceImplTest {
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
             when(dispenseRepository.save(any(Dispense.class))).thenReturn(dispense);
 
-            service.cancelDispense(dispenseId);
+            service.cancelDispense(dispenseId, null, CANCEL_REASON);
 
             org.mockito.InOrder order = org.mockito.Mockito.inOrder(prescriptionRepository, dispenseRepository);
             order.verify(prescriptionRepository).findByIdForUpdate(prescriptionId);
@@ -1956,7 +1959,7 @@ class DispenseServiceImplTest {
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
             when(dispenseRepository.save(any(Dispense.class))).thenReturn(dispense);
 
-            service.cancelDispense(dispenseId);
+            service.cancelDispense(dispenseId, null, CANCEL_REASON);
 
             org.mockito.InOrder order = org.mockito.Mockito.inOrder(prescriptionRepository, dispenseRepository,
                     paymentVoider);
@@ -1966,6 +1969,41 @@ class DispenseServiceImplTest {
             order.verify(paymentVoider).voidForCancelledDispense(eq(dispense), any());
         }
 
+        @org.junit.jupiter.params.ParameterizedTest
+        @org.junit.jupiter.params.provider.NullAndEmptySource
+        @org.junit.jupiter.params.provider.ValueSource(strings = {"   ", "\t"})
+        @DisplayName("QA D1069: a cancel with no reason is refused before anything moves")
+        void aCancelWithoutAReasonIsRefused(String reason) {
+            assertThatThrownBy(() -> service.cancelDispense(dispenseId, null, reason))
+                    .isInstanceOf(BusinessException.class)
+                    .hasFieldOrPropertyWithValue("messageKey", "pharmacy.dispense.cancelReasonRequired");
+            verify(dispenseRepository, never()).save(any());
+            verify(paymentVoider, never()).voidForCancelledDispense(any(), any());
+            verify(stockLotRepository, never()).incrementRemaining(any(), any(), any());
+        }
+
+        @Test
+        @DisplayName("QA D1069: a reason over 500 characters is refused with the limit")
+        void aTooLongReasonIsRefused() {
+            assertThatThrownBy(() -> service.cancelDispense(dispenseId, null, "x".repeat(501)))
+                    .hasFieldOrPropertyWithValue("messageKey", "pharmacy.dispense.cancelReasonTooLong");
+            verify(paymentVoider, never()).voidForCancelledDispense(any(), any());
+        }
+
+        @Test
+        @DisplayName("QA D1069: the reason is kept on the dispense and on the voided payment")
+        void theReasonIsKeptOnTheFillAndThePayment() {
+            Dispense dispense = buildDispense(DispenseStatus.COMPLETED);
+            when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(dispenseRepository.save(any(Dispense.class))).thenReturn(dispense);
+
+            service.cancelDispense(dispenseId, null, "  " + CANCEL_REASON + "  ");
+
+            assertThat(dispense.getCancelNote()).isEqualTo(CANCEL_REASON);
+            verify(paymentVoider).voidForCancelledDispense(dispense, CANCEL_REASON);
+        }
+
         @Test
         @DisplayName("QA D404: a refused cancel voids nothing")
         void aRefusedCancelVoidsNothing() {
@@ -1973,7 +2011,7 @@ class DispenseServiceImplTest {
             when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
 
-            assertThatThrownBy(() -> service.cancelDispense(dispenseId)).isInstanceOf(BusinessException.class);
+            assertThatThrownBy(() -> service.cancelDispense(dispenseId, null, CANCEL_REASON)).isInstanceOf(BusinessException.class);
 
             verify(paymentVoider, never()).voidForCancelledDispense(any(), any());
         }
@@ -1988,7 +2026,7 @@ class DispenseServiceImplTest {
             when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
             when(roleValidator.requireActiveHospitalId()).thenReturn(null);
 
-            assertThatThrownBy(() -> service.cancelDispense(dispenseId))
+            assertThatThrownBy(() -> service.cancelDispense(dispenseId, null, CANCEL_REASON))
                     .isInstanceOf(ResourceNotFoundException.class);
 
             assertThat(dispense.getStatus()).isEqualTo(DispenseStatus.COMPLETED);
@@ -2013,7 +2051,7 @@ class DispenseServiceImplTest {
             when(dispenseRepository.save(any(Dispense.class))).thenReturn(dispense);
             when(dispenseMapper.toResponseDTO(dispense)).thenReturn(responseDTO);
 
-            DispenseResponseDTO result = service.cancelDispense(dispenseId);
+            DispenseResponseDTO result = service.cancelDispense(dispenseId, null, CANCEL_REASON);
 
             assertThat(result.getStatus()).isEqualTo("CANCELLED");
             assertThat(stockLot.getRemainingQuantity()).isEqualByComparingTo(BigDecimal.valueOf(50));
@@ -2073,7 +2111,7 @@ class DispenseServiceImplTest {
             when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseRepository.NOT_A_FILL))
                     .thenReturn(BigDecimal.ZERO);
 
-            service.cancelDispense(dispenseId);
+            service.cancelDispense(dispenseId, null, CANCEL_REASON);
 
             assertThat(dispense.getStatus()).isEqualTo(DispenseStatus.CANCELLED);
             assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.DISCONTINUED);
@@ -2102,7 +2140,7 @@ class DispenseServiceImplTest {
             when(dispenseRepository.sumQuantityDispensedForPrescription(prescriptionId, DispenseRepository.NOT_A_FILL))
                     .thenReturn(BigDecimal.ZERO);
 
-            service.cancelDispense(dispenseId);
+            service.cancelDispense(dispenseId, null, CANCEL_REASON);
 
             assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.SIGNED);
             verify(stayOrderDiscontinuation).discontinueIfStayEnded(prescription, userId, "dispense cancelled");
@@ -2131,7 +2169,7 @@ class DispenseServiceImplTest {
             when(controlledStockWitness.resolve(null, inventoryItem, user))
                     .thenThrow(new BusinessException("stockTransaction.witness.required"));
 
-            assertThatThrownBy(() -> service.cancelDispense(dispenseId)).isInstanceOf(BusinessException.class);
+            assertThatThrownBy(() -> service.cancelDispense(dispenseId, null, CANCEL_REASON)).isInstanceOf(BusinessException.class);
 
             verify(stockLotRepository, never()).incrementRemaining(any(), any(), any());
             verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
@@ -2148,7 +2186,7 @@ class DispenseServiceImplTest {
             when(controlledStockWitness.resolve(witnessId, inventoryItem, user)).thenReturn(witness);
             when(dispenseRepository.save(any(Dispense.class))).thenReturn(dispense);
 
-            service.cancelDispense(dispenseId, witnessId);
+            service.cancelDispense(dispenseId, witnessId, CANCEL_REASON);
 
             org.mockito.ArgumentCaptor<com.example.hms.model.pharmacy.StockTransaction> tx =
                     org.mockito.ArgumentCaptor.forClass(com.example.hms.model.pharmacy.StockTransaction.class);
@@ -2179,7 +2217,7 @@ class DispenseServiceImplTest {
             when(stockTransactionRepository.sumQuantityForReference(dispenseId,
                     java.util.EnumSet.of(StockTransactionType.RETURN))).thenReturn(new BigDecimal("2"));
 
-            service.cancelDispense(dispenseId);
+            service.cancelDispense(dispenseId, null, CANCEL_REASON);
 
             verify(stockLotRepository).incrementRemaining(eq(stockLotId), eq(new BigDecimal("2")), any());
             verify(inventoryItemRepository).incrementOnHand(eq(inventoryItem.getId()), eq(new BigDecimal("2")), any());
@@ -2213,7 +2251,7 @@ class DispenseServiceImplTest {
             when(stockTransactionRepository.sumQuantityForLot(stockLotId,
                     java.util.EnumSet.of(StockTransactionType.RETURN))).thenReturn(new BigDecimal("4"));
 
-            service.cancelDispense(dispenseId);
+            service.cancelDispense(dispenseId, null, CANCEL_REASON);
 
             verify(inventoryItemRepository).lockById(inventoryItem.getId());
             verify(stockLotRepository, never()).incrementRemaining(any(), any(), any());
@@ -2234,7 +2272,7 @@ class DispenseServiceImplTest {
             when(stockTransactionRepository.sumQuantityForReference(dispenseId,
                     java.util.EnumSet.of(StockTransactionType.RETURN))).thenReturn(new BigDecimal("4"));
 
-            service.cancelDispense(dispenseId);
+            service.cancelDispense(dispenseId, null, CANCEL_REASON);
 
             verify(stockLotRepository, never()).incrementRemaining(any(), any(), any());
             verify(inventoryItemRepository, never()).incrementOnHand(any(), any(), any());
@@ -2255,7 +2293,7 @@ class DispenseServiceImplTest {
                 when(dispenseMapper.toResponseDTO(dispense))
                         .thenReturn(DispenseResponseDTO.builder().id(dispenseId).status("CANCELLED").build());
 
-                service.cancelDispense(dispenseId);
+                service.cancelDispense(dispenseId, null, CANCEL_REASON);
 
                 assertThat(prescription.getStatus()).as(owned.name()).isEqualTo(owned);
             }
@@ -2274,7 +2312,7 @@ class DispenseServiceImplTest {
             when(dispenseMapper.toResponseDTO(dispense))
                     .thenReturn(DispenseResponseDTO.builder().id(dispenseId).status("CANCELLED").build());
 
-            service.cancelDispense(dispenseId);
+            service.cancelDispense(dispenseId, null, CANCEL_REASON);
 
             assertThat(prescription.getStatus()).isEqualTo(PrescriptionStatus.PENDING_CLARIFICATION);
             verify(prescriptionRepository, never()).save(any());
@@ -2290,7 +2328,7 @@ class DispenseServiceImplTest {
             when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
 
-            assertThatThrownBy(() -> service.cancelDispense(dispenseId))
+            assertThatThrownBy(() -> service.cancelDispense(dispenseId, null, CANCEL_REASON))
                     .isInstanceOf(BusinessException.class)
                     .hasMessageContaining("already cancelled");
         }
@@ -2303,7 +2341,7 @@ class DispenseServiceImplTest {
             when(dispenseRepository.findById(dispenseId)).thenReturn(Optional.of(dispense));
             when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
 
-            assertThatThrownBy(() -> service.cancelDispense(dispenseId))
+            assertThatThrownBy(() -> service.cancelDispense(dispenseId, null, CANCEL_REASON))
                     .isInstanceOf(BusinessException.class)
                     .hasMessageContaining("Only completed or partial");
         }

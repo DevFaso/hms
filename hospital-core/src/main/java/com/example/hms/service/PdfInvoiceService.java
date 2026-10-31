@@ -90,6 +90,7 @@ public class PdfInvoiceService {
             w.text(BODY, 11, MARGIN, t.get("pdf.invoice.status", statusLabel(t, invoice)));
             w.qr(buildQrPng("hms://invoice/" + invoice.getId()));
             w.down(80);
+            cancellationBlock(w, t, invoice);
 
             w.rule();
             w.down(14);
@@ -131,7 +132,8 @@ public class PdfInvoiceService {
             w.down(16);
             w.right(BODY, 11, t.get(AMOUNT_PAID, money(paid)));
             w.down(16);
-            w.right(BOLD, 11, t.get(BALANCE_DUE, money(total.subtract(paid).max(BigDecimal.ZERO))));
+            // QA D1104: the shared balance rule: nothing is owed on a cancelled invoice.
+            w.right(BOLD, 11, t.get(BALANCE_DUE, money(com.example.hms.utility.InvoiceBalance.dueOf(invoice))));
 
             List<PaymentTransaction> confirmed = payments.stream()
                 .filter(p -> p.getStatus() == null || p.getStatus() == PaymentStatus.CONFIRMED)
@@ -151,6 +153,31 @@ public class PdfInvoiceService {
             return w.finish();
         } catch (IOException e) {
             throw new IllegalStateException("Failed to generate invoice PDF", e);
+        }
+    }
+
+    /**
+     * QA D1104: a cancelled invoice says why it was cancelled, and a check-in
+     * copay folded onto a visit invoice says which invoice the money went to.
+     * The PDF said "Annulée" and then "Reste à payer" the full amount, with no
+     * reason and nothing about the carry-over.
+     */
+    private static void cancellationBlock(Writer w, PdfLabels t, BillingInvoice invoice) throws IOException {
+        boolean printed = false;
+        if (invoice.getStatus() == com.example.hms.enums.InvoiceStatus.CANCELLED
+                && invoice.getCancelReason() != null && !invoice.getCancelReason().isBlank()) {
+            w.paragraph(BODY, 11, MARGIN, t.get("pdf.invoice.cancelReason", invoice.getCancelReason().strip()));
+            w.down(15);
+            printed = true;
+        }
+        if (invoice.getCreditedToInvoice() != null) {
+            w.paragraph(BODY, 11, MARGIN,
+                t.get("pdf.invoice.carriedOver", safe(invoice.getCreditedToInvoice().getInvoiceNumber())));
+            w.down(15);
+            printed = true;
+        }
+        if (printed) {
+            w.down(4);
         }
     }
 

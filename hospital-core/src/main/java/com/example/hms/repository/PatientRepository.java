@@ -28,15 +28,31 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
     String FOLD_CLOSE = "), '" + PatientMatchKeys.NAME_FOLD_FROM + "', '" + PatientMatchKeys.NAME_FOLD_TO + "')";
 
     /**
-     * {@code :namePattern} (built by {@link PatientMatchKeys#nameContainsPattern})
-     * against the first name, the last name, "first last", "last first" and the
-     * MRN, accents ignored on both sides.
+     * QA D1103: the name orders a patient may be typed in, middle name
+     * included, each folded like the typed side. "Rasmané Wend" (first +
+     * middle), "Mariam Wendkouni Kiemdé" (the name exactly as displayed) and
+     * "Wendkouni" (the middle name alone) found nobody: the middle name was in
+     * no comparison. A row with no middle name is matched by the first two.
      */
-    String NAME_OR_MRN_MATCH = "(:namePattern IS NULL"
-        + " OR " + FOLD_OPEN + "p.firstName" + FOLD_CLOSE + " LIKE :namePattern"
+    String NAME_MATCH = "(" + FOLD_OPEN + "p.firstName" + FOLD_CLOSE + " LIKE :namePattern"
         + " OR " + FOLD_OPEN + "p.lastName" + FOLD_CLOSE + " LIKE :namePattern"
         + " OR " + FOLD_OPEN + "CONCAT(p.firstName, ' ', p.lastName)" + FOLD_CLOSE + " LIKE :namePattern"
         + " OR " + FOLD_OPEN + "CONCAT(p.lastName, ' ', p.firstName)" + FOLD_CLOSE + " LIKE :namePattern"
+        + " OR (p.middleName IS NOT NULL AND ("
+        + FOLD_OPEN + "p.middleName" + FOLD_CLOSE + " LIKE :namePattern"
+        + " OR " + FOLD_OPEN + "CONCAT(p.firstName, ' ', p.middleName, ' ', p.lastName)" + FOLD_CLOSE + " LIKE :namePattern"
+        + " OR " + FOLD_OPEN + "CONCAT(p.lastName, ' ', p.firstName, ' ', p.middleName)" + FOLD_CLOSE + " LIKE :namePattern"
+        + " OR " + FOLD_OPEN + "CONCAT(p.firstName, ' ', p.middleName)" + FOLD_CLOSE + " LIKE :namePattern"
+        + " OR " + FOLD_OPEN + "CONCAT(p.middleName, ' ', p.lastName)" + FOLD_CLOSE + " LIKE :namePattern"
+        + ")))";
+
+    /**
+     * {@code :namePattern} (built by {@link PatientMatchKeys#nameContainsPattern})
+     * against the names in every order of {@link #NAME_MATCH} and the MRN,
+     * accents ignored on both sides.
+     */
+    String NAME_OR_MRN_MATCH = "(:namePattern IS NULL"
+        + " OR " + NAME_MATCH
         + " OR LOWER(r.mrn) LIKE :namePattern)";
 
     /** {@code p.phoneNumberPrimary} reduced to its digits ("+226 70-00.10/02" becomes "22670001002"). */

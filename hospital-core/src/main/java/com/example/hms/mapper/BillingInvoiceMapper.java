@@ -99,13 +99,9 @@ public class BillingInvoiceMapper {
         dto.setTotalAmount(invoice.getTotalAmount());
         dto.setAmountPaid(invoice.getAmountPaid());
 
-        // Calculate balance due
-        BigDecimal balanceDue = (invoice.getTotalAmount() != null ? invoice.getTotalAmount() : BigDecimal.ZERO)
-            .subtract(invoice.getAmountPaid() != null ? invoice.getAmountPaid() : BigDecimal.ZERO);
-        // QA D202: a cancelled invoice is owed by nobody, whatever was billed on it.
-        if (invoice.getStatus() == com.example.hms.enums.InvoiceStatus.CANCELLED) {
-            balanceDue = BigDecimal.ZERO;
-        }
+        // QA D202 / D1104: one rule for the balance, shared with the invoice PDF:
+        // a cancelled invoice is owed by nobody, whatever was billed on it.
+        BigDecimal balanceDue = com.example.hms.utility.InvoiceBalance.dueOf(invoice);
         dto.setBalanceDue(balanceDue);
 
         // Calculate patient responsibility

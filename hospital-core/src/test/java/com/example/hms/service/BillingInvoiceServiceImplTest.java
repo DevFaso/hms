@@ -2594,6 +2594,111 @@ class BillingInvoiceServiceImplTest {
         assertEquals("billing.adjustment.lineNotOnInvoice", foreign.getMessageKey());
     }
 
+    private com.example.hms.model.InvoiceAdjustment liveWaiver(com.example.hms.repository.InvoiceAdjustmentRepository repo,
+                                                           BillingInvoice invoice, String amount) {
+        com.example.hms.model.InvoiceAdjustment waiver = com.example.hms.model.InvoiceAdjustment.builder()
+            .invoice(invoice).type(com.example.hms.enums.InvoiceAdjustmentType.WAIVER)
+            .amount(new BigDecimal(amount)).reason("Gratuité").build();
+        waiver.setId(UUID.randomUUID());
+        when(repo.findById(waiver.getId())).thenReturn(Optional.of(waiver));
+        return waiver;
+    }
+
+    @Test
+    void reverseAdjustment_undoesAMistakenWaiverAndKeepsTheFoldedCopay_D1105() {
+        // QA D1105: visit invoice 4 000, the 1 500 check-in copay folded in, a
+        // waiver of the 2 500 left settled it. Undoing the waiver must not
+        // reverse the copay the patient really paid.
+        com.example.hms.repository.InvoiceAdjustmentRepository repo = adjustments();
+        BillingInvoice invoice = issued("1500", "1500");
+        invoice.setStatus(InvoiceStatus.PAID);
+        com.example.hms.model.InvoiceAdjustment waiver = liveWaiver(repo, invoice, "2500");
+        UUID staff = UUID.randomUUID();
+
+        BillingInvoiceResponseDTO after = billingInvoiceService.reverseAdjustment(invoice.getId(), waiver.getId(),
+            "Exonération appliquée par erreur", staff, Locale.FRENCH);
+
+        assertEquals(0, new BigDecimal("4000").compareTo(after.getTotalAmount()));
+        assertEquals(InvoiceStatus.PARTIALLY_PAID, invoice.getStatus());
+        assertEquals(0, new BigDecimal("1500").compareTo(invoice.getAmountPaid()));
+        assertNotNull(waiver.getReversedAt());
+        assertEquals(staff, waiver.getReversedBy());
+        assertEquals("Exonération appliquée par erreur", waiver.getReversalReason());
+        verify(paymentTransactionRepository, never()).transitionStatus(any(), any(), any(), any());
+        verify(paymentTransactionRepository, never()).save(any());
+    }
+
+    @Test
+    void reverseAdjustment_ofAWaiverOnAnUnpaidInvoiceReopensIt_D1105() {
+        com.example.hms.repository.InvoiceAdjustmentRepository repo = adjustments();
+        BillingInvoice invoice = issued("0", "0");
+        invoice.setStatus(InvoiceStatus.PAID);
+        com.example.hms.model.InvoiceAdjustment waiver = liveWaiver(repo, invoice, "4725");
+
+        billingInvoiceService.reverseAdjustment(invoice.getId(), waiver.getId(), "Erreur", UUID.randomUUID(),
+            Locale.FRENCH);
+
+        assertEquals(InvoiceStatus.SENT, invoice.getStatus());
+        assertEquals(0, new BigDecimal("4725").compareTo(invoice.getTotalAmount()));
+    }
+
+    @Test
+    void reverseAdjustment_needsAReasonALiveRowAndAStandingInvoice_D1105() {
+        com.example.hms.repository.InvoiceAdjustmentRepository repo = adjustments();
+        BillingInvoice invoice = issued("1500", "1500");
+        invoice.setStatus(InvoiceStatus.PAID);
+        com.example.hms.model.InvoiceAdjustment waiver = liveWaiver(repo, invoice, "2500");
+        UUID invoiceId = invoice.getId();
+        UUID waiverId = waiver.getId();
+        UUID staff = UUID.randomUUID();
+
+        for (String blank : new String[] {null, "", "   "}) {
+            com.example.hms.exception.BusinessException noReason = assertThrows(
+                com.example.hms.exception.BusinessException.class,
+                () -> billingInvoiceService.reverseAdjustment(invoiceId, waiverId, blank, staff, Locale.FRENCH));
+            assertEquals("billing.adjustment.reversalReasonRequired", noReason.getMessageKey());
+        }
+        com.example.hms.exception.BusinessException tooLong = assertThrows(
+            com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.reverseAdjustment(invoiceId, waiverId, "x".repeat(501), staff, Locale.FRENCH));
+        assertEquals("billing.adjustment.reversalReasonTooLong", tooLong.getMessageKey());
+
+        waiver.setReversedAt(java.time.LocalDateTime.now());
+        com.example.hms.exception.BusinessException twice = assertThrows(
+            com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.reverseAdjustment(invoiceId, waiverId, "Erreur", staff, Locale.FRENCH));
+        assertEquals("billing.adjustment.alreadyReversed", twice.getMessageKey());
+
+        waiver.setReversedAt(null);
+        invoice.setStatus(InvoiceStatus.CANCELLED);
+        com.example.hms.exception.BusinessException cancelled = assertThrows(
+            com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.reverseAdjustment(invoiceId, waiverId, "Erreur", staff, Locale.FRENCH));
+        assertEquals("billing.adjustment.notReversible", cancelled.getMessageKey());
+
+        BillingInvoice other = issued("1000", "0");
+        assertThrows(com.example.hms.exception.ResourceNotFoundException.class,
+            () -> billingInvoiceService.reverseAdjustment(other.getId(), waiverId, "Erreur", staff, Locale.FRENCH));
+        assertEquals(0, new BigDecimal("1500").compareTo(invoice.getTotalAmount()));
+        verify(repo, never()).save(any());
+    }
+
+    @Test
+    void rejectPayment_needsAReason_D1069() {
+        BillingInvoice invoice = payableInvoice(UUID.randomUUID());
+        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+        var pending = ledgerRow(invoice, "10.00", com.example.hms.enums.PaymentStatus.PENDING);
+        UUID invoiceId = invoice.getId();
+        UUID pendingId = pending.getId();
+        for (String blank : new String[] {null, "", "  "}) {
+            com.example.hms.exception.BusinessException refused = assertThrows(
+                com.example.hms.exception.BusinessException.class,
+                () -> billingInvoiceService.rejectPayment(invoiceId, pendingId, blank, UUID.randomUUID(), Locale.ENGLISH));
+            assertEquals("billing.payment.reasonRequired", refused.getMessageKey());
+        }
+        assertEquals(com.example.hms.enums.PaymentStatus.PENDING, pending.getStatus());
+    }
+
     @Test
     void addAdjustment_aDraftIsEditedNotAdjusted_D974() {
         adjustments();
@@ -2612,7 +2717,7 @@ class BillingInvoiceServiceImplTest {
         com.example.hms.repository.InvoiceAdjustmentRepository repo = adjustments();
         UUID patientId = UUID.randomUUID();
         BillingInvoice invoice = portalInvoice(patientId, InvoiceStatus.PAID);
-        when(repo.findByInvoice_IdOrderByCreatedAtAsc(invoice.getId())).thenReturn(List.of(
+        when(repo.findByInvoice_IdAndReversedAtIsNullOrderByCreatedAtAsc(invoice.getId())).thenReturn(List.of(
             com.example.hms.model.InvoiceAdjustment.builder().invoice(invoice)
                 .type(com.example.hms.enums.InvoiceAdjustmentType.WAIVER)
                 .amount(new BigDecimal("500")).reason("indigent, vu avec l'assistante sociale").build()));
@@ -2659,7 +2764,7 @@ class BillingInvoiceServiceImplTest {
         com.example.hms.repository.InvoiceAdjustmentRepository repo = adjustments();
         UUID patientId = UUID.randomUUID();
         BillingInvoice invoice = portalInvoice(patientId, InvoiceStatus.PAID);
-        when(repo.findByInvoice_IdOrderByCreatedAtAsc(invoice.getId())).thenReturn(List.of(
+        when(repo.findByInvoice_IdAndReversedAtIsNullOrderByCreatedAtAsc(invoice.getId())).thenReturn(List.of(
             com.example.hms.model.InvoiceAdjustment.builder().invoice(invoice)
                 .type(com.example.hms.enums.InvoiceAdjustmentType.WAIVER)
                 .amount(new BigDecimal("500")).reason("famille en conflit").build()));
