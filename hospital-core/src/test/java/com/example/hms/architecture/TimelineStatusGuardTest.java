@@ -42,7 +42,6 @@ class TimelineStatusGuardTest {
     private static final Pattern METHOD = Pattern.compile(
         // Possessive, one level of nested parentheses in the parameters (Sonar S8786: no backtracking).
         "\\n    (?:private|public|protected)[^;{=(]*+\\(((?:[^;{()\"]|\"[^\";{]*+\"|\\((?:[^;{()\"]|\"[^\";{]*+\")*+\\))*+)\\)\\s*+(?:throws [\\w., ]++)?+\\{");
-    private static final Pattern NAME = Pattern.compile("(\\w++)\\s*+\\($");
     private static final Pattern STATUS_IN_SUMMARY = Pattern.compile(
         "TimelineStatus\\.withStatus(?:Label)?\\(|statusLabel\\(|\\blabel\\(\\s*\\w+\\.getStatus\\(\\)\\s*\\)");
 
@@ -104,9 +103,21 @@ class TimelineStatusGuardTest {
                 continue;
             }
             String head = source.substring(m.start(), m.start(1));
-            Matcher name = NAME.matcher(head);
-            out.add(file + "#" + (name.find() ? name.group(1) : "?"));
+            out.add(file + "#" + methodName(head));
         }
         return out;
+    }
+
+    /** The method name at the end of a declaration head ("… name("), read without a regex. */
+    static String methodName(String head) {
+        int end = head.lastIndexOf('(');
+        while (end > 0 && Character.isWhitespace(head.charAt(end - 1))) {
+            end--;
+        }
+        int start = end;
+        while (start > 0 && Character.isJavaIdentifierPart(head.charAt(start - 1))) {
+            start--;
+        }
+        return start < end ? head.substring(start, end) : "?";
     }
 }

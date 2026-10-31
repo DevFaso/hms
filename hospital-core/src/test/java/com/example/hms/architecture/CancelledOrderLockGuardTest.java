@@ -55,7 +55,6 @@ class CancelledOrderLockGuardTest {
     private static final Pattern METHOD = Pattern.compile(
         // Possessive, one level of nested parentheses in the parameters (Sonar S8786: no backtracking).
         "\\n    (?:private|public|protected)[^;{=(]*+\\(((?:[^;{()\"]|\"[^\";{]*+\"|\\((?:[^;{()\"]|\"[^\";{]*+\")*+\\))*+)\\)\\s*+(?:throws [\\w., ]++)?+\\{");
-    private static final Pattern NAME = Pattern.compile("(\\w++)\\s*+\\($");
     private static final Pattern SET_STATUS = Pattern.compile("(\\w+)\\.setStatus\\(");
     private static final Pattern LOCK = Pattern.compile(
         // A refusal of the cancelled state, not merely a mention of CANCELLED:
@@ -163,8 +162,7 @@ class CancelledOrderLockGuardTest {
                 continue;
             }
             String head = source.substring(m.start(), m.start(1));
-            Matcher name = NAME.matcher(head);
-            out.add(service + "#" + (name.find() ? name.group(1) : "?"));
+            out.add(service + "#" + methodName(head));
         }
         return out;
     }
@@ -182,5 +180,18 @@ class CancelledOrderLockGuardTest {
             return arg.startsWith(statusEnum + ".") && !arg.endsWith(".CANCELLED");
         }
         return true;
+    }
+
+    /** The method name at the end of a declaration head ("… name("), read without a regex. */
+    static String methodName(String head) {
+        int end = head.lastIndexOf('(');
+        while (end > 0 && Character.isWhitespace(head.charAt(end - 1))) {
+            end--;
+        }
+        int start = end;
+        while (start > 0 && Character.isJavaIdentifierPart(head.charAt(start - 1))) {
+            start--;
+        }
+        return start < end ? head.substring(start, end) : "?";
     }
 }

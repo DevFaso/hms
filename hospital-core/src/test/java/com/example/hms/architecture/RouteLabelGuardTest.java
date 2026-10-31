@@ -74,19 +74,28 @@ class RouteLabelGuardTest {
         assertThat(offenders("C", after)).isEmpty();
     }
 
+    private static final String GET_ROUTE = "getRoute()";
+
     static List<String> offenders(String file, String source) {
         List<String> out = new ArrayList<>();
         Matcher m = TEXT_BUILDER.matcher(source);
         while (m.find()) {
             int open = m.end() - 1;
             String args = source.substring(open + 1, SourceScan.closingParen(source, open));
-            Matcher route = Pattern.compile("((?:\\w*+\\.)*+)\\bgetRoute\\(\\)").matcher(args);
-            while (route.find()) {
-                String before = args.substring(0, route.start());
-                if (before.matches("(?s).*MedicationRoutes\\.label\\(\\s*$")) {
+            // Each getRoute() and its receiver (the run of word characters and dots before it), read
+            // without a regex (Sonar S8786).
+            for (int at = args.indexOf(GET_ROUTE); at >= 0; at = args.indexOf(GET_ROUTE, at + 1)) {
+                if (at > 0 && Character.isJavaIdentifierPart(args.charAt(at - 1))) {
                     continue;
                 }
-                out.add(file + " " + route.group(1) + "getRoute()");
+                int start = at;
+                while (start > 0 && (Character.isJavaIdentifierPart(args.charAt(start - 1)) || args.charAt(start - 1) == '.')) {
+                    start--;
+                }
+                if (args.substring(0, start).stripTrailing().endsWith("MedicationRoutes.label(")) {
+                    continue;
+                }
+                out.add(file + " " + args.substring(start, at) + GET_ROUTE);
             }
         }
         return out;

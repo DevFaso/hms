@@ -1250,11 +1250,11 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     @Override
     @Transactional(readOnly = true)
     public com.example.hms.payload.dto.BillingSummaryDTO summarize(Locale locale) {
-        return summarizeScope(locale);
+        return summarizeScope();
     }
 
     /** QA D209: the KPIs over the whole scope, inside the caller's read-only transaction. */
-    private com.example.hms.payload.dto.BillingSummaryDTO summarizeScope(Locale locale) {
+    private com.example.hms.payload.dto.BillingSummaryDTO summarizeScope() {
         // QA D209: the KPIs cover the whole scope; global view reads every hospital.
         UUID hospitalId = roleValidator.requireActiveHospitalId();
         List<Object[]> rows = invoiceRepository.summarize(hospitalId, LocalDate.now(java.time.ZoneId.systemDefault()));
@@ -1279,7 +1279,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     @Transactional(readOnly = true)
     public com.example.hms.payload.dto.BillingSummaryDTO summarize(LocalDate fromDate, LocalDate toDate, Locale locale) {
         if (fromDate == null && toDate == null) {
-            return summarizeScope(locale);
+            return summarizeScope();
         }
         if (fromDate != null && toDate != null && fromDate.isAfter(toDate)) {
             throw new BusinessException("billing.summary.rangeInverted");
@@ -1414,6 +1414,11 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         private BigDecimal received = BigDecimal.ZERO;
         private BigDecimal reversed = BigDecimal.ZERO;
 
+        private static boolean stillCounted(String status) {
+            return PaymentStatus.CONFIRMED.name().equals(status)
+                || com.example.hms.enums.PharmacyPaymentStatus.POSTED.name().equals(status);
+        }
+
         void add(com.example.hms.payload.dto.CashClosingDTO.Entry e) {
             BigDecimal amount = e.getAmount() != null ? e.getAmount() : BigDecimal.ZERO;
             if (!stillCounted(e.getStatus())) {
@@ -1432,10 +1437,6 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         }
     }
 
-    private static boolean stillCounted(String status) {
-        return PaymentStatus.CONFIRMED.name().equals(status)
-            || com.example.hms.enums.PharmacyPaymentStatus.POSTED.name().equals(status);
-    }
 
     private static long asLong(Object value) {
         return value instanceof Number n ? n.longValue() : 0L;
