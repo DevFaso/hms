@@ -15,7 +15,7 @@
     is the correct ARIA role for a non-primary side region.
   -->
   <!-- QA D1125: Escape on the phone drawer closes it (an aria-hidden backdrop never gets the key). -->
-  <aside class="sidebar" (keydown.escape)="closeSidebarFromKeyboard()">
+  <aside class="sidebar" tabindex="-1" (keydown.escape)="closeSidebarFromKeyboard()">
     <div class="sidebar-header">
       <div class="logo-area">
         <app-brand-mark [size]="30" tone="onDark" />

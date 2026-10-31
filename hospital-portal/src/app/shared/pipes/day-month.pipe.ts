@@ -1,6 +1,7 @@
 import { Pipe, PipeTransform } from '@angular/core';
 
 import { currentLocale } from '../i18n/app-locale';
+import { serverDateOrInstant } from '../date-utils';
 
 /**
  * QA D1140: a day and a month with no year, in the reader's order — "31 oct."
@@ -13,9 +14,11 @@ import { currentLocale } from '../i18n/app-locale';
  */
 @Pipe({ name: 'dayMonth', standalone: true })
 export class DayMonthPipe implements PipeTransform {
-  transform(value: Date | string | number | null | undefined, locale = currentLocale()): string {
+  transform(value: Date | string | null | undefined, locale = currentLocale()): string {
     if (value === null || value === undefined || value === '') return '';
-    const date = value instanceof Date ? value : new Date(value);
+    // A bare calendar date is that local day; a server time is read as UTC
+    // (serverDateOrInstant), like every other date on screen.
+    const date = value instanceof Date ? value : serverDateOrInstant(value);
     if (Number.isNaN(date.getTime())) return '';
     return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short' }).format(date);
   }

@@ -34,7 +34,9 @@ export function methodBody(ts, name) {
 
 /** Does this open method open by a state of its own (not only by setting a target)? */
 export function opensByOwnState(body) {
-  return /\.set\(\s*true\s*\)|=\s*true\b|\.open\(|\.showModal\(\)|router\.navigate|\.dialog\./.test(body);
+  return /\.set\(\s*true\s*\)|=\s*true\b|\.open\(|\.showModal\(\)|router\.navigate|\.dialog\./.test(
+    body,
+  );
 }
 
 test('the D1130 shape is caught: openAsk(null) with open = target !== null', () => {

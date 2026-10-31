@@ -218,4 +218,5 @@ export function decimalCodeFindings(source) {
   return findings;
 }
 
-const CSS_CONTEXT = /(?:height|width|left|top|right|bottom|style|offset|size|translate)\w*\s*(?:\(|=|:)[^;]*$/i;
+const CSS_CONTEXT =
+  /(?:height|width|left|top|right|bottom|style|offset|size|translate)\w*\s*(?:\(|=|:)[^;]*$/i;
