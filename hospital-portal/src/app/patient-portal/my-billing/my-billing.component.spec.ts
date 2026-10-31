@@ -128,7 +128,25 @@ describe('MyBillingComponent', () => {
     create([invoice({ balance: 50 })]);
     openDialog();
     component.payAmount = null as unknown as number;
-    (host().querySelector('.pay-submit-btn') as HTMLElement).click();
+    // Round 19 (NOT_FIXED in round 18): the DOM is rendered with the empty
+    // amount BEFORE the click, as the patient sees it. "Payer" used to be
+    // disabled then, so the message below could never appear.
+    fixture.detectChanges();
+    const pay = host().querySelector('.pay-submit-btn') as HTMLButtonElement;
+    expect(pay.disabled).toBeFalse();
+    pay.click();
+    fixture.detectChanges();
+    expect(portal.payInvoice).not.toHaveBeenCalled();
+    expect(component.payError()).toBe('BILLING.PAYMENT_AMOUNT_REQUIRED');
+    expect(host().textContent).toContain('BILLING.PAYMENT_AMOUNT_REQUIRED');
+  });
+
+  it('QA D1089: a zero amount is answered the same way', () => {
+    create([invoice({ balance: 50 })]);
+    openDialog();
+    component.payAmount = 0;
+    fixture.detectChanges();
+    (host().querySelector('.pay-submit-btn') as HTMLButtonElement).click();
     fixture.detectChanges();
     expect(portal.payInvoice).not.toHaveBeenCalled();
     expect(component.payError()).toBe('BILLING.PAYMENT_AMOUNT_REQUIRED');

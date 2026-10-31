@@ -45,6 +45,14 @@ export const WALL_CLOCK = new Map([
     "copy of the offered slot's wall-clock start",
   ],
   [
+    'reception/waitlist-panel/waitlist-panel.component.html:requestedDateFrom',
+    'LocalDate the desk typed (a calendar day, no clock): QA D1119',
+  ],
+  [
+    'reception/waitlist-panel/waitlist-panel.component.html:requestedDateTo',
+    'LocalDate the desk typed (a calendar day, no clock): QA D1119',
+  ],
+  [
     'referrals/referrals.html:scheduledAppointmentAt',
     "booked as the Appointment's local date and start time (#948 review)",
   ],

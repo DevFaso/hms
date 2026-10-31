@@ -444,6 +444,7 @@
                             type="number"
                             min="1"
                             step="1"
+                            id="line-edit-qty"
                             class="line-edit-input"
                             [attr.aria-label]="'BILLING.LINE_QUANTITY' | translate"
                             [attr.data-testid]="'line-qty-' + it.id"
@@ -456,6 +457,7 @@
                             type="number"
                             min="1"
                             step="1"
+                            id="line-edit-price"
                             class="line-edit-input"
                             [attr.aria-label]="'BILLING.LINE_UNIT_PRICE' | translate"
                             [attr.data-testid]="'line-price-' + it.id"
@@ -483,7 +485,7 @@
                               <button
                                 type="button"
                                 class="btn-primary btn-sm"
-                                [disabled]="!canSaveLine()"
+                                [disabled]="itemSaving()"
                                 [attr.data-testid]="'line-save-' + it.id"
                                 (click)="saveLine(it)"
                               >
@@ -579,7 +581,7 @@
                 <button
                   type="button"
                   class="btn-primary"
-                  [disabled]="!canAddItem()"
+                  [disabled]="itemSaving()"
                   (click)="addItem()"
                 >
                   {{ 'BILLING.ADD_LINE' | translate }}
@@ -596,13 +598,35 @@
             } @else {
               <ul class="adjustment-list">
                 @for (a of adjustments(); track a.id) {
-                  <li [attr.data-testid]="'adjustment-' + a.id">
+                  <li [attr.data-testid]="'adjustment-' + a.id" [class.reversed]="!!a.reversedAt">
                     <strong>{{ 'BILLING.ADJUSTMENT_TYPES.' + a.type | translate }}</strong>
                     — {{ formatCurrency(a.amount) }}
                     @if (a.invoiceItemDescription) {
                       ({{ a.invoiceItemDescription }})
                     }
                     <span class="field-hint">{{ a.reason }}</span>
+                    @if (a.reversedAt) {
+                      <!-- QA D1105: a reversed adjustment stays on the ledger, with why. -->
+                      <span
+                        class="badge badge-muted"
+                        [attr.data-testid]="'adjustment-reversed-' + a.id"
+                      >
+                        {{ 'BILLING.ADJUSTMENT_REVERSED_BADGE' | translate }}
+                        {{ a.reversedAt | serverTime | date: 'short' }}
+                      </span>
+                      @if (a.reversalReason) {
+                        <span class="field-hint">{{ a.reversalReason }}</span>
+                      }
+                    } @else if (canReverseAdjustment(inv, a)) {
+                      <button
+                        type="button"
+                        class="btn-link btn-sm"
+                        [attr.data-testid]="'adjustment-reverse-' + a.id"
+                        (click)="openAdjustmentReversal(a)"
+                      >
+                        {{ 'BILLING.ADJUSTMENT_REVERSE' | translate }}
+                      </button>
+                    }
                   </li>
                 }
               </ul>
@@ -956,13 +980,7 @@
         <button
           class="btn-primary"
           (click)="submitForm()"
-          [disabled]="
-            saving() ||
-            !form.patientId ||
-            !form.invoiceDate ||
-            !form.dueDate ||
-            (cancellingIssued() && !form.cancelReason?.trim())
-          "
+          [disabled]="saving() || !form.patientId || !form.invoiceDate || !form.dueDate"
         >
           {{
             saving()
@@ -1195,6 +1213,69 @@
   </div>
 }
 
+<!-- ═══ REVERSE AN ADJUSTMENT (QA D1105) ═══ -->
+@if (reversingAdjustment(); as a) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeAdjustmentReversal()"
+    (keydown.escape)="closeAdjustmentReversal()"
+  >
+    <div
+      class="modal"
+      appDialogA11y
+      tabindex="-1"
+      aria-labelledby="bill-adj-reversal-title"
+      (dialogClose)="closeAdjustmentReversal()"
+      (click)="$event.stopPropagation()"
+      (keydown.escape)="$event.stopPropagation()"
+    >
+      <div class="modal-header">
+        <h2 id="bill-adj-reversal-title">
+          {{ 'BILLING.ADJUSTMENT_REVERSE' | translate }} —
+          {{ 'BILLING.ADJUSTMENT_TYPES.' + a.type | translate }}
+          {{ formatCurrency(a.amount) }}
+        </h2>
+        <button
+          class="modal-close"
+          (click)="closeAdjustmentReversal()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="field">
+          <label for="adj-reversal-reason"
+            >{{ 'BILLING.ADJUSTMENT_REVERSAL_REASON' | translate }} *</label
+          >
+          <textarea
+            id="adj-reversal-reason"
+            rows="3"
+            maxlength="500"
+            [ngModel]="adjustmentReversalReason()"
+            (ngModelChange)="adjustmentReversalReason.set($event)"
+          ></textarea>
+        </div>
+        <p class="muted-note">{{ 'BILLING.ADJUSTMENT_REVERSAL_NOTE' | translate }}</p>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeAdjustmentReversal()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          class="btn-primary"
+          data-testid="adjustment-reversal-confirm"
+          (click)="submitAdjustmentReversal()"
+          [disabled]="adjustmentReversalSaving()"
+        >
+          {{ 'COMMON.CONFIRM' | translate }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
 <!-- ═══ REVERSE / REJECT PAYMENT MODAL (QA D140, D142) ═══ -->
 @if (reversingPayment(); as p) {
   <div
@@ -1247,11 +1328,7 @@
         <button class="btn-secondary" (click)="closeReversal()">
           {{ 'COMMON.CANCEL' | translate }}
         </button>
-        <button
-          class="btn-primary"
-          (click)="submitReversal()"
-          [disabled]="paymentActionBusy() || !reversalReason().trim()"
-        >
+        <button class="btn-primary" (click)="submitReversal()" [disabled]="paymentActionBusy()">
           {{ 'COMMON.CONFIRM' | translate }}
         </button>
       </div>

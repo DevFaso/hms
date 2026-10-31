@@ -873,6 +873,21 @@ export interface SchedulingProvider {
   role?: string | null;
 }
 
+/**
+ * QA D1093: one published, free slot a patient may book (or move their visit
+ * to). A self-booking takes exactly one of these; the server refuses any other
+ * time.
+ */
+export interface PortalOpenSlot {
+  slotId: string;
+  staffId: string;
+  staffName?: string | null;
+  date: string;
+  /** 24 h wall-clock time, "HH:mm" or "HH:mm:ss". */
+  startTime: string;
+  endTime: string;
+}
+
 export interface PatientPaymentRequest {
   amount: number;
   paymentMethod: string;
@@ -1516,6 +1531,35 @@ export class PatientPortalService {
         map((r) => r.data ?? []),
         catchError(() => of([])),
       );
+  }
+
+  /** QA D1093: the published, free slots of a day (narrowed to a clinician when one is chosen). */
+  getOpenSlots(
+    hospitalId: string,
+    departmentId: string,
+    date: string,
+    staffId?: string,
+  ): Observable<PortalOpenSlot[]> {
+    const params: Record<string, string> = { date };
+    if (staffId) params['staffId'] = staffId;
+    return this.http
+      .get<ApiWrapper<PortalOpenSlot[]>>(
+        `${this.base}/booking/hospitals/${hospitalId}/departments/${departmentId}/slots`,
+        { params },
+      )
+      .pipe(map((r) => r.data ?? []));
+  }
+
+  /** QA D1093: the published, free slots the patient's own visit can move to on a day. */
+  getRescheduleSlots(appointmentId: string, date: string): Observable<PortalOpenSlot[]> {
+    return this.http
+      .get<ApiWrapper<PortalOpenSlot[]>>(
+        `${this.base}/appointments/${appointmentId}/reschedule-slots`,
+        {
+          params: { date },
+        },
+      )
+      .pipe(map((r) => r.data ?? []));
   }
 
   getSchedulingProviders(

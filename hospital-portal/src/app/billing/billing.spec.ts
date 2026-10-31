@@ -66,6 +66,7 @@ describe('BillingComponent', () => {
       'getSummary',
       'addAdjustment',
       'listAdjustments',
+      'reverseAdjustment',
     ]);
     billingSpy.listAdjustments.and.returnValue(of([]));
     billingSpy.listPayments.and.returnValue(of([]));
@@ -913,6 +914,119 @@ describe('BillingComponent', () => {
       component.paymentAmount.set(null);
       component.recordPayment();
       expect(toastSpy.error).toHaveBeenCalledWith('BILLING.PAYMENT_AMOUNT_REQUIRED');
+    });
+  });
+
+  describe('no dead button on a reason or an amount (QA D1069 / D1089, round 19)', () => {
+    beforeEach(() => {
+      fixture.detectChanges();
+      component.viewInvoice(component.invoices()[0]);
+      fixture.detectChanges();
+    });
+
+    it('QA D1069: the payment reversal is refused where the reason is typed, never by a dead button', () => {
+      component.openReversal(
+        {
+          id: 'p1',
+          amount: 1000,
+          paymentDate: '2026-10-18',
+          paymentMethod: 'CASH',
+          status: 'CONFIRMED',
+        },
+        'reverse',
+      );
+      fixture.detectChanges();
+      const host: HTMLElement = fixture.nativeElement;
+      const confirm = Array.from(
+        host.querySelectorAll<HTMLButtonElement>('.modal-actions .btn-primary'),
+      ).find((b) => b.textContent?.includes('COMMON.CONFIRM'))!;
+      expect(confirm.disabled).toBeFalse();
+      confirm.click();
+      fixture.detectChanges();
+      expect(billingSpy.reversePayment).not.toHaveBeenCalled();
+      expect(host.querySelector('#reversal-reason')!.getAttribute('aria-invalid')).toBe('true');
+      expect(host.textContent).toContain('BILLING.REVERSAL_REASON_REQUIRED');
+    });
+
+    it('QA D1089: a line with no price is refused under the price, not by a dead "Add"', () => {
+      component.viewInvoice(mockInvoice({ status: 'DRAFT' }));
+      fixture.detectChanges();
+      component.newItemDescription.set('Consultation');
+      component.newItemQuantity.set(1);
+      component.newItemUnitPrice.set(null);
+      fixture.detectChanges();
+      const host: HTMLElement = fixture.nativeElement;
+      const add = Array.from(host.querySelectorAll<HTMLButtonElement>('button')).find((b) =>
+        b.textContent?.includes('BILLING.ADD_LINE'),
+      )!;
+      expect(add.disabled).toBeFalse();
+      add.click();
+      fixture.detectChanges();
+      expect(billingSpy.createInvoiceItem).not.toHaveBeenCalled();
+      expect(host.querySelector('#line-price')!.getAttribute('aria-invalid')).toBe('true');
+      expect(host.textContent).toContain('BILLING.PAYMENT_AMOUNT_REQUIRED');
+    });
+  });
+
+  describe('undoing a mistaken adjustment (QA D1105)', () => {
+    const waiver = {
+      id: 'adj-1',
+      type: 'WAIVER' as const,
+      amount: 2500,
+      reason: 'Gratuité',
+      createdAt: '2026-10-30T10:00:00',
+    };
+
+    beforeEach(() => {
+      billingSpy.listAdjustments.and.returnValue(of([waiver]));
+      fixture.detectChanges();
+      component.viewInvoice(mockInvoice({ status: 'PAID', amountPaid: 1500, totalAmount: 1500 }));
+      fixture.detectChanges();
+    });
+
+    it('offers the undo on a paid invoice whose copay is real money', () => {
+      expect(
+        fixture.nativeElement.querySelector('[data-testid="adjustment-reverse-adj-1"]'),
+      ).not.toBeNull();
+    });
+
+    it('asks why, refuses without a reason, then sends it and re-reads the ledger', () => {
+      billingSpy.reverseAdjustment.and.returnValue(
+        of(mockInvoice({ status: 'PARTIALLY_PAID', amountPaid: 1500, totalAmount: 4000 })),
+      );
+      component.openAdjustmentReversal(waiver);
+      fixture.detectChanges();
+      const host: HTMLElement = fixture.nativeElement;
+      const confirm = host.querySelector<HTMLButtonElement>(
+        '[data-testid="adjustment-reversal-confirm"]',
+      )!;
+      expect(confirm.disabled).toBeFalse();
+      confirm.click();
+      fixture.detectChanges();
+      expect(billingSpy.reverseAdjustment).not.toHaveBeenCalled();
+      expect(host.querySelector('#adj-reversal-reason')!.getAttribute('aria-invalid')).toBe('true');
+
+      component.adjustmentReversalReason.set('  Exonération appliquée par erreur ');
+      component.submitAdjustmentReversal();
+      expect(billingSpy.reverseAdjustment).toHaveBeenCalledWith(
+        'inv-1',
+        'adj-1',
+        'Exonération appliquée par erreur',
+      );
+      expect(component.reversingAdjustment()).toBeNull();
+      expect(billingSpy.listAdjustments).toHaveBeenCalledWith('inv-1');
+    });
+
+    it('a reversed adjustment shows its reason and no second undo', () => {
+      billingSpy.listAdjustments.and.returnValue(
+        of([{ ...waiver, reversedAt: '2026-10-31T09:00:00', reversalReason: 'Erreur' }]),
+      );
+      component.viewInvoice(mockInvoice({ status: 'PARTIALLY_PAID' }));
+      fixture.detectChanges();
+      const host: HTMLElement = fixture.nativeElement;
+      expect(host.querySelector('[data-testid="adjustment-reversed-adj-1"]')).not.toBeNull();
+      expect(host.querySelector('[data-testid="adjustment-reverse-adj-1"]')).toBeNull();
+      expect(host.textContent).toContain('Erreur');
     });
   });
 

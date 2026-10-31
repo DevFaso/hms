@@ -147,17 +147,7 @@
       <button class="btn-secondary" (click)="closePayDialog()">
         {{ 'COMMON.CANCEL' | translate }}
       </button>
-      <button
-        class="btn-primary"
-        [disabled]="
-          !selectedInvoiceId() ||
-          !payAmount() ||
-          (payAmount() ?? 0) <= 0 ||
-          (needsReference() && !payReference().trim()) ||
-          paying()
-        "
-        (click)="submitPayment()"
-      >
+      <button class="btn-primary" [disabled]="paying()" (click)="submitPayment()">
         @if (paying()) {
           <span class="material-symbols-outlined spin">progress_activity</span>
         }

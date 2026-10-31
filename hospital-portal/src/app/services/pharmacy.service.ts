@@ -1159,11 +1159,18 @@ export class PharmacyService {
     );
   }
 
-  /** QA D654: a controlled fill goes back on the shelf in front of a witness. */
-  cancelDispense(id: string, witnessedBy?: string): Observable<ApiResponse<DispenseResponse>> {
+  /**
+   * QA D654: a controlled fill goes back on the shelf in front of a witness.
+   * QA D1069: every cancel says why (it voids the payment and returns the stock).
+   */
+  cancelDispense(
+    id: string,
+    reason: string,
+    witnessedBy?: string,
+  ): Observable<ApiResponse<DispenseResponse>> {
     return this.http.post<ApiResponse<DispenseResponse>>(
       `/pharmacy/dispense/${id}/cancel`,
-      witnessedBy ? { witnessedBy } : {},
+      witnessedBy ? { reason, witnessedBy } : { reason },
     );
   }
 

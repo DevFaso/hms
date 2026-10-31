@@ -308,9 +308,7 @@
           <button
             type="submit"
             class="btn-primary"
-            [disabled]="
-              saving() || form.quantityDispensed <= 0 || !verifyAttested() || fefoReasonMissing()
-            "
+            [disabled]="saving() || form.quantityDispensed <= 0 || !verifyAttested()"
           >
             @if (saving()) {
               <span class="spinner"></span>
@@ -328,7 +326,6 @@
                 saving() ||
                 form.quantityDispensed <= 0 ||
                 !verifyAttested() ||
-                fefoReasonMissing() ||
                 fefoSplit().length > 1
               "
               (click)="submitReady()"
@@ -804,21 +801,34 @@
       {{ 'PHARMACY.RECENT_DISPENSES' | translate }}
     </h2>
 
-    <!-- QA D654: a controlled fill goes back on the shelf in front of a witness -->
+    <!-- QA D1069: every cancel says why; QA D654: a controlled fill goes back in front of a witness -->
     @if (cancelWitnessFor()) {
       <div class="form-row" data-testid="cancel-witness">
         <div class="field">
-          <label for="cancelWitness">{{ 'PHARMACY.WITNESS' | translate }} *</label>
-          <select id="cancelWitness" [(ngModel)]="cancelWitnessId" name="cancelWitness" required>
-            <option [ngValue]="undefined">
-              {{ 'PHARMACY.SELECT_WITNESS_OPTION' | translate }}
-            </option>
-            @for (w of witnessCandidates(); track w.userId) {
-              <option [ngValue]="w.userId">{{ w.displayName }}</option>
-            }
-          </select>
+          <label for="dispenseCancelReason">{{ 'PHARMACY.CANCEL_REASON' | translate }} *</label>
+          <textarea
+            id="dispenseCancelReason"
+            rows="2"
+            maxlength="500"
+            [(ngModel)]="dispenseCancelReason"
+            name="dispenseCancelReason"
+            required
+          ></textarea>
           <small class="field-hint">{{ 'PHARMACY.CANCEL_DISPENSE_CONFIRM' | translate }}</small>
         </div>
+        @if (cancelNeedsWitness()) {
+          <div class="field">
+            <label for="cancelWitness">{{ 'PHARMACY.WITNESS' | translate }} *</label>
+            <select id="cancelWitness" [(ngModel)]="cancelWitnessId" name="cancelWitness" required>
+              <option [ngValue]="undefined">
+                {{ 'PHARMACY.SELECT_WITNESS_OPTION' | translate }}
+              </option>
+              @for (w of witnessCandidates(); track w.userId) {
+                <option [ngValue]="w.userId">{{ w.displayName }}</option>
+              }
+            </select>
+          </div>
+        }
         <div class="field">
           <button type="button" class="btn btn-secondary" (click)="cancelWitnessFor.set(null)">
             {{ 'COMMON.CANCEL' | translate }}

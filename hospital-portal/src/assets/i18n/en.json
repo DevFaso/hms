@@ -2206,7 +2206,14 @@
     "CANCEL_REASON_REQUIRED": "Give the reason for cancelling this issued invoice.",
     "ADJUSTMENT_AMOUNT_REQUIRED": "Enter the amount of the discount or waiver (greater than zero).",
     "EDIT_LINE": "Price or correct this line",
-    "ITEM_UPDATED": "Line updated"
+    "ITEM_UPDATED": "Line updated",
+    "ADJUSTMENT_REVERSE": "Undo the adjustment",
+    "ADJUSTMENT_REVERSED": "Adjustment undone",
+    "ADJUSTMENT_REVERSED_BADGE": "Undone on",
+    "ADJUSTMENT_REVERSAL_REASON": "Reason for undoing it",
+    "ADJUSTMENT_REVERSAL_REASON_REQUIRED": "Give the reason for undoing this adjustment.",
+    "ADJUSTMENT_REVERSAL_NOTE": "The amount goes back on what is owed. Money already received, such as the copay paid at check-in, stays recorded.",
+    "ADJUSTMENT_REVERSAL_FAILED": "The adjustment could not be undone."
   },
   "CHAT": {
     "ACCESS_DENIED": "You do not have permission to access chat.",
@@ -5015,7 +5022,13 @@
     "PHONE_GUARDIAN_HINT": "For a child, you may leave this blank and give the parent's or guardian's phone under Emergency contact.",
     "PHONE_FROM_GUARDIAN": "Left blank: the parent's or guardian's phone (Emergency contact) will be recorded as this patient's contact.",
     "SHARED_CONTACT_NOTE": "This phone number is already the contact of another patient (for example a parent). That is allowed: this registration creates a separate record.",
-    "MATCHED_ON_IDENTITY": "same name and date of birth"
+    "MATCHED_ON_IDENTITY": "same name and date of birth",
+    "EXISTING_MATCH_DESC_IDENTITY": "A record with the same name and date of birth already exists at another hospital. Link it here instead of creating a duplicate.",
+    "EXISTING_MATCH_DESC_IDENTITY_HERE": "A record with the same name and date of birth is already registered at this hospital. Open it instead of creating a duplicate.",
+    "EXISTING_MATCH_DESC_IDENTITY_MIXED": "Records with the same name and date of birth already exist, here or at another hospital. Open or link the right record instead of creating a duplicate.",
+    "EXISTING_MATCH_DESC_BOTH": "Records with the same name and date of birth, or with this phone number or e-mail, already exist at another hospital. Link the right record here instead of creating a duplicate.",
+    "EXISTING_MATCH_DESC_BOTH_HERE": "Records with the same name and date of birth, or with this phone number or e-mail, are already registered at this hospital. Open the right record instead of creating a duplicate.",
+    "EXISTING_MATCH_DESC_BOTH_MIXED": "Records with the same name and date of birth, or with this phone number or e-mail, already exist, here or at another hospital. Open or link the right record instead of creating a duplicate."
   },
   "PLATFORM": {
     "ACCESS_LOGS": "Access Logs",
@@ -5351,7 +5364,10 @@
         "SUBMIT": "Reschedule Appointment",
         "TITLE": "Reschedule Appointment"
       },
-      "DURATION_NOTE": "The clinic's appointment slots set how long your visit lasts."
+      "DURATION_NOTE": "The clinic's appointment slots set how long your visit lasts.",
+      "CHOOSE_SLOT": "Choose a free slot",
+      "NO_SLOTS": "No free slot on this day. Choose another date or another clinician.",
+      "SLOTS_FAILED": "The free slots could not be loaded. Try again."
     },
     "MEDICATIONS": {
       "TITLE": "My Medications",
@@ -9553,7 +9569,9 @@
       "BADGE_APPROVED": "Paediatric limits approved",
       "SAVED": "Paediatric dose limits saved",
       "SAVE_FAILED": "The paediatric dose limits could not be saved"
-    }
+    },
+    "CANCEL_REASON": "Reason for cancelling",
+    "CANCEL_REASON_REQUIRED": "Give the reason for cancelling this dispense: it voids the payment and returns the stock."
   },
   "LAB_QC": {
     "TITLE": "Quality Control Dashboard",

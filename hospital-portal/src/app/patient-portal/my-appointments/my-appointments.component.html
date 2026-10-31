@@ -107,6 +107,7 @@
               <select
                 id="provider"
                 [(ngModel)]="selectedProviderId"
+                (ngModelChange)="loadSlots()"
                 [disabled]="!selectedDepartmentId"
               >
                 <option value="">
@@ -129,16 +130,38 @@
                   >{{ 'PORTAL.APPOINTMENTS.DATE' | translate }}
                   <span class="required">*</span></label
                 >
-                <input type="date" id="apptDate" [(ngModel)]="selectedDate" [min]="todayDate" />
+                <input
+                  type="date"
+                  id="apptDate"
+                  [(ngModel)]="selectedDate"
+                  (ngModelChange)="loadSlots()"
+                  [min]="todayDate"
+                />
               </div>
               <div class="booking-field">
                 <label for="apptTime"
                   >{{ 'PORTAL.APPOINTMENTS.TIME' | translate }}
                   <span class="required">*</span></label
                 >
-                <input type="time" id="apptTime" [(ngModel)]="selectedTime" />
+                <!-- QA D1093: a published, free slot is picked, never a typed time. -->
+                <select id="apptTime" [(ngModel)]="selectedTime" data-testid="booking-slot">
+                  <option value="">{{ 'PORTAL.APPOINTMENTS.CHOOSE_SLOT' | translate }}</option>
+                  @for (s of openSlots(); track s.slotId) {
+                    <option [value]="s.startTime">
+                      {{ s.startTime | clockTime }} – {{ s.endTime | clockTime }}
+                      @if (selectedProviderId && s.staffName) {
+                        · {{ s.staffName }}
+                      }
+                    </option>
+                  }
+                </select>
               </div>
             </div>
+            @if (slotsLoaded() && openSlots().length === 0) {
+              <p class="booking-hint" role="status" data-testid="booking-no-slots">
+                {{ 'PORTAL.APPOINTMENTS.NO_SLOTS' | translate }}
+              </p>
+            }
             <!-- QA D1060: the clinic's slot length sets how long a visit lasts. -->
             <p class="booking-hint" data-testid="booking-duration-note">
               {{ 'PORTAL.APPOINTMENTS.DURATION_NOTE' | translate }}
@@ -554,16 +577,39 @@
                 >{{ 'PORTAL.APPOINTMENTS.RESCHEDULE.NEW_DATE' | translate }}
                 <span class="required">*</span></label
               >
-              <input type="date" id="reschedDate" [(ngModel)]="rescheduleDate" [min]="todayDate" />
+              <input
+                type="date"
+                id="reschedDate"
+                [(ngModel)]="rescheduleDate"
+                (ngModelChange)="onRescheduleDateChange()"
+                [min]="todayDate"
+              />
             </div>
             <div class="booking-field">
               <label for="reschedStart"
                 >{{ 'PORTAL.APPOINTMENTS.RESCHEDULE.NEW_START' | translate }}
                 <span class="required">*</span></label
               >
-              <input type="time" id="reschedStart" [(ngModel)]="rescheduleStartTime" />
+              <!-- QA D1093: the visit moves to a published, free slot of its clinician. -->
+              <select
+                id="reschedStart"
+                [(ngModel)]="rescheduleStartTime"
+                data-testid="reschedule-slot"
+              >
+                <option value="">{{ 'PORTAL.APPOINTMENTS.CHOOSE_SLOT' | translate }}</option>
+                @for (s of rescheduleSlots(); track s.slotId) {
+                  <option [value]="s.startTime">
+                    {{ s.startTime | clockTime }} – {{ s.endTime | clockTime }}
+                  </option>
+                }
+              </select>
             </div>
           </div>
+          @if (rescheduleSlotsLoaded() && rescheduleSlots().length === 0) {
+            <p class="booking-hint" role="status" data-testid="reschedule-no-slots">
+              {{ 'PORTAL.APPOINTMENTS.NO_SLOTS' | translate }}
+            </p>
+          }
           <!-- QA D1060: the clinic's slot length sets how long a visit lasts. -->
           <p class="booking-hint" data-testid="reschedule-duration-note">
             {{ 'PORTAL.APPOINTMENTS.DURATION_NOTE' | translate }}
