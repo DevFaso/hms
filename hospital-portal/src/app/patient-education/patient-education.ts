@@ -27,6 +27,7 @@ import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 /**
  * Patient-education workspace (Phase 3 task 18): resource library + assign/
  * progress views against /patient-education. Backend role quirks honored:
@@ -39,6 +40,7 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    SubmitGuardDirective,
     ModalDialogDirective,
     ServerTimePipe,
     CommonModule,

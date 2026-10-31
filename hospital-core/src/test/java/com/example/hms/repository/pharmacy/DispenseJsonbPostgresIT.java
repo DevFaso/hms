@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -24,6 +25,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -104,6 +106,46 @@ class DispenseJsonbPostgresIT {
                 .setParameter("id", id)
                 .getSingleResult());
         assertThat(storedType).isEqualTo("array");
+    }
+
+    @Test
+    void qaD1128EveryDispenseListIsNewestFirstWithAPreparedFillByItsPreparationTime() {
+        UUID patientId = UUID.randomUUID();
+        LocalDateTime now = LocalDateTime.now();
+        UUID threeDaysAgo = insertFor(patientId, now.minusDays(3));
+        UUID yesterday = insertFor(patientId, now.minusDays(1));
+        UUID twoDaysAgo = insertFor(patientId, now.minusDays(2));
+        UUID prepared = insertFor(patientId, null);
+
+        List<UUID> order = new TransactionTemplate(transactionManager).execute(status ->
+            repository.findByPatientId(patientId, PageRequest.of(0, 10)).getContent().stream()
+                .map(Dispense::getId).toList());
+
+        assertThat(order).containsExactly(prepared, yesterday, twoDaysAgo, threeDaysAgo);
+
+        List<UUID> firstTwo = new TransactionTemplate(transactionManager).execute(status ->
+            repository.findByPatientId(patientId, PageRequest.of(0, 2)).getContent().stream()
+                .map(Dispense::getId).toList());
+        assertThat(firstTwo).containsExactly(prepared, yesterday);
+    }
+
+    private UUID insertFor(UUID patientId, LocalDateTime dispensedAt) {
+        UUID id = new TransactionTemplate(transactionManager).execute(status -> {
+            skipForeignKeysInThisTransaction();
+            Dispense dispense = Dispense.builder()
+                .prescription(entityManager.getReference(Prescription.class, UUID.randomUUID()))
+                .patient(entityManager.getReference(Patient.class, patientId))
+                .pharmacy(entityManager.getReference(Pharmacy.class, UUID.randomUUID()))
+                .dispensedByUser(entityManager.getReference(User.class, UUID.randomUUID()))
+                .medicationName("Amoxicillin 500 mg")
+                .quantityRequested(new BigDecimal("10"))
+                .quantityDispensed(new BigDecimal("10"))
+                .dispensedAt(dispensedAt)
+                .build();
+            return repository.saveAndFlush(dispense).getId();
+        });
+        saved.add(id);
+        return id;
     }
 
     private UUID insert(String overrides) {

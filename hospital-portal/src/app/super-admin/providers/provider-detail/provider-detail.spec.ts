@@ -16,6 +16,7 @@ import { SuperAdminProviderService } from '../../../services/super-admin-provide
 import { UserDetail } from '../../../services/user.service';
 import { providerFixture } from '../../../testing/provider-fixtures';
 import { ProviderDetailComponent } from './provider-detail';
+import { isSubmitBlocked } from '../../../shared/forms/submit-guard.testing';
 
 describe('ProviderDetailComponent', () => {
   let service: jasmine.SpyObj<SuperAdminProviderService>;
@@ -160,7 +161,7 @@ describe('ProviderDetailComponent', () => {
     const cmp = setup();
     cmp.openVerify();
     const confirm = () =>
-      host().querySelector<HTMLButtonElement>('[data-test="verify-confirm"]')!.disabled;
+      isSubmitBlocked(host().querySelector<HTMLButtonElement>('[data-test="verify-confirm"]'));
     expect(confirm()).toBeTrue();
     cmp.patchVerify({ ifuMatchesRccm: true });
     expect(confirm()).toBeTrue();

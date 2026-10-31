@@ -30,6 +30,7 @@ import { currentLocale } from '../shared/i18n/app-locale';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 import { serverInstant } from '../shared/date-utils';
 import { refusalReason } from '../shared/refusal-reason';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 /** Maps each role to the set of roles it is allowed to message. */
 const ALLOWED_MESSAGE_TARGETS: Record<string, Set<string>> = {
   ROLE_SUPER_ADMIN: new Set([
@@ -156,7 +157,7 @@ function clinicianTarget(c: MessageableClinician): ChatTarget {
 @Component({
   selector: 'app-chat',
   standalone: true,
-  imports: [FormsModule, TranslateModule, RoleLabelPipe],
+  imports: [SubmitGuardDirective, FormsModule, TranslateModule, RoleLabelPipe],
   templateUrl: './chat.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './chat.scss',

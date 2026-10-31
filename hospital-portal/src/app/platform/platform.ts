@@ -30,6 +30,7 @@ import {
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { toServerDateTime, localDateString } from '../shared/date-utils';
 import { OrgTextPipe } from '../shared/pipes/org-text.pipe';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 
 /* ── View state types ── */
 
@@ -170,7 +171,15 @@ function linkKey(serviceId: string, hospitalId: string): string {
 @Component({
   selector: 'app-platform',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, EnumLabelPipe, OrgTextPipe],
+  imports: [
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+    OrgTextPipe,
+    SubmitGuardDirective,
+  ],
   templateUrl: './platform.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './platform.scss',
@@ -560,6 +569,8 @@ export class PlatformComponent implements OnInit {
   }
 
   changeServiceStatus(service: OrgServiceResponse, newStatus: PlatformServiceStatus): void {
+    // QA D1124: the current status is a pressed toggle, not a dead button; choosing it again changes nothing.
+    if (service.status === newStatus) return;
     this.saving.set(true);
     this.platformSvc
       .updateOrgService(service.organizationId, service.id, { status: newStatus })

@@ -28,10 +28,12 @@ import { HospitalScopeHintComponent } from '../shared/hospital-scope-chip/hospit
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { PrintLabelService } from '../services/print-label.service';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 @Component({
   selector: 'app-stock-routing',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     ServerTimePipe,
     CommonModule,
     FormsModule,
@@ -472,6 +474,17 @@ export class StockRoutingComponent implements OnInit {
   }
 
   /** QA D966: a routing action is offered only while the order can still be routed. */
+  /**
+   * QA D1124: why a routing decision refuses, shown next to its button; null
+   * when it may be sent. The buttons are never silently disabled.
+   */
+  routeBlockReason(): string | null {
+    if (!this.scopeReady()) return this.translate.instant('SUBMIT_GUARD.SCOPE');
+    const result = this.stockResult();
+    if (!result) return this.translate.instant('SUBMIT_GUARD.PRESCRIPTION');
+    return result.routable === false ? this.translate.instant('SUBMIT_GUARD.NOT_ROUTABLE') : null;
+  }
+
   canRoute(): boolean {
     const result = this.stockResult();
     return this.scopeReady() && !!result && result.routable !== false;

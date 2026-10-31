@@ -293,7 +293,8 @@
         type="button"
         class="btn-primary"
         data-testid="submit-issue"
-        [disabled]="!formKeyLabel().trim() || saving()"
+        [disabled]="saving()"
+        [appSubmitGuard]="!formKeyLabel().trim()"
         (click)="submitIssue()"
       >
         {{ 'WEBHOOKS.ISSUE_CONFIRM' | translate }}
@@ -368,7 +369,8 @@
         type="button"
         class="btn-primary"
         data-testid="submit-endpoint"
-        [disabled]="!endpointFormValid() || saving()"
+        [disabled]="saving()"
+        [appSubmitGuard]="!endpointFormValid()"
         (click)="submitEndpointForm()"
       >
         {{ (editingEndpoint() ? 'COMMON.SAVE' : 'WEBHOOKS.REGISTER_CONFIRM') | translate }}

@@ -2376,7 +2376,8 @@
     "MISSING_REQUIRED_FIELDS": "Required fields missing: {{fields}}",
     "REMOVE_FILTER": "Remove filter",
     "SHOW_DETAILS": "Show or hide details",
-    "FIELD_REQUIRED": "This field is required."
+    "FIELD_REQUIRED": "This field is required.",
+    "SUBMIT_BLOCKED_REQUIRED": "Complete the required fields (marked *) first."
   },
   "CONSULTATIONS": {
     "ACKNOWLEDGE": "Acknowledge",
@@ -3174,7 +3175,10 @@
     "STARTED": "Visit started",
     "CHECK_OUT": "Check out",
     "NOT_FOUND": "Encounter not found",
-    "NOTE_EARLIER_ENTRIES": "Earlier entries of this stay"
+    "NOTE_EARLIER_ENTRIES": "Earlier entries of this stay",
+    "ADDENDUM_DISCARD_ASK": "Discard the addendum you have typed?",
+    "ADDENDUM_KEEP": "Keep writing",
+    "ADDENDUM_DISCARD": "Discard the text"
   },
   "FCP": {
     "CONFIRM_PASSWORD": "Confirm Password",
@@ -10477,7 +10481,7 @@
     "REVIEW_ERROR": "Failed to record the review",
     "PROVIDER_REVIEW": "Provider review",
     "DELETE_TITLE": "Delete birth plan",
-    "DELETE_CONFIRM": "Delete the birth plan for",
+    "DELETE_CONFIRM": "Delete the birth plan for {{name}}?",
     "DELETED": "Birth plan deleted",
     "DELETE_ERROR": "Failed to delete birth plan"
   },
@@ -12266,7 +12270,15 @@
     "NO_DISPENSES": "No dispense to collect at this pharmacy.",
     "DISPENSES_LOAD_FAILED": "The pharmacy's dispenses could not be loaded.",
     "ALREADY_PAID": "This dispense has already been paid. No second payment is taken.",
-    "REFERENCE_REQUIRED": "Enter the mobile-money transaction reference shown on the patient’s phone."
+    "REFERENCE_REQUIRED": "Enter the mobile-money transaction reference shown on the patient’s phone.",
+    "RECEIPT": {
+      "TITLE": "Pharmacy receipt",
+      "NUMBER": "No.",
+      "ISSUED_AT": "Issued: {{date}}",
+      "TOTAL_PAID": "Total paid",
+      "THANKS": "Thank you for your trust. Keep this receipt for your medical records.",
+      "SIGNATURE": "Pharmacist signature:"
+    }
   },
   "MY_PHARMACY_INVOICES": {
     "TITLE": "My pharmacy invoices",
@@ -12349,5 +12361,34 @@
     "RELEASE_REASON": "Reason for freeing the bed",
     "RELEASE_REASON_REQUIRED": "Enter why the bed is freed.",
     "RELEASE_ACTION": "Free the bed"
+  },
+  "SUBMIT_GUARD": {
+    "ATTESTATION": "Tick “I have verified this prescription” first.",
+    "CODE": "Enter the full code.",
+    "CONSENT": "Tick the consent box to submit.",
+    "EMAIL_PENDING": "Confirm the code sent to your new e-mail address first.",
+    "ENCOUNTER": "Choose a visit first.",
+    "FILE": "Choose a file first.",
+    "LOADING": "Please wait: still loading.",
+    "MESSAGE": "Type a message (or attach a file) first.",
+    "NOT_ON_FORMULARY": "This partner pharmacy does not stock this medicine.",
+    "NOT_ROUTABLE": "This prescription cannot be routed in its current state.",
+    "NO_CHANGES": "Nothing has changed yet.",
+    "OVERRIDE_REASON": "Enter the override reason first.",
+    "PATIENT": "Choose a patient first.",
+    "PATIENT_AND_CLINICIAN": "Choose the patient and the clinician first.",
+    "PAYMENT_REFERENCE": "Enter the transaction reference of the payment.",
+    "PERIOD": "Choose a valid period (start before end).",
+    "PERMISSION": "Choose at least one permission.",
+    "PHARMACY": "Choose a pharmacy first.",
+    "PHONE": "Enter a full phone number first.",
+    "PRESCRIPTION": "Choose a prescription first.",
+    "QUANTITY": "Enter a quantity greater than zero.",
+    "READY_SPLIT": "A fill prepared for collection comes from one lot; this quantity needs two. Dispense it directly instead.",
+    "SCOPE": "Choose a hospital first.",
+    "UNIT": "Enter the unit (tablets, ml…).",
+    "VERIFY_FIELDS": "Fill in the patient, medication, dose and route first.",
+    "VERIFY_FIRST": "Verify the five rights first.",
+    "WITNESS": "Choose the witness (a second clinician of this hospital)."
   }
 }

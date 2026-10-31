@@ -328,7 +328,13 @@
           <button type="button" class="btn-secondary" (click)="closeForm()">
             {{ 'COMMON.CANCEL' | translate }}
           </button>
-          <button type="submit" class="btn-primary" [disabled]="saving() || !txType()">
+          <button
+            type="submit"
+            class="btn-primary"
+            [disabled]="saving()"
+            [appSubmitGuard]="!txType()"
+            [submitGuardFields]="['txType']"
+          >
             <span class="material-symbols-outlined">check</span>
             {{
               saving() ? ('COMMON.SAVING' | translate) : ('PHARMACY.RECORD_TRANSACTION' | translate)

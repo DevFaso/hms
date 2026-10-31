@@ -17,12 +17,14 @@ import { ToastService } from '../core/toast.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 type BirthPlanFilter = 'all' | 'pending-review' | 'reviewed';
 
 @Component({
   selector: 'app-birth-plan-tab',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     ModalDialogDirective,
     ServerTimePipe,
     CommonModule,

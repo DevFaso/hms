@@ -18,10 +18,18 @@ import { ProfileService } from '../../services/profile.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 @Component({
   selector: 'app-lab-test-config',
   standalone: true,
-  imports: [CdkTrapFocus, CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [
+    SubmitGuardDirective,
+    CdkTrapFocus,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+  ],
   templateUrl: './lab-test-config.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lab-test-config.scss',

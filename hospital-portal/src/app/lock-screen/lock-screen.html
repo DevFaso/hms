@@ -52,7 +52,13 @@
         </button>
       </div>
 
-      <button type="submit" class="btn-unlock" [disabled]="loading() || !password">
+      <button
+        type="submit"
+        class="btn-unlock"
+        [disabled]="loading()"
+        [appSubmitGuard]="!password"
+        [submitGuardFields]="['unlock-password']"
+      >
         @if (loading()) {
           <span class="spinner"></span>
           <span>{{ 'LOCK.VERIFYING' | translate }}</span>

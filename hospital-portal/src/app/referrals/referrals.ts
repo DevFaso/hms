@@ -42,10 +42,12 @@ import { labelledRefusalReason } from '../shared/refusal-reason';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 @Component({
   selector: 'app-referrals',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     PersonNamePipe,
     ModalDialogDirective,
     PatientSublinePipe,
@@ -83,6 +85,8 @@ export class ReferralsComponent implements OnInit {
    * the reason is shown in the referral instead.
    */
   readonly chartCheck = signal<'idle' | 'checking' | 'unavailable'>('idle');
+  /** The chart-access check is in flight (the only reason "Open chart" is disabled). */
+  readonly chartChecking = computed(() => this.chartCheck() === 'checking');
 
   openPatientChart(ref: ReferralResponse): void {
     if (!ref.patientId) return;

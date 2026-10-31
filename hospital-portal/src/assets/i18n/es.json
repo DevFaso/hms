@@ -2376,7 +2376,8 @@
     "MISSING_REQUIRED_FIELDS": "Faltan campos obligatorios: {{fields}}",
     "REMOVE_FILTER": "Quitar el filtro",
     "SHOW_DETAILS": "Mostrar u ocultar los detalles",
-    "FIELD_REQUIRED": "Este campo es obligatorio."
+    "FIELD_REQUIRED": "Este campo es obligatorio.",
+    "SUBMIT_BLOCKED_REQUIRED": "Complete primero los campos obligatorios (marcados con *)."
   },
   "CONSULTATIONS": {
     "ACKNOWLEDGE": "Acusar recibo",
@@ -3174,7 +3175,10 @@
     "STARTED": "Consulta iniciada",
     "CHECK_OUT": "Dar el alta",
     "NOT_FOUND": "Consulta no encontrada",
-    "NOTE_EARLIER_ENTRIES": "Entradas anteriores de esta estancia"
+    "NOTE_EARLIER_ENTRIES": "Entradas anteriores de esta estancia",
+    "ADDENDUM_DISCARD_ASK": "¿Descartar el addendum escrito?",
+    "ADDENDUM_KEEP": "Seguir escribiendo",
+    "ADDENDUM_DISCARD": "Descartar el texto"
   },
   "FCP": {
     "CONFIRM_PASSWORD": "Confirmar contraseña",
@@ -10477,7 +10481,7 @@
     "REVIEW_ERROR": "Error al registrar la revisión",
     "PROVIDER_REVIEW": "Revisión del profesional",
     "DELETE_TITLE": "Eliminar plan de parto",
-    "DELETE_CONFIRM": "Eliminar el plan de parto de",
+    "DELETE_CONFIRM": "¿Eliminar el plan de parto de {{name}}?",
     "DELETED": "Plan de parto eliminado",
     "DELETE_ERROR": "Error al eliminar el plan"
   },
@@ -12266,7 +12270,15 @@
     "NO_DISPENSES": "No hay ninguna dispensación que cobrar en esta farmacia.",
     "DISPENSES_LOAD_FAILED": "No se pudieron cargar las dispensaciones de la farmacia.",
     "ALREADY_PAID": "Esta dispensación ya está pagada. No se cobra un segundo pago.",
-    "REFERENCE_REQUIRED": "Introduzca la referencia de la transacción de dinero móvil que muestra el teléfono del paciente."
+    "REFERENCE_REQUIRED": "Introduzca la referencia de la transacción de dinero móvil que muestra el teléfono del paciente.",
+    "RECEIPT": {
+      "TITLE": "Recibo de farmacia",
+      "NUMBER": "N.º",
+      "ISSUED_AT": "Emitido el: {{date}}",
+      "TOTAL_PAID": "Total pagado",
+      "THANKS": "Gracias por su confianza. Conserve este recibo para su historial médico.",
+      "SIGNATURE": "Firma del farmacéutico:"
+    }
   },
   "MY_PHARMACY_INVOICES": {
     "TITLE": "Mis facturas de farmacia",
@@ -12349,5 +12361,34 @@
     "RELEASE_REASON": "Motivo de la liberación",
     "RELEASE_REASON_REQUIRED": "Indique por qué se libera la cama.",
     "RELEASE_ACTION": "Liberar la cama"
+  },
+  "SUBMIT_GUARD": {
+    "ATTESTATION": "Marque primero «He verificado esta receta».",
+    "CODE": "Introduzca el código completo.",
+    "CONSENT": "Marque la casilla de consentimiento para enviar.",
+    "EMAIL_PENDING": "Confirme primero el código enviado a su nueva dirección de correo.",
+    "ENCOUNTER": "Elija primero una visita.",
+    "FILE": "Elija primero un archivo.",
+    "LOADING": "Espere: cargando.",
+    "MESSAGE": "Escriba primero un mensaje (o adjunte un archivo).",
+    "NOT_ON_FORMULARY": "Esta farmacia asociada no dispone de este medicamento.",
+    "NOT_ROUTABLE": "Esta receta no puede derivarse en su estado actual.",
+    "NO_CHANGES": "No hay cambios que guardar.",
+    "OVERRIDE_REASON": "Indique primero el motivo de la excepción.",
+    "PATIENT": "Elija primero un paciente.",
+    "PATIENT_AND_CLINICIAN": "Elija primero el paciente y el profesional.",
+    "PAYMENT_REFERENCE": "Introduzca la referencia de la transacción.",
+    "PERIOD": "Elija un período válido (inicio antes del fin).",
+    "PERMISSION": "Elija al menos un permiso.",
+    "PHARMACY": "Elija primero una farmacia.",
+    "PHONE": "Introduzca primero un número de teléfono completo.",
+    "PRESCRIPTION": "Elija primero una receta.",
+    "QUANTITY": "Introduzca una cantidad mayor que cero.",
+    "READY_SPLIT": "Una preparación para recoger sale de un solo lote; esta cantidad necesita dos. Dispénsela directamente.",
+    "SCOPE": "Elija primero un establecimiento.",
+    "UNIT": "Indique la unidad (comprimidos, ml…).",
+    "VERIFY_FIELDS": "Complete primero el paciente, el medicamento, la dosis y la vía.",
+    "VERIFY_FIRST": "Verifique primero los cinco correctos.",
+    "WITNESS": "Elija el testigo (un segundo profesional de este establecimiento)."
   }
 }

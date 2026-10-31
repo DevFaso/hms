@@ -499,7 +499,8 @@
               type="button"
               class="btn-primary"
               data-test="verify-confirm"
-              [disabled]="busy() || !verifyReady()"
+              [disabled]="busy()"
+              [appSubmitGuard]="!verifyReady()"
               (click)="submitVerify()"
             >
               {{ 'PROVIDER.VERIFY.SUBMIT' | translate }}
@@ -580,7 +581,9 @@
               type="button"
               class="btn-primary"
               data-test="decision-confirm"
-              [disabled]="busy() || dialog.reason.trim() === ''"
+              [disabled]="busy()"
+              [appSubmitGuard]="dialog.reason.trim() === ''"
+              [submitGuardFields]="['decision-reason']"
               (click)="submitDecision()"
             >
               @if (dialog.kind === 'reject') {
@@ -698,7 +701,8 @@
               type="button"
               class="btn-primary"
               data-test="lifecycle-confirm"
-              [disabled]="busy() || !lifecycleReady()"
+              [disabled]="busy()"
+              [appSubmitGuard]="!lifecycleReady()"
               (click)="submitLifecycle()"
             >
               {{ 'PROVIDER.COMMON.CONFIRM' | translate }}

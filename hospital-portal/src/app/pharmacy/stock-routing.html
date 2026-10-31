@@ -30,7 +30,8 @@
       <button
         class="btn btn-primary"
         (click)="checkStock()"
-        [disabled]="checking() || !prescriptionId.trim()"
+        [disabled]="checking()"
+        [appSubmitGuard]="!prescriptionId.trim() && ('SUBMIT_GUARD.PRESCRIPTION' | translate)"
         data-testid="routing-recheck"
       >
         @if (checking()) {
@@ -199,7 +200,8 @@
             <button
               class="btn btn-warning"
               (click)="openBackOrderForm()"
-              [disabled]="saving() || !canRoute()"
+              [disabled]="saving()"
+              [appSubmitGuard]="routeBlockReason()"
               data-testid="open-back-order"
             >
               {{ 'PHARMACY.BACK_ORDER' | translate }}
@@ -207,7 +209,8 @@
             <button
               class="btn btn-secondary"
               (click)="printForPatient()"
-              [disabled]="saving() || !canRoute()"
+              [disabled]="saving()"
+              [appSubmitGuard]="routeBlockReason()"
               data-testid="print-for-patient"
             >
               {{ 'PHARMACY.PRINT_FOR_PATIENT' | translate }}
@@ -250,7 +253,12 @@
                         <button
                           class="btn btn-sm btn-primary"
                           (click)="openPartnerForm(partner)"
-                          [disabled]="saving() || !partner.hasOnFormulary || !canRoute()"
+                          [disabled]="saving()"
+                          [appSubmitGuard]="
+                            !partner.hasOnFormulary
+                              ? ('SUBMIT_GUARD.NOT_ON_FORMULARY' | translate)
+                              : routeBlockReason()
+                          "
                           [attr.data-testid]="'route-here-' + partner.pharmacyId"
                         >
                           {{ 'PHARMACY.ROUTE_HERE' | translate }}
@@ -299,7 +307,8 @@
         <button
           class="btn btn-primary"
           (click)="submitRouteToPartner()"
-          [disabled]="saving() || !scopeReady()"
+          [disabled]="saving()"
+          [appSubmitGuard]="!scopeReady() && ('SUBMIT_GUARD.SCOPE' | translate)"
         >
           @if (saving()) {
             <span class="spinner"></span>
@@ -332,7 +341,8 @@
         <button
           class="btn btn-warning"
           (click)="submitBackOrder()"
-          [disabled]="saving() || !scopeReady()"
+          [disabled]="saving()"
+          [appSubmitGuard]="!scopeReady() && ('SUBMIT_GUARD.SCOPE' | translate)"
         >
           @if (saving()) {
             <span class="spinner"></span>
@@ -435,14 +445,16 @@
                   <button
                     class="btn btn-sm btn-success"
                     (click)="respondToPartner(d.id, true)"
-                    [disabled]="saving() || !scopeReady()"
+                    [disabled]="saving()"
+                    [appSubmitGuard]="!scopeReady() && ('SUBMIT_GUARD.SCOPE' | translate)"
                   >
                     {{ 'PHARMACY.ACCEPT' | translate }}
                   </button>
                   <button
                     class="btn btn-sm btn-danger"
                     (click)="respondToPartner(d.id, false)"
-                    [disabled]="saving() || !scopeReady()"
+                    [disabled]="saving()"
+                    [appSubmitGuard]="!scopeReady() && ('SUBMIT_GUARD.SCOPE' | translate)"
                   >
                     {{ 'PHARMACY.REJECT' | translate }}
                   </button>
@@ -451,7 +463,8 @@
                   <button
                     class="btn btn-sm btn-success"
                     (click)="confirmPartnerDispense(d.id)"
-                    [disabled]="saving() || !scopeReady()"
+                    [disabled]="saving()"
+                    [appSubmitGuard]="!scopeReady() && ('SUBMIT_GUARD.SCOPE' | translate)"
                   >
                     {{ 'PHARMACY.CONFIRM_DISPENSE' | translate }}
                   </button>

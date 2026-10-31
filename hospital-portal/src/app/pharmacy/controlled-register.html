@@ -9,7 +9,12 @@
         class="btn-secondary"
         type="button"
         data-testid="register-export-csv"
-        [disabled]="exporting() || !selectedPharmacyId || !periodValid()"
+        [disabled]="exporting()"
+        [appSubmitGuard]="
+          !selectedPharmacyId
+            ? ('SUBMIT_GUARD.PHARMACY' | translate)
+            : !periodValid() && ('SUBMIT_GUARD.PERIOD' | translate)
+        "
         (click)="export('csv')"
       >
         <span class="material-symbols-outlined" aria-hidden="true">table</span>
@@ -19,7 +24,12 @@
         class="btn-secondary"
         type="button"
         data-testid="register-export-pdf"
-        [disabled]="exporting() || !selectedPharmacyId || !periodValid()"
+        [disabled]="exporting()"
+        [appSubmitGuard]="
+          !selectedPharmacyId
+            ? ('SUBMIT_GUARD.PHARMACY' | translate)
+            : !periodValid() && ('SUBMIT_GUARD.PERIOD' | translate)
+        "
         (click)="export('pdf')"
       >
         <span class="material-symbols-outlined" aria-hidden="true">picture_as_pdf</span>

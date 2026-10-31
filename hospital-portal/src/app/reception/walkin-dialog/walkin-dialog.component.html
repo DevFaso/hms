@@ -190,7 +190,11 @@
     </button>
     <button
       class="btn-primary"
-      [disabled]="!selectedPatient() || !selectedStaff() || saving()"
+      [disabled]="saving()"
+      [appSubmitGuard]="
+        (!selectedPatient() || !selectedStaff()) &&
+        ('SUBMIT_GUARD.PATIENT_AND_CLINICIAN' | translate)
+      "
       (click)="submit()"
     >
       @if (saving()) {

@@ -572,7 +572,9 @@
           <button
             class="btn-primary"
             (click)="submitDefForm()"
-            [disabled]="savingDef() || !defForm.testCode || !defForm.testName || !isLoincValid()"
+            [disabled]="savingDef()"
+            [appSubmitGuard]="!defForm.testCode || !defForm.testName || !isLoincValid()"
+            [submitGuardFields]="['defTestCode', 'defTestName']"
           >
             @if (savingDef()) {
               <span class="material-symbols-outlined spin">progress_activity</span>

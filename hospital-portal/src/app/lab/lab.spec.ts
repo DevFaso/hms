@@ -26,6 +26,7 @@ import { RoleContextService } from '../core/role-context.service';
 import { AuthService } from '../auth/auth.service';
 import { PrintLabelService } from '../services/print-label.service';
 import { RoleContextStub, roleContextStub } from '../testing/role-context.stub';
+import { isSubmitBlocked } from '../shared/forms/submit-guard.testing';
 
 /**
  * Audit gap B1 on the order form and the worklist: a provider can send an
@@ -378,7 +379,7 @@ describe('LabComponent — performing laboratory', () => {
       host.querySelector<HTMLButtonElement>('[data-testid="reject-specimen-sp-9"]')!.click();
       fixture.detectChanges();
       const confirm = host.querySelector<HTMLButtonElement>('[data-testid="lab-reject-confirm"]')!;
-      expect(confirm.disabled).withContext('a reason is mandatory').toBeTrue();
+      expect(isSubmitBlocked(confirm)).withContext('a reason is mandatory').toBeTrue();
       const reason = host.querySelector<HTMLTextAreaElement>('[data-testid="lab-reject-reason"]')!;
       reason.value = '  Hémolysé ';
       reason.dispatchEvent(new Event('input'));
@@ -613,7 +614,7 @@ describe('LabComponent — performing laboratory', () => {
       const confirm = fixture.nativeElement.querySelector(
         '[data-testid="lab-void-confirm"]',
       ) as HTMLButtonElement;
-      expect(confirm.disabled).withContext('no reason yet').toBeTrue();
+      expect(isSubmitBlocked(confirm)).withContext('no reason yet').toBeTrue();
 
       const reason = fixture.nativeElement.querySelector(
         '[data-testid="lab-void-reason"]',
@@ -621,12 +622,12 @@ describe('LabComponent — performing laboratory', () => {
       reason.value = '   ';
       reason.dispatchEvent(new Event('input'));
       fixture.detectChanges();
-      expect(confirm.disabled).withContext('spaces are no reason').toBeTrue();
+      expect(isSubmitBlocked(confirm)).withContext('spaces are no reason').toBeTrue();
 
       reason.value = '  Wrong patient  ';
       reason.dispatchEvent(new Event('input'));
       fixture.detectChanges();
-      expect(confirm.disabled).toBeFalse();
+      expect(isSubmitBlocked(confirm)).toBeFalse();
       labService.listOrders.calls.reset();
       confirm.click();
       fixture.detectChanges();

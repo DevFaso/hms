@@ -23,6 +23,7 @@ import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 import { serverLocalDate } from '../../shared/date-utils';
 import { refusalReason } from '../../shared/refusal-reason';
 
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 /**
  * QA D961: the doctor issues a dated, signed medical certificate or
  * sick-leave note from the visit, in French, English or Spanish. The PDF is
@@ -31,7 +32,7 @@ import { refusalReason } from '../../shared/refusal-reason';
 @Component({
   selector: 'app-medical-certificate-dialog',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, ModalDialogDirective],
+  imports: [SubmitGuardDirective, CommonModule, FormsModule, TranslateModule, ModalDialogDirective],
   templateUrl: './medical-certificate-dialog.component.html',
   styleUrl: './medical-certificate-dialog.component.scss',
   changeDetection: ChangeDetectionStrategy.Eager,

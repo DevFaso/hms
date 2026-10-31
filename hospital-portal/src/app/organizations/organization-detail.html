@@ -264,7 +264,8 @@
             class="btn"
             [class.btn-danger]="cfg.destructive"
             [class.btn-primary]="!cfg.destructive"
-            [disabled]="!canConfirm() || submitting()"
+            [disabled]="submitting()"
+            [appSubmitGuard]="!canConfirm()"
             (click)="confirm()"
             data-test="action-confirm"
           >

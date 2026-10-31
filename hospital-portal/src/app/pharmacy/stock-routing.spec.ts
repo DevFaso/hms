@@ -13,6 +13,7 @@ import { PharmacyService } from '../services/pharmacy.service';
 import { StockRoutingComponent } from './stock-routing';
 import { RoleContextService } from '../core/role-context.service';
 import { PrintLabelService } from '../services/print-label.service';
+import { isSubmitBlocked } from '../shared/forms/submit-guard.testing';
 
 describe('StockRoutingComponent', () => {
   let component: StockRoutingComponent;
@@ -589,23 +590,23 @@ describe('StockRoutingComponent', () => {
 
     const backOrder = fixture.nativeElement.querySelector('[data-testid="open-back-order"]');
     const print = fixture.nativeElement.querySelector('[data-testid="print-for-patient"]');
-    expect(backOrder.disabled).toBeTrue();
-    expect(print.disabled).toBeTrue();
+    expect(isSubmitBlocked(backOrder)).toBeTrue();
+    expect(isSubmitBlocked(print)).toBeTrue();
     // "Route here" is the control that starts a routing, and it carries its
     // own disabled condition — a second [disabled] binding silently replaced
     // the gate here once, so it is asserted rather than assumed.
     expect(
-      fixture.nativeElement.querySelector('[data-testid="route-here-partner-1"]').disabled,
+      isSubmitBlocked(fixture.nativeElement.querySelector('[data-testid="route-here-partner-1"]')),
     ).toBeTrue();
 
     hasHospitalScope.set(true);
     fixture.detectChanges();
 
     expect(
-      fixture.nativeElement.querySelector('[data-testid="open-back-order"]').disabled,
+      isSubmitBlocked(fixture.nativeElement.querySelector('[data-testid="open-back-order"]')),
     ).toBeFalse();
     expect(
-      fixture.nativeElement.querySelector('[data-testid="print-for-patient"]').disabled,
+      isSubmitBlocked(fixture.nativeElement.querySelector('[data-testid="print-for-patient"]')),
     ).toBeFalse();
     expect(
       fixture.nativeElement.querySelector('[data-testid="route-here-partner-1"]').disabled,

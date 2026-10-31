@@ -9,6 +9,7 @@ import {
 } from '@angular/core';
 import { CANCEL_REASON_REQUIRED_KEY, isOrderCancellable } from '../shared/order-lifecycle';
 import { refuseFields } from '../shared/forms/invalid-fields';
+import { focusWhenRendered } from '../shared/a11y/focus-when-rendered';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -30,17 +31,21 @@ import { ToastService } from '../core/toast.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { localDateString } from '../shared/date-utils';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { refusalReason } from '../shared/refusal-reason';
 import { AuthorshipService } from '../shared/authorship.service';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 type UltrasoundWorklist = 'all' | 'pending' | 'high-risk' | 'follow-up' | 'anomalies';
 
 @Component({
   selector: 'app-ultrasound-tab',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     ModalDialogDirective,
     ServerTimePipe,
+    EnumLabelPipe,
     CommonModule,
     FormsModule,
     TranslateModule,
@@ -320,6 +325,14 @@ export class UltrasoundTabComponent implements OnInit {
   openCancelPrompt(): void {
     this.cancelReason = '';
     this.showCancelPrompt.set(true);
+    // QA D1144: the button that opened the prompt is gone; the keyboard goes to the reason.
+    focusWhenRendered(this.host.nativeElement, '#us-cancel-reason');
+  }
+
+  /** Closes the cancel prompt and gives the keyboard back to "Cancel the order". */
+  closeCancelPrompt(): void {
+    this.showCancelPrompt.set(false);
+    focusWhenRendered(this.host.nativeElement, '[data-testid="us-cancel-order"]');
   }
 
   submitCancel(): void {
@@ -339,6 +352,9 @@ export class UltrasoundTabComponent implements OnInit {
         this.cancelBusy.set(false);
         this.showCancelPrompt.set(false);
         this.viewedOrder.set(updated);
+        // QA D1144: a cancelled order offers no "Cancel" button to return to;
+        // the keyboard lands on the dialog's Close, never on the page body.
+        focusWhenRendered(this.host.nativeElement, '[data-testid="us-order-close"]');
         // Patch in place; a cancelled order leaves the pending worklist.
         this.orders.update((list) =>
           this.worklist() === 'pending'

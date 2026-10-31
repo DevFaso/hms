@@ -3,6 +3,7 @@ import { textMatches } from '../shared/person-search';
 import {
   Component,
   computed,
+  ElementRef,
   inject,
   OnInit,
   signal,
@@ -54,10 +55,13 @@ import {
   StartActor,
 } from '../core/encounter-start';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { focusWhenRendered } from '../shared/a11y/focus-when-rendered';
 @Component({
   selector: 'app-encounters',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     PersonNamePipe,
     ModalDialogDirective,
     PatientSublinePipe,
@@ -194,6 +198,9 @@ export class EncountersComponent implements OnInit {
   addendumContent = '';
   showAddendumForm = signal(false);
   addendumSaving = signal(false);
+  /** QA D1131: Escape was pressed over typed addendum text; the form asks before discarding it. */
+  readonly addendumDiscardAsk = signal(false);
+  private readonly hostEl = inject(ElementRef);
   /**
    * QA D831 (#965 review): the entry the open addendum form corrects. On a
    * stay an earlier entry is signed and locked, so an addendum is its only
@@ -906,13 +913,55 @@ export class EncountersComponent implements OnInit {
   openAddendumForm(entryId: string | null | undefined): void {
     this.addendumTargetId.set(entryId ?? null);
     this.addendumContent = '';
+    this.addendumDiscardAsk.set(false);
     this.showAddendumForm.set(true);
+    // QA D1131: the keyboard lands in the box, not on the page body.
+    this.focusSoon('[data-testid="addendum-content"]');
   }
 
-  closeAddendumForm(): void {
+  /**
+   * Closes the addendum form. `returnFocus` (Cancel, Escape, discard) gives
+   * the keyboard back to the "Add an addendum" button it was opened from.
+   */
+  closeAddendumForm(returnFocus = false): void {
+    const opener = this.addendumOnEarlierEntry() ? this.addendumTargetId() : 'current';
     this.showAddendumForm.set(false);
     this.addendumTargetId.set(null);
     this.addendumContent = '';
+    this.addendumDiscardAsk.set(false);
+    if (returnFocus && opener) {
+      this.focusSoon(`[data-addendum-for="${CSS.escape(opener)}"]`);
+    }
+  }
+
+  /**
+   * QA D1131: Escape inside the addendum is the addendum's own — it never
+   * reaches the visit panel (which closed and lost the text). An empty
+   * addendum closes; typed text asks first; Escape on that question goes back
+   * to the text.
+   */
+  onAddendumEscape(event: Event): void {
+    event.preventDefault();
+    event.stopPropagation();
+    if (this.addendumDiscardAsk()) {
+      this.keepAddendum();
+    } else if (this.addendumContent.trim()) {
+      this.addendumDiscardAsk.set(true);
+      this.focusSoon('[data-testid="addendum-keep"]');
+    } else {
+      this.closeAddendumForm(true);
+    }
+  }
+
+  /** Back to the typed addendum, text intact. */
+  keepAddendum(): void {
+    this.addendumDiscardAsk.set(false);
+    this.focusSoon('[data-testid="addendum-content"]');
+  }
+
+  /** Focuses `selector` inside this page once the view has rendered it. */
+  private focusSoon(selector: string): void {
+    focusWhenRendered(this.hostEl.nativeElement as HTMLElement, selector);
   }
 
   addAddendum(): void {

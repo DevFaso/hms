@@ -28,6 +28,7 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { PEV_VACCINES, pevCvx } from './pev-cvx';
 import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 type HistorySection = 'social' | 'family' | 'immunizations';
 type FamilyFilter = 'all' | 'genetic' | 'screening-needed';
 
@@ -41,6 +42,7 @@ type FamilyFilter = 'all' | 'genetic' | 'screening-needed';
   selector: 'app-medical-history-tab',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     ModalDialogDirective,
     ServerTimePipe,
     CommonModule,

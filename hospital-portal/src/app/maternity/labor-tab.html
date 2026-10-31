@@ -105,7 +105,9 @@
         <button
           class="btn-primary"
           (click)="submitStart()"
-          [disabled]="saving() || !startForm.laborOnsetAt"
+          [disabled]="saving()"
+          [appSubmitGuard]="!startForm.laborOnsetAt"
+          [submitGuardFields]="['labor-onset']"
         >
           {{ 'LABOR.START_EPISODE' | translate }}
         </button>

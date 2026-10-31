@@ -92,7 +92,12 @@
           <button type="button" class="btn-secondary" (click)="dismissed.emit()">
             {{ 'COMMON.CANCEL' | translate }}
           </button>
-          <button type="submit" class="btn-primary" [disabled]="saving() || !!missing()">
+          <button
+            type="submit"
+            class="btn-primary"
+            [disabled]="saving()"
+            [appSubmitGuard]="missing() && (missing()! | translate)"
+          >
             {{
               (saving() ? 'MEDICAL_CERTIFICATE.ISSUING' : 'MEDICAL_CERTIFICATE.ISSUE') | translate
             }}

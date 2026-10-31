@@ -19,6 +19,7 @@ import {
 } from '../services/organization.service';
 import { ToastService } from '../core/toast.service';
 import fr from '../../assets/i18n/fr.json';
+import { isSubmitBlocked } from '../shared/forms/submit-guard.testing';
 
 function org(
   id: string,
@@ -244,11 +245,11 @@ describe('PlatformComponent', () => {
       const submit = (): HTMLButtonElement =>
         fixture.nativeElement.querySelector('[data-test="provision-submit"]');
 
-      expect(submit().disabled).toBeTrue();
+      expect(isSubmitBlocked(submit())).toBeTrue();
 
       c.provisionOrgId.set('o1');
       fixture.detectChanges();
-      expect(submit().disabled).toBeFalse();
+      expect(isSubmitBlocked(submit())).toBeFalse();
     });
   });
 
@@ -291,10 +292,11 @@ describe('PlatformComponent', () => {
       platform.getCatalog.and.returnValue(of([catalogItem({ enabled: false })]));
       c.switchView('catalog');
       fixture.detectChanges();
-      const cardButton: HTMLButtonElement = fixture.nativeElement.querySelector(
-        '[data-test="catalog-provision"]',
-      );
-      expect(cardButton.disabled).toBeTrue();
+      // QA D1124: no dead button on the card; it says, in words, that the item is off.
+      expect(fixture.nativeElement.querySelector('[data-test="catalog-provision"]')).toBeNull();
+      expect(
+        fixture.nativeElement.querySelector('[data-test="catalog-provision-disabled"]'),
+      ).not.toBeNull();
 
       c.openCatalogDetail(catalogItem({ enabled: false }));
       fixture.detectChanges();
@@ -303,8 +305,7 @@ describe('PlatformComponent', () => {
       ).not.toBeNull();
       expect(fixture.nativeElement.querySelector('[data-test="provision-org"]')).toBeNull();
       expect(
-        (fixture.nativeElement.querySelector('[data-test="provision-submit"]') as HTMLButtonElement)
-          .disabled,
+        isSubmitBlocked(fixture.nativeElement.querySelector('[data-test="provision-submit"]')),
       ).toBeTrue();
     });
   });

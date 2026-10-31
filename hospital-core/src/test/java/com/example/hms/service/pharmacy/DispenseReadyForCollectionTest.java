@@ -267,6 +267,8 @@ class DispenseReadyForCollectionTest {
                 .medicationName("Amoxicillin")
                 .quantityRequested(BigDecimal.TEN)
                 .quantityDispensed(BigDecimal.TEN)
+                // QA D1141: every fill carries its unit (the server refuses one without).
+                .unit("capsule")
                 .build();
     }
 
@@ -461,6 +463,24 @@ class DispenseReadyForCollectionTest {
             assertThatThrownBy(() -> service.markReadyForCollection(req))
                     .isInstanceOf(BusinessException.class)
                     .extracting("messageKey").isEqualTo("prescription.safeguard.CONTROLLED_SUBSTANCE.dispense");
+            assertNothingPrepared();
+        }
+
+        @Test
+        @DisplayName("QA D1141: a prepared fill with no unit, of an order with none, is refused; the shelf is left alone")
+        void aPreparedFillWithoutAUnitIsRefused() {
+            prescription.setQuantityUnit(null);
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any()))
+                    .thenReturn(Optional.of(prescription));
+            DispenseRequestDTO dto = request();
+            dto.setUnit(" ");
+            dto.setStockLotId(stockLotId);
+
+            assertThatThrownBy(() -> service.markReadyForCollection(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting("messageKey").isEqualTo("dispense.unit.required");
+            assertThat(stockLot.getRemainingQuantity()).isEqualByComparingTo("50");
             assertNothingPrepared();
         }
 

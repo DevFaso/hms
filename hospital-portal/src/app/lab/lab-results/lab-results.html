@@ -680,9 +680,11 @@
         <button
           class="btn-primary"
           (click)="submitForm()"
-          [disabled]="
-            saving() || (!editing() && !form.labOrderId) || !form.resultValue || !form.resultDate
+          [disabled]="saving()"
+          [appSubmitGuard]="
+            (!editing() && !form.labOrderId) || !form.resultValue || !form.resultDate
           "
+          [submitGuardFields]="['lr-orderId', 'lr-resultValue', 'lr-resultDate']"
         >
           {{
             saving()
@@ -1067,7 +1069,9 @@
           type="button"
           class="btn-primary"
           data-testid="read-back-submit"
-          [disabled]="!readBackValue().trim() || readBackSubmitting()"
+          [disabled]="readBackSubmitting()"
+          [appSubmitGuard]="!readBackValue().trim()"
+          [submitGuardFields]="['readBackValue']"
           (click)="submitReadBack()"
         >
           {{ 'LAB_RESULTS.READ_BACK_CONFIRM' | translate }}

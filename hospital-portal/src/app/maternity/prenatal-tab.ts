@@ -30,10 +30,12 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { ClockTimePipe } from '../shared/pipes/clock-time.pipe';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 @Component({
   selector: 'app-prenatal-tab',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     ModalDialogDirective,
     ClockTimePipe,
     ServerTimePipe,

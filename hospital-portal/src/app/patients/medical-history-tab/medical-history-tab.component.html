@@ -673,7 +673,9 @@
         <button
           type="button"
           class="btn-primary"
-          [disabled]="familySaving() || !familyForm.relationship || !familyForm.conditionDisplay"
+          [disabled]="familySaving()"
+          [appSubmitGuard]="!familyForm.relationship || !familyForm.conditionDisplay"
+          [submitGuardFields]="['fh-relationship', 'fh-condition']"
           (click)="submitFamily()"
         >
           {{ 'COMMON.SAVE' | translate }}
@@ -864,7 +866,9 @@
         <button
           type="button"
           class="btn-primary"
-          [disabled]="immunizationSaving() || !immunizationForm.vaccineDisplay"
+          [disabled]="immunizationSaving()"
+          [appSubmitGuard]="!immunizationForm.vaccineDisplay"
+          [submitGuardFields]="['im-display']"
           (click)="submitImmunization()"
         >
           {{ 'COMMON.SAVE' | translate }}

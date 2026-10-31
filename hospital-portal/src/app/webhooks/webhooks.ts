@@ -29,6 +29,7 @@ import { ToastService } from '../core/toast.service';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 type ConfirmKind = 'rotate-key' | 'revoke-key' | 'revoke-endpoint' | 'rotate-secret';
 
 interface RevealedSecret {
@@ -50,7 +51,14 @@ interface RevealedSecret {
 @Component({
   selector: 'app-webhooks',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, ModalDialogDirective],
+  imports: [
+    SubmitGuardDirective,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    ModalDialogDirective,
+  ],
   templateUrl: './webhooks.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './webhooks.scss',

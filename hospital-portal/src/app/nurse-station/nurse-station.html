@@ -255,14 +255,16 @@
                       }
                     </td>
                     <td>
-                      <button
-                        class="action-btn action-record"
-                        (click)="recordVitals(v.patientId, v.patientName)"
-                        [disabled]="!v.patientId"
-                      >
-                        <span class="material-symbols-outlined">edit_note</span>
-                        {{ 'NURSE.RECORD' | translate }}
-                      </button>
+                      <!-- QA D1124: a row with no patient cannot be recorded, so it offers no dead button. -->
+                      @if (v.patientId) {
+                        <button
+                          class="action-btn action-record"
+                          (click)="recordVitals(v.patientId, v.patientName)"
+                        >
+                          <span class="material-symbols-outlined">edit_note</span>
+                          {{ 'NURSE.RECORD' | translate }}
+                        </button>
+                      }
                     </td>
                   </tr>
                 }
@@ -1145,7 +1147,8 @@
         <button
           class="modal-btn modal-confirm"
           (click)="confirmHoldRefuse()"
-          [disabled]="!reasonText() || (promptNeedsWitness() && !witnessUserId())"
+          [appSubmitGuard]="!reasonText().trim() || (promptNeedsWitness() && !witnessUserId())"
+          [submitGuardFields]="['mar-reason-input', 'mar-witness']"
         >
           {{ 'NURSE.CONFIRM' | translate }}
           {{ reasonActionLabelKey() | translate }}
@@ -1493,7 +1496,9 @@
         <button
           class="modal-btn modal-confirm"
           (click)="submitCreateTask()"
-          [disabled]="taskCreating() || !taskForm().patientId || !taskForm().category"
+          [disabled]="taskCreating()"
+          [appSubmitGuard]="!taskForm().patientId || !taskForm().category"
+          [submitGuardFields]="['tc-patient', 'tc-category']"
         >
           @if (taskCreating()) {
             <span class="material-symbols-outlined">hourglass_empty</span>
@@ -1633,7 +1638,9 @@
         <button
           class="modal-btn modal-confirm"
           (click)="submitCreateHandoff()"
-          [disabled]="handoffCreating() || !handoffForm().patientId || !handoffForm().direction"
+          [disabled]="handoffCreating()"
+          [appSubmitGuard]="!handoffForm().patientId || !handoffForm().direction"
+          [submitGuardFields]="['ho-patient', 'ho-direction']"
         >
           @if (handoffCreating()) {
             <span class="material-symbols-outlined">hourglass_empty</span>

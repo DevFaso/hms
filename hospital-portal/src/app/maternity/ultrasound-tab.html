@@ -61,7 +61,7 @@
                 {{ o.scheduledDate ? (o.scheduledDate | serverTime | date: 'mediumDate') : '—' }}
                 {{ o.scheduledTime || '' }}
               </td>
-              <td>{{ o.priority || 'ROUTINE' }}</td>
+              <td>{{ o.priority || 'ROUTINE' | enumLabel: 'imagingOrderPriority' }}</td>
               <td>
                 <span class="{{ statusClass(o.status) }}">
                   {{ 'ULTRASOUND.STATUS_' + o.status | translate }}
@@ -205,7 +205,8 @@
       <div class="modal-body">
         <div class="view-section">
           <p>
-            {{ 'ULTRASOUND.TYPE_' + o.scanType | translate }} · {{ o.priority || 'ROUTINE' }}
+            {{ 'ULTRASOUND.TYPE_' + o.scanType | translate }} ·
+            {{ o.priority || 'ROUTINE' | enumLabel: 'imagingOrderPriority' }}
             @if (o.gestationalAgeAtOrder) {
               · {{ o.gestationalAgeAtOrder }} {{ 'MATERNITY.WEEKS' | translate }}
             }
@@ -287,7 +288,7 @@
               ></textarea>
             </div>
             <div class="modal-actions">
-              <button class="btn-secondary" (click)="showCancelPrompt.set(false)">
+              <button class="btn-secondary" (click)="closeCancelPrompt()">
                 {{ 'COMMON.CANCEL' | translate }}
               </button>
               <button class="btn-danger" [disabled]="cancelBusy()" (click)="submitCancel()">
@@ -315,11 +316,11 @@
           }
         }
         @if (canCancelThisOrder(o) && !showCancelPrompt()) {
-          <button class="btn-danger" (click)="openCancelPrompt()">
+          <button class="btn-danger" data-testid="us-cancel-order" (click)="openCancelPrompt()">
             {{ 'ULTRASOUND.CANCEL_ORDER' | translate }}
           </button>
         }
-        <button class="btn-secondary" (click)="closeOrder()">
+        <button class="btn-secondary" data-testid="us-order-close" (click)="closeOrder()">
           {{ 'COMMON.CLOSE' | translate }}
         </button>
       </div>
@@ -381,7 +382,7 @@
             <label for="us-priority">{{ 'ULTRASOUND.PRIORITY' | translate }}</label>
             <select id="us-priority" [(ngModel)]="orderForm.priority">
               @for (p of priorities; track p) {
-                <option [value]="p">{{ p }}</option>
+                <option [value]="p">{{ p | enumLabel: 'imagingOrderPriority' }}</option>
               }
             </select>
           </div>
@@ -453,7 +454,9 @@
         </button>
         <button
           class="btn-primary"
-          [disabled]="orderSaving() || !orderForm.patientId"
+          [disabled]="orderSaving()"
+          [appSubmitGuard]="!orderForm.patientId"
+          [submitGuardFields]="['us-patient']"
           (click)="submitOrder()"
         >
           {{ 'COMMON.SAVE' | translate }}

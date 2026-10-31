@@ -316,10 +316,11 @@
             <button
               [attr.aria-label]="'CHAT.SEND' | translate"
               class="send-btn"
-              [disabled]="
-                sendingMessage() ||
-                recordingAudio() ||
-                (!messageText.trim() && pendingAttachments().length === 0)
+              [disabled]="sendingMessage() || recordingAudio()"
+              [appSubmitGuard]="
+                !messageText.trim() &&
+                pendingAttachments().length === 0 &&
+                ('SUBMIT_GUARD.MESSAGE' | translate)
               "
               (click)="sendMessage()"
             >

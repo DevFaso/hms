@@ -67,7 +67,8 @@
       <button
         class="btn-primary"
         (click)="uploadDocument()"
-        [disabled]="uploading() || !selectedFile()"
+        [disabled]="uploading()"
+        [appSubmitGuard]="!selectedFile() && ('SUBMIT_GUARD.FILE' | translate)"
       >
         {{
           uploading()

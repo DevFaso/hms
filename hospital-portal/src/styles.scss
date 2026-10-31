@@ -230,3 +230,9 @@ button {
   color: #b42318;
   font-size: 0.8rem;
 }
+
+/* QA D1124: the reason a guarded submit refused, on its own line in a button row. */
+.submit-guard-msg {
+  flex-basis: 100%;
+  margin-bottom: 0;
+}

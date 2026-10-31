@@ -5,6 +5,7 @@ import { MAX_PATIENT_DOCUMENT_BYTES, MyDocumentsComponent } from './my-documents
 import { PatientPortalService } from '../../services/patient-portal.service';
 import { ToastService } from '../../core/toast.service';
 import { currentLocale } from '../../shared/i18n/app-locale';
+import { isSubmitBlocked } from '../../shared/forms/submit-guard.testing';
 
 const mockDoc = {
   id: 'doc-1',
@@ -212,7 +213,7 @@ describe('MyDocumentsComponent - file size', () => {
     );
     expect(fixture.componentInstance.selectedFile()).toBeNull();
     expect(input.value).toBe('');
-    expect(uploadButton().disabled).toBeTrue();
+    expect(isSubmitBlocked(uploadButton())).toBeTrue();
     fixture.componentInstance.uploadDocument();
     expect(portalService.uploadDocument).not.toHaveBeenCalled();
   });
@@ -223,7 +224,7 @@ describe('MyDocumentsComponent - file size', () => {
 
     expect(host().querySelector('[data-testid="file-too-large"]')).toBeNull();
     expect(fixture.componentInstance.selectedFile()?.size).toBe(MAX_PATIENT_DOCUMENT_BYTES);
-    expect(uploadButton().disabled).toBeFalse();
+    expect(isSubmitBlocked(uploadButton())).toBeFalse();
   });
 
   it('toasts the upload failure translated, not as a raw key', () => {

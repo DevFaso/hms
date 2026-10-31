@@ -403,7 +403,9 @@
         <button
           type="button"
           class="btn-primary"
-          [disabled]="resourceSaving() || !resourceForm.title"
+          [disabled]="resourceSaving()"
+          [appSubmitGuard]="!resourceForm.title"
+          [submitGuardFields]="['edu-title']"
           (click)="submitResource()"
         >
           {{ 'COMMON.SAVE' | translate }}
@@ -460,7 +462,9 @@
         <button
           type="button"
           class="btn-primary"
-          [disabled]="assignBusy() || !assignResourceId"
+          [disabled]="assignBusy()"
+          [appSubmitGuard]="!assignResourceId"
+          [submitGuardFields]="['edu-assign-resource']"
           (click)="submitAssign()"
         >
           {{ 'EDUCATION.ASSIGN' | translate }}

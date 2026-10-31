@@ -377,7 +377,9 @@
         <button
           type="button"
           class="btn-primary"
-          [disabled]="linkSaving() || !linkForm.payerCode || !linkForm.policyNumber"
+          [disabled]="linkSaving()"
+          [appSubmitGuard]="!linkForm.payerCode || !linkForm.policyNumber"
+          [submitGuardFields]="['cov-payer', 'cov-policy']"
           (click)="submitLink()"
         >
           {{ 'COMMON.SAVE' | translate }}
@@ -463,7 +465,9 @@
         <button
           type="button"
           class="btn-primary"
-          [disabled]="editSaving() || !editForm.providerName || !editForm.policyNumber"
+          [disabled]="editSaving()"
+          [appSubmitGuard]="!editForm.providerName || !editForm.policyNumber"
+          [submitGuardFields]="['cov-provider', 'cov-edit-policy']"
           (click)="submitEdit()"
         >
           {{ 'COMMON.SAVE' | translate }}
@@ -624,7 +628,9 @@
           type="button"
           class="btn-primary"
           data-testid="guarantor-save"
-          [disabled]="guarantorSaving() || !guarantorForm.fullName"
+          [disabled]="guarantorSaving()"
+          [appSubmitGuard]="!guarantorForm.fullName"
+          [submitGuardFields]="['gua-name']"
           (click)="submitGuarantor()"
         >
           {{ 'COMMON.SAVE' | translate }}

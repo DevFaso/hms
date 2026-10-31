@@ -23,7 +23,12 @@
       >
         {{ 'BREAK_GLASS_REVIEW.FILTER_ALL' | translate }}
       </button>
-      <button type="button" class="btn-secondary" (click)="reload()" [disabled]="!scopeReady()">
+      <button
+        type="button"
+        class="btn-secondary"
+        (click)="reload()"
+        [appSubmitGuard]="!scopeReady() && ('SUBMIT_GUARD.SCOPE' | translate)"
+      >
         {{ 'COMMON.REFRESH' | translate }}
       </button>
     </div>

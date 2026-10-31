@@ -41,6 +41,7 @@ import { serverInstant } from '../shared/date-utils';
 import { DialogFocusDirective } from '../shared/a11y/dialog-focus.directive';
 import { earlierLotWithStock, fefoAllocation, FefoPart, fefoFirstLot } from './fefo-lots';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 /** The viewer's local calendar date as YYYY-MM-DD (not the UTC one). */
 function localIsoDate(d: Date): string {
   const mm = String(d.getMonth() + 1).padStart(2, '0');
@@ -134,6 +135,7 @@ export const UNRECOGNISED_ATTENTION = {
   selector: 'app-dispensing',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     ServerTimePipe,
     PersonNamePipe,
     CommonModule,
@@ -859,6 +861,27 @@ export class DispensingComponent implements OnInit, OnDestroy {
     );
   }
 
+  /**
+   * QA D1124 / D1089: why "Dispenser" (or, with `ready`, "Prêt") refuses,
+   * shown next to the button; null when the fill may be sent. The buttons
+   * are never silently disabled.
+   */
+  dispenseBlockReason(ready: boolean): string | null {
+    if (!(Number(this.form.quantityDispensed) > 0)) {
+      return this.translate.instant('SUBMIT_GUARD.QUANTITY');
+    }
+    if (!this.form.unit?.trim()) {
+      return this.translate.instant('SUBMIT_GUARD.UNIT');
+    }
+    if (!this.verifyAttested()) {
+      return this.translate.instant('SUBMIT_GUARD.ATTESTATION');
+    }
+    if (ready && this.fefoSplit().length > 1) {
+      return this.translate.instant('SUBMIT_GUARD.READY_SPLIT');
+    }
+    return null;
+  }
+
   private openForm(rx: WorkQueuePrescription): void {
     this.selectedPrescription = rx;
     this.form = this.emptyForm();
@@ -866,6 +889,8 @@ export class DispensingComponent implements OnInit, OnDestroy {
     this.form.patientId = rx.patient?.id ?? '';
     this.form.pharmacyId = this.selectedPharmacyId;
     this.form.medicationName = rx.medicationName ?? '';
+    // QA D1141: the unit the order was written in (fills were saved without one).
+    this.form.unit = rx.quantityUnit ?? '';
     // QA D432 then D1001: the fill starts at what is still owed on the order
     // (the server's ceiling), not at 0 and not at the full prescribed amount,
     // which a partly filled order refuses ("il reste au plus 10").

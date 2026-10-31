@@ -1,21 +1,28 @@
-<button
-  type="button"
-  class="photo-avatar"
-  data-testid="patient-photo-avatar"
-  [class.editable]="canEdit"
-  [disabled]="!canEdit"
-  (click)="openModal()"
-  [attr.aria-label]="'PATIENT_PHOTO.EDIT' | translate"
->
+<!-- QA D1124: the avatar is a button only for a user who may change the photo;
+     for everyone else it is a picture, never a dead button. -->
+<ng-template #avatarFace>
   @if (photoUrl(); as url) {
     <img [src]="url" [alt]="'PATIENT_PHOTO.ALT' | translate" data-testid="patient-photo-img" />
   } @else {
     <span class="initials">{{ initials }}</span>
   }
-  @if (canEdit) {
+</ng-template>
+@if (canEdit) {
+  <button
+    type="button"
+    class="photo-avatar editable"
+    data-testid="patient-photo-avatar"
+    (click)="openModal()"
+    [attr.aria-label]="'PATIENT_PHOTO.EDIT' | translate"
+  >
+    <ng-container [ngTemplateOutlet]="avatarFace" />
     <span class="edit-overlay"><span class="material-symbols-outlined">photo_camera</span></span>
-  }
-</button>
+  </button>
+} @else {
+  <div class="photo-avatar" data-testid="patient-photo-avatar">
+    <ng-container [ngTemplateOutlet]="avatarFace" />
+  </div>
+}
 
 @if (showModal()) {
   <!-- Modal nested INSIDE the backdrop (the #442 lesson). -->

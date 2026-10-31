@@ -148,25 +148,27 @@
                 }}</span>
               </td>
               <td class="action-cell" (click)="$event.stopPropagation()">
-                <button
-                  class="btn-icon"
-                  (click)="openVerify(sig)"
-                  [title]="'SIGNATURES.VERIFY' | translate"
-                  [attr.aria-label]="'SIGNATURES.VERIFY' | translate"
-                  [disabled]="sig.status !== 'SIGNED'"
-                >
-                  <span class="material-icons">verified_user</span>
-                </button>
-                @if (canRevoke) {
+                <!-- QA D1124: verify and revoke apply to a signed signature only, so
+                     they are offered there and nowhere else (never a dead icon). -->
+                @if (sig.status === 'SIGNED') {
                   <button
-                    class="btn-icon danger"
-                    (click)="openRevoke(sig)"
-                    [title]="'SIGNATURES.REVOKE' | translate"
-                    [attr.aria-label]="'SIGNATURES.REVOKE' | translate"
-                    [disabled]="sig.status !== 'SIGNED'"
+                    class="btn-icon"
+                    (click)="openVerify(sig)"
+                    [title]="'SIGNATURES.VERIFY' | translate"
+                    [attr.aria-label]="'SIGNATURES.VERIFY' | translate"
                   >
-                    <span class="material-icons">block</span>
+                    <span class="material-icons">verified_user</span>
                   </button>
+                  @if (canRevoke) {
+                    <button
+                      class="btn-icon danger"
+                      (click)="openRevoke(sig)"
+                      [title]="'SIGNATURES.REVOKE' | translate"
+                      [attr.aria-label]="'SIGNATURES.REVOKE' | translate"
+                    >
+                      <span class="material-icons">block</span>
+                    </button>
+                  }
                 }
               </td>
             </tr>

@@ -22,6 +22,7 @@ import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 /**
  * Coverage tab on patient detail (Phase 3 task 17): insurance policies and
  * hospital registrations for one patient. Insurance roles are HOSPITAL_ADMIN/
@@ -33,7 +34,14 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
   selector: 'app-coverage-tab',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [DialogFocusDirective, ServerTimePipe, CommonModule, FormsModule, TranslateModule],
+  imports: [
+    SubmitGuardDirective,
+    DialogFocusDirective,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+  ],
   templateUrl: './coverage-tab.component.html',
   styleUrl: './coverage-tab.component.scss',
 })

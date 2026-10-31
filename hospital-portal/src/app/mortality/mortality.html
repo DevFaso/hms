@@ -397,7 +397,9 @@
         <button
           class="btn-danger"
           (click)="submitRecord()"
-          [disabled]="recording() || !form.patientId || !form.diedAt || !form.immediateCause"
+          [disabled]="recording()"
+          [appSubmitGuard]="!form.patientId || !form.diedAt || !form.immediateCause"
+          [submitGuardFields]="['mort-patientSearch', 'd-when', 'd-immediate']"
         >
           {{ 'MORTALITY.RECORD_DEATH' | translate }}
         </button>
@@ -449,7 +451,9 @@
         <button
           class="btn-primary"
           (click)="submitAmend()"
-          [disabled]="amending() || !amendForm.amendmentReason"
+          [disabled]="amending()"
+          [appSubmitGuard]="!amendForm.amendmentReason"
+          [submitGuardFields]="['a-reason']"
         >
           {{ 'COMMON.SAVE' | translate }}
         </button>

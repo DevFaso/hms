@@ -275,7 +275,9 @@
               <button
                 type="button"
                 class="btn-primary"
-                [disabled]="actionBusy() || !scheduleDatetime"
+                [disabled]="actionBusy()"
+                [appSubmitGuard]="!scheduleDatetime"
+                [submitGuardFields]="['proc-schedule']"
                 (click)="submitSchedule()"
               >
                 {{ 'COMMON.CONFIRM' | translate }}
@@ -303,7 +305,9 @@
               <button
                 type="button"
                 class="btn-primary"
-                [disabled]="actionBusy() || !consentBy.trim()"
+                [disabled]="actionBusy()"
+                [appSubmitGuard]="!consentBy.trim()"
+                [submitGuardFields]="['proc-consent-by']"
                 (click)="submitConsent()"
               >
                 {{ 'COMMON.CONFIRM' | translate }}
@@ -327,7 +331,9 @@
               <button
                 type="button"
                 class="btn-danger"
-                [disabled]="actionBusy() || !cancelReason.trim()"
+                [disabled]="actionBusy()"
+                [appSubmitGuard]="!cancelReason.trim()"
+                [submitGuardFields]="['proc-cancel-reason']"
                 (click)="submitCancel()"
               >
                 {{ 'COMMON.CONFIRM' | translate }}
@@ -549,12 +555,11 @@
         <button
           type="button"
           class="btn-primary"
-          [disabled]="
-            orderSaving() ||
-            !orderForm.patientId ||
-            !orderForm.procedureName ||
-            !orderForm.indication
+          [disabled]="orderSaving()"
+          [appSubmitGuard]="
+            !orderForm.patientId || !orderForm.procedureName || !orderForm.indication
           "
+          [submitGuardFields]="['proc-patient', 'proc-name', 'proc-indication']"
           (click)="submitOrder()"
         >
           {{ 'PROCEDURES.SUBMIT' | translate }}

@@ -71,6 +71,7 @@ import { CloseUnseenDialogComponent } from '../reception/close-unseen-dialog/clo
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { offersHeadCircumference } from '../shared/patient-measures';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 type FilterMode = 'me' | 'unit' | 'all';
 type SectionType =
   | 'vitals'
@@ -97,6 +98,7 @@ export function localInputToUtcIso(value: string | undefined | null): string | u
   selector: 'app-nurse-station',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     ModalDialogDirective,
     MedicationRoutePipe,
     CommonModule,

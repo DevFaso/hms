@@ -134,7 +134,12 @@
           <button type="button" class="btn btn-secondary" (click)="close()">
             {{ 'CHECKOUT.CANCEL' | translate }}
           </button>
-          <button type="submit" class="btn btn-primary" [disabled]="!canSubmit">
+          <button
+            type="submit"
+            class="btn btn-primary"
+            [disabled]="saving()"
+            [appSubmitGuard]="!encounter && ('SUBMIT_GUARD.ENCOUNTER' | translate)"
+          >
             @if (saving()) {
               <span>{{ 'CHECKOUT.CHECKING_OUT' | translate }}</span>
             } @else {

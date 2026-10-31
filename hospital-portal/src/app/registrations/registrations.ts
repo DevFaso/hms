@@ -17,6 +17,7 @@ import { ToastService } from '../core/toast.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 type ActiveFilter = 'all' | 'active' | 'inactive';
 
 /**
@@ -29,7 +30,13 @@ type ActiveFilter = 'all' | 'active' | 'inactive';
   selector: 'app-registrations',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, TranslateModule, PatientPickerComponent, ModalDialogDirective],
+  imports: [
+    SubmitGuardDirective,
+    FormsModule,
+    TranslateModule,
+    PatientPickerComponent,
+    ModalDialogDirective,
+  ],
   templateUrl: './registrations.html',
   styleUrl: './registrations.scss',
 })

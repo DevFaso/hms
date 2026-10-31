@@ -42,6 +42,7 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { labSeverityFlag, labSeverityTone } from '../shared/lab-severity';
 import { LabValuePipe, formatLabNumber } from '../shared/lab-value.pipe';
 
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 /**
  * D49: the order code the API sends is the order's UUID. Readers get its first
  * eight characters, enough to tell two orders apart on one screen.
@@ -55,6 +56,7 @@ export { toServerDateTime, toLocalInputValue };
   selector: 'app-lab-results',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     LabCorrectionBadgeComponent,
     CdkTrapFocus,
     LabValuePipe,

@@ -15,6 +15,7 @@ import {
   UserProfile,
 } from '../services/profile.service';
 import { PatientPortalService, PatientProfileDTO } from '../services/patient-portal.service';
+import { isSubmitBlocked } from '../shared/forms/submit-guard.testing';
 
 const profile = (email: string, firstName = 'Awa'): UserProfile => ({
   id: 'u1',
@@ -396,7 +397,7 @@ describe('ProfileComponent — editing the profile', () => {
     const save = fixture.nativeElement.querySelector(
       'form.edit-form button[type="submit"]',
     ) as HTMLButtonElement;
-    expect(save.disabled).toBeTrue();
+    expect(isSubmitBlocked(save)).toBeTrue();
   });
 
   it('a refused profile PUT stops there: no email step is attempted', () => {

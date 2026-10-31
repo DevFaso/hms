@@ -346,7 +346,10 @@
                 [checked]="selectedSlotId() === slot.id"
                 (change)="selectedSlotId.set(slot.id)"
               />
-              <span class="slot-when">{{ slot.startAt | date: 'EEE d MMM, HH:mm' }}</span>
+              <!-- D1140 class: the locale orders day, month and time. -->
+              <span class="slot-when"
+                >{{ slot.startAt | date: 'EEEE' }} {{ slot.startAt | date: 'short' }}</span
+              >
               <span class="slot-who">{{ slot.staffName ?? '—' }}</span>
               @if (slot.visitTypeName) {
                 <span class="slot-type">{{ slot.visitTypeName }}</span>
@@ -377,7 +380,8 @@
       </button>
       <button
         class="btn-primary"
-        [disabled]="offering() || !selectedSlotId()"
+        [disabled]="offering()"
+        [appSubmitGuard]="!selectedSlotId() && ('RECEPTION.SELECT_SLOT_FIRST' | translate)"
         (click)="submitOffer()"
       >
         @if (offering()) {

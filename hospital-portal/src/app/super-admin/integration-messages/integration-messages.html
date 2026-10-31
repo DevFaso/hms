@@ -167,12 +167,13 @@
                   {{ 'INTEGRATION_MESSAGES.CONTENT_PURGED' | translate }}
                 </small>
               }
-              @if (row.status === 'FAILED') {
+              <!-- QA D1124: a purged message cannot be replayed; the "content purged" note above says why, so no dead button. -->
+              @if (row.status === 'FAILED' && !isPurged(row)) {
                 <button
                   type="button"
                   class="replay-btn"
                   [attr.data-test-replay]="row.id"
-                  [disabled]="replayBusyFor(row.id) || isPurged(row)"
+                  [disabled]="replayBusyFor(row.id)"
                   (click)="replay(row.id)"
                 >
                   @if (replayBusyFor(row.id)) {

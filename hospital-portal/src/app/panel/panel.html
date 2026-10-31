@@ -196,7 +196,12 @@
 
     <label class="field">
       <span>{{ 'PANEL.PROVIDER' | translate }} *</span>
-      <select name="panelStaff" [ngModel]="formStaffId()" (ngModelChange)="formStaffId.set($event)">
+      <select
+        id="panel-staff"
+        name="panelStaff"
+        [ngModel]="formStaffId()"
+        (ngModelChange)="formStaffId.set($event)"
+      >
         <option value="">{{ 'PANEL.PROVIDER_PLACEHOLDER' | translate }}</option>
         @for (s of filteredStaff(); track s.id) {
           <option [value]="s.id">{{ s.name }}</option>
@@ -231,7 +236,9 @@
         type="button"
         class="btn-primary"
         data-testid="submit-assign"
-        [disabled]="!selectedPatient() || !formStaffId() || saving()"
+        [disabled]="saving()"
+        [appSubmitGuard]="!selectedPatient() || !formStaffId()"
+        [submitGuardFields]="['panel-patient-picker', 'panel-staff']"
         (click)="submitAssign()"
       >
         {{ 'PANEL.ASSIGN_CONFIRM' | translate }}
@@ -260,6 +267,7 @@
     <label class="field">
       <span>{{ 'PANEL.END_REASON' | translate }} *</span>
       <textarea
+        id="panel-end-reason"
         name="panelEndReason"
         rows="3"
         maxlength="500"
@@ -274,7 +282,9 @@
       <button
         type="button"
         class="btn-primary danger"
-        [disabled]="!endReason().trim() || saving()"
+        [disabled]="saving()"
+        [appSubmitGuard]="!endReason().trim()"
+        [submitGuardFields]="['panel-end-reason']"
         (click)="submitEnd()"
       >
         {{ 'PANEL.END_CONFIRM' | translate }}

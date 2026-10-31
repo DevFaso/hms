@@ -1,5 +1,5 @@
 import { expectKeyboardModal } from '../testing/modal-dialog-keyboard';
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -56,6 +56,7 @@ describe('UltrasoundTabComponent', () => {
       'highRiskOrders',
       'followUpRequired',
       'anomalies',
+      'cancelOrder',
     ]);
     service.pendingOrders.and.returnValue(of([]));
     service.anomalies.and.returnValue(of([]));
@@ -88,8 +89,67 @@ describe('UltrasoundTabComponent', () => {
         NO_REPORTS: 'Aucun compte rendu',
         LOAD_ERROR: 'Chargement impossible',
       },
+      PORTAL: {
+        ENUM: {
+          IMAGING_ORDER_PRIORITY: {
+            ROUTINE: 'Routine',
+            URGENT: 'Urgente',
+            STAT: 'Immédiat (STAT)',
+          },
+        },
+      },
     });
   });
+
+  it('QA D1117: the priority reads in French in the list, the view and the order form', () => {
+    create(['ROLE_MIDWIFE'], [order({ priority: 'STAT' })]);
+    expect(texts('tbody td')).toContain('Immédiat (STAT)');
+    expect(host().textContent).not.toContain('STAT ');
+
+    fixture.componentInstance.openOrder(order({ priority: 'URGENT' }));
+    fixture.detectChanges();
+    expect(host().textContent).toContain('Urgente');
+
+    fixture.componentInstance.openCreateOrder();
+    fixture.detectChanges();
+    const options = Array.from(host().querySelectorAll('#us-priority option')).map((o) =>
+      o.textContent?.trim(),
+    );
+    expect(options).toEqual(['Routine', 'Urgente', 'Immédiat (STAT)']);
+  });
+
+  it('QA D1144: the cancel prompt takes the keyboard, and gives it back to "Cancel the order"', fakeAsync(() => {
+    create(['ROLE_MIDWIFE']);
+    const cmp = fixture.componentInstance;
+    spyOn(cmp, 'canCancelThisOrder').and.returnValue(true);
+    document.body.appendChild(host());
+    try {
+      cmp.openOrder(order());
+      fixture.detectChanges();
+      host().querySelector<HTMLButtonElement>('[data-testid="us-cancel-order"]')!.click();
+      fixture.detectChanges();
+      tick();
+      expect(document.activeElement?.id).toBe('us-cancel-reason');
+
+      cmp.closeCancelPrompt();
+      fixture.detectChanges();
+      tick();
+      expect(document.activeElement).toBe(host().querySelector('[data-testid="us-cancel-order"]'));
+
+      // Once cancelled there is no "Cancel" to return to: the dialog's Close takes the keyboard.
+      service.cancelOrder.and.returnValue(of(order({ status: 'CANCELLED' })));
+      cmp.openCancelPrompt();
+      fixture.detectChanges();
+      tick();
+      cmp.cancelReason = 'Doublon';
+      cmp.submitCancel();
+      fixture.detectChanges();
+      tick();
+      expect(document.activeElement).toBe(host().querySelector('[data-testid="us-order-close"]'));
+    } finally {
+      host().remove();
+    }
+  }));
 
   it('lists the hospital’s orders with a translated scan type and status', () => {
     create(['ROLE_MIDWIFE']);

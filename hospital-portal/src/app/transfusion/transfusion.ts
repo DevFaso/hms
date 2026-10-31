@@ -40,6 +40,7 @@ import { refusalReason } from '../shared/refusal-reason';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { AuthorshipService } from '../shared/authorship.service';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 type Tab = 'requests' | 'units';
 
 /**
@@ -54,6 +55,7 @@ type Tab = 'requests' | 'units';
   selector: 'app-transfusion',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     ModalDialogDirective,
     ServerTimePipe,
     CommonModule,

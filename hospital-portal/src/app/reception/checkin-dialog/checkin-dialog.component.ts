@@ -24,10 +24,11 @@ import { refusalReason } from '../../shared/refusal-reason';
 import { saveResponse } from '../../shared/download-file';
 import { DESK_PAYMENT_METHODS, deskMethodNeedsReference } from '../desk-payment-methods';
 
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 @Component({
   selector: 'app-checkin-dialog',
   standalone: true,
-  imports: [DialogFocusDirective, FormsModule, TranslateModule],
+  imports: [SubmitGuardDirective, DialogFocusDirective, FormsModule, TranslateModule],
   templateUrl: './checkin-dialog.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './checkin-dialog.component.scss',
@@ -68,6 +69,22 @@ export class CheckinDialogComponent {
       !referenceMissing &&
       !this.saving()
     );
+  }
+
+  /**
+   * QA D1124: why "Enregistrer" refuses, shown next to it (null when it may
+   * be sent). The button is never silently disabled.
+   */
+  submitBlockReason(): string | null {
+    if (!this.queueItem?.appointmentId) {
+      return this.translate.instant('RECEPTION.NO_APPOINTMENT_SELECTED');
+    }
+    if (!this.identityConfirmed()) {
+      return this.translate.instant('RECEPTION.CONFIRM_IDENTITY_FIRST');
+    }
+    const referenceMissing =
+      (this.copayAmount() ?? 0) > 0 && this.copayNeedsReference() && !this.copayReference().trim();
+    return referenceMissing ? this.translate.instant('SUBMIT_GUARD.PAYMENT_REFERENCE') : null;
   }
 
   submit(): void {

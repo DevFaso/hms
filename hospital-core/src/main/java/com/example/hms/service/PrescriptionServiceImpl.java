@@ -410,7 +410,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      * visible, not a refusal.
      */
     @Override
-    @Transactional
+    // QA D1142: the review requirement found at the signature is kept when the
+    // signature is refused for it (see PediatricDoseReviewRequiredException).
+    @Transactional(dontRollbackOn = com.example.hms.exception.PediatricDoseReviewRequiredException.class)
     public PrescriptionResponseDTO signPrescription(UUID id,
                                                     com.example.hms.payload.dto.SignPrescriptionRequestDTO reauthentication,
                                                     Locale locale) {
@@ -579,7 +581,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             return;
         }
         if (prescription.getPediatricDoseReviewedAt() == null) {
-            throw new BusinessException("prescription.pediatricReview.requiredToSign");
+            // Committed, not rolled back: the flag set above must outlive the refusal (QA D1142).
+            throw new com.example.hms.exception.PediatricDoseReviewRequiredException();
         }
         com.example.hms.model.User reviewer = prescription.getPediatricDoseReviewedBy();
         UUID signerUserId = signer.getUser() != null ? signer.getUser().getId() : null;
