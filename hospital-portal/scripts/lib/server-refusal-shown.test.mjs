@@ -6,8 +6,8 @@
 // On the order, encounter, admission and discharge screens, an error handler
 // that shows a toast for a WRITE must pass the server's reason first
 // (`refusalReason(err) ?? generic`, src/app/shared/refusal-reason.ts). A
-// handler without the error parameter can only show the generic text, so it
-// is allowed only for a read (a key naming a load, a missing record or an
+// handler that shows only a translated generic text (with or without the error
+// parameter) is allowed only for a read (a key naming a load, a missing record or an
 // empty result).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -35,9 +35,13 @@ export const SCREENS = [
 /** A read's generic message: a load, a missing record, an empty answer. */
 const READ_KEY = /LOAD|NOT_FOUND|NO_|_NONE|TEMPLATE/;
 
-/** `error: () => …toast.error(…instant('KEY'))` within the handler's first lines. */
+/**
+ * An error handler (with or without the error parameter) whose toast shows a
+ * translated generic text and nothing from the server:
+ * `error: (…) => …toast.error(this.translate.instant('KEY'))`.
+ */
 const BLIND_HANDLER =
-  /error:\s*\(\)\s*=>\s*\{?[^}]{0,200}?this\.toast\.error\(\s*this\.translate\.instant\('([A-Z_.]+)'/g;
+  /error:\s*\([^)]*\)\s*=>\s*\{?[^}]{0,300}?this\.toast\.error\(\s*this\.translate\.instant\('([A-Z_.]+)'/g;
 
 export function blindWriteHandlers(source) {
   const out = [];
@@ -73,4 +77,10 @@ test('QA D1111 guard: the scan sees the round-19 shape', () => {
   assert.deepEqual(blindWriteHandlers(read), []);
   const fixed = `      error: (err: unknown) => {\n        this.toast.error(refusalReason(err) ?? this.translate.instant('DISCHARGE.REQUEST_ERROR'));\n      },`;
   assert.deepEqual(blindWriteHandlers(fixed), []);
+  // Taking the error and still showing only the generic text is the same defect.
+  const ignored = `      error: (err: unknown) => {\n        this.toast.error(this.translate.instant('DISCHARGE.REQUEST_ERROR'));\n      },`;
+  assert.deepEqual(
+    blindWriteHandlers(ignored).map((h) => h.key),
+    ['DISCHARGE.REQUEST_ERROR'],
+  );
 });
