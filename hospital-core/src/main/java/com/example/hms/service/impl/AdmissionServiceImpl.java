@@ -51,6 +51,7 @@ import com.example.hms.service.recordaccess.BreakGlassGate;
 @Service
 @RequiredArgsConstructor
 public class AdmissionServiceImpl implements AdmissionService {
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(AdmissionServiceImpl.class);
     private static final String HOSPITAL_NOT_FOUND_KEY = "hospital.notFound";
     private static final String DEPARTMENT_NOT_FOUND_KEY = "department.notFound";
     private static final String ADMISSION_NOT_FOUND_KEY = "admission.notFound";
@@ -372,11 +373,70 @@ public class AdmissionServiceImpl implements AdmissionService {
 
     @Override
     @Transactional
-    public AdmissionResponseDTO unassignBed(UUID admissionId) {
+    public AdmissionResponseDTO unassignBed(UUID admissionId, String reason) {
+        // QA D1100 (round 19): "Retirer le lit" freed an inpatient's bed in one
+        // click, with no reason recorded. The reason is required and audited.
+        String releaseReason = reason == null ? "" : reason.trim();
+        if (releaseReason.isEmpty()) {
+            throw new BusinessException("admission.bed.unassignReasonRequired");
+        }
+        if (releaseReason.length() > MAX_BED_RELEASE_REASON) {
+            throw new BusinessException("admission.bed.unassignReasonTooLong", MAX_BED_RELEASE_REASON);
+        }
         Admission admission = loadTenantScopedAdmission(admissionId);
+        String bedLabel = admission.getBed() == null ? null : BedAssignmentService.bedLabel(admission.getBed());
         bedAssignmentService.unassignBed(admission);
         admission = admissionRepository.save(admission);
+        if (bedLabel != null) {
+            auditBedReleaseAfterCommit(admission, bedLabel, releaseReason);
+        }
         return admissionMapper.toResponseDTO(admission);
+    }
+
+    /** QA D1100: the audit trail's only record of why the bed was freed (no column holds it). */
+    private static final int MAX_BED_RELEASE_REASON = 500;
+
+    private com.example.hms.service.AuditEventLogService auditEventLogService;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setAuditEventLogService(com.example.hms.service.AuditEventLogService auditEventLogService) {
+        this.auditEventLogService = auditEventLogService;
+    }
+
+    /**
+     * QA D1100: who freed which bed of which stay, and why. Written after the
+     * commit, so a refused or rolled-back release leaves no row; a failed audit
+     * write never undoes the release. Ids and the bed label in the description;
+     * the nurse's reason goes in the details, as the brief requires (no column
+     * holds it and this slice adds no migration).
+     */
+    private void auditBedReleaseAfterCommit(Admission admission, String bedLabel, String reason) {
+        if (auditEventLogService == null) {
+            return;
+        }
+        UUID actorId = com.example.hms.security.CallerIdentity.currentUserId();
+        UUID hospitalId = admission.getHospital() == null ? null : admission.getHospital().getId();
+        UUID patientId = admission.getPatient() == null ? null : admission.getPatient().getId();
+        String admissionIdText = String.valueOf(admission.getId());
+        java.util.Map<String, String> details = java.util.Map.of("bed", bedLabel, "reason", reason);
+        com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
+            try {
+                auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
+                    .eventType(com.example.hms.enums.AuditEventType.ADMISSION_BED_RELEASED)
+                    .status(com.example.hms.enums.AuditStatus.SUCCESS)
+                    .userId(actorId)
+                    .hospitalId(hospitalId)
+                    .patientId(patientId)
+                    .eventDescription("Bed " + bedLabel + " released from admission " + admissionIdText)
+                    .details(details)
+                    .entityType("ADMISSION")
+                    .resourceId(admissionIdText)
+                    .build());
+            } catch (RuntimeException ex) {
+                log.warn("Bed release audit not written for admission {}: {}", admissionIdText,
+                    ex.getClass().getSimpleName());
+            }
+        });
     }
 
     /** Load with the same tenant guard as {@link #getAdmission}. */

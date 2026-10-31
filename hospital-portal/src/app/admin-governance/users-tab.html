@@ -95,8 +95,10 @@
         tabindex="-1"
         (click)="$event.stopPropagation()"
         (keydown.escape)="closeImport(); $event.stopPropagation()"
+        appModalDialog
+        aria-labelledby="users-tab-dialog-2-title"
       >
-        <h2>{{ 'ADMIN_GOV.IMPORT_USERS' | translate }}</h2>
+        <h2 id="users-tab-dialog-2-title">{{ 'ADMIN_GOV.IMPORT_USERS' | translate }}</h2>
         @if (!importResult()) {
           <p class="form-hint">{{ 'ADMIN_GOV.IMPORT_USERS_HINT' | translate }}</p>
           <label class="form-field">
@@ -161,13 +163,16 @@
         } @else {
           <div class="result-summary">
             <span class="badge badge-info">
-              {{ 'ASSIGN_ADMIN.PROCESSED' | translate }}: {{ importResult()!.processed }}
+              {{ 'ASSIGN_ADMIN.PROCESSED' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ importResult()!.processed }}
             </span>
             <span class="badge badge-success">
-              {{ 'ADMIN_GOV.IMPORTED' | translate }}: {{ importResult()!.imported }}
+              {{ 'ADMIN_GOV.IMPORTED' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ importResult()!.imported }}
             </span>
             <span class="badge badge-danger">
-              {{ 'ASSIGN_ADMIN.FAILED' | translate }}: {{ importResult()!.failed }}
+              {{ 'ASSIGN_ADMIN.FAILED' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ importResult()!.failed }}
             </span>
           </div>
           <div class="table-wrap result-table">
@@ -225,8 +230,10 @@
         tabindex="-1"
         (click)="$event.stopPropagation()"
         (keydown.escape)="closeReset(); $event.stopPropagation()"
+        appModalDialog
+        aria-labelledby="users-tab-dialog-1-title"
       >
-        <h2>{{ 'ADMIN_GOV.FORCE_RESET' | translate }}</h2>
+        <h2 id="users-tab-dialog-1-title">{{ 'ADMIN_GOV.FORCE_RESET' | translate }}</h2>
         @if (!resetResult()) {
           <label class="form-field">
             <span>{{ 'ADMIN_GOV.RESET_IDENTIFIERS' | translate }} *</span>
@@ -265,16 +272,18 @@
         } @else {
           <div class="result-summary">
             <span class="badge badge-info">
-              {{ 'ASSIGN_ADMIN.REQUESTED' | translate }}: {{ resetResult()!.requested }}
+              {{ 'ASSIGN_ADMIN.REQUESTED' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ resetResult()!.requested }}
             </span>
             <span class="badge badge-success">
-              {{ 'ADMIN_GOV.SUCCEEDED' | translate }}: {{ resetResult()!.succeeded }}
+              {{ 'ADMIN_GOV.SUCCEEDED' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ resetResult()!.succeeded }}
             </span>
           </div>
           <ul class="failure-list">
             @for (r of resetResult()!.results; track $index) {
               @if (!r.success) {
-                <li>{{ r.email || r.userId }}: {{ r.message }}</li>
+                <li>{{ r.email || r.userId }}{{ 'COMMON.COLON' | translate }} {{ r.message }}</li>
               }
             }
           </ul>

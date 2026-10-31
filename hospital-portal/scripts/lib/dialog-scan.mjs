@@ -12,10 +12,16 @@
  *            not containers and are not matched.
  *  modal   — role="dialog" with no aria-modal, or aria-modal="false".
  *  label   — role="dialog" without a non-empty aria-labelledby or aria-label.
- *  escape  — role="dialog" with no `(keydown.escape)` on the dialog, an
- *            ancestor or a descendant, in a component with no
- *            `document:keydown.escape` HostListener and no CDK/Material
- *            dialog (which closes on Escape itself).
+ *  escape  — role="dialog" with no `(keydown.escape)` on the dialog or an
+ *            ancestor, in a component with no `document:keydown.escape`
+ *            HostListener and no CDK/Material dialog (which closes on Escape
+ *            itself). QA D1004 (round 19): a handler on a DESCENDANT does not
+ *            count — a typeahead's `(keydown.escape)` clears its list, it
+ *            does not close the dialog.
+ *  focus   — the dialog (or an ancestor) carries no focus-managing directive.
+ *            QA D1004 (round 19): a NESTED dialog's directive does not count
+ *            for the dialog around it (the outer form still kept focus on its
+ *            opener, so its own Escape never fired).
  *
  * A native `<dialog>` has the role, the modality and Escape built in: only
  * its name is checked.
@@ -80,7 +86,6 @@ export const COMPONENT_ESCAPE =
 const ESCAPE_ATTR = /^\(keydown\.esc(?:ape)?\)$/;
 const KEYDOWN_ATTR = /^\(keydown\)$/;
 const ESCAPE_KEY = /['"]Escape['"]/;
-const ESCAPE_IN_MARKUP = /\(keydown\.esc(?:ape)?\)=/;
 
 /**
  * QA D1030 (D968's class): `(keydown.escape)="$event.stopPropagation()"` on
@@ -269,8 +274,7 @@ export function dialogFindings(html, componentSource = html, dialogSelectors = n
         hasEscapeAttr(tag) ||
         hasKeydownEscape(tag, componentSource) ||
         // QA D1030: a dialog that swallows Escape never lets the backdrop's close fire.
-        (!swallowsEscape(tag) && stack.some((s) => s.escape)) ||
-        (inner != null && ESCAPE_IN_MARKUP.test(inner));
+        (!swallowsEscape(tag) && stack.some((s) => s.escape));
       if (!hasEscape) {
         out.push({
           line: tag.line,
@@ -285,9 +289,7 @@ export function dialogFindings(html, componentSource = html, dialogSelectors = n
         directive !== null ||
         hasFocusDirective(tag) ||
         stack.some((s) => s.focus) ||
-        COMPONENT_FOCUS.test(componentSource) ||
-        (inner != null &&
-          /\b(?:appModalDialog|appDialogA11y|appDialogFocus|cdkTrapFocus)\b/.test(inner));
+        COMPONENT_FOCUS.test(componentSource);
       if (!managesFocus) {
         out.push({
           line: tag.line,

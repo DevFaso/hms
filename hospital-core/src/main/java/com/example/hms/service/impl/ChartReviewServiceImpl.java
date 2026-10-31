@@ -704,8 +704,9 @@ public class ChartReviewServiceImpl implements ChartReviewService {
 
     private static String formatResult(ResultEntryDTO r) {
         if (r.getResultValue() == null) return null;
-        if (r.getResultUnit() == null || r.getResultUnit().isBlank()) return r.getResultValue();
-        return r.getResultValue() + " " + r.getResultUnit();
+        // QA D1106 (D1002 class): the chronology title in the reader's number format.
+        return com.example.hms.utility.DisplayNumbers.labValueWithUnit(r.getResultValue(), r.getResultUnit(),
+            com.example.hms.utility.DisplayNumbers.requestLocale());
     }
 
     private static String joinNonBlank(String sep, String... parts) {

@@ -777,7 +777,13 @@ describe('EncountersComponent', () => {
   });
 
   it('status transition guards follow the encounter lifecycle', () => {
-    expect(component.canCompleteExamination(mockEncounter({ status: 'IN_PROGRESS' }))).toBeTrue();
+    // QA D1099: the caller is the visit's examining clinician.
+    (TestBed.inject(AuthService) as jasmine.SpyObj<AuthService>).getUserId.and.returnValue('u-doc');
+    expect(
+      component.canCompleteExamination(
+        mockEncounter({ status: 'IN_PROGRESS', staffUserId: 'u-doc' }),
+      ),
+    ).toBeTrue();
     expect(component.canCompleteExamination(mockEncounter({ status: 'SCHEDULED' }))).toBeFalse();
     expect(
       component.canMarkReadyForDischarge(mockEncounter({ status: 'AWAITING_RESULTS' })),
@@ -796,7 +802,27 @@ describe('EncountersComponent', () => {
     ).toBeTrue();
 
     auth.hasAnyRole.and.callFake((roles: string[]) => roles.includes('ROLE_NURSE'));
-    expect(component.canMarkReadyForDischarge(mockEncounter({ status: 'IN_PROGRESS' }))).toBeTrue();
+    // QA D1099: the nurse is the visit's examining clinician here.
+    auth.getUserId.and.returnValue('u-nurse');
+    expect(
+      component.canMarkReadyForDischarge(
+        mockEncounter({ status: 'IN_PROGRESS', staffUserId: 'u-nurse' }),
+      ),
+    ).toBeTrue();
+  });
+
+  // QA D1099 (round 19): a midwife ended a doctor's examination.
+  it('QA D1099: ending an examination is offered to its examining clinician only', () => {
+    const auth = TestBed.inject(AuthService) as jasmine.SpyObj<AuthService>;
+    auth.hasAnyRole.and.callFake((roles: string[]) => roles.includes('ROLE_MIDWIFE'));
+    auth.getUserId.and.returnValue('u-mw');
+    const doctorsVisit = mockEncounter({ status: 'IN_PROGRESS', staffUserId: 'u-dr' });
+    expect(component.canCompleteExamination(doctorsVisit)).toBeFalse();
+    expect(component.canMarkReadyForDischarge(doctorsVisit)).toBeFalse();
+    auth.hasAnyRole.and.callFake((roles: string[]) => roles.includes('ROLE_DOCTOR'));
+    auth.getUserId.and.returnValue('u-dr');
+    expect(component.canCompleteExamination(doctorsVisit)).toBeTrue();
+    expect(component.canMarkReadyForDischarge(doctorsVisit)).toBeTrue();
   });
 
   it('completeExamination updates the selected encounter and reloads', () => {

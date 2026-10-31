@@ -142,7 +142,8 @@
     <div class="active-chips">
       @if (genderFilter) {
         <span class="filter-chip">
-          {{ 'PATIENTS.GENDER' | translate }}: {{ genderFilter | enumLabel: 'gender' }}
+          {{ 'PATIENTS.GENDER' | translate }}{{ 'COMMON.COLON' | translate }}
+          {{ genderFilter | enumLabel: 'gender' }}
           <button
             [attr.aria-label]="'COMMON.REMOVE_FILTER' | translate"
             class="chip-remove"
@@ -154,7 +155,7 @@
       }
       @if (statusFilter) {
         <span class="filter-chip">
-          {{ 'COMMON.STATUS' | translate }}:
+          {{ 'COMMON.STATUS' | translate }}{{ 'COMMON.COLON' | translate }}
           {{ (statusFilter === 'active' ? 'COMMON.ACTIVE' : 'COMMON.INACTIVE') | translate }}
           <button
             [attr.aria-label]="'COMMON.REMOVE_FILTER' | translate"
@@ -167,7 +168,7 @@
       }
       @if (bloodTypeFilter) {
         <span class="filter-chip">
-          {{ 'PATIENTS.BLOOD' | translate }}: {{ bloodTypeFilter }}
+          {{ 'PATIENTS.BLOOD' | translate }}{{ 'COMMON.COLON' | translate }} {{ bloodTypeFilter }}
           <button
             [attr.aria-label]="'COMMON.REMOVE_FILTER' | translate"
             class="chip-remove"
@@ -179,7 +180,8 @@
       }
       @if (hospitalFilter) {
         <span class="filter-chip">
-          {{ 'ENCOUNTERS.HOSPITAL' | translate }}: {{ hospitalName(hospitalFilter) }}
+          {{ 'ENCOUNTERS.HOSPITAL' | translate }}{{ 'COMMON.COLON' | translate }}
+          {{ hospitalName(hospitalFilter) }}
           <button
             [attr.aria-label]="'COMMON.REMOVE_FILTER' | translate"
             class="chip-remove"

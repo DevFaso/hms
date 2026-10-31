@@ -11,6 +11,10 @@ describe('patient-measures (QA D1077)', () => {
   it('never offers a fundal height for a patient recorded as male', () => {
     expect(isRecordedMale('MALE')).toBeTrue();
     expect(isRecordedMale('m')).toBeTrue();
+    // Round 19: the server's male values (ObstetricEligibility), not only MALE/M.
+    expect(isRecordedMale('Homme')).toBeTrue();
+    expect(isRecordedMale('masculin')).toBeTrue();
+    expect(isRecordedMale('FEMALE')).toBeFalse();
     expect(offersFundalHeight('MALE')).toBeFalse();
     expect(offersFundalHeight('M')).toBeFalse();
     expect(offersFundalHeight('FEMALE')).toBeTrue();

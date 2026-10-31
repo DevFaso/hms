@@ -79,6 +79,7 @@ class HospitalRepositoryCallerCoverageTest {
         entry("MeController.myHospital#findById", LABEL + " (the caller's own facility)"),
         entry("AuthBootstrapServiceImpl.resolveCurrentSession#findById", LABEL + " (the caller's own primary facility)"),
         entry("MorbidityAnalyticsServiceImpl.hospitalView#findById", LABEL),
+        entry("CdsCardText.zoneOf#findById", "QA D1114: reads the hospital's time zone to write a card time on its wall clock; grants, writes and lists nothing"),
         entry("PatientPortalServiceImpl.toProfileDTO#findById", LABEL + " (a hospital on the patient's own record)"),
         entry("UserServiceImpl.createUserWithRolesAndHospital#findById", LABEL + " (the activation message)"),
         entry("UserServiceImpl.normalizePhone#findById", "reads the hospital's country for the phone calling code; grants, writes and lists nothing"),

@@ -213,6 +213,32 @@
               {{ 'PHARMACY.SUBSTITUTION' | translate }}
             </label>
           </div>
+          <!-- QA D1102 class: a serious interaction stops the fill until the
+               pharmacist gives the reason to dispense anyway. -->
+          @if (cdsAlerts().length > 0) {
+            <div class="field full-width" data-testid="cds-override">
+              <label for="cdsOverrideReason"
+                >{{ 'PHARMACY.CDS_OVERRIDE.LABEL' | translate }} *</label
+              >
+              <ul class="field-hint" role="alert">
+                @for (alert of cdsAlerts(); track $index) {
+                  <li>{{ alert }}</li>
+                }
+              </ul>
+              <input
+                id="cdsOverrideReason"
+                type="text"
+                maxlength="500"
+                data-testid="cds-override-reason"
+                [(ngModel)]="form.cdsOverrideReason"
+                name="cdsOverrideReason"
+                required
+              />
+              @if (cdsOverrideMissing()) {
+                <small class="field-hint">{{ 'PHARMACY.CDS_OVERRIDE.HINT' | translate }}</small>
+              }
+            </div>
+          }
           <!-- QA D512: every fill is verified by a pharmacist; the dispensing
                pharmacist attests it here, recorded under their own name. -->
           <div class="field checkbox-field">
@@ -541,7 +567,14 @@
             @for (rx of workQueue(); track rx.id) {
               <tr>
                 <td>{{ rx.patient | personName }}</td>
-                <td>{{ rx.medicationName }}</td>
+                <td>
+                  {{ rx.medicationName }}
+                  @if (rx.alertOverridden) {
+                    <span class="cell-sub" [attr.data-testid]="'rx-alert-overridden-' + rx.id">{{
+                      'PHARMACY.ALERT_OVERRIDDEN' | translate
+                    }}</span>
+                  }
+                </td>
                 <td>{{ rx.dosage }}</td>
                 <td>
                   {{ rx.quantity }} {{ rx.quantityUnit }}

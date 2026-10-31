@@ -102,7 +102,7 @@ public class FefoLotPolicy {
                     java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM)
                             .withLocale(org.springframework.context.i18n.LocaleContextHolder.getLocale())
                             .format(lot.getExpiryDate()),
-                    left.stripTrailingZeros().toPlainString());
+                    com.example.hms.utility.DisplayNumbers.quantity(left));
         }
         if (reason.length() > REASON_MAX) {
             throw new BusinessException("pharmacy.fefo.reasonTooLong", String.valueOf(REASON_MAX));

@@ -179,7 +179,7 @@
                         <span class="material-symbols-outlined">edit_note</span>
                       </button>
                     }
-                    @if (!['COMPLETED', 'FINAL', 'CANCELLED'].includes(o.status)) {
+                    @if (isOrderCancellable(o.status)) {
                       @if (canEditThisOrder(o)) {
                         <button
                           class="action-link"
@@ -348,7 +348,7 @@
             {{ rep.reportTitle || rep.reportNumber || ('IMAGING.REPORT' | translate) }}
           </h2>
           <div class="header-actions">
-            @if (canAuthorReports && !rep.signed) {
+            @if (canAuthorReports && !rep.signed && !reportOrderCancelled(rep)) {
               <button class="btn-secondary" (click)="openEditReport(rep)">
                 <span class="material-symbols-outlined">edit</span>
                 {{ 'COMMON.EDIT' | translate }}
@@ -1023,6 +1023,21 @@
             <strong>{{ deletingItem()?.patientDisplayName }}</strong
             >?
           </p>
+        </div>
+        <!-- QA D1098: every cancel states why; the reason is kept on the order. -->
+        <div class="form-group">
+          <label for="imaging-cancel-reason"
+            >{{ 'ORDER_LIFECYCLE.CANCEL_REASON_LABEL' | translate }} *</label
+          >
+          <textarea
+            id="imaging-cancel-reason"
+            rows="3"
+            maxlength="500"
+            required
+            aria-required="true"
+            [ngModel]="cancelReason()"
+            (ngModelChange)="cancelReason.set($event)"
+          ></textarea>
         </div>
       </div>
       <div class="modal-actions">

@@ -66,6 +66,30 @@ public final class CallerIdentity {
         }
     }
 
+    /**
+     * QA D1112 (round 19): an authorship check says what the rule is. A doctor
+     * finalizing a colleague's discharge summary read "Vous ne pouvez agir
+     * qu'en votre propre nom" ({@code identity.notCaller}), which is the
+     * refusal for naming someone else in a request, not for touching a record
+     * someone else wrote. Refuse (403) with {@code messageKey}, the object's
+     * own rule ("Seul le médecin qui a rédigé ce résumé peut le finaliser."),
+     * unless {@code author} is the caller's staff record.
+     * {@code AuthorshipRefusalKeyGuardTest} keeps {@code requireCaller} for
+     * the acting-on-behalf checks only.
+     */
+    public static void requireAuthor(Staff author, String messageKey) {
+        if (!isCaller(author)) {
+            throw new ClientSafeAccessDeniedException(MessageUtil.resolveOrRaw(messageKey));
+        }
+    }
+
+    /** {@link #requireAuthor}, except for a verified super-admin in global view. */
+    public static void requireAuthorUnlessSuperAdmin(Staff author, String messageKey) {
+        if (!isGlobalSuperAdmin()) {
+            requireAuthor(author, messageKey);
+        }
+    }
+
     /** True for a verified super-admin in global view, as the one resolver decides it. */
     public static boolean isGlobalSuperAdmin() {
         return com.example.hms.security.tenant.ActingScopeResolver.currentScope()

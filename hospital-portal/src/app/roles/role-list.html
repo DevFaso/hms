@@ -114,14 +114,16 @@
       tabindex="-1"
     >
       <dialog
+        appModalDialog
+        aria-labelledby="role-list-dialog-1-title"
         class="modal"
         [open]="showCreate()"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="closeCreate()"
+        (keydown.escape)="closeCreate(); $event.stopPropagation()"
         tabindex="-1"
       >
         <div class="modal-header">
-          <h2>
+          <h2 id="role-list-dialog-1-title">
             {{ editing() ? ('ROLES.EDIT_ROLE' | translate) : ('ROLES.CREATE_ROLE' | translate) }}
           </h2>
           <button
@@ -203,14 +205,16 @@
       tabindex="-1"
     >
       <dialog
+        appModalDialog
+        aria-labelledby="role-list-dialog-2-title"
         class="modal modal-lg"
         [open]="showPermissions()"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="closePermissions()"
+        (keydown.escape)="closePermissions(); $event.stopPropagation()"
         tabindex="-1"
       >
         <div class="modal-header">
-          <h2>
+          <h2 id="role-list-dialog-2-title">
             {{ 'ROLES.MANAGE_PERMISSIONS' | translate }} —
             {{ selectedRole() ? roleTitle(selectedRole()!) : '' }}
           </h2>
@@ -278,14 +282,16 @@
       tabindex="-1"
     >
       <dialog
+        appModalDialog
+        aria-labelledby="role-list-dialog-3-title"
         class="modal"
         [open]="showDeleteConfirm()"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="cancelDelete()"
+        (keydown.escape)="cancelDelete(); $event.stopPropagation()"
         tabindex="-1"
       >
         <div class="modal-header">
-          <h2>{{ 'ROLES.DELETE_ROLE' | translate }}</h2>
+          <h2 id="role-list-dialog-3-title">{{ 'ROLES.DELETE_ROLE' | translate }}</h2>
           <button
             [attr.aria-label]="'COMMON.CLOSE' | translate"
             class="modal-close"

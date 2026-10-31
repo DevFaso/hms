@@ -173,8 +173,10 @@
         tabindex="-1"
         (click)="$event.stopPropagation()"
         (keydown.escape)="closePolicyModal(); $event.stopPropagation()"
+        appModalDialog
+        aria-labelledby="policies-tab-dialog-2-title"
       >
-        <h2>
+        <h2 id="policies-tab-dialog-2-title">
           {{ (editingPolicy() ? 'ADMIN_GOV.EDIT_POLICY' : 'ADMIN_GOV.NEW_POLICY') | translate }}
         </h2>
         <div class="form-row">
@@ -269,8 +271,10 @@
         tabindex="-1"
         (click)="$event.stopPropagation()"
         (keydown.escape)="closeRuleModal(); $event.stopPropagation()"
+        appModalDialog
+        aria-labelledby="policies-tab-dialog-1-title"
       >
-        <h2>
+        <h2 id="policies-tab-dialog-1-title">
           {{ (editingRule() ? 'ADMIN_GOV.EDIT_RULE' : 'ADMIN_GOV.NEW_RULE') | translate }}
           — {{ rulePolicy()?.name }}
         </h2>

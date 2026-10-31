@@ -74,7 +74,8 @@ public class PregnancyHypertensionProtocolRule implements BpaRule {
         Optional<BpaProtocol> protocol = protocolRepository.findByProtocolCode(PROTOCOL_CODE);
         if (protocol.isPresent() && !protocol.get().isActive()) return List.of();
 
-        return List.of(buildCard(latest, gestationalWeeks(context.estimatedDueDate(), today)));
+        return List.of(buildCard(latest, gestationalWeeks(context.estimatedDueDate(), today),
+            text.zoneOf(context.hospitalId())));
     }
 
     static boolean isPregnant(LocalDate dueDate, LocalDate today) {
@@ -114,12 +115,12 @@ public class PregnancyHypertensionProtocolRule implements BpaRule {
         return latest;
     }
 
-    private CdsCard buildCard(PatientVitalSign v, long weeks) {
+    private CdsCard buildCard(PatientVitalSign v, long weeks, java.time.ZoneId zone) {
         boolean severe = isSevere(v);
         String reading = text.get("cds.bpa.pregnancyHtn.reading",
             "Blood pressure {0}/{1} mmHg at {2} weeks of pregnancy ({3}).",
             dash(v.getSystolicBpMmHg()), dash(v.getDiastolicBpMmHg()), String.valueOf(weeks),
-            BpaCardText.when(v.getRecordedAt()));
+            BpaCardText.when(text, v.getRecordedAt(), zone));
         String detail = text.get("cds.bpa." + PROTOCOL_CODE + ".summary",
             "Hypertension in pregnancy (systolic >= 140 or diastolic >= 90 mmHg). Recheck the blood pressure, "
                 + "test for proteinuria and look for warning signs (headache, visual disturbance, epigastric "

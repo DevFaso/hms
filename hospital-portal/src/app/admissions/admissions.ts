@@ -9,7 +9,7 @@ import {
   signal,
   ChangeDetectionStrategy,
 } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { CommonModule, DOCUMENT } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { Subject, of } from 'rxjs';
@@ -39,6 +39,11 @@ import { fromServerDateTime, toLocalInputValue, toServerDateTime } from '../shar
 import { BedService, BedResponse } from '../services/bed.service';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { refusalReason } from '../shared/refusal-reason';
+import { refuseFields } from '../shared/forms/invalid-fields';
+
+/** The bed-release reason's field (QA D1100), marked when it is refused. */
+const UNASSIGN_REASON_ID = 'admission-unassign-bed-reason';
 
 interface OrderSetPickerCtx {
   hospitalId: string;
@@ -80,6 +85,8 @@ export class AdmissionsComponent implements OnInit {
   private readonly roleContext = inject(RoleContextService);
   private readonly route = inject(ActivatedRoute);
   private readonly translate = inject(TranslateService);
+  /** The page's document: the bed-release dialog's field is marked in it (QA D1100). */
+  private readonly doc = inject(DOCUMENT);
   private readonly auth = inject(AuthService);
   private readonly scopeUrl = inject(HospitalScopeUrlService);
   private readonly bedService = inject(BedService);
@@ -579,8 +586,8 @@ export class AdmissionsComponent implements OnInit {
         this.deleting.set(false);
         this.load();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('ADMISSIONS.DELETE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('ADMISSIONS.DELETE_FAILED'));
         this.deleting.set(false);
       },
     });
@@ -671,20 +678,52 @@ export class AdmissionsComponent implements OnInit {
         this.closeBedAssign();
         this.load();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('ADMISSIONS.BED_ASSIGN_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('ADMISSIONS.BED_ASSIGN_FAILED'),
+        );
         this.bedAssigning.set(false);
       },
     });
   }
 
-  unassignBed(adm: AdmissionResponse): void {
-    this.admissionService.unassignBed(adm.id).subscribe({
+  /* ── Free the bed (QA D1100: confirmed, with a reason; the server audits it) ── */
+  readonly unassigningAdm = signal<AdmissionResponse | null>(null);
+  readonly unassignReason = signal('');
+  readonly unassigning = signal(false);
+
+  openUnassignBed(adm: AdmissionResponse): void {
+    this.unassignReason.set('');
+    this.unassigningAdm.set(adm);
+  }
+
+  closeUnassignBed(): void {
+    this.unassigningAdm.set(null);
+  }
+
+  confirmUnassignBed(): void {
+    const adm = this.unassigningAdm();
+    if (!adm) return;
+    const reason = this.unassignReason().trim();
+    if (!reason) {
+      const message = this.translate.instant('ADMISSION_BED.RELEASE_REASON_REQUIRED');
+      refuseFields(this.doc, [UNASSIGN_REASON_ID], [UNASSIGN_REASON_ID], message);
+      return;
+    }
+    this.unassigning.set(true);
+    this.admissionService.unassignBed(adm.id, reason).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('ADMISSIONS.BED_UNASSIGNED'));
+        this.unassigning.set(false);
+        this.closeUnassignBed();
         this.load();
       },
-      error: () => this.toast.error(this.translate.instant('ADMISSIONS.BED_ASSIGN_FAILED')),
+      error: (err: unknown) => {
+        this.unassigning.set(false);
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('ADMISSIONS.BED_ASSIGN_FAILED'),
+        );
+      },
     });
   }
 

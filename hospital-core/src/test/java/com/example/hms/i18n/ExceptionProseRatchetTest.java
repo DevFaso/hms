@@ -49,7 +49,8 @@ class ExceptionProseRatchetTest {
     static final Pattern PROSE = Pattern.compile(
         "new\\s+(?:[a-z]\\w*\\s*\\.\\s*)*(?:BusinessException|BusinessRuleException|BusinessValidationException|BadRequestException"
             + "|ConflictException|IllegalArgumentException|IllegalStateException|UnauthorizedException"
-            + "|ResponseStatusException)\\s*\\(\\s*(?:HttpStatus\\.\\w+\\s*,\\s*)?\"((?:[^\"\\\\]|\\\\.)*)\"");
+            // QA D1102 (round 19): a CDS refusal is shown to the prescriber too.
+            + "|CdsCriticalBlockException|ResponseStatusException)\\s*\\(\\s*(?:HttpStatus\\.\\w+\\s*,\\s*)?\"((?:[^\"\\\\]|\\\\.)*)\"");
 
     static boolean isProse(String literal) {
         return literal.indexOf(' ') >= 0;
@@ -59,7 +60,7 @@ class ExceptionProseRatchetTest {
     static final Pattern PROSE_CONSTANT = Pattern.compile(
         "new\\s+(?:[a-z]\\w*\\s*\\.\\s*)*(?:BusinessException|BusinessRuleException|BusinessValidationException"
             + "|BadRequestException|ConflictException|IllegalArgumentException|IllegalStateException"
-            + "|UnauthorizedException|ResponseStatusException)\\s*\\(\\s*(?:HttpStatus\\.\\w+\\s*,\\s*)?"
+            + "|UnauthorizedException|CdsCriticalBlockException|ResponseStatusException)\\s*\\(\\s*(?:HttpStatus\\.\\w+\\s*,\\s*)?"
             + "([A-Z][A-Z0-9_]*)\\s*[,)]");
 
     /** A String constant declared in the same file. */

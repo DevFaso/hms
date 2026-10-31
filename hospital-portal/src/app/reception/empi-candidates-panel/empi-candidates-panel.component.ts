@@ -236,9 +236,9 @@ const SEX_OPTIONS: string[] = ['F', 'M', 'X'];
         @if (isAdmin && mergeSelection().length === 2) {
           <div class="empi-panel__merge-bar" data-testid="empi-merge-bar">
             <p>
-              {{ 'EMPI.MERGE_PRIMARY_LABEL' | translate }}:
+              {{ 'EMPI.MERGE_PRIMARY_LABEL' | translate }}{{ 'COMMON.COLON' | translate }}
               <strong>{{ mergeSelection()[0].displayName }}</strong>
-              · {{ 'EMPI.MERGE_SECONDARY_LABEL' | translate }}:
+              · {{ 'EMPI.MERGE_SECONDARY_LABEL' | translate }}{{ 'COMMON.COLON' | translate }}
               {{ mergeSelection()[1].displayName }}
             </p>
             <div class="actions">

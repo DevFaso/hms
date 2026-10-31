@@ -94,11 +94,13 @@
         class="modal"
         [open]="showModal()"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="closeModal()"
+        (keydown.escape)="closeModal(); $event.stopPropagation()"
         tabindex="-1"
+        appModalDialog
+        aria-labelledby="announcement-list-dialog-2-title"
       >
         <div class="modal-header">
-          <h2>
+          <h2 id="announcement-list-dialog-2-title">
             {{
               editing()
                 ? ('ANNOUNCEMENTS.EDIT_ANNOUNCEMENT' | translate)
@@ -158,11 +160,15 @@
         class="modal"
         [open]="showDeleteConfirm()"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="cancelDelete()"
+        (keydown.escape)="cancelDelete(); $event.stopPropagation()"
         tabindex="-1"
+        appModalDialog
+        aria-labelledby="announcement-list-dialog-1-title"
       >
         <div class="modal-header">
-          <h2>{{ 'ANNOUNCEMENTS.DELETE_ANNOUNCEMENT' | translate }}</h2>
+          <h2 id="announcement-list-dialog-1-title">
+            {{ 'ANNOUNCEMENTS.DELETE_ANNOUNCEMENT' | translate }}
+          </h2>
           <button
             [attr.aria-label]="'COMMON.CLOSE' | translate"
             class="modal-close"

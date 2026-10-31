@@ -346,6 +346,12 @@ export interface DispenseRequest {
    */
   fefoOverrideReason?: string;
   /**
+   * QA D1102 class: the pharmacist's reason for dispensing past a serious
+   * interaction alert. Sent only once the server refused the fill with the
+   * alerts (`cdsAdvisories`), which the form then shows beside this field.
+   */
+  cdsOverrideReason?: string;
+  /**
    * Roadmap row 4 / T-68 — optional client-supplied idempotency key the
    * offline-dispense queue mints when the user clicks Dispense. Allows the
    * same logical dispense to be replayed after connectivity returns without
@@ -565,6 +571,11 @@ export interface WorkQueuePrescription {
    * `GET /prescriptions/{id}` refuses. The words are fetched in the dialog.
    */
   clarificationResolvedAt?: string;
+  /**
+   * QA D1101: the prescriber passed an allergy or a critical decision-support
+   * alert with a reason. A cue only; the reason is read on the prescription.
+   */
+  alertOverridden?: boolean;
 }
 
 /**

@@ -336,6 +336,27 @@ class AdmissionControllerTest {
 
             verify(admissionService).cancelAdmission(id);
         }
+
+        @Test
+        @WithMockUser(authorities = "ROLE_NURSE")
+        @DisplayName("QA D1100: the bed-release reason travels in the body, never the query string")
+        void unassignBed_readsTheReasonFromTheBody_D1100() throws Exception {
+            UUID id = UUID.randomUUID();
+            when(admissionService.unassignBed(eq(id), any())).thenReturn(new AdmissionResponseDTO());
+
+            mockMvc.perform(delete(BASE + "/{admissionId}/bed", id)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"reason\":\"Transfert en réanimation\"}"))
+                .andExpect(status().isOk());
+            verify(admissionService).unassignBed(id, "Transfert en réanimation");
+
+            Mockito.reset(admissionService);
+            when(admissionService.unassignBed(eq(id), any())).thenReturn(new AdmissionResponseDTO());
+            mockMvc.perform(delete(BASE + "/{admissionId}/bed", id).param("reason", "dans l'URL"))
+                .andExpect(status().isOk());
+            // A query-string reason is ignored: the service sees none and refuses it (400).
+            verify(admissionService).unassignBed(eq(id), isNull());
+        }
     }
 
     // ═══════════════════════ Patient queries ═══════════════════════

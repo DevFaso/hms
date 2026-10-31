@@ -86,7 +86,9 @@ public class DuplicateMedicationOrderRule implements CdsRule {
     private CdsCard buildCard(Prescription existing) {
         String summary = text.get("cds.duplicate.summary",
             "Possible duplicate order: {0} was prescribed on {1}",
-            existing.getMedicationName(), text.date(existing.getCreatedAt().toLocalDate()));
+            existing.getMedicationName(),
+            // QA D1114: the hospital's day the order was written, not the server's UTC day.
+            text.date(existing.getCreatedAt(), text.zoneOf(existing.getHospital() != null ? existing.getHospital().getId() : null)));
         String detail = text.get("cds.duplicate.detail",
             "An active prescription for the same medication exists within the past "
                 + "{0} days (status: {1}). Verify the new order is intended.",

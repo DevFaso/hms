@@ -1231,6 +1231,17 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     localise: { why: 'enum' },
   },
   {
+    // QA D1100: an inpatient's bed freed, with its reason in the details.
+    key: 'AUDIT.DESC.ADMISSION_BED_RELEASED',
+    re: /^Bed (.+) released from admission (\S+)$/,
+    params: ['bed', 'admission'],
+  },
+  {
+    // QA D1096: the paediatric dose review an order needed before signing.
+    key: 'AUDIT.DESC.PRESCRIPTION_PEDIATRIC_DOSE_REVIEWED',
+    re: /^Paediatric dose review recorded$/,
+  },
+  {
     key: 'AUDIT.DESC.PAYMENT_EVENT',
     re: /^(Payment recorded|Payment reversed|Pending payment confirmed|Pending payment rejected|Check-in copay recorded): payment (\S+) on invoice (\S+)$/,
     params: ['what', 'payment', 'invoice'],

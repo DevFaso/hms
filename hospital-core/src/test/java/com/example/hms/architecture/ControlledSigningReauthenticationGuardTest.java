@@ -77,6 +77,23 @@ class ControlledSigningReauthenticationGuardTest {
         assertThat(signed).as("before the status becomes SIGNED").isGreaterThan(reauth);
     }
 
+    /**
+     * QA D1096 (round 19): the signature is also where the paediatric dose
+     * review is enforced - before the re-authentication (no code spent on a
+     * refusal) and before the status becomes SIGNED. Every other SIGNED
+     * writer above re-signs an order that already passed this signature.
+     */
+    @Test
+    void theSignatureRequiresTheRecordedDoseReviewBeforeReAuthenticatingOrSigning() throws IOException {
+        String text = Files.readString(MAIN.resolve("service/PrescriptionServiceImpl.java"));
+        int review = text.indexOf("requirePediatricDoseReviewAtSigning(prescription, signingCards, signer);");
+        int reauth = text.indexOf("prescriberReauthentication.requireForControlledSigning(");
+        int signed = text.indexOf(SIGNED_WRITE);
+        assertThat(review).as("the signature checks the paediatric dose review").isPositive();
+        assertThat(reauth).as("after the review check").isGreaterThan(review);
+        assertThat(signed).as("before the status becomes SIGNED").isGreaterThan(review);
+    }
+
     private static int countOf(String text, String needle) {
         int count = 0;
         for (int i = text.indexOf(needle); i >= 0; i = text.indexOf(needle, i + needle.length())) {

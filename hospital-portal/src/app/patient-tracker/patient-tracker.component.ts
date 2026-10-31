@@ -48,7 +48,8 @@ export interface TrackerColumn {
 
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
-import { mayStartVisit } from '../core/encounter-start';
+import { isNeverSeenVisit, mayEndExamination, mayStartVisit } from '../core/encounter-start';
+import { refusalReason } from '../shared/refusal-reason';
 
 @Component({
   selector: 'app-patient-tracker',
@@ -82,6 +83,8 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
     return this.auth.hasAnyRole(actionRoles('encounterCloseUnseen'));
   }
   readonly closeUnseenItem = signal<PatientTrackerItem | null>(null);
+  /** QA D1108: LWBS is offered until the patient is seen, the server's rule. */
+  readonly isNeverSeenVisit = isNeverSeenVisit;
 
   openCloseUnseen(item: PatientTrackerItem): void {
     this.closeUnseenItem.set(item);
@@ -306,6 +309,24 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
       item.assignedProviderUserId,
     );
   }
+  /**
+   * QA D1099: "Terminer l'examen" and "Sortie" on a visit in progress are the
+   * examining clinician's (core/encounter-start mayEndExamination, the server's
+   * rule); a midwife was offered them on doctors' cards and the server accepted.
+   */
+  canEndExamItem(item: PatientTrackerItem): boolean {
+    return mayEndExamination(
+      {
+        superAdmin: this.roleContext.isSuperAdmin(),
+        // rbac-inline-ok: mirrors EncounterClosureRules.requireExaminingClinician (a doctor ends an unassigned visit).
+        doctor: this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR']),
+        // rbac-inline-ok: the actor shape of core/encounter-start (unused by this rule).
+        midwife: this.roleContext.hasAnyActiveRole(['ROLE_MIDWIFE']),
+        userId: this.auth.getUserId(),
+      },
+      item.assignedProviderUserId,
+    );
+  }
   startInProgress = signal(false);
 
   startVisit(item: PatientTrackerItem): void {
@@ -333,8 +354,12 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
         this.examInProgress.set(false);
         this.loadBoard();
       },
-      error: () => {
+      error: (err: unknown) => {
         this.examInProgress.set(false);
+        // QA D1099: a refusal (not the examining clinician) is read, not swallowed.
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('ENCOUNTERS.EXAM_COMPLETE_FAILED'),
+        );
       },
     });
   }
@@ -349,8 +374,11 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
         this.readyInProgress.set(false);
         this.loadBoard();
       },
-      error: () => {
+      error: (err: unknown) => {
         this.readyInProgress.set(false);
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('ENCOUNTERS.STATUS_UPDATE_FAILED'),
+        );
       },
     });
   }

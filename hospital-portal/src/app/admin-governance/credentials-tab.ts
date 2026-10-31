@@ -14,6 +14,7 @@ import {
   SuperAdminGovernanceService,
 } from '../services/super-admin-governance.service';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 /**
  * Credential health overview (SUPER_ADMIN). Read-only in v1 — the MFA and
@@ -22,7 +23,7 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 @Component({
   selector: 'app-gov-credentials-tab',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule],
+  imports: [ModalDialogDirective, ServerTimePipe, CommonModule, FormsModule, TranslateModule],
   templateUrl: './credentials-tab.html',
   styleUrl: './admin-governance.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

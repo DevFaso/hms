@@ -27,6 +27,7 @@ import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { MedicationRoutePipe } from '../shared/pipes/medication-route.pipe';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 /**
  * Medication-history workspace (Phase 3 task 15): the /medication-history
@@ -39,6 +40,7 @@ import { MedicationRoutePipe } from '../shared/pipes/medication-route.pipe';
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    ModalDialogDirective,
     MedicationRoutePipe,
     ServerTimePipe,
     CommonModule,

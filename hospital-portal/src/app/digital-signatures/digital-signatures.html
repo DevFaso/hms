@@ -197,9 +197,14 @@
         (keydown.enter)="$event.stopPropagation()"
         tabindex="-1"
         role="dialog"
+        appModalDialog
+        aria-labelledby="digital-signatures-dialog-4-title"
+        (escaped)="closeDetail()"
       >
         <div class="drawer-header">
-          <h2>{{ 'SIGNATURES.DETAIL_TITLE' | translate }}</h2>
+          <h2 id="digital-signatures-dialog-4-title">
+            {{ 'SIGNATURES.DETAIL_TITLE' | translate }}
+          </h2>
           <button
             [attr.aria-label]="'COMMON.CLOSE' | translate"
             class="btn-icon"
@@ -304,9 +309,14 @@
         (keydown.enter)="$event.stopPropagation()"
         tabindex="-1"
         role="dialog"
+        appModalDialog
+        aria-labelledby="digital-signatures-dialog-3-title"
+        (escaped)="closeVerify()"
       >
         <div class="modal-header">
-          <h2>{{ 'SIGNATURES.VERIFY_TITLE' | translate }}</h2>
+          <h2 id="digital-signatures-dialog-3-title">
+            {{ 'SIGNATURES.VERIFY_TITLE' | translate }}
+          </h2>
           <button
             [attr.aria-label]="'COMMON.CLOSE' | translate"
             class="btn-icon"
@@ -376,9 +386,14 @@
         (keydown.enter)="$event.stopPropagation()"
         tabindex="-1"
         role="dialog"
+        appModalDialog
+        aria-labelledby="digital-signatures-dialog-2-title"
+        (escaped)="closeRevoke()"
       >
         <div class="modal-header">
-          <h2>{{ 'SIGNATURES.REVOKE_TITLE' | translate }}</h2>
+          <h2 id="digital-signatures-dialog-2-title">
+            {{ 'SIGNATURES.REVOKE_TITLE' | translate }}
+          </h2>
           <button
             [attr.aria-label]="'COMMON.CLOSE' | translate"
             class="btn-icon"
@@ -432,9 +447,12 @@
         (keydown.enter)="$event.stopPropagation()"
         tabindex="-1"
         role="dialog"
+        appModalDialog
+        aria-labelledby="digital-signatures-dialog-1-title"
+        (escaped)="closeSign()"
       >
         <div class="modal-header">
-          <h2>{{ 'SIGNATURES.SIGN_TITLE' | translate }}</h2>
+          <h2 id="digital-signatures-dialog-1-title">{{ 'SIGNATURES.SIGN_TITLE' | translate }}</h2>
           <button
             [attr.aria-label]="'COMMON.CLOSE' | translate"
             type="button"

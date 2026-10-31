@@ -25,6 +25,7 @@ import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 /**
  * Patient-education workspace (Phase 3 task 18): resource library + assign/
@@ -37,7 +38,14 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
   selector: 'app-patient-education',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, PatientPickerComponent],
+  imports: [
+    ModalDialogDirective,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    PatientPickerComponent,
+  ],
   templateUrl: './patient-education.html',
   styleUrl: './patient-education.scss',
 })

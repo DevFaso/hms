@@ -1,3 +1,4 @@
+import { expectKeyboardModal } from '../testing/modal-dialog-keyboard';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
@@ -129,6 +130,32 @@ describe('MaternityComponent — tabs', () => {
     fixture.detectChanges();
     expect(activeTab()).toBe('Échographies');
     expect(host().querySelector('app-ultrasound-tab')).not.toBeNull();
+  });
+
+  describe('keyboard modals (QA D1004)', () => {
+    afterEach(() => (fixture.nativeElement as HTMLElement).remove());
+
+    it('"Nouvel historique": focus moves in, Escape closes, focus returns', () => {
+      create(['ROLE_MIDWIFE']);
+      document.body.appendChild(fixture.nativeElement);
+      const opener = host().querySelector<HTMLElement>('.page-actions .btn-primary')!;
+      expectKeyboardModal(fixture, opener);
+    });
+
+    it('"Nouvelle orientation OB/GYN": focus moves in, Escape closes, focus returns', () => {
+      referrals.summary.and.returnValue(of(null) as never);
+      referrals.byHospital.and.returnValue(
+        of({ content: [], totalElements: 0, totalPages: 0, number: 0, size: 20 }) as never,
+      );
+      create(['ROLE_MIDWIFE']);
+      document.body.appendChild(fixture.nativeElement);
+      tabButtons()
+        .find((b) => b.textContent?.trim() === 'Références')!
+        .click();
+      fixture.detectChanges();
+      const opener = host().querySelector<HTMLElement>('.page-actions .btn-primary')!;
+      expectKeyboardModal(fixture, opener);
+    });
   });
 });
 

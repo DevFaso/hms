@@ -503,9 +503,14 @@
       (click)="closeModal()"
       (keydown.escape)="closeModal()"
     ></div>
-    <div class="modal modal-lg">
+    <div
+      class="modal modal-lg"
+      appModalDialog
+      aria-labelledby="consultations-dialog-6-title"
+      (escaped)="closeModal()"
+    >
       <div class="modal-header">
-        <h2>{{ 'CONSULTATIONS.NEW' | translate }}</h2>
+        <h2 id="consultations-dialog-6-title">{{ 'CONSULTATIONS.NEW' | translate }}</h2>
         <button class="modal-close" (click)="closeModal()" [title]="'COMMON.CLOSE' | translate">
           &times;
         </button>
@@ -701,9 +706,14 @@
       (click)="closeAssignModal()"
       (keydown.escape)="closeAssignModal()"
     ></div>
-    <div class="modal">
+    <div
+      class="modal"
+      appModalDialog
+      aria-labelledby="consultations-dialog-5-title"
+      (escaped)="closeAssignModal()"
+    >
       <div class="modal-header">
-        <h2>
+        <h2 id="consultations-dialog-5-title">
           {{
             isReassign()
               ? ('CONSULTATIONS.REASSIGN_CONSULTANT' | translate)
@@ -807,9 +817,14 @@
       (click)="closeScheduleModal()"
       (keydown.escape)="closeScheduleModal()"
     ></div>
-    <div class="modal">
+    <div
+      class="modal"
+      appModalDialog
+      aria-labelledby="consultations-dialog-4-title"
+      (escaped)="closeScheduleModal()"
+    >
       <div class="modal-header">
-        <h2>{{ 'CONSULTATIONS.SCHEDULE' | translate }}</h2>
+        <h2 id="consultations-dialog-4-title">{{ 'CONSULTATIONS.SCHEDULE' | translate }}</h2>
         <button
           class="modal-close"
           (click)="closeScheduleModal()"
@@ -866,9 +881,14 @@
       (click)="closeCompleteModal()"
       (keydown.escape)="closeCompleteModal()"
     ></div>
-    <div class="modal">
+    <div
+      class="modal"
+      appModalDialog
+      aria-labelledby="consultations-dialog-3-title"
+      (escaped)="closeCompleteModal()"
+    >
       <div class="modal-header">
-        <h2>{{ 'CONSULTATIONS.COMPLETE' | translate }}</h2>
+        <h2 id="consultations-dialog-3-title">{{ 'CONSULTATIONS.COMPLETE' | translate }}</h2>
         <button
           class="modal-close"
           (click)="closeCompleteModal()"
@@ -953,9 +973,14 @@
       (click)="closeDeclineModal()"
       (keydown.escape)="closeDeclineModal()"
     ></div>
-    <div class="modal">
+    <div
+      class="modal"
+      appModalDialog
+      aria-labelledby="consultations-dialog-2-title"
+      (escaped)="closeDeclineModal()"
+    >
       <div class="modal-header">
-        <h2>{{ 'CONSULTATIONS.DECLINE' | translate }}</h2>
+        <h2 id="consultations-dialog-2-title">{{ 'CONSULTATIONS.DECLINE' | translate }}</h2>
         <button
           class="modal-close"
           (click)="closeDeclineModal()"
@@ -1012,9 +1037,14 @@
       (click)="cancelDeleteAction()"
       (keydown.escape)="cancelDeleteAction()"
     ></div>
-    <div class="modal">
+    <div
+      class="modal"
+      appModalDialog
+      aria-labelledby="consultations-dialog-1-title"
+      (escaped)="cancelDeleteAction()"
+    >
       <div class="modal-header">
-        <h2>{{ 'CONSULTATIONS.CANCEL' | translate }}</h2>
+        <h2 id="consultations-dialog-1-title">{{ 'CONSULTATIONS.CANCEL' | translate }}</h2>
         <button
           class="modal-close"
           (click)="cancelDeleteAction()"

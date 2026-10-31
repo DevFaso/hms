@@ -27,6 +27,7 @@ import { switchMap, catchError, debounceTime, distinctUntilChanged, map, Subject
 import { of } from 'rxjs';
 import { labelledRefusalReason } from '../shared/refusal-reason';
 import { blankFields, focusFirstInvalid } from '../shared/forms/invalid-fields';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 /**
  * QA D1118: the card names what the match is really on. A record found by the
@@ -62,7 +63,14 @@ export function matchBasisSuffix(matches: readonly Pick<RegistrationMatch, 'matc
 @Component({
   selector: 'app-patient-form',
   standalone: true,
-  imports: [FormsModule, RouterLink, TranslateModule, DatePipe, ServerTimePipe],
+  imports: [
+    ModalDialogDirective,
+    FormsModule,
+    RouterLink,
+    TranslateModule,
+    DatePipe,
+    ServerTimePipe,
+  ],
   templateUrl: './patient-form.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './patient-form.scss',

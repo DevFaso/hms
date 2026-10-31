@@ -1,3 +1,4 @@
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -33,6 +34,7 @@ import { ClockTimePipe } from '../shared/pipes/clock-time.pipe';
   selector: 'app-prenatal-tab',
   standalone: true,
   imports: [
+    ModalDialogDirective,
     ClockTimePipe,
     ServerTimePipe,
     CommonModule,

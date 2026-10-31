@@ -186,8 +186,10 @@
         tabindex="-1"
         (click)="$event.stopPropagation()"
         (keydown.escape)="closeBaseline(); $event.stopPropagation()"
+        appModalDialog
+        aria-labelledby="security-tab-dialog-2-title"
       >
-        <h2>{{ 'ADMIN_GOV.NEW_BASELINE' | translate }}</h2>
+        <h2 id="security-tab-dialog-2-title">{{ 'ADMIN_GOV.NEW_BASELINE' | translate }}</h2>
         <label class="form-field">
           <span>{{ 'ADMIN_GOV.BASELINE_TITLE' | translate }} *</span>
           <input
@@ -258,8 +260,12 @@
         tabindex="-1"
         (click)="$event.stopPropagation()"
         (keydown.escape)="closeSimulation(); $event.stopPropagation()"
+        appModalDialog
+        aria-labelledby="security-tab-dialog-1-title"
       >
-        <h2>{{ 'ADMIN_GOV.SIMULATE_TITLE' | translate: { title: template.title } }}</h2>
+        <h2 id="security-tab-dialog-1-title">
+          {{ 'ADMIN_GOV.SIMULATE_TITLE' | translate: { title: template.title } }}
+        </h2>
         @if (!simResult()) {
           <label class="form-field">
             <span>{{ 'ADMIN_GOV.SCENARIO' | translate }} *</span>
@@ -295,15 +301,24 @@
             </div>
             <div class="sim-details">
               <p>
-                <strong>{{ 'ADMIN_GOV.EVALUATED_RULES' | translate }}:</strong>
+                <strong
+                  >{{ 'ADMIN_GOV.EVALUATED_RULES' | translate
+                  }}{{ 'COMMON.COLON' | translate }}</strong
+                >
                 {{ simResult()!.evaluatedRuleCount }}
               </p>
               <p>
-                <strong>{{ 'ADMIN_GOV.IMPACTED_CONTROLLERS' | translate }}:</strong>
+                <strong
+                  >{{ 'ADMIN_GOV.IMPACTED_CONTROLLERS' | translate
+                  }}{{ 'COMMON.COLON' | translate }}</strong
+                >
                 {{ simResult()!.impactedControllers.join(', ') || '—' }}
               </p>
               <div>
-                <strong>{{ 'ADMIN_GOV.RECOMMENDED_ACTIONS' | translate }}:</strong>
+                <strong
+                  >{{ 'ADMIN_GOV.RECOMMENDED_ACTIONS' | translate
+                  }}{{ 'COMMON.COLON' | translate }}</strong
+                >
                 <ul>
                   @for (action of simResult()!.recommendedActions; track $index) {
                     <li>{{ action }}</li>

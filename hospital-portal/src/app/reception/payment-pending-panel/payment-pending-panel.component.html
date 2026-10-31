@@ -87,7 +87,8 @@
             <option [value]="null">-- {{ 'RECEPTION.SELECT_INVOICE' | translate }} --</option>
             @for (inv of openInvoices(); track inv.id) {
               <option [value]="inv.id">
-                {{ inv.invoiceNumber }} — {{ 'RECEPTION.BALANCE' | translate }}:
+                {{ inv.invoiceNumber }} — {{ 'RECEPTION.BALANCE' | translate
+                }}{{ 'COMMON.COLON' | translate }}
                 {{ balanceOf(inv) | cfa: inv.currency }}
               </option>
             }

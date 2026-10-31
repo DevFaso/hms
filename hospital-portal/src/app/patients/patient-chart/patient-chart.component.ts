@@ -1,3 +1,4 @@
+import { LabValuePipe, LabRangePipe } from '../../shared/pipes/lab-value.pipe';
 import { MaternityService } from '../../services/maternity.service';
 import { ongoingPregnancy } from '../../maternity/pregnancy-dates';
 import {
@@ -65,6 +66,8 @@ const UNSCOPED_KEY = 'UNSCOPED';
   selector: 'app-patient-chart',
   standalone: true,
   imports: [
+    LabValuePipe,
+    LabRangePipe,
     ServerTimePipe,
     CommonModule,
     FormsModule,

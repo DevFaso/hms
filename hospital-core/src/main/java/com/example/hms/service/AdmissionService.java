@@ -55,7 +55,8 @@ public interface AdmissionService {
     /**
      * Detach the admission's bed and make it available again
      */
-    AdmissionResponseDTO unassignBed(UUID admissionId);
+    /** QA D1100: frees the inpatient's bed for a stated reason, audited with it. */
+    AdmissionResponseDTO unassignBed(UUID admissionId, String reason);
 
     /**
      * Get admissions by patient

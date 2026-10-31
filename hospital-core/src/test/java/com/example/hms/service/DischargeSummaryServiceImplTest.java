@@ -331,7 +331,10 @@ class DischargeSummaryServiceImplTest {
         actAs(doctorTwo);
         when(dischargeSummaryRepository.findById(summaryId)).thenReturn(Optional.of(summary));
         assertThatThrownBy(() -> service.finalizeDischargeSummary(summaryId, "Doctor A", staffId, Locale.ENGLISH))
-            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class)
+            // QA D1112: the authorship rule, not "act in your own name" (identity.notCaller).
+            .satisfies(e -> org.assertj.core.api.Assertions.assertThat(e.getMessage())
+                .containsAnyOf("dischargeSummary.finalize.authorOnly", "can finalize it", "peut le finaliser"));
         assertThat(summary.getIsFinalized()).isFalse();
         verify(dischargeSummaryRepository, never()).save(any());
     }
@@ -435,7 +438,10 @@ class DischargeSummaryServiceImplTest {
         when(dischargeSummaryRepository.findById(summaryId)).thenReturn(Optional.of(summary));
         UUID doctorTwoStaffId = UUID.randomUUID();
         assertThatThrownBy(() -> service.deleteDischargeSummary(summaryId, doctorTwoStaffId))
-            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class)
+            // QA D1112: the authorship rule, not "act in your own name" (identity.notCaller).
+            .satisfies(e -> org.assertj.core.api.Assertions.assertThat(e.getMessage())
+                .containsAnyOf("dischargeSummary.authorOnly", "Only the doctor who wrote this summary", "Seul le médecin qui a rédigé ce résumé"));
         verify(dischargeSummaryRepository, never()).delete(any(DischargeSummary.class));
     }
 
@@ -574,7 +580,10 @@ class DischargeSummaryServiceImplTest {
         req.setDischargeDiagnosis("Rewritten by another doctor");
         when(dischargeSummaryRepository.findById(summaryId)).thenReturn(Optional.of(summary));
         assertThatThrownBy(() -> service.updateDischargeSummary(summaryId, req, Locale.ENGLISH))
-            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class)
+            // QA D1112: the authorship rule, not "act in your own name" (identity.notCaller).
+            .satisfies(e -> org.assertj.core.api.Assertions.assertThat(e.getMessage())
+                .containsAnyOf("dischargeSummary.authorOnly", "Only the doctor who wrote this summary", "Seul le médecin qui a rédigé ce résumé"));
         assertThat(summary.getDischargeDiagnosis()).isNotEqualTo("Rewritten by another doctor");
         verify(dischargeSummaryRepository, never()).save(any());
     }

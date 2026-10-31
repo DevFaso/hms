@@ -1,3 +1,4 @@
+import { LabValuePipe, LabRangePipe } from '../shared/pipes/lab-value.pipe';
 import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
 import { currentMedications } from '../patient-portal/current-medications';
 import {
@@ -142,6 +143,8 @@ export { currentMedications };
   selector: 'app-dashboard',
   standalone: true,
   imports: [
+    LabValuePipe,
+    LabRangePipe,
     PersonNamePipe,
     LabCorrectionBadgeComponent,
     ClockTimePipe,

@@ -256,7 +256,9 @@ class CrossHospitalWriteSecurityIT extends BaseIT {
         when(ultrasoundOrderRepository.findById(rowId)).thenReturn(Optional.of(own));
         when(ultrasoundOrderRepository.save(own)).thenReturn(own);
 
-        MvcResult result = send(post("/ultrasound/orders/{id}/cancel", rowId));
+        // QA D1098 (round 19): every cancel states its reason.
+        MvcResult result = send(post("/ultrasound/orders/{id}/cancel", rowId)
+            .param("cancellationReason", "Examen plus indiqué"));
 
         assertThat(result.getResponse().getStatus()).isEqualTo(200);
         assertThat(own.getStatus()).isEqualTo(UltrasoundOrderStatus.CANCELLED);

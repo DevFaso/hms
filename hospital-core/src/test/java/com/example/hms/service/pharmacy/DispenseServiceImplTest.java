@@ -1489,8 +1489,13 @@ class DispenseServiceImplTest {
                             java.util.List.of("[CONTRAINDICATED] Drug A ↔ Drug B"), true));
 
             assertThatThrownBy(() -> service.createDispense(dto))
-                    .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("CDS_CRITICAL");
+                    // QA D1102 class (round 19): the alerts come back as cards for the
+                    // screen's override field, in a sentence without the old
+                    // CDS_CRITICAL developer token (was hasMessageContaining("CDS_CRITICAL")).
+                    .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class)
+                    .hasMessageNotContaining("CDS_CRITICAL")
+                    .extracting("cards", org.assertj.core.api.InstanceOfAssertFactories.LIST)
+                    .hasSize(1);
 
             // No state should have mutated.
             verify(dispenseRepository, never()).save(any(Dispense.class));

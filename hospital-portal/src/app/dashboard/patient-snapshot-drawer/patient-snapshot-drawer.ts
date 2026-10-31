@@ -1,3 +1,4 @@
+import { LabValuePipe } from '../../shared/pipes/lab-value.pipe';
 import { ChangeDetectionStrategy, Component, input, output, signal } from '@angular/core';
 
 import { RouterLink } from '@angular/router';
@@ -9,7 +10,7 @@ import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 @Component({
   selector: 'app-patient-snapshot-drawer',
   standalone: true,
-  imports: [LabCorrectionBadgeComponent, RouterLink, TranslateModule, EnumLabelPipe],
+  imports: [LabValuePipe, LabCorrectionBadgeComponent, RouterLink, TranslateModule, EnumLabelPipe],
   templateUrl: './patient-snapshot-drawer.html',
   styleUrl: './patient-snapshot-drawer.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

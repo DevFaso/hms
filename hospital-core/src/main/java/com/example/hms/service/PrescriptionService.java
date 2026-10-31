@@ -81,6 +81,13 @@ public interface PrescriptionService {
     PrescriptionResponseDTO cosignPrescription(UUID id, Locale locale);
 
     /**
+     * Round 19 (QA D1096): a pharmacist or a physician other than the
+     * prescriber records the paediatric dose review the decision support asked
+     * for, with a reason; the order is not signed until then.
+     */
+    PrescriptionResponseDTO recordPediatricDoseReview(UUID id, String reason, Locale locale);
+
+    /**
      * The prescription list, hospital-scoped.
      *
      * @param statuses gap G12 — restrict the page to these {@code PrescriptionStatus}

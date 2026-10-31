@@ -12,6 +12,7 @@ import { ToastService } from '../../core/toast.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { roleContextStub } from '../../testing/role-context.stub';
 import { AuthService } from '../../auth/auth.service';
+import { resetStoredLangForTests } from '../../shared/i18n/app-locale';
 
 /**
  * B6 — the chart's Labs section. Wave 1 shipped the release ceremony; until
@@ -274,14 +275,26 @@ describe('PatientChartComponent — labs section', () => {
   /* ── Rendering ── */
 
   it('renders a released result with its value, unit and reference range', () => {
-    setup({ roles: ['ROLE_DOCTOR'], results: [released()] });
-    openLabs();
+    // QA D1106 (round 19): in the reader's notation — "9,2" and "12 – 16 g/dL"
+    // in French (this assertion read the raw "9.2" / "12 - 16 g/dL" before).
+    const previousLang = localStorage.getItem('lang');
+    localStorage.setItem('lang', 'fr');
+    resetStoredLangForTests();
+    try {
+      setup({ roles: ['ROLE_DOCTOR'], results: [released({ referenceRange: '12 - 15.5 g/dL' })] });
+      openLabs();
 
-    const text = fixture.nativeElement.textContent as string;
-    expect(text).toContain('9.2');
-    expect(text).toContain('g/dL');
-    expect(text).toContain('12 - 16 g/dL');
-    expect(text).toContain('CHART.LAB_STATUS_ABNORMAL_LOW');
+      const text = fixture.nativeElement.textContent as string;
+      expect(text).toContain('9,2');
+      expect(text).toContain('g/dL');
+      expect(text).toContain('12 – 15,5 g/dL');
+      expect(text).not.toContain('9.2');
+      expect(text).toContain('CHART.LAB_STATUS_ABNORMAL_LOW');
+    } finally {
+      if (previousLang === null) localStorage.removeItem('lang');
+      else localStorage.setItem('lang', previousLang);
+      resetStoredLangForTests();
+    }
   });
 
   it('renders an unreleased row as pending, with no value and no abnormal colouring', () => {
@@ -609,7 +622,8 @@ describe('PatientChartComponent — labs section', () => {
     expect(component.labsScoped()).toBeTrue();
     expect(patientService.listLabResults).toHaveBeenCalledTimes(1);
     expect(labService.listOrders).toHaveBeenCalledTimes(1);
-    expect(fixture.nativeElement.textContent).toContain('9.2');
+    // The row is on screen (its value, in the reader's notation since D1106).
+    expect(fixture.nativeElement.textContent).toMatch(/9[.,]2/);
   });
 
   /* ── Empty and error states ── */
@@ -648,7 +662,8 @@ describe('PatientChartComponent — labs section', () => {
   it('keeps the rows on screen when a refresh over them fails', () => {
     setup({ roles: ['ROLE_DOCTOR'], results: [released()], orders: [order()] });
     openLabs();
-    expect(fixture.nativeElement.textContent).toContain('9.2');
+    // The row is on screen (its value, in the reader's notation since D1106).
+    expect(fixture.nativeElement.textContent).toMatch(/9[.,]2/);
 
     patientService.listLabResults.and.returnValue(throwError(() => new Error('502')));
     component.loadLabResults();
@@ -657,7 +672,8 @@ describe('PatientChartComponent — labs section', () => {
     // The rows the clinician was reading are still drawn, with the failure
     // stated above them rather than replacing them.
     expect(component.labResultsError()).toBeTrue();
-    expect(fixture.nativeElement.textContent).toContain('9.2');
+    // The row is on screen (its value, in the reader's notation since D1106).
+    expect(fixture.nativeElement.textContent).toMatch(/9[.,]2/);
     expect(fixture.nativeElement.querySelector('.stale-banner')).not.toBeNull();
     expect(fixture.nativeElement.querySelector('.error-state')).toBeNull();
   });
@@ -677,7 +693,8 @@ describe('PatientChartComponent — labs section', () => {
     // replaced by a spinner.
     expect(labService.listOrders).toHaveBeenCalledTimes(1);
     expect(component.labResultsError()).toBeFalse();
-    expect(fixture.nativeElement.textContent).toContain('9.2');
+    // The row is on screen (its value, in the reader's notation since D1106).
+    expect(fixture.nativeElement.textContent).toMatch(/9[.,]2/);
   });
 
   it('re-reads BOTH blocks when Retry is pressed after the scope moved', () => {
@@ -762,7 +779,8 @@ describe('PatientChartComponent — labs section', () => {
     openLabs();
 
     expect(patientService.listLabResults).toHaveBeenCalledTimes(2);
-    expect(fixture.nativeElement.textContent).toContain('9.2');
+    // The row is on screen (its value, in the reader's notation since D1106).
+    expect(fixture.nativeElement.textContent).toMatch(/9[.,]2/);
   });
 
   it('keeps looking for results even when the ORDERS read failed', () => {
@@ -779,7 +797,8 @@ describe('PatientChartComponent — labs section', () => {
     openLabs();
 
     expect(patientService.listLabResults).toHaveBeenCalledTimes(2);
-    expect(fixture.nativeElement.textContent).toContain('9.2');
+    // The row is on screen (its value, in the reader's notation since D1106).
+    expect(fixture.nativeElement.textContent).toMatch(/9[.,]2/);
     // The failed block keeps its error card and is NOT retried silently.
     expect(labService.listOrders).toHaveBeenCalledTimes(1);
     expect(fixture.nativeElement.textContent).toContain('CHART.LAB_ORDERS_LOAD_ERROR');

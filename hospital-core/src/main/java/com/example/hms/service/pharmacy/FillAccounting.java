@@ -68,13 +68,14 @@ public final class FillAccounting {
     /**
      * The remainder as a human reads it in an SMS or on a printed copy —
      * "6" or "6 comprimés" — with the trailing zeros of a NUMERIC(12,2)
-     * column stripped. Null when the remainder is unknown.
+     * column stripped, in the reader's decimal notation ("2,5 ml" in French,
+     * D1002 class). Null when the remainder is unknown.
      */
-    public static String remainingLabel(BigDecimal remaining, String quantityUnit) {
+    public static String remainingLabel(BigDecimal remaining, String quantityUnit, java.util.Locale locale) {
         if (remaining == null) {
             return null;
         }
-        String amount = remaining.stripTrailingZeros().toPlainString();
+        String amount = com.example.hms.utility.DisplayNumbers.quantity(remaining, locale);
         return quantityUnit != null && !quantityUnit.isBlank()
                 ? amount + " " + quantityUnit.trim()
                 : amount;

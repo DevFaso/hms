@@ -170,6 +170,12 @@
                     'PRESCRIPTIONS.PHARMACY.AT' | translate: { pharmacy: p.pharmacyName }
                   }}</span>
                 }
+                @if (awaitsDoseReview(p)) {
+                  <span class="attention-note" [attr.data-testid]="'rx-dose-review-due-' + p.id">
+                    <span class="material-symbols-outlined" aria-hidden="true">child_care</span>
+                    {{ 'PRESCRIPTIONS.DOSE_REVIEW.DUE' | translate }}
+                  </span>
+                }
                 @if (attentionReasonKey(p); as reasonKey) {
                   <span class="attention-note" [attr.data-testid]="'rx-attention-' + p.id">
                     <span class="material-symbols-outlined" aria-hidden="true">priority_high</span>
@@ -219,6 +225,17 @@
                       [attr.data-testid]="'rx-cosign-' + p.id"
                     >
                       <span class="material-symbols-outlined">approval</span>
+                    </button>
+                  }
+                  @if (canRecordDoseReview(p)) {
+                    <button
+                      class="action-link sign-link"
+                      (click)="openDoseReview(p)"
+                      [title]="'PRESCRIPTIONS.DOSE_REVIEW.ACTION' | translate"
+                      [attr.aria-label]="'PRESCRIPTIONS.DOSE_REVIEW.ACTION' | translate"
+                      [attr.data-testid]="'rx-dose-review-' + p.id"
+                    >
+                      <span class="material-symbols-outlined">fact_check</span>
                     </button>
                   }
                   @if (canPharmacistVerify(p)) {
@@ -367,7 +384,9 @@
             rx.signedAt ||
             rx.requiresCosign ||
             rx.controlledSubstance ||
-            rx.requiresPharmacistVerification
+            rx.requiresPharmacistVerification ||
+            rx.overrideReason ||
+            rx.pediatricDoseReviewRequired
           ) {
             <div class="detail-notes" data-testid="rx-evidence">
               @if (rx.signedAt) {
@@ -427,6 +446,48 @@
                       'PRESCRIPTIONS.PHARMACIST_VERIFY_NOTE_RECORDED' | translate
                     }}</span
                     ><span class="field-value">{{ rx.pharmacistVerificationNote }}</span>
+                  </div>
+                }
+              }
+              <!-- QA D1101: why an alert was passed, for the pharmacist, the
+                   co-signer and the chart. -->
+              @if (rx.overrideReason) {
+                <div class="detail-field" data-testid="rx-override-reason">
+                  <span class="field-label">{{
+                    (rx.allergyOverride
+                      ? 'PRESCRIPTIONS.OVERRIDE.ALLERGY_REASON'
+                      : 'PRESCRIPTIONS.OVERRIDE.CDS_REASON'
+                    ) | translate
+                  }}</span
+                  ><span class="field-value">{{ rx.overrideReason }}</span>
+                </div>
+              }
+              <!-- QA D1096: the paediatric dose review, due or recorded. -->
+              @if (rx.pediatricDoseReviewRequired) {
+                <div class="detail-field" data-testid="rx-dose-review-state">
+                  <span class="field-label">{{
+                    'PRESCRIPTIONS.DOSE_REVIEW.STATE' | translate
+                  }}</span
+                  ><span class="field-value">{{
+                    rx.pediatricDoseReviewedAt
+                      ? (rx.pediatricDoseReviewedAt | serverTime | date: 'medium')
+                      : ('PRESCRIPTIONS.DOSE_REVIEW.DUE' | translate)
+                  }}</span>
+                </div>
+                @if (rx.pediatricDoseReviewedByName) {
+                  <div class="detail-field">
+                    <span class="field-label">{{
+                      'PRESCRIPTIONS.DOSE_REVIEW.REVIEWED_BY' | translate
+                    }}</span
+                    ><span class="field-value">{{ rx.pediatricDoseReviewedByName }}</span>
+                  </div>
+                }
+                @if (rx.pediatricDoseReviewReason) {
+                  <div class="detail-field">
+                    <span class="field-label">{{
+                      'PRESCRIPTIONS.DOSE_REVIEW.REASON' | translate
+                    }}</span
+                    ><span class="field-value">{{ rx.pediatricDoseReviewReason }}</span>
                   </div>
                 }
               }
@@ -1027,7 +1088,7 @@
           ></textarea>
         </div>
 
-        @if (editingSigned()) {
+        @if (withdrawalReasonShown()) {
           <div class="field">
             <label for="rx-withdrawalReason"
               >{{ 'PRESCRIPTIONS.WITHDRAWAL_REASON' | translate }} *</label
@@ -1300,6 +1361,18 @@
           }}</strong>
           — {{ verifyTarget()?.dosage }} {{ verifyTarget()?.frequency }}
         </p>
+        <!-- QA D1101: the verifying pharmacist sees why an alert was passed. -->
+        @if (verifyTarget()?.overrideReason) {
+          <p data-testid="rx-verify-override-reason">
+            <strong>{{
+              (verifyTarget()?.allergyOverride
+                ? 'PRESCRIPTIONS.OVERRIDE.ALLERGY_REASON'
+                : 'PRESCRIPTIONS.OVERRIDE.CDS_REASON'
+              ) | translate
+            }}</strong
+            >{{ 'COMMON.COLON' | translate }} {{ verifyTarget()?.overrideReason }}
+          </p>
+        }
         <p class="muted">{{ 'PRESCRIPTIONS.PHARMACIST_VERIFY_HINT' | translate }}</p>
         <label class="form-field">
           <span>{{ 'PRESCRIPTIONS.PHARMACIST_VERIFY_NOTE' | translate }}</span>
@@ -1334,6 +1407,81 @@
               ? ('PRESCRIPTIONS.PHARMACIST_VERIFYING' | translate)
               : ('PRESCRIPTIONS.PHARMACIST_VERIFY_CONFIRM' | translate)
           }}
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- QA D1096: the paediatric dose review, recorded with its reason. -->
+@if (doseReviewTarget(); as reviewRx) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeDoseReview()"
+    (keydown.escape)="closeDoseReview()"
+    data-testid="rx-dose-review-modal"
+  >
+    <div
+      class="modal"
+      appModalDialog
+      aria-labelledby="rx-dose-review-title"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      (keydown)="$event.stopPropagation()"
+      (escaped)="closeDoseReview()"
+    >
+      <div class="modal-header">
+        <h2 id="rx-dose-review-title">{{ 'PRESCRIPTIONS.DOSE_REVIEW.TITLE' | translate }}</h2>
+        <button
+          type="button"
+          class="btn-close"
+          (click)="closeDoseReview()"
+          [title]="'COMMON.CANCEL' | translate"
+          [attr.aria-label]="'COMMON.CANCEL' | translate"
+        >
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p>
+          <strong>{{ reviewRx.medicationDisplayName || reviewRx.medicationName }}</strong>
+          — {{ reviewRx.dosage }} {{ reviewRx.frequency }}
+        </p>
+        <p class="muted">{{ 'PRESCRIPTIONS.DOSE_REVIEW.HINT' | translate }}</p>
+        <label class="form-field">
+          <span>{{ 'PRESCRIPTIONS.DOSE_REVIEW.REASON' | translate }} *</span>
+          <textarea
+            rows="3"
+            maxlength="1000"
+            [(ngModel)]="doseReviewReason"
+            name="doseReviewReason"
+            id="rx-dose-review-reason"
+            data-testid="rx-dose-review-reason"
+          ></textarea>
+        </label>
+        @if (doseReviewError()) {
+          <p class="form-error" role="alert" data-testid="rx-dose-review-error">
+            {{ doseReviewError() }}
+          </p>
+        }
+      </div>
+      <div class="modal-actions">
+        <button
+          type="button"
+          class="btn-secondary"
+          [disabled]="doseReviewSaving()"
+          (click)="closeDoseReview()"
+        >
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          type="button"
+          class="btn-primary"
+          (click)="submitDoseReview()"
+          data-testid="rx-dose-review-submit"
+        >
+          {{ 'PRESCRIPTIONS.DOSE_REVIEW.CONFIRM' | translate }}
         </button>
       </div>
     </div>

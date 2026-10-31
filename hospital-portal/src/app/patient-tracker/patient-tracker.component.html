@@ -107,16 +107,17 @@
                     >
                       {{ 'TRACKER.COMPLETE_TRIAGE' | translate }}
                     </button>
-                    @if (canCloseUnseen) {
-                      <!-- QA D954: left without being seen, closed from the tracker. -->
-                      <button
-                        class="btn-complete-triage"
-                        data-testid="tracker-lwbs"
-                        (click)="openCloseUnseen(item)"
-                      >
-                        {{ 'NURSE.LEFT_WITHOUT_BEING_SEEN' | translate }}
-                      </button>
-                    }
+                  }
+                  @if (canCloseUnseen && isNeverSeenVisit(item.currentStatus)) {
+                    <!-- QA D954: left without being seen, closed from the tracker; QA D1108:
+                         until the patient is seen (after triage too), the server's rule. -->
+                    <button
+                      class="btn-complete-triage"
+                      data-testid="tracker-lwbs"
+                      (click)="openCloseUnseen(item)"
+                    >
+                      {{ 'NURSE.LEFT_WITHOUT_BEING_SEEN' | translate }}
+                    </button>
                   }
                   @if (col.key === 'waitingForPhysician' && canStartItem(item)) {
                     <!-- QA D1015: the clinician who owns the visit starts it here (a
@@ -130,7 +131,8 @@
                       {{ 'TRACKER.START_VISIT' | translate }}
                     </button>
                   }
-                  @if (col.key === 'inProgress') {
+                  @if (col.key === 'inProgress' && canEndExamItem(item)) {
+                    <!-- QA D1099: the examining clinician ends the examination. -->
                     <button
                       class="btn-complete-exam"
                       (click)="completeExamination(item)"
@@ -153,7 +155,7 @@
                   @if (
                     col.key === 'readyForDischarge' ||
                     col.key === 'awaitingResults' ||
-                    (col.key === 'inProgress' && isClinician)
+                    (col.key === 'inProgress' && isClinician && canEndExamItem(item))
                   ) {
                     <button
                       class="btn-checkout"

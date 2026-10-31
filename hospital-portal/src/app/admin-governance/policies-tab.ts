@@ -13,6 +13,7 @@ import {
 import { OrganizationService, OrganizationResponse } from '../services/organization.service';
 import { ToastService } from '../core/toast.service';
 import { OrgTextPipe } from '../shared/pipes/org-text.pipe';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 /**
  * Org security policies + rules via the flat CRUD controllers
@@ -23,7 +24,7 @@ import { OrgTextPipe } from '../shared/pipes/org-text.pipe';
 @Component({
   selector: 'app-gov-policies-tab',
   standalone: true,
-  imports: [FormsModule, TranslateModule, OrgTextPipe],
+  imports: [ModalDialogDirective, FormsModule, TranslateModule, OrgTextPipe],
   templateUrl: './policies-tab.html',
   styleUrl: './admin-governance.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

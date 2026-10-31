@@ -128,6 +128,8 @@
 @if (viewedOrder(); as o) {
   <div class="modal-backdrop" tabindex="-1" (click)="closeOrder()" (keydown.escape)="closeOrder()">
     <div
+      appModalDialog
+      aria-labelledby="procedure-orders-dialog-1-title"
       class="modal modal-lg"
       role="dialog"
       aria-modal="true"
@@ -136,7 +138,7 @@
       (keydown.escape)="closeOrder(); $event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="procedure-orders-dialog-1-title">
           {{ o.procedureName }}
           <span class="{{ statusClass(o.status) }}">
             {{ o.status | enumLabel: 'procedureOrderStatus' }}
@@ -164,20 +166,21 @@
             </span>
           </p>
           <p class="muted">
-            {{ 'PROCEDURES.ORDERED_BY' | translate }}: {{ o.orderingProviderName || '—' }}
+            {{ 'PROCEDURES.ORDERED_BY' | translate }}{{ 'COMMON.COLON' | translate }}
+            {{ o.orderingProviderName || '—' }}
             @if (o.orderedAt) {
               — {{ o.orderedAt | serverTime | date: 'medium' }}
             }
           </p>
           @if (o.scheduledDatetime) {
             <p>
-              {{ 'PROCEDURES.SCHEDULED_FOR' | translate }}:
+              {{ 'PROCEDURES.SCHEDULED_FOR' | translate }}{{ 'COMMON.COLON' | translate }}
               {{ o.scheduledDatetime | serverTime | date: 'medium' }}
             </p>
           }
           @if (o.laterality) {
             <p class="muted">
-              {{ 'PROCEDURES.LATERALITY' | translate }}:
+              {{ 'PROCEDURES.LATERALITY' | translate }}{{ 'COMMON.COLON' | translate }}
               {{ 'PROCEDURES.LATERALITY_' + o.laterality | translate }}
               @if (o.siteMarked) {
                 · {{ 'PROCEDURES.SITE_MARKED' | translate }}
@@ -209,13 +212,15 @@
               @if (o.requiresAnesthesia) {
                 <span class="flag-badge">
                   {{ 'PROCEDURES.ANESTHESIA' | translate
-                  }}{{ o.anesthesiaType ? ': ' + o.anesthesiaType : '' }}
+                  }}{{
+                    o.anesthesiaType ? ('COMMON.COLON' | translate) + ' ' + o.anesthesiaType : ''
+                  }}
                 </span>
               }
               @if (o.requiresSedation) {
                 <span class="flag-badge">
                   {{ 'PROCEDURES.SEDATION' | translate
-                  }}{{ o.sedationType ? ': ' + o.sedationType : '' }}
+                  }}{{ o.sedationType ? ('COMMON.COLON' | translate) + ' ' + o.sedationType : '' }}
                 </span>
               }
               @if (o.bloodProductsRequired) {
@@ -406,6 +411,8 @@
     (keydown.escape)="closeOrderModal()"
   >
     <div
+      appModalDialog
+      aria-labelledby="procedure-orders-dialog-2-title"
       class="modal modal-lg"
       role="dialog"
       aria-modal="true"
@@ -414,7 +421,7 @@
       (keydown.escape)="closeOrderModal(); $event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'PROCEDURES.NEW_ORDER' | translate }}</h2>
+        <h2 id="procedure-orders-dialog-2-title">{{ 'PROCEDURES.NEW_ORDER' | translate }}</h2>
         <button
           type="button"
           class="modal-close"

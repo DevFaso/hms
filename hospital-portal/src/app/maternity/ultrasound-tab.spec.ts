@@ -1,3 +1,4 @@
+import { expectKeyboardModal } from '../testing/modal-dialog-keyboard';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
@@ -144,5 +145,23 @@ describe('UltrasoundTabComponent', () => {
     fixture.detectChanges();
     expect(toast.error).toHaveBeenCalledWith('Chargement impossible');
     expect(host().querySelector('.loading-state')).toBeNull();
+  });
+
+  describe('keyboard modals (QA D1004)', () => {
+    afterEach(() => (fixture.nativeElement as HTMLElement).remove());
+
+    it('"Nouvelle demande d’échographie": focus moves in, Escape closes, focus returns', () => {
+      create(['ROLE_MIDWIFE']);
+      document.body.appendChild(fixture.nativeElement);
+      const opener = host().querySelector<HTMLElement>('.btn-primary')!;
+      expectKeyboardModal(fixture, opener);
+    });
+
+    it('the view-échographie dialog: focus moves in, Escape closes, focus returns', () => {
+      create(['ROLE_DOCTOR']);
+      document.body.appendChild(fixture.nativeElement);
+      const opener = host().querySelector<HTMLElement>('.actions-cell button')!;
+      expectKeyboardModal(fixture, opener);
+    });
   });
 });

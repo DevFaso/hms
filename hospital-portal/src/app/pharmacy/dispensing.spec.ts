@@ -301,6 +301,44 @@ describe('DispensingComponent', () => {
     expect(toastSvc.error).toHaveBeenCalledWith('Insufficient stock');
   });
 
+  it('QA D1102 class: a serious interaction refusal opens the override field and the reason is sent', () => {
+    const message = 'A serious interaction alert stops this dispense: [major] A ↔ B: bleeding.';
+    pharmacySvc.createDispense.and.returnValue(
+      throwError(() => ({
+        error: {
+          message,
+          cdsAdvisories: [{ summary: '[major] A ↔ B: bleeding', indicator: 'critical' }],
+        },
+      })),
+    );
+    const form = {
+      prescriptionId: 'rx-1',
+      patientId: 'pat-1',
+      pharmacyId: 'ph-1',
+      dispensedBy: 'user-1',
+      medicationName: 'Amoxicillin',
+      quantityRequested: 30,
+      quantityDispensed: 30,
+    };
+    component.form = { ...form };
+    component.showForm.set(true);
+    component.submitDispense();
+    fixture.detectChanges();
+
+    expect(toastSvc.error).toHaveBeenCalledWith(message);
+    expect(component.cdsAlerts()).toEqual(['[major] A ↔ B: bleeding']);
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="cds-override-reason"]'),
+    ).not.toBeNull();
+
+    pharmacySvc.createDispense.and.returnValue(of({ data: { id: 'd-new' } } as any));
+    component.form.cdsOverrideReason = '  Benefit outweighs the risk, INR monitored  ';
+    component.submitDispense();
+    expect(pharmacySvc.createDispense.calls.mostRecent().args[0].cdsOverrideReason).toBe(
+      'Benefit outweighs the risk, INR monitored',
+    );
+  });
+
   it('should cancel dispense', () => {
     // QA D1069 (declared change): the cancel is no longer a bare confirm(); it
     // opens the panel that asks why, and sends the reason.

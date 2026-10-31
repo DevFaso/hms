@@ -212,7 +212,9 @@ public class ObgynReferralServiceImpl implements ObgynReferralService {
     ) {
         ObgynReferral referral = findReferral(referralId);
         requireReferringMidwife(referral);
-        referral.cancel(request.getReason());
+        // QA D1098: the DTO's @NotBlank holds at the edge; any other caller states why too.
+        referral.cancel(com.example.hms.service.support.CancelledOrders.requireCancelReason(
+            request == null ? null : request.getReason()));
         referral.setUpdatedBy(username);
 
         log.info("Referral {} cancelled by {}", referralId, username);

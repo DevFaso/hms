@@ -4,6 +4,7 @@ import {
   Component,
   computed,
   DestroyRef,
+  ElementRef,
   inject,
   OnInit,
   signal,
@@ -56,6 +57,7 @@ import { canonicalRoute } from '../shared/pipes/medication-route.pipe';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { isStepUpRefusal } from '../services/step-up';
 import { MfaService } from '../auth/mfa.service';
+import { refuseFields } from '../shared/forms/invalid-fields';
 
 /**
  * The prescriber's list tabs (gap G10).
@@ -85,6 +87,9 @@ export type PrescriptionStatusTab = Exclude<PrescriptionTab, 'all'>;
  * `labelKey` is the field name on purpose — check-i18n-referenced-keys.mjs
  * reads it, so a typo fails the gate instead of rendering the raw key.
  */
+/** QA D1096: the dose review dialog's reason field. */
+const DOSE_REVIEW_REASON_ID = 'rx-dose-review-reason';
+
 /** CANCELLED and DISCONTINUED: the prescriber withdrew the order, which the server treats as final. */
 export function isWithdrawnStatus(status: string | null | undefined): boolean {
   return status === 'CANCELLED' || status === 'DISCONTINUED';
@@ -313,6 +318,12 @@ export class PrescriptionsComponent implements OnInit {
 
   /* ── Pharmacist verification (Tier 2 item 33) ── */
   showVerifyModal = signal(false);
+  /** QA D1096: the paediatric dose review dialog. */
+  readonly doseReviewTarget = signal<PrescriptionResponse | null>(null);
+  readonly doseReviewError = signal('');
+  readonly doseReviewSaving = signal(false);
+  doseReviewReason = '';
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   verifyTarget = signal<PrescriptionResponse | null>(null);
   verifyNote = '';
   verifying = signal(false);
@@ -385,6 +396,8 @@ export class PrescriptionsComponent implements OnInit {
    * with a reason. Every other field is read-only; the server refuses them.
    */
   editingSigned = signal(false);
+  /** QA D1098 class: an order awaiting the pharmacist's clarification was signed. */
+  editingClarification = signal(false);
 
   /** QA D670: the prescriber of record shown on a signed order's withdrawal form. */
   editingPrescriberName = signal('');
@@ -626,6 +639,7 @@ export class PrescriptionsComponent implements OnInit {
     this.editingId.set(null);
     this.editingWithdrawn.set(false);
     this.editingSigned.set(false);
+    this.editingClarification.set(false);
     this.selectedPatient.set(null);
     this.patientQuery.set('');
     this.formError.set('');
@@ -669,6 +683,7 @@ export class PrescriptionsComponent implements OnInit {
     this.editingWithdrawn.set(isWithdrawnStatus(p.status));
     const signed = p.status === 'SIGNED';
     this.editingSigned.set(signed);
+    this.editingClarification.set(p.status === 'PENDING_CLARIFICATION');
     this.editingPrescriberName.set(p.staffFullName ?? '');
     if (signed) {
       // No withdrawal is pre-selected: the prescriber chooses one, deliberately.
@@ -679,8 +694,23 @@ export class PrescriptionsComponent implements OnInit {
     this.showModal.set(true);
   }
 
+  /**
+   * QA D660 / D1098 class: the withdrawal reason is asked of a signed order,
+   * and of an order awaiting clarification (signed before the pharmacist's
+   * question) once Cancelled or Discontinued is chosen; the server refuses
+   * either withdrawal without it.
+   */
+  withdrawalReasonShown(): boolean {
+    return (
+      this.editingSigned() || (this.editingClarification() && isWithdrawnStatus(this.form.status))
+    );
+  }
+
   /** QA D660: what the Save button waits for on a signed prescription. */
   signedWithdrawalIncomplete(): boolean {
+    if (this.editingClarification()) {
+      return isWithdrawnStatus(this.form.status) && !this.form.withdrawalReason?.trim();
+    }
     return (
       this.editingSigned() &&
       (!isWithdrawnStatus(this.form.status) || !this.form.withdrawalReason?.trim())
@@ -948,6 +978,81 @@ export class PrescriptionsComponent implements OnInit {
       (p.status === 'SIGNED' || p.status === 'TRANSMITTED') &&
       this.roleContext.hasAnyActiveRole(PrescriptionsComponent.VERIFIER_ROLES)
     );
+  }
+
+  /* ── Paediatric dose review (round 19, QA D1096) ───────────────────── */
+
+  /** Pharmacists (the verify roles) and physicians may record the review. */
+  private static readonly DOSE_REVIEWER_ROLES = [
+    ...PrescriptionsComponent.VERIFIER_ROLES,
+    'ROLE_DOCTOR',
+  ];
+
+  /** The order waits for its paediatric dose review: the row says so to everyone. */
+  awaitsDoseReview(p: PrescriptionResponse): boolean {
+    return (
+      !!p.pediatricDoseReviewRequired && !p.pediatricDoseReviewedAt && !isWithdrawnStatus(p.status)
+    );
+  }
+
+  /**
+   * Offered to a pharmacist or a physician on an order awaiting its review,
+   * never to its own prescriber (the server refuses that too, with a reason).
+   */
+  canRecordDoseReview(p: PrescriptionResponse): boolean {
+    if (!this.awaitsDoseReview(p)) return false;
+    const own = this.ownPrescriberStaffId();
+    if (own && p.staffId === own) return false;
+    return this.roleContext.hasAnyActiveRole(PrescriptionsComponent.DOSE_REVIEWER_ROLES);
+  }
+
+  openDoseReview(p: PrescriptionResponse): void {
+    this.doseReviewTarget.set(p);
+    this.doseReviewReason = '';
+    this.doseReviewError.set('');
+  }
+
+  closeDoseReview(): void {
+    this.doseReviewTarget.set(null);
+    this.doseReviewReason = '';
+    this.doseReviewError.set('');
+  }
+
+  /**
+   * The submit button stays enabled: a missing reason is said in the dialog
+   * (QA D1089 class - a disabled button never shows its message), and every
+   * server refusal (own order, not a pharmacist or physician) is shown there.
+   */
+  submitDoseReview(): void {
+    const target = this.doseReviewTarget();
+    if (!target || this.doseReviewSaving()) return;
+    if (!this.doseReviewReason.trim()) {
+      const message = this.translate.instant('PRESCRIPTIONS.DOSE_REVIEW.REASON_REQUIRED');
+      this.doseReviewError.set(message);
+      refuseFields(
+        this.host.nativeElement,
+        [DOSE_REVIEW_REASON_ID],
+        [DOSE_REVIEW_REASON_ID],
+        message,
+      );
+      return;
+    }
+    this.doseReviewSaving.set(true);
+    this.prescriptionService.recordPediatricDoseReview(target.id, this.doseReviewReason).subscribe({
+      next: () => {
+        this.doseReviewSaving.set(false);
+        this.toast.success(this.translate.instant('PRESCRIPTIONS.DOSE_REVIEW.RECORDED'));
+        this.closeDoseReview();
+        this.load();
+      },
+      error: (err: unknown) => {
+        this.doseReviewSaving.set(false);
+        this.doseReviewError.set(
+          this.extractErrorMessage(err) ||
+            this.refusalText(err, 'PRESCRIPTIONS.DOSE_REVIEW.FAILED'),
+        );
+      },
+    });
   }
 
   openVerifyModal(p: PrescriptionResponse): void {

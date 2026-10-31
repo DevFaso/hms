@@ -224,9 +224,11 @@ class DischargeApprovalServiceImplTest {
 
     @Test
     void requestDischarge_nullRequest_throwsBusiness() {
+        // QA D1111: a key, no longer the English "Request payload is required…".
         assertThatThrownBy(() -> service.requestDischarge(null))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("required");
+            .extracting(e -> ((BusinessException) e).getMessageKey())
+            .isEqualTo("dischargeApproval.payloadRequired");
     }
 
     @Test
@@ -246,7 +248,8 @@ class DischargeApprovalServiceImplTest {
         var request = buildRequest();
         assertThatThrownBy(() -> service.requestDischarge(request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("inactive");
+            // QA D1111: a key, no longer an English sentence.
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("dischargeApproval.registrationInactive");
     }
 
     @Test
@@ -257,7 +260,8 @@ class DischargeApprovalServiceImplTest {
         var request = buildRequest();
         assertThatThrownBy(() -> service.requestDischarge(request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("already completed");
+            // QA D1111: a key, no longer an English sentence.
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("dischargeApproval.alreadyDischarged");
     }
 
     @Test
@@ -270,7 +274,8 @@ class DischargeApprovalServiceImplTest {
         var request = buildRequest();
         assertThatThrownBy(() -> service.requestDischarge(request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("pending");
+            // QA D1111: a key, no longer an English sentence.
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("dischargeApproval.alreadyPending");
     }
 
     @Test
@@ -299,7 +304,8 @@ class DischargeApprovalServiceImplTest {
         var request = buildRequest();
         assertThatThrownBy(() -> service.requestDischarge(request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("different hospitals");
+            // QA D1111: a key, no longer an English sentence.
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("dischargeApproval.hospitalMismatch");
     }
 
     @Test
@@ -414,7 +420,8 @@ class DischargeApprovalServiceImplTest {
         var decision = buildDecision();
         assertThatThrownBy(() -> service.approve(approvalId, decision))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("pending");
+            // QA D1111: a key, no longer an English sentence.
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("dischargeApproval.notPending");
     }
 
     @Test
@@ -488,9 +495,12 @@ class DischargeApprovalServiceImplTest {
         when(dischargeApprovalRepository.findById(approvalId)).thenReturn(Optional.of(approval));
 
         UUID randomId = UUID.randomUUID();
+        // QA D1112: an authorship refusal (403) naming the rule, keyed (was an English 400).
         assertThatThrownBy(() -> service.cancel(approvalId, randomId, "reason"))
-            .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("requesting nurse");
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class)
+            .satisfies(e -> assertThat(e.getMessage())
+                .containsAnyOf("dischargeApproval.cancel.requesterOnly", "nurse who requested this discharge"));
+        assertThat(approval.getStatus()).isEqualTo(DischargeStatus.PENDING);
     }
 
     @Test
@@ -508,9 +518,11 @@ class DischargeApprovalServiceImplTest {
         approval.setNurse(null);
         when(dischargeApprovalRepository.findById(approvalId)).thenReturn(Optional.of(approval));
 
+        // QA D1111: a key, no longer the English "no nurse associated…".
         assertThatThrownBy(() -> service.cancel(approvalId, nurseStaffId, "reason"))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("no nurse");
+            .extracting(e -> ((BusinessException) e).getMessageKey())
+            .isEqualTo("dischargeApproval.cancel.noRequester");
     }
 
     // ---- getById ----
@@ -588,7 +600,8 @@ class DischargeApprovalServiceImplTest {
         var request = buildRequest();
         assertThatThrownBy(() -> service.requestDischarge(request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("role");
+            // QA D1111: a key, no longer an English sentence.
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("dischargeApproval.assignmentNoRole");
     }
 
     @Test
@@ -608,6 +621,7 @@ class DischargeApprovalServiceImplTest {
         var request = buildRequest();
         assertThatThrownBy(() -> service.requestDischarge(request))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("not linked");
+            // QA D1111: a key, no longer an English sentence.
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("dischargeApproval.staffAssignmentMismatch");
     }
 }
