@@ -2650,13 +2650,6 @@ public class EncounterServiceImpl implements EncounterService {
         }
     }
 
-    /**
-     * QA D526: the tentative appointment behind a dated checkout follow-up.
-     * Every precondition of {@code Appointment#validate} is checked first, so
-     * the save never throws inside the checkout transaction (a repository
-     * exception would mark it rollback-only); when one is missing the recall
-     * alone carries the follow-up. Time is a placeholder the desk confirms.
-     */
     /** The follow-up's preferred day, or null when it is blank or not an ISO date. */
     private static java.time.LocalDate parseFollowUpDate(String preferredDate) {
         if (preferredDate == null || preferredDate.isBlank()) {
@@ -2669,6 +2662,13 @@ public class EncounterServiceImpl implements EncounterService {
         }
     }
 
+    /**
+     * QA D526: the tentative appointment behind a dated checkout follow-up.
+     * Every precondition of {@code Appointment#validate} is checked first, so
+     * the save never throws inside the checkout transaction (a repository
+     * exception would mark it rollback-only); when one is missing the recall
+     * alone carries the follow-up. Time is a placeholder the desk confirms.
+     */
     private UUID createFollowUpAppointmentFromCheckout(
             Encounter encounter,
             com.example.hms.payload.dto.clinical.CheckOutRequestDTO request) {
