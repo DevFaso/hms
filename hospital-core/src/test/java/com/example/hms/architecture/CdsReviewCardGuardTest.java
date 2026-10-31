@@ -39,8 +39,40 @@ import static org.assertj.core.api.Assertions.assertThat;
 class CdsReviewCardGuardTest {
 
     private static final Path CDS = Paths.get("src/main/java/com/example/hms/cdshooks");
-    /** {@code builder(text.get("cds.key"} - the method a card sentence is handed to. */
-    private static final Pattern CARD_SENTENCE = Pattern.compile("(\\w++)\\(\\s*+text\\.get\\(\\s*+\"(cds\\.[^\"]++)\"");
+    /** {@code text.get("cds.key"} - a card sentence; the method it is handed to is read before it. */
+    private static final Pattern CARD_SENTENCE = Pattern.compile("text\\.get\\(\\s*+\"(cds\\.[^\"]++)\"");
+
+    /**
+     * Each card sentence key of {@code source} with the method it is handed to:
+     * {@code builder(text.get("cds.key"} (the word right before the opening
+     * parenthesis, blanks allowed after it). A sentence not handed to a call is skipped.
+     */
+    static Map<String, String> cardSentences(String source) {
+        Map<String, String> out = new TreeMap<>();
+        Matcher m = CARD_SENTENCE.matcher(source);
+        while (m.find()) {
+            int i = m.start();
+            while (i > 0 && Character.isWhitespace(source.charAt(i - 1))) {
+                i--;
+            }
+            if (i == 0 || source.charAt(i - 1) != '(') {
+                continue;
+            }
+            int end = i - 1;
+            int start = end;
+            while (start > 0 && isWordChar(source.charAt(start - 1))) {
+                start--;
+            }
+            if (start < end) {
+                out.put(m.group(1), source.substring(start, end));
+            }
+        }
+        return out;
+    }
+
+    private static boolean isWordChar(char ch) {
+        return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') || ch == '_';
+    }
     private static final String REVIEW_BUILDER = "reviewRequired";
 
     @Test
@@ -55,10 +87,7 @@ class CdsReviewCardGuardTest {
         try (Stream<Path> files = Files.walk(CDS)) {
             for (Path file : files.filter(p -> p.toString().endsWith(".java")).toList()) {
                 String source = SourceScan.stripComments(Files.readString(file, StandardCharsets.UTF_8));
-                Matcher m = CARD_SENTENCE.matcher(source);
-                while (m.find()) {
-                    builderByKey.put(m.group(2), m.group(1));
-                }
+                builderByKey.putAll(cardSentences(source));
             }
         }
         List<String> reviewKeys = new ArrayList<>();
@@ -82,9 +111,8 @@ class CdsReviewCardGuardTest {
     @Test
     @DisplayName("the scan reads the D1096 shape")
     void catchesTheOldShape() {
-        Matcher m = CARD_SENTENCE.matcher("cards.add(warning(text.get(\"cds.pediatric.manualReview.summary\", \"…\"");
-        assertThat(m.find()).isTrue();
-        assertThat(m.group(1)).isEqualTo("warning");
+        assertThat(cardSentences("cards.add(warning(text.get(\"cds.pediatric.manualReview.summary\", \"…\""))
+            .containsEntry("cds.pediatric.manualReview.summary", "warning");
         assertThat(asksForReview("{0}: child under {1} months - a pharmacist or physician must review the dose")).isTrue();
         assertThat(asksForReview("Limit: {0}.")).isFalse();
     }
