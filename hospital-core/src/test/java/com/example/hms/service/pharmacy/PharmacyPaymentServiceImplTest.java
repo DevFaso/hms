@@ -183,7 +183,9 @@ class PharmacyPaymentServiceImplTest {
 
         service.createPayment(dto);
 
-        verify(mobileMoneyGateway).charge(any());
+        // QA D1079: the French description the payer sees writes a space before the colon.
+        verify(mobileMoneyGateway).charge(org.mockito.ArgumentMatchers.argThat(
+                r -> "Pharmacie : Amoxicilline 500mg".equals(r.description())));
         verify(paymentRepository).save(org.mockito.ArgumentMatchers.argThat(
                 p -> "MOCK-abc".equals(p.getReferenceNumber())));
     }

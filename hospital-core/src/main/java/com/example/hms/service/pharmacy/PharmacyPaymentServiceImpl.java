@@ -129,7 +129,7 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
                             phone,
                             dto.getAmount(),
                             currency,
-                            "Pharmacie: " + dispense.getMedicationName(),
+                            "Pharmacie : " + dispense.getMedicationName(),
                             dispense.getId().toString()));
             return charge.providerReference();
         } catch (MobileMoneyGateway.MobileMoneyException e) {

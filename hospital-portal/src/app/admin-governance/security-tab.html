@@ -295,15 +295,24 @@
             </div>
             <div class="sim-details">
               <p>
-                <strong>{{ 'ADMIN_GOV.EVALUATED_RULES' | translate }}:</strong>
+                <strong
+                  >{{ 'ADMIN_GOV.EVALUATED_RULES' | translate
+                  }}{{ 'COMMON.COLON' | translate }}</strong
+                >
                 {{ simResult()!.evaluatedRuleCount }}
               </p>
               <p>
-                <strong>{{ 'ADMIN_GOV.IMPACTED_CONTROLLERS' | translate }}:</strong>
+                <strong
+                  >{{ 'ADMIN_GOV.IMPACTED_CONTROLLERS' | translate
+                  }}{{ 'COMMON.COLON' | translate }}</strong
+                >
                 {{ simResult()!.impactedControllers.join(', ') || '—' }}
               </p>
               <div>
-                <strong>{{ 'ADMIN_GOV.RECOMMENDED_ACTIONS' | translate }}:</strong>
+                <strong
+                  >{{ 'ADMIN_GOV.RECOMMENDED_ACTIONS' | translate
+                  }}{{ 'COMMON.COLON' | translate }}</strong
+                >
                 <ul>
                   @for (action of simResult()!.recommendedActions; track $index) {
                     <li>{{ action }}</li>

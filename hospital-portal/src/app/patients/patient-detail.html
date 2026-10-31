@@ -46,8 +46,8 @@
         <div class="header-meta">
           @if (p.mrn) {
             <span class="meta-tag mrn"
-              ><span class="material-symbols-outlined">badge</span>
-              {{ 'PATIENTS.MRN' | translate }}: {{ p.mrn }}</span
+              ><span class="material-symbols-outlined">badge</span> {{ 'PATIENTS.MRN' | translate
+              }}{{ 'COMMON.COLON' | translate }} {{ p.mrn }}</span
             >
           }
           <span class="meta-tag"

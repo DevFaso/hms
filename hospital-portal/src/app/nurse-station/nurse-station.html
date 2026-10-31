@@ -620,7 +620,10 @@
                     </span>
                   }
                   @if (p.mrn) {
-                    <span class="meta-item">MRN: {{ p.mrn }}</span>
+                    <span class="meta-item"
+                      >{{ 'NURSE.MRN' | translate }}{{ 'COMMON.COLON' | translate }}
+                      {{ p.mrn }}</span
+                    >
                   }
                   @if (p.departmentName) {
                     <span class="meta-item">{{ p.departmentName }}</span>

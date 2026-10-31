@@ -300,30 +300,47 @@
             <h4>{{ 'PRE_CHECKIN.UPDATED_DEMOGRAPHICS' | translate }}</h4>
             @if (phoneNumber) {
               <p>
-                <strong>{{ 'PRE_CHECKIN.PHONE_LABEL' | translate }}:</strong> {{ phoneNumber }}
+                <strong
+                  >{{ 'PRE_CHECKIN.PHONE_LABEL' | translate
+                  }}{{ 'COMMON.COLON' | translate }}</strong
+                >
+                {{ phoneNumber }}
               </p>
             }
             @if (email) {
               <p>
-                <strong>{{ 'PRE_CHECKIN.EMAIL_LABEL' | translate }}:</strong> {{ email }}
+                <strong
+                  >{{ 'PRE_CHECKIN.EMAIL_LABEL' | translate
+                  }}{{ 'COMMON.COLON' | translate }}</strong
+                >
+                {{ email }}
               </p>
             }
             @if (addressLine1) {
               <p>
-                <strong>{{ 'PRE_CHECKIN.ADDRESS_LABEL' | translate }}:</strong> {{ addressLine1 }},
-                {{ city }} {{ state }} {{ zipCode }}
+                <strong
+                  >{{ 'PRE_CHECKIN.ADDRESS_LABEL' | translate
+                  }}{{ 'COMMON.COLON' | translate }}</strong
+                >
+                {{ addressLine1 }}, {{ city }} {{ state }} {{ zipCode }}
               </p>
             }
             @if (emergencyContactName) {
               <p>
-                <strong>{{ 'PRE_CHECKIN.EMERGENCY_CONTACT_LABEL' | translate }}:</strong>
+                <strong
+                  >{{ 'PRE_CHECKIN.EMERGENCY_CONTACT_LABEL' | translate
+                  }}{{ 'COMMON.COLON' | translate }}</strong
+                >
                 {{ emergencyContactName }} ({{ emergencyContactRelationship }}) —
                 {{ emergencyContactPhone }}
               </p>
             }
             @if (insuranceProvider) {
               <p>
-                <strong>{{ 'PRE_CHECKIN.INSURANCE_LABEL' | translate }}:</strong>
+                <strong
+                  >{{ 'PRE_CHECKIN.INSURANCE_LABEL' | translate
+                  }}{{ 'COMMON.COLON' | translate }}</strong
+                >
                 {{ insuranceProvider }} — {{ insurancePlan }}
               </p>
             }

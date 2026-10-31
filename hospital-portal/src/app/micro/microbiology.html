@@ -179,7 +179,7 @@
         }
         @if (culture.finalizedAt) {
           <p class="finalized-line">
-            {{ 'MICRO.FINALIZED_AT' | translate }}:
+            {{ 'MICRO.FINALIZED_AT' | translate }}{{ 'COMMON.COLON' | translate }}
             {{ culture.finalizedAt | serverTime | date: 'short' }}
             @if (culture.finalizedByName) {
               ({{ culture.finalizedByName }})

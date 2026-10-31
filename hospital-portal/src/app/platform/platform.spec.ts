@@ -577,8 +577,10 @@ describe('PlatformComponent', () => {
   describe('validation errors (D11)', () => {
     it('shows each field error with the label of the field', () => {
       const instant = spyOn(TestBed.inject(TranslateService), 'instant').and.callFake(
-        (key: string | string[], params?: { errors?: string }) =>
-          params?.errors ? `INVALID ${params.errors}` : (key as string),
+        (key: string | string[], params?: { errors?: string }) => {
+          if (key === 'COMMON.COLON') return ' :';
+          return params?.errors ? `INVALID ${params.errors}` : (key as string);
+        },
       );
       const err = new HttpErrorResponse({
         status: 400,
@@ -594,7 +596,8 @@ describe('PlatformComponent', () => {
       const message = c.errorMessage(err, 'PLATFORM.TOAST.SERVICE_UPDATE_FAILED');
 
       expect(message).toBe(
-        'INVALID PLATFORM.PROVIDER: size must be between 0 and 120; PLATFORM.CONTACT_EMAIL: must be a well-formed email address',
+        // QA D1079: the colon comes from COMMON.COLON (French: a no-break space before it).
+        'INVALID PLATFORM.PROVIDER : size must be between 0 and 120; PLATFORM.CONTACT_EMAIL : must be a well-formed email address',
       );
       expect(instant).toHaveBeenCalledWith('PLATFORM.TOAST.VALIDATION_FAILED', jasmine.any(Object));
     });

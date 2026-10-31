@@ -161,13 +161,16 @@
         } @else {
           <div class="result-summary">
             <span class="badge badge-info">
-              {{ 'ASSIGN_ADMIN.PROCESSED' | translate }}: {{ importResult()!.processed }}
+              {{ 'ASSIGN_ADMIN.PROCESSED' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ importResult()!.processed }}
             </span>
             <span class="badge badge-success">
-              {{ 'ADMIN_GOV.IMPORTED' | translate }}: {{ importResult()!.imported }}
+              {{ 'ADMIN_GOV.IMPORTED' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ importResult()!.imported }}
             </span>
             <span class="badge badge-danger">
-              {{ 'ASSIGN_ADMIN.FAILED' | translate }}: {{ importResult()!.failed }}
+              {{ 'ASSIGN_ADMIN.FAILED' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ importResult()!.failed }}
             </span>
           </div>
           <div class="table-wrap result-table">
@@ -265,16 +268,18 @@
         } @else {
           <div class="result-summary">
             <span class="badge badge-info">
-              {{ 'ASSIGN_ADMIN.REQUESTED' | translate }}: {{ resetResult()!.requested }}
+              {{ 'ASSIGN_ADMIN.REQUESTED' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ resetResult()!.requested }}
             </span>
             <span class="badge badge-success">
-              {{ 'ADMIN_GOV.SUCCEEDED' | translate }}: {{ resetResult()!.succeeded }}
+              {{ 'ADMIN_GOV.SUCCEEDED' | translate }}{{ 'COMMON.COLON' | translate }}
+              {{ resetResult()!.succeeded }}
             </span>
           </div>
           <ul class="failure-list">
             @for (r of resetResult()!.results; track $index) {
               @if (!r.success) {
-                <li>{{ r.email || r.userId }}: {{ r.message }}</li>
+                <li>{{ r.email || r.userId }}{{ 'COMMON.COLON' | translate }} {{ r.message }}</li>
               }
             }
           </ul>

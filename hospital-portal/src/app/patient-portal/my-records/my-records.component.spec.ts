@@ -63,6 +63,7 @@ describe('MyRecordsComponent', () => {
     translate.setFallbackLang('fr');
     translate.use('fr');
     translate.setTranslation('fr', {
+      COMMON: { COLON: '\u00a0:' },
       PORTAL: {
         RECORDS: {
           TITLE: 'Mon dossier',
@@ -156,8 +157,9 @@ describe('MyRecordsComponent', () => {
     );
     create();
     expect(texts('[data-testid="my-record-numbers"] li')).toEqual([
-      'CHU Wend-Panga : CHW7848',
-      'Clinique Nabonswendé : CNK4035',
+      // QA D1079: the colon is COMMON.COLON (a no-break space before it in French).
+      'CHU Wend-Panga\u00a0: CHW7848',
+      'Clinique Nabonswendé\u00a0: CNK4035',
     ]);
   });
 
