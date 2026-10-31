@@ -76,6 +76,7 @@
             type="button"
             class="btn-primary"
             data-test="save"
+            [disabled]="saving() || loading()"
             [appSubmitGuard]="!canSave()"
             (click)="save()"
           >

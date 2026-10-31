@@ -108,6 +108,7 @@
                 {{ 'PATIENTS.CODE_SENT_TO' | translate }} {{ otpMaskedPhone }}
               </span>
               <input
+                id="otpCode"
                 type="text"
                 class="otp-code-input"
                 inputmode="numeric"
@@ -122,7 +123,8 @@
                 type="button"
                 class="btn-secondary btn-otp"
                 [disabled]="otpConfirming"
-                [appSubmitGuard]="otpCode.trim().length < 4"
+                [appSubmitGuard]="otpCode.trim().length < 4 && ('SUBMIT_GUARD.CODE' | translate)"
+                [submitGuardFields]="['otpCode']"
                 (click)="confirmPhoneVerification()"
               >
                 @if (otpConfirming) {
@@ -143,7 +145,10 @@
                 type="button"
                 class="btn-secondary btn-otp"
                 [disabled]="otpSending"
-                [appSubmitGuard]="(form.phoneNumberPrimary || '').trim().length < 8"
+                [appSubmitGuard]="
+                  (form.phoneNumberPrimary || '').trim().length < 8 &&
+                  ('SUBMIT_GUARD.PHONE' | translate)
+                "
                 (click)="sendPhoneVerification()"
               >
                 @if (otpSending) {

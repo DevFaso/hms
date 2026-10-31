@@ -37,8 +37,8 @@ const BLOCKED_KEY = 'COMMON.SUBMIT_BLOCKED_REQUIRED';
  * is shown as is (already translated) for a reason that is not a field — an
  * attestation, a witness, a hospital scope.
  *
- * The fields are `submitGuardFields` (ids) when given, otherwise every
- * `required` / `aria-required="true"` control of the enclosing form or dialog.
+ * The fields are `submitGuardFields` (ids, looked up in the enclosing form or
+ * dialog); without them only the reason is shown.
  * `scripts/lib/silent-disabled-submit.test.mjs` fails the build on a button
  * disabled for anything but a request in flight or a pager's end.
  */
@@ -54,7 +54,7 @@ const BLOCKED_KEY = 'COMMON.SUBMIT_BLOCKED_REQUIRED';
 export class SubmitGuardDirective {
   /** Falsy: the form may be sent. `true`: required fields are missing. A string: that reason. */
   readonly appSubmitGuard = input<unknown>(null);
-  /** The ids of the fields the guard is about, in reading order (default: the required controls around the button). */
+  /** The ids of the fields the guard is about, in reading order. */
   readonly submitGuardFields = input<readonly string[] | null>(null);
 
   private readonly host = inject(ElementRef<HTMLElement>);
@@ -84,7 +84,7 @@ export class SubmitGuardDirective {
     event.preventDefault();
     event.stopImmediatePropagation();
     const root = this.root();
-    const all = this.fieldIds(root);
+    const all = this.fieldIds();
     const blank = all.filter((id) => isBlank(root.querySelector(`#${CSS.escape(id)}`)));
     this.marked = all;
     if (blank.length > 0) {
@@ -114,16 +114,13 @@ export class SubmitGuardDirective {
     );
   }
 
-  private fieldIds(root: HTMLElement): string[] {
-    const given = this.submitGuardFields();
-    if (given && given.length > 0) return [...given];
-    const ids: string[] = [];
-    for (const el of Array.from(
-      root.querySelectorAll<HTMLElement>('[required], [aria-required="true"]'),
-    )) {
-      if (el.id && !el.hasAttribute('disabled')) ids.push(el.id);
-    }
-    return ids;
+  /**
+   * Only the fields the template names: a guard on a secondary action inside
+   * a larger form (the OTP check in the registration form) must not mark the
+   * form's other blank fields as missing.
+   */
+  private fieldIds(): string[] {
+    return [...(this.submitGuardFields() ?? [])];
   }
 
   private messageId(): string {

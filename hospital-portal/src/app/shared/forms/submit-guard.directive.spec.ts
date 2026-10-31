@@ -35,7 +35,7 @@ class HostComponent {
   submitted = 0;
   readonly saving = signal(false);
   readonly guard = signal<unknown>(true);
-  readonly fields = signal<string[] | null>(null);
+  readonly fields = signal<string[] | null>(['med']);
 }
 
 describe('SubmitGuardDirective (QA D1124 / D1089)', () => {
@@ -99,6 +99,15 @@ describe('SubmitGuardDirective (QA D1124 / D1089)', () => {
     );
     expect((el.querySelector('#med') as HTMLInputElement).hasAttribute('aria-invalid')).toBeFalse();
     expect(reason()?.textContent).toBe("Champs obligatoires manquants : J'accepte");
+  });
+
+  it('without listed fields it marks nothing (a secondary action never flags the whole form)', () => {
+    host.fields.set(null);
+    fixture.detectChanges();
+    button().click();
+    expect(host.clicked).toBe(0);
+    expect((el.querySelector('#med') as HTMLInputElement).hasAttribute('aria-invalid')).toBeFalse();
+    expect(reason()?.textContent).toBe('Complétez d’abord les champs obligatoires (marqués *).');
   });
 
   it('falls back to the general sentence when no field is blank', () => {

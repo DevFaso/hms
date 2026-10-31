@@ -12365,6 +12365,7 @@
     "PERIOD": "Choose a valid period (start before end).",
     "PERMISSION": "Choose at least one permission.",
     "PHARMACY": "Choose a pharmacy first.",
+    "PHONE": "Enter a full phone number first.",
     "PRESCRIPTION": "Choose a prescription first.",
     "QUANTITY": "Enter a quantity greater than zero.",
     "READY_SPLIT": "A fill prepared for collection comes from one lot; this quantity needs two. Dispense it directly instead.",

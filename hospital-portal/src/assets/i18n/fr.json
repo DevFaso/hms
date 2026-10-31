@@ -12365,6 +12365,7 @@
     "PERIOD": "Choisissez une période valide (début avant fin).",
     "PERMISSION": "Choisissez au moins une permission.",
     "PHARMACY": "Choisissez d’abord une pharmacie.",
+    "PHONE": "Saisissez d’abord un numéro de téléphone complet.",
     "PRESCRIPTION": "Choisissez d’abord une ordonnance.",
     "QUANTITY": "Saisissez une quantité supérieure à zéro.",
     "READY_SPLIT": "Une préparation à retirer vient d’un seul lot ; cette quantité en demande deux. Délivrez-la directement.",
