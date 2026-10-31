@@ -23,9 +23,13 @@ export function expectKeyboardModal(fixture: ComponentFixture<unknown>, opener: 
   if (!dialog) return;
   expect(host.contains(dialog)).toBeTrue();
   expect(dialog.getAttribute('aria-modal')).toBe('true');
+  // Named by its title (aria-labelledby) or, for a menu with no title, an aria-label.
   const titleId = dialog.getAttribute('aria-labelledby') ?? '';
-  expect(titleId).withContext('named by its title').not.toBe('');
-  expect(document.getElementById(titleId)?.textContent?.trim() ?? '').not.toBe('');
+  const name =
+    titleId === ''
+      ? (dialog.getAttribute('aria-label') ?? '')
+      : (document.getElementById(titleId)?.textContent ?? '');
+  expect(name.trim()).withContext('the dialog has a name').not.toBe('');
 
   active!.dispatchEvent(
     new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),

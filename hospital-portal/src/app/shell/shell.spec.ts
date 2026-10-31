@@ -12,6 +12,7 @@ import { AuthService } from '../auth/auth.service';
 import { PermissionService } from '../core/permission.service';
 import { RoleContextService } from '../core/role-context.service';
 import { NotificationService } from '../services/notification.service';
+import { expectKeyboardModal } from '../testing/modal-dialog-keyboard';
 import { ImpersonationService } from '../services/impersonation.service';
 import { IdleService } from '../core/idle.service';
 import { EmergencyBroadcastService } from '../services/emergency-broadcast.service';
@@ -1223,6 +1224,25 @@ describe('ShellComponent — inbox surfaces live in the topbar', () => {
     fixture.detectChanges();
     expect(broadcastSpy().connect).toHaveBeenCalledTimes(1);
   });
+
+  // QA D1125 (D1004 class, round 20): the bell panel and the profile menu
+  // moved no focus, and their Escape was bound on an aria-hidden backdrop that
+  // never receives a key, so Escape left them open.
+  for (const [what, testid] of [
+    ['notification panel', 'shell-bell'],
+    ['profile menu', 'shell-profile-btn'],
+  ]) {
+    it(`the ${what} is a keyboard modal: focus in, Escape closes, focus back to its button`, () => {
+      const fixture = build(['ROLE_DOCTOR'], 'ROLE_DOCTOR');
+      document.body.appendChild(fixture.nativeElement);
+      fixture.detectChanges();
+      const opener = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
+        `[data-testid="${testid}"]`,
+      )!;
+      expectKeyboardModal(fixture, opener);
+      fixture.destroy();
+    });
+  }
 
   it('a provider user whose settings are being asked again keeps the provider home, never the hospital nav', () => {
     const fixture = build(['ROLE_PHARMACIST'], 'ROLE_PHARMACIST', true);

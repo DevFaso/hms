@@ -126,4 +126,35 @@ describe('PatientSnapshotDrawerComponent', () => {
       );
     });
   }
+
+  // QA D1125 (D1004 class, round 20): opened from the person_search icon or the
+  // patient name, the drawer kept focus on its opener, had no role, ignored
+  // Escape and let Tab walk into the queue behind it.
+  it('is a labelled modal: focus moves in, Escape closes it, focus goes back to the opener', () => {
+    const opener = document.createElement('button');
+    opener.textContent = 'Aperçu';
+    document.body.appendChild(opener);
+    opener.focus();
+    // Created after the click, as the reception cockpit's @if does.
+    fixture = TestBed.createComponent(PatientSnapshotDrawerComponent);
+    component = fixture.componentInstance;
+    document.body.appendChild(fixture.nativeElement);
+    const closed = jasmine.createSpy('panelClosed');
+    component.panelClosed.subscribe(closed);
+    component.patientId = 'p1';
+    fixture.detectChanges();
+
+    const active = document.activeElement as HTMLElement;
+    const dialog = active.closest<HTMLElement>('[role="dialog"]');
+    expect(dialog).withContext('focus moved into the drawer').not.toBeNull();
+    expect(dialog!.getAttribute('aria-modal')).toBe('true');
+    const title = document.getElementById(dialog!.getAttribute('aria-labelledby') ?? '');
+    expect(title?.textContent?.trim()).toBe('RECEPTION.PATIENT_SNAPSHOT');
+
+    active.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    expect(closed).toHaveBeenCalledTimes(1);
+    fixture.destroy();
+    expect(document.activeElement).withContext('focus back on the opener').toBe(opener);
+    opener.remove();
+  });
 });

@@ -648,51 +648,54 @@
   <div
     class="modal-backdrop"
     tabindex="-1"
-    (click)="closeUnassignBed()"
+    (click)="$event.target === $event.currentTarget && closeUnassignBed()"
     (keydown.escape)="closeUnassignBed()"
-  ></div>
-  <div
-    class="modal"
-    appModalDialog
-    aria-labelledby="admissions-unassign-bed-title"
-    (escaped)="closeUnassignBed()"
   >
-    <div class="modal-header">
-      <h2 id="admissions-unassign-bed-title">{{ 'ADMISSION_BED.RELEASE_TITLE' | translate }}</h2>
-      <button
-        [attr.aria-label]="'COMMON.CLOSE' | translate"
-        class="modal-close"
-        (click)="closeUnassignBed()"
-      >
-        <span class="material-symbols-outlined" aria-hidden="true">close</span>
-      </button>
-    </div>
-    <div class="modal-body">
-      <p class="delete-warning">
-        {{ 'ADMISSION_BED.RELEASE_CONFIRM' | translate: { bed: ua.roomBed, name: ua.patientName } }}
-      </p>
-      <div class="form-group">
-        <label for="admission-unassign-bed-reason"
-          >{{ 'ADMISSION_BED.RELEASE_REASON' | translate }} *</label
+    <div
+      class="modal"
+      appModalDialog
+      aria-labelledby="admissions-unassign-bed-title"
+      (escaped)="closeUnassignBed()"
+    >
+      <div class="modal-header">
+        <h2 id="admissions-unassign-bed-title">{{ 'ADMISSION_BED.RELEASE_TITLE' | translate }}</h2>
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="modal-close"
+          (click)="closeUnassignBed()"
         >
-        <textarea
-          id="admission-unassign-bed-reason"
-          rows="3"
-          maxlength="500"
-          required
-          aria-required="true"
-          [ngModel]="unassignReason()"
-          (ngModelChange)="unassignReason.set($event)"
-        ></textarea>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
       </div>
-    </div>
-    <div class="modal-actions">
-      <button class="btn-secondary" (click)="closeUnassignBed()">
-        {{ 'COMMON.CANCEL' | translate }}
-      </button>
-      <button class="btn-danger" (click)="confirmUnassignBed()" [disabled]="unassigning()">
-        {{ 'ADMISSION_BED.RELEASE_ACTION' | translate }}
-      </button>
+      <div class="modal-body">
+        <p class="delete-warning">
+          {{
+            'ADMISSION_BED.RELEASE_CONFIRM' | translate: { bed: ua.roomBed, name: ua.patientName }
+          }}
+        </p>
+        <div class="form-group">
+          <label for="admission-unassign-bed-reason"
+            >{{ 'ADMISSION_BED.RELEASE_REASON' | translate }} *</label
+          >
+          <textarea
+            id="admission-unassign-bed-reason"
+            rows="3"
+            maxlength="500"
+            required
+            aria-required="true"
+            [ngModel]="unassignReason()"
+            (ngModelChange)="unassignReason.set($event)"
+          ></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeUnassignBed()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button class="btn-danger" (click)="confirmUnassignBed()" [disabled]="unassigning()">
+          {{ 'ADMISSION_BED.RELEASE_ACTION' | translate }}
+        </button>
+      </div>
     </div>
   </div>
 }

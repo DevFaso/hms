@@ -7,11 +7,18 @@
     (click)="close()"
     (keydown.enter)="close()"
   ></div>
-  <aside class="snapshot-drawer">
+  <!-- QA D1125: a labelled modal; focus moves in, Escape closes, focus goes back to the opener. -->
+  <aside
+    class="snapshot-drawer"
+    appModalDialog
+    aria-labelledby="dashboard-snapshot-drawer-title"
+    data-testid="dashboard-snapshot-drawer"
+    (escaped)="close()"
+  >
     <!-- Header -->
     <div class="drawer-header">
       <div class="drawer-header-left">
-        <h2 class="drawer-patient-name">{{ pt.name }}</h2>
+        <h2 id="dashboard-snapshot-drawer-title" class="drawer-patient-name">{{ pt.name }}</h2>
         <span class="drawer-meta"
           >{{ pt.age }}{{ pt.sex ? '/' + pt.sex.charAt(0) : '' }} · {{ pt.mrn }}</span
         >
@@ -290,10 +297,18 @@
     (click)="close()"
     (keydown.enter)="close()"
   ></div>
-  <aside class="snapshot-drawer" data-testid="snapshot-status">
+  <aside
+    class="snapshot-drawer"
+    data-testid="snapshot-status"
+    appModalDialog
+    aria-labelledby="dashboard-snapshot-status-title"
+    (escaped)="close()"
+  >
     <div class="drawer-header">
       <div class="drawer-header-left">
-        <h2 class="drawer-patient-name">{{ 'DASHBOARD.SNAPSHOT_TITLE' | translate }}</h2>
+        <h2 id="dashboard-snapshot-status-title" class="drawer-patient-name">
+          {{ 'DASHBOARD.SNAPSHOT_TITLE' | translate }}
+        </h2>
       </div>
       <div class="drawer-header-actions">
         <button

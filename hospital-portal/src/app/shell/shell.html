@@ -14,7 +14,8 @@
     unlabeled; it remains a `complementary` landmark by default, which
     is the correct ARIA role for a non-primary side region.
   -->
-  <aside class="sidebar">
+  <!-- QA D1125: Escape on the phone drawer closes it (an aria-hidden backdrop never gets the key). -->
+  <aside class="sidebar" (keydown.escape)="closeSidebarFromKeyboard()">
     <div class="sidebar-header">
       <div class="logo-area">
         <app-brand-mark [size]="30" tone="onDark" />
@@ -175,12 +176,7 @@
 
   @if (!sidebarCollapsed()) {
     <!-- Phones only (shell.scss): the drawer's backdrop closes it on a tap. -->
-    <div
-      class="sidebar-backdrop"
-      aria-hidden="true"
-      (click)="closeSidebar()"
-      (keydown.escape)="closeSidebar()"
-    ></div>
+    <div class="sidebar-backdrop" aria-hidden="true" (click)="closeSidebar()"></div>
   }
 
   <!-- Main Content -->
@@ -274,6 +270,7 @@
         <!-- Notifications -->
         <button
           class="icon-btn"
+          data-testid="shell-bell"
           (click)="toggleNotifications()"
           [attr.aria-label]="translate.instant('NAV.NOTIFICATIONS_ARIA', { count: unreadCount() })"
         >
@@ -286,6 +283,7 @@
         <!-- Profile -->
         <button
           class="profile-btn"
+          data-testid="shell-profile-btn"
           (click)="toggleProfileMenu()"
           [attr.aria-label]="userName() ? null : ('SHELL.MY_PROFILE' | translate)"
         >
@@ -312,15 +310,17 @@
 
     <!-- Notification Panel -->
     @if (notifPanelOpen()) {
+      <div class="overlay-backdrop" aria-hidden="true" (click)="closeOverlays()"></div>
+      <!-- QA D1125: focus in, Escape, focus back to the bell (appModalDialog). -->
       <div
-        class="overlay-backdrop"
-        aria-hidden="true"
-        (click)="closeOverlays()"
-        (keydown.escape)="closeOverlays()"
-      ></div>
-      <div class="notif-panel">
+        class="notif-panel"
+        appModalDialog
+        aria-labelledby="shell-notif-panel-title"
+        data-testid="shell-notif-panel"
+        (escaped)="closeOverlays()"
+      >
         <div class="panel-header">
-          <h3>{{ 'SHELL.NOTIFICATIONS' | translate }}</h3>
+          <h3 id="shell-notif-panel-title">{{ 'SHELL.NOTIFICATIONS' | translate }}</h3>
           <div class="panel-header-actions">
             @if (unreadCount() > 0) {
               <button
@@ -382,13 +382,15 @@
 
     <!-- Profile Menu -->
     @if (profileMenuOpen()) {
+      <div class="overlay-backdrop" aria-hidden="true" (click)="closeOverlays()"></div>
+      <!-- QA D1125: focus in, Escape, focus back to the avatar (appModalDialog). -->
       <div
-        class="overlay-backdrop"
-        aria-hidden="true"
-        (click)="closeOverlays()"
-        (keydown.escape)="closeOverlays()"
-      ></div>
-      <div class="profile-menu">
+        class="profile-menu"
+        appModalDialog
+        [attr.aria-label]="'SHELL.MY_PROFILE' | translate"
+        data-testid="shell-profile-menu"
+        (escaped)="closeOverlays()"
+      >
         <div class="profile-menu-header">
           <div class="avatar-lg">
             @if (userAvatarUrl()) {

@@ -275,132 +275,133 @@
     <div
       class="modal-backdrop"
       tabindex="-1"
-      (click)="closeRecord()"
+      (click)="$event.target === $event.currentTarget && closeRecord()"
       (keydown.escape)="closeRecord()"
-    ></div>
-    <div
-      class="modal modal-wide"
-      appModalDialog
-      aria-labelledby="mortality-dialog-2-title"
-      (escaped)="closeRecord()"
     >
-      <div class="modal-header">
-        <h2 id="mortality-dialog-2-title">{{ 'MORTALITY.RECORD_DEATH' | translate }}</h2>
-        <button class="modal-close" (click)="closeRecord()">&times;</button>
-      </div>
-      <div class="modal-body">
-        <p class="modal-hint warn">{{ 'MORTALITY.RECORD_HINT' | translate }}</p>
+      <div
+        class="modal modal-wide"
+        appModalDialog
+        aria-labelledby="mortality-dialog-2-title"
+        (escaped)="closeRecord()"
+      >
+        <div class="modal-header">
+          <h2 id="mortality-dialog-2-title">{{ 'MORTALITY.RECORD_DEATH' | translate }}</h2>
+          <button class="modal-close" (click)="closeRecord()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-hint warn">{{ 'MORTALITY.RECORD_HINT' | translate }}</p>
 
-        <app-patient-picker
-          inputId="mort-patientSearch"
-          [selected]="selectedPatient()"
-          (selectedChange)="onPatientPicked($event)"
-        />
+          <app-patient-picker
+            inputId="mort-patientSearch"
+            [selected]="selectedPatient()"
+            (selectedChange)="onPatientPicked($event)"
+          />
 
-        <div class="field-row">
-          <div class="field">
-            <label for="d-when">{{ 'MORTALITY.DIED_AT' | translate }} *</label>
-            <input id="d-when" type="datetime-local" [(ngModel)]="form.diedAt" />
+          <div class="field-row">
+            <div class="field">
+              <label for="d-when">{{ 'MORTALITY.DIED_AT' | translate }} *</label>
+              <input id="d-when" type="datetime-local" [(ngModel)]="form.diedAt" />
+            </div>
+            <div class="field">
+              <label for="d-place">{{ 'MORTALITY.PLACE' | translate }}</label>
+              <select id="d-place" [(ngModel)]="form.placeOfDeath">
+                @for (p of placesOfDeath; track p) {
+                  <option [value]="p">{{ 'MORTALITY.PLACE_' + p | translate }}</option>
+                }
+              </select>
+            </div>
+            <div class="field">
+              <label for="d-manner">{{ 'MORTALITY.MANNER' | translate }}</label>
+              <select id="d-manner" [(ngModel)]="form.mannerOfDeath">
+                @for (m of mannersOfDeath; track m) {
+                  <option [value]="m">{{ 'MORTALITY.MANNER_' + m | translate }}</option>
+                }
+              </select>
+            </div>
           </div>
-          <div class="field">
-            <label for="d-place">{{ 'MORTALITY.PLACE' | translate }}</label>
-            <select id="d-place" [(ngModel)]="form.placeOfDeath">
-              @for (p of placesOfDeath; track p) {
-                <option [value]="p">{{ 'MORTALITY.PLACE_' + p | translate }}</option>
-              }
-            </select>
+
+          <div class="field-row">
+            <div class="field grow">
+              <label for="d-immediate">{{ 'MORTALITY.IMMEDIATE_CAUSE' | translate }} *</label>
+              <input id="d-immediate" type="text" [(ngModel)]="form.immediateCause" />
+            </div>
+            <div class="field">
+              <label for="d-immediate-code">{{ 'MORTALITY.ICD_CODE' | translate }}</label>
+              <input id="d-immediate-code" type="text" [(ngModel)]="form.immediateCauseCode" />
+            </div>
           </div>
+
+          <div class="field-row">
+            <div class="field grow">
+              <label for="d-underlying">{{ 'MORTALITY.UNDERLYING_CAUSE' | translate }}</label>
+              <input id="d-underlying" type="text" [(ngModel)]="form.underlyingCause" />
+            </div>
+            <div class="field">
+              <label for="d-underlying-code">{{ 'MORTALITY.ICD_CODE' | translate }}</label>
+              <input id="d-underlying-code" type="text" [(ngModel)]="form.underlyingCauseCode" />
+            </div>
+          </div>
+          <small class="field-hint">{{ 'MORTALITY.UNDERLYING_HINT' | translate }}</small>
+
           <div class="field">
-            <label for="d-manner">{{ 'MORTALITY.MANNER' | translate }}</label>
-            <select id="d-manner" [(ngModel)]="form.mannerOfDeath">
-              @for (m of mannersOfDeath; track m) {
-                <option [value]="m">{{ 'MORTALITY.MANNER_' + m | translate }}</option>
-              }
-            </select>
+            <label for="d-contributing">{{ 'MORTALITY.CONTRIBUTING' | translate }}</label>
+            <textarea id="d-contributing" rows="2" [(ngModel)]="form.contributingCauses"></textarea>
+          </div>
+
+          <label class="checkbox-field">
+            <input type="checkbox" [(ngModel)]="form.maternalDeath" />
+            {{ 'MORTALITY.IS_MATERNAL' | translate }}
+          </label>
+          @if (form.maternalDeath) {
+            <div class="field">
+              <label for="d-maternal-timing">{{ 'MORTALITY.MATERNAL_TIMING' | translate }} *</label>
+              <select id="d-maternal-timing" [(ngModel)]="form.maternalDeathTiming">
+                @for (t of maternalTimings; track t) {
+                  <option [value]="t">{{ 'MORTALITY.TIMING_' + t | translate }}</option>
+                }
+              </select>
+              <small class="field-hint">{{ 'MORTALITY.MATERNAL_TIMING_HINT' | translate }}</small>
+            </div>
+          }
+
+          <label class="checkbox-field">
+            <input type="checkbox" [(ngModel)]="form.perinatalDeath" />
+            {{ 'MORTALITY.IS_PERINATAL' | translate }}
+          </label>
+          @if (form.perinatalDeath) {
+            <div class="field">
+              <label for="d-perinatal-type">{{ 'MORTALITY.PERINATAL_TYPE' | translate }} *</label>
+              <select id="d-perinatal-type" [(ngModel)]="form.perinatalType">
+                @for (t of perinatalTypes; track t) {
+                  <option [value]="t">{{ 'MORTALITY.PERINATAL_' + t | translate }}</option>
+                }
+              </select>
+              <small class="field-hint">{{ 'MORTALITY.PERINATAL_TYPE_HINT' | translate }}</small>
+            </div>
+          }
+
+          <label class="checkbox-field">
+            <input type="checkbox" [(ngModel)]="form.autopsyRequested" />
+            {{ 'MORTALITY.AUTOPSY' | translate }}
+          </label>
+
+          <div class="field">
+            <label for="d-notes">{{ 'COMMON.NOTES' | translate }}</label>
+            <textarea id="d-notes" rows="2" [(ngModel)]="form.notes"></textarea>
           </div>
         </div>
-
-        <div class="field-row">
-          <div class="field grow">
-            <label for="d-immediate">{{ 'MORTALITY.IMMEDIATE_CAUSE' | translate }} *</label>
-            <input id="d-immediate" type="text" [(ngModel)]="form.immediateCause" />
-          </div>
-          <div class="field">
-            <label for="d-immediate-code">{{ 'MORTALITY.ICD_CODE' | translate }}</label>
-            <input id="d-immediate-code" type="text" [(ngModel)]="form.immediateCauseCode" />
-          </div>
+        <div class="modal-actions">
+          <button class="btn-secondary" (click)="closeRecord()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button
+            class="btn-danger"
+            (click)="submitRecord()"
+            [disabled]="recording() || !form.patientId || !form.diedAt || !form.immediateCause"
+          >
+            {{ 'MORTALITY.RECORD_DEATH' | translate }}
+          </button>
         </div>
-
-        <div class="field-row">
-          <div class="field grow">
-            <label for="d-underlying">{{ 'MORTALITY.UNDERLYING_CAUSE' | translate }}</label>
-            <input id="d-underlying" type="text" [(ngModel)]="form.underlyingCause" />
-          </div>
-          <div class="field">
-            <label for="d-underlying-code">{{ 'MORTALITY.ICD_CODE' | translate }}</label>
-            <input id="d-underlying-code" type="text" [(ngModel)]="form.underlyingCauseCode" />
-          </div>
-        </div>
-        <small class="field-hint">{{ 'MORTALITY.UNDERLYING_HINT' | translate }}</small>
-
-        <div class="field">
-          <label for="d-contributing">{{ 'MORTALITY.CONTRIBUTING' | translate }}</label>
-          <textarea id="d-contributing" rows="2" [(ngModel)]="form.contributingCauses"></textarea>
-        </div>
-
-        <label class="checkbox-field">
-          <input type="checkbox" [(ngModel)]="form.maternalDeath" />
-          {{ 'MORTALITY.IS_MATERNAL' | translate }}
-        </label>
-        @if (form.maternalDeath) {
-          <div class="field">
-            <label for="d-maternal-timing">{{ 'MORTALITY.MATERNAL_TIMING' | translate }} *</label>
-            <select id="d-maternal-timing" [(ngModel)]="form.maternalDeathTiming">
-              @for (t of maternalTimings; track t) {
-                <option [value]="t">{{ 'MORTALITY.TIMING_' + t | translate }}</option>
-              }
-            </select>
-            <small class="field-hint">{{ 'MORTALITY.MATERNAL_TIMING_HINT' | translate }}</small>
-          </div>
-        }
-
-        <label class="checkbox-field">
-          <input type="checkbox" [(ngModel)]="form.perinatalDeath" />
-          {{ 'MORTALITY.IS_PERINATAL' | translate }}
-        </label>
-        @if (form.perinatalDeath) {
-          <div class="field">
-            <label for="d-perinatal-type">{{ 'MORTALITY.PERINATAL_TYPE' | translate }} *</label>
-            <select id="d-perinatal-type" [(ngModel)]="form.perinatalType">
-              @for (t of perinatalTypes; track t) {
-                <option [value]="t">{{ 'MORTALITY.PERINATAL_' + t | translate }}</option>
-              }
-            </select>
-            <small class="field-hint">{{ 'MORTALITY.PERINATAL_TYPE_HINT' | translate }}</small>
-          </div>
-        }
-
-        <label class="checkbox-field">
-          <input type="checkbox" [(ngModel)]="form.autopsyRequested" />
-          {{ 'MORTALITY.AUTOPSY' | translate }}
-        </label>
-
-        <div class="field">
-          <label for="d-notes">{{ 'COMMON.NOTES' | translate }}</label>
-          <textarea id="d-notes" rows="2" [(ngModel)]="form.notes"></textarea>
-        </div>
-      </div>
-      <div class="modal-actions">
-        <button class="btn-secondary" (click)="closeRecord()">
-          {{ 'COMMON.CANCEL' | translate }}
-        </button>
-        <button
-          class="btn-danger"
-          (click)="submitRecord()"
-          [disabled]="recording() || !form.patientId || !form.diedAt || !form.immediateCause"
-        >
-          {{ 'MORTALITY.RECORD_DEATH' | translate }}
-        </button>
       </div>
     </div>
   }
@@ -410,49 +411,50 @@
     <div
       class="modal-backdrop"
       tabindex="-1"
-      (click)="closeAmend()"
+      (click)="$event.target === $event.currentTarget && closeAmend()"
       (keydown.escape)="closeAmend()"
-    ></div>
-    <div
-      class="modal"
-      appModalDialog
-      aria-labelledby="mortality-dialog-1-title"
-      (escaped)="closeAmend()"
     >
-      <div class="modal-header">
-        <h2 id="mortality-dialog-1-title">{{ 'MORTALITY.AMEND' | translate }}</h2>
-        <button class="modal-close" (click)="closeAmend()">&times;</button>
-      </div>
-      <div class="modal-body">
-        <p class="modal-hint">{{ 'MORTALITY.AMEND_HINT' | translate }}</p>
-        <div class="field">
-          <label for="a-reason">{{ 'MORTALITY.AMENDMENT_REASON' | translate }} *</label>
-          <input id="a-reason" type="text" [(ngModel)]="amendForm.amendmentReason" />
+      <div
+        class="modal"
+        appModalDialog
+        aria-labelledby="mortality-dialog-1-title"
+        (escaped)="closeAmend()"
+      >
+        <div class="modal-header">
+          <h2 id="mortality-dialog-1-title">{{ 'MORTALITY.AMEND' | translate }}</h2>
+          <button class="modal-close" (click)="closeAmend()">&times;</button>
         </div>
-        <div class="field">
-          <label for="a-immediate">{{ 'MORTALITY.IMMEDIATE_CAUSE' | translate }}</label>
-          <input id="a-immediate" type="text" [(ngModel)]="amendForm.immediateCause" />
+        <div class="modal-body">
+          <p class="modal-hint">{{ 'MORTALITY.AMEND_HINT' | translate }}</p>
+          <div class="field">
+            <label for="a-reason">{{ 'MORTALITY.AMENDMENT_REASON' | translate }} *</label>
+            <input id="a-reason" type="text" [(ngModel)]="amendForm.amendmentReason" />
+          </div>
+          <div class="field">
+            <label for="a-immediate">{{ 'MORTALITY.IMMEDIATE_CAUSE' | translate }}</label>
+            <input id="a-immediate" type="text" [(ngModel)]="amendForm.immediateCause" />
+          </div>
+          <div class="field">
+            <label for="a-underlying">{{ 'MORTALITY.UNDERLYING_CAUSE' | translate }}</label>
+            <input id="a-underlying" type="text" [(ngModel)]="amendForm.underlyingCause" />
+          </div>
+          <div class="field">
+            <label for="a-notes">{{ 'COMMON.NOTES' | translate }}</label>
+            <textarea id="a-notes" rows="2" [(ngModel)]="amendForm.notes"></textarea>
+          </div>
         </div>
-        <div class="field">
-          <label for="a-underlying">{{ 'MORTALITY.UNDERLYING_CAUSE' | translate }}</label>
-          <input id="a-underlying" type="text" [(ngModel)]="amendForm.underlyingCause" />
+        <div class="modal-actions">
+          <button class="btn-secondary" (click)="closeAmend()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button
+            class="btn-primary"
+            (click)="submitAmend()"
+            [disabled]="amending() || !amendForm.amendmentReason"
+          >
+            {{ 'COMMON.SAVE' | translate }}
+          </button>
         </div>
-        <div class="field">
-          <label for="a-notes">{{ 'COMMON.NOTES' | translate }}</label>
-          <textarea id="a-notes" rows="2" [(ngModel)]="amendForm.notes"></textarea>
-        </div>
-      </div>
-      <div class="modal-actions">
-        <button class="btn-secondary" (click)="closeAmend()">
-          {{ 'COMMON.CANCEL' | translate }}
-        </button>
-        <button
-          class="btn-primary"
-          (click)="submitAmend()"
-          [disabled]="amending() || !amendForm.amendmentReason"
-        >
-          {{ 'COMMON.SAVE' | translate }}
-        </button>
       </div>
     </div>
   }

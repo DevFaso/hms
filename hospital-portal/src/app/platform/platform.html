@@ -566,9 +566,14 @@
       (click)="closeServiceDrawer()"
       (keydown.enter)="closeServiceDrawer()"
     ></div>
-    <aside class="drawer">
+    <aside
+      class="drawer"
+      appModalDialog
+      aria-labelledby="platform-service-drawer-title"
+      (escaped)="closeServiceDrawer()"
+    >
       <div class="drawer-header">
-        <h2>
+        <h2 id="platform-service-drawer-title">
           <span class="material-icons">{{ serviceTypeIcon(selectedService()!.serviceType) }}</span>
           {{ serviceTypeLabel(selectedService()!.serviceType) }}
         </h2>
@@ -944,9 +949,14 @@
       (click)="closeRegisterDrawer()"
       (keydown.enter)="closeRegisterDrawer()"
     ></div>
-    <aside class="drawer">
+    <aside
+      class="drawer"
+      appModalDialog
+      aria-labelledby="platform-register-drawer-title"
+      (escaped)="closeRegisterDrawer()"
+    >
       <div class="drawer-header">
-        <h2>
+        <h2 id="platform-register-drawer-title">
           <span class="material-icons">add_circle</span>
           {{ 'PLATFORM.REGISTER_NEW_SERVICE' | translate }}
         </h2>
@@ -1124,9 +1134,14 @@
       (click)="closeCatalogDetail()"
       (keydown.enter)="closeCatalogDetail()"
     ></div>
-    <aside class="drawer">
+    <aside
+      class="drawer"
+      appModalDialog
+      aria-labelledby="platform-catalog-drawer-title"
+      (escaped)="closeCatalogDetail()"
+    >
       <div class="drawer-header">
-        <h2>
+        <h2 id="platform-catalog-drawer-title">
           <span class="material-icons">{{ serviceTypeIcon(item.serviceType) }}</span>
           {{ item.displayName }}
         </h2>
@@ -1327,9 +1342,14 @@
       (click)="closeReleaseForm()"
       (keydown.enter)="closeReleaseForm()"
     ></div>
-    <aside class="drawer">
+    <aside
+      class="drawer"
+      appModalDialog
+      aria-labelledby="platform-release-drawer-title"
+      (escaped)="closeReleaseForm()"
+    >
       <div class="drawer-header">
-        <h2>
+        <h2 id="platform-release-drawer-title">
           <span class="material-icons">event</span>
           {{ 'PLATFORM.SCHEDULE_RELEASE_WINDOW' | translate }}
         </h2>

@@ -44,6 +44,7 @@ import {
 } from './nav-groups';
 import { ProviderContextService } from '../core/provider-context.service';
 import { SkipLinkComponent } from '../shared/a11y/skip-link.component';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { BrandMarkComponent } from '../shared/brand-mark/brand-mark.component';
 import { HospitalScopeGateService } from '../core/hospital-scope-gate.service';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
@@ -88,6 +89,7 @@ function isMobileViewport(): boolean {
     SkipLinkComponent,
     BrandMarkComponent,
     RoleLabelPipe,
+    ModalDialogDirective,
   ],
   templateUrl: './shell.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -1890,6 +1892,17 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   /** The mobile drawer's backdrop: a tap outside the drawer closes it. */
   closeSidebar(): void {
     this.sidebarCollapsed.set(true);
+  }
+
+  /**
+   * QA D1125: Escape inside the phone drawer closes it and gives focus back to
+   * the menu button (the drawer is hidden, so focus would fall to the page).
+   * On a wide screen the expanded sidebar is not an overlay: Escape leaves it.
+   */
+  closeSidebarFromKeyboard(): void {
+    if (this.sidebarCollapsed() || !isMobileViewport()) return;
+    this.sidebarCollapsed.set(true);
+    globalThis.document?.querySelector<HTMLElement>('.mobile-toggle')?.focus();
   }
 
   toggleProfileMenu(): void {
