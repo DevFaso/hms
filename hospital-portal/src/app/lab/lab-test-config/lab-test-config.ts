@@ -354,6 +354,35 @@ export class LabTestConfigComponent implements OnInit {
    * active one is retired through the approval workflow instead. Mirrors
    * LabTestDefinitionServiceImpl (RANGES_LOCKED and delete).
    */
+  /** QA D1120: only the live (ACTIVE) version gets a new version; a draft is edited directly. */
+  canCreateVersion(def: { approvalStatus?: string | null }): boolean {
+    return def.approvalStatus === 'ACTIVE';
+  }
+
+  readonly creatingVersionId = signal<string | null>(null);
+
+  /**
+   * QA D1120: copies the active definition into a linked DRAFT, which goes
+   * through the same four-eyes approval and replaces it on activation.
+   */
+  createVersion(def: LabTestDefinition): void {
+    if (this.creatingVersionId()) return;
+    this.creatingVersionId.set(def.id);
+    this.labService.createTestDefinitionVersion(def.id).subscribe({
+      next: () => {
+        this.creatingVersionId.set(null);
+        this.toast.success(this.translate.instant('LAB_TEST_CONFIG.VERSION_CREATED'));
+        this.loadDefinitions();
+      },
+      error: (err) => {
+        this.creatingVersionId.set(null);
+        this.toast.error(
+          err?.error?.message ?? this.translate.instant('LAB_TEST_CONFIG.VERSION_ERROR'),
+        );
+      },
+    });
+  }
+
   /** QA D650: a retired definition is read-only (the API answers 409 to an edit). */
   isRetired(def: { approvalStatus?: string | null }): boolean {
     return def.approvalStatus === 'RETIRED';

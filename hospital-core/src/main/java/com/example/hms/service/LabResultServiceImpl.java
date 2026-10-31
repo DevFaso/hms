@@ -330,6 +330,8 @@ public class LabResultServiceImpl implements LabResultService {
             // QA D286: a positive qualitative answer is abnormal. An ingested
             // result keeps the analyzer's own OBX-8 flag.
             result.setAbnormalFlag(LabResultValueRules.flagFor(result.getResultValue(), null, result.getAbnormalFlag()));
+            // QA D1095: units come from the test definition; a blank one is the definition's.
+            result.setResultUnit(LabResultMapper.unitOrTestUnit(result.getResultUnit(), labOrder.getLabTestDefinition()));
         }
         if (superseded != null) {
             result.setSupersedesResultId(superseded.getId());
@@ -819,6 +821,8 @@ public class LabResultServiceImpl implements LabResultService {
         request.setResultDate(plausibleResultDate(request.getResultDate(), labOrder));
         request.setResultValue(LabResultValueRules.normalizeDecimalComma(request.getResultValue()));
         LabResultValueRules.requireValidValue(request.getResultValue(), labOrder.getLabTestDefinition());
+        // QA D1095: as on entry, a blank unit is the test definition's.
+        request.setResultUnit(LabResultMapper.unitOrTestUnit(request.getResultUnit(), labOrder.getLabTestDefinition()));
     UUID currentUserId = authService.getCurrentUserId();
     validateLabResultAuthor(currentUserId, authorityHospitalId(labOrder, hospital, activeHospitalId));
 
@@ -1329,17 +1333,24 @@ public class LabResultServiceImpl implements LabResultService {
     @Override
     @Transactional
     public LabResultResponseDTO releaseLabResult(UUID id, Locale locale) {
-        return doReleaseLabResult(id, false);
+        return doReleaseLabResult(id, false, false);
     }
 
     @Override
     @Transactional
     public LabResultResponseDTO releaseLabResult(UUID id, boolean selfReleaseConfirmed, Locale locale) {
-        return doReleaseLabResult(id, selfReleaseConfirmed);
+        return doReleaseLabResult(id, selfReleaseConfirmed, false);
     }
 
-    /** The release itself; both public entry points run it in their own transaction. */
-    private LabResultResponseDTO doReleaseLabResult(UUID id, boolean selfReleaseConfirmed) {
+    @Override
+    @Transactional
+    public LabResultResponseDTO releaseLabResult(UUID id, boolean selfReleaseConfirmed, boolean ungradedConfirmed,
+                                                 Locale locale) {
+        return doReleaseLabResult(id, selfReleaseConfirmed, ungradedConfirmed);
+    }
+
+    /** The release itself; every public entry point runs it in its own transaction. */
+    private LabResultResponseDTO doReleaseLabResult(UUID id, boolean selfReleaseConfirmed, boolean ungradedConfirmed) {
         LabResult labResult = labResultRepository.findById(id)
             .orElseThrow(() -> new ResourceNotFoundException(LAB_RESULT_NOT_FOUND));
         // Release was the one write path here without the scope comparison
@@ -1374,6 +1385,18 @@ public class LabResultServiceImpl implements LabResultService {
         boolean selfRelease = LabResultMapper.enteredBy(labResult, actorId);
         if (selfRelease && !selfReleaseConfirmed) {
             throw new ConflictException(com.example.hms.utility.MessageUtil.resolve("labresult.selfRelease.confirmRequired"));
+        }
+        // QA D1092: a value no range can grade (its unit matches none and
+        // converts to none) carries no severity, so it can raise no critical
+        // alert. It is never released in one unconsidered click: the releaser
+        // confirms they reviewed it, and the ordering clinician's in-basket
+        // item is flagged for review (fileInOrderingClinicianInBasketAfterCommit).
+        if (!ungradedConfirmed) {
+            initialiseTestDefinition(labResult.getLabOrder());
+            if (labResultMapper.isUngradedForUnitMismatch(labResult)) {
+                throw new ConflictException(com.example.hms.utility.MessageUtil.resolve(
+                    UNGRADED_RELEASE_CONFIRM_KEY, LabResultMapper.unitOf(labResult)));
+            }
         }
 
         LabResult superseded = null;
@@ -1443,6 +1466,10 @@ public class LabResultServiceImpl implements LabResultService {
      * (ids only) rather than undoing the release.
      */
     static final String CORRECTION_IN_BASKET_TITLE_KEY = "lab.result.correction.inBasketTitle";
+    /** QA D1092: the 409 a release of an ungraded result answers until it is confirmed. */
+    static final String UNGRADED_RELEASE_CONFIRM_KEY = "labresult.release.ungraded.confirmRequired";
+    /** QA D1092: the in-basket body of a released result no range could grade. */
+    static final String UNGRADED_IN_BASKET_BODY_KEY = "lab.result.ungraded.inBasketBody";
     static final String CORRECTION_IN_BASKET_BODY_KEY = "lab.result.correction.inBasketBody";
 
     private void fileInOrderingClinicianInBasketAfterCommit(LabResult labResult, LabResult superseded) {
@@ -1466,6 +1493,12 @@ public class LabResultServiceImpl implements LabResultService {
         // QA D931: a value the clinician may already have acted on has changed;
         // that is never a routine item, whatever the new value grades as.
         if (superseded != null && priority == com.example.hms.enums.InBasketPriority.NORMAL) {
+            priority = com.example.hms.enums.InBasketPriority.URGENT;
+        }
+        // QA D1092: no range could grade the value (its unit matches none), so
+        // nothing can say it is not critical. The clinician reviews it.
+        boolean ungraded = labResultMapper.isUngradedForUnitMismatch(labResult);
+        if (ungraded && priority == com.example.hms.enums.InBasketPriority.NORMAL) {
             priority = com.example.hms.enums.InBasketPriority.URGENT;
         }
         String testName = order.getLabTestDefinition() != null
@@ -1495,6 +1528,15 @@ public class LabResultServiceImpl implements LabResultService {
             request.setBody(com.example.hms.utility.MessageUtil.resolve(
                 com.example.hms.service.i18n.NotificationLocales.STAFF, CORRECTION_IN_BASKET_BODY_KEY, bodyArgs));
             request.setBodyKey(CORRECTION_IN_BASKET_BODY_KEY);
+            request.setBodyArgs(bodyArgs);
+        }
+        if (ungraded && superseded == null) {
+            Object[] bodyArgs = {
+                com.example.hms.service.lab.LabResultReleaseNotifier.valueOf(labResult)
+            };
+            request.setBody(com.example.hms.utility.MessageUtil.resolve(
+                com.example.hms.service.i18n.NotificationLocales.STAFF, UNGRADED_IN_BASKET_BODY_KEY, bodyArgs));
+            request.setBodyKey(UNGRADED_IN_BASKET_BODY_KEY);
             request.setBodyArgs(bodyArgs);
         }
         request.setTitle(title);
@@ -2322,10 +2364,10 @@ public class LabResultServiceImpl implements LabResultService {
 
             LabResultComparisonDTO.TrendDirection direction = determineTrendDirection(trendHistory);
             String significance = determineSignificance(percentageChange);
-            String interpretation = generateInterpretation(currentNum, previousNum, absoluteChange, percentageChange, daysBetween, current.getResultUnit());
+            String interpretation = generateInterpretation(currentNum, previousNum, absoluteChange, percentageChange, daysBetween, LabResultMapper.unitOf(current));
 
             return LabResultComparisonDTO.ComparisonMetadata.builder()
-                .absoluteChange(String.format("%.2f %s", absoluteChange, current.getResultUnit() != null ? current.getResultUnit() : ""))
+                .absoluteChange(String.format("%.2f %s", absoluteChange, LabResultMapper.unitOf(current) != null ? LabResultMapper.unitOf(current) : ""))
                 .percentageChange(percentageChange)
                 .trendDirection(direction)
                 .daysBetween(daysBetween)

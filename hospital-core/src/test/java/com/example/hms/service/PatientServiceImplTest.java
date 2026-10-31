@@ -964,7 +964,7 @@ class PatientServiceImplTest {
                 .filteredOn(entry -> "LAB_RESULT".equals(entry.getCategory()))
                 .singleElement()
                 .extracting(PatientTimelineEntryDTO::getSummary)
-                .isEqualTo("Glycémie à jeun: 0.92 g/L");
+                .isEqualTo("Glycémie à jeun : 0.92 g/L"); // QA D1079: French colon spacing
             assertThat(response.getEntries())
                 .filteredOn(entry -> "ENCOUNTER".equals(entry.getCategory()))
                 .singleElement()

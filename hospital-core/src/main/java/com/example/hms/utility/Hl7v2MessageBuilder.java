@@ -135,7 +135,7 @@ public class Hl7v2MessageBuilder {
             "OBR|1|" + orderId + "||" + testCode + "^" + testName + "|||" + resultDate + SEG_TERM +
             "OBX|1|" + valueType(result.getResultValue()) + "|" + testCode + "^" + testName + "||"
             + encodeEscapes(result.getResultValue()) + "|" +
-            encodeEscapes(result.getResultUnit()) + "||" + abnormalFlag + "|||" + resultStatus
+            encodeEscapes(com.example.hms.mapper.LabResultMapper.unitOf(result)) + "||" + abnormalFlag + "|||" + resultStatus
             + "|||" + resultDate + SEG_TERM;
     }
 

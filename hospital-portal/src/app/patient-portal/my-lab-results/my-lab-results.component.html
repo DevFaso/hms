@@ -49,7 +49,10 @@
               } @else {
                 <span class="pli-sub">
                   {{ 'PORTAL.LAB_RESULTS.RESULT_PREFIX' | translate }}
-                  <strong>{{ displayResult(lab.result) }}</strong>
+                  <!-- QA D1095: the value is never shown without its unit -->
+                  <strong
+                    >{{ displayResult(lab.result) }}{{ lab.unit ? ' ' + lab.unit : '' }}</strong
+                  >
                   @if (lab.referenceRange) {
                     &nbsp;({{ 'PORTAL.LAB_RESULTS.NORMAL_PREFIX' | translate }}
                     {{ displayResult(lab.referenceRange) }})
@@ -83,7 +86,7 @@
                     >{{
                       lab.isPending
                         ? ('PORTAL.LAB_RESULTS.PENDING_RESULT' | translate)
-                        : displayResult(lab.result)
+                        : displayResult(lab.result) + (lab.unit ? ' ' + lab.unit : '')
                     }}
                     <app-lab-correction-badge [corrected]="lab.corrected" audience="patient"
                   /></span>

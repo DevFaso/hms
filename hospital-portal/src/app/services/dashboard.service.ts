@@ -220,6 +220,8 @@ export interface DoctorResultQueueItem {
   patientId: string;
   testName: string;
   resultValue: string;
+  /** QA D1095: the value's unit (the test definition's when none was typed). */
+  resultUnit?: string | null;
   /** NORMAL | ABNORMAL | CRITICAL — the three-value family, nothing else. */
   abnormalFlag: string;
   /**

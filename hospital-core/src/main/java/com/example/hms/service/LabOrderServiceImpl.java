@@ -310,6 +310,7 @@ public class LabOrderServiceImpl implements LabOrderService {
         if (hospital != null && requestedHospitalId != null && !hospital.getId().equals(requestedHospitalId)) {
             throw new BusinessException("lab.order.encounterHospitalMismatch");
         }
+        requireOrderableEncounter(encounter, patient, base);
 
         if (hospital == null && requestedHospitalId != null) {
             hospital = hospitalRepository.findClinicalById(requestedHospitalId)
@@ -384,6 +385,30 @@ public class LabOrderServiceImpl implements LabOrderService {
         applyStandingOrderMetadata(labOrder, request, base, labOrder.getOrderDatetime());
 
         return labOrder;
+    }
+
+    /**
+     * QA D1094: the visit a lab order is attached to. Any clinician of the
+     * visit's hospital who may order tests orders on it (the role check
+     * follows), as in a real hospital: the visit need not be theirs. It must
+     * be this patient's, and a NEW order (or one moved onto another visit) goes
+     * only on a visit still open - a closed visit takes a new visit. Each
+     * refusal is a translated 400; the entity's invariants are never the first
+     * to say no (they answered a colleague's visit with a 500).
+     */
+    static void requireOrderableEncounter(Encounter encounter, Patient patient, LabOrder base) {
+        if (encounter == null) {
+            return;
+        }
+        if (encounter.getPatient() == null || patient == null
+                || !java.util.Objects.equals(encounter.getPatient().getId(), patient.getId())) {
+            throw new BusinessException("lab.order.encounterPatientMismatch");
+        }
+        boolean sameVisitAsBefore = base != null && base.getEncounter() != null
+            && java.util.Objects.equals(base.getEncounter().getId(), encounter.getId());
+        if (!sameVisitAsBefore && encounter.getStatus() != null && encounter.getStatus().isClosed()) {
+            throw new BusinessException("lab.order.encounterClosed", encounter.getStatus().localizedLabel());
+        }
     }
 
     private static final java.util.Set<String> LAB_PRIORITIES = java.util.Set.of("ROUTINE", "URGENT", "STAT");

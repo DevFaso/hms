@@ -88,7 +88,15 @@
         <tbody>
           @for (def of filtered(); track def.id) {
             <tr class="data-row">
-              <td class="order-code">{{ def.testCode }}</td>
+              <td class="order-code">
+                {{ def.testCode }}
+                @if ((def.versionNumber ?? 1) > 1) {
+                  <!-- QA D1120: a new version, which replaces the active one on activation -->
+                  <span class="code-badge" data-testid="approval-def-version">{{
+                    'LAB_TEST_CONFIG.VERSION_LABEL' | translate: { version: def.versionNumber }
+                  }}</span>
+                }
+              </td>
               <td>
                 <div class="cell-primary">{{ def.testName }}</div>
                 @if (def.description) {

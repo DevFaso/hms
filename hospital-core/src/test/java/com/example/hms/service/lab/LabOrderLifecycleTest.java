@@ -172,4 +172,15 @@ class LabOrderLifecycleTest {
         assertThat(LabOrderLifecycle.statusAfterSpecimenRejected(null)).isNull();
         assertThat(LabOrderLifecycle.acceptsSpecimenRejection(null)).isFalse();
     }
+
+    /** QA D1109: every status is decided - only an order awaiting or in analysis takes a new specimen. */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(LabOrderStatus.class)
+    void d1109_everyStatusDecidesWhetherANewSpecimenIsTaken(LabOrderStatus status) {
+        boolean open = java.util.EnumSet.of(LabOrderStatus.ORDERED, LabOrderStatus.PENDING,
+            LabOrderStatus.COLLECTED, LabOrderStatus.RECEIVED, LabOrderStatus.IN_PROGRESS).contains(status);
+        assertThat(LabOrderLifecycle.acceptsNewSpecimen(status)).isEqualTo(open);
+        assertThat(LabOrderLifecycle.acceptsSpecimenReceipt(status))
+            .isEqualTo(status != LabOrderStatus.CANCELLED && status != LabOrderStatus.ENTERED_IN_ERROR);
+    }
 }

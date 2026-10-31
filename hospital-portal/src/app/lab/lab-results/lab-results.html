@@ -633,13 +633,23 @@
             />
           </div>
           <div class="field">
-            <label for="lr-resultUnit">{{ 'LAB_RESULTS.UNIT' | translate }}</label>
+            <label for="lr-resultUnit"
+              >{{ 'LAB_RESULTS.UNIT' | translate }}{{ selectedTestUnit() ? ' *' : '' }}</label
+            >
             <input
               id="lr-resultUnit"
               type="text"
               [(ngModel)]="form.resultUnit"
-              [placeholder]="'LAB_RESULTS.UNIT_PLACEHOLDER' | translate"
+              [placeholder]="selectedTestUnit() || ('LAB_RESULTS.UNIT_PLACEHOLDER' | translate)"
+              [required]="!!selectedTestUnit()"
+              aria-describedby="lr-resultUnit-hint"
             />
+            @if (selectedTestUnit(); as testUnit) {
+              <!-- QA D1095 / D1092: the unit the test's ranges grade; another unit may not be graded -->
+              <small id="lr-resultUnit-hint" class="field-hint">{{
+                'LAB_RESULTS.UNIT_FROM_TEST' | translate: { unit: testUnit }
+              }}</small>
+            }
           </div>
         </div>
         <div class="form-row">
@@ -702,13 +712,25 @@
       cdkTrapFocus
       [cdkTrapFocusAutoCapture]="true"
       (keydown.escape)="cancelSelfRelease(); $event.stopPropagation()"
-      [attr.aria-label]="'LAB_RESULTS.SELF_RELEASE_TITLE' | translate"
+      [attr.aria-label]="
+        (isSelfRelease(target)
+          ? 'LAB_RESULTS.SELF_RELEASE_TITLE'
+          : 'LAB_RESULTS.UNGRADED_RELEASE_TITLE'
+        ) | translate
+      "
       tabindex="-1"
       (click)="$event.stopPropagation()"
       data-testid="self-release-modal"
     >
       <div class="modal-header">
-        <h2>{{ 'LAB_RESULTS.SELF_RELEASE_TITLE' | translate }}</h2>
+        <h2>
+          {{
+            (isSelfRelease(target)
+              ? 'LAB_RESULTS.SELF_RELEASE_TITLE'
+              : 'LAB_RESULTS.UNGRADED_RELEASE_TITLE'
+            ) | translate
+          }}
+        </h2>
         <button
           [attr.aria-label]="'COMMON.CLOSE' | translate"
           class="modal-close"
@@ -718,13 +740,21 @@
         </button>
       </div>
       <div class="modal-body">
-        <p>
-          {{
-            'LAB_RESULTS.SELF_RELEASE_BODY'
-              | translate
-                : { test: target.labTestName || '—', patient: target.patientFullName || '—' }
-          }}
-        </p>
+        @if (isSelfRelease(target)) {
+          <p>
+            {{
+              'LAB_RESULTS.SELF_RELEASE_BODY'
+                | translate
+                  : { test: target.labTestName || '—', patient: target.patientFullName || '—' }
+            }}
+          </p>
+        }
+        @if (target.unitMismatch) {
+          <!-- QA D1092: no range can grade this value; releasing it is a reviewed decision -->
+          <p role="note" data-testid="release-ungraded-note">
+            {{ 'LAB_RELEASE.UNGRADED_NOTE' | translate: { unit: target.resultUnit || '—' } }}
+          </p>
+        }
       </div>
       <div class="modal-actions">
         <button class="btn-secondary" (click)="cancelSelfRelease()">
@@ -735,7 +765,12 @@
           (click)="confirmSelfRelease()"
           data-testid="self-release-confirm"
         >
-          {{ 'LAB_RESULTS.SELF_RELEASE_CONFIRM' | translate }}
+          {{
+            (isSelfRelease(target)
+              ? 'LAB_RESULTS.SELF_RELEASE_CONFIRM'
+              : 'LAB_RESULTS.UNGRADED_RELEASE_CONFIRM'
+            ) | translate
+          }}
         </button>
       </div>
     </div>

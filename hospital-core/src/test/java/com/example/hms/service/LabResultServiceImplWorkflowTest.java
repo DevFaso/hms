@@ -764,4 +764,59 @@ class LabResultServiceImplWorkflowTest {
             () -> labResultService.acknowledgeLabResult(labResultId, Locale.US));
         assertThat(labResult.isAcknowledged()).isFalse();
     }
+
+    /**
+     * QA D1092: a value no range can grade (its unit matches none and converts
+     * to none) raises no critical alert, so it is never released in one
+     * unconsidered click. Without the confirmation the release is a 409 and
+     * nothing is written.
+     */
+    @Test
+    void d1092_anUngradedResultIsNotReleasedWithoutConfirmation() {
+        UUID labResultId = UUID.randomUUID();
+        LabResult labResult = buildLabResult(labResultId);
+        labResult.setResultUnit("mEq/L");
+        User author = new User();
+        author.setId(UUID.randomUUID());
+        resultAssignment.setUser(author);
+        UUID actorId = UUID.randomUUID();
+
+        when(labResultRepository.findById(labResultId)).thenReturn(Optional.of(labResult));
+        when(authService.getCurrentUserId()).thenReturn(actorId);
+        when(roleValidator.isLabScientist(actorId, hospitalId)).thenReturn(true);
+        when(labResultMapper.isUngradedForUnitMismatch(labResult)).thenReturn(true);
+
+        assertThatThrownBy(() -> labResultService.releaseLabResult(labResultId, false, false, Locale.US))
+            .isInstanceOf(com.example.hms.exception.ConflictException.class)
+            .hasMessageContaining("mEq/L");
+        assertThatThrownBy(() -> labResultService.releaseLabResult(labResultId, false, Locale.US))
+            .as("the entry point without the flag refuses too")
+            .isInstanceOf(com.example.hms.exception.ConflictException.class);
+        assertThat(labResult.isReleased()).isFalse();
+        verify(labResultRepository, never()).save(any());
+        verify(criticalValueNotificationService, never()).notifyIfCritical(any(), any());
+    }
+
+    /** QA D1092: confirmed, it is released; the reviewer said they read the warning. */
+    @Test
+    void d1092_aConfirmedUngradedReleaseGoesThrough() {
+        UUID labResultId = UUID.randomUUID();
+        LabResult labResult = buildLabResult(labResultId);
+        labResult.setResultUnit("mEq/L");
+        User author = new User();
+        author.setId(UUID.randomUUID());
+        resultAssignment.setUser(author);
+        UUID actorId = UUID.randomUUID();
+
+        when(labResultRepository.findById(labResultId)).thenReturn(Optional.of(labResult));
+        when(authService.getCurrentUserId()).thenReturn(actorId);
+        when(roleValidator.isLabScientist(actorId, hospitalId)).thenReturn(true);
+        when(labResultRepository.save(labResult)).thenReturn(labResult);
+        when(labResultMapper.toResponseDTO(labResult)).thenReturn(LabResultResponseDTO.builder().build());
+
+        labResultService.releaseLabResult(labResultId, false, true, Locale.US);
+
+        assertThat(labResult.isReleased()).isTrue();
+        verify(labResultRepository).save(labResult);
+    }
 }

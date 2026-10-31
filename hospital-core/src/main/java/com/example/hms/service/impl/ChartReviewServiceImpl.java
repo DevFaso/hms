@@ -235,10 +235,12 @@ public class ChartReviewServiceImpl implements ChartReviewService {
         return source.stream().map(ChartReviewServiceImpl::toNursingNoteDto).toList();
     }
 
-    static NoteEntryDTO toNursingNoteDto(NursingNote note) {
+    public static NoteEntryDTO toNursingNoteDto(NursingNote note) {
         return NoteEntryDTO.builder()
             .id(note.getId())
             .template(note.getTemplate() != null ? note.getTemplate().name() : null)
+            // QA D1107: the title the nurse typed, shown above the note.
+            .title(note.getTitle() != null && !note.getTitle().isBlank() ? note.getTitle().strip() : null)
             .authorName(firstNonBlankOf(note.getSignedByName(), note.getAuthorName()))
             .authorCredentials(firstNonBlankOf(note.getSignedByCredentials(), note.getAuthorCredentials()))
             .documentedAt(note.getDocumentedAt())
@@ -247,7 +249,7 @@ public class ChartReviewServiceImpl implements ChartReviewService {
             .lateEntry(note.isLateEntry())
             .preview(firstPreview(note.getNarrative(), note.getDataAssessment(), note.getActionSummary(),
                 note.getResponseSummary(), note.getDataSubjective(), note.getDataObjective(), note.getDataPlan(),
-                note.getDataImplementation(), note.getDataEvaluation(), note.getEducationSummary(), note.getTitle()))
+                note.getDataImplementation(), note.getDataEvaluation(), note.getEducationSummary()))
             .source(NOTE_SOURCE_NURSING)
             .build();
     }
@@ -424,7 +426,8 @@ public class ChartReviewServiceImpl implements ChartReviewService {
             .id(n.getId())
             .section(Section.NOTE)
             .occurredAt(n.getDocumentedAt())
-            .title(joinNonBlank(" — ", n.getTemplate(), n.getAuthorName()))
+            // QA D1107: the note's own title leads, when it has one.
+            .title(joinNonBlank(" — ", n.getTitle(), n.getTemplate(), n.getAuthorName()))
             .summary(n.getPreview())
             .status(n.isSigned() ? "SIGNED" : "DRAFT")
             .build()));
@@ -571,7 +574,7 @@ public class ChartReviewServiceImpl implements ChartReviewService {
             .testName(testName)
             .testCode(testCode)
             .resultValue(showsValue ? r.getResultValue() : null)
-            .resultUnit(showsValue ? r.getResultUnit() : null)
+            .resultUnit(showsValue ? com.example.hms.mapper.LabResultMapper.unitOf(r) : null)
             .abnormalFlag(showsValue ? gradedSeverity(r) : null)
             .abnormalDirection(showsValue ? gradedDirection(r) : null)
             .resultDate(r.getResultDate())

@@ -24,7 +24,11 @@ import {
 } from '../services/lab.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
-import { EncounterService, EncounterResponse } from '../services/encounter.service';
+import {
+  EncounterService,
+  EncounterResponse,
+  isClosedEncounterStatus,
+} from '../services/encounter.service';
 import { ProfileService } from '../services/profile.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
@@ -417,8 +421,13 @@ export class LabComponent implements OnInit {
     this.encounterService.list({ patientId, hospitalId }).subscribe({
       next: (list) => {
         if (this.form.patientId !== patientId) return;
+        // QA D1094: any treating clinician of the hospital orders on an OPEN
+        // visit, a colleague's included; a closed visit takes no new order
+        // (the server refuses it), so it is not offered.
         this.patientEncounters.set(
-          [...list].sort((a, b) => (b.encounterDate ?? '').localeCompare(a.encounterDate ?? '')),
+          [...list]
+            .filter((e) => !isClosedEncounterStatus(e.status))
+            .sort((a, b) => (b.encounterDate ?? '').localeCompare(a.encounterDate ?? '')),
         );
       },
       error: () => this.patientEncounters.set([]),
@@ -529,8 +538,17 @@ export class LabComponent implements OnInit {
         this.saving.set(false);
         this.loadOrders();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('LAB.TOAST.SAVE_FAILED'));
+      error: (err: unknown) => {
+        // QA D1094: a refusal the server explains (a closed visit, another
+        // patient's visit) is shown in the reader's language; only a failure
+        // with no message falls back to the generic toast.
+        const status = (err as { status?: number } | null)?.status ?? 0;
+        const message = (err as { error?: { message?: unknown } } | null)?.error?.message;
+        this.toast.error(
+          status >= 400 && status < 500 && typeof message === 'string' && message.trim()
+            ? message
+            : this.translate.instant('LAB.TOAST.SAVE_FAILED'),
+        );
         this.saving.set(false);
       },
     });
@@ -933,24 +951,36 @@ export class LabComponent implements OnInit {
    * and a specimen already collected on it is not received (the server
    * refuses both, and a receipt would queue an analyzer work order).
    */
+  /**
+   * QA D1109: an order takes a new specimen only while it awaits or is in
+   * analysis (LabOrderLifecycle.acceptsNewSpecimen). Once a result exists it is
+   * answered (a repeat is a new order), and a cancelled or voided order takes
+   * nothing; the form was offered on released orders and left dangling tubes.
+   */
+  private static readonly SPECIMEN_OPEN_STATUSES = new Set([
+    'ORDERED',
+    'PENDING',
+    'COLLECTED',
+    'RECEIVED',
+    'IN_PROGRESS',
+  ]);
+
   specimensOrderAcceptsSpecimens(): boolean {
-    return this.specimensOrder()?.status !== 'ENTERED_IN_ERROR';
+    const status = this.specimensOrder()?.status;
+    return !!status && LabComponent.SPECIMEN_OPEN_STATUSES.has(status);
   }
 
+  /** Not once a result exists, nor on a cancelled or voided order (the same set). */
   specimensOrderAcceptsRejection(): boolean {
+    return this.specimensOrderAcceptsSpecimens();
+  }
+
+  /** QA D1109: a tube already collected is received unless its order was cancelled or voided. */
+  canReceive(specimen: LabSpecimen): boolean {
     const status = this.specimensOrder()?.status;
     return (
-      this.specimensOrderAcceptsSpecimens() &&
+      status !== 'ENTERED_IN_ERROR' &&
       status !== 'CANCELLED' &&
-      status !== 'RESULTED' &&
-      status !== 'VERIFIED' &&
-      status !== 'COMPLETED'
-    );
-  }
-
-  canReceive(specimen: LabSpecimen): boolean {
-    return (
-      this.specimensOrderAcceptsSpecimens() &&
       (specimen.status === 'COLLECTED' || specimen.status === 'IN_TRANSIT')
     );
   }

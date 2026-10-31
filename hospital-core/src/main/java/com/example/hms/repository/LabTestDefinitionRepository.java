@@ -31,6 +31,32 @@ public interface LabTestDefinitionRepository extends JpaRepository<LabTestDefini
 
     List<LabTestDefinition> findByHospital_IdAndActiveTrue(UUID hospitalId);
 
+    /**
+     * QA D1120: the definitions of one hospital's catalogue that carry
+     * {@code testCode} and are not retired - the live code a new definition
+     * there may not reuse.
+     */
+    @Query("""
+        SELECT l FROM LabTestDefinition l
+        WHERE UPPER(l.testCode) = UPPER(:testCode)
+          AND l.approvalStatus <> com.example.hms.enums.LabTestDefinitionApprovalStatus.RETIRED
+          AND l.hospital.id = :hospitalId
+    """)
+    List<LabTestDefinition> findLiveByCodeAtHospital(@Param("testCode") String testCode,
+                                                     @Param("hospitalId") UUID hospitalId);
+
+    /** QA D1120: as {@link #findLiveByCodeAtHospital}, in the global (platform) catalogue. */
+    @Query("""
+        SELECT l FROM LabTestDefinition l
+        WHERE UPPER(l.testCode) = UPPER(:testCode)
+          AND l.approvalStatus <> com.example.hms.enums.LabTestDefinitionApprovalStatus.RETIRED
+          AND l.hospital IS NULL
+    """)
+    List<LabTestDefinition> findLiveGlobalByCode(@Param("testCode") String testCode);
+
+    /** QA D1120: the versions that replace {@code definitionId} (a draft in progress, or retired history). */
+    List<LabTestDefinition> findBySupersedesDefinitionId(UUID definitionId);
+
     List<LabTestDefinition> findByHospitalIsNullAndActiveTrue();
 
     /**

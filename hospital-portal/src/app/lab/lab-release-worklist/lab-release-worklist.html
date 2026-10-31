@@ -244,6 +244,12 @@
           </p>
         }
         <p class="confirm-note">{{ 'LAB_RELEASE.CONFIRM_NOTE' | translate }}</p>
+        @if (target.unitMismatch) {
+          <!-- QA D1092: no range can grade this value; releasing it is a reviewed decision -->
+          <p class="self-release-note" role="note" data-testid="release-ungraded-note">
+            {{ 'LAB_RELEASE.UNGRADED_NOTE' | translate: { unit: target.resultUnit || '—' } }}
+          </p>
+        }
         @if (isSelfRelease(target)) {
           <p class="self-release-note" role="note" data-testid="self-release-note">
             {{ 'LAB_RELEASE.SELF_RELEASE_NOTE' | translate }}

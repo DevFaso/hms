@@ -427,8 +427,9 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
     }
 
     private String resolveUnit(LabResult result, LabTestDefinition definition) {
-        if (result.getResultUnit() != null && !result.getResultUnit().isBlank()) {
-            return result.getResultUnit();
+        String stated = com.example.hms.mapper.LabResultMapper.unitOf(result);
+        if (stated != null) {
+            return stated;
         }
         if (definition != null && definition.getUnit() != null && !definition.getUnit().isBlank()) {
             return definition.getUnit();

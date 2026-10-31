@@ -488,6 +488,7 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
                                     ? r.getLabOrder().getLabTestDefinition().getName()
                                     : com.example.hms.utility.MessageUtil.resolveOrRaw(com.example.hms.mapper.LabOrderMapper.DELETED_TEST_LABEL))
                             .value(r.getResultValue())
+                            .unit(com.example.hms.mapper.LabResultMapper.unitOf(r))
                             .flag(labResultFlag(r))
                             .abnormalDirection(r.getAbnormalFlag() != null ? r.getAbnormalFlag().direction() : null)
                             .date(r.getResultDate() != null ? r.getResultDate().format(DATE_FMT) : "")

@@ -215,6 +215,8 @@ public class PatientRecordPdfService {
         return join(SEPARATOR, t.fmt(n.getDocumentedAt()),
             "NURSING".equals(n.getSource()) ? t.get("pdf.record.note.nursing") : null,
             label(t, n.getTemplate()),
+            // QA D1107: the note's title, as the chart review shows it.
+            n.getTitle(),
             n.getAuthorName(), t.get(n.isSigned() ? "pdf.record.note.signed" : "pdf.record.note.draft"),
             n.getPreview());
     }
