@@ -1,4 +1,6 @@
+import { LocaleNumberPipe } from '../shared/pipes/lab-value.pipe';
 import { glucoseMgDlToMmol } from '../shared/glucose-units';
+import { formatDecimal } from '../shared/i18n/app-locale';
 import {
   Component,
   computed,
@@ -74,6 +76,7 @@ type TabKey =
   selector: 'app-patient-detail',
   standalone: true,
   imports: [
+    LocaleNumberPipe,
     NursingNotesPanelComponent,
     ClockTimePipe,
     ServerTimePipe,
@@ -665,12 +668,7 @@ export class PatientDetailComponent implements OnInit {
    *  exact gap once hid this tab's wire mismatch behind "sparse data".) */
   /** QA D530: glucose shown in mmol/L, the unit the lab reports. */
   glucoseMmol(mgDl: number | null | undefined): string {
-    return mgDl == null
-      ? ''
-      : glucoseMgDlToMmol(mgDl).toLocaleString(this.translate.currentLang || 'fr', {
-          minimumFractionDigits: 1,
-          maximumFractionDigits: 1,
-        });
+    return mgDl == null ? '' : formatDecimal(glucoseMgDlToMmol(mgDl), 1);
   }
 
   hasValue(value: number | null | undefined): boolean {

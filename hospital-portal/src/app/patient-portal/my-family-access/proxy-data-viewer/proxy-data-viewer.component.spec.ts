@@ -1,3 +1,4 @@
+import { resetStoredLangForTests } from '../../../shared/i18n/app-locale';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
@@ -183,5 +184,52 @@ describe('ProxyDataViewerComponent', () => {
     const records = fixture.nativeElement.querySelector('[data-testid="proxy-records"]');
     expect(records.textContent).toContain('Hemoglobin');
     expect(records.textContent).toContain('PORTAL.LAB_RESULTS.PENDING_RESULT');
+  });
+  it('QA D1116: a released lab value and its range read in the reader notation', () => {
+    const previousLang = localStorage.getItem('lang');
+    localStorage.setItem('lang', 'fr');
+    resetStoredLangForTests();
+    try {
+      portal.getMyProxyAccess.and.returnValue(of([grant('VIEW_RECORDS')]));
+      portal.getProxyRecords.and.returnValue(
+        of({
+          profile: {} as never,
+          recentLabResults: [
+            {
+              id: 'l2',
+              testName: 'Kaliémie',
+              result: '2.5',
+              referenceRange: '3.5 - 5 mmol/L',
+              status: 'COMPLETED',
+              collectedDate: '2026-09-20T08:00:00',
+              released: true,
+              isPending: false,
+              isAbnormal: true,
+              unit: 'mmol/L',
+              orderedBy: '',
+              performedBy: '',
+              category: '',
+              notes: '',
+              resultedAt: '',
+            },
+          ],
+          currentMedications: [],
+          latestVitals: [],
+          immunizations: [],
+          allergies: [],
+          activeDiagnoses: [],
+        }),
+      );
+      fixture.detectChanges();
+      const records: HTMLElement = fixture.nativeElement.querySelector(
+        '[data-testid="proxy-records"]',
+      );
+      expect(records.textContent).toContain('2,5');
+      expect(records.textContent).not.toContain('2.5');
+    } finally {
+      if (previousLang === null) localStorage.removeItem('lang');
+      else localStorage.setItem('lang', previousLang);
+      resetStoredLangForTests();
+    }
   });
 });
