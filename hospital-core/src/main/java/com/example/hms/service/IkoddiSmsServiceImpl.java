@@ -8,7 +8,6 @@ import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.Locale;
 
 /**
  * Real {@link SmsService} backed by the IKODDI gateway. Registered only when
@@ -30,11 +29,6 @@ public class IkoddiSmsServiceImpl implements SmsService {
     public void send(String phoneNumber, String message) {
         IkoddiGateway.SmsDispatch dispatch = ikoddiGateway.sendSms(List.of(phoneNumber), message, null);
         log.info("📲 IKODDI SMS dispatched to {} (delivered={})", maskPhone(phoneNumber), dispatch.delivered());
-    }
-
-    @Override
-    public void sendUsernameReminderSms(String phoneNumber, String username, Locale locale) {
-        send(phoneNumber, String.format("Hello! Your username is: %s", username));
     }
 
     @Override

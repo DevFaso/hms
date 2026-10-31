@@ -18,11 +18,9 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
-import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Component
 public class NursingNoteMapper {
@@ -187,12 +185,13 @@ public class NursingNoteMapper {
     }
 
     private String resolveAuthorCredentials(NursingNote note, Staff staff) {
+        // QA D1136: a job title travels as its code (legacy English rows mapped back).
         if (note.getAuthorCredentials() != null && !note.getAuthorCredentials().isBlank()) {
-            return note.getAuthorCredentials();
+            return com.example.hms.utility.JobTitleCredentials.toCode(note.getAuthorCredentials());
         }
         if (staff != null) {
             if (staff.getJobTitle() != null) {
-                return formatJobTitle(staff.getJobTitle().name());
+                return staff.getJobTitle().name();
             }
             if (staff.getLicenseNumber() != null) {
                 return staff.getLicenseNumber();
@@ -221,7 +220,7 @@ public class NursingNoteMapper {
 
     private String resolveAddendumAuthorCredentials(NursingNoteAddendum addendum) {
         if (addendum.getAuthorCredentials() != null && !addendum.getAuthorCredentials().isBlank()) {
-            return addendum.getAuthorCredentials();
+            return com.example.hms.utility.JobTitleCredentials.toCode(addendum.getAuthorCredentials());
         }
         Staff staff = addendum.getAuthorStaff();
         if (staff != null && staff.getLicenseNumber() != null) {
@@ -243,17 +242,5 @@ public class NursingNoteMapper {
 
     private String trim(String value) {
         return value == null ? null : value.trim();
-    }
-
-    private String formatJobTitle(String raw) {
-        if (raw == null) {
-            return null;
-        }
-        String normalized = raw.replace('_', ' ').toLowerCase(Locale.ROOT);
-        String[] parts = normalized.split(" ");
-        return java.util.Arrays.stream(parts)
-            .filter(s -> !s.isBlank())
-            .map(part -> part.substring(0, 1).toUpperCase(Locale.ROOT) + part.substring(1))
-            .collect(Collectors.joining(" "));
     }
 }

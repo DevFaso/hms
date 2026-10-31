@@ -30,11 +30,68 @@
  * the first heading inside it, so a pin survives the lines around it moving
  * and stops matching when the dialog is fixed or removed.
  */
-import { tags, innerHtml, attrValue, classTokens } from './html-tags.mjs';
+import { tags, innerHtml, attrValue, classTokens, hasAttr } from './html-tags.mjs';
 import { balanced } from './js-scan.mjs';
 
 const CONTAINER_TOKEN =
-  /^(?:[a-z0-9]+-)*(?:modal|dialog)(?:-(?:container|panel|card|box|window|wrapper|sheet|surface))?$/;
+  /^(?:[a-z0-9]+-)*(?:modal|dialog|popover|flyout|offcanvas)(?:-(?:container|panel|card|box|window|wrapper|sheet|surface))?$/;
+
+/**
+ * QA D1125 / D1004 (round 20): a hand-built overlay is not always called a
+ * modal. The shell's notification panel and profile menu, the reception
+ * snapshot drawer and the dashboard drawer each sat behind a page-covering
+ * `*-backdrop` / `*-overlay` element with no dialog semantics, so the scan
+ * keyed on `role="dialog"` never saw them. A COVER is an element whose class
+ * ends in backdrop / overlay / scrim; what it covers the page for must be a
+ * dialog: the cover itself, a dialog inside it, or the element right after
+ * it (the sibling-panel shape).
+ *
+ * A `*-overlay` with no `(click)` is not a cover the user opened and dismisses
+ * (a loading spinner's veil, a camera icon over an avatar, the idle lock
+ * screen): only a `*-backdrop` / `*-scrim` or a dismissable `*-overlay` is read.
+ */
+const COVER_TOKEN = /^(?:[a-z0-9]+-)*(?:backdrop|overlay|scrim)$/;
+const ALWAYS_COVER_TOKEN = /^(?:[a-z0-9]+-)*(?:backdrop|scrim)$/;
+
+export function isCover(tag) {
+  const tokens = [...classTokens(tag)];
+  if (tokens.some((t) => ALWAYS_COVER_TOKEN.test(t))) return true;
+  return tokens.some((t) => COVER_TOKEN.test(t)) && tag.attrs.has('(click)');
+}
+
+/** A page layout container is never the panel of an overlay, whatever dialogs it holds. */
+export const LAYOUT_MARKUP = /<(?:router-outlet|main)\b/;
+
+/**
+ * The one non-dialog panel a cover may stand for: a navigation drawer (the
+ * shell's phone sidebar, an element holding a `<nav>`), which closes on its
+ * own reachable `(keydown.escape)`. A landmark is not made a dialog because it
+ * slides over the page on a phone.
+ */
+function isNavDrawer(html, tokens, index) {
+  const inner = innerHtml(html, tokens, index) ?? '';
+  return /<nav\b/.test(inner) && hasEscapeAttr(tokens[index]);
+}
+
+/** Index of the element that ends right before `tokens[index]` opens, or -1. */
+function previousSiblingIndex(tokens, index) {
+  const prev = tokens[index - 1];
+  if (prev?.type !== 'close') return -1;
+  for (let k = index - 2; k >= 0; k--) {
+    if (
+      tokens[k].type === 'open' &&
+      tokens[k].name === prev.name &&
+      closeIndexOf(tokens, k) === index - 1
+    )
+      return k;
+  }
+  return -1;
+}
+
+/** Markup that can take keyboard focus, so a keydown can be fired inside it. */
+const FOCUSABLE_MARKUP =
+  /<(?:button|a|input|select|textarea|ng-content|app-[\w-]+)\b|\btabindex\s*=|\[(?:attr\.)?tabindex\]|\bcontenteditable\b|\bappModalDialog\b|\bappDialogA11y\b|\bappDialogFocus\b|\brole\s*=\s*["'](?:dialog|alertdialog)["']|<dialog\b/;
+const FOCUSABLE_TAGS = new Set(['button', 'a', 'input', 'select', 'textarea']);
 
 const DIALOG_ROLES = new Set(['dialog', 'alertdialog']);
 
@@ -186,6 +243,109 @@ function headingOf(inner) {
     .slice(0, 60);
 }
 
+/** Index of the token that closes `tokens[openIndex]` (itself for a void/self-closing tag). */
+export function closeIndexOf(tokens, openIndex) {
+  const open = tokens[openIndex];
+  if (open.selfClosing || open.type !== 'open') return openIndex;
+  let depth = 0;
+  for (let k = openIndex + 1; k < tokens.length; k++) {
+    const t = tokens[k];
+    if (t.name !== open.name) continue;
+    if (t.type === 'open' && !t.selfClosing) depth++;
+    else if (t.type === 'close') {
+      if (depth === 0) return k;
+      depth--;
+    }
+  }
+  return openIndex;
+}
+
+export const DIALOG_MARKUP =
+  /\bappDialogA11y\b|\bappModalDialog\b|\brole\s*=\s*["'](?:dialog|alertdialog)["']|\[(?:attr\.)?role\]\s*=\s*["']'(?:dialog|alertdialog)'["']|<dialog\b/;
+
+/** Is this tag (with its inner markup) a dialog, or a wrapper around one? */
+function isOrWrapsDialog(html, tokens, index, childDialog) {
+  const tag = tokens[index];
+  if (directiveDialog(tag) || tag.name === 'dialog') return true;
+  const role = attrValue(tag, 'role');
+  if (role !== undefined && DIALOG_ROLES.has(role.replace(/['"]/g, '').trim())) return true;
+  if (childDialog !== null && childDialog.test(html.slice(tag.start, tag.end))) return true;
+  // A `.modal`-named container is the role rule's to report: not reported twice.
+  if ([...classTokens(tag)].some((t) => CONTAINER_TOKEN.test(t))) return true;
+  const inner = innerHtml(html, tokens, index);
+  return (
+    inner != null &&
+    (DIALOG_MARKUP.test(inner) ||
+      containsContainerClass(inner) ||
+      (childDialog !== null && childDialog.test(inner)))
+  );
+}
+
+/** A dialog-container class anywhere inside (the role rule reports it if it is not a dialog). */
+function containsContainerClass(inner) {
+  for (const m of inner.matchAll(/\bclass="([^"]*)"/g)) {
+    if (m[1].split(/\s+/).some((t) => CONTAINER_TOKEN.test(t))) return true;
+  }
+  return false;
+}
+
+/**
+ * QA D1125 (round 20): the cover rule. A page-covering backdrop whose panel is
+ * not a dialog (role, modality, focus in, Escape, focus back) — neither the
+ * cover, nor a dialog inside it, nor the element right after it.
+ */
+function coverFinding(html, tokens, index, childDialog) {
+  if (isOrWrapsDialog(html, tokens, index, childDialog)) return null;
+  const nextIndex = closeIndexOf(tokens, index) + 1;
+  const next = tokens[nextIndex];
+  const hasPanel = next?.type === 'open';
+  if (
+    hasPanel &&
+    !LAYOUT_MARKUP.test(innerHtml(html, tokens, nextIndex) ?? '') &&
+    isOrWrapsDialog(html, tokens, nextIndex, childDialog)
+  )
+    return null;
+  const prevIndex = previousSiblingIndex(tokens, index);
+  if ([prevIndex, hasPanel ? nextIndex : -1].some((k) => k >= 0 && isNavDrawer(html, tokens, k)))
+    return null;
+  const tag = tokens[index];
+  const panel = hasPanel ? next : tag;
+  const panelName = hasPanel ? (panel.attrs.get('class') ?? panel.name) : '-';
+  return {
+    line: panel.line,
+    rule: 'overlay',
+    anchor: `${tag.attrs.get('class') ?? tag.name} + ${panelName}`,
+    message:
+      'a page-covering overlay whose panel is not a dialog: put appModalDialog (role, aria-modal, focus in, Escape, focus back) and a name on the panel',
+  };
+}
+
+/**
+ * QA D1125 (round 20): `(keydown.escape)` bound on an element that can never
+ * hold focus (the shell's `aria-hidden` backdrop, an empty cover) never fires:
+ * keyboard events go to the focused element and bubble UP, never sideways.
+ */
+function unreachableEscape(html, tokens, index) {
+  const tag = tokens[index];
+  if (!hasEscapeAttr(tag)) return null;
+  if (FOCUSABLE_TAGS.has(tag.name) || hasAttr(tag, 'tabindex') || hasAttr(tag, 'contenteditable'))
+    return null;
+  // A dialog element is read by the focus rule (it must take focus itself).
+  if (directiveDialog(tag) || hasFocusDirective(tag)) return null;
+  const role = (attrValue(tag, 'role') ?? '').replace(/['"]/g, '').trim();
+  if (tag.name === 'dialog' || DIALOG_ROLES.has(role)) return null;
+  const hidden = (attrValue(tag, 'aria-hidden') ?? '').replace(/['"]/g, '').trim() === 'true';
+  const inner = innerHtml(html, tokens, index) ?? '';
+  if (!hidden && FOCUSABLE_MARKUP.test(inner)) return null;
+  return {
+    line: tag.line,
+    rule: 'escape-target',
+    anchor: `${tag.attrs.get('class') ?? tag.name} (keydown.escape)`,
+    message:
+      '(keydown.escape) on an element that can never hold focus (no focusable content, or aria-hidden): the key never reaches it',
+  };
+}
+
 function anchor(tag, inner) {
   const base = tag.attrs.get('class') ?? attrValue(tag, 'role') ?? tag.name;
   const heading = headingOf(inner);
@@ -223,6 +383,12 @@ export function dialogFindings(html, componentSource = html, dialogSelectors = n
         }
       }
       return;
+    }
+    const unreachable = unreachableEscape(html, tokens, index);
+    if (unreachable) out.push(unreachable);
+    if (!stack.some((s) => s.isDialog) && isCover(tag)) {
+      const cover = coverFinding(html, tokens, index, childDialog);
+      if (cover) out.push(cover);
     }
     const directive = directiveDialog(tag);
     const role = attrValue(tag, 'role') ?? (directive ? 'dialog' : undefined);

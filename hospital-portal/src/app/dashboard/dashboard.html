@@ -570,7 +570,7 @@
             "
           >
             <span class="kv-label">{{ 'DASHBOARD.OCCUPANCY_RATE' | translate }}</span>
-            <span class="kv-value">{{ bedOccupancy()!.occupancyRate | number: '1.1-1' }}%</span>
+            <span class="kv-value">{{ bedOccupancy()!.occupancyRate | measure: '%' }}</span>
           </div>
         </section>
       }
@@ -645,9 +645,9 @@
               <span style="font-size: 13px; color: #475569; font-weight: 500">{{
                 'DASHBOARD.COLLECTION_RATE' | translate
               }}</span>
-              <span style="font-size: 16px; font-weight: 700; color: #059669"
-                >{{ paymentCollectionRate() | number: '1.1-1' }}%</span
-              >
+              <span style="font-size: 16px; font-weight: 700; color: #059669">{{
+                paymentCollectionRate() | measure: '%'
+              }}</span>
             </div>
           </div>
         </section>
@@ -700,9 +700,9 @@
                 margin-top: 4px;
               "
             >
-              <span>{{ paymentTrend()[0]?.date | serverTime | date: 'MMM d' }}</span>
+              <span>{{ paymentTrend()[0]?.date | serverTime | dayMonth }}</span>
               <span>{{
-                paymentTrend()[paymentTrend().length - 1]?.date | serverTime | date: 'MMM d'
+                paymentTrend()[paymentTrend().length - 1]?.date | serverTime | dayMonth
               }}</span>
             </div>
           </div>
@@ -1097,7 +1097,7 @@
                             : '#059669'
                       "
                     >
-                      {{ row.occupancyRate | number: '1.1-1' }}%
+                      {{ row.occupancyRate | measure: '%' }}
                     </td>
                   </tr>
                 }
@@ -2366,7 +2366,7 @@
               <div class="stat-body">
                 <span class="stat-value" style="color: #059669">
                   @if ((qualityManagerDashboard()?.qualityPassRate ?? null) !== null) {
-                    {{ qualityManagerDashboard()!.qualityPassRate! | number: '1.1-1' }}%
+                    {{ qualityManagerDashboard()!.qualityPassRate! | measure: '%' }}
                   } @else {
                     N/A
                   }
@@ -3011,12 +3011,13 @@
                       }
                       <app-lab-correction-badge [corrected]="lab.corrected" audience="patient" />
                       @if (lab.referenceRange) {
-                        <span class="lab-range">({{ lab.referenceRange | labRange }})</span>
+                        <!-- QA D1140: the space is inside the span; between elements Angular drops it -->
+                        <span class="lab-range">&ngsp;({{ lab.referenceRange | labRange }})</span>
                       }
                     </span>
                   }
                 </div>
-                <span class="lab-date">{{ lab.collectedDate | serverTime | date: 'MMM d' }}</span>
+                <span class="lab-date">{{ lab.collectedDate | serverTime | dayMonth }}</span>
               </div>
             }
           }

@@ -204,6 +204,17 @@ public class UserRoleHospitalAssignmentController {
         return ResponseEntity.ok(assignmentService.verifyAssignmentByCode(assignmentCode, confirmationCode));
     }
 
+    @Operation(summary = "Self-service activation by phone number and the one-time code from the SMS (QA D1123)")
+    @PostMapping("/public/activate-by-phone")
+    public ResponseEntity<UserRoleAssignmentPublicViewDTO> verifyAssignmentByPhone(
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "JSON body with phone and confirmationCode")
+            @RequestBody java.util.Map<String, String> body) {
+        String phone = body != null ? body.get("phone") : null;
+        String confirmationCode = body != null ? body.get("confirmationCode") : null;
+        log.info("🔐 Self-service activation attempt by phone");
+        return ResponseEntity.ok(assignmentService.verifyAssignmentByPhone(phone, confirmationCode));
+    }
+
     @Operation(
         summary = "Deactivate an assignment (preferred over DELETE)",
         description = "Soft-deactivates the assignment by setting active=false. " +

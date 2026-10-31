@@ -4,7 +4,11 @@
     "why": "False positive: `${code}: ${notes}` is the stored wire format of an adjustment reason (parsed back by the same file and the server), not display text; the screen renders it through COMMON.COLON (QA D1051)"
   },
   "privacy-policy/privacy-policy.ts": {
-    "count": 14,
-    "why": "False positive: the 14 sites are all inside the @if (lang === 'en') English section of the bilingual policy, where English typography glues the colon; the French section (@if (lang === 'fr')) already writes ' :'"
+    "count": 15,
+    "why": "False positive: the 15 sites (14 colons, 1 semicolon, QA D1138 widened the scan) are all inside the @if (lang === 'en') English section of the bilingual policy, where English typography glues the mark; the French section (@if (lang === 'fr')) already writes ' :'"
+  },
+  "maternity/birth-plan-tab.html": {
+    "count": 1,
+    "why": "QA D1138 sibling in a fix/r20-portal-forms file (birth-plan-tab.html, `{{ introduction?.patientName }}?`): not touched by fix/r20-portal-overlays-display, listed in its hand-back; delete when that branch keys the mark"
   }
 }

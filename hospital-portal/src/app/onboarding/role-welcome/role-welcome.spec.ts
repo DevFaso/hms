@@ -63,6 +63,7 @@ describe('RoleWelcomeComponent', () => {
     service = jasmine.createSpyObj<AssignmentPublicService>('AssignmentPublicService', [
       'getPublicView',
       'verifyCode',
+      'verifyByPhone',
     ]);
   });
 
@@ -99,11 +100,73 @@ describe('RoleWelcomeComponent', () => {
     expect(text()).not.toContain('Please check your email');
   });
 
-  it('translates the missing-code message', () => {
-    create(null);
-    fixture.detectChanges();
+  // QA D1123: with no link (an SMS reader, "I have a code" on the login page)
+  // the page was a dead end ("Aucun code dans le lien… vérifiez votre e-mail").
+  // It now takes the phone number and the code from the SMS.
+  describe('"I have a code" (QA D1123)', () => {
+    const fill = (id: string, value: string) => {
+      const input = (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
+        `#${id}`,
+      )!;
+      input.value = value;
+      input.dispatchEvent(new Event('input'));
+    };
+    const submit = () => {
+      (fixture.nativeElement as HTMLElement)
+        .querySelector<HTMLButtonElement>('[data-testid="activate-by-phone-submit"]')!
+        .click();
+      fixture.detectChanges();
+    };
 
-    expect(service.getPublicView).not.toHaveBeenCalled();
-    expect(text()).toContain('Aucun code dans le lien.');
+    it('with no link, offers the phone + code form instead of a dead end', () => {
+      create(null);
+      expect(service.getPublicView).not.toHaveBeenCalled();
+      expect(
+        fixture.nativeElement.querySelector('[data-testid="activate-by-phone"]'),
+      ).not.toBeNull();
+      expect(text()).not.toContain('Aucun code dans le lien.');
+    });
+
+    it('activates with the phone number and the SMS code, and shows the sign-in details once', async () => {
+      service.verifyByPhone.and.returnValue(
+        of(view({ confirmationVerified: true, tempUsername: '70003201', tempPassword: 'T3mp!' })),
+      );
+      create(null);
+      await fixture.whenStable();
+      fill('rw-phone', '70 00 32 01');
+      fill('rw-phone-code', '482913');
+      await fixture.whenStable();
+      submit();
+
+      expect(service.verifyByPhone).toHaveBeenCalledOnceWith('70 00 32 01', '482913');
+      expect(fixture.componentInstance.pageState).toBe('success');
+      expect(text()).toContain('70003201');
+    });
+
+    it('refuses an empty phone or a short code on the page, before any request', async () => {
+      create(null);
+      await fixture.whenStable();
+      submit();
+      expect(fixture.componentInstance.verifyError).toBe('ONBOARDING.ERR_PHONE_REQUIRED');
+      fill('rw-phone', '70003201');
+      fill('rw-phone-code', '123');
+      await fixture.whenStable();
+      submit();
+      expect(fixture.componentInstance.verifyError).toBe('ONBOARDING.ERR_CODE_FORMAT');
+      expect(service.verifyByPhone).not.toHaveBeenCalled();
+    });
+
+    it("shows the server's refusal (wrong code, too many tries) in the reader's language", async () => {
+      service.verifyByPhone.and.returnValue(
+        throwError(() => ({ status: 400, error: { message: 'Code de confirmation invalide.' } })),
+      );
+      create(null);
+      await fixture.whenStable();
+      fill('rw-phone', '70003201');
+      fill('rw-phone-code', '000000');
+      await fixture.whenStable();
+      submit();
+      expect(text()).toContain('Code de confirmation invalide.');
+    });
   });
 });

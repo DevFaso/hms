@@ -247,6 +247,23 @@ class ArchivedHospitalAssignmentTest {
     }
 
     @Test
+    @DisplayName("QA D1123: activation by phone + code into a hospital archived since is refused too")
+    void activationByPhoneIsRefused() {
+        UserRoleHospitalAssignment pending = row(nurse, archived, false);
+        pending.setAssignmentCode("ASG-ARC");
+        pending.setConfirmationSentAt(LocalDateTime.now());
+        assignee.setPhoneNumber("+22670000000");
+        when(userRepository.findByPhoneNumber("+22670000000")).thenReturn(Optional.of(assignee));
+        when(assignmentRepository.findByUserId(assignee.getId())).thenReturn(List.of(pending));
+        when(assignmentRepository.findByAssignmentCode("ASG-ARC")).thenReturn(Optional.of(pending));
+
+        assertThatThrownBy(() -> service.verifyAssignmentByPhone("+22670000000", "123456"))
+            .isInstanceOf(ConflictException.class);
+        assertThat(pending.getActive()).isFalse();
+        verify(assignmentRepository, never()).save(any());
+    }
+
+    @Test
     @DisplayName("regenerating the code (a fresh invitation) into an archived hospital is refused")
     void regenerateIsRefused() {
         UserRoleHospitalAssignment pending = row(nurse, archived, false);

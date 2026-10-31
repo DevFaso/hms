@@ -952,7 +952,7 @@
               <p>
                 <strong>{{ meta.absoluteChange ?? '—' }}</strong>
                 @if (meta.percentageChange !== null) {
-                  ({{ meta.percentageChange | number: '1.0-1' }}%)
+                  ({{ meta.percentageChange | measure: '%' }})
                 }
                 @if (meta.daysBetween !== null) {
                   — {{ meta.daysBetween }} {{ 'LAB_RESULTS.DAYS_BETWEEN' | translate }}

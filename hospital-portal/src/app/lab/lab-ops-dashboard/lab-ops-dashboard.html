@@ -57,7 +57,7 @@
                 ></div>
               </div>
               <span class="bar-count">{{ row.count }}</span>
-              <span class="bar-pct">({{ row.pct }}%)</span>
+              <span class="bar-pct">({{ row.pct | measure: '%' }})</span>
             </div>
           }
         </div>
@@ -80,7 +80,7 @@
                 ></div>
               </div>
               <span class="bar-count">{{ row.count }}</span>
-              <span class="bar-pct">({{ row.pct }}%)</span>
+              <span class="bar-pct">({{ row.pct | measure: '%' }})</span>
             </div>
           }
         </div>

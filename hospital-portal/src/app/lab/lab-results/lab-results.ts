@@ -41,6 +41,7 @@ import {
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { labSeverityFlag, labSeverityTone } from '../shared/lab-severity';
 import { LabValuePipe, formatLabNumber } from '../shared/lab-value.pipe';
+import { MeasurePipe } from '../../shared/pipes/measure.pipe';
 
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 /**
@@ -57,6 +58,7 @@ export { toServerDateTime, toLocalInputValue };
   standalone: true,
   imports: [
     SubmitGuardDirective,
+    MeasurePipe,
     LabCorrectionBadgeComponent,
     CdkTrapFocus,
     LabValuePipe,

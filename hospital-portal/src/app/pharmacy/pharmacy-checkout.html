@@ -37,7 +37,7 @@
             <option [value]="d.id">
               {{ d.patientName || ('PHARMACY_CHECKOUT.RECEIPT_NO_PATIENT' | translate) }} ·
               {{ d.medicationName }} · {{ d.quantityDispensed }} {{ d.unit }} ·
-              {{ d.dispensedAt | serverTime | date: 'dd/MM/yyyy HH:mm' }}
+              {{ d.dispensedAt | serverTime | date: 'short' }}
             </option>
           }
         </select>

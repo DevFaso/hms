@@ -15,6 +15,7 @@ import { Subscription } from 'rxjs';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { DashboardService, LabOpsSummary } from '../../services/dashboard.service';
 import { ToastService } from '../../core/toast.service';
+import { MeasurePipe } from '../../shared/pipes/measure.pipe';
 
 interface StatCard {
   key: string;
@@ -35,7 +36,7 @@ interface StatusRow {
 @Component({
   selector: 'app-lab-ops-dashboard',
   standalone: true,
-  imports: [DatePipe, ServerTimePipe, RouterModule, TranslateModule],
+  imports: [MeasurePipe, DatePipe, ServerTimePipe, RouterModule, TranslateModule],
   templateUrl: './lab-ops-dashboard.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lab-ops-dashboard.scss',

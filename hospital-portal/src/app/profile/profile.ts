@@ -33,12 +33,20 @@ import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 import { serverInstant } from '../shared/date-utils';
 import { PatientPortalService } from '../services/patient-portal.service';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { MeasurePipe } from '../shared/pipes/measure.pipe';
 type ProfileTab = 'overview' | 'edit' | 'security' | 'activity';
 
 @Component({
   selector: 'app-profile',
   standalone: true,
-  imports: [SubmitGuardDirective, FormsModule, TranslateModule, EnumLabelPipe, RoleLabelPipe],
+  imports: [
+    SubmitGuardDirective,
+    MeasurePipe,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+    RoleLabelPipe,
+  ],
   templateUrl: './profile.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './profile.scss',

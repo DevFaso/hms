@@ -40,7 +40,9 @@ import { walk } from './walk.mjs';
 import {
   gluedColonSites,
   gluedColons,
+  gluedFrenchPunctuation,
   gluedFrenchValue,
+  gluedPunctuationSites,
   gluedTsLabels,
 } from './glued-colon-scan.mjs';
 
@@ -55,7 +57,8 @@ function currentSites() {
   const sites = {};
   const add = (file, line, what) => (sites[rel(file)] ??= []).push(`${line}: ${what}`);
   for (const { file, text, lineOffset } of templatesIn(appDir)) {
-    for (const s of gluedColonSites(text)) {
+    // QA D1138: `?` `!` `;` typed in the markup, counted with the colons.
+    for (const s of [...gluedColonSites(text), ...gluedPunctuationSites(text)]) {
       const line = text.slice(0, s.offset).split('\n').length + lineOffset;
       add(file, line, `${s.rule} | ${s.excerpt.trim()}`);
     }
@@ -97,7 +100,8 @@ test('QA D1079: no French translation glues a colon to the word before it', () =
   (function walkJson(node, path) {
     for (const [k, v] of Object.entries(node)) {
       if (v && typeof v === 'object') walkJson(v, `${path}${k}.`);
-      else if (typeof v === 'string' && gluedFrenchValue(v)) glued.push(`${path}${k} = ${v}`);
+      else if (typeof v === 'string' && (gluedFrenchValue(v) || gluedFrenchPunctuation(v)))
+        glued.push(`${path}${k} = ${v}`);
     }
   })(fr, '');
   assert.deepEqual(glued, []);
@@ -161,4 +165,34 @@ test('QA D1079 guard: display text only - Angular syntax, times, URLs and CSS ar
   for (const source of cleanTs) assert.equal(gluedTsLabels(source).length, 0, source);
   assert.equal(gluedFrenchValue('Envoi vers {{host}}:{{port}}.'), false);
   assert.equal(gluedFrenchValue('Statut\u00a0: {{s}} à 10:30, voir https://x'), false);
+});
+
+test('QA D1138: the scan sees a glued ? ! ; after a name, a word or an interpolation', () => {
+  // round 20: the imaging cancel prompt, "… pour Zongo, Fatimata?"
+  const prompt = `{{ 'IMAGING.ORDER_FOR' | translate }}
+    <strong>{{ deletingItem()?.patientDisplayName }}</strong
+    >?`;
+  assert.equal(gluedPunctuationSites(prompt).length, 1);
+  assert.equal(gluedPunctuationSites('<p>Bienvenue {{ name }}!</p>').length, 1);
+  assert.equal(gluedPunctuationSites('<p>Attention; risque</p>').length, 1);
+  const clean = [
+    "<strong>{{ n }}</strong>{{ 'COMMON.QUESTION_MARK' | translate }}",
+    '<p>a&nbsp;b &amp; c &#160;d</p>',
+    '{{ a ?? b }} {{ x?.y }} <span [hidden]="!ok">x</span>',
+    '<p>Continuer ?</p>',
+  ];
+  for (const html of clean) assert.equal(gluedPunctuationSites(html).length, 0, html);
+  assert.equal(gluedFrenchPunctuation('Supprimer {{name}}?'), true);
+  assert.equal(gluedFrenchPunctuation('Continuer\u00a0?'), false);
+  assert.equal(gluedFrenchPunctuation('Voir https://x.y/?a=1'), false);
+});
+
+test('QA D1138: COMMON.QUESTION_MARK and EXCLAMATION_MARK are the language rule', () => {
+  const common = (lang) => JSON.parse(readFileSync(join(i18nDir, `${lang}.json`), 'utf8')).COMMON;
+  assert.match(common('fr').QUESTION_MARK, /^[\u00a0\u202f]\?$/);
+  assert.match(common('fr').EXCLAMATION_MARK, /^[\u00a0\u202f]!$/);
+  for (const lang of ['en', 'es']) {
+    assert.equal(common(lang).QUESTION_MARK, '?');
+    assert.equal(common(lang).EXCLAMATION_MARK, '!');
+  }
 });

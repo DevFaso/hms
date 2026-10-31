@@ -9,6 +9,8 @@ import {
   inject,
 } from '@angular/core';
 
+import { captureOpener, restoreFocus } from './focus-return';
+
 /**
  * QA D947/D988 (WCAG 2.1.1, 2.4.3): the keyboard contract of a modal dialog.
  * Put it on the element that carries `role="dialog"` and `aria-modal="true"`:
@@ -42,8 +44,7 @@ export class DialogFocusDirective implements AfterViewInit, OnDestroy {
   ].join(',');
 
   ngAfterViewInit(): void {
-    const active = document.activeElement;
-    this.previouslyFocused = active instanceof HTMLElement ? active : null;
+    this.previouslyFocused = captureOpener();
     const el = this.host.nativeElement as HTMLElement;
     const first = this.focusables()[0];
     if (first) {
@@ -57,9 +58,7 @@ export class DialogFocusDirective implements AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    if (this.previouslyFocused && document.contains(this.previouslyFocused)) {
-      this.previouslyFocused.focus();
-    }
+    restoreFocus(this.previouslyFocused);
   }
 
   @HostListener('keydown', ['$event'])

@@ -8,6 +8,8 @@ import {
   output,
 } from '@angular/core';
 
+import { captureOpener, restoreFocus } from './focus-return';
+
 /**
  * QA D976: the billing and patient-portal modals left focus on the row
  * button behind them, never closed on Escape, let Tab walk into the page
@@ -50,8 +52,7 @@ export class DialogA11yDirective implements OnInit, OnDestroy {
   private opener: HTMLElement | null = null;
 
   ngOnInit(): void {
-    const active = document.activeElement;
-    this.opener = active instanceof HTMLElement ? active : null;
+    this.opener = captureOpener();
     DialogA11yDirective.stack.push(this);
     // After the content inside the box has rendered.
     setTimeout(() => this.focusInitial());
@@ -61,8 +62,7 @@ export class DialogA11yDirective implements OnInit, OnDestroy {
     const stack = DialogA11yDirective.stack;
     const at = stack.indexOf(this);
     if (at >= 0) stack.splice(at, 1);
-    const opener = this.opener;
-    if (opener?.isConnected) opener.focus();
+    restoreFocus(this.opener);
   }
 
   private isTop(): boolean {

@@ -7,9 +7,16 @@
   (keydown.enter)="panelClosed.emit()"
   (keydown.escape)="panelClosed.emit()"
 ></div>
-<div class="drawer-panel">
+<!-- QA D1125: a labelled modal; focus moves in, Escape closes, focus goes back to the opener. -->
+<div
+  class="drawer-panel"
+  appModalDialog
+  aria-labelledby="reception-snapshot-drawer-title"
+  data-testid="reception-snapshot-drawer"
+  (escaped)="panelClosed.emit()"
+>
   <div class="drawer-header">
-    <h2>{{ 'RECEPTION.PATIENT_SNAPSHOT' | translate }}</h2>
+    <h2 id="reception-snapshot-drawer-title">{{ 'RECEPTION.PATIENT_SNAPSHOT' | translate }}</h2>
     <button
       class="btn-icon-close"
       (click)="panelClosed.emit()"
@@ -203,11 +210,9 @@
   ></div>
   <div
     class="attest-modal"
-    role="dialog"
-    aria-modal="true"
     [attr.aria-label]="'RECEPTION.ATTEST_ELIGIBILITY' | translate"
-    appDialogFocus
-    (dialogDismiss)="showAttestModal.set(false)"
+    appModalDialog
+    (escaped)="showAttestModal.set(false)"
   >
     <div class="attest-header">
       <h3>{{ 'RECEPTION.ATTEST_ELIGIBILITY' | translate }}</h3>

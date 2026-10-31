@@ -29,6 +29,7 @@ import { DowntimeService } from '../services/downtime.service';
 import { STEP_UP_REQUEST, isStepUpRefusal } from '../services/step-up';
 import { BACKGROUND_REQUEST } from '../services/ws-transport';
 import { ToastService } from '../core/toast.service';
+import { CSRF_REPLAY, isCsrfRefusal } from './csrf.interceptor';
 
 const SILENT_403_PATTERNS = [
   /\/hospitals(\?|$|\/$)/,
@@ -434,6 +435,14 @@ export const errorInterceptor: HttpInterceptorFn = (req, next) => {
         // why their save failed.
         const body = error.error as { message?: string } | null;
         downtime.markReadOnly(body?.message ?? null);
+      } else if (isCsrfRefusal(error)) {
+        // QA D1145: a stale CSRF token is not a forbidden page. The CSRF
+        // interceptor (outside this one) fetches a fresh token and replays
+        // once; only the replay's refusal is reported, on the page.
+        const message = (error.error as { message?: unknown } | null)?.message;
+        if (req.context.get(CSRF_REPLAY) && typeof message === 'string' && message.trim()) {
+          toast.error(message.trim());
+        }
       } else if (error.status === 403 && mfaStepUpRefusal(error) !== null) {
         // A refused MFA step-up: rethrown to the page, no redirect.
       } else if (error.status === 403 && hospitalScopeRefusal(error) !== null) {

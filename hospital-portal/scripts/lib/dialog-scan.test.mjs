@@ -209,7 +209,12 @@ test('parts of a dialog (header, body, footer, backdrop, button) are not contain
   const html = `<div class="modal-backdrop"></div><div class="modal-header"></div>
     <div class="modal-body"></div><div class="modal-footer"></div><button class="modal-close"></button>
     <div class="dialog-overlay"></div>`;
-  assert.deepEqual(dialogFindings(html), []);
+  // Round 20: the lone backdrop of this fragment trips the new cover rule
+  // (`overlay`, tested at the end); this test is about the container rule.
+  assert.deepEqual(
+    dialogFindings(html).filter((f) => f.rule !== 'overlay'),
+    [],
+  );
 });
 
 test('round 16: an element with a shared dialog directive is a dialog; its Escape counts when the output is bound', () => {
@@ -257,4 +262,53 @@ test('round 17 (D1004 class): an Escape that only stops propagation on the dialo
     '(keydown.escape)="close(); $event.stopPropagation()"',
   );
   assert.deepEqual(rules(closes, closes), []);
+});
+
+test('QA D1125 (round 20): a sibling panel behind a backdrop that is not a dialog is a hand-built overlay', () => {
+  // The shell bell panel and profile menu, the reception snapshot drawer.
+  const bell = `<div class="overlay-backdrop" aria-hidden="true" (click)="close()"></div>
+    <div class="notif-panel"><h3>Notifications</h3><button (click)="x()">x</button></div>`;
+  assert.deepEqual(
+    scan(bell, bell).map((f) => `${f.rule}:${f.anchor}`),
+    ['overlay:overlay-backdrop + notif-panel'],
+  );
+  const fixed = bell.replace(
+    '<div class="notif-panel">',
+    '<div class="notif-panel" appModalDialog aria-labelledby="t" (escaped)="close()">',
+  );
+  assert.deepEqual(scan(fixed, fixed), []);
+  // A dismissable *-overlay cover is read too; a loading veil (no click) is not.
+  const drawer = `<div class="drawer-overlay" role="button" tabindex="0" (click)="c()"></div><div class="drawer-panel"><button>x</button></div>`;
+  assert.deepEqual(
+    scan(drawer, drawer).map((f) => f.rule),
+    ['overlay'],
+  );
+  const veil = `<div class="loading-overlay"><div class="spinner"></div></div>`;
+  assert.deepEqual(scan(veil, veil), []);
+});
+
+test('QA D1125 (round 20): (keydown.escape) on an element that can never hold focus is reported', () => {
+  const hidden = `<div class="overlay-backdrop" aria-hidden="true" (click)="c()" (keydown.escape)="c()"></div>
+    <div class="menu" appModalDialog aria-label="m" (escaped)="c()"><a href="/x">x</a></div>`;
+  assert.deepEqual(
+    scan(hidden, hidden).map((f) => f.rule),
+    ['escape-target'],
+  );
+  // Focusable itself (tabindex), or wrapping something focusable: the key can reach it.
+  const reachable = hidden.replace('aria-hidden="true"', 'tabindex="-1"');
+  assert.deepEqual(scan(reachable, reachable), []);
+  const wrapper = `<div class="card" (keydown.escape)="c()"><button>x</button></div>`;
+  assert.deepEqual(scan(wrapper, wrapper), []);
+});
+
+test('QA D1125 (round 20): a navigation drawer closing on its own Escape is the one non-dialog panel', () => {
+  const sidebar = `<aside class="sidebar" (keydown.escape)="closeSidebarFromKeyboard()"><nav><a href="/">x</a></nav></aside>
+    <div class="sidebar-backdrop" aria-hidden="true" (click)="closeSidebar()"></div>
+    <div class="main-area"><main><router-outlet /></main></div>`;
+  assert.deepEqual(scan(sidebar, sidebar), []);
+  const noEscape = sidebar.replace(' (keydown.escape)="closeSidebarFromKeyboard()"', '');
+  assert.deepEqual(
+    scan(noEscape, noEscape).map((f) => f.rule),
+    ['overlay'],
+  );
 });

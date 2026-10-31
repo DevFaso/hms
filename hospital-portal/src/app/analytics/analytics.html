@@ -86,7 +86,9 @@
                     [style.background]="statusColor(item.label)"
                   ></div>
                 </div>
-                <span class="status-count">{{ item.value | number }} ({{ item.pct }}%)</span>
+                <span class="status-count"
+                  >{{ item.value | number }} ({{ item.pct | measure: '%' }})</span
+                >
               </div>
             }
           </div>
@@ -114,7 +116,9 @@
                     [style.background]="statusColor(item.label)"
                   ></div>
                 </div>
-                <span class="status-count">{{ item.value | number }} ({{ item.pct }}%)</span>
+                <span class="status-count"
+                  >{{ item.value | number }} ({{ item.pct | measure: '%' }})</span
+                >
               </div>
             }
           </div>
@@ -142,7 +146,9 @@
                     [style.background]="statusColor(item.label)"
                   ></div>
                 </div>
-                <span class="status-count">{{ item.value | number }} ({{ item.pct }}%)</span>
+                <span class="status-count"
+                  >{{ item.value | number }} ({{ item.pct | measure: '%' }})</span
+                >
               </div>
             }
           </div>

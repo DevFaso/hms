@@ -27,6 +27,7 @@ class UsernameReminderServiceImplTest {
     @Mock private UserRepository userRepository;
     @Mock private EmailService emailService;
     @Mock private SmsService smsService;
+    @Mock private org.springframework.context.MessageSource messageSource;
 
     @InjectMocks
     private UsernameReminderServiceImpl service;
@@ -59,7 +60,7 @@ class UsernameReminderServiceImplTest {
             service.sendReminder(emailIdentifier, locale, requestIp);
 
             verify(emailService).sendUsernameReminderEmail("john@example.com", "johndoe", locale);
-            verify(smsService, never()).sendUsernameReminderSms(anyString(), anyString(), any());
+            verify(smsService, never()).send(anyString(), anyString());
         }
 
         @Test
@@ -68,9 +69,14 @@ class UsernameReminderServiceImplTest {
             String phoneIdentifier = "+1234567890";
             when(userRepository.findActiveByEmailOrPhone(phoneIdentifier)).thenReturn(Optional.of(user));
 
+            when(messageSource.getMessage(org.mockito.ArgumentMatchers.eq("sms.username.reminder"), any(),
+                    anyString(), org.mockito.ArgumentMatchers.eq(locale)))
+                .thenReturn("e-Keneya: your username is johndoe");
+
             service.sendReminder(phoneIdentifier, locale, requestIp);
 
-            verify(smsService).sendUsernameReminderSms("+1234567890", "johndoe", locale);
+            // QA D1123 sibling: the text comes from the reader's bundle, not an English literal.
+            verify(smsService).send("+1234567890", "e-Keneya: your username is johndoe");
             verify(emailService, never()).sendUsernameReminderEmail(anyString(), anyString(), any());
         }
 
@@ -79,7 +85,7 @@ class UsernameReminderServiceImplTest {
         void fallsBackToEmailWhenSmsServiceNull() {
             // Construct service with null smsService manually
             UsernameReminderServiceImpl serviceWithoutSms = new UsernameReminderServiceImpl(
-                    userRepository, emailService, null);
+                    userRepository, emailService, null, messageSource);
 
             String phoneIdentifier = "+1234567890";
             when(userRepository.findActiveByEmailOrPhone(phoneIdentifier)).thenReturn(Optional.of(user));
@@ -87,7 +93,7 @@ class UsernameReminderServiceImplTest {
             serviceWithoutSms.sendReminder(phoneIdentifier, locale, requestIp);
 
             verify(emailService).sendUsernameReminderEmail("john@example.com", "johndoe", locale);
-            verify(smsService, never()).sendUsernameReminderSms(anyString(), anyString(), any());
+            verify(smsService, never()).send(anyString(), anyString());
         }
 
         @Test
@@ -98,7 +104,7 @@ class UsernameReminderServiceImplTest {
             service.sendReminder("unknown@test.com", locale, requestIp);
 
             verify(emailService, never()).sendUsernameReminderEmail(anyString(), anyString(), any());
-            verify(smsService, never()).sendUsernameReminderSms(anyString(), anyString(), any());
+            verify(smsService, never()).send(anyString(), anyString());
         }
 
         @Test
@@ -109,7 +115,7 @@ class UsernameReminderServiceImplTest {
             service.sendReminder("+9999999999", locale, requestIp);
 
             verify(emailService, never()).sendUsernameReminderEmail(anyString(), anyString(), any());
-            verify(smsService, never()).sendUsernameReminderSms(anyString(), anyString(), any());
+            verify(smsService, never()).send(anyString(), anyString());
         }
     }
 }

@@ -2377,6 +2377,8 @@
     "REMOVE_FILTER": "Quitar el filtro",
     "SHOW_DETAILS": "Mostrar u ocultar los detalles",
     "FIELD_REQUIRED": "Este campo es obligatorio.",
+    "QUESTION_MARK": "?",
+    "EXCLAMATION_MARK": "!",
     "SUBMIT_BLOCKED_REQUIRED": "Complete primero los campos obligatorios (marcados con *)."
   },
   "CONSULTATIONS": {
@@ -4079,7 +4081,8 @@
     "RA_INSTRUCTION": "Introduzca la dirección de correo o el número de teléfono de su cuenta y le enviaremos un nuevo enlace o código de activación, válido durante 24 horas.",
     "SEND_ACTIVATION_LINK": "Enviar el enlace de activación",
     "ACTIVATION_LINK_SENT": "Si esta dirección o este número pertenece a una cuenta aún no activa, un nuevo enlace o código de activación está en camino. Es válido durante 24 horas.",
-    "RESET_LINK_SENT": "Si ese correo o número de teléfono está registrado, se ha enviado un enlace de restablecimiento. Revise su bandeja de entrada o sus SMS."
+    "RESET_LINK_SENT": "Si ese correo o número de teléfono está registrado, se ha enviado un enlace de restablecimiento. Revise su bandeja de entrada o sus SMS.",
+    "HAVE_A_CODE": "Tengo un código de activación"
   },
   "NAV": {
     "ADMINISTRATION": "Administración",
@@ -4636,7 +4639,15 @@
     "ERR_ASSIGNMENT_NOT_FOUND": "Asignación no encontrada. Utilice el enlace del correo original.",
     "ERR_GENERIC": "Algo salió mal. Inténtelo de nuevo.",
     "OTHER_ROLES_HINT": "Si su correo de bienvenida menciona otros roles, confirme cada uno con su propio código, usando el botón que aparece debajo de ese código.",
-    "DIGIT_OF": "Dígito {{n}} de {{total}}"
+    "DIGIT_OF": "Dígito {{n}} de {{total}}",
+    "BY_PHONE_TITLE": "Active su cuenta",
+    "BY_PHONE_INTRO": "Introduzca el número de teléfono registrado en recepción y el código de 6 dígitos recibido por SMS.",
+    "PHONE_LABEL": "Número de teléfono",
+    "CODE_LABEL": "Código de activación (6 dígitos)",
+    "BY_PHONE_SUBMIT": "Activar mi cuenta",
+    "ERR_PHONE_REQUIRED": "Introduzca su número de teléfono.",
+    "ERR_CODE_FORMAT": "El código tiene 6 dígitos.",
+    "ERR_PHONE_CODE_INCORRECT": "Este número y este código no coinciden. Revise el SMS e inténtelo de nuevo."
   },
   "ORGANIZATIONS": {
     "CONTACT": "Contacto",
@@ -8246,7 +8257,7 @@
     "USERNAME_DESC": "Elija un nombre de usuario único",
     "USERNAME_HINT": "De 3 a 50 caracteres: letras, dígitos, puntos, guiones, guiones bajos",
     "USERNAME_PLACEHOLDER": "ej. juan.perez",
-    "CURRENT_HINT_SMS": "La contraseña temporal que recibió por SMS",
+    "CURRENT_HINT_SMS": "La contraseña temporal mostrada tras introducir el código recibido por SMS",
     "CURRENT_HINT_GENERIC": "La contraseña temporal que se le entregó"
   },
   "SETTINGS_HUB": {

@@ -150,19 +150,24 @@ export class MyEducationComponent implements OnInit {
 
   // ── Questions ────────────────────────────────────────────────────
 
+  /**
+   * QA D1130: the dialog's open state is its own signal. It was derived as
+   * `askTarget() !== null`, and the general "Poser une question" opens with
+   * no resource (`openAsk(null)`), so it never opened.
+   */
+  readonly askOpen = signal(false);
+
   openAsk(item: PatientEducationItem | null): void {
     this.askTarget.set(item);
     this.askText = '';
     this.askUrgent = false;
+    this.askOpen.set(true);
   }
 
   closeAsk(): void {
+    this.askOpen.set(false);
     this.askTarget.set(null);
     this.askText = '';
-  }
-
-  get askOpen(): boolean {
-    return this.askTarget() !== null;
   }
 
   submitQuestion(): void {

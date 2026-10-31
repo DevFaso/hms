@@ -31,6 +31,7 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { toServerDateTime, localDateString } from '../shared/date-utils';
 import { OrgTextPipe } from '../shared/pipes/org-text.pipe';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 /* ── View state types ── */
 
@@ -179,6 +180,7 @@ function linkKey(serviceId: string, hospitalId: string): string {
     EnumLabelPipe,
     OrgTextPipe,
     SubmitGuardDirective,
+    ModalDialogDirective,
   ],
   templateUrl: './platform.html',
   changeDetection: ChangeDetectionStrategy.Eager,

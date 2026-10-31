@@ -28,6 +28,7 @@ import { of } from 'rxjs';
 import { labelledRefusalReason } from '../shared/refusal-reason';
 import { blankFields, focusFirstInvalid } from '../shared/forms/invalid-fields';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { MeasurePipe } from '../shared/pipes/measure.pipe';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 /**
@@ -66,6 +67,7 @@ export function matchBasisSuffix(matches: readonly Pick<RegistrationMatch, 'matc
   standalone: true,
   imports: [
     SubmitGuardDirective,
+    MeasurePipe,
     ModalDialogDirective,
     FormsModule,
     RouterLink,

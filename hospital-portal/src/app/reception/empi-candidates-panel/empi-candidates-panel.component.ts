@@ -16,6 +16,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EmpiCandidateMatch, EmpiCandidateQuery, EmpiService } from '../../services/empi.service';
 import { ToastService } from '../../core/toast.service';
 import { RoleContextService } from '../../core/role-context.service';
+import { MeasurePipe } from '../../shared/pipes/measure.pipe';
 
 interface CandidateFormState {
   firstName: string;
@@ -52,7 +53,7 @@ const SEX_OPTIONS: string[] = ['F', 'M', 'X'];
 @Component({
   selector: 'app-empi-candidates-panel',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule],
+  imports: [MeasurePipe, CommonModule, FormsModule, TranslateModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="empi-panel" data-testid="empi-candidates-panel">
@@ -170,7 +171,7 @@ const SEX_OPTIONS: string[] = ['F', 'M', 'X'];
                       [class.empi-panel__score--medium]="match.score >= 0.7 && match.score < 0.85"
                       [class.empi-panel__score--low]="match.score < 0.7"
                     >
-                      {{ (match.score * 100 | number: '1.0-1') + '%' }}
+                      {{ match.score * 100 | measure: '%' }}
                     </span>
                   </td>
                   <td>

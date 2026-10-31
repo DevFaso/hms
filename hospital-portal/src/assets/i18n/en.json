@@ -2377,6 +2377,8 @@
     "REMOVE_FILTER": "Remove filter",
     "SHOW_DETAILS": "Show or hide details",
     "FIELD_REQUIRED": "This field is required.",
+    "QUESTION_MARK": "?",
+    "EXCLAMATION_MARK": "!",
     "SUBMIT_BLOCKED_REQUIRED": "Complete the required fields (marked *) first."
   },
   "CONSULTATIONS": {
@@ -4079,7 +4081,8 @@
     "RA_INSTRUCTION": "Enter the e-mail address or the phone number of your account and we will send a new activation link or code. It is valid for 24 hours.",
     "SEND_ACTIVATION_LINK": "Send activation link",
     "ACTIVATION_LINK_SENT": "If this address or number belongs to an account that is not yet active, a new activation link or code is on its way. It is valid for 24 hours.",
-    "RESET_LINK_SENT": "If that email or phone number is registered, a password reset link has been sent. Please check your inbox or your text messages."
+    "RESET_LINK_SENT": "If that email or phone number is registered, a password reset link has been sent. Please check your inbox or your text messages.",
+    "HAVE_A_CODE": "I have an activation code"
   },
   "NAV": {
     "ADMINISTRATION": "Administration",
@@ -4636,7 +4639,15 @@
     "ERR_ASSIGNMENT_NOT_FOUND": "Assignment not found. Please use the original email link.",
     "ERR_GENERIC": "Something went wrong. Please try again.",
     "OTHER_ROLES_HINT": "If your welcome email lists other roles, confirm each one with its own code, using the button under that code.",
-    "DIGIT_OF": "Digit {{n}} of {{total}}"
+    "DIGIT_OF": "Digit {{n}} of {{total}}",
+    "BY_PHONE_TITLE": "Activate your account",
+    "BY_PHONE_INTRO": "Enter the phone number the reception registered and the 6-digit code you received by SMS.",
+    "PHONE_LABEL": "Phone number",
+    "CODE_LABEL": "Activation code (6 digits)",
+    "BY_PHONE_SUBMIT": "Activate my account",
+    "ERR_PHONE_REQUIRED": "Enter your phone number.",
+    "ERR_CODE_FORMAT": "The code has 6 digits.",
+    "ERR_PHONE_CODE_INCORRECT": "This number and code do not match. Check the SMS and try again."
   },
   "ORGANIZATIONS": {
     "CONTACT": "Contact",
@@ -8246,7 +8257,7 @@
     "USERNAME_DESC": "Pick a unique username",
     "USERNAME_HINT": "3 to 50 characters: letters, digits, dots, hyphens, underscores",
     "USERNAME_PLACEHOLDER": "e.g. john.doe",
-    "CURRENT_HINT_SMS": "The temporary password you received by SMS",
+    "CURRENT_HINT_SMS": "The temporary password shown after you entered the code from your SMS",
     "CURRENT_HINT_GENERIC": "The temporary password you were given"
   },
   "SETTINGS_HUB": {

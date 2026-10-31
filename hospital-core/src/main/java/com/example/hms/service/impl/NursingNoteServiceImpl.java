@@ -506,8 +506,10 @@ public class NursingNoteServiceImpl implements NursingNoteService {
         if (staff == null) {
             return null;
         }
+        // QA D1136: stored as the job title's code, labelled in the reader's
+        // language by the portal; the English words were stored before.
         if (staff.getJobTitle() != null) {
-            return formatJobTitle(staff.getJobTitle().name());
+            return staff.getJobTitle().name();
         }
         return staff.getLicenseNumber();
     }
@@ -517,18 +519,6 @@ public class NursingNoteServiceImpl implements NursingNoteService {
         String l = last != null ? last.trim() : "";
         String combined = (f + " " + l).trim();
         return combined.isEmpty() ? null : combined;
-    }
-
-    private String formatJobTitle(String raw) {
-        if (raw == null || raw.isBlank()) {
-            return null;
-        }
-        String normalized = raw.replace('_', ' ').toLowerCase(Locale.ROOT);
-        String[] parts = normalized.split(" ");
-        return java.util.Arrays.stream(parts)
-            .filter(part -> !part.isBlank())
-            .map(part -> part.substring(0, 1).toUpperCase(Locale.ROOT) + part.substring(1))
-            .collect(Collectors.joining(" "));
     }
 
     private String resolvePatientName(Patient patient) {

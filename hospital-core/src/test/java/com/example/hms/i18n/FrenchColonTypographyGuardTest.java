@@ -71,8 +71,18 @@ class FrenchColonTypographyGuardTest {
         "Not French display text: the FHIR imaging narrative is English interop text "
             + "(\"Technique: …\", \"Findings: …\"), never rendered by the portal");
 
+    /**
+     * QA D1138 (round 20): French also writes a space before {@code ?}, {@code !} and
+     * {@code ;} ("Annuler la demande ?"). A word, a closing bracket or a placeholder glued
+     * to one of them, at the end of a word; a URL's query string is not punctuation.
+     */
+    private static final Pattern GLUED_PUNCTUATION =
+        Pattern.compile("[\\p{L})}\\].'\\u2019\\u00bb][?!;](?![\\p{L}\\p{N}=])");
+    private static final Pattern URL = Pattern.compile("https?://\\S+");
+
     static boolean gluedFrenchLabel(String text) {
-        return GLUED_LABEL.matcher(BETWEEN_PLACEHOLDERS.matcher(text).replaceAll("} {")).find();
+        return GLUED_LABEL.matcher(BETWEEN_PLACEHOLDERS.matcher(text).replaceAll("} {")).find()
+            || GLUED_PUNCTUATION.matcher(URL.matcher(text).replaceAll(" ")).find();
     }
 
     @Test
@@ -144,6 +154,11 @@ class FrenchColonTypographyGuardTest {
         assertThat(gluedFrenchLabel("Statut : {0}")).isFalse();
         assertThat(gluedFrenchLabel("Transport vers {0}:{1}")).isFalse();
         assertThat(gluedFrenchLabel("Voir https://e-keneya.com à 10:30")).isFalse();
+        // QA D1138: ? ! ; glued in French
+        assertThat(gluedFrenchLabel("Annuler la demande pour {0}?")).isTrue();
+        assertThat(gluedFrenchLabel("Attention!")).isTrue();
+        assertThat(gluedFrenchLabel("Annuler la demande pour {0} ?")).isFalse();
+        assertThat(gluedFrenchLabel("Voir https://e-keneya.com/aide?lang=fr")).isFalse();
         assertThat(APPEND_COLON.matcher("summary.append(\": \").append(v)").find()).isTrue();
         assertThat(APPEND_COLON.matcher("url.append(\":\").append(port)").find()).isFalse();
     }

@@ -242,7 +242,9 @@ public class ChartReviewServiceImpl implements ChartReviewService {
             // QA D1107: the title the nurse typed, shown above the note.
             .title(note.getTitle() != null && !note.getTitle().isBlank() ? note.getTitle().strip() : null)
             .authorName(firstNonBlankOf(note.getSignedByName(), note.getAuthorName()))
-            .authorCredentials(firstNonBlankOf(note.getSignedByCredentials(), note.getAuthorCredentials()))
+            // QA D1136: a job title as its code; the portal labels it.
+            .authorCredentials(com.example.hms.utility.JobTitleCredentials.toCode(
+                firstNonBlankOf(note.getSignedByCredentials(), note.getAuthorCredentials())))
             .documentedAt(note.getDocumentedAt())
             .signedAt(note.getSignedAt())
             .signed(note.getSignedAt() != null)
@@ -504,7 +506,7 @@ public class ChartReviewServiceImpl implements ChartReviewService {
             .encounterCode(encounter.getCode())
             .template(note.getTemplate() != null ? note.getTemplate().name() : null)
             .authorName(note.getAuthorName())
-            .authorCredentials(note.getAuthorCredentials())
+            .authorCredentials(com.example.hms.utility.JobTitleCredentials.toCode(note.getAuthorCredentials()))
             .documentedAt(note.getDocumentedAt())
             .signedAt(note.getSignedAt())
             .signed(note.getSignedAt() != null)

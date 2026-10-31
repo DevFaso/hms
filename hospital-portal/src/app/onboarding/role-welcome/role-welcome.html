@@ -56,6 +56,73 @@
     </div>
   }
 
+  <!-- ───────────── BY PHONE (QA D1123: no e-mail link) ───────────── -->
+  @if (pageState === 'by-phone') {
+    <div class="rw-card" data-testid="activate-by-phone">
+      <div class="rw-header">
+        <div class="rw-logo-area">
+          <div class="rw-logo-badge">e-Keneya</div>
+        </div>
+        <h1 class="rw-title">{{ 'ONBOARDING.BY_PHONE_TITLE' | translate }}</h1>
+        <p class="rw-subtitle">{{ 'ONBOARDING.BY_PHONE_INTRO' | translate }}</p>
+      </div>
+      <form class="rw-verify" novalidate (ngSubmit)="submitByPhone()">
+        <div class="rw-field">
+          <label class="rw-info-label" for="rw-phone">{{
+            'ONBOARDING.PHONE_LABEL' | translate
+          }}</label>
+          <input
+            id="rw-phone"
+            class="rw-input"
+            type="tel"
+            name="phone"
+            autocomplete="tel"
+            [(ngModel)]="phone"
+            [attr.aria-invalid]="verifyError === 'ONBOARDING.ERR_PHONE_REQUIRED' ? 'true' : null"
+            [attr.aria-describedby]="verifyError ? 'rw-phone-error' : null"
+          />
+        </div>
+        <div class="rw-field">
+          <label class="rw-info-label" for="rw-phone-code">{{
+            'ONBOARDING.CODE_LABEL' | translate
+          }}</label>
+          <input
+            id="rw-phone-code"
+            class="rw-input"
+            type="text"
+            name="code"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            maxlength="6"
+            [(ngModel)]="phoneCode"
+            [attr.aria-invalid]="
+              verifyError && verifyError !== 'ONBOARDING.ERR_PHONE_REQUIRED' ? 'true' : null
+            "
+            [attr.aria-describedby]="verifyError ? 'rw-phone-error' : null"
+          />
+        </div>
+        @if (verifyError) {
+          <div id="rw-phone-error" class="rw-error" role="alert">{{ verifyError | translate }}</div>
+        }
+        <button
+          type="submit"
+          class="rw-btn rw-btn--primary rw-btn--full"
+          data-testid="activate-by-phone-submit"
+          [attr.aria-busy]="verifying"
+        >
+          {{
+            verifying
+              ? ('ONBOARDING.VERIFYING' | translate)
+              : ('ONBOARDING.BY_PHONE_SUBMIT' | translate)
+          }}
+        </button>
+      </form>
+      <button type="button" class="rw-btn rw-btn--link" (click)="goToLogin()">
+        {{ 'ONBOARDING.GO_TO_LOGIN' | translate }}
+      </button>
+    </div>
+  }
+
   <!-- ───────────── MAIN FORM ───────────── -->
   @if (pageState === 'loaded' && assignment) {
     <div class="rw-card">
@@ -65,7 +132,8 @@
           <div class="rw-logo-badge">e-Keneya</div>
         </div>
         <h1 class="rw-title">
-          {{ 'ONBOARDING.WELCOME' | translate }} {{ assignment.assigneeName }}!
+          {{ 'ONBOARDING.WELCOME' | translate }} {{ assignment.assigneeName
+          }}{{ 'COMMON.EXCLAMATION_MARK' | translate }}
         </h1>
         <p class="rw-subtitle">{{ 'ONBOARDING.ASSIGNED_ROLE' | translate }}</p>
       </div>

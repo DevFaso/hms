@@ -171,7 +171,7 @@
                 'STORYBOARD.LAST_VISIT'
                   | translate
                     : {
-                        date: (last.encounterDate | serverTime | date: 'dd/MM/yyyy') ?? '—',
+                        date: (last.encounterDate | serverTime | date: 'shortDate') ?? '—',
                         department: last.departmentName ?? '—',
                       }
               }}

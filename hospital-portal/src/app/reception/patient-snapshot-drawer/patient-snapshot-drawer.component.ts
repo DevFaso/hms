@@ -1,4 +1,4 @@
-import { DialogFocusDirective } from '../../shared/a11y/dialog-focus.directive';
+import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 import {
   Component,
   Input,
@@ -22,7 +22,7 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
   selector: 'app-patient-snapshot-drawer',
   standalone: true,
   imports: [
-    DialogFocusDirective,
+    ModalDialogDirective,
     ServerTimePipe,
     CfaPipe,
     CommonModule,

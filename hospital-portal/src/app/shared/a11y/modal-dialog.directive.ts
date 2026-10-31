@@ -9,6 +9,8 @@ import {
   inject,
 } from '@angular/core';
 
+import { captureOpener, restoreFocus } from './focus-return';
+
 /**
  * QA D1004: a hand-built overlay dialog behaves as a modal for keyboard and
  * screen-reader users. Put it on the dialog box (not the overlay):
@@ -45,10 +47,8 @@ export class ModalDialogDirective implements AfterViewInit, OnDestroy {
   private static readonly stack: ModalDialogDirective[] = [];
 
   private readonly host = inject(ElementRef<HTMLElement>);
-  private readonly opener: HTMLElement | null =
-    typeof document !== 'undefined' && document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null;
+  /** QA D1125: the opener even when it had disabled itself (focus-return.ts). */
+  private readonly opener: HTMLElement | null = captureOpener();
 
   private static readonly FOCUSABLE = [
     'a[href]',
@@ -81,9 +81,7 @@ export class ModalDialogDirective implements AfterViewInit, OnDestroy {
     const stack = ModalDialogDirective.stack;
     const at = stack.indexOf(this);
     if (at >= 0) stack.splice(at, 1);
-    if (this.opener && typeof this.opener.focus === 'function' && this.opener.isConnected) {
-      this.opener.focus();
-    }
+    restoreFocus(this.opener);
   }
 
   /**
@@ -93,6 +91,10 @@ export class ModalDialogDirective implements AfterViewInit, OnDestroy {
   @HostListener('document:keydown', ['$event'])
   onDocumentKeydown(event: KeyboardEvent): void {
     if (!this.isTop() || this.box().contains(document.activeElement)) return;
+    // Focus is inside another modal built without this directive (a CDK
+    // dialog, appDialogFocus): that one owns the keyboard, never pull focus out.
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && active.closest('[aria-modal="true"]')) return;
     if (event.key === 'Escape' && this.escaped.observed) {
       event.preventDefault();
       this.escaped.emit();

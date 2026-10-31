@@ -15,6 +15,7 @@ import { NursingNote, NursingNoteService } from '../../services/nursing-note.ser
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { serverInstant, serverLocalDate } from '../../shared/date-utils';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
+import { CredentialsLabelPipe } from '../../shared/pipes/credentials-label.pipe';
 
 /** One labelled part of a note, in the order the template writes it. */
 export interface NursingNotePart {
@@ -30,7 +31,7 @@ export interface NursingNotePart {
 @Component({
   selector: 'app-nursing-notes-panel',
   standalone: true,
-  imports: [CommonModule, TranslateModule, ServerTimePipe, EnumLabelPipe],
+  imports: [CommonModule, TranslateModule, ServerTimePipe, EnumLabelPipe, CredentialsLabelPipe],
   templateUrl: './nursing-notes-panel.component.html',
   styleUrl: './nursing-notes-panel.component.scss',
   changeDetection: ChangeDetectionStrategy.Eager,

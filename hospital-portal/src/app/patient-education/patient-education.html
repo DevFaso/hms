@@ -252,7 +252,7 @@
                     <div class="progress-track">
                       <div class="progress-fill" [style.width.%]="p.progressPercentage"></div>
                     </div>
-                    <span class="muted">{{ p.progressPercentage }}%</span>
+                    <span class="muted">{{ p.progressPercentage | measure: '%' }}</span>
                   } @else {
                     <span class="muted">—</span>
                   }

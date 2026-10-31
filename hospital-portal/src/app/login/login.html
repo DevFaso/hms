@@ -407,6 +407,14 @@
               (click)="openResendActivation()"
               >{{ 'LOGIN.RESEND_ACTIVATION' | translate }}</a
             >
+            <span class="link-separator">·</span>
+            <!-- QA D1123: a phone-only patient activates with the number and the SMS code. -->
+            <a
+              class="forgot-link"
+              data-testid="have-a-code-link"
+              routerLink="/onboarding/role-welcome"
+              >{{ 'LOGIN.HAVE_A_CODE' | translate }}</a
+            >
           </div>
         </div>
 

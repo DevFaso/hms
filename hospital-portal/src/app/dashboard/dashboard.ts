@@ -1,4 +1,5 @@
 import { LabValuePipe, LabRangePipe } from '../shared/pipes/lab-value.pipe';
+import { DayMonthPipe } from '../shared/pipes/day-month.pipe';
 import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
 import { currentMedications } from '../patient-portal/current-medications';
 import {
@@ -92,6 +93,7 @@ import {
 import { currentLocale, formatCfa } from '../shared/i18n/app-locale';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { ClockTimePipe } from '../shared/pipes/clock-time.pipe';
+import { MeasurePipe } from '../shared/pipes/measure.pipe';
 // ── Local interfaces ────────────────────────────────────────────────────────
 
 interface QuickAction {
@@ -143,8 +145,10 @@ export { currentMedications };
   selector: 'app-dashboard',
   standalone: true,
   imports: [
+    MeasurePipe,
     LabValuePipe,
     LabRangePipe,
+    DayMonthPipe,
     PersonNamePipe,
     LabCorrectionBadgeComponent,
     ClockTimePipe,
