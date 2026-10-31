@@ -131,6 +131,11 @@ export const ACTION_PERMISSIONS = {
     endpoint: 'EncounterController#startEncounter',
     roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR'],
   },
+  // QA D961: a medical certificate is a doctor's act.
+  encounterMedicalCertificate: {
+    endpoint: 'EncounterController#issueMedicalCertificate',
+    roles: ['ROLE_DOCTOR'],
+  },
   referralCreate: {
     endpoint: 'GeneralReferralController#createReferral',
     roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE'],

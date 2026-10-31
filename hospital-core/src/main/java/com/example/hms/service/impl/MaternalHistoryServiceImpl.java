@@ -345,6 +345,12 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
         // QA r5 tenancy sweep: a write loads under the tenant guard.
         com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(maternalHistory.getHospital(), MATERNAL_HISTORY_NOT_FOUND_WITH_ID, id);
         
+        // QA D930 class: a hard delete of a colleague's record was open to anyone at
+        // the hospital. Only the clinician who recorded it (or a super-admin in
+        // global view) deletes it; everyone else updates it, which keeps a version.
+        if (maternalHistory.getRecordedBy() != null) {
+            com.example.hms.security.CallerIdentity.requireCallerUnlessSuperAdmin(maternalHistory.getRecordedBy());
+        }
         maternalHistoryRepository.delete(maternalHistory);
         
         log.warn("Deleted maternal history ID: {} by user: {}", id, username);

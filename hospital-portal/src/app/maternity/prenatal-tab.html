@@ -154,18 +154,20 @@
               <td>{{ (a.status | enumLabel: 'appointmentStatus') || '—' }}</td>
               <td class="actions-cell">
                 <button
+                  [attr.aria-label]="'PRENATAL.RESCHEDULE' | translate"
                   class="btn-secondary btn-sm"
                   [title]="'PRENATAL.RESCHEDULE' | translate"
                   (click)="openReschedule(a)"
                 >
-                  <span class="material-symbols-outlined">edit_calendar</span>
+                  <span class="material-symbols-outlined" aria-hidden="true">edit_calendar</span>
                 </button>
                 <button
+                  [attr.aria-label]="'PRENATAL.SEND_REMINDER' | translate"
                   class="btn-secondary btn-sm"
                   [title]="'PRENATAL.SEND_REMINDER' | translate"
                   (click)="openReminder(a)"
                 >
-                  <span class="material-symbols-outlined">notifications</span>
+                  <span class="material-symbols-outlined" aria-hidden="true">notifications</span>
                 </button>
               </td>
             </tr>
@@ -186,6 +188,7 @@
   >
     <div
       class="modal"
+      aria-labelledby="prenatal-tab-dialog-1-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
@@ -193,13 +196,13 @@
       (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'PRENATAL.RESCHEDULE' | translate }}</h2>
+        <h2 id="prenatal-tab-dialog-1-title">{{ 'PRENATAL.RESCHEDULE' | translate }}</h2>
         <button
           class="modal-close"
           (click)="closeReschedule()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -244,6 +247,7 @@
   >
     <div
       class="modal"
+      aria-labelledby="prenatal-tab-dialog-2-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
@@ -251,13 +255,13 @@
       (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'PRENATAL.SEND_REMINDER' | translate }}</h2>
+        <h2 id="prenatal-tab-dialog-2-title">{{ 'PRENATAL.SEND_REMINDER' | translate }}</h2>
         <button
           class="modal-close"
           (click)="closeReminder()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">

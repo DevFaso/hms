@@ -929,6 +929,8 @@ export type PatientDocumentType =
   | 'INSURANCE_DOCUMENT'
   | 'INVOICE'
   | 'IMMUNIZATION_RECORD'
+  /** QA D961: issued by a doctor from a visit; never uploaded by the patient. */
+  | 'MEDICAL_CERTIFICATE'
   | 'OTHER';
 
 export interface PatientDocumentResponse {

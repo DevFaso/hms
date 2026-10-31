@@ -198,6 +198,8 @@ export interface PatientFlowItem {
   urgency: string;
   state: string;
   flowSource: 'ENCOUNTER' | 'ADMISSION';
+  /** QA D994: the visit's type, absent on an admission card and on an older server. */
+  encounterType?: string | null;
 }
 
 export interface ClinicalInboxItem {

@@ -37,6 +37,8 @@ export const DOCUMENT_TYPE_OPTIONS: { value: PatientDocumentType; labelKey: stri
   { value: 'INSURANCE_DOCUMENT', labelKey: 'PORTAL.DOCUMENTS.TYPE_INSURANCE_DOCUMENT' },
   { value: 'INVOICE', labelKey: 'PORTAL.DOCUMENTS.TYPE_INVOICE' },
   { value: 'IMMUNIZATION_RECORD', labelKey: 'PORTAL.DOCUMENTS.TYPE_IMMUNIZATION_RECORD' },
+  // QA D961: certificates a doctor issued from a visit.
+  { value: 'MEDICAL_CERTIFICATE', labelKey: 'PORTAL.DOCUMENTS.TYPE_MEDICAL_CERTIFICATE' },
   { value: 'OTHER', labelKey: 'PORTAL.DOCUMENTS.TYPE_OTHER' },
 ];
 
