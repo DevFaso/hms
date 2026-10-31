@@ -93,7 +93,7 @@ public class DuplicateMedicationOrderRule implements CdsRule {
             String.valueOf(LOOKBACK.toDays()), text.enumWord(existing.getStatus()));
         return new CdsCard(
             summary, detail, CdsCard.Indicator.WARNING,
-            new Source(SOURCE_LABEL, null, null),
+            new Source(text.get("cds.source.duplicateOrder", SOURCE_LABEL), null, null),
             null, null, null, UUID.randomUUID().toString()
         );
     }

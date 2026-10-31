@@ -110,16 +110,16 @@ public class PrescriptionClarificationService {
                     com.example.hms.utility.MessageUtil.resolve("dispense.ready.openPreparation"));
         }
         if (reason == null || reason.isBlank()) {
-            throw new BusinessException("A clarification request needs a reason.");
+            throw new BusinessException("pharmacy.clarification.reasonRequired");
         }
         PrescriptionStatus status = prescription.getStatus();
         if (status == null || !CLARIFIABLE_STATUSES.contains(status)) {
-            throw new BusinessException("Only a prescription awaiting a fill can be sent back for "
-                    + "clarification; this one is " + status + ".");
+            throw new BusinessException("pharmacy.clarification.notClarifiable",
+                    status == null ? "" : status.localizedLabel());
         }
         UUID pharmacistId = roleValidator.getCurrentUserId();
         if (pharmacistId == null) {
-            throw new BusinessException("Unable to determine current user");
+            throw new BusinessException("pharmacy.currentUserUnknown");
         }
 
         prescription.setClarificationPreviousStatus(status);
@@ -150,8 +150,8 @@ public class PrescriptionClarificationService {
     public void resolveClarification(UUID prescriptionId, String response) {
         Prescription prescription = findInScope(prescriptionId);
         if (prescription.getStatus() != PrescriptionStatus.PENDING_CLARIFICATION) {
-            throw new BusinessException("This prescription is not awaiting clarification; it is "
-                    + prescription.getStatus() + ".");
+            throw new BusinessException("pharmacy.clarification.notAwaiting",
+                    prescription.getStatus() == null ? "" : prescription.getStatus().localizedLabel());
         }
         Staff doctor = resolveDoctorAtHospital(prescription);
 

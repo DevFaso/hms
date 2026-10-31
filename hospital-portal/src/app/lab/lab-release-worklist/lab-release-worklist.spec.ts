@@ -1,3 +1,4 @@
+import { formatLabNumber } from '../shared/lab-value.pipe';
 import { formatDate } from '@angular/common';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
@@ -119,7 +120,8 @@ describe('LabReleaseWorklistComponent', () => {
     const row = host().querySelector('[data-testid="release-row-result-1"]');
     expect(row?.textContent).toContain('John Doe');
     expect(row?.textContent).toContain('Haemoglobin');
-    expect(row?.textContent).toContain('9.1');
+    // QA D1002: the value in the reader's number format, a space, then the unit.
+    expect(row?.textContent).toContain(formatLabNumber('9.1') + ' g/dL');
     expect(row?.textContent).toContain('g/dL');
     expect(host().querySelector('[data-testid="release-action-result-1"]')).not.toBeNull();
   });
@@ -447,6 +449,28 @@ describe('LabReleaseWorklistComponent', () => {
     const row = host().querySelector('[data-testid="release-row-result-1"]');
     expect(row?.textContent).toContain('LAB_RELEASE.FLAG_CRITICAL');
     expect(row?.querySelector('.flag-critical')).not.toBeNull();
+  });
+
+  it('QA D969: labels a positive qualitative answer (ABNORMAL) "abnormal", as /lab-results does', () => {
+    setup(['ROLE_LAB_DIRECTOR']);
+    fixture.detectChanges();
+    flushWorklist([result({ severityFlag: 'ABNORMAL', unitMismatch: false })]);
+    fixture.detectChanges();
+
+    expect(component.severityKey(component.rows()[0])).toBe('ABNORMAL');
+    const row = host().querySelector('[data-testid="release-row-result-1"]');
+    expect(row?.textContent).toContain('LAB_RELEASE.FLAG_ABNORMAL');
+    expect(row?.textContent).not.toContain('LAB_RELEASE.FLAG_UNSPECIFIED');
+    expect(row?.querySelector('.flag-abnormal')).not.toBeNull();
+  });
+
+  it('QA D963: badges a STAT result on the queue', () => {
+    setup(['ROLE_LAB_DIRECTOR']);
+    fixture.detectChanges();
+    flushWorklist([result({ orderPriority: 'STAT' })]);
+    fixture.detectChanges();
+
+    expect(host().querySelector('[data-testid="release-priority-result-1"]')).not.toBeNull();
   });
 
   it('flags a critical result on the queue', () => {

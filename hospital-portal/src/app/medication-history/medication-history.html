@@ -203,7 +203,7 @@
                     · {{ e.frequency }}
                   }
                   @if (e.route) {
-                    · {{ e.route }}
+                    · {{ e.route | medicationRoute }}
                   }
                 </td>
                 <td>{{ e.source || '—' }}</td>

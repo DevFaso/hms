@@ -157,6 +157,7 @@ export class MedicationCatalogComponent implements OnInit {
       category: item.category ?? '',
       essentialList: item.essentialList ?? false,
       controlled: item.controlled ?? false,
+      pediatricMaxDoseMgPerKg: item.pediatricMaxDoseMgPerKg ?? null,
       description: item.description ?? '',
     };
     this.showModal.set(true);
@@ -273,6 +274,7 @@ export class MedicationCatalogComponent implements OnInit {
       category: '',
       essentialList: false,
       controlled: false,
+      pediatricMaxDoseMgPerKg: null,
       description: '',
     };
   }

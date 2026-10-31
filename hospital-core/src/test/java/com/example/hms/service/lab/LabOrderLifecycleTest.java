@@ -147,4 +147,29 @@ class LabOrderLifecycleTest {
         assertThat(LabOrderLifecycle.statusAfterNewResult(null)).isNull();
         assertThat(LabOrderLifecycle.statusAfterAllResultsReleased(null)).isNull();
     }
+
+    @Test
+    @DisplayName("QA D962 — a specimen rejection sends a collected or received order back to ORDERED, never a resulted one")
+    void specimenRejectionVerdicts() {
+        for (LabOrderStatus status : new LabOrderStatus[] {
+            LabOrderStatus.COLLECTED, LabOrderStatus.RECEIVED, LabOrderStatus.IN_PROGRESS}) {
+            assertThat(LabOrderLifecycle.statusAfterSpecimenRejected(status)).as(status.name())
+                .isEqualTo(LabOrderStatus.ORDERED);
+            assertThat(LabOrderLifecycle.acceptsSpecimenRejection(status)).as(status.name()).isTrue();
+        }
+        // Review of #975: PENDING is already awaiting collection; it stays where it is.
+        assertThat(LabOrderLifecycle.acceptsSpecimenRejection(LabOrderStatus.PENDING)).isTrue();
+        for (LabOrderStatus status : new LabOrderStatus[] {
+            LabOrderStatus.PENDING, LabOrderStatus.ORDERED, LabOrderStatus.CANCELLED, LabOrderStatus.RESULTED,
+            LabOrderStatus.VERIFIED, LabOrderStatus.COMPLETED, LabOrderStatus.ENTERED_IN_ERROR}) {
+            assertThat(LabOrderLifecycle.statusAfterSpecimenRejected(status)).as(status.name()).isNull();
+        }
+        for (LabOrderStatus status : new LabOrderStatus[] {
+            LabOrderStatus.RESULTED, LabOrderStatus.VERIFIED, LabOrderStatus.COMPLETED,
+            LabOrderStatus.ENTERED_IN_ERROR, LabOrderStatus.CANCELLED}) {
+            assertThat(LabOrderLifecycle.acceptsSpecimenRejection(status)).as(status.name()).isFalse();
+        }
+        assertThat(LabOrderLifecycle.statusAfterSpecimenRejected(null)).isNull();
+        assertThat(LabOrderLifecycle.acceptsSpecimenRejection(null)).isFalse();
+    }
 }

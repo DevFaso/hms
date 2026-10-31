@@ -26,6 +26,7 @@ import { ToastService } from '../core/toast.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { MedicationRoutePipe } from '../shared/pipes/medication-route.pipe';
 
 /**
  * Medication-history workspace (Phase 3 task 15): the /medication-history
@@ -38,6 +39,7 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    MedicationRoutePipe,
     ServerTimePipe,
     CommonModule,
     FormsModule,

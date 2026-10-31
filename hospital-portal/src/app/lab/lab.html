@@ -113,7 +113,18 @@
                 <div class="cell-primary">{{ order.patientFullName || '—' }}</div>
               </td>
               <td>
-                <div class="cell-primary">{{ order.labTestName || '—' }}</div>
+                <div class="cell-primary">
+                  {{ order.labTestName || '—' }}
+                  @if (isUrgentPriority(order.priority)) {
+                    <!-- QA D963: STAT and URGENT stand out on the worklist. -->
+                    <span
+                      class="priority-badge"
+                      [class.priority-stat]="order.priority === 'STAT'"
+                      [attr.data-testid]="'lab-priority-' + order.id"
+                      >{{ order.priority | enumLabel: 'labOrderPriority' }}</span
+                    >
+                  }
+                </div>
                 <div class="cell-secondary">{{ order.labTestCode || '' }}</div>
               </td>
               <td>
@@ -125,7 +136,7 @@
                       isIncomingExternal(order) ? 'routing-incoming' : 'routing-outgoing'
                     "
                   >
-                    {{ counterpartLabelKey(order) | translate }}:
+                    {{ counterpartLabelKey(order) | translate }}{{ 'COMMON.COLON' | translate }}
                     {{ counterpartHospitalName(order) }}
                   </div>
                 } @else {
@@ -210,9 +221,19 @@
 
   @if (selectedOrder(); as o) {
     <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeDetail()">
-      <div class="detail-panel">
+      <div
+        class="detail-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="lab-dialog-title-1"
+        cdkTrapFocus
+        [cdkTrapFocusAutoCapture]="true"
+        (keydown.escape)="closeDetail(); $event.stopPropagation()"
+      >
         <div class="panel-header">
-          <h2>{{ 'LAB.ORDER' | translate }} {{ shortOrderCode(o.labOrderCode) }}</h2>
+          <h2 id="lab-dialog-title-1">
+            {{ 'LAB.ORDER' | translate }} {{ shortOrderCode(o.labOrderCode) }}
+          </h2>
           <button
             class="close-btn"
             [title]="'COMMON.CLOSE_DETAIL_PANEL' | translate"
@@ -251,13 +272,24 @@
                 o.status | enumLabel: 'labOrderStatus'
               }}</span>
             </div>
+            <div class="detail-field" data-testid="detail-priority">
+              <span class="field-label">{{ 'LAB.PRIORITY' | translate }}</span
+              ><span
+                class="field-value"
+                [class.priority-badge]="isUrgentPriority(o.priority)"
+                [class.priority-stat]="o.priority === 'STAT'"
+                >{{ o.priority ? (o.priority | enumLabel: 'labOrderPriority') : '—' }}</span
+              >
+            </div>
             <div class="detail-field">
               <span class="field-label">{{ 'LAB.DIAGNOSIS_CODE' | translate }}</span
               ><span class="field-value">{{ o.primaryDiagnosisCode || '—' }}</span>
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'LAB.ORDER_CHANNEL' | translate }}</span
-              ><span class="field-value">{{ o.orderChannel || '—' }}</span>
+              ><span class="field-value">{{
+                o.orderChannel ? (o.orderChannel | enumLabel: 'labOrderChannel') : '—'
+              }}</span>
             </div>
           </div>
           @if (o.clinicalIndication) {
@@ -282,6 +314,22 @@
               <p>{{ o.cancellationReason }}</p>
             </div>
           }
+          @for (rs of rejectedDetailSpecimens(); track rs.id) {
+            <!-- QA D962: the laboratory refused a specimen; a new sample is needed. -->
+            <div class="notes-section" [attr.data-testid]="'lab-order-rejected-' + rs.id">
+              <span class="field-label">{{
+                'LAB.REJECT_SPECIMEN.REJECTED_ON_ORDER' | translate
+              }}</span>
+              <p>
+                {{ rs.rejectionReason || '—' }}
+                @if (rs.rejectedAt) {
+                  <span class="cell-secondary">
+                    — {{ rs.rejectedAt | serverTime | date: 'medium' }}</span
+                  >
+                }
+              </p>
+            </div>
+          }
         </div>
       </div>
     </div>
@@ -293,12 +341,19 @@
   <div class="modal-backdrop" tabindex="-1" (click)="closeModal()" (keydown.escape)="closeModal()">
     <div
       class="modal modal-lg"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="lab-dialog-title-2"
+      cdkTrapFocus
+      [cdkTrapFocusAutoCapture]="true"
+      (keydown.escape)="closeModal(); $event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ editing() ? ('LAB.EDIT_ORDER' | translate) : ('LAB.NEW_ORDER' | translate) }}</h2>
+        <h2 id="lab-dialog-title-2">
+          {{ editing() ? ('LAB.EDIT_ORDER' | translate) : ('LAB.NEW_ORDER' | translate) }}
+        </h2>
         <button class="modal-close" (click)="closeModal()">
           <span class="material-symbols-outlined">close</span>
         </button>
@@ -435,7 +490,7 @@
             <select id="lab-priority" [(ngModel)]="form.priority">
               <option value="">{{ 'LAB.SELECT_PRIORITY' | translate }}</option>
               @for (p of priorities; track p) {
-                <option [value]="p">{{ p }}</option>
+                <option [value]="p">{{ p | enumLabel: 'labOrderPriority' }}</option>
               }
             </select>
           </div>
@@ -504,8 +559,8 @@
           <div class="field">
             <label for="lab-orderChannel">{{ 'LAB.ORDER_CHANNEL' | translate }} *</label>
             <select id="lab-orderChannel" [(ngModel)]="form.orderChannel" required>
-              @for (ch of orderChannels; track ch.value) {
-                <option [value]="ch.value">{{ ch.label }}</option>
+              @for (ch of orderChannels; track ch) {
+                <option [value]="ch">{{ ch | enumLabel: 'labOrderChannel' }}</option>
               }
             </select>
           </div>
@@ -566,10 +621,12 @@
       class="modal"
       role="dialog"
       aria-modal="true"
+      cdkTrapFocus
+      [cdkTrapFocusAutoCapture]="true"
+      (keydown.escape)="closeVoid(); $event.stopPropagation()"
       aria-labelledby="lab-void-title"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
         <h2 id="lab-void-title">{{ 'LAB.VOID.TITLE' | translate }}</h2>
@@ -626,12 +683,17 @@
   >
     <div
       class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="lab-dialog-title-3"
+      cdkTrapFocus
+      [cdkTrapFocusAutoCapture]="true"
+      (keydown.escape)="cancelDelete(); $event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'LAB.DELETE_TITLE' | translate }}</h2>
+        <h2 id="lab-dialog-title-3">{{ 'LAB.DELETE_TITLE' | translate }}</h2>
         <button class="modal-close" (click)="cancelDelete()">
           <span class="material-symbols-outlined">close</span>
         </button>
@@ -665,12 +727,17 @@
   >
     <div
       class="modal modal-lg"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="lab-dialog-title-4"
+      cdkTrapFocus
+      [cdkTrapFocusAutoCapture]="true"
+      (keydown.escape)="closeSpecimens(); $event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="lab-dialog-title-4">
           {{ 'LAB.SPECIMENS' | translate }} — {{ shortOrderCode(specimensOrder()?.labOrderCode) }}
         </h2>
         <button class="modal-close" (click)="closeSpecimens()">
@@ -714,8 +781,16 @@
                     <td>{{ s.currentLocation || '—' }}</td>
                     <td>
                       <span [class]="getSpecimenStatusClass(s.status)">{{
-                        'LAB.SPECIMEN_STATUS_' + s.status | translate
+                        s.status | enumLabel: 'labSpecimenStatus'
                       }}</span>
+                      @if (s.status === 'REJECTED' && s.rejectionReason) {
+                        <div class="cell-secondary" [attr.data-testid]="'specimen-reason-' + s.id">
+                          {{
+                            'LAB.REJECT_SPECIMEN.REASON_VALUE'
+                              | translate: { reason: s.rejectionReason }
+                          }}
+                        </div>
+                      }
                     </td>
                     <td>
                       @if (canReceive(s)) {
@@ -725,6 +800,15 @@
                           [disabled]="receivingSpecimenId() === s.id"
                         >
                           {{ 'LAB.RECEIVE' | translate }}
+                        </button>
+                      }
+                      @if (canReject(s)) {
+                        <button
+                          class="btn-secondary btn-sm"
+                          [attr.data-testid]="'reject-specimen-' + s.id"
+                          (click)="openReject(s)"
+                        >
+                          {{ 'LAB.REJECT_SPECIMEN.ACTION' | translate }}
                         </button>
                       }
                       <button
@@ -785,6 +869,71 @@
             {{ 'LAB.COLLECT' | translate }}
           </button>
         }
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ═══ REJECT SPECIMEN, QA D962 ═══ -->
+@if (rejectingSpecimen(); as rs) {
+  <div
+    class="modal-backdrop"
+    tabindex="-1"
+    (click)="closeReject()"
+    (keydown.escape)="closeReject()"
+  >
+    <div
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="lab-reject-title"
+      cdkTrapFocus
+      [cdkTrapFocusAutoCapture]="true"
+      (keydown.escape)="closeReject(); $event.stopPropagation()"
+      tabindex="-1"
+      (click)="$event.stopPropagation()"
+      data-testid="lab-reject-modal"
+    >
+      <div class="modal-header">
+        <h2 id="lab-reject-title">{{ 'LAB.REJECT_SPECIMEN.TITLE' | translate }}</h2>
+        <button
+          class="modal-close"
+          (click)="closeReject()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <p class="delete-warning">
+          {{ 'LAB.REJECT_SPECIMEN.EXPLAIN' | translate }}
+          <strong>{{ rs.accessionNumber || '—' }}</strong>
+        </p>
+        <div class="field">
+          <label for="lab-reject-reason">{{ 'LAB.REJECT_SPECIMEN.REASON' | translate }} *</label>
+          <textarea
+            id="lab-reject-reason"
+            data-testid="lab-reject-reason"
+            rows="3"
+            maxlength="500"
+            [value]="rejectReason()"
+            (input)="onRejectReasonInput($event)"
+            [placeholder]="'LAB.REJECT_SPECIMEN.REASON_PLACEHOLDER' | translate"
+          ></textarea>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-secondary" (click)="closeReject()">
+          {{ 'COMMON.CANCEL' | translate }}
+        </button>
+        <button
+          class="btn-danger"
+          data-testid="lab-reject-confirm"
+          (click)="executeReject()"
+          [disabled]="rejecting() || !rejectReason().trim()"
+        >
+          {{ 'LAB.REJECT_SPECIMEN.CONFIRM' | translate }}
+        </button>
       </div>
     </div>
   </div>

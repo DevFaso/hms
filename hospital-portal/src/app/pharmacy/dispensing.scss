@@ -419,3 +419,10 @@
   font-size: 0.875rem;
   color: var(--text-secondary, #5b6472);
 }
+
+// QA D1001: the remainder under the prescribed quantity in the queue.
+.cell-sub {
+  display: block;
+  font-size: 0.75rem;
+  color: #4b5563;
+}

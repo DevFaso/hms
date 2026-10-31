@@ -22,6 +22,7 @@ import {
 import { EnumLabelService } from '../../core/enum-label.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { MedicationRoutePipe } from '../../shared/pipes/medication-route.pipe';
 
 type LoadState = 'loading' | 'ready' | 'empty' | 'error';
 
@@ -51,7 +52,7 @@ const ABNORMAL_DANGER = new Set(['CRITICAL', 'ABNORMAL']);
 @Component({
   selector: 'app-chart-review',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, TranslateModule, EnumLabelPipe],
+  imports: [ServerTimePipe, CommonModule, TranslateModule, EnumLabelPipe, MedicationRoutePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './chart-review.component.html',
   styleUrl: './chart-review.component.scss',

@@ -73,6 +73,7 @@ class PatientSubjectReadCoverageTest {
         entry("PatientPortalController#downloadDocument", "PatientDocumentServiceImpl.requireOwnDocument(caller's patient id)"),
         entry("PatientPortalController#getQuestionnaires", "PatientPortalServiceImpl: appointment must be the caller's"),
         entry("PatientPortalController#getMyEducationItem", "PatientPortalServiceImpl.requireAssignedEducation(caller's patient id)"),
+        entry("PatientPortalController#getMyPrintedPrescription", "PrescriptionCopyPdfService.copyForPatient: 404 unless the caller's own (QA D966)"),
         entry("PatientPortalController#myScreeningInstrument", "an instrument definition by code, not patient data"),
         entry("PatientPortalController#getDepartments", "booking directory of a hospital, not patient data"),
         entry("PatientPortalController#getProviders", "booking directory of a hospital, not patient data"));
