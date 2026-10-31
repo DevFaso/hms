@@ -299,9 +299,14 @@ describe('NursingIntakeFormComponent — carried-in chart data (QA D951/D992)', 
     const host = fixture.nativeElement as HTMLElement;
     const rx = component.documentedMedications()[0];
     expect(host.querySelector('.documented__list button.btn-add--inline')).not.toBeNull();
+    expect(host.querySelector('[data-testid="reconciled-status"]')).toBeNull();
     component.reconcilePrescription(rx);
     fixture.detectChanges();
-    const row = host.querySelector('.documented__list li');
+    // The allergies list uses the same class: take the row of this medicine.
+    const row = [...host.querySelectorAll('.documented__list li')].find((li) =>
+      li.textContent?.includes('Amoxicilline'),
+    );
+    expect(row).withContext('the prescription row').toBeDefined();
     expect(row?.querySelector('button')).withContext('no dead button on the row').toBeNull();
     expect(row?.querySelector('[data-testid="reconciled-status"]')?.textContent?.trim()).toBe(
       'INTAKE.RECONCILED',
