@@ -66,7 +66,8 @@ public class CdsCheckServiceImpl implements CdsCheckService {
             log.debug("Skipping CDS for prescription {} — no medication code", prescription.getId());
             return new CdsAlertResult(
                     CdsAlertSeverity.INFO,
-                    List.of("Aucun code médicament — vérification CDS non disponible"),
+                    // QA D1102 class: the pharmacist's language, never a French literal.
+                    List.of(com.example.hms.utility.MessageUtil.resolveOrRaw("pharmacy.cds.noCode")),
                     false
             );
         }
@@ -95,9 +96,8 @@ public class CdsCheckServiceImpl implements CdsCheckService {
 
         // Therapeutic overlap (same drug code already active).
         if (activeCodes.contains(prescribedCode)) {
-            alerts.add("Chevauchement thérapeutique : "
-                    + prescription.getMedicationName()
-                    + " est déjà actif pour ce patient");
+            alerts.add(com.example.hms.utility.MessageUtil.resolveOrRaw("pharmacy.cds.overlap",
+                    prescription.getMedicationName()));
             worst = escalate(worst, CdsAlertSeverity.WARNING);
         }
 
@@ -144,9 +144,12 @@ public class CdsCheckServiceImpl implements CdsCheckService {
                 interaction.getDescription());
         String desc = localized != null && !localized.isBlank()
                 ? localized
-                : "Interaction médicamenteuse détectée";
-        return String.format("[%s] %s ↔ %s : %s",
-                interaction.getSeverity(),
+                : com.example.hms.utility.MessageUtil.resolveOrRaw("pharmacy.cds.interactionDefault");
+        // QA D1102 class: the severity in words ("majeur"), never the enum code.
+        String severity = interaction.getSeverity() == null ? ""
+                : com.example.hms.utility.MessageUtil.resolveOrRaw("cds.enum." + interaction.getSeverity().name());
+        return com.example.hms.utility.MessageUtil.resolveOrRaw("pharmacy.cds.interaction",
+                severity,
                 interaction.getDrug1Name(),
                 interaction.getDrug2Name(),
                 desc);

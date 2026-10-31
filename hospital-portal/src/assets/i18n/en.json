@@ -6366,7 +6366,8 @@
         "LAB_ORDER_ENTERED_IN_ERROR": "Lab Order Entered in Error",
         "MEDICATION_DOSE_LIMITS_UPDATED": "Paediatric dose limits updated",
         "PRESCRIPTION_CDS_OVERRIDDEN": "Prescription decision-support alert overridden",
-        "PRESCRIPTION_SIGN_REAUTHENTICATION": "Re-authentication to sign a controlled-drug prescription"
+        "PRESCRIPTION_SIGN_REAUTHENTICATION": "Re-authentication to sign a controlled-drug prescription",
+        "PRESCRIPTION_PEDIATRIC_DOSE_REVIEWED": "Paediatric dose review recorded"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelled",
@@ -7296,6 +7297,23 @@
       "CODE": "Code from your authenticator app (or a backup code)",
       "SUBMIT": "Sign",
       "FAILED": "Your identity could not be confirmed. The prescription is not signed."
+    },
+    "DOSE_REVIEW": {
+      "DUE": "Dose review by a pharmacist or physician required",
+      "ACTION": "Record the dose review",
+      "TITLE": "Record the paediatric dose review",
+      "HINT": "The dose check could not judge this child’s dose. As a pharmacist or a physician other than the prescriber, record why you accept it; the order can be signed once the review is recorded.",
+      "REASON": "Reason for accepting the dose",
+      "REASON_REQUIRED": "Give the reason for accepting this dose.",
+      "CONFIRM": "Record the review",
+      "RECORDED": "Dose review recorded",
+      "FAILED": "The dose review could not be recorded.",
+      "STATE": "Paediatric dose review",
+      "REVIEWED_BY": "Reviewed by"
+    },
+    "OVERRIDE": {
+      "ALLERGY_REASON": "Allergy override reason",
+      "CDS_REASON": "Reason for overriding the critical alert"
     }
   },
   "PROFILE": {
@@ -9553,7 +9571,12 @@
       "BADGE_APPROVED": "Paediatric limits approved",
       "SAVED": "Paediatric dose limits saved",
       "SAVE_FAILED": "The paediatric dose limits could not be saved"
-    }
+    },
+    "CDS_OVERRIDE": {
+      "LABEL": "Interaction override reason",
+      "HINT": "A serious interaction stops this fill: give the reason to dispense anyway. It is recorded with the dispense."
+    },
+    "ALERT_OVERRIDDEN": "Alert overridden by the prescriber: see the reason on the prescription"
   },
   "LAB_QC": {
     "TITLE": "Quality Control Dashboard",

@@ -137,6 +137,8 @@ public enum AuditEventType {
     PRESCRIPTION_CDS_OVERRIDDEN,
     /** Round 18: the prescriber's re-authentication when signing a controlled-drug order (success or failure). */
     PRESCRIPTION_SIGN_REAUTHENTICATION,
+    /** Round 19 (QA D1096): a pharmacist or physician recorded the paediatric dose review an order needed. */
+    PRESCRIPTION_PEDIATRIC_DOSE_REVIEWED,
     PHARMACY_DEACTIVATED,
     MTM_REVIEW_STARTED,
     MTM_INTERVENTION_RECORDED,

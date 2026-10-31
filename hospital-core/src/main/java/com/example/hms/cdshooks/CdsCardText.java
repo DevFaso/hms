@@ -1,5 +1,6 @@
 package com.example.hms.cdshooks;
 
+import com.example.hms.repository.HospitalRepository;
 import org.springframework.context.MessageSource;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.jspecify.annotations.Nullable;
@@ -8,6 +9,9 @@ import org.springframework.stereotype.Component;
 import java.text.MessageFormat;
 import java.util.Locale;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.UUID;
 import java.time.format.DateTimeFormatter;
 import java.time.format.FormatStyle;
 
@@ -35,6 +39,57 @@ public class CdsCardText {
 
     public CdsCardText(@Nullable MessageSource messageSource) {
         this.messageSource = messageSource;
+    }
+
+    /** "31/10/2026 20:54": a card's date and time, on the hospital's wall clock. */
+    private static final DateTimeFormatter DATE_TIME = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+
+    /**
+     * QA D1114 (round 19): the hospital a card's times are read in. Optional
+     * so a rule built with {@code new} in a unit test keeps the server zone.
+     */
+    @Nullable
+    private HospitalRepository hospitals;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setHospitals(@Nullable HospitalRepository hospitals) {
+        this.hospitals = hospitals;
+    }
+
+    /**
+     * QA D1114 (round 19, the D1084 class): the zone a card's times are
+     * written in - the hospital's ({@code HospitalTime.zoneOf}: its
+     * organisation's zone), else the server's when the hospital is unknown
+     * (a super-admin in global view, a rule outside Spring).
+     */
+    public ZoneId zoneOf(@Nullable UUID hospitalId) {
+        if (hospitalId == null || hospitals == null) {
+            return ZoneId.systemDefault();
+        }
+        return hospitals.findById(hospitalId)
+            .map(com.example.hms.utility.HospitalTime::zoneOf)
+            .orElse(ZoneId.systemDefault());
+    }
+
+    /**
+     * QA D1114 (round 19): a server time (stored in the server's zone, UTC on
+     * the hosts) on the hospital's wall clock, so the BPA card says 20:54 when
+     * the vitals tab does, not 00:54. Every card time goes through here
+     * ({@code ServerComposedTimeGuardTest}).
+     */
+    public String dateTime(@Nullable LocalDateTime serverTime, ZoneId zone) {
+        if (serverTime == null) {
+            return "—";
+        }
+        return com.example.hms.utility.HospitalTime.at(serverTime, zone).format(DATE_TIME);
+    }
+
+    /** The hospital's calendar day of a server time, in the reader's language (QA D1114, D1049). */
+    public String date(@Nullable LocalDateTime serverTime, ZoneId zone) {
+        if (serverTime == null) {
+            return "—";
+        }
+        return date(com.example.hms.utility.HospitalTime.at(serverTime, zone).toLocalDate());
     }
 
     /** The sentence for {@code key} in the request locale, else {@code english} formatted with {@code args}. */

@@ -85,7 +85,7 @@ public class MalariaFeverProtocolRule implements BpaRule {
         Optional<BpaProtocol> protocol = protocolRepository.findByProtocolCodeAndActiveTrue(PROTOCOL_CODE);
         if (protocol.isEmpty()) return List.of();
 
-        return List.of(buildCard(protocol.get(), feverEvent.get()));
+        return List.of(buildCard(protocol.get(), feverEvent.get(), text.zoneOf(context.hospitalId())));
     }
 
     Optional<PatientVitalSign> findFeverInWindow(List<PatientVitalSign> vitals) {
@@ -114,11 +114,11 @@ public class MalariaFeverProtocolRule implements BpaRule {
         return hints.stream().anyMatch(lower::contains);
     }
 
-    private CdsCard buildCard(BpaProtocol protocol, PatientVitalSign feverEvent) {
+    private CdsCard buildCard(BpaProtocol protocol, PatientVitalSign feverEvent, java.time.ZoneId zone) {
         String detail = BpaCardText.summary(text, protocol) + "\n\n" + text.get("cds.bpa.malaria.temperature",
             "Most recent temperature: {0}°C at {1}.",
             text.decimal(feverEvent.getTemperatureCelsius(), 1),
-            BpaCardText.when(feverEvent.getRecordedAt()));
+            BpaCardText.when(text, feverEvent.getRecordedAt(), zone));
         List<CdsLink> links = protocol.getProtocolUrl() == null
             ? null
             : List.of(new CdsLink(

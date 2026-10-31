@@ -164,6 +164,15 @@ public class PrescriptionMapper {
             .clarificationResponse(p.getClarificationResponse())
             .clarificationResolvedAt(p.getClarificationResolvedAt())
             .withdrawalReason(p.getWithdrawalReason())
+            // QA D1101: the override reason the prescriber gave, for the
+            // pharmacist, the co-signer and the chart.
+            .overrideReason(p.getOverrideReason())
+            .allergyOverride(p.getOverrideReason() == null ? null : p.isAllergiesReviewed())
+            // QA D1096: the paediatric dose review, required and recorded.
+            .pediatricDoseReviewRequired(p.isPediatricDoseReviewRequired())
+            .pediatricDoseReviewedAt(p.getPediatricDoseReviewedAt())
+            .pediatricDoseReviewedByName(displayName(p.getPediatricDoseReviewedBy()))
+            .pediatricDoseReviewReason(p.getPediatricDoseReviewReason())
 
             .createdAt(p.getCreatedAt())
             .updatedAt(p.getUpdatedAt())

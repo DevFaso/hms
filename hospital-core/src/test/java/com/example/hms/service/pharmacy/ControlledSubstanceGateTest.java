@@ -13,6 +13,7 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
@@ -228,5 +229,64 @@ class ControlledSubstanceGateTest {
 
         assertThatCode(() -> guard.requireSafeguardsFor(rx, PrescriptionStatus.SIGNED))
             .doesNotThrowAnyException();
+    }
+
+    // ── QA D1097 (round 19): withdrawing is never gated by the step-up ─────
+
+    /**
+     * The QA call: an unsigned morphine order stuck in PENDING_SIGNATURE
+     * because Annulée asked for the signature's two-factor proof. A withdrawal
+     * gives nobody leave to act on the order, so neither safeguard applies.
+     */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = PrescriptionStatus.class, names = {"CANCELLED", "DISCONTINUED"})
+    void aControlledOrCosignOrderMayBeWithdrawnWithoutItsSafeguards(PrescriptionStatus withdrawal) {
+        Prescription rx = controlled(PrescriptionStatus.PENDING_SIGNATURE);
+        rx.setRequiresCosign(true);
+        assertThatCode(() -> guard.requireSafeguardsFor(rx, withdrawal)).doesNotThrowAnyException();
+        Prescription catalogue = catalogueControlledWithoutTick(PrescriptionStatus.DRAFT);
+        assertThatCode(() -> guard.requireSafeguardsFor(catalogue, withdrawal)).doesNotThrowAnyException();
+    }
+
+    /** Every status but the unsigned and the withdrawn ones still needs the proof (the signature's gate is kept). */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(PrescriptionStatus.class)
+    void onlyTheActionableStatusesNeedTheProof(PrescriptionStatus target) {
+        Prescription rx = controlled(PrescriptionStatus.DRAFT);
+        boolean actionable = target != PrescriptionStatus.DRAFT && target != PrescriptionStatus.PENDING_SIGNATURE
+            && target != PrescriptionStatus.CANCELLED && target != PrescriptionStatus.DISCONTINUED;
+        assertThat(ControlledSubstanceGuard.isActionable(target)).isEqualTo(actionable);
+        if (actionable) {
+            assertThatThrownBy(() -> guard.requireSafeguardsFor(rx, target))
+                .isInstanceOf(BusinessException.class)
+                .extracting("messageKey").isEqualTo("prescription.safeguard.CONTROLLED_SUBSTANCE.status");
+        } else {
+            assertThatCode(() -> guard.requireSafeguardsFor(rx, target)).doesNotThrowAnyException();
+        }
+    }
+
+    // ── QA D1096 (round 19): the paediatric dose review at the counter ─────
+
+    @Test
+    void dispenseRefusesAnOrderWhoseDoseReviewIsNotRecorded() {
+        Prescription rx = new Prescription();
+        rx.setId(UUID.randomUUID());
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        rx.setPediatricDoseReviewRequired(true);
+
+        assertThatThrownBy(() -> guard.requireDispensable(rx))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("prescription.safeguard.PEDIATRIC_DOSE_REVIEW.dispense");
+    }
+
+    @Test
+    void dispenseAllowsAnOrderOnceItsDoseReviewIsRecorded() {
+        Prescription rx = new Prescription();
+        rx.setId(UUID.randomUUID());
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        rx.setPediatricDoseReviewRequired(true);
+        rx.setPediatricDoseReviewedAt(LocalDateTime.now());
+
+        assertThatCode(() -> guard.requireDispensable(rx)).doesNotThrowAnyException();
     }
 }

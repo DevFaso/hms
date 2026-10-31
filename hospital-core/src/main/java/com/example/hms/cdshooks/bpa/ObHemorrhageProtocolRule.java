@@ -85,7 +85,7 @@ public class ObHemorrhageProtocolRule implements BpaRule {
         Optional<BpaProtocol> protocol = protocolRepository.findByProtocolCodeAndActiveTrue(PROTOCOL_CODE);
         if (protocol.isEmpty()) return List.of();
 
-        return List.of(buildCard(protocol.get(), signal.get()));
+        return List.of(buildCard(protocol.get(), signal.get(), text.zoneOf(context.hospitalId())));
     }
 
     boolean isPostpartum(List<PatientProblem> problems) {
@@ -119,11 +119,11 @@ public class ObHemorrhageProtocolRule implements BpaRule {
         return hints.stream().anyMatch(lower::contains);
     }
 
-    private CdsCard buildCard(BpaProtocol protocol, HemorrhageSignal signal) {
+    private CdsCard buildCard(BpaProtocol protocol, HemorrhageSignal signal, java.time.ZoneId zone) {
         StringBuilder detail = new StringBuilder(BpaCardText.summary(text, protocol));
         detail.append("\n\n").append(text.get("cds.bpa.pph.vitals",
             "Most recent triggering vitals at {0}: HR={1} bpm, sBP={2} mmHg.",
-            BpaCardText.when(signal.recordedAt()),
+            BpaCardText.when(text, signal.recordedAt(), zone),
             signal.hr() == null ? "—" : String.valueOf(signal.hr()),
             signal.sbp() == null ? "—" : String.valueOf(signal.sbp())));
         if (signal.tachy()) detail.append(' ').append(text.get("cds.bpa.pph.tachycardia", "Tachycardia."));
