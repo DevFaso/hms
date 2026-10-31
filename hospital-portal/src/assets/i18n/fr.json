@@ -1739,7 +1739,8 @@
       "DOSE_LIMITS_APPROVED": "Limites de dose pédiatriques validées sur l’article du catalogue {{item}}",
       "DOSE_LIMITS_DEFAULT": "Limites de dose pédiatriques définies par défaut, en attente de validation, sur l’article du catalogue {{item}}",
       "RX_SIGN_REAUTH_VERIFIED": "Identité confirmée pour signer une ordonnance de stupéfiant ({{method}})",
-      "RX_SIGN_REAUTH_REFUSED": "Identité non confirmée pour signer une ordonnance de stupéfiant ({{reason}})"
+      "RX_SIGN_REAUTH_REFUSED": "Identité non confirmée pour signer une ordonnance de stupéfiant ({{reason}})",
+      "INVOICE_ADJUSTMENT_REVERSED": "{{kind}} {{adjustment}} annulé sur la facture {{invoice}}, motif enregistré"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "aucun rôle actif dans cet hôpital",
