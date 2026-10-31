@@ -1,3 +1,4 @@
+import { DialogFocusDirective } from '../../shared/a11y/dialog-focus.directive';
 import {
   Component,
   Input,
@@ -15,11 +16,19 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ReceptionService, FrontDeskPatientSnapshot } from '../reception.service';
 import { ToastService } from '../../core/toast.service';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { CfaPipe } from '../../shared/pipes/cfa.pipe';
 
 @Component({
   selector: 'app-patient-snapshot-drawer',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule],
+  imports: [
+    DialogFocusDirective,
+    ServerTimePipe,
+    CfaPipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+  ],
   templateUrl: './patient-snapshot-drawer.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './patient-snapshot-drawer.component.scss',

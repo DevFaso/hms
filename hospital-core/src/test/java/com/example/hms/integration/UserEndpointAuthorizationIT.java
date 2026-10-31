@@ -102,6 +102,7 @@ class UserEndpointAuthorizationIT extends BaseIT {
     @Autowired private PatientHospitalRegistrationRepository registrationRepository;
     @Autowired private PatientPrimaryCareRepository primaryCareRepository;
     @Autowired private StaffRepository staffRepository;
+    @Autowired private com.example.hms.repository.PatientAddressHistoryRepository addressHistoryRepository;
     @Autowired private org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
 
     private final List<UUID> createdUsers = new ArrayList<>();
@@ -144,6 +145,8 @@ class UserEndpointAuthorizationIT extends BaseIT {
             registrationRepository.deleteAll(registrationRepository.findByPatientId(patientId));
             primaryCareRepository.deleteAll(primaryCareRepository.findByPatient_IdOrderByStartDateDesc(patientId));
         }
+        // QA D926's address correction files an address-history row.
+        addressHistoryRepository.deleteAll();
         patientRepository.deleteAllById(createdPatients);
         // Includes accounts admin-register made during a test.
         for (UUID userId : createdUsers) {
@@ -613,11 +616,48 @@ class UserEndpointAuthorizationIT extends BaseIT {
     }
 
     @Test
-    @DisplayName("a hospital admin asking for the deleted view gets their live, scoped view")
+    @DisplayName("QA D919: a hospital admin asking for the deleted view gets an empty page, never the live list")
     void deletedViewStaysSuperAdminOnly() throws Exception {
         String admin = hms(adminA, "ROLE_HOSPITAL_ADMIN");
         var deleted = page(get("/users").param("onlyDeleted", "true").param("size", "100"), admin);
-        assertThat(ids(deleted)).contains(nurseA.getId()).doesNotContain(doctorB.getId(), superAdmin.getId());
+        assertThat(ids(deleted)).isEmpty();
+        assertThat(total(deleted)).isZero();
+    }
+
+    @Test
+    @DisplayName("QA D926: through the real filter chain, the desk and the hospital admin correct a chart's demographics (PATCH /patients/{id})")
+    void theDeskCorrectsDemographicsThroughTheRealChain() throws Exception {
+        Patient patientRecord = patientRow(patientA);
+        registrationRepository.save(PatientHospitalRegistration.builder()
+            .patient(patientRecord).hospital(hospitalA).mrn("MRN-A-" + next())
+            .registrationDate(LocalDate.now()).active(true).build());
+
+        assertThat(status(patch("/patients/" + patientRecord.getId()), hms(receptionistA, "ROLE_RECEPTIONIST"),
+            Map.of("city", "Koudougou", "addressLine1", "Secteur 22"))).isEqualTo(200);
+        assertThat(status(patch("/patients/" + patientRecord.getId()), hms(adminA, "ROLE_HOSPITAL_ADMIN"),
+            Map.of("emergencyContactName", "Mariam Ouattara", "emergencyContactRelationship", "Mère")))
+            .isEqualTo(200);
+
+        Patient stored = patientRepository.findByIdUnscoped(patientRecord.getId()).orElseThrow();
+        assertThat(stored.getCity()).isEqualTo("Koudougou");
+        assertThat(stored.getEmergencyContactRelationship()).isEqualTo("Mère");
+    }
+
+    @Test
+    @DisplayName("QA D920: a hospital admin's GET, PUT and DELETE of a deleted account of their hospital all answer 404")
+    void aDeletedAccountIsMissingForAHospitalAdmin() throws Exception {
+        String sa = hms(superAdmin, "ROLE_SUPER_ADMIN");
+        String admin = hms(adminA, "ROLE_HOSPITAL_ADMIN");
+        assertThat(status(delete("/users/" + nurseA.getId()), sa, null)).isEqualTo(200);
+
+        assertThat(status(get("/users/" + nurseA.getId()), admin, null)).isEqualTo(404);
+        assertThat(status(put("/users/" + nurseA.getId()), admin, Map.of("firstName", "Renamed"))).isEqualTo(404);
+        assertThat(status(delete("/users/" + nurseA.getId()), admin, null)).isEqualTo(404);
+
+        // The super-admin still gets the actionable answers.
+        assertThat(status(put("/users/" + nurseA.getId()), sa, Map.of("firstName", "Renamed"))).isEqualTo(400);
+        assertThat(status(delete("/users/" + nurseA.getId()), sa, null)).isEqualTo(409);
+        assertThat(userRepository.findById(nurseA.getId()).orElseThrow().getFirstName()).isNotEqualTo("Renamed");
     }
 
     @Test

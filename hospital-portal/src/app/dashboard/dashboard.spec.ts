@@ -113,6 +113,7 @@ describe('Dashboard navigation & RBAC', () => {
 
     const permStub: Partial<PermissionService> = {
       hasPermission: (p: string) => permSet.has(p) || permSet.has('*'),
+      hasActivePermission: (p: string) => permSet.has(p) || permSet.has('*'),
       hasAnyPermission: (...ps: string[]) => ps.some((p) => permSet.has(p) || permSet.has('*')),
     };
 
@@ -776,6 +777,7 @@ describe('Dashboard onStartEncounter', () => {
 
     const permStub: Partial<PermissionService> = {
       hasPermission: () => true,
+      hasActivePermission: () => true,
       hasAnyPermission: () => true,
     };
 
@@ -866,6 +868,7 @@ describe('Dashboard i18n refactor coverage', () => {
 
     const permStub: Partial<PermissionService> = {
       hasPermission: (p: string) => permSet.has(p) || permSet.has('*'),
+      hasActivePermission: (p: string) => permSet.has(p) || permSet.has('*'),
       hasAnyPermission: (...ps: string[]) => ps.some((p) => permSet.has(p) || permSet.has('*')),
     };
 
@@ -1244,6 +1247,7 @@ describe('Dashboard live tracker refresh', () => {
 
     const permStub: Partial<PermissionService> = {
       hasPermission: () => false,
+      hasActivePermission: () => false,
       hasAnyPermission: () => false,
     };
 
@@ -1370,7 +1374,11 @@ describe('result review queue - acknowledge and failure state', () => {
         { provide: AuthService, useValue: authStub },
         {
           provide: PermissionService,
-          useValue: { hasPermission: () => true, hasAnyPermission: () => true },
+          useValue: {
+            hasPermission: () => true,
+            hasActivePermission: () => true,
+            hasAnyPermission: () => true,
+          },
         },
         {
           provide: ToastService,
@@ -1549,7 +1557,11 @@ describe('dashboard - review queue and snapshot follow the hospital scope', () =
         { provide: AuthService, useValue: authStub },
         {
           provide: PermissionService,
-          useValue: { hasPermission: () => false, hasAnyPermission: () => false },
+          useValue: {
+            hasPermission: () => false,
+            hasActivePermission: () => false,
+            hasAnyPermission: () => false,
+          },
         },
         {
           provide: ToastService,
@@ -1807,7 +1819,11 @@ describe('Dashboard patient care-team card', () => {
         { provide: AuthService, useValue: authStub },
         {
           provide: PermissionService,
-          useValue: { hasPermission: () => false, hasAnyPermission: () => false },
+          useValue: {
+            hasPermission: () => false,
+            hasActivePermission: () => false,
+            hasAnyPermission: () => false,
+          },
         },
       ],
     });
@@ -1893,7 +1909,11 @@ describe('Dashboard invoice aging (QA D283)', () => {
         { provide: AuthService, useValue: authStub },
         {
           provide: PermissionService,
-          useValue: { hasPermission: () => true, hasAnyPermission: () => true },
+          useValue: {
+            hasPermission: () => true,
+            hasActivePermission: () => true,
+            hasAnyPermission: () => true,
+          },
         },
       ],
     });
@@ -2020,7 +2040,11 @@ describe('QA D254: dashboard billing widget', () => {
         { provide: AuthService, useValue: authStub },
         {
           provide: PermissionService,
-          useValue: { hasPermission: () => false, hasAnyPermission: () => false },
+          useValue: {
+            hasPermission: () => false,
+            hasActivePermission: () => false,
+            hasAnyPermission: () => false,
+          },
         },
       ],
     });

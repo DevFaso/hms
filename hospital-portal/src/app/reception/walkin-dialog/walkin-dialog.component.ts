@@ -1,3 +1,4 @@
+import { DialogFocusDirective } from '../../shared/a11y/dialog-focus.directive';
 import {
   Component,
   Output,
@@ -24,7 +25,7 @@ type EncounterType = 'CONSULTATION' | 'FOLLOW_UP' | 'EMERGENCY' | 'OUTPATIENT' |
 @Component({
   selector: 'app-walkin-dialog',
   standalone: true,
-  imports: [PatientSublinePipe, FormsModule, TranslateModule],
+  imports: [DialogFocusDirective, PatientSublinePipe, FormsModule, TranslateModule],
   templateUrl: './walkin-dialog.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './walkin-dialog.component.scss',
@@ -149,7 +150,9 @@ export class WalkInDialogComponent implements OnInit {
       departmentId: this.departmentId(),
       encounterType: this.encounterType(),
       encounterDate: new Date().toISOString(),
-      notes: this.notes() || undefined,
+      // QA D944: the "Motif principal" is the visit's chief complaint: the
+      // queue shows it and triage starts from it. It used to travel as notes.
+      chiefComplaint: this.notes().trim() || undefined,
       status: 'ARRIVED',
     };
 

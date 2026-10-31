@@ -315,7 +315,8 @@
           <span class="material-symbols-outlined" aria-hidden="true">person_search</span>
           <div>
             <strong>{{ 'PATIENTS.EXISTING_MATCH_TITLE' | translate }}</strong>
-            <p>{{ 'PATIENTS.EXISTING_MATCH_DESC' | translate }}</p>
+            <!-- QA D986: the sentence matches where the records are, as the row badges do. -->
+            <p>{{ matchDescriptionKey() | translate }}</p>
           </div>
         </div>
         @for (m of registrationMatches; track m.patientId) {
@@ -371,14 +372,14 @@
       @if (duplicateCandidates.length > 0 && !showDuplicateWarning) {
         <div class="duplicate-warning-strip">
           <span class="material-symbols-outlined">warning</span>
+          <!-- QA D986: one translated sentence, not fragments glued in English word order. -->
           <span>
-            {{ duplicateCandidates.length }} {{ 'PATIENTS.POSSIBLE_DUPLICATE' | translate }}
             {{
-              duplicateCandidates.length === 1
-                ? ('PATIENTS.RECORD' | translate)
-                : ('PATIENTS.RECORDS' | translate)
+              (duplicateCandidates.length === 1
+                ? 'PATIENTS.DUPLICATES_FOUND_ONE'
+                : 'PATIENTS.DUPLICATES_FOUND_MANY'
+              ) | translate: { count: duplicateCandidates.length }
             }}
-            {{ 'PATIENTS.FOUND_REVIEW' | translate }}
           </span>
           <button type="button" class="btn-link" (click)="showDuplicateWarning = true">
             {{ 'PATIENTS.VIEW' | translate }}

@@ -332,7 +332,9 @@
   cursor: pointer;
   transition: background 120ms;
 
-  &:hover {
+  /* QA D947: the option the arrow keys are on looks like the hovered one. */
+  &:hover,
+  &.active {
     background: var(--primary-soft);
   }
 

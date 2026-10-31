@@ -45,11 +45,26 @@
     (keydown.enter)="closePayDialog()"
     (keydown.escape)="closePayDialog()"
   ></div>
-  <div class="modal-box">
+  <!-- QA D988: a real modal dialog (role, name, focus in, Tab trap, Escape). -->
+  <div
+    class="modal-box"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="collectPaymentTitle"
+    appDialogFocus
+    (dialogDismiss)="closePayDialog()"
+  >
     <div class="modal-header">
-      <h3>{{ 'RECEPTION.COLLECT_PAYMENT' | translate }} — {{ payingItem()!.patientName }}</h3>
-      <button class="btn-close" (click)="closePayDialog()">
-        <span class="material-symbols-outlined">close</span>
+      <h3 id="collectPaymentTitle">
+        {{ 'RECEPTION.COLLECT_PAYMENT' | translate }} — {{ payingItem()!.patientName }}
+      </h3>
+      <button
+        type="button"
+        class="btn-close"
+        (click)="closePayDialog()"
+        [attr.aria-label]="'COMMON.CLOSE' | translate"
+      >
+        <span class="material-symbols-outlined" aria-hidden="true">close</span>
       </button>
     </div>
     <div class="modal-body">
@@ -73,7 +88,7 @@
             @for (inv of openInvoices(); track inv.id) {
               <option [value]="inv.id">
                 {{ inv.invoiceNumber }} — {{ 'RECEPTION.BALANCE' | translate }}:
-                {{ inv.balanceDue | number: '1.2-2' }}
+                {{ balanceOf(inv) | cfa: inv.currency }}
               </option>
             }
           </select>
@@ -84,12 +99,17 @@
             id="payAmt"
             type="number"
             class="form-control"
-            min="0.01"
-            step="0.01"
+            min="1"
+            step="1"
+            inputmode="numeric"
             [ngModel]="payAmount()"
             (ngModelChange)="payAmount.set($event)"
-            placeholder="0.00"
+            placeholder="0"
           />
+          <!-- QA D948: francs CFA, whole francs, as the rest of the product shows them. -->
+          @if (payAmount(); as amt) {
+            <span class="amount-preview">{{ amt | cfa: selectedCurrency() }}</span>
+          }
         </div>
         <div class="field-group">
           <label for="payMeth">{{ 'RECEPTION.METHOD' | translate }}</label>
@@ -99,12 +119,28 @@
             [ngModel]="payMethod()"
             (ngModelChange)="payMethod.set($event)"
           >
-            <option value="CASH">{{ 'RECEPTION.CASH' | translate }}</option>
-            <option value="CARD">{{ 'RECEPTION.CARD' | translate }}</option>
-            <option value="INSURANCE">{{ 'RECEPTION.INSURANCE' | translate }}</option>
-            <option value="OTHER">{{ 'COMMON.OTHER' | translate }}</option>
+            @for (m of methods; track m.value) {
+              <option [value]="m.value">{{ m.labelKey | translate }}</option>
+            }
           </select>
         </div>
+        @if (needsReference()) {
+          <div class="field-group">
+            <label for="payRef"
+              >{{ 'RECEPTION.PAYMENT_REFERENCE' | translate }}
+              <span class="required">*</span></label
+            >
+            <input
+              id="payRef"
+              type="text"
+              class="form-control"
+              maxlength="100"
+              [ngModel]="payReference()"
+              (ngModelChange)="payReference.set($event)"
+              [placeholder]="'RECEPTION.PAYMENT_REFERENCE_PLACEHOLDER' | translate"
+            />
+          </div>
+        }
       }
     </div>
     <div class="modal-footer">
@@ -113,7 +149,13 @@
       </button>
       <button
         class="btn-primary"
-        [disabled]="!selectedInvoiceId() || !payAmount() || (payAmount() ?? 0) <= 0 || paying()"
+        [disabled]="
+          !selectedInvoiceId() ||
+          !payAmount() ||
+          (payAmount() ?? 0) <= 0 ||
+          (needsReference() && !payReference().trim()) ||
+          paying()
+        "
         (click)="submitPayment()"
       >
         @if (paying()) {

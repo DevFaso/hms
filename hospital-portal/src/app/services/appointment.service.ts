@@ -63,6 +63,8 @@ export interface AppointmentUpsertRequest {
   departmentId?: string;
   reason?: string;
   notes?: string;
+  /** QA D985: the recall this booking answers (booked from the recall list). */
+  recallId?: string;
 }
 
 export interface AppointmentFilterRequest {

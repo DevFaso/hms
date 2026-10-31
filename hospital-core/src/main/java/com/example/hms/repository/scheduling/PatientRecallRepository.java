@@ -67,6 +67,9 @@ public interface PatientRecallRepository extends JpaRepository<PatientRecall, UU
      */
     List<PatientRecall> findByPatient_IdAndStatusIn(UUID patientId, java.util.Collection<RecallStatus> statuses);
 
+    /** QA D985: the recalls an appointment satisfies, in one status. */
+    List<PatientRecall> findByLinkedAppointment_IdAndStatus(UUID appointmentId, RecallStatus status);
+
     /**
      * QA D321: the follow-up a checkout requested, so the after-visit summary
      * can show it (it is created as a recall, not as an appointment).
