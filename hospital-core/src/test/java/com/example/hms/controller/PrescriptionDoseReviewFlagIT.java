@@ -1,8 +1,6 @@
 package com.example.hms.controller;
 
 import com.example.hms.BaseIT;
-import com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard;
-import com.example.hms.cdshooks.rules.CdsRuleEngine;
 import com.example.hms.enums.EmploymentType;
 import com.example.hms.enums.EncounterType;
 import com.example.hms.enums.JobTitle;
@@ -40,7 +38,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
@@ -55,8 +52,6 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -89,9 +84,6 @@ class PrescriptionDoseReviewFlagIT extends BaseIT {
     @Autowired private PatientRepository patientRepository;
     @Autowired private EncounterRepository encounterRepository;
     @Autowired private PrescriptionRepository prescriptionRepository;
-
-    /** The dose check's verdict at the signature: "a pharmacist or a physician must review this dose". */
-    @MockitoBean private CdsRuleEngine cdsRuleEngine;
 
     private Organization organization;
     private Hospital hospital;
@@ -152,7 +144,7 @@ class PrescriptionDoseReviewFlagIT extends BaseIT {
         patient = patientRepository.save(Patient.builder()
             .firstName("Wendpanga")
             .lastName("Ouedraogo")
-            .dateOfBirth(LocalDate.now().minusMonths(2))
+            .dateOfBirth(LocalDate.now().minusWeeks(5))
             .gender("M")
             .address("Patient address")
             .city("Ouagadougou")
@@ -174,6 +166,10 @@ class PrescriptionDoseReviewFlagIT extends BaseIT {
             .build());
 
         // An order saved before the round-19 gate: no review requirement on it.
+        // The real dose check (no Spring bean is replaced, so this shares the
+        // suite's context) asks for a review under 3 months
+        // (PediatricDoseRule.DEFAULT_MANUAL_REVIEW_UNDER_MONTHS) when no
+        // catalogue item says otherwise.
         prescription = prescriptionRepository.save(Prescription.builder()
             .patient(patient)
             .staff(doctorStaff)
@@ -186,10 +182,6 @@ class PrescriptionDoseReviewFlagIT extends BaseIT {
             .quantity(BigDecimal.ONE)
             .status(PrescriptionStatus.DRAFT)
             .build());
-
-        when(cdsRuleEngine.evaluateProposedPrescription(any(), any(), any(CdsRuleEngine.ProposedOrder.class)))
-            .thenReturn(List.of(new CdsCard("Dose review required", "Under the manual-review age",
-                CdsCard.Indicator.WARNING, null, null, null, null, null, null, Boolean.TRUE)));
     }
 
     @AfterEach

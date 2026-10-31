@@ -467,6 +467,8 @@ class QueueClaimConcurrencyPostgresIT {
             .medicationName("Amoxicillin")
             .quantityRequested(BigDecimal.TEN)
             .quantityDispensed(BigDecimal.TEN)
+            // QA D1141: every fill carries its unit (the server refuses one without).
+            .unit("capsule")
             .build();
     }
 

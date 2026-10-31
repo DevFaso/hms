@@ -284,6 +284,7 @@ class PrescriptionClarificationIT extends BaseIT {
             .medicationName("Amoxicilline 500 mg")
             .quantityRequested(BigDecimal.TEN)
             .quantityDispensed(BigDecimal.TEN)
+            .unit("gélule")
             .build();
 
         mockMvc.perform(post(API_CONTEXT + DISPENSE_PATH)
