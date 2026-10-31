@@ -1460,7 +1460,13 @@
     "VIEW": "Ver cita",
     "VIEW_MANAGE_SUBTITLE": "Ver y gestionar detalles de la cita",
     "YES_CANCEL": "Sí, Cancelar",
-    "DURATION_SET_BY_SLOTS": "La duración de la visita la fijan los turnos del profesional."
+    "DURATION_SET_BY_SLOTS": "La duración de la visita la fijan los turnos del profesional.",
+    "STATUS_REASON": "Motivo",
+    "STATUS_REASON_LABEL": "Motivo (obligatorio)",
+    "STATUS_REASON_REQUIRED": "Indique el motivo antes de confirmar.",
+    "NO_SHOW_DIALOG_TITLE": "Marcar como ausente",
+    "NO_SHOW_CONFIRM_MESSAGE": "El paciente no acudió a esta cita.",
+    "CONFIRM_NO_SHOW": "Marcar como ausente"
   },
   "APPOINTMENT_CALENDAR": {
     "TITLE": "Calendario de citas",
@@ -8524,7 +8530,9 @@
     "TITLE": "Planes de tratamiento",
     "TREATMENT_PLAN": "Plan de tratamiento",
     "UPDATE_PLAN": "Actualizar plan",
-    "VIEW_PLAN": "Ver plan"
+    "VIEW_PLAN": "Ver plan",
+    "APPROVE_PLAN": "Aprobar el plan",
+    "PLAN_APPROVED": "Plan de tratamiento aprobado"
   },
   "USERS": {
     "ACTIVATE": "Activar",

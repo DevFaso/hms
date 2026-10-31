@@ -66,6 +66,8 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
     private final RoleValidator roleValidator;
     /** QA D964: a counter sale from a lot follows first expired, first out too. */
     private final FefoLotPolicy fefoLotPolicy;
+    /** QA D1129: a non-cash sale's reference is recorded once across every till. */
+    private final com.example.hms.service.payment.PaymentReferenceRegistry referenceRegistry;
 
     @Override
     public PharmacySaleResponseDTO createSale(PharmacySaleRequestDTO dto) {
@@ -75,6 +77,11 @@ public class PharmacySaleServiceImpl implements PharmacySaleService {
         }
         if (dto.getLines() == null || dto.getLines().isEmpty()) {
             throw new BusinessException("pharmacy.sale.linesRequired");
+        }
+        // QA D1129: the same mobile-money transaction is not counted at two tills
+        // (an insurance authorisation can cover several sales, so it is not checked).
+        if (dto.getPaymentMethod() == com.example.hms.enums.PharmacyPaymentMethod.MOBILE_MONEY) {
+            referenceRegistry.requireUnused(activeHospitalId, dto.getReferenceNumber());
         }
 
         Hospital hospital = hospitalRepository.findById(dto.getHospitalId())

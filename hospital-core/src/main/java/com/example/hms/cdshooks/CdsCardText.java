@@ -58,17 +58,20 @@ public class CdsCardText {
 
     /**
      * QA D1114 (round 19, the D1084 class): the zone a card's times are
-     * written in - the hospital's ({@code HospitalTime.zoneOf}: its
-     * organisation's zone), else the server's when the hospital is unknown
-     * (a super-admin in global view, a rule outside Spring).
+     * written in - the hospital's (its organisation's zone, read as a value
+     * so it works without a session, QA D1121), else the server's when the
+     * hospital is unknown (a super-admin in global view, a rule outside Spring).
      */
     public ZoneId zoneOf(@Nullable UUID hospitalId) {
         if (hospitalId == null || hospitals == null) {
             return ZoneId.systemDefault();
         }
-        return hospitals.findById(hospitalId)
-            .map(com.example.hms.utility.HospitalTime::zoneOf)
-            .orElse(ZoneId.systemDefault());
+        // QA D1121 (round 20): read the zone id as a value. Loading the
+        // Hospital and walking to its LAZY organisation threw outside a
+        // session (the CDS hooks run without one), and the rule engine
+        // dropped every time-stamped card.
+        return com.example.hms.utility.HospitalCalendar.zoneOf(
+            hospitals.findTimezoneIdById(hospitalId).orElse(null), java.time.Clock.systemDefaultZone());
     }
 
     /**
@@ -126,9 +129,36 @@ public class CdsCardText {
         return com.example.hms.utility.DisplayNumbers.decimal(value, fractionDigits, locale());
     }
 
+    /**
+     * QA D1133 (round 20): a computed quantity on a card (a daily dose, a
+     * dose per take, a weight) with at most {@code maxFractionDigits}
+     * decimals and no trailing zeros: "8000 mg", "4 cp", "14 kg", "12,5
+     * mg/kg", never the padded "8000,00 mg". The reader's separator, no
+     * grouping ({@code DisplayNumbers.measure}).
+     */
+    public String measure(@Nullable Number value, int maxFractionDigits) {
+        if (value == null) {
+            return "—";
+        }
+        return com.example.hms.utility.DisplayNumbers.measure(value, maxFractionDigits, locale());
+    }
+
     /** The language the card is written in: the request's, or English outside Spring. */
     private Locale locale() {
         return messageSource == null ? Locale.ENGLISH : LocaleContextHolder.getLocale();
+    }
+
+    /**
+     * QA D1134 (round 20): a severity in words where it qualifies a feminine
+     * noun (the allergy's "gravité", an "interaction"), so it agrees in French
+     * and Spanish: {@code cds.severity.<NAME>} ("inconnue", "majeure"), else
+     * {@link #enumWord}. The masculine {@code cds.enum.*} read "gravité : inconnu".
+     */
+    public String severityWord(@Nullable Enum<?> value) {
+        if (value == null) {
+            return "";
+        }
+        return get("cds.severity." + value.name(), enumWord(value));
     }
 
     /** A severity / status enum in words: {@code cds.enum.<NAME>}, else its lower-case name. */

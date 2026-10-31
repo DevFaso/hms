@@ -44,6 +44,8 @@ public class AppointmentResponseDTO {
 
     private String reason;
     private String notes;
+    /** QA D1126 / D1132: why the visit was cancelled or marked a no-show. */
+    private String statusReason;
 
     private LocalDate appointmentDate;
     private LocalTime startTime;

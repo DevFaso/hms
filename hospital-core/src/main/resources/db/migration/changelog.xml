@@ -3268,4 +3268,14 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- V255 (round 20): QA D1126 / D1132, the reason given with an
+         appointment's CANCELLED or NO_SHOW move is kept (status_reason on
+         clinical.appointments). Plain statement, no DO block. Idempotent. -->
+    <changeSet id="V255-r20-appointment-status-reason" author="hms-team" runOnChange="false">
+        <sqlFile path="V255__r20_appointment_status_reason.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

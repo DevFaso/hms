@@ -3355,6 +3355,74 @@ class EncounterServiceImplTest {
         verify(patientRecallRepository).save(any(com.example.hms.model.scheduling.PatientRecall.class));
     }
 
+    /** The booking context d526 uses: a dated follow-up for a clinician of the encounter's hospital. */
+    private Encounter followUpEncounter(UUID encounterId) {
+        Encounter encounter = checkoutRecallEncounter(encounterId);
+        Hospital hospital = encounter.getHospital();
+        encounter.getStaff().setHospital(hospital);
+        com.example.hms.model.UserRoleHospitalAssignment assignment = new com.example.hms.model.UserRoleHospitalAssignment();
+        assignment.setHospital(hospital);
+        encounter.setAssignment(assignment);
+        com.example.hms.model.Department department = new com.example.hms.model.Department();
+        department.setId(UUID.randomUUID());
+        encounter.setDepartment(department);
+        encounter.getStaff().setId(UUID.randomUUID());
+        lenient().when(patientLocaleResolver.resolve(any(), any())).thenReturn(Locale.FRENCH);
+        lenient().when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("ok");
+        return encounter;
+    }
+
+    private static CheckOutRequestDTO followUpOn(LocalDate date) {
+        return CheckOutRequestDTO.builder()
+            .followUpAppointment(CheckOutRequestDTO.FollowUpAppointmentRequest.builder()
+                .reason("Contrôle").preferredDate(date.toString()).build())
+            .build();
+    }
+
+    @Test
+    void qaD1139_aFollowUpTakesExactlyOnePublishedSlotOnTheGrid() {
+        // QA D1139: the placeholder grid booked 08:30-08:50 (two 20-minute
+        // patient slots, before the 09:00 session). With published slots the
+        // follow-up takes the first free one, and books it.
+        UUID encounterId = UUID.randomUUID();
+        Encounter encounter = followUpEncounter(encounterId);
+        LocalDate preferred = LocalDate.now().plusDays(7);
+        com.example.hms.model.scheduling.AppointmentSlot nineOClock = com.example.hms.model.scheduling.AppointmentSlot.builder()
+            .slotDate(preferred).startAt(preferred.atTime(9, 0)).endAt(preferred.atTime(9, 20)).build();
+        when(slotPolicy.firstFreePublished(eq(encounter.getStaff().getId()), eq(encounter.getHospital().getId()),
+                eq(preferred), any()))
+            .thenReturn(new com.example.hms.service.scheduling.AppointmentSlotPolicy.PublishedPick(true, nineOClock));
+        when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> {
+            Appointment a = inv.getArgument(0);
+            a.setId(UUID.randomUUID());
+            return a;
+        });
+
+        service.checkOut(encounterId, followUpOn(preferred), "doctor1", true, null);
+
+        org.mockito.ArgumentCaptor<Appointment> booked = org.mockito.ArgumentCaptor.forClass(Appointment.class);
+        verify(appointmentRepository).save(booked.capture());
+        assertThat(booked.getValue().getStartTime()).isEqualTo(java.time.LocalTime.of(9, 0));
+        assertThat(booked.getValue().getEndTime()).isEqualTo(java.time.LocalTime.of(9, 20));
+        verify(slotPolicy).takeSlot(nineOClock, booked.getValue());
+        verify(slotPolicy, never()).endFor(any(), any(), any());
+    }
+
+    @Test
+    void qaD1139_aDayWhosePublishedSlotsAreAllTakenBooksNothingAndKeepsTheRecall() {
+        UUID encounterId = UUID.randomUUID();
+        followUpEncounter(encounterId);
+        LocalDate preferred = LocalDate.now().plusDays(7);
+        when(slotPolicy.firstFreePublished(any(), any(), eq(preferred), any()))
+            .thenReturn(new com.example.hms.service.scheduling.AppointmentSlotPolicy.PublishedPick(true, null));
+
+        service.checkOut(encounterId, followUpOn(preferred), "doctor1", true, null);
+
+        verify(appointmentRepository, never()).save(any(Appointment.class));
+        verify(slotPolicy, never()).takeSlot(any(), any());
+        verify(patientRecallRepository).save(any(com.example.hms.model.scheduling.PatientRecall.class));
+    }
+
     @Test
     void d526_anIncompleteBookingContextKeepsTheRecallAndBooksNothing() {
         // The staff has no hospital: Appointment#validate would throw inside
@@ -3580,6 +3648,54 @@ class EncounterServiceImplTest {
             assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.LEFT_WITHOUT_BEING_SEEN);
             assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
             verify(appointmentRepository).save(appointment);
+        }
+
+        @Test
+        @DisplayName("QA D1126: close-unseen keeps its reason on the appointment it cancels")
+        void qaD1126_closeUnseenKeepsTheReasonOnTheAppointment() {
+            Encounter encounter = visit(EncounterStatus.ARRIVED);
+            com.example.hms.repository.BillingInvoiceRepository invoices =
+                org.mockito.Mockito.mock(com.example.hms.repository.BillingInvoiceRepository.class);
+            service.setBillingInvoiceRepository(invoices);
+            when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(encounterMapper.toEncounterResponseDTO(any())).thenReturn(new EncounterResponseDTO());
+
+            service.closeUnseen(encounter.getId(), com.example.hms.payload.dto.clinical.CloseUnseenVisitRequestDTO.builder()
+                    .outcome(com.example.hms.enums.UnseenVisitOutcome.LEFT_WITHOUT_BEING_SEEN)
+                    .reason("  Parti avant l'appel  ").build(),
+                "receptionist1", true, null);
+
+            assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
+            assertThat(appointment.getStatusReason()).isEqualTo("Parti avant l'appel");
+            verify(invoices).findByEncounter_IdAndCheckInCopayTrueAndStatus(encounter.getId(),
+                com.example.hms.enums.InvoiceStatus.PAID);
+        }
+
+        @org.junit.jupiter.params.ParameterizedTest(name = "{0}")
+        @org.junit.jupiter.params.provider.EnumSource(value = com.example.hms.enums.UnseenVisitOutcome.class)
+        @DisplayName("QA D1126: a checked-in visit whose copay was paid is not closed until the copay is reversed")
+        void qaD1126_aPaidCopayIsReversedBeforeTheVisitIsClosed(com.example.hms.enums.UnseenVisitOutcome outcome) {
+            Encounter encounter = visit(EncounterStatus.ARRIVED);
+            com.example.hms.repository.BillingInvoiceRepository invoices =
+                org.mockito.Mockito.mock(com.example.hms.repository.BillingInvoiceRepository.class);
+            com.example.hms.model.BillingInvoice copay = new com.example.hms.model.BillingInvoice();
+            copay.setInvoiceNumber("CHW-2026-000063");
+            when(invoices.findByEncounter_IdAndCheckInCopayTrueAndStatus(encounter.getId(),
+                com.example.hms.enums.InvoiceStatus.PAID)).thenReturn(java.util.List.of(copay));
+            service.setBillingInvoiceRepository(invoices);
+
+            assertThatThrownBy(() -> service.closeUnseen(encounter.getId(),
+                    com.example.hms.payload.dto.clinical.CloseUnseenVisitRequestDTO.builder()
+                        .outcome(outcome).reason("Parti").build(),
+                    "receptionist1", true, null))
+                .satisfies(ex -> {
+                    assertThat(keyOf(ex)).isEqualTo("encounter.closeUnseen.paidCopay");
+                    assertThat(((com.example.hms.exception.BusinessException) ex).getArgs())
+                        .containsExactly("CHW-2026-000063");
+                });
+            assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.ARRIVED);
+            assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.CHECKED_IN);
+            verify(encounterRepository, never()).save(any());
         }
 
         @org.junit.jupiter.params.ParameterizedTest(name = "{0}")

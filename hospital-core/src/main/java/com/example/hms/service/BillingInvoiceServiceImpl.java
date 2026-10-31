@@ -68,6 +68,8 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     private final ActingScopeResolver actingScopeResolver;
     private final PatientHospitalRegistrationRepository registrationRepository;
     private final InvoiceNumberAllocator invoiceNumberAllocator;
+    /** QA D1129: one provider reference, recorded once across every till. */
+    private final com.example.hms.service.payment.PaymentReferenceRegistry referenceRegistry;
 
     public BillingInvoiceServiceImpl(
             BillingInvoiceRepository invoiceRepository,
@@ -82,7 +84,9 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             ActingScopeResolver actingScopeResolver,
             PatientHospitalRegistrationRepository registrationRepository,
             InvoiceNumberAllocator invoiceNumberAllocator,
-            org.springframework.transaction.PlatformTransactionManager transactionManager) {
+            org.springframework.transaction.PlatformTransactionManager transactionManager,
+            com.example.hms.service.payment.PaymentReferenceRegistry referenceRegistry) {
+        this.referenceRegistry = referenceRegistry;
         this.invoiceRepository = invoiceRepository;
         this.patientRepository = patientRepository;
         this.hospitalRepository = hospitalRepository;
@@ -1584,14 +1588,11 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
      * by each hospital, not refused here.
      */
     private void rejectReusedReference(BillingInvoice invoice, PaymentMethod method, String reference) {
-        if (method == PaymentMethod.CASH || reference == null || reference.isBlank() || invoice.getHospital() == null) {
+        if (method == PaymentMethod.CASH || invoice.getHospital() == null) {
             return;
         }
-        if (paymentTransactionRepository.existsLiveReference(invoice.getHospital().getId(),
-                reference.trim().toLowerCase(java.util.Locale.ROOT),
-                java.util.List.of(PaymentStatus.PENDING, PaymentStatus.CONFIRMED))) {
-            throw new BusinessException("billing.payment.duplicateReference");
-        }
+        // QA D1129: the pharmacy payments and walk-in sales are read too.
+        referenceRegistry.requireUnused(invoice.getHospital().getId(), reference);
     }
 
     /** The ledger row a cashier reconciles against: one per recorded payment, patient or staff. */

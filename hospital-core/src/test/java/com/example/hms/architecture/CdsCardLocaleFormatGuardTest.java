@@ -48,7 +48,12 @@ class CdsCardLocaleFormatGuardTest {
             + "|\\.toPlainString\\(\\)"
             + "|toLocal(?:Date|Time|DateTime)\\(\\)\\.toString\\(\\)"
             + "|(?:Date|At|Time|DateTime)\\(\\)\\.toString\\(\\)"
-            + "|DateTimeFormatter\\.ISO_");
+            + "|DateTimeFormatter\\.ISO_"
+            // QA D1133 (round 20): a value padded to a fixed number of decimals
+            // ("8000,00 mg", "14,00 kg"). A computed quantity goes through
+            // CdsCardText.measure(…), which drops trailing zeros; decimal(v, 1)
+            // stays for a reading written to one place, like a temperature.
+            + "|\\.decimal\\([^;,]*+,\\s*+[2-9]\\s*+\\)");
 
     /**
      * Sites that still format a card value by hand, each with why. Shrink only.
@@ -94,6 +99,9 @@ class CdsCardLocaleFormatGuardTest {
             text.get("cds.bpa.malaria.temperature", "…",
                 String.format(Locale.ROOT, "%.1f", feverEvent.getTemperatureCelsius()), when);
             """)).hasSize(2);
+        // QA D1133: the padded dose ("8000,00 mg") is refused, the trimmed one is not.
+        assertThat(offenders("return text.decimal(v, 2);")).hasSize(1);
+        assertThat(offenders("return text.measure(v, 2);")).isEmpty();
         assertThat(offenders("""
             text.get("cds.duplicate.summary", "…", name, text.date(existing.getCreatedAt().toLocalDate()));
             text.get("cds.bpa.malaria.temperature", "…", text.decimal(t, 1), when);

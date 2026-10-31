@@ -66,7 +66,7 @@ public class DuplicateMedicationOrderRule implements CdsRule {
                 ? context.activePrescriptionRxnorms().get(i)
                 : null;
             if (matches(proposedRx, existingRx, proposedName, existing.getMedicationName())) {
-                return List.of(buildCard(existing));
+                return List.of(buildCard(existing, context.hospitalId()));
             }
         }
         return List.of();
@@ -83,12 +83,14 @@ public class DuplicateMedicationOrderRule implements CdsRule {
             || proposedNameLower.contains(existingLower);
     }
 
-    private CdsCard buildCard(Prescription existing) {
+    private CdsCard buildCard(Prescription existing, UUID hospitalId) {
         String summary = text.get("cds.duplicate.summary",
             "Possible duplicate order: {0} was prescribed on {1}",
             existing.getMedicationName(),
             // QA D1114: the hospital's day the order was written, not the server's UTC day.
-            text.date(existing.getCreatedAt(), text.zoneOf(existing.getHospital() != null ? existing.getHospital().getId() : null)));
+            // QA D1121: the request's hospital id (the active orders are loaded for it),
+            // never the order's LAZY hospital, which a rule outside a session cannot read.
+            text.date(existing.getCreatedAt(), text.zoneOf(hospitalId)));
         String detail = text.get("cds.duplicate.detail",
             "An active prescription for the same medication exists within the past "
                 + "{0} days (status: {1}). Verify the new order is intended.",

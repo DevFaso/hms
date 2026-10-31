@@ -27,7 +27,15 @@ public final class HospitalCalendar {
     /** The hospital's zone, or the clock's when the hospital names none (or an invalid one). */
     public static ZoneId zoneOf(Hospital hospital, Clock clock) {
         Organization organization = hospital != null ? hospital.getOrganization() : null;
-        String id = organization != null ? organization.getDefaultTimezone() : null;
+        return zoneOf(organization != null ? organization.getDefaultTimezone() : null, clock);
+    }
+
+    /**
+     * QA D1121: the same rule for a zone id already read as a value
+     * ({@code HospitalRepository.findTimezoneIdById}), for callers with no
+     * persistence context: blank or unparseable falls back to the clock's.
+     */
+    public static ZoneId zoneOf(String id, Clock clock) {
         if (id != null && !id.isBlank()) {
             try {
                 return ZoneId.of(id.trim());

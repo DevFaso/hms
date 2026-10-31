@@ -197,7 +197,16 @@ public class AppointmentServiceImpl implements AppointmentService {
         // subsequent action, and a checked-in appointment could never be
         // completed, marked no-show or cancelled. It sat CHECKED_IN forever
         // while the encounter carried the clinical workflow on alone.
-        m.put(AppointmentStatus.CHECKED_IN,  EnumSet.of(AppointmentStatus.IN_PROGRESS, AppointmentStatus.COMPLETED, AppointmentStatus.NO_SHOW, AppointmentStatus.CANCELLED));
+        //
+        // QA D1126 (round 20): no NO_SHOW and no CANCELLED from CHECKED_IN. A
+        // checked-in patient came (so not a no-show), has an open visit and
+        // may have paid a copay at the desk: cancelling the appointment alone
+        // dropped the patient from triage with the visit still open and the
+        // copay still PAID. A checked-in visit is closed from the reception
+        // queue ("close without a consultation", EncounterServiceImpl.closeUnseen),
+        // which needs a reason, cancels this appointment with it, and refuses
+        // while a paid copay stands. See requireNotCheckedInForCancel.
+        m.put(AppointmentStatus.CHECKED_IN,  EnumSet.of(AppointmentStatus.IN_PROGRESS, AppointmentStatus.COMPLETED));
         m.put(AppointmentStatus.IN_PROGRESS, EnumSet.of(AppointmentStatus.COMPLETED, AppointmentStatus.FAILED, AppointmentStatus.NO_SHOW));
         m.put(AppointmentStatus.RESCHEDULED, EnumSet.of(AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED, AppointmentStatus.CANCELLED));
         m.put(AppointmentStatus.COMPLETED,   EnumSet.noneOf(AppointmentStatus.class));
@@ -206,6 +215,47 @@ public class AppointmentServiceImpl implements AppointmentService {
         m.put(AppointmentStatus.FAILED,      EnumSet.of(AppointmentStatus.RESCHEDULED));
         m.put(AppointmentStatus.UNKNOWN,     EnumSet.noneOf(AppointmentStatus.class));
         VALID_TRANSITIONS = Collections.unmodifiableMap(m);
+    }
+
+    /** QA D1126 / D1132: the moves that drop a booked visit, and so need a reason. */
+    private static final Set<AppointmentStatus> NEEDS_STATUS_REASON =
+        EnumSet.of(AppointmentStatus.CANCELLED, AppointmentStatus.NO_SHOW);
+
+    /** QA D1126: the longest reason kept (status_reason, V255). */
+    static final int STATUS_REASON_MAX = 500;
+
+    /**
+     * QA D1126 / D1132 (round 20): the reason a move to CANCELLED or NO_SHOW
+     * must carry, trimmed, on every staff write path (the status action and
+     * the edit form). PUT /appointments/{id}/status?action=CANCEL with no body
+     * answered 200 and nothing recorded why the visit was dropped. Null for
+     * any other status (a reason describes the drop, not the next status).
+     */
+    public static String requireStatusReason(AppointmentStatus status, String reason) {
+        if (!NEEDS_STATUS_REASON.contains(status)) {
+            return null;
+        }
+        String trimmed = reason == null ? "" : reason.trim();
+        if (trimmed.isEmpty()) {
+            throw new BusinessException("appointment.status.reasonRequired", AppointmentStatus.labelOf(status));
+        }
+        if (trimmed.length() > STATUS_REASON_MAX) {
+            throw new BusinessException("appointment.status.reasonTooLong", STATUS_REASON_MAX);
+        }
+        return trimmed;
+    }
+
+    /**
+     * QA D1126 (round 20): a checked-in appointment is not cancelled or marked
+     * a no-show from the appointment; the desk closes the visit from the
+     * reception queue, where the copay is checked. A clear refusal rather than
+     * the generic "transition not allowed".
+     */
+    private static void requireNotCheckedInForCancel(AppointmentStatus current, AppointmentStatus requested) {
+        if (current == AppointmentStatus.CHECKED_IN && NEEDS_STATUS_REASON.contains(requested)) {
+            throw new BusinessException("appointment.status.checkedInCloseFromQueue",
+                AppointmentStatus.labelOf(requested));
+        }
     }
 
     /** Statuses that require the appointment time window to have started. */
@@ -326,6 +376,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         if (requested == null || requested == current) {
             return;
         }
+        requireNotCheckedInForCancel(current, requested);
         Set<AppointmentStatus> allowed = VALID_TRANSITIONS.getOrDefault(current, Set.of());
         if (!allowed.contains(requested)) {
             throw new BusinessException(INVALID_TRANSITION_KEY,
@@ -526,6 +577,8 @@ public class AppointmentServiceImpl implements AppointmentService {
         applyBookingText(appointment, request);
     AppointmentStatus status = Optional.ofNullable(request.getStatus()).orElse(AppointmentStatus.SCHEDULED);
     appointment.setStatus(status);
+        // QA D1126: a booking written straight as CANCELLED or NO_SHOW needs its reason too.
+        appointment.setStatusReason(requireStatusReason(status, request.getStatusReason()));
         appointment.setCreatedBy(currentUser);
         appointment.setAssignment(assignment);
 
@@ -850,6 +903,8 @@ public class AppointmentServiceImpl implements AppointmentService {
                 LocalDateTime.of(existing.getAppointmentDate(), existing.getStartTime()), hospital);
             requireStartedFor(request.getStatus(), requestedStart, hospital);
         }
+        // QA D1126: the edit form drops a visit only with a reason, like the status action.
+        String statusReason = statusMoved ? requireStatusReason(request.getStatus(), request.getStatusReason()) : null;
 
         // QA D1018 / D923: the department is part of the edit. The PUT used to
         // answer 200 and keep the old one, so a visit moved to a paediatrician
@@ -860,6 +915,9 @@ public class AppointmentServiceImpl implements AppointmentService {
         existing.setDepartment(department);
         existing.setAssignment(assignment);
         existing.setUpdatedAt(LocalDateTime.now());
+        if (statusMoved) {
+            existing.setStatusReason(statusReason);
+        }
 
         // QA D923: flush BEFORE the refresh. refresh() reloads the row from the
         // database, so refreshing an entity whose edits were still only in the
@@ -983,7 +1041,8 @@ public class AppointmentServiceImpl implements AppointmentService {
 
     @Override
     @Transactional
-    public AppointmentResponseDTO confirmOrCancelAppointment(UUID appointmentId, String action, Locale locale, String username) {
+    public AppointmentResponseDTO confirmOrCancelAppointment(UUID appointmentId, String action, String reason,
+                                                             Locale locale, String username) {
         User currentUser = getUserOrThrow(username);
         Appointment appointment = appointmentRepository.findById(appointmentId)
             .orElseThrow(() -> new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_KEY, appointmentId));
@@ -1010,6 +1069,7 @@ public class AppointmentServiceImpl implements AppointmentService {
 
         // ── Validate status transition ──
         AppointmentStatus currentStatus = appointment.getStatus();
+        requireNotCheckedInForCancel(currentStatus, newStatus);
         Set<AppointmentStatus> allowed = VALID_TRANSITIONS.getOrDefault(currentStatus, Set.of());
         if (!allowed.contains(newStatus)) {
             throw new BusinessException(INVALID_TRANSITION_KEY,
@@ -1022,8 +1082,11 @@ public class AppointmentServiceImpl implements AppointmentService {
             appointment.getHospital());
 
         requireFreedSlotStillFree(appointment, currentStatus, newStatus);
+        // QA D1126 / D1132: a cancel or a no-show needs the reason, and keeps it.
+        String statusReason = requireStatusReason(newStatus, reason);
 
         appointment.setStatus(newStatus);
+        appointment.setStatusReason(statusReason);
         appointmentRepository.save(appointment);
 
         // The appointment owns its slot (P3 #22): once the visit is cancelled

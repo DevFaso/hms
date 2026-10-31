@@ -1460,7 +1460,13 @@
     "VIEW": "View appointment",
     "VIEW_MANAGE_SUBTITLE": "View and manage appointment details",
     "YES_CANCEL": "Yes, Cancel",
-    "DURATION_SET_BY_SLOTS": "The visit's length is set by the clinician's appointment slots."
+    "DURATION_SET_BY_SLOTS": "The visit's length is set by the clinician's appointment slots.",
+    "STATUS_REASON": "Reason",
+    "STATUS_REASON_LABEL": "Reason (required)",
+    "STATUS_REASON_REQUIRED": "Give the reason before confirming.",
+    "NO_SHOW_DIALOG_TITLE": "Mark as no-show",
+    "NO_SHOW_CONFIRM_MESSAGE": "The patient did not come to this appointment.",
+    "CONFIRM_NO_SHOW": "Mark as no-show"
   },
   "APPOINTMENT_CALENDAR": {
     "TITLE": "Appointment calendar",
@@ -8524,7 +8530,9 @@
     "TITLE": "Treatment Plans",
     "TREATMENT_PLAN": "Treatment Plan",
     "UPDATE_PLAN": "Update Plan",
-    "VIEW_PLAN": "View Plan"
+    "VIEW_PLAN": "View Plan",
+    "APPROVE_PLAN": "Approve the plan",
+    "PLAN_APPROVED": "Treatment plan approved"
   },
   "USERS": {
     "ACTIVATE": "Activate",

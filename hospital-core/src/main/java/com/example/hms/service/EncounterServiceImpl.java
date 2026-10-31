@@ -320,6 +320,37 @@ public class EncounterServiceImpl implements EncounterService {
     void setRecallService(com.example.hms.service.scheduling.PatientRecallService recallService) {
         this.recallService = recallService;
     }
+
+    /**
+     * QA D1126 (round 20): the visit's paid check-in copays, which a close
+     * without a consultation must not leave standing. Setter-injected like
+     * {@link #recallService}; null in constructor-built unit tests, where no
+     * copay is checked.
+     */
+    private com.example.hms.repository.BillingInvoiceRepository billingInvoiceRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setBillingInvoiceRepository(com.example.hms.repository.BillingInvoiceRepository billingInvoiceRepository) {
+        this.billingInvoiceRepository = billingInvoiceRepository;
+    }
+
+    /**
+     * QA D1126 (round 20, user decision "as it works in real hospitals"): a
+     * checked-in patient whose copay was paid is not closed out with the money
+     * silently kept. The desk reverses the copay payment in billing first (a
+     * reason is required there, QA D142), then closes the visit.
+     */
+    private void requireNoStandingPaidCopay(UUID encounterId) {
+        if (billingInvoiceRepository == null) {
+            return;
+        }
+        billingInvoiceRepository.findByEncounter_IdAndCheckInCopayTrueAndStatus(
+                encounterId, com.example.hms.enums.InvoiceStatus.PAID).stream()
+            .findFirst()
+            .ifPresent(copay -> {
+                throw new BusinessException("encounter.closeUnseen.paidCopay", copay.getInvoiceNumber());
+            });
+    }
     /** QA D795: the stay's own department, which a transfer moves (BedAssignmentService, QA D237). */
     private final com.example.hms.repository.AdmissionRepository admissionRepository;
     /** QA D972 hand-off: publishes {@link com.example.hms.event.EncounterCheckedOutEvent} at checkout. */
@@ -2534,6 +2565,8 @@ public class EncounterServiceImpl implements EncounterService {
         if (!EncounterClosureRules.isNeverSeen(previous)) {
             throw new BusinessException("encounter.closeUnseen.wrongStatus", EncounterStatus.labelOf(previous));
         }
+        // QA D1126: a paid copay is reversed in billing before the visit is closed.
+        requireNoStandingPaidCopay(encounter.getId());
         String previousValues = serializeEncounter(encounter);
         LocalDateTime now = LocalDateTime.now();
 
@@ -2564,6 +2597,8 @@ public class EncounterServiceImpl implements EncounterService {
         if (appointment != null
                 && appointment.getStatus() != com.example.hms.enums.AppointmentStatus.CANCELLED) {
             appointment.setStatus(com.example.hms.enums.AppointmentStatus.CANCELLED);
+            // QA D1126: the appointment keeps the reason the visit was closed with.
+            appointment.setStatusReason(request.getReason().trim());
             appointmentRepository.save(appointment);
             // QA D985 (branch C1): the recall this visit answered is open again.
             if (recallService != null) {
@@ -2655,11 +2690,11 @@ public class EncounterServiceImpl implements EncounterService {
                     encounter.getId());
             return null;
         }
-        java.time.LocalTime[] slot = freeFollowUpSlot(staff.getId(), date);
-        if (slot.length == 0) {
+        FollowUpSlot slot = freeFollowUpSlot(staff.getId(), hospital.getId(), date);
+        if (slot == null) {
             return null;
         }
-        java.time.LocalTime start = slot[0];
+        java.time.LocalTime start = slot.start();
         String reason = checkoutFollowUpReason(followUp);
         String notes = followUp.getNotes();
         Appointment saved = appointmentRepository.save(Appointment.builder()
@@ -2670,14 +2705,24 @@ public class EncounterServiceImpl implements EncounterService {
                 .department(department)
                 .appointmentDate(date)
                 .startTime(start)
-                .endTime(slot[1])
+                .endTime(slot.end())
                 .status(com.example.hms.enums.AppointmentStatus.PENDING)
                 // QA D1073: the clinician who checked the patient out booked the follow-up.
                 .createdBy(followUpCreator())
                 .reason(reason.length() > 2048 ? reason.substring(0, 2048) : reason)
                 .notes(notes != null && notes.length() > 2048 ? notes.substring(0, 2048) : notes)
                 .build());
+        // QA D1139: the published slot is BOOKED by this follow-up, so the
+        // patient portal and the desk no longer offer it.
+        if (saved != null && slot.published() != null) {
+            slotPolicy.takeSlot(slot.published(), saved);
+        }
         return saved != null ? saved.getId() : null;
+    }
+
+    /** A follow-up's time, and the published slot it takes (null on an ad-hoc day). */
+    private record FollowUpSlot(java.time.LocalTime start, java.time.LocalTime end,
+                                com.example.hms.model.scheduling.AppointmentSlot published) {
     }
 
     private boolean notHeld(UUID staffId, java.time.LocalDateTime start, java.time.LocalDateTime end) {
@@ -2699,28 +2744,44 @@ public class EncounterServiceImpl implements EncounterService {
     private static final int FOLLOW_UP_SLOT_MINUTES = 30;
 
     /**
-     * The first half-hour from 08:00 the clinician has nothing booked at, so
-     * the placeholder never collides with uq_appt_staff_slot at flush (which
-     * would fail the whole checkout), as {start, end}; empty when the day is
-     * full. QA D1060: the end is the slot rules' (it was a flat 30 minutes);
-     * QA D1063: a slot held for a waitlist offer is skipped.
+     * The follow-up's time, or null when the day is full.
+     *
+     * <p>QA D1139 (round 20): when the clinician publishes slots that day, the
+     * follow-up takes exactly one of them: the earliest offerable slot with no
+     * booking on its time, on the slot grid. The half-hour placeholder grid
+     * from 08:00 booked 08:30 to 08:50, off a 20-minute grid, straddling two
+     * published patient slots, while the portal offered nothing before 09:00.
+     * A day with published slots and none free is full (the follow-up stays a
+     * recall).
+     *
+     * <p>A day with no published slot (an ad-hoc clinic) keeps the placeholder:
+     * the first half-hour from 08:00 the clinician has nothing booked at, so it
+     * never collides at flush (QA D1060: the end is the slot rules'; QA D1063:
+     * a slot held for a waitlist offer is skipped).
      */
-    private java.time.LocalTime[] freeFollowUpSlot(UUID staffId, java.time.LocalDate date) {
+    private FollowUpSlot freeFollowUpSlot(UUID staffId, UUID hospitalId, java.time.LocalDate date) {
         // QA D937 class (branch C1): the same overlap rule as every booking
         // path. A cancelled or missed booking frees its time, and a held one
         // blocks any half-hour it overlaps, not only one starting at its minute.
         java.util.List<Appointment> sameDay = staffId == null ? java.util.List.of()
             : appointmentRepository.findByStaff_IdAndAppointmentDate(staffId, date);
+        com.example.hms.service.scheduling.AppointmentSlotPolicy.PublishedPick pick = slotPolicy.firstFreePublished(
+            staffId, hospitalId, date,
+            s -> !AppointmentSlotRules.overlapsHeldSlot(sameDay, null, s.getStartAt(), s.getEndAt()));
+        if (pick != null && pick.published()) {
+            return pick.slot() == null ? null : new FollowUpSlot(pick.slot().getStartAt().toLocalTime(),
+                pick.slot().getEndAt().toLocalTime(), pick.slot());
+        }
         for (java.time.LocalTime t = FOLLOW_UP_PLACEHOLDER_START; !t.isAfter(FOLLOW_UP_PLACEHOLDER_LAST);
                 t = t.plusMinutes(FOLLOW_UP_SLOT_MINUTES)) {
             java.time.LocalDateTime start = java.time.LocalDateTime.of(date, t);
             java.time.LocalTime endTime = slotPolicy.endFor(staffId, date, t);
             java.time.LocalDateTime end = java.time.LocalDateTime.of(date, endTime);
             if (!AppointmentSlotRules.overlapsHeldSlot(sameDay, null, start, end) && notHeld(staffId, start, end)) {
-                return new java.time.LocalTime[] {t, endTime};
+                return new FollowUpSlot(t, endTime, null);
             }
         }
-        return new java.time.LocalTime[0];
+        return null;
     }
 
     /** The follow-up date asked at checkout, or two weeks out when absent or unparseable. */

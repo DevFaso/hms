@@ -148,16 +148,22 @@ public class PatientViewCdsService implements CdsHookService {
             sb.append(" — ").append(text.get("cds.patientView.reaction", "reaction: {0}", a.getReaction().trim()));
         }
         if (a.getSeverity() != null) {
-            sb.append(" (").append(text.enumWord(a.getSeverity())).append(")");
+            // QA D1134: "(gravité : légère)", agreeing with its noun, never a bare masculine "(léger)".
+            sb.append(" (").append(severityText(a.getSeverity())).append(")");
         }
         return sb.toString();
+    }
+
+    /** QA D1134: "gravité : légère", the severity agreeing with the noun it is read after. */
+    private String severityText(Enum<?> severity) {
+        return text.get("cds.patientView.severity", "severity: {0}", text.severityWord(severity));
     }
 
     private String renderProblem(PatientProblem p) {
         StringBuilder sb = new StringBuilder("- ");
         sb.append(safe(p.getProblemDisplay(), p.getProblemCode()));
         if (p.getSeverity() != null) {
-            sb.append(" (").append(text.enumWord(p.getSeverity())).append(")");
+            sb.append(" (").append(severityText(p.getSeverity())).append(")");
         }
         if (p.isChronic()) sb.append(" — ").append(text.get("cds.patientView.chronic", "chronic"));
         appendCodings(sb, p);

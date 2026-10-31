@@ -134,6 +134,19 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
     Optional<Hospital> findByIdForUpdate(@Param("id") UUID id);
 
     /**
+     * QA D1121 (round 20): the hospital's time-zone id (its organisation's),
+     * read as a plain value. A card writer runs outside any persistence
+     * context (open-in-view is off and the CDS hooks are not transactional),
+     * so loading the {@link Hospital} and walking to its LAZY organisation
+     * threw {@code LazyInitializationException} and every time-stamped BPA
+     * card was dropped. This projection reads no association, so it works
+     * with or without an open session. Empty when the hospital is unknown or
+     * names no zone.
+     */
+    @Query("SELECT o.defaultTimezone FROM Hospital h JOIN h.organization o WHERE h.id = :id")
+    Optional<String> findTimezoneIdById(@Param("id") UUID id);
+
+    /**
      * The requireClinicalHospital rule (provider plan AC-11, item 4): a
      * hospital by id, for any request-supplied CLINICAL destination (a
      * booking, an admission, an order, a referral, a registration...). A

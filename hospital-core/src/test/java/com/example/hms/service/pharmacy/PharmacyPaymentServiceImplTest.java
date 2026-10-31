@@ -64,6 +64,7 @@ class PharmacyPaymentServiceImplTest {
     @Mock private RoleValidator roleValidator;
     @Mock private PharmacyServiceSupport support;
     @Mock private InventoryItemRepository inventoryItemRepository;
+    @Mock private com.example.hms.service.payment.PaymentReferenceRegistry referenceRegistry;
 
     @InjectMocks private PharmacyPaymentServiceImpl service;
 
@@ -222,6 +223,29 @@ class PharmacyPaymentServiceImplTest {
         verify(mobileMoneyGateway, never()).charge(any());
         verify(paymentRepository).save(org.mockito.ArgumentMatchers.argThat(
                 p -> "OM-R17-662001".equals(p.getReferenceNumber())));
+    }
+
+    @Test
+    @DisplayName("QA D1129: a typed mobile-money reference already recorded on another payment is refused")
+    void d1129_aReusedReferenceIsRefusedBeforeAnythingIsSaved() {
+        PharmacyPaymentRequestDTO dto = request(PharmacyPaymentMethod.MOBILE_MONEY);
+        dto.setReferenceNumber("OM-R20-77812");
+
+        when(mobileMoneyGateway.providerCode()).thenReturn("MOCK");
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(roleValidator.getCurrentUserId()).thenReturn(userId);
+        when(dispenseRepository.findLockedById(dispenseId)).thenReturn(Optional.of(dispense));
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        org.mockito.Mockito.doThrow(new BusinessException("billing.payment.duplicateReference"))
+                .when(referenceRegistry).requireUnused(hospitalId, "OM-R20-77812");
+
+        assertThatThrownBy(() -> service.createPayment(dto))
+                .isInstanceOf(BusinessException.class)
+                .extracting("messageKey").isEqualTo("billing.payment.duplicateReference");
+        verify(paymentRepository, never()).save(any());
+        verify(mobileMoneyGateway, never()).charge(any());
     }
 
     @Test

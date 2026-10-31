@@ -81,7 +81,8 @@ public class DrugDrugInteractionRule implements CdsRule {
 
     private CdsCard buildCard(DrugInteraction di) {
         String summary = text.get("cds.ddi.summary", "Drug-drug interaction: {0} ↔ {1} ({2})",
-            di.getDrug1Name(), di.getDrug2Name(), text.enumWord(di.getSeverity()));
+            // QA D1134: the severity agrees with "interaction" (feminine in French and Spanish).
+            di.getDrug1Name(), di.getDrug2Name(), text.severityWord(di.getSeverity()));
         String detail = composeDetail(di);
         return new CdsCard(
             summary,

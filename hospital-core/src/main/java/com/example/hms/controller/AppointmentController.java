@@ -174,12 +174,16 @@ public class AppointmentController {
     public ResponseEntity<AppointmentResponseDTO> updateAppointmentStatus(
         @PathVariable UUID id,
         @RequestParam(name = "action") String action,
+        // QA D1126 / D1132: the reason of a cancel or a no-show (required for those two).
+        @jakarta.validation.Valid @RequestBody(required = false)
+        com.example.hms.payload.dto.AppointmentStatusChangeRequestDTO body,
     @RequestHeader(name = "Accept-Language", required = false) String lang,
         Authentication authentication
     ) {
     Locale locale = parseLocale(lang);
         return ResponseEntity.ok(
-            appointmentService.confirmOrCancelAppointment(id, action, locale, getUsername(authentication))
+            appointmentService.confirmOrCancelAppointment(id, action, body != null ? body.getReason() : null,
+                locale, getUsername(authentication))
         );
     }
 

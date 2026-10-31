@@ -64,6 +64,7 @@ class PharmacySaleServiceImplTest {
 
     /** QA D964: FEFO is followed unless a test says otherwise (null = no override recorded). */
     @org.mockito.Mock private FefoLotPolicy fefoLotPolicy;
+    @Mock private com.example.hms.service.payment.PaymentReferenceRegistry referenceRegistry;
     @InjectMocks private PharmacySaleServiceImpl service;
 
     private final UUID hospitalId = UUID.randomUUID();
@@ -120,6 +121,22 @@ class PharmacySaleServiceImplTest {
         assertThatThrownBy(() -> service.createSale(dto))
                 .isInstanceOf(BusinessException.class)
                 .extracting("messageKey").isEqualTo("pharmacy.sale.hospitalMismatch");
+    }
+
+    @Test
+    @DisplayName("QA D1129: a mobile-money sale whose reference is already recorded is refused")
+    void d1129_aReusedReferenceIsRefused() {
+        PharmacySaleRequestDTO dto = request(List.of(line(BigDecimal.ONE, BigDecimal.TEN)));
+        dto.setPaymentMethod(PharmacyPaymentMethod.MOBILE_MONEY);
+        dto.setReferenceNumber("OM-R20-55123");
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        org.mockito.Mockito.doThrow(new BusinessException("billing.payment.duplicateReference"))
+                .when(referenceRegistry).requireUnused(hospitalId, "OM-R20-55123");
+
+        assertThatThrownBy(() -> service.createSale(dto))
+                .isInstanceOf(BusinessException.class)
+                .extracting("messageKey").isEqualTo("billing.payment.duplicateReference");
+        verify(saleRepository, never()).save(any());
     }
 
     @Test

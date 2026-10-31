@@ -49,7 +49,16 @@ public interface AppointmentService {
     List<AppointmentResponseDTO> getAppointmentsByStaffId(UUID staffId, Locale locale, String username);
 
     // Confirm or cancel, with user context
-    AppointmentResponseDTO confirmOrCancelAppointment(UUID appointmentId, String action, Locale locale, String username);
+    default AppointmentResponseDTO confirmOrCancelAppointment(UUID appointmentId, String action, Locale locale, String username) {
+        return confirmOrCancelAppointment(appointmentId, action, null, locale, username);
+    }
+
+    /**
+     * A status action. QA D1126 / D1132: {@code reason} is required (and kept)
+     * when the action cancels the visit or marks it a no-show.
+     */
+    AppointmentResponseDTO confirmOrCancelAppointment(UUID appointmentId, String action, String reason,
+                                                      Locale locale, String username);
 
     // Search with custom filters and pagination
     Page<AppointmentResponseDTO> searchAppointments(AppointmentFilterDTO filter, Pageable pageable, Locale locale, String username);

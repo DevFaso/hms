@@ -74,6 +74,22 @@ public class CdsRuleEngine {
     private final MedicationCatalogItemRepository catalogRepository;
     private final PatientVitalSignRepository vitalSignRepository;
 
+    /**
+     * QA D1121 (round 20): a rule that throws is a defect, not a quiet log
+     * line. In production the chart must still load, so the failure is logged
+     * at ERROR with its stack trace and the other rules still run; with
+     * {@code hms.cds.rules.fail-fast=true} (the test profile) it is rethrown,
+     * so any test that reaches the engine fails on it. The D1114 time-zone fix
+     * threw LazyInitializationException in every time-stamped rule and no test
+     * noticed, because the engine only logged a WARN.
+     */
+    private boolean failFast;
+
+    @org.springframework.beans.factory.annotation.Value("${hms.cds.rules.fail-fast:false}")
+    public void setFailFast(boolean failFast) {
+        this.failFast = failFast;
+    }
+
     public CdsRuleEngine(
         List<CdsRule> rules,
         PrescriptionRepository prescriptionRepository,
@@ -184,9 +200,13 @@ public class CdsRuleEngine {
                 if (ruleCards != null) cards.addAll(ruleCards);
             } catch (RuntimeException ex) {
                 // Defensive: a buggy rule must not block a clinician from
-                // signing. Log and continue with the rest.
-                logger.warn("CDS rule {} threw {}: {}", rule.id(),
-                    ex.getClass().getSimpleName(), ex.getMessage());
+                // signing. Log and continue with the rest. QA D1121: ERROR
+                // with the stack trace, and rethrown under fail-fast.
+                if (failFast) {
+                    throw ex;
+                }
+                logger.error("CDS rule {} threw {}: {}", rule.id(),
+                    ex.getClass().getSimpleName(), ex.getMessage(), ex);
             }
         }
         return cards;

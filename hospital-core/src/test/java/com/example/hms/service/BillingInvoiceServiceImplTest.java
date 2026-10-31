@@ -81,6 +81,10 @@ class BillingInvoiceServiceImplTest {
     private InvoiceNumberAllocator invoiceNumberAllocator;
     @Mock
     private org.springframework.transaction.PlatformTransactionManager transactionManager;
+    @Mock
+    private com.example.hms.repository.pharmacy.PharmacyPaymentRepository pharmacyPaymentRepository;
+    @Mock
+    private com.example.hms.repository.pharmacy.PharmacySaleRepository pharmacySaleRepository;
 
     private static final UUID HOSPITAL_ID = UUID.randomUUID();
 
@@ -110,7 +114,10 @@ class BillingInvoiceServiceImplTest {
             actingScopeResolver,
             registrationRepository,
             invoiceNumberAllocator,
-            transactionManager
+            transactionManager,
+            // QA D1129: the real registry over the mocked ledgers.
+            new com.example.hms.service.payment.PaymentReferenceRegistry(paymentTransactionRepository,
+                pharmacyPaymentRepository, pharmacySaleRepository)
         );
     }
 
@@ -1900,6 +1907,27 @@ class BillingInvoiceServiceImplTest {
         when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
         when(paymentTransactionRepository.existsLiveReference(eq(HOSPITAL_ID), eq("om-20260926-7781"), any()))
             .thenReturn(true);
+        UUID invoiceId = invoice.getId();
+        UUID userId = UUID.randomUUID();
+        var card = payment("CARD");
+
+        com.example.hms.exception.BusinessException refused = assertThrows(
+            com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.recordPatientPayment(invoiceId, patientId, userId, card, Locale.ENGLISH));
+        assertEquals("billing.payment.duplicateReference", refused.getMessageKey());
+        verify(paymentTransactionRepository, never()).save(any());
+    }
+
+    /** QA D1129: a reference already taken at the pharmacy checkout is refused on an invoice too. */
+    @Test
+    void recordPatientPayment_aReferenceTakenAtThePharmacyIsRefused_D1129() {
+        UUID patientId = UUID.randomUUID();
+        BillingInvoice invoice = payableInvoice(patientId);
+        Hospital hospital = new Hospital();
+        hospital.setId(HOSPITAL_ID);
+        invoice.setHospital(hospital);
+        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+        when(pharmacyPaymentRepository.existsLiveReference(HOSPITAL_ID, "om-20260926-7781")).thenReturn(true);
         UUID invoiceId = invoice.getId();
         UUID userId = UUID.randomUUID();
         var card = payment("CARD");

@@ -2888,9 +2888,11 @@ public class PatientServiceImpl implements PatientService {
         String allergen = Optional.ofNullable(allergy.getAllergenDisplay())
             .orElseGet(() -> com.example.hms.utility.MessageUtil.resolveOrRaw("timeline.category.ALLERGY"));
         // QA D333: the severity in the reader's language, not the enum constant.
-        String severity = com.example.hms.utility.MessageUtil.resolveOrRaw("cds.enum."
+        // QA D1134: "gravité : légère", agreeing with its feminine noun (was a bare masculine "léger").
+        String severity = com.example.hms.utility.MessageUtil.resolveOrRaw("cds.severity."
             + (allergy.getSeverity() != null ? allergy.getSeverity().name() : LOG_UNKNOWN));
-        return allergen + " (" + severity + ")";
+        return allergen + " (" + com.example.hms.utility.MessageUtil.resolveOrRaw("cds.patientView.severity", severity)
+            + ")";
     }
 
     private String formatImagingOrderSummary(UltrasoundOrder order) {

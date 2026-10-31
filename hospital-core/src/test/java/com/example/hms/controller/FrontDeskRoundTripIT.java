@@ -247,7 +247,10 @@ class FrontDeskRoundTripIT extends BaseIT {
         LocalDate day = LocalDate.now().plusDays(12);
         Appointment first = appointment(aicha, day, LocalTime.of(14, 0), AppointmentStatus.SCHEDULED);
         mockMvc.perform(put(API + "/appointments/{id}/status", first.getId()).contextPath(API)
-                .param("action", "cancel").with(asReceptionist()))
+                .param("action", "cancel").with(asReceptionist())
+                // QA D1126: a cancel or a no-show carries its reason.
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .content("{\"reason\":\"Patient called to cancel\"}"))
             .andExpect(status().isOk());
 
         Patient other = patient("Karim", "Sanogo", LocalDate.of(1985, 1, 3), "76112233");
@@ -258,13 +261,39 @@ class FrontDeskRoundTripIT extends BaseIT {
             .andExpect(status().isCreated());
     }
 
+    /** QA D1126 / D1132: the desk's cancel without a reason is refused on the real endpoint; with one, it is kept. */
+    @Test
+    @DisplayName("D1126: a cancel without a reason is refused, and the reason given is kept")
+    void d1126_aCancelNeedsItsReasonAndKeepsIt() throws Exception {
+        Appointment booked = appointment(aicha, LocalDate.now().plusDays(3), LocalTime.of(10, 0),
+            AppointmentStatus.CONFIRMED);
+
+        mockMvc.perform(put(API + "/appointments/{id}/status", booked.getId()).contextPath(API)
+                .param("action", "CANCEL").with(asReceptionist()))
+            .andExpect(status().isBadRequest());
+        assertThat(appointmentRepository.findById(booked.getId()).orElseThrow().getStatus())
+            .isEqualTo(AppointmentStatus.CONFIRMED);
+
+        mockMvc.perform(put(API + "/appointments/{id}/status", booked.getId()).contextPath(API)
+                .param("action", "CANCEL").with(asReceptionist())
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .content("{\"reason\":\"  Le patient a appelé  \"}"))
+            .andExpect(status().isOk());
+        Appointment cancelled = appointmentRepository.findById(booked.getId()).orElseThrow();
+        assertThat(cancelled.getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
+        assertThat(cancelled.getStatusReason()).isEqualTo("Le patient a appelé");
+    }
+
     @Test
     @DisplayName("D946: a SCHEDULED appointment whose time has passed is marked absent without a fake confirmation")
     void aPastScheduledAppointmentCanBeMarkedAbsent() throws Exception {
         Appointment past = appointment(aicha, LocalDate.now().minusDays(1), LocalTime.of(8, 0), AppointmentStatus.SCHEDULED);
 
         mockMvc.perform(put(API + "/appointments/{id}/status", past.getId()).contextPath(API)
-                .param("action", "no_show").with(asReceptionist()))
+                .param("action", "no_show").with(asReceptionist())
+                // QA D1126: a cancel or a no-show carries its reason.
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .content("{\"reason\":\"Did not come\"}"))
             .andExpect(status().isOk());
 
         assertThat(appointmentRepository.findById(past.getId()).orElseThrow().getStatus())
@@ -291,7 +320,10 @@ class FrontDeskRoundTripIT extends BaseIT {
         assertThat(scheduled.getLinkedAppointment().getId()).isEqualTo(appointmentId);
 
         mockMvc.perform(put(API + "/appointments/{id}/status", appointmentId).contextPath(API)
-                .param("action", "cancel").with(asReceptionist()))
+                .param("action", "cancel").with(asReceptionist())
+                // QA D1126: a cancel or a no-show carries its reason.
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .content("{\"reason\":\"Patient called to cancel\"}"))
             .andExpect(status().isOk());
         PatientRecall reopened = recallRepository.findById(recall.getId()).orElseThrow();
         assertThat(reopened.getStatus()).isEqualTo(RecallStatus.PENDING);
@@ -309,7 +341,10 @@ class FrontDeskRoundTripIT extends BaseIT {
             .dueDate(day).reason("Contrôle").status(RecallStatus.SCHEDULED).linkedAppointment(visit).build());
 
         mockMvc.perform(put(API + "/appointments/{id}/status", visit.getId()).contextPath(API)
-                .param("action", "no_show").with(asReceptionist()))
+                .param("action", "no_show").with(asReceptionist())
+                // QA D1126: a cancel or a no-show carries its reason.
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .content("{\"reason\":\"Did not come\"}"))
             .andExpect(status().isOk());
         assertThat(recallRepository.findById(recall.getId()).orElseThrow().getStatus())
             .isEqualTo(RecallStatus.PENDING);

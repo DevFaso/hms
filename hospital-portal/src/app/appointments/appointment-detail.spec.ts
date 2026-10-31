@@ -228,4 +228,79 @@ describe('AppointmentDetailComponent', () => {
   it('canReschedule should be true for CONFIRMED status', () => {
     expect(component.canReschedule).toBeTrue();
   });
+  describe('QA D1126 / D1132: a cancel or a no-show asks for the reason (clicked, not called)', () => {
+    const click = (selector: string): void => {
+      const el = fixture.nativeElement.querySelector(selector) as HTMLElement | null;
+      expect(el).withContext(selector).not.toBeNull();
+      el!.click();
+      fixture.detectChanges();
+    };
+    const typeReason = async (text: string): Promise<void> => {
+      const area = fixture.nativeElement.querySelector(
+        '[data-testid="drop-reason"]',
+      ) as HTMLTextAreaElement;
+      area.value = text;
+      area.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      await fixture.whenStable();
+    };
+
+    beforeEach(() => {
+      component.appointment.set({ ...mockAppointment, status: 'CONFIRMED' });
+      fixture.detectChanges();
+      mockAppointmentService.updateStatus.calls.reset();
+    });
+
+    it('the cancel dialog refuses a blank reason on click and sends the typed one', async () => {
+      click('.page-header .btn-danger');
+      expect(fixture.nativeElement.querySelector('[data-testid="drop-reason"]')).not.toBeNull();
+
+      click('[data-testid="drop-confirm"]');
+      expect(mockAppointmentService.updateStatus).not.toHaveBeenCalled();
+      expect(
+        fixture.nativeElement.querySelector('[data-testid="drop-reason-error"]'),
+      ).not.toBeNull();
+      const confirm = fixture.nativeElement.querySelector(
+        '[data-testid="drop-confirm"]',
+      ) as HTMLButtonElement;
+      expect(confirm.disabled).withContext('never silently disabled (D1089)').toBeFalse();
+
+      await typeReason('  Patient called to cancel  ');
+      click('[data-testid="drop-confirm"]');
+      expect(mockAppointmentService.updateStatus).toHaveBeenCalledWith(
+        'appt-1',
+        'CANCEL',
+        'Patient called to cancel',
+      );
+    });
+
+    it('the no-show button opens the same dialog and sends NO_SHOW with its reason', async () => {
+      click('[data-testid="mark-no-show"]');
+      expect(mockAppointmentService.updateStatus).not.toHaveBeenCalled();
+
+      click('[data-testid="drop-confirm"]');
+      expect(mockAppointmentService.updateStatus).not.toHaveBeenCalled();
+
+      await typeReason('No answer on three calls');
+      click('[data-testid="drop-confirm"]');
+      expect(mockAppointmentService.updateStatus).toHaveBeenCalledWith(
+        'appt-1',
+        'NO_SHOW',
+        'No answer on three calls',
+      );
+    });
+
+    it('shows the kept reason on the appointment', () => {
+      component.appointment.set({
+        ...mockAppointment,
+        status: 'CANCELLED',
+        statusReason: 'Doctor away',
+      });
+      fixture.detectChanges();
+      const row = fixture.nativeElement.querySelector(
+        '[data-testid="status-reason"]',
+      ) as HTMLElement;
+      expect(row?.textContent).toContain('Doctor away');
+    });
+  });
 });

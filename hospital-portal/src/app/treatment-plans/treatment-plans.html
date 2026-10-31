@@ -279,6 +279,20 @@
               }
             </div>
           }
+          <!-- QA D1127: another clinician approves the plan; its author cannot. -->
+          @if (canApprovePlan(plan)) {
+            <div class="detail-section">
+              <button
+                type="button"
+                class="btn-primary"
+                data-testid="approve-plan"
+                (click)="approvePlan(plan)"
+                [attr.aria-busy]="approving() ? 'true' : null"
+              >
+                {{ 'TREATMENT.APPROVE_PLAN' | translate }}
+              </button>
+            </div>
+          }
         </div>
       </div>
     </div>

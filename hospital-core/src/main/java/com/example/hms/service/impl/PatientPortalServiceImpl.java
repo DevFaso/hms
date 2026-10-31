@@ -871,6 +871,11 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         }
 
         appointment.setStatus(AppointmentStatus.CANCELLED);
+        // QA D1126: the patient's own reason, when given, is kept like the desk's.
+        // Optional here on purpose: the shipped iOS app labels it "Reason
+        // (optional)", and the patient is the author of the cancellation.
+        appointment.setStatusReason(dto.getReason() != null && !dto.getReason().isBlank()
+                ? dto.getReason().trim() : null);
         if (dto.getReason() != null && !dto.getReason().isBlank()) {
             String existingNotes = appointment.getNotes() != null ? appointment.getNotes() : "";
             appointment.setNotes(existingNotes + (existingNotes.isEmpty() ? "" : " | ")
