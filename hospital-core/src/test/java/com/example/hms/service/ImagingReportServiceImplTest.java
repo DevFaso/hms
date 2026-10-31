@@ -278,12 +278,13 @@ class ImagingReportServiceImplTest {
         ImagingReport report = persistedReport();
         report.setImpression("Normal study.");
 
-        assertThatThrownBy(() -> imagingReportService.createReport(ImagingReportUpsertRequestDTO.builder()
-            .imagingOrderId(orderId).findings("x").build()))
+        ImagingReportUpsertRequestDTO create = ImagingReportUpsertRequestDTO.builder()
+            .imagingOrderId(orderId).findings("x").build();
+        ImagingReportUpsertRequestDTO revise = ImagingReportUpsertRequestDTO.builder().findings("revised").build();
+        assertThatThrownBy(() -> imagingReportService.createReport(create))
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("imaging.order.cancelled.locked");
-        assertThatThrownBy(() -> imagingReportService.updateReport(reportId,
-            ImagingReportUpsertRequestDTO.builder().findings("revised").build()))
+        assertThatThrownBy(() -> imagingReportService.updateReport(reportId, revise))
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("imaging.order.cancelled.locked");
         assertThatThrownBy(() -> imagingReportService.signReport(reportId))

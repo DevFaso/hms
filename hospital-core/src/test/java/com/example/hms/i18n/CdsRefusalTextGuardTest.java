@@ -121,8 +121,10 @@ class CdsRefusalTextGuardTest {
     @Test
     @DisplayName("the scans catch the D1102 shapes")
     void catchesTheOldShapes() {
-        String old = "throw new CdsCriticalBlockException(\n \"CDS ALERT: \" + card.summary()\n"
-            + " + \" — set forceOverride after clinical review.\", advisories);";
+        String old = """
+            throw new CdsCriticalBlockException(
+             "CDS ALERT: " + card.summary()
+             + " — set forceOverride after clinical review.", advisories);""";
         Matcher m = THROW.matcher(old);
         assertThat(m.find()).isTrue();
         assertThat(isResolved(firstArgument(old, m.end()))).isFalse();

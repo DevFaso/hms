@@ -45,15 +45,7 @@ public class ImmunizationFhirMapper {
                 src.getAdministrationDate().atStartOfDay(ZoneId.systemDefault()).toInstant()
             )));
         }
-        // QA D1113: a dose transcribed from a card or another record is not
-        // this hospital's own observation (FHIR primarySource = false).
-        String transcribedFrom = com.example.hms.service.timeline.VisitTimelineRows.transcribedSourceOf(src);
-        if (src.getSourceOfRecord() != null && !src.getSourceOfRecord().isBlank()) {
-            out.setPrimarySource(transcribedFrom == null);
-            if (transcribedFrom != null) {
-                out.setReportOrigin(new CodeableConcept().setText(transcribedFrom));
-            }
-        }
+        mapProvenance(src, out);
         if (src.getLotNumber() != null) out.setLotNumber(src.getLotNumber());
         if (src.getExpirationDate() != null) {
             out.setExpirationDate(Date.from(
@@ -72,6 +64,21 @@ public class ImmunizationFhirMapper {
                 .setUnit(src.getDoseUnit()));
         }
         return out;
+    }
+
+    /**
+     * QA D1113: a dose transcribed from a card or another record is not
+     * this hospital's own observation (FHIR primarySource = false).
+     */
+    private static void mapProvenance(PatientImmunization src, Immunization out) {
+        if (src.getSourceOfRecord() == null || src.getSourceOfRecord().isBlank()) {
+            return;
+        }
+        String transcribedFrom = com.example.hms.service.timeline.VisitTimelineRows.transcribedSourceOf(src);
+        out.setPrimarySource(transcribedFrom == null);
+        if (transcribedFrom != null) {
+            out.setReportOrigin(new CodeableConcept().setText(transcribedFrom));
+        }
     }
 
     private static Immunization.ImmunizationStatus mapStatus(PatientImmunization src) {

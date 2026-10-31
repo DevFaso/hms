@@ -68,6 +68,9 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
     /** Matches the digest LabOrderServiceImpl already computes for lab orders. */
     private static final String SIGNATURE_ALGORITHM = "SHA-256";
+    /** Audit details carry a digest of a free-text reason, never the reason itself. */
+    private static final String REASON_DIGEST_PREFIX = "{\"reasonSha256\":\"";
+    private static final String AUDIT_ENTITY_PRESCRIPTION = "Prescription";
 
     private final PrescriptionRepository prescriptionRepository;
     private final PatientRepository patientRepository;
@@ -651,7 +654,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         UUID prescriptionId = prescription.getId();
         UUID patientId = prescription.getPatient() != null ? prescription.getPatient().getId() : null;
         UUID assignmentId = prescription.getAssignment() != null ? prescription.getAssignment().getId() : null;
-        String details = "{\"reasonSha256\":\"" + computeSignatureDigest(reason) + "\"}";
+        String details = REASON_DIGEST_PREFIX + computeSignatureDigest(reason) + "\"}";
         com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
             try {
                 auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
@@ -662,7 +665,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                     .patientId(patientId)
                     .eventDescription("Paediatric dose review recorded")
                     .details(details)
-                    .entityType("Prescription")
+                    .entityType(AUDIT_ENTITY_PRESCRIPTION)
                     .resourceId(prescriptionId != null ? prescriptionId.toString() : null)
                     .build());
             } catch (RuntimeException ex) {
@@ -2140,7 +2143,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         UUID patientId = prescription.getPatient() != null ? prescription.getPatient().getId() : null;
         UUID assignmentId = prescription.getAssignment() != null ? prescription.getAssignment().getId() : null;
         long critical = advisories.stream().filter(c -> c.indicator() == CdsCard.Indicator.CRITICAL).count();
-        String details = "{\"reasonSha256\":\"" + computeSignatureDigest(reason) + "\",\"criticalAlerts\":" + critical + "}";
+        String details = REASON_DIGEST_PREFIX + computeSignatureDigest(reason) + "\",\"criticalAlerts\":" + critical + "}";
         com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
             try {
                 auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
@@ -2151,7 +2154,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                     .patientId(patientId)
                     .eventDescription(description)
                     .details(details)
-                    .entityType("Prescription")
+                    .entityType(AUDIT_ENTITY_PRESCRIPTION)
                     .resourceId(prescriptionId != null ? prescriptionId.toString() : null)
                     .build());
             } catch (RuntimeException ex) {
@@ -2193,7 +2196,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         UUID patientId = prescription.getPatient() != null ? prescription.getPatient().getId() : null;
         UUID assignmentId = prescription.getAssignment() != null ? prescription.getAssignment().getId() : null;
         String details = reason == null ? "{\"overrideCleared\":true}"
-            : "{\"reasonSha256\":\"" + computeSignatureDigest(reason) + "\"}";
+            : REASON_DIGEST_PREFIX + computeSignatureDigest(reason) + "\"}";
         com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
             try {
                 auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
@@ -2204,7 +2207,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
                     .patientId(patientId)
                     .eventDescription(description)
                     .details(details)
-                    .entityType("Prescription")
+                    .entityType(AUDIT_ENTITY_PRESCRIPTION)
                     .resourceId(prescriptionId != null ? prescriptionId.toString() : null)
                     .build());
             } catch (RuntimeException ex) {

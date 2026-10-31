@@ -2041,8 +2041,8 @@ class PatientPortalServiceImplPhase2Test {
             when(appointmentRepository.save(any(Appointment.class))).thenAnswer(inv -> inv.getArgument(0));
             when(appointmentMapper.toAppointmentResponseDTO(any())).thenReturn(AppointmentResponseDTO.builder().build());
             // QA D1093: the length is the published slot's own (a 20-minute slot).
-            when(slotPolicy.requirePublishedFreeSlot(eq(staffId),
-                    eq(java.time.LocalDateTime.of(BOOKING_DATE, LocalTime.of(10, 0))), eq(hospitalId), eq(departmentId)))
+            when(slotPolicy.requirePublishedFreeSlot(staffId,
+                    java.time.LocalDateTime.of(BOOKING_DATE, LocalTime.of(10, 0)), hospitalId, departmentId))
                     .thenReturn(com.example.hms.model.scheduling.AppointmentSlot.builder()
                             .startAt(java.time.LocalDateTime.of(BOOKING_DATE, LocalTime.of(10, 0)))
                             .endAt(java.time.LocalDateTime.of(BOOKING_DATE, LocalTime.of(10, 20)))

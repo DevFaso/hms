@@ -423,6 +423,22 @@ public class EncounterServiceImpl implements EncounterService {
         return encounterMapper.toEncounterResponseDTO(saved);
     }
 
+    /**
+     * QA D788: a status written through the edit obeys the closing rules of the
+     * check-out. QA D1099: a status write that ends an examination in progress
+     * is the examining clinician's ({@code examinerBefore}, the examiner as the
+     * visit stood before the edit), as on the workflow endpoints.
+     */
+    private static void requireStatusWriteAllowed(EncounterStatus previousStatus, EncounterStatus newStatus,
+                                                  UUID examinerBefore) {
+        EncounterClosureRules.requireDirectTransition(previousStatus, newStatus,
+            EncounterClosureRules.callerIsClinician());
+        if (previousStatus == EncounterStatus.IN_PROGRESS
+                && EncounterClosureRules.EXAMINATION_ENDED.contains(newStatus)) {
+            EncounterClosureRules.requireExaminingClinicianUser(examinerBefore);
+        }
+    }
+
     @Override
     @jakarta.transaction.Transactional(rollbackOn = Exception.class)
     public EncounterResponseDTO updateEncounter(UUID id, EncounterRequestDTO request, Locale locale,
@@ -456,15 +472,7 @@ public class EncounterServiceImpl implements EncounterService {
         ensureEncounterCode(merged);
         stampArrivalWhenMarkedArrived(merged, previousStatus);
 
-        // QA D788: a status written here obeys the closing rules of the check-out.
-        EncounterClosureRules.requireDirectTransition(previousStatus, merged.getStatus(),
-            EncounterClosureRules.callerIsClinician());
-        // QA D1099: a status write that ends an examination in progress is the
-        // examining clinician's, as on the workflow endpoints.
-        if (previousStatus == EncounterStatus.IN_PROGRESS
-                && EncounterClosureRules.EXAMINATION_ENDED.contains(merged.getStatus())) {
-            EncounterClosureRules.requireExaminingClinicianUser(examinerBefore);
-        }
+        requireStatusWriteAllowed(previousStatus, merged.getStatus(), examinerBefore);
 
         // If this update is the one transitioning the encounter into COMPLETED and the
         // dedicated /checkout endpoint was bypassed, ensure a checkout timestamp is set.

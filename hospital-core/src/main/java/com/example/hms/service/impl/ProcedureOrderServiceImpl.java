@@ -232,6 +232,18 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
             .toList();
     }
 
+    /**
+     * QA D857: a reschedule to a past date was accepted (01/01/2020 made the
+     * order "Planifié" and offered "Débuter la procédure"). Checked before
+     * anything is applied, so a refused request changes nothing.
+     */
+    private void requireRescheduleNotInPast(ProcedureOrderUpdateDTO updateDTO, ProcedureOrder procedureOrder) {
+        if (updateDTO.getScheduledDatetime() != null
+                && !updateDTO.getScheduledDatetime().equals(procedureOrder.getScheduledDatetime())) {
+            requireNotInPast(updateDTO.getScheduledDatetime());
+        }
+    }
+
     @Override
     public ProcedureOrderResponseDTO updateProcedureOrder(UUID orderId, ProcedureOrderUpdateDTO updateDTO) {
         ProcedureOrder procedureOrder = getProcedureOrderEntity(orderId);
@@ -261,13 +273,7 @@ public class ProcedureOrderServiceImpl implements ProcedureOrderService {
             ? com.example.hms.service.support.CancelledOrders.requireCancelReason(updateDTO.getCancellationReason())
             : null;
 
-        // QA D857: a reschedule to a past date was accepted (01/01/2020 made
-        // the order "Planifié" and offered "Débuter la procédure"). Checked
-        // before anything is applied, so a refused request changes nothing.
-        if (updateDTO.getScheduledDatetime() != null
-                && !updateDTO.getScheduledDatetime().equals(procedureOrder.getScheduledDatetime())) {
-            requireNotInPast(updateDTO.getScheduledDatetime());
-        }
+        requireRescheduleNotInPast(updateDTO, procedureOrder);
 
         if (updateDTO.getStatus() != null) {
             procedureOrder.setStatus(updateDTO.getStatus());

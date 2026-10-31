@@ -65,9 +65,10 @@ class ServerComposedTimeGuardTest {
                     continue;
                 }
                 String source = SourceScan.stripComments(Files.readString(file, StandardCharsets.UTF_8));
-                if (DATE_TIME_FORMATTER.matcher(source).find() && !CONVERTS.matcher(source).find()) {
-                    offenders.add(rel);
-                } else if (rel.startsWith("cdshooks/") && SERVER_DAY.matcher(source).find()) {
+                boolean formatsInServerZone =
+                    DATE_TIME_FORMATTER.matcher(source).find() && !CONVERTS.matcher(source).find();
+                boolean cardTakesServerDay = rel.startsWith("cdshooks/") && SERVER_DAY.matcher(source).find();
+                if (formatsInServerZone || cardTakesServerDay) {
                     offenders.add(rel);
                 }
             }

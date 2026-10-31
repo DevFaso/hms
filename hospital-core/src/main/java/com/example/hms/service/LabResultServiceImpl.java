@@ -1481,26 +1481,8 @@ public class LabResultServiceImpl implements LabResultService {
                 || order.getHospital() == null) {
             return;
         }
-        String severity = labResultMapper.severityFlagOf(labResult);
-        com.example.hms.enums.InBasketPriority priority = switch (severity) {
-            case LabResultMapper.FLAG_CRITICAL -> com.example.hms.enums.InBasketPriority.CRITICAL;
-            case "LOW", "HIGH", LabResultMapper.FLAG_ABNORMAL -> com.example.hms.enums.InBasketPriority.URGENT;
-            // QA D286: no range grades a qualitative answer; its recorded flag does.
-            default -> labResult.getAbnormalFlag() != null && labResult.getAbnormalFlag() != AbnormalFlag.NORMAL
-                ? com.example.hms.enums.InBasketPriority.URGENT
-                : com.example.hms.enums.InBasketPriority.NORMAL;
-        };
-        // QA D931: a value the clinician may already have acted on has changed;
-        // that is never a routine item, whatever the new value grades as.
-        if (superseded != null && priority == com.example.hms.enums.InBasketPriority.NORMAL) {
-            priority = com.example.hms.enums.InBasketPriority.URGENT;
-        }
-        // QA D1092: no range could grade the value (its unit matches none), so
-        // nothing can say it is not critical. The clinician reviews it.
         boolean ungraded = labResultMapper.isUngradedForUnitMismatch(labResult);
-        if (ungraded && priority == com.example.hms.enums.InBasketPriority.NORMAL) {
-            priority = com.example.hms.enums.InBasketPriority.URGENT;
-        }
+        com.example.hms.enums.InBasketPriority priority = inBasketPriorityOf(labResult, superseded, ungraded);
         String testName = order.getLabTestDefinition() != null
             ? order.getLabTestDefinition().getName()
             // QA D648: the same "deleted test" label as every other lab screen.
@@ -1512,33 +1494,8 @@ public class LabResultServiceImpl implements LabResultService {
         request.setHospitalId(order.getHospital().getId());
         request.setItemType(com.example.hms.enums.InBasketItemType.RESULT);
         request.setPriority(priority);
-        String title = testName != null ? testName : "Lab result";
-        if (superseded != null) {
-            // QA D931: the item says it replaces a result, and from what to what.
-            // QA D1053: kept as keys too, so each reader sees it in their language.
-            Object[] titleArgs = {title};
-            Object[] bodyArgs = {
-                com.example.hms.service.lab.LabResultReleaseNotifier.valueOf(superseded),
-                com.example.hms.service.lab.LabResultReleaseNotifier.valueOf(labResult)
-            };
-            title = com.example.hms.utility.MessageUtil.resolve(
-                com.example.hms.service.i18n.NotificationLocales.STAFF, CORRECTION_IN_BASKET_TITLE_KEY, titleArgs);
-            request.setTitleKey(CORRECTION_IN_BASKET_TITLE_KEY);
-            request.setTitleArgs(titleArgs);
-            request.setBody(com.example.hms.utility.MessageUtil.resolve(
-                com.example.hms.service.i18n.NotificationLocales.STAFF, CORRECTION_IN_BASKET_BODY_KEY, bodyArgs));
-            request.setBodyKey(CORRECTION_IN_BASKET_BODY_KEY);
-            request.setBodyArgs(bodyArgs);
-        }
-        if (ungraded && superseded == null) {
-            Object[] bodyArgs = {
-                com.example.hms.service.lab.LabResultReleaseNotifier.valueOf(labResult)
-            };
-            request.setBody(com.example.hms.utility.MessageUtil.resolve(
-                com.example.hms.service.i18n.NotificationLocales.STAFF, UNGRADED_IN_BASKET_BODY_KEY, bodyArgs));
-            request.setBodyKey(UNGRADED_IN_BASKET_BODY_KEY);
-            request.setBodyArgs(bodyArgs);
-        }
+        String title = describeChange(request, testName != null ? testName : "Lab result", labResult, superseded,
+            ungraded);
         request.setTitle(title);
         request.setReferenceId(labResult.getId());
         request.setReferenceType(LAB_RESULT_REFERENCE_TYPE);
@@ -1553,6 +1510,62 @@ public class LabResultServiceImpl implements LabResultService {
                 LOG.warn("In-basket item not filed for released result {}: {}", resultId, ex.getClass().getSimpleName());
             }
         });
+    }
+
+    /** The in-basket priority of a released result for its ordering clinician. */
+    private com.example.hms.enums.InBasketPriority inBasketPriorityOf(LabResult labResult, LabResult superseded,
+                                                                     boolean ungraded) {
+        String severity = labResultMapper.severityFlagOf(labResult);
+        com.example.hms.enums.InBasketPriority priority = switch (severity) {
+            case LabResultMapper.FLAG_CRITICAL -> com.example.hms.enums.InBasketPriority.CRITICAL;
+            case "LOW", "HIGH", LabResultMapper.FLAG_ABNORMAL -> com.example.hms.enums.InBasketPriority.URGENT;
+            // QA D286: no range grades a qualitative answer; its recorded flag does.
+            default -> labResult.getAbnormalFlag() != null && labResult.getAbnormalFlag() != AbnormalFlag.NORMAL
+                ? com.example.hms.enums.InBasketPriority.URGENT
+                : com.example.hms.enums.InBasketPriority.NORMAL;
+        };
+        // QA D931: a value the clinician may already have acted on has changed;
+        // that is never a routine item, whatever the new value grades as.
+        // QA D1092: no range could grade the value (its unit matches none), so
+        // nothing can say it is not critical. The clinician reviews it.
+        if ((superseded != null || ungraded) && priority == com.example.hms.enums.InBasketPriority.NORMAL) {
+            return com.example.hms.enums.InBasketPriority.URGENT;
+        }
+        return priority;
+    }
+
+    /**
+     * The correction (QA D931) or ungraded (QA D1092) wording of the item, as text
+     * and as keys (QA D1053: each reader sees it in their language). Returns the title.
+     */
+    private static String describeChange(com.example.hms.payload.dto.clinical.CreateInBasketItemRequest request,
+                                         String title, LabResult labResult, LabResult superseded, boolean ungraded) {
+        if (superseded != null) {
+            // QA D931: the item says it replaces a result, and from what to what.
+            Object[] titleArgs = {title};
+            Object[] bodyArgs = {
+                com.example.hms.service.lab.LabResultReleaseNotifier.valueOf(superseded),
+                com.example.hms.service.lab.LabResultReleaseNotifier.valueOf(labResult)
+            };
+            request.setTitleKey(CORRECTION_IN_BASKET_TITLE_KEY);
+            request.setTitleArgs(titleArgs);
+            request.setBody(com.example.hms.utility.MessageUtil.resolve(
+                com.example.hms.service.i18n.NotificationLocales.STAFF, CORRECTION_IN_BASKET_BODY_KEY, bodyArgs));
+            request.setBodyKey(CORRECTION_IN_BASKET_BODY_KEY);
+            request.setBodyArgs(bodyArgs);
+            return com.example.hms.utility.MessageUtil.resolve(
+                com.example.hms.service.i18n.NotificationLocales.STAFF, CORRECTION_IN_BASKET_TITLE_KEY, titleArgs);
+        }
+        if (ungraded) {
+            Object[] bodyArgs = {
+                com.example.hms.service.lab.LabResultReleaseNotifier.valueOf(labResult)
+            };
+            request.setBody(com.example.hms.utility.MessageUtil.resolve(
+                com.example.hms.service.i18n.NotificationLocales.STAFF, UNGRADED_IN_BASKET_BODY_KEY, bodyArgs));
+            request.setBodyKey(UNGRADED_IN_BASKET_BODY_KEY);
+            request.setBodyArgs(bodyArgs);
+        }
+        return title;
     }
 
     /**

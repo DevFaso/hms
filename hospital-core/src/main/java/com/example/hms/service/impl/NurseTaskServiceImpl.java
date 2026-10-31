@@ -2101,7 +2101,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         }
 
         String authorName = formatFullName(author.getFirstName(), author.getLastName(), author.getUsername());
-        LocalDateTime documentedAt = LocalDateTime.now();
+        LocalDateTime documentedAt = LocalDateTime.now(java.time.ZoneId.systemDefault());
 
         NursingNote.NursingNoteBuilder noteBuilder = NursingNote.builder()
             .patient(patient)

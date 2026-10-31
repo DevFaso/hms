@@ -1915,8 +1915,9 @@ class EncounterServiceImplTest {
         UUID encounterId = UUID.randomUUID();
         Hospital hospital = new Hospital(); hospital.setId(UUID.randomUUID());
         Encounter encounter = doctorsVisitInProgressSeenByAMidwife(encounterId, hospital);
+        UUID hospitalId = hospital.getId();
 
-        assertThatThrownBy(() -> service.completeExamination(encounterId, false, hospital.getId()))
+        assertThatThrownBy(() -> service.completeExamination(encounterId, false, hospitalId))
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getMessageKey())
             .isEqualTo("encounter.exam.notExaminingClinician");
@@ -1948,8 +1949,9 @@ class EncounterServiceImplTest {
         UUID encounterId = UUID.randomUUID();
         Hospital hospital = new Hospital(); hospital.setId(UUID.randomUUID());
         Encounter encounter = doctorsVisitInProgressSeenByAMidwife(encounterId, hospital);
+        UUID hospitalId = hospital.getId();
 
-        assertThatThrownBy(() -> service.markReadyForDischarge(encounterId, false, hospital.getId()))
+        assertThatThrownBy(() -> service.markReadyForDischarge(encounterId, false, hospitalId))
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getMessageKey())
             .isEqualTo("encounter.exam.notExaminingClinician");
@@ -1962,9 +1964,11 @@ class EncounterServiceImplTest {
         Hospital hospital = new Hospital(); hospital.setId(UUID.randomUUID());
         Encounter encounter = doctorsVisitInProgressSeenByAMidwife(encounterId, hospital);
 
-        assertThatThrownBy(() -> service.checkOut(encounterId,
-                com.example.hms.payload.dto.clinical.CheckOutRequestDTO.builder().build(), "midwife1", false,
-                hospital.getId()))
+        UUID hospitalId = hospital.getId();
+        com.example.hms.payload.dto.clinical.CheckOutRequestDTO checkOut =
+            com.example.hms.payload.dto.clinical.CheckOutRequestDTO.builder().build();
+
+        assertThatThrownBy(() -> service.checkOut(encounterId, checkOut, "midwife1", false, hospitalId))
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getMessageKey())
             .isEqualTo("encounter.exam.notExaminingClinician");

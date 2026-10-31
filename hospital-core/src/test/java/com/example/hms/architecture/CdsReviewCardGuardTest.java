@@ -40,7 +40,7 @@ class CdsReviewCardGuardTest {
 
     private static final Path CDS = Paths.get("src/main/java/com/example/hms/cdshooks");
     /** {@code builder(text.get("cds.key"} - the method a card sentence is handed to. */
-    private static final Pattern CARD_SENTENCE = Pattern.compile("(\\w+)\\(\\s*text\\.get\\(\\s*\"(cds\\.[^\"]+)\"");
+    private static final Pattern CARD_SENTENCE = Pattern.compile("(\\w++)\\(\\s*+text\\.get\\(\\s*+\"(cds\\.[^\"]++)\"");
     private static final String REVIEW_BUILDER = "reviewRequired";
 
     @Test

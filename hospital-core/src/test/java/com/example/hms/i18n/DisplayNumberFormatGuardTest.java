@@ -49,19 +49,25 @@ class DisplayNumberFormatGuardTest {
     private static final Path MAIN = Path.of("src/main/java/com/example/hms");
 
     private static final String DECIMAL_GETTER =
-        "get(?:Temperature\\w*|WeightKg|HeightCm|HeadCircumferenceCm|Bmi|Muac\\w*)\\(\\)";
+        "get(?:Temperature\\w*+|WeightKg|HeightCm|HeadCircumferenceCm|Bmi|Muac\\w*+)\\(\\)";
+    /**
+     * {@code r.getResultValue()} / {@code v.getWeightKg()} with its receiver chain: the
+     * chain is read up to the first getter, without backtracking (linear).
+     */
+    private static final String RESULT_VALUE = "(?:(?!getResultValue\\(\\))[\\w.])*+getResultValue\\(\\)";
+    private static final String DECIMAL_READ = "(?:(?!" + DECIMAL_GETTER + ")[\\w.])*+" + DECIMAL_GETTER;
 
     private static final Pattern RAW_DECIMAL = Pattern.compile(
         "\\.toPlainString\\(\\)"
             + "|String\\.format\\((?:[^;%]|%(?![-+ 0#,]*+\\d*+(?:\\.\\d++)?+[fFeEgG]))*+%[-+ 0#,]*+\\d*+(?:\\.\\d++)?+[fFeEgG]"
-            + "|\\.append\\(\\s*[\\w.]*getResultValue\\(\\)\\s*\\)"
-            + "|getResultValue\\(\\)\\s*\\+"
-            + "|\\+\\s*[\\w.()]*?\\bgetResultValue\\(\\)"
-            + "|\\bjoin\\([^;]*?,\\s*[\\w.]*getResultValue\\(\\)"
-            + "|String\\.valueOf\\(\\s*[\\w.]*" + DECIMAL_GETTER + "\\s*\\)"
-            + "|" + DECIMAL_GETTER + "\\s*\\+|\\+\\s*[\\w.]*" + DECIMAL_GETTER
+            + "|\\.append\\(\\s*+" + RESULT_VALUE + "\\s*+\\)"
+            + "|getResultValue\\(\\)\\s*+\\+"
+            + "|\\+\\s*+(?:(?!\\bgetResultValue\\(\\))[\\w.()])*+\\bgetResultValue\\(\\)"
+            + "|\\bjoin\\((?:(?!,\\s*+" + RESULT_VALUE + ")[^;])*+,\\s*+" + RESULT_VALUE
+            + "|String\\.valueOf\\(\\s*+" + DECIMAL_READ + "\\s*+\\)"
+            + "|" + DECIMAL_GETTER + "\\s*+\\+|\\+\\s*+" + DECIMAL_READ
             + "|" + DECIMAL_GETTER + "\\.toString\\(\\)"
-            + "|\\.append\\(\\s*[\\w.]*" + DECIMAL_GETTER + "\\s*\\)");
+            + "|\\.append\\(\\s*+" + DECIMAL_READ + "\\s*+\\)");
 
     /**
      * True false positives only: machine formats where the decimal point is the

@@ -309,11 +309,11 @@ public class PediatricDoseRule implements CdsRule {
                 : text.get("cds.pediatric.limit.pending", "default, pending local approval");
             return source + " (" + status + ")";
         }
-    }
 
-    private CdsCard warning(String summary, String limitBasis) {
-        String detail = text.get("cds.pediatric.warning.detail", "Limit: {0}.", limitBasis);
-        return card(summary, detail, CdsCard.Indicator.WARNING, null);
+        private CdsCard warning(String summary, String limitBasis) {
+            String detail = text.get("cds.pediatric.warning.detail", "Limit: {0}.", limitBasis);
+            return card(summary, detail, CdsCard.Indicator.WARNING, null);
+        }
     }
 
     /**

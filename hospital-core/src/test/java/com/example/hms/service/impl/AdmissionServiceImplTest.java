@@ -35,6 +35,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -737,7 +738,7 @@ class AdmissionServiceImplTest {
     @Test
     void unassignBed_auditsTheReleaseWithItsReason_D1100() {
         com.example.hms.service.AuditEventLogService audit =
-            org.mockito.Mockito.mock(com.example.hms.service.AuditEventLogService.class);
+            mock(com.example.hms.service.AuditEventLogService.class);
         service.setAuditEventLogService(audit);
         Admission admission = new Admission();
         admission.setId(admissionId);

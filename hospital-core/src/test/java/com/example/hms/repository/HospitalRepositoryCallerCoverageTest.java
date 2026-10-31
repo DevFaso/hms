@@ -86,6 +86,7 @@ class HospitalRepositoryCallerCoverageTest {
         // QA D942: a patient's numbers are stored in E.164 for the hospital's country.
         entry("PatientServiceImpl.countryFor#findById", "reads the hospital's country for the phone calling code; grants, writes and lists nothing"),
         entry("PatientServiceImpl.organizationOf#findById", "QA D1064: reads the hospital's organisation to keep the registration identity match inside it; grants, writes and lists nothing"),
+        entry("ReceptionServiceImpl.carriedOverVisits#findById", "reads the hospital's zone to know its calendar day (QA D1021 carry-over); grants, writes and lists nothing"),
         entry("ReceptionServiceImpl.getDuplicateCandidates#findById", "reads the hospital's country for the phone calling code; grants, writes and lists nothing"),
         entry("LookupController.getAppointmentsByPatientPhone#findById", "reads the hospital's country for the phone calling code; grants, writes and lists nothing"),
         entry("AuditEventLogServiceImpl.phoneHoldersAt#findById", "reads the event hospital's country for the phone calling code; grants, writes and lists nothing"),

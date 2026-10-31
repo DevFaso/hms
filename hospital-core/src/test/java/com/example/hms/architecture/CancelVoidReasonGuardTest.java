@@ -12,6 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeSet;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
@@ -44,8 +45,15 @@ class CancelVoidReasonGuardTest {
     private static final Path TEST = Path.of("src/test/java/com/example/hms");
 
     /** The controllers of money and stock: pharmacy, billing, invoices, payments, claims. */
-    private static final Pattern MONEY_CONTROLLER = Pattern.compile(
-        "controller/(pharmacy/\\w+|\\w*(Billing|Invoice|Payment|Pharmacy|Dispense|Claim|Copay|Cashier)\\w*)\\.java");
+    private static final Pattern MONEY_CONTROLLER = Pattern.compile("controller/(pharmacy/\\w++|\\w++)\\.java");
+    private static final Pattern MONEY_NAME =
+        Pattern.compile("Billing|Invoice|Payment|Pharmacy|Dispense|Claim|Copay|Cashier");
+
+    /** A controller under controller/pharmacy/, or one whose name says money or stock. */
+    static boolean isMoneyController(String rel) {
+        Matcher m = MONEY_CONTROLLER.matcher(rel);
+        return m.matches() && (m.group(1).startsWith("pharmacy/") || MONEY_NAME.matcher(m.group(1)).find());
+    }
 
     /** A path that undoes something already done. */
     private static final Pattern VOID_PATH = Pattern.compile("(?i)(cancel|void|revers|reject|refund|undo|waive|annul)");
@@ -94,7 +102,7 @@ class CancelVoidReasonGuardTest {
         List<String> found = new ArrayList<>();
         for (Path f : controllers()) {
             String rel = MAIN.relativize(f).toString().replace('\\', '/');
-            if (!MONEY_CONTROLLER.matcher(rel).matches()) {
+            if (!isMoneyController(rel)) {
                 continue;
             }
             Class<?> type = Class.forName("com.example.hms." + rel.replace('/', '.').replace(".java", ""));
@@ -177,8 +185,8 @@ class CancelVoidReasonGuardTest {
     void theScanSeesAnUnlistedVoid() {
         assertThat(VOID_PATH.matcher("/pharmacy/sales/{id}/refund").find()).isTrue();
         assertThat(VOID_PATH.matcher("/billing-invoices/{id}/payments").find()).isFalse();
-        assertThat(MONEY_CONTROLLER.matcher("controller/pharmacy/PharmacySaleController.java").matches()).isTrue();
-        assertThat(MONEY_CONTROLLER.matcher("controller/PatientController.java").matches()).isFalse();
+        assertThat(isMoneyController("controller/pharmacy/PharmacySaleController.java")).isTrue();
+        assertThat(isMoneyController("controller/PatientController.java")).isFalse();
     }
 
     private static Class<?> findPayload(String simpleName) throws Exception {

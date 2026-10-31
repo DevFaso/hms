@@ -558,17 +558,17 @@ public class CriticalValueNotificationService {
             testName, value, patientName);
     }
 
-    /**
-     * QA D349: a numeric result in the reader's notation ("5,0" in French),
-     * keeping the scale the laboratory reported; a comparator is kept
-     * ("&lt;0.5" reads "&lt;0,5", round 19). Words ("Positif") are shown as entered.
-     */
     /** QA D1095: the value, a space and its unit; the value alone for a test with no unit (no double space). */
     public static String withUnit(String value, LabResult result) {
         String unit = com.example.hms.mapper.LabResultMapper.unitOf(result);
         return unit != null ? value + " " + unit : value;
     }
 
+    /**
+     * QA D349: a numeric result in the reader's notation ("5,0" in French),
+     * keeping the scale the laboratory reported; a comparator is kept
+     * ("&lt;0.5" reads "&lt;0,5", round 19). Words ("Positif") are shown as entered.
+     */
     public static String localizedValue(String raw, java.util.Locale locale) {
         // D1002 class: one server number formatter (utility/DisplayNumbers).
         return com.example.hms.utility.DisplayNumbers.labValue(raw, locale);

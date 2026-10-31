@@ -180,10 +180,10 @@ class CancelledOrderLockGuardTest {
         assertThat(sites).hasSize(1);
         assertThat(REASON_CHECK.matcher(sites.get(0)[1]).find()).isFalse();
         assertThat(RESULTED_CHECK.matcher(sites.get(0)[1]).find()).isFalse();
-        String after = before.replace("order.setStatus(request.getStatus());",
-            "CancelledOrders.requireResultStaysClosed(order.getStatus(), request.getStatus(), RESULTED_STATES);\n"
-                + "String reason = CancelledOrders.requireCancelReason(request.getCancellationReason());\n"
-                + "order.setStatus(request.getStatus());");
+        String after = before.replace("order.setStatus(request.getStatus());", """
+            CancelledOrders.requireResultStaysClosed(order.getStatus(), request.getStatus(), RESULTED_STATES);
+            String reason = CancelledOrders.requireCancelReason(request.getCancellationReason());
+            order.setStatus(request.getStatus());""");
         List<String[]> fixed = cancelSites("ImagingOrderServiceImpl", after);
         assertThat(REASON_CHECK.matcher(fixed.get(0)[1]).find()).isTrue();
         assertThat(RESULTED_CHECK.matcher(fixed.get(0)[1]).find()).isTrue();

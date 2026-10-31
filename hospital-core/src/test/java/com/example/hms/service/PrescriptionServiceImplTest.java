@@ -5604,8 +5604,9 @@ class PrescriptionServiceImplTest {
         stubSignable(rx, prescriberUserId);
 
         UUID rxId = rx.getId();
-        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId,
-            com.example.hms.payload.dto.SignPrescriptionRequestDTO.builder().mfaCode("123456").build(), Locale.ENGLISH))
+        com.example.hms.payload.dto.SignPrescriptionRequestDTO signRequest =
+            com.example.hms.payload.dto.SignPrescriptionRequestDTO.builder().mfaCode("123456").build();
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, signRequest, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
             .extracting("messageKey").isEqualTo("prescription.pediatricReview.requiredToSign");
         assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.DRAFT);

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.example.hms.enums.SlotStatus;
@@ -198,7 +199,7 @@ class AppointmentSlotPolicyTest {
         assertThat(lapsed.getAppointment()).isSameAs(appointment);
         assertThat(lapsed.getHeldUntil()).isNull();
         assertThat(lapsed.getHeldByUserId()).isNull();
-        org.mockito.Mockito.verify(slotRepository).saveAndFlush(lapsed);
+        verify(slotRepository).saveAndFlush(lapsed);
     }
 
     @Test

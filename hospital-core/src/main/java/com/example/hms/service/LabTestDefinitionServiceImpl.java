@@ -298,22 +298,7 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
 
         dto.setLoincCode(TerminologyCodes.normalizeAndRequireValidLoinc(dto.getLoincCode()));
 
-        // D30: an edit never moves a definition between hospitals (or into the
-        // global catalog) - it used to null hospital_id on every save. A new
-        // owning assignment must be the caller's own, at the same hospital.
-        if (dto.getAssignmentId() != null
-            && (existing.getAssignment() == null
-                || !dto.getAssignmentId().equals(existing.getAssignment().getId()))) {
-            UserRoleHospitalAssignment assignment = assignmentRepository.findById(dto.getAssignmentId())
-                .orElseThrow(() -> new ResourceNotFoundException(ASSIGNMENT_NOT_FOUND));
-            assertOwnAssignment(currentUser, assignment);
-            UUID assignmentHospitalId = assignment.getHospital() != null ? assignment.getHospital().getId() : null;
-            UUID definitionHospitalId = existing.getHospital() != null ? existing.getHospital().getId() : null;
-            if (!Objects.equals(assignmentHospitalId, definitionHospitalId)) {
-                throw new AccessDeniedException("A lab test definition cannot be moved to another hospital.");
-            }
-            existing.setAssignment(assignment);
-        }
+        applyAssignmentChange(dto, existing, currentUser);
         if (dto.getReferenceRanges() != null) {
             assertRangesEditable(existing, mapper.mapRangeDtosToEntities(dto.getReferenceRanges()));
         }
@@ -336,6 +321,27 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
         }
         mapper.updateEntityFromDto(dto, existing);
         return mapper.toDto(repository.save(existing));
+    }
+
+    /**
+     * D30: an edit never moves a definition between hospitals (or into the
+     * global catalog) - it used to null hospital_id on every save. A new
+     * owning assignment must be the caller's own, at the same hospital.
+     */
+    private void applyAssignmentChange(LabTestDefinitionRequestDTO dto, LabTestDefinition existing, User currentUser) {
+        if (dto.getAssignmentId() == null
+            || (existing.getAssignment() != null && dto.getAssignmentId().equals(existing.getAssignment().getId()))) {
+            return;
+        }
+        UserRoleHospitalAssignment assignment = assignmentRepository.findById(dto.getAssignmentId())
+            .orElseThrow(() -> new ResourceNotFoundException(ASSIGNMENT_NOT_FOUND));
+        assertOwnAssignment(currentUser, assignment);
+        UUID assignmentHospitalId = assignment.getHospital() != null ? assignment.getHospital().getId() : null;
+        UUID definitionHospitalId = existing.getHospital() != null ? existing.getHospital().getId() : null;
+        if (!Objects.equals(assignmentHospitalId, definitionHospitalId)) {
+            throw new AccessDeniedException("A lab test definition cannot be moved to another hospital.");
+        }
+        existing.setAssignment(assignment);
     }
 
     @Override
