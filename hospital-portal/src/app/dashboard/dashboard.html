@@ -700,9 +700,9 @@
                 margin-top: 4px;
               "
             >
-              <span>{{ paymentTrend()[0]?.date | serverTime | date: 'MMM d' }}</span>
+              <span>{{ paymentTrend()[0]?.date | serverTime | dayMonth }}</span>
               <span>{{
-                paymentTrend()[paymentTrend().length - 1]?.date | serverTime | date: 'MMM d'
+                paymentTrend()[paymentTrend().length - 1]?.date | serverTime | dayMonth
               }}</span>
             </div>
           </div>
@@ -3011,12 +3011,13 @@
                       }
                       <app-lab-correction-badge [corrected]="lab.corrected" audience="patient" />
                       @if (lab.referenceRange) {
-                        <span class="lab-range">({{ lab.referenceRange | labRange }})</span>
+                        <!-- QA D1140: the space is inside the span; between elements Angular drops it -->
+                        <span class="lab-range">&ngsp;({{ lab.referenceRange | labRange }})</span>
                       }
                     </span>
                   }
                 </div>
-                <span class="lab-date">{{ lab.collectedDate | serverTime | date: 'MMM d' }}</span>
+                <span class="lab-date">{{ lab.collectedDate | serverTime | dayMonth }}</span>
               </div>
             }
           }

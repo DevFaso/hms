@@ -202,6 +202,46 @@ export function gluedColons(html) {
 }
 
 /**
+ * QA D1138 (round 20): the same class for `?`, `!` and `;`. French writes a
+ * (narrow no-break) space before them too ("Annuler la demande pour Zongo,
+ * Fatimata ?"); English and Spanish do not. The imaging cancel prompt typed
+ * the `?` in the markup after the patient's name (`</strong>?`), so French
+ * read "Fatimata?". The mark belongs to the translation (a sentence with a
+ * `{{name}}` placeholder), never to the markup. Rule `punct`: in the display
+ * text, a `?` `!` `;` typed with no space after a letter, a closing bracket or
+ * an interpolation — tag boundaries skipped (`</strong>?`). An HTML entity's
+ * own `;` (`&nbsp;`) is not punctuation.
+ *
+ * @returns {{ offset: number, rule: 'punct', excerpt: string }[]}
+ */
+export function gluedPunctuationSites(html) {
+  const { text, offsets } = displayText(html);
+  const sites = [];
+  for (let k = 0; k < text.length; k++) {
+    const ch = text[k];
+    if (ch !== '?' && ch !== '!' && ch !== ';') continue;
+    if (
+      ch === ';' &&
+      /&(?:[a-z][a-z0-9]*|#x?[0-9a-f]+)$/i.test(text.slice(Math.max(0, k - 12), k))
+    ) {
+      continue;
+    }
+    // Only a mark that ends a word counts (`?.`, `!=` are not display text).
+    const next = text[k + 1];
+    if (next !== undefined && next !== BREAK && next !== VALUE && !/\s/.test(next)) continue;
+    let b = k - 1;
+    while (b >= 0 && text[b] === BREAK) b--;
+    if (b < 0) continue;
+    const prev = text[b];
+    // A space typed before the mark is already the French gap.
+    if (prev === VALUE || LETTER.test(prev)) {
+      sites.push({ offset: offsets[k], rule: 'punct', excerpt: excerptAt(html, offsets[k]) });
+    }
+  }
+  return sites;
+}
+
+/**
  * A French translation with a colon glued to the word (or placeholder) before
  * it ("Date de naissance:", "{{label}}: {{value}}"). `{{host}}:{{port}}`
  * (between two placeholders), `https://` and `10:30` are not labels.
@@ -209,6 +249,18 @@ export function gluedColons(html) {
 export function gluedFrenchValue(value) {
   const stripped = value.replace(/\}\}:\{\{/g, '}} {{');
   return /[\p{L})}\].'\u2019]:(?![/\p{L}\p{N}])/u.test(stripped);
+}
+
+/**
+ * QA D1138: a French translation with `?`, `!` or `;` glued to the word (or
+ * placeholder) before it ("Supprimer {{name}}?"). A URL's `?` and an entity's
+ * `;` are not punctuation.
+ */
+export function gluedFrenchPunctuation(value) {
+  const stripped = value
+    .replace(/https?:\/\/\S+/g, '')
+    .replace(/&(?:[a-z][a-z0-9]*|#x?[0-9a-f]+);/gi, '');
+  return /[\p{L})}\].'\u2019\u00bb][?!;](?![\p{L}\p{N}=])/u.test(stripped);
 }
 
 /**

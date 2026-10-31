@@ -2370,7 +2370,9 @@
     "MISSING_REQUIRED_FIELDS": "Faltan campos obligatorios: {{fields}}",
     "REMOVE_FILTER": "Quitar el filtro",
     "SHOW_DETAILS": "Mostrar u ocultar los detalles",
-    "FIELD_REQUIRED": "Este campo es obligatorio."
+    "FIELD_REQUIRED": "Este campo es obligatorio.",
+    "QUESTION_MARK": "?",
+    "EXCLAMATION_MARK": "!"
   },
   "CONSULTATIONS": {
     "ACKNOWLEDGE": "Acusar recibo",

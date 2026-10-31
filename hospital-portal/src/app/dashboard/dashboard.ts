@@ -1,4 +1,5 @@
 import { LabValuePipe, LabRangePipe } from '../shared/pipes/lab-value.pipe';
+import { DayMonthPipe } from '../shared/pipes/day-month.pipe';
 import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
 import { currentMedications } from '../patient-portal/current-medications';
 import {
@@ -145,6 +146,7 @@ export { currentMedications };
   imports: [
     LabValuePipe,
     LabRangePipe,
+    DayMonthPipe,
     PersonNamePipe,
     LabCorrectionBadgeComponent,
     ClockTimePipe,

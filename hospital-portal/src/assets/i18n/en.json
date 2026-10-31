@@ -2370,7 +2370,9 @@
     "MISSING_REQUIRED_FIELDS": "Required fields missing: {{fields}}",
     "REMOVE_FILTER": "Remove filter",
     "SHOW_DETAILS": "Show or hide details",
-    "FIELD_REQUIRED": "This field is required."
+    "FIELD_REQUIRED": "This field is required.",
+    "QUESTION_MARK": "?",
+    "EXCLAMATION_MARK": "!"
   },
   "CONSULTATIONS": {
     "ACKNOWLEDGE": "Acknowledge",

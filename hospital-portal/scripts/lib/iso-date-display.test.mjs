@@ -24,7 +24,7 @@ const appDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'src', 
 // "2026-11-02 → 2026-11-13" because `requestedDateFrom` ended in "From".
 const DATE_FIELD =
   /(?:\.|\b)[a-zA-Z]*(?:Date|At|Datetime|DateTime|Timestamp)(?:From|To|Start|End|Until)?\b|\bdateOfBirth\b|\bdob\b|\.date\b/;
-const FORMATTED = /\|\s*date\b|\bformat\w*\(|\bfmt\w*\(|\|\s*(?:relativeTime|timeAgo|age)\b/;
+const FORMATTED = /\|\s*(?:date|dayMonth)\b|\bformat\w*\(|\bfmt\w*\(|\|\s*(?:relativeTime|timeAgo|age)\b/;
 
 /** The ISO dates one template interpolates unformatted. */
 export function isoDateOffenders(html, file = 'template') {
@@ -88,6 +88,53 @@ test('QA D1049 guard: the scan sees the shapes the defect had', () => {
   assert.deepEqual(
     isoDateOffenders(
       "{{ p.dateOfBirth | date: 'mediumDate' }} {{ a.createdAt | serverTime | date: 'short' }} {{ formatDate(x.dueDate) }}",
+    ),
+    [],
+  );
+});
+
+// QA D1140 (round 20): a date pattern that fixes the field ORDER. The portal
+// dashboard's lab card wrote `date: 'MMM d'` — the English order in every
+// language ("oct. 31" in French); pharmacy screens wrote `'dd/MM/yyyy'`, the
+// French order for an English reader. A pattern naming both a day and a month
+// is forbidden: use a named format ('shortDate', 'mediumDate', 'short') or
+// `| dayMonth` (shared/pipes/day-month.pipe.ts) for a day and month alone.
+const FIXED_ORDER_DATE = /\|\s*date\s*:\s*'([^']*)'/g;
+
+/** The fixed-order date patterns one template uses. */
+export function fixedOrderDates(html, file = 'template') {
+  const out = [];
+  for (const m of html.matchAll(FIXED_ORDER_DATE)) {
+    const pattern = m[1];
+    if (/(?<![A-Za-z])d{1,2}(?![A-Za-z])/.test(pattern) && /M/.test(pattern)) {
+      out.push(`${file}::${pattern}`);
+    }
+  }
+  return out;
+}
+
+/** Owned by another fix branch this round; listed so the hand-back names it. */
+const FIXED_ORDER_PINNED = {
+  'reception/waitlist-panel/waitlist-panel.component.html::EEE d MMM, HH:mm':
+    'D1140 sibling in fix/r20-portal-forms files (waitlist-panel): not touched here, see hand-back',
+};
+
+test('QA D1140: no template fixes the order of a day and a month', () => {
+  const found = templatesIn(appDir).flatMap(({ file, text }) =>
+    fixedOrderDates(text, relative(appDir, file).replaceAll('\\', '/')),
+  );
+  const unpinned = found.filter((k) => !(k in FIXED_ORDER_PINNED));
+  const stale = Object.keys(FIXED_ORDER_PINNED).filter((k) => !found.includes(k));
+  assert.deepEqual(unpinned, [], 'a fixed-order date pattern (QA D1140)');
+  assert.deepEqual(stale, [], 'the site was fixed: delete its pin');
+});
+
+test('QA D1140 guard: the scan sees the shapes the defect had, and passes the named formats', () => {
+  assert.equal(fixedOrderDates("{{ lab.collectedDate | serverTime | date: 'MMM d' }}").length, 1);
+  assert.equal(fixedOrderDates("{{ c.createdAt | date: 'dd/MM/yyyy HH:mm' }}").length, 1);
+  assert.deepEqual(
+    fixedOrderDates(
+      "{{ a | date: 'mediumDate' }} {{ b | date: 'MMM yyyy' }} {{ c | date: 'EEE' }} {{ d | dayMonth }}",
     ),
     [],
   );
