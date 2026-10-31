@@ -6367,7 +6367,8 @@
         "MEDICATION_DOSE_LIMITS_UPDATED": "Paediatric dose limits updated",
         "PRESCRIPTION_CDS_OVERRIDDEN": "Prescription decision-support alert overridden",
         "PRESCRIPTION_SIGN_REAUTHENTICATION": "Re-authentication to sign a controlled-drug prescription",
-        "PRESCRIPTION_PEDIATRIC_DOSE_REVIEWED": "Paediatric dose review recorded"
+        "PRESCRIPTION_PEDIATRIC_DOSE_REVIEWED": "Paediatric dose review recorded",
+        "ADMISSION_BED_RELEASED": "Inpatient bed released"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelled",

@@ -6367,7 +6367,8 @@
         "MEDICATION_DOSE_LIMITS_UPDATED": "Límites de dosis pediátricos modificados",
         "PRESCRIPTION_CDS_OVERRIDDEN": "Alerta de apoyo a la decisión anulada en una receta",
         "PRESCRIPTION_SIGN_REAUTHENTICATION": "Reautenticación para firmar una receta de estupefaciente",
-        "PRESCRIPTION_PEDIATRIC_DOSE_REVIEWED": "Revisión de dosis pediátrica registrada"
+        "PRESCRIPTION_PEDIATRIC_DOSE_REVIEWED": "Revisión de dosis pediátrica registrada",
+        "ADMISSION_BED_RELEASED": "Cama de hospitalización liberada"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelada",
