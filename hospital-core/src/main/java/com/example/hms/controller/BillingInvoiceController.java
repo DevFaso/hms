@@ -205,6 +205,24 @@ public class BillingInvoiceController {
         return ResponseEntity.ok(invoiceService.addAdjustment(invoiceId, request, staffId, locale));
     }
 
+    /**
+     * QA D1105: billing undoes a mistaken discount, waiver or credit note,
+     * with a reason; the money received (a folded copay) stays as it is.
+     */
+    @PostMapping("/{invoiceId}/adjustments/{adjustmentId}/reverse")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST')")
+    @Operation(summary = "Reverse a discount, waiver or credit note of an invoice")
+    public ResponseEntity<BillingInvoiceResponseDTO> reverseAdjustment(
+        @PathVariable UUID invoiceId,
+        @PathVariable UUID adjustmentId,
+        @Valid @RequestBody com.example.hms.payload.dto.AdjustmentReversalRequestDTO request,
+        @RequestHeader(name = "Accept-Language", required = false) Locale locale,
+        org.springframework.security.core.Authentication authentication) {
+        UUID staffId = authUtils.resolveUserId(authentication).orElse(null);
+        return ResponseEntity.ok(invoiceService.reverseAdjustment(invoiceId, adjustmentId, request.reason(), staffId,
+            locale));
+    }
+
     @GetMapping("/{invoiceId}/adjustments")
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT','ROLE_RECEPTIONIST')")
     @Operation(summary = "List the discounts, waivers and credit notes of an invoice")

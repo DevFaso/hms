@@ -93,10 +93,6 @@
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
     },
-    "src/app/billing/billing.ts::unmarked-refusal::submitReversal::BILLING.REVERSAL_REASON_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
     "src/app/consultations/consultations.ts::unmarked-refusal::executeCancel::CONSULTATIONS.CANCEL_REASON_REQUIRED": {
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
@@ -394,14 +390,6 @@
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
     },
     "src/app/patients/patient-detail.ts::unmarked-refusal::setChartRestriction::PATIENTS.CHART_RESTRICTION_REASON_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
-    "src/app/pharmacy/dispensing.ts::unmarked-refusal::confirmWitnessedCancel::PHARMACY.WITNESS_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
-    "src/app/pharmacy/dispensing.ts::unmarked-refusal::missingWitness::PHARMACY.WITNESS_REQUIRED": {
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
     },

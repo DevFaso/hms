@@ -205,6 +205,64 @@ export class BillingComponent implements OnInit {
     return this.canAdjust && (inv.status === 'SENT' || inv.status === 'PARTIALLY_PAID');
   }
 
+  /**
+   * QA D1105: a standing adjustment of an issued invoice can be undone with a
+   * reason (a mistaken waiver); the copay paid at check-in stays received.
+   */
+  canReverseAdjustment(inv: BillingInvoiceResponse, a: InvoiceAdjustmentRow): boolean {
+    return (
+      this.canAdjust &&
+      !a.reversedAt &&
+      (inv.status === 'SENT' || inv.status === 'PARTIALLY_PAID' || inv.status === 'PAID')
+    );
+  }
+
+  reversingAdjustment = signal<InvoiceAdjustmentRow | null>(null);
+  adjustmentReversalReason = signal('');
+  adjustmentReversalSaving = signal(false);
+
+  openAdjustmentReversal(a: InvoiceAdjustmentRow): void {
+    this.reversingAdjustment.set(a);
+    this.adjustmentReversalReason.set('');
+  }
+
+  closeAdjustmentReversal(): void {
+    this.reversingAdjustment.set(null);
+  }
+
+  submitAdjustmentReversal(): void {
+    const inv = this.selectedInvoice();
+    const a = this.reversingAdjustment();
+    if (!inv || !a || this.adjustmentReversalSaving()) return;
+    const reason = this.adjustmentReversalReason().trim();
+    if (!reason) {
+      // QA D1069 / D1105: the reason is asked for where it is typed, never by a dead button.
+      refuseFields(
+        this.host.nativeElement,
+        ['adj-reversal-reason'],
+        ['adj-reversal-reason'],
+        this.translate.instant('BILLING.ADJUSTMENT_REVERSAL_REASON_REQUIRED'),
+      );
+      return;
+    }
+    this.adjustmentReversalSaving.set(true);
+    this.billingService.reverseAdjustment(inv.id, a.id, reason).subscribe({
+      next: (updated) => {
+        this.adjustmentReversalSaving.set(false);
+        this.closeAdjustmentReversal();
+        this.toast.success(this.translate.instant('BILLING.ADJUSTMENT_REVERSED'));
+        this.applyUpdated(updated);
+        this.loadAdjustments(updated.id);
+      },
+      error: (err: HttpErrorResponse) => {
+        this.adjustmentReversalSaving.set(false);
+        this.toast.error(
+          err.error?.message ?? this.translate.instant('BILLING.ADJUSTMENT_REVERSAL_FAILED'),
+        );
+      },
+    });
+  }
+
   private loadAdjustments(invoiceId: string): void {
     this.billingService.listAdjustments(invoiceId).subscribe({
       next: (rows) => {
@@ -688,22 +746,28 @@ ${this.translate.instant('BILLING.SUPPLEMENTARY_CONFIRM')}`)
     return this.canEdit && inv.status === 'DRAFT';
   }
 
-  canAddItem(): boolean {
-    const qty = this.newItemQuantity();
-    const price = this.newItemUnitPrice();
-    return (
-      !this.itemSaving() &&
-      this.newItemDescription().trim().length > 0 &&
-      !!qty &&
-      qty >= 1 &&
-      !!price &&
-      price > 0
-    );
-  }
-
   addItem(): void {
     const inv = this.selectedInvoice();
-    if (!inv || !this.canAddItem()) return;
+    if (!inv || this.itemSaving()) return;
+    // QA D1089: the button is never dead; the field that is missing or wrong says so.
+    const qty = this.newItemQuantity();
+    const priceProblem = cfaAmountProblem(this.newItemUnitPrice());
+    const missing = [
+      this.newItemDescription().trim().length === 0 ? 'line-desc' : null,
+      !qty || qty < 1 ? 'line-qty' : null,
+      priceProblem ? 'line-price' : null,
+    ].filter((id): id is string => id !== null);
+    if (missing.length > 0) {
+      refuseFields(
+        this.host.nativeElement,
+        missing,
+        ['line-desc', 'line-qty', 'line-price'],
+        missing[0] === 'line-price' && priceProblem
+          ? this.translate.instant(cfaAmountMessageKey(priceProblem))
+          : this.translate.instant('COMMON.FIELD_REQUIRED'),
+      );
+      return;
+    }
     this.itemSaving.set(true);
     this.billingService
       .createInvoiceItem({
@@ -758,12 +822,23 @@ ${this.translate.instant('BILLING.SUPPLEMENTARY_CONFIRM')}`)
   saveLine(item: InvoiceItemResponse): void {
     const inv = this.selectedInvoice();
     if (!inv || this.itemSaving()) return;
+    // QA D1089: the button is never dead; the field that is missing or wrong says so.
+    const qty = this.editLineQuantity();
     const priceProblem = cfaAmountProblem(this.editLineUnitPrice());
-    if (priceProblem) {
-      this.toast.error(this.translate.instant(cfaAmountMessageKey(priceProblem)));
+    const qtyWrong = !qty || qty < 1 || !Number.isInteger(qty);
+    if (qtyWrong || priceProblem) {
+      refuseFields(
+        this.host.nativeElement,
+        [qtyWrong ? 'line-edit-qty' : null, priceProblem ? 'line-edit-price' : null].filter(
+          (id): id is string => id !== null,
+        ),
+        ['line-edit-qty', 'line-edit-price'],
+        !qtyWrong && priceProblem
+          ? this.translate.instant(cfaAmountMessageKey(priceProblem))
+          : this.translate.instant('COMMON.FIELD_REQUIRED'),
+      );
       return;
     }
-    if (!this.canSaveLine()) return;
     this.itemSaving.set(true);
     this.billingService
       .updateInvoiceItem(item.id, {
@@ -874,7 +949,13 @@ ${this.translate.instant('BILLING.SUPPLEMENTARY_CONFIRM')}`)
     const reason = this.reversalReason().trim();
     if (!inv || !p || this.paymentActionBusy()) return;
     if (!reason) {
-      this.toast.error(this.translate.instant('BILLING.REVERSAL_REASON_REQUIRED'));
+      // QA D1069: the button is never dead; the reason is asked for where it is typed.
+      refuseFields(
+        this.host.nativeElement,
+        ['reversal-reason'],
+        ['reversal-reason'],
+        this.translate.instant('BILLING.REVERSAL_REASON_REQUIRED'),
+      );
       return;
     }
     this.paymentActionBusy.set(true);

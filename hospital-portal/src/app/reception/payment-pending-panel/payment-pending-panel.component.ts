@@ -7,6 +7,7 @@ import {
   inject,
   signal,
   ChangeDetectionStrategy,
+  ElementRef,
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { CfaPipe } from '../../shared/pipes/cfa.pipe';
@@ -19,6 +20,8 @@ import { DialogFocusDirective } from '../../shared/a11y/dialog-focus.directive';
 import { DESK_PAYMENT_METHODS, deskMethodNeedsReference } from '../desk-payment-methods';
 import { BillingService, PaymentRow } from '../../services/billing.service';
 import { saveResponse } from '../../shared/download-file';
+import { refuseFields } from '../../shared/forms/invalid-fields';
+import { cfaAmountMessageKey, cfaAmountProblem } from '../../shared/cfa-amount';
 
 interface OpenInvoice {
   id: string;
@@ -48,6 +51,7 @@ export class PaymentPendingPanelComponent {
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
   private readonly billing = inject(BillingService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   payingItem = signal<ReceptionQueueItem | null>(null);
   openInvoices = signal<OpenInvoice[]>([]);
@@ -119,8 +123,24 @@ export class PaymentPendingPanelComponent {
     const amount = this.payAmount();
     const method = this.payMethod();
     const reference = this.payReference().trim();
-    if (!invoiceId || !amount || amount <= 0) return;
-    if (this.needsReference() && !reference) return;
+    // QA D1089: the button is never dead; an empty field says what is missing.
+    const amountProblem = cfaAmountProblem(amount);
+    const missing = [
+      !invoiceId ? 'invSelect' : null,
+      amountProblem ? 'payAmt' : null,
+      this.needsReference() && !reference ? 'payRef' : null,
+    ].filter((id): id is string => id !== null);
+    if (missing.length > 0 || !invoiceId || !amount) {
+      refuseFields(
+        this.host.nativeElement,
+        missing,
+        ['invSelect', 'payAmt', 'payRef'],
+        missing[0] === 'payAmt' && amountProblem
+          ? this.translate.instant(cfaAmountMessageKey(amountProblem))
+          : this.translate.instant('COMMON.FIELD_REQUIRED'),
+      );
+      return;
+    }
 
     this.paying.set(true);
     this.receptionService

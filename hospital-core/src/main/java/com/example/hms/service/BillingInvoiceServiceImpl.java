@@ -605,6 +605,81 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             .toList();
     }
 
+    /** QA D1105: the statuses an adjustment may be reversed in: an issued invoice still standing. */
+    private static final java.util.Set<InvoiceStatus> REVERSIBLE =
+        java.util.EnumSet.of(InvoiceStatus.SENT, InvoiceStatus.PARTIALLY_PAID, InvoiceStatus.PAID);
+
+    @Override
+    @Transactional
+    public BillingInvoiceResponseDTO reverseAdjustment(UUID invoiceId, UUID adjustmentId, String reason, UUID staffId,
+                                                       Locale locale) {
+        requireAdjustmentLedger();
+        BillingInvoice invoice = loadInScopeForUpdate(invoiceId);
+        com.example.hms.model.InvoiceAdjustment adjustment = adjustmentRepository.findById(adjustmentId)
+            .filter(a -> a.getInvoice() != null && invoice.getId().equals(a.getInvoice().getId()))
+            .orElseThrow(() -> new ResourceNotFoundException("billing.adjustment.notFound"));
+        String why = reason == null ? "" : reason.trim();
+        if (why.isEmpty()) {
+            throw new BusinessException("billing.adjustment.reversalReasonRequired");
+        }
+        if (why.length() > CANCEL_REASON_MAX) {
+            throw new BusinessException("billing.adjustment.reversalReasonTooLong", String.valueOf(CANCEL_REASON_MAX));
+        }
+        if (!adjustment.isLive()) {
+            throw new BusinessException("billing.adjustment.alreadyReversed");
+        }
+        if (!REVERSIBLE.contains(invoice.getStatus())) {
+            throw new BusinessException("billing.adjustment.notReversible");
+        }
+        adjustment.setReversedAt(java.time.LocalDateTime.now(java.time.ZoneId.systemDefault()));
+        adjustment.setReversedBy(staffId);
+        adjustment.setReversalReason(why);
+        adjustmentRepository.save(adjustment);
+        // The amount goes back on what is owed; the money received is not
+        // touched (QA D1105: a folded check-in copay stays CONFIRMED), so the
+        // status follows it.
+        BigDecimal newTotal = nz(invoice.getTotalAmount()).add(nz(adjustment.getAmount()));
+        invoice.setTotalAmount(newTotal);
+        BigDecimal paid = nz(invoice.getAmountPaid());
+        if (paid.compareTo(newTotal) >= 0) {
+            invoice.setStatus(InvoiceStatus.PAID);
+        } else if (paid.signum() > 0) {
+            invoice.setStatus(InvoiceStatus.PARTIALLY_PAID);
+        } else {
+            invoice.setStatus(InvoiceStatus.SENT);
+        }
+        BillingInvoice saved = invoiceRepository.save(invoice);
+        auditAdjustmentReversalAfterCommit(staffId, saved, adjustment);
+        return toPortalResponse(saved);
+    }
+
+    /** QA D1105: who reversed which adjustment (ids and the kind only: no amount, no reason text). */
+    private void auditAdjustmentReversalAfterCommit(UUID actorId, BillingInvoice invoice,
+                                                    com.example.hms.model.InvoiceAdjustment adjustment) {
+        if (auditEventLogService == null) {
+            return;
+        }
+        String invoiceIdText = String.valueOf(invoice.getId());
+        String adjustmentIdText = String.valueOf(adjustment.getId());
+        com.example.hms.enums.InvoiceAdjustmentType type = adjustment.getType();
+        com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
+            try {
+                auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
+                    .eventType(AuditEventType.INVOICE_UPDATED)
+                    .status(com.example.hms.enums.AuditStatus.SUCCESS)
+                    .userId(actorId)
+                    .eventDescription("Invoice adjustment " + type + " " + adjustmentIdText
+                        + " reversed with a recorded reason on invoice " + invoiceIdText)
+                    .entityType(AUDIT_ENTITY_INVOICE)
+                    .resourceId(invoiceIdText)
+                    .build());
+            } catch (RuntimeException ex) {
+                LOG.warn("Adjustment reversal audit not written for invoice {}: {}", invoiceIdText,
+                    ex.getClass().getSimpleName());
+            }
+        });
+    }
+
     /** The ledger is a Spring bean in every running context; a test that builds the service by hand sets it. */
     private void requireAdjustmentLedger() {
         java.util.Objects.requireNonNull(adjustmentRepository, "adjustmentRepository");
@@ -679,10 +754,11 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             .toList();
         List<com.example.hms.payload.dto.InvoiceAdjustmentResponseDTO> adjustments = adjustmentRepository == null
             ? List.of()
-            : adjustmentRepository.findByInvoice_IdOrderByCreatedAtAsc(invoiceId).stream()
+            : adjustmentRepository.findByInvoice_IdAndReversedAtIsNullOrderByCreatedAtAsc(invoiceId).stream()
                 .map(com.example.hms.payload.dto.InvoiceAdjustmentResponseDTO::from)
+                // QA D1105: the patient sees what still lowers the bill, never the clerk's reasons.
                 .map(a -> new com.example.hms.payload.dto.InvoiceAdjustmentResponseDTO(a.id(), a.type(), a.amount(),
-                    null, a.invoiceItemId(), a.invoiceItemDescription(), a.createdAt()))
+                    null, a.invoiceItemId(), a.invoiceItemDescription(), a.createdAt(), null, null))
                 .toList();
         return new com.example.hms.payload.dto.portal.PortalInvoiceDetailDTO(toPortalResponse(invoice), items, payments,
             adjustments);
@@ -1086,8 +1162,9 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         // QA D141: the confirmed payments are printed under the totals.
         List<PaymentTransaction> payments = paymentTransactionRepository.findByInvoice_IdOrderByCreatedAtAsc(invoiceId);
         // QA D974: the adjustments are on the paper too, so lines and total agree.
+        // QA D1105: a reversed adjustment no longer lowers the total, so it is not printed under it.
         List<com.example.hms.model.InvoiceAdjustment> adjustments = adjustmentRepository != null
-            ? adjustmentRepository.findByInvoice_IdOrderByCreatedAtAsc(invoiceId) : List.of();
+            ? adjustmentRepository.findByInvoice_IdAndReversedAtIsNullOrderByCreatedAtAsc(invoiceId) : List.of();
         if (!withReasons && adjustments != null) {
             adjustments = adjustments.stream()
                 .map(a -> com.example.hms.model.InvoiceAdjustment.builder().invoice(a.getInvoice())

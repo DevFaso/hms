@@ -44,7 +44,9 @@ public interface BillingInvoiceRepository extends JpaRepository<BillingInvoice, 
         List<BillingInvoice> findByPatientEmail(@Param("email") String email);
     
         // Find invoices by patient name
-        @Query("SELECT bi FROM BillingInvoice bi WHERE LOWER(bi.patient.firstName) LIKE LOWER(CONCAT('%', :name, '%')) OR LOWER(bi.patient.lastName) LIKE LOWER(CONCAT('%', :name, '%'))")
+        // QA D1103: the middle name is part of the name a clerk types.
+        @Query("SELECT bi FROM BillingInvoice bi WHERE LOWER(bi.patient.firstName) LIKE LOWER(CONCAT('%', :name, '%')) OR LOWER(bi.patient.lastName) LIKE LOWER(CONCAT('%', :name, '%'))"
+            + " OR LOWER(bi.patient.middleName) LIKE LOWER(CONCAT('%', :name, '%'))")
         List<BillingInvoice> findByPatientName(@Param("name") String name);
     
         // Find invoices by hospital name
@@ -123,6 +125,10 @@ public interface BillingInvoiceRepository extends JpaRepository<BillingInvoice, 
                 OR LOWER(p.firstName) LIKE :query
                 OR LOWER(p.lastName) LIKE :query
                 OR LOWER(CONCAT(CONCAT(p.firstName, ' '), p.lastName)) LIKE :query
+                OR LOWER(p.middleName) LIKE :query
+                OR LOWER(CONCAT(p.firstName, ' ', p.middleName, ' ', p.lastName)) LIKE :query
+                OR LOWER(CONCAT(p.firstName, ' ', p.middleName)) LIKE :query
+                OR LOWER(CONCAT(p.middleName, ' ', p.lastName)) LIKE :query
                 OR LOWER(enc.code) LIKE :query
                 OR EXISTS (SELECT 1 FROM PatientHospitalRegistration r
                            WHERE r.patient.id = bi.patient.id AND r.hospital.id = bi.hospital.id AND LOWER(r.mrn) LIKE :query))
@@ -141,6 +147,10 @@ public interface BillingInvoiceRepository extends JpaRepository<BillingInvoice, 
                 OR LOWER(p.firstName) LIKE :query
                 OR LOWER(p.lastName) LIKE :query
                 OR LOWER(CONCAT(CONCAT(p.firstName, ' '), p.lastName)) LIKE :query
+                OR LOWER(p.middleName) LIKE :query
+                OR LOWER(CONCAT(p.firstName, ' ', p.middleName, ' ', p.lastName)) LIKE :query
+                OR LOWER(CONCAT(p.firstName, ' ', p.middleName)) LIKE :query
+                OR LOWER(CONCAT(p.middleName, ' ', p.lastName)) LIKE :query
                 OR LOWER(enc.code) LIKE :query
                 OR EXISTS (SELECT 1 FROM PatientHospitalRegistration r
                            WHERE r.patient.id = bi.patient.id AND r.hospital.id = bi.hospital.id AND LOWER(r.mrn) LIKE :query))

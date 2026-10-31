@@ -126,7 +126,7 @@ class InvoiceEmailServiceTest {
         BillingInvoice invoice = invoiceAtA(InvoiceStatus.SENT);
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalA);
         when(invoiceItemRepository.findByBillingInvoiceId(invoice.getId())).thenReturn(List.of());
-        when(adjustmentRepository.findByInvoice_IdOrderByCreatedAtAsc(invoice.getId())).thenReturn(List.of(
+        when(adjustmentRepository.findByInvoice_IdAndReversedAtIsNullOrderByCreatedAtAsc(invoice.getId())).thenReturn(List.of(
             com.example.hms.model.InvoiceAdjustment.builder().invoice(invoice)
                 .type(com.example.hms.enums.InvoiceAdjustmentType.WAIVER)
                 .amount(new java.math.BigDecimal("500")).reason("indigent").build()));

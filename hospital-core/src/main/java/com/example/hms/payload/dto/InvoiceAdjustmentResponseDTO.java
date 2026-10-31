@@ -12,7 +12,11 @@ public record InvoiceAdjustmentResponseDTO(
     String reason,
     String invoiceItemId,
     String invoiceItemDescription,
-    String createdAt
+    String createdAt,
+    /** QA D1105: when the adjustment was reversed (ISO, server time); null while it stands. */
+    String reversedAt,
+    /** QA D1105: why it was reversed (billing staff only; null for the patient). */
+    String reversalReason
 ) {
     public static InvoiceAdjustmentResponseDTO from(InvoiceAdjustment row) {
         return new InvoiceAdjustmentResponseDTO(
@@ -23,6 +27,8 @@ public record InvoiceAdjustmentResponseDTO(
             row.getInvoiceItem() != null && row.getInvoiceItem().getId() != null
                 ? row.getInvoiceItem().getId().toString() : null,
             row.getInvoiceItem() != null ? row.getInvoiceItem().getItemDescription() : null,
-            row.getCreatedAt() != null ? row.getCreatedAt().toString() : null);
+            row.getCreatedAt() != null ? row.getCreatedAt().toString() : null,
+            row.getReversedAt() != null ? row.getReversedAt().toString() : null,
+            row.getReversalReason());
     }
 }

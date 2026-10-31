@@ -60,7 +60,10 @@
             </td>
             <td>
               @if (entry.requestedDateFrom || entry.requestedDateTo) {
-                {{ entry.requestedDateFrom ?? '?' }} → {{ entry.requestedDateTo ?? '?' }}
+                <!-- QA D1119: the reader's date format, as the recall list beside it. -->
+                {{ entry.requestedDateFrom ? (entry.requestedDateFrom | date: 'mediumDate') : '?' }}
+                →
+                {{ entry.requestedDateTo ? (entry.requestedDateTo | date: 'mediumDate') : '?' }}
               } @else {
                 —
               }

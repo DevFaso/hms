@@ -68,6 +68,35 @@ describe('PaymentPendingPanelComponent', () => {
     expect(component.paying()).toBe(false);
   });
 
+  it('QA D1089: the record button is never dead; an empty amount is marked and named', () => {
+    const spy = spyOn(mockReceptionService, 'recordPayment').and.returnValue(of({}));
+    component.payingItem.set({ patientId: 'p1', patientName: 'Seydou' } as any);
+    component.openInvoices.set([
+      {
+        id: 'inv-1',
+        invoiceNumber: 'F-1',
+        totalAmount: 2000,
+        amountPaid: 0,
+        currency: 'XOF',
+      } as any,
+    ]);
+    component.selectedInvoiceId.set('inv-1');
+    component.payAmount.set(null);
+    fixture.detectChanges();
+    const host: HTMLElement = fixture.nativeElement;
+    const record = Array.from(
+      host.querySelectorAll<HTMLButtonElement>('.modal-footer button'),
+    ).find((b) => b.textContent?.includes('RECEPTION.RECORD_PAYMENT'))!;
+    expect(record.disabled).toBeFalse();
+
+    record.click();
+    fixture.detectChanges();
+
+    expect(spy).not.toHaveBeenCalled();
+    expect(host.querySelector('#payAmt')!.getAttribute('aria-invalid')).toBe('true');
+    expect(host.textContent).toContain('BILLING.PAYMENT_AMOUNT_REQUIRED');
+  });
+
   it('QA D948: offers Mobile Money, needs its reference, and sends it', () => {
     expect(component.methods.map((m) => m.value)).toContain('MOBILE_MONEY');
     const spy = spyOn(mockReceptionService, 'recordPayment').and.returnValue(of({}));

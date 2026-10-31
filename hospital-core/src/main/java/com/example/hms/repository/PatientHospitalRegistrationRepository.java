@@ -124,6 +124,8 @@ public interface PatientHospitalRegistrationRepository extends JpaRepository<Pat
              OR LOWER(COALESCE(p.user.username, '')) = LOWER(:identifier)
              OR LOWER(COALESCE(r.patientFullName, '')) = LOWER(:identifier)
              OR LOWER(CONCAT(COALESCE(p.firstName, ''), ' ', COALESCE(p.lastName, ''))) = LOWER(:identifier)
+             OR (p.middleName IS NOT NULL AND LOWER(CONCAT(COALESCE(p.firstName, ''), ' ', p.middleName, ' ',
+                 COALESCE(p.lastName, ''))) = LOWER(:identifier))
           )
     """)
     List<PatientHospitalRegistration> findActiveByHospitalIdAndIdentifier(@Param("hospitalId") UUID hospitalId,

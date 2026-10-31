@@ -28,6 +28,37 @@ import { of } from 'rxjs';
 import { labelledRefusalReason } from '../shared/refusal-reason';
 import { blankFields, focusFirstInvalid } from '../shared/forms/invalid-fields';
 
+/**
+ * QA D1118: the card names what the match is really on. A record found by the
+ * same name and date of birth (matchedOn IDENTITY) was described as "a record
+ * with this phone number or e-mail", which the receptionist had not typed.
+ * '' = phone or e-mail, '_IDENTITY' = name and date of birth, '_BOTH' = some of each.
+ */
+/** QA D1118: the card's sentence by match basis, then by where the records are. */
+export const MATCH_DESCRIPTION_KEYS: Record<string, Record<string, string>> = {
+  '': {
+    '': 'PATIENTS.EXISTING_MATCH_DESC',
+    _HERE: 'PATIENTS.EXISTING_MATCH_DESC_HERE',
+    _MIXED: 'PATIENTS.EXISTING_MATCH_DESC_MIXED',
+  },
+  _IDENTITY: {
+    '': 'PATIENTS.EXISTING_MATCH_DESC_IDENTITY',
+    _HERE: 'PATIENTS.EXISTING_MATCH_DESC_IDENTITY_HERE',
+    _MIXED: 'PATIENTS.EXISTING_MATCH_DESC_IDENTITY_MIXED',
+  },
+  _BOTH: {
+    '': 'PATIENTS.EXISTING_MATCH_DESC_BOTH',
+    _HERE: 'PATIENTS.EXISTING_MATCH_DESC_BOTH_HERE',
+    _MIXED: 'PATIENTS.EXISTING_MATCH_DESC_BOTH_MIXED',
+  },
+};
+
+export function matchBasisSuffix(matches: readonly Pick<RegistrationMatch, 'matchedOn'>[]): string {
+  const identity = matches.filter((m) => m.matchedOn === 'IDENTITY').length;
+  if (identity === 0) return '';
+  return identity === matches.length ? '_IDENTITY' : '_BOTH';
+}
+
 @Component({
   selector: 'app-patient-form',
   standalone: true,
@@ -72,11 +103,12 @@ export class PatientFormComponent implements OnInit {
    * matched records are: here, elsewhere, or both.
    */
   matchDescriptionKey(): string {
-    const here = this.identityMatches.filter((m) => m.alreadyRegisteredHere).length;
-    if (here === 0) return 'PATIENTS.EXISTING_MATCH_DESC';
-    return here === this.identityMatches.length
-      ? 'PATIENTS.EXISTING_MATCH_DESC_HERE'
-      : 'PATIENTS.EXISTING_MATCH_DESC_MIXED';
+    const matches = this.identityMatches;
+    const here = matches.filter((m) => m.alreadyRegisteredHere).length;
+    let where = '_MIXED';
+    if (here === 0) where = '';
+    else if (here === matches.length) where = '_HERE';
+    return MATCH_DESCRIPTION_KEYS[matchBasisSuffix(matches)][where];
   }
   /**
    * QA D1061 / D1064: the matches that may be this same person (the same name

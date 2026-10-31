@@ -1739,7 +1739,8 @@
       "DOSE_LIMITS_APPROVED": "Limites de dose pédiatriques validées sur l’article du catalogue {{item}}",
       "DOSE_LIMITS_DEFAULT": "Limites de dose pédiatriques définies par défaut, en attente de validation, sur l’article du catalogue {{item}}",
       "RX_SIGN_REAUTH_VERIFIED": "Identité confirmée pour signer une ordonnance de stupéfiant ({{method}})",
-      "RX_SIGN_REAUTH_REFUSED": "Identité non confirmée pour signer une ordonnance de stupéfiant ({{reason}})"
+      "RX_SIGN_REAUTH_REFUSED": "Identité non confirmée pour signer une ordonnance de stupéfiant ({{reason}})",
+      "INVOICE_ADJUSTMENT_REVERSED": "{{kind}} {{adjustment}} annulé sur la facture {{invoice}}, motif enregistré"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "aucun rôle actif dans cet hôpital",
@@ -2206,7 +2207,14 @@
     "CANCEL_REASON_REQUIRED": "Indiquez le motif de l’annulation de cette facture émise.",
     "ADJUSTMENT_AMOUNT_REQUIRED": "Saisissez le montant de la remise ou de l’exonération (supérieur à zéro).",
     "EDIT_LINE": "Tarifer ou corriger cette ligne",
-    "ITEM_UPDATED": "Ligne mise à jour"
+    "ITEM_UPDATED": "Ligne mise à jour",
+    "ADJUSTMENT_REVERSE": "Annuler l'ajustement",
+    "ADJUSTMENT_REVERSED": "Ajustement annulé",
+    "ADJUSTMENT_REVERSED_BADGE": "Annulé le",
+    "ADJUSTMENT_REVERSAL_REASON": "Motif de l'annulation",
+    "ADJUSTMENT_REVERSAL_REASON_REQUIRED": "Indiquez le motif de l'annulation de cet ajustement.",
+    "ADJUSTMENT_REVERSAL_NOTE": "Le montant revient sur ce qui reste dû. L'argent déjà reçu, comme le ticket modérateur payé à l'accueil, reste enregistré.",
+    "ADJUSTMENT_REVERSAL_FAILED": "L'ajustement n'a pas pu être annulé."
   },
   "CHAT": {
     "ACCESS_DENIED": "Vous n'avez pas l'autorisation d'accéder à la messagerie.",
@@ -5015,7 +5023,13 @@
     "PHONE_GUARDIAN_HINT": "Pour un enfant, vous pouvez laisser ce champ vide et saisir le téléphone du parent ou du tuteur dans Contact d'urgence.",
     "PHONE_FROM_GUARDIAN": "Laissé vide : le téléphone du parent ou du tuteur (Contact d'urgence) sera enregistré comme contact de ce patient.",
     "SHARED_CONTACT_NOTE": "Ce numéro de téléphone est déjà le contact d'un autre patient (par exemple un parent). C'est autorisé : cet enregistrement crée un dossier distinct.",
-    "MATCHED_ON_IDENTITY": "mêmes nom et date de naissance"
+    "MATCHED_ON_IDENTITY": "mêmes nom et date de naissance",
+    "EXISTING_MATCH_DESC_IDENTITY": "Un dossier avec les mêmes nom et date de naissance existe déjà dans un autre hôpital. Liez-le ici au lieu de créer un doublon.",
+    "EXISTING_MATCH_DESC_IDENTITY_HERE": "Un dossier avec les mêmes nom et date de naissance est déjà enregistré dans cet hôpital. Ouvrez-le au lieu de créer un doublon.",
+    "EXISTING_MATCH_DESC_IDENTITY_MIXED": "Des dossiers avec les mêmes nom et date de naissance existent déjà, ici ou dans un autre hôpital. Ouvrez ou liez le bon dossier au lieu de créer un doublon.",
+    "EXISTING_MATCH_DESC_BOTH": "Des dossiers avec les mêmes nom et date de naissance, ou avec ce numéro de téléphone ou cet e-mail, existent déjà dans un autre hôpital. Liez ici le bon dossier au lieu de créer un doublon.",
+    "EXISTING_MATCH_DESC_BOTH_HERE": "Des dossiers avec les mêmes nom et date de naissance, ou avec ce numéro de téléphone ou cet e-mail, sont déjà enregistrés dans cet hôpital. Ouvrez le bon dossier au lieu de créer un doublon.",
+    "EXISTING_MATCH_DESC_BOTH_MIXED": "Des dossiers avec les mêmes nom et date de naissance, ou avec ce numéro de téléphone ou cet e-mail, existent déjà, ici ou dans un autre hôpital. Ouvrez ou liez le bon dossier au lieu de créer un doublon."
   },
   "PLATFORM": {
     "ACCESS_LOGS": "Journaux d'accès",
@@ -5351,7 +5365,10 @@
         "SUBMIT": "Reprogrammer le rendez-vous",
         "TITLE": "Reprogrammer le rendez-vous"
       },
-      "DURATION_NOTE": "La durée de votre rendez-vous est fixée par les créneaux de la clinique."
+      "DURATION_NOTE": "La durée de votre rendez-vous est fixée par les créneaux de la clinique.",
+      "CHOOSE_SLOT": "Choisissez un créneau libre",
+      "NO_SLOTS": "Aucun créneau libre ce jour-là. Choisissez une autre date ou un autre soignant.",
+      "SLOTS_FAILED": "Les créneaux libres n'ont pas pu être chargés. Réessayez."
     },
     "MEDICATIONS": {
       "TITLE": "Mes médicaments",
@@ -9553,7 +9570,9 @@
       "BADGE_APPROVED": "Limites pédiatriques validées",
       "SAVED": "Limites de dose pédiatriques enregistrées",
       "SAVE_FAILED": "Les limites de dose pédiatriques n’ont pas pu être enregistrées"
-    }
+    },
+    "CANCEL_REASON": "Motif de l'annulation",
+    "CANCEL_REASON_REQUIRED": "Indiquez le motif de l'annulation : elle annule le paiement et remet le stock en rayon."
   },
   "LAB_QC": {
     "TITLE": "Tableau de bord du contrôle qualité",

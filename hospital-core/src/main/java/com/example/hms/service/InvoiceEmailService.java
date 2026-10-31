@@ -95,7 +95,8 @@ public class InvoiceEmailService {
         if (adjustmentRepository == null) {
             return List.of();
         }
-        return adjustmentRepository.findByInvoice_IdOrderByCreatedAtAsc(invoiceId).stream()
+        // QA D1105: only what still lowers the bill; a reversed adjustment is not mailed.
+        return adjustmentRepository.findByInvoice_IdAndReversedAtIsNullOrderByCreatedAtAsc(invoiceId).stream()
             .map(a -> com.example.hms.model.InvoiceAdjustment.builder().invoice(a.getInvoice())
                 .invoiceItem(a.getInvoiceItem()).type(a.getType()).amount(a.getAmount()).build())
             .toList();

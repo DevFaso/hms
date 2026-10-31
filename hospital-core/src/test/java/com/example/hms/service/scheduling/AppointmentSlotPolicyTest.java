@@ -109,6 +109,119 @@ class AppointmentSlotPolicyTest {
             .doesNotThrowAnyException();
     }
 
+    // ── QA D1093: a patient's own booking takes exactly one published, free slot ──
+
+    private final UUID hospitalId = UUID.randomUUID();
+    private final UUID departmentId = UUID.randomUUID();
+
+    private AppointmentSlot publishedSlot(LocalDateTime start, SlotStatus status, LocalDateTime heldUntil) {
+        AppointmentSlot s = slot(start, start.plusMinutes(20), status, heldUntil);
+        com.example.hms.model.Hospital h = new com.example.hms.model.Hospital();
+        h.setId(hospitalId);
+        com.example.hms.model.Department d = new com.example.hms.model.Department();
+        d.setId(departmentId);
+        s.setHospital(h);
+        s.setDepartment(d);
+        return s;
+    }
+
+    @Test
+    void d1093_aMinuteBetweenTwoSlotsIsRefused() {
+        // QA D1093 step 1: 10:10 against 20-minute slots at 10:00 and 10:20.
+        LocalDateTime offGrid = LocalDateTime.of(FRIDAY, LocalTime.of(10, 10));
+        assertThatThrownBy(() -> policy.requirePublishedFreeSlot(staffId, offGrid, hospitalId, departmentId))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "portal.booking.notAPublishedSlot");
+    }
+
+    @Test
+    void d1093_aDayOrAnHourWithNoSessionIsRefused() {
+        // QA D1093 steps 3-4: 15:00 with no afternoon session, a Saturday with no template.
+        for (LocalDateTime t : List.of(LocalDateTime.of(FRIDAY, LocalTime.of(15, 0)),
+                LocalDateTime.of(FRIDAY.plusDays(1), LocalTime.of(9, 0)))) {
+            assertThatThrownBy(() -> policy.requirePublishedFreeSlot(staffId, t, hospitalId, departmentId))
+                .hasFieldOrPropertyWithValue("messageKey", "portal.booking.notAPublishedSlot");
+        }
+    }
+
+    @Test
+    void d1093_aBookedOrBlockedSlotIsNotFree() {
+        LocalDateTime start = LocalDateTime.of(FRIDAY, LocalTime.of(10, 20));
+        for (SlotStatus taken : List.of(SlotStatus.BOOKED, SlotStatus.BLOCKED)) {
+            when(slotRepository.findFirstByStaff_IdAndStartAt(staffId, start))
+                .thenReturn(Optional.of(publishedSlot(start, taken, null)));
+            assertThatThrownBy(() -> policy.requirePublishedFreeSlot(staffId, start, hospitalId, departmentId))
+                .hasFieldOrPropertyWithValue("messageKey", "portal.booking.slotNotFree");
+        }
+        when(slotRepository.findFirstByStaff_IdAndStartAt(staffId, start))
+            .thenReturn(Optional.of(publishedSlot(start, SlotStatus.HELD, LocalDateTime.now(CLOCK).plusMinutes(5))));
+        assertThatThrownBy(() -> policy.requirePublishedFreeSlot(staffId, start, hospitalId, departmentId))
+            .hasFieldOrPropertyWithValue("messageKey", "portal.booking.slotNotFree");
+    }
+
+    @Test
+    void d1093_anOpenSlotOrARunOutHoldIsTaken() {
+        LocalDateTime start = LocalDateTime.of(FRIDAY, LocalTime.of(10, 20));
+        AppointmentSlot open = publishedSlot(start, SlotStatus.OPEN, null);
+        when(slotRepository.findFirstByStaff_IdAndStartAt(staffId, start)).thenReturn(Optional.of(open));
+        assertThat(policy.requirePublishedFreeSlot(staffId, start, hospitalId, departmentId)).isSameAs(open);
+        assertThat(policy.requirePublishedFreeSlot(staffId, start, hospitalId, null)).isSameAs(open);
+
+        AppointmentSlot lapsed = publishedSlot(start, SlotStatus.HELD, LocalDateTime.now(CLOCK).minusMinutes(1));
+        when(slotRepository.findFirstByStaff_IdAndStartAt(staffId, start)).thenReturn(Optional.of(lapsed));
+        assertThat(policy.requirePublishedFreeSlot(staffId, start, hospitalId, departmentId)).isSameAs(lapsed);
+    }
+
+    @Test
+    void d1093_aSlotOfAnotherClinicIsNoPublishedSlot() {
+        LocalDateTime start = LocalDateTime.of(FRIDAY, LocalTime.of(10, 20));
+        when(slotRepository.findFirstByStaff_IdAndStartAt(staffId, start))
+            .thenReturn(Optional.of(publishedSlot(start, SlotStatus.OPEN, null)));
+        assertThatThrownBy(() -> policy.requirePublishedFreeSlot(staffId, start, UUID.randomUUID(), departmentId))
+            .hasFieldOrPropertyWithValue("messageKey", "portal.booking.notAPublishedSlot");
+        assertThatThrownBy(() -> policy.requirePublishedFreeSlot(staffId, start, hospitalId, UUID.randomUUID()))
+            .hasFieldOrPropertyWithValue("messageKey", "portal.booking.notAPublishedSlot");
+        assertThatThrownBy(() -> policy.requirePublishedFreeSlot(null, start, hospitalId, departmentId))
+            .hasFieldOrPropertyWithValue("messageKey", "portal.booking.notAPublishedSlot");
+    }
+
+    @Test
+    void d1093_takingASlotBooksItForTheAppointment() {
+        LocalDateTime start = LocalDateTime.of(FRIDAY, LocalTime.of(10, 20));
+        AppointmentSlot lapsed = publishedSlot(start, SlotStatus.HELD, LocalDateTime.now(CLOCK).minusMinutes(1));
+        lapsed.setHeldByUserId(UUID.randomUUID());
+        com.example.hms.model.Appointment appointment = new com.example.hms.model.Appointment();
+
+        policy.takeSlot(lapsed, appointment);
+
+        assertThat(lapsed.getStatus()).isEqualTo(SlotStatus.BOOKED);
+        assertThat(lapsed.getAppointment()).isSameAs(appointment);
+        assertThat(lapsed.getHeldUntil()).isNull();
+        assertThat(lapsed.getHeldByUserId()).isNull();
+        org.mockito.Mockito.verify(slotRepository).saveAndFlush(lapsed);
+    }
+
+    @Test
+    void d1093_aConcurrentTakerIsAFriendlyRefusal() {
+        AppointmentSlot open = publishedSlot(LocalDateTime.of(FRIDAY, LocalTime.of(10, 20)), SlotStatus.OPEN, null);
+        when(slotRepository.saveAndFlush(open))
+            .thenThrow(new org.springframework.dao.OptimisticLockingFailureException("raced"));
+        assertThatThrownBy(() -> policy.takeSlot(open, new com.example.hms.model.Appointment()))
+            .hasFieldOrPropertyWithValue("messageKey", "slot.justTaken");
+    }
+
+    @Test
+    void d1093_anyClinicianMeansOnlyOfferableSlotsAtThatTime() {
+        LocalDateTime start = LocalDateTime.of(FRIDAY, LocalTime.of(10, 20));
+        AppointmentSlot open = publishedSlot(start, SlotStatus.OPEN, null);
+        open.setStaff(new com.example.hms.model.Staff());
+        AppointmentSlot booked = publishedSlot(start, SlotStatus.BOOKED, null);
+        booked.setStaff(new com.example.hms.model.Staff());
+        when(slotRepository.findByDepartment_IdAndStartAt(departmentId, start)).thenReturn(List.of(open, booked));
+        assertThat(policy.offerableAt(departmentId, start)).containsExactly(open);
+        assertThat(policy.offerableAt(null, start)).isEmpty();
+    }
+
     private static AppointmentSlot slot(LocalDateTime start, LocalDateTime end, SlotStatus status,
                                         LocalDateTime heldUntil) {
         return AppointmentSlot.builder().slotDate(start.toLocalDate()).startAt(start).endAt(end)

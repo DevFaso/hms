@@ -3232,4 +3232,16 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- V254 (round 19): QA D1069, a cancelled dispense keeps the pharmacist's
+         reason (cancel_note on clinical.dispenses); QA D1105, an invoice
+         adjustment can be reversed on its own with a reason (reversed_at,
+         reversed_by, reversal_reason on billing.invoice_adjustments). Plain
+         statements, no DO block. Idempotent. -->
+    <changeSet id="V254-r19-cancel-reasons-and-adjustment-reversal" author="hms-team" runOnChange="false">
+        <sqlFile path="V254__r19_cancel_reasons_and_adjustment_reversal.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

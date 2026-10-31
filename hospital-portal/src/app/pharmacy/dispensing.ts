@@ -2,11 +2,13 @@ import {
   Component,
   computed,
   inject,
+  ElementRef,
   OnDestroy,
   OnInit,
   signal,
   ChangeDetectionStrategy,
 } from '@angular/core';
+import { refuseFields } from '../shared/forms/invalid-fields';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -154,6 +156,7 @@ export class DispensingComponent implements OnInit, OnDestroy {
   private readonly router = inject(Router);
   private readonly offlineQueue = inject(OfflineDispenseQueueService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   // Work queue
   workQueue = signal<WorkQueuePrescription[]>([]);
@@ -187,8 +190,12 @@ export class DispensingComponent implements OnInit, OnDestroy {
   /** QA D654: colleagues who may witness a controlled substance leaving or coming back. */
   witnessCandidates = signal<StockWitnessCandidate[]>([]);
   /** QA D654: the controlled fill whose cancel waits for its witness. */
+  /** QA D654 / D1069: the fill whose cancel panel is open (reason always, witness for a controlled one). */
   readonly cancelWitnessFor = signal<string | null>(null);
+  readonly cancelNeedsWitness = signal(false);
   cancelWitnessId: string | undefined = undefined;
+  /** QA D1069: why the fill is cancelled; it voids the payment and returns the stock. */
+  dispenseCancelReason = '';
 
   // Dispensing form
   showForm = signal(false);
@@ -889,7 +896,24 @@ export class DispensingComponent implements OnInit, OnDestroy {
 
   /** QA D654: refuses a controlled fill with no witness before the server does. */
   private missingWitness(): boolean {
+    // QA D1089 class (round 19): the FEFO reason is asked for where it is
+    // typed; a dead "Délivrer" button used to hide the message.
+    if (this.fefoReasonMissing()) {
+      refuseFields(
+        this.host.nativeElement,
+        ['fefoReason'],
+        ['fefoReason'],
+        this.translate.instant('PHARMACY.FEFO_REASON_REQUIRED'),
+      );
+      return true;
+    }
     if (this.lotIsControlled() && !this.form.witnessedBy) {
+      refuseFields(
+        this.host.nativeElement,
+        ['dispWitness'],
+        ['dispWitness'],
+        this.translate.instant('PHARMACY.WITNESS_REQUIRED'),
+      );
       this.toast.error(this.translate.instant('PHARMACY.WITNESS_REQUIRED'));
       return true;
     }
@@ -1053,31 +1077,47 @@ export class DispensingComponent implements OnInit, OnDestroy {
     return rx.attentionReason === 'READY_UNCOLLECTED' ? { days: this.daysWaiting(rx) } : {};
   }
 
+  /**
+   * QA D1069: every cancel opens the panel that asks why (the server refuses a
+   * cancel without a reason; it voids the payment and returns the stock).
+   * QA D654: a controlled fill also asks for the witness.
+   */
   cancelDispense(id: string): void {
     const fill = this.recentDispenses().find((d) => d.id === id);
-    if (fill && this.isControlledFill(fill)) {
-      // QA D654: the stock goes back in front of a witness, chosen first.
-      this.cancelWitnessId = undefined;
-      this.cancelWitnessFor.set(id);
-      return;
-    }
-    if (!confirm(this.translate.instant('PHARMACY.CANCEL_DISPENSE_CONFIRM'))) return;
-    this.sendCancel(id);
+    this.cancelWitnessId = undefined;
+    this.dispenseCancelReason = '';
+    this.cancelNeedsWitness.set(!!fill && this.isControlledFill(fill));
+    this.cancelWitnessFor.set(id);
   }
 
-  /** QA D654: the witnessed cancel of a controlled fill. */
+  /** QA D654 / D1069: the cancel, once the reason (and for a controlled fill, the witness) is given. */
   confirmWitnessedCancel(): void {
     const id = this.cancelWitnessFor();
     if (!id) return;
-    if (!this.cancelWitnessId) {
-      this.toast.error(this.translate.instant('PHARMACY.WITNESS_REQUIRED'));
+    const reason = this.dispenseCancelReason.trim();
+    const missing = [
+      !reason ? 'dispenseCancelReason' : null,
+      this.cancelNeedsWitness() && !this.cancelWitnessId ? 'cancelWitness' : null,
+    ].filter((f): f is string => f !== null);
+    if (missing.length > 0) {
+      const key =
+        missing[0] === 'dispenseCancelReason'
+          ? 'PHARMACY.CANCEL_REASON_REQUIRED'
+          : 'PHARMACY.WITNESS_REQUIRED';
+      refuseFields(
+        this.host.nativeElement,
+        missing,
+        ['dispenseCancelReason', 'cancelWitness'],
+        this.translate.instant(key),
+      );
+      this.toast.error(this.translate.instant(key));
       return;
     }
-    this.sendCancel(id, this.cancelWitnessId);
+    this.sendCancel(id, reason, this.cancelNeedsWitness() ? this.cancelWitnessId : undefined);
   }
 
-  private sendCancel(id: string, witnessedBy?: string): void {
-    this.svc.cancelDispense(id, witnessedBy).subscribe({
+  private sendCancel(id: string, reason: string, witnessedBy?: string): void {
+    this.svc.cancelDispense(id, reason, witnessedBy).subscribe({
       next: () => {
         this.cancelWitnessFor.set(null);
         this.toast.success(this.translate.instant('PHARMACY.DISPENSE_CANCELLED'));

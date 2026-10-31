@@ -59,6 +59,52 @@ class PatientMatchKeysGuardTest {
         }
     }
 
+    /** Patient-name queries that are not a typed-name search, and why (QA D1103). */
+    private static final Map<String, String> NAME_QUERIES_WITHOUT_MIDDLE_NAME = Map.of(
+        "PatientRepository#findByFirstNameContainingIgnoreCaseOrLastNameContainingIgnoreCase",
+        "the EMPI probabilistic matcher's candidate block (first OR last name, scored afterwards by Jaro-Winkler "
+            + "on every name part) and the audit resource-name lookup: not a name a person types to find a patient");
+
+    /**
+     * QA D1103 (class guard): every repository query that compares a
+     * patient's name (LIKE or =) also compares the middle name, so a name
+     * typed exactly as it is displayed ("Mariam Wendkouni Kiemdé") or the
+     * middle name alone finds the patient in every picker, the billing list
+     * and the API search. Reads every {@code @Query} of every repository.
+     */
+    @Test
+    void everyPatientNameComparisonIncludesTheMiddleName() throws Exception {
+        List<String> missing = new java.util.ArrayList<>();
+        int seen = 0;
+        try (Stream<Path> files = Files.walk(MAIN.resolve("repository"))) {
+            for (Path f : files.filter(x -> x.toString().endsWith(".java")).toList()) {
+                String rel = MAIN.relativize(f).toString().replace('\\', '/').replace(".java", "");
+                Class<?> repo = Class.forName("com.example.hms." + rel.replace('/', '.'));
+                for (Method m : repo.getDeclaredMethods()) {
+                    Query q = m.getAnnotation(Query.class);
+                    if (q == null) {
+                        continue;
+                    }
+                    String flat = q.value().replaceAll("\\s+", " ");
+                    boolean aboutPatients = java.util.regex.Pattern
+                        .compile("(FROM|JOIN) Patient p\\b|\\.patient p\\b|\\.patient\\.firstName").matcher(flat).find();
+                    boolean comparesAName = flat.contains("firstName")
+                        && (flat.toUpperCase().contains(" LIKE ") || flat.toUpperCase().contains("= LOWER("));
+                    if (!aboutPatients || !comparesAName) {
+                        continue;
+                    }
+                    seen++;
+                    String key = repo.getSimpleName() + "#" + m.getName();
+                    if (!flat.contains("middleName") && !NAME_QUERIES_WITHOUT_MIDDLE_NAME.containsKey(key)) {
+                        missing.add(key);
+                    }
+                }
+            }
+        }
+        assertThat(seen).as("patient name comparisons found").isGreaterThanOrEqualTo(4);
+        assertThat(missing).as("a patient name search that ignores the middle name (QA D1103)").isEmpty();
+    }
+
     @Test
     void noNameFinderIsDerived_andEveryNameQueryFolds() {
         // A derived "...NameContainingIgnoreCase" finder is accent-sensitive

@@ -5,7 +5,10 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 
-import { PatientFormComponent } from './patient-form';
+import { MATCH_DESCRIPTION_KEYS, PatientFormComponent } from './patient-form';
+import en from '../../assets/i18n/en.json';
+import fr from '../../assets/i18n/fr.json';
+import es from '../../assets/i18n/es.json';
 import {
   PatientService,
   PatientResponse,
@@ -482,5 +485,55 @@ describe('PatientFormComponent', () => {
       { ...mockMatch(), patientId: 'p9', alreadyRegisteredHere: false },
     ];
     expect(component.matchDescriptionKey()).toBe('PATIENTS.EXISTING_MATCH_DESC_MIXED');
+  });
+
+  it('QA D1118: a same-name-and-birth-date match is not described as a phone or e-mail match', () => {
+    component.registrationMatches = [mockMatch({ matchedOn: 'IDENTITY' })];
+    expect(component.matchDescriptionKey()).toBe('PATIENTS.EXISTING_MATCH_DESC_IDENTITY');
+    component.registrationMatches = [
+      mockMatch({ matchedOn: 'IDENTITY', alreadyRegisteredHere: true }),
+    ];
+    expect(component.matchDescriptionKey()).toBe('PATIENTS.EXISTING_MATCH_DESC_IDENTITY_HERE');
+    component.registrationMatches = [
+      mockMatch({ matchedOn: 'IDENTITY', alreadyRegisteredHere: true }),
+      mockMatch({ patientId: 'p9', matchedOn: 'IDENTITY' }),
+    ];
+    expect(component.matchDescriptionKey()).toBe('PATIENTS.EXISTING_MATCH_DESC_IDENTITY_MIXED');
+    component.registrationMatches = [
+      mockMatch({ matchedOn: 'IDENTITY' }),
+      mockMatch({ patientId: 'p9', matchedOn: 'EMAIL' }),
+    ];
+    expect(component.matchDescriptionKey()).toBe('PATIENTS.EXISTING_MATCH_DESC_BOTH');
+  });
+
+  it('QA D1118 guard: every basis and place has its sentence in each language, naming the right basis', () => {
+    const bundles: Record<string, Record<string, unknown>> = { en, fr, es };
+    const lookup = (b: Record<string, unknown>, key: string): string =>
+      key.split('.').reduce<unknown>((n, k) => (n as Record<string, unknown>)?.[k], b) as string;
+    const phoneWords: Record<string, RegExp> = { en: /phone/i, fr: /téléphone/i, es: /teléfono/i };
+    const birthWords: Record<string, RegExp> = {
+      en: /date of birth/i,
+      fr: /naissance/i,
+      es: /nacimiento/i,
+    };
+    for (const [basis, places] of Object.entries(MATCH_DESCRIPTION_KEYS)) {
+      for (const key of Object.values(places)) {
+        for (const [lang, bundle] of Object.entries(bundles)) {
+          const text = lookup(bundle, key);
+          expect(typeof text)
+            .withContext(`${lang}:${key}`)
+            .toBe('string');
+          if (basis === '_IDENTITY') {
+            expect(text).withContext(`${lang}:${key}`).not.toMatch(phoneWords[lang]);
+            expect(text).withContext(`${lang}:${key}`).toMatch(birthWords[lang]);
+          } else if (basis === '') {
+            expect(text).withContext(`${lang}:${key}`).toMatch(phoneWords[lang]);
+          } else {
+            expect(text).withContext(`${lang}:${key}`).toMatch(phoneWords[lang]);
+            expect(text).withContext(`${lang}:${key}`).toMatch(birthWords[lang]);
+          }
+        }
+      }
+    }
   });
 });

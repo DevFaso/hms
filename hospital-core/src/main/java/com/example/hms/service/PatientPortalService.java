@@ -148,6 +148,17 @@ public interface PatientPortalService {
     /** Return active providers (doctors/nurses) in a given hospital + department. */
     List<Map<String, Object>> getProvidersForDepartment(Authentication auth, UUID hospitalId, UUID departmentId);
 
+    /**
+     * QA D1093: the published, free slots a patient may book on {@code date}
+     * at a hospital they are registered at (narrowed to a clinician when
+     * {@code staffId} is given). A self-booking takes exactly one of these.
+     */
+    List<Map<String, Object>> getOpenSlots(Authentication auth, UUID hospitalId, UUID departmentId,
+                                           UUID staffId, java.time.LocalDate date);
+
+    /** QA D1093: the published, free slots of the clinician of the patient's own appointment on {@code date}. */
+    List<Map<String, Object>> getRescheduleSlots(Authentication auth, UUID appointmentId, java.time.LocalDate date);
+
     // ── Cancel own appointment ───────────────────────────────────────────
     AppointmentResponseDTO cancelMyAppointment(Authentication auth, CancelAppointmentRequestDTO dto, Locale locale);
 

@@ -77,6 +77,8 @@ class PatientSubjectReadCoverageTest {
         entry("PatientPortalController#myScreeningInstrument", "an instrument definition by code, not patient data"),
         entry("PatientPortalController#getDepartments", "booking directory of a hospital, not patient data"),
         entry("PatientPortalController#getProviders", "booking directory of a hospital, not patient data"),
+        entry("PatientPortalController#getOpenSlots", "published slots of a hospital the caller is registered at, not patient data (QA D1093)"),
+        entry("PatientPortalController#getRescheduleSlots", "PatientPortalServiceImpl.requirePatientOwnership: appointment must be the caller's (QA D1093)"),
         // QA D982: another patient's invoice (or a draft) answers exactly as a missing one.
         entry("PatientPortalController#getMyInvoiceDetail", "BillingInvoiceServiceImpl.requirePortalVisible(caller's patient id)"),
         entry("PatientPortalController#downloadMyInvoicePdf", "BillingInvoiceServiceImpl.requirePortalVisible(caller's patient id)"),

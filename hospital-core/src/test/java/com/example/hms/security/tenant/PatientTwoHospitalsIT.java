@@ -132,6 +132,8 @@ class PatientTwoHospitalsIT {
     @Autowired private LabOrderRepository labOrderRepository;
     @Autowired private LabResultRepository labResultRepository;
     @Autowired private AppointmentRepository appointmentRepository;
+    /** QA D1093: a patient books a published slot only, so the test publishes one first. */
+    @Autowired private com.example.hms.repository.scheduling.AppointmentSlotRepository slotRepository;
 
     private final List<UUID> organizations = new ArrayList<>();
     private final List<UUID> hospitals = new ArrayList<>();
@@ -226,8 +228,21 @@ class PatientTwoHospitalsIT {
     @DisplayName("book at each hospital (the body's hospital, checked against registrations), list both, cancel one")
     void appointments(String path) throws Exception {
         String token = token(path);
+        // QA D1093: a minute that is no published slot is refused, end to end,
+        // before anything is booked (the r19 off-grid 10:10 and weekend bookings).
+        publishSlot(siteA, 9);
+        ResponseEntity<String> offGrid = send(HttpMethod.POST, "/me/patient/appointments",
+            bookingBody(siteA.hospital().getId(), siteA.department().getId(), siteA.staff().getId(), 9)
+                .replace(":00\",\"reason\"", ":10\",\"reason\""), token);
+        assertThat(offGrid.getStatusCode().value()).as(offGrid.getBody()).isEqualTo(400);
+        assertThat(offGrid.getBody()).contains("published slots");
+
         UUID atA = book(token, siteA, 9);
         UUID atB = book(token, siteB, 10);
+        // QA D1093: the booking took its slot, so nobody else is offered it.
+        assertThat(slotRepository.findByAppointment_Id(atA)).get()
+            .extracting(com.example.hms.model.scheduling.AppointmentSlot::getStatus)
+            .isEqualTo(com.example.hms.enums.SlotStatus.BOOKED);
 
         assertThat(appointmentRepository.findById(atA).orElseThrow().getHospital().getId())
             .isEqualTo(siteA.hospital().getId());
@@ -368,7 +383,25 @@ class PatientTwoHospitalsIT {
             .linkedTo(patientUser.getId(), patientUser.getUsername()));
     }
 
+    /** QA D1093: the generated slot the patient's booking takes (one per staff and start, unique index). */
+    private void publishSlot(Site site, int hour) {
+        java.time.LocalDateTime start = LocalDate.now().plusDays(7).atTime(hour, 0);
+        if (slotRepository.existsByStaff_IdAndStartAt(site.staff().getId(), start)) {
+            return;
+        }
+        slotRepository.save(com.example.hms.model.scheduling.AppointmentSlot.builder()
+            .hospital(site.hospital())
+            .department(site.department())
+            .staff(site.staff())
+            .slotDate(start.toLocalDate())
+            .startAt(start)
+            .endAt(start.plusMinutes(30))
+            .status(com.example.hms.enums.SlotStatus.OPEN)
+            .build());
+    }
+
     private UUID book(String token, Site site, int hour) throws Exception {
+        publishSlot(site, hour);
         ResponseEntity<String> response = send(HttpMethod.POST, "/me/patient/appointments",
             bookingBody(site.hospital().getId(), site.department().getId(), site.staff().getId(), hour), token);
         assertThat(response.getStatusCode().is2xxSuccessful()).as(response.getBody()).isTrue();
