@@ -7,6 +7,7 @@ import {
   signal,
   ChangeDetectionStrategy,
 } from '@angular/core';
+import { isOrderCancellable } from '../shared/order-lifecycle';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -302,12 +303,7 @@ export class TransfusionComponent implements OnInit {
 
   /** QA D1081: a transfusion request is cancelled by the clinician who asked for it. */
   canCancelRequest(r: TransfusionRequestResponse): boolean {
-    return (
-      this.canRequest &&
-      r.status !== 'COMPLETED' &&
-      r.status !== 'CANCELLED' &&
-      this.authorship.isAuthor(r)
-    );
+    return this.canRequest && isOrderCancellable(r.status) && this.authorship.isAuthor(r);
   }
 
   cancelRequest(request: TransfusionRequestResponse): void {

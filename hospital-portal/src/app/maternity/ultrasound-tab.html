@@ -272,10 +272,16 @@
           <div class="view-section action-form">
             <h3>{{ 'ULTRASOUND.CANCEL_ORDER' | translate }}</h3>
             <div class="field">
-              <label for="us-cancel-reason">{{
-                'MATERNITY.CANCELLATION_REASON' | translate
-              }}</label>
-              <textarea id="us-cancel-reason" rows="2" [(ngModel)]="cancelReason"></textarea>
+              <label for="us-cancel-reason"
+                >{{ 'MATERNITY.CANCELLATION_REASON' | translate }} *</label
+              >
+              <textarea
+                id="us-cancel-reason"
+                rows="2"
+                required
+                aria-required="true"
+                [(ngModel)]="cancelReason"
+              ></textarea>
             </div>
             <div class="modal-actions">
               <button class="btn-secondary" (click)="showCancelPrompt.set(false)">
@@ -305,7 +311,7 @@
             </button>
           }
         }
-        @if (canOrder && o.status !== 'CANCELLED' && !showCancelPrompt() && isOrderAuthor(o)) {
+        @if (canCancelThisOrder(o) && !showCancelPrompt()) {
           <button class="btn-danger" (click)="openCancelPrompt()">
             {{ 'ULTRASOUND.CANCEL_ORDER' | translate }}
           </button>

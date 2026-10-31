@@ -12275,5 +12275,16 @@
     "TYPE_ATTENDANCE": "Certificat de présence",
     "TYPE_GENERAL": "Certificat médical",
     "TYPE_SICK_LEAVE": "Arrêt de travail"
+  },
+  "ORDER_LIFECYCLE": {
+    "CANCEL_REASON_LABEL": "Motif de l’annulation",
+    "CANCEL_REASON_REQUIRED": "Indiquez le motif de l’annulation."
+  },
+  "ADMISSION_BED": {
+    "RELEASE_TITLE": "Libérer le lit",
+    "RELEASE_CONFIRM": "Libérer le lit {{bed}} occupé par {{name}} ? Le patient quitte le tableau des lits.",
+    "RELEASE_REASON": "Motif de la libération",
+    "RELEASE_REASON_REQUIRED": "Indiquez pourquoi le lit est libéré.",
+    "RELEASE_ACTION": "Libérer le lit"
   }
 }

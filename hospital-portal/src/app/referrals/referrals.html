@@ -795,6 +795,21 @@
             }}
           </p>
         </div>
+        <!-- QA D1098: every cancel states why; it used to send "Cancelled by admin". -->
+        <div class="form-group">
+          <label for="referral-cancel-reason"
+            >{{ 'ORDER_LIFECYCLE.CANCEL_REASON_LABEL' | translate }} *</label
+          >
+          <textarea
+            id="referral-cancel-reason"
+            rows="3"
+            maxlength="500"
+            required
+            aria-required="true"
+            [ngModel]="cancelReason()"
+            (ngModelChange)="cancelReason.set($event)"
+          ></textarea>
+        </div>
         @if (cancelError()) {
           <p class="form-error" role="alert">{{ cancelError() }}</p>
         }

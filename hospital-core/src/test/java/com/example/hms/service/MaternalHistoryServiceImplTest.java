@@ -547,7 +547,10 @@ class MaternalHistoryServiceImplTest {
         com.example.hms.security.CallerIdentityTestSupport.actAs(colleague, hospital);
 
         assertThatThrownBy(() -> maternalHistoryService.deleteMaternalHistory(historyId, "colleague"))
-                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+                .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class)
+                // QA D1112: the authorship rule, not "act in your own name" (identity.notCaller).
+                .satisfies(e -> org.assertj.core.api.Assertions.assertThat(e.getMessage()).containsAnyOf(
+                    "maternalHistory.delete.recorderOnly", "Only the clinician who recorded", "Seul le clinicien qui a enregistré"));
         verify(maternalHistoryRepository, never()).delete(any());
         com.example.hms.security.CallerIdentityTestSupport.clear();
     }

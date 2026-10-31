@@ -462,6 +462,23 @@ class GeneralReferralServiceImplTest {
         verify(referralRepository).save(referral);
     }
 
+    /** QA D1098: a blank reason passed the required request parameter. */
+    @Test
+    void cancelReferral_refusesABlankReason_D1098() {
+        UUID referralId = UUID.randomUUID();
+        GeneralReferral referral = buildReferral(referralId);
+        signedInAsReferrer(referral);
+        ReferralStatus before = referral.getStatus();
+        when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
+
+        com.example.hms.exception.BusinessException refused = assertThrows(
+            com.example.hms.exception.BusinessException.class,
+            () -> generalReferralService.cancelReferral(referralId, "  "));
+
+        assertEquals("order.lifecycle.cancelReasonRequired", refused.getMessageKey());
+        assertEquals(before, referral.getStatus());
+    }
+
     @Test
     void cancelReferral_marksReferralCancelledAndPersistsReason() {
         UUID referralId = UUID.randomUUID();

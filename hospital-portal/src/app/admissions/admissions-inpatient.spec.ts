@@ -266,9 +266,15 @@ describe('AdmissionsComponent (inpatient round 3: D153 departments and stay flow
     component.selectedBedId.set('b1');
     component.submitBedAssign();
     expect(component.bedAssigning()).toBeFalse();
-    component.unassignBed(adm());
+    // QA D1100: the bed is freed through its dialog, with a reason.
+    component.openUnassignBed(adm());
+    component.unassignReason.set('Transfert');
+    component.confirmUnassignBed();
     admissions.unassignBed.and.returnValue(throwError(() => new Error('x')));
-    component.unassignBed(adm());
+    // QA D1100: the bed is freed through its dialog, with a reason.
+    component.openUnassignBed(adm());
+    component.unassignReason.set('Transfert');
+    component.confirmUnassignBed();
     beds.getAvailableBeds.and.returnValue(throwError(() => new Error('x')));
     component.openBedAssign(adm());
     expect(component.bedsLoading()).toBeFalse();

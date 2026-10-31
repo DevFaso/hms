@@ -1,4 +1,5 @@
 import { personName } from '../shared/pipes/person-name.pipe';
+import { isOrderCancellable } from '../shared/order-lifecycle';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -908,12 +909,7 @@ export class MaternityComponent implements OnInit {
 
   /** QA D1081: an OB/GYN referral is cancelled by the midwife who sent it. */
   canCancelThisReferral(r: ObgynReferralResponse): boolean {
-    return (
-      this.canCancelReferral &&
-      r.status !== 'COMPLETED' &&
-      r.status !== 'CANCELLED' &&
-      this.authorship.isAuthor(r)
-    );
+    return this.canCancelReferral && isOrderCancellable(r.status) && this.authorship.isAuthor(r);
   }
 
   cancelReferralAction(): void {

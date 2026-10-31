@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
+import { isOrderCancellable } from '../shared/order-lifecycle';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -75,7 +76,11 @@ export class ProcedureOrdersComponent implements OnInit {
    * or a midwife's order (ProcedureOrderServiceImpl.requireCancelAuthor).
    */
   canCancelOrder(o: ProcedureOrderResponse): boolean {
-    return this.canCancel && (this.authorship.isAuthor(o) || o.authorIsPhysician === false);
+    return (
+      this.canCancel &&
+      isOrderCancellable(o.status) &&
+      (this.authorship.isAuthor(o) || o.authorIsPhysician === false)
+    );
   }
 
   worklist = signal<Worklist>('all');

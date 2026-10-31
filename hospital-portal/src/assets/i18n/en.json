@@ -12275,5 +12275,16 @@
     "TYPE_ATTENDANCE": "Certificate of attendance",
     "TYPE_GENERAL": "Medical certificate",
     "TYPE_SICK_LEAVE": "Sick leave (arrêt de travail)"
+  },
+  "ORDER_LIFECYCLE": {
+    "CANCEL_REASON_LABEL": "Reason for the cancellation",
+    "CANCEL_REASON_REQUIRED": "Enter the reason for the cancellation."
+  },
+  "ADMISSION_BED": {
+    "RELEASE_TITLE": "Free the bed",
+    "RELEASE_CONFIRM": "Free bed {{bed}} held by {{name}}? The patient leaves the bed board.",
+    "RELEASE_REASON": "Reason for freeing the bed",
+    "RELEASE_REASON_REQUIRED": "Enter why the bed is freed.",
+    "RELEASE_ACTION": "Free the bed"
   }
 }

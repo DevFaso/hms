@@ -99,6 +99,111 @@ class CancelledOrderLockGuardTest {
         assertThat(GuardAllowlist.stale(actual, ALLOWED)).as("the site was fixed: delete its line").isEmpty();
     }
 
+    private static final Pattern CANCEL_WRITE = Pattern.compile(
+        "setCancellationReason\\(|setCancelReason\\(|\\.cancel\\(|setStatus\\(\\w+Status\\.CANCELLED\\)");
+    /** A refusal of a blank reason: the shared helper, or a service's own "...ReasonRequired" key. */
+    private static final Pattern REASON_CHECK = Pattern.compile(
+        "requireCancelReason\\(|[rR]easonRequired\"|[rR]eason\\.required\"");
+    /**
+     * A refusal of a resulted order: the shared helper, a COMPLETED check, a
+     * terminal check, a transition table, or the entity's own cancel() (the
+     * referrals' refuses a terminal referral).
+     */
+    private static final Pattern RESULTED_CHECK = Pattern.compile(
+        "requireResultStaysClosed\\(|Status\\.COMPLETED\\b|isTerminal\\(|validateStatusTransition\\(|\\.cancel\\(");
+
+    /** Writes of the reason column that are not cancellations, each with why. */
+    private static final Map<String, String> NOT_A_CANCEL = Map.of(
+        "GeneralReferralServiceImpl#toResponse",
+        "copies the stored reason onto the response DTO (dto.setCancellationReason), it cancels nothing",
+        "LabOrderServiceImpl#voidLabOrder",
+        "the void as entered in error: the correction path a RESULTED order needs instead of a cancel; it has "
+            + "its own required reason (lab.order.voidReasonRequired)");
+
+    /**
+     * QA D1098 (round 19): a resulted imaging order was cancelled with no
+     * reason and another sent back to ORDERED. Every method of the ten order
+     * services that writes a cancellation must refuse a blank reason and an
+     * order that already has its result. No allowlist.
+     */
+    @Test
+    @DisplayName("every cancellation states its reason and spares a resulted order")
+    void everyCancelStatesItsReasonAndSparesAResultedOrder() throws IOException {
+        List<String> noReason = new ArrayList<>();
+        List<String> resultedCancellable = new ArrayList<>();
+        int cancels = 0;
+        for (String rel : ORDER_SERVICES.keySet()) {
+            Path file = SERVICES.resolve(rel);
+            String source = SourceScan.stripComments(Files.readString(file, StandardCharsets.UTF_8));
+            String service = file.getFileName().toString().replace(".java", "");
+            for (String[] site : cancelSites(service, source)) {
+                if (NOT_A_CANCEL.containsKey(site[0])) {
+                    continue;
+                }
+                cancels++;
+                if (!REASON_CHECK.matcher(site[1]).find()) {
+                    noReason.add(site[0]);
+                }
+                if (!RESULTED_CHECK.matcher(site[1]).find()) {
+                    resultedCancellable.add(site[0]);
+                }
+            }
+        }
+        assertThat(cancels).as("cancellation writes found").isGreaterThanOrEqualTo(9);
+        assertThat(noReason)
+            .as("a cancellation that stores no checked reason (QA D1098): call "
+                + "CancelledOrders.requireCancelReason(reason) before the write" + SourceScan.MANDATE)
+            .isEmpty();
+        assertThat(resultedCancellable)
+            .as("a cancellation that does not refuse an order that already has its result (QA D1098): call "
+                + "CancelledOrders.requireResultStaysClosed(current, target, RESULTED_STATES)" + SourceScan.MANDATE)
+            .isEmpty();
+    }
+
+    @Test
+    @DisplayName("the cancel scan catches the D1098 shape")
+    void catchesTheResultedCancelShape() {
+        String before = """
+            class ImagingOrderServiceImpl {
+                public ImagingOrderResponseDTO updateOrderStatus(UUID orderId, Request request) {
+                    ImagingOrder order = getOrderInScope(orderId);
+                    CancelledOrders.requireNotCancelled(order.getStatus(), "imaging.order.cancelled.locked");
+                    order.setStatus(request.getStatus());
+                    if (cancelling) {
+                        order.setCancellationReason(request.getCancellationReason());
+                    }
+                    return map(order);
+                }
+            }
+            """;
+        List<String[]> sites = cancelSites("ImagingOrderServiceImpl", before);
+        assertThat(sites).hasSize(1);
+        assertThat(REASON_CHECK.matcher(sites.get(0)[1]).find()).isFalse();
+        assertThat(RESULTED_CHECK.matcher(sites.get(0)[1]).find()).isFalse();
+        String after = before.replace("order.setStatus(request.getStatus());",
+            "CancelledOrders.requireResultStaysClosed(order.getStatus(), request.getStatus(), RESULTED_STATES);\n"
+                + "String reason = CancelledOrders.requireCancelReason(request.getCancellationReason());\n"
+                + "order.setStatus(request.getStatus());");
+        List<String[]> fixed = cancelSites("ImagingOrderServiceImpl", after);
+        assertThat(REASON_CHECK.matcher(fixed.get(0)[1]).find()).isTrue();
+        assertThat(RESULTED_CHECK.matcher(fixed.get(0)[1]).find()).isTrue();
+    }
+
+    /** Each method of {@code source} that writes a cancellation: {site, body}. */
+    private static List<String[]> cancelSites(String service, String source) {
+        List<String[]> out = new ArrayList<>();
+        Matcher m = METHOD.matcher(source);
+        while (m.find()) {
+            int open = m.end() - 1;
+            int close = SourceScan.closingBrace(source, open);
+            String body = source.substring(open, Math.min(close + 1, source.length()));
+            if (CANCEL_WRITE.matcher(body).find()) {
+                out.add(new String[] {service + "#" + methodName(source.substring(m.start(), m.start(1))), body});
+            }
+        }
+        return out;
+    }
+
     @Test
     @DisplayName("the scan catches the D1066 shape")
     void catchesTheOldShape() {

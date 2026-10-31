@@ -106,8 +106,9 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         UltrasoundOrder order = getOrderInScope(orderId);
         requireOrderAuthor(order);
 
-        // Prevent modification of completed orders
-        if (order.getStatus() == UltrasoundOrderStatus.COMPLETED) {
+        // Prevent modification of completed orders (QA D1098: and reported ones)
+        if (order.getStatus() == UltrasoundOrderStatus.COMPLETED
+                || order.getStatus() == UltrasoundOrderStatus.REPORT_AVAILABLE) {
             throw new BusinessException("ultrasound.order.completedNoEdit");
         }
 
@@ -142,12 +143,17 @@ public class UltrasoundServiceImpl implements UltrasoundService {
             throw new BusinessException("ultrasound.order.alreadyCancelled");
         }
 
-        if (order.getStatus() == UltrasoundOrderStatus.COMPLETED) {
+        // QA D1098 (round 19): an order whose report is available is resulted
+        // too - it was cancellable, leaving a report on a cancelled order.
+        if (order.getStatus() == UltrasoundOrderStatus.COMPLETED
+                || order.getStatus() == UltrasoundOrderStatus.REPORT_AVAILABLE) {
             throw new BusinessException("ultrasound.order.completedNoCancel");
         }
+        // QA D1098: every cancel states why (the endpoint's reason was optional).
+        String reason = com.example.hms.service.support.CancelledOrders.requireCancelReason(cancellationReason);
 
         order.setStatus(UltrasoundOrderStatus.CANCELLED);
-        order.setCancellationReason(cancellationReason);
+        order.setCancellationReason(reason);
         // QA D1047: a cancellation is stamped with when and by whom, like every order.
         order.setCancelledAt(LocalDateTime.now(java.time.ZoneId.systemDefault()));
         order.setCancelledBy(cancellerName(order));

@@ -14,9 +14,11 @@ import { serverDateOrInstant } from './date-utils';
 const GROWTH_AGE_LIMIT_YEARS = 20;
 const YEAR_MS = 365.25 * 24 * 3600 * 1000;
 
+/** The server's male values (ObstetricEligibility): a form and the server agree on who is male. */
+const MALE_VALUES = new Set(['m', 'male', 'homme', 'masculin', 'h']);
+
 export function isRecordedMale(gender: string | null | undefined): boolean {
-  const g = (gender ?? '').trim().toUpperCase();
-  return g === 'MALE' || g === 'M';
+  return MALE_VALUES.has((gender ?? '').trim().toLowerCase());
 }
 
 export function offersFundalHeight(gender: string | null | undefined): boolean {

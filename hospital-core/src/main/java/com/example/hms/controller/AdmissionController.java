@@ -103,9 +103,15 @@ public class AdmissionController {
 
     @DeleteMapping("/{admissionId}/bed")
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_SUPER_ADMIN')")
-    @Operation(summary = "Unassign the bed", description = "Detach the admission's bed and make it available again")
-    public ResponseEntity<AdmissionResponseDTO> unassignBed(@PathVariable UUID admissionId) {
-        return ResponseEntity.ok(admissionService.unassignBed(admissionId));
+    @com.example.hms.security.audit.WriteAudited(skip = true,
+        reason = "AdmissionServiceImpl.unassignBed audits the release with its reason (ADMISSION_BED_RELEASED, QA D1100)")
+    @Operation(summary = "Unassign the bed",
+        description = "Detach the admission's bed and make it available again. A reason is required (QA D1100).")
+    public ResponseEntity<AdmissionResponseDTO> unassignBed(
+        @PathVariable UUID admissionId,
+        @RequestParam(required = false) String reason
+    ) {
+        return ResponseEntity.ok(admissionService.unassignBed(admissionId, reason));
     }
 
     @PostMapping("/{admissionId}/discharge")

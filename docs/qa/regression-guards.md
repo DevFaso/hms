@@ -217,6 +217,19 @@ arbitrary URL.
 | `scripts/lib/maternity-notes-shown.test.mjs` | D1068: a free-text field a maternity form saves that no read surface renders. | Maternity templates; the two `recentDeliveryOverrideReason` confirmations excused |
 | `guard:a11y-dialogs`, `glued-colon` (shrunk) | D1004, D1079. | a11y-dialogs 247 → 210 pins; glued colons 113 sites in 41 files → 92 in 32 |
 
+## Guards added by fix/r19-oe-orders (round 19; extend these too)
+
+| Guard | Class | Scope / allowlist |
+|---|---|---|
+| `architecture/VitalSignMeasureRuleGuardTest` (new) | D1077 (NOT_FIXED in r18 and r19): a vitals write path that stores a measure the patient cannot have (head circumference for an adult, fundal height for a man). Every method that saves a `PatientVitalSign`, applies a request onto one (`applyRequestToEntity`) or builds one with a head circumference must call a `PatientMeasureRules.require…` rule; every class that reads a fundal height from a request must check it. | All of `src/main` (recordVital, triage, nurse station found); no allowlist |
+| `architecture/CancelledOrderLockGuardTest#everyCancelStatesItsReasonAndSparesAResultedOrder` (widened) | D1098: a cancellation with no checked reason, or one that does not refuse an order that already has its result. | The ten order services; 2 non-cancels listed (`GeneralReferralServiceImpl#toResponse` copies the reason onto the DTO; `LabOrderServiceImpl#voidLabOrder` is the entered-in-error path a resulted lab order needs) |
+| `scripts/lib/author-only-actions.test.mjs` (widened, D1098 + D1108) | D1098: a cancel button of an order list not gated on `isOrderCancellable` (`shared/order-lifecycle.ts`); D1108: an LWBS button not gated on `isNeverSeenVisit` (`core/encounter-start.ts`). | Every template; 5 non-order records listed (appointments ×2, pharmacy fill, lab void, discharge request) |
+| `architecture/ExaminingClinicianGuardTest` (new) | D1099: a service method that takes a visit out of IN_PROGRESS without `EncounterClosureRules.requireExaminingClinician`. | `service/**`; no allowlist (`ReceptionServiceImpl#updateEncounterStatus` judged not this class: own patients only, noted in the test) |
+| `architecture/BedReleaseReasonGuardTest` (new) | D1100: a bed freed by hand (`bedAssignmentService.unassignBed`) with no required reason or no `ADMISSION_BED_RELEASED` audit. | All of `src/main`; no allowlist |
+| `scripts/lib/server-refusal-shown.test.mjs` (new) | D1111: a write's error handler on the order/encounter/admission/discharge screens that shows only a generic toast (`error: () => toast(…)`). | 10 screens; reads (load / not found / none) allowed by key |
+| `architecture/AuthorshipRefusalKeyGuardTest` (new) | D1112: an authorship check that answers `identity.notCaller` ("act in your own name"): `requireCaller` on a record's own author, or `identity.notCaller` written outside the acting-on-behalf sites. Every `requireAuthor…` key is defined in the four clinical bundles. | 3 acting-on-behalf sites listed with why |
+| `i18n/ExceptionProseRatchetTest` (baseline shrunk) | D1111: English refusals in the discharge flow. | `DischargeApprovalServiceImpl` 12 → 0, `DischargeSummaryServiceImpl` 4 → 0 |
+
 ## What is not guarded (and why)
 
 - **Bean Validation default messages** (D925 "providerName: must not be

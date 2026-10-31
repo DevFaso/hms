@@ -98,16 +98,19 @@
                 {{ 'TRIAGE.TITLE' | translate }}
               </button>
               <!-- QA D954: a patient who leaves before being seen is closed here,
-                   with a reason, instead of staying in the queue. -->
-              <button
-                class="action-btn action-lwbs"
-                data-testid="awaiting-triage-lwbs"
-                (click)="openCloseUnseen(e)"
-                [title]="'NURSE.LEFT_WITHOUT_BEING_SEEN' | translate"
-              >
-                <span class="material-symbols-outlined" aria-hidden="true">directions_walk</span>
-                {{ 'NURSE.LEFT_WITHOUT_BEING_SEEN' | translate }}
-              </button>
+                   with a reason, instead of staying in the queue (QA D1108: the
+                   one never-seen rule, core/encounter-start). -->
+              @if (isNeverSeenVisit(e.status)) {
+                <button
+                  class="action-btn action-lwbs"
+                  data-testid="awaiting-triage-lwbs"
+                  (click)="openCloseUnseen(e)"
+                  [title]="'NURSE.LEFT_WITHOUT_BEING_SEEN' | translate"
+                >
+                  <span class="material-symbols-outlined" aria-hidden="true">directions_walk</span>
+                  {{ 'NURSE.LEFT_WITHOUT_BEING_SEEN' | translate }}
+                </button>
+              }
             </div>
           </div>
         }

@@ -366,6 +366,28 @@ class ProcedureOrderServiceImplTest {
         assertThatThrownBy(() -> service.cancelProcedureOrder(orderId, "r")).isInstanceOf(BusinessException.class);
     }
 
+    /** QA D1098 (round 19): every cancel states why, on both cancel paths. */
+    @Test void cancelProcedureOrder_refusesABlankReason_D1098() {
+        ProcedureOrder order = buildOrder(ProcedureOrderStatus.ORDERED);
+        when(procedureOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        assertThatThrownBy(() -> service.cancelProcedureOrder(orderId, " "))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("order.lifecycle.cancelReasonRequired");
+        assertThat(order.getStatus()).isEqualTo(ProcedureOrderStatus.ORDERED);
+    }
+
+    @Test void updateProcedureOrder_refusesACancelWithoutAReason_D1098() {
+        ProcedureOrder order = buildOrder(ProcedureOrderStatus.SCHEDULED);
+        when(procedureOrderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        ProcedureOrderUpdateDTO u = new ProcedureOrderUpdateDTO();
+        u.setStatus(ProcedureOrderStatus.CANCELLED);
+        assertThatThrownBy(() -> service.updateProcedureOrder(orderId, u))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("order.lifecycle.cancelReasonRequired");
+        assertThat(order.getStatus()).isEqualTo(ProcedureOrderStatus.SCHEDULED);
+        verify(procedureOrderRepository, never()).save(any());
+    }
+
     @Test void getPendingConsentOrders() {
         ProcedureOrder o = buildOrder(ProcedureOrderStatus.SCHEDULED);
         o.setConsentObtained(false);

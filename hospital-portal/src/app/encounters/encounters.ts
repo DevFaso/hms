@@ -47,7 +47,12 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { serverLocalDate, toServerDateTime } from '../shared/date-utils';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
-import { mayStartVisit } from '../core/encounter-start';
+import {
+  isNeverSeenVisit,
+  mayEndExamination,
+  mayStartVisit,
+  StartActor,
+} from '../core/encounter-start';
 
 @Component({
   selector: 'app-encounters',
@@ -118,16 +123,11 @@ export class EncountersComponent implements OnInit {
   protected readonly canCloseUnseen = computed(() =>
     this.roleContext.hasAnyActiveRole(actionRoles('encounterCloseUnseen')),
   );
-  private static readonly NEVER_SEEN = new Set([
-    'SCHEDULED',
-    'ARRIVED',
-    'TRIAGE',
-    'WAITING_FOR_PHYSICIAN',
-  ]);
   readonly closeUnseenEncounter = signal<EncounterResponse | null>(null);
 
   isNeverSeen(status: string | null | undefined): boolean {
-    return !!status && EncountersComponent.NEVER_SEEN.has(status);
+    // QA D1108: the one never-seen rule (core/encounter-start), the server's own.
+    return isNeverSeenVisit(status);
   }
 
   /**
@@ -603,8 +603,8 @@ export class EncountersComponent implements OnInit {
         this.loadEncounters();
         this.deleting.set(false);
       },
-      error: () => {
-        this.toast.error(this.translate.instant('ENCOUNTERS.DELETE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('ENCOUNTERS.DELETE_FAILED'));
         this.deleting.set(false);
       },
     });
@@ -930,8 +930,10 @@ export class EncountersComponent implements OnInit {
           this.addendumSaving.set(false);
           this.loadNoteHistory(enc.id);
         },
-        error: () => {
-          this.toast.error(this.translate.instant('ENCOUNTERS.ADDENDUM_FAILED'));
+        error: (err: unknown) => {
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('ENCOUNTERS.ADDENDUM_FAILED'),
+          );
           this.addendumSaving.set(false);
         },
       });
@@ -947,29 +949,30 @@ export class EncountersComponent implements OnInit {
     ) {
       return false;
     }
-    // QA D1085: per visit, the server's rule (core/encounter-start). The
-    // assigned clinician is named by user when the server sends it, else by
-    // the staff record the session carries.
+    // QA D1085: per visit, the server's rule (core/encounter-start).
+    return mayStartVisit(this.visitActor(), this.assignedUserOf(enc));
+  }
+
+  /**
+   * The assigned clinician, named by user when the server sends it, else by
+   * the staff record the session carries (QA D1085).
+   */
+  private assignedUserOf(enc: EncounterResponse): string | null {
     const myStaffId = this.auth.getUserProfile()?.staffId ?? null;
-    const assigned =
-      enc.staffUserId !== undefined
-        ? enc.staffUserId
-        : enc.staffId
-          ? enc.staffId === myStaffId
-            ? this.auth.getUserId()
-            : `staff:${enc.staffId}`
-          : null;
-    return mayStartVisit(
-      {
-        superAdmin: this.roleContext.isSuperAdmin(),
-        // rbac-inline-ok: mirrors EncounterController#startEncounter's midwifeOnly test (ROLE_DOCTOR held or not).
-        doctor: this.auth.hasAnyRole(['ROLE_DOCTOR']),
-        // rbac-inline-ok: mirrors EncounterController#startEncounter (a midwife leads her own visits).
-        midwife: this.auth.hasAnyRole(['ROLE_MIDWIFE']),
-        userId: this.auth.getUserId(),
-      },
-      assigned,
-    );
+    if (enc.staffUserId !== undefined) return enc.staffUserId;
+    if (!enc.staffId) return null;
+    return enc.staffId === myStaffId ? this.auth.getUserId() : `staff:${enc.staffId}`;
+  }
+
+  private visitActor(): StartActor {
+    return {
+      superAdmin: this.roleContext.isSuperAdmin(),
+      // rbac-inline-ok: mirrors EncounterController#startEncounter's midwifeOnly test (ROLE_DOCTOR held or not).
+      doctor: this.auth.hasAnyRole(['ROLE_DOCTOR']),
+      // rbac-inline-ok: mirrors EncounterController#startEncounter (a midwife leads her own visits).
+      midwife: this.auth.hasAnyRole(['ROLE_MIDWIFE']),
+      userId: this.auth.getUserId(),
+    };
   }
 
   /** D96: a visit ready for discharge can be checked out from here too. */
@@ -988,8 +991,10 @@ export class EncountersComponent implements OnInit {
         this.selectedEncounter.set(updated);
         this.loadEncounters();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('ENCOUNTERS.STATUS_UPDATE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('ENCOUNTERS.STATUS_UPDATE_FAILED'),
+        );
         this.transitioning.set(false);
       },
     });
@@ -1015,7 +1020,10 @@ export class EncountersComponent implements OnInit {
   }
 
   canCompleteExamination(enc: EncounterResponse): boolean {
-    return enc.status === 'IN_PROGRESS';
+    // QA D1099: the examining clinician ends the examination (the server refuses anyone else).
+    return (
+      enc.status === 'IN_PROGRESS' && mayEndExamination(this.visitActor(), this.assignedUserOf(enc))
+    );
   }
 
   /**
@@ -1028,7 +1036,9 @@ export class EncountersComponent implements OnInit {
     }
     return (
       enc.status === 'IN_PROGRESS' &&
-      this.auth.hasAnyRole([...SERVICE_RULE_ROLES.readyForDischargeFromInProgress])
+      this.auth.hasAnyRole([...SERVICE_RULE_ROLES.readyForDischargeFromInProgress]) &&
+      // QA D1099: from IN_PROGRESS it ends the examination, the examining clinician's step.
+      mayEndExamination(this.visitActor(), this.assignedUserOf(enc))
     );
   }
 
@@ -1041,8 +1051,10 @@ export class EncountersComponent implements OnInit {
         this.selectedEncounter.set(updated);
         this.loadEncounters();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('ENCOUNTERS.EXAM_COMPLETE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('ENCOUNTERS.EXAM_COMPLETE_FAILED'),
+        );
         this.transitioning.set(false);
       },
     });
@@ -1057,8 +1069,10 @@ export class EncountersComponent implements OnInit {
         this.selectedEncounter.set(updated);
         this.loadEncounters();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('ENCOUNTERS.STATUS_UPDATE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('ENCOUNTERS.STATUS_UPDATE_FAILED'),
+        );
         this.transitioning.set(false);
       },
     });
