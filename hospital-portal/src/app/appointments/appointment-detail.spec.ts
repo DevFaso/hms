@@ -290,6 +290,28 @@ describe('AppointmentDetailComponent', () => {
       );
     });
 
+    it('QA D1124: before the start time Absent and Complete stay clickable and say why they refuse', () => {
+      component.appointment.set({
+        ...mockAppointment,
+        status: 'CONFIRMED',
+        appointmentDate: '2099-01-01',
+      });
+      fixture.detectChanges();
+      for (const [selector, reason] of [
+        ['[data-testid="mark-no-show"]', 'APPOINTMENTS.CANNOT_NO_SHOW_BEFORE_START'],
+        ['.btn-complete', 'APPOINTMENTS.CANNOT_COMPLETE_BEFORE_START'],
+      ] as const) {
+        const button = fixture.nativeElement.querySelector(selector) as HTMLButtonElement;
+        expect(button.disabled).withContext(`${selector} never silently disabled`).toBeFalse();
+        click(selector);
+        expect(button.nextElementSibling?.textContent?.trim()).withContext(selector).toBe(reason);
+      }
+      expect(fixture.nativeElement.querySelector('[data-testid="drop-reason"]'))
+        .withContext('the no-show dialog does not open before the start time')
+        .toBeNull();
+      expect(mockAppointmentService.updateStatus).not.toHaveBeenCalled();
+    });
+
     it('shows the kept reason on the appointment', () => {
       component.appointment.set({
         ...mockAppointment,

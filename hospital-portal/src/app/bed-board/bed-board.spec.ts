@@ -330,6 +330,29 @@ describe('BedBoardComponent', () => {
     expect(component.bedStatusClass(bed())).toContain('bed-available');
   });
 
+  // QA D1124 (round 20 merge): the precaution and transfer buttons were
+  // disabled until their form was complete, so a click explained nothing.
+  for (const which of ['transfer', 'precautions'] as const) {
+    it(`D1124: the ${which} submit stays enabled, refuses a blank form and names the fields`, () => {
+      const fixture = TestBed.createComponent(BedBoardComponent);
+      const cmp = fixture.componentInstance;
+      fixture.detectChanges();
+      if (which === 'transfer') cmp.openTransfer(occupant());
+      else cmp.openPrecautions(occupant());
+      fixture.detectChanges();
+      const el = fixture.nativeElement as HTMLElement;
+      const submit = el.querySelector<HTMLButtonElement>('.modal-footer .btn-primary')!;
+      expect(submit.disabled).withContext('never silently disabled').toBeFalse();
+      submit.click();
+      fixture.detectChanges();
+      expect(isolationSpy.startPrecaution).not.toHaveBeenCalled();
+      expect(transferSpy.requestTransfer).not.toHaveBeenCalled();
+      const field = which === 'transfer' ? '#transfer-reason' : '#precaution-reason';
+      expect(el.querySelector(field)?.getAttribute('aria-invalid')).toBe('true');
+      expect(el.querySelector('[data-testid="submit-guard-reason"]')).not.toBeNull();
+    });
+  }
+
   it('loads the patient precautions when the modal opens', () => {
     component.openPrecautions(occupant());
     expect(isolationSpy.getActiveForPatient).toHaveBeenCalledWith('p1');

@@ -159,17 +159,20 @@
                       · {{ rx.frequency }}
                     }
                   </span>
-                  <button
-                    type="button"
-                    class="btn-add btn-add--inline"
-                    [disabled]="isReconciled(rx)"
-                    (click)="reconcilePrescription(rx)"
-                  >
-                    {{
-                      (isReconciled(rx) ? 'INTAKE.RECONCILED' : 'INTAKE.RECONCILE_MEDICATION')
-                        | translate
-                    }}
-                  </button>
+                  <!-- QA D1124: a reconciled row says so in words; it is not a dead button. -->
+                  @if (isReconciled(rx)) {
+                    <span class="documented__status" data-testid="reconciled-status">{{
+                      'INTAKE.RECONCILED' | translate
+                    }}</span>
+                  } @else {
+                    <button
+                      type="button"
+                      class="btn-add btn-add--inline"
+                      (click)="reconcilePrescription(rx)"
+                    >
+                      {{ 'INTAKE.RECONCILE_MEDICATION' | translate }}
+                    </button>
+                  }
                 </li>
               }
             </ul>
@@ -280,7 +283,12 @@
         <button type="button" class="btn btn-secondary" (click)="dismissed.emit()">
           {{ 'COMMON.CANCEL' | translate }}
         </button>
-        <button type="submit" class="btn btn-primary" [disabled]="!canSubmit">
+        <button
+          type="submit"
+          class="btn btn-primary"
+          [disabled]="saving()"
+          [appSubmitGuard]="encounter?.id ? null : ('INTAKE.NO_ENCOUNTER' | translate)"
+        >
           @if (saving()) {
             <span>{{ 'COMMON.SAVING' | translate }}...</span>
           }

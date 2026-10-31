@@ -39,6 +39,7 @@ import { fromServerDateTime, toLocalInputValue, toServerDateTime } from '../shar
 import { BedService, BedResponse } from '../services/bed.service';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refusalReason } from '../shared/refusal-reason';
 import { refuseFields } from '../shared/forms/invalid-fields';
 
@@ -59,6 +60,7 @@ const CANCELLABLE_STATUSES = new Set<string>(['PENDING', 'ACTIVE', 'ON_LEAVE']);
   selector: 'app-admissions',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     ModalDialogDirective,
     PersonNamePipe,
     PatientSublinePipe,

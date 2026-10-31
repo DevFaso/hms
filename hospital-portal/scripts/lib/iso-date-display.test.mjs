@@ -114,11 +114,11 @@ export function fixedOrderDates(html, file = 'template') {
   return out;
 }
 
-/** Owned by another fix branch this round; listed so the hand-back names it. */
-const FIXED_ORDER_PINNED = {
-  'reception/waitlist-panel/waitlist-panel.component.html::EEE d MMM, HH:mm':
-    'D1140 sibling in fix/r20-portal-forms files (waitlist-panel): not touched here, see hand-back',
-};
+/**
+ * Pinned sites, each with its reason: none. The round-20 waitlist pin was
+ * removed at the merge, once fix/r20-portal-forms made that date locale-ordered.
+ */
+const FIXED_ORDER_PINNED = {};
 
 test('QA D1140: no template fixes the order of a day and a month', () => {
   const found = templatesIn(appDir).flatMap(({ file, text }) =>

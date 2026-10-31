@@ -24,13 +24,14 @@ import {
 import { ToastService } from '../../core/toast.service';
 import { canonicalRoute } from '../../shared/pipes/medication-route.pipe';
 import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 import { PatientAllergy, PatientService } from '../../services/patient.service';
 import { PrescriptionResponse, PrescriptionService } from '../../services/prescription.service';
 
 @Component({
   selector: 'app-nursing-intake-form',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, ModalDialogDirective],
+  imports: [CommonModule, FormsModule, TranslateModule, ModalDialogDirective, SubmitGuardDirective],
   templateUrl: './nursing-intake-form.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './nursing-intake-form.component.scss',

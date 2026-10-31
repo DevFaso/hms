@@ -6,9 +6,5 @@
   "privacy-policy/privacy-policy.ts": {
     "count": 15,
     "why": "False positive: the 15 sites (14 colons, 1 semicolon, QA D1138 widened the scan) are all inside the @if (lang === 'en') English section of the bilingual policy, where English typography glues the mark; the French section (@if (lang === 'fr')) already writes ' :'"
-  },
-  "maternity/birth-plan-tab.html": {
-    "count": 1,
-    "why": "QA D1138 sibling in a fix/r20-portal-forms file (birth-plan-tab.html, `{{ introduction?.patientName }}?`): not touched by fix/r20-portal-overlays-display, listed in its hand-back; delete when that branch keys the mark"
   }
 }

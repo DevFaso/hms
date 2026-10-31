@@ -1,6 +1,7 @@
 import { refuseFields } from '../shared/forms/invalid-fields';
 import { StaffService, StaffResponse, isClinicalProvider } from '../services/staff.service';
 import { DialogFocusDirective } from '../shared/a11y/dialog-focus.directive';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import {
   Component,
   inject,
@@ -64,6 +65,7 @@ const CHECK_IN_ELIGIBLE: readonly AppointmentStatus[] = ['SCHEDULED', 'CONFIRMED
   selector: 'app-appointment-detail',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     DialogFocusDirective,
     ServerTimePipe,
     CommonModule,

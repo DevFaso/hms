@@ -34,6 +34,7 @@ import { roleSatisfies } from '../core/role-equivalence';
 import { finalize } from 'rxjs';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { MeasurePipe } from '../shared/pipes/measure.pipe';
 
@@ -56,6 +57,7 @@ import { MeasurePipe } from '../shared/pipes/measure.pipe';
   selector: 'app-bed-board',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     MeasurePipe,
     ServerTimePipe,
     CommonModule,

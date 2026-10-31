@@ -222,5 +222,8 @@
     "src/app/prescriptions/prescriptions.html::verifyTarget()?.overrideReason",
     "src/app/prescriptions/prescriptions.html::reviewRx.frequency",
     "src/app/prescriptions/prescriptions.html::rx.overrideReason"
-  ]
+  ],
+  "reasons": {
+    "src/app/appointments/appointment-detail.html::appt.statusReason": "False positive (round 20, D1126 / D1132): the reason a person typed when cancelling an appointment or marking it a no-show (free text, at most 500 characters, kept as written in the new status_reason column), not an enum; there is no domain to pipe it through."
+  }
 }

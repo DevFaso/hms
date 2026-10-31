@@ -74,6 +74,28 @@ describe('NursingIntakeFormComponent', () => {
     expect(component.canSubmit).toBeFalse();
   });
 
+  it('QA D1124: with no encounter the submit stays clickable and says why it refuses', () => {
+    component.encounter = null;
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const submit = host.querySelector<HTMLButtonElement>('button[type="submit"]');
+    expect(submit?.disabled).withContext('never silently disabled (D1124)').toBeFalse();
+    submit?.click();
+    expect(mockEncounterService.submitNursingIntake).not.toHaveBeenCalled();
+    expect(host.querySelector('[data-testid="submit-guard-reason"]')?.textContent?.trim()).toBe(
+      'INTAKE.NO_ENCOUNTER',
+    );
+  });
+
+  it('QA D1124: only a request in flight disables the submit', () => {
+    component.saving.set(true);
+    fixture.detectChanges();
+    const submit = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+      'button[type="submit"]',
+    );
+    expect(submit?.disabled).toBeTrue();
+  });
+
   it('should add and remove allergies', () => {
     expect(component.allergies().length).toBe(0);
 
@@ -271,6 +293,19 @@ describe('NursingIntakeFormComponent — carried-in chart data (QA D951/D992)', 
     expect(component.medications().length).toBe(1);
     expect(component.medications()[0].medicationName).toBe('Amoxicilline');
     expect(component.isReconciled(rx)).toBeTrue();
+  });
+
+  it('QA D1124: a reconciled row says so in words, never a disabled button', () => {
+    const host = fixture.nativeElement as HTMLElement;
+    const rx = component.documentedMedications()[0];
+    expect(host.querySelector('.documented__list button.btn-add--inline')).not.toBeNull();
+    component.reconcilePrescription(rx);
+    fixture.detectChanges();
+    const row = host.querySelector('.documented__list li');
+    expect(row?.querySelector('button')).withContext('no dead button on the row').toBeNull();
+    expect(row?.querySelector('[data-testid="reconciled-status"]')?.textContent?.trim()).toBe(
+      'INTAKE.RECONCILED',
+    );
   });
 
   it('names the encounter by its visit code, never a UUID fragment', () => {

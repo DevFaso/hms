@@ -381,7 +381,9 @@
       <button
         class="btn-primary"
         (click)="submitPrecaution()"
-        [disabled]="savingPrecaution() || !precautionForm.reason.trim()"
+        [disabled]="savingPrecaution()"
+        [appSubmitGuard]="!precautionForm.reason.trim()"
+        [submitGuardFields]="['precaution-reason']"
       >
         {{ 'BED_BOARD.START_PRECAUTION' | translate }}
       </button>
@@ -440,7 +442,12 @@
         <div class="override-block">
           <p class="hint warn">{{ 'BED_BOARD.OVERRIDE_WARNING' | translate }}</p>
           <label class="check">
-            <input type="checkbox" [(ngModel)]="transferForm.isolationOverride" name="override" />
+            <input
+              id="override-confirm"
+              type="checkbox"
+              [(ngModel)]="transferForm.isolationOverride"
+              name="override"
+            />
             {{ 'BED_BOARD.OVERRIDE_CONFIRM' | translate }}
           </label>
           @if (transferForm.isolationOverride) {
@@ -479,7 +486,14 @@
       <button
         class="btn-primary"
         (click)="submitTransfer()"
-        [disabled]="savingTransfer() || !transferSubmittable"
+        [disabled]="savingTransfer()"
+        [appSubmitGuard]="!transferSubmittable"
+        [submitGuardFields]="[
+          'transfer-destination',
+          'transfer-reason',
+          'override-confirm',
+          'override-reason',
+        ]"
       >
         {{ 'BED_BOARD.ORDER_TRANSFER' | translate }}
       </button>

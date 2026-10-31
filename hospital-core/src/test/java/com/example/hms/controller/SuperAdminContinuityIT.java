@@ -4,7 +4,6 @@ import com.example.hms.BaseIT;
 import com.example.hms.model.Role;
 import com.example.hms.model.User;
 import com.example.hms.model.UserRoleHospitalAssignment;
-import com.example.hms.repository.AuditEventLogRepository;
 import com.example.hms.repository.RoleRepository;
 import com.example.hms.repository.UserRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
@@ -14,6 +13,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.ApplicationContext;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -50,7 +50,7 @@ class SuperAdminContinuityIT extends BaseIT {
     @Autowired private RoleRepository roleRepository;
     @Autowired private UserRepository userRepository;
     @Autowired private UserRoleHospitalAssignmentRepository assignmentRepository;
-    @Autowired private AuditEventLogRepository auditEventLogRepository;
+    @Autowired private ApplicationContext applicationContext;
 
     @BeforeEach
     void setUp() {
@@ -67,11 +67,16 @@ class SuperAdminContinuityIT extends BaseIT {
         }
     }
 
+    /**
+     * The shared FK-ordered wipe (audit rows, staff, departments, then the
+     * assignments and users this class deletes). A table-wide
+     * {@code assignmentRepository.deleteAll()} alone failed on
+     * {@code fk_staff_assignment} whenever a class run before this one in the
+     * same context left a staff row behind (round-20 merge, #996).
+     */
     private void deleteRows() {
         ActingScopeTestSupport.globalSuperAdmin(UUID.randomUUID());
-        auditEventLogRepository.deleteAll();
-        assignmentRepository.deleteAll();
-        userRepository.deleteAll();
+        SharedClinicalRowsCleanup.deleteAll(applicationContext);
     }
 
     @Test

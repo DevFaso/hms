@@ -378,6 +378,11 @@ class PatientControllerDiagnosisIT extends BaseIT {
 		patientProblemRepository.deleteAllById(createdProblemIds);
 		createdProblemIds.clear();
 		auditEventLogRepository.deleteAllInBatch();
+		// Then the doctor's staff row, assignment, user, patient and hospital
+		// this class seeded, in FK order: a class that runs next in the same
+		// context and deletes assignments table-wide (SuperAdminContinuityIT)
+		// otherwise trips on fk_staff_assignment (round-20 merge, #996).
+		SharedClinicalRowsCleanup.deleteAll(applicationContext);
 	}
 
 	private Role ensureDoctorRole() {

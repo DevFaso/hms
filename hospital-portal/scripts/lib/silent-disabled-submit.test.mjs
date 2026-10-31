@@ -40,30 +40,14 @@ import { tags } from './html-tags.mjs';
 const appDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'src', 'app');
 
 /**
- * Files another round-20 branch owns (fix/r20-portal-overlays-display), left
- * untouched here to avoid a merge conflict. Each is a real instance of the
- * class, listed in the hand-back with its fix; the pin is removed when that
- * fix lands. A pin whose file no longer offends fails the test, so this list
- * can only shrink.
+ * Pinned files: none. The round-20 branches pinned admissions, appointment
+ * detail, bed board and the nursing intake while another branch owned those
+ * files; the merge into qa/r16-combined fixed every one the same way
+ * (`[disabled]` for the request in flight, the rest in `[appSubmitGuard]`).
+ * A new pin needs a written reason, and a pin whose file no longer offends
+ * fails the test, so this list can only shrink.
  */
-const PINS = new Map([
-  [
-    'admissions/admissions.html',
-    'D1124: bed assign, admit and discharge (fix/r20-portal-overlays-display owns admissions.html)',
-  ],
-  [
-    'appointments/appointment-detail.html',
-    'D1124: start / complete before the appointment started (owned by fix/r20-portal-overlays-display)',
-  ],
-  [
-    'bed-board/bed-board.html',
-    'D1124: precaution reason and transfer (owned by fix/r20-portal-overlays-display)',
-  ],
-  [
-    'nurse-station/nursing-intake-form/nursing-intake-form.component.html',
-    'D1124: intake submit and reconciled row (owned by fix/r20-portal-overlays-display)',
-  ],
-]);
+const PINS = new Map();
 
 function scanApp() {
   const offenders = new Map();

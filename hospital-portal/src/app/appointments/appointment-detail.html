@@ -82,7 +82,12 @@
                 <button
                   class="btn-xs btn-complete"
                   (click)="markAsCompleted()"
-                  [disabled]="saving() || !hasAppointmentStarted"
+                  [disabled]="saving()"
+                  [appSubmitGuard]="
+                    hasAppointmentStarted
+                      ? null
+                      : ('APPOINTMENTS.CANNOT_COMPLETE_BEFORE_START' | translate)
+                  "
                   [title]="
                     hasAppointmentStarted
                       ? ('APPOINTMENTS.MARK_COMPLETED' | translate)
@@ -105,7 +110,12 @@
                 class="btn-xs btn-noshow"
                 data-testid="mark-no-show"
                 (click)="markAsNoShow()"
-                [disabled]="saving() || !hasAppointmentStarted"
+                [disabled]="saving()"
+                [appSubmitGuard]="
+                  hasAppointmentStarted
+                    ? null
+                    : ('APPOINTMENTS.CANNOT_NO_SHOW_BEFORE_START' | translate)
+                "
                 [title]="
                   hasAppointmentStarted
                     ? ('APPOINTMENTS.MARK_NO_SHOW' | translate)

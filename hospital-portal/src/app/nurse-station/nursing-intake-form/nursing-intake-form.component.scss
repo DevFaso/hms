@@ -200,6 +200,12 @@
       margin: 4px 0 0;
       color: var(--text-secondary, #555);
     }
+
+    &__status {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--success-color, #1b6e3a);
+    }
   }
 
   .btn-add--inline {
