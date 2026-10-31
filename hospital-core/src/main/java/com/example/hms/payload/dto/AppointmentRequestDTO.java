@@ -67,4 +67,12 @@ public class AppointmentRequestDTO {
 
     private String reason;
     private String notes;
+
+    /**
+     * QA D1126: why the visit is cancelled or marked a no-show, required when
+     * this edit moves the status to CANCELLED or NO_SHOW (the same rule as the
+     * status action). Not the booking {@link #reason}.
+     */
+    @jakarta.validation.constraints.Size(max = 500)
+    private String statusReason;
 }

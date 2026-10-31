@@ -58,4 +58,21 @@ public interface PharmacyPaymentRepository extends JpaRepository<PharmacyPayment
                               @org.springframework.data.repository.query.Param("voidedBy") UUID voidedBy,
                               @org.springframework.data.repository.query.Param("reason") String reason,
                               @org.springframework.data.repository.query.Param("now") java.time.LocalDateTime now);
+
+    /**
+     * QA D1129 (round 20): whether a provider reference is already on a POSTED
+     * mobile-money pharmacy payment of the same hospital, compared without case or
+     * spaces (the normal form of {@code PaymentReferenceRegistry}). Scoped to
+     * one hospital like the invoice check (QA D782).
+     */
+    @org.springframework.data.jpa.repository.Query("""
+           SELECT COUNT(p) > 0
+             FROM PharmacyPayment p
+            WHERE p.hospital.id = :hospitalId
+              AND LOWER(REPLACE(TRIM(p.referenceNumber), ' ', '')) = :reference
+              AND p.paymentMethod = com.example.hms.enums.PharmacyPaymentMethod.MOBILE_MONEY
+              AND p.status = com.example.hms.enums.PharmacyPaymentStatus.POSTED
+           """)
+    boolean existsLiveReference(@org.springframework.data.repository.query.Param("hospitalId") UUID hospitalId,
+                                @org.springframework.data.repository.query.Param("reference") String reference);
 }

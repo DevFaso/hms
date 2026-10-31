@@ -67,7 +67,15 @@ public class BpaProtocolsCdsService implements CdsHookService {
         );
     }
 
+    /**
+     * QA D1121 (round 20): read-only transaction around the chart-view
+     * evaluation, so the patient and its readings stay readable for the whole
+     * hook (open-in-view is off). The rules themselves must not depend on it
+     * - {@code BpaRulesOutsideSessionIT} runs each one with no session open -
+     * this is the second line of defence, not the fix.
+     */
     @Override
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public CdsHookResponse evaluate(CdsHookRequest request) {
         UUID patientId = CdsHookContext.requirePatientId(request);
         if (patientId == null) return CdsHookResponse.empty();

@@ -281,9 +281,12 @@ class AppointmentStatusTransitionTest {
         when(appointmentRepository.save(any())).thenReturn(appointment);
         when(appointmentMapper.toAppointmentResponseDTO(appointment)).thenReturn(dto);
 
-        appointmentService.confirmOrCancelAppointment(appointmentId, "cancel", null, "doctor_b");
+        // QA D1126: a cancel carries its reason (the call used to send none).
+        appointmentService.confirmOrCancelAppointment(appointmentId, "cancel", "  Patient called to cancel ",
+            null, "doctor_b");
 
         verify(appointmentRepository).save(appointment);
+        org.assertj.core.api.Assertions.assertThat(appointment.getStatusReason()).isEqualTo("Patient called to cancel");
         // The appointment owns its slot (P3 #22): cancelling frees the time.
         verify(slotInventoryService).releaseForAppointment(appointmentId);
         // The fulfilment-critical link to item 45's outbox: the cancel is
@@ -432,17 +435,91 @@ class AppointmentStatusTransitionTest {
         org.assertj.core.api.Assertions.assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.COMPLETED);
     }
 
-    @Test
-    void checkedInAppointmentCanBeMarkedNoShow() {
-        // The patient checked in and then left before being seen. Rare, but
-        // the front desk has to be able to record it.
+    /**
+     * QA D1126 (round 20), changed assertion: this test used to prove a
+     * CHECKED_IN appointment could be marked NO_SHOW ("checked in and then
+     * left before being seen"). That patient now leaves through the reception
+     * queue's close-without-a-consultation (LEFT_WITHOUT_BEING_SEEN, round 13),
+     * which needs a reason and refuses while a paid copay stands. Cancelling
+     * or no-showing the appointment alone dropped the patient from triage with
+     * the visit open and the copay PAID.
+     */
+    @org.junit.jupiter.params.ParameterizedTest(name = "{0}")
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"no_show", "cancel"})
+    void qaD1126_aCheckedInAppointmentIsClosedFromTheQueueNotCancelledHere(String action) {
         givenAppointment(AppointmentStatus.CHECKED_IN, LocalDate.now().minusDays(1));
+
+        assertThatThrownBy(() ->
+            appointmentService.confirmOrCancelAppointment(appointmentId, action, "Left the waiting room", null,
+                "doctor_b"))
+            .isInstanceOf(BusinessException.class)
+            .satisfies(ex -> org.assertj.core.api.Assertions.assertThat(((BusinessException) ex).getMessageKey())
+                .isEqualTo("appointment.status.checkedInCloseFromQueue"));
+
+        verify(appointmentRepository, never()).save(any());
+        org.assertj.core.api.Assertions.assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.CHECKED_IN);
+    }
+
+    /** QA D1126 / D1132: no cancel and no no-show without a reason on the status action. */
+    @org.junit.jupiter.params.ParameterizedTest(name = "{0} / [{1}]")
+    @org.junit.jupiter.params.provider.CsvSource(value = {"cancel,NULL", "cancel,'   '", "no_show,NULL", "no_show,''"},
+        nullValues = "NULL")
+    void qaD1126_aCancelOrNoShowWithoutAReasonIsRefused(String action, String reason) {
+        givenAppointment(AppointmentStatus.CONFIRMED, LocalDate.now().minusDays(1));
+
+        assertThatThrownBy(() ->
+            appointmentService.confirmOrCancelAppointment(appointmentId, action, reason, null, "doctor_b"))
+            .isInstanceOf(BusinessException.class)
+            .satisfies(ex -> org.assertj.core.api.Assertions.assertThat(((BusinessException) ex).getMessageKey())
+                .isEqualTo("appointment.status.reasonRequired"));
+
+        verify(appointmentRepository, never()).save(any());
+        org.assertj.core.api.Assertions.assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.CONFIRMED);
+    }
+
+    @Test
+    void qaD1126_anOverLongReasonIsRefused() {
+        givenAppointment(AppointmentStatus.CONFIRMED, LocalDate.now().minusDays(1));
+
+        assertThatThrownBy(() ->
+            appointmentService.confirmOrCancelAppointment(appointmentId, "cancel", "x".repeat(501), null, "doctor_b"))
+            .isInstanceOf(BusinessException.class)
+            .satisfies(ex -> org.assertj.core.api.Assertions.assertThat(((BusinessException) ex).getMessageKey())
+                .isEqualTo("appointment.status.reasonTooLong"));
+        verify(appointmentRepository, never()).save(any());
+    }
+
+    @Test
+    void qaD1126_aNoShowKeepsItsReason() {
+        givenAppointment(AppointmentStatus.CONFIRMED, LocalDate.now().minusDays(1));
         stubSaveAndMap();
 
-        appointmentService.confirmOrCancelAppointment(appointmentId, "no_show", null, "doctor_b");
+        appointmentService.confirmOrCancelAppointment(appointmentId, "no_show", "No answer on three calls", null,
+            "doctor_b");
 
-        org.assertj.core.api.Assertions.assertThat(appointment.getStatus())
-            .isEqualTo(AppointmentStatus.NO_SHOW);
+        org.assertj.core.api.Assertions.assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.NO_SHOW);
+        org.assertj.core.api.Assertions.assertThat(appointment.getStatusReason()).isEqualTo("No answer on three calls");
+    }
+
+    /** QA D1126: the edit form (PUT /appointments/{id}) is held to the same reason and the same checked-in rule. */
+    @org.junit.jupiter.params.ParameterizedTest(name = "{0} -> {1}")
+    @org.junit.jupiter.params.provider.CsvSource({
+        "CONFIRMED,CANCELLED,appointment.status.reasonRequired",
+        "CONFIRMED,NO_SHOW,appointment.status.reasonRequired",
+        "CHECKED_IN,CANCELLED,appointment.status.checkedInCloseFromQueue",
+        "CHECKED_IN,NO_SHOW,appointment.status.checkedInCloseFromQueue"})
+    void qaD1126_theEditFormDropsAVisitOnlyWithAReason(AppointmentStatus from, AppointmentStatus to, String key) {
+        givenAppointment(from, LocalDate.now().minusDays(1));
+        com.example.hms.payload.dto.AppointmentRequestDTO edit = editOf(to);
+
+        assertThatThrownBy(() ->
+            appointmentService.updateAppointment(appointmentId, edit, java.util.Locale.ENGLISH, "doctor_b"))
+            .isInstanceOf(BusinessException.class)
+            .satisfies(ex -> org.assertj.core.api.Assertions.assertThat(((BusinessException) ex).getMessageKey())
+                .isEqualTo(key));
+        verify(appointmentRepository, never()).save(any());
+        verify(appointmentRepository, never()).saveAndFlush(any());
+        org.assertj.core.api.Assertions.assertThat(appointment.getStatus()).isEqualTo(from);
     }
 
     @Test
@@ -669,6 +746,7 @@ class AppointmentStatusTransitionTest {
     void round8_aPutThatCancelsReleasesTheInventorySlotLikeTheStatusAction() {
         givenAppointment(AppointmentStatus.SCHEDULED, LocalDate.now().plusDays(7));
         com.example.hms.payload.dto.AppointmentRequestDTO edit = editOf(AppointmentStatus.CANCELLED);
+        edit.setStatusReason("Patient called to cancel"); // QA D1126: a PUT that cancels carries its reason
         ReflectionTestUtils.setField(appointmentService, "entityManager",
             mock(jakarta.persistence.EntityManager.class));
         org.mockito.Mockito.doAnswer(inv -> {
@@ -787,7 +865,8 @@ class AppointmentStatusTransitionTest {
         appointment.setEndTime(startedThere.toLocalTime().plusMinutes(1));
         stubSaveAndMap();
 
-        appointmentService.confirmOrCancelAppointment(appointmentId, "no_show", null, "doctor_b");
+        // QA D1126: a no-show carries its reason.
+        appointmentService.confirmOrCancelAppointment(appointmentId, "no_show", "Did not come", null, "doctor_b");
 
         org.assertj.core.api.Assertions.assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.NO_SHOW);
     }

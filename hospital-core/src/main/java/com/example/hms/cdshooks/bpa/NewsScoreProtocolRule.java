@@ -73,8 +73,11 @@ public class NewsScoreProtocolRule implements BpaRule {
 
         Optional<PatientVitalSign> latest = latestClinicalVitals(context.recentVitals());
         if (latest.isEmpty()) return List.of();
-        // QA D518: no adult NEWS2 card for a child.
-        if (!NewsScoreCalculator.appliesTo(context.patient()) || !NewsScoreCalculator.applies(latest.get())) {
+        // QA D518: no adult NEWS2 card for a child. QA D1121: asked of the
+        // context's patient only - the bundle's own patient is a LAZY proxy
+        // (the same patient: vitals are loaded by patient id) that cannot be
+        // read outside a session, and reading it dropped every NEWS2 card.
+        if (!NewsScoreCalculator.appliesTo(context.patient())) {
             return List.of();
         }
 

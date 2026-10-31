@@ -120,7 +120,8 @@ class RoundSixFrenchTextTest {
         Throwable alert = catchThrowable(() -> ReflectionTestUtils.invokeMethod(service, "handleAllergyConflict",
             patient, unknown, "Amoxicilline", Boolean.FALSE, ""));
         assertThat(alert).isInstanceOf(CdsCriticalBlockException.class);
-        assertThat(alert.getMessage()).contains("(gravité : inconnu)").doesNotContain("UNKNOWN");
+        // QA D1134 (changed assertion): "gravité" is feminine, so "inconnue" (was pinned as "inconnu").
+        assertThat(alert.getMessage()).contains("(gravité : inconnue)").doesNotContain("UNKNOWN");
 
         PatientAllergy severe = new PatientAllergy();
         severe.setAllergenDisplay("Pénicilline");
@@ -128,6 +129,13 @@ class RoundSixFrenchTextTest {
         Throwable severeAlert = catchThrowable(() -> ReflectionTestUtils.invokeMethod(service, "handleAllergyConflict",
             patient, severe, "Amoxicilline", Boolean.FALSE, ""));
         assertThat(severeAlert.getMessage()).contains("(gravité : sévère)").doesNotContain("SEVERE");
+
+        PatientAllergy mild = new PatientAllergy();
+        mild.setAllergenDisplay("Pénicilline");
+        mild.setSeverity(AllergySeverity.MILD);
+        Throwable mildAlert = catchThrowable(() -> ReflectionTestUtils.invokeMethod(service, "handleAllergyConflict",
+            patient, mild, "Amoxicilline", Boolean.FALSE, ""));
+        assertThat(mildAlert.getMessage()).contains("(gravité : légère)");
     }
 
     @Test

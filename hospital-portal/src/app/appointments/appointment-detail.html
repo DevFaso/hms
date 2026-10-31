@@ -148,6 +148,13 @@
               <span class="field-value">{{ appt.notes }}</span>
             </div>
           }
+          <!-- QA D1126 / D1132: why the visit was cancelled or marked a no-show. -->
+          @if (appt.statusReason) {
+            <div class="field-row" data-testid="status-reason">
+              <span class="field-label">{{ 'APPOINTMENTS.STATUS_REASON' | translate }}</span>
+              <span class="field-value">{{ appt.statusReason }}</span>
+            </div>
+          }
           <div class="field-row">
             <span class="field-label">{{ 'APPOINTMENTS.CREATED_BY' | translate }}</span>
             <span class="field-value">{{ appt.createdByName }}</span>
@@ -374,7 +381,12 @@
     >
       <div class="modal-header">
         <h2 id="appointment-detail-dialog-1-title">
-          {{ 'APPOINTMENTS.CANCEL_APPOINTMENT' | translate }}
+          {{
+            (dropAction() === 'CANCEL'
+              ? 'APPOINTMENTS.CANCEL_APPOINTMENT'
+              : 'APPOINTMENTS.NO_SHOW_DIALOG_TITLE'
+            ) | translate
+          }}
         </h2>
         <button
           type="button"
@@ -387,9 +399,39 @@
       </div>
       <div class="modal-body">
         <p class="confirm-message">
-          {{ 'APPOINTMENTS.CANCEL_CONFIRM_MESSAGE' | translate }}<br />
+          {{
+            (dropAction() === 'CANCEL'
+              ? 'APPOINTMENTS.CANCEL_CONFIRM_MESSAGE'
+              : 'APPOINTMENTS.NO_SHOW_CONFIRM_MESSAGE'
+            ) | translate
+          }}<br />
           <strong>{{ 'APPOINTMENTS.CANNOT_BE_UNDONE' | translate }}</strong>
         </p>
+        <!-- QA D1126 / D1132: the reason is required and kept with the appointment. -->
+        <div class="field">
+          <label for="dropReason">{{ 'APPOINTMENTS.STATUS_REASON_LABEL' | translate }}</label>
+          <textarea
+            id="dropReason"
+            name="dropReason"
+            rows="3"
+            data-testid="drop-reason"
+            [attr.maxlength]="dropReasonMax"
+            [(ngModel)]="dropReason"
+            (ngModelChange)="dropReasonError.set(false)"
+            [attr.aria-invalid]="dropReasonError() ? 'true' : null"
+            [attr.aria-describedby]="dropReasonError() ? 'dropReasonError' : null"
+          ></textarea>
+          @if (dropReasonError()) {
+            <p
+              id="dropReasonError"
+              class="field-error"
+              role="alert"
+              data-testid="drop-reason-error"
+            >
+              {{ 'APPOINTMENTS.STATUS_REASON_REQUIRED' | translate }}
+            </p>
+          }
+        </div>
       </div>
       <div class="modal-actions">
         <button type="button" class="btn-secondary" (click)="closeCancelConfirm()">
@@ -398,13 +440,19 @@
         <button
           type="button"
           class="btn-danger"
+          data-testid="drop-confirm"
           (click)="executeCancel()"
           [disabled]="cancelling()"
         >
           {{
-            cancelling()
-              ? ('APPOINTMENTS.CANCELLING' | translate)
-              : ('APPOINTMENTS.YES_CANCEL' | translate)
+            (cancelling()
+              ? dropAction() === 'CANCEL'
+                ? 'APPOINTMENTS.CANCELLING'
+                : 'COMMON.SAVING'
+              : dropAction() === 'CANCEL'
+                ? 'APPOINTMENTS.YES_CANCEL'
+                : 'APPOINTMENTS.CONFIRM_NO_SHOW'
+            ) | translate
           }}
         </button>
       </div>

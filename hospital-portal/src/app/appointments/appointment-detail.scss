@@ -368,3 +368,11 @@
   font-size: 0.8rem;
   color: var(--text-secondary);
 }
+
+/* QA D1126 / D1132: the refusal of a blank cancel or no-show reason. */
+.field-error {
+  display: block;
+  margin: 0;
+  color: var(--danger, #b42318);
+  font-size: 0.8rem;
+}

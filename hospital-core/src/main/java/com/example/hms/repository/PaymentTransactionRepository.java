@@ -113,7 +113,8 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
 
     /**
      * QA D345: whether a provider reference is already on a pending or
-     * confirmed row of the same hospital, compared without case or spaces.
+     * confirmed row of the same hospital, compared without case or spaces
+     * (QA D1129: inner spaces too, the normal form of {@code PaymentReferenceRegistry}).
      * Scoped to one hospital by design (QA D782): a check across hospitals
      * would disclose another tenant's transaction ids.
      */
@@ -121,7 +122,7 @@ public interface PaymentTransactionRepository extends JpaRepository<PaymentTrans
            SELECT COUNT(pt) > 0
              FROM PaymentTransaction pt
             WHERE pt.invoice.hospital.id = :hospitalId
-              AND LOWER(TRIM(pt.referenceNumber)) = :reference
+              AND LOWER(REPLACE(TRIM(pt.referenceNumber), ' ', '')) = :reference
               AND pt.paymentMethod <> com.example.hms.enums.PaymentMethod.CASH
               AND pt.status IN :statuses
            """)

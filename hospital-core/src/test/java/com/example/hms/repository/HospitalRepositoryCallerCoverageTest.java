@@ -79,7 +79,6 @@ class HospitalRepositoryCallerCoverageTest {
         entry("MeController.myHospital#findById", LABEL + " (the caller's own facility)"),
         entry("AuthBootstrapServiceImpl.resolveCurrentSession#findById", LABEL + " (the caller's own primary facility)"),
         entry("MorbidityAnalyticsServiceImpl.hospitalView#findById", LABEL),
-        entry("CdsCardText.zoneOf#findById", "QA D1114: reads the hospital's time zone to write a card time on its wall clock; grants, writes and lists nothing"),
         entry("PatientPortalServiceImpl.toProfileDTO#findById", LABEL + " (a hospital on the patient's own record)"),
         entry("UserServiceImpl.createUserWithRolesAndHospital#findById", LABEL + " (the activation message)"),
         entry("UserServiceImpl.normalizePhone#findById", "reads the hospital's country for the phone calling code; grants, writes and lists nothing"),
@@ -154,7 +153,11 @@ class HospitalRepositoryCallerCoverageTest {
         entry("UserRoleHospitalAssignmentServiceImpl#findByNameIgnoreCase",
             "the assignment target by name: a provider is a valid target, held to RoleFacilityCompatibility (slice 1)"),
         entry("UserServiceImpl#findByCodeIgnoreCase", "the dev default hospital by its fixed code"),
-        entry("DevSyntheticDataSeeder#findByCodeIgnoreCase", "dev seed data, by the seed's own fixed codes"));
+        entry("DevSyntheticDataSeeder#findByCodeIgnoreCase", "dev seed data, by the seed's own fixed codes"),
+        // QA D1121: moved from BY_ID_RECORDED ("CdsCardText.zoneOf#findById"), the same read as a plain value.
+        entry("CdsCardText#findTimezoneIdById",
+            "QA D1114/D1121: reads the hospital's time-zone id as a value to write a card time on its wall clock;"
+                + " grants, writes and lists nothing"));
 
     @Test
     @DisplayName("every unfiltered HospitalRepository caller is recorded with its reason")

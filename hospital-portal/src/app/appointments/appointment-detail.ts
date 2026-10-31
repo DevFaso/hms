@@ -328,7 +328,25 @@ export class AppointmentDetailComponent implements OnInit {
 
   // ─── Cancel ─────────────────────────────────────────────────────────────────
 
+  /**
+   * QA D1126 / D1132 (round 20): the visit is dropped (cancelled, or marked a
+   * no-show) only with a reason, which the server requires and keeps. One
+   * dialog serves both; the confirm button is never silently disabled for a
+   * blank reason, it says why on click (the D1089 rule).
+   */
+  readonly dropAction = signal<'CANCEL' | 'NO_SHOW'>('CANCEL');
+  dropReason = '';
+  readonly dropReasonError = signal(false);
+  readonly dropReasonMax = 500;
+
   openCancelConfirm(): void {
+    this.openDropDialog('CANCEL');
+  }
+
+  private openDropDialog(action: 'CANCEL' | 'NO_SHOW'): void {
+    this.dropAction.set(action);
+    this.dropReason = '';
+    this.dropReasonError.set(false);
     this.showCancelConfirm.set(true);
   }
 
@@ -337,11 +355,22 @@ export class AppointmentDetailComponent implements OnInit {
   }
 
   executeCancel(): void {
+    const reason = this.dropReason.trim();
+    if (!reason) {
+      this.dropReasonError.set(true);
+      return;
+    }
+    this.dropReasonError.set(false);
+    const action = this.dropAction();
     this.cancelling.set(true);
-    this.appointmentService.updateStatus(this.appointmentId, 'CANCEL').subscribe({
+    this.appointmentService.updateStatus(this.appointmentId, action, reason).subscribe({
       next: (updated) => {
         this.appointment.set(updated);
-        this.toast.success(this.translate.instant('APPOINTMENTS.CANCEL_SUCCESS'));
+        this.toast.success(
+          this.translate.instant(
+            action === 'CANCEL' ? 'APPOINTMENTS.CANCEL_SUCCESS' : 'APPOINTMENTS.STATUS_UPDATED',
+          ),
+        );
         this.showCancelConfirm.set(false);
         this.cancelling.set(false);
       },
@@ -365,7 +394,8 @@ export class AppointmentDetailComponent implements OnInit {
   }
 
   markAsNoShow(): void {
-    this.updateStatus('NO_SHOW');
+    // QA D1132: a no-show drops the visit too, so it asks for the reason.
+    this.openDropDialog('NO_SHOW');
   }
 
   /**

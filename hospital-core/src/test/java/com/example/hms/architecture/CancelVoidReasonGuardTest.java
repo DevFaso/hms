@@ -11,11 +11,18 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
+import org.springframework.asm.ClassReader;
+import org.springframework.asm.ClassVisitor;
+import org.springframework.asm.MethodVisitor;
+import org.springframework.asm.SpringAsmInfo;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -187,6 +194,152 @@ class CancelVoidReasonGuardTest {
         assertThat(VOID_PATH.matcher("/billing-invoices/{id}/payments").find()).isFalse();
         assertThat(isMoneyController("controller/pharmacy/PharmacySaleController.java")).isTrue();
         assertThat(isMoneyController("controller/PatientController.java")).isFalse();
+    }
+
+    // ── QA D1126 / D1132 (round 20): appointments ─────────────────────────
+
+    private static final String APPOINTMENT = "com/example/hms/model/Appointment";
+    private static final String APPOINTMENT_BUILDER = APPOINTMENT + "$AppointmentBuilder";
+
+    /**
+     * QA D1126 / D1132 (round 20): every main-code method that writes an
+     * appointment's status ({@code Appointment.setStatus} or the builder's
+     * {@code status(...)}), found by a bytecode scan, is listed here: either
+     * it can drop the visit (CANCELLED or NO_SHOW), with where the reason
+     * comes from and the test that proves a blank one is refused, or why the
+     * path carries its own reason ("OWN REASON"), or "NEVER DROPS: why".
+     * Round 19's guard covered pharmacy and billing only, and
+     * {@code PUT /appointments/{id}/status?action=CANCEL} with no body
+     * answered 200.
+     */
+    private static final Map<String, String> APPOINTMENT_STATUS_WRITERS = new LinkedHashMap<>();
+
+    static {
+        APPOINTMENT_STATUS_WRITERS.put("AppointmentServiceImpl.confirmOrCancelAppointment",
+            "AppointmentStatusChangeRequestDTO.reason -> service/AppointmentStatusTransitionTest#qaD1126_aCancelOrNoShowWithoutAReasonIsRefused");
+        APPOINTMENT_STATUS_WRITERS.put("AppointmentMapper.updateAppointmentFromDto",
+            "AppointmentRequestDTO.statusReason (checked in AppointmentServiceImpl.updateAppointment before the mapper runs)"
+                + " -> service/AppointmentStatusTransitionTest#qaD1126_theEditFormDropsAVisitOnlyWithAReason");
+        APPOINTMENT_STATUS_WRITERS.put("AppointmentServiceImpl.createAppointment",
+            "AppointmentRequestDTO.statusReason (requireStatusReason on the requested status)"
+                + " -> architecture/CancelVoidReasonGuardTest#aBookingWrittenAsCancelledNeedsAReason");
+        APPOINTMENT_STATUS_WRITERS.put("EncounterServiceImpl.closeUnseen",
+            "CloseUnseenVisitRequestDTO.reason (required, QA D788)"
+                + " -> service/EncounterServiceImplTest#qaD1126_closeUnseenKeepsTheReasonOnTheAppointment");
+        APPOINTMENT_STATUS_WRITERS.put("PatientPortalServiceImpl.cancelMyAppointment",
+            "OWN REASON: the patient cancels their own not-yet-started booking; the reason is optional on purpose"
+                + " (the shipped iOS app labels it 'Reason (optional)') and kept in status_reason when given");
+        APPOINTMENT_STATUS_WRITERS.put("MortalityServiceImpl.cancelFutureAppointments",
+            "OWN REASON: the death record cancels the patient's future bookings; the record is the reason (written"
+                + " to the notes); only SCHEDULED, CONFIRMED and RESCHEDULED bookings after the date of death");
+        APPOINTMENT_STATUS_WRITERS.put("AppointmentMapper.toAppointment",
+            "NEVER DROPS: no main code calls it; createAppointment builds the row itself and checks the reason");
+        APPOINTMENT_STATUS_WRITERS.put("DevSyntheticDataSeeder.createAppointment",
+            "NEVER DROPS: dev seed data, written COMPLETED");
+        APPOINTMENT_STATUS_WRITERS.put("EncounterServiceImpl.checkOut", "NEVER DROPS: the check-out completes the appointment");
+        APPOINTMENT_STATUS_WRITERS.put("EncounterServiceImpl.createFollowUpAppointmentFromCheckout",
+            "NEVER DROPS: the follow-up is booked PENDING");
+        APPOINTMENT_STATUS_WRITERS.put("GeneralReferralServiceImpl.createAppointmentForReferral",
+            "NEVER DROPS: the referral's appointment is booked SCHEDULED");
+        APPOINTMENT_STATUS_WRITERS.put("PatientPortalServiceImpl.scheduleMyAppointment",
+            "NEVER DROPS: the patient's booking is written SCHEDULED");
+        APPOINTMENT_STATUS_WRITERS.put("PatientPortalServiceImpl.rescheduleMyAppointment",
+            "NEVER DROPS: a moved booking stays PENDING or becomes SCHEDULED (movedStatus)");
+        APPOINTMENT_STATUS_WRITERS.put("ReceptionServiceImpl.checkInPatient", "NEVER DROPS: the check-in writes CHECKED_IN");
+        APPOINTMENT_STATUS_WRITERS.put("SlotInventoryServiceImpl.book", "NEVER DROPS: a slot booking is written SCHEDULED");
+    }
+
+    @Test
+    void everyAppointmentStatusWriteIsListedWithItsReasonProof() throws IOException {
+        Set<String> writers = appointmentStatusWriters();
+        assertThat(writers).as("appointment status writers found").hasSizeGreaterThanOrEqualTo(4);
+        assertThat(new TreeSet<>(writers))
+            .as("a method that writes an appointment's status is not listed (QA D1126): say whether it can cancel"
+                + " or no-show the visit and where the reason comes from, or a listed one is gone")
+            .isEqualTo(new TreeSet<>(APPOINTMENT_STATUS_WRITERS.keySet()));
+        for (Map.Entry<String, String> e : APPOINTMENT_STATUS_WRITERS.entrySet()) {
+            String v = e.getValue();
+            if (!v.contains(" -> ")) {
+                assertThat(v).as(e.getKey()).matches("(NEVER DROPS|OWN REASON): .+");
+                continue;
+            }
+            String[] parts = v.substring(v.indexOf(" -> ") + 4).split("#");
+            Path file = TEST.resolve(parts[0] + ".java");
+            assertThat(file).as(v).exists();
+            assertThat(Files.readString(file)).as(v).containsPattern("void " + Pattern.quote(parts[1]) + "\\(");
+        }
+    }
+
+    /** QA D1132 (UI): the desk dialog asks for the reason, proven by a click-level spec. */
+    @Test
+    void theDeskAppointmentDialogProvesTheReason() throws IOException {
+        Path spec = Path.of("../hospital-portal/src/app/appointments/appointment-detail.spec.ts");
+        assertThat(Files.readString(spec)).contains("D1126").contains("drop-confirm").contains("drop-reason-error");
+    }
+
+    /** QA D1126: a booking written straight as CANCELLED or NO_SHOW is held to the same reason. */
+    @Test
+    void aBookingWrittenAsCancelledNeedsAReason() throws IOException {
+        for (com.example.hms.enums.AppointmentStatus dropped : List.of(
+                com.example.hms.enums.AppointmentStatus.CANCELLED, com.example.hms.enums.AppointmentStatus.NO_SHOW)) {
+            org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                    com.example.hms.service.AppointmentServiceImpl.requireStatusReason(dropped, " "))
+                .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                .hasFieldOrPropertyWithValue("messageKey", "appointment.status.reasonRequired");
+        }
+        assertThat(com.example.hms.service.AppointmentServiceImpl
+            .requireStatusReason(com.example.hms.enums.AppointmentStatus.SCHEDULED, null)).isNull();
+        assertThat(Files.readString(MAIN.resolve("service/AppointmentServiceImpl.java")))
+            .as("createAppointment keeps the reason of the status it writes")
+            .contains("appointment.setStatusReason(requireStatusReason(status, request.getStatusReason()))");
+    }
+
+    /** "OuterClass.method" of every main-code write of an appointment's status (a lambda counts as its method). */
+    private static Set<String> appointmentStatusWriters() throws IOException {
+        Set<String> writers = new TreeSet<>();
+        Resource[] all = new PathMatchingResourcePatternResolver().getResources("classpath*:com/example/hms/**/*.class");
+        for (Resource resource : all) {
+            if (!resource.getURL().toString().contains("/main/")) {
+                continue;
+            }
+            String[] owner = new String[1];
+            try (java.io.InputStream in = resource.getInputStream()) {
+                new ClassReader(in).accept(new ClassVisitor(SpringAsmInfo.ASM_VERSION) {
+                    @Override
+                    public void visit(int version, int access, String name, String signature,
+                                      String superName, String[] interfaces) {
+                        String simple = name.substring(name.lastIndexOf('/') + 1);
+                        owner[0] = simple.contains("$") ? simple.substring(0, simple.indexOf('$')) : simple;
+                    }
+
+                    @Override
+                    public MethodVisitor visitMethod(int access, String name, String descriptor,
+                                                     String signature, String[] exceptions) {
+                        String caller = owner[0] + "." + enclosingMethod(name);
+                        return new MethodVisitor(SpringAsmInfo.ASM_VERSION) {
+                            @Override
+                            public void visitMethodInsn(int opcode, String target, String method,
+                                                        String desc, boolean isInterface) {
+                                boolean setter = APPOINTMENT.equals(target) && "setStatus".equals(method);
+                                boolean builder = APPOINTMENT_BUILDER.equals(target) && "status".equals(method);
+                                if ((setter || builder) && !"Appointment".equals(owner[0])) {
+                                    writers.add(caller);
+                                }
+                            }
+                        };
+                    }
+                }, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+            }
+        }
+        return writers;
+    }
+
+    private static String enclosingMethod(String name) {
+        if (name.startsWith("lambda$")) {
+            int end = name.indexOf('$', "lambda$".length());
+            return end < 0 ? name : name.substring("lambda$".length(), end);
+        }
+        return name;
     }
 
     private static Class<?> findPayload(String simpleName) throws Exception {

@@ -101,6 +101,15 @@ public class Appointment extends BaseEntity {
     @Column(name = "notes", length = 2048)
     private String notes;
 
+    /**
+     * QA D1126 / D1132 (V255): why the visit was cancelled or marked a
+     * no-show. Required on every staff move to CANCELLED or NO_SHOW; the
+     * close-unseen and death-record cancellations carry their own reason, a
+     * patient's self-cancellation the patient's when one was given.
+     */
+    @Column(name = "status_reason", length = 500)
+    private String statusReason;
+
     /** Timestamp when the patient was checked in by the receptionist (MVP 1). */
     @Column(name = "checked_in_at")
     private LocalDateTime checkedInAt;

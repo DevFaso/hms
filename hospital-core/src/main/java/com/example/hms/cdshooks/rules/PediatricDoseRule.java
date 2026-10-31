@@ -281,9 +281,12 @@ public class PediatricDoseRule implements CdsRule {
             return v == null ? "?" : text.decimal(v, Math.max(0, v.stripTrailingZeros().scale()));
         }
 
-        /** A computed value, two decimals (QA D1078: the reader's separator). */
+        /**
+         * A computed value, at most two decimals and no trailing zeros (QA
+         * D1133: "8000 mg", not "8000,00 mg"), with the reader's separator (QA D1078).
+         */
         private String number(double v) {
-            return text.decimal(v, 2);
+            return text.measure(v, 2);
         }
 
         String ageText() {
@@ -365,7 +368,8 @@ public class PediatricDoseRule implements CdsRule {
      * decimals; a configured limit keeps the decimals it was entered with.
      */
     private String number(Double v) {
-        return v == null ? "?" : text.decimal(v, 2);
+        // QA D1133: no padded zeros ("14 kg", not "14,00 kg").
+        return v == null ? "?" : text.measure(v, 2);
     }
 
 }

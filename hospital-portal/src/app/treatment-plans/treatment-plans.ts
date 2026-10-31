@@ -113,12 +113,17 @@ export class TreatmentPlansComponent implements OnInit {
    * user's language; the wire value stays the raw enum.
    */
   get treatmentPlanStatuses(): { value: string; label: string }[] {
-    return ['DRAFT', 'IN_REVIEW', 'REVISIONS_REQUIRED', 'APPROVED', 'ARCHIVED', 'CANCELLED'].map(
-      (value) => ({
-        value,
-        label: this.translate.instant(`PORTAL.ENUM.TREATMENT_PLAN_STATUS.${value}`),
-      }),
-    );
+    // QA D1127: the author never sets APPROVED (the server refuses it); another
+    // clinician approves from the plan's detail. Shown only on a plan that is
+    // already approved, so the edit keeps reading its status.
+    const statuses = ['DRAFT', 'IN_REVIEW', 'REVISIONS_REQUIRED', 'ARCHIVED', 'CANCELLED'];
+    if (this.form?.status === 'APPROVED') {
+      statuses.splice(3, 0, 'APPROVED');
+    }
+    return statuses.map((value) => ({
+      value,
+      label: this.translate.instant(`PORTAL.ENUM.TREATMENT_PLAN_STATUS.${value}`),
+    }));
   }
 
   emptyForm(): TreatmentPlanRequest {
@@ -342,6 +347,46 @@ export class TreatmentPlansComponent implements OnInit {
 
   viewDetail(p: TreatmentPlanResponse): void {
     this.selectedPlan.set(p);
+  }
+
+  /** QA D1127: a plan not yet approved, opened by a clinician other than its author. */
+  canApprovePlan(p: TreatmentPlanResponse): boolean {
+    const myStaffId = this.auth.getUserProfile()?.staffId ?? null;
+    return (
+      !!myStaffId &&
+      !this.canEditPlan(p) &&
+      ['DRAFT', 'IN_REVIEW', 'REVISIONS_REQUIRED'].includes(p.status)
+    );
+  }
+
+  readonly approving = signal(false);
+
+  /**
+   * QA D1127 (round 20): the approval is another clinician's review (the
+   * server refuses the author's, and refuses APPROVED on the create and the
+   * edit). It moves the plan to APPROVED on the server.
+   */
+  approvePlan(p: TreatmentPlanResponse): void {
+    const myStaffId = this.auth.getUserProfile()?.staffId ?? null;
+    if (!myStaffId) {
+      return;
+    }
+    this.approving.set(true);
+    this.tpService.addReview(p.id, { reviewerStaffId: myStaffId, action: 'APPROVED' }).subscribe({
+      next: () => {
+        this.toast.success(this.translate.instant('TREATMENT.PLAN_APPROVED'));
+        this.approving.set(false);
+        this.closeDetail();
+        this.load();
+      },
+      error: (err: unknown) => {
+        this.toast.error(
+          labelledRefusalReason(err, this.translate, TreatmentPlansComponent.FIELD_LABELS) ??
+            this.translate.instant('TREATMENT.SAVE_FAILED'),
+        );
+        this.approving.set(false);
+      },
+    });
   }
   closeDetail(): void {
     this.selectedPlan.set(null);

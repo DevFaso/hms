@@ -109,7 +109,8 @@ class PediatricDoseRuleRound18Test {
 
         assertThat(anyHardStop(cards)).isTrue();
         assertThat(cards.stream().filter(CdsCard::blocksOverride).findFirst().orElseThrow().summary())
-            .contains("6000.00 mg").contains("4000");
+            // QA D1133 (changed assertion): no padded zeros, "6000 mg" (was "6000.00 mg").
+            .contains("6000 mg").doesNotContain("6000.00").contains("4000");
     }
 
     /** Review of round 18: an unreadable frequency still counts the dose itself against the daily cap. */
@@ -290,7 +291,9 @@ class PediatricDoseRuleRound18Test {
                     .filter(c -> c.summary().contains("mg/kg")).findFirst().orElseThrow();
                 assertThat(ceiling.summary()).as(reader.toString())
                     .contains("0,48 mg/kg").contains("0,1 mg/kg").doesNotContain("0.48").doesNotContain("0.1 ");
-                assertThat(ceiling.detail()).as(reader.toString()).contains("10,50").doesNotContain("10.50");
+                // QA D1133 (changed assertion): "10,5" with no padded zero (was "10,50"); still no point.
+                assertThat(ceiling.detail()).as(reader.toString()).contains("10,5 ").doesNotContain("10.5")
+                    .doesNotContain("10,50");
             }
             LocaleContextHolder.setLocale(Locale.ENGLISH);
             CdsCard english = localized.evaluate(order).stream()

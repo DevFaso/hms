@@ -19,6 +19,7 @@
     "src/app/admin-governance/security-tab.html::template.category",
     "src/app/admissions/admissions.html::a.acuityLevel",
     "src/app/appointments/appointment-detail.html::appt.reason",
+    "src/app/appointments/appointment-detail.html::appt.statusReason",
     "src/app/appointments/appointment-list.html::appt.reason",
     "src/app/bed-board/bed-board.html::p.reason",
     "src/app/bed-board/bed-board.html::t.reason",

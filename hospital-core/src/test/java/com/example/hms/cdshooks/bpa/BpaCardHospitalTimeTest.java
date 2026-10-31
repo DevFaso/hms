@@ -49,6 +49,8 @@ class BpaCardHospitalTimeTest {
         hospital.setId(hospitalId);
         hospital.setOrganization(organization);
         when(hospitals.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        // QA D1121: the zone is read as a value, never through the LAZY organisation.
+        when(hospitals.findTimezoneIdById(hospitalId)).thenReturn(Optional.of(HOSPITAL_ZONE.getId()));
         CdsCardText text = new CdsCardText(null);
         text.setHospitals(hospitals);
         return text;

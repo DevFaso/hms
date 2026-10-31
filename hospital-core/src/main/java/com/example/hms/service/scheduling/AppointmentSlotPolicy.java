@@ -173,6 +173,38 @@ public class AppointmentSlotPolicy {
     }
 
     /**
+     * QA D1139 (round 20): the published slot a checkout follow-up takes: the
+     * earliest slot of the clinician ({@code staffId}) on {@code date}, at
+     * {@code hospitalId}, that is offerable now, starts later than now, and
+     * that {@code free} accepts (no booking already on its time). The pick is
+     * empty with {@code published = true} when the clinician publishes slots
+     * that day and none is free, and with {@code published = false} when the
+     * day has no published slot at all (an ad-hoc clinic, where the caller
+     * keeps its own grid).
+     */
+    public PublishedPick firstFreePublished(UUID staffId, UUID hospitalId, LocalDate date,
+                                            java.util.function.Predicate<AppointmentSlot> free) {
+        if (staffId == null || date == null) {
+            return new PublishedPick(false, null);
+        }
+        java.util.List<AppointmentSlot> published = slotRepository.findByStaff_IdAndSlotDate(staffId, date).stream()
+            .filter(s -> s.getStartAt() != null && s.getEndAt() != null)
+            .filter(s -> hospitalId == null || s.getHospital() == null || hospitalId.equals(s.getHospital().getId()))
+            .sorted(Comparator.comparing(AppointmentSlot::getStartAt))
+            .toList();
+        LocalDateTime now = LocalDateTime.now(clock);
+        AppointmentSlot pick = published.stream()
+            .filter(s -> s.isOfferable(now) && s.getStartAt().isAfter(now) && free.test(s))
+            .findFirst()
+            .orElse(null);
+        return new PublishedPick(!published.isEmpty(), pick);
+    }
+
+    /** QA D1139: whether the day publishes slots, and the free one picked (null when none). */
+    public record PublishedPick(boolean published, AppointmentSlot slot) {
+    }
+
+    /**
      * QA D1063: refuses {@code [start, end)} when it overlaps a slot of the
      * clinician that is HELD by a live hold (a waitlist offer waiting for the
      * patient's answer). The slot inventory refused to book such a slot; the

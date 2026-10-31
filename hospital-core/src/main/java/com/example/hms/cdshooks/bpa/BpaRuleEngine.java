@@ -96,6 +96,22 @@ public class BpaRuleEngine {
     /** A delivery recorded during the pregnancy ends it (review of #971). */
     private final com.example.hms.repository.DeliveryRecordRepository deliveryRecordRepository;
 
+    /**
+     * QA D1121 (round 20): a rule that throws is a defect, not a quiet log
+     * line. In production the chart must still load, so the failure is logged
+     * at ERROR with its stack trace and the other rules still run; with
+     * {@code hms.cds.rules.fail-fast=true} (the test profile) it is rethrown,
+     * so any test that reaches the engine fails on it. The D1114 time-zone fix
+     * threw LazyInitializationException in every time-stamped rule and no test
+     * noticed, because the engine only logged a WARN.
+     */
+    private boolean failFast;
+
+    @org.springframework.beans.factory.annotation.Value("${hms.cds.rules.fail-fast:false}")
+    public void setFailFast(boolean failFast) {
+        this.failFast = failFast;
+    }
+
     public BpaRuleEngine(
         List<BpaRule> rules,
         PatientVitalSignRepository vitalSignRepository,
@@ -151,8 +167,12 @@ public class BpaRuleEngine {
                 // Defensive: a buggy rule must not crash the chart load.
                 // Log with the throwable so the stack trace lands in
                 // production logs and `ex.getMessage()` being null
-                // doesn't strip diagnostic context.
-                logger.warn("BPA rule {} threw {}: {}", rule.id(),
+                // doesn't strip diagnostic context. QA D1121: ERROR, and
+                // rethrown under fail-fast so a test cannot miss it.
+                if (failFast) {
+                    throw ex;
+                }
+                logger.error("BPA rule {} threw {}: {}", rule.id(),
                     ex.getClass().getSimpleName(), ex.getMessage(), ex);
             }
         }

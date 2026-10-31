@@ -145,9 +145,10 @@ public class CdsCheckServiceImpl implements CdsCheckService {
         String desc = localized != null && !localized.isBlank()
                 ? localized
                 : com.example.hms.utility.MessageUtil.resolveOrRaw("pharmacy.cds.interactionDefault");
-        // QA D1102 class: the severity in words ("majeur"), never the enum code.
+        // QA D1102 class: the severity in words, never the enum code. QA D1134:
+        // the interaction's (feminine) form, "majeure", not the masculine "majeur".
         String severity = interaction.getSeverity() == null ? ""
-                : com.example.hms.utility.MessageUtil.resolveOrRaw("cds.enum." + interaction.getSeverity().name());
+                : com.example.hms.utility.MessageUtil.resolveOrRaw("cds.severity." + interaction.getSeverity().name());
         return com.example.hms.utility.MessageUtil.resolveOrRaw("pharmacy.cds.interaction",
                 severity,
                 interaction.getDrug1Name(),

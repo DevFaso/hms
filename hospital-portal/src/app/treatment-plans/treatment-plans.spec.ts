@@ -5,13 +5,18 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 
 import { TreatmentPlansComponent } from './treatment-plans';
-import { TreatmentPlanResponse, TreatmentPlanService } from '../services/treatment-plan.service';
+import {
+  TreatmentPlanResponse,
+  TreatmentPlanReview,
+  TreatmentPlanService,
+} from '../services/treatment-plan.service';
 import { HospitalService } from '../services/hospital.service';
 import { StaffService } from '../services/staff.service';
 import { PatientService } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
+import { AuthService } from '../auth/auth.service';
 import { roleContextStub } from '../testing/role-context.stub';
 import {
   EXPECTED_PICKER_SUBLINES,
@@ -142,5 +147,77 @@ describe('TreatmentPlansComponent patient picker (rendered, QA D912)', () => {
     expect(renderPickerSublines(fixture, fixture.componentInstance)).toEqual(
       EXPECTED_PICKER_SUBLINES,
     );
+  });
+});
+
+describe('TreatmentPlansComponent approval (QA D1127)', () => {
+  let component: TreatmentPlansComponent;
+  let plans: jasmine.SpyObj<TreatmentPlanService>;
+  let toast: jasmine.SpyObj<ToastService>;
+  const plan = (over: Partial<TreatmentPlanResponse>): TreatmentPlanResponse =>
+    ({
+      id: 'tp1',
+      status: 'IN_REVIEW',
+      authorStaffId: 's-author',
+      ...over,
+    }) as TreatmentPlanResponse;
+
+  beforeEach(() => {
+    plans = jasmine.createSpyObj<TreatmentPlanService>('TreatmentPlanService', [
+      'create',
+      'update',
+      'getAll',
+      'addReview',
+    ]);
+    plans.getAll.and.returnValue(of([]));
+    plans.addReview.and.returnValue(of({} as TreatmentPlanReview));
+    toast = jasmine.createSpyObj<ToastService>('ToastService', ['success', 'error']);
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: TreatmentPlanService, useValue: plans },
+        { provide: HospitalService, useValue: {} },
+        { provide: StaffService, useValue: {} },
+        { provide: PatientService, useValue: {} },
+        { provide: ToastService, useValue: toast },
+        {
+          provide: RoleContextService,
+          useValue: { isSuperAdmin: () => false, globalView: () => false },
+        },
+        {
+          provide: AuthService,
+          useValue: {
+            getUserProfile: () => ({ id: 'u-colleague', staffId: 's-colleague' }),
+            getUserId: () => 'u-colleague',
+          },
+        },
+        { provide: ActivatedRoute, useValue: {} },
+        { provide: HospitalScopeUrlService, useValue: {} },
+        { provide: TranslateService, useValue: { instant: (key: string) => key } },
+      ],
+    });
+    component = TestBed.runInInjectionContext(() => new TreatmentPlansComponent());
+  });
+
+  it('never offers APPROVED to the author on a new or unapproved plan', () => {
+    component.form = component.emptyForm();
+    expect(component.treatmentPlanStatuses.map((s) => s.value)).not.toContain('APPROVED');
+    component.form = { ...component.emptyForm(), status: 'APPROVED' };
+    expect(component.treatmentPlanStatuses.map((s) => s.value)).toContain('APPROVED');
+  });
+
+  it("offers the approval to another clinician, never to the plan's author", () => {
+    expect(component.canApprovePlan(plan({}))).toBeTrue();
+    expect(component.canApprovePlan(plan({ authorStaffId: 's-colleague' }))).toBeFalse();
+    expect(component.canApprovePlan(plan({ authorUserId: 'u-colleague' }))).toBeFalse();
+    expect(component.canApprovePlan(plan({ status: 'APPROVED' }))).toBeFalse();
+  });
+
+  it("approves through the colleague's review", () => {
+    component.approvePlan(plan({}));
+    expect(plans.addReview).toHaveBeenCalledWith('tp1', {
+      reviewerStaffId: 's-colleague',
+      action: 'APPROVED',
+    });
+    expect(toast.success).toHaveBeenCalledWith('TREATMENT.PLAN_APPROVED');
   });
 });

@@ -1460,7 +1460,13 @@
     "VIEW": "Voir le rendez-vous",
     "VIEW_MANAGE_SUBTITLE": "Voir et gérer les détails du rendez-vous",
     "YES_CANCEL": "Oui, Annuler",
-    "DURATION_SET_BY_SLOTS": "La durée de la visite est fixée par les créneaux du praticien."
+    "DURATION_SET_BY_SLOTS": "La durée de la visite est fixée par les créneaux du praticien.",
+    "STATUS_REASON": "Motif",
+    "STATUS_REASON_LABEL": "Motif (obligatoire)",
+    "STATUS_REASON_REQUIRED": "Indiquez le motif avant de confirmer.",
+    "NO_SHOW_DIALOG_TITLE": "Marquer comme absent",
+    "NO_SHOW_CONFIRM_MESSAGE": "Le patient ne s'est pas présenté à ce rendez-vous.",
+    "CONFIRM_NO_SHOW": "Marquer comme absent"
   },
   "APPOINTMENT_CALENDAR": {
     "TITLE": "Calendrier des rendez-vous",
@@ -8524,7 +8530,9 @@
     "TITLE": "Plans de traitement",
     "TREATMENT_PLAN": "Plan de traitement",
     "UPDATE_PLAN": "Mettre à jour le plan",
-    "VIEW_PLAN": "Voir le plan"
+    "VIEW_PLAN": "Voir le plan",
+    "APPROVE_PLAN": "Approuver le plan",
+    "PLAN_APPROVED": "Plan de traitement approuvé"
   },
   "USERS": {
     "ACTIVATE": "Activer",

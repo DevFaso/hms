@@ -189,11 +189,30 @@ class AppointmentControllerTest {
     }
     @Test
     void updateAppointmentStatus_shouldReturnOk() throws Exception {
-        when(appointmentService.confirmOrCancelAppointment(eq(appointmentId), eq("confirm"), any(Locale.class), eq("testuser")))
+        // QA D1126: the status action now passes the (optional) body reason; none for a confirm.
+        when(appointmentService.confirmOrCancelAppointment(eq(appointmentId), eq("confirm"),
+                org.mockito.ArgumentMatchers.isNull(), any(Locale.class), eq("testuser")))
                 .thenReturn(responseDTO);
 
         mockMvc.perform(put("/appointments/{id}/status", appointmentId)
                         .param("action", "confirm")
+                        .header("Accept-Language", "en-US")
+                        .principal(auth))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(appointmentId.toString()));
+    }
+
+    /** QA D1126 / D1132: a cancel's reason travels in the body to the service. */
+    @Test
+    void updateAppointmentStatus_passesTheCancelReasonFromTheBody() throws Exception {
+        when(appointmentService.confirmOrCancelAppointment(eq(appointmentId), eq("CANCEL"),
+                eq("Patient called to cancel"), any(Locale.class), eq("testuser")))
+                .thenReturn(responseDTO);
+
+        mockMvc.perform(put("/appointments/{id}/status", appointmentId)
+                        .param("action", "CANCEL")
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .content("{\"reason\":\"Patient called to cancel\"}")
                         .header("Accept-Language", "en-US")
                         .principal(auth))
                 .andExpect(status().isOk())

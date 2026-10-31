@@ -2250,7 +2250,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             // Sent as a critical CDS card so the prescribing screen shows the
             // alert and offers the override (with its mandatory reason).
             // QA D333: the severity is shown in the reader's language, never as the enum constant.
-            String severityLabel = com.example.hms.utility.MessageUtil.resolveOrRaw("cds.enum." + severityStr);
+            // QA D1134: the feminine form, it is read after "gravité" ("gravité : inconnue").
+            String severityLabel = com.example.hms.utility.MessageUtil.resolveOrRaw("cds.severity." + severityStr);
             String message = com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.allergy.conflict",
                 allergy.getAllergenDisplay(), severityLabel, medicationName);
             CdsCard card = new CdsCard(message, null, CdsCard.Indicator.CRITICAL,

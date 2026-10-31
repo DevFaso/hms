@@ -45,6 +45,35 @@ class AppointmentSlotPolicyTest {
         when(slotRepository.findByStaff_IdAndSlotDate(any(), any())).thenReturn(List.of());
     }
 
+    /** QA D1139: a checkout follow-up takes the earliest free published slot, on the grid. */
+    @Test
+    void theFollowUpTakesTheFirstFreePublishedSlot() {
+        AppointmentSlot nine = slot(FRIDAY.atTime(9, 0), FRIDAY.atTime(9, 20), SlotStatus.OPEN, null);
+        AppointmentSlot nineTwenty = slot(FRIDAY.atTime(9, 20), FRIDAY.atTime(9, 40), SlotStatus.OPEN, null);
+        AppointmentSlot booked = slot(FRIDAY.atTime(8, 40), FRIDAY.atTime(9, 0), SlotStatus.BOOKED, null);
+        when(slotRepository.findByStaff_IdAndSlotDate(staffId, FRIDAY)).thenReturn(List.of(nineTwenty, booked, nine));
+
+        AppointmentSlotPolicy.PublishedPick pick = policy.firstFreePublished(staffId, null, FRIDAY, s -> true);
+        assertThat(pick.published()).isTrue();
+        assertThat(pick.slot()).isSameAs(nine);
+
+        // 09:00 already has a booking on its time: the next slot, never a half-hour off the grid.
+        AppointmentSlotPolicy.PublishedPick next = policy.firstFreePublished(staffId, null, FRIDAY,
+            s -> !s.getStartAt().equals(FRIDAY.atTime(9, 0)));
+        assertThat(next.slot()).isSameAs(nineTwenty);
+
+        AppointmentSlotPolicy.PublishedPick full = policy.firstFreePublished(staffId, null, FRIDAY, s -> false);
+        assertThat(full.published()).isTrue();
+        assertThat(full.slot()).isNull();
+    }
+
+    @Test
+    void aDayWithNoPublishedSlotSaysSo() {
+        AppointmentSlotPolicy.PublishedPick pick = policy.firstFreePublished(staffId, null, FRIDAY, s -> true);
+        assertThat(pick.published()).isFalse();
+        assertThat(pick.slot()).isNull();
+    }
+
     @Test
     void aGeneratedSlotGivesTheEnd() {
         LocalDateTime start = LocalDateTime.of(FRIDAY, LocalTime.of(8, 20));
