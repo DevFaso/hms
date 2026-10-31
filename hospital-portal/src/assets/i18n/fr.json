@@ -10473,7 +10473,7 @@
     "REVIEW_ERROR": "Échec de l'enregistrement de la revue",
     "PROVIDER_REVIEW": "Revue du soignant",
     "DELETE_TITLE": "Supprimer le plan de naissance",
-    "DELETE_CONFIRM": "Supprimer le plan de naissance de",
+    "DELETE_CONFIRM": "Supprimer le plan de naissance de {{name}} ?",
     "DELETED": "Plan de naissance supprimé",
     "DELETE_ERROR": "Échec de la suppression du plan"
   },
@@ -12262,7 +12262,15 @@
     "NO_DISPENSES": "Aucune délivrance à encaisser dans cette pharmacie.",
     "DISPENSES_LOAD_FAILED": "Impossible de charger les délivrances de la pharmacie.",
     "ALREADY_PAID": "Cette délivrance est déjà payée. Aucun second paiement n'est encaissé.",
-    "REFERENCE_REQUIRED": "Saisissez la référence de la transaction mobile money affichée sur le téléphone du patient."
+    "REFERENCE_REQUIRED": "Saisissez la référence de la transaction mobile money affichée sur le téléphone du patient.",
+    "RECEIPT": {
+      "TITLE": "Reçu de pharmacie",
+      "NUMBER": "Nº",
+      "ISSUED_AT": "Émis le : {{date}}",
+      "TOTAL_PAID": "Total payé",
+      "THANKS": "Merci de votre confiance. Conservez ce reçu pour vos dossiers médicaux.",
+      "SIGNATURE": "Signature du pharmacien :"
+    }
   },
   "MY_PHARMACY_INVOICES": {
     "TITLE": "Mes factures de pharmacie",

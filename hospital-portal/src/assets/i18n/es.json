@@ -10473,7 +10473,7 @@
     "REVIEW_ERROR": "Error al registrar la revisión",
     "PROVIDER_REVIEW": "Revisión del profesional",
     "DELETE_TITLE": "Eliminar plan de parto",
-    "DELETE_CONFIRM": "Eliminar el plan de parto de",
+    "DELETE_CONFIRM": "¿Eliminar el plan de parto de {{name}}?",
     "DELETED": "Plan de parto eliminado",
     "DELETE_ERROR": "Error al eliminar el plan"
   },
@@ -12262,7 +12262,15 @@
     "NO_DISPENSES": "No hay ninguna dispensación que cobrar en esta farmacia.",
     "DISPENSES_LOAD_FAILED": "No se pudieron cargar las dispensaciones de la farmacia.",
     "ALREADY_PAID": "Esta dispensación ya está pagada. No se cobra un segundo pago.",
-    "REFERENCE_REQUIRED": "Introduzca la referencia de la transacción de dinero móvil que muestra el teléfono del paciente."
+    "REFERENCE_REQUIRED": "Introduzca la referencia de la transacción de dinero móvil que muestra el teléfono del paciente.",
+    "RECEIPT": {
+      "TITLE": "Recibo de farmacia",
+      "NUMBER": "N.º",
+      "ISSUED_AT": "Emitido el: {{date}}",
+      "TOTAL_PAID": "Total pagado",
+      "THANKS": "Gracias por su confianza. Conserve este recibo para su historial médico.",
+      "SIGNATURE": "Firma del farmacéutico:"
+    }
   },
   "MY_PHARMACY_INVOICES": {
     "TITLE": "Mis facturas de farmacia",

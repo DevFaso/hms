@@ -352,6 +352,9 @@ export class UltrasoundTabComponent implements OnInit {
         this.cancelBusy.set(false);
         this.showCancelPrompt.set(false);
         this.viewedOrder.set(updated);
+        // QA D1144: a cancelled order offers no "Cancel" button to return to;
+        // the keyboard lands on the dialog's Close, never on the page body.
+        focusWhenRendered(this.host.nativeElement, '[data-testid="us-order-close"]');
         // Patch in place; a cancelled order leaves the pending worklist.
         this.orders.update((list) =>
           this.worklist() === 'pending'

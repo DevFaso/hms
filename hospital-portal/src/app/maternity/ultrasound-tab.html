@@ -320,7 +320,7 @@
             {{ 'ULTRASOUND.CANCEL_ORDER' | translate }}
           </button>
         }
-        <button class="btn-secondary" (click)="closeOrder()">
+        <button class="btn-secondary" data-testid="us-order-close" (click)="closeOrder()">
           {{ 'COMMON.CLOSE' | translate }}
         </button>
       </div>

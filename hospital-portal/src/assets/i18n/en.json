@@ -10473,7 +10473,7 @@
     "REVIEW_ERROR": "Failed to record the review",
     "PROVIDER_REVIEW": "Provider review",
     "DELETE_TITLE": "Delete birth plan",
-    "DELETE_CONFIRM": "Delete the birth plan for",
+    "DELETE_CONFIRM": "Delete the birth plan for {{name}}?",
     "DELETED": "Birth plan deleted",
     "DELETE_ERROR": "Failed to delete birth plan"
   },
@@ -12262,7 +12262,15 @@
     "NO_DISPENSES": "No dispense to collect at this pharmacy.",
     "DISPENSES_LOAD_FAILED": "The pharmacy's dispenses could not be loaded.",
     "ALREADY_PAID": "This dispense has already been paid. No second payment is taken.",
-    "REFERENCE_REQUIRED": "Enter the mobile-money transaction reference shown on the patient’s phone."
+    "REFERENCE_REQUIRED": "Enter the mobile-money transaction reference shown on the patient’s phone.",
+    "RECEIPT": {
+      "TITLE": "Pharmacy receipt",
+      "NUMBER": "No.",
+      "ISSUED_AT": "Issued: {{date}}",
+      "TOTAL_PAID": "Total paid",
+      "THANKS": "Thank you for your trust. Keep this receipt for your medical records.",
+      "SIGNATURE": "Pharmacist signature:"
+    }
   },
   "MY_PHARMACY_INVOICES": {
     "TITLE": "My pharmacy invoices",

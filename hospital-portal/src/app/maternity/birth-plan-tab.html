@@ -574,7 +574,12 @@
         </button>
       </div>
       <div class="modal-body">
-        <p>{{ 'BIRTH_PLAN.DELETE_CONFIRM' | translate }} {{ plan.introduction?.patientName }}?</p>
+        <!-- D1138 class: the whole question is translated, so French spaces its "?". -->
+        <p>
+          {{
+            'BIRTH_PLAN.DELETE_CONFIRM' | translate: { name: plan.introduction?.patientName || '—' }
+          }}
+        </p>
       </div>
       <div class="modal-actions">
         <button class="btn-secondary" (click)="closeDelete()">

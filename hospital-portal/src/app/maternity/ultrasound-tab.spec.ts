@@ -56,6 +56,7 @@ describe('UltrasoundTabComponent', () => {
       'highRiskOrders',
       'followUpRequired',
       'anomalies',
+      'cancelOrder',
     ]);
     service.pendingOrders.and.returnValue(of([]));
     service.anomalies.and.returnValue(of([]));
@@ -134,6 +135,17 @@ describe('UltrasoundTabComponent', () => {
       fixture.detectChanges();
       tick();
       expect(document.activeElement).toBe(host().querySelector('[data-testid="us-cancel-order"]'));
+
+      // Once cancelled there is no "Cancel" to return to: the dialog's Close takes the keyboard.
+      service.cancelOrder.and.returnValue(of(order({ status: 'CANCELLED' })));
+      cmp.openCancelPrompt();
+      fixture.detectChanges();
+      tick();
+      cmp.cancelReason = 'Doublon';
+      cmp.submitCancel();
+      fixture.detectChanges();
+      tick();
+      expect(document.activeElement).toBe(host().querySelector('[data-testid="us-order-close"]'));
     } finally {
       host().remove();
     }
