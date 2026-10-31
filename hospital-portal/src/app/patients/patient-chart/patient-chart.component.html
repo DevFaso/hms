@@ -547,12 +547,18 @@
                     </td>
                   } @else {
                     <td>
+                      <!-- Round 19 (D1095/D1106 merge): Angular drops whitespace-only text
+                           between elements, so the spaces between value, unit and the
+                           correction badge are real text, not markup indentation
+                           ("9,2 g/dL Corrigé", never "9,2g/dLCorrigé"). -->
                       <span class="lab-value">{{ r.value | labValue }}</span>
                       @if (r.unit) {
-                        <span class="lab-unit">{{ r.unit }}</span>
+                        <span class="lab-unit">{{ ' ' + r.unit }}</span>
                       }
                       <!-- QA D1016 (round 18): the chart's own Labs table marks a correction -->
-                      <app-lab-correction-badge [corrected]="r.corrected" />
+                      @if (r.corrected) {
+                        {{ ' ' }}<app-lab-correction-badge [corrected]="r.corrected" />
+                      }
                     </td>
                     <td>{{ r.referenceRange | labRange }}</td>
                   }

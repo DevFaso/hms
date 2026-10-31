@@ -297,6 +297,17 @@ describe('PatientChartComponent — labs section', () => {
     }
   });
 
+  it('separates the value, its unit and the correction badge with real spaces (round 19)', () => {
+    // Angular drops whitespace-only text between elements: the cell read
+    // "9,2g/dLCorrigé" before the spaces became text.
+    setup({ roles: ['ROLE_DOCTOR'], results: [released({ corrected: true })] });
+    openLabs();
+
+    const cell = (fixture.nativeElement.querySelector('.lab-value') as HTMLElement).closest('td')!;
+    const text = (cell.textContent ?? '').replaceAll(/\s+/g, ' ').trim();
+    expect(text).toMatch(/^9[.,]2 g\/dL LAB_RESULTS\.CORRECTED$/);
+  });
+
   it('renders an unreleased row as pending, with no value and no abnormal colouring', () => {
     setup({ roles: ['ROLE_DOCTOR'], results: [unreleased()] });
     openLabs();

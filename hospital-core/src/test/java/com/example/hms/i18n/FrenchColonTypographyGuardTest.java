@@ -69,10 +69,7 @@ class FrenchColonTypographyGuardTest {
     private static final Map<String, Allowance> ALLOWED = GuardAllowlist.allow(
         "fhir/mapper/DiagnosticReportFhirMapper.java::append", 1,
         "Not French display text: the FHIR imaging narrative is English interop text "
-            + "(\"Technique: …\", \"Findings: …\"), never rendered by the portal",
-        "service/PatientServiceImpl.java::append", 2,
-        "owned by fix/r19-lab-results-chart (D1079 lab line: \"Glycémie à jeun: 5.6 g/L\" in the "
-            + "timeline lab summary); delete on merge");
+            + "(\"Technique: …\", \"Findings: …\"), never rendered by the portal");
 
     static boolean gluedFrenchLabel(String text) {
         return GLUED_LABEL.matcher(BETWEEN_PLACEHOLDERS.matcher(text).replaceAll("} {")).find();
