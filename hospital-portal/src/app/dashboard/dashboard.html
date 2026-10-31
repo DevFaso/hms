@@ -124,21 +124,22 @@
       <!-- Shortcuts only where no Quick Actions strip already carries them
            (hasQuickActionsStrip), so Start Encounter is never on the page twice. -->
       @if (!hasQuickActionsStrip()) {
-        @if (permissions.hasPermission('Create Appointments')) {
+        <!-- QA D997: offered for the role the user is acting in, not every role held. -->
+        @if (permissions.hasActivePermission('Create Appointments')) {
           <a class="hero-btn hero-btn-primary" routerLink="/appointments/new">
             <span class="material-symbols-outlined">calendar_add_on</span>
             {{ 'DASHBOARD.NEW_APPOINTMENT' | translate }}
           </a>
         }
-        @if (permissions.hasPermission('Create Encounters')) {
+        @if (permissions.hasActivePermission('Create Encounters')) {
           <a class="hero-btn hero-btn-secondary" routerLink="/encounters">
             <span class="material-symbols-outlined">stethoscope</span>
             {{ 'DASHBOARD.START_ENCOUNTER' | translate }}
           </a>
         }
         @if (
-          permissions.hasPermission('Register Patients') &&
-          !permissions.hasPermission('Create Encounters')
+          permissions.hasActivePermission('Register Patients') &&
+          !permissions.hasActivePermission('Create Encounters')
         ) {
           <a class="hero-btn hero-btn-secondary" routerLink="/patients/new">
             <span class="material-symbols-outlined">person_add</span>
@@ -150,6 +151,7 @@
         class="hero-btn hero-btn-ghost"
         (click)="refreshDashboard()"
         [title]="'DASHBOARD.REFRESH' | translate"
+        [attr.aria-label]="'DASHBOARD.REFRESH' | translate"
       >
         <span class="material-symbols-outlined" [class.spin]="loading()">refresh</span>
       </button>
@@ -413,7 +415,7 @@
                     {{ p.firstName.charAt(0) }}{{ p.lastName.charAt(0) }}
                   </div>
                   <div class="patient-info">
-                    <span class="patient-name">{{ p.firstName }} {{ p.lastName }}</span>
+                    <span class="patient-name">{{ p | personName }}</span>
                     <span class="patient-meta">
                       @if (p.mrn) {
                         <span class="mrn-tag">{{ p.mrn }}</span>
@@ -675,7 +677,7 @@
                     justify-content: flex-end;
                     height: 100%;
                   "
-                  [title]="point.date + ': $' + (point.amount | number: '1.0-0')"
+                  [title]="point.date + ': ' + (point.amount | cfa)"
                 >
                   <div
                     style="
@@ -910,7 +912,8 @@
                   >
                   <span class="sched-reason"
                     >{{ 'CREDENTIALING.LICENSE_NUMBER' | translate }}: {{ alert.licenseNumber }} —
-                    {{ 'DASHBOARD.EXPIRES' | translate }}: {{ alert.licenseExpiryDate }}</span
+                    {{ 'DASHBOARD.EXPIRES' | translate }}:
+                    {{ alert.licenseExpiryDate | serverTime | date: 'mediumDate' }}</span
                   >
                 </div>
                 <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px">
@@ -1424,7 +1427,7 @@
                     {{ p.firstName.charAt(0) }}{{ p.lastName.charAt(0) }}
                   </div>
                   <div class="patient-info">
-                    <span class="patient-name">{{ p.firstName }} {{ p.lastName }}</span>
+                    <span class="patient-name">{{ p | personName }}</span>
                     <span class="patient-meta">
                       @if (p.mrn) {
                         <span class="mrn-tag">{{ p.mrn }}</span>
@@ -1445,6 +1448,7 @@
                       class="row-action-btn"
                       routerLink="/encounters"
                       [title]="'DASHBOARD.NEW_ENCOUNTER' | translate"
+                      [attr.aria-label]="'DASHBOARD.NEW_ENCOUNTER' | translate"
                     >
                       <span class="material-symbols-outlined">stethoscope</span>
                     </a>
@@ -1452,6 +1456,7 @@
                       class="row-action-btn"
                       routerLink="/lab"
                       [title]="'DASHBOARD.VIEW_RESULTS' | translate"
+                      [attr.aria-label]="'DASHBOARD.VIEW_RESULTS' | translate"
                     >
                       <span class="material-symbols-outlined">science</span>
                     </a>
@@ -1836,7 +1841,7 @@
                     {{ p.firstName.charAt(0) }}{{ p.lastName.charAt(0) }}
                   </div>
                   <div class="patient-info">
-                    <span class="patient-name">{{ p.firstName }} {{ p.lastName }}</span>
+                    <span class="patient-name">{{ p | personName }}</span>
                   </div>
                   <span class="material-symbols-outlined chevron">chevron_right</span>
                 </a>
@@ -1867,7 +1872,8 @@
           <span class="material-symbols-outlined stat-icon">how_to_reg</span>
         </div>
         <div class="stat-body">
-          <span class="stat-value">{{ completedToday() }}</span
+          <!-- QA D945: the tile says "checked in", so it counts the checked-in visits. -->
+          <span class="stat-value">{{ checkedInToday() }}</span
           ><span class="stat-label">{{ 'DASHBOARD.CHECKED_IN' | translate }}</span>
         </div>
       </a>
@@ -1996,7 +2002,7 @@
                     {{ p.firstName.charAt(0) }}{{ p.lastName.charAt(0) }}
                   </div>
                   <div class="patient-info">
-                    <span class="patient-name">{{ p.firstName }} {{ p.lastName }}</span>
+                    <span class="patient-name">{{ p | personName }}</span>
                     <span class="patient-meta">
                       @if (p.mrn) {
                         <span class="mrn-tag">{{ p.mrn }}</span>
@@ -2587,7 +2593,7 @@
                     {{ p.firstName.charAt(0) }}{{ p.lastName.charAt(0) }}
                   </div>
                   <div class="patient-info">
-                    <span class="patient-name">{{ p.firstName }} {{ p.lastName }}</span>
+                    <span class="patient-name">{{ p | personName }}</span>
                   </div>
                   <span class="material-symbols-outlined chevron">chevron_right</span>
                 </a>
@@ -2712,7 +2718,7 @@
                     {{ p.firstName.charAt(0) }}{{ p.lastName.charAt(0) }}
                   </div>
                   <div class="patient-info">
-                    <span class="patient-name">{{ p.firstName }} {{ p.lastName }}</span>
+                    <span class="patient-name">{{ p | personName }}</span>
                   </div>
                   <span class="material-symbols-outlined chevron">chevron_right</span>
                 </a>
@@ -2837,7 +2843,7 @@
                     {{ p.firstName.charAt(0) }}{{ p.lastName.charAt(0) }}
                   </div>
                   <div class="patient-info">
-                    <span class="patient-name">{{ p.firstName }} {{ p.lastName }}</span>
+                    <span class="patient-name">{{ p | personName }}</span>
                   </div>
                   <span class="material-symbols-outlined chevron">chevron_right</span>
                 </a>
@@ -2998,6 +3004,7 @@
                   } @else {
                     <span class="lab-value"
                       >{{ lab.result }}
+                      <app-lab-correction-badge [corrected]="lab.corrected" audience="patient" />
                       @if (lab.referenceRange) {
                         <span class="lab-range">({{ lab.referenceRange }})</span>
                       }
@@ -3314,7 +3321,7 @@
                   {{ p.firstName.charAt(0) }}{{ p.lastName.charAt(0) }}
                 </div>
                 <div class="patient-info">
-                  <span class="patient-name">{{ p.firstName }} {{ p.lastName }}</span>
+                  <span class="patient-name">{{ p | personName }}</span>
                 </div>
                 <span class="material-symbols-outlined chevron">chevron_right</span>
               </a>

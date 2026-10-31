@@ -1,3 +1,4 @@
+import { CdkTrapFocus } from '@angular/cdk/a11y';
 import {
   Component,
   OnInit,
@@ -9,6 +10,7 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { LabCorrectionBadgeComponent } from '../shared/lab-correction-badge.component';
 import { Subject, of } from 'rxjs';
 import { catchError, map, switchMap } from 'rxjs/operators';
 
@@ -18,6 +20,9 @@ import { AuthService } from '../../auth/auth.service';
 import { ToastService } from '../../core/toast.service';
 import { shortOrderCode } from '../../shared/lab/order-code';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
+import { labSeverityFlag } from '../shared/lab-severity';
+import { LabValuePipe } from '../shared/lab-value.pipe';
 
 /**
  * Release worklist (B14).
@@ -46,7 +51,15 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 @Component({
   selector: 'app-lab-release-worklist',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, TranslateModule],
+  imports: [
+    LabCorrectionBadgeComponent,
+    CdkTrapFocus,
+    ServerTimePipe,
+    EnumLabelPipe,
+    LabValuePipe,
+    CommonModule,
+    TranslateModule,
+  ],
   templateUrl: './lab-release-worklist.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrl: './lab-release-worklist.scss',
@@ -319,14 +332,18 @@ export class LabReleaseWorklistComponent implements OnInit {
   }
 
   /**
-   * CRITICAL / LOW / HIGH / NORMAL / UNSPECIFIED, as LabResultMapper emits
-   * them (QA D212: CRITICAL used to fall through to "not flagged"), or UNIT_MISMATCH when no configured range is in the result's
-   * unit: that row was never graded, which "not flagged" would hide.
+   * The grade as LabResultMapper emits it (QA D212: CRITICAL used to fall
+   * through to "not flagged"; QA D969: so did ABNORMAL, a positive
+   * qualitative answer), or UNIT_MISMATCH when no configured range is in the
+   * result's unit. The one reading /lab-results uses too (lab-severity.ts).
    */
   severityKey(r: LabResultResponse): string {
-    if (r.unitMismatch) return 'UNIT_MISMATCH';
-    const flag = (r.severityFlag ?? '').toUpperCase();
-    return ['CRITICAL', 'LOW', 'HIGH', 'NORMAL'].includes(flag) ? flag : 'UNSPECIFIED';
+    return labSeverityFlag(r);
+  }
+
+  /** QA D963: a STAT or URGENT order is flagged on the queue, which lists them first. */
+  isUrgentPriority(r: LabResultResponse): boolean {
+    return r.orderPriority === 'STAT' || r.orderPriority === 'URGENT';
   }
 
   severityClass(r: LabResultResponse): string {

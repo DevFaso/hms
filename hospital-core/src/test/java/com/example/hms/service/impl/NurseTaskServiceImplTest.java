@@ -165,6 +165,8 @@ class NurseTaskServiceImplTest {
     private com.example.hms.repository.UserRoleHospitalAssignmentRepository assignmentRepository;
     @Mock
     private com.example.hms.repository.PatientAllergyRepository patientAllergyRepository;
+    @Mock
+    private com.example.hms.service.emar.ControlledAdministrationWitness administrationWitness;
 
     @BeforeEach
     void setUp() {
@@ -176,7 +178,7 @@ class NurseTaskServiceImplTest {
             nurseHandoffRepository, labOrderRepository, imagingOrderRepository, procedureOrderRepository,
             fiveRightsService, objectMapper, news2EscalationService,
             new com.example.hms.service.support.DischargedPatientGuard(admissionRepository, encounterRepository),
-            assignmentRepository, patientAllergyRepository));
+            assignmentRepository, patientAllergyRepository, administrationWitness));
 
         // QA D220 narrowed the vitals rounds to admitted patients; the tests
         // below that are about windows, names and counts treat every listed
@@ -352,6 +354,9 @@ class NurseTaskServiceImplTest {
             .recommendation("Continue q4h vitals.")
             .createdByName("Nina Nurse")
             .build();
+        // QA D1075: the report time is the creation time, which completion never moves.
+        first.setCreatedAt(java.time.LocalDateTime.of(2026, 10, 30, 13, 33, 43));
+        first.setUpdatedAt(java.time.LocalDateTime.of(2026, 10, 30, 13, 34, 2));
         NurseHandoff second = NurseHandoff.builder()
             .patient(patientEntity)
             .direction("Transfer to Radiology")
@@ -370,6 +375,7 @@ class NurseTaskServiceImplTest {
         assertThat(dto.getNote()).isEqualTo("Post-op day 1, afebrile.");
         assertThat(dto.getRecommendation()).isEqualTo("Continue q4h vitals.");
         assertThat(dto.getCreatedByName()).isEqualTo("Nina Nurse");
+        assertThat(dto.getCreatedAt()).isEqualTo(java.time.LocalDateTime.of(2026, 10, 30, 13, 33, 43));
         assertThat(dto.getStatus()).isEqualTo("PENDING");
     }
 
@@ -1245,6 +1251,73 @@ class NurseTaskServiceImplTest {
     }
 
     @Test
+    void D922_aControlledDoseIsRecordedWithItsWitnessAndRefusedWithoutOne() {
+        UUID rxId = UUID.randomUUID();
+        UUID nurseId = UUID.randomUUID();
+        UUID witnessId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Patient mockPatient = mock(Patient.class);
+        lenient().when(mockPatient.getId()).thenReturn(UUID.randomUUID());
+        Hospital mockHospital = mock(Hospital.class);
+        lenient().when(mockHospital.getId()).thenReturn(hospitalId);
+        Prescription rx = mock(Prescription.class);
+        lenient().when(rx.getId()).thenReturn(rxId);
+        lenient().when(rx.getPatient()).thenReturn(mockPatient);
+        lenient().when(rx.getHospital()).thenReturn(mockHospital);
+        lenient().when(rx.getMedicationName()).thenReturn("Morphine");
+        lenient().when(rx.isControlledSubstance()).thenReturn(true);
+        // A controlled order is verified by a pharmacist before it is given (the gate above the witness).
+        lenient().when(rx.getPharmacistVerifiedAt()).thenReturn(LocalDateTime.now().minusHours(1));
+        lenient().when(rx.getCreatedAt()).thenReturn(LocalDateTime.now().minusHours(1));
+        when(prescriptionRepository.findByIdForUpdate(rxId)).thenReturn(Optional.of(rx));
+        NurseMedicationAdministrationRequestDTO request = new NurseMedicationAdministrationRequestDTO();
+        request.setStatus("GIVEN");
+        request.setOverrideReason("Scanner down; checked by hand.");
+
+        // Without a witness: refused before anything is written.
+        when(administrationWitness.resolve(rx, MedicationAdministrationStatus.GIVEN, null, nurseId))
+            .thenThrow(new BusinessException("nurse.mar.witness.required", "Morphine"));
+        assertThatThrownBy(() -> service.recordMedicationAdministration(rxId, nurseId, hospitalId, request))
+            .isInstanceOf(BusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "nurse.mar.witness.required");
+        verify(marRepository, never()).save(any(MedicationAdministrationRecord.class));
+
+        // With a colleague as witness: recorded with the dose.
+        User colleague = new User();
+        colleague.setId(witnessId);
+        colleague.setFirstName("Awa");
+        colleague.setLastName("Kaboré");
+        request.setWitnessUserId(witnessId);
+        when(administrationWitness.resolve(rx, MedicationAdministrationStatus.GIVEN, witnessId, nurseId))
+            .thenReturn(colleague);
+        when(marRepository.save(any(MedicationAdministrationRecord.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        NurseMedicationTaskResponseDTO result = service.recordMedicationAdministration(rxId, nurseId, hospitalId, request);
+
+        org.mockito.ArgumentCaptor<MedicationAdministrationRecord> saved =
+            org.mockito.ArgumentCaptor.forClass(MedicationAdministrationRecord.class);
+        verify(marRepository).save(saved.capture());
+        assertThat(saved.getValue().getWitnessUser()).isSameAs(colleague);
+        assertThat(result.getWitnessName()).isEqualTo("Awa Kaboré");
+        // QA D1080: the administer response says what the GET says - morphine is controlled.
+        assertThat(result.isControlledSubstance()).isTrue();
+    }
+
+    /** QA D1080: the synthetic-task fallback keeps the row's controlled flag too. */
+    @Test
+    void d1080_theFallbackResponseKeepsTheControlledFlag() {
+        UUID taskId = UUID.randomUUID();
+        UUID nurseId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        doReturn(List.of(NurseMedicationTaskResponseDTO.builder().id(taskId).patientId(UUID.randomUUID())
+            .medication("Morphine").status("DUE").controlledSubstance(true).build()))
+            .when(service).getMedicationTasks(nurseId, hospitalId, null);
+
+        assertThat(service.recordMedicationAdministration(taskId, nurseId, hospitalId, null).isControlledSubstance())
+            .isTrue();
+    }
+
+    @Test
     void recordMedicationAdministrationGivenWithoutOverrideOrVerifyIsRejected() {
         UUID rxId = UUID.randomUUID();
         UUID nurseId = UUID.randomUUID();
@@ -1992,6 +2065,7 @@ class NurseTaskServiceImplTest {
             .temperatureCelsius(36.8)
             .systolicBpMmHg(120)
             .diastolicBpMmHg(80)
+            .painScale(4)
             .build();
 
         service.captureVitals(patientId, nurseId, hospitalId, req);
@@ -2000,6 +2074,8 @@ class NurseTaskServiceImplTest {
         verify(vitalSignRepository).save(captor.capture());
         PatientVitalSign saved = captor.getValue();
         assertThat(saved.getHeartRateBpm()).isEqualTo(72);
+        // QA D1045: the ward pain reassessment is charted (the bundle text, or its key without bundles).
+        assertThat(saved.getNotes()).isNotBlank();
         assertThat(saved.isClinicallySignificant()).isFalse();
     }
 
@@ -2429,9 +2505,15 @@ class NurseTaskServiceImplTest {
         req.setDataPart("Vital signs stable");
         req.setActionPart("Repositioned patient");
         req.setResponsePart("Patient comfortable after repositioning");
+        req.setTitle("Réévaluation douleur post-morphine");
 
         NurseCareNoteResponseDTO result = service.createCareNote(patientId, nurseId, hospitalId, req);
 
+        // QA D1044: the title the nurse typed is stored with the note and returned.
+        ArgumentCaptor<NursingNote> savedNote = ArgumentCaptor.forClass(NursingNote.class);
+        verify(nursingNoteRepository).save(savedNote.capture());
+        assertThat(savedNote.getValue().getTitle()).isEqualTo("Réévaluation douleur post-morphine");
+        assertThat(result.getTitle()).isEqualTo("Réévaluation douleur post-morphine");
         assertThat(result.getTemplate()).isEqualTo("DAR");
         assertThat(result.getAuthorName()).isEqualTo("Jane RN");
         assertThat(result.getPatientName()).isEqualTo("Note Patient");
@@ -3262,7 +3344,7 @@ class NurseTaskServiceImplTest {
             nurseHandoffRepository, labOrderRepository, imagingOrderRepository, procedureOrderRepository,
             fiveRightsService, failingMapper, news2EscalationService,
             new com.example.hms.service.support.DischargedPatientGuard(admissionRepository, encounterRepository),
-            assignmentRepository, patientAllergyRepository);
+            assignmentRepository, patientAllergyRepository, administrationWitness);
 
         UUID rxId = UUID.randomUUID();
         UUID nurseId = UUID.randomUUID();
@@ -3440,7 +3522,8 @@ class NurseTaskServiceImplTest {
         List<NurseMedicationTaskResponseDTO> tasks = service.getMedicationTasks(nurseId, hospitalId, null);
 
         assertThat(tasks).hasSize(1);
-        assertThat(tasks.get(0).getStatus()).isEqualTo("DUE");
+        // QA D949: eight hours away is not yet due (it was reported DUE and refused on Give).
+        assertThat(tasks.get(0).getStatus()).isEqualTo("UPCOMING");
         assertThat(tasks.get(0).getDueTime()).isEqualTo(firstSlot.plusHours(12));
     }
 
@@ -3990,4 +4073,86 @@ class NurseTaskServiceImplTest {
             .hasFieldOrPropertyWithValue("messageKey", "nurse.mar.patientDischarged");
         verify(marRepository, never()).save(any(MedicationAdministrationRecord.class));
     }
+
+    // ── QA round 16 (D928, D929, D949, D950, D922) ──────────────────────
+
+    private List<NurseMedicationTaskResponseDTO> marFor(UUID nurseId, UUID hospitalId, Prescription rx,
+                                                        String filter,
+                                                        MedicationAdministrationRecord... closed) {
+        UUID patientId = rx.getPatient().getId();
+        when(nurseDashboardService.getPatientsForNurse(nurseId, hospitalId, null))
+            .thenReturn(List.of(patient(patientId, "Awa Kabore", "Awa", "Kabore")));
+        when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
+            .thenReturn(List.of(rx));
+        lenient().when(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId()))
+            .thenReturn(List.of(closed));
+        return service.getMedicationTasks(nurseId, hospitalId, filter);
+    }
+
+    /**
+     * QA D928 replay (u16.js): "Une fois par jour", held. The course used to
+     * become COMPLETED with no due time, so days 2-5 vanished. The next dose
+     * is tomorrow, and the held dose is said to be held (D929).
+     */
+    @Test
+    void d928_aFrenchWordFrequencyKeepsTheCourseAfterAHeldDose() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "Une fois par jour");
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        LocalDateTime firstSlot = rx.getCreatedAt();
+
+        List<NurseMedicationTaskResponseDTO> tasks = marFor(UUID.randomUUID(), hospitalId, rx, null,
+            closedDose(rx, firstSlot, MedicationAdministrationStatus.HELD));
+
+        assertThat(tasks).hasSize(1);
+        assertThat(tasks.get(0).getStatus()).isEqualTo("UPCOMING");
+        assertThat(tasks.get(0).getDueTime()).isEqualTo(firstSlot.plusHours(24));
+        assertThat(tasks.get(0).getLastOutcome()).isEqualTo("HELD");
+    }
+
+    /** QA D929: a one-off dose that was refused ends the course, and the row says it was refused. */
+    @Test
+    void d929_aFinishedCourseCarriesTheLastOutcome() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "une seule fois");
+        rx.setStatus(PrescriptionStatus.SIGNED);
+
+        List<NurseMedicationTaskResponseDTO> tasks = marFor(UUID.randomUUID(), hospitalId, rx, null,
+            closedDose(rx, rx.getCreatedAt(), MedicationAdministrationStatus.REFUSED));
+
+        assertThat(tasks.get(0).getStatus()).isEqualTo("COMPLETED");
+        assertThat(tasks.get(0).getLastOutcome()).isEqualTo("REFUSED");
+    }
+
+    /**
+     * QA D949: tomorrow's dose is not "to give" and is not counted as due;
+     * the eMAR's "still to give" list (PENDING) leaves it out.
+     */
+    @Test
+    void d949_aSlotBeyondTheEarlyWindowIsUpcomingAndNotPending() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "q24h");
+        rx.setStatus(PrescriptionStatus.SIGNED);
+
+        List<NurseMedicationTaskResponseDTO> pending = marFor(UUID.randomUUID(), hospitalId, rx, "PENDING",
+            closedDose(rx, rx.getCreatedAt(), MedicationAdministrationStatus.GIVEN));
+
+        assertThat(pending).isEmpty();
+    }
+
+    /** QA D950/D922: the route as a form code, and the controlled flag, on the MAR row. */
+    @Test
+    void d950_theRowCarriesTheRouteCodeAndTheControlledFlag() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "q4h");
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        rx.setRoute("INTRAVENOUS");
+        rx.setControlledSubstance(true);
+
+        List<NurseMedicationTaskResponseDTO> tasks = marFor(UUID.randomUUID(), hospitalId, rx, null);
+
+        assertThat(tasks.get(0).getRouteCode()).isEqualTo("IV");
+        assertThat(tasks.get(0).isControlledSubstance()).isTrue();
+    }
+
 }

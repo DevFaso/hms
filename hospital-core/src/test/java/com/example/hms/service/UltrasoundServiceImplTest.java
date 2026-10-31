@@ -195,7 +195,7 @@ class UltrasoundServiceImplTest {
 
         assertThatThrownBy(() -> ultrasoundService.createOrder(request, null))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Growth scan");
+            .hasMessageContaining("ultrasound.ga.GROWTH_SCAN"); // QA D1046: keyed, was English prose
 
         verifyNoInteractions(ultrasoundMapper);
         verify(orderRepository, never()).save(any());
@@ -215,7 +215,7 @@ class UltrasoundServiceImplTest {
 
         assertThatThrownBy(() -> ultrasoundService.createOrder(request, null))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("Anatomy scan");
+            .hasMessageContaining("ultrasound.ga.ANATOMY_SCAN"); // QA D1046: keyed, was English prose
 
         verify(orderRepository, never()).save(any());
     }
@@ -436,7 +436,7 @@ class UltrasoundServiceImplTest {
 
         assertThatThrownBy(() -> ultrasoundService.markReportReviewed(reportId, null))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("already reviewed");
+            .hasMessageContaining("ultrasound.report.alreadyReviewed"); // QA D1046
 
         verify(reportRepository, never()).save(any());
     }
@@ -472,7 +472,7 @@ class UltrasoundServiceImplTest {
 
         assertThatThrownBy(() -> ultrasoundService.markPatientNotified(reportId))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("already been notified");
+            .hasMessageContaining("ultrasound.report.patientAlreadyNotified"); // QA D1046
 
         verify(reportRepository, never()).save(any());
     }
@@ -570,6 +570,8 @@ class UltrasoundServiceImplTest {
 
         assertThat(order.getStatus()).isEqualTo(UltrasoundOrderStatus.CANCELLED);
         assertThat(order.getCancellationReason()).isEqualTo(reason);
+        // QA D1047: the cancellation is stamped with its time.
+        assertThat(order.getCancelledAt()).isNotNull();
         assertThat(result).isSameAs(responseDTO);
     }
 
@@ -855,5 +857,73 @@ class UltrasoundServiceImplTest {
         when(ultrasoundMapper.toOrderResponseDTO(own)).thenReturn(UltrasoundOrderResponseDTO.builder().id(orderId).build());
 
         assertThat(ultrasoundService.getOrdersByHospitalId(hospitalId)).hasSize(1);
+    }
+
+    // ═══════════════ QA D930 class (round 16 siblings): the order's author ═══════════════
+
+    private static void asUser(UUID userId, Runnable call) {
+        User user = new User();
+        user.setId(userId);
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(user, null, java.util.List.of()));
+        try {
+            call.run();
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+    }
+
+    @Test
+    void d930_createRecordsTheSessionUserAsTheOrdersAuthor() {
+        UUID sessionUser = UUID.randomUUID();
+        UltrasoundOrderRequestDTO request = UltrasoundOrderRequestDTO.builder()
+            .patientId(patientId).hospitalId(hospitalId)
+            .scanType(UltrasoundScanType.NUCHAL_TRANSLUCENCY).gestationalAgeAtOrder(12).build();
+        UltrasoundOrder orderEntity = new UltrasoundOrder();
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(ultrasoundMapper.toOrderEntity(request, patient, hospital)).thenReturn(orderEntity);
+        when(orderRepository.save(orderEntity)).thenReturn(orderEntity);
+        when(staffRepository.findByUserIdAndHospitalId(sessionUser, hospitalId)).thenReturn(Optional.empty());
+
+        // The controller's id parses the username as a UUID: null for a real account.
+        asUser(sessionUser, () -> ultrasoundService.createOrder(request, null));
+
+        assertThat(orderEntity.getOrderedByUserId()).isEqualTo(sessionUser);
+    }
+
+    @Test
+    void d930_aColleagueCannotChangeOrCancelAnotherCliniciansOrder() {
+        UltrasoundOrder order = new UltrasoundOrder();
+        order.setId(orderId);
+        order.setHospital(hospital);
+        order.setStatus(UltrasoundOrderStatus.ORDERED);
+        order.setOrderedByUserId(UUID.randomUUID());
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        UUID colleague = UUID.randomUUID();
+        UltrasoundOrderRequestDTO edit = UltrasoundOrderRequestDTO.builder().build();
+
+        assertThatThrownBy(() -> asUser(colleague, () -> ultrasoundService.updateOrder(orderId, edit)))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThatThrownBy(() -> asUser(colleague, () -> ultrasoundService.cancelOrder(orderId, "no")))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(order.getStatus()).isEqualTo(UltrasoundOrderStatus.ORDERED);
+        verify(orderRepository, never()).save(any());
+    }
+
+    @Test
+    void d930_theAuthorCancelsHerOrder() {
+        UltrasoundOrder order = new UltrasoundOrder();
+        order.setId(orderId);
+        order.setHospital(hospital);
+        order.setStatus(UltrasoundOrderStatus.ORDERED);
+        UUID author = UUID.randomUUID();
+        order.setOrderedByUserId(author);
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(orderRepository.save(order)).thenReturn(order);
+
+        asUser(author, () -> ultrasoundService.cancelOrder(orderId, "Patient request"));
+
+        assertThat(order.getStatus()).isEqualTo(UltrasoundOrderStatus.CANCELLED);
     }
 }

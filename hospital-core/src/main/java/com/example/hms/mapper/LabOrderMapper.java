@@ -45,9 +45,7 @@ public class LabOrderMapper {
         LabTestDefinition labTestDefinition = JpaProxyUtils.safeInit(
             labOrder.getLabTestDefinition(), OWNER, labOrderId, "labTestDefinition");
 
-        String patientFullName = patient != null
-            ? buildFullName(patient.getFirstName(), patient.getLastName())
-            : null;
+        String patientFullName = patient != null ? patient.getFullName() : null;
         String hospitalName = hospital != null ? hospital.getName() : null;
         // QA D645/D648: a definition deleted before D601 is not a blank cell.
         boolean definitionMissing = labTestDefinition == null;
@@ -142,13 +140,6 @@ public class LabOrderMapper {
                 .assignment(assignment)
                 .hospital(hospital)
                 .build();
-    }
-
-    private static String buildFullName(String first, String last) {
-        String f = first == null ? "" : first.trim();
-        String l = last == null ? "" : last.trim();
-        String full = (f + " " + l).trim();
-        return full.isEmpty() ? null : full;
     }
 
     /**

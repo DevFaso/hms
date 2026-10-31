@@ -1,3 +1,5 @@
+import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
+import { textMatches } from '../shared/person-search';
 import {
   Component,
   computed,
@@ -8,6 +10,7 @@ import {
   ChangeDetectionStrategy,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { HttpErrorResponse } from '@angular/common/http';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -22,6 +25,7 @@ import {
 } from '../services/prescription.service';
 import {
   DispenseResponse,
+  MedicationCatalogItemResponse,
   PharmacyService,
   RoutingDecisionResponse,
 } from '../services/pharmacy.service';
@@ -48,6 +52,10 @@ import { actionRoles } from '../core/action-permissions';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { serverInstant } from '../shared/date-utils';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
+import { canonicalRoute } from '../shared/pipes/medication-route.pipe';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { isStepUpRefusal } from '../services/step-up';
+import { MfaService } from '../auth/mfa.service';
 
 /**
  * The prescriber's list tabs (gap G10).
@@ -143,6 +151,8 @@ export const PRESCRIPTION_TABS: readonly { id: PrescriptionTab; labelKey: string
   selector: 'app-prescriptions',
   standalone: true,
   imports: [
+    PersonNamePipe,
+    ModalDialogDirective,
     PatientSublinePipe,
     ServerTimePipe,
     CommonModule,
@@ -173,6 +183,7 @@ export class PrescriptionsComponent implements OnInit {
   private readonly translate = inject(TranslateService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly auth = inject(AuthService);
+  private readonly mfa = inject(MfaService);
 
   /**
    * QA D427: the actions the API admits for this caller, so nobody is offered
@@ -313,6 +324,8 @@ export class PrescriptionsComponent implements OnInit {
    * advisory. Surfaces the override checkbox in the form.
    */
   cdsCriticalBlocked = signal(false);
+  /** Round 18 (QA D935): a hard stop among the cards: no override is offered, the dose must change. */
+  readonly cdsHardStop = computed(() => this.cdsAdvisories().some((c) => !!c.hardStop));
 
   ngOnInit(): void {
     // Cross-tenant: hydrate URL scope before the first list fetch so
@@ -323,6 +336,7 @@ export class PrescriptionsComponent implements OnInit {
     this.load();
     this.loadPrescribers();
     this.initPatientSearch();
+    this.initCatalogSearch();
     this.initPharmacyHistory();
 
     const params = this.route.snapshot.queryParamMap;
@@ -453,6 +467,57 @@ export class PrescriptionsComponent implements OnInit {
     };
   }
 
+  /**
+   * QA D922/D935: the hospital's catalogue items matching the typed name. A
+   * pick sends its id, so the catalogue's controlled flag and paediatric
+   * ceiling apply to the order (the server resolves a typed name too).
+   */
+  readonly catalogOptions = signal<MedicationCatalogItemResponse[]>([]);
+  private readonly catalogSearch$ = new Subject<string>();
+
+  initCatalogSearch(): void {
+    this.catalogSearch$
+      .pipe(
+        debounceTime(250),
+        distinctUntilChanged(),
+        switchMap((q) =>
+          q.length < 2
+            ? of([] as MedicationCatalogItemResponse[])
+            : this.pharmacyService.searchMedications(q, 0, 15).pipe(
+                map((page) => page.content ?? []),
+                catchError(() => of([] as MedicationCatalogItemResponse[])),
+              ),
+        ),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((items) => this.catalogOptions.set(items));
+  }
+
+  /**
+   * The text a catalogue option puts in the medication field: name, strength
+   * and form, so a tablet and a syrup of the same name and strength (one of
+   * them perhaps controlled) read apart in the list.
+   */
+  catalogLabel(item: MedicationCatalogItemResponse): string {
+    const strength = [item.strength, item.strengthUnit].filter((v) => !!v).join(' ');
+    const form = item.form ? this.translate.instant(`PHARMACY.FORM_OPTION.${item.form}`) : '';
+    return [item.nameFr, strength, form].filter((v) => !!v).join(' ');
+  }
+
+  /** The picked catalogue item, when the field holds one option's text exactly. */
+  readonly pickedCatalogItem = signal<MedicationCatalogItemResponse | null>(null);
+
+  onMedicationNameChange(value: string): void {
+    this.form.medicationName = value;
+    // Review of #975: two options reading the same must not resolve to the
+    // first one's id; the server then resolves (or refuses) the typed name.
+    const matches = this.catalogOptions().filter((o) => this.catalogLabel(o) === value);
+    const picked = matches.length === 1 ? matches[0] : null;
+    this.pickedCatalogItem.set(picked);
+    this.form.medicationCatalogItemId = picked ? picked.id : null;
+    if (!picked) this.catalogSearch$.next((value ?? '').trim());
+  }
+
   initPatientSearch(): void {
     this.patientSearch$
       .pipe(
@@ -553,6 +618,7 @@ export class PrescriptionsComponent implements OnInit {
 
   openCreate(): void {
     this.form = this.emptyForm();
+    this.resetCatalogPick();
     // QA D123: a clinician prescribing opens the form with THEMSELVES as the
     // prescriber, instead of an empty choice in a list of colleagues.
     this.form.staffId = this.ownPrescriberStaffId();
@@ -570,6 +636,7 @@ export class PrescriptionsComponent implements OnInit {
     // QA D660: a withdrawn order is read-only, every field; the server
     // refuses any edit of it, so no form is opened on one.
     if (isWithdrawnStatus(p.status)) return;
+    this.resetCatalogPick();
     this.form = {
       patientId: p.patientId ?? '',
       staffId: p.staffId ?? '',
@@ -577,13 +644,15 @@ export class PrescriptionsComponent implements OnInit {
       medicationName: p.medicationName ?? '',
       dosage: p.dosage ?? '',
       frequency: p.frequency ?? '',
-      route: p.route ?? '',
+      // QA D950: a stored "ORAL" opens on the form's own PO option.
+      route: canonicalRoute(p.route) ?? p.route ?? '',
       duration: p.duration ?? '',
       quantity: p.quantity ?? null,
       quantityUnit: p.quantityUnit ?? '',
       notes: p.notes ?? '',
       status: (p.status as PrescriptionRequest['status']) ?? 'DRAFT',
       takeHome: !!p.takeHome,
+      medicationCatalogItemId: p.medicationCatalogItemId ?? null,
     };
     this.selectedPatient.set({
       id: p.patientId ?? '',
@@ -622,6 +691,17 @@ export class PrescriptionsComponent implements OnInit {
     this.showModal.set(false);
     this.formError.set('');
     this.resetCdsState();
+    this.resetCatalogPick();
+  }
+
+  /**
+   * Review of #975: the previous form's catalogue pick (and its "controlled"
+   * hint) is not carried into the next order opened. The options stay: the
+   * search skips a repeated query, so clearing them would leave a re-typed
+   * name with nothing to pick.
+   */
+  private resetCatalogPick(): void {
+    this.pickedCatalogItem.set(null);
   }
 
   /**
@@ -773,7 +853,10 @@ export class PrescriptionsComponent implements OnInit {
    * — so this is presentation only: it hides a button that would 403.
    */
   canSign(p: PrescriptionResponse): boolean {
-    if (!this.canSignRole() || this.isOtherPrescriber(p)) return false;
+    // QA D934: a nurse's or midwife's draft is signed by a doctor of the hospital.
+    if (!this.canSignRole() || (this.isOtherPrescriber(p) && !p.awaitingPhysicianSignature)) {
+      return false;
+    }
     return p.status === 'DRAFT' || p.status === 'PENDING_SIGNATURE';
   }
 
@@ -904,12 +987,63 @@ export class PrescriptionsComponent implements OnInit {
     });
   }
 
+  /**
+   * Round 18: the order a controlled-drug signature is being re-authenticated
+   * for, and what the prescriber types: their TOTP code when an authenticator
+   * is enrolled, else their password. Cleared after every attempt that ends
+   * the dialog, so nothing is kept between signatures.
+   */
+  readonly signReauthTarget = signal<PrescriptionResponse | null>(null);
+  readonly signReauthUsesCode = signal(false);
+  readonly signReauthError = signal('');
+  signReauthSecret = '';
+
   signPrescription(p: PrescriptionResponse): void {
+    if (p.controlledSubstance) {
+      this.openSignReauth(p);
+      return;
+    }
+    this.doSign(p);
+  }
+
+  openSignReauth(p: PrescriptionResponse): void {
+    this.actionError.set('');
+    this.signReauthSecret = '';
+    this.signReauthError.set('');
+    this.signReauthUsesCode.set(false);
+    this.signReauthTarget.set(p);
+    this.mfa.getStatus().subscribe({
+      next: (status) => this.signReauthUsesCode.set(!!status?.mfaEnabled),
+      error: () => this.signReauthUsesCode.set(false),
+    });
+  }
+
+  closeSignReauth(): void {
+    this.signReauthSecret = '';
+    this.signReauthError.set('');
+    this.signReauthTarget.set(null);
+  }
+
+  submitSignReauth(): void {
+    const target = this.signReauthTarget();
+    const secret = this.signReauthSecret;
+    if (!target || !secret.trim() || this.signingId()) return;
+    this.doSign(
+      target,
+      this.signReauthUsesCode() ? { mfaCode: secret.trim() } : { password: secret },
+    );
+  }
+
+  private doSign(p: PrescriptionResponse, reauth?: { password?: string; mfaCode?: string }): void {
     this.actionError.set('');
     this.signingId.set(p.id);
-    this.prescriptionService.sign(p.id).subscribe({
+    const signed$ = reauth
+      ? this.prescriptionService.sign(p.id, reauth)
+      : this.prescriptionService.sign(p.id);
+    signed$.subscribe({
       next: (signed) => {
         this.toast.success(this.translate.instant('PRESCRIPTIONS.TOAST.SIGNED'));
+        this.closeSignReauth();
         // QA D793: the signature repeats the non-blocking advisories (a
         // beta-lactam cross-reactivity), already in the reader's language.
         for (const card of signed?.cdsAdvisories ?? []) {
@@ -926,10 +1060,24 @@ export class PrescriptionsComponent implements OnInit {
         // outstanding. Collapsing those into one generic string would leave a
         // prescriber with no idea what to do next.
         const msg = this.extractErrorMessage(err);
+        this.signingId.set(null);
+        // Round 18: a refused re-authentication (missing, wrong, locked) is
+        // shown in the sign dialog, which opens if the list did not know the
+        // drug was controlled; the secret typed is cleared either way.
+        if (err instanceof HttpErrorResponse && isStepUpRefusal(err)) {
+          this.signReauthSecret = '';
+          if (!this.signReauthTarget()) {
+            this.openSignReauth(p);
+          }
+          this.signReauthError.set(
+            msg || this.translate.instant('PRESCRIPTIONS.SIGN_REAUTH.FAILED'),
+          );
+          return;
+        }
         const text = msg || this.refusalText(err, 'PRESCRIPTIONS.TOAST.SIGN_FAILED');
+        this.closeSignReauth();
         this.actionError.set(text);
         this.toast.error(text);
-        this.signingId.set(null);
       },
     });
   }
@@ -1109,9 +1257,9 @@ export class PrescriptionsComponent implements OnInit {
     if (term) {
       list = list.filter(
         (p) =>
-          (p.patientFullName ?? '').toLowerCase().includes(term) ||
+          textMatches(p.patientFullName, term) ||
           (p.medicationName ?? '').toLowerCase().includes(term) ||
-          (p.staffFullName ?? '').toLowerCase().includes(term),
+          textMatches(p.staffFullName, term),
       );
     }
     this.filtered.set(list);

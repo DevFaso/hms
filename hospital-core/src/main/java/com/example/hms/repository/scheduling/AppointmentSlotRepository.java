@@ -17,6 +17,12 @@ public interface AppointmentSlotRepository extends JpaRepository<AppointmentSlot
 
     boolean existsByStaff_IdAndStartAt(UUID staffId, LocalDateTime startAt);
 
+    /** QA D1060: the generated slot a visit starting then takes, whose end the slot rules give. */
+    java.util.Optional<AppointmentSlot> findFirstByStaff_IdAndStartAt(UUID staffId, LocalDateTime startAt);
+
+    /** QA D1063: one clinician's slots on one day, to refuse a booking over a live hold. */
+    List<AppointmentSlot> findByStaff_IdAndSlotDate(UUID staffId, LocalDate slotDate);
+
     List<AppointmentSlot> findBySessionTemplate_IdAndSlotDateBetween(
         UUID sessionTemplateId, LocalDate from, LocalDate to);
 

@@ -33,9 +33,11 @@
         <button
           class="search-clear"
           [title]="'COMMON.CLEAR_SEARCH' | translate"
+          [attr.aria-label]="'COMMON.CLEAR_SEARCH' | translate"
           (click)="searchTerm = ''; onSearchChange()"
+          [attr.aria-label]="'COMMON.CLEAR_SEARCH' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       }
     </div>
@@ -63,13 +65,16 @@
       >
         {{ 'COMMON.INACTIVE' | translate }}
       </button>
-      <button
-        class="status-pill deleted-pill"
-        [class.active]="statusFilter === 'deleted'"
-        (click)="statusFilter = 'deleted'; onStatusFilterChange()"
-      >
-        {{ 'COMMON.DELETED' | translate }}
-      </button>
+      <!-- QA D919: deleted accounts are the super-admin's; nobody else is offered the view. -->
+      @if (canSeeDeleted()) {
+        <button
+          class="status-pill deleted-pill"
+          [class.active]="statusFilter === 'deleted'"
+          (click)="statusFilter = 'deleted'; onStatusFilterChange()"
+        >
+          {{ 'COMMON.DELETED' | translate }}
+        </button>
+      }
     </div>
 
     <button
@@ -174,27 +179,33 @@
                     <button
                       class="action-link edit"
                       [title]="'COMMON.EDIT' | translate"
+                      [attr.aria-label]="'COMMON.EDIT' | translate"
                       (click)="openEdit(user)"
+                      [attr.aria-label]="'COMMON.EDIT' | translate"
                     >
-                      <span class="material-symbols-outlined">edit</span>
+                      <span class="material-symbols-outlined" aria-hidden="true">edit</span>
                     </button>
                   }
                   @if (user.deleted) {
                     <button
                       class="action-link restore"
                       [title]="'USERS.RESTORE_USER' | translate"
+                      [attr.aria-label]="'USERS.RESTORE_USER' | translate"
                       (click)="restoreUser(user)"
                       [disabled]="restoring()"
+                      [attr.aria-label]="'USERS.RESTORE_USER' | translate"
                     >
-                      <span class="material-symbols-outlined">restore</span>
+                      <span class="material-symbols-outlined" aria-hidden="true">restore</span>
                     </button>
                   } @else if (!isSelf(user) && isManageable(user)) {
                     <button
                       class="action-link delete"
                       [title]="'COMMON.DELETE' | translate"
+                      [attr.aria-label]="'COMMON.DELETE' | translate"
                       (click)="confirmDelete(user)"
+                      [attr.aria-label]="'COMMON.DELETE' | translate"
                     >
-                      <span class="material-symbols-outlined">delete</span>
+                      <span class="material-symbols-outlined" aria-hidden="true">delete</span>
                     </button>
                   }
                   @if (canImpersonate(user)) {
@@ -202,12 +213,16 @@
                       type="button"
                       class="action-link impersonate"
                       [title]="'IMPERSONATION.IMPERSONATE_USER' | translate"
+                      [attr.aria-label]="'IMPERSONATION.IMPERSONATE_USER' | translate"
                       [attr.data-test]="'impersonate-' + user.username"
                       (click)="openImpersonate(user)"
+                      [attr.aria-label]="'IMPERSONATION.IMPERSONATE_USER' | translate"
                     >
                       <!-- switch_account, not an eye: QA mistook the old
                            visibility glyph for a "view details" action. -->
-                      <span class="material-symbols-outlined">switch_account</span>
+                      <span class="material-symbols-outlined" aria-hidden="true"
+                        >switch_account</span
+                      >
                     </button>
                   }
                 </div>
@@ -221,22 +236,28 @@
     @if (totalPages() > 1) {
       <div class="pagination">
         <button
+          [attr.aria-label]="'COMMON.PREVIOUS' | translate"
           class="page-btn"
           [disabled]="currentPage() === 0"
           (click)="goToPage(currentPage() - 1)"
+          type="button"
+          [attr.aria-label]="'COMMON.PREVIOUS' | translate"
         >
-          <span class="material-symbols-outlined">chevron_left</span>
+          <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
         </button>
         <span class="page-info"
           >{{ 'COMMON.PAGE' | translate }} {{ currentPage() + 1 }} {{ 'COMMON.OF' | translate }}
           {{ totalPages() }}</span
         >
         <button
+          [attr.aria-label]="'COMMON.NEXT' | translate"
           class="page-btn"
           [disabled]="currentPage() >= totalPages() - 1"
           (click)="goToPage(currentPage() + 1)"
+          type="button"
+          [attr.aria-label]="'COMMON.NEXT' | translate"
         >
-          <span class="material-symbols-outlined">chevron_right</span>
+          <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
         </button>
       </div>
     }
@@ -268,10 +289,13 @@
       tabindex="-1"
     >
       <dialog
+        aria-modal="true"
         class="modal"
         [open]="showCreate()"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="closeCreate()"
+        (keydown.escape)="$event.stopPropagation()"
+        appDialogFocus
+        (dialogDismiss)="closeCreate()"
         tabindex="-1"
       >
         <div class="modal-header">
@@ -280,7 +304,12 @@
               editing() ? ('USERS.EDIT_USER' | translate) : ('USERS.REGISTER_NEW_USER' | translate)
             }}
           </h2>
-          <button class="modal-close" (click)="closeCreate()">
+          <button
+            type="button"
+            class="modal-close"
+            (click)="closeCreate()"
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -561,11 +590,13 @@
   @if (issuedCredentials(); as creds) {
     <div class="modal-backdrop" (keydown.escape)="dismissCredentials()" tabindex="-1">
       <dialog
+        aria-modal="true"
         class="modal"
         open
         data-test="issued-credentials"
         aria-labelledby="issued-credentials-title"
-        (keydown.escape)="dismissCredentials()"
+        appDialogFocus
+        (dialogDismiss)="dismissCredentials()"
         tabindex="-1"
       >
         <div class="modal-header">
@@ -600,15 +631,23 @@
       tabindex="-1"
     >
       <dialog
+        aria-modal="true"
         class="modal"
         [open]="showDeleteConfirm()"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="cancelDelete()"
+        (keydown.escape)="$event.stopPropagation()"
+        appDialogFocus
+        (dialogDismiss)="cancelDelete()"
         tabindex="-1"
       >
         <div class="modal-header">
           <h2>{{ 'USERS.DELETE_USER' | translate }}</h2>
-          <button class="modal-close" (click)="cancelDelete()">
+          <button
+            type="button"
+            class="modal-close"
+            (click)="cancelDelete()"
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -621,7 +660,11 @@
               <strong>{{ deletingUser()?.firstName }} {{ deletingUser()?.lastName }}</strong>
             </p>
             <p class="delete-detail">
-              {{ 'USERS.DELETE_WARNING' | translate }}
+              <!-- QA D919: the restore sentence only for who can restore. -->
+              {{
+                (canSeeDeleted() ? 'USERS.DELETE_WARNING' : 'USERS.DELETE_WARNING_NO_RESTORE')
+                  | translate
+              }}
             </p>
           </div>
         </div>
@@ -653,15 +696,23 @@
       data-test="impersonate-modal"
     >
       <dialog
+        aria-modal="true"
         class="modal-content modal-md"
         open
         (click)="$event.stopPropagation()"
-        (keydown.escape)="closeImpersonate()"
+        (keydown.escape)="$event.stopPropagation()"
+        appDialogFocus
+        (dialogDismiss)="closeImpersonate()"
         tabindex="-1"
       >
         <div class="modal-header">
           <h2>{{ 'IMPERSONATION.MODAL_TITLE' | translate }}</h2>
-          <button class="modal-close" (click)="closeImpersonate()">
+          <button
+            type="button"
+            class="modal-close"
+            (click)="closeImpersonate()"
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>

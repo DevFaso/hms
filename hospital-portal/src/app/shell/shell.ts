@@ -1,3 +1,4 @@
+import { EMPI_MATCHER_ROLES, EmpiStatusService } from '../reception/empi-status.service';
 import {
   Component,
   computed,
@@ -120,6 +121,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly downtime = inject(DowntimeService);
   /** Whether this session acts at a provider facility (provider plan AC-12). */
   private readonly providerContext = inject(ProviderContextService);
+  private readonly empiStatus = inject(EmpiStatusService);
   readonly translate = inject(TranslateService);
   private notifSub?: Subscription;
   private readCountSub?: Subscription;
@@ -1065,6 +1067,19 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
           route: '/pharmacy/stock-adjustment',
         },
         {
+          // QA D967: mirrors the /pharmacy/controlled-register RoleGuard.
+          icon: 'local_police',
+          label: 'Controlled-Drug Register',
+          translationKey: 'NAV.CONTROLLED_REGISTER',
+          route: '/pharmacy/controlled-register',
+          roles: [
+            'ROLE_PHARMACIST',
+            'ROLE_STORE_MANAGER',
+            'ROLE_HOSPITAL_ADMIN',
+            'ROLE_SUPER_ADMIN',
+          ],
+        },
+        {
           icon: 'medication',
           label: 'Dispensing',
           translationKey: 'NAV.DISPENSING',
@@ -1393,14 +1408,10 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     // doctors could not reach the panel at all, the second reachability
     // defect on this same surface. Roles mirror the RoleGuard on
     // 'reception/empi-candidates'.
+    // QA D987: and only while the matcher is switched on; it answers 404 off.
     if (
-      this.hasAnyRole([
-        'ROLE_RECEPTIONIST',
-        'ROLE_NURSE',
-        'ROLE_DOCTOR',
-        'ROLE_HOSPITAL_ADMIN',
-        'ROLE_SUPER_ADMIN',
-      ])
+      (this.empiStatus.enabled() === true || this.empiStatus.failed()) &&
+      this.hasAnyRole([...EMPI_MATCHER_ROLES])
     ) {
       items.push({
         icon: 'join_inner',
@@ -1651,6 +1662,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   ngOnInit(): void {
     this.userProfile.set(this.auth.getUserProfile());
     this.permissions.loadFromBackend();
+    // QA D987: the duplicate-patient entry depends on the matcher being on.
+    this.empiStatus.load();
 
     this.loadNotifications();
     this.loadUnreadMessages();

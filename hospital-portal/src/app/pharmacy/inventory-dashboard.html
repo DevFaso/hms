@@ -124,11 +124,17 @@
       </div>
       @if (totalPages > 1) {
         <div class="pagination">
-          <button class="btn-secondary btn-sm" [disabled]="currentPage === 0" (click)="prevPage()">
+          <button
+            [attr.aria-label]="'COMMON.PREVIOUS' | translate"
+            class="btn-secondary btn-sm"
+            [disabled]="currentPage === 0"
+            (click)="prevPage()"
+          >
             <span class="material-symbols-outlined">chevron_left</span>
           </button>
           <span class="page-info">{{ currentPage + 1 }} / {{ totalPages }}</span>
           <button
+            [attr.aria-label]="'COMMON.NEXT' | translate"
             class="btn-secondary btn-sm"
             [disabled]="currentPage >= totalPages - 1"
             (click)="nextPage()"
@@ -148,12 +154,18 @@
 
   <!-- Reorder Alerts Tab -->
   @if (activeTab() === 'alerts') {
-    <div class="alerts-header">
-      <button class="btn-secondary" (click)="triggerReorderAlerts()">
-        <span class="material-symbols-outlined">notifications_active</span>
-        {{ 'PHARMACY.TRIGGER_ALERTS' | translate }}
-      </button>
-    </div>
+    @if (canTriggerAlerts()) {
+      <div class="alerts-header">
+        <button
+          class="btn-secondary"
+          data-testid="trigger-reorder-alerts"
+          (click)="triggerReorderAlerts()"
+        >
+          <span class="material-symbols-outlined">notifications_active</span>
+          {{ 'PHARMACY.TRIGGER_ALERTS' | translate }}
+        </button>
+      </div>
+    }
     @if (alertsLoading()) {
       <div class="loading-state">
         <div class="spinner"></div>
@@ -200,7 +212,9 @@
   <!-- Expiry Report Tab -->
   @if (activeTab() === 'expiry') {
     <div class="expiry-controls">
-      <label for="expiryDays">{{ 'PHARMACY.DAYS_AHEAD' | translate }}:</label>
+      <label for="expiryDays"
+        >{{ 'PHARMACY.DAYS_AHEAD' | translate }}{{ 'COMMON.COLON' | translate }}</label
+      >
       <select id="expiryDays" [(ngModel)]="daysAhead" (ngModelChange)="loadExpiringLots()">
         <option [ngValue]="30">30</option>
         <option [ngValue]="60">60</option>
@@ -283,10 +297,17 @@
         (click)="$event.stopPropagation()"
         (keydown)="$event.stopPropagation()"
         tabindex="-1"
+        appModalDialog
+        aria-labelledby="inventory-dashboard-dialog-title-1"
+        (escaped)="closeCreateModal()"
       >
         <div class="modal-header">
-          <h2>{{ 'PHARMACY.ADD_ITEM' | translate }}</h2>
-          <button class="modal-close" (click)="closeCreateModal()">
+          <h2 id="inventory-dashboard-dialog-title-1">{{ 'PHARMACY.ADD_ITEM' | translate }}</h2>
+          <button
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+            class="modal-close"
+            (click)="closeCreateModal()"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>

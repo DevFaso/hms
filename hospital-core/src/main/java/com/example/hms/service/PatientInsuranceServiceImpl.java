@@ -316,6 +316,7 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
         }
 
         PatientInsurance insurance = findOrCreateInsurance(patientId, payerCode, policyNumber, patient);
+        applyProviderName(insurance, req.getProviderName(), payerCode);
 
         if (!actAsPatient) {
             insurance.setAssignment(resolveStaffAssignment(actorUserId, hospitalIdForStaff, locale));
@@ -429,6 +430,22 @@ public class PatientInsuranceServiceImpl implements PatientInsuranceService {
             insurance.setPatient(patient);
         }
         return insurance;
+    }
+
+    /**
+     * QA D925: {@code provider_name} is required, and a policy created through
+     * the natural-key link had none, so every new link answered 500 (or 400
+     * "providerName: must not be blank" when it was also made primary). A
+     * typed name wins; otherwise a new policy keeps the payer code as its name
+     * and an existing one keeps the name it has.
+     */
+    private static void applyProviderName(PatientInsurance insurance, String typed, String payerCode) {
+        String name = typed == null ? null : typed.trim();
+        if (name != null && !name.isEmpty()) {
+            insurance.setProviderName(name);
+        } else if (insurance.getProviderName() == null || insurance.getProviderName().isBlank()) {
+            insurance.setProviderName(payerCode);
+        }
     }
 
     private void applyPrimaryFlag(LinkPatientInsuranceRequestDTO req, boolean actAsPatient,

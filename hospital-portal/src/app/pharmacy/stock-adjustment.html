@@ -115,17 +115,47 @@
           <div class="form-row">
             <div class="field">
               <label for="txLot">{{ 'PHARMACY.STOCK_LOT' | translate }} *</label>
-              <select id="txLot" [(ngModel)]="form.stockLotId" name="stockLotId" required>
+              <select
+                id="txLot"
+                [(ngModel)]="form.stockLotId"
+                name="stockLotId"
+                (ngModelChange)="onLotChange()"
+                required
+              >
                 <option [ngValue]="undefined">
                   {{ 'PHARMACY.SELECT_LOT_OPTION' | translate }}
                 </option>
                 @for (lot of itemLots(); track lot.id) {
                   <option [ngValue]="lot.id">
-                    {{ lot.lotNumber }} ({{ lot.remainingQuantity }}, {{ lot.expiryDate }})
+                    {{ lot.lotNumber }} ({{ lot.remainingQuantity }},
+                    {{ lot.expiryDate | serverTime | date: 'mediumDate' }})
                   </option>
                 }
               </select>
             </div>
+            <!-- QA D964: a transfer sends first expired, first out, or says why not -->
+            @if (earlierTransferLot(); as earlier) {
+              <div class="field" data-testid="transfer-fefo-warning">
+                <label for="trFefo">{{ 'PHARMACY.FEFO_REASON' | translate }} *</label>
+                <small class="field-hint" role="alert">{{
+                  'PHARMACY.FEFO_WARNING'
+                    | translate
+                      : {
+                          lot: earlier.lotNumber,
+                          date: (earlier.expiryDate | serverTime | date: 'mediumDate'),
+                          left: earlier.remainingQuantity,
+                        }
+                }}</small>
+                <input
+                  id="trFefo"
+                  type="text"
+                  maxlength="300"
+                  [(ngModel)]="fefoReason"
+                  name="fefoReason"
+                  required
+                />
+              </div>
+            }
           </div>
         }
 
@@ -236,17 +266,52 @@
           </div>
         }
 
-        <!-- RETURN-specific fields -->
+        <!-- RETURN-specific fields. QA D932: the return is booked against its
+             dispense, so the stock goes back on the lot the fill came from. -->
         @if (isReturn()) {
           <div class="form-row">
             <div class="field">
-              <label for="retRef">{{ 'PHARMACY.RETURN_REFERENCE' | translate }} *</label>
+              <label for="retDispense">{{ 'PHARMACY.RETURN_DISPENSE' | translate }}</label>
+              <select
+                id="retDispense"
+                data-testid="return-dispense"
+                [(ngModel)]="returnDispenseId"
+                name="returnDispenseId"
+              >
+                <option value="">{{ 'PHARMACY.RETURN_NO_DISPENSE_OPTION' | translate }}</option>
+                @for (d of returnableDispenses(); track d.dispenseId) {
+                  <option [value]="d.dispenseId">
+                    {{ d.dispensedAt | serverTime | date: 'short' }} · {{ d.patientName || '—' }} ·
+                    {{
+                      'PHARMACY.RETURNABLE_OF'
+                        | translate: { left: d.returnableQuantity, given: d.quantityDispensed }
+                    }}
+                  </option>
+                }
+              </select>
+              @if (returnableLoading()) {
+                <small class="field-hint">{{ 'COMMON.LOADING' | translate }}</small>
+              } @else if (
+                form.inventoryItemId &&
+                (itemLots().length === 0 || form.stockLotId) &&
+                returnableDispenses().length === 0
+              ) {
+                <small class="field-hint" data-testid="return-no-dispense">{{
+                  'PHARMACY.RETURN_NO_DISPENSE_HINT' | translate
+                }}</small>
+              }
+            </div>
+            <div class="field">
+              <label for="retRef"
+                >{{ 'PHARMACY.RETURN_REFERENCE' | translate
+                }}{{ returnDispenseId ? '' : ' *' }}</label
+              >
               <input
                 id="retRef"
                 type="text"
                 [(ngModel)]="returnReference"
                 name="returnReference"
-                required
+                [required]="!returnDispenseId"
               />
             </div>
           </div>
@@ -276,7 +341,9 @@
 
   <!-- Filter -->
   <div class="filter-bar">
-    <label for="txFilterType">{{ 'PHARMACY.FILTER_BY_TYPE' | translate }}:</label>
+    <label for="txFilterType"
+      >{{ 'PHARMACY.FILTER_BY_TYPE' | translate }}{{ 'COMMON.COLON' | translate }}</label
+    >
     <select id="txFilterType" [(ngModel)]="filterType" (ngModelChange)="onFilterChange()">
       <option value="">{{ 'COMMON.ALL' | translate }}</option>
       @for (t of transactionTypes; track t) {

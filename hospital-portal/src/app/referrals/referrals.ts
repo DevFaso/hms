@@ -1,3 +1,5 @@
+import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
+import { textMatches } from '../shared/person-search';
 import {
   Component,
   computed,
@@ -8,7 +10,7 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 import {
@@ -35,11 +37,14 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { missingRequiredMessage } from '../shared/required-fields';
 import { labelledRefusalReason } from '../shared/refusal-reason';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 @Component({
   selector: 'app-referrals',
   standalone: true,
   imports: [
+    PersonNamePipe,
+    ModalDialogDirective,
     PatientSublinePipe,
     ServerTimePipe,
     CommonModule,
@@ -62,6 +67,29 @@ export class ReferralsComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly scopeUrl = inject(HospitalScopeUrlService);
   private readonly translate = inject(TranslateService);
+  private readonly router = inject(Router);
+
+  /**
+   * QA D998: whether the referral's patient chart opens here. A referral
+   * accepted at another hospital does not by itself open the chart there
+   * (cross-hospital reads are behind a flag), and opening /patients/<id>
+   * used to bounce silently back to the list. The chart is checked first and
+   * the reason is shown in the referral instead.
+   */
+  readonly chartCheck = signal<'idle' | 'checking' | 'unavailable'>('idle');
+
+  openPatientChart(ref: ReferralResponse): void {
+    if (!ref.patientId) return;
+    this.chartCheck.set('checking');
+    const hospitalId = this.roleContext.effectiveHospitalIdForRequest() ?? undefined;
+    this.patientService.getById(ref.patientId, hospitalId).subscribe({
+      next: () => {
+        this.chartCheck.set('idle');
+        this.router.navigate(['/patients', ref.patientId]);
+      },
+      error: () => this.chartCheck.set('unavailable'),
+    });
+  }
 
   /** Cross-tenant signals — drive the chip + Hospital column toggle. */
   protected readonly isSuperAdmin = this.roleContext.isSuperAdmin;
@@ -105,7 +133,11 @@ export class ReferralsComponent implements OnInit {
   isReceivingSide(r: ReferralResponse): boolean {
     const active = this.roleContext.effectiveHospitalIdForRequest();
     const target = r.receivingHospitalId || r.hospitalId;
-    return !!active && !!target && active === target;
+    // QA D955: an internal referral's two sides are one hospital; the
+    // receiving steps still belong to someone other than the referrer.
+    const staffId = this.auth.getUserProfile()?.staffId;
+    const isReferrer = !!staffId && r.referringProviderId === staffId;
+    return !!active && !!target && active === target && !isReferrer;
   }
 
   /** QA D412/D427: a draft is sent by the clinician who wrote it, and only by them. */
@@ -729,15 +761,16 @@ export class ReferralsComponent implements OnInit {
     if (term) {
       list = list.filter(
         (r) =>
-          (r.patientName ?? '').toLowerCase().includes(term) ||
+          textMatches(r.patientName, term) ||
           (r.targetSpecialty ?? '').toLowerCase().includes(term) ||
-          (r.receivingProviderName ?? '').toLowerCase().includes(term),
+          textMatches(r.receivingProviderName, term),
       );
     }
     this.filtered.set(list);
   }
 
   viewDetail(r: ReferralResponse): void {
+    this.chartCheck.set('idle');
     this.selectedReferral.set(r);
   }
   closeDetail(): void {

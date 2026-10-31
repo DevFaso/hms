@@ -29,7 +29,7 @@
   </div>
   @if (canEdit) {
     <button class="btn-primary" (click)="openCreatePlan()">
-      <span class="material-symbols-outlined">add</span>
+      <span class="material-symbols-outlined" aria-hidden="true">add</span>
       {{ 'BIRTH_PLAN.NEW' | translate }}
     </button>
   }
@@ -89,37 +89,41 @@
             </td>
             <td class="actions-cell">
               <button
+                [attr.aria-label]="'COMMON.VIEW' | translate"
                 class="btn-secondary btn-sm"
                 [title]="'COMMON.VIEW' | translate"
                 (click)="openPlan(p)"
               >
-                <span class="material-symbols-outlined">visibility</span>
+                <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
               </button>
               @if (canEdit) {
                 <button
+                  [attr.aria-label]="'COMMON.EDIT' | translate"
                   class="btn-secondary btn-sm"
                   [title]="'COMMON.EDIT' | translate"
                   (click)="openEditPlan(p)"
                 >
-                  <span class="material-symbols-outlined">edit</span>
+                  <span class="material-symbols-outlined" aria-hidden="true">edit</span>
                 </button>
               }
               @if (canReview && !p.providerReviewed) {
                 <button
+                  [attr.aria-label]="'BIRTH_PLAN.REVIEW' | translate"
                   class="btn-secondary btn-sm"
                   [title]="'BIRTH_PLAN.REVIEW' | translate"
                   (click)="openReview(p)"
                 >
-                  <span class="material-symbols-outlined">approval</span>
+                  <span class="material-symbols-outlined" aria-hidden="true">approval</span>
                 </button>
               }
               @if (canDelete) {
                 <button
+                  [attr.aria-label]="'COMMON.DELETE' | translate"
                   class="btn-secondary btn-sm"
                   [title]="'COMMON.DELETE' | translate"
                   (click)="confirmDelete(p)"
                 >
-                  <span class="material-symbols-outlined">delete</span>
+                  <span class="material-symbols-outlined" aria-hidden="true">delete</span>
                 </button>
               }
             </td>
@@ -131,12 +135,13 @@
   @if (totalPages() > 1) {
     <div class="pager">
       <button
+        [attr.aria-label]="'COMMON.PREVIOUS' | translate"
         class="btn-secondary btn-sm"
         [disabled]="page() === 0"
         (click)="prev()"
         [title]="'COMMON.PREVIOUS' | translate"
       >
-        <span class="material-symbols-outlined">chevron_left</span>
+        <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
       </button>
       <span class="muted">{{ page() + 1 }} / {{ totalPages() }}</span>
       <button
@@ -144,8 +149,9 @@
         [disabled]="page() + 1 >= totalPages()"
         (click)="next()"
         [title]="'COMMON.NEXT' | translate"
+        [attr.aria-label]="'COMMON.NEXT' | translate"
       >
-        <span class="material-symbols-outlined">chevron_right</span>
+        <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
       </button>
     </div>
   }
@@ -156,20 +162,23 @@
   <div class="modal-backdrop" tabindex="-1" (click)="closePlan()" (keydown.escape)="closePlan()">
     <div
       class="modal modal-lg"
+      aria-labelledby="birth-plan-tab-dialog-1-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closePlan(); $event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ p.introduction?.patientName }} — {{ 'BIRTH_PLAN.TITLE' | translate }}</h2>
+        <h2 id="birth-plan-tab-dialog-1-title">
+          {{ p.introduction?.patientName }} — {{ 'BIRTH_PLAN.TITLE' | translate }}
+        </h2>
         <button
           class="modal-close"
           (click)="closePlan()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -287,20 +296,23 @@
   >
     <div
       class="modal modal-lg"
+      aria-labelledby="birth-plan-tab-dialog-2-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closePlanModal(); $event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ (editingPlanId() ? 'BIRTH_PLAN.EDIT' : 'BIRTH_PLAN.NEW') | translate }}</h2>
+        <h2 id="birth-plan-tab-dialog-2-title">
+          {{ (editingPlanId() ? 'BIRTH_PLAN.EDIT' : 'BIRTH_PLAN.NEW') | translate }}
+        </h2>
         <button
           class="modal-close"
           (click)="closePlanModal()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -477,20 +489,21 @@
   >
     <div
       class="modal"
+      aria-labelledby="birth-plan-tab-dialog-3-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeReview(); $event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'BIRTH_PLAN.REVIEW_TITLE' | translate }}</h2>
+        <h2 id="birth-plan-tab-dialog-3-title">{{ 'BIRTH_PLAN.REVIEW_TITLE' | translate }}</h2>
         <button
           class="modal-close"
           (click)="closeReview()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -530,20 +543,21 @@
   >
     <div
       class="modal"
+      aria-labelledby="birth-plan-tab-dialog-4-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeDelete(); $event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'BIRTH_PLAN.DELETE_TITLE' | translate }}</h2>
+        <h2 id="birth-plan-tab-dialog-4-title">{{ 'BIRTH_PLAN.DELETE_TITLE' | translate }}</h2>
         <button
           class="modal-close"
           (click)="closeDelete()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">

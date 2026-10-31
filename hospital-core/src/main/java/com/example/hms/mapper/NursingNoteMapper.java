@@ -62,6 +62,7 @@ public class NursingNoteMapper {
             .responseSummary(note.getResponseSummary())
             .educationSummary(note.getEducationSummary())
             .narrative(note.getNarrative())
+            .title(note.getTitle())
             .lateEntry(note.isLateEntry())
             .eventOccurredAt(toOffset(note.getEventOccurredAt()))
             .documentedAt(toOffset(note.getDocumentedAt()))

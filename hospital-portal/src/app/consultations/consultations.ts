@@ -1,3 +1,5 @@
+import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
+import { textMatches } from '../shared/person-search';
 import {
   Component,
   computed,
@@ -35,6 +37,8 @@ import { serverInstant, toServerDateTime } from '../shared/date-utils';
 import { missingRequiredMessage } from '../shared/required-fields';
 import { labelledRefusalReason } from '../shared/refusal-reason';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { AuthorshipService } from '../shared/authorship.service';
 
 /** Mirrors the @PreAuthorize on GET /consultations/mine. Update both together. */
 const CONSULTANT_TAB_ROLES = ['ROLE_DOCTOR', 'ROLE_SUPER_ADMIN'];
@@ -43,6 +47,8 @@ const CONSULTANT_TAB_ROLES = ['ROLE_DOCTOR', 'ROLE_SUPER_ADMIN'];
   selector: 'app-consultations',
   standalone: true,
   imports: [
+    PersonNamePipe,
+    ModalDialogDirective,
     PatientSublinePipe,
     ServerTimePipe,
     CommonModule,
@@ -58,6 +64,7 @@ const CONSULTANT_TAB_ROLES = ['ROLE_DOCTOR', 'ROLE_SUPER_ADMIN'];
 })
 export class ConsultationsComponent implements OnInit {
   private readonly consultService = inject(ConsultationService);
+  private readonly authorship = inject(AuthorshipService);
   private readonly hospitalService = inject(HospitalService);
   private readonly patientService = inject(PatientService);
   private readonly staffService = inject(StaffService);
@@ -363,6 +370,13 @@ export class ConsultationsComponent implements OnInit {
     this.loadStats();
   }
 
+  /** QA D1081: a consultation request is withdrawn by the clinician who made it. */
+  canCancelConsultation(c: ConsultationResponse): boolean {
+    return (
+      !['COMPLETED', 'CANCELLED', 'DECLINED'].includes(c.status) && this.authorship.isAuthor(c)
+    );
+  }
+
   confirmCancel(c: ConsultationResponse): void {
     this.deletingItem.set(c);
     this.cancelReason.set('');
@@ -462,9 +476,9 @@ export class ConsultationsComponent implements OnInit {
     if (term) {
       list = list.filter(
         (c) =>
-          (c.patientName ?? '').toLowerCase().includes(term) ||
+          textMatches(c.patientName, term) ||
           (c.specialtyRequested ?? '').toLowerCase().includes(term) ||
-          (c.consultantName ?? '').toLowerCase().includes(term),
+          textMatches(c.consultantName, term),
       );
     }
     this.filtered.set(list);

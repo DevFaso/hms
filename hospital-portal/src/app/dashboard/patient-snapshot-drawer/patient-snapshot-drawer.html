@@ -1,5 +1,6 @@
 @if (isOpen() && snapshot(); as pt) {
   <div
+    [attr.aria-label]="'COMMON.CLOSE' | translate"
     class="drawer-overlay"
     role="button"
     tabindex="0"
@@ -24,7 +25,11 @@
           <span class="material-symbols-outlined">open_in_full</span>
           {{ 'DASHBOARD.FULL_CHART' | translate }}
         </a>
-        <button class="drawer-close" (click)="close()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="drawer-close"
+          (click)="close()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -175,6 +180,7 @@
                   >
                     {{ lab.value }}
                   </span>
+                  <app-lab-correction-badge [corrected]="lab.corrected" />
                 </div>
               }
             }
@@ -277,6 +283,7 @@
 -->
 @if (isOpen() && !snapshot() && (loading() || loadError())) {
   <div
+    [attr.aria-label]="'COMMON.CLOSE' | translate"
     class="drawer-overlay"
     role="button"
     tabindex="0"

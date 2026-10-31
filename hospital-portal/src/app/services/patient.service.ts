@@ -12,6 +12,32 @@ export interface PatientAddressHistoryEntry {
   replacedAt: string;
 }
 
+/** QA D926: the demographics PATCH /patients/{id} corrects (null or absent = unchanged). */
+export interface PatientDemographicsPatch {
+  firstName?: string;
+  middleName?: string;
+  lastName?: string;
+  dateOfBirth?: string;
+  gender?: string;
+  phoneNumberPrimary?: string;
+  phoneNumberSecondary?: string;
+  email?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  /** QA D1036: the postal code (the record's `zipCode`). */
+  postalCode?: string;
+  /** QA D1036: self-reported, correctable. */
+  ethnicity?: string;
+  /** QA D1036: A, B, AB or O with its Rhesus sign. */
+  bloodType?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  emergencyContactRelationship?: string;
+}
+
 export interface PatientResponse {
   id: string;
   /** QA D504 — the patient's sharing opt-out held back other hospitals' allergies. */
@@ -165,6 +191,8 @@ export interface PatientProblem {
   supportingEvidence?: string;
   chronic?: boolean;
   diagnosisCodes?: string[];
+  /** When the problem was last recorded or reviewed (server time). */
+  lastReviewedAt?: string | null;
 }
 
 export interface PatientDiagnosisRequest {
@@ -303,6 +331,8 @@ export interface PatientLabResult {
   /** NORMAL | ABNORMAL | ABNORMAL_LOW | ABNORMAL_HIGH | CRITICAL | PENDING | UNKNOWN (not interpreted, D31). */
   status?: string;
   released: boolean;
+  /** QA D1016 (round 18): a released value that replaces an earlier released one. */
+  corrected?: boolean;
   /**
    * No configured reference range is in this result's unit, so nothing
    * graded it: a NORMAL status then only means no abnormal flag was recorded.
@@ -351,7 +381,29 @@ export interface RegistrationMatch {
   maskedEmail: string | null;
   hospitalCount: number;
   alreadyRegisteredHere: boolean;
-  matchedOn: 'PHONE' | 'EMAIL';
+  /**
+   * PHONE / EMAIL: the typed contact is on file. IDENTITY (QA D1064): the same
+   * name and date of birth at another hospital of the organisation, whatever
+   * the phone.
+   */
+  matchedOn: 'PHONE' | 'EMAIL' | 'IDENTITY';
+  /**
+   * QA D1061: true when the record has the typed name and date of birth, false
+   * when it only shares the contact (a parent's phone on a child's
+   * registration), null when the request carried no name or date of birth.
+   */
+  sameIdentity?: boolean | null;
+}
+
+/** The registration-match request: a contact, and/or the identity (QA D1064). */
+export interface RegistrationMatchQuery {
+  email?: string;
+  phone?: string;
+  hospitalId?: string;
+  firstName?: string;
+  lastName?: string;
+  /** yyyy-MM-dd */
+  dateOfBirth?: string;
 }
 
 export interface AllergyListResult {
@@ -414,6 +466,14 @@ export class PatientService {
     return this.http.put<PatientResponse>(`/patients/${id}`, req);
   }
 
+  /**
+   * QA D926: the desk corrects a chart's identity, contact and guardian.
+   * PATCH: a field left out is unchanged; a required one sent blank is refused.
+   */
+  patchDemographics(id: string, req: PatientDemographicsPatch): Observable<PatientResponse> {
+    return this.http.patch<PatientResponse>(`/patients/${id}`, req);
+  }
+
   lookup(params: {
     identifier?: string;
     email?: string;
@@ -434,15 +494,16 @@ export class PatientService {
    * Exact email/phone match across ALL hospitals for the registration form.
    * Returns a masked, privacy-minimal projection — link via POST /registrations.
    */
-  registrationMatch(params: {
-    email?: string;
-    phone?: string;
-    hospitalId?: string;
-  }): Observable<RegistrationMatch[]> {
+  registrationMatch(params: RegistrationMatchQuery): Observable<RegistrationMatch[]> {
     let httpParams = new HttpParams();
     if (params.email) httpParams = httpParams.set('email', params.email);
     if (params.phone) httpParams = httpParams.set('phone', params.phone);
     if (params.hospitalId) httpParams = httpParams.set('hospitalId', params.hospitalId);
+    // QA D1061 / D1064: the identity, so a record is told apart from one that
+    // only shares the phone, and found at another hospital when the phone differs.
+    if (params.firstName) httpParams = httpParams.set('firstName', params.firstName);
+    if (params.lastName) httpParams = httpParams.set('lastName', params.lastName);
+    if (params.dateOfBirth) httpParams = httpParams.set('dateOfBirth', params.dateOfBirth);
     return this.http.get<RegistrationMatch[]>('/patients/registration-match', {
       params: httpParams,
     });

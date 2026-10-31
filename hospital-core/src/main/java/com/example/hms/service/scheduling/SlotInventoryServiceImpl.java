@@ -19,6 +19,7 @@ import com.example.hms.repository.PatientRepository;
 import com.example.hms.repository.UserRoleHospitalAssignmentRepository;
 import com.example.hms.repository.scheduling.AppointmentSlotRepository;
 import com.example.hms.repository.scheduling.SessionTemplateRepository;
+import com.example.hms.service.AppointmentSlotRules;
 import com.example.hms.utility.RoleValidator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,7 +32,9 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -64,6 +67,8 @@ public class SlotInventoryServiceImpl implements SlotInventoryService {
      * {@code SlotFhirMapper} already reads {@code heldUntil} with the same bean.
      */
     private final Clock clock;
+    /** QA D1073: the person who booked from a slot (the desk, or the waitlist accept) is its creator. */
+    private final com.example.hms.repository.UserRepository userRepository;
 
     @Override
     @Transactional
@@ -147,13 +152,45 @@ public class SlotInventoryServiceImpl implements SlotInventoryService {
         LocalDate end = to != null ? to : start.plusWeeks(2);
         int capped = limit <= 0 ? 50 : Math.min(limit, MAX_SEARCH_RESULTS);
 
+        // QA D1013: a desk, portal or referral booking takes the clinician's
+        // time without touching the slot rows, so a slot the clinician is
+        // already booked over is not offered (one read per clinician and day).
+        Map<String, List<Appointment>> booked = new HashMap<>();
         return slotRepository.searchOpen(
                 hospitalId, departmentId, staffId, visitTypeId, start, end,
                 // Never offer a slot in the past, even on today's date.
                 now, now, PageRequest.of(0, capped))
             .stream()
+            .filter(slot -> !clinicianBookedOver(slot, booked))
             .map(this::toDto)
             .toList();
+    }
+
+    /**
+     * QA D1013: whether the slot's clinician already holds an appointment over
+     * the slot's time, made by any path (the desk, the patient portal, a
+     * referral, the check-out follow-up), other than the slot's own. The
+     * inventory used to know only about bookings made through it, so a
+     * waitlist offer sold a time the desk had already given away, and the
+     * clinician had two patients at 09:20.
+     */
+    private boolean clinicianBookedOver(AppointmentSlot slot, Map<String, List<Appointment>> cache) {
+        Staff staff = slot.getStaff();
+        if (staff == null || staff.getId() == null) {
+            return false;
+        }
+        List<Appointment> sameDay = cache.computeIfAbsent(staff.getId() + "|" + slot.getSlotDate(),
+            k -> appointmentRepository.findByStaff_IdAndAppointmentDate(staff.getId(), slot.getSlotDate()));
+        UUID own = slot.getAppointment() != null ? slot.getAppointment().getId() : null;
+        return AppointmentSlotRules.overlapsHeldSlot(sameDay, own, slot.getStartAt(), slot.getEndAt());
+    }
+
+    /** QA D1013: refuses a slot whose clinician is already booked over its time, in the desk's words. */
+    private void requireClinicianFree(AppointmentSlot slot) {
+        if (clinicianBookedOver(slot, new HashMap<>())) {
+            throw new BusinessException("appointment.staff.unavailable", slot.getStaff().getId(),
+                slot.getSlotDate(), slot.getStartAt().toLocalTime(), slot.getEndAt().toLocalTime());
+        }
     }
 
     @Override
@@ -168,6 +205,9 @@ public class SlotInventoryServiceImpl implements SlotInventoryService {
         if (slot.getStartAt().isBefore(now)) {
             throw new BusinessException(SLOT_IN_PAST);
         }
+        // QA D1013: a waitlist offer holds the slot first; never hold a time
+        // the clinician is already booked over.
+        requireClinicianFree(slot);
 
         int minutes = holdMinutes > 0 ? holdMinutes : 10;
         slot.setStatus(SlotStatus.HELD);
@@ -238,6 +278,10 @@ public class SlotInventoryServiceImpl implements SlotInventoryService {
         if (slot.getStartAt().isBefore(now)) {
             throw new BusinessException(SLOT_IN_PAST);
         }
+        // QA D1013: the same overlap rule as every other booking path, checked
+        // again at booking (an accepted waitlist offer books here), since the
+        // desk may have booked the clinician while the slot was held.
+        requireClinicianFree(slot);
 
         Patient patient = patientRepository.findById(patientId)
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
@@ -267,6 +311,8 @@ public class SlotInventoryServiceImpl implements SlotInventoryService {
             .endTime(slot.getEndAt().toLocalTime())
             .status(AppointmentStatus.SCHEDULED)
             .reason(reason == null || reason.isBlank() ? defaultReason(slot) : reason)
+            // QA D1073: a slot or waitlist booking names who made it, as a desk booking does.
+            .createdBy(currentUserId != null ? userRepository.findById(currentUserId).orElse(null) : null)
             .build());
 
         clearHold(slot);

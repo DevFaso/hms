@@ -109,6 +109,8 @@ public class MortalityServiceImpl implements MortalityService {
     private final MortalityMapper mapper;
     private final RoleValidator roleValidator;
     private final com.example.hms.service.BedAssignmentService bedAssignmentService;
+    /** QA D972: a visit a death closes is handed to billing like a checkout (null in hand-built tests). */
+    private final org.springframework.context.ApplicationEventPublisher eventPublisher;
 
     @Override
     public RecordDeathResponseDTO recordDeath(DeathRecordRequestDTO request) {
@@ -323,7 +325,16 @@ public class MortalityServiceImpl implements MortalityService {
                 continue;
             }
             encounter.setStatus(EncounterStatus.COMPLETED);
+            if (encounter.getCheckoutTimestamp() == null) {
+                encounter.setCheckoutTimestamp(LocalDateTime.now(clock));
+            }
             encounterRepository.save(encounter);
+            // QA D972 (round 18): the visit is billed like any completed one;
+            // the family settles it as in any hospital.
+            if (eventPublisher != null) {
+                eventPublisher.publishEvent(
+                    com.example.hms.event.EncounterCheckedOutEvent.of(encounter, encounter.getCheckoutTimestamp()));
+            }
             if (deathRecord.getEncounterId() == null) {
                 deathRecord.setEncounterId(encounter.getId());
             }

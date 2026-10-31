@@ -923,6 +923,7 @@
                         <button
                           class="btn-icon-danger"
                           [title]="'COMMON.REMOVE' | translate"
+                          [attr.aria-label]="'COMMON.REMOVE' | translate"
                           (click)="removeRecoveryContact(rc)"
                           [disabled]="recoverySaving()"
                         >

@@ -1,3 +1,4 @@
+import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
 import { currentMedications } from '../patient-portal/current-medications';
 import {
   ChangeDetectionStrategy,
@@ -11,6 +12,7 @@ import {
   untracked,
 } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
+import { CfaPipe } from '../shared/pipes/cfa.pipe';
 import { Router, RouterLink, Routes } from '@angular/router';
 import { AuthService } from '../auth/auth.service';
 import { HospitalService } from '../services/hospital.service';
@@ -61,6 +63,7 @@ import {
   CareTeamDTO,
 } from '../services/patient-portal.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { LabCorrectionBadgeComponent } from '../lab/shared/lab-correction-badge.component';
 import { Subscription } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
 import { PatientTrackerWsService } from '../services/patient-tracker-ws.service';
@@ -139,6 +142,8 @@ export { currentMedications };
   selector: 'app-dashboard',
   standalone: true,
   imports: [
+    PersonNamePipe,
+    LabCorrectionBadgeComponent,
     ClockTimePipe,
     ServerTimePipe,
     CommonModule,
@@ -152,6 +157,7 @@ export { currentMedications };
     InBasketPanelComponent,
     EnumLabelPipe,
     CredentialRenewalComponent,
+    CfaPipe,
   ],
   templateUrl: './dashboard.html',
   styleUrl: './dashboard.scss',
@@ -442,6 +448,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   completedToday = computed(
     () => this.todayAppointments().filter((a) => a.status === 'COMPLETED').length,
+  );
+  /** QA D945: today's appointments whose patient is checked in and waiting. */
+  checkedInToday = computed(
+    () => this.todayAppointments().filter((a) => a.status === 'CHECKED_IN').length,
   );
   pendingToday = computed(
     () =>
@@ -884,7 +894,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
     for (const [perm, action] of all) {
       if (
         !seen.has(action.route) &&
-        this.permissions.hasPermission(perm) &&
+        // QA D997: the acting role's actions only.
+        this.permissions.hasActivePermission(perm) &&
         this.canAccessRoute(action.route)
       ) {
         seen.add(action.route);

@@ -115,6 +115,7 @@
                   <button
                     class="action-link edit"
                     [title]="'COMMON.EDIT' | translate"
+                    [attr.aria-label]="'COMMON.EDIT' | translate"
                     (click)="openEdit(org)"
                   >
                     <span class="material-symbols-outlined">edit</span>
@@ -122,6 +123,7 @@
                   <button
                     class="action-link delete"
                     [title]="'COMMON.DELETE' | translate"
+                    [attr.aria-label]="'COMMON.DELETE' | translate"
                     (click)="confirmDelete(org)"
                   >
                     <span class="material-symbols-outlined">delete</span>
@@ -137,6 +139,7 @@
     @if (totalPages() > 1) {
       <div class="pagination">
         <button
+          [attr.aria-label]="'COMMON.PREVIOUS' | translate"
           class="page-btn"
           [disabled]="currentPage() === 0"
           (click)="goToPage(currentPage() - 1)"
@@ -148,6 +151,7 @@
           {{ 'ORGANIZATIONS.PAGE_OF' | translate }} {{ totalPages() }}</span
         >
         <button
+          [attr.aria-label]="'COMMON.NEXT' | translate"
           class="page-btn"
           [disabled]="currentPage() >= totalPages() - 1"
           (click)="goToPage(currentPage() + 1)"
@@ -193,7 +197,11 @@
               editing() ? ('ORGANIZATIONS.EDIT' | translate) : ('ORGANIZATIONS.CREATE' | translate)
             }}
           </h2>
-          <button class="modal-close" (click)="closeCreate()">
+          <button
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+            class="modal-close"
+            (click)="closeCreate()"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -323,7 +331,11 @@
       >
         <div class="modal-header">
           <h2>{{ 'ORGANIZATIONS.DELETE' | translate }}</h2>
-          <button class="modal-close" (click)="cancelDelete()">
+          <button
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+            class="modal-close"
+            (click)="cancelDelete()"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>

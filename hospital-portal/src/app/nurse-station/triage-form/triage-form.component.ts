@@ -5,6 +5,7 @@ import {
   Output,
   inject,
   signal,
+  computed,
   ChangeDetectionStrategy,
   DestroyRef,
 } from '@angular/core';
@@ -21,13 +22,16 @@ import {
 } from '../../services/encounter.service';
 import { ToastService } from '../../core/toast.service';
 import { RovingFocusDirective } from '../../shared/a11y/roving-focus.directive';
+import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
+import { PatientService } from '../../services/patient.service';
+import { offersFundalHeight } from '../../shared/patient-measures';
 
 type ConsciousnessOption = 'ALERT' | 'NEW_CONFUSION' | 'VOICE' | 'PAIN' | 'UNRESPONSIVE';
 
 @Component({
   selector: 'app-triage-form',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, RovingFocusDirective],
+  imports: [CommonModule, FormsModule, TranslateModule, RovingFocusDirective, ModalDialogDirective],
   templateUrl: './triage-form.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './triage-form.component.scss',
@@ -39,6 +43,7 @@ export class TriageFormComponent {
    */
   @Input() set encounter(value: EncounterResponse | null) {
     this._encounter = value;
+    this.loadPatientSex(value);
     if (value?.chiefComplaint && !this.chiefComplaint()) {
       this.chiefComplaint.set(value.chiefComplaint);
     }
@@ -51,6 +56,30 @@ export class TriageFormComponent {
   @Output() triageCompleted = new EventEmitter<TriageSubmissionResponse>();
 
   private readonly encounterService = inject(EncounterService);
+  private readonly patientService = inject(PatientService);
+
+  /**
+   * QA D1077: the patient's recorded sex, read once per encounter. A fundal
+   * height is not offered (nor sent) for a patient recorded as male.
+   */
+  readonly patientGender = signal<string | null>(null);
+  readonly showFundalHeight = computed(() => offersFundalHeight(this.patientGender()));
+
+  private loadPatientSex(value: EncounterResponse | null): void {
+    this.patientGender.set(null);
+    if (!value?.patientId) return;
+    const asked = value.patientId;
+    this.patientService
+      .getById(asked, value.hospitalId || undefined)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (p) => {
+          if (this._encounter?.patientId === asked) this.patientGender.set(p?.gender ?? null);
+        },
+        // Unknown sex keeps the field: the server refuses it for a male patient.
+        error: () => undefined,
+      });
+  }
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
 
@@ -64,6 +93,8 @@ export class TriageFormComponent {
   weightKg = signal<number | null>(null);
   heightCm = signal<number | null>(null);
   painScale = signal<number | null>(null);
+  /** QA D1031: the antenatal fundal height, in cm (optional). */
+  fundalHeightCm = signal<number | null>(null);
 
   /* ── NEWS2 parameters (P3 #25b) ─────────── */
   onOxygen = signal(false);
@@ -120,6 +151,39 @@ export class TriageFormComponent {
       .subscribe(() => (this.esiOptionsCache = this.buildEsiOptions()));
   }
 
+  /**
+   * Review of #971: Escape closes the dialog only while nothing has been
+   * typed; once vitals are entered it would throw them away, so it is ignored
+   * (the Close button still closes).
+   */
+  onEscape(): void {
+    if (!this.hasEntries()) this.dismissed.emit();
+  }
+
+  hasEntries(): boolean {
+    const vitals = [
+      this.temperatureCelsius(),
+      this.heartRateBpm(),
+      this.respiratoryRateBpm(),
+      this.systolicBpMmHg(),
+      this.diastolicBpMmHg(),
+      this.spo2Percent(),
+      this.weightKg(),
+      this.heightCm(),
+      this.painScale(),
+      this.fundalHeightCm(),
+      this.fallRiskScore(),
+    ];
+    return (
+      vitals.some((v) => v !== null) ||
+      !!this.consciousnessLevel() ||
+      this.onOxygen() ||
+      this.fallRisk() ||
+      !!this.roomAssignment().trim() ||
+      this.chiefComplaint().trim() !== (this.encounter?.chiefComplaint ?? '').trim()
+    );
+  }
+
   get canSubmit(): boolean {
     return !!this.encounter?.id && this.esiScore() >= 1 && this.esiScore() <= 5 && !this.saving();
   }
@@ -166,6 +230,7 @@ export class TriageFormComponent {
       onOxygen: this.onOxygen(),
       consciousnessLevel: this.consciousnessLevel() || undefined,
       painScale: this.painScale() ?? undefined,
+      fundalHeightCm: this.showFundalHeight() ? (this.fundalHeightCm() ?? undefined) : undefined,
       fallRisk: this.fallRisk() || undefined,
       fallRiskScore: this.fallRiskScore() ?? undefined,
       roomAssignment: this.roomAssignment() || undefined,

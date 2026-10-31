@@ -66,6 +66,7 @@
                 class="btn-sm"
                 (click)="openPermissions(role)"
                 [title]="'ROLES.MANAGE_PERMISSIONS' | translate"
+                [attr.aria-label]="'ROLES.MANAGE_PERMISSIONS' | translate"
               >
                 <span class="material-symbols-outlined">settings</span>
               </button>
@@ -73,6 +74,7 @@
                 class="btn-sm edit"
                 (click)="openEdit(role)"
                 [title]="'ROLES.EDIT_ROLE' | translate"
+                [attr.aria-label]="'ROLES.EDIT_ROLE' | translate"
               >
                 <span class="material-symbols-outlined">edit</span>
               </button>
@@ -81,6 +83,7 @@
                   class="btn-sm delete"
                   (click)="confirmDelete(role)"
                   [title]="'ROLES.DELETE_ROLE' | translate"
+                  [attr.aria-label]="'ROLES.DELETE_ROLE' | translate"
                 >
                   <span class="material-symbols-outlined">delete</span>
                 </button>
@@ -121,7 +124,11 @@
           <h2>
             {{ editing() ? ('ROLES.EDIT_ROLE' | translate) : ('ROLES.CREATE_ROLE' | translate) }}
           </h2>
-          <button class="modal-close" (click)="closeCreate()">
+          <button
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+            class="modal-close"
+            (click)="closeCreate()"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -207,7 +214,11 @@
             {{ 'ROLES.MANAGE_PERMISSIONS' | translate }} —
             {{ selectedRole() ? roleTitle(selectedRole()!) : '' }}
           </h2>
-          <button class="modal-close" (click)="closePermissions()">
+          <button
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+            class="modal-close"
+            (click)="closePermissions()"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -275,7 +286,11 @@
       >
         <div class="modal-header">
           <h2>{{ 'ROLES.DELETE_ROLE' | translate }}</h2>
-          <button class="modal-close" (click)="cancelDelete()">
+          <button
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+            class="modal-close"
+            (click)="cancelDelete()"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>

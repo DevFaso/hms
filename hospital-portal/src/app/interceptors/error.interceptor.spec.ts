@@ -1,4 +1,5 @@
 import { TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { ToastService } from '../core/toast.service';
 import {
   HttpClient,
   HttpContext,
@@ -147,7 +148,12 @@ describe('errorInterceptor', () => {
     });
     httpMock
       .expectOne('/super-admin/hospitals/h/suspend')
-      .flush({ message: 'Access denied' }, { status: 403, statusText: 'Forbidden' });
+      // The server's opaque refusal carries code ACCESS_DENIED (GlobalExceptionHandler /
+      // JsonAccessDeniedHandler); a reason without a code is the page's (QA D995).
+      .flush(
+        { message: 'Access denied', code: 'ACCESS_DENIED' },
+        { status: 403, statusText: 'Forbidden' },
+      );
 
     expect(error?.status).toBe(403);
     expect(router.navigate).toHaveBeenCalledWith(['/error/403']);
@@ -416,6 +422,93 @@ describe('errorInterceptor', () => {
     httpMock.expectNone('/frontend-audit');
   });
 
+  it('D995 (round 17): any write refused with a server reason stays on the page, the reason in a toast', () => {
+    const toast = TestBed.inject(ToastService);
+    let error: HttpErrorResponse | undefined;
+    http.post('/treatment-plans', {}).subscribe({ error: (e) => (error = e) });
+    httpMock
+      .expectOne('/treatment-plans')
+      .flush(
+        { message: 'Seul l’auteur du plan peut le modifier.' },
+        { status: 403, statusText: 'Forbidden' },
+      );
+
+    expect(router.navigate).not.toHaveBeenCalled();
+    expect(error?.status).toBe(403);
+    expect(toast.toasts().map((t) => t.message)).toEqual([
+      'Seul l’auteur du plan peut le modifier.',
+    ]);
+    // The page reporting the same reason does not stack a second toast.
+    toast.error('Seul l’auteur du plan peut le modifier.');
+    expect(toast.toasts().length).toBe(1);
+  });
+
+  it('D995 (round 17): the opaque role refusal (code ACCESS_DENIED) still opens the 403 page', () => {
+    http.post('/treatment-plans', {}).subscribe({ error: () => undefined });
+    httpMock
+      .expectOne('/treatment-plans')
+      .flush(
+        { message: 'Accès refusé', code: 'ACCESS_DENIED' },
+        { status: 403, statusText: 'Forbidden' },
+      );
+
+    expect(router.navigate).toHaveBeenCalledWith(['/error/403']);
+  });
+
+  // QA D995/D933 guard: every encounter workflow action and discharge write is
+  // answered on the page that sent it. A new action URL must join the list.
+  const pageHandledClinicalActions: [string, string][] = [
+    ['POST', '/encounters/e1/triage'],
+    ['POST', '/encounters/e1/complete-triage'],
+    ['POST', '/encounters/e1/nursing-intake'],
+    ['POST', '/encounters/e1/notes'],
+    ['POST', '/encounters/e1/notes/addendums'],
+    ['POST', '/encounters/e1/notes/sign?noteId=n1'],
+    ['POST', '/encounters/e1/notes/cosign'],
+    ['POST', '/encounters/e1/checkout'],
+    ['POST', '/encounters/e1/close-unseen'],
+    ['POST', '/encounters/e1/start'],
+    ['POST', '/encounters/e1/complete-examination'],
+    ['POST', '/encounters/e1/ready-for-discharge'],
+    ['POST', '/encounters/e1/medical-certificate'],
+    ['PUT', '/discharge-summaries/s1'],
+    ['DELETE', '/discharge-summaries/s1?deletedByProviderId=x'],
+    ['POST', '/discharge-summaries/s1/finalize'],
+    ['POST', '/discharge-approvals/a1/approve'],
+    ['POST', '/discharge-approvals/a1/reject'],
+    ['POST', '/discharge-approvals/a1/cancel'],
+    // QA D930 class (round 16 siblings): author checks on orders and draft reads.
+    ['PUT', '/imaging/orders/o1/status'],
+    ['POST', '/imaging/orders/o1/signature'],
+    ['PUT', '/imaging/results/r1'],
+    ['POST', '/imaging/results/r1/sign'],
+    ['PUT', '/imaging/results/r1/status'],
+    ['PUT', '/ultrasound/orders/u1'],
+    ['POST', '/ultrasound/orders/u1/cancel?cancellationReason=x'],
+    ['POST', '/referrals/obgyn/f1/cancel'],
+    ['POST', '/transfusions/requests/t1/cancel'],
+    // Product decision 2026-10-28: procedure orders are author-owned for cancel.
+    ['POST', '/procedure-orders/p1/cancel?cancellationReason=x'],
+    ['PUT', '/procedure-orders/p1'],
+  ];
+  for (const [method, url] of pageHandledClinicalActions) {
+    it(`QA D995: a refused ${method} ${url} stays on the page (no 403 page)`, () => {
+      let error: HttpErrorResponse | undefined;
+      http.request(method, url, { body: {} }).subscribe({ error: (e) => (error = e) });
+      httpMock
+        .expectOne(url)
+        .flush({ message: 'refused' }, { status: 403, statusText: 'Forbidden' });
+      expect(router.navigate).not.toHaveBeenCalled();
+      expect(error?.status).toBe(403);
+    });
+  }
+
+  it('QA D995: a refused encounter READ still goes to the 403 page', () => {
+    http.get('/encounters/e1').subscribe({ error: () => undefined });
+    httpMock.expectOne('/encounters/e1').flush(null, { status: 403, statusText: 'Forbidden' });
+    expect(router.navigate).toHaveBeenCalledWith(['/error/403']);
+  });
+
   it('QA D618: a refused discharge stays on the open form (no 403 page)', () => {
     let error: HttpErrorResponse | undefined;
     http.post('/admissions/adm-1/discharge', {}).subscribe({ error: (e) => (error = e) });
@@ -460,6 +553,19 @@ describe('errorInterceptor', () => {
     http.post('/referrals/r-1/cancel', {}).subscribe({ error: (e) => (error = e) });
     httpMock
       .expectOne('/referrals/r-1/cancel')
+      .flush(null, { status: 403, statusText: 'Forbidden' });
+
+    expect(router.navigate).not.toHaveBeenCalled();
+    expect(error?.status).toBe(403);
+  });
+
+  it('QA D965: a refused pharmacy action is reported by the page, not a 403 page', () => {
+    let error: HttpErrorResponse | undefined;
+    http.post('/pharmacy/inventory/reorder-alerts/trigger', {}).subscribe({
+      error: (e) => (error = e),
+    });
+    httpMock
+      .expectOne('/pharmacy/inventory/reorder-alerts/trigger')
       .flush(null, { status: 403, statusText: 'Forbidden' });
 
     expect(router.navigate).not.toHaveBeenCalled();

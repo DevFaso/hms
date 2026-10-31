@@ -1,3 +1,4 @@
+import { personName } from '../shared/pipes/person-name.pipe';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -31,7 +32,7 @@ import { PatientService, PatientResponse } from '../services/patient.service';
 import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
-import { labelledRefusalReason } from '../shared/refusal-reason';
+import { labelledRefusalReason, refusalReason } from '../shared/refusal-reason';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import {
   localInputInstant,
@@ -45,6 +46,14 @@ import { PrenatalTabComponent } from './prenatal-tab';
 import { PostpartumTabComponent } from './postpartum-tab';
 import { LaborTabComponent } from './labor-tab';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import {
+  dueDateFromLmp,
+  effectiveDueDate,
+  gestationalAge,
+  isDelivered,
+  ongoingPregnancy,
+} from './pregnancy-dates';
+import { AuthorshipService } from '../shared/authorship.service';
 
 /** The history form's fields the server names under `fieldErrors`. */
 const HISTORY_LABELS: Record<string, string> = {
@@ -120,6 +129,7 @@ type MaternityTab =
 })
 export class MaternityComponent implements OnInit {
   private readonly maternityService = inject(MaternityService);
+  private readonly authorship = inject(AuthorshipService);
   private readonly referralService = inject(ObgynReferralService);
   private readonly patientService = inject(PatientService);
   private readonly auth = inject(AuthService);
@@ -316,18 +326,52 @@ export class MaternityComponent implements OnInit {
     if (!this.hospitalId) return;
     this.patientService.list(this.hospitalId).subscribe({
       next: (patients) => {
-        this.patientNames = new Map(
-          (patients ?? []).map((p) => [p.id, `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim()]),
-        );
+        this.patientNames = new Map((patients ?? []).map((p) => [p.id, personName(p)]));
       },
       error: () => {
-        // Names stay blank; the table falls back to the MRN-less id prefix.
+        // Names stay blank; the table says the name is unavailable.
       },
     });
   }
 
+  /**
+   * QA D1005: the due date follows the LMP (Naegele, as the server computes
+   * it) unless the midwife typed her own; the gestational age is shown beside
+   * it and on the list.
+   */
+  onLmpChange(lmp: string): void {
+    const menstrual = this.historyForm.menstrualHistory ?? (this.historyForm.menstrualHistory = {});
+    const previousAuto = dueDateFromLmp(menstrual.lastMenstrualPeriod);
+    menstrual.lastMenstrualPeriod = lmp;
+    if (!menstrual.estimatedDueDate || menstrual.estimatedDueDate === previousAuto) {
+      menstrual.estimatedDueDate = dueDateFromLmp(lmp) || undefined;
+    }
+  }
+
+  formGestationalAge(): { weeks: number; days: number } | null {
+    return gestationalAge(effectiveDueDate(this.historyForm.menstrualHistory));
+  }
+
+  dueDateOf(history: MaternalHistoryResponse): string {
+    return effectiveDueDate(history.menstrualHistory);
+  }
+
+  /** QA D1067: a delivered woman's history shows no running gestational age. */
+  gestationalAgeOf(history: MaternalHistoryResponse): { weeks: number; days: number } | null {
+    return ongoingPregnancy(history);
+  }
+
+  /** QA D1067: the delivery that ended this history's pregnancy, if any. */
+  deliveredAtOf(history: MaternalHistoryResponse): string | null {
+    return isDelivered(history) ? (history.deliveredAt ?? null) : null;
+  }
+
   patientName(patientId: string): string {
-    return this.patientNames.get(patientId) || `${patientId.substring(0, 8)}…`;
+    // QA D992 class: never a slice of the UUID; say the name is unavailable.
+    return (
+      this.patientNames.get(patientId) ||
+      (this.translate.instant('MATERNITY.PATIENT_NAME_UNAVAILABLE') as string)
+    );
   }
 
   setWorklist(w: BoardWorklist): void {
@@ -734,7 +778,7 @@ export class MaternityComponent implements OnInit {
   patientDisplay(referral: ObgynReferralResponse): string {
     const p = referral.patient;
     if (!p) return '—';
-    return `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim() || (p.mrn ?? p.id);
+    return personName(p) || (p.mrn ?? p.id);
   }
 
   /** Mirrors the backend summary: SUBMITTED and ACKNOWLEDGED both count. */
@@ -862,6 +906,16 @@ export class MaternityComponent implements OnInit {
     this.referralActionUpdateCareTeam = false;
   }
 
+  /** QA D1081: an OB/GYN referral is cancelled by the midwife who sent it. */
+  canCancelThisReferral(r: ObgynReferralResponse): boolean {
+    return (
+      this.canCancelReferral &&
+      r.status !== 'COMPLETED' &&
+      r.status !== 'CANCELLED' &&
+      this.authorship.isAuthor(r)
+    );
+  }
+
   cancelReferralAction(): void {
     this.referralAction.set(null);
   }
@@ -872,7 +926,7 @@ export class MaternityComponent implements OnInit {
     this.referralActionBusy.set(true);
     this.referralService.start(referral.id).subscribe({
       next: (updated) => this.afterReferralAction(updated, 'MATERNITY.REFERRAL_STARTED'),
-      error: () => this.referralActionError(),
+      error: (err: unknown) => this.referralActionError(err),
     });
   }
 
@@ -896,7 +950,7 @@ export class MaternityComponent implements OnInit {
           : 'MATERNITY.REFERRAL_CANCELLED';
     op.subscribe({
       next: (updated) => this.afterReferralAction(updated, successKey),
-      error: () => this.referralActionError(),
+      error: (err: unknown) => this.referralActionError(err),
     });
   }
 
@@ -909,8 +963,11 @@ export class MaternityComponent implements OnInit {
     this.loadSummary();
   }
 
-  private referralActionError(): void {
-    this.toast.error(this.translate.instant('MATERNITY.REFERRAL_ACTION_ERROR'));
+  private referralActionError(err?: unknown): void {
+    // QA D930 class: a cancel refused to anyone but the referring midwife says so.
+    this.toast.error(
+      refusalReason(err) ?? this.translate.instant('MATERNITY.REFERRAL_ACTION_ERROR'),
+    );
     this.referralActionBusy.set(false);
   }
 }

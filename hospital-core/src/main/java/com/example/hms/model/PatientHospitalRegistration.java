@@ -128,11 +128,17 @@ public class PatientHospitalRegistration extends BaseEntity {
         setStayStatus(PatientStayStatus.ADMITTED);
     }
 
+    /**
+     * Ends the stay, never the registration. QA D1014: this used to clear
+     * {@code active} too, and every patient list, search and picker reads
+     * active registrations only, so an approved discharge made the patient
+     * vanish and impossible to readmit, book or see again (V244 restores the
+     * rows it ended). A discharged patient stays registered here.
+     */
     public void markDischarged() {
         this.readyByStaffId = null;
         this.readyForDischargeNote = null;
         setStayStatus(PatientStayStatus.DISCHARGED);
-        this.active = false;
     }
 
     public PatientHospitalRegistration(Patient patient, Hospital hospital) {
@@ -221,10 +227,12 @@ public class PatientHospitalRegistration extends BaseEntity {
         if (patientFullName != null || patient == null) {
             return;
         }
-        String f = safeTrim(patient.getFirstName());
-        String m = safeTrim(patient.getMiddleName());
-        String l = safeTrim(patient.getLastName());
-        String full = ((f == null ? "" : f) + (m == null ? "" : " " + m) + (l == null ? "" : " " + l)).trim();
+        // QA D1036: a blank part adds nothing (a blank middle name used to
+        // leave two spaces between the first and the last name).
+        String full = java.util.stream.Stream.of(patient.getFirstName(), patient.getMiddleName(), patient.getLastName())
+            .map(this::safeTrim)
+            .filter(part -> part != null && !part.isEmpty())
+            .collect(java.util.stream.Collectors.joining(" "));
         patientFullName = full.isEmpty() ? null : full;
     }
 

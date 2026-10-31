@@ -4,8 +4,13 @@ import { Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, Subject, Subscription, throwError } from 'rxjs';
 import { localInputToUtcIso, NurseStationComponent } from './nurse-station';
-import { NurseTaskService, NurseFlowBoard, NurseHandoff } from '../services/nurse-task.service';
-import { PatientResponse } from '../services/patient.service';
+import {
+  NurseTaskService,
+  NurseFlowBoard,
+  NurseHandoff,
+  NurseMedicationTask,
+} from '../services/nurse-task.service';
+import { PatientResponse, PatientService } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { EncounterService } from '../services/encounter.service';
 import { AuthService } from '../auth/auth.service';
@@ -45,6 +50,7 @@ describe('NurseStationComponent — two-tier polling', () => {
       'getPendingAdmissions',
       'captureVitals',
       'administerMedication',
+      'getAdministrationWitnessCandidates',
     ]);
     toastSpy = jasmine.createSpyObj('ToastService', ['info', 'success', 'error', 'warn']);
     routerSpy = jasmine.createSpyObj('Router', ['navigate']);
@@ -59,6 +65,7 @@ describe('NurseStationComponent — two-tier polling', () => {
       of([{ userId: 'u-2', displayName: 'Awa Sanou' }]),
     );
     nurseServiceSpy.getMedicationMAR.and.returnValue(of([]));
+    nurseServiceSpy.getAdministrationWitnessCandidates.and.returnValue(of([]));
     nurseServiceSpy.getDashboardSummary.and.returnValue(of(null as any));
     nurseServiceSpy.getNursingTasks.and.returnValue(of([]));
     nurseServiceSpy.getNurseInbox.and.returnValue(of([]));
@@ -370,6 +377,23 @@ describe('NurseStationComponent — two-tier polling', () => {
         .toBeTruthy();
     });
 
+    it('QA D954: the nurse closes an unseen visit from the triage card', () => {
+      authSpy.hasAnyRole.and.callFake((r: string[]) => r.includes('ROLE_NURSE'));
+      component.loadFlow$().subscribe();
+      component['pendingLoads'].set(0);
+      fixture.detectChanges();
+      const btn = fixture.nativeElement.querySelector(
+        '[data-testid="awaiting-triage-lwbs"]',
+      ) as HTMLButtonElement;
+      expect(btn).withContext('LWBS action on the triage card').toBeTruthy();
+      btn.click();
+      fixture.detectChanges();
+      expect(component.closeUnseenEncounter()?.id).toBe('e1');
+      expect(fixture.nativeElement.querySelector('app-close-unseen-dialog')).toBeTruthy();
+      component.onUnseenVisitClosed();
+      expect(component.closeUnseenEncounter()).toBeNull();
+    });
+
     it('a non-nurse gets no triage list and no encounter query', () => {
       component.loadFlow$().subscribe();
       expect(encounterSpy.list).not.toHaveBeenCalled();
@@ -378,6 +402,105 @@ describe('NurseStationComponent — two-tier polling', () => {
   });
 
   /* ── P0 #1: real SBAR handoffs ─────────────────────────────── */
+
+  describe('MAR rows (QA D929, D949, D950, D922, D993)', () => {
+    // No patientId: the name renders as text, not a router link (the spec has no router).
+    const rows = [
+      {
+        id: 'm1',
+        patientName: 'Awa',
+        medication: 'Aspirine',
+        dose: '250 mg',
+        route: 'ORAL',
+        dueTime: '2030-01-02T23:04:00',
+        status: 'UPCOMING',
+        lastOutcome: 'HELD',
+      },
+      {
+        id: 'm2',
+        patientName: 'Awa',
+        medication: 'Morphine',
+        dose: '2 mg',
+        route: 'INTRAVENOUS',
+        dueTime: '2030-01-01T10:00:00',
+        status: 'COMPLETED',
+        lastOutcome: 'REFUSED',
+        controlledSubstance: true,
+      },
+      {
+        id: 'm3',
+        patientName: 'Awa',
+        medication: 'Paracétamol',
+        dose: '1 g',
+        route: 'PO',
+        dueTime: '2030-01-01T10:00:00',
+        status: 'DUE',
+      },
+    ];
+
+    function render(): HTMLElement {
+      nurseServiceSpy.getMedicationMAR.and.returnValue(
+        of(rows as unknown as NurseMedicationTask[]),
+      );
+      component.refresh();
+      component.activeSection.set('medications');
+      component['pendingLoads'].set(0);
+      fixture.detectChanges();
+      return fixture.nativeElement as HTMLElement;
+    }
+
+    it('only a dose that can be recorded now offers Give, Hold and Refuse', () => {
+      const el = render();
+      const actionCells = Array.from(el.querySelectorAll('tr.data-row td.action-cell'));
+      expect(actionCells.map((td) => !!td.querySelector('.action-give'))).toEqual([
+        false,
+        false,
+        true,
+      ]);
+      expect(actionCells[1].textContent).toContain('NURSE.COURSE_ENDED');
+      expect(actionCells[1].textContent).not.toContain('NURSE.DONE');
+    });
+
+    it('a held or refused last dose is shown as such, never as given', () => {
+      const el = render();
+      expect(el.querySelector('[data-testid="med-last-outcome-m1"]')?.textContent).toContain(
+        'NURSE.LAST_DOSE',
+      );
+      expect(component.canRecordDose(rows[0] as never)).toBeFalse();
+      expect(component.canRecordDose(rows[2] as never)).toBeTrue();
+    });
+
+    it('the route reads as its translated label, whatever way it was stored', () => {
+      const el = render();
+      const text = el.textContent ?? '';
+      expect(text).toContain('PRESCRIPTIONS.ROUTES.IV');
+      expect(text).toContain('PRESCRIPTIONS.ROUTES.PO');
+      expect(text).not.toContain('INTRAVENOUS');
+    });
+
+    it('a controlled substance is marked on its row', () => {
+      const el = render();
+      expect(el.querySelector('[data-testid="med-controlled-m2"]')).toBeTruthy();
+      expect(el.querySelector('[data-testid="med-controlled-m3"]')).toBeNull();
+    });
+
+    it('a dose due on another day shows its date', () => {
+      expect(component.isDueToday('2030-01-02T23:04:00')).toBeFalse();
+      const now = new Date();
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const todayUtc = `${now.getUTCFullYear()}-${pad(now.getUTCMonth() + 1)}-${pad(now.getUTCDate())}T${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())}:00`;
+      expect(component.isDueToday(todayUtc)).toBeTrue();
+    });
+
+    it('the hold/refuse reason box has a label', () => {
+      component.promptHoldRefuse('m3', 'HELD');
+      fixture.detectChanges();
+      const el = fixture.nativeElement as HTMLElement;
+      const box = el.querySelector('#mar-reason-input');
+      expect(box).toBeTruthy();
+      expect(el.querySelector('label[for="mar-reason-input"]')).toBeTruthy();
+    });
+  });
 
   it('submitCreateHandoff requires patient and direction before posting', () => {
     component.openHandoffCreate();
@@ -466,6 +589,37 @@ describe('NurseStationComponent — two-tier polling', () => {
     expect(
       component.canCompleteHandoff({ ...base, id: 'to-me', completableByMe: true } as NurseHandoff),
     ).toBeTrue();
+  });
+
+  it('QA D1075: the handoff card shows when it was reported, not when it was completed', () => {
+    const h = {
+      id: 'h1',
+      patientId: 'p1',
+      patientName: 'Bea Ward',
+      direction: 'SHIFT_CHANGE',
+      createdAt: '2026-10-30T13:33:43',
+      updatedAt: '2026-10-30T13:34:02',
+      completedAt: '2026-10-30T13:34:02',
+      note: 'Stable.',
+      background: null,
+      assessment: null,
+      recommendation: null,
+      status: 'COMPLETED',
+      createdByName: 'Nina Nurse',
+    } as NurseHandoff;
+    expect(component.handoffReportedAt(h)).toBe('2026-10-30T13:33:43');
+    // A server that predates createdAt still shows a time.
+    expect(component.handoffReportedAt({ ...h, createdAt: undefined })).toBe('2026-10-30T13:34:02');
+  });
+
+  it('QA D1077: the ward vitals offer head circumference only on the growth age rule', () => {
+    const lookup = spyOn(TestBed.inject(PatientService), 'getById');
+    lookup.and.returnValue(of({ id: 'p65', dateOfBirth: '1961-05-01' } as PatientResponse));
+    component.recordVitals('p65', 'Daouda Traoré');
+    expect(component.showHeadCircumference()).withContext('65 years old').toBeFalse();
+    lookup.and.returnValue(of({ id: 'p1', dateOfBirth: '2025-03-01' } as PatientResponse));
+    component.recordVitals('p1', 'Bébé');
+    expect(component.showHeadCircumference()).withContext('infant').toBeTrue();
   });
 
   it('completeHandoff calls the service and refreshes', () => {
@@ -599,8 +753,51 @@ describe('NurseStationComponent — two-tier polling', () => {
     component.recordVitals('p1', 'Awa');
     component.updateVitalsField('spo2Percent', '97');
     component.submitVitals();
-    expect(nurseServiceSpy.captureVitals).toHaveBeenCalledWith('p1', { spo2Percent: 97 });
+    // QA D1043: the unticked oxygen box is sent as false.
+    expect(nurseServiceSpy.captureVitals).toHaveBeenCalledWith('p1', {
+      spo2Percent: 97,
+      onOxygen: false,
+    });
     expect(toastSpy.error).toHaveBeenCalledWith('SpO2 out of range');
+  });
+
+  it('QA D1043: an untouched oxygen box alone is not a vitals set; with readings it is sent as false', () => {
+    component.recordVitals('p1', 'Awa');
+    component.updateVitalsOnOxygen(false);
+    component.submitVitals();
+    expect(nurseServiceSpy.captureVitals).not.toHaveBeenCalled();
+  });
+
+  it('QA D1045: the ward pain score is sent with the vitals', () => {
+    nurseServiceSpy.captureVitals.and.returnValue(of(undefined));
+    component.recordVitals('p1', 'Awa');
+    component.updateVitalsField('painScale', '6');
+    component.submitVitals();
+    expect(nurseServiceSpy.captureVitals).toHaveBeenCalledWith('p1', {
+      painScale: 6,
+      onOxygen: false,
+    });
+  });
+
+  it('QA D1039: the triage card reads the arrival time, never the visit day midnight', () => {
+    expect(
+      component.waitStart({
+        arrivalTimestamp: '2026-10-29T08:10:00',
+        encounterDate: '2026-10-29T00:00:00',
+      }),
+    ).toBe('2026-10-29T08:10:00');
+    expect(
+      component.waitStart({
+        encounterDate: '2026-10-29T00:00:00',
+        createdAt: '2026-10-29T07:55:00',
+      }),
+    ).toBe('2026-10-29T07:55:00');
+    expect(
+      component.waitStart({
+        encounterDate: '2026-10-20T09:00:00',
+        createdAt: '2026-10-29T07:55:00',
+      }),
+    ).toBe('2026-10-20T09:00:00');
   });
 
   it('QA D530: glucose is typed in mmol/L like the lab and sent in mg/dL', () => {
@@ -608,7 +805,10 @@ describe('NurseStationComponent — two-tier polling', () => {
     component.recordVitals('p1', 'Awa');
     component.updateGlucoseMmol('5.6');
     component.submitVitals();
-    expect(nurseServiceSpy.captureVitals).toHaveBeenCalledWith('p1', { bloodGlucoseMgDl: 101 });
+    expect(nurseServiceSpy.captureVitals).toHaveBeenCalledWith('p1', {
+      bloodGlucoseMgDl: 101,
+      onOxygen: false,
+    });
   });
 
   it('QA D530: the vitals modal names the patient, never the English word Patient', () => {
@@ -650,6 +850,27 @@ describe('NurseStationComponent — two-tier polling', () => {
         overrideReason: 'Scanner broken on ward',
       });
       expect(component.reasonPrompt()).toBeNull();
+    });
+
+    it('D922: Give of a controlled drug from the station asks for a witness and sends it', () => {
+      nurseServiceSpy.administerMedication.and.returnValue(of({} as any));
+      component.medications.set([
+        { id: 'rx-mor', medication: 'Morphine', controlledSubstance: true } as any,
+      ]);
+      component.administerMedication('rx-mor');
+      component.reasonText.set('Pas de scanner au chevet');
+      expect(component.promptNeedsWitness()).toBeTrue();
+      component.confirmHoldRefuse();
+      expect(nurseServiceSpy.administerMedication).not.toHaveBeenCalled();
+      expect(toastSpy.error).toHaveBeenCalledWith('NURSE.WITNESS.REQUIRED');
+
+      component.witnessUserId.set('u-witness');
+      component.confirmHoldRefuse();
+      expect(nurseServiceSpy.administerMedication).toHaveBeenCalledWith('rx-mor', {
+        status: 'GIVEN',
+        overrideReason: 'Pas de scanner au chevet',
+        witnessUserId: 'u-witness',
+      });
     });
 
     it("D78: a refusal shows the server's localised reason, not the generic toast", () => {

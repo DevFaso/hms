@@ -385,13 +385,15 @@ class AdmissionControllerTest {
 
         @Test
         @WithMockUser(authorities = "ROLE_NURSE")
-        @DisplayName("returns 404 NOT FOUND when no active admission")
-        void getCurrentAdmission_notFound() throws Exception {
+        // QA D1082 class (round 18): this used to expect 404; no open stay is an
+        // answer, and the house convention for an empty "current" is 204.
+        @DisplayName("returns 204 NO CONTENT when no active admission")
+        void getCurrentAdmission_noneIsNoContent() throws Exception {
             UUID patientId = UUID.randomUUID();
             when(admissionService.getCurrentAdmissionForPatient(patientId)).thenReturn(null);
 
             mockMvc.perform(get(BASE + "/patient/{patientId}/current", patientId))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNoContent());
 
             verify(admissionService).getCurrentAdmissionForPatient(patientId);
         }

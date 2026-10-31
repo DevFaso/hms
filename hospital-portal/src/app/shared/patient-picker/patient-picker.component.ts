@@ -1,3 +1,4 @@
+import { PersonNamePipe } from '../../shared/pipes/person-name.pipe';
 import {
   Component,
   EventEmitter,
@@ -25,7 +26,7 @@ import { patientSubline } from './patient-subline';
 @Component({
   selector: 'app-patient-picker',
   standalone: true,
-  imports: [TranslateModule],
+  imports: [PersonNamePipe, TranslateModule],
   templateUrl: './patient-picker.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './patient-picker.component.scss',

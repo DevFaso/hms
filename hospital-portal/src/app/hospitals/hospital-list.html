@@ -101,6 +101,7 @@
                     <a
                       class="action-link"
                       [title]="'HOSPITAL_LIFECYCLE.OPEN_DETAIL' | translate"
+                      [attr.aria-label]="'HOSPITAL_LIFECYCLE.OPEN_DETAIL' | translate"
                       [routerLink]="['/hospitals', h.id]"
                       [attr.data-test]="'hospital-detail-' + h.id"
                     >
@@ -109,6 +110,7 @@
                     <button
                       class="action-link"
                       [title]="'COMMON.EDIT' | translate"
+                      [attr.aria-label]="'COMMON.EDIT' | translate"
                       [attr.data-test]="'hospital-edit-' + h.id"
                       (click)="openEdit(h)"
                     >
@@ -117,6 +119,7 @@
                     <button
                       class="action-link danger"
                       [title]="'COMMON.DELETE' | translate"
+                      [attr.aria-label]="'COMMON.DELETE' | translate"
                       [attr.data-test]="'hospital-delete-' + h.id"
                       (click)="confirmDelete(h)"
                     >
@@ -163,7 +166,11 @@
           <h2>
             {{ editing() ? ('HOSPITALS.EDIT' | translate) : ('HOSPITALS.CREATE' | translate) }}
           </h2>
-          <button class="modal-close" (click)="closeModal()">
+          <button
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+            class="modal-close"
+            (click)="closeModal()"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -402,7 +409,11 @@
       >
         <div class="modal-header">
           <h2>{{ 'HOSPITALS.DELETE' | translate }}</h2>
-          <button class="modal-close" (click)="cancelDelete()">
+          <button
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+            class="modal-close"
+            (click)="cancelDelete()"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>

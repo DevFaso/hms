@@ -125,6 +125,7 @@ import com.example.hms.utility.RoleNames;
 @Slf4j
 public class PatientPortalServiceImpl implements PatientPortalService {
     private static final String APPOINTMENT_NOT_FOUND_KEY = "appointment.notFound";
+    private static final String PROVIDER_UNAVAILABLE_KEY = "portal.booking.providerUnavailable";
     /** QA D717: the only states a patient may still cancel or reschedule from the portal. */
     private static final Set<AppointmentStatus> PATIENT_CHANGEABLE_STATUSES = java.util.EnumSet.of(
             AppointmentStatus.SCHEDULED, AppointmentStatus.CONFIRMED,
@@ -187,6 +188,8 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private final com.example.hms.service.NotificationService notificationService;
     private final EmailService emailService;
     private final com.example.hms.service.scheduling.SlotInventoryService slotInventoryService;
+    /** QA D1060 / D1063: the slot rules set the visit length and refuse a slot held for an offer. */
+    private final com.example.hms.service.scheduling.AppointmentSlotPolicy slotPolicy;
     private final com.example.hms.service.webhook.WebhookPublisher webhookPublisher;
     /** The patient's stated language for the mails the portal sends them. */
     private final com.example.hms.service.i18n.PatientLocaleResolver patientLocaleResolver;
@@ -213,6 +216,17 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private final com.example.hms.repository.EducationResourceRepository educationResourceRepository;
     private final com.example.hms.mapper.PatientEducationQuestionMapper educationQuestionMapper;
     private final MessageSource messageSource;
+
+    /**
+     * QA D985: booking or cancelling the visit a recall asks for moves the
+     * recall. Setter-injected (null in constructor-built unit tests).
+     */
+    private com.example.hms.service.scheduling.PatientRecallService recallService;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setRecallService(com.example.hms.service.scheduling.PatientRecallService recallService) {
+        this.recallService = recallService;
+    }
 
     @org.springframework.beans.factory.annotation.Value("${app.frontend.base-url}")
     private String frontendBaseUrl;
@@ -281,8 +295,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 throw new BusinessException(MessageUtil.resolve("patient.phoneNumberPrimary.required"));
             }
             UUID selfId = patient.getId();
-            if (patientRepository.findByPhoneNumberPrimary(primary)
-                    .filter(other -> !other.getId().equals(selfId)).isPresent()) {
+            // Never single-result: two records may already share the number,
+            // and keeping one's own (unchanged) number is never a conflict.
+            if (!primary.equals(patient.getPhoneNumberPrimary())
+                    && patientRepository.existsByPhoneNumberPrimaryAndIdNot(primary, selfId)) {
                 throw new BusinessException(MessageUtil.resolve("patient.profile.phone.taken"));
             }
             patient.setPhoneNumberPrimary(primary);
@@ -474,6 +490,25 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         return billingInvoiceService.getInvoicesForPortalPatient(patientId, pageable, locale);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public com.example.hms.payload.dto.portal.PortalInvoiceDetailDTO getMyInvoiceDetail(Authentication auth, UUID invoiceId) {
+        return billingInvoiceService.getPortalInvoiceDetail(invoiceId, resolvePatientId(auth));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public com.example.hms.payload.dto.InvoicePdfResponseDTO getMyInvoicePdf(Authentication auth, UUID invoiceId, Locale locale) {
+        return billingInvoiceService.getPortalInvoicePdf(invoiceId, resolvePatientId(auth), locale);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public com.example.hms.payload.dto.InvoicePdfResponseDTO getMyReceiptPdf(Authentication auth, UUID invoiceId,
+                                                                             UUID paymentId, Locale locale) {
+        return billingInvoiceService.getPortalReceiptPdf(invoiceId, paymentId, resolvePatientId(auth), locale);
+    }
+
     // ── Pay an invoice ───────────────────────────────────────────────────
 
     @Override
@@ -575,30 +610,29 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             staff = available.get(0); // assign first available
         }
 
-        // Time defaults — endTime = startTime + 30 min if omitted
-        java.time.LocalTime endTime = dto.getEndTime() != null
-                ? dto.getEndTime()
-                : dto.getStartTime().plusMinutes(30);
+        // QA D1060: the slot rules decide how long the visit lasts, never the
+        // patient: a self-booking took a clinician's whole day. Any end time
+        // the client sends is ignored.
+        java.time.LocalTime endTime = slotPolicy.endFor(staff.getId(), dto.getDate(), dto.getStartTime());
         java.time.LocalDateTime requestedStart = java.time.LocalDateTime.of(dto.getDate(), dto.getStartTime());
         java.time.LocalDateTime requestedEnd = java.time.LocalDateTime.of(dto.getDate(), endTime);
-        if (!requestedEnd.isAfter(requestedStart)) {
-            throw new BusinessException(MessageUtil.resolve("portal.booking.endBeforeStart"));
-        }
+
+        // QA D978: a patient books a future time within the patient booking day.
+        com.example.hms.service.AppointmentSlotRules.requirePatientBookable(
+                requestedStart, requestedEnd, nowAt(department.getHospital()));
 
         // Staff availability check
         if (!staffAvailabilityService.isStaffAvailable(staff.getId(), requestedStart)) {
-            throw new BusinessException(MessageUtil.resolve("portal.booking.providerUnavailable"));
+            throw new BusinessException(MessageUtil.resolve(PROVIDER_UNAVAILABLE_KEY));
         }
 
-        // Overlap check
-        boolean hasConflict = appointmentRepository
-                .findByStaff_IdAndAppointmentDate(staff.getId(), dto.getDate())
-                .stream()
-                .anyMatch(existing -> {
-                    java.time.LocalDateTime es = java.time.LocalDateTime.of(existing.getAppointmentDate(), existing.getStartTime());
-                    java.time.LocalDateTime ee = java.time.LocalDateTime.of(existing.getAppointmentDate(), existing.getEndTime());
-                    return requestedStart.isBefore(ee) && es.isBefore(requestedEnd);
-                });
+        // QA D1063: a slot held for a waitlist offer is not given to anyone else.
+        slotPolicy.requireNoLiveHold(staff.getId(), requestedStart, requestedEnd);
+
+        // Overlap check. QA D937: a cancelled booking or a no-show frees its slot.
+        boolean hasConflict = com.example.hms.service.AppointmentSlotRules.overlapsHeldSlot(
+                appointmentRepository.findByStaff_IdAndAppointmentDate(staff.getId(), dto.getDate()),
+                null, requestedStart, requestedEnd);
         if (hasConflict) {
             throw new BusinessException(MessageUtil.resolve("portal.booking.providerBusy"));
         }
@@ -606,7 +640,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         // Resolve the staff's role assignment for this hospital
         UserRoleHospitalAssignment assignment = assignmentRepository
                 .findActiveStaffAssignment(staff.getUser().getId(), hospital.getId())
-                .orElseThrow(() -> new BusinessException(MessageUtil.resolve("portal.booking.providerUnavailable")));
+                .orElseThrow(() -> new BusinessException(MessageUtil.resolve(PROVIDER_UNAVAILABLE_KEY)));
 
         // Create the appointment
         Appointment appointment = new Appointment();
@@ -624,6 +658,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         appointment.setAssignment(assignment);
 
         Appointment saved = appointmentRepository.save(appointment);
+        // QA D985: a recall the patient answers by booking is scheduled.
+        if (recallService != null) {
+            recallService.scheduleOpenRecallFor(saved, null);
+        }
         log.info("Patient {} self-scheduled appointment {} at hospital {} department {}",
                 patientId, saved.getId(), hospital.getName(), department.getName());
 
@@ -742,6 +780,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         // The appointment owns its slot (P3 #22): a patient cancelling from the
         // portal frees the time for the next patient just like a desk cancel.
         slotInventoryService.releaseForAppointment(appointment.getId());
+        // QA D985: the recall this visit answered is open again.
+        if (recallService != null) {
+            recallService.reopenRecallsOf(appointment.getId());
+        }
         // Outbound webhooks (Tier 2 item 45): the portal cancel is its own
         // write path - a subscriber must see it like a desk cancel.
         if (appointment.getHospital() != null) {
@@ -757,7 +799,48 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         return appointmentMapper.toAppointmentResponseDTO(appointment);
     }
 
+    /** The status a visit the patient moves lands on: SCHEDULED, a tentative PENDING one staying PENDING. */
+    private static AppointmentStatus movedStatus(AppointmentStatus current) {
+        return current == AppointmentStatus.PENDING ? AppointmentStatus.PENDING : AppointmentStatus.SCHEDULED;
+    }
+
+    /**
+     * The wall-clock time at the hospital (its organisation's zone, else the
+     * server's): a patient's "past" slot is judged on the hospital's clock,
+     * not the server's (QA D978, review round 8).
+     */
+    private static java.time.LocalDateTime nowAt(com.example.hms.model.Hospital hospital) {
+        return com.example.hms.utility.HospitalCalendar.now(hospital);
+    }
+
     // ── Reschedule own appointment ───────────────────────────────────────
+
+    /** A completed, cancelled or already-arrived visit is not moved by the patient (QA D717 sibling). */
+    private static void requirePatientReschedulable(Appointment appointment) {
+        if (appointment.getStatus() == AppointmentStatus.COMPLETED) {
+            throw new BusinessException("appointment.reschedule.completed");
+        }
+        if (appointment.getStatus() == AppointmentStatus.CANCELLED) {
+            throw new BusinessException("appointment.reschedule.cancelled");
+        }
+        if (!PATIENT_CHANGEABLE_STATUSES.contains(appointment.getStatus())) {
+            throw new BusinessException("appointment.patient.notChangeable");
+        }
+    }
+
+    /** QA D978 / D937: the clinician works at the new time and has no other booking over it. */
+    private void requireProviderFreeForMove(Appointment appointment, java.time.LocalDateTime newStart,
+                                            java.time.LocalDateTime newEnd) {
+        UUID staffId = appointment.getStaff().getId();
+        if (!staffAvailabilityService.isStaffAvailable(staffId, newStart)) {
+            throw new BusinessException(MessageUtil.resolve(PROVIDER_UNAVAILABLE_KEY));
+        }
+        if (com.example.hms.service.AppointmentSlotRules.overlapsHeldSlot(
+                appointmentRepository.findByStaff_IdAndAppointmentDate(staffId, newStart.toLocalDate()),
+                appointment.getId(), newStart, newEnd)) {
+            throw new BusinessException(MessageUtil.resolve("portal.booking.providerBusy"));
+        }
+    }
 
     @Override
     @Transactional
@@ -769,25 +852,34 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .orElseThrow(() -> new ResourceNotFoundException(APPOINTMENT_NOT_FOUND_KEY, dto.getAppointmentId()));
 
         requirePatientOwnership(appointment, patientId);
-
-        if (appointment.getStatus() == AppointmentStatus.COMPLETED) {
-            throw new BusinessException("appointment.reschedule.completed");
-        }
-        if (appointment.getStatus() == AppointmentStatus.CANCELLED) {
-            throw new BusinessException("appointment.reschedule.cancelled");
-        }
-        // QA D717 sibling: an arrived patient cannot move the visit either.
-        if (!PATIENT_CHANGEABLE_STATUSES.contains(appointment.getStatus())) {
-            throw new BusinessException("appointment.patient.notChangeable");
-        }
-        if (!dto.getNewEndTime().isAfter(dto.getNewStartTime())) {
-            throw new BusinessException("appointment.timeRange.invalid");
+        requirePatientReschedulable(appointment);
+        // QA D1060: the slot rules set the length at the new time; the patient
+        // never chooses it (the dialog's free end field saved 08:20-09:20).
+        java.time.LocalTime newEndTime = slotPolicy.endFor(
+                appointment.getStaff() != null ? appointment.getStaff().getId() : null,
+                dto.getNewDate(), dto.getNewStartTime());
+        // QA D978 / D937: the new slot obeys the same rules as a new booking:
+        // in the future, within the patient booking day, and free.
+        java.time.LocalDateTime newStart = java.time.LocalDateTime.of(dto.getNewDate(), dto.getNewStartTime());
+        java.time.LocalDateTime newEnd = java.time.LocalDateTime.of(dto.getNewDate(), newEndTime);
+        com.example.hms.service.AppointmentSlotRules.requirePatientBookable(
+                newStart, newEnd, nowAt(appointment.getHospital()));
+        if (appointment.getStaff() != null) {
+            requireProviderFreeForMove(appointment, newStart, newEnd);
+            // QA D1063: nor onto a slot held for a waitlist offer.
+            slotPolicy.requireNoLiveHold(appointment.getStaff().getId(), newStart, newEnd);
         }
 
         appointment.setAppointmentDate(dto.getNewDate());
         appointment.setStartTime(dto.getNewStartTime());
-        appointment.setEndTime(dto.getNewEndTime());
-        appointment.setStatus(AppointmentStatus.RESCHEDULED);
+        appointment.setEndTime(newEndTime);
+        // QA D977: a moved appointment is booked at its new time, exactly as the
+        // desk reschedule lands it (SCHEDULED). RESCHEDULED marks a superseded
+        // booking; parking the moved one there hid its pre-check-in and its
+        // reminders' status checks treated it as a different state. A tentative
+        // booking (PENDING, the check-out follow-up of QA D526) stays tentative:
+        // moving it is not the clinic confirming it (review round 13).
+        appointment.setStatus(movedStatus(appointment.getStatus()));
         if (dto.getReason() != null && !dto.getReason().isBlank()) {
             String existingNotes = appointment.getNotes() != null ? appointment.getNotes() : "";
             appointment.setNotes(existingNotes + (existingNotes.isEmpty() ? "" : " | ")
@@ -995,7 +1087,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional(readOnly = true)
     public Page<AccessLogEntryDTO> getMyAccessLog(Authentication auth, Pageable pageable) {
         UUID patientId = resolvePatientId(auth);
-        return disclosureAccountingService.getEntries(patientId, null, null, pageable);
+        return disclosureAccountingService.getEntriesAsPatientSees(patientId, null, null, pageable);
     }
 
     @Override
@@ -1006,7 +1098,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                                                              java.time.LocalDateTime to,
                                                              Pageable pageable) {
         UUID patientId = resolvePatientId(auth);
-        return disclosureAccountingService.getAccounting(patientId, from, to, pageable);
+        return disclosureAccountingService.getAccountingAsPatientSees(patientId, from, to, pageable);
     }
 
     // ── Private helpers ──────────────────────────────────────────────────
@@ -1241,9 +1333,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     }
 
     private String formatPatientName(Patient patient, Locale locale) {
-        String first = patient.getFirstName() != null ? patient.getFirstName() : "";
-        String last = patient.getLastName() != null ? patient.getLastName() : "";
-        String combined = (first + " " + last).trim();
+        String combined = java.util.Objects.toString(patient.getFullName(), "");
         return combined.isBlank()
             ? messageSource.getMessage("patient.fallback.indefinite", null, locale)
             : combined;
@@ -1477,7 +1567,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         return ProxyResponseDTO.builder()
                 .id(p.getId())
                 .grantorPatientId(grantor.getId())
-                .grantorName(grantor.getFirstName() + " " + grantor.getLastName())
+                .grantorName(grantor.getFullName())
                 .proxyUserId(proxy.getId())
                 .proxyUsername(proxy.getUsername())
                 .proxyDisplayName(proxy.getFirstName() + " " + proxy.getLastName())
@@ -1833,7 +1923,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             Patient patient = appointment.getPatient();
             Staff staff = appointment.getStaff();
             Hospital hospital = appointment.getHospital();
-            String patientName = patient.getFirstName() + " " + patient.getLastName();
+            String patientName = patient.getFullName();
             String staffName = staff.getUser().getFirstName() + " " + staff.getUser().getLastName();
             String appointmentDate = appointment.getAppointmentDate().toString();
             String appointmentTime = appointment.getStartTime() + " - " + appointment.getEndTime();
@@ -1855,7 +1945,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             Patient patient = appointment.getPatient();
             Staff staff = appointment.getStaff();
             Hospital hospital = appointment.getHospital();
-            String patientName = patient.getFirstName() + " " + patient.getLastName();
+            String patientName = patient.getFullName();
             String staffName = staff.getUser().getFirstName() + " " + staff.getUser().getLastName();
             String newAppointmentDate = appointment.getAppointmentDate().toString();
             String newAppointmentTime = appointment.getStartTime() + " - " + appointment.getEndTime();
@@ -1967,17 +2057,16 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         // Only allow pre-check-in for upcoming SCHEDULED/CONFIRMED appointments
         if (appointment.getStatus() != com.example.hms.enums.AppointmentStatus.SCHEDULED
                 && appointment.getStatus() != com.example.hms.enums.AppointmentStatus.CONFIRMED) {
-            throw new IllegalStateException(
-                    "Pre-check-in is only available for SCHEDULED or CONFIRMED appointments. Current: "
-                            + appointment.getStatus());
+            // QA D940: in the patient's language, not a hard-coded English string.
+            throw new BusinessException("portal.precheckin.status");
         }
 
-        // Validate timing: 1-7 days before appointment
+        // Validate timing: from 7 days before the appointment to the day itself
         java.time.LocalDate today = java.time.LocalDate.now();
         java.time.LocalDate apptDate = appointment.getAppointmentDate();
         long daysUntil = java.time.temporal.ChronoUnit.DAYS.between(today, apptDate);
         if (daysUntil < 0 || daysUntil > 7) {
-            throw new BusinessException("Pre-check-in is available 1–7 days before your appointment.");
+            throw new BusinessException("portal.precheckin.window");
         }
 
         // 1) Update demographics if provided

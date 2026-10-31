@@ -113,7 +113,16 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
         LocalDate dueDate = resolveDueDate(request, lmp);
         int currentWeek = Math.max(0, (int) ChronoUnit.WEEKS.between(lmp, today));
 
-        List<Appointment> futureAppointments = appointmentRepository.findByHospital_IdAndPatient_Id(hospital.getId(), patient.getId()).stream()
+        List<Appointment> patientAppointments = appointmentRepository.findByHospital_IdAndPatient_Id(hospital.getId(), patient.getId());
+        // QA D1031: the antenatal contacts already held in this pregnancy (since
+        // the LMP), by the same rule the calendar uses to recognise one.
+        int completedContacts = (int) patientAppointments.stream()
+            .filter(PrenatalSchedulingServiceImpl::countsAsPrenatalVisit)
+            .filter(appt -> appt.getStatus() == AppointmentStatus.COMPLETED)
+            .filter(appt -> appt.getAppointmentDate().compareTo(lmp) >= 0)
+            .filter(appt -> appt.getAppointmentDate().compareTo(today) <= 0)
+            .count();
+        List<Appointment> futureAppointments = patientAppointments.stream()
             .filter(appt -> !appt.getAppointmentDate().isBefore(today.minusWeeks(1)))
             // QA D519: a cancelled (or missed) appointment and a visit with
             // another service (a GP consultation) are not antenatal visits.
@@ -145,6 +154,7 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
             .staffId(staff != null ? staff.getId() : null)
             .estimatedDueDate(dueDate)
             .currentGestationalWeek(currentWeek)
+            .completedContacts(completedContacts)
             .highRisk(highRisk)
             .recommendations(recommendations)
             .existingAppointments(existingAppointments)
@@ -167,7 +177,11 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
             .appointmentDate(request.getNewAppointmentDate())
             .startTime(request.getNewStartTime())
             .endTime(endTime)
-            .status(AppointmentStatus.RESCHEDULED)
+            // QA D977 class (branch C1): a moved visit is booked at its new
+            // time, SCHEDULED, as the desk and the portal reschedules land it.
+            // A missed one (NO_SHOW, FAILED) leaves through RESCHEDULED, the
+            // only move the state machine allows out of those states.
+            .status(rescheduledStatus(appointment.getStatus()))
             .patientId(appointment.getPatient().getId())
             .staffId(resolveStaffForReschedule(request, appointment))
             .hospitalId(appointment.getHospital().getId())
@@ -177,6 +191,20 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
             .build();
 
         return appointmentService.updateAppointment(appointment.getId(), updateDto, locale, username);
+    }
+
+    /**
+     * The status a moved ANC visit lands on (QA D977 class). A tentative
+     * (PENDING) visit stays tentative: moving it is not confirming it, as on
+     * the portal (review round 14).
+     */
+    static AppointmentStatus rescheduledStatus(AppointmentStatus current) {
+        if (current == AppointmentStatus.PENDING) {
+            return AppointmentStatus.PENDING;
+        }
+        return current == AppointmentStatus.NO_SHOW || current == AppointmentStatus.FAILED
+            ? AppointmentStatus.RESCHEDULED
+            : AppointmentStatus.SCHEDULED;
     }
 
     @Override
@@ -208,10 +236,10 @@ public class PrenatalSchedulingServiceImpl implements PrenatalSchedulingService 
         // A custom message is the scheduler's own words and is stored as given.
         String custom = request.getCustomMessage();
         if (custom != null && !custom.isBlank()) {
-            notificationService.createLiteralNotification(custom, patientUsername, null);
+            notificationService.createLiteralNotification(custom, patientUsername, "PRENATAL_REMINDER");
         } else {
             notificationService.createNotification("prenatal.reminder.default",
-                defaultReminderArgs(appointment, request.getDaysBefore()), patientUsername, null);
+                defaultReminderArgs(appointment, request.getDaysBefore()), patientUsername, "PRENATAL_REMINDER");
         }
     }
 

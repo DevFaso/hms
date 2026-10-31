@@ -49,6 +49,8 @@ export interface PrenatalScheduleResponse {
   staffId?: string | null;
   estimatedDueDate?: string;
   currentGestationalWeek: number;
+  /** QA D1031: antenatal contacts already held in this pregnancy. */
+  completedContacts?: number;
   highRisk: boolean;
   recommendations: PrenatalVisitRecommendation[];
   existingAppointments: PrenatalAppointmentSummary[];

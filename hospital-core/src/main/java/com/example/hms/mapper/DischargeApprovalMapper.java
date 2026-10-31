@@ -22,6 +22,8 @@ public class DischargeApprovalMapper {
 
         return DischargeApprovalResponseDTO.builder()
             .id(entity.getId())
+            .authorUserId(entity.getNurse() != null && entity.getNurse().getUser() != null
+                ? entity.getNurse().getUser().getId() : null)
             .status(entity.getStatus())
             .patientId(patient != null ? patient.getId() : null)
             .patientName(patient != null ? patient.getFullName() : null)

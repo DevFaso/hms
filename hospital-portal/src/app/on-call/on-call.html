@@ -14,7 +14,12 @@
           {{ 'ON_CALL.ADD' | translate }}
         </button>
       }
-      <button class="btn-refresh" (click)="load()" [disabled]="loading()">
+      <button
+        [attr.aria-label]="'COMMON.REFRESH' | translate"
+        class="btn-refresh"
+        (click)="load()"
+        [disabled]="loading()"
+      >
         <span class="material-symbols-outlined" [class.spin]="loading()">refresh</span>
       </button>
     </div>
@@ -118,12 +123,17 @@
       data-testid="oncall-modal"
     >
       <div
+        appModalDialog
+        aria-labelledby="on-call-panel-1-title"
+        (escaped)="closeModal()"
         class="form-card"
         (click)="$event.stopPropagation()"
         (keydown.escape)="$event.stopPropagation()"
         tabindex="-1"
       >
-        <h2>{{ (editingId() ? 'ON_CALL.EDIT_TITLE' : 'ON_CALL.ADD_TITLE') | translate }}</h2>
+        <h2 id="on-call-panel-1-title">
+          {{ (editingId() ? 'ON_CALL.EDIT_TITLE' : 'ON_CALL.ADD_TITLE') | translate }}
+        </h2>
         <form (ngSubmit)="submit()">
           <label for="oncall-staff"
             >{{ 'ON_CALL.STAFF' | translate }} *
@@ -204,12 +214,15 @@
       data-testid="oncall-delete-modal"
     >
       <div
+        appModalDialog
+        aria-labelledby="on-call-panel-2-title"
+        (escaped)="cancelDelete()"
         class="form-card confirm-card"
         (click)="$event.stopPropagation()"
         (keydown.escape)="$event.stopPropagation()"
         tabindex="-1"
       >
-        <h2>{{ 'ON_CALL.DELETE_TITLE' | translate }}</h2>
+        <h2 id="on-call-panel-2-title">{{ 'ON_CALL.DELETE_TITLE' | translate }}</h2>
         <p>
           <strong>{{ target.staffName || target.staffId }}</strong>
           — {{ target.startTime | serverTime | date: 'short' }} →

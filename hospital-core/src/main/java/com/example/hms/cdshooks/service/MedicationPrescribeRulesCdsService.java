@@ -51,11 +51,7 @@ public class MedicationPrescribeRulesCdsService implements CdsHookService {
     }
 
     private static final String ID = "hms-medication-prescribe-rules";
-    private static final Source SOURCE = new Source(
-        "HMS medication-prescribe rules",
-        null,
-        null
-    );
+    private static final String SOURCE_LABEL = "HMS medication-prescribe rules";
 
     private final CdsRuleEngine ruleEngine;
     private final PatientRepository patientRepository;
@@ -146,7 +142,7 @@ public class MedicationPrescribeRulesCdsService implements CdsHookService {
                 text.get("cds.tallMan.summary", "Confusable name — verify spelling"),
                 text.get("cds.tallMan.detail", "Use ISMP tall-man lettering: {0}", tallMan),
                 CdsCard.Indicator.INFO,
-                SOURCE,
+                new Source(text.get("cds.source.prescribeRules", SOURCE_LABEL), null, null),
                 null, null, null, null
             ));
     }

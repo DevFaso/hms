@@ -880,4 +880,16 @@ describe('PatientChartComponent — labs section', () => {
       limit: 25,
     });
   });
+  it('QA D1016 (round 18): the chart Labs table marks a corrected released value, and only that one', () => {
+    setup({
+      results: [released({ id: 'r-c', corrected: true }), released({ id: 'r-n', testName: 'NFS' })],
+    });
+    openLabs();
+    const rows = Array.from(
+      fixture.nativeElement.querySelectorAll('tbody tr') as NodeListOf<HTMLElement>,
+    ).filter((tr) => tr.querySelector('.lab-value'));
+    expect(rows.length).toBe(2);
+    expect(rows[0].querySelector('[data-testid="lab-correction-badge"]')).not.toBeNull();
+    expect(rows[1].querySelector('[data-testid="lab-correction-badge"]')).toBeNull();
+  });
 });

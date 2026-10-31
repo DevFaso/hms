@@ -155,6 +155,7 @@
                       class="action-link"
                       (click)="viewDetail(o)"
                       [title]="'IMAGING.VIEW_DETAILS' | translate"
+                      [attr.aria-label]="'IMAGING.VIEW_DETAILS' | translate"
                     >
                       <span class="material-symbols-outlined">visibility</span>
                     </button>
@@ -163,6 +164,7 @@
                         class="action-link"
                         (click)="viewReportForOrder(o)"
                         [title]="'IMAGING.VIEW_REPORT' | translate"
+                        [attr.aria-label]="'IMAGING.VIEW_REPORT' | translate"
                       >
                         <span class="material-symbols-outlined">description</span>
                       </button>
@@ -172,6 +174,7 @@
                         class="action-link"
                         (click)="openAuthorReport(o, o.status === 'RESULTS_AVAILABLE')"
                         [title]="'IMAGING.AUTHOR_REPORT' | translate"
+                        [attr.aria-label]="'IMAGING.AUTHOR_REPORT' | translate"
                       >
                         <span class="material-symbols-outlined">edit_note</span>
                       </button>
@@ -182,15 +185,17 @@
                           class="action-link"
                           (click)="openEdit(o)"
                           [title]="'IMAGING.EDIT_ORDER' | translate"
+                          [attr.aria-label]="'IMAGING.EDIT_ORDER' | translate"
                         >
                           <span class="material-symbols-outlined">edit</span>
                         </button>
                       }
-                      @if (canCancelOrder()) {
+                      @if (canCancelThisOrder(o)) {
                         <button
                           class="action-link delete"
                           (click)="confirmCancel(o)"
                           [title]="'IMAGING.CANCEL_ORDER' | translate"
+                          [attr.aria-label]="'IMAGING.CANCEL_ORDER' | translate"
                         >
                           <span class="material-symbols-outlined">cancel</span>
                         </button>
@@ -294,6 +299,7 @@
                       class="action-link"
                       (click)="openReport(r)"
                       [title]="'IMAGING.VIEW_REPORT' | translate"
+                      [attr.aria-label]="'IMAGING.VIEW_REPORT' | translate"
                     >
                       <span class="material-symbols-outlined">visibility</span>
                     </button>
@@ -303,6 +309,7 @@
                         (click)="acknowledgeCritical(r)"
                         [disabled]="acknowledging()"
                         [title]="'IMAGING.ACK_CRITICAL' | translate"
+                        [attr.aria-label]="'IMAGING.ACK_CRITICAL' | translate"
                       >
                         <span class="material-symbols-outlined">notifications_active</span>
                       </button>
@@ -312,6 +319,7 @@
                         class="action-link"
                         (click)="openStatusUpdate(r)"
                         [title]="'IMAGING.UPDATE_STATUS' | translate"
+                        [attr.aria-label]="'IMAGING.UPDATE_STATUS' | translate"
                       >
                         <span class="material-symbols-outlined">sync_alt</span>
                       </button>
@@ -329,9 +337,16 @@
   <!-- ══ Report detail overlay ══ -->
   @if (selectedReport(); as rep) {
     <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeReport()">
-      <div class="detail-panel">
+      <div
+        appModalDialog
+        aria-labelledby="imaging-panel-1-title"
+        (escaped)="closeReport()"
+        class="detail-panel"
+      >
         <div class="detail-header">
-          <h2>{{ rep.reportTitle || rep.reportNumber || ('IMAGING.REPORT' | translate) }}</h2>
+          <h2 id="imaging-panel-1-title">
+            {{ rep.reportTitle || rep.reportNumber || ('IMAGING.REPORT' | translate) }}
+          </h2>
           <div class="header-actions">
             @if (canAuthorReports && !rep.signed) {
               <button class="btn-secondary" (click)="openEditReport(rep)">
@@ -343,7 +358,12 @@
                 {{ 'IMAGING.SIGN_REPORT' | translate }}
               </button>
             }
-            <button class="btn-close" (click)="closeReport()" [title]="'COMMON.CLOSE' | translate">
+            <button
+              class="btn-close"
+              (click)="closeReport()"
+              [title]="'COMMON.CLOSE' | translate"
+              [attr.aria-label]="'COMMON.CLOSE' | translate"
+            >
               <span class="material-symbols-outlined">close</span>
             </button>
           </div>
@@ -517,9 +537,14 @@
       (click)="closeStatusUpdate()"
       (keydown.escape)="closeStatusUpdate()"
     ></div>
-    <div class="modal">
+    <div
+      class="modal"
+      appModalDialog
+      aria-labelledby="imaging-dialog-1-title"
+      (escaped)="closeStatusUpdate()"
+    >
       <div class="modal-header">
-        <h2>{{ 'IMAGING.VOID_REPORT' | translate }}</h2>
+        <h2 id="imaging-dialog-1-title">{{ 'IMAGING.VOID_REPORT' | translate }}</h2>
         <button
           class="modal-close"
           (click)="closeStatusUpdate()"
@@ -568,9 +593,14 @@
       (click)="closeReportModal()"
       (keydown.escape)="closeReportModal()"
     ></div>
-    <div class="modal modal-wide">
+    <div
+      class="modal modal-wide"
+      appModalDialog
+      aria-labelledby="imaging-dialog-2-title"
+      (escaped)="closeReportModal()"
+    >
       <div class="modal-header">
-        <h2>
+        <h2 id="imaging-dialog-2-title">
           {{ (reportEditId() ? 'IMAGING.EDIT_REPORT' : 'IMAGING.AUTHOR_REPORT') | translate }}
         </h2>
         <button
@@ -673,13 +703,19 @@
   }
   @if (selectedOrder(); as ord) {
     <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeDetail()">
-      <div class="detail-panel">
+      <div
+        appModalDialog
+        aria-labelledby="imaging-panel-2-title"
+        (escaped)="closeDetail()"
+        class="detail-panel"
+      >
         <div class="detail-header">
-          <h2>{{ 'IMAGING.ORDER_DETAILS' | translate }}</h2>
+          <h2 id="imaging-panel-2-title">{{ 'IMAGING.ORDER_DETAILS' | translate }}</h2>
           <button
             class="btn-close"
             (click)="closeDetail()"
             [title]="'IMAGING.CLOSE_DETAIL' | translate"
+            [attr.aria-label]="'IMAGING.CLOSE_DETAIL' | translate"
           >
             <span class="material-symbols-outlined">close</span>
           </button>
@@ -739,7 +775,10 @@
             <div class="detail-field">
               <span class="field-label">{{ 'IMAGING.SCHEDULED' | translate }}</span
               ><span class="field-value"
-                >{{ ord.scheduledDate || '—' }} {{ ord.scheduledTime || '' }}</span
+                >{{
+                  ord.scheduledDate ? (ord.scheduledDate | serverTime | date: 'mediumDate') : '—'
+                }}
+                {{ ord.scheduledTime || '' }}</span
               >
             </div>
             <div class="detail-field">
@@ -782,7 +821,11 @@
                   </div>
                   @if (rep.impression) {
                     <p class="report-impression">
-                      <strong>{{ 'IMAGING.IMPRESSION' | translate }}:</strong> {{ rep.impression }}
+                      <strong
+                        >{{ 'IMAGING.IMPRESSION' | translate
+                        }}{{ 'COMMON.COLON' | translate }}</strong
+                      >
+                      {{ rep.impression }}
                     </p>
                   }
                   @if (rep.findings) {
@@ -805,9 +848,14 @@
       (click)="closeModal()"
       (keydown.escape)="closeModal()"
     ></div>
-    <div class="modal modal-lg">
+    <div
+      class="modal modal-lg"
+      appModalDialog
+      aria-labelledby="imaging-dialog-3-title"
+      (escaped)="closeModal()"
+    >
       <div class="modal-header">
-        <h2>
+        <h2 id="imaging-dialog-3-title">
           {{
             editing()
               ? ('IMAGING.EDIT_ORDER' | translate)
@@ -949,9 +997,14 @@
       (click)="cancelDeleteAction()"
       (keydown.escape)="cancelDeleteAction()"
     ></div>
-    <div class="modal">
+    <div
+      class="modal"
+      appModalDialog
+      aria-labelledby="imaging-dialog-4-title"
+      (escaped)="cancelDeleteAction()"
+    >
       <div class="modal-header">
-        <h2>{{ 'IMAGING.CANCEL_ORDER' | translate }}</h2>
+        <h2 id="imaging-dialog-4-title">{{ 'IMAGING.CANCEL_ORDER' | translate }}</h2>
         <button
           class="modal-close"
           (click)="cancelDeleteAction()"

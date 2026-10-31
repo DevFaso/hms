@@ -48,6 +48,9 @@ export class MyDocumentsComponent implements OnInit {
 
   /** The translation key of a document type; the raw enum is never shown (QA D344/D434). */
   typeLabelKey(type: PatientDocumentType): string {
+    // QA D961: a certificate the doctor issued is listed with its own label
+    // (it is not an upload choice, so it is not in DOCUMENT_TYPES).
+    if (type === 'MEDICAL_CERTIFICATE') return 'PORTAL.DOCUMENTS.TYPE_MEDICAL_CERTIFICATE';
     return DOCUMENT_TYPES.find((t) => t.value === type)?.labelKey ?? 'PORTAL.DOCUMENTS.TYPE_OTHER';
   }
 

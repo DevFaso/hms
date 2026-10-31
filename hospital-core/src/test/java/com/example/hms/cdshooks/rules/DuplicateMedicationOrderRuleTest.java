@@ -48,6 +48,33 @@ class DuplicateMedicationOrderRuleTest {
         assertThat(cards.get(0).summary()).contains("Amox 500");
     }
 
+    /** QA D1049 (round 18): the date reads in the reader's language, never "2026-10-30". */
+    @Test
+    void theDuplicateDateIsWrittenForTheReader() {
+        org.springframework.context.support.ReloadableResourceBundleMessageSource source =
+            new org.springframework.context.support.ReloadableResourceBundleMessageSource();
+        source.setBasenames(com.example.hms.config.MessageBundles.basenames());
+        source.setDefaultEncoding("UTF-8");
+        source.setFallbackToSystemLocale(false);
+        source.setAlwaysUseMessageFormat(true);
+        rule.setCardText(new com.example.hms.cdshooks.CdsCardText(source));
+        Prescription prior = priorRx("Paracétamol", PrescriptionStatus.SIGNED, 1);
+        prior.setCreatedAt(java.time.LocalDate.now().minusDays(1).atTime(9, 0));
+        String iso = prior.getCreatedAt().toLocalDate().toString();
+        try {
+            for (java.util.Locale locale : List.of(java.util.Locale.FRENCH, java.util.Locale.forLanguageTag("es"))) {
+                org.springframework.context.i18n.LocaleContextHolder.setLocale(locale);
+                CdsCard card = rule.evaluate(context("paracétamol", null, List.of(prior),
+                    Arrays.asList((String) null))).get(0);
+                String expected = prior.getCreatedAt().toLocalDate().format(java.time.format.DateTimeFormatter
+                    .ofLocalizedDate(java.time.format.FormatStyle.MEDIUM).withLocale(locale));
+                assertThat(card.summary()).as(locale.toString()).contains(expected).doesNotContain(iso);
+            }
+        } finally {
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        }
+    }
+
     @Test
     void substringFallbackMatchesFreetextHistory() {
         CdsRuleContext ctx = context("amoxicillin 250mg", null,

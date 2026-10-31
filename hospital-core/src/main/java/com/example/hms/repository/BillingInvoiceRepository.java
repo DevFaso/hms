@@ -177,6 +177,32 @@ public interface BillingInvoiceRepository extends JpaRepository<BillingInvoice, 
            """)
     List<Object[]> summarize(@Param("hospitalId") UUID hospitalId, @Param("today") LocalDate today);
 
+    /**
+     * QA D1059: {@link #summarize} over the invoices dated in
+     * [{@code fromDate}, {@code toDate}], so the KPI tiles follow the list's
+     * date filter. No nullable date parameter (Postgres cannot type one): the
+     * caller sends the widest range when a bound is open.
+     */
+    @Query("""
+           SELECT COUNT(bi),
+                  SUM(CASE WHEN bi.status = com.example.hms.enums.InvoiceStatus.PAID THEN 1 ELSE 0 END),
+                  SUM(CASE WHEN bi.status IN (com.example.hms.enums.InvoiceStatus.SENT,
+                                              com.example.hms.enums.InvoiceStatus.PARTIALLY_PAID) THEN 1 ELSE 0 END),
+                  SUM(CASE WHEN bi.status IN (com.example.hms.enums.InvoiceStatus.SENT,
+                                              com.example.hms.enums.InvoiceStatus.PARTIALLY_PAID)
+                            AND bi.dueDate < :today THEN 1 ELSE 0 END),
+                  SUM(CASE WHEN bi.status <> com.example.hms.enums.InvoiceStatus.CANCELLED
+                           THEN COALESCE(bi.amountPaid, 0) ELSE 0 END),
+                  SUM(CASE WHEN bi.status IN (com.example.hms.enums.InvoiceStatus.SENT,
+                                              com.example.hms.enums.InvoiceStatus.PARTIALLY_PAID)
+                           THEN COALESCE(bi.totalAmount, 0) - COALESCE(bi.amountPaid, 0) ELSE 0 END)
+             FROM BillingInvoice bi
+            WHERE (:hospitalId IS NULL OR bi.hospital.id = :hospitalId)
+              AND bi.invoiceDate >= :fromDate AND bi.invoiceDate <= :toDate
+           """)
+    List<Object[]> summarizeBetween(@Param("hospitalId") UUID hospitalId, @Param("today") LocalDate today,
+                                    @Param("fromDate") LocalDate fromDate, @Param("toDate") LocalDate toDate);
+
     /** QA D529: the invoices of a visit or stay, copays included (filtered by the caller). */
     List<BillingInvoice> findByEncounter_IdAndStatusNot(UUID encounterId, InvoiceStatus status);
 
@@ -185,6 +211,7 @@ public interface BillingInvoiceRepository extends JpaRepository<BillingInvoice, 
 
     /** QA D210: the paid check-in copays of a visit, still standing on their own. */
     List<BillingInvoice> findByEncounter_IdAndCheckInCopayTrueAndStatus(UUID encounterId, InvoiceStatus status);
+
 
     /** The invoice an earlier create with this idempotency key produced (QA D94). */
     java.util.Optional<BillingInvoice> findByHospital_IdAndClientRequestId(UUID hospitalId, UUID clientRequestId);

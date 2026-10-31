@@ -518,3 +518,41 @@ describe('PatientPortalService after-visit summaries (QA D526)', () => {
     expect(s.followUpDate).toBeNull();
   });
 });
+
+/** QA D981: the visit's reason is shown (an admission's too) and the assessment stays the assessment. */
+describe('PatientPortalService encounters (QA D981)', () => {
+  let service: PatientPortalService;
+  let httpMock: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [PatientPortalService, provideHttpClient(), provideHttpClientTesting()],
+    });
+    service = TestBed.inject(PatientPortalService);
+    httpMock = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => httpMock.verify());
+
+  it('reads the reason for admission when the note has no complaint', () => {
+    let reason = '';
+    let assessment = '';
+    service.getMyEncounters().subscribe((list) => {
+      reason = list[0].chiefComplaint;
+      assessment = list[0].diagnosisSummary;
+    });
+    httpMock.expectOne('/me/patient/encounters').flush({
+      data: [
+        {
+          id: 'e1',
+          encounterDate: '2026-10-20T08:00:00',
+          encounterType: 'INPATIENT',
+          chiefComplaint: 'Paludisme grave, admis pour artésunate IV',
+          note: { assessment: 'Stable' },
+        },
+      ],
+    });
+    expect(reason).toBe('Paludisme grave, admis pour artésunate IV');
+    expect(assessment).toBe('Stable');
+  });
+});

@@ -203,7 +203,7 @@
                     · {{ e.frequency }}
                   }
                   @if (e.route) {
-                    · {{ e.route }}
+                    · {{ e.route | medicationRoute }}
                   }
                 </td>
                 <td>{{ e.source || '—' }}</td>
@@ -293,6 +293,7 @@
                         type="button"
                         class="btn-secondary btn-sm"
                         [title]="'COMMON.EDIT' | translate"
+                        [attr.aria-label]="'COMMON.EDIT' | translate"
                         (click)="openEditFill(f)"
                       >
                         <span class="material-symbols-outlined">edit</span>
@@ -323,7 +324,7 @@
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeFillModal(); $event.stopPropagation()"
     >
       <div class="modal-header">
         <h2>

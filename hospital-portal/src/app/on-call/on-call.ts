@@ -25,6 +25,7 @@ import { RoleContextService } from '../core/role-context.service';
 import { finalize } from 'rxjs';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { nowLocalDatetime } from '../shared/date-utils';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 /** Form model: datetime-local strings, converted to ISO with offset on submit. */
 interface OnCallFormModel {
@@ -75,7 +76,14 @@ export function isRosterable(staff: StaffResponse): boolean {
 @Component({
   selector: 'app-on-call',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [
+    ModalDialogDirective,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+  ],
   templateUrl: './on-call.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './on-call.scss',

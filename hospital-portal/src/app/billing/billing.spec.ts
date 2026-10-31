@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
-import { provideHttpClient, withXhr } from '@angular/common/http';
+import { HttpHeaders, HttpResponse, provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, Subject, throwError } from 'rxjs';
@@ -56,6 +56,7 @@ describe('BillingComponent', () => {
       'getInvoice',
       'getInvoiceItems',
       'createInvoiceItem',
+      'updateInvoiceItem',
       'deleteInvoiceItem',
       'listPayments',
       'confirmPayment',
@@ -63,7 +64,10 @@ describe('BillingComponent', () => {
       'reversePayment',
       'getReceiptPdf',
       'getSummary',
+      'addAdjustment',
+      'listAdjustments',
     ]);
+    billingSpy.listAdjustments.and.returnValue(of([]));
     billingSpy.listPayments.and.returnValue(of([]));
     billingSpy.getSummary.and.returnValue(
       of({ total: 0, paid: 0, outstanding: 0, overdue: 0, totalRevenue: 0, balance: 0 }),
@@ -250,7 +254,11 @@ describe('BillingComponent', () => {
     expect(date?.disabled).toBeTrue();
     expect(el.querySelector<HTMLInputElement>('#bill-dueDate')?.disabled).toBeTrue();
     expect(el.querySelector<HTMLInputElement>('#bill-encounter')?.disabled).toBeTrue();
-    expect(el.querySelector<HTMLTextAreaElement>('#bill-notes')?.disabled).toBeFalse();
+    // QA D1057: the notes are locked too (the server refuses a change, D656);
+    // they used to stay editable and the cashier's cancellation reason was refused.
+    expect(el.querySelector<HTMLTextAreaElement>('#bill-notes')?.disabled).toBeTrue();
+    // QA D1057: an issued invoice never offers DRAFT, only itself or a cancellation.
+    expect(component.statusOptions()).toEqual(['SENT', 'CANCELLED']);
   });
 
   it('QA D621: amounts read "F CFA" whatever the language', () => {
@@ -527,6 +535,21 @@ describe('BillingComponent', () => {
     expect(stats.balance).toBe(12900);
   });
 
+  it('QA D1059: the KPI tiles follow the date filter', () => {
+    billingSpy.getSummary.and.returnValue(
+      of({ total: 3, paid: 1, outstanding: 2, overdue: 0, totalRevenue: 1500, balance: 6000 }),
+    );
+    billingSpy.searchInvoices.and.returnValue(of(mockPage([])));
+    fixture.detectChanges();
+    component.filterFromDate.set('2026-10-29');
+    component.filterToDate.set('2026-10-29');
+    component.applyServerFilters();
+    expect(billingSpy.getSummary).toHaveBeenCalledWith({
+      fromDate: '2026-10-29',
+      toDate: '2026-10-29',
+    });
+  });
+
   it('QA D325: the All tab counts every invoice in scope, not the loaded page', () => {
     billingSpy.getSummary.and.returnValue(
       of({ total: 41, paid: 20, outstanding: 9, overdue: 2, totalRevenue: 0, balance: 0 }),
@@ -548,8 +571,374 @@ describe('BillingComponent', () => {
 
   it('shows a toast when the PDF download fails', () => {
     billingSpy.getInvoicePdf.and.returnValue(throwError(() => new Error('nope')));
-    component.downloadPdf('inv-1');
+    component.downloadPdf(mockInvoice());
     expect(toastSpy.error).toHaveBeenCalled();
+  });
+
+  describe('document names (QA D1009)', () => {
+    function pdf(disposition?: string): HttpResponse<Blob> {
+      const headers = disposition
+        ? new HttpHeaders({ 'Content-Disposition': disposition })
+        : new HttpHeaders();
+      return new HttpResponse({ body: new Blob(['%PDF']), headers });
+    }
+
+    let saved: string[];
+    beforeEach(() => {
+      saved = [];
+      spyOn(URL, 'createObjectURL').and.returnValue('blob:x');
+      spyOn(URL, 'revokeObjectURL');
+      spyOn(HTMLAnchorElement.prototype, 'click').and.callFake(function (this: HTMLAnchorElement) {
+        saved.push(this.download);
+      });
+    });
+
+    it('names the invoice PDF by the name the server gives, never by its id', () => {
+      billingSpy.getInvoicePdf.and.returnValue(
+        of(pdf('attachment; filename="invoice-GH-2026-000012.pdf"')),
+      );
+      component.downloadPdf(mockInvoice({ id: '7b0c1f1e-uuid', invoiceNumber: 'GH-2026-000012' }));
+      expect(saved).toEqual(['invoice-GH-2026-000012.pdf']);
+    });
+
+    it('falls back to the invoice number when the header is not readable', () => {
+      billingSpy.getInvoicePdf.and.returnValue(of(pdf()));
+      component.downloadPdf(mockInvoice({ id: '7b0c1f1e-uuid', invoiceNumber: 'GH-2026-000012' }));
+      expect(saved[0]).toBe('invoice-GH-2026-000012.pdf');
+      expect(saved[0]).not.toContain('7b0c1f1e');
+    });
+
+    it('gives each receipt of an invoice its own name', () => {
+      fixture.detectChanges();
+      component.viewInvoice(component.invoices()[0]);
+      const row = { id: 'p1', amount: 500, paymentDate: '2026-10-18', paymentMethod: 'CASH' };
+      billingSpy.getReceiptPdf.and.returnValues(
+        of(pdf('attachment; filename="INV-0001-R1.pdf"')),
+        of(pdf('attachment; filename="INV-0001-R2.pdf"')),
+      );
+      component.downloadReceipt({ ...row, status: 'CONFIRMED' } as never);
+      component.downloadReceipt({ ...row, id: 'p2', status: 'CONFIRMED' } as never);
+      expect(saved).toEqual(['INV-0001-R1.pdf', 'INV-0001-R2.pdf']);
+    });
+  });
+
+  describe('check-in copay still standing (QA D936)', () => {
+    const copay = mockInvoice({
+      id: 'cp-5',
+      invoiceNumber: '000005',
+      status: 'PAID',
+      amountPaid: 1000,
+      checkInCopay: true,
+      encounterCode: 'ENC-20261027-25DB1D',
+    });
+
+    it('lists the open copay of the picked patient and links its visit in one click', () => {
+      fixture.detectChanges();
+      component.openCreate();
+      billingSpy.searchInvoices.and.returnValue(
+        of(
+          mockPage([
+            copay,
+            mockInvoice({
+              id: 'cp-4',
+              checkInCopay: true,
+              status: 'PAID',
+              encounterCode: 'ENC-OLD',
+              creditedToInvoiceNumber: '000003',
+            }),
+            mockInvoice({ id: 'v-1', status: 'PAID', encounterCode: 'ENC-X' }),
+          ]),
+        ),
+      );
+      component.onPatientPicked({ id: 'pat-1', firstName: 'Fatimata', lastName: 'S' } as never);
+      expect(billingSpy.searchInvoices.calls.mostRecent().args[0]).toEqual({
+        patientId: 'pat-1',
+        statuses: ['PAID'],
+      });
+      expect(component.openCopays().map((c) => c.id)).toEqual(['cp-5']);
+      // The only open copay is proposed; the clerk clears it, then links it again in one click.
+      expect(component.form.encounterReference).toBe('ENC-20261027-25DB1D');
+      component.form = { ...component.form, encounterReference: undefined };
+
+      fixture.detectChanges();
+      const notice: HTMLElement = fixture.nativeElement.querySelector(
+        '[data-testid="open-copays"]',
+      );
+      expect(notice).not.toBeNull();
+      notice
+        .querySelector<HTMLButtonElement>('[data-testid="link-copay-ENC-20261027-25DB1D"]')!
+        .click();
+      expect(component.form.encounterReference).toBe('ENC-20261027-25DB1D');
+    });
+
+    it('proposes the visit of the only open copay, which the clerk may clear', () => {
+      fixture.detectChanges();
+      component.openCreate();
+      billingSpy.searchInvoices.and.returnValue(of(mockPage([copay])));
+      component.onPatientPicked({ id: 'pat-1' } as never);
+      expect(component.form.encounterReference).toBe('ENC-20261027-25DB1D');
+    });
+
+    it('does not carry the proposed visit to another patient', () => {
+      fixture.detectChanges();
+      component.openCreate();
+      billingSpy.searchInvoices.and.returnValue(of(mockPage([copay])));
+      component.onPatientPicked({ id: 'pat-1' } as never);
+      billingSpy.searchInvoices.and.returnValue(of(mockPage([])));
+      component.onPatientPicked({ id: 'pat-2' } as never);
+      expect(component.form.encounterReference).toBeUndefined();
+    });
+
+    it('lists nothing when the copays were already taken', () => {
+      fixture.detectChanges();
+      component.openCreate();
+      billingSpy.searchInvoices.and.returnValue(
+        of(mockPage([{ ...copay, creditedToInvoiceNumber: '000009' }])),
+      );
+      component.onPatientPicked({ id: 'pat-1' } as never);
+      expect(component.openCopays()).toEqual([]);
+    });
+  });
+
+  describe('payment reference (QA D1007)', () => {
+    it('is required for the methods the server refuses without one', () => {
+      fixture.detectChanges();
+      component.openPayment(component.invoices()[0]);
+      component.paymentMethod.set('MOBILE_MONEY');
+      component.paymentAmount.set(500);
+      component.paymentReference.set('');
+      component.recordPayment();
+      expect(billingSpy.recordPayment).not.toHaveBeenCalled();
+      expect(toastSpy.error).toHaveBeenCalledWith('BILLING.PAYMENT_REFERENCE_REQUIRED');
+      fixture.detectChanges();
+      expect(
+        fixture.nativeElement.querySelector('label[for="payment-reference"]').textContent,
+      ).toContain('*');
+      component.paymentMethod.set('CASH');
+      fixture.detectChanges();
+      expect(component.paymentReferenceRequired()).toBeFalse();
+    });
+  });
+
+  describe('discount, waiver and credit note (QA D974)', () => {
+    beforeEach(() => {
+      fixture.detectChanges();
+      component.viewInvoice(component.invoices()[0]);
+      fixture.detectChanges();
+    });
+
+    it('refuses an adjustment without a reason', () => {
+      component.adjustmentType.set('WAIVER');
+      component.adjustmentAmount.set(1000);
+      component.submitAdjustment();
+      expect(billingSpy.addAdjustment).not.toHaveBeenCalled();
+      expect(toastSpy.error).toHaveBeenCalledWith('BILLING.ADJUSTMENT_REASON_REQUIRED');
+    });
+
+    it('a credit note names its line and may leave the amount to the server', () => {
+      billingSpy.addAdjustment.and.returnValue(
+        of(mockInvoice({ totalAmount: 500, balanceDue: 500 })),
+      );
+      component.adjustmentType.set('CREDIT_NOTE');
+      component.adjustmentReason.set('NFS non réalisée');
+      component.submitAdjustment();
+      expect(billingSpy.addAdjustment).not.toHaveBeenCalled();
+      component.adjustmentLineId.set('item-9');
+      component.submitAdjustment();
+      expect(billingSpy.addAdjustment).toHaveBeenCalledWith('inv-1', {
+        type: 'CREDIT_NOTE',
+        amount: null,
+        reason: 'NFS non réalisée',
+        invoiceItemId: 'item-9',
+      });
+      expect(billingSpy.listAdjustments).toHaveBeenCalledWith('inv-1');
+    });
+
+    it('shows the form on an issued invoice only', () => {
+      expect(
+        fixture.nativeElement.querySelector('[data-testid="adjustment-submit"]'),
+      ).not.toBeNull();
+      expect(component.canAdjustInvoice(mockInvoice({ status: 'DRAFT' }))).toBeFalse();
+    });
+  });
+
+  it('an invoice settled by a waiver can be cancelled (QA D974)', () => {
+    component.openEdit(
+      mockInvoice({ status: 'PAID', amountPaid: 0, totalAmount: 0, balanceDue: 0 }),
+    );
+    expect(component.statusOptions()).toEqual(['PAID', 'CANCELLED']);
+    expect(component.statusLocked()).toBeFalse();
+    component.openEdit(mockInvoice({ status: 'PAID', amountPaid: 1000 }));
+    expect(component.statusOptions()).toEqual(['PAID']);
+  });
+
+  describe('cancelling an issued invoice (QA D1069)', () => {
+    it('asks for the reason, refuses without one, and sends it', () => {
+      billingSpy.updateInvoice.and.returnValue(of(mockInvoice({ status: 'CANCELLED' })));
+      component.openEdit(mockInvoice({ status: 'SENT' }));
+      component.form.status = 'CANCELLED';
+      expect(component.cancellingIssued()).toBeTrue();
+      component.submitForm();
+      expect(billingSpy.updateInvoice).not.toHaveBeenCalled();
+      expect(toastSpy.error).toHaveBeenCalledWith('BILLING.CANCEL_REASON_REQUIRED');
+      component.form.cancelReason = 'Facturé au mauvais patient';
+      component.submitForm();
+      expect(billingSpy.updateInvoice.calls.mostRecent().args[1].cancelReason).toBe(
+        'Facturé au mauvais patient',
+      );
+    });
+
+    it('marks and describes the missing reason under its field (QA D1072)', () => {
+      component.openEdit(mockInvoice({ status: 'SENT' }));
+      component.form.status = 'CANCELLED';
+      fixture.detectChanges();
+      component.submitForm();
+      fixture.detectChanges();
+      const field: HTMLElement = fixture.nativeElement.querySelector('#bill-cancel-reason');
+      expect(field.getAttribute('aria-invalid')).toBe('true');
+      const message = fixture.nativeElement.querySelector('#bill-cancel-reason-invalid-msg');
+      expect(message?.textContent).toBe('BILLING.CANCEL_REASON_REQUIRED');
+      expect(field.getAttribute('aria-describedby')).toContain('bill-cancel-reason-invalid-msg');
+    });
+
+    it('a waiver-settled invoice is cancelled with a reason too', () => {
+      component.openEdit(
+        mockInvoice({ status: 'PAID', amountPaid: 0, totalAmount: 0, balanceDue: 0 }),
+      );
+      component.form.status = 'CANCELLED';
+      expect(component.cancellingIssued()).toBeTrue();
+    });
+
+    it('a draft, or an edit that does not cancel, sends no reason', () => {
+      billingSpy.updateInvoice.and.returnValue(of(mockInvoice()));
+      component.openEdit(mockInvoice({ status: 'DRAFT' }));
+      component.form.status = 'CANCELLED';
+      expect(component.cancellingIssued()).toBeFalse();
+      component.openEdit(mockInvoice({ status: 'SENT' }));
+      component.form.cancelReason = 'left over';
+      component.submitForm();
+      expect(billingSpy.updateInvoice.calls.mostRecent().args[1].cancelReason).toBeUndefined();
+    });
+
+    it('shows the recorded reason on the cancelled invoice', () => {
+      fixture.detectChanges();
+      component.viewInvoice(
+        mockInvoice({
+          status: 'CANCELLED',
+          cancelReason: 'Doublon',
+          cancelledAt: '2026-10-30T17:09:00',
+        }),
+      );
+      fixture.detectChanges();
+      const reason = fixture.nativeElement.querySelector('[data-testid="cancel-reason"]');
+      expect(reason?.textContent).toContain('Doublon');
+    });
+  });
+
+  describe('a zero-priced line is priced in place (QA D1088)', () => {
+    const zeroLine = {
+      id: 'line-0',
+      billingInvoiceId: 'inv-1',
+      itemDescription: 'Radiographie thoracique',
+      itemCategory: 'SERVICE',
+      quantity: 1,
+      unitPrice: 0,
+      totalPrice: 0,
+    };
+
+    beforeEach(() => {
+      billingSpy.getInvoiceItems.and.returnValue(of([zeroLine]));
+      billingSpy.getInvoice.and.returnValue(
+        of(mockInvoice({ status: 'DRAFT', totalAmount: 7500 })),
+      );
+      fixture.detectChanges();
+      component.viewInvoice(mockInvoice({ status: 'DRAFT', totalAmount: 0, balanceDue: 0 }));
+      fixture.detectChanges();
+    });
+
+    it('offers to edit each line of a draft, not only to delete it', () => {
+      expect(
+        fixture.nativeElement.querySelector('[data-testid="line-edit-line-0"]'),
+      ).not.toBeNull();
+    });
+
+    it('updates the same line with its new price and re-reads the total', () => {
+      billingSpy.updateInvoiceItem.and.returnValue(
+        of({ ...zeroLine, unitPrice: 7500, totalPrice: 7500 }),
+      );
+      component.startEditLine(zeroLine);
+      expect(component.editLineUnitPrice()).toBeNull();
+      expect(component.canSaveLine()).toBeFalse();
+      component.editLineUnitPrice.set(7500);
+      component.saveLine(zeroLine);
+      expect(billingSpy.updateInvoiceItem).toHaveBeenCalledWith('line-0', {
+        billingInvoiceId: 'inv-1',
+        itemDescription: 'Radiographie thoracique',
+        itemCategory: 'SERVICE',
+        quantity: 1,
+        unitPrice: 7500,
+      });
+      expect(billingSpy.createInvoiceItem).not.toHaveBeenCalled();
+      expect(billingSpy.deleteInvoiceItem).not.toHaveBeenCalled();
+      expect(component.editingLineId()).toBeNull();
+    });
+  });
+
+  describe('an empty amount asks for an amount (QA D1089)', () => {
+    beforeEach(() => {
+      fixture.detectChanges();
+      component.viewInvoice(component.invoices()[0]);
+    });
+
+    it('a waiver with no amount is not told about decimals', () => {
+      component.adjustmentType.set('WAIVER');
+      component.adjustmentReason.set('Indigent');
+      component.adjustmentAmount.set(null);
+      component.submitAdjustment();
+      expect(billingSpy.addAdjustment).not.toHaveBeenCalled();
+      expect(toastSpy.error).toHaveBeenCalledWith('BILLING.ADJUSTMENT_AMOUNT_REQUIRED');
+      expect(toastSpy.error).not.toHaveBeenCalledWith('BILLING.PAYMENT_WHOLE_AMOUNT');
+    });
+
+    it('a waiver with decimals is told about decimals', () => {
+      component.adjustmentType.set('DISCOUNT');
+      component.adjustmentReason.set('Geste commercial');
+      component.adjustmentAmount.set(250.5);
+      component.submitAdjustment();
+      expect(toastSpy.error).toHaveBeenCalledWith('BILLING.PAYMENT_WHOLE_AMOUNT');
+    });
+
+    it('a payment with no amount asks for one', () => {
+      component.paymentInv.set(mockInvoice());
+      component.paymentAmount.set(null);
+      component.recordPayment();
+      expect(toastSpy.error).toHaveBeenCalledWith('BILLING.PAYMENT_AMOUNT_REQUIRED');
+    });
+  });
+
+  describe('receptionist (QA D973)', () => {
+    it('may record a payment but not reverse one', async () => {
+      TestBed.resetTestingModule();
+      const roleCtx = {
+        hasAnyActiveRole: (roles: string[]) => roles.includes('ROLE_RECEPTIONIST'),
+      } as unknown as RoleContextService;
+      const permissionSpy = jasmine.createSpyObj('PermissionService', ['hasAnyPermission']);
+      permissionSpy.hasAnyPermission.and.returnValue(false);
+      await TestBed.configureTestingModule({
+        imports: [BillingComponent, TranslateModule.forRoot()],
+        providers: [
+          provideHttpClient(withXhr()),
+          provideHttpClientTesting(),
+          { provide: BillingService, useValue: billingSpy },
+          { provide: ToastService, useValue: toastSpy },
+          { provide: PermissionService, useValue: permissionSpy },
+          { provide: RoleContextService, useValue: roleCtx },
+        ],
+      }).compileComponents();
+      const reception = TestBed.createComponent(BillingComponent).componentInstance;
+      expect(reception.canRecordPayment).toBeTrue();
+      expect(reception.canReversePayment).toBeFalse();
+    });
   });
 
   describe('payments ledger (QA D140/D142)', () => {
@@ -636,7 +1025,7 @@ describe('BillingComponent', () => {
       spyOn(URL, 'createObjectURL').and.returnValue('blob:x');
       spyOn(URL, 'revokeObjectURL');
       const click = spyOn(HTMLAnchorElement.prototype, 'click');
-      billingSpy.getReceiptPdf.and.returnValue(of(new Blob(['%PDF'])));
+      billingSpy.getReceiptPdf.and.returnValue(of(new HttpResponse({ body: new Blob(['%PDF']) })));
       component.downloadReceipt(pending);
       expect(billingSpy.getReceiptPdf).toHaveBeenCalledWith('inv-1', 'p9');
       expect(click).toHaveBeenCalled();

@@ -7,13 +7,13 @@
     <div class="page-actions">
       @if (activeTab() === 'board' && canManageHistory) {
         <button class="btn-primary" (click)="openCreateHistory()">
-          <span class="material-symbols-outlined">add</span>
+          <span class="material-symbols-outlined" aria-hidden="true">add</span>
           {{ 'MATERNITY.NEW_HISTORY' | translate }}
         </button>
       }
       @if (activeTab() === 'referrals' && canCreateReferral) {
         <button class="btn-primary" (click)="openCreateReferral()">
-          <span class="material-symbols-outlined">add</span>
+          <span class="material-symbols-outlined" aria-hidden="true">add</span>
           {{ 'MATERNITY.NEW_REFERRAL' | translate }}
         </button>
       }
@@ -129,6 +129,8 @@
             <tr>
               <th scope="col">{{ 'MATERNITY.PATIENT' | translate }}</th>
               <th scope="col">{{ 'MATERNITY.RECORDED' | translate }}</th>
+              <th scope="col">{{ 'MATERNITY.EDD' | translate }}</th>
+              <th scope="col">{{ 'MATERNITY.GA' | translate }}</th>
               <th scope="col">{{ 'MATERNITY.VERSION' | translate }}</th>
               <th scope="col">{{ 'MATERNITY.RISK' | translate }}</th>
               <th scope="col">{{ 'MATERNITY.FLAGS' | translate }}</th>
@@ -141,6 +143,22 @@
               <tr class="data-row">
                 <td>{{ patientName(h.patientId) }}</td>
                 <td>{{ h.recordedDate | serverTime | date: 'medium' }}</td>
+                <td data-testid="history-edd-cell">
+                  {{ dueDateOf(h) ? (dueDateOf(h) | serverTime | date: 'mediumDate') : '—' }}
+                </td>
+                <td data-testid="history-ga-cell">
+                  @if (gestationalAgeOf(h); as ga) {
+                    {{ 'MATERNITY.GA_SHORT' | translate: { weeks: ga.weeks, days: ga.days } }}
+                  } @else if (deliveredAtOf(h); as delivered) {
+                    <!-- QA D1067: delivered, not a running term -->
+                    <span data-testid="history-delivered">{{
+                      'MATERNITY.DELIVERED_ON'
+                        | translate: { date: (delivered | serverTime | date: 'mediumDate') }
+                    }}</span>
+                  } @else {
+                    —
+                  }
+                </td>
                 <td>v{{ h.versionNumber ?? 1 }}</td>
                 <td>
                   <span class="{{ riskClass(h.riskCategory) }}">
@@ -190,38 +208,42 @@
                 </td>
                 <td class="actions-cell">
                   <button
+                    [attr.aria-label]="'COMMON.VIEW' | translate"
                     class="btn-secondary btn-sm"
                     [title]="'COMMON.VIEW' | translate"
                     (click)="openHistoryDetail(h)"
                   >
-                    <span class="material-symbols-outlined">visibility</span>
+                    <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
                   </button>
                   @if (canManageHistory) {
                     <button
+                      [attr.aria-label]="'COMMON.EDIT' | translate"
                       class="btn-secondary btn-sm"
                       [title]="'COMMON.EDIT' | translate"
                       (click)="openEditHistory(h)"
                     >
-                      <span class="material-symbols-outlined">edit</span>
+                      <span class="material-symbols-outlined" aria-hidden="true">edit</span>
                     </button>
                   }
                   @if (canReview) {
                     <button
+                      [attr.aria-label]="'MATERNITY.CALCULATE_RISK' | translate"
                       class="btn-secondary btn-sm"
                       [title]="'MATERNITY.CALCULATE_RISK' | translate"
                       [disabled]="reviewBusyId() === h.id"
                       (click)="calculateRisk(h)"
                     >
-                      <span class="material-symbols-outlined">calculate</span>
+                      <span class="material-symbols-outlined" aria-hidden="true">calculate</span>
                     </button>
                     @if (!h.reviewedByProvider) {
                       <button
+                        [attr.aria-label]="'MATERNITY.MARK_REVIEWED' | translate"
                         class="btn-secondary btn-sm"
                         [title]="'MATERNITY.MARK_REVIEWED' | translate"
                         [disabled]="reviewBusyId() === h.id"
                         (click)="markReviewed(h)"
                       >
-                        <span class="material-symbols-outlined">task_alt</span>
+                        <span class="material-symbols-outlined" aria-hidden="true">task_alt</span>
                       </button>
                     }
                   }
@@ -234,12 +256,13 @@
       @if (boardTotalPages() > 1) {
         <div class="pager">
           <button
+            [attr.aria-label]="'COMMON.PREVIOUS' | translate"
             class="btn-secondary btn-sm"
             [disabled]="boardPage() === 0"
             (click)="boardPrev()"
             [title]="'COMMON.PREVIOUS' | translate"
           >
-            <span class="material-symbols-outlined">chevron_left</span>
+            <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
           </button>
           <span class="muted">{{ boardPage() + 1 }} / {{ boardTotalPages() }}</span>
           <button
@@ -247,8 +270,9 @@
             [disabled]="boardPage() + 1 >= boardTotalPages()"
             (click)="boardNext()"
             [title]="'COMMON.NEXT' | translate"
+            [attr.aria-label]="'COMMON.NEXT' | translate"
           >
-            <span class="material-symbols-outlined">chevron_right</span>
+            <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
           </button>
         </div>
       }
@@ -379,11 +403,12 @@
                 </td>
                 <td class="actions-cell">
                   <button
+                    [attr.aria-label]="'COMMON.VIEW' | translate"
                     class="btn-secondary btn-sm"
                     [title]="'COMMON.VIEW' | translate"
                     (click)="openReferral(r)"
                   >
-                    <span class="material-symbols-outlined">visibility</span>
+                    <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
                   </button>
                 </td>
               </tr>
@@ -394,12 +419,13 @@
       @if (referralTotalPages() > 1) {
         <div class="pager">
           <button
+            [attr.aria-label]="'COMMON.PREVIOUS' | translate"
             class="btn-secondary btn-sm"
             [disabled]="referralPage() === 0"
             (click)="referralPrev()"
             [title]="'COMMON.PREVIOUS' | translate"
           >
-            <span class="material-symbols-outlined">chevron_left</span>
+            <span class="material-symbols-outlined" aria-hidden="true">chevron_left</span>
           </button>
           <span class="muted">{{ referralPage() + 1 }} / {{ referralTotalPages() }}</span>
           <button
@@ -407,8 +433,9 @@
             [disabled]="referralPage() + 1 >= referralTotalPages()"
             (click)="referralNext()"
             [title]="'COMMON.NEXT' | translate"
+            [attr.aria-label]="'COMMON.NEXT' | translate"
           >
-            <span class="material-symbols-outlined">chevron_right</span>
+            <span class="material-symbols-outlined" aria-hidden="true">chevron_right</span>
           </button>
         </div>
       }
@@ -426,20 +453,23 @@
   >
     <div
       class="modal modal-lg"
+      aria-labelledby="maternity-dialog-1-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeHistoryDetail(); $event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ patientName(h.patientId) }} — {{ 'MATERNITY.HISTORY_TITLE' | translate }}</h2>
+        <h2 id="maternity-dialog-1-title">
+          {{ patientName(h.patientId) }} — {{ 'MATERNITY.HISTORY_TITLE' | translate }}
+        </h2>
         <button
           class="modal-close"
           (click)="closeHistoryDetail()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -568,14 +598,15 @@
   >
     <div
       class="modal modal-lg"
+      aria-labelledby="maternity-dialog-2-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeHistoryModal(); $event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="maternity-dialog-2-title">
           {{
             (editingHistoryId() ? 'MATERNITY.EDIT_HISTORY' : 'MATERNITY.NEW_HISTORY') | translate
           }}
@@ -585,7 +616,7 @@
           (click)="closeHistoryModal()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -634,7 +665,8 @@
             <input
               id="history-lmp"
               type="date"
-              [(ngModel)]="historyForm.menstrualHistory!.lastMenstrualPeriod"
+              [ngModel]="historyForm.menstrualHistory!.lastMenstrualPeriod"
+              (ngModelChange)="onLmpChange($event)"
             />
           </div>
           <div class="field">
@@ -642,8 +674,14 @@
             <input
               id="history-edd"
               type="date"
+              aria-describedby="history-ga"
               [(ngModel)]="historyForm.menstrualHistory!.estimatedDueDate"
             />
+            @if (formGestationalAge(); as ga) {
+              <small id="history-ga" class="field-hint" data-testid="history-ga">
+                {{ 'MATERNITY.GA_TODAY' | translate: { weeks: ga.weeks, days: ga.days } }}
+              </small>
+            }
           </div>
         </div>
 
@@ -936,20 +974,21 @@
   >
     <div
       class="modal modal-lg"
+      aria-labelledby="maternity-dialog-3-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeReferralModal(); $event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'MATERNITY.NEW_REFERRAL' | translate }}</h2>
+        <h2 id="maternity-dialog-3-title">{{ 'MATERNITY.NEW_REFERRAL' | translate }}</h2>
         <button
           class="modal-close"
           (click)="closeReferralModal()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -1067,14 +1106,15 @@
   >
     <div
       class="modal modal-lg"
+      aria-labelledby="maternity-dialog-4-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeReferral(); $event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="maternity-dialog-4-title">
           {{ patientDisplay(r) }}
           <span class="{{ referralStatusClass(r.status) }}">
             {{ 'MATERNITY.STATUS_' + r.status | translate }}
@@ -1085,7 +1125,7 @@
           (click)="closeReferral()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -1219,12 +1259,13 @@
                 [attr.aria-label]="'MATERNITY.MESSAGE_PLACEHOLDER' | translate"
               ></textarea>
               <button
+                [attr.aria-label]="'MATERNITY.SEND' | translate"
                 class="btn-primary btn-sm"
                 [disabled]="messageSending() || !messageDraft.trim()"
                 (click)="sendMessage()"
                 [title]="'MATERNITY.SEND' | translate"
               >
-                <span class="material-symbols-outlined">send</span>
+                <span class="material-symbols-outlined" aria-hidden="true">send</span>
               </button>
             </div>
           }
@@ -1246,7 +1287,7 @@
             {{ 'MATERNITY.COMPLETE' | translate }}
           </button>
         }
-        @if (canCancelReferral && r.status !== 'COMPLETED' && r.status !== 'CANCELLED') {
+        @if (canCancelThisReferral(r)) {
           <button class="btn-danger" (click)="openReferralAction('cancel')">
             {{ 'MATERNITY.CANCEL_REFERRAL' | translate }}
           </button>

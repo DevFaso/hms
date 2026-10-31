@@ -66,6 +66,8 @@ public class LabResultServiceImpl implements LabResultService {
 
     private static final String LAB_RESULT_NOT_FOUND = "labresult.notfound";
     private static final String LAB_ORDER_NOT_FOUND = "laborder.notfound";
+    /** The in-basket reference type of a lab result item. */
+    private static final String LAB_RESULT_REFERENCE_TYPE = "LAB_RESULT";
 
     private static final Logger LOG = LoggerFactory.getLogger(LabResultServiceImpl.class);
 
@@ -102,6 +104,8 @@ public class LabResultServiceImpl implements LabResultService {
     private final AuditEventLogService auditEventLogService;
     /** QA D178: a released result lands in the ordering clinician's in-basket. */
     private final InBasketService inBasketService;
+    /** QA D938 / D931: the patient's and the clinician's notice of a release or a correction. */
+    private final com.example.hms.service.lab.LabResultReleaseNotifier releaseNotifier;
 
     /**
      * Whether a normal-range result is released the moment it is saved, with
@@ -353,10 +357,9 @@ public class LabResultServiceImpl implements LabResultService {
         // auto-release on the flag alone released critical manual results.
         String severity = severityOf(saved);
         performAutoVerification(saved, severity);
+        LabResult supersededOnRelease = null;
         if (saved.isReleased()) {
-            linkCorrectionOnRelease(saved, lockedOrder, currentUserId);
-        }
-        if (saved.isReleased()) {
+            supersededOnRelease = linkCorrectionOnRelease(saved, lockedOrder, currentUserId);
             completeOrderIfAllReleased(lockedOrder);
         }
         triggerReflexOrders(saved);
@@ -367,6 +370,11 @@ public class LabResultServiceImpl implements LabResultService {
         // lose them. The service defers only its SMS, which is the blocking
         // network hop.
         criticalValueNotificationService.notifyIfCritical(saved, severity);
+        if (saved.isReleased()) {
+            // QA D938 / D931: an auto-verified result is released here, and a
+            // release tells the same people whichever path performed it.
+            announceRelease(saved, supersededOnRelease);
+        }
 
         // The outbound message is queued IN this transaction too. It was
         // deferred to after the commit for a moment, which quietly made it
@@ -1004,17 +1012,25 @@ public class LabResultServiceImpl implements LabResultService {
      * the same result cannot both be released over it; the target is re-read
      * and re-checked under that lock.
      */
-    private void linkCorrectionOnRelease(LabResult correction, LabOrder lockedOrder, UUID actorId) {
+    private LabResult linkCorrectionOnRelease(LabResult correction, LabOrder lockedOrder, UUID actorId) {
         UUID targetId = correction.getSupersedesResultId();
         if (targetId == null) {
-            return;
+            return null;
         }
         LabResult target = requireSupersedable(targetId, lockedOrder);
         // Only the link is written on the released row; its value, release
         // stamps and critical history stay exactly as released.
         target.setSupersededByResultId(correction.getId());
         labResultRepository.save(target);
+        // QA D931: the superseded result's in-basket items stayed open, and
+        // opening one answered 404 (a superseded result is withdrawn from
+        // every clinical read). The open items go with the link, in this
+        // transaction; acknowledged ones stay as the record of who saw what.
+        if (inBasketService != null) {
+            inBasketService.removeOpenItemsForReference(target.getId(), LAB_RESULT_REFERENCE_TYPE);
+        }
         auditCorrectionAfterCommit(target.getId(), correction.getId(), actorId);
+        return target;
     }
 
     /** Deleting a correction must leave the original it named current again. */
@@ -1360,10 +1376,11 @@ public class LabResultServiceImpl implements LabResultService {
             throw new ConflictException(com.example.hms.utility.MessageUtil.resolve("labresult.selfRelease.confirmRequired"));
         }
 
+        LabResult superseded = null;
         if (labResult.getSupersedesResultId() != null) {
             LabOrder lockedOrder = labOrderRepository.findWithLockById(labResult.getLabOrder().getId())
                 .orElse(labResult.getLabOrder());
-            linkCorrectionOnRelease(labResult, lockedOrder, actorId);
+            superseded = linkCorrectionOnRelease(labResult, lockedOrder, actorId);
         }
         labResult.setReleased(true);
         labResult.setReleasedAt(LocalDateTime.now());
@@ -1384,8 +1401,34 @@ public class LabResultServiceImpl implements LabResultService {
         // registered for after this transaction commits.
         completeOrderIfAllReleased(labResult.getLabOrder());
         enqueueReleasedObservationAfterCommit(labResult);
-        fileInOrderingClinicianInBasketAfterCommit(labResult);
+        announceRelease(labResult, superseded);
         return labResultMapper.toResponseDTO(labResult);
+    }
+
+    /**
+     * Everything a release tells people, for every path that releases: the
+     * ordering clinician's in-basket item (QA D178), the patient's notice
+     * (QA D938) and, for a correction, the clinician's notice naming the old
+     * and the new value (QA D931). Run after the critical check: a correction
+     * that paged as critical already says it is a correction, so it is not
+     * announced twice.
+     */
+    @Override
+    public void announceReleasedResult(LabResult result) {
+        if (result != null && result.isReleased()) {
+            announceRelease(result, null);
+        }
+    }
+
+    private void announceRelease(LabResult labResult, LabResult superseded) {
+        fileInOrderingClinicianInBasketAfterCommit(labResult, superseded);
+        if (releaseNotifier == null) {
+            return;
+        }
+        releaseNotifier.patientResultReleased(labResult);
+        if (superseded != null && labResult.getCriticalNotifiedAt() == null) {
+            releaseNotifier.correctionReleased(labResult, superseded);
+        }
     }
 
     /**
@@ -1399,7 +1442,10 @@ public class LabResultServiceImpl implements LabResultService {
      * touch a lazy association. Its own transaction, and a failure is logged
      * (ids only) rather than undoing the release.
      */
-    private void fileInOrderingClinicianInBasketAfterCommit(LabResult labResult) {
+    static final String CORRECTION_IN_BASKET_TITLE_KEY = "lab.result.correction.inBasketTitle";
+    static final String CORRECTION_IN_BASKET_BODY_KEY = "lab.result.correction.inBasketBody";
+
+    private void fileInOrderingClinicianInBasketAfterCommit(LabResult labResult, LabResult superseded) {
         if (inBasketService == null) {
             return;
         }
@@ -1417,6 +1463,11 @@ public class LabResultServiceImpl implements LabResultService {
                 ? com.example.hms.enums.InBasketPriority.URGENT
                 : com.example.hms.enums.InBasketPriority.NORMAL;
         };
+        // QA D931: a value the clinician may already have acted on has changed;
+        // that is never a routine item, whatever the new value grades as.
+        if (superseded != null && priority == com.example.hms.enums.InBasketPriority.NORMAL) {
+            priority = com.example.hms.enums.InBasketPriority.URGENT;
+        }
         String testName = order.getLabTestDefinition() != null
             ? order.getLabTestDefinition().getName()
             // QA D648: the same "deleted test" label as every other lab screen.
@@ -1428,11 +1479,29 @@ public class LabResultServiceImpl implements LabResultService {
         request.setHospitalId(order.getHospital().getId());
         request.setItemType(com.example.hms.enums.InBasketItemType.RESULT);
         request.setPriority(priority);
-        request.setTitle(testName != null ? testName : "Lab result");
+        String title = testName != null ? testName : "Lab result";
+        if (superseded != null) {
+            // QA D931: the item says it replaces a result, and from what to what.
+            // QA D1053: kept as keys too, so each reader sees it in their language.
+            Object[] titleArgs = {title};
+            Object[] bodyArgs = {
+                com.example.hms.service.lab.LabResultReleaseNotifier.valueOf(superseded),
+                com.example.hms.service.lab.LabResultReleaseNotifier.valueOf(labResult)
+            };
+            title = com.example.hms.utility.MessageUtil.resolve(
+                com.example.hms.service.i18n.NotificationLocales.STAFF, CORRECTION_IN_BASKET_TITLE_KEY, titleArgs);
+            request.setTitleKey(CORRECTION_IN_BASKET_TITLE_KEY);
+            request.setTitleArgs(titleArgs);
+            request.setBody(com.example.hms.utility.MessageUtil.resolve(
+                com.example.hms.service.i18n.NotificationLocales.STAFF, CORRECTION_IN_BASKET_BODY_KEY, bodyArgs));
+            request.setBodyKey(CORRECTION_IN_BASKET_BODY_KEY);
+            request.setBodyArgs(bodyArgs);
+        }
+        request.setTitle(title);
         request.setReferenceId(labResult.getId());
-        request.setReferenceType("LAB_RESULT");
+        request.setReferenceType(LAB_RESULT_REFERENCE_TYPE);
         request.setPatientId(patient != null ? patient.getId() : null);
-        request.setPatientName(patient != null ? (patient.getFirstName() + " " + patient.getLastName()).trim() : null);
+        request.setPatientName(patient != null ? patient.getFullName() : null);
         request.setEncounterId(order.getEncounter() != null ? order.getEncounter().getId() : null);
         UUID resultId = labResult.getId();
         TransactionCallbacks.afterCommit(() -> {
@@ -2348,17 +2417,8 @@ public class LabResultServiceImpl implements LabResultService {
         }
 
         return labOrder.getLabTestDefinition().getReferenceRanges().stream()
-            .map(range -> LabResultReferenceRangeDTO.builder()
-                .minValue(range.getMinValue())
-                .maxValue(range.getMaxValue())
-                .unit(range.getUnit())
-                .ageMin(range.getAgeMin())
-                .ageMax(range.getAgeMax())
-                .gender(range.getGender())
-                .notes(range.getNotes())
-                .criticalLow(range.getCriticalLow())
-                .criticalHigh(range.getCriticalHigh())
-                .build())
+            .filter(java.util.Objects::nonNull)
+            .map(LabResultMapper::toReferenceRangeDto)
             .toList();
     }
 }

@@ -318,7 +318,13 @@ public class UserServiceImpl implements UserService {
 
         // Normalised only once the caller may grant these roles: a refused
         // caller gets the 403, never a phone-format 400.
-        final String phone = normalizeRegistrationPhone(request);
+        final String typedPhone = normalizeRegistrationPhone(request);
+        // QA D1061: a patient's own account takes the phone as its login only
+        // when no OTHER person holds it. A child registered under a parent's
+        // number is a new person with no login phone; the number stays the
+        // contact on the child's patient record. It used to answer 409
+        // "already registered", so the desk invented a number.
+        final String phone = isPatient ? loginPhoneFor(typedPhone, request) : typedPhone;
         request.setPhoneNumber(phone);
 
         // ---- 0a) Duplicate checks ----
@@ -473,8 +479,11 @@ public class UserServiceImpl implements UserService {
         // ---- 6a) Generated credentials nobody can deliver ----
         // No e-mail on file and no real SMS transport: the staff UI shows them
         // once, from this response only. Never logged, never persisted in clear.
+        // QA D1061: a dependant with no login phone (registered under a
+        // guardian's number) has no channel either, whatever the SMS transport.
         if (generatedPassword != null && (email == null || email.isBlank())
-                && (smsService == null || !smsService.deliversRealSms())) {
+                && (user.getPhoneNumber() == null || user.getPhoneNumber().isBlank()
+                    || smsService == null || !smsService.deliversRealSms())) {
             result.setTemporaryUsername(user.getUsername());
             result.setTemporaryPassword(generatedPassword);
         }
@@ -895,6 +904,40 @@ public class UserServiceImpl implements UserService {
             }
         }
         return findByPhoneInAnyForm(phone);
+    }
+
+    /**
+     * QA D1061: {@code phone} as the new patient account's login phone, or
+     * null when the account holding it is another person (a parent, a spouse):
+     * same number, different name or date of birth. The same person keeps the
+     * existing behaviour (linked at another hospital, refused as already
+     * registered here). Real registration desks file a dependant under the
+     * guardian's contact number; one phone is not one person.
+     */
+    private String loginPhoneFor(String phone, AdminSignupRequest request) {
+        if (phone == null) {
+            return null;
+        }
+        Optional<User> holder = findByPhoneInAnyForm(phone);
+        // The registrar's own discarded attempt keeps the phone, so it is
+        // reclaimed (QA D40) even when its name was corrected since.
+        if (holder.isEmpty() || isDiscardedRegistration(holder.get()) || isSamePerson(holder.get(), request)) {
+            return phone;
+        }
+        log.info("[REGISTER] the phone belongs to another person: the new patient account gets no login phone");
+        return null;
+    }
+
+    /** Whether the registration names the person behind {@code holder} (PatientMatchKeys.sameIdentity). */
+    private boolean isSamePerson(User holder, AdminSignupRequest request) {
+        com.example.hms.payload.dto.PatientRequestDTO patientRequest = request.getPatient();
+        String first = patientRequest != null && hasText(patientRequest.getFirstName()) ? patientRequest.getFirstName() : request.getFirstName();
+        String last = patientRequest != null && hasText(patientRequest.getLastName()) ? patientRequest.getLastName() : request.getLastName();
+        java.time.LocalDate dob = patientRequest != null ? patientRequest.getDateOfBirth() : null;
+        return patientRepository.findByUserId(holder.getId())
+            .map(existing -> com.example.hms.utility.PatientMatchKeys.sameIdentity(existing, first, last, dob))
+            .orElseGet(() -> com.example.hms.utility.PatientMatchKeys.sameIdentity(
+                holder.getFirstName(), holder.getLastName(), null, first, last, dob));
     }
 
     /**
@@ -1377,6 +1420,12 @@ public class UserServiceImpl implements UserService {
         }
         // The deleted view is the super-admin's: a scoped call never asks for it.
         boolean scoped = !scope.everyone();
+        // QA D919: a scoped caller asking for the deleted worklist gets an empty
+        // page, never the live list (the rule the controllers apply, kept here
+        // for every other caller of this listing).
+        if (scoped && onlyDeleted) {
+            return Page.empty(pageable);
+        }
         // QA D430: a non-administrator lists colleagues only, never patient accounts.
         Page<User> users = scope.seesPatientContacts()
             ? userRepository.findAllPaged(
@@ -1397,6 +1446,9 @@ public class UserServiceImpl implements UserService {
             return Page.empty(pageable);
         }
         boolean scoped = !scope.everyone();
+        if (scoped && onlyDeleted) {
+            return Page.empty(pageable); // QA D919, as getAllUsers
+        }
         // The free-text box also finds an account by e-mail or phone (D119);
         // phones are stored in E.164, so "70 20 20 20" is matched on its digits.
         // QA D198: a caller who cannot read contact details cannot search on them either.
@@ -1498,6 +1550,12 @@ public class UserServiceImpl implements UserService {
         if (!accountAccess.canDelete(user)) {
             throw refused(AuditEventType.USER_DELETE, "delete", user);
         }
+        // QA D920: GET answers a deleted account as missing for everyone but
+        // the super-admin, so delete does too; "already deleted" told a
+        // hospital admin about an account they cannot see.
+        if (user.isDeleted() && !accountAccess.callerSeesDeletedAccounts()) {
+            throw refused(AuditEventType.USER_DELETE, "delete", user);
+        }
         // QA D327: a second delete of a deleted account changed nothing yet
         // answered success and wrote a second USER_DELETE audit row.
         if (user.isDeleted()) {
@@ -1544,6 +1602,14 @@ public class UserServiceImpl implements UserService {
         // inactive, and an administrator reactivates the ones still wanted.
         User user = userRepository.findById(id)
                 .orElseThrow(() -> userNotFound(id));
+        // QA D920 (review round 13): the deleted view is the super-admin's, so
+        // for anyone else every restore is refused like a missing id, live
+        // account or deleted one alike; a 409 for a live account against a
+        // restore of a deleted one told a hospital admin which ids were deleted.
+        if (!accountAccess.callerSeesDeletedAccounts()) {
+            recordRefusal(AuditEventType.USER_RESTORE, "restore", user.getId());
+            throw userNotFound(id);
+        }
         if (!accountAccess.canAdminister(user)) {
             throw refused(AuditEventType.USER_RESTORE, "restore", user);
         }
@@ -1645,19 +1711,23 @@ public class UserServiceImpl implements UserService {
         }
     }
 
-    @Override
-    @Transactional
-    public UserResponseDTO updateUser(UUID id, UpdateUserRequestDTO dto) {
-        User user = userRepository.findById(id)
-                .orElseThrow(() -> userNotFound(id));
-
-        // Editing your own account is the profile page: contact fields only,
-        // whoever you are. Anyone else's account needs an administrator of it
-        // (UserAccountAccess.canAdminister) and is otherwise refused exactly
-        // like a missing id, with a FAILURE row.
+    /**
+     * Who may edit this account, and whether it can be edited at all.
+     * Editing your own account is the profile page: contact fields only,
+     * whoever you are. Anyone else's account needs an administrator of it
+     * (UserAccountAccess.canAdminister) and is otherwise refused exactly like
+     * a missing id, with a FAILURE row.
+     */
+    private void requireEditableBy(User user, UpdateUserRequestDTO dto) {
         if (accountAccess.isSelf(user)) {
             requireSelfServiceChangesOnly(user, dto);
         } else if (!accountAccess.canAdminister(user)) {
+            throw refused(AuditEventType.USER_UPDATE, "update", user);
+        }
+        // QA D920: a deleted account is missing for everyone but the
+        // super-admin, as GET answers; "restore it first" pointed a hospital
+        // admin at a restore they are not offered.
+        if (user.isDeleted() && !accountAccess.callerSeesDeletedAccounts()) {
             throw refused(AuditEventType.USER_UPDATE, "update", user);
         }
         // A deleted account is restored first, then edited: an edit would
@@ -1665,6 +1735,15 @@ public class UserServiceImpl implements UserService {
         if (user.isDeleted()) {
             throw new BusinessException(MessageUtil.resolve("user.update.deleted"));
         }
+    }
+
+    @Override
+    @Transactional
+    public UserResponseDTO updateUser(UUID id, UpdateUserRequestDTO dto) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> userNotFound(id));
+
+        requireEditableBy(user, dto);
         requireIdentifiersFree(user, dto);
         requireRolesUnchanged(user, dto);
 
@@ -1966,17 +2045,34 @@ public class UserServiceImpl implements UserService {
      * Email Verification
      * --------------------------------
      */
+    /**
+     * Activates the account behind an emailed link and its ROLE_PATIENT
+     * assignments in ONE transaction (QA D921); the Patient row is not touched.
+     * {@code AuthController#verifyEmail} used to do this itself: the account
+     * save committed on its own, then the assignment loop read
+     * {@code assignment.getRole()} with no session (open-in-view is off), so
+     * every link answered 500 and left the account active with its patient
+     * role still off and the token consumed. Here the lazy reads run inside
+     * the transaction, and a failure rolls the whole activation back, token
+     * included, so the link still works on the next try.
+     *
+     * @return false when the address is unknown, the token does not match or
+     *         has expired, or an administrator switched the account off
+     */
     @Override
     @Transactional
     public boolean verifyEmail(String email, String token) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new ResourceNotFoundException("user.notFoundByEmail", email));
+        User user = userRepository.findByEmail(email).orElse(null);
+        if (user == null) {
+            return false;
+        }
 
         if (user.getActivationToken() == null
+                || token == null
                 || !token.equals(user.getActivationToken())
                 || user.getActivationTokenExpiresAt() == null
                 || user.getActivationTokenExpiresAt().isBefore(LocalDateTime.now())) {
-            log.warn("⚠️ Invalid or expired activation token for: {}", email);
+            log.warn("⚠️ Invalid or expired activation token for user {}", user.getId());
             return false;
         }
 
@@ -1991,27 +2087,37 @@ public class UserServiceImpl implements UserService {
         user.setActivationToken(null);
         user.setActivationTokenExpiresAt(null);
         userRepository.save(user);
-        // NOTE: this method has no caller in main — AuthController#verifyEmail
-        // implements verification itself and is the path that runs. The reset
-        // is kept, and deferred like every other one, so wiring this method up
-        // later cannot reintroduce the bug the rest of this class just fixed:
-        // the patient activation below writes after this point, and a rollback
-        // there would otherwise leave the counter cleared for an account that
-        // stayed inactive. (Note for whoever wires it up: unlike
-        // AuthController#verifyEmail this method does NOT activate the user's
-        // ROLE_PATIENT assignments — it only flips the Patient row.)
+        // Refusals collected while the account was inactive must not outlive
+        // the activation: the disabled arm of /auth/login counts toward the
+        // lockout, so five attempts before verifying would otherwise leave the
+        // holder locked out at the moment the link finally works. Deferred to
+        // the commit, so a rollback below cannot leave the counter cleared for
+        // an account that stayed inactive.
         final UUID verifiedId = user.getId();
         TransactionCallbacks.afterCommit(() -> loginAttemptService.resetAttempts(verifiedId));
 
-        // Activate the Patient entity to match the now-verified User
-        patientRepository.findByUserId(user.getId()).ifPresent(patient -> {
-            if (!patient.isActive()) {
-                patient.setActive(true);
-                patientRepository.save(patient);
+        int activated = 0;
+        for (UserRoleHospitalAssignment assignment : assignmentRepository.findByUserId(user.getId())) {
+            // QA D789: a patient row at a hospital archived since stays off;
+            // the account itself is still verified.
+            if (assignment.getRole() != null
+                    && ROLE_PATIENT.equalsIgnoreCase(assignment.getRole().getCode())
+                    && !Boolean.TRUE.equals(assignment.getActive())
+                    && (assignment.getHospital() == null
+                        || !com.example.hms.security.provider.FacilityAssignmentGuard
+                            .isClosed(assignment.getHospital().getLifecycleState()))) {
+                assignment.setActive(true);
+                assignmentRepository.save(assignment);
+                activated++;
             }
-        });
+        }
 
-        log.info("✅ Email verified: {}", user.getEmail());
+        // The Patient row's active flag is the record's administrative soft
+        // delete, not the account's state (createPatient, QA D27/V188): the
+        // link verifies the account and never brings back a record staff
+        // switched off.
+
+        log.info("✅ Email verified for user {}. Activated {} patient assignment(s).", user.getId(), activated);
         return true;
     }
 

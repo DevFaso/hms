@@ -80,6 +80,10 @@ export const ENUM_WORDS = [
   // entity token (TRANSFER, PRESCRIPTION, BILLING_INVOICE). The dashboard
   // passed it through a helper that echoed it, and no tail above names it.
   'resourceName',
+  // QA D1062: a proxy grant's `permissions` is a comma-joined list of scope
+  // codes (VIEW_APPOINTMENTS,VIEW_LAB_RESULTS); no tail above named it, and the
+  // "granted by me" table showed the codes raw while the received table piped them.
+  'permissions',
 ];
 
 /**

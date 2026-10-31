@@ -62,6 +62,40 @@ describe('MedicationCatalogComponent (QA D50)', () => {
     expect(component.formLabel(null)).toBe('—');
   });
 
+  it('QA D935 (round 18): the paediatric limits are carried into the dosing dialog, a new one pending approval', () => {
+    render(['ROLE_PHARMACIST']);
+    const component = TestBed.createComponent(MedicationCatalogComponent).componentInstance;
+    component.openDosing({
+      id: 'cat-1',
+      nameFr: 'Paracétamol sirop',
+      genericName: 'paracetamol',
+      essentialList: true,
+      controlled: false,
+      active: true,
+      pediatricMaxDoseMgPerKg: 15,
+      pediatricMaxDailyMg: 4000,
+      pediatricDoseSource: 'WHO Pocket Book 2013',
+    } as never);
+    expect(component.dosingForm.pediatricMaxDoseMgPerKg).toBe(15);
+    expect(component.dosingForm.pediatricMaxDailyMg).toBe(4000);
+    expect(component.dosingForm.pediatricDoseStatus).toBe('DEFAULT_PENDING_APPROVAL');
+    component.addBand();
+    expect(component.dosingForm.pediatricWeightBands.length).toBe(1);
+    component.removeBand(0);
+    expect(component.dosingForm.pediatricWeightBands.length).toBe(0);
+  });
+
+  it('QA D935 (round 18): the pharmacist may set the paediatric limits, not edit the item', () => {
+    const el = render(['ROLE_PHARMACIST']);
+    expect(el.querySelector('[data-test="catalog-dosing"]')).not.toBeNull();
+    expect(el.querySelector('[data-test="catalog-edit"]')).toBeNull();
+  });
+
+  it('QA D935 (round 18): a doctor reads the catalogue with no dosing action', () => {
+    const el = render(['ROLE_DOCTOR']);
+    expect(el.querySelector('[data-test="catalog-dosing"]')).toBeNull();
+  });
+
   it('offers the hospital admin create, edit and delete', () => {
     const el = render(['ROLE_HOSPITAL_ADMIN']);
     expect(el.querySelector('.page-header .btn-primary')).not.toBeNull();

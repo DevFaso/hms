@@ -112,6 +112,7 @@
                   <button
                     class="btn-action btn-view"
                     [title]="'LAB_APPROVAL.ACTION.VIEW_TITLE' | translate"
+                    [attr.aria-label]="'LAB_APPROVAL.ACTION.VIEW_TITLE' | translate"
                     (click)="viewDefinition(def)"
                   >
                     <span class="material-symbols-outlined">visibility</span>
@@ -244,14 +245,23 @@
 <!-- ══ Definition Detail Panel ════════════════════════════════════════ -->
 @if (selectedDefinition(); as def) {
   <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeDetail()">
-    <div class="detail-panel">
+    <div
+      class="detail-panel"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="lab-approval-dialog-title-1"
+      cdkTrapFocus
+      [cdkTrapFocusAutoCapture]="true"
+      (keydown.escape)="closeDetail(); $event.stopPropagation()"
+    >
       <div class="panel-header">
-        <h2>
+        <h2 id="lab-approval-dialog-title-1">
           {{ def.testName }} <span class="code-badge">{{ def.testCode }}</span>
         </h2>
         <button
           class="close-btn"
           [title]="'LAB_APPROVAL.ACTION.CLOSE_TITLE' | translate"
+          [attr.aria-label]="'LAB_APPROVAL.ACTION.CLOSE_TITLE' | translate"
           (click)="closeDetail()"
         >
           <span class="material-symbols-outlined">close</span>
@@ -327,6 +337,7 @@
                   <button
                     class="btn-icon delete-btn"
                     [title]="'LAB_APPROVAL.STUDIES.DELETE_TITLE' | translate"
+                    [attr.aria-label]="'LAB_APPROVAL.STUDIES.DELETE_TITLE' | translate"
                     (click)="deleteStudy(study)"
                   >
                     <span class="material-symbols-outlined">delete</span>
@@ -336,7 +347,9 @@
                   <div class="study-meta">
                     <span
                       ><strong>{{ 'LAB_APPROVAL.STUDIES.DATE_LABEL' | translate }}</strong>
-                      {{ study.studyDate }}</span
+                      {{
+                        study.studyDate ? (study.studyDate | serverTime | date: 'mediumDate') : '—'
+                      }}</span
                     >
                     @if (study.performedByDisplay) {
                       <span
@@ -591,13 +604,22 @@
   >
     <div
       class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="lab-approval-dialog-title-2"
+      cdkTrapFocus
+      [cdkTrapFocusAutoCapture]="true"
+      (keydown.escape)="closeStudyModal(); $event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'LAB_APPROVAL.STUDY_FORM.TITLE' | translate }}</h2>
-        <button class="modal-close" (click)="closeStudyModal()">
+        <h2 id="lab-approval-dialog-title-2">{{ 'LAB_APPROVAL.STUDY_FORM.TITLE' | translate }}</h2>
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="modal-close"
+          (click)="closeStudyModal()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -712,12 +734,17 @@
   >
     <div
       class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="lab-approval-dialog-title-3"
+      cdkTrapFocus
+      [cdkTrapFocusAutoCapture]="true"
+      (keydown.escape)="closeApprovalModal(); $event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="lab-approval-dialog-title-3">
           @switch (approvalAction()) {
             @case ('SUBMIT_FOR_QA') {
               {{ 'LAB_APPROVAL.CONFIRM.TITLE_SUBMIT' | translate }}
@@ -739,7 +766,11 @@
             }
           }
         </h2>
-        <button class="modal-close" (click)="closeApprovalModal()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="modal-close"
+          (click)="closeApprovalModal()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>

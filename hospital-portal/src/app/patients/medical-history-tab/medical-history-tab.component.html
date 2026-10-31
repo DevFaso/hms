@@ -35,7 +35,7 @@
       <h3>{{ 'MED_HISTORY.SOCIAL_TITLE' | translate }}</h3>
       @if (canEditSocialFamily) {
         <button type="button" class="btn-primary btn-sm" (click)="openSocialForm()">
-          <span class="material-symbols-outlined">add</span>
+          <span class="material-symbols-outlined" aria-hidden="true">add</span>
           {{ 'MED_HISTORY.NEW_SOCIAL_VERSION' | translate }}
         </button>
       }
@@ -172,7 +172,7 @@
       </div>
       @if (canEditSocialFamily) {
         <button type="button" class="btn-primary btn-sm" (click)="openCreateFamily()">
-          <span class="material-symbols-outlined">add</span>
+          <span class="material-symbols-outlined" aria-hidden="true">add</span>
           {{ 'MED_HISTORY.ADD_FAMILY' | translate }}
         </button>
       }
@@ -235,12 +235,13 @@
                 <td>
                   @if (canEditSocialFamily) {
                     <button
+                      [attr.aria-label]="'COMMON.EDIT' | translate"
                       type="button"
                       class="btn-secondary btn-sm"
                       [title]="'COMMON.EDIT' | translate"
                       (click)="openEditFamily(f)"
                     >
-                      <span class="material-symbols-outlined">edit</span>
+                      <span class="material-symbols-outlined" aria-hidden="true">edit</span>
                     </button>
                   }
                 </td>
@@ -258,7 +259,7 @@
       <h3>{{ 'MED_HISTORY.IMMUNIZATIONS_TITLE' | translate }}</h3>
       @if (canEditImmunizations) {
         <button type="button" class="btn-primary btn-sm" (click)="openCreateImmunization()">
-          <span class="material-symbols-outlined">add</span>
+          <span class="material-symbols-outlined" aria-hidden="true">add</span>
           {{ 'MED_HISTORY.ADD_IMMUNIZATION' | translate }}
         </button>
       }
@@ -300,6 +301,13 @@
                       ? (im.administrationDate | serverTime | date: 'mediumDate')
                       : '—'
                   }}
+                  @if (im.sourceOfRecord && im.sourceOfRecord !== 'GIVEN_HERE') {
+                    <span class="flag-badge" data-testid="immunization-source">{{
+                      isKnownSource(im.sourceOfRecord)
+                        ? ('MED_HISTORY.SOURCE.' + im.sourceOfRecord | translate)
+                        : im.sourceOfRecord
+                    }}</span>
+                  }
                 </td>
                 <td>{{ doseLabel(im) }}</td>
                 <td>{{ (im.status | enumLabel: 'immunizationStatus') || '—' }}</td>
@@ -318,23 +326,27 @@
                 <td class="actions-cell">
                   @if (canEditImmunizations) {
                     <button
+                      [attr.aria-label]="'COMMON.EDIT' | translate"
                       type="button"
                       class="btn-secondary btn-sm"
                       [title]="'COMMON.EDIT' | translate"
                       (click)="openEditImmunization(im)"
                     >
-                      <span class="material-symbols-outlined">edit</span>
+                      <span class="material-symbols-outlined" aria-hidden="true">edit</span>
                     </button>
                   }
                   @if (canMarkReminder && im.nextDoseDueDate && !im.reminderSent) {
                     <button
+                      [attr.aria-label]="'MED_HISTORY.MARK_REMINDER' | translate"
                       type="button"
                       class="btn-secondary btn-sm"
                       [disabled]="reminderBusyId() === im.id"
                       [title]="'MED_HISTORY.MARK_REMINDER' | translate"
                       (click)="markReminderSent(im)"
                     >
-                      <span class="material-symbols-outlined">notifications</span>
+                      <span class="material-symbols-outlined" aria-hidden="true"
+                        >notifications</span
+                      >
                     </button>
                   }
                 </td>
@@ -357,21 +369,24 @@
   >
     <div
       class="modal modal-lg"
+      aria-labelledby="medical-history-tab-dialog-1-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeSocialModal(); $event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'MED_HISTORY.NEW_SOCIAL_VERSION' | translate }}</h2>
+        <h2 id="medical-history-tab-dialog-1-title">
+          {{ 'MED_HISTORY.NEW_SOCIAL_VERSION' | translate }}
+        </h2>
         <button
           type="button"
           class="modal-close"
           (click)="closeSocialModal()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -547,14 +562,15 @@
   >
     <div
       class="modal modal-lg"
+      aria-labelledby="medical-history-tab-dialog-2-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeFamilyModal(); $event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="medical-history-tab-dialog-2-title">
           {{
             (editingFamilyId() ? 'MED_HISTORY.EDIT_FAMILY' : 'MED_HISTORY.ADD_FAMILY') | translate
           }}
@@ -565,7 +581,7 @@
           (click)="closeFamilyModal()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -662,14 +678,15 @@
   >
     <div
       class="modal modal-lg"
+      aria-labelledby="medical-history-tab-dialog-3-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeImmunizationModal(); $event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="medical-history-tab-dialog-3-title">
           {{
             (editingImmunizationId()
               ? 'MED_HISTORY.EDIT_IMMUNIZATION'
@@ -683,24 +700,66 @@
           (click)="closeImmunizationModal()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
         <div class="form-row">
           <div class="field">
-            <label for="im-code">{{ 'MED_HISTORY.VACCINE_CODE' | translate }} *</label>
-            <input id="im-code" type="text" [(ngModel)]="immunizationForm.vaccineCode" />
+            <label for="im-display">{{ 'MED_HISTORY.VACCINE' | translate }} *</label>
+            <input
+              id="im-display"
+              type="text"
+              list="im-pev-vaccines"
+              [ngModel]="immunizationForm.vaccineDisplay"
+              (ngModelChange)="onVaccineChosen($event)"
+            />
+            <datalist id="im-pev-vaccines">
+              @for (v of pevVaccines; track v) {
+                <option [value]="'MED_HISTORY.PEV.' + v | translate"></option>
+              }
+            </datalist>
           </div>
           <div class="field">
-            <label for="im-display">{{ 'MED_HISTORY.VACCINE' | translate }} *</label>
-            <input id="im-display" type="text" [(ngModel)]="immunizationForm.vaccineDisplay" />
+            <label for="im-code">{{ 'MED_HISTORY.VACCINE_CODE' | translate }}</label>
+            <input
+              id="im-code"
+              type="text"
+              [(ngModel)]="immunizationForm.vaccineCode"
+              aria-describedby="im-code-hint"
+            />
+            <!-- QA D1003 (round 17): optional. A PEV vaccine fills its verified
+                 CVX code (pev-cvx.ts); any other vaccine takes the code of an
+                 earlier dose of it in this chart. Always editable. -->
+            <p class="field-hint" id="im-code-hint">
+              {{ 'MED_HISTORY.VACCINE_CODE_HINT' | translate }}
+            </p>
           </div>
         </div>
         <div class="form-row">
           <div class="field">
             <label for="im-date">{{ 'MED_HISTORY.ADMINISTERED' | translate }} *</label>
-            <input id="im-date" type="date" [(ngModel)]="immunizationForm.administrationDate" />
+            <input
+              id="im-date"
+              type="date"
+              [ngModel]="immunizationForm.administrationDate"
+              (ngModelChange)="onImmunizationDateChange($event)"
+            />
+          </div>
+          <div class="field">
+            <label for="im-source">{{ 'MED_HISTORY.SOURCE_OF_RECORD' | translate }} *</label>
+            <select
+              id="im-source"
+              [ngModel]="immunizationForm.sourceOfRecord"
+              (ngModelChange)="onImmunizationSourceChange($event)"
+            >
+              @if (!immunizationForm.sourceOfRecord) {
+                <option value="">{{ 'MED_HISTORY.SOURCE_UNKNOWN' | translate }}</option>
+              }
+              @for (src of immunizationSources; track src) {
+                <option [value]="src">{{ 'MED_HISTORY.SOURCE.' + src | translate }}</option>
+              }
+            </select>
           </div>
           <div class="field">
             <label for="im-status">{{ 'COMMON.STATUS' | translate }} *</label>
@@ -789,11 +848,7 @@
         <button
           type="button"
           class="btn-primary"
-          [disabled]="
-            immunizationSaving() ||
-            !immunizationForm.vaccineCode ||
-            !immunizationForm.vaccineDisplay
-          "
+          [disabled]="immunizationSaving() || !immunizationForm.vaccineDisplay"
           (click)="submitImmunization()"
         >
           {{ 'COMMON.SAVE' | translate }}

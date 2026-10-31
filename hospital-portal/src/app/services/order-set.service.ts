@@ -87,6 +87,8 @@ export interface ApplyOrderSetRequest {
   encounterId: string;
   orderingStaffId: string;
   forceOverride?: boolean;
+  /** Round 18: required with forceOverride when a critical alert is passed. */
+  overrideReason?: string;
 }
 
 export interface AppliedOrderSetSummary {

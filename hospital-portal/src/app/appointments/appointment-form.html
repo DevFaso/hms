@@ -30,7 +30,7 @@
               />
             </div>
           </div>
-          <div class="field-row two-col">
+          <div class="field-row">
             <div class="field">
               <label for="start">{{ 'APPOINTMENTS.START_TIME' | translate }} *</label>
               <input
@@ -39,27 +39,13 @@
                 [(ngModel)]="form.startTime"
                 name="startTime"
                 required
-                (change)="onStartTimeChange()"
               />
-            </div>
-            <div class="field">
-              <label for="end">{{ 'APPOINTMENTS.END_TIME' | translate }}</label>
-              <input
-                id="end"
-                type="time"
-                [(ngModel)]="form.endTime"
-                name="endTime"
-                (change)="onEndTimeChange()"
-              />
-              <small class="field-hint">{{ 'APPOINTMENTS.END_TIME_HINT' | translate }}</small>
+              <!-- QA D1060: the clinician's slot rules set how long the visit lasts. -->
+              <small class="field-hint" data-testid="appt-duration-note">{{
+                'APPOINTMENTS.DURATION_SET_BY_SLOTS' | translate
+              }}</small>
             </div>
           </div>
-          @if (timeError()) {
-            <p class="field-error">
-              <span class="material-symbols-outlined">error</span>
-              {{ timeError() }}
-            </p>
-          }
         </div>
 
         <!-- Patient picker -->
@@ -69,9 +55,7 @@
             <div class="picker-chip">
               <div class="chip-avatar">{{ patientInitials(selectedPatient()!) }}</div>
               <div class="chip-info">
-                <span class="chip-name"
-                  >{{ selectedPatient()!.firstName }} {{ selectedPatient()!.lastName }}</span
-                >
+                <span class="chip-name">{{ selectedPatient() | personName }}</span>
                 @if (selectedPatient() | patientSubline; as sub) {
                   <span class="chip-sub">{{ sub }}</span>
                 }
@@ -81,36 +65,57 @@
                 class="chip-clear"
                 (click)="clearPatient()"
                 [title]="'APPOINTMENTS.CHANGE_PATIENT' | translate"
+                [attr.aria-label]="'APPOINTMENTS.CHANGE_PATIENT' | translate"
               >
-                <span class="material-symbols-outlined">close</span>
+                <span class="material-symbols-outlined" aria-hidden="true">close</span>
               </button>
             </div>
           } @else {
             <div class="patient-picker-wrap">
               <span class="material-symbols-outlined picker-search-icon">person_search</span>
               <input
+                id="apptPatientSearch"
                 [attr.aria-label]="'APPOINTMENTS.SEARCH_PATIENT_PLACEHOLDER' | translate"
                 class="picker-input"
                 type="text"
                 [placeholder]="'APPOINTMENTS.SEARCH_PATIENT_PLACEHOLDER' | translate"
                 [value]="patientQuery()"
                 (input)="onPatientQueryChange($any($event.target).value)"
+                (keydown)="onPatientKeydown($event)"
                 (blur)="patientDropdownOpen.set(false)"
                 autocomplete="off"
+                role="combobox"
+                aria-autocomplete="list"
+                aria-controls="apptPatientListbox"
+                [attr.aria-expanded]="patientDropdownOpen()"
+                [attr.aria-activedescendant]="
+                  patientDropdownOpen() && patientActive() >= 0
+                    ? 'apptPatientOption' + patientActive()
+                    : null
+                "
               />
               @if (patientSearchLoading()) {
                 <div class="picker-spinner"></div>
               }
               @if (patientDropdownOpen()) {
                 <ul
+                  id="apptPatientListbox"
+                  role="listbox"
                   class="picker-dropdown"
                   [attr.aria-label]="'APPOINTMENTS.PATIENT_SUGGESTIONS' | translate"
                 >
-                  @for (p of patientSuggestions(); track p.id) {
-                    <li class="picker-option" (mousedown)="selectPatient(p)">
+                  @for (p of patientSuggestions(); track p.id; let i = $index) {
+                    <li
+                      class="picker-option"
+                      role="option"
+                      [id]="'apptPatientOption' + i"
+                      [class.active]="i === patientActive()"
+                      [attr.aria-selected]="i === patientActive()"
+                      (mousedown)="selectPatient(p)"
+                    >
                       <div class="opt-avatar">{{ patientInitials(p) }}</div>
                       <div class="opt-info">
-                        <span class="opt-name">{{ p.firstName }} {{ p.lastName }}</span>
+                        <span class="opt-name">{{ p | personName }}</span>
                         @if (p | patientSubline; as sub) {
                           <span class="opt-meta">{{ sub }}</span>
                         }
@@ -143,33 +148,54 @@
                 class="chip-clear"
                 (click)="clearStaff()"
                 [title]="'APPOINTMENTS.CHANGE_STAFF' | translate"
+                [attr.aria-label]="'APPOINTMENTS.CHANGE_STAFF' | translate"
               >
-                <span class="material-symbols-outlined">close</span>
+                <span class="material-symbols-outlined" aria-hidden="true">close</span>
               </button>
             </div>
           } @else {
             <div class="patient-picker-wrap">
               <span class="material-symbols-outlined picker-search-icon">badge</span>
               <input
+                id="apptStaffSearch"
                 [attr.aria-label]="'APPOINTMENTS.SEARCH_STAFF_PLACEHOLDER' | translate"
                 class="picker-input"
                 type="text"
                 [placeholder]="'APPOINTMENTS.SEARCH_STAFF_PLACEHOLDER' | translate"
                 [value]="staffQuery()"
                 (input)="onStaffQueryChange($any($event.target).value)"
+                (keydown)="onStaffKeydown($event)"
                 (blur)="staffDropdownOpen.set(false)"
                 autocomplete="off"
+                role="combobox"
+                aria-autocomplete="list"
+                aria-controls="apptStaffListbox"
+                [attr.aria-expanded]="staffDropdownOpen()"
+                [attr.aria-activedescendant]="
+                  staffDropdownOpen() && staffActive() >= 0
+                    ? 'apptStaffOption' + staffActive()
+                    : null
+                "
               />
               @if (staffSearchLoading()) {
                 <div class="picker-spinner"></div>
               }
               @if (staffDropdownOpen()) {
                 <ul
+                  id="apptStaffListbox"
+                  role="listbox"
                   class="picker-dropdown"
                   [attr.aria-label]="'APPOINTMENTS.STAFF_SUGGESTIONS' | translate"
                 >
-                  @for (s of staffSuggestions(); track s.id) {
-                    <li class="picker-option" (mousedown)="selectStaff(s)">
+                  @for (s of staffSuggestions(); track s.id; let i = $index) {
+                    <li
+                      class="picker-option"
+                      role="option"
+                      [id]="'apptStaffOption' + i"
+                      [class.active]="i === staffActive()"
+                      [attr.aria-selected]="i === staffActive()"
+                      (mousedown)="selectStaff(s)"
+                    >
                       <div class="opt-avatar staff-avatar">{{ staffInitials(s) }}</div>
                       <div class="opt-info">
                         <span class="opt-name">{{ s.name }}</span>

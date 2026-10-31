@@ -1,3 +1,6 @@
+import { EnumLabelService } from '../../core/enum-label.service';
+import { currentLocale } from '../../shared/i18n/app-locale';
+import { CdkTrapFocus } from '@angular/cdk/a11y';
 import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -18,7 +21,7 @@ import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 @Component({
   selector: 'app-lab-test-config',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [CdkTrapFocus, CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
   templateUrl: './lab-test-config.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lab-test-config.scss',
@@ -27,6 +30,7 @@ export class LabTestConfigComponent implements OnInit {
   private readonly labService = inject(LabService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly enumLabels = inject(EnumLabelService);
   private readonly profileService = inject(ProfileService);
   private readonly roleContext = inject(RoleContextService);
 
@@ -194,6 +198,8 @@ export class LabTestConfigComponent implements OnInit {
         notes: null,
         criticalLow: null,
         criticalHigh: null,
+        ageUnit: 'YEARS',
+        source: null,
       },
     ]);
   }
@@ -519,8 +525,27 @@ export class LabTestConfigComponent implements OnInit {
   describeCondition(rule: LabReflexRule): string {
     try {
       const cond = JSON.parse(rule.condition ?? '{}');
-      if (cond.severityFlag) return `severity = ${cond.severityFlag}`;
-      if (cond.thresholdOperator) return `value ${cond.thresholdOperator} ${cond.thresholdValue}`;
+      // QA D963: the condition is read in the user's language, the flag through
+      // its enum label, never the wire token ("severity = ABNORMAL").
+      if (cond.severityFlag) {
+        return this.translate.instant('LAB_TEST_CONFIG.REFLEX_CONDITION_SEVERITY', {
+          flag: this.enumLabels.transform(cond.severityFlag, 'labSeverityFlag'),
+        });
+      }
+      if (cond.thresholdOperator) {
+        // Review of #975: a value that is not a number is shown as stored, never as "NaN".
+        const threshold = Number(cond.thresholdValue);
+        return this.translate.instant('LAB_TEST_CONFIG.REFLEX_CONDITION_THRESHOLD', {
+          operator: cond.thresholdOperator,
+          value:
+            cond.thresholdValue !== null &&
+            cond.thresholdValue !== undefined &&
+            cond.thresholdValue !== '' &&
+            Number.isFinite(threshold)
+              ? new Intl.NumberFormat(currentLocale()).format(threshold)
+              : String(cond.thresholdValue ?? ''),
+        });
+      }
     } catch {
       // fall through to raw condition
     }

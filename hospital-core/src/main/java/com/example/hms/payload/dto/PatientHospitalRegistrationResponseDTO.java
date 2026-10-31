@@ -32,6 +32,8 @@ public class PatientHospitalRegistrationResponseDTO {
     private UUID patientId;
     private String patientUsername; // added for human readability
     private String patientFirstName;
+    /** QA D1036: the middle name, so the desk shows the patient's whole name. */
+    private String patientMiddleName;
     private String patientLastName;
     private String patientEmail;
     private String patientPhone;
@@ -60,9 +62,11 @@ public class PatientHospitalRegistrationResponseDTO {
 
     @JsonProperty("patientFullName")
     public String getPatientFullName() {
-        String f = patientFirstName == null ? "" : patientFirstName.trim();
-        String l = patientLastName == null ? "" : patientLastName.trim();
-        String full = (f + " " + l).trim();
+        // QA D1036: each part once, single-spaced, the middle name included.
+        String full = java.util.stream.Stream.of(patientFirstName, patientMiddleName, patientLastName)
+            .filter(part -> part != null && !part.isBlank())
+            .map(String::trim)
+            .collect(java.util.stream.Collectors.joining(" "));
         return full.isEmpty() ? null : full;
     }
 }

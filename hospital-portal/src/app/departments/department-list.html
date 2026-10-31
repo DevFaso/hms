@@ -59,6 +59,7 @@
                 <button
                   class="action-link"
                   [title]="'COMMON.EDIT' | translate"
+                  [attr.aria-label]="'COMMON.EDIT' | translate"
                   (click)="openEdit(dept)"
                 >
                   <span class="material-symbols-outlined">edit</span>
@@ -66,6 +67,7 @@
                 <button
                   class="action-link danger"
                   [title]="'COMMON.DELETE' | translate"
+                  [attr.aria-label]="'COMMON.DELETE' | translate"
                   (click)="confirmDelete(dept)"
                 >
                   <span class="material-symbols-outlined">delete</span>
@@ -111,7 +113,11 @@
           <h2>
             {{ editing() ? ('DEPARTMENTS.EDIT' | translate) : ('DEPARTMENTS.CREATE' | translate) }}
           </h2>
-          <button class="modal-close" (click)="closeModal()">
+          <button
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+            class="modal-close"
+            (click)="closeModal()"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -277,7 +283,11 @@
       >
         <div class="modal-header">
           <h2>{{ 'DEPARTMENTS.DELETE' | translate }}</h2>
-          <button class="modal-close" (click)="cancelDelete()">
+          <button
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+            class="modal-close"
+            (click)="cancelDelete()"
+          >
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>

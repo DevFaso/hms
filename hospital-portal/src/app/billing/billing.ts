@@ -1,4 +1,12 @@
-import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import { textMatches } from '../shared/person-search';
+import {
+  Component,
+  ElementRef,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
@@ -10,6 +18,9 @@ import {
   InvoiceItemResponse,
   InvoiceStatus,
   INVOICE_ITEM_CATEGORIES,
+  INVOICE_ADJUSTMENT_TYPES,
+  InvoiceAdjustmentRow,
+  InvoiceAdjustmentType,
   INVOICE_STATUSES,
   PaymentRow,
   STAFF_PAYMENT_METHODS,
@@ -21,22 +32,34 @@ import { ToastService } from '../core/toast.service';
 import { PermissionService } from '../core/permission.service';
 import { RoleContextService } from '../core/role-context.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { CashClosingComponent } from './cash-closing/cash-closing.component';
 import { formatCfa } from '../shared/i18n/app-locale';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { DialogA11yDirective } from '../shared/a11y/dialog-a11y.directive';
+import { saveResponse } from '../shared/download-file';
+import { cfaAmountMessageKey, cfaAmountProblem } from '../shared/cfa-amount';
+import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
+import { refuseFields } from '../shared/forms/invalid-fields';
 
 type BillingTab = 'all' | 'outstanding' | 'paid' | 'overdue';
+
+/** The cancellation reason's field (QA D1069), marked when it is refused (QA D1072). */
+const CANCEL_REASON_ID = 'bill-cancel-reason';
 
 @Component({
   selector: 'app-billing',
   standalone: true,
   imports: [
     ServerTimePipe,
+    PersonNamePipe,
     CommonModule,
     FormsModule,
     TranslateModule,
     EnumLabelPipe,
     PatientPickerComponent,
+    DialogA11yDirective,
+    CashClosingComponent,
   ],
   templateUrl: './billing.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -48,8 +71,15 @@ export class BillingComponent implements OnInit {
   private readonly permissions = inject(PermissionService);
   private readonly roleContext = inject(RoleContextService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   // Permission-gated action flags
+  /** QA D1059: the cashier's daily cash closing, opened from the page header. */
+  readonly showCashClosing = signal(false);
+
+  /** QA D1059: the date range of the last search run, which the KPI tiles follow. */
+  private appliedRange: { fromDate?: string; toDate?: string } = {};
+
   readonly canCreate = this.permissions.hasAnyPermission('Create Invoice', 'Manage Billing');
   readonly canEdit = this.permissions.hasAnyPermission('Create Invoice', 'Manage Billing');
   /** QA D181: the server deletes only for SUPER_ADMIN and HOSPITAL_ADMIN, so a
@@ -62,16 +92,28 @@ export class BillingComponent implements OnInit {
     'View Billing Reports',
     'Manage Billing',
   );
-  /** SecurityConfig excludes RECEPTIONIST from POST /billing-invoices/**, so
-   *  payment recording 403s for receptionists despite the @PreAuthorize. */
+  /** QA D973: the front desk takes payments (the server admits the receptionist
+   *  on POST /billing-invoices/{id}/payments), so the button is not hidden from it. */
   readonly canRecordPayment = this.roleContext.hasAnyActiveRole([
     'ROLE_SUPER_ADMIN',
     'ROLE_HOSPITAL_ADMIN',
     'ROLE_BILLING_SPECIALIST',
     'ROLE_ACCOUNTANT',
+    'ROLE_RECEPTIONIST',
+  ]);
+  /** QA D974: the server lets these roles discount, waive or credit an issued invoice. */
+  readonly canAdjust = this.roleContext.hasAnyActiveRole([
+    'ROLE_SUPER_ADMIN',
+    'ROLE_HOSPITAL_ADMIN',
+    'ROLE_BILLING_SPECIALIST',
   ]);
   /** QA D142: the server reverses a payment for these roles only. */
-  readonly canReversePayment = this.canRecordPayment;
+  readonly canReversePayment = this.roleContext.hasAnyActiveRole([
+    'ROLE_SUPER_ADMIN',
+    'ROLE_HOSPITAL_ADMIN',
+    'ROLE_BILLING_SPECIALIST',
+    'ROLE_ACCOUNTANT',
+  ]);
 
   invoices = signal<BillingInvoiceResponse[]>([]);
   filtered = signal<BillingInvoiceResponse[]>([]);
@@ -103,8 +145,18 @@ export class BillingComponent implements OnInit {
   editingNumber = signal('');
   /** The status the edited invoice has now; a paid status follows payments (QA D91). */
   editingStatus = signal<InvoiceStatus>('DRAFT');
+  /** QA D974: what the edited invoice has received (a waiver can settle it with none). */
+  editingPaid = signal(0);
   /** With lines, the total is their sum and cannot be typed (QA D72). */
   editingHasLines = signal(false);
+  /**
+   * QA D936: the picked patient's paid check-in copays that no visit invoice
+   * has taken yet. Billing cannot open the encounter list, so the form names
+   * the visit each one was paid for and links it in one click.
+   */
+  openCopays = signal<BillingInvoiceResponse[]>([]);
+  /** The visit code the form filled in itself (cleared when the patient changes). */
+  private proposedVisit: string | null = null;
 
   /* ── Invoice lines (detail panel) ── */
   items = signal<InvoiceItemResponse[]>([]);
@@ -139,6 +191,86 @@ export class BillingComponent implements OnInit {
   paymentSaving = signal(false);
   readonly paymentMethods: StaffPaymentMethod[] = STAFF_PAYMENT_METHODS;
 
+  /* ── Adjustments (detail panel, QA D974) ── */
+  adjustments = signal<InvoiceAdjustmentRow[]>([]);
+  readonly adjustmentTypes: InvoiceAdjustmentType[] = INVOICE_ADJUSTMENT_TYPES;
+  adjustmentType = signal<InvoiceAdjustmentType>('DISCOUNT');
+  adjustmentAmount = signal<number | null>(null);
+  adjustmentReason = signal('');
+  adjustmentLineId = signal('');
+  adjustmentSaving = signal(false);
+
+  /** QA D974: only an issued invoice is adjusted; a draft's lines are edited instead. */
+  canAdjustInvoice(inv: BillingInvoiceResponse): boolean {
+    return this.canAdjust && (inv.status === 'SENT' || inv.status === 'PARTIALLY_PAID');
+  }
+
+  private loadAdjustments(invoiceId: string): void {
+    this.billingService.listAdjustments(invoiceId).subscribe({
+      next: (rows) => {
+        if (this.selectedInvoice()?.id === invoiceId) this.adjustments.set(rows ?? []);
+      },
+      error: () => this.adjustments.set([]),
+    });
+  }
+
+  private resetAdjustment(): void {
+    this.adjustmentType.set('DISCOUNT');
+    this.adjustmentAmount.set(null);
+    this.adjustmentReason.set('');
+    this.adjustmentLineId.set('');
+  }
+
+  submitAdjustment(): void {
+    const inv = this.selectedInvoice();
+    if (!inv || this.adjustmentSaving()) return;
+    const reason = this.adjustmentReason().trim();
+    const type = this.adjustmentType();
+    const amount = this.adjustmentAmount();
+    const line = this.adjustmentLineId();
+    if (!reason) {
+      this.toast.error(this.translate.instant('BILLING.ADJUSTMENT_REASON_REQUIRED'));
+      return;
+    }
+    if (type === 'CREDIT_NOTE' && !line) {
+      this.toast.error(this.translate.instant('BILLING.ADJUSTMENT_LINE_REQUIRED'));
+      return;
+    }
+    // QA D1089: an empty amount asks for one; only a typed one is checked for decimals.
+    const amountProblem = type === 'CREDIT_NOTE' ? null : cfaAmountProblem(amount);
+    if (amountProblem) {
+      this.toast.error(
+        this.translate.instant(
+          cfaAmountMessageKey(amountProblem, 'BILLING.ADJUSTMENT_AMOUNT_REQUIRED'),
+        ),
+      );
+      return;
+    }
+    this.adjustmentSaving.set(true);
+    this.billingService
+      .addAdjustment(inv.id, {
+        type,
+        amount: amount || null,
+        reason,
+        invoiceItemId: type === 'CREDIT_NOTE' ? line : null,
+      })
+      .subscribe({
+        next: (updated) => {
+          this.adjustmentSaving.set(false);
+          this.resetAdjustment();
+          this.toast.success(this.translate.instant('BILLING.ADJUSTMENT_SAVED'));
+          this.applyUpdated(updated);
+          this.loadAdjustments(updated.id);
+        },
+        error: (err: HttpErrorResponse) => {
+          this.adjustmentSaving.set(false);
+          this.toast.error(
+            err.error?.message ?? this.translate.instant('BILLING.ADJUSTMENT_FAILED'),
+          );
+        },
+      });
+  }
+
   /* ── Payments ledger (detail panel, QA D140/D142) ── */
   payments = signal<PaymentRow[]>([]);
   paymentActionBusy = signal(false);
@@ -172,8 +304,28 @@ export class BillingComponent implements OnInit {
   statusOptions(): InvoiceStatus[] {
     if (!this.editing()) return ['DRAFT', 'SENT'];
     const current = this.editingStatus();
+    // QA D974: settled by a waiver with no money received: a mistaken waiver is undone by cancelling.
+    if (current === 'PAID' && this.editingPaid() === 0) return ['PAID', 'CANCELLED'];
     if (current === 'PAID' || current === 'PARTIALLY_PAID') return [current];
+    // QA D1057: an issued invoice never goes back to DRAFT (the server refuses
+    // it: billing.invoice.noReturnToDraft); it stays as it is or is cancelled.
+    if (current && current !== 'DRAFT') return [current, 'CANCELLED'];
     return ['DRAFT', 'SENT', 'CANCELLED'];
+  }
+
+  /**
+   * QA D1069: the edit moves an issued invoice to CANCELLED, so the reason is
+   * asked for (the server refuses the move without it).
+   */
+  cancellingIssued(): boolean {
+    const current = this.editingStatus();
+    return (
+      this.editing() &&
+      this.form.status === 'CANCELLED' &&
+      !!current &&
+      current !== 'DRAFT' &&
+      current !== 'CANCELLED'
+    );
   }
 
   /** QA D614: an issued invoice keeps its patient; it is cancelled and re-issued instead. */
@@ -193,7 +345,10 @@ export class BillingComponent implements OnInit {
 
   statusLocked(): boolean {
     const current = this.editingStatus();
-    return this.editing() && (current === 'PAID' || current === 'PARTIALLY_PAID');
+    return (
+      this.editing() &&
+      (current === 'PARTIALLY_PAID' || (current === 'PAID' && this.editingPaid() > 0))
+    );
   }
 
   openCreate(): void {
@@ -201,6 +356,7 @@ export class BillingComponent implements OnInit {
     // One key per form: a double click or a retry creates one invoice (QA D94).
     this.form.clientRequestId = crypto.randomUUID();
     this.formPatient.set(null);
+    this.openCopays.set([]);
     this.editingHasLines.set(false);
     this.editing.set(false);
     this.editingId.set(null);
@@ -232,6 +388,7 @@ export class BillingComponent implements OnInit {
     );
     this.editingNumber.set(inv.invoiceNumber ?? '');
     this.editingStatus.set(inv.status ?? 'DRAFT');
+    this.editingPaid.set(Number(inv.amountPaid ?? 0));
     this.editingHasLines.set(false);
     this.billingService.getInvoiceItems(inv.id).subscribe({
       next: (lines) => this.editingHasLines.set((lines ?? []).length > 0),
@@ -245,6 +402,37 @@ export class BillingComponent implements OnInit {
   onPatientPicked(p: PatientResponse | null): void {
     this.formPatient.set(p);
     this.form.patientId = p?.id ?? '';
+    this.loadOpenCopays(p?.id ?? null);
+  }
+
+  /** QA D936: the copays a new invoice for this patient should take. */
+  private loadOpenCopays(patientId: string | null): void {
+    this.openCopays.set([]);
+    if (this.proposedVisit && this.form.encounterReference === this.proposedVisit) {
+      this.form.encounterReference = undefined;
+    }
+    this.proposedVisit = null;
+    if (!patientId || this.editing()) return;
+    this.billingService.searchInvoices({ patientId, statuses: ['PAID'] }, 0, 50).subscribe({
+      next: (res) => {
+        if (this.form.patientId !== patientId) return;
+        const open = (res?.content ?? []).filter(
+          (inv) => inv.checkInCopay && !inv.creditedToInvoiceNumber && !!inv.encounterCode,
+        );
+        this.openCopays.set(open);
+        // QA D936: one open copay is proposed as the visit; the clerk sees it and may clear it.
+        if (open.length === 1 && !this.form.encounterReference) {
+          this.form.encounterReference = open[0].encounterCode ?? undefined;
+          this.proposedVisit = this.form.encounterReference ?? null;
+        }
+      },
+      error: () => this.openCopays.set([]),
+    });
+  }
+
+  /** QA D936: the visit the copay was paid for becomes this invoice's visit. */
+  linkCopayVisit(copay: BillingInvoiceResponse): void {
+    this.form.encounterReference = copay.encounterCode ?? undefined;
   }
 
   closeModal(): void {
@@ -253,6 +441,17 @@ export class BillingComponent implements OnInit {
 
   submitForm(): void {
     if (this.saving()) return;
+    // QA D1069: only a cancellation carries a reason; any other edit sends none.
+    if (this.form.status !== 'CANCELLED') {
+      this.form.cancelReason = undefined;
+    } else if (this.cancellingIssued() && !this.form.cancelReason?.trim()) {
+      // QA D1072 (round-18 merge): the missing reason is marked under its field
+      // and focused, not only named in a toast.
+      const message = this.translate.instant('BILLING.CANCEL_REASON_REQUIRED');
+      refuseFields(this.host.nativeElement, [CANCEL_REASON_ID], [CANCEL_REASON_ID], message);
+      this.toast.error(message);
+      return;
+    }
     this.saving.set(true);
     const op = this.editing()
       ? this.billingService.updateInvoice(this.editingId()!, this.form)
@@ -340,12 +539,17 @@ ${this.translate.instant('BILLING.SUPPLEMENTARY_CONFIRM')}`)
           : this.filterStatus()
             ? [this.filterStatus() as InvoiceStatus]
             : undefined;
+    // QA D1059: the tiles follow the range of the search actually run (an
+    // inverted one is not a range: the tiles then cover every invoice).
+    const fromDate = this.filterFromDate() || undefined;
+    const toDate = this.filterToDate() || undefined;
+    this.appliedRange = fromDate && toDate && fromDate > toDate ? {} : { fromDate, toDate };
     this.billingService
       .searchInvoices(
         {
           statuses,
-          fromDate: this.filterFromDate() || undefined,
-          toDate: this.filterToDate() || undefined,
+          fromDate,
+          toDate,
           query: this.searchTerm.trim() || undefined,
         },
         page,
@@ -374,7 +578,8 @@ ${this.translate.instant('BILLING.SUPPLEMENTARY_CONFIRM')}`)
    * page of 20 rows undercounted revenue and money owed.
    */
   private refreshStats(): void {
-    this.billingService.getSummary().subscribe({
+    // QA D1059: the tiles follow the list's date filter (the invoice date, as the search reads it).
+    this.billingService.getSummary(this.appliedRange).subscribe({
       next: (summary) =>
         this.stats.set({
           total: Number(summary?.total ?? 0),
@@ -428,7 +633,7 @@ ${this.translate.instant('BILLING.SUPPLEMENTARY_CONFIRM')}`)
       list = list.filter(
         (inv) =>
           (inv.invoiceNumber ?? '').toLowerCase().includes(term) ||
-          (inv.patientFullName ?? '').toLowerCase().includes(term) ||
+          textMatches(inv.patientFullName, term) ||
           (inv.status ?? '').toLowerCase().includes(term),
       );
     }
@@ -440,6 +645,9 @@ ${this.translate.instant('BILLING.SUPPLEMENTARY_CONFIRM')}`)
     this.resetNewItem();
     this.loadItems(inv.id);
     this.loadPayments(inv.id);
+    this.resetAdjustment();
+    this.adjustments.set([]);
+    this.loadAdjustments(inv.id);
   }
 
   closeDetail(): void {
@@ -510,6 +718,66 @@ ${this.translate.instant('BILLING.SUPPLEMENTARY_CONFIRM')}`)
           this.itemSaving.set(false);
           this.resetNewItem();
           this.toast.success(this.translate.instant('BILLING.ITEM_ADDED'));
+          this.refreshSelected(inv.id);
+        },
+        error: (err: HttpErrorResponse) => {
+          this.itemSaving.set(false);
+          this.toast.error(
+            err.error?.message ?? this.translate.instant('BILLING.ITEM_SAVE_FAILED'),
+          );
+        },
+      });
+  }
+
+  /* QA D1088: a line posted at zero (the checkout's unpriced charges) is priced in place. */
+  editingLineId = signal<string | null>(null);
+  editLineQuantity = signal<number | null>(null);
+  editLineUnitPrice = signal<number | null>(null);
+
+  startEditLine(item: InvoiceItemResponse): void {
+    this.editingLineId.set(item.id);
+    this.editLineQuantity.set(item.quantity ?? 1);
+    this.editLineUnitPrice.set(Number(item.unitPrice) > 0 ? Number(item.unitPrice) : null);
+  }
+
+  cancelEditLine(): void {
+    this.editingLineId.set(null);
+  }
+
+  canSaveLine(): boolean {
+    const qty = this.editLineQuantity();
+    return (
+      !this.itemSaving() &&
+      !!qty &&
+      qty >= 1 &&
+      Number.isInteger(qty) &&
+      cfaAmountProblem(this.editLineUnitPrice()) === null
+    );
+  }
+
+  saveLine(item: InvoiceItemResponse): void {
+    const inv = this.selectedInvoice();
+    if (!inv || this.itemSaving()) return;
+    const priceProblem = cfaAmountProblem(this.editLineUnitPrice());
+    if (priceProblem) {
+      this.toast.error(this.translate.instant(cfaAmountMessageKey(priceProblem)));
+      return;
+    }
+    if (!this.canSaveLine()) return;
+    this.itemSaving.set(true);
+    this.billingService
+      .updateInvoiceItem(item.id, {
+        billingInvoiceId: inv.id,
+        itemDescription: item.itemDescription,
+        itemCategory: item.itemCategory as InvoiceItemCategory,
+        quantity: this.editLineQuantity() ?? 1,
+        unitPrice: this.editLineUnitPrice() ?? 0,
+      })
+      .subscribe({
+        next: () => {
+          this.itemSaving.set(false);
+          this.editingLineId.set(null);
+          this.toast.success(this.translate.instant('BILLING.ITEM_UPDATED'));
           this.refreshSelected(inv.id);
         },
         error: (err: HttpErrorResponse) => {
@@ -632,32 +900,24 @@ ${this.translate.instant('BILLING.SUPPLEMENTARY_CONFIRM')}`)
     });
   }
 
+  /** QA D1009: each receipt keeps its own number ("…-R2") instead of sharing one name. */
   downloadReceipt(p: PaymentRow): void {
     const inv = this.selectedInvoice();
     if (!inv) return;
     this.billingService.getReceiptPdf(inv.id, p.id).subscribe({
-      next: (blob) => {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `receipt-${inv.invoiceNumber || inv.id}.pdf`;
-        a.click();
-        URL.revokeObjectURL(url);
-      },
+      next: (res) =>
+        saveResponse(
+          res,
+          `receipt-${inv.invoiceNumber}-${(p.paymentDate ?? '').substring(0, 10)}.pdf`,
+        ),
       error: () => this.toast.error(this.translate.instant('BILLING.PDF_FAILED')),
     });
   }
 
-  downloadPdf(id: string): void {
-    this.billingService.getInvoicePdf(id).subscribe({
-      next: (blob) => {
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `invoice-${id}.pdf`;
-        a.click();
-        URL.revokeObjectURL(url);
-      },
+  /** QA D1009: the invoice PDF is named by its number, not its database id. */
+  downloadPdf(inv: BillingInvoiceResponse): void {
+    this.billingService.getInvoicePdf(inv.id).subscribe({
+      next: (res) => saveResponse(res, `invoice-${inv.invoiceNumber}.pdf`),
       error: () => this.toast.error(this.translate.instant('BILLING.PDF_FAILED')),
     });
   }
@@ -758,6 +1018,11 @@ ${this.translate.instant('BILLING.SUPPLEMENTARY_CONFIRM')}`)
     });
   }
 
+  /** QA D1007: the server refuses these methods without a transaction reference. */
+  paymentReferenceRequired(): boolean {
+    return ['MOBILE_MONEY', 'INSURANCE', 'BANK_TRANSFER'].includes(this.paymentMethod());
+  }
+
   closePayment(): void {
     this.showPaymentModal.set(false);
     this.paymentInv.set(null);
@@ -766,21 +1031,23 @@ ${this.translate.instant('BILLING.SUPPLEMENTARY_CONFIRM')}`)
   recordPayment(): void {
     const inv = this.paymentInv();
     const amount = this.paymentAmount();
-    if (!inv || !amount || amount <= 0) {
-      this.toast.error(this.translate.instant('BILLING.PAYMENT_AMOUNT_REQUIRED'));
+    if (!inv) return;
+    // QA D184 / D1089: an amount first, then whole francs (francs CFA have no cents).
+    const amountProblem = cfaAmountProblem(amount);
+    if (amountProblem || amount === null) {
+      this.toast.error(this.translate.instant(cfaAmountMessageKey(amountProblem ?? 'required')));
       return;
     }
     if (amount > (inv.balanceDue ?? 0)) {
       this.toast.error(this.translate.instant('BILLING.PAYMENT_EXCEEDS_BALANCE'));
       return;
     }
-    // QA D184: francs CFA have no cents.
-    if (!Number.isInteger(amount)) {
-      this.toast.error(this.translate.instant('BILLING.PAYMENT_WHOLE_AMOUNT'));
+    const reference = this.paymentReference().trim();
+    if (this.paymentReferenceRequired() && !reference) {
+      this.toast.error(this.translate.instant('BILLING.PAYMENT_REFERENCE_REQUIRED'));
       return;
     }
     this.paymentSaving.set(true);
-    const reference = this.paymentReference().trim();
     const payment = { amount, method: this.paymentMethod(), reference: reference || undefined };
     this.billingService.recordPayment(inv.id, payment).subscribe({
       next: (updated) => {

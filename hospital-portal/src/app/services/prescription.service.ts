@@ -1,4 +1,15 @@
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpContext, HttpParams } from '@angular/common/http';
+import { STEP_UP_REQUEST } from './step-up';
+
+/**
+ * Round 18: the prescriber's re-authentication when signing a controlled-drug
+ * prescription: the TOTP code when an authenticator is enrolled, else the
+ * password. Checked on that one call.
+ */
+export interface SignReauthentication {
+  password?: string;
+  mfaCode?: string;
+}
 import { Injectable, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
 import { CdsCard } from '../shared/cds-card/cds-card.model';
@@ -58,6 +69,10 @@ export interface PrescriptionResponse {
   /** Safeguard state (P2 #15) — why a sign/dispense was refused, made visible. */
   controlledSubstance?: boolean;
   requiresCosign?: boolean;
+  /** QA D934: a nurse's or midwife's unsigned draft, which a doctor of the hospital signs. */
+  awaitingPhysicianSignature?: boolean;
+  /** QA D922: the catalogue item the order was written from, or resolved to. */
+  medicationCatalogItemId?: string | null;
   /** QA D757: a take-home order outlives its stay. */
   takeHome?: boolean;
   twoFactorVerifiedAt?: string | null;
@@ -195,6 +210,12 @@ export interface PrescriptionRequest {
    */
   controlledSubstance?: boolean;
   requiresCosign?: boolean;
+  /**
+   * QA D922/D935: the catalogue item picked in the form, so the catalogue's
+   * controlled flag and paediatric ceiling apply. The server also resolves a
+   * typed name to the hospital's item when this is absent.
+   */
+  medicationCatalogItemId?: string | null;
   /** QA D757: the order goes home with the patient; every other stay order ends at discharge. */
   takeHome?: boolean;
   /** QA D660: mandatory when a SIGNED prescription is cancelled or discontinued. */
@@ -223,6 +244,8 @@ export class PrescriptionService {
     patientId?: string;
     staffId?: string;
     hospitalId?: string;
+    /** One visit's prescriptions (used without patientId, which the server reads first). */
+    encounterId?: string;
     /**
      * Gap G12 — restrict the page to these `PrescriptionStatus` values. One
      * repeated `status` query parameter per value. Omitted or empty means
@@ -245,6 +268,7 @@ export class PrescriptionService {
       if (filters.patientId) params = params.set('patientId', filters.patientId);
       if (filters.staffId) params = params.set('staffId', filters.staffId);
       if (filters.hospitalId) params = params.set('hospitalId', filters.hospitalId);
+      if (filters.encounterId) params = params.set('encounterId', filters.encounterId);
       for (const status of filters.statuses ?? []) {
         params = params.append('status', status);
       }
@@ -276,8 +300,18 @@ export class PrescriptionService {
    * is the only path that records who signed, when, and a digest of what they
    * signed. Only the prescribing clinician can call it.
    */
-  sign(id: string): Observable<PrescriptionResponse> {
-    return this.http.post<PrescriptionResponse>(`${this.baseUrl}/${id}/sign`, {});
+  sign(id: string, reauthentication?: SignReauthentication): Observable<PrescriptionResponse> {
+    // Round 18: a controlled drug is signed with the prescriber's
+    // re-authentication in the body (never a header, never stored). The call
+    // is marked as a step-up, so a refused password or code comes back to the
+    // sign dialog instead of signing the user out or opening the 403 page.
+    return this.http.post<PrescriptionResponse>(
+      `${this.baseUrl}/${id}/sign`,
+      reauthentication ?? {},
+      {
+        context: new HttpContext().set(STEP_UP_REQUEST, true),
+      },
+    );
   }
 
   /**

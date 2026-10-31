@@ -52,7 +52,7 @@ public class LabResultMapper {
 
         OrderContext context = extractOrderContext(result.getLabOrder());
         List<LabResultReferenceRangeDTO> referenceRanges = toReferenceRangeDtos(context.referenceRanges());
-        Grading grading = gradingOf(result.getResultUnit(), context.testUnit(), context.referenceRanges());
+        Grading grading = gradingOf(result.getResultUnit(), context.testUnit(), context.referenceRanges(), demographicsOf(result));
         String severityFlag = effectiveSeverityFlag(result, grading.range(), context.expectedResult());
 
         return LabResultResponseDTO.builder()
@@ -60,6 +60,7 @@ public class LabResultMapper {
             .labOrderId(result.getLabOrder() != null && result.getLabOrder().getId() != null
                 ? result.getLabOrder().getId().toString() : null)
             .labOrderCode(context.labOrderCode())
+            .orderPriority(result.getLabOrder() != null ? result.getLabOrder().getPriority() : null)
             .labTestCode(context.labTestCode())
             .patientId(result.getLabOrder() != null && result.getLabOrder().getPatient() != null
                 && result.getLabOrder().getPatient().getId() != null
@@ -80,6 +81,7 @@ public class LabResultMapper {
             .resultDate(result.getResultDate())
             .notes(result.getNotes())
             .referenceRanges(referenceRanges)
+            .gradedReferenceRange(grading.range() != null ? toReferenceRangeDto(grading.range()) : null)
             .expectedResult(context.expectedResult())
             .severityFlag(severityFlag)
             .unitMismatch(grading.unitMismatch())
@@ -132,7 +134,7 @@ public class LabResultMapper {
         }
 
         OrderContext context = extractOrderContext(result.getLabOrder());
-        Grading grading = gradingOf(result.getResultUnit(), context.testUnit(), context.referenceRanges());
+        Grading grading = gradingOf(result.getResultUnit(), context.testUnit(), context.referenceRanges(), demographicsOf(result));
         String severityFlag = effectiveSeverityFlag(result, grading.range(), context.expectedResult());
 
         return LabResultTrendPointDTO.builder()
@@ -142,6 +144,7 @@ public class LabResultMapper {
             .resultValue(result.getResultValue())
             .resultUnit(result.getResultUnit())
             .severityFlag(severityFlag)
+            .corrected(com.example.hms.service.lab.LabResultCorrections.isCorrection(result))
             .build();
     }
 
@@ -169,7 +172,7 @@ public class LabResultMapper {
             return FLAG_UNSPECIFIED;
         }
         OrderContext context = extractOrderContext(result.getLabOrder());
-        LabTestReferenceRange graded = gradingOf(result.getResultUnit(), context.testUnit(), context.referenceRanges()).range();
+        LabTestReferenceRange graded = gradingOf(result.getResultUnit(), context.testUnit(), context.referenceRanges(), demographicsOf(result)).range();
         return effectiveSeverityFlag(result, graded, context.expectedResult());
     }
 
@@ -289,7 +292,7 @@ public class LabResultMapper {
             return null;
         }
         OrderContext context = extractOrderContext(result.getLabOrder());
-        LabTestReferenceRange graded = gradingOf(result.getResultUnit(), context.testUnit(), context.referenceRanges()).range();
+        LabTestReferenceRange graded = gradingOf(result.getResultUnit(), context.testUnit(), context.referenceRanges(), demographicsOf(result)).range();
         return graded != null ? toReferenceRangeDto(graded) : null;
     }
 
@@ -309,7 +312,7 @@ public class LabResultMapper {
             return false;
         }
         OrderContext context = extractOrderContext(result.getLabOrder());
-        return gradingOf(result.getResultUnit(), context.testUnit(), context.referenceRanges()).unitMismatch();
+        return gradingOf(result.getResultUnit(), context.testUnit(), context.referenceRanges(), demographicsOf(result)).unitMismatch();
     }
 
     /**
@@ -340,10 +343,15 @@ public class LabResultMapper {
      * </ol>
      */
     private static Grading gradingOf(String resultUnit, String testUnit,
-                                     List<LabTestReferenceRange> referenceRanges) {
-        if (referenceRanges == null || referenceRanges.isEmpty()) {
+                                     List<LabTestReferenceRange> configuredRanges,
+                                     LabRangeApplicability.Demographics patient) {
+        if (configuredRanges == null || configuredRanges.isEmpty()) {
             return NOT_GRADED;
         }
+        // Round 18: the ranges that apply to this patient's sex and age, best
+        // first (LabRangeApplicability); the unit rule below then reads them in
+        // that order instead of the configured one.
+        List<LabTestReferenceRange> referenceRanges = LabRangeApplicability.candidates(configuredRanges, patient);
         // A result that states no unit is in the test's unit, like a range.
         String result = normalisedUnit(resultUnit);
         if (result == null) {
@@ -417,6 +425,35 @@ public class LabResultMapper {
                 .notes(dto.getNotes())
                 .assignment(assignment)
                 .build();
+    }
+
+    /**
+     * Round 18: the patient's sex and date of birth, and the result date, that
+     * choose the applicable reference range; {@code null} when the order or
+     * its patient cannot be read (the configured order is then kept). A lazy
+     * patient is loaded here when a session is open: the critical-value alert
+     * reads this grading, and a child must not be graded on the adult range
+     * because a list query did not fetch the patient.
+     */
+    private static LabRangeApplicability.Demographics demographicsOf(LabResult result) {
+        LabOrder order = result == null ? null : result.getLabOrder();
+        if (order == null || !Hibernate.isInitialized(order)) {
+            return null;
+        }
+        Patient patient = order.getPatient();
+        if (patient == null) {
+            return null;
+        }
+        if (!Hibernate.isInitialized(patient)) {
+            try {
+                Hibernate.initialize(patient);
+            } catch (RuntimeException detached) {
+                return null;
+            }
+        }
+        java.time.LocalDate onDate = result.getResultDate() != null
+            ? result.getResultDate().toLocalDate() : java.time.LocalDate.now(java.time.ZoneId.systemDefault());
+        return LabRangeApplicability.Demographics.of(patient.getGender(), patient.getDateOfBirth(), onDate);
     }
 
     /**
@@ -575,7 +612,12 @@ public class LabResultMapper {
             .toList();
     }
 
-    private static LabResultReferenceRangeDTO toReferenceRangeDto(LabTestReferenceRange range) {
+    /**
+     * The one copy of a stored range into a result payload (round 18): the
+     * lab-result service's own copy went through here too, so a field added
+     * to the range cannot reach one payload and not the other.
+     */
+    public static LabResultReferenceRangeDTO toReferenceRangeDto(LabTestReferenceRange range) {
         return LabResultReferenceRangeDTO.builder()
             .minValue(range.getMinValue())
             .maxValue(range.getMaxValue())
@@ -586,6 +628,8 @@ public class LabResultMapper {
             .notes(range.getNotes())
             .criticalLow(range.getCriticalLow())
             .criticalHigh(range.getCriticalHigh())
+            .ageUnit(range.getAgeUnit())
+            .source(range.getSource())
             .build();
     }
 

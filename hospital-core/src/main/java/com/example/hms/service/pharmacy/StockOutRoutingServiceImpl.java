@@ -220,6 +220,8 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
                 .quantityRequired(remaining)
                 .sufficient(sufficient)
                 .partnerPharmacies(partnerOptions)
+                .prescriptionStatus(prescription.getStatus() != null ? prescription.getStatus().name() : null)
+                .routable(ROUTABLE_STATUSES.contains(prescription.getStatus()))
                 .build();
     }
 
@@ -314,7 +316,8 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
                 .routingType(RoutingType.PRINT)
                 .decidedByUser(currentUser)
                 .decidedForPatient(patient)
-                .reason("Prescription printed for patient to fill at external pharmacy")
+                // QA D1000: a key, rendered in the reader's language by the mapper.
+                .reason(com.example.hms.mapper.pharmacy.RoutingReasonText.PRINT_KEY)
                 .remainingQuantity(remaining)
                 .status(RoutingDecisionStatus.COMPLETED)
                 .decidedAt(LocalDateTime.now())
@@ -355,7 +358,7 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
                 .routingType(RoutingType.BACKORDER)
                 .decidedByUser(currentUser)
                 .decidedForPatient(patient)
-                .reason("Medication out of stock; placed on back order")
+                .reason(com.example.hms.mapper.pharmacy.RoutingReasonText.BACK_ORDER_KEY)
                 .remainingQuantity(remaining)
                 .estimatedRestockDate(estimatedRestockDate)
                 .status(RoutingDecisionStatus.PENDING)
@@ -507,7 +510,8 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
             throw new BusinessException("stock.routing.noShowNotPartner");
         }
         if (decision.getStatus() != RoutingDecisionStatus.ACCEPTED) {
-            throw new BusinessException("stock.routing.noShowNotAccepted", String.valueOf(decision.getStatus()));
+            throw new BusinessException("stock.routing.noShowNotAccepted",
+                RoutingDecisionStatus.labelOf(decision.getStatus()));
         }
 
         String words = reason.trim();

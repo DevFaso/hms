@@ -1,3 +1,5 @@
+import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { DatePipe } from '@angular/common';
 import {
   Component,
   computed,
@@ -33,7 +35,7 @@ interface StatusRow {
 @Component({
   selector: 'app-lab-ops-dashboard',
   standalone: true,
-  imports: [RouterModule, TranslateModule],
+  imports: [DatePipe, ServerTimePipe, RouterModule, TranslateModule],
   templateUrl: './lab-ops-dashboard.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lab-ops-dashboard.scss',

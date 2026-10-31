@@ -121,6 +121,7 @@
 <!-- Add to Waitlist Modal -->
 @if (showAddForm()) {
   <div
+    [attr.aria-label]="'COMMON.CLOSE' | translate"
     class="modal-backdrop"
     (click)="showAddForm.set(false)"
     (keydown.enter)="showAddForm.set(false)"
@@ -132,6 +133,8 @@
     role="dialog"
     aria-modal="true"
     [attr.aria-label]="'RECEPTION.ADD_TO_WAITLIST' | translate"
+    appDialogFocus
+    (dialogDismiss)="showAddForm.set(false)"
   >
     <div class="modal-header">
       <h2>{{ 'RECEPTION.ADD_TO_WAITLIST' | translate }}</h2>
@@ -161,7 +164,7 @@
             <ul class="autocomplete-list">
               @for (p of patientResults(); track p.id) {
                 <li (click)="selectPatient(p)" (keydown.enter)="selectPatient(p)" tabindex="0">
-                  {{ p.firstName }} {{ p.lastName }}
+                  {{ p | personName }}
                   @if (p | patientSubline; as sub) {
                     <span class="mrn-hint">· {{ sub }}</span>
                   }
@@ -307,6 +310,8 @@
     role="dialog"
     aria-modal="true"
     [attr.aria-label]="'RECEPTION.OFFER_SLOT' | translate"
+    appDialogFocus
+    (dialogDismiss)="offerEntry.set(null)"
   >
     <div class="modal-header">
       <h2>{{ 'RECEPTION.OFFER_SLOT_TO' | translate: { name: entry.patientName } }}</h2>

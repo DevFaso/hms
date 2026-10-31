@@ -183,6 +183,7 @@
                     class="action-link view-link"
                     (click)="viewDetail(p)"
                     [title]="'PRESCRIPTIONS.VIEW_DETAILS' | translate"
+                    [attr.aria-label]="'PRESCRIPTIONS.VIEW_DETAILS' | translate"
                   >
                     <span class="material-symbols-outlined">visibility</span>
                   </button>
@@ -191,6 +192,7 @@
                       class="action-link edit-link"
                       (click)="openEdit(p)"
                       [title]="'COMMON.EDIT' | translate"
+                      [attr.aria-label]="'COMMON.EDIT' | translate"
                     >
                       <span class="material-symbols-outlined">edit</span>
                     </button>
@@ -247,6 +249,7 @@
                       class="action-link"
                       (click)="openDispatchModal(p)"
                       [title]="'PRESCRIPTIONS.DISPATCH_SMS' | translate"
+                      [attr.aria-label]="'PRESCRIPTIONS.DISPATCH_SMS' | translate"
                       [attr.data-testid]="'rx-dispatch-sms-' + p.id"
                     >
                       <span class="material-symbols-outlined">sms</span>
@@ -257,6 +260,7 @@
                       class="action-link delete-link"
                       (click)="confirmDelete(p)"
                       [title]="'COMMON.DELETE' | translate"
+                      [attr.aria-label]="'COMMON.DELETE' | translate"
                     >
                       <span class="material-symbols-outlined">delete</span>
                     </button>
@@ -271,13 +275,19 @@
   }
   @if (selectedPrescription(); as rx) {
     <div class="detail-overlay" tabindex="-1" (keydown.escape)="closeDetail()">
-      <div class="detail-panel">
+      <div
+        appModalDialog
+        aria-labelledby="prescriptions-panel-1-title"
+        (escaped)="closeDetail()"
+        class="detail-panel"
+      >
         <div class="detail-header">
-          <h2>{{ 'PRESCRIPTIONS.DETAILS' | translate }}</h2>
+          <h2 id="prescriptions-panel-1-title">{{ 'PRESCRIPTIONS.DETAILS' | translate }}</h2>
           <button
             class="btn-close"
             (click)="closeDetail()"
             [title]="'COMMON.CLOSE_DETAIL_PANEL' | translate"
+            [attr.aria-label]="'COMMON.CLOSE_DETAIL_PANEL' | translate"
           >
             <span class="material-symbols-outlined">close</span>
           </button>
@@ -728,17 +738,27 @@
 <!-- ═══ CREATE / EDIT PRESCRIPTION MODAL ═══ -->
 @if (showModal()) {
   <div class="modal-backdrop" tabindex="-1" (click)="closeModal()" (keydown.escape)="closeModal()">
+    <!-- QA D1030: a working dialog - focus moves in, Tab stays inside, Escape
+         closes (the inner stopPropagation used to swallow it) and focus goes
+         back to the opener. -->
     <div
       class="modal modal-lg"
+      appModalDialog
+      aria-labelledby="rx-form-title"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown)="$event.stopPropagation()"
+      (escaped)="closeModal()"
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="rx-form-title">
           {{ editing() ? ('PRESCRIPTIONS.EDIT' | translate) : ('PRESCRIPTIONS.NEW' | translate) }}
         </h2>
-        <button class="modal-close" (click)="closeModal()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="modal-close"
+          (click)="closeModal()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -756,9 +776,7 @@
               <div class="picker-chip">
                 <div class="chip-avatar">{{ patientInitials(selectedPatient()!) }}</div>
                 <div class="chip-info">
-                  <span class="chip-name"
-                    >{{ selectedPatient()!.firstName }} {{ selectedPatient()!.lastName }}</span
-                  >
+                  <span class="chip-name">{{ selectedPatient() | personName }}</span>
                   @if (selectedPatient() | patientSubline; as sub) {
                     <span class="chip-sub">{{ sub }}</span>
                   }
@@ -769,6 +787,7 @@
                     class="chip-clear"
                     (click)="clearPatient()"
                     [title]="'COMMON.CHANGE_PATIENT' | translate"
+                    [attr.aria-label]="'COMMON.CHANGE_PATIENT' | translate"
                   >
                     <span class="material-symbols-outlined">close</span>
                   </button>
@@ -799,7 +818,7 @@
                       <li class="picker-option" (mousedown)="selectPatient(p)">
                         <div class="opt-avatar">{{ patientInitials(p) }}</div>
                         <div class="opt-info">
-                          <span class="opt-name">{{ p.firstName }} {{ p.lastName }}</span>
+                          <span class="opt-name">{{ p | personName }}</span>
                           @if (p | patientSubline; as sub) {
                             <span class="opt-meta">{{ sub }}</span>
                           }
@@ -828,14 +847,33 @@
         </div>
         <div class="field">
           <label for="rx-medName">{{ 'PRESCRIPTIONS.MEDICATION_NAME' | translate }} *</label>
+          <!-- QA D922/D935: picking a catalogue item sends its id, so the
+               catalogue's controlled flag and paediatric ceiling apply. -->
           <input
             id="rx-medName"
             type="text"
-            [(ngModel)]="form.medicationName"
+            list="rx-med-catalog"
+            autocomplete="off"
+            [ngModel]="form.medicationName"
+            (ngModelChange)="onMedicationNameChange($event)"
             [readonly]="editingSigned()"
             [placeholder]="'PRESCRIPTIONS.MEDICATION_PLACEHOLDER' | translate"
             required
           />
+          <datalist id="rx-med-catalog">
+            @for (item of catalogOptions(); track item.id) {
+              <option [value]="catalogLabel(item)"></option>
+            }
+          </datalist>
+          @if (pickedCatalogItem()?.controlled) {
+            <p
+              class="field-hint field-hint-controlled"
+              data-testid="rx-controlled-hint"
+              role="status"
+            >
+              {{ 'PRESCRIPTIONS.CONTROLLED_PICKED_HINT' | translate }}
+            </p>
+          }
         </div>
         <div class="form-row">
           <div class="field">
@@ -1009,7 +1047,12 @@
           <div class="field cds-advisories" data-testid="cds-advisories">
             <h4 class="cds-advisories__heading">{{ 'CDS.SECTION_LABEL' | translate }}</h4>
             <app-cds-card-list [cards]="cdsAdvisories()" />
-            @if (cdsCriticalBlocked()) {
+            @if (cdsCriticalBlocked() && cdsHardStop()) {
+              <!-- Round 18 (QA D935): an absolute maximum is never overridden. -->
+              <p class="form-error" role="alert" data-testid="cds-hard-stop">
+                {{ 'CDS.HARD_STOP' | translate }}
+              </p>
+            } @else if (cdsCriticalBlocked()) {
               <div class="cds-override">
                 <label class="cds-override__label">
                   <input
@@ -1090,13 +1133,20 @@
   >
     <div
       class="modal"
+      appModalDialog
+      aria-labelledby="rx-delete-title"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown)="$event.stopPropagation()"
+      (escaped)="cancelDelete()"
     >
       <div class="modal-header">
-        <h2>{{ 'PRESCRIPTIONS.DELETE_TITLE' | translate }}</h2>
-        <button class="modal-close" (click)="cancelDelete()">
+        <h2 id="rx-delete-title">{{ 'PRESCRIPTIONS.DELETE_TITLE' | translate }}</h2>
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="modal-close"
+          (click)="cancelDelete()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -1129,26 +1179,28 @@
   >
     <div
       class="modal"
-      role="dialog"
-      aria-modal="true"
+      appModalDialog
+      aria-labelledby="rx-dispatch-title"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown)="$event.stopPropagation()"
+      (escaped)="closeDispatchModal()"
     >
       <div class="modal-header">
-        <h2>{{ 'PRESCRIPTIONS.DISPATCH_SMS_TITLE' | translate }}</h2>
+        <h2 id="rx-dispatch-title">{{ 'PRESCRIPTIONS.DISPATCH_SMS_TITLE' | translate }}</h2>
         <button
           type="button"
           class="btn-close"
           (click)="closeDispatchModal()"
           [title]="'COMMON.CANCEL' | translate"
+          [attr.aria-label]="'COMMON.CANCEL' | translate"
         >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
       <div class="modal-body">
         <p>
-          {{ 'PRESCRIPTIONS.DISPATCH_SMS_FOR' | translate }}:
+          {{ 'PRESCRIPTIONS.DISPATCH_SMS_FOR' | translate }}{{ 'COMMON.COLON' | translate }}
           <strong>{{ dispatchTarget()?.medicationName }}</strong>
         </p>
         <label class="form-field">
@@ -1218,28 +1270,31 @@
     (keydown.escape)="closeVerifyModal()"
     data-testid="rx-verify-modal"
   >
+    <!-- QA D1030: focus moves in, Tab stays inside, Escape closes, focus goes back. -->
     <div
       class="modal"
-      role="dialog"
-      aria-modal="true"
+      appModalDialog
+      aria-labelledby="rx-verify-title"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown)="$event.stopPropagation()"
+      (escaped)="closeVerifyModal()"
     >
       <div class="modal-header">
-        <h2>{{ 'PRESCRIPTIONS.PHARMACIST_VERIFY_TITLE' | translate }}</h2>
+        <h2 id="rx-verify-title">{{ 'PRESCRIPTIONS.PHARMACIST_VERIFY_TITLE' | translate }}</h2>
         <button
           type="button"
           class="btn-close"
           (click)="closeVerifyModal()"
           [title]="'COMMON.CANCEL' | translate"
+          [attr.aria-label]="'COMMON.CANCEL' | translate"
         >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
       <div class="modal-body">
         <p>
-          {{ 'PRESCRIPTIONS.PHARMACIST_VERIFY_FOR' | translate }}:
+          {{ 'PRESCRIPTIONS.PHARMACIST_VERIFY_FOR' | translate }}{{ 'COMMON.COLON' | translate }}
           <strong>{{
             verifyTarget()?.medicationDisplayName || verifyTarget()?.medicationName
           }}</strong>
@@ -1282,5 +1337,84 @@
         </button>
       </div>
     </div>
+  </div>
+}
+
+<!-- Round 18: re-authentication to sign a controlled-drug prescription. -->
+@if (signReauthTarget(); as reauthRx) {
+  <div
+    class="modal-backdrop"
+    (click)="closeSignReauth()"
+    (keydown.escape)="closeSignReauth()"
+    role="presentation"
+    tabindex="-1"
+  >
+    <dialog
+      class="modal"
+      [open]="!!signReauthTarget()"
+      (click)="$event.stopPropagation()"
+      (keydown)="$event.stopPropagation()"
+      tabindex="-1"
+      appModalDialog
+      aria-labelledby="rx-sign-reauth-title"
+      (escaped)="closeSignReauth()"
+      data-testid="rx-sign-reauth"
+    >
+      <div class="modal-header">
+        <h2 id="rx-sign-reauth-title">{{ 'PRESCRIPTIONS.SIGN_REAUTH.TITLE' | translate }}</h2>
+        <button
+          type="button"
+          class="modal-close"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          (click)="closeSignReauth()"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+      </div>
+      <form (ngSubmit)="submitSignReauth()">
+        <div class="modal-body">
+          <p>
+            {{
+              'PRESCRIPTIONS.SIGN_REAUTH.INTRO' | translate: { medication: reauthRx.medicationName }
+            }}
+          </p>
+          <div class="field">
+            <label for="rx-sign-reauth-secret">{{
+              (signReauthUsesCode()
+                ? 'PRESCRIPTIONS.SIGN_REAUTH.CODE'
+                : 'PRESCRIPTIONS.SIGN_REAUTH.PASSWORD'
+              ) | translate
+            }}</label>
+            <input
+              id="rx-sign-reauth-secret"
+              name="signReauthSecret"
+              [type]="signReauthUsesCode() ? 'text' : 'password'"
+              [attr.inputmode]="signReauthUsesCode() ? 'numeric' : null"
+              [attr.autocomplete]="signReauthUsesCode() ? 'one-time-code' : 'current-password'"
+              maxlength="256"
+              required
+              [(ngModel)]="signReauthSecret"
+            />
+          </div>
+          @if (signReauthError()) {
+            <p class="form-error" role="alert" data-testid="rx-sign-reauth-error">
+              {{ signReauthError() }}
+            </p>
+          }
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-secondary" (click)="closeSignReauth()">
+            {{ 'COMMON.CANCEL' | translate }}
+          </button>
+          <button
+            type="submit"
+            class="btn-primary"
+            [disabled]="!signReauthSecret.trim() || !!signingId()"
+          >
+            {{ 'PRESCRIPTIONS.SIGN_REAUTH.SUBMIT' | translate }}
+          </button>
+        </div>
+      </form>
+    </dialog>
   </div>
 }

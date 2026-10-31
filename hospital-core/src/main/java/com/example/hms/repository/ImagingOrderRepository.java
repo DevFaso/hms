@@ -17,6 +17,9 @@ import java.util.UUID;
 @Repository
 public interface ImagingOrderRepository extends JpaRepository<ImagingOrder, UUID> {
 
+    /** QA D972: a visit's imaging orders, for the checkout charge (withdrawn ones excluded by the caller's list). */
+    List<ImagingOrder> findByEncounterIdAndStatusNotIn(UUID encounterId, java.util.Collection<ImagingOrderStatus> excluded);
+
     /**
      * QA D623 (D508 did not hold): the order by id WITHOUT the repository tenant
      * filter. The scoped {@code findById} answers only for the acting hospital,

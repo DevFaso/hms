@@ -2,10 +2,12 @@ import { ChangeDetectionStrategy, Component, computed, inject, input, output } f
 
 import { RouterLink } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { LabCorrectionBadgeComponent } from '../../lab/shared/lab-correction-badge.component';
 import { DoctorResultQueueItem } from '../../services/dashboard.service';
 import { HospitalScopeChipComponent } from '../../shared/hospital-scope-chip/hospital-scope-chip.component';
 import { HospitalScopeHintComponent } from '../../shared/hospital-scope-chip/hospital-scope-hint.component';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { LabValuePipe } from '../../lab/shared/lab-value.pipe';
 
 /** QA D731 sibling: resultedAt is a zone-less UTC wall time. */
 const SERVER_TIME = new ServerTimePipe();
@@ -19,7 +21,14 @@ const LOCALE_MAP: Record<string, string> = {
 @Component({
   selector: 'app-doctor-results-panel',
   standalone: true,
-  imports: [RouterLink, TranslateModule, HospitalScopeChipComponent, HospitalScopeHintComponent],
+  imports: [
+    LabCorrectionBadgeComponent,
+    RouterLink,
+    TranslateModule,
+    HospitalScopeChipComponent,
+    HospitalScopeHintComponent,
+    LabValuePipe,
+  ],
   templateUrl: './doctor-results-panel.html',
   styleUrl: './doctor-results-panel.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

@@ -136,6 +136,10 @@ public class ConsultationServiceImpl implements ConsultationService {
             consultant = resolveStaffAt(request.getPreferredConsultantId(), hospital.getId())
                 .orElseThrow(() -> new BusinessException("consultation.consultant.notAtHospital"));
             requireConsultantAtHospital(consultant, hospital.getId());
+            // QA D955 class: a consult asks a colleague, from its creation on.
+            if (com.example.hms.security.CallerIdentity.sameUser(requestingProvider, consultant)) {
+                throw new BusinessException("consultation.consultant.notRequester");
+            }
         }
 
         LocalDateTime slaDueBy = calculateSlaDueBy(request.getUrgency());
@@ -493,7 +497,7 @@ public class ConsultationServiceImpl implements ConsultationService {
                     : NotificationLocalizer.key("patient.fallback.yours");
                 notificationService.createNotification("consultation.completed.notification",
                     new Object[]{patientName, consultation.getSpecialtyRequested(), consultantName},
-                    requesterUsername, null);
+                    requesterUsername, "CONSULTATION_UPDATE");
             }
         } catch (Exception e) {
             log.warn("Failed to send completion notification for consultation {}: {}", consultationId, e.getMessage());
@@ -628,7 +632,7 @@ public class ConsultationServiceImpl implements ConsultationService {
                 : NotificationLocalizer.key("patient.fallback.indefinite");
             notificationService.createNotification("consultation.assigned.notification",
                 new Object[]{patientName, consultation.getSpecialtyRequested(), consultation.getUrgency()},
-                consultantUsername, null);
+                consultantUsername, "CONSULTATION_UPDATE");
         } catch (Exception e) {
             log.warn("Failed to send assignment notification for consultation {}: {}", consultationId, e.getMessage());
         }
@@ -820,6 +824,10 @@ public class ConsultationServiceImpl implements ConsultationService {
      */
     private void requireConsultantAtHospital(Staff consultant, Consultation consultation) {
         requireConsultantAtHospital(consultant, consultation.getHospital() != null ? consultation.getHospital().getId() : null);
+        // QA D955 class: a consult asks a colleague; the requester is never its consultant.
+        if (com.example.hms.security.CallerIdentity.sameUser(consultation.getRequestingProvider(), consultant)) {
+            throw new BusinessException("consultation.consultant.notRequester");
+        }
     }
 
     private void requireConsultantAtHospital(Staff consultant, UUID hospitalId) {
@@ -1080,6 +1088,8 @@ public class ConsultationServiceImpl implements ConsultationService {
 
         return ConsultationResponseDTO.builder()
             .id(consultationId)
+            .authorUserId(consultation.getRequestingProvider() != null && consultation.getRequestingProvider().getUser() != null
+                ? consultation.getRequestingProvider().getUser().getId() : null)
             .patientId(patient != null ? patient.getId() : null)
             .patientName(patient != null ? patient.getFullName() : null)
             .patientMrn(patientMrn)

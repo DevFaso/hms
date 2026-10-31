@@ -207,7 +207,9 @@
                       }}</span>
                     }
                     @if (d.effectiveDate) {
-                      <span class="storyboard__chip-detail">{{ d.effectiveDate }}</span>
+                      <span class="storyboard__chip-detail">{{
+                        d.effectiveDate | serverTime | date: 'mediumDate'
+                      }}</span>
                     }
                   </li>
                 }

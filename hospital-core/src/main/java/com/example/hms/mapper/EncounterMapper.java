@@ -127,7 +127,7 @@ public class EncounterMapper {
     private void populatePatient(EncounterResponseDTO dto, Patient p) {
         if (p == null) return;
         dto.setPatientId(p.getId());
-        dto.setPatientName(joinName(p.getFirstName(), p.getLastName()));
+        dto.setPatientName(nullSafe(p.getFullName()));
         dto.setPatientEmail(nullSafe(p.getEmail()));
         dto.setPatientPhoneNumber(nullSafe(p.getPhoneNumberPrimary()));
     }
@@ -135,6 +135,7 @@ public class EncounterMapper {
     private void populateStaff(EncounterResponseDTO dto, Staff s) {
         if (s == null) return;
         dto.setStaffId(s.getId());
+        dto.setStaffUserId(s.getUser() != null ? s.getUser().getId() : null);
         String staffDisplay = (s.getUser() != null)
             ? joinName(s.getUser().getFirstName(), s.getUser().getLastName())
             : nullSafe(s.getName());
@@ -305,6 +306,10 @@ public class EncounterMapper {
         if (dto.getEncounterType() != null) e.setEncounterType(EncounterType.valueOf(dto.getEncounterType().name()));
         if (dto.getEncounterDate() != null) e.setEncounterDate(dto.getEncounterDate());
         if (dto.getNotes() != null) e.setNotes(dto.getNotes());
+        // QA D944: the walk-in's "Motif principal" is the visit's chief complaint.
+        if (dto.getChiefComplaint() != null && !dto.getChiefComplaint().isBlank()) {
+            e.setChiefComplaint(dto.getChiefComplaint().trim());
+        }
 
         return e;
     }

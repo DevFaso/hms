@@ -164,6 +164,7 @@
                         {{ 'PORTAL.LAB_RESULTS.PENDING_RESULT' | translate }}
                       } @else {
                         {{ l.result }} {{ l.unit }}
+                        <app-lab-correction-badge [corrected]="l.corrected" audience="patient" />
                         @if (l.isAbnormal) {
                           <span class="material-symbols-outlined abnormal-flag">warning</span>
                         }
@@ -203,8 +204,8 @@
                   <tr>
                     <td>{{ inv.invoiceNumber }}</td>
                     <td>{{ inv.date | serverTime | date: 'mediumDate' }}</td>
-                    <td>{{ inv.amount | number: '1.0-2' }}</td>
-                    <td>{{ inv.balance | number: '1.0-2' }}</td>
+                    <td>{{ inv.amount | cfa }}</td>
+                    <td>{{ inv.balance | cfa }}</td>
                     <td>
                       <span class="portal-status-chip" [attr.data-status]="inv.status">{{
                         inv.status | enumLabel: 'invoiceStatus'
@@ -271,6 +272,7 @@
                         {{ 'PORTAL.LAB_RESULTS.PENDING_RESULT' | translate }}
                       } @else {
                         {{ l.result }} {{ l.unit }}
+                        <app-lab-correction-badge [corrected]="l.corrected" audience="patient" />
                       }
                     </li>
                   }

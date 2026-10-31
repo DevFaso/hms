@@ -145,4 +145,21 @@ describe('MyLabResultsComponent', () => {
     expect(detail?.textContent).toContain('PORTAL.LAB_RESULTS.PENDING_INTERPRETATION');
     expect(detail?.textContent).not.toContain('PORTAL.LAB_RESULTS.NORMAL_RESULT');
   });
+
+  /**
+   * QA D1016 (D931 fixed on the doctor's side only): the patient saw a
+   * corrected "Négatif" as a second, ordinary result. It is marked, in the
+   * list and in the detail, and a first result is not.
+   */
+  it('QA D1016: marks a corrected result as corrected, in the list and the detail', async () => {
+    const el = await render([lab({ id: 'c1', corrected: true }), lab({ id: 'n1' })]);
+    const items = el.querySelectorAll('.portal-list-item');
+    expect(items[0].querySelector('[data-testid="lab-correction-badge"]')).toBeTruthy();
+    expect(items[1].querySelector('[data-testid="lab-correction-badge"]')).toBeFalsy();
+    component.toggleExpand('c1');
+    fixture.detectChanges();
+    expect(el.querySelectorAll('.detail-panel [data-testid="lab-correction-badge"]').length).toBe(
+      1,
+    );
+  });
 });

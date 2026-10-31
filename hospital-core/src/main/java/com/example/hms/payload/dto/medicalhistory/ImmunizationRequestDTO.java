@@ -35,9 +35,13 @@ public class ImmunizationRequestDTO {
     private UUID encounterId;
 
     // Vaccine Information
-    @NotBlank(message = "{immunization.vaccineCode.required}")
+    // QA D1003 (round 17): optional. CVX is a US code system; a Burkina Faso
+    // EPI (PEV) vaccine either takes its verified CVX from the portal's
+    // mapping table or has none (MenAfriVac, malaria). A dose without a code
+    // is still a dose: the DHIS2 export reports it as unmapped instead of
+    // refusing the record. Blank is stored as null (ImmunizationMapper).
     @Size(max = 50)
-    @Schema(description = "Vaccine CVX code", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(description = "Vaccine CVX code (CDC), optional")
     private String vaccineCode;
 
     @NotBlank(message = "{immunization.vaccineDisplay.required}")

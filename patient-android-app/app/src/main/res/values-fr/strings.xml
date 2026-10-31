@@ -439,6 +439,7 @@
     <string name="doc_type_prescription">Ordonnance</string>
     <string name="doc_type_insurance_document">Document d\'assurance</string>
     <string name="doc_type_invoice">Facture</string>
+    <string name="doc_type_medical_certificate">Certificat médical</string>
     <string name="doc_type_immunization_record">Carnet de vaccination</string>
     <string name="document_request_busy">Une autre opération sur vos documents est en cours. Veuillez patienter un instant.</string>
     <string name="doc_type_other">Autre</string>

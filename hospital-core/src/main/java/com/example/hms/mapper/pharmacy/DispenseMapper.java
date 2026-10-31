@@ -38,7 +38,12 @@ public class DispenseMapper {
             .id(entity.getId())
             .prescriptionId(entity.getPrescription() != null ? entity.getPrescription().getId() : null)
             .patientId(entity.getPatient() != null ? entity.getPatient().getId() : null)
+            // QA D1058 (round 18): the name is mapped here, for every read. Only
+            // GET /dispenses/{id} used to add it, so the pharmacy checkout picker
+            // (the pharmacy's list) read "Non renseigné" on every row.
+            .patientName(patientNameOf(entity.getPatient()))
             .pharmacyId(entity.getPharmacy() != null ? entity.getPharmacy().getId() : null)
+            .pharmacyName(pharmacyNameOf(entity.getPharmacy()))
             .stockLotId(entity.getStockLot() != null ? entity.getStockLot().getId() : null)
             .dispensedBy(entity.getDispensedByUser() != null ? entity.getDispensedByUser().getId() : null)
             .dispensedByName(displayNameOf(entity.getDispensedByUser()))
@@ -84,6 +89,34 @@ public class DispenseMapper {
             String last = user.getLastName() != null ? user.getLastName().trim() : "";
             String full = (first + " " + last).trim();
             return full.isEmpty() ? null : full;
+        } catch (org.hibernate.LazyInitializationException detached) {
+            return null;
+        }
+    }
+
+    /**
+     * The patient's full name (middle name included), or null. A LAZY
+     * association: a detached proxy on the idempotency replay path answers
+     * null rather than failing the response, as {@link #displayNameOf} does.
+     */
+    static String patientNameOf(Patient patient) {
+        if (patient == null) {
+            return null;
+        }
+        try {
+            return patient.getFullName();
+        } catch (org.hibernate.LazyInitializationException detached) {
+            return null;
+        }
+    }
+
+    /** The pharmacy's name, or null; a detached proxy answers null. */
+    static String pharmacyNameOf(Pharmacy pharmacy) {
+        if (pharmacy == null) {
+            return null;
+        }
+        try {
+            return pharmacy.getName();
         } catch (org.hibernate.LazyInitializationException detached) {
             return null;
         }

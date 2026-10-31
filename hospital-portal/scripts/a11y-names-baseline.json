@@ -1,0 +1,150 @@
+{
+  "$comment": [
+    "Icon-only buttons and unlabelled fields, as they stand today.",
+    "Each key is \"template::rule::anchor\"; \"count\" is how many such controls the",
+    "template holds and \"why\" the QA defect id (or the reason a person wrote).",
+    "A control not listed fails the build; name a control, then delete its pin."
+  ],
+  "pinned": {
+    "src/app/admin-assignments/admin-assignments.html::field-label::input filterCode()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/admin-assignments/admin-assignments.html::field-label::select filterActive()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/admin-assignments/admin-assignments.html::field-label::select filterHospitalId()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/admin-governance/matrix-tab.html::field-label::input row.actions": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/admin-governance/matrix-tab.html::field-label::input row.domain": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/admin-governance/matrix-tab.html::field-label::input row.owners": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/admin-governance/matrix-tab.html::field-label::select auditFilter()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/admin-governance/matrix-tab.html::field-label::select environment()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/admin-governance/users-tab.html::field-label::select rotationFilter()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/admin/order-sets/order-set-list.component.ts::field-label::input searchTerm()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/admissions/order-set-picker/order-set-picker.component.ts::field-label::input searchTerm()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/chat/chat.html::field-label::input file": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/chat/chat.html::field-label::input messageText": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/consultations/consultations.html::field-label::input assign-specialty-filter": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/departments/department-list.html::field-label::select dHead-empty": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/departments/department-list.html::field-label::select dHead-loading": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/digital-signatures/digital-signatures.html::field-label::input lookupReportId()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/digital-signatures/digital-signatures.html::field-label::select statusFilter()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/digital-signatures/digital-signatures.html::field-label::select typeFilter()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/discharge/discharge.html::field-label::input f.appointmentType": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/discharge/discharge.html::field-label::input f.location": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/discharge/discharge.html::field-label::input f.providerName": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/discharge/discharge.html::field-label::input m.dosage": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/discharge/discharge.html::field-label::input m.frequency": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/discharge/discharge.html::field-label::input m.medicationName": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/discharge/discharge.html::field-label::input t.testName": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/imaging/imaging.html::field-label::select reportModalityFilter()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/lab/lab-staff-list/lab-staff-list.html::field-label::select editRoleCode()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/lock-screen/lock-screen.html::field-label::input password": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/mfa/mfa-challenge.html::field-label::input mfaCode": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/mfa/mfa-enroll.html::field-label::input totpCode": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/patient-education/patient-education.html::field-label::select categoryFilter()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/patient-education/patient-education.html::field-label::select typeFilter()": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/patient-portal/my-medical-history/my-medical-history.component.html::field-label::textarea text": {
+      "count": 4,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    },
+    "src/app/profile/profile.html::field-label::input mfaTotpCode": {
+      "count": 1,
+      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
+    }
+  }
+}

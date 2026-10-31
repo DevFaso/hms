@@ -274,6 +274,33 @@ export class EnumLabelService implements OnDestroy {
     },
 
     /* ── Phase 2 — Lab / admin / referrals / signatures ───── */
+    /** QA D963: LabOrderServiceImpl.LAB_PRIORITIES. */
+    labOrderPriority: {
+      ROUTINE: 'Routine',
+      URGENT: 'Urgent',
+      STAT: 'STAT (immediate)',
+    },
+    /** QA D963: LabOrderChannel. */
+    labOrderChannel: {
+      ELECTRONIC: 'Electronic',
+      PORTAL: 'Portal',
+      PHONE: 'Phone',
+      FAX: 'Fax',
+      EMAIL: 'Email',
+      WRITTEN: 'Written',
+      WALK_IN: 'Walk-In',
+      OTHER: 'Other',
+    },
+    /** QA D963 / D962: LabSpecimenStatus. */
+    labSpecimenStatus: {
+      PENDING: 'Pending',
+      COLLECTED: 'Collected',
+      IN_TRANSIT: 'In transit',
+      RECEIVED: 'Received',
+      PROCESSING: 'Processing',
+      COMPLETED: 'Completed',
+      REJECTED: 'Rejected',
+    },
     labOrderStatus: {
       ORDERED: 'Ordered',
       PENDING: 'Pending',
@@ -756,11 +783,35 @@ export class EnumLabelService implements OnDestroy {
     /* ── Patient chart timeline categories (PatientServiceImpl CATEGORY_*) ── */
     timelineCategory: {
       ALLERGY: 'Allergy',
+      DIAGNOSIS: 'Diagnosis',
       ENCOUNTER: 'Encounter',
       IMAGING: 'Imaging',
+      LAB_ORDER: 'Lab test ordered',
       LAB_RESULT: 'Lab result',
+      NOTE: 'Clinical note',
       PRESCRIPTION: 'Prescription',
       PROCEDURE: 'Procedure',
+      REFERRAL: 'Referral',
+      TREATMENT_PLAN: 'Treatment plan',
+      CONSULTATION: 'Consultation request',
+      DISCHARGE_SUMMARY: 'Discharge summary',
+      DOCUMENT: 'Issued document',
+      // QA D959 (round 18): every clinical event type has a chronology row.
+      TRANSFUSION: 'Transfusion request',
+      PROCEDURE_ORDER: 'Procedure order',
+      OBGYN_REFERRAL: 'OB/GYN referral',
+      NURSING_NOTE: 'Nursing note',
+      IMMUNIZATION: 'Immunization',
+      DELIVERY: 'Delivery',
+      DEATH: 'Death',
+      MICRO_CULTURE: 'Microbiology culture',
+    },
+
+    /* ── Clinical / nursing note templates (QA D1076) ──────── */
+    noteTemplate: {
+      DAR: 'DAR note',
+      SOAP: 'SOAP note',
+      SOAPIE: 'SOAPIE note',
     },
 
     /* ── Immunization status ───────────────────────────────── */
@@ -774,9 +825,19 @@ export class EnumLabelService implements OnDestroy {
 
     /* ── MAR task status ───────────────────────────────────── */
     marTaskStatus: {
-      COMPLETED: 'Completed',
+      COMPLETED: 'Course ended',
       DUE: 'Due',
       OVERDUE: 'Overdue',
+      UPCOMING: 'Upcoming',
+    },
+
+    /* ── MAR dose outcome (QA D929) ────────────────────────── */
+    medicationAdministrationStatus: {
+      GIVEN: 'Given',
+      HELD: 'Held',
+      MISSED: 'Missed',
+      PENDING: 'Pending',
+      REFUSED: 'Refused',
     },
 
     /* ── Newborn alert types ───────────────────────────────── */
@@ -792,21 +853,29 @@ export class EnumLabelService implements OnDestroy {
 
     /* ── Notification types (Notification.type, a String column) ─── */
     notificationType: {
+      ADMIN_MESSAGE: 'Message from the administration',
+      ANNOUNCEMENT: 'Announcement',
       APPOINTMENT_REMINDER: 'Appointment Reminder',
       BREAK_GLASS_OPT_OUT_OVERRIDE: 'Emergency access to your record',
+      CHAT_MESSAGE: 'New message',
+      CONSULTATION_UPDATE: 'Specialist consultation',
       CRITICAL_IMAGING_FINDING: 'Critical Imaging Finding',
       CRITICAL_IMAGING_FINDING_ESCALATION: 'Critical Imaging Finding Escalation',
       CRITICAL_LAB_RESULT: 'Critical Lab Result',
       CRITICAL_LAB_RESULT_ESCALATION: 'Critical Lab Result Escalation',
       DISCHARGE_SUMMARY: 'Discharge Summary',
       LAB_ORDER_RECEIVED: 'Lab Order Received',
+      LAB_RESULT: 'Lab result',
+      LAB_SPECIMEN_REJECTED: 'Specimen rejected',
       LICENSE_EXPIRY: 'License Expiry',
+      MATERNITY_ALERT: 'Maternity alert',
       MEDICATION_REFILL: 'Medication Refill',
       NEWS2_ESCALATION: 'NEWS2 Escalation',
       OBSTETRIC_ALERT: 'Urgent Obstetric Alert',
       OBSTETRIC_ALERT_ESCALATION: 'Urgent Obstetric Alert Escalation',
       PHARMACY_EVENT: 'Pharmacy Update',
       POSITIVE_CULTURE_RESULT: 'Positive Culture Result',
+      PRENATAL_REMINDER: 'Antenatal visit reminder',
       PRO_CRITICAL_ITEM: 'Critical PRO Item',
       PRO_CRITICAL_ITEM_ESCALATION: 'Critical PRO Item Escalation',
       PRO_SCREEN_POSITIVE: 'Positive PRO Screen',
@@ -1130,6 +1199,19 @@ export class EnumLabelService implements OnDestroy {
   private lookup(value: string, domain?: string): string {
     const known = this.lookupKnown(value, domain);
     if (known) return known;
+
+    // QA D1062: a comma-joined list of codes (a proxy grant's
+    // "VIEW_APPOINTMENTS,VIEW_LAB_RESULTS") is labelled code by code, so a
+    // combination nobody keyed whole still reads in the page's language.
+    if (value.includes(',')) {
+      const parts = value
+        .split(',')
+        .map((p) => p.trim())
+        .filter((p) => p !== '');
+      if (parts.length > 1 && parts.every((p) => EnumLabelService.CODE_LIKE.test(p))) {
+        return parts.map((p) => this.lookup(p, domain)).join(', ');
+      }
+    }
 
     // 3) Prettify — UPPER_SNAKE_CASE → Title Case. QA D836: only a code is
     // prettified. Free text someone typed ("Sang total (EDTA)", a lab sample

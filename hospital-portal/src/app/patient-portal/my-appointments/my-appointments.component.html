@@ -20,12 +20,15 @@
     >
       <div
         class="booking-form-card"
+        appDialogA11y
         tabindex="-1"
+        aria-labelledby="appt-dialog-title-1"
+        (dialogClose)="closeBookingForm()"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="closeBookingForm()"
+        (keydown.escape)="$event.stopPropagation()"
       >
         <div class="booking-header">
-          <h2>
+          <h2 id="appt-dialog-title-1">
             <span class="material-symbols-outlined">event_available</span>
             {{ 'PORTAL.APPOINTMENTS.BOOKING.FORM_TITLE' | translate }}
           </h2>
@@ -42,6 +45,12 @@
           <div class="booking-success">
             <span class="material-symbols-outlined">check_circle</span>
             <p>{{ 'PORTAL.APPOINTMENTS.BOOKING.SUCCESS' | translate }}</p>
+            @if (bookedAppointment(); as booked) {
+              <p data-testid="booking-booked-time">
+                {{ booked.date | serverTime | date: 'fullDate' }} · {{ booked.startTime | clockTime
+                }}{{ booked.endTime ? ' – ' + (booked.endTime | clockTime) : '' }}
+              </p>
+            }
           </div>
         } @else {
           <div class="booking-body">
@@ -130,6 +139,10 @@
                 <input type="time" id="apptTime" [(ngModel)]="selectedTime" />
               </div>
             </div>
+            <!-- QA D1060: the clinic's slot length sets how long a visit lasts. -->
+            <p class="booking-hint" data-testid="booking-duration-note">
+              {{ 'PORTAL.APPOINTMENTS.DURATION_NOTE' | translate }}
+            </p>
 
             <div class="booking-field">
               <label for="reason">{{ 'PORTAL.APPOINTMENTS.BOOKING.REASON' | translate }}</label>
@@ -273,13 +286,23 @@
                     (appt.status === 'SCHEDULED' || appt.status === 'CONFIRMED') &&
                     !appt.preCheckedIn
                   ) {
-                    <button
-                      class="precheckin-btn"
-                      (click)="openPreCheckIn(appt); $event.stopPropagation()"
-                    >
-                      <span class="material-symbols-outlined">fact_check</span>
-                      {{ 'PORTAL.APPOINTMENTS.BOOKING.PRECHECKIN_BTN' | translate }}
-                    </button>
+                    @if (preCheckInOpen(appt)) {
+                      <button
+                        class="precheckin-btn"
+                        data-testid="precheckin-open"
+                        (click)="openPreCheckIn(appt); $event.stopPropagation()"
+                      >
+                        <span class="material-symbols-outlined" aria-hidden="true">fact_check</span>
+                        {{ 'PORTAL.APPOINTMENTS.BOOKING.PRECHECKIN_BTN' | translate }}
+                      </button>
+                    } @else if (preCheckInOpensOn(appt); as opensOn) {
+                      <span class="precheckin-later" data-testid="precheckin-later">
+                        {{
+                          'PORTAL.APPOINTMENTS.BOOKING.PRECHECKIN_OPENS_ON'
+                            | translate: { date: preCheckInOpensOnLabel(opensOn) }
+                        }}
+                      </span>
+                    }
                   }
                   @if (appt.preCheckedIn) {
                     <span class="precheckin-done">
@@ -407,12 +430,15 @@
     >
       <div
         class="booking-form-card"
+        appDialogA11y
         tabindex="-1"
+        aria-labelledby="appt-dialog-title-2"
+        (dialogClose)="closeCancel()"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="closeCancel()"
+        (keydown.escape)="$event.stopPropagation()"
       >
         <div class="booking-header">
-          <h2>
+          <h2 id="appt-dialog-title-2">
             <span class="material-symbols-outlined">event_busy</span>
             {{ 'PORTAL.APPOINTMENTS.CANCEL.TITLE' | translate }}
           </h2>
@@ -487,12 +513,15 @@
     >
       <div
         class="booking-form-card"
+        appDialogA11y
         tabindex="-1"
+        aria-labelledby="appt-dialog-title-3"
+        (dialogClose)="closeReschedule()"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="closeReschedule()"
+        (keydown.escape)="$event.stopPropagation()"
       >
         <div class="booking-header">
-          <h2>
+          <h2 id="appt-dialog-title-3">
             <span class="material-symbols-outlined">edit_calendar</span>
             {{ 'PORTAL.APPOINTMENTS.RESCHEDULE.TITLE' | translate }}
           </h2>
@@ -534,14 +563,11 @@
               >
               <input type="time" id="reschedStart" [(ngModel)]="rescheduleStartTime" />
             </div>
-            <div class="booking-field">
-              <label for="reschedEnd"
-                >{{ 'PORTAL.APPOINTMENTS.RESCHEDULE.NEW_END' | translate }}
-                <span class="required">*</span></label
-              >
-              <input type="time" id="reschedEnd" [(ngModel)]="rescheduleEndTime" />
-            </div>
           </div>
+          <!-- QA D1060: the clinic's slot length sets how long a visit lasts. -->
+          <p class="booking-hint" data-testid="reschedule-duration-note">
+            {{ 'PORTAL.APPOINTMENTS.DURATION_NOTE' | translate }}
+          </p>
 
           <div class="booking-field">
             <label for="reschedReason">{{

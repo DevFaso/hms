@@ -2205,6 +2205,69 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
 
 ## Standing platform debt — owed, not parity
 
+- **QA round 18 residuals (fix/r18-billing-pharmacy), noted, not fixed there.**
+  (1) D1069 sibling: cancelling a completed dispense (`POST /pharmacy/dispense/{id}/cancel`) voids its payment
+  (refund due) and puts the stock back with no reason asked; the ledger and the payment store the English
+  literals "Dispense cancelled ..." (read through the register's reason labels). Needs a reason field in the
+  dispensing cancel panel and on `DispenseCancelRequestDTO`, stored on the payment void and the ledger row.
+  (2) D1084 sibling: at the round-18 merge (#976) `PdfInvoiceService` was confirmed to print dates only
+  (`PaymentTransaction.paymentDate` is a `LocalDate`), so no billing time reaches `PdfLabels`. Still owed:
+  `PdfLabels.fmt(LocalDateTime)` serves the clinical PDFs (`PatientRecordPdfService` "generated at"
+  `LocalDateTime.now(ZoneOffset.UTC)` and chart rows, `WristbandPdfService` specimen collection time) in the
+  server's zone; give them the hospital's zone, then delete the `PdfLabels` pin in `ServerComposedTimeGuardTest`.
+  (3) D972: an ultrasound order has no encounter link, so it cannot reach the visit invoice; it needs a charge
+  at completion (as `DeliveryChargeService` does for a birth) or an encounter column.
+  (4) D972 decision recorded: an in-house specialist consultation and an immunization are not separate visit
+  lines (`BillableOrderRegistryGuardTest.NOT_BILLABLE`); a hospital that charges for them records the service
+  on the visit. Revisit if the user wants them billed by default.
+
+- **QA round 16 residuals (PR #972 review round 8), noted, not fixed there.**
+  (1) The slot inventory and the overlap rule disagree on RESCHEDULED: the
+  status action releases the inventory slot, while `holdsSlot()` keeps the
+  row's time held, so the picker can offer a time the booking then refuses
+  (pre-existing; decide which one is the truth). (2) The desk reschedule
+  modal sends SCHEDULED, which NO_SHOW cannot reach (its only exit is
+  RESCHEDULED), so a missed visit can be moved only through the API
+  (`PUT /appointments/{id}` with status RESCHEDULED). (3) A demographics PATCH
+  or PUT that renames the patient leaves the linked login account's
+  `User.firstName/lastName` unchanged. (4) The portal profile's phone
+  uniqueness (D113, `existsByPhoneNumberPrimaryAndIdNot`) compares the stored
+  string exactly, so a legacy national-format holder is not seen; the rule
+  itself is in question now that the desk records shared family numbers.
+  (5) Fixed in #972 round 10 (a short number lists every holder). (6) The phone match is a
+  sequential scan; a stored digits column with an index needs a migration.
+  (7) Fixed on qa/r16-combined with (13) below.
+  (8) The D919 "scoped onlyDeleted is an empty page" rule lives in both
+  `UserController` and `UserServiceImpl`; keep it in the service only.
+  (9) Blob downloads revoke the object URL right after `click()` (billing,
+  governance, the check-in receipt); a shared download helper that defers the
+  revoke would cover every caller.
+  (10) Round 13: a phone the facility rule cannot normalise is stored as
+  typed (as on develop); refusing it at the desk is a product decision.
+  (11) A missed visit moved back into a slot-holding status does not re-link
+  the recall the no-show reopened. (12) `PatientMatchKeys.samePhone` (full
+  match) and `PhoneNumbers.isSameSubscriber` (last 8 digits) define "same
+  subscriber" differently; one definition should serve both.
+  Remaining after round 18 (#972, bounded by the coordinator):
+  (13) ✅ FIXED on qa/r16-combined (2026-10-28): the audit's PATIENT
+  resource name (phone, email, full name, MRN) resolves by the request's
+  patient id, else only among patients actively registered at the event's
+  hospital, and only when exactly one matches; no hospital or two holders
+  leaves it unresolved. Same class fixed in the patient's own booking by
+  email (first match → the caller's own record) and the identifier lookup's
+  email branch (first holder → every holder, then the hospital filter);
+  guarded codebase-wide by `PatientFirstMatchGuardTest`. (14) Recall auto-linking (no recallId) takes any
+  open recall of the same department or clinician from 30 days before its
+  due date, so an unrelated visit there can close it on completion; decide
+  the targeting rule with the clinic. (15) PATCH identity fields (name, DOB,
+  sex) are open to every role the endpoint admits and change the shared row
+  for every hospital; gender is free text up to 10 characters (as the PUT).
+  (16) `appDialogFocus` closes the whole dialog on an Escape meant for a
+  suggestion list inside it (walk-in, recall). (17) The duplicate check's two
+  Page searches each run an unused COUNT; a Slice/List variant would drop
+  them. (18) The check-in copay receipt hard-codes the French "recu-" file
+  prefix.
+
 - **QA D899 residual (round 15): the stock check counts expired lots.**
   Stock routing now resolves a free-text order to the shelf by the dispense
   DRUG rule (`fix/qa-r15-clinical-pharmacy`), but its on-hand figure is still
@@ -2375,6 +2438,121 @@ off develop, drafted until `/code-review` + `/security-review`, never stacked.
   (4) the head SHA is read live instead of from the event payload, so a
   push during a run can be labelled with the newer head; (5) a PR with only
   generated files still calls the model; (6) tests for those cases.
+
+- **QA D972 — clinic-to-billing hand-off at checkout (round 16, branch B
+  prepared the producer; the consumer is owed).** A checked-out visit creates
+  no charge: only the copay invoice exists, and only maternity delivery posts
+  lines automatically. `EncounterServiceImpl.checkOut` now publishes
+  `com.example.hms.event.EncounterCheckedOutEvent` (ids and scalars only:
+  encounter, code, patient, hospital, department, provider staff, encounter
+  type, checkout time, the visit's non-withdrawn prescription ids, its lab
+  order ids and procedure order ids). Owed: a billing listener
+  (`@TransactionalEventListener(phase = AFTER_COMMIT)` + `REQUIRES_NEW`, the
+  `DeliveryChargeService` idiom) that turns it into draft charges on the
+  visit's invoice from the hospital's price list, idempotent per encounter
+  (a unique key on the encounter id so a replayed event never bills twice),
+  and a test that a failed charge never rolls the checkout back.
+- **Round 16 branch B follow-ups that live in other branches' files.**
+  (1) The nursing-notes panel (`encounters/nursing-notes-panel`, D927) is in
+  the encounter detail only; the patient chart (`patients/patient-detail`)
+  should embed `<app-nursing-notes-panel [patientId]>` too. (2) The ward
+  vitals dialog in `nurse-station.html` has no pain field (D989 note), and
+  the chart's vitals list shows the localised `notes` text, not a structured
+  pain score (a `pain_score` column like `postpartum_observations` would let
+  every screen format it). (3) The treatment-plans page still offers Edit on
+  a colleague's plan; the server now refuses it (D930 class), so the button
+  should be hidden for non-authors. (4) Author checks still missing on
+  documents owned by other branches, found in the D930 audit: an unsigned
+  prescription draft can be rewritten or deleted by any prescriber
+  (`PrescriptionServiceImpl.update/deletePrescription`), a lab order can be
+  hard-deleted by anyone at the ordering hospital
+  (`LabOrderServiceImpl.deleteLabOrder`), an imaging report draft can be
+  edited, signed or voided by any clinician (`ImagingReportServiceImpl`), an
+  imaging order can be cancelled through `updateOrderStatus` by anyone in
+  scope, and an ultrasound order update has no author check. Admissions,
+  problems, allergies and family/social history are left team-owned on
+  purpose (the ward team acts on them). Procedure orders: DECIDED by the user
+  2026-10-28 ("as it works in real hospitals"), applied on
+  fix/r17-review-976: an order belongs to the clinician who placed it.
+  Cancelling it (POST /cancel, or CANCELLED through the update) is the
+  ordering clinician's, a physician's of that hospital for a nurse's or
+  midwife's order, or a super-admin's in global view (translated 403
+  `procedureOrder.cancelForbidden` otherwise); the care team still records
+  execution (schedule, pre-op steps, start, complete, postpone, consent,
+  site marking); a cancelled order stays locked with its first stamp. The
+  order has no clinical-content edit and no signature step today, so there
+  is nothing else to gate; the portal's cancel button is role-level only
+  (the response carries the ordering staff id, not a user id, so an exact
+  author gate needs a server-computed flag). (5) D1003: the CVX code
+  stays a required typed field because the DHIS2 ADX export counts doses by
+  it; the PEV vaccine list offers names only. A vetted PEV-vaccine to CVX
+  table (supplied by the user, never invented) would let the form fill the
+  code. (6) D930: a draft discharge summary is editable by the visit's
+  treating doctor, but finalize still requires the discharging provider
+  (QA D503), who is the visit's clinician of record and may be the nurse
+  who opened it; the Résumés tab shows the buttons to the discharging
+  provider only. Checkout should name the treating doctor as discharging
+  provider. (7) D961: the certificate's examination date is the visit's
+  date on the server clock (UTC); right for UTC+0 hospitals, a day early
+  for a past-day visit at a UTC+1 hospital until hospitals carry a zone.
+  (8) Review round 7 of #971, deferred (not logic or security breaks):
+  the certificate button is offered to every doctor on a seen visit while
+  the server lets only the treating clinician sign (the refusal is readable
+  in the dialog; an exact gate needs a server-computed flag on the
+  encounter); a sick-leave start date has no upper bound (the maximum
+  offset after the visit is a clinical policy for the user to set); the
+  checkout diagnosis prefill takes problems reviewed on or after the visit
+  day with no upper bound (problems carry no encounter link; the prefill is
+  editable); efficiency: `DischargeSummaryServiceImpl.toDto` runs the
+  author rule per list row (role lookups and an exists query per draft),
+  `publishCheckedOut` runs three id queries with no listener yet, and
+  `BpaRuleEngine.buildContext` loads the due date for every non-male
+  patient even when no BP reading is hypertensive; "who is a physician"
+  is computed in `EncounterServiceImpl.isPhysicianAt`,
+  `DischargeSummaryServiceImpl.isPhysician` and the token-based
+  `callerIsDoctor`, which should share one helper.
+  (9) Review round 9 of #971, deferred: `issuing_hospital_id` (V240) has
+  no foreign key or index, so a removed hospital would leave a dangling id
+  and a 500 on the document read; V240 may already have run on dev from an
+  integration branch, so the FK needs its own migration (next free number)
+  rather than an edit; the certificate endpoint admits ROLE_DOCTOR only,
+  while checkout ownership counts physicians and surgeons as doctors
+  (DECIDED by the user 2026-10-28, applied on fix/r17-review-976: any
+  licensed physician at the visit's hospital signs - doctor, physician,
+  surgeon, anaesthesiologist, radiologist, `RoleValidator.
+  LICENSED_PHYSICIAN_ROLE_CODES`; never a nurse, midwife, receptionist or
+  admin; the endpoint, the service and the portal button share the list);
+  the maternity screens show a gestational age up to 44 weeks while the
+  pregnancy-hypertension card stops at the due date + 14 days (42 weeks);
+  the nursing-notes panel on a closed visit reads the 50 newest notes and
+  keeps the visit's days, so a visit followed by more than 50 later notes
+  shows none of its own until `GET /nurse/notes` takes a date range.
+  qSOFA scores the worst reading in its window for mentation, as it
+  already did for RR and sBP (a rule-wide design, not changed here).
+  (10) Review round 10 of #971, deferred: the EMERGENCY "dated today"
+  test and the certificate's examination day compare the server's date
+  (UTC) with a form date sent as local midnight, so at a UTC+1 hospital a
+  visit for today reads as yesterday (Burkina Faso is UTC+0; the fix is a
+  zone per hospital, as in (7)); a discharge-summary draft keeps its
+  provider when the visit's clinician of record is reassigned and the visit
+  is completed again (before #971 checkout re-homed it every time; who owns
+  a draft after a reassignment is a rule to decide, not re-homing that
+  would undo a covering doctor's ownership).
+  (11) Review round 11 of #971: a treatment plan's author still cannot hand
+  it to a colleague (the D503 rule on develop already refused naming
+  someone else as author; #971 only stopped a colleague from taking a plan
+  over), so the plan form's author picker can only fail: hide it, or decide
+  a hand-over rule.
+  (12) Review round 12 of #971, deferred: checkout still writes the visit's
+  closing fields (diagnoses, follow-up, summaries) into an existing draft
+  held by another doctor, as it did before #971 (it no longer changes the
+  draft's owner); whether checkout should leave another doctor's draft
+  alone, or append, is a workflow decision, and refusing it would break
+  checkout. A transcribed vaccine dose (D1003) records no staff member,
+  since `administered_by` was its only actor column; a `recorded_by`
+  column (new migration) would keep who entered it, beyond the write-audit
+  row. The certificate dialog's default start date is the browser's day of
+  the arrival, the server checks its own (the zone item in (10)).
 
 ### Execution plan (2026-09-26)
 
@@ -2607,6 +2785,28 @@ user, data steps, and the residuals each PR recorded (the bullets dated
 2026-10-04 and 2026-10-07 at the end of the items).
 
 ### The items
+
+- **Chronology rows of another hospital for the visit categories (QA round 16 (D959)).**
+  The doctor's chronology now lists diagnoses, lab orders still waiting,
+  imaging orders, signed notes with their plan and referrals
+  (`VisitTimelineRows`), but only the acting hospital's own rows. Reading
+  another hospital's rows in these categories needs the same treatment-
+  relationship and sensitive-category accounting the shared categories have
+  (E8 #49/#51, decision D3, RECORD_SHARE per source): a problem carries its
+  own sensitivity category, a note and a lab order ride on their encounter,
+  a referral and an imaging order have neither. Until then they are not read
+  across hospitals at all.
+
+- **Invoice adjustments after this round (QA round 16 (D974)).** Discounts,
+  waivers and credit notes (V242, `POST /billing-invoices/{id}/adjustments`)
+  lower an issued invoice with a mandatory reason, an audit row and the line
+  on the PDF; a credit note reverses a line. Still owed: a refund when a credit
+  note would leave the invoice below what was already paid (today the payment
+  is reversed first), a report of adjustments per period for the
+  accountant, and a status of its own for an invoice settled by a waiver
+  (today it ends PAID with amountPaid 0: nothing is owed and revenue sums
+  amountPaid, but the paid tab and paid counts include it; a WAIVED status
+  needs a product decision and a migration of the status column users).
 
 - **~~Device-only history notes are filed under a different identity per login path
   (#709 iOS, #710 Android).~~ Closed by #791** (2026-10-03): both apps resolve
@@ -5359,11 +5559,16 @@ user, data steps, and the residuals each PR recorded (the bullets dated
 - **Note signing at outpatient checkout (QA D513, round 8, `fix/qa-r8-clinical-inpatient`).** The checkout no longer lets the visit note be rewritten (400 refusal `encounter.note.closedLocked`, corrections go through an attributed addendum) and the edit response now carries the flushed `updatedAt`. Requiring the note to be signed before checkout, or signing it as part of checkout, changes the outpatient flow for every clinician and is a product decision (who signs a nurse-documented visit, what happens to a visit closed by the discharge path); an unsigned closed note is still shown as unsigned. Owed: decide and build the checkout-time signature step.
 - **Patient returns tied to a dispense in the stock form (QA D604/D653/D654, round 9, `fix/qa-r9-pharmacy-billing`).** A RETURN that names its dispense (`referenceId`) is capped at what that fill delivered minus earlier returns, under the dispense row lock, and a cancel puts back only the part not yet returned. A RETURN with no reference on a lot with fills still out is now booked against the most recent fill that can take all of it (so that fill's cancel puts nothing back twice), and a return larger than every open fill is refused (`stockTransaction.return.referenceRequired`). Remaining: the attribution picks the newest fill, not necessarily the one the patient brought back (a dispense picker in the return form would let the pharmacist name it), and a lot's transferred-out stock coming back while a fill is still out is booked against that fill. Controlled stock is now witnessed on dispense, prepare-ready, dispense cancel and lot receipt; a `cancel-ready` of a prepared controlled fill (and the system voids on a prescription edit) still returns stock unwitnessed. The prescription response now shows the catalog's controlled flag (D654, decided); enforcing it in the signing gate waits on the prescriber two-factor step (next bullet).
 
-- **Prescriber two-factor step for controlled substances (D654, #926).** The prescription response now shows the catalog's controlled flag (morphine reports controlled = true), but the two-factor signing and dispense block (`ControlledSubstanceGuard`) still keys on the prescriber's own tick, because no prescriber two-factor step exists yet. Owed: build that step, then enforce the catalog flag in the guard. Stock witness rules already read the catalog.
+- **Prescriber two-factor step for controlled substances (D654, #926; round 17: decision D654 SUPERSEDED by the user on 2026-10-28, QA D922: a catalogue-controlled drug is always controlled. `fix/r17-lab-pharmacy-billing` applied it to every safeguard that exists, guarded by `ControlledFlagGuardTest`; this two-factor clause is the one remaining exception, because enforcing a step nobody can perform would make every morphine order unsignable - flagged to the user for a decision.)** The prescription response now shows the catalog's controlled flag (morphine reports controlled = true), but the two-factor signing and dispense block (`ControlledSubstanceGuard`) still keys on the prescriber's own tick, because no prescriber two-factor step exists yet. Owed: build that step, then enforce the catalog flag in the guard. Stock witness rules already read the catalog. **Round 18 (`fix/r18-clinical-reference`): the step is built.** `signPrescription` re-authenticates the prescriber (TOTP/backup code when enrolled, else the HMS password; one call, one signature; audited `PRESCRIPTION_SIGN_REAUTHENTICATION`) for every controlled order, tick OR catalogue (`PrescriptionControlledResolver`), and writes `twoFactorVerifiedAt`; `ControlledSigningReauthenticationGuardTest` keeps every SIGNED write behind it. ~~Still owed: the dispense side (`requireDispensable`) keys on the tick.~~ **Done at the round-18 merge (#976):** `ControlledSubstanceGuard` keys both the status clause and `requireDispensable` on `PrescriptionControlledResolver`, so a catalogue-controlled order without the prescriber's proof (signed before round 18) is refused at the dispense, preparation and hand-over; `ControlledFlagGuardTest#everyTwoFactorSafeguardAsksTheCatalogue` fails on a proof check keyed on the tick. No trainee co-sign: the product has no intern/resident role (only `EmploymentType.INTERN`, not a role).
+- **Round 18 clinical reference defaults (`fix/r18-clinical-reference`).** (1) An ACTIVE lab test definition's reference ranges are locked (D617/D705) and `test_code` is globally unique, so a live test's ranges cannot be revised except by retiring it and creating a new version under a new code: a range-revision workflow (new version of the same test) is owed. (2) Neonatal glucose has only a critical low (< 0.40 g/L / 2.2 mmol/L): no neonatal normal interval was supplied, so a non-critical neonatal low reads "normal" until the lab director adds one. (3) Adult critical limits for Hb, WBC and platelets were not supplied; the seed keeps the existing configured values, marked unverified. (4) Children's glucose (1 month-17 years) and potassium: no paediatric interval supplied; they fall back to the adult range as before. (5) An order whose typed name matches several uncontrolled catalogue items stays unlinked and is checked against ONE of them (the lowest absolute daily cap, else the lowest mg/kg ceiling): the other items' limits are not applied; picking the exact item in the form avoids it, and a per-limit "strictest of each" check is owed. (6) The dev defaults are loaded by `C:/dev/hms-qa/scripts/r18/seed/` (dry run by default) and stay "default, pending local approval" until the lab director / pharmacy lead approves them.
+- **Witness at administration of a controlled substance (QA D922, round 16, `fix/r16-orders-meds-lab`).** Round 16 made the catalogue's controlled flag reach the order whatever the client sends (name resolution in `PrescriptionServiceImpl.applyCatalogPick`), so a controlled order now needs a pharmacist's verification before the MAR lets it be given, the MAR and eMAR rows say "Stupéfiant", and the patient cannot request its renewal. Still owed from the QA expectation: a second nurse or doctor witnessing the GIVEN record of a controlled dose (a `witness` on `MedicationAdministrationRecord`, a picker on the eMAR and the nurse-station Give, refused without one), which needs a column (next free migration) and is a new safeguard rather than a fix of an offered workflow. The prescriber two-factor step (previous bullet) is unchanged.
+- **Prescription read/write cost after round 16 (#975 review, efficiency, deferred with the user's rule).** (1) `PrescriptionServiceImpl.catalogItemsNamed` loads the hospital's active catalogue and accent-folds it in memory on every create/update that carries neither a catalogue id nor a code (the prescribing form now sends the id, so this is the API/order-set path); the accent-insensitive prefix rule needs an `unaccent`-backed bounded query before it can be pushed to the database. (2) `PrescriptionMapper.awaitsPhysicianSignature` asks RoleValidator up to three times per unsigned DRAFT/PENDING_SIGNATURE row (`isDoctor` short-circuits for doctors, so one query in the common case); a per-mapping memo keyed on (userId, hospitalId) or a batched role read would answer it once per list. Both are correct today; owed when a list page measures slow.
+- **National (LNME) catalogue entries in prescription resolution (#975 review round 6, scope widening, deferred).** The D922 resolution (`PrescriptionServiceImpl.applyCatalogPick` / `catalogItemsNamed`, `findByHospitalIdAndCode`, `PrescriptionControlledResolver`) reads only the hospital's own catalogue rows, while the catalogue list also serves national entries (`hospital_id IS NULL`, V95). A controlled drug that exists only as a national entry stays unflagged when typed or coded. Owed: resolve hospital rows first, then national ones, under the same ambiguity rule, with a test that a national-only controlled drug is flagged.
 
 - **Report picker in the sign modal (QA D627 / D123, round 9, `fix/qa-r9-i18n-admin-portal`).** The modal now offers only the types the server can sign (`SIGNABLE_TYPES` = `SignableReportLocator.SIGNABLE`, mirrored by `SignableTypesMirrorTest`), the server refuses an unsignable type with a translated 400, and a non-UUID id is refused before the call. Choosing the record by name instead of pasting its UUID needs a per-type search (discharge summaries, lab results, imaging reports, consultations, notes, prescriptions, procedures) in the acting hospital — a new picker feature, not a fix. Signing from each record's own page already passes the id.
 - **Two priority pickers echo the wire value (QA D620 sibling, round 9).** `lab.html` and `ultrasound-tab.html` render `<option>{{ p }}</option>` for ROUTINE/URGENT/STAT; no lab-order or ultrasound priority domain is keyed yet, so they are pinned in `i18n-raw-enums-baseline.json` (the gate now sees an option that echoes its value). Key the two domains and pipe them.
 - **QA D660 follow-up (#929): only SIGNED** prescriptions are locked to withdraw-with-reason on edit (`PrescriptionServiceImpl.withdrawSignedPrescription`). Other post-signature states (TRANSMITTED, TRANSMISSION_FAILED, PENDING_STOCK, PARTNER_*, PENDING_CLARIFICATION) still go through the general edit path and can rewrite the signed drug/dose under the original signature digest; PENDING_CLARIFICATION needs its G5 "doctor edits first" path kept, so widening the lock needs a design decision. The withdrawal reason is stored (V223, encrypted) and returned on the response DTO but not yet shown on the prescription detail/list.
+- **Imaging order status moves by any doctor in scope (#976 review, QA D930 class, predates #976).** `ImagingOrderServiceImpl.updateOrderStatus` now restricts the move into CANCELLED and the move back out of it to the ordering provider, a radiologist of the hospital or a super-admin in global view, and stamps the cancellation on the transition only. Every other transition is still open to any caller the controller admits: a doctor can move a colleague's order to COMPLETED or RESULTS_AVAILABLE (and rewrite its schedule, location and workflow notes) without being its author or of the imaging department. This predates #976 and was left out of it on purpose. Owed: decide who may record each imaging workflow state (likely the imaging department for SCHEDULED/IN_PROGRESS/COMPLETED/RESULTS_AVAILABLE, the author for the rest), enforce it at the same choke point, and extend `ClinicalDocumentAuthorGuardTest`.
 
 ## Open clinical questions — kept open on purpose, not forgotten
 
@@ -5705,3 +5910,10 @@ ships*, not for building — and check the shipped surface before trusting a
   ROLE_SUPER_ADMIN for those. A complete fix is backend-side: return the held
   roles in the session bootstrap, and a required-role hint in 403 bodies.
 - **QA D601 follow-up (r9-lab-integrity):** lab test definitions and orders with results can no longer be hard-deleted, but dev already holds rows orphaned before the fix (definition 570c6b4d gone, its orders and released results left behind). They need a one-off data repair (restore the definition row as RETIRED from a backup, or re-point the orders) that the user must run; it is data, not code, so it is not in the PR. A DB-level FK `lab_orders.lab_test_definition_id` (the entity declares `fk_laborder_testdef`, the dev schema evidently lacks it) should be added in a migration once the orphans are repaired, since the migration would fail on them today.
+- **Round 18 branch 2 (fix/r18-clinical-record, #983) residuals (efficiency, not logic).**
+  `ProcedureOrderServiceImpl#authorIsPhysician` asks `RoleValidator.draftsForPhysicianSignature`
+  for every row of a procedure list (up to two role queries per row): resolve it once per distinct
+  (author, hospital) in the list methods. `MaternalHistoryServiceImpl#toDto` looks up the delivery
+  (D1067 `deliveredAt`) once per row on the paged hospital lists: batch it per page.
+  `PediatricDoseRule` card decimals: done at the round-18 merge (#976): `CdsCardText.decimal`, the
+  `CdsCardLocaleFormatGuardTest` allowance deleted, `PediatricDoseRuleRound18Test` asserts FR/ES commas.

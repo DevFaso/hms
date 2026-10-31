@@ -3,7 +3,10 @@ package com.example.hms.service.pharmacy;
 import com.example.hms.enums.PrescriptionStatus;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.model.Prescription;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+
+import java.util.Objects;
 
 /**
  * The one copy of the controlled-substance rule (P2 #15).
@@ -18,11 +21,20 @@ import org.springframework.stereotype.Component;
  * <p>The rule itself: a prescription the prescriber flagged as a controlled
  * substance must have completed two-factor verification, and one flagged as
  * requiring a co-signature must actually carry one, before it may reach any
- * state that authorises somebody to act on it. Both gates apply ONLY when the
- * prescriber set the flag — nothing changes for ordinary prescriptions.
+ * state that authorises somebody to act on it - signing, every later status,
+ * and the dispense. "Controlled" is {@link PrescriptionControlledResolver}'s
+ * answer (the prescriber's tick OR the catalogue item's flag, QA D922, user
+ * decision 2026-10-28: "a drug the catalogue marks as controlled is always
+ * treated as controlled, whatever the prescriber ticked"); the co-signature
+ * gate applies when the order requires one. Nothing changes for ordinary
+ * prescriptions.
  */
 @Component
+@RequiredArgsConstructor
 public class ControlledSubstanceGuard {
+
+    /** The one answer to "is this order controlled": the tick or the catalogue. */
+    private final PrescriptionControlledResolver controlledResolver;
 
     /**
      * Refuse to move {@code prescription} to {@code targetStatus} with a
@@ -39,22 +51,44 @@ public class ControlledSubstanceGuard {
                 || targetStatus == PrescriptionStatus.PENDING_SIGNATURE) {
             return;
         }
+        Objects.requireNonNull(prescription, "prescription");
 
-        // QA D678 / user decision D654: the prescriber's own tick ONLY, never
-        // PrescriptionControlledResolver's catalog answer. A catalog-controlled
-        // drug would otherwise be unsignable, as no two-factor step exists yet
-        // (tasklist standing debt). Verification, chart, history and PDF do use it.
-        if (prescription.isControlledSubstance() && prescription.getTwoFactorVerifiedAt() == null) {
-            throw new BusinessException(
-                "CONTROLLED_SUBSTANCE: a prescription flagged as a controlled substance cannot be "
-                    + "set to " + targetStatus + " until two-factor verification is complete.");
+        // QA D922: user decision 2026-10-28 SUPERSEDES D654 ("the guard keys
+        // only on the prescriber's tick"). A drug the catalogue marks
+        // controlled is controlled whatever the prescriber ticked. Round 18
+        // built the step this clause demands: signPrescription re-authenticates
+        // the prescriber for EVERY controlled order (tick or catalogue) and
+        // writes twoFactorVerifiedAt before this check. The round-18 merge
+        // keys this clause, and the dispense one below, on the same resolver
+        // (ControlledFlagGuardTest), so a catalogue-controlled order signed
+        // before round 18 without the proof is refused at the dispense, as a
+        // ticked order without the proof always was, instead of being handed
+        // over as an ordinary drug.
+        if (controlledResolver.isControlled(prescription) && prescription.getTwoFactorVerifiedAt() == null) {
+            // QA D1000: a key resolved in the caller's language; the code
+            // (CONTROLLED_SUBSTANCE) stays in the key for log searches.
+            throw new BusinessException("prescription.safeguard.CONTROLLED_SUBSTANCE.status",
+                targetStatus.localizedLabel());
         }
 
         if (prescription.isRequiresCosign()
                 && (prescription.getCosignedAt() == null || prescription.getCosignedBy() == null)) {
-            throw new BusinessException(
-                "COSIGN_REQUIRED: a prescription that requires a co-signature cannot be set to "
-                    + targetStatus + " until a second prescriber co-signs it.");
+            throw new BusinessException("prescription.safeguard.COSIGN_REQUIRED.status",
+                targetStatus.localizedLabel());
+        }
+    }
+
+    /**
+     * Review of round 18: the co-sign half of {@link #requireSafeguardsFor},
+     * checked by the signature BEFORE the prescriber re-authenticates, so a
+     * refusal for a missing co-signature never spends their TOTP step or a
+     * backup code on a signature that cannot happen.
+     */
+    public void requireCosignedFor(Prescription prescription, PrescriptionStatus targetStatus) {
+        if (prescription.isRequiresCosign()
+                && (prescription.getCosignedAt() == null || prescription.getCosignedBy() == null)) {
+            throw new BusinessException("prescription.safeguard.COSIGN_REQUIRED.status",
+                targetStatus.localizedLabel());
         }
     }
 
@@ -63,21 +97,19 @@ public class ControlledSubstanceGuard {
      * signed prescription can be cancelled, medication handed to a patient
      * cannot be recalled — and status can be reached by paths that never pass
      * the prescribe-side gate, so the dispense path must check independently
-     * rather than trust the status.
+     * rather than trust the status. "Controlled" is the catalogue-or-tick
+     * answer here too (QA D922, round-18 merge): before, a catalogue-controlled
+     * order with the tick unset was dispensed with no prescriber proof.
      */
     public void requireDispensable(Prescription prescription) {
-        if (prescription.isControlledSubstance() && prescription.getTwoFactorVerifiedAt() == null) {
-            throw new BusinessException(
-                "CONTROLLED_SUBSTANCE: this prescription is flagged as a controlled substance "
-                    + "and has no completed two-factor verification. It cannot be dispensed "
-                    + "until the prescriber verifies it.");
+        Objects.requireNonNull(prescription, "prescription");
+        if (controlledResolver.isControlled(prescription) && prescription.getTwoFactorVerifiedAt() == null) {
+            throw new BusinessException("prescription.safeguard.CONTROLLED_SUBSTANCE.dispense");
         }
 
         if (prescription.isRequiresCosign()
                 && (prescription.getCosignedAt() == null || prescription.getCosignedBy() == null)) {
-            throw new BusinessException(
-                "COSIGN_REQUIRED: this prescription requires a co-signature and has not been "
-                    + "co-signed. It cannot be dispensed until a second prescriber co-signs it.");
+            throw new BusinessException("prescription.safeguard.COSIGN_REQUIRED.dispense");
         }
     }
 }

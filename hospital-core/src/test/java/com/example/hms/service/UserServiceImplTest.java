@@ -588,6 +588,9 @@ class UserServiceImplTest {
             hospital.setId(hospitalId);
             hospital.setName("Hospital P");
 
+            // QA D1061: the phone's holder is the same person (same name), so this is still a 409.
+            user.setFirstName("Awa");
+            user.setLastName("Ouedraogo");
             when(userRepository.findByPhoneNumber("+22670707070"))
                 .thenReturn(Optional.of(user));
             when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
@@ -702,6 +705,9 @@ class UserServiceImplTest {
         @DisplayName("QA D24: a staff record alone also marks the account as staff (phone match)")
         void patientPhoneOfAStaffRecordIsRefused() {
             UUID hospitalId = stubHospital("00000000-0000-0000-0000-000000000012");
+            // QA D1061: the same person (same name) as the staff account behind the phone.
+            user.setFirstName("Jane");
+            user.setLastName("Doe");
             when(userRepository.findByPhoneNumber("+22670000001")).thenReturn(Optional.of(user));
             when(staffRepository.existsByUserId(user.getId())).thenReturn(true);
 
@@ -750,6 +756,9 @@ class UserServiceImplTest {
             UUID hospitalId = stubHospital("00000000-0000-0000-0000-000000000015");
             user.setDeleted(true);
             user.setActive(false);
+            // QA D1061: the registrar's own earlier attempt names the same person.
+            user.setFirstName("Jane");
+            user.setLastName("Doe");
             when(userRepository.findByPhoneNumber("+22670000002")).thenReturn(Optional.of(user));
             when(patientRepository.existsByUserId(user.getId())).thenReturn(false);
             lenient().when(assignmentService.isRoleAlreadyAssigned(user.getId(), hospitalId, patientRole.getId()))
@@ -770,6 +779,8 @@ class UserServiceImplTest {
             UUID hospitalId = stubHospital("00000000-0000-0000-0000-000000000016");
             user.setDeleted(true);
             user.setActivatedBeforeDelete(true);
+            user.setFirstName("Jane");
+            user.setLastName("Doe");
             when(userRepository.findByPhoneNumber("+22670000003")).thenReturn(Optional.of(user));
             when(assignmentService.isRoleAlreadyAssigned(user.getId(), hospitalId, patientRole.getId()))
                 .thenReturn(true);
@@ -956,6 +967,8 @@ class UserServiceImplTest {
             user.setActive(false);
             user.setActivatedBeforeDelete(true);
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            // The super-admin, who sees deleted accounts, gets the actionable answer.
+            when(accountAccess.callerSeesDeletedAccounts()).thenReturn(true);
 
             assertThatThrownBy(() -> userService.deleteUser(userId))
                 .isInstanceOf(com.example.hms.exception.ConflictException.class);
@@ -1104,6 +1117,25 @@ class UserServiceImplTest {
     @DisplayName("restoreUser")
     class RestoreUser {
 
+        @org.junit.jupiter.api.BeforeEach
+        void asTheSuperAdmin() {
+            // The restore worklist is the super-admin's (QA D919/D920); these cases are theirs.
+            lenient().when(accountAccess.callerSeesDeletedAccounts()).thenReturn(true);
+        }
+
+        @Test
+        @DisplayName("QA D920 review round 13: for a hospital admin every restore is missing, live or deleted alike")
+        void aHospitalAdminCannotTellDeletedFromLiveThroughRestore() {
+            when(accountAccess.callerSeesDeletedAccounts()).thenReturn(false);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            for (boolean deleted : new boolean[] {true, false}) {
+                user.setDeleted(deleted);
+                assertThatThrownBy(() -> userService.restoreUser(userId))
+                    .isInstanceOf(ResourceNotFoundException.class);
+            }
+            verify(userRepository, never()).save(any(User.class));
+        }
+
         @Test
         @DisplayName("QA D327: restoring an account that is not deleted is refused and not audited")
         void restoreOfALiveAccountIsRefused() {
@@ -1123,6 +1155,7 @@ class UserServiceImplTest {
             user.setDeleted(true);
             user.setActive(false);
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(accountAccess.callerSeesDeletedAccounts()).thenReturn(true);
 
             assertThatThrownBy(() -> userService.deleteUser(userId))
                 .isInstanceOf(com.example.hms.exception.ConflictException.class);
@@ -1527,12 +1560,29 @@ class UserServiceImplTest {
         @DisplayName("a deleted account cannot be edited (D126)")
         void deletedAccountIsNotEditable() {
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(accountAccess.callerSeesDeletedAccounts()).thenReturn(true);
             user.setDeleted(true);
             UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
             dto.setFirstName("Ghost");
 
             assertThatThrownBy(() -> userService.updateUser(userId, dto))
                     .isInstanceOf(BusinessException.class);
+            verify(userRepository, never()).save(any(User.class));
+        }
+
+        @Test
+        @DisplayName("QA D920: for anyone but the super-admin a deleted account is missing, on PUT and DELETE alike")
+        void deletedAccountIsMissingForAHospitalAdmin() {
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(accountAccess.callerSeesDeletedAccounts()).thenReturn(false);
+            user.setDeleted(true);
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setFirstName("Ghost");
+
+            assertThatThrownBy(() -> userService.updateUser(userId, dto))
+                    .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+            assertThatThrownBy(() -> userService.deleteUser(userId))
+                    .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
             verify(userRepository, never()).save(any(User.class));
         }
 
@@ -1824,6 +1874,7 @@ class UserServiceImplTest {
             when(userRepository.findById(userId)).thenReturn(Optional.of(target));
             when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
             when(staffRepository.findByUserId(userId)).thenReturn(List.of());
+            when(accountAccess.callerSeesDeletedAccounts()).thenReturn(true); // the super-admin's worklist
 
             userService.restoreUser(userId);
 
@@ -2242,6 +2293,8 @@ class UserServiceImplTest {
         void restoreByNonAdministratorIsRefusedAsMissing() {
             user.setDeleted(true);
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            // Sees the deleted worklist, but does not administer this account.
+            when(accountAccess.callerSeesDeletedAccounts()).thenReturn(true);
             refuseAdministration();
 
             assertThatThrownBy(() -> userService.restoreUser(userId))
@@ -2425,13 +2478,28 @@ class UserServiceImplTest {
             when(userRepository.searchStaffDirectory(any(), any(), any(), any(), anyBoolean(), anyBoolean(), anyBoolean(), anyBoolean(),
                     any(), any())).thenReturn(onePage);
 
-            // Even if a deleted flag reached the service, the scoped path has no deleted view.
-            userService.getAllUsers(0, 10, true, true);
-            userService.searchUsers("ami", "ROLE_NURSE", "x@y", 0, 10, true, true);
+            // Even if an includeDeleted flag reached the service, the scoped path has no deleted view.
+            userService.getAllUsers(0, 10, true, false);
+            userService.searchUsers("ami", "ROLE_NURSE", "x@y", 0, 10, true, false);
 
             verify(userRepository).findStaffDirectoryPaged(eq(true), eq(hospitals), eq(false), eq(false), any());
             verify(userRepository).searchStaffDirectory(eq("ami"), isNull(), eq("ROLE_NURSE"), eq("x@y"), eq(false), eq(false),
                     eq(false), eq(true), eq(hospitals), any());
+        }
+
+        @Test
+        @DisplayName("QA D919: a scoped caller asking for the deleted worklist gets an empty page, and nothing is queried")
+        void scopedCallerGetsNoDeletedWorklist() {
+            Set<UUID> hospitals = Set.of(UUID.randomUUID());
+            when(accountAccess.requireDirectoryAccess())
+                    .thenReturn(new UserAccountAccess.DirectoryScope(false, hospitals));
+
+            assertThat(userService.getAllUsers(0, 10, true, true).getContent()).isEmpty();
+            assertThat(userService.searchUsers("ami", null, null, 0, 10, true, true).getContent()).isEmpty();
+
+            verify(userRepository, never()).findStaffDirectoryPaged(anyBoolean(), any(), anyBoolean(), anyBoolean(), any());
+            verify(userRepository, never()).searchStaffDirectory(any(), any(), any(), any(), anyBoolean(), anyBoolean(),
+                    anyBoolean(), anyBoolean(), any(), any());
         }
 
         @Test
@@ -2703,6 +2771,61 @@ class UserServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D1061: a child registered under a parent's phone is a new person with no login phone")
+        void aChildUnderAParentsPhoneIsANewPersonWithoutALoginPhone() {
+            stubCreation(patientRole);
+            User parent = new User();
+            parent.setId(UUID.randomUUID());
+            parent.setFirstName("Boukari");
+            parent.setLastName("Nikiéma");
+            parent.setPhoneNumber("+22676334455");
+            com.example.hms.model.Patient parentRecord = new com.example.hms.model.Patient();
+            parentRecord.setFirstName("Boukari");
+            parentRecord.setLastName("Nikiéma");
+            parentRecord.setDateOfBirth(java.time.LocalDate.of(1985, 3, 2));
+            lenient().when(userRepository.findByPhoneNumber("+22676334455")).thenReturn(Optional.of(parent));
+            lenient().when(patientRepository.findByUserId(parent.getId())).thenReturn(Optional.of(parentRecord));
+            AdminSignupRequest req = request("ROLE_PATIENT", null, "76334455");
+            req.setFirstName("Abdoul Aziz");
+            req.setLastName("Nikiéma");
+            com.example.hms.payload.dto.PatientRequestDTO child = new com.example.hms.payload.dto.PatientRequestDTO();
+            child.setFirstName("Abdoul Aziz");
+            child.setLastName("Nikiéma");
+            child.setDateOfBirth(java.time.LocalDate.of(2021, 8, 19));
+            req.setPatient(child);
+            // Review round 1: even with a real SMS transport there is no channel to the child.
+            lenient().when(smsService.deliversRealSms()).thenReturn(true);
+
+            UserResponseDTO result = userService.createUserWithRolesAndHospital(req);
+
+            User saved = savedUser();
+            assertThat(saved.getId()).isNotEqualTo(parent.getId());
+            assertThat(saved.getPhoneNumber()).isNull();
+            // The one-time credentials are handed to the desk, not lost.
+            assertThat(result.getTemporaryPassword()).isNotNull();
+            assertThat(result.getTemporaryUsername()).isEqualTo(saved.getUsername());
+            verify(assignmentService, never()).isRoleAlreadyAssigned(eq(parent.getId()), any(), any());
+        }
+
+        @Test
+        @DisplayName("QA D1061: the same person behind the phone is still found, never duplicated")
+        void theSamePersonBehindThePhoneIsStillFound() {
+            stubCreation(patientRole);
+            User holder = new User();
+            holder.setId(UUID.randomUUID());
+            holder.setFirstName("Aïcha");
+            holder.setLastName("Ouédraogo");
+            lenient().when(userRepository.findByPhoneNumber("+22670202020")).thenReturn(Optional.of(holder));
+
+            // (The flow may stop downstream on the unstubbed hospital; what is pinned is the account.)
+            org.assertj.core.api.Assertions.catchThrowable(
+                () -> userService.createUserWithRolesAndHospital(request("ROLE_PATIENT", null, "70202020")));
+
+            // The existing account is used: no new account is created.
+            verify(userRepository, never()).saveAndFlush(any(User.class));
+        }
+
+        @Test
         @DisplayName("a patient with no e-mail and no SMS transport gets the generated credentials once in the response")
         void phoneOnlyPatientGetsCredentialsInResponse() {
             stubCreation(patientRole);
@@ -2819,5 +2942,68 @@ class UserServiceImplTest {
         Object title = org.springframework.test.util.ReflectionTestUtils.invokeMethod(
             userService, "coerceJobTitle", null, java.util.Set.of(other));
         assertThat(title).isEqualTo(com.example.hms.enums.JobTitle.ADMINISTRATIVE_STAFF);
+    }
+
+    // ── QA D921: the one transactional activation path ────────────────────
+
+    @org.junit.jupiter.api.Nested
+    @org.junit.jupiter.api.DisplayName("verifyEmail (QA D921)")
+    class VerifyEmail {
+
+        private User pending() {
+            User u = new User();
+            u.setId(UUID.randomUUID());
+            u.setEmail("apatient@example.com");
+            u.setActive(false);
+            u.setActivationToken("tok-1");
+            u.setActivationTokenExpiresAt(java.time.LocalDateTime.now().plusHours(1));
+            when(userRepository.findByEmail("apatient@example.com")).thenReturn(Optional.of(u));
+            return u;
+        }
+
+        @org.junit.jupiter.api.Test
+        @DisplayName("activates the account and its patient rows, and clears the lockout only then")
+        void activatesAndClearsTheLockout() {
+            User u = pending();
+            Role pendingPatientRole = Role.builder().code("ROLE_PATIENT").name("PATIENT").build();
+            UserRoleHospitalAssignment row = UserRoleHospitalAssignment.builder().role(pendingPatientRole).active(false).build();
+            when(assignmentRepository.findByUserId(u.getId())).thenReturn(List.of(row));
+
+            assertThat(userService.verifyEmail("apatient@example.com", "tok-1")).isTrue();
+
+            assertThat(u.isActive()).isTrue();
+            assertThat(u.getActivationToken()).isNull();
+            assertThat(row.getActive()).isTrue();
+            // No transaction in a unit test: afterCommit runs at once.
+            verify(loginAttemptService).resetAttempts(u.getId());
+        }
+
+        @org.junit.jupiter.api.Test
+        @DisplayName("an invalid token changes nothing and never clears the lockout (not an oracle)")
+        void invalidTokenIsNotALockoutOracle() {
+            User u = pending();
+
+            assertThat(userService.verifyEmail("apatient@example.com", "wrong")).isFalse();
+
+            assertThat(u.isActive()).isFalse();
+            assertThat(u.getActivationToken()).isEqualTo("tok-1");
+            verify(loginAttemptService, never()).resetAttempts(any());
+            verify(assignmentRepository, never()).findByUserId(any());
+            verify(userRepository, never()).save(any(User.class));
+        }
+
+        @org.junit.jupiter.api.Test
+        @DisplayName("V184: an account an administrator disabled is refused, with no side effects")
+        void adminDisabledAccountIsRefused() {
+            User u = pending();
+            u.setDeactivatedByAdminAt(java.time.LocalDateTime.now());
+
+            assertThat(userService.verifyEmail("apatient@example.com", "tok-1")).isFalse();
+
+            assertThat(u.isActive()).isFalse();
+            verify(loginAttemptService, never()).resetAttempts(any());
+            verify(assignmentRepository, never()).findByUserId(any());
+            verify(userRepository, never()).save(any(User.class));
+        }
     }
 }

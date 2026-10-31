@@ -71,6 +71,8 @@ class ChartReviewServiceImplTest {
     private final PatientChartAccess patientChartAccess = mock(PatientChartAccess.class);
     private final EncounterRepository encounterRepo = mock(EncounterRepository.class);
     private final EncounterNoteRepository noteRepo = mock(EncounterNoteRepository.class);
+    private final com.example.hms.repository.NursingNoteRepository nursingNoteRepo =
+        mock(com.example.hms.repository.NursingNoteRepository.class);
     private final LabResultRepository labResultRepo = mock(LabResultRepository.class);
     private final PrescriptionRepository prescriptionRepo = mock(PrescriptionRepository.class);
     private final ImagingOrderRepository imagingOrderRepo = mock(ImagingOrderRepository.class);
@@ -97,7 +99,7 @@ class ChartReviewServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new ChartReviewServiceImpl(
-            patientChartAccess, encounterRepo, noteRepo, labResultRepo, prescriptionRepo,
+            patientChartAccess, encounterRepo, noteRepo, nursingNoteRepo, labResultRepo, prescriptionRepo,
             imagingOrderRepo, imagingReportRepo, procedureRepo, hospitalRepo,
             recordAccessPolicy, reachRecorder, sensitivityClassifier, breakGlassGate,
             new com.example.hms.mapper.LabResultMapper());
@@ -716,6 +718,68 @@ class ChartReviewServiceImplTest {
                 assertThat(e.getTitle()).doesNotContain("1.8");
                 assertThat(e.getStatus()).isNull();
             });
+    }
+
+    /**
+     * QA D1016/D931 (round 18, third round NOT_FIXED): the Results tab said
+     * "Corrigé" but the Chronologie built from the same row did not.
+     */
+    @Test
+    void d1016_theChronologyMarksTheCorrectionTheResultsTabMarks() {
+        LabResult original = handEnteredPotassium("4.1");
+        LabResult correction = handEnteredPotassium("4.0");
+        correction.setLabOrder(original.getLabOrder());
+        correction.setSupersedesResultId(original.getId());
+        correction.setResultDate(original.getResultDate().plusMinutes(5));
+        LabResult plain = handEnteredPotassium("3.9");
+        when(labResultRepo.findPatientResultsReadableAt(
+            any(UUID.class), any(), any(), anyBoolean(), any(Pageable.class)))
+            .thenReturn(List.of(correction, plain));
+
+        ChartReviewDTO dto = service.getChartReview(PATIENT_ID, HOSPITAL_ID, null);
+
+        assertThat(dto.getTimeline())
+            .filteredOn(e -> e.getSection() == ChartReviewDTO.TimelineEventDTO.Section.RESULT)
+            .extracting(ChartReviewDTO.TimelineEventDTO::getId, ChartReviewDTO.TimelineEventDTO::isCorrected)
+            .containsExactlyInAnyOrder(
+                org.assertj.core.groups.Tuple.tuple(correction.getId(), true),
+                org.assertj.core.groups.Tuple.tuple(plain.getId(), false));
+        // Every section that lists the row says the same thing.
+        assertThat(dto.getResults()).filteredOn(r -> r.getId().equals(correction.getId()))
+            .singleElement().extracting(ChartReviewDTO.ResultEntryDTO::isCorrected).isEqualTo(true);
+    }
+
+    /** QA D1076: the ward's nursing notes are in the Notes tab and the timeline, marked as nursing notes. */
+    @Test
+    void d1076_nursingNotesAreInTheNotesTabAndTheTimeline() {
+        com.example.hms.model.NursingNote note = new com.example.hms.model.NursingNote();
+        note.setId(UUID.randomUUID());
+        note.setHospital(hospital);
+        note.setTemplate(com.example.hms.model.NursingNoteTemplate.DAR);
+        note.setAuthorName("Inf. Sawadogo");
+        note.setDataAssessment("Douleur 3/10 après antalgique");
+        note.setDocumentedAt(LocalDateTime.now().minusHours(1));
+        note.setSignedAt(LocalDateTime.now().minusHours(1));
+        when(nursingNoteRepo.findTop50ByPatient_IdAndHospital_IdInOrderByCreatedAtDesc(eq(PATIENT_ID), any()))
+            .thenReturn(List.of(note));
+
+        ChartReviewDTO dto = service.getChartReview(PATIENT_ID, HOSPITAL_ID, null);
+
+        assertThat(dto.getNotes()).singleElement().satisfies(n -> {
+            assertThat(n.getSource()).isEqualTo("NURSING");
+            assertThat(n.getTemplate()).isEqualTo("DAR");
+            assertThat(n.getPreview()).isEqualTo("Douleur 3/10 après antalgique");
+            assertThat(n.isSigned()).isTrue();
+        });
+        assertThat(dto.getTimeline()).extracting(ChartReviewDTO.TimelineEventDTO::getSection)
+            .containsExactly(ChartReviewDTO.TimelineEventDTO.Section.NOTE);
+    }
+
+    /** QA D1076: the global (super-admin) view reads the notes patient-wide. */
+    @Test
+    void d1076_theGlobalViewReadsNursingNotesPatientWide() {
+        service.getChartReview(PATIENT_ID, null, null);
+        verify(nursingNoteRepo).findTop50ByPatient_IdOrderByCreatedAtDesc(PATIENT_ID);
     }
 
     @Test

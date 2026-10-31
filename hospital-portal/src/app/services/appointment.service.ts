@@ -37,6 +37,8 @@ export interface AppointmentResponse {
   hospitalName: string;
   hospitalAddress: string | null;
   departmentId?: string | null;
+  /** The department's name (the API has always sent it). */
+  departmentName?: string | null;
   createdById: string;
   createdByName: string;
   reason: string;
@@ -63,6 +65,8 @@ export interface AppointmentUpsertRequest {
   departmentId?: string;
   reason?: string;
   notes?: string;
+  /** QA D985: the recall this booking answers (booked from the recall list). */
+  recallId?: string;
 }
 
 export interface AppointmentFilterRequest {

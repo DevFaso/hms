@@ -1,0 +1,850 @@
+{
+  "$comment": [
+    "Dialogs that lack role/aria-modal/a name/Escape, as they stand today.",
+    "Each key is \"template::rule::anchor\"; \"count\" is how many such sites the",
+    "template holds and \"why\" the QA defect id (or the reason a person wrote).",
+    "A site not listed fails the build; fix a dialog, then delete its pins."
+  ],
+  "pinned": {
+    "src/app/admin-assignments/admin-assignments.html::focus::modal <{{ 'ASSIGN_ADMIN.REGENERATE_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/admin-assignments/admin-assignments.html::focus::modal <{{ (modal() === 'create' ? 'ASSIGN_ADMIN.NEW' : 'ASSIGN_ADMI>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/admin-assignments/admin-assignments.html::focus::modal modal-lg <{{ 'ASSIGN_ADMIN.DETAIL_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/admin-assignments/admin-assignments.html::focus::modal modal-lg <{{ 'ASSIGN_ADMIN.IMPORT_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/admin-assignments/admin-assignments.html::focus::modal modal-lg <{{ 'ASSIGN_ADMIN.MULTI_SCOPE_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/admin-assignments/admin-assignments.html::label::modal <{{ 'ASSIGN_ADMIN.REGENERATE_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/admin-assignments/admin-assignments.html::label::modal <{{ (modal() === 'create' ? 'ASSIGN_ADMIN.NEW' : 'ASSIGN_ADMI>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/admin-assignments/admin-assignments.html::label::modal modal-lg <{{ 'ASSIGN_ADMIN.DETAIL_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/admin-assignments/admin-assignments.html::label::modal modal-lg <{{ 'ASSIGN_ADMIN.IMPORT_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/admin-assignments/admin-assignments.html::label::modal modal-lg <{{ 'ASSIGN_ADMIN.MULTI_SCOPE_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/admin-governance/credentials-tab.html::focus::modal modal-lg <{{ row.username || row.email }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/admin-governance/credentials-tab.html::label::modal modal-lg <{{ row.username || row.email }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/admin-governance/matrix-tab.html::focus::modal modal-lg <{{ 'ADMIN_GOV.ENV_' + snap.environment | translate }} · v{{ >": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/admin-governance/matrix-tab.html::focus::modal modal-xl <{{ 'ADMIN_GOV.NEW_SNAPSHOT' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/admin-governance/matrix-tab.html::label::modal modal-lg <{{ 'ADMIN_GOV.ENV_' + snap.environment | translate }} · v{{ >": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/admin-governance/matrix-tab.html::label::modal modal-xl <{{ 'ADMIN_GOV.NEW_SNAPSHOT' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/admin-governance/policies-tab.html::focus::modal <{{ (editingPolicy() ? 'ADMIN_GOV.EDIT_POLICY' : 'ADMIN_GOV.N>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/admin-governance/policies-tab.html::focus::modal <{{ (editingRule() ? 'ADMIN_GOV.EDIT_RULE' : 'ADMIN_GOV.NEW_R>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/admin-governance/policies-tab.html::label::modal <{{ (editingPolicy() ? 'ADMIN_GOV.EDIT_POLICY' : 'ADMIN_GOV.N>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/admin-governance/policies-tab.html::label::modal <{{ (editingRule() ? 'ADMIN_GOV.EDIT_RULE' : 'ADMIN_GOV.NEW_R>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/admin-governance/security-tab.html::focus::modal <{{ 'ADMIN_GOV.NEW_BASELINE' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/admin-governance/security-tab.html::focus::modal modal-lg <{{ 'ADMIN_GOV.SIMULATE_TITLE' | translate: { title: template>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/admin-governance/security-tab.html::label::modal <{{ 'ADMIN_GOV.NEW_BASELINE' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/admin-governance/security-tab.html::label::modal modal-lg <{{ 'ADMIN_GOV.SIMULATE_TITLE' | translate: { title: template>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/admin-governance/users-tab.html::focus::modal <{{ 'ADMIN_GOV.FORCE_RESET' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/admin-governance/users-tab.html::focus::modal modal-lg <{{ 'ADMIN_GOV.IMPORT_USERS' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/admin-governance/users-tab.html::label::modal <{{ 'ADMIN_GOV.FORCE_RESET' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/admin-governance/users-tab.html::label::modal modal-lg <{{ 'ADMIN_GOV.IMPORT_USERS' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/announcements/announcement-list.html::focus::modal <{{ 'ANNOUNCEMENTS.DELETE_ANNOUNCEMENT' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/announcements/announcement-list.html::focus::modal <{{ editing() ? ('ANNOUNCEMENTS.EDIT_ANNOUNCEMENT' | translat>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/announcements/announcement-list.html::label::modal <{{ 'ANNOUNCEMENTS.DELETE_ANNOUNCEMENT' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): dialog without a name; aria-labelledby pointing at its title"
+    },
+    "src/app/announcements/announcement-list.html::label::modal <{{ editing() ? ('ANNOUNCEMENTS.EDIT_ANNOUNCEMENT' | translat>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): dialog without a name; aria-labelledby pointing at its title"
+    },
+    "src/app/announcements/announcement-list.html::modal::modal <{{ 'ANNOUNCEMENTS.DELETE_ANNOUNCEMENT' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 <dialog [open]> rule): a <dialog> not opened with showModal() is not modal; fix with appModalDialog and delete the pin"
+    },
+    "src/app/announcements/announcement-list.html::modal::modal <{{ editing() ? ('ANNOUNCEMENTS.EDIT_ANNOUNCEMENT' | translat>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 <dialog [open]> rule): a <dialog> not opened with showModal() is not modal; fix with appModalDialog and delete the pin"
+    },
+    "src/app/appointments/appointment-detail.html::label::modal <{{ 'APPOINTMENTS.RESCHEDULE_APPOINTMENT' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): dialog without a name; aria-labelledby pointing at its title"
+    },
+    "src/app/appointments/appointment-detail.html::label::modal modal-confirm <{{ 'APPOINTMENTS.CANCEL_APPOINTMENT' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): dialog without a name; aria-labelledby pointing at its title"
+    },
+    "src/app/bed-management/bed-management.html::focus::modal-card <{{ (editingBedId() ? 'BEDS.EDIT_BED' : 'BEDS.NEW_BED') | tra>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/bed-management/bed-management.html::focus::modal-card <{{ (editingWardId() ? 'BEDS.EDIT_WARD' : 'BEDS.NEW_WARD') | >": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/bed-management/bed-management.html::label::modal-card <{{ (editingBedId() ? 'BEDS.EDIT_BED' : 'BEDS.NEW_BED') | tra>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/bed-management/bed-management.html::label::modal-card <{{ (editingWardId() ? 'BEDS.EDIT_WARD' : 'BEDS.NEW_WARD') | >": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/bed-management/bed-management.html::modal::modal-card <{{ (editingBedId() ? 'BEDS.EDIT_BED' : 'BEDS.NEW_BED') | tra>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/bed-management/bed-management.html::modal::modal-card <{{ (editingWardId() ? 'BEDS.EDIT_WARD' : 'BEDS.NEW_WARD') | >": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/checkout/checkout-dialog/checkout-dialog.component.html::focus::dialog-panel <{{ 'CHECKOUT.TITLE' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/checkout/checkout-dialog/checkout-dialog.component.html::modal::dialog-panel <{{ 'CHECKOUT.TITLE' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 <dialog [open]> rule): a <dialog> not opened with showModal() is not modal; fix with appModalDialog and delete the pin"
+    },
+    "src/app/consultations/consultations.html::role::modal <{{ 'CONSULTATIONS.CANCEL' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/consultations/consultations.html::role::modal <{{ 'CONSULTATIONS.COMPLETE' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/consultations/consultations.html::role::modal <{{ 'CONSULTATIONS.DECLINE' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/consultations/consultations.html::role::modal <{{ 'CONSULTATIONS.SCHEDULE' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/consultations/consultations.html::role::modal <{{ isReassign() ? ('CONSULTATIONS.REASSIGN_CONSULTANT' | tra>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/consultations/consultations.html::role::modal modal-lg <{{ 'CONSULTATIONS.NEW' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/dashboard/credential-renewal/credential-renewal.component.html::focus::cred-modal <{{ 'CREDENTIALING.RENEW_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/dashboard/credential-renewal/credential-renewal.component.html::label::cred-modal <{{ 'CREDENTIALING.RENEW_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/departments/department-list.html::focus::modal <{{ 'DEPARTMENTS.DELETE' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/departments/department-list.html::focus::modal modal-lg <{{ editing() ? ('DEPARTMENTS.EDIT' | translate) : ('DEPARTME>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/departments/department-list.html::label::modal <{{ 'DEPARTMENTS.DELETE' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): dialog without a name; aria-labelledby pointing at its title"
+    },
+    "src/app/departments/department-list.html::label::modal modal-lg <{{ editing() ? ('DEPARTMENTS.EDIT' | translate) : ('DEPARTME>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): dialog without a name; aria-labelledby pointing at its title"
+    },
+    "src/app/departments/department-list.html::modal::modal <{{ 'DEPARTMENTS.DELETE' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 <dialog [open]> rule): a <dialog> not opened with showModal() is not modal; fix with appModalDialog and delete the pin"
+    },
+    "src/app/departments/department-list.html::modal::modal modal-lg <{{ editing() ? ('DEPARTMENTS.EDIT' | translate) : ('DEPARTME>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 <dialog [open]> rule): a <dialog> not opened with showModal() is not modal; fix with appModalDialog and delete the pin"
+    },
+    "src/app/digital-signatures/digital-signatures.html::escape::drawer <{{ 'SIGNATURES.DETAIL_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/digital-signatures/digital-signatures.html::escape::modal-content <{{ 'SIGNATURES.REVOKE_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/digital-signatures/digital-signatures.html::escape::modal-content <{{ 'SIGNATURES.SIGN_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/digital-signatures/digital-signatures.html::escape::modal-content <{{ 'SIGNATURES.VERIFY_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/digital-signatures/digital-signatures.html::focus::drawer <{{ 'SIGNATURES.DETAIL_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/digital-signatures/digital-signatures.html::focus::modal-content <{{ 'SIGNATURES.REVOKE_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/digital-signatures/digital-signatures.html::focus::modal-content <{{ 'SIGNATURES.SIGN_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/digital-signatures/digital-signatures.html::focus::modal-content <{{ 'SIGNATURES.VERIFY_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/digital-signatures/digital-signatures.html::label::drawer <{{ 'SIGNATURES.DETAIL_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/digital-signatures/digital-signatures.html::label::modal-content <{{ 'SIGNATURES.REVOKE_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/digital-signatures/digital-signatures.html::label::modal-content <{{ 'SIGNATURES.SIGN_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/digital-signatures/digital-signatures.html::label::modal-content <{{ 'SIGNATURES.VERIFY_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/digital-signatures/digital-signatures.html::modal::drawer <{{ 'SIGNATURES.DETAIL_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/digital-signatures/digital-signatures.html::modal::modal-content <{{ 'SIGNATURES.REVOKE_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/digital-signatures/digital-signatures.html::modal::modal-content <{{ 'SIGNATURES.SIGN_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/digital-signatures/digital-signatures.html::modal::modal-content <{{ 'SIGNATURES.VERIFY_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/encounters/eligibility-check-dialog/eligibility-check-dialog.component.html::escape::elig-dialog__panel <{{ 'ENCOUNTERS.ELIGIBILITY.TITLE' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
+    },
+    "src/app/encounters/eligibility-check-dialog/eligibility-check-dialog.component.html::focus::elig-dialog <{{ 'ENCOUNTERS.ELIGIBILITY.TITLE' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/encounters/eligibility-check-dialog/eligibility-check-dialog.component.html::focus::elig-dialog__panel <{{ 'ENCOUNTERS.ELIGIBILITY.TITLE' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/encounters/encounters.html::focus::modal <{{ 'ENCOUNTERS.DELETE' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/encounters/encounters.html::focus::modal modal-lg <{{ 'ENCOUNTERS.AVS_TITLE' | translate }} — {{ summary.patien>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/encounters/encounters.html::focus::modal modal-lg <{{ editing() ? ('ENCOUNTERS.EDIT' | translate) : ('ENCOUNTER>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/feature-flags/feature-flags.html::escape::modal-content <{{ 'FLAGS.CREATE_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/feature-flags/feature-flags.html::focus::modal-content <{{ 'FLAGS.CREATE_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/feature-flags/feature-flags.html::label::modal-content <{{ 'FLAGS.CREATE_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/feature-flags/feature-flags.html::modal::modal-content <{{ 'FLAGS.CREATE_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/hospitals/hospital-detail.html::role::dialog <{{ 'HOSPITAL_LIFECYCLE.DIALOG.' + state.kind.toUpperCase() |>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/hospitals/hospital-list.html::focus::modal <{{ 'HOSPITALS.DELETE' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/hospitals/hospital-list.html::focus::modal modal-lg <{{ editing() ? ('HOSPITALS.EDIT' | translate) : ('HOSPITALS.>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/hospitals/hospital-list.html::label::modal <{{ 'HOSPITALS.DELETE' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): dialog without a name; aria-labelledby pointing at its title"
+    },
+    "src/app/hospitals/hospital-list.html::label::modal modal-lg <{{ editing() ? ('HOSPITALS.EDIT' | translate) : ('HOSPITALS.>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): dialog without a name; aria-labelledby pointing at its title"
+    },
+    "src/app/hospitals/hospital-list.html::modal::modal <{{ 'HOSPITALS.DELETE' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 <dialog [open]> rule): a <dialog> not opened with showModal() is not modal; fix with appModalDialog and delete the pin"
+    },
+    "src/app/hospitals/hospital-list.html::modal::modal modal-lg <{{ editing() ? ('HOSPITALS.EDIT' | translate) : ('HOSPITALS.>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 <dialog [open]> rule): a <dialog> not opened with showModal() is not modal; fix with appModalDialog and delete the pin"
+    },
+    "src/app/login/login.html::focus::fp-card <{{ 'LOGIN.FORGOT_USERNAME_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/login/login.html::focus::fp-card <{{ 'LOGIN.RA_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/login/login.html::focus::fp-card <{{ 'LOGIN.RESET_PASSWORD_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/login/login.html::modal::fp-card <{{ 'LOGIN.FORGOT_USERNAME_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 <dialog [open]> rule): a <dialog> not opened with showModal() is not modal; fix with appModalDialog and delete the pin"
+    },
+    "src/app/login/login.html::modal::fp-card <{{ 'LOGIN.RA_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 <dialog [open]> rule): a <dialog> not opened with showModal() is not modal; fix with appModalDialog and delete the pin"
+    },
+    "src/app/login/login.html::modal::fp-card <{{ 'LOGIN.RESET_PASSWORD_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 <dialog [open]> rule): a <dialog> not opened with showModal() is not modal; fix with appModalDialog and delete the pin"
+    },
+    "src/app/maternity/birth-plan-tab.html::focus::modal <{{ 'BIRTH_PLAN.DELETE_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/maternity/birth-plan-tab.html::focus::modal <{{ 'BIRTH_PLAN.REVIEW_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/maternity/birth-plan-tab.html::focus::modal modal-lg <{{ (editingPlanId() ? 'BIRTH_PLAN.EDIT' : 'BIRTH_PLAN.NEW') >": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/maternity/birth-plan-tab.html::focus::modal modal-lg <{{ p.introduction?.patientName }} — {{ 'BIRTH_PLAN.TITLE' | >": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/maternity/maternity.html::focus::modal modal-lg <{{ 'MATERNITY.NEW_REFERRAL' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/maternity/maternity.html::focus::modal modal-lg <{{ (editingHistoryId() ? 'MATERNITY.EDIT_HISTORY' : 'MATERNI>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/maternity/maternity.html::focus::modal modal-lg <{{ patientDisplay(r) }} {{ 'MATERNITY.STATUS_' + r.status | >": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/maternity/maternity.html::focus::modal modal-lg <{{ patientName(h.patientId) }} — {{ 'MATERNITY.HISTORY_TITLE>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/maternity/prenatal-tab.html::focus::modal <{{ 'PRENATAL.RESCHEDULE' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/maternity/prenatal-tab.html::focus::modal <{{ 'PRENATAL.SEND_REMINDER' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/maternity/ultrasound-tab.html::focus::modal modal-lg <{{ 'ULTRASOUND.RECORD_REPORT' | translate }} — {{ order.pati>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/maternity/ultrasound-tab.html::focus::modal modal-lg <{{ (editingOrderId() ? 'ULTRASOUND.EDIT_ORDER' : 'ULTRASOUND>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/maternity/ultrasound-tab.html::focus::modal modal-lg <{{ o.patientDisplayName || ('MATERNITY.PATIENT' | translate)>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/medication-history/medication-history.html::focus::modal modal-lg <{{ (editingFillId() ? 'MED_TIMELINE.EDIT_FILL' : 'MED_TIMELI>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/medication-history/medication-history.html::label::modal modal-lg <{{ (editingFillId() ? 'MED_TIMELINE.EDIT_FILL' : 'MED_TIMELI>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/micro/microbiology.html::focus::modal <{{ 'MICRO.CREATE_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/micro/microbiology.html::focus::modal <{{ 'MICRO.ISOLATE_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/micro/microbiology.html::focus::modal <{{ 'MICRO.SUSC_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/micro/microbiology.html::label::modal <{{ 'MICRO.CREATE_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/micro/microbiology.html::label::modal <{{ 'MICRO.ISOLATE_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/micro/microbiology.html::label::modal <{{ 'MICRO.SUSC_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/mortality/mortality.html::role::modal <{{ 'MORTALITY.AMEND' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/mortality/mortality.html::role::modal modal-wide <{{ 'MORTALITY.RECORD_DEATH' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/organizations/organization-detail.html::escape::modal <{{ cfg.titleKey | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
+    },
+    "src/app/organizations/organization-detail.html::focus::modal <{{ cfg.titleKey | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/organizations/organization-detail.html::label::modal <{{ cfg.titleKey | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/organizations/organization-detail.html::modal::modal <{{ cfg.titleKey | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/organizations/organization-list.html::focus::modal <{{ 'ORGANIZATIONS.DELETE' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/organizations/organization-list.html::focus::modal <{{ editing() ? ('ORGANIZATIONS.EDIT' | translate) : ('ORGANI>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/organizations/organization-list.html::label::modal <{{ 'ORGANIZATIONS.DELETE' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): dialog without a name; aria-labelledby pointing at its title"
+    },
+    "src/app/organizations/organization-list.html::label::modal <{{ editing() ? ('ORGANIZATIONS.EDIT' | translate) : ('ORGANI>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): dialog without a name; aria-labelledby pointing at its title"
+    },
+    "src/app/organizations/organization-list.html::modal::modal <{{ 'ORGANIZATIONS.DELETE' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 <dialog [open]> rule): a <dialog> not opened with showModal() is not modal; fix with appModalDialog and delete the pin"
+    },
+    "src/app/organizations/organization-list.html::modal::modal <{{ editing() ? ('ORGANIZATIONS.EDIT' | translate) : ('ORGANI>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 <dialog [open]> rule): a <dialog> not opened with showModal() is not modal; fix with appModalDialog and delete the pin"
+    },
+    "src/app/panel/panel.html::focus::modal <{{ 'PANEL.ASSIGN' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/panel/panel.html::focus::modal <{{ 'PANEL.END_TITLE' | translate: { name: row.patientName } >": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/patient-education/patient-education.html::focus::modal <{{ 'EDUCATION.ASSIGN_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/patient-education/patient-education.html::focus::modal <{{ 'EDUCATION.UPDATE_PROGRESS' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/patient-education/patient-education.html::focus::modal modal-lg <{{ (editingResourceId() ? 'EDUCATION.EDIT_RESOURCE' : 'EDUCA>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/patient-education/patient-education.html::label::modal <{{ 'EDUCATION.ASSIGN_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/patient-education/patient-education.html::label::modal <{{ 'EDUCATION.UPDATE_PROGRESS' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/patient-education/patient-education.html::label::modal modal-lg <{{ (editingResourceId() ? 'EDUCATION.EDIT_RESOURCE' : 'EDUCA>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/patients/bpa-panel/bpa-panel.component.html::escape::bpa-modal <{{ 'BPA.CRITICAL_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/patients/bpa-panel/bpa-panel.component.html::focus::bpa-modal <{{ 'BPA.CRITICAL_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/patients/break-glass-banner/break-glass-banner.component.html::focus::bg-modal <{{ 'BREAK_GLASS.MODAL_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/patients/break-glass-banner/break-glass-banner.component.html::label::bg-modal <{{ 'BREAK_GLASS.MODAL_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/patients/coverage-tab/coverage-tab.component.html::label::modal <{{ 'COVERAGE.DELETE_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/patients/coverage-tab/coverage-tab.component.html::label::modal <{{ 'COVERAGE.EDIT_INSURANCE' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/patients/coverage-tab/coverage-tab.component.html::label::modal <{{ 'COVERAGE.LINK_INSURANCE' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/patients/coverage-tab/coverage-tab.component.html::label::modal <{{ 'COVERAGE.RECORD_CONSENT' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/patients/coverage-tab/coverage-tab.component.html::label::modal <{{ 'COVERAGE.REVOKE_CONSENT' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/patients/coverage-tab/coverage-tab.component.html::label::modal <{{ (editingGuarantor() ? 'COVERAGE.EDIT_GUARANTOR' : 'COVERA>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/patients/fluid-balance/fluid-balance-tab.component.html::focus::modal <{{ 'FLUID_BALANCE.MODAL_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/patients/fluid-balance/fluid-balance-tab.component.html::label::modal <{{ 'FLUID_BALANCE.MODAL_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/patients/medical-history-tab/medical-history-tab.component.html::focus::modal modal-lg <{{ 'MED_HISTORY.NEW_SOCIAL_VERSION' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/patients/medical-history-tab/medical-history-tab.component.html::focus::modal modal-lg <{{ (editingFamilyId() ? 'MED_HISTORY.EDIT_FAMILY' : 'MED_HIS>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/patients/medical-history-tab/medical-history-tab.component.html::focus::modal modal-lg <{{ (editingImmunizationId() ? 'MED_HISTORY.EDIT_IMMUNIZATION>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/patients/patient-form.html::escape::dup-modal <{{ 'PATIENTS.POSSIBLE_DUPLICATES' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/patients/patient-form.html::focus::dup-modal <{{ 'PATIENTS.POSSIBLE_DUPLICATES' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/patients/patient-form.html::label::dup-modal <{{ 'PATIENTS.POSSIBLE_DUPLICATES' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/patients/patient-photo/patient-photo.component.html::focus::modal <{{ 'PATIENT_PHOTO.MODAL_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/patients/patient-photo/patient-photo.component.html::label::modal <{{ 'PATIENT_PHOTO.MODAL_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/procedure-orders/procedure-orders.html::focus::modal modal-lg <{{ 'PROCEDURES.NEW_ORDER' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/procedure-orders/procedure-orders.html::focus::modal modal-lg <{{ o.procedureName }} {{ o.status | enumLabel: 'procedureOrd>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/procedure-orders/procedure-orders.html::label::modal modal-lg <{{ 'PROCEDURES.NEW_ORDER' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/procedure-orders/procedure-orders.html::label::modal modal-lg <{{ o.procedureName }} {{ o.status | enumLabel: 'procedureOrd>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/provider/provider-staff-register/provider-staff-register.html::focus::modal modal-lg <{{ titleKey() | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/provider/provider-staff/provider-staff.html::focus::modal <{{ 'PROVIDER.STAFF.DEACTIVATE_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/referrals/referrals.html::focus::modal <{{ 'REFERRALS.ACKNOWLEDGE_REFERRAL' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/referrals/referrals.html::focus::modal <{{ 'REFERRALS.CANCEL_REFERRAL' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/referrals/referrals.html::focus::modal <{{ 'REFERRALS.COMPLETE_REFERRAL' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/referrals/referrals.html::focus::modal <{{ 'REFERRALS.REJECT_REFERRAL' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/referrals/referrals.html::focus::modal <{{ 'REFERRALS.SCHEDULE_REFERRAL' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/referrals/referrals.html::focus::modal modal-lg <{{ 'REFERRALS.NEW' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/registrations/registrations.html::focus::modal <{{ 'REGISTRATIONS.DELETE_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/registrations/registrations.html::focus::modal <{{ (editingRegistration() ? 'REGISTRATIONS.EDIT' : 'REGISTRA>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/registrations/registrations.html::label::modal <{{ 'REGISTRATIONS.DELETE_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/registrations/registrations.html::label::modal <{{ (editingRegistration() ? 'REGISTRATIONS.EDIT' : 'REGISTRA>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/registries/registries.html::focus::modal <{{ 'REGISTRIES.CHANGE_STATUS' | translate }} — {{ target.pat>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/registries/registries.html::focus::modal <{{ 'REGISTRIES.ENROLL_TITLE' | translate }} — {{ 'REGISTRIES>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/reports/reports.html::escape::modal-panel <{{ 'REPORTS.CREATE' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/reports/reports.html::focus::modal-panel <{{ 'REPORTS.CREATE' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/roi/roi.html::focus::modal <{{ 'ROI.LOG_REQUEST' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/roi/roi.html::focus::modal <{{ decisionActionKey(d.kind) | translate }} — {{ d.row.patie>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/roles/role-list.html::focus::modal <{{ 'ROLES.DELETE_ROLE' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/roles/role-list.html::focus::modal <{{ editing() ? ('ROLES.EDIT_ROLE' | translate) : ('ROLES.CRE>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/roles/role-list.html::focus::modal modal-lg <{{ 'ROLES.MANAGE_PERMISSIONS' | translate }} — {{ selectedRo>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/roles/role-list.html::label::modal <{{ 'ROLES.DELETE_ROLE' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): dialog without a name; aria-labelledby pointing at its title"
+    },
+    "src/app/roles/role-list.html::label::modal <{{ editing() ? ('ROLES.EDIT_ROLE' | translate) : ('ROLES.CRE>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): dialog without a name; aria-labelledby pointing at its title"
+    },
+    "src/app/roles/role-list.html::label::modal modal-lg <{{ 'ROLES.MANAGE_PERMISSIONS' | translate }} — {{ selectedRo>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): dialog without a name; aria-labelledby pointing at its title"
+    },
+    "src/app/roles/role-list.html::modal::modal <{{ 'ROLES.DELETE_ROLE' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 <dialog [open]> rule): a <dialog> not opened with showModal() is not modal; fix with appModalDialog and delete the pin"
+    },
+    "src/app/roles/role-list.html::modal::modal <{{ editing() ? ('ROLES.EDIT_ROLE' | translate) : ('ROLES.CRE>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 <dialog [open]> rule): a <dialog> not opened with showModal() is not modal; fix with appModalDialog and delete the pin"
+    },
+    "src/app/roles/role-list.html::modal::modal modal-lg <{{ 'ROLES.MANAGE_PERMISSIONS' | translate }} — {{ selectedRo>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 <dialog [open]> rule): a <dialog> not opened with showModal() is not modal; fix with appModalDialog and delete the pin"
+    },
+    "src/app/scheduling/scheduling.html::escape::modal-panel <{{ 'SCHEDULING.BULK_SCHEDULE_SHIFTS' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 swallow rule): the dialog swallows Escape ($event.stopPropagation) so the backdrop close never fires; pre-existing"
+    },
+    "src/app/scheduling/scheduling.html::focus::modal-panel <{{ 'SCHEDULING.BULK_SCHEDULE_SHIFTS' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/scheduling/scheduling.html::modal::modal-panel <{{ 'SCHEDULING.BULK_SCHEDULE_SHIFTS' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 <dialog [open]> rule): a <dialog> not opened with showModal() is not modal; fix with appModalDialog and delete the pin"
+    },
+    "src/app/shared/prescription-clarification/prescription-clarification.component.html::focus::modal clarify-modal <{{ (isPharmacy() ? 'PRESCRIPTIONS.CLARIFICATION.TITLE_REQUES>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/staff/staff-list.html::focus::modal <{{ 'STAFF.DEACTIVATE_STAFF' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/staff/staff-list.html::focus::modal modal-lg <{{ editing() ? ('STAFF.EDIT_STAFF' | translate) : ('STAFF.RE>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/staff/staff-list.html::label::modal <{{ 'STAFF.DEACTIVATE_STAFF' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): dialog without a name; aria-labelledby pointing at its title"
+    },
+    "src/app/staff/staff-list.html::label::modal modal-lg <{{ editing() ? ('STAFF.EDIT_STAFF' | translate) : ('STAFF.RE>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): dialog without a name; aria-labelledby pointing at its title"
+    },
+    "src/app/staff/staff-list.html::modal::modal <{{ 'STAFF.DEACTIVATE_STAFF' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 <dialog [open]> rule): a <dialog> not opened with showModal() is not modal; fix with appModalDialog and delete the pin"
+    },
+    "src/app/staff/staff-list.html::modal::modal modal-lg <{{ editing() ? ('STAFF.EDIT_STAFF' | translate) : ('STAFF.RE>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 <dialog [open]> rule): a <dialog> not opened with showModal() is not modal; fix with appModalDialog and delete the pin"
+    },
+    "src/app/super-admin/providers/provider-detail/provider-detail.html::focus::modal <@if (dialog.kind === 'reject') { {{ 'PROVIDER.DECISION.REJEC>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/super-admin/providers/provider-detail/provider-detail.html::focus::modal <@switch (dialog.kind) { @case ('suspend') { {{ 'PROVIDER.LIF>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/super-admin/providers/provider-detail/provider-detail.html::focus::modal modal-xl <{{ 'PROVIDER.VERIFY.TITLE' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/treatment-plans/treatment-plans.html::role::modal modal-lg <{{ editing() ? ('COMMON.EDIT' | translate) : ('TREATMENT.NEW>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): modal without full dialog semantics; fix with the next touch of the page"
+    },
+    "src/app/users/user-list.html::label::modal <{{ 'USERS.DELETE_USER' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): dialog without a name; aria-labelledby pointing at its title"
+    },
+    "src/app/users/user-list.html::label::modal <{{ editing() ? ('USERS.EDIT_USER' | translate) : ('USERS.REG>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): dialog without a name; aria-labelledby pointing at its title"
+    },
+    "src/app/users/user-list.html::label::modal-content modal-md <{{ 'IMPERSONATION.MODAL_TITLE' | translate }}>": {
+      "count": 1,
+      "why": "pre-existing (class D976/D988): dialog without a name; aria-labelledby pointing at its title"
+    },
+    "src/app/webhooks/webhooks.html::focus::modal <{{ 'WEBHOOKS.ISSUE_KEY' | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/webhooks/webhooks.html::focus::modal <{{ (editingEndpoint() ? 'WEBHOOKS.EDIT_ENDPOINT' : 'WEBHOOKS>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/webhooks/webhooks.html::focus::modal <{{ confirmMessageKey(c.kind) | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    },
+    "src/app/webhooks/webhooks.html::focus::modal <{{ r.titleKey | translate }}>": {
+      "count": 1,
+      "why": "QA D1030 class (round-17 focus rule): pre-existing hand-built dialog with no focus management; fix with appModalDialog and delete the pin"
+    }
+  }
+}

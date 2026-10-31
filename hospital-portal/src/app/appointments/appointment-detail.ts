@@ -1,4 +1,14 @@
-import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import { refuseFields } from '../shared/forms/invalid-fields';
+import { StaffService, StaffResponse, isClinicalProvider } from '../services/staff.service';
+import { DialogFocusDirective } from '../shared/a11y/dialog-focus.directive';
+import {
+  Component,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+  ElementRef,
+} from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -53,7 +63,14 @@ const CHECK_IN_ELIGIBLE: readonly AppointmentStatus[] = ['SCHEDULED', 'CONFIRMED
 @Component({
   selector: 'app-appointment-detail',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [
+    DialogFocusDirective,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+  ],
   templateUrl: './appointment-detail.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './appointment-detail.scss',
@@ -65,8 +82,47 @@ export class AppointmentDetailComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly receptionService = inject(ReceptionService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   protected readonly permissions = inject(PermissionService);
   private readonly auth = inject(AuthService);
+  private readonly staffService = inject(StaffService);
+
+  /**
+   * QA D1018 / D923: the reschedule can move the visit to another clinician,
+   * department or reason, not only another time. The hospital's clinicians,
+   * read when the dialog opens.
+   */
+  readonly rescheduleStaffOptions = signal<StaffResponse[]>([]);
+  rescheduleStaffId = '';
+  rescheduleDepartmentId = '';
+  rescheduleReason = '';
+
+  /** The departments of the hospital's clinicians (the booking form's list). */
+  rescheduleDepartments(): { id: string; name: string }[] {
+    const seen = new Map<string, string>();
+    for (const s of this.rescheduleStaffOptions()) {
+      if (s.departmentId && !seen.has(s.departmentId)) {
+        seen.set(s.departmentId, s.departmentName || s.departmentId);
+      }
+    }
+    const appt = this.appointment();
+    if (appt?.departmentId && !seen.has(appt.departmentId)) {
+      seen.set(appt.departmentId, appt.departmentName || appt.departmentId);
+    }
+    return Array.from(seen.entries()).map(([id, name]) => ({ id, name }));
+  }
+
+  /** Whether the booked clinician is in the loaded list (else it is offered on its own). */
+  hasRescheduleStaff(staffId: string): boolean {
+    return this.rescheduleStaffOptions().some((s) => s.id === staffId);
+  }
+
+  /** A clinician picked: the visit follows them to their department. */
+  onRescheduleStaffChange(staffId: string): void {
+    this.rescheduleStaffId = staffId;
+    const picked = this.rescheduleStaffOptions().find((s) => s.id === staffId);
+    if (picked?.departmentId) this.rescheduleDepartmentId = picked.departmentId;
+  }
 
   appointment = signal<AppointmentResponse | null>(null);
   loading = signal(true);
@@ -77,7 +133,6 @@ export class AppointmentDetailComponent implements OnInit {
   showReschedule = signal(false);
   rescheduleDate = '';
   rescheduleStart = '';
-  rescheduleEnd = '';
   rescheduleNotes = '';
 
   // Cancel confirm modal
@@ -184,9 +239,18 @@ export class AppointmentDetailComponent implements OnInit {
     if (!appt) return;
     this.rescheduleDate = appt.appointmentDate;
     this.rescheduleStart = appt.startTime;
-    this.rescheduleEnd = appt.endTime;
     this.rescheduleNotes = appt.notes ?? '';
+    this.rescheduleStaffId = appt.staffId;
+    this.rescheduleDepartmentId = appt.departmentId ?? '';
+    this.rescheduleReason = appt.reason ?? '';
     this.showReschedule.set(true);
+    if (appt.hospitalId) {
+      this.staffService.list(appt.hospitalId).subscribe({
+        next: (list) => this.rescheduleStaffOptions.set(list.filter(isClinicalProvider)),
+        // The dialog still moves the time with the booked clinician.
+        error: () => this.rescheduleStaffOptions.set([]),
+      });
+    }
   }
 
   closeReschedule(): void {
@@ -195,7 +259,17 @@ export class AppointmentDetailComponent implements OnInit {
 
   submitReschedule(): void {
     const appt = this.appointment();
-    if (!appt || !this.rescheduleDate || !this.rescheduleStart || !this.rescheduleEnd) {
+    if (!appt || !this.rescheduleDate || !this.rescheduleStart) {
+      // QA D1072: the missing field is marked and focused.
+      refuseFields(
+        this.host.nativeElement,
+        [
+          !this.rescheduleDate ? 'reschedDate' : null,
+          !this.rescheduleStart ? 'reschedStart' : null,
+        ].filter((id): id is string => id !== null),
+        ['reschedDate', 'reschedStart'],
+        this.translate.instant('COMMON.FIELD_REQUIRED'),
+      );
       this.toast.error(this.translate.instant('APPOINTMENTS.REQUIRED_FIELDS'));
       return;
     }
@@ -209,16 +283,11 @@ export class AppointmentDetailComponent implements OnInit {
       return;
     }
 
-    if (this.rescheduleEnd <= this.rescheduleStart) {
-      this.toast.error(this.translate.instant('APPOINTMENTS.END_BEFORE_START'));
-      return;
-    }
-
     this.saving.set(true);
     const req: AppointmentUpsertRequest = {
       appointmentDate: this.rescheduleDate,
       startTime: this.rescheduleStart,
-      endTime: this.rescheduleEnd,
+      // QA D1060: no end time; the server sets it from the slot rules.
       // SCHEDULED, not RESCHEDULED. A moved appointment is a LIVE appointment
       // at a new time — the patient is expected to turn up and be checked in.
       // Writing RESCHEDULED here stranded it: every consumer treats that
@@ -234,10 +303,11 @@ export class AppointmentDetailComponent implements OnInit {
       // means anything and should be asked for again.
       status: 'SCHEDULED',
       patientId: appt.patientId,
-      staffId: appt.staffId,
+      // QA D1018: what the desk chose in the dialog, the booked values otherwise.
+      staffId: this.rescheduleStaffId || appt.staffId,
       hospitalId: appt.hospitalId,
-      departmentId: appt.departmentId ?? undefined,
-      reason: appt.reason,
+      departmentId: this.rescheduleDepartmentId || appt.departmentId || undefined,
+      reason: this.rescheduleReason.trim() || appt.reason,
       notes: this.rescheduleNotes || appt.notes || undefined,
     };
     this.appointmentService.update(this.appointmentId, req).subscribe({

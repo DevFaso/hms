@@ -975,4 +975,103 @@ class PrescriptionToPharmacyFlowIT extends BaseIT {
     private String nextId() {
         return String.format("%05d", sequence.incrementAndGet());
     }
+    // ───────────────────────── QA round 16 replays ─────────────────────────
+
+    @Autowired private com.example.hms.repository.MedicationCatalogItemRepository catalogItemRepository;
+
+    private com.example.hms.model.medication.MedicationCatalogItem seedCatalogItem(String name, boolean controlled) {
+        com.example.hms.model.medication.MedicationCatalogItem item = catalogItemRepository.save(
+                com.example.hms.model.medication.MedicationCatalogItem.builder()
+                        .nameFr(name)
+                        .genericName(name.toLowerCase(java.util.Locale.ROOT))
+                        .controlled(controlled)
+                        .active(true)
+                        .hospital(hospitalA)
+                        .build());
+        cleanup.push(() -> catalogItemRepository.deleteById(item.getId()));
+        return item;
+    }
+
+    private UUID createdId(String body) throws Exception {
+        UUID rxId = UUID.fromString(objectMapper.readTree(body).get("id").asString());
+        cleanup.push(() -> {
+            Prescription rx = prescriptionRepository.findById(rxId).orElse(null);
+            if (rx != null) {
+                UUID encounterId = rx.getEncounter() != null ? rx.getEncounter().getId() : null;
+                prescriptionRepository.deleteById(rxId);
+                if (encounterId != null) {
+                    encounterRepository.deleteById(encounterId);
+                }
+            }
+        });
+        return rxId;
+    }
+
+    @Test
+    @DisplayName("QA D922 replay (u18.js): a typed \"Morphine\" takes the hospital catalogue's controlled flag")
+    void d922_aTypedControlledDrugIsControlled() throws Exception {
+        com.example.hms.model.medication.MedicationCatalogItem morphine = seedCatalogItem("Morphine", true);
+
+        String created = mockMvc.perform(apiPost(API + "/prescriptions")
+                        .with(doctor(doctorA, hospitalA))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of(
+                                "patientId", patient.getId(),
+                                "medicationName", "Morphine",
+                                "dosage", "2 mg",
+                                "frequency", "Toutes les 4 heures",
+                                "route", "INTRAVENOUS",
+                                "quantity", 6,
+                                "quantityUnit", "ampoule"))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.controlledSubstance").value(true))
+                .andExpect(jsonPath("$.requiresPharmacistVerification").value(true))
+                .andExpect(jsonPath("$.medicationCatalogItemId").value(morphine.getId().toString()))
+                .andReturn().getResponse().getContentAsString();
+        UUID rxId = createdId(created);
+
+        assertThat(prescriptionRepository.findById(rxId).orElseThrow().getMedicationCatalogItemId())
+                .isEqualTo(morphine.getId());
+    }
+
+    @Test
+    @DisplayName("QA D970 replay (u19.js): editing a prescription raises no duplicate warning against itself")
+    void d970_anEditIsNotADuplicateOfItself() throws Exception {
+        String created = mockMvc.perform(apiPost(API + "/prescriptions")
+                        .with(doctor(doctorA, hospitalA))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of(
+                                "patientId", patient.getId(),
+                                "medicationName", "Sulfadoxine-pyriméthamine",
+                                "dosage", "3 comprimés",
+                                "frequency", "dose unique",
+                                "quantity", 3))))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        UUID rxId = createdId(created);
+
+        String edited = mockMvc.perform(apiPut(API + "/prescriptions/{id}", rxId)
+                        .with(doctor(doctorA, hospitalA))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of(
+                                "patientId", patient.getId(),
+                                "medicationName", "Sulfadoxine-pyriméthamine",
+                                "dosage", "3 comprimés",
+                                "frequency", "dose unique",
+                                "quantity", 3,
+                                "notes", "à prendre au centre"))))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        tools.jackson.databind.JsonNode advisories = objectMapper.readTree(edited).path("cdsAdvisories");
+        for (tools.jackson.databind.JsonNode card : advisories) {
+            assertThat(card.path("summary").asString()).doesNotContainIgnoringCase("duplicate");
+            assertThat(card.path("summary").asString()).doesNotContainIgnoringCase("doublon");
+        }
+    }
+
+    private static org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder apiPut(
+            String path, Object... vars) {
+        return org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(path, vars).contextPath(API);
+    }
+
 }

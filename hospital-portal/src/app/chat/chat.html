@@ -39,6 +39,7 @@
             class="btn-new-chat"
             (click)="openNewConversation()"
             [title]="'CHAT.NEW_CONVERSATION' | translate"
+            [attr.aria-label]="'CHAT.NEW_CONVERSATION' | translate"
           >
             <span class="material-symbols-outlined">edit_square</span>
           </button>
@@ -100,6 +101,7 @@
                 class="btn-icon"
                 (click)="closeNewConversation()"
                 [title]="'COMMON.CLOSE' | translate"
+                [attr.aria-label]="'COMMON.CLOSE' | translate"
               >
                 <span class="material-symbols-outlined">close</span>
               </button>
@@ -168,6 +170,7 @@
                 class="btn-icon"
                 (click)="refreshMessages()"
                 [title]="'CHAT.REFRESH_MESSAGES' | translate"
+                [attr.aria-label]="'CHAT.REFRESH_MESSAGES' | translate"
               >
                 <span class="material-symbols-outlined">refresh</span>
               </button>
@@ -286,6 +289,7 @@
               [disabled]="uploadingPhoto() || sendingMessage() || recordingAudio()"
               (click)="photoInput.click()"
               [title]="'CHAT.ATTACH_PHOTO' | translate"
+              [attr.aria-label]="'CHAT.ATTACH_PHOTO' | translate"
             >
               <span class="material-symbols-outlined">{{
                 uploadingPhoto() ? 'progress_activity' : 'image'
@@ -297,6 +301,7 @@
               [disabled]="uploadingAudio() || sendingMessage()"
               (click)="toggleVoiceMemo()"
               [title]="'CHAT.RECORD_VOICE_MEMO' | translate"
+              [attr.aria-label]="'CHAT.RECORD_VOICE_MEMO' | translate"
             >
               <span class="material-symbols-outlined">{{
                 recordingAudio() ? 'stop_circle' : uploadingAudio() ? 'progress_activity' : 'mic'
@@ -309,6 +314,7 @@
               (keydown.enter)="sendMessage()"
             />
             <button
+              [attr.aria-label]="'CHAT.SEND' | translate"
               class="send-btn"
               [disabled]="
                 sendingMessage() ||

@@ -58,6 +58,14 @@ public class TriageSubmissionRequestDTO {
     @Min(0) @Max(10)
     private Integer painScale;
 
+    /**
+     * QA D1031: the fundal height measured at an antenatal contact, in cm.
+     * Charted with the vitals in the clinician's language; no expected value
+     * is computed (no reference curve is held in the codebase).
+     */
+    @jakarta.validation.constraints.Positive
+    private Integer fundalHeightCm;
+
     // ── Clinical assessment ────────────────────────────────────
 
     @Size(max = 2048)

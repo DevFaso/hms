@@ -387,12 +387,15 @@
       data-testid="vt-modal"
     >
       <div
+        appModalDialog
+        aria-labelledby="slot-admin-panel-1-title"
+        (escaped)="closeVisitTypeModal()"
         class="form-card"
         (click)="$event.stopPropagation()"
         (keydown.escape)="$event.stopPropagation()"
         tabindex="-1"
       >
-        <h2>
+        <h2 id="slot-admin-panel-1-title">
           {{ (vtEditingId() ? 'SLOT_ADMIN.VT_EDIT_TITLE' : 'SLOT_ADMIN.VT_ADD_TITLE') | translate }}
         </h2>
         <form (ngSubmit)="submitVisitType()">
@@ -469,12 +472,15 @@
       data-testid="tpl-modal"
     >
       <div
+        appModalDialog
+        aria-labelledby="slot-admin-panel-2-title"
+        (escaped)="closeTemplateModal()"
         class="form-card"
         (click)="$event.stopPropagation()"
         (keydown.escape)="$event.stopPropagation()"
         tabindex="-1"
       >
-        <h2>
+        <h2 id="slot-admin-panel-2-title">
           {{
             (tplEditingId() ? 'SLOT_ADMIN.TPL_EDIT_TITLE' : 'SLOT_ADMIN.TPL_ADD_TITLE') | translate
           }}
@@ -603,12 +609,15 @@
       data-testid="slot-block-modal"
     >
       <div
+        appModalDialog
+        aria-labelledby="slot-admin-panel-3-title"
+        (escaped)="cancelBlock()"
         class="form-card confirm-card"
         (click)="$event.stopPropagation()"
         (keydown.escape)="$event.stopPropagation()"
         tabindex="-1"
       >
-        <h2>{{ 'SLOT_ADMIN.BLOCK_TITLE' | translate }}</h2>
+        <h2 id="slot-admin-panel-3-title">{{ 'SLOT_ADMIN.BLOCK_TITLE' | translate }}</h2>
         <p>
           <strong>{{ target.startAt | date: 'medium' }}</strong>
           — {{ target.staffName }}

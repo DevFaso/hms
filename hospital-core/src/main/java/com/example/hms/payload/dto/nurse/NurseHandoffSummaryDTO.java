@@ -19,6 +19,8 @@ public class NurseHandoffSummaryDTO {
     private String patientName;
     private String direction;
     private LocalDateTime updatedAt;
+    /** QA D1075: when the handoff was reported; updatedAt moves when it is completed. */
+    private LocalDateTime createdAt;
     /** Situation line — kept under the legacy name the card UI already renders. */
     private String note;
     private String background;

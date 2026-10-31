@@ -1,7 +1,7 @@
 package com.example.hms.mapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -53,14 +53,27 @@ class PrescriptionMapperCatalogControlledTest {
         assertThat(mapper.toResponseDTO(rx).isControlledSubstance()).isTrue();
     }
 
+    /**
+     * Declared assertion change (round-18 merge, QA D922 supersedes D654): a
+     * response read still never writes the prescriber's tick, but the
+     * safeguard no longer depends on it - it asks the catalogue, so
+     * catalogue-controlled morphine without the prescriber's proof is refused
+     * (this test asserted it passed).
+     */
     @Test
-    void signingIsNotNewlyBlockedByTheCatalogFlag() {
+    void aReadNeverWritesTheTickAndTheSafeguardAsksTheCatalog() {
         PrescriptionMapper mapper = mapperWithCatalog(true);
         Prescription rx = morphineWithoutTick(mapper);
         mapper.toResponseDTO(rx);
         assertThat(rx.isControlledSubstance()).isFalse();
-        assertThatCode(() -> new ControlledSubstanceGuard()
-            .requireSafeguardsFor(rx, PrescriptionStatus.SIGNED)).doesNotThrowAnyException();
+        MedicationCatalogItem item = new MedicationCatalogItem();
+        item.setControlled(true);
+        MedicationCatalogItemRepository repo = mock(MedicationCatalogItemRepository.class);
+        when(repo.findByHospitalIdAndCode(HOSPITAL_ID, "MORPH-10")).thenReturn(Optional.of(item));
+        ControlledSubstanceGuard guard = new ControlledSubstanceGuard(
+            new com.example.hms.service.pharmacy.PrescriptionControlledResolver(repo));
+        assertThatThrownBy(() -> guard.requireSafeguardsFor(rx, PrescriptionStatus.SIGNED))
+            .extracting("messageKey").isEqualTo("prescription.safeguard.CONTROLLED_SUBSTANCE.status");
     }
 
     @Test

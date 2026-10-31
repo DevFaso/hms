@@ -14,6 +14,7 @@ export interface ReferralPatientSummary {
   id: string;
   mrn?: string;
   firstName?: string;
+  middleName?: string;
   lastName?: string;
   dateOfBirth?: string;
 }
@@ -59,6 +60,9 @@ export interface ObgynReferralMessage {
 }
 
 export interface ObgynReferralResponse {
+  /** QA D1081: the user the server's author check compares with (shared/authorship.service). */
+  authorUserId?: string | null;
+
   id: string;
   patient?: ReferralPatientSummary;
   hospital?: ReferralHospitalSummary;

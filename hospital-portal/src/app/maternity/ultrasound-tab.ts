@@ -20,6 +20,8 @@ import { ToastService } from '../core/toast.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { localDateString } from '../shared/date-utils';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { refusalReason } from '../shared/refusal-reason';
+import { AuthorshipService } from '../shared/authorship.service';
 
 type UltrasoundWorklist = 'all' | 'pending' | 'high-risk' | 'follow-up' | 'anomalies';
 
@@ -33,6 +35,7 @@ type UltrasoundWorklist = 'all' | 'pending' | 'high-risk' | 'follow-up' | 'anoma
 })
 export class UltrasoundTabComponent implements OnInit {
   private readonly ultrasoundService = inject(UltrasoundService);
+  private readonly authorship = inject(AuthorshipService);
   private readonly auth = inject(AuthService);
   private readonly roleContext = inject(RoleContextService);
   private readonly toast = inject(ToastService);
@@ -41,6 +44,11 @@ export class UltrasoundTabComponent implements OnInit {
   private hospitalId: string | null = null;
 
   /** Order + report writes = DOCTOR/MIDWIFE/SUPER_ADMIN (effective backend roles). */
+  /** QA D1081: an ultrasound order is rewritten or cancelled by its author only. */
+  isOrderAuthor(o: UltrasoundOrderResponse): boolean {
+    return this.authorship.isAuthor(o);
+  }
+
   readonly canOrder = this.roleContext.hasAnyActiveRole([
     'ROLE_DOCTOR',
     'ROLE_MIDWIFE',
@@ -266,8 +274,10 @@ export class UltrasoundTabComponent implements OnInit {
         this.closeOrderModal();
         this.load();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('ULTRASOUND.ORDER_SAVE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('ULTRASOUND.ORDER_SAVE_ERROR'),
+        );
         this.orderSaving.set(false);
       },
     });
@@ -306,8 +316,9 @@ export class UltrasoundTabComponent implements OnInit {
             : list.map((o) => (o.id === updated.id ? updated : o)),
         );
       },
-      error: () => {
-        this.toast.error(this.translate.instant('ULTRASOUND.CANCEL_ERROR'));
+      error: (err: unknown) => {
+        // QA D930 class: the server says only the ordering clinician may cancel.
+        this.toast.error(refusalReason(err) ?? this.translate.instant('ULTRASOUND.CANCEL_ERROR'));
         this.cancelBusy.set(false);
       },
     });

@@ -411,7 +411,7 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
         // QA D605: the team is told even when the documenter is unknown.
         boolean notifyDocumenter = documentedBy != null && documentedBy.getUsername() != null;
         String fullName = assessment.getPatient() != null
-            ? (assessment.getPatient().getFirstName() + " " + assessment.getPatient().getLastName()).trim()
+            ? java.util.Objects.toString(assessment.getPatient().getFullName(), "")
             : "";
         assessment.getAlerts().stream()
             .filter(alert -> alert.getSeverity() == NewbornAlertSeverity.URGENT)
@@ -429,7 +429,7 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
             notificationService.createNotification("newborn.alert.notification",
                 new Object[]{typeKey, patientArg,
                     com.example.hms.service.maternity.ObstetricAlertEscalationWorker.alertMessageArg(
-                        messageKey, null, alert.getMessage())}, documentedBy.getUsername(), null);
+                        messageKey, null, alert.getMessage())}, documentedBy.getUsername(), "MATERNITY_ALERT");
         } catch (RuntimeException ex) {
             log.warn("Failed to create newborn alert notification: {}", ex.getMessage());
         }

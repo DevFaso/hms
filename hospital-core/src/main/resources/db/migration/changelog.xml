@@ -3118,4 +3118,118 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- V239 (round 16): a specimen can be rejected with a reason; the reason,
+         the rejecting user and the time are stored on the specimen (QA D962).
+         Plain statements, no DO block. Idempotent. -->
+    <changeSet id="V239-lab-specimen-rejection" author="hms-team" runOnChange="false">
+        <sqlFile path="V239__lab_specimen_rejection.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- =================================================================
+         V240 (round 16, QA D971): the BPA protocol row for the
+         hypertension-in-pregnancy advisory card, so an administrator can
+         switch it off. Seeded active; ON CONFLICT DO
+         NOTHING keeps an administrator's change on a re-run. V239 is not
+         used on this branch (another round-16 branch holds it).
+         ================================================================= -->
+    <changeSet id="V240-bpa-pregnancy-hypertension-protocol" author="hms-team" runOnChange="false">
+        <sqlFile path="V240__bpa_pregnancy_hypertension_protocol.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="true"/>
+    </changeSet>
+
+    <!-- V242 (round 16): discounts, waivers and credit notes on an issued
+         invoice, each with a mandatory reason (QA D974). Plain statements,
+         no DO block. Idempotent. -->
+    <changeSet id="V242-invoice-adjustments" author="hms-team" runOnChange="false">
+        <sqlFile path="V242__invoice_adjustments.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V243 (round 16, sibling fixes): the ordering user's id on an
+         ultrasound order, so update and cancel can be refused to anyone but
+         its author (QA D930 class). Nullable, plain statement, no DO block.
+         Idempotent. -->
+    <changeSet id="V243-ultrasound-order-author" author="hms-team" runOnChange="false">
+        <sqlFile path="V243__ultrasound_order_author.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V244 (round 17, front desk and identity): a discharge approval no
+         longer ends the patient's registration (QA D1014); puts back the
+         registrations it ended. Data only, plain statement, no DO block.
+         Idempotent. -->
+    <changeSet id="V244-discharged-registrations-stay-registered" author="hms-team" runOnChange="false">
+        <sqlFile path="V244__discharged_registrations_stay_registered.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V245 (round 17, clinical workflow): the witness of a controlled-drug
+         administration on the MAR/eMAR (QA D922, decision 2026-10-28) and the
+         care-note title (QA D1044). Nullable, plain statements, no DO block.
+         Idempotent. -->
+    <changeSet id="V245-mar-witness-and-care-note-title" author="hms-team" runOnChange="false">
+        <sqlFile path="V245__mar_witness_and_care_note_title.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V246 (round 17): QA D1053, an in-basket item keeps the message keys
+         and arguments of its title and body, so it is rendered in the
+         reader's language; QA D1032, a pharmacy payment stores a readable
+         receipt number from a per-hospital, per-year counter (existing
+         payments numbered in order). Plain statements, no DO block.
+         Idempotent. -->
+    <changeSet id="V246-r17-in-basket-keys-and-pharmacy-receipts" author="hms-team" runOnChange="false">
+        <sqlFile path="V246__r17_in_basket_keys_and_pharmacy_receipts.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V247 (round 18, QA D935): per-hospital paediatric dose limits - per-day
+         mg/kg, absolute per-dose and per-day mg caps, a manual-review age,
+         weight bands (JSON), the source and the local approval status. No
+         data. Plain statements, no DO block. Idempotent. -->
+    <changeSet id="V247-pediatric-dose-limits" author="hms-team" runOnChange="false">
+        <sqlFile path="V247__pediatric_dose_limits.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V249 (round 18, front desk and identity): QA D1061, a dependant's
+         patient account may have no login phone (security.users.phone_number
+         loses NOT NULL; the UNIQUE constraint stays, NULLs never collide), so
+         a child is registered under the guardian's number. Plain statement,
+         no DO block. Idempotent. -->
+    <changeSet id="V249-dependant-account-without-login-phone" author="hms-team" runOnChange="false">
+        <sqlFile path="V249__dependant_account_without_login_phone.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V251 (round 18): QA D1069, an invoice cancellation stores its
+         reason, when and by whom (cancel_reason, cancelled_at, cancelled_by
+         on billing.billing_invoices). Plain statements, no DO block.
+         Idempotent. -->
+    <changeSet id="V251-invoice-cancel-reason" author="hms-team" runOnChange="false">
+        <sqlFile path="V251__invoice_cancel_reason.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

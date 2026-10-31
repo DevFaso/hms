@@ -29,11 +29,15 @@ import {
   StockWitnessCandidate,
 } from '../services/pharmacy.service';
 import { AuthService } from '../auth/auth.service';
+import { PrintLabelService } from '../services/print-label.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { OfflineDispenseQueueService } from './offline-dispense-queue.service';
 import { PrescriptionClarificationComponent } from '../shared/prescription-clarification/prescription-clarification.component';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
 import { serverInstant } from '../shared/date-utils';
+import { DialogFocusDirective } from '../shared/a11y/dialog-focus.directive';
+import { earlierLotWithStock, fefoAllocation, FefoPart, fefoFirstLot } from './fefo-lots';
 
 /** The viewer's local calendar date as YYYY-MM-DD (not the UTC one). */
 function localIsoDate(d: Date): string {
@@ -129,11 +133,13 @@ export const UNRECOGNISED_ATTENTION = {
   standalone: true,
   imports: [
     ServerTimePipe,
+    PersonNamePipe,
     CommonModule,
     FormsModule,
     TranslateModule,
     EnumLabelPipe,
     PrescriptionClarificationComponent,
+    DialogFocusDirective,
   ],
   templateUrl: './dispensing.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -141,6 +147,8 @@ export const UNRECOGNISED_ATTENTION = {
 })
 export class DispensingComponent implements OnInit, OnDestroy {
   private readonly svc = inject(PharmacyService);
+  /** QA D966: opens a fetched PDF for printing. */
+  private readonly printService = inject(PrintLabelService);
   private readonly auth = inject(AuthService);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
@@ -570,7 +578,9 @@ export class DispensingComponent implements OnInit, OnDestroy {
     this.svc.listDispensableLots(rxId, this.selectedPharmacyId).subscribe({
       next: (res) => {
         // A late answer for a prescription that is no longer open is dropped.
-        if (this.selectedPrescription?.id === rxId) this.stockLots.set(res?.data ?? []);
+        if (this.selectedPrescription?.id !== rxId) return;
+        this.stockLots.set(res?.data ?? []);
+        this.preselectFefoLot();
       },
       error: () => this.stockLots.set([]),
     });
@@ -587,6 +597,57 @@ export class DispensingComponent implements OnInit, OnDestroy {
       .filter((lot) => lot.remainingQuantity > 0 && !this.isExpired(lot))
       .sort((a, b) => a.expiryDate.localeCompare(b.expiryDate)),
   );
+
+  /**
+   * QA D964 / D1029: first expired, first out. The shortest-dated usable lot,
+   * whatever the quantity (a larger fill is split: {@link fefoSplit});
+   * pre-selected when the lots arrive, unless the pharmacist already chose.
+   */
+  fefoLot(): StockLotResponse | undefined {
+    return fefoFirstLot(this.dispensableLots());
+  }
+
+  /**
+   * QA D1029: the fill split across lots in expiry order, when the chosen lot
+   * is the shortest-dated one and holds less than the quantity: the first lot
+   * is emptied and the rest comes from the next. Empty when one lot covers it
+   * (or the lots together cannot, which the server refuses as before). A
+   * method, not a computed: it reads the quantity typed in the form.
+   */
+  fefoSplit(): FefoPart<StockLotResponse>[] {
+    const chosen = this.selectedLot();
+    const qty = Number(this.form.quantityDispensed) || 0;
+    if (!chosen || chosen.id !== this.fefoLot()?.id || qty <= chosen.remainingQuantity) return [];
+    // An order with no stated quantity (or 0) counts one complete fill as the whole
+    // order (the server's rule), so a first part would close it and refuse
+    // the rest: such a fill is not split (the shortest lot, or a reason).
+    if (!((this.selectedPrescription?.quantity ?? 0) > 0)) return [];
+    const parts = fefoAllocation(this.dispensableLots(), qty);
+    return parts.length > 1 ? parts : [];
+  }
+
+  private preselectFefoLot(): void {
+    const lot = this.fefoLot();
+    if (lot && !this.form.stockLotId) {
+      this.form.stockLotId = lot.id;
+      this.onLotChange();
+    }
+  }
+
+  /**
+   * QA D964 / D1029: a shorter-dated lot of the same item that still holds
+   * stock (the server's FefoLotPolicy rule). While it exists, taking the
+   * chosen lot needs a reason, whether or not the earlier lot could cover the
+   * whole fill.
+   */
+  earlierLot(): StockLotResponse | undefined {
+    return earlierLotWithStock(this.dispensableLots(), this.selectedLot());
+  }
+
+  /** QA D964: a FEFO skip with no reason keeps Dispense and Ready disabled. */
+  fefoReasonMissing(): boolean {
+    return !!this.earlierLot() && !this.form.fefoOverrideReason?.trim();
+  }
 
   isExpired(lot: StockLotResponse): boolean {
     if (!lot?.expiryDate) return false;
@@ -628,7 +689,12 @@ export class DispensingComponent implements OnInit, OnDestroy {
   printLotLabel(): void {
     const lotId = this.form.stockLotId;
     if (!lotId) return;
-    window.open(`/pharmacy/stock-lots/${lotId}/label.pdf`, '_blank', 'noopener');
+    // QA D966: fetched with the session (the interceptors add /api and the
+    // token), then opened for printing; a refusal is said, not a blank tab.
+    this.svc.getStockLotLabel(lotId).subscribe({
+      next: (blob) => this.printService.openForPrint(blob),
+      error: () => this.toast.error(this.translate.instant('PHARMACY.PRINT_LABEL_FAILED')),
+    });
   }
 
   onPharmacyChange(): void {
@@ -767,6 +833,18 @@ export class DispensingComponent implements OnInit, OnDestroy {
     });
   }
 
+  /** QA D1001: what is still owed on the order; the prescribed amount only when the server sent none. */
+  remainingQuantity(rx: WorkQueuePrescription): number {
+    return rx.remainingQuantity ?? rx.quantity ?? 0;
+  }
+
+  /** QA D1001: true when part of the order was already dispensed, so the queue shows both figures. */
+  isPartlyDispensed(rx: WorkQueuePrescription): boolean {
+    return (
+      rx.remainingQuantity != null && rx.quantity != null && rx.remainingQuantity < rx.quantity
+    );
+  }
+
   private openForm(rx: WorkQueuePrescription): void {
     this.selectedPrescription = rx;
     this.form = this.emptyForm();
@@ -774,10 +852,12 @@ export class DispensingComponent implements OnInit, OnDestroy {
     this.form.patientId = rx.patient?.id ?? '';
     this.form.pharmacyId = this.selectedPharmacyId;
     this.form.medicationName = rx.medicationName ?? '';
-    this.form.quantityRequested = rx.quantity ?? 0;
-    // QA D432: the fill starts at what was prescribed, not at 0 (which kept
-    // Dispense disabled until the pharmacist retyped the quantity).
-    this.form.quantityDispensed = rx.quantity ?? 0;
+    // QA D432 then D1001: the fill starts at what is still owed on the order
+    // (the server's ceiling), not at 0 and not at the full prescribed amount,
+    // which a partly filled order refuses ("il reste au plus 10").
+    const owed = this.remainingQuantity(rx);
+    this.form.quantityRequested = owed;
+    this.form.quantityDispensed = owed;
     this.form.dispensedBy = this.auth.currentProfile()?.id ?? '';
     this.verifyAttested.set(false);
     this.showForm.set(true);
@@ -798,6 +878,12 @@ export class DispensingComponent implements OnInit, OnDestroy {
     if (this.verifyAttested()) {
       body.verifiedBy = this.form.dispensedBy;
     }
+    // QA D964: the reason travels only when a shorter-dated lot was skipped.
+    if (this.earlierLot()) {
+      body.fefoOverrideReason = this.form.fefoOverrideReason?.trim();
+    } else {
+      delete body.fefoOverrideReason;
+    }
     return body;
   }
 
@@ -812,6 +898,11 @@ export class DispensingComponent implements OnInit, OnDestroy {
 
   submitDispense(): void {
     if (this.missingWitness()) return;
+    const split = this.fefoSplit();
+    if (split.length > 1) {
+      this.submitSplitDispense(split);
+      return;
+    }
     this.saving.set(true);
     this.svc.createDispense(this.attestedForm()).subscribe({
       next: () => {
@@ -828,6 +919,50 @@ export class DispensingComponent implements OnInit, OnDestroy {
         this.toast.error(err?.error?.message ?? this.translate.instant('PHARMACY.DISPENSE_FAILED'));
       },
     });
+  }
+
+  /**
+   * QA D1029: one fill per lot, in expiry order, so the shorter-dated lot is
+   * emptied first. Sequential: the second fill is sent only once the first
+   * is recorded (the order is then partly filled, and the next fill is FEFO
+   * because the earlier lot is empty). If a later part fails, the parts
+   * already recorded stand and the order shows what is still owed.
+   */
+  private async submitSplitDispense(parts: FefoPart<StockLotResponse>[]): Promise<void> {
+    this.saving.set(true);
+    const base = this.attestedForm();
+    let recorded = 0;
+    try {
+      for (const [index, part] of parts.entries()) {
+        const body: DispenseRequest = {
+          ...base,
+          stockLotId: part.lot.id,
+          quantityRequested: part.quantity,
+          quantityDispensed: part.quantity,
+        };
+        delete body.fefoOverrideReason;
+        // The product scan names one pack's lot: it is checked on the first part only.
+        if (index > 0) delete body.productScanValue;
+        await firstValueFrom(this.svc.createDispense(body));
+        recorded++;
+      }
+      this.toast.success(
+        this.translate.instant('PHARMACY.DISPENSE_SPLIT_SUCCESS', { count: parts.length }),
+      );
+    } catch (err) {
+      const e = err as { error?: { message?: string } };
+      this.toast.error(e?.error?.message ?? this.translate.instant('PHARMACY.DISPENSE_FAILED'));
+      if (recorded === 0) {
+        this.saving.set(false);
+        return;
+      }
+    }
+    this.formClaimedRowId.set(null);
+    this.saving.set(false);
+    this.showForm.set(false);
+    this.selectedPrescription = null;
+    this.loadWorkQueue();
+    this.loadRecentDispenses();
   }
 
   /**

@@ -460,4 +460,62 @@ class ImagingReportServiceImplTest {
         assertThat(imagingReportService.getReportsByHospitalAndStatus(anyHospitalId, ImagingReportStatus.FINAL))
             .isEmpty();
     }
+
+    // ═══════════════ QA D930 class (round 16 siblings): the report's author ═══════════════
+
+    private ImagingReport reportReadBy(UUID interpreterUserId, UUID filedBy) {
+        ImagingReport report = persistedReport();
+        report.setImpression("No acute finding");
+        if (interpreterUserId != null) {
+            User user = new User();
+            user.setId(interpreterUserId);
+            Staff interpreter = new Staff();
+            interpreter.setId(UUID.randomUUID());
+            interpreter.setHospital(hospital);
+            interpreter.setUser(user);
+            report.setInterpretingProvider(interpreter);
+        }
+        report.setCreatedBy(filedBy);
+        return report;
+    }
+
+    @Test
+    void d930_aColleagueCannotReviseSignOrVoidAnotherCliniciansDraftRead() {
+        ImagingReport report = reportReadBy(UUID.randomUUID(), UUID.randomUUID());
+        ImagingReportStatusUpdateRequestDTO voidIt = new ImagingReportStatusUpdateRequestDTO();
+        voidIt.setStatus(ImagingReportStatus.CANCELLED);
+        voidIt.setStatusReason("Wrong patient");
+
+        assertThatThrownBy(() -> imagingReportService.updateReport(reportId, new ImagingReportUpsertRequestDTO()))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThatThrownBy(() -> imagingReportService.signReport(reportId))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThatThrownBy(() -> imagingReportService.updateReportStatus(reportId, voidIt))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        assertThat(report.getSignedBy()).isNull();
+        assertThat(report.getReportStatus()).isEqualTo(ImagingReportStatus.PRELIMINARY);
+        verify(imagingReportRepository, never()).save(any(ImagingReport.class));
+    }
+
+    @Test
+    void d930_theInterpretingProviderSignsHerRead() {
+        ImagingReport report = reportReadBy(callerUserId, UUID.randomUUID());
+
+        imagingReportService.signReport(reportId);
+
+        assertThat(report.getReportStatus()).isEqualTo(ImagingReportStatus.FINAL);
+        assertThat(report.getSignedBy()).isSameAs(caller);
+    }
+
+    /** Declared supervision path: the clinician who filed the draft may still revise it after naming the reader. */
+    @Test
+    void d930_theClinicianWhoFiledTheDraftRevisesIt() {
+        ImagingReport report = reportReadBy(UUID.randomUUID(), callerUserId);
+        ImagingReportUpsertRequestDTO edit = new ImagingReportUpsertRequestDTO();
+        edit.setImpression("Small effusion");
+
+        imagingReportService.updateReport(reportId, edit);
+
+        verify(imagingReportRepository).save(report);
+    }
 }

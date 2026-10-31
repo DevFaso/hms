@@ -48,7 +48,12 @@
       {{ 'SIGNATURES.LOOKUP' | translate }}
     </button>
     @if (lookupDone()) {
-      <button type="button" class="btn-icon" (click)="clearLookup()">
+      <button
+        [attr.aria-label]="'COMMON.CLEAR' | translate"
+        type="button"
+        class="btn-icon"
+        (click)="clearLookup()"
+      >
         <span class="material-icons">close</span>
       </button>
     }
@@ -147,6 +152,7 @@
                   class="btn-icon"
                   (click)="openVerify(sig)"
                   [title]="'SIGNATURES.VERIFY' | translate"
+                  [attr.aria-label]="'SIGNATURES.VERIFY' | translate"
                   [disabled]="sig.status !== 'SIGNED'"
                 >
                   <span class="material-icons">verified_user</span>
@@ -156,6 +162,7 @@
                     class="btn-icon danger"
                     (click)="openRevoke(sig)"
                     [title]="'SIGNATURES.REVOKE' | translate"
+                    [attr.aria-label]="'SIGNATURES.REVOKE' | translate"
                     [disabled]="sig.status !== 'SIGNED'"
                   >
                     <span class="material-icons">block</span>
@@ -193,7 +200,11 @@
       >
         <div class="drawer-header">
           <h2>{{ 'SIGNATURES.DETAIL_TITLE' | translate }}</h2>
-          <button class="btn-icon" (click)="closeDetail()">
+          <button
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+            class="btn-icon"
+            (click)="closeDetail()"
+          >
             <span class="material-icons">close</span>
           </button>
         </div>
@@ -296,7 +307,11 @@
       >
         <div class="modal-header">
           <h2>{{ 'SIGNATURES.VERIFY_TITLE' | translate }}</h2>
-          <button class="btn-icon" (click)="closeVerify()">
+          <button
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+            class="btn-icon"
+            (click)="closeVerify()"
+          >
             <span class="material-icons">close</span>
           </button>
         </div>
@@ -364,7 +379,11 @@
       >
         <div class="modal-header">
           <h2>{{ 'SIGNATURES.REVOKE_TITLE' | translate }}</h2>
-          <button class="btn-icon" (click)="closeRevoke()">
+          <button
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+            class="btn-icon"
+            (click)="closeRevoke()"
+          >
             <span class="material-icons">close</span>
           </button>
         </div>
@@ -416,7 +435,12 @@
       >
         <div class="modal-header">
           <h2>{{ 'SIGNATURES.SIGN_TITLE' | translate }}</h2>
-          <button type="button" class="btn-icon" (click)="closeSign()">
+          <button
+            [attr.aria-label]="'COMMON.CLOSE' | translate"
+            type="button"
+            class="btn-icon"
+            (click)="closeSign()"
+          >
             <span class="material-icons">close</span>
           </button>
         </div>

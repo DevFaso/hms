@@ -1,3 +1,5 @@
+import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
+import { textMatches } from '../shared/person-search';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
   Component,
@@ -36,6 +38,7 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { fromServerDateTime, toLocalInputValue, toServerDateTime } from '../shared/date-utils';
 import { BedService, BedResponse } from '../services/bed.service';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 interface OrderSetPickerCtx {
   hospitalId: string;
@@ -51,6 +54,8 @@ const CANCELLABLE_STATUSES = new Set<string>(['PENDING', 'ACTIVE', 'ON_LEAVE']);
   selector: 'app-admissions',
   standalone: true,
   imports: [
+    ModalDialogDirective,
+    PersonNamePipe,
     PatientSublinePipe,
     CommonModule,
     FormsModule,
@@ -720,7 +725,7 @@ export class AdmissionsComponent implements OnInit {
     if (term) {
       list = list.filter(
         (a) =>
-          (a.patientName ?? '').toLowerCase().includes(term) ||
+          textMatches(a.patientName, term) ||
           (a.chiefComplaint ?? '').toLowerCase().includes(term) ||
           (a.roomBed ?? '').toLowerCase().includes(term),
       );

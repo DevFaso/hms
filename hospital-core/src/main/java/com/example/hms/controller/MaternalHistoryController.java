@@ -82,14 +82,15 @@ public class MaternalHistoryController {
     @GetMapping("/patient/{patientId}/current")
     @PreAuthorize("hasAnyAuthority('ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_MIDWIFE', 'ROLE_SUPER_ADMIN')")
     @Operation(summary = "Get current maternal history for patient",
-               description = "Retrieves the latest version of maternal history for a patient")
+               description = "Retrieves the latest version of maternal history for a patient; 204 No Content when there is none")
     public ResponseEntity<MaternalHistoryResponseDTO> getCurrentMaternalHistory(
         @PathVariable UUID patientId,
         Authentication authentication
     ) {
         String username = authentication.getName();
         MaternalHistoryResponseDTO response = maternalHistoryService.getCurrentMaternalHistoryByPatientId(patientId, username);
-        return ResponseEntity.ok(response);
+        // QA D1082: a woman with no maternal history yet is 204, as birth plans and care plans answer.
+        return response == null ? ResponseEntity.noContent().build() : ResponseEntity.ok(response);
     }
 
     @GetMapping("/patient/{patientId}/versions")

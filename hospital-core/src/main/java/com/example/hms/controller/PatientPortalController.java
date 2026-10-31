@@ -107,6 +107,8 @@ public class PatientPortalController {
     private final NotificationService notificationService;
     private final PharmacyPaymentService pharmacyPaymentService;
     private final PharmacyClaimService pharmacyClaimService;
+    /** QA D966: the printed copy of a prescription the pharmacy printed for the patient. */
+    private final com.example.hms.service.pharmacy.PrescriptionCopyPdfService prescriptionCopyPdfService;
 
     // ── Profile ──────────────────────────────────────────────────────────
 
@@ -177,6 +179,21 @@ public class PatientPortalController {
         return ResponseEntity.ok(ApiResponseWrapper.success(prescriptions));
     }
 
+    /**
+     * QA D966: the copy of a prescription the pharmacy printed for me, to take
+     * to an outside pharmacy. My own prescriptions only, and only once printed.
+     */
+    @Operation(summary = "Download the printed copy of my prescription")
+    @GetMapping(value = "/prescriptions/{prescriptionId}/printed-copy",
+            produces = org.springframework.http.MediaType.APPLICATION_PDF_VALUE)
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<byte[]> getMyPrintedPrescription(Authentication auth,
+                                                           @PathVariable UUID prescriptionId) {
+        UUID patientId = portalService.resolvePatientId(auth);
+        return com.example.hms.controller.pharmacy.StockOutRoutingController.printedCopyResponse(
+                prescriptionCopyPdfService.copyForPatient(prescriptionId, patientId), prescriptionId);
+    }
+
     // ── Vital Signs ──────────────────────────────────────────────────────
 
     @Operation(summary = "View my vital signs")
@@ -224,6 +241,41 @@ public class PatientPortalController {
         Locale locale = LocaleContextHolder.getLocale();
         Page<BillingInvoiceResponseDTO> invoices = portalService.getMyInvoices(auth, pageable, locale);
         return ResponseEntity.ok(ApiResponseWrapper.success(invoices));
+    }
+
+    @Operation(summary = "One of my invoices with its lines and payments (QA D982)")
+    @GetMapping("/billing/invoices/{invoiceId}")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<com.example.hms.payload.dto.portal.PortalInvoiceDetailDTO>> getMyInvoiceDetail(
+            Authentication auth, @PathVariable UUID invoiceId) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(portalService.getMyInvoiceDetail(auth, invoiceId)));
+    }
+
+    @Operation(summary = "Download my invoice as PDF (QA D982)")
+    @GetMapping("/billing/invoices/{invoiceId}/pdf")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<byte[]> downloadMyInvoicePdf(Authentication auth, @PathVariable UUID invoiceId) {
+        var pdf = portalService.getMyInvoicePdf(auth, invoiceId, LocaleContextHolder.getLocale());
+        return pdfAttachment(pdf.content(), "invoice-" + pdf.suggestedFilename() + ".pdf");
+    }
+
+    @Operation(summary = "Download the receipt of one of my payments (QA D982)")
+    @GetMapping("/billing/invoices/{invoiceId}/payments/{paymentId}/receipt")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<byte[]> downloadMyReceiptPdf(Authentication auth, @PathVariable UUID invoiceId,
+                                                       @PathVariable UUID paymentId) {
+        var pdf = portalService.getMyReceiptPdf(auth, invoiceId, paymentId, LocaleContextHolder.getLocale());
+        return pdfAttachment(pdf.content(), pdf.suggestedFilename() + ".pdf");
+    }
+
+    private static ResponseEntity<byte[]> pdfAttachment(byte[] content, String filename) {
+        return ResponseEntity.ok()
+            .contentType(MediaType.APPLICATION_PDF)
+            .cacheControl(org.springframework.http.CacheControl.noCache())
+            .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION,
+                org.springframework.http.ContentDisposition.attachment().filename(filename).build().toString())
+            .contentLength(content.length)
+            .body(content);
     }
 
     @Operation(summary = "Pay an invoice",

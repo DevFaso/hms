@@ -110,6 +110,7 @@
                   type="button"
                   class="btn-secondary btn-sm"
                   [title]="'COMMON.VIEW' | translate"
+                  [attr.aria-label]="'COMMON.VIEW' | translate"
                   (click)="openOrder(o)"
                 >
                   <span class="material-symbols-outlined">visibility</span>
@@ -132,7 +133,7 @@
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeOrder(); $event.stopPropagation()"
     >
       <div class="modal-header">
         <h2>
@@ -383,7 +384,7 @@
             </button>
           }
         }
-        @if (canCancel && !isTerminal(o) && !detailAction()) {
+        @if (canCancelOrder(o) && !isTerminal(o) && !detailAction()) {
           <button type="button" class="btn-danger" (click)="openAction('cancel')">
             {{ 'PROCEDURES.CANCEL_ORDER' | translate }}
           </button>
@@ -410,7 +411,7 @@
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeOrderModal(); $event.stopPropagation()"
     >
       <div class="modal-header">
         <h2>{{ 'PROCEDURES.NEW_ORDER' | translate }}</h2>

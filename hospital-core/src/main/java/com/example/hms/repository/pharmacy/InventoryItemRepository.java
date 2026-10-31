@@ -25,6 +25,13 @@ public interface InventoryItemRepository extends JpaRepository<InventoryItem, UU
     boolean existsByPharmacyIdAndActiveTrue(UUID pharmacyId);
 
     /**
+     * QA D967: every item of a pharmacy with its catalogue entry, deactivated
+     * ones included (a controlled drug taken off the list keeps its register).
+     */
+    @Query("SELECT i FROM InventoryItem i LEFT JOIN FETCH i.medicationCatalogItem WHERE i.pharmacy.id = :pharmacyId")
+    List<InventoryItem> findAllWithCatalogItemByPharmacyId(@Param("pharmacyId") UUID pharmacyId);
+
+    /**
      * QA D270: the item row, locked for the rest of the transaction, so two
      * manual returns cannot both fit under the same not-yet-returned total.
      */

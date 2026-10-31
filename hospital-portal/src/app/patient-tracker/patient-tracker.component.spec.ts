@@ -18,6 +18,7 @@ import {
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import fr from '../../assets/i18n/fr.json';
 import es from '../../assets/i18n/es.json';
+import { RoleContextService } from '../core/role-context.service';
 
 function mockItem(overrides: Partial<PatientTrackerItem> = {}): PatientTrackerItem {
   return {
@@ -73,7 +74,7 @@ describe('PatientTrackerComponent', () => {
     ]);
     trackerWsSpy.getEvents.and.returnValue(of());
     trackerWsSpy.getConnectionState.and.returnValue(of(false));
-    authSpy = jasmine.createSpyObj('AuthService', ['getHospitalId', 'hasAnyRole']);
+    authSpy = jasmine.createSpyObj('AuthService', ['getHospitalId', 'hasAnyRole', 'getUserId']);
     authSpy.hasAnyRole.and.returnValue(true);
     encounterSpy = jasmine.createSpyObj('EncounterService', [
       'getById',
@@ -112,6 +113,65 @@ describe('PatientTrackerComponent', () => {
     expect(component.board()).toBeTruthy();
     expect(component.totalPatients()).toBe(2);
     expect(component.averageWait()).toBe(15);
+  });
+
+  // QA D1085: the midwife was offered Démarrer on every waiting card.
+  it('D1085: offers Start per card on the server rule (midwife: only her own visits)', () => {
+    const roles = TestBed.inject(RoleContextService);
+    roles.setRoles(['ROLE_MIDWIFE']);
+    authSpy.getUserId.and.returnValue('u-mw');
+    const mine = mockItem({
+      encounterId: 'm',
+      currentStatus: 'WAITING_FOR_PHYSICIAN',
+      assignedProviderUserId: 'u-mw',
+    });
+    const doctors = mockItem({
+      encounterId: 'd',
+      currentStatus: 'WAITING_FOR_PHYSICIAN',
+      assignedProviderUserId: 'u-dr',
+    });
+    const unassigned = mockItem({
+      encounterId: 'u',
+      currentStatus: 'WAITING_FOR_PHYSICIAN',
+      assignedProviderUserId: null,
+    });
+    expect(component.canStartItem(mine)).toBeTrue();
+    expect(component.canStartItem(doctors)).toBeFalse();
+    expect(component.canStartItem(unassigned)).toBeFalse();
+    roles.setRoles(['ROLE_DOCTOR']);
+    authSpy.getUserId.and.returnValue('u-dr');
+    expect(component.canStartItem(unassigned)).toBeTrue();
+    expect(component.canStartItem(doctors)).toBeTrue();
+    expect(component.canStartItem(mine)).toBeFalse();
+    trackerSpy.getTrackerBoard.and.returnValue(
+      of(mockBoard({ waitingForPhysician: [mine, doctors, unassigned] })),
+    );
+    roles.setRoles(['ROLE_MIDWIFE']);
+    authSpy.getUserId.and.returnValue('u-mw');
+    fixture.detectChanges();
+    const starts = fixture.nativeElement.querySelectorAll('[data-testid="tracker-start"]');
+    expect(starts.length).withContext('one Start button, on her own visit').toBe(1);
+  });
+
+  it('QA D954: an arrived patient who left unseen is closed from the tracker', () => {
+    authSpy.hasAnyRole.and.callFake((roles: string[]) => roles.includes('ROLE_NURSE'));
+    fixture.detectChanges();
+    const btn = fixture.nativeElement.querySelector(
+      '[data-testid="tracker-lwbs"]',
+    ) as HTMLButtonElement;
+    expect(btn).withContext('LWBS action on the arrived card').toBeTruthy();
+    btn.click();
+    fixture.detectChanges();
+    expect(component.closeUnseenItem()?.encounterId).toBe('e1');
+    expect(fixture.nativeElement.querySelector('app-close-unseen-dialog')).toBeTruthy();
+    component.onUnseenVisitClosed();
+    expect(component.closeUnseenItem()).toBeNull();
+  });
+
+  it('QA D954: a role the endpoint refuses is not offered the LWBS action', () => {
+    authSpy.hasAnyRole.and.callFake((roles: string[]) => roles.includes('ROLE_LAB_TECHNICIAN'));
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="tracker-lwbs"]')).toBeNull();
   });
 
   it('should set loading to false after load', () => {

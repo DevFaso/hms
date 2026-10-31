@@ -1,4 +1,13 @@
-import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
+import { refuseFields } from '../shared/forms/invalid-fields';
+import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
+import {
+  Component,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+  ElementRef,
+} from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -14,16 +23,37 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { localDateString } from '../shared/date-utils';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
+import { comboboxKey } from '../shared/a11y/combobox-keys';
+import { labelledRefusalReason } from '../shared/refusal-reason';
+
+/** QA D984: the label each refused field is reported under. */
+const APPOINTMENT_FIELD_LABELS: Readonly<Record<string, string>> = {
+  appointmentDate: 'APPOINTMENTS.DATE',
+  startTime: 'APPOINTMENTS.START_TIME',
+  endTime: 'APPOINTMENTS.END_TIME',
+  reason: 'APPOINTMENTS.REASON',
+  notes: 'APPOINTMENTS.NOTES',
+};
 
 interface DeptOption {
   id: string;
   name: string;
 }
 
+/** QA D1072: the fields the booking form may refuse, in reading order. */
+const APPOINTMENT_FORM_REQUIRED_IDS = ['date', 'start', 'apptPatientSearch', 'apptStaffSearch'];
+
 @Component({
   selector: 'app-appointment-form',
   standalone: true,
-  imports: [PatientSublinePipe, FormsModule, RouterLink, TranslateModule, EnumLabelPipe],
+  imports: [
+    PersonNamePipe,
+    PatientSublinePipe,
+    FormsModule,
+    RouterLink,
+    TranslateModule,
+    EnumLabelPipe,
+  ],
   templateUrl: './appointment-form.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './appointment-form.scss',
@@ -38,6 +68,7 @@ export class AppointmentFormComponent implements OnInit {
   private readonly toast = inject(ToastService);
   private readonly roleContext = inject(RoleContextService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   saving = signal(false);
 
@@ -45,6 +76,8 @@ export class AppointmentFormComponent implements OnInit {
   patientQuery = signal('');
   patientSuggestions = signal<PatientResponse[]>([]);
   patientDropdownOpen = signal(false);
+  /** QA D947: the suggestion the arrow keys are on (-1: none). */
+  patientActive = signal(-1);
   patientSearchLoading = signal(false);
   selectedPatient = signal<PatientResponse | null>(null);
   private readonly patientSearch$ = new Subject<string>();
@@ -53,6 +86,8 @@ export class AppointmentFormComponent implements OnInit {
   staffQuery = signal('');
   staffSuggestions = signal<StaffResponse[]>([]);
   staffDropdownOpen = signal(false);
+  /** QA D947: the suggestion the arrow keys are on (-1: none). */
+  staffActive = signal(-1);
   staffSearchLoading = signal(false);
   selectedStaff = signal<StaffResponse | null>(null);
   private readonly staffSearch$ = new Subject<string>();
@@ -96,7 +131,6 @@ export class AppointmentFormComponent implements OnInit {
   form: AppointmentUpsertRequest = {
     appointmentDate: '',
     startTime: '',
-    endTime: '',
     reason: '',
     notes: '',
   };
@@ -123,6 +157,7 @@ export class AppointmentFormComponent implements OnInit {
         this.allStaff = list.filter(isClinicalProvider);
         this.staffLoaded = true;
         this.setDeptsFromStaff(lockedId);
+        this.applyPendingStaff();
       });
     } else {
       // Multi-hospital admin: load all hospitals for the dropdown.
@@ -151,11 +186,24 @@ export class AppointmentFormComponent implements OnInit {
     const time = params.get('time');
     if (time && /^\d{2}:\d{2}$/.test(time)) {
       this.form.startTime = time;
-      this.onStartTimeChange();
+      // QA D1060: the visit's length is the clinician's slot length, set by
+      // the server on every booking path; the calendar's suggested duration
+      // (QA D1055) is no longer sent as an end time.
+    }
+    // QA D1055: the provider (and so the department) the calendar was planned with.
+    const staffId = params.get('staffId');
+    if (staffId && /^[0-9a-f-]{36}$/i.test(staffId)) {
+      this.pendingStaffId = staffId;
+      this.applyPendingStaff();
     }
     const reason = params.get('reason');
     if (reason) {
       this.form.reason = reason.trim().slice(0, 255);
+    }
+    // QA D985: booked from the recall list, the booking schedules that recall.
+    const recallId = params.get('recallId');
+    if (recallId && /^[0-9a-f-]{36}$/i.test(recallId)) {
+      this.form.recallId = recallId;
     }
     const patientId = params.get('patientId');
     if (patientId && /^[0-9a-f-]{36}$/i.test(patientId)) {
@@ -180,6 +228,9 @@ export class AppointmentFormComponent implements OnInit {
       .subscribe({
         next: (list) => {
           this.patientSuggestions.set(list.slice(0, 8));
+          // QA D947: a new list has no active option; Tab must not pick whoever
+          // now sits where the old highlight was (review round 11).
+          this.patientActive.set(-1);
           this.patientDropdownOpen.set(list.length > 0);
           this.patientSearchLoading.set(false);
         },
@@ -192,11 +243,43 @@ export class AppointmentFormComponent implements OnInit {
     if (q.length >= 1) this.patientSearch$.next(q);
     else {
       this.patientSuggestions.set([]);
+      // QA D947: a new list has no active option; Tab must not pick whoever
+      // now sits where the old highlight was (review round 11).
+      this.patientActive.set(-1);
       this.patientDropdownOpen.set(false);
     }
   }
 
+  /** QA D947: ArrowDown/ArrowUp/Enter/Tab/Escape on the patient picker. */
+  onPatientKeydown(event: KeyboardEvent): void {
+    const options = this.patientDropdownOpen() ? this.patientSuggestions() : [];
+    const step = comboboxKey(event, options.length, this.patientActive());
+    if (step.pick) {
+      this.selectPatient(options[step.active]);
+    } else if (step.close) {
+      this.patientDropdownOpen.set(false);
+    }
+    this.patientActive.set(step.close ? -1 : step.active);
+  }
+
+  /** QA D947: the same keyboard on the staff picker. */
+  onStaffKeydown(event: KeyboardEvent): void {
+    const options = this.staffDropdownOpen() ? this.staffSuggestions() : [];
+    const step = comboboxKey(event, options.length, this.staffActive());
+    if (step.pick) {
+      this.selectStaff(options[step.active]);
+    } else if (step.close) {
+      this.staffDropdownOpen.set(false);
+    }
+    this.staffActive.set(step.close ? -1 : step.active);
+  }
+
   selectPatient(p: PatientResponse): void {
+    // QA D985 (review round 14): picking another patient drops the recall the
+    // form was opened for, as clearing the patient does; it was theirs.
+    if (this.form.patientId && this.form.patientId !== p.id) {
+      delete this.form.recallId;
+    }
     this.selectedPatient.set(p);
     this.form.patientId = p.id;
     delete this.form.patientEmail;
@@ -207,6 +290,8 @@ export class AppointmentFormComponent implements OnInit {
   clearPatient(): void {
     this.selectedPatient.set(null);
     delete this.form.patientId;
+    // The recall belonged to the patient just cleared (QA D985).
+    delete this.form.recallId;
     this.patientQuery.set('');
   }
 
@@ -260,6 +345,9 @@ export class AppointmentFormComponent implements OnInit {
               )
             : this.allStaff;
           this.staffSuggestions.set(filtered.slice(0, 8));
+          // QA D947: a new list has no active option; Tab must not pick whoever
+          // now sits where the old highlight was (review round 11).
+          this.staffActive.set(-1);
           this.staffDropdownOpen.set(filtered.length > 0);
           this.staffSearchLoading.set(false);
         },
@@ -272,7 +360,24 @@ export class AppointmentFormComponent implements OnInit {
     if (q.length >= 1) this.staffSearch$.next(q);
     else {
       this.staffSuggestions.set([]);
+      // QA D947: a new list has no active option; Tab must not pick whoever
+      // now sits where the old highlight was (review round 11).
+      this.staffActive.set(-1);
       this.staffDropdownOpen.set(false);
+    }
+  }
+
+  /** QA D1055: a provider asked for by the link, applied once the staff list is in. */
+  private pendingStaffId: string | null = null;
+
+  private applyPendingStaff(): void {
+    if (!this.pendingStaffId || !this.staffLoaded) return;
+    const staff = this.allStaff.find((s) => s.id === this.pendingStaffId);
+    this.pendingStaffId = null;
+    if (!staff) return;
+    this.selectStaff(staff);
+    if (staff.departmentId && !this.form.departmentId) {
+      this.form.departmentId = staff.departmentId;
     }
   }
 
@@ -364,52 +469,26 @@ export class AppointmentFormComponent implements OnInit {
     return this.hospitals().find((h) => h.id === id)?.name ?? id;
   }
 
-  // ── Time validation ────────────────────────────────────
-  timeError = signal<string | null>(null);
-
-  onStartTimeChange(): void {
-    const start = this.form.startTime;
-    if (!start) return;
-    this.timeError.set(null);
-    const [h, m] = start.split(':').map(Number);
-    const totalMin = h * 60 + m + 30;
-    const endH = Math.floor(totalMin / 60) % 24;
-    const endM = totalMin % 60;
-    const autoEnd = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`;
-    if (!this.form.endTime || this.form.endTime <= start) {
-      this.form.endTime = autoEnd;
-    }
-  }
-
-  onEndTimeChange(): void {
-    if (this.form.startTime && this.form.endTime) {
-      if (this.form.endTime <= this.form.startTime) {
-        this.timeError.set(this.translate.instant('APPOINTMENTS.END_TIME_AFTER_START'));
-      } else {
-        this.timeError.set(null);
-      }
-    }
-  }
-
-  private validateTimes(): boolean {
-    if (!this.form.startTime || !this.form.endTime) return true;
-    if (this.form.endTime <= this.form.startTime) {
-      const msg = this.translate.instant('APPOINTMENTS.END_TIME_AFTER_START');
-      this.timeError.set(msg);
-      this.toast.error(msg);
-      return false;
-    }
-    this.timeError.set(null);
-    return true;
-  }
-
   // ── Submit ───────────────────────────────────────────────
   submit(): void {
+    // QA D1072: every missing field is marked and the first one focused, with
+    // the toast naming the first gap as before.
+    const missing = [
+      !this.form.appointmentDate ? 'date' : null,
+      !this.form.startTime ? 'start' : null,
+      !this.form.patientId ? 'apptPatientSearch' : null,
+      !this.form.staffId ? 'apptStaffSearch' : null,
+    ].filter((id): id is string => id !== null);
+    refuseFields(
+      this.host.nativeElement,
+      missing,
+      APPOINTMENT_FORM_REQUIRED_IDS,
+      this.translate.instant('COMMON.FIELD_REQUIRED'),
+    );
     if (!this.form.appointmentDate || !this.form.startTime) {
       this.toast.error(this.translate.instant('APPOINTMENTS.TOAST.DATE_TIME_REQUIRED'));
       return;
     }
-    if (this.form.endTime && !this.validateTimes()) return;
     if (!this.form.patientId) {
       this.toast.error(this.translate.instant('APPOINTMENTS.TOAST.PATIENT_REQUIRED'));
       return;
@@ -434,8 +513,17 @@ export class AppointmentFormComponent implements OnInit {
         this.router.navigate(['/appointments']);
       },
       error: (err) => {
+        // QA D985: a recall the booking cannot answer (closed meanwhile, another
+        // patient's) rolls the booking back; drop it so the next submit books
+        // the visit without it, as the refusal says.
+        if ((err as { error?: { field?: unknown } } | null)?.error?.field === 'recallId') {
+          delete this.form.recallId;
+        }
+        // QA D984: a validation refusal names the field and its reason
+        // ("Date : must be today or later"), not the generic text.
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('APPOINTMENTS.TOAST.CREATE_FAILED'),
+          labelledRefusalReason(err, this.translate, APPOINTMENT_FIELD_LABELS) ??
+            this.translate.instant('APPOINTMENTS.TOAST.CREATE_FAILED'),
         );
         this.saving.set(false);
       },

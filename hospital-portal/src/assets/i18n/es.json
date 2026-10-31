@@ -801,7 +801,8 @@
       "INFO": "Información",
       "WARNING": "Advertencia",
       "CRITICAL": "Crítico"
-    }
+    },
+    "HARD_STOP": "Esta dosis supera un máximo absoluto y no puede anularse. Cambie la dosis o la frecuencia."
   },
   "BPA": {
     "ACK_FAILED": "No se pudo registrar el reconocimiento del aviso.",
@@ -939,7 +940,8 @@
     "SIGN_OFF": "Firmar",
     "SUBTITLE": "Cada sesión de acceso de emergencia de este hospital, pendiente de la firma de un administrador.",
     "TITLE": "Revisión de accesos de emergencia",
-    "MRN": "N.º de historia"
+    "MRN": "N.º de historia",
+    "PATIENT_UNNAMED": "Paciente (sin nombre en el expediente)"
   },
   "STORYBOARD": {
     "ARIA_LABEL": "Banner de resumen del paciente",
@@ -1084,7 +1086,8 @@
         "CANCELLED": "Cancelado",
         "POSTPONED": "Pospuesto"
       }
-    }
+    },
+    "NURSING_NOTE": "Nota de enfermería"
   },
   "ORDER_SETS": {
     "ADD_ITEM": "Agregar elemento",
@@ -1386,10 +1389,7 @@
     "DOCTOR": "Médico",
     "DOCTOR_STAFF": "Médico / Personal",
     "DURATION": "Duración",
-    "END_BEFORE_START": "La hora de fin debe ser posterior a la hora de inicio.",
     "END_TIME": "Hora de Fin",
-    "END_TIME_AFTER_START": "La hora de fin debe ser posterior a la hora de inicio",
-    "END_TIME_HINT": "Se calcula automáticamente si se deja vacío (30 min por defecto)",
     "FILTER_FROM_DATE_TITLE": "Filtrar desde la fecha",
     "FILTER_TO_DATE_TITLE": "Filtrar hasta la fecha",
     "FROM": "Desde",
@@ -1421,6 +1421,7 @@
     "REASON": "Motivo",
     "REASON_FOR_VISIT": "Motivo de la Visita",
     "REASON_PLACEHOLDER": "Motivo de la visita…",
+    "REMOVE_FILTER": "Quitar el filtro",
     "REQUESTED": "Solicitado",
     "REQUIRED_FIELDS": "Complete todos los campos obligatorios.",
     "RESCHEDULE": "Reprogramar",
@@ -1458,7 +1459,8 @@
     "TO_DATE": "Hasta",
     "VIEW": "Ver cita",
     "VIEW_MANAGE_SUBTITLE": "Ver y gestionar detalles de la cita",
-    "YES_CANCEL": "Sí, Cancelar"
+    "YES_CANCEL": "Sí, Cancelar",
+    "DURATION_SET_BY_SLOTS": "La duración de la visita la fijan los turnos del profesional."
   },
   "APPOINTMENT_CALENDAR": {
     "TITLE": "Calendario de citas",
@@ -1502,6 +1504,9 @@
     "WRITE_DELETE": "Eliminación: {{entity}}",
     "WRITE_ENTITY_UNKNOWN": "registro",
     "DESC": {
+      "INVOICE_ADJUSTMENT": "{{kind}} en la factura {{invoice}}",
+      "PATIENT_DEMOGRAPHICS_REPLACED": "Datos del paciente reemplazados",
+      "PATIENT_DEMOGRAPHICS_UPDATED": "Datos del paciente corregidos: {{fields}}",
       "PATIENT_RECORD_VIEWED": "Expediente del paciente consultado",
       "USER_PROFILE_UPDATED": "Perfil de usuario actualizado",
       "USER_CREATED": "Nueva cuenta de usuario creada",
@@ -1727,7 +1732,14 @@
       "STATUS_WAS": "{{what}} (estaba {{previous}})",
       "PLATFORM_SERVICE_UPDATED": "Servicio de plataforma modificado: {{details}}",
       "PLATFORM_SERVICE_STATUS": "Estado del servicio de plataforma cambiado a {{status}}: {{details}}",
-      "PLATFORM_LINK_TOGGLED": "Vínculo del servicio de plataforma con un {{target}} {{state}}: {{details}}"
+      "PLATFORM_LINK_TOGGLED": "Vínculo del servicio de plataforma con un {{target}} {{state}}: {{details}}",
+      "INVOICE_CANCELLED": "Factura {{invoice}} anulada, motivo registrado",
+      "CDS_OVERRIDE_CREATED": "Alerta crítica de apoyo a la decisión anulada al crear la receta",
+      "CDS_OVERRIDE_EDITED": "Alerta crítica de apoyo a la decisión anulada al modificar la receta",
+      "DOSE_LIMITS_APPROVED": "Límites de dosis pediátricos aprobados en el artículo del catálogo {{item}}",
+      "DOSE_LIMITS_DEFAULT": "Límites de dosis pediátricos definidos por defecto, pendientes de aprobación, en el artículo del catálogo {{item}}",
+      "RX_SIGN_REAUTH_VERIFIED": "Identidad confirmada para firmar una receta de estupefaciente ({{method}})",
+      "RX_SIGN_REAUTH_REFUSED": "Identidad no confirmada para firmar una receta de estupefaciente ({{reason}})"
     },
     "SCOPE_REFUSAL": {
       "NOT_PERMITTED": "ningún rol activo en este hospital",
@@ -1983,9 +1995,43 @@
       "EMERGENCY_FORCE_LOGOUT_ALL": "Cierre de sesión de emergencia de todos",
       "EMERGENCY_FORCE_MFA_REENROL": "Restablecimiento de emergencia del doble factor",
       "EMERGENCY_KILL_FEATURE": "Desactivación de emergencia de una función"
+    },
+    "INVOICE_ADJUSTMENT": {
+      "CREDIT_NOTE": "Nota de crédito",
+      "DISCOUNT": "Descuento",
+      "WAIVER": "Exención"
+    },
+    "RX_SIGN_REAUTH": {
+      "TOTP": "código de autenticación",
+      "PASSWORD": "contraseña",
+      "REQUIRED": "ningún código introducido",
+      "INVALID": "código erróneo",
+      "CHALLENGE": "inicio de sesión no completado",
+      "NOT_ENROLLED": "ninguna aplicación de autenticación",
+      "UNAVAILABLE": "autenticación no disponible",
+      "UNIDENTIFIED": "cuenta no identificada",
+      "LOCKED": "demasiados códigos erróneos",
+      "REUSED": "código ya utilizado",
+      "IMPERSONATION": "sesión de soporte",
+      "PASSWORD_REQUIRED": "ninguna contraseña introducida",
+      "PASSWORD_INVALID": "contraseña errónea",
+      "PASSWORD_LOCKED": "demasiadas contraseñas erróneas",
+      "SIGNING_IMPERSONATION": "sesión de soporte",
+      "SIGNING_NOT_ENROLLED": "aplicación de autenticación necesaria para esta cuenta"
     }
   },
   "BILLING": {
+    "ADJUSTMENTS": "Descuentos, exenciones y notas de crédito",
+    "ADJUSTMENT_AMOUNT": "Importe (F CFA)",
+    "ADJUSTMENT_AMOUNT_HINT": "Déjelo vacío para acreditar todo lo que queda en la línea.",
+    "ADJUSTMENT_FAILED": "No se pudo guardar el ajuste.",
+    "ADJUSTMENT_LINE": "Línea anulada",
+    "ADJUSTMENT_LINE_REQUIRED": "Elija la línea que anula la nota de crédito.",
+    "ADJUSTMENT_REASON": "Motivo",
+    "ADJUSTMENT_REASON_REQUIRED": "Indique el motivo del descuento, la exención o la nota de crédito.",
+    "ADJUSTMENT_SAVED": "Factura ajustada.",
+    "ADJUSTMENT_SUBMIT": "Aplicar",
+    "ADJUSTMENT_TYPE": "Tipo",
     "ALL_STATUSES": "Todos los estados",
     "AMOUNT": "Importe",
     "AMOUNT_PAID": "Importe pagado",
@@ -2026,7 +2072,12 @@
     "NEW_INVOICE": "Nueva factura",
     "NOTES": "Notas",
     "NOTES_PLACEHOLDER": "Notas de la factura…",
+    "NO_ADJUSTMENTS": "Ningún descuento, exención ni nota de crédito.",
     "NO_INVOICES": "No se encontraron facturas",
+    "OPEN_COPAYS_INTRO": "Este paciente pagó un copago en la admisión que ninguna factura ha recogido todavía. Vincule su visita para que se descuente y el paciente no pague dos veces:",
+    "OPEN_COPAY_LINE": "{{amount}} por la visita {{visit}} (factura {{invoice}})",
+    "OPEN_COPAY_LINK": "Vincular esta visita",
+    "OPEN_COPAY_LINKED": "Vinculada: el copago se descontará",
     "OUTSTANDING": "Pendiente",
     "OUTSTANDING_COUNT": "Pendientes de pago",
     "OVERDUE": "Vencida",
@@ -2039,6 +2090,7 @@
     "PAYMENT_METHOD": "Método de pago",
     "PAYMENT_NOTE": "Los pagos se aplican a facturas emitidas o parcialmente pagadas, hasta el saldo pendiente, en francos enteros.",
     "PAYMENT_RECORDED": "Pago registrado",
+    "PAYMENT_REFERENCE_REQUIRED": "Indique la referencia de la transacción para un pago con dinero móvil, transferencia o seguro.",
     "PAYMENT_TITLE": "Registrar pago — {{invoice}}",
     "PDF_FAILED": "Error al descargar el PDF",
     "PENDING": "Pendiente",
@@ -2118,7 +2170,43 @@
       "REVERSED": "Revertido"
     },
     "PAYMENT_PENDING_DECLARED": "Un pago de {{amount}} declarado por el paciente está pendiente de confirmación. Confírmelo o rechácelo antes de cobrar ese importe de nuevo.",
-    "PATIENT_LOCKED_ISSUED": "Esta factura ya fue emitida: no se puede cambiar su paciente. Anúlela y emita una nueva factura."
+    "PATIENT_LOCKED_ISSUED": "Esta factura ya fue emitida: no se puede cambiar su paciente. Anúlela y emita una nueva factura.",
+    "ADJUSTMENT_TYPES": {
+      "CREDIT_NOTE": "Nota de crédito",
+      "DISCOUNT": "Descuento",
+      "WAIVER": "Exención (gratuidad)"
+    },
+    "CASH_CLOSING": {
+      "OPEN": "Cierre de caja",
+      "TITLE": "Cierre de caja del día",
+      "DATE": "Día",
+      "PRINT": "Imprimir",
+      "LOADING": "Cargando el cierre de caja…",
+      "LOAD_FAILED": "No se pudo cargar el cierre de caja.",
+      "SUBTITLE": "Cobros de {{cashier}} el {{date}}",
+      "EMPTY": "Ningún cobro ese día.",
+      "BY_METHOD": "Totales por medio de pago",
+      "SOURCE": "Caja",
+      "COUNT": "Pagos",
+      "AMOUNT": "Importe",
+      "TOTAL": "Total cobrado",
+      "REVERSED": "Anulados después (fuera de caja)",
+      "ENTRIES": "Pagos cobrados",
+      "TIME": "Hora",
+      "DOCUMENT": "Factura o medicamento",
+      "REFERENCE": "Referencia",
+      "REVERSED_TAG": "anulado",
+      "SOURCES": {
+        "BILLING": "Facturas",
+        "PHARMACY": "Farmacia"
+      }
+    },
+    "CANCEL_REASON": "Motivo de la anulación",
+    "CANCEL_REASON_PLACEHOLDER": "¿Por qué se anula esta factura emitida? El motivo se conserva con ella.",
+    "CANCEL_REASON_REQUIRED": "Indique el motivo de la anulación de esta factura emitida.",
+    "ADJUSTMENT_AMOUNT_REQUIRED": "Indique el importe del descuento o de la exoneración (mayor que cero).",
+    "EDIT_LINE": "Tarifar o corregir esta línea",
+    "ITEM_UPDATED": "Línea actualizada"
   },
   "CHAT": {
     "ACCESS_DENIED": "No tiene permiso para acceder a la mensajería.",
@@ -2162,7 +2250,8 @@
     "VOICE_MEMO_NOT_SUPPORTED": "Este navegador no admite la grabación de notas de voz.",
     "VOICE_MEMO_UPLOAD_FAILED": "Fallo al subir la nota de voz.",
     "ATTACHMENT": "Archivo adjunto",
-    "SUBTITLE_PATIENT": "Escriba a su equipo de atención"
+    "SUBTITLE_PATIENT": "Escriba a su equipo de atención",
+    "SEND": "Enviar el mensaje"
   },
   "COMMON": {
     "ACTION": "Acción",
@@ -2185,6 +2274,7 @@
     "CLEAR_SEARCH": "Borrar búsqueda",
     "CLOSE": "Cerrar",
     "CLOSE_DETAIL_PANEL": "Cerrar panel de detalles",
+    "COLON": ":",
     "COMPLETED": "Completado",
     "CONFIRM": "Confirmar",
     "CREATE": "Crear",
@@ -2267,7 +2357,10 @@
     "MINUTES_SHORT": "{{count}} min",
     "COPYRIGHT_FOOTER": "© {{year}} e-Keneya — Sistema de gestión hospitalaria",
     "PATIENT_PICKER_NO_MATCH": "Ningún paciente coincide con esta búsqueda.",
-    "MISSING_REQUIRED_FIELDS": "Faltan campos obligatorios: {{fields}}"
+    "MISSING_REQUIRED_FIELDS": "Faltan campos obligatorios: {{fields}}",
+    "REMOVE_FILTER": "Quitar el filtro",
+    "SHOW_DETAILS": "Mostrar u ocultar los detalles",
+    "FIELD_REQUIRED": "Este campo es obligatorio."
   },
   "CONSULTATIONS": {
     "ACKNOWLEDGE": "Acusar recibo",
@@ -2545,6 +2638,7 @@
     "PASSED": "Aprobado",
     "PATIENTS_TODAY": "Pacientes de hoy",
     "PATIENT_FLOW": "Flujo de Pacientes",
+    "PATIENT_FLOW_EMERGENCY": "Urgencias",
     "PATIENT_FLOW_INPATIENT": "Hospitalizado",
     "PATIENT_FLOW_OUTPATIENT": "Ambulatorio",
     "PATIENT_LOOKUP": "Búsqueda de Pacientes",
@@ -3026,6 +3120,7 @@
     "NOTE_SIGNED_AT": "Firmada",
     "NOTE_SIGNED_PRE_V125": "Declarada antes de la ceremonia — no verificable",
     "NOTE_SIGNING": "Firmando…",
+    "NOTE_SIGN_AUTHOR_ONLY": "Solo el autor ({{name}}) puede firmar esta nota.",
     "NOTE_SIGN_FAILED": "Error al firmar la nota",
     "NOTE_SIGN_SUCCESS": "Nota firmada",
     "NOTE_UNSIGNED": "Esta nota no está firmada. La firma la bloquea — los cambios posteriores se hacen mediante adendas.",
@@ -3403,16 +3498,6 @@
     "ORDERED_BY": "Ordenado por",
     "ORDERED_DATE": "Fecha de la orden",
     "ORDER_CHANNEL": "Canal de la orden",
-    "ORDER_CHANNEL_OPTION": {
-      "ELECTRONIC": "Electrónico",
-      "EMAIL": "Correo electrónico",
-      "FAX": "Fax",
-      "OTHER": "Otro",
-      "PHONE": "Teléfono",
-      "PORTAL": "Portal",
-      "WALK_IN": "Sin cita previa",
-      "WRITTEN": "Escrito"
-    },
     "ORDER_CODE": "Código de orden",
     "ORDER_DATE": "Fecha de la orden",
     "PATIENT": "Paciente",
@@ -3440,13 +3525,6 @@
     "SELECT_TEST": "Seleccionar prueba",
     "SENT_TO": "Enviado a",
     "SPECIMENS": "Muestras",
-    "SPECIMEN_STATUS_COLLECTED": "Recolectada",
-    "SPECIMEN_STATUS_COMPLETED": "Completada",
-    "SPECIMEN_STATUS_IN_TRANSIT": "En tránsito",
-    "SPECIMEN_STATUS_PENDING": "Pendiente",
-    "SPECIMEN_STATUS_PROCESSING": "En proceso",
-    "SPECIMEN_STATUS_RECEIVED": "Recibida",
-    "SPECIMEN_STATUS_REJECTED": "Rechazada",
     "SPECIMEN_TYPE": "Tipo de muestra",
     "SPECIMEN_TYPE_PLACEHOLDER": "p. ej. Sangre total, Orina, Hisopo",
     "STATUS_FILTER": "Estado",
@@ -3492,6 +3570,18 @@
       "CONFIRM": "Marcar como registrada por error",
       "DONE": "La orden está marcada como registrada por error.",
       "FAILED": "No se pudo marcar la orden como registrada por error."
+    },
+    "REJECT_SPECIMEN": {
+      "ACTION": "Rechazar",
+      "CONFIRM": "Rechazar la muestra",
+      "DONE": "Muestra rechazada. La solicitud vuelve a esperar una toma y se ha avisado al prescriptor.",
+      "EXPLAIN": "La muestra se rechaza y la solicitud vuelve a esperar una nueva toma. Se informa del motivo al prescriptor. Muestra:",
+      "FAILED": "No se pudo rechazar la muestra.",
+      "REASON": "Motivo del rechazo",
+      "REASON_PLACEHOLDER": "p. ej. hemolizada, tubo inadecuado, volumen insuficiente, sin etiqueta",
+      "REASON_VALUE": "Motivo: {{reason}}",
+      "REJECTED_ON_ORDER": "Muestra rechazada por el laboratorio: se necesita una nueva toma",
+      "TITLE": "Rechazar la muestra"
     }
   },
   "LAB_STAFF": {
@@ -3573,6 +3663,8 @@
     "REFLEX_ACTIVATE": "Activar",
     "REFLEX_ADD": "Agregar regla",
     "REFLEX_CONDITION": "Condición",
+    "REFLEX_CONDITION_SEVERITY": "Gravedad = {{flag}}",
+    "REFLEX_CONDITION_THRESHOLD": "Valor {{operator}} {{value}}",
     "REFLEX_COND_SEVERITY": "Indicador de severidad",
     "REFLEX_COND_THRESHOLD": "Umbral numérico",
     "REFLEX_CREATED": "Regla refleja creada",
@@ -3623,9 +3715,17 @@
     "EXPECTED_RESULT": "Resultado esperado (prueba cualitativa)",
     "EXPECTED_RESULT_PLACEHOLDER": "p. ej. Negativo",
     "EXPECTED_RESULT_HINT": "Para una prueba que se responde con palabras (prueba rápida, cultivo), indique la respuesta normal en lugar de un rango numérico. El paciente la ve junto al resultado.",
-    "EXPECTED_RESULT_SHORT": "Esperado: {{value}}"
+    "EXPECTED_RESULT_SHORT": "Esperado: {{value}}",
+    "AGE_UNIT": "Unidad de edad",
+    "AGE_UNIT_YEARS": "años",
+    "AGE_UNIT_MONTHS": "meses",
+    "AGE_UNIT_DAYS": "días",
+    "RANGE_SOURCE": "Fuente"
   },
   "LAB_RESULTS": {
+    "ALL_AGES": "Todas las edades",
+    "CORRECTED": "Corregido",
+    "CORRECTED_HINT": "Este resultado corrige un resultado validado anteriormente; el valor anterior se conserva en el expediente, marcado como sustituido.",
     "TITLE": "Resultados de laboratorio",
     "SUBTITLE": "Gestionar los resultados de pruebas de laboratorio",
     "LOADING": "Cargando resultados…",
@@ -3711,9 +3811,13 @@
     "CORRECTION_OF": "Corrección del resultado liberado {{test}} ({{value}}). El valor liberado queda registrado, marcado como sustituido.",
     "SUPERSEDED": "Sustituido",
     "SUPERSEDED_HINT": "Una corrección sustituyó este resultado liberado; la corrección es el valor vigente.",
-    "EXPECTED_RESULT": "Resultado esperado"
+    "EXPECTED_RESULT": "Resultado esperado",
+    "CORRECTED_HINT_PATIENT": "El laboratorio corrigió este resultado después de comunicarlo. Este es el valor que cuenta; su equipo médico está informado.",
+    "RANGE_APPLIED": "Intervalo aplicado a este paciente",
+    "RANGE_SOURCE": "Fuente"
   },
   "LAB_RELEASE": {
+    "FLAG_ABNORMAL": "Anormal",
     "TITLE": "Lista de validación",
     "SUBTITLE": "Resultados pendientes de validación por el laboratorio",
     "AWAITING_COUNT": "{{count}} pendientes de validación",
@@ -3752,7 +3856,8 @@
     "LOAD_ERROR": "No se pudo cargar la lista de validación.",
     "PAGE_OF": "Página {{page}} de {{total}}",
     "SELF_RELEASE_NOTE": "Usted ingresó este resultado. Liberarlo sin un segundo revisor está permitido y queda registrado como «Validado por su autor».",
-    "SELF_RELEASE_CONFIRM": "Liberarlo yo mismo"
+    "SELF_RELEASE_CONFIRM": "Liberarlo yo mismo",
+    "CONFIRM_CORRECTION": "Este resultado es una corrección: validarlo sustituye un valor ya validado y comunicado al clínico y al paciente."
   },
   "LAB_INSTRUMENTS": {
     "TITLE": "Instrumentos de laboratorio",
@@ -3955,6 +4060,7 @@
     "AUDIT_LOGS": "Registros de Auditoría",
     "AUDIT_SEARCH": "Búsqueda de auditoría",
     "BED_MANAGEMENT": "Gestión de camas",
+    "CONTROLLED_REGISTER": "Registro de estupefacientes",
     "EMERGENCY_CONTROLS": "Controles de emergencia",
     "SUBSCRIPTIONS": "Suscripciones",
     "DATA_RESIDENCY": "Residencia de datos",
@@ -4375,7 +4481,7 @@
       "VITALS_SAVE_FAILED": "Error al guardar los signos vitales",
       "HANDOFF_COMPLETED": "Traspaso completado",
       "HANDOFF_FAILED": "Error al completar el traspaso",
-      "HANDOFF_REQUIRED": "Se requieren paciente y dirección.",
+      "HANDOFF_REQUIRED": "Se requieren el paciente y el tipo de traspaso.",
       "HANDOFF_CREATED": "Traspaso registrado para {{patient}}",
       "HANDOFF_CREATE_FAILED": "Error al registrar el traspaso",
       "TASK_REQUIRED": "Se requieren paciente y categoría.",
@@ -4413,7 +4519,21 @@
     "OPEN_EMAR": "Abrir el eMAR para escanear",
     "HANDOFF_RECIPIENT": "Entregado a",
     "HANDOFF_RECIPIENT_PLACEHOLDER": "Elija un colega",
-    "HANDOFF_TO": "a"
+    "HANDOFF_TO": "a",
+    "LEFT_WITHOUT_BEING_SEEN": "Se fue sin ser atendido",
+    "LAST_DOSE": "Última dosis:",
+    "NOT_YET_DUE": "Aún no corresponde",
+    "COURSE_ENDED": "Tratamiento terminado",
+    "CONTROLLED_SUBSTANCE": "Estupefaciente",
+    "WITNESS": {
+      "LABEL": "Testigo (segundo profesional)",
+      "CHOOSE": "Elegir al testigo",
+      "HINT": "Estupefaciente: un segundo enfermero, matrona o médico del centro es testigo de la administración.",
+      "NONE": "Ningún otro profesional activo del centro puede ser testigo.",
+      "LOAD_FAILED": "No se pudo cargar la lista de testigos.",
+      "REQUIRED": "Elija al testigo de esta administración de estupefaciente."
+    },
+    "PAIN_SCORE": "Dolor (0-10)"
   },
   "ONBOARDING": {
     "ABILITIES_TITLE": "Sus capacidades",
@@ -4704,6 +4824,7 @@
     "CITY_PLACEHOLDER": "p. ej., Uagadugú, París, Nueva York",
     "CODE_SEND_FAILED": "No se pudo enviar el código de verificación",
     "CODE_SENT_TO": "Código de verificación enviado al",
+    "CONTACT_INFO": "Datos de contacto",
     "COUNTRY": "País",
     "COUNTRY_PLACEHOLDER": "p. ej., Burkina Faso, EE. UU., Francia",
     "DATE": "Fecha",
@@ -4714,11 +4835,19 @@
     "DOWNLOAD_RECORD_FAILED": "No se pudo descargar la historia clínica.",
     "DOWNLOAD_RECORD_TITLE": "Descargar la historia clínica de este paciente como PDF imprimible. La descarga se registra como exportación.",
     "DOWNLOAD_RECORD_WRONG_HOSPITAL": "Este paciente no está registrado en su hospital actual, por lo que su historia clínica no puede exportarse desde aquí. Cambie de hospital con el selector de ámbito e inténtelo de nuevo.",
+    "DUPLICATES_FOUND_MANY": "Se encontraron {{count}} posibles expedientes duplicados. Revíselos antes de guardar.",
+    "DUPLICATES_FOUND_ONE": "Se encontró 1 posible expediente duplicado. Revíselo antes de guardar.",
     "DUPLICATE_DESC": "Los siguientes registros existentes se parecen mucho a la información que ha introducido.",
     "EC_NAME": "Nombre del contacto",
+    "EC_NONE": "No hay ningún contacto de emergencia registrado.",
     "EC_PHONE": "Teléfono del contacto",
     "EC_RELATIONSHIP": "Parentesco",
     "EC_RELATIONSHIP_PLACEHOLDER": "p. ej., cónyuge, padre/madre, hermano/a",
+    "EDIT_BUTTON": "Editar",
+    "EDIT_DEMOGRAPHICS": "Editar los datos del paciente",
+    "EDIT_FAILED": "No se pudieron guardar los datos del paciente.",
+    "EDIT_REQUIRED_MISSING": "El nombre, el apellido, el sexo y el teléfono son obligatorios.",
+    "EDIT_SAVED": "Datos del paciente actualizados.",
     "EMAIL": "Correo",
     "EMAIL_OPTIONAL_HINT": "La mayoría de los pacientes se registran solo con un número de teléfono",
     "EMERGENCY_CONTACT": "Contacto de Emergencia",
@@ -4729,6 +4858,8 @@
     "ETHNICITY": "Etnia",
     "ETHNICITY_PLACEHOLDER": "Autodeclarada, en las palabras del paciente (opcional)",
     "EXISTING_MATCH_DESC": "Ya existe un expediente con este número de teléfono o correo en otro hospital. Vincúlelo aquí en lugar de crear un duplicado.",
+    "EXISTING_MATCH_DESC_HERE": "Ya hay un expediente con este número de teléfono o este correo registrado en este hospital. Ábralo en lugar de crear un duplicado.",
+    "EXISTING_MATCH_DESC_MIXED": "Ya existen expedientes con este número de teléfono o este correo, aquí o en otro hospital. Abra o vincule el correcto en lugar de crear un duplicado.",
     "EXISTING_MATCH_TITLE": "Paciente existente encontrado",
     "EXPIRES": "Vence",
     "EXPIRY_DATE_OPTIONAL": "Fecha de vencimiento (opcional)",
@@ -4743,6 +4874,7 @@
     "GENDER": "Género",
     "GO_BACK_REVIEW": "Volver y revisar",
     "GRANTED_AT": "Concedido el",
+    "GUARDIAN_CARD": "Contacto de emergencia / tutor",
     "HEAD_CIRCUMFERENCE": "Perímetro cefálico",
     "HEART_RATE": "Frecuencia cardíaca",
     "HEIGHT": "Talla",
@@ -4795,6 +4927,7 @@
     "NO_PATIENTS": "No se encontraron pacientes",
     "NO_VITALS": "No hay signos vitales registrados",
     "NO_VITALS_DESC": "Los signos vitales aparecerán aquí cuando se registren.",
+    "PHONE_SECONDARY": "Teléfono secundario",
     "VITALS_NO_HOSPITAL": "Los signos vitales se muestran de un hospital a la vez, y esta cuenta no tiene ninguno definido. Aparecerán en cuanto se defina un ámbito hospitalario.",
     "NO_VITAL_METRICS": "No se registraron métricas numéricas — solo notas.",
     "OPTIONAL": "Opcional",
@@ -4877,7 +5010,12 @@
     "WRISTBAND_FAILED": "Error al generar la pulsera",
     "ZIP_CODE": "Código postal",
     "AGE_YEARS": "{{count}} años",
-    "AGE_YEAR": "{{count}} año"
+    "AGE_YEAR": "{{count}} año",
+    "CHART_UNAVAILABLE_TITLE": "Este expediente no se puede abrir aquí",
+    "PHONE_GUARDIAN_HINT": "Para un niño, puede dejarlo vacío e indicar el teléfono del padre, la madre o el tutor en Contacto de emergencia.",
+    "PHONE_FROM_GUARDIAN": "Vacío: el teléfono del padre, la madre o el tutor (Contacto de emergencia) se registrará como contacto de este paciente.",
+    "SHARED_CONTACT_NOTE": "Este número de teléfono ya es el contacto de otro paciente (por ejemplo, un padre o una madre). Está permitido: este registro crea un expediente distinto.",
+    "MATCHED_ON_IDENTITY": "mismo nombre y fecha de nacimiento"
   },
   "PLATFORM": {
     "ACCESS_LOGS": "Registros de acceso",
@@ -5132,6 +5270,8 @@
   },
   "PORTAL": {
     "VITALS": {
+      "ABOVE_NORMAL": "Por encima de lo normal",
+      "BELOW_NORMAL": "Por debajo de lo normal",
       "TITLE": "Mis signos vitales",
       "LOADING": "Cargando signos vitales...",
       "EMPTY_TITLE": "No hay signos vitales registrados",
@@ -5167,6 +5307,7 @@
       "GENERAL_VISIT": "Visita general",
       "GENERAL": "General",
       "BOOKING": {
+        "PRECHECKIN_OPENS_ON": "El registro previo en línea se abre el {{date}}, 7 días antes de la cita.",
         "TITLE": "Programar cita",
         "FORM_TITLE": "Programar una nueva cita",
         "SUCCESS": "¡Cita programada con éxito!",
@@ -5199,11 +5340,9 @@
       },
       "RESCHEDULE": {
         "BTN": "Reprogramar",
-        "END_AFTER_START": "La hora de fin debe ser posterior a la hora de inicio.",
         "FAILED": "No se pudo reprogramar la cita. Inténtelo de nuevo.",
-        "MISSING_FIELDS": "Elija una nueva fecha, hora de inicio y hora de fin.",
+        "MISSING_FIELDS": "Elija una nueva fecha y una hora de inicio.",
         "NEW_DATE": "Nueva fecha",
-        "NEW_END": "Nueva hora de fin",
         "NEW_START": "Nueva hora de inicio",
         "PAST_DATE": "La nueva fecha no puede estar en el pasado.",
         "REASON": "Motivo (opcional)",
@@ -5211,7 +5350,8 @@
         "SAVING": "Reprogramando…",
         "SUBMIT": "Reprogramar la cita",
         "TITLE": "Reprogramar la cita"
-      }
+      },
+      "DURATION_NOTE": "La duración de su cita la fijan los turnos de la clínica."
     },
     "MEDICATIONS": {
       "TITLE": "Mis medicamentos",
@@ -5243,9 +5383,12 @@
       "NOT_REFILLABLE": "Esta receta ya no se puede renovar. Póngase en contacto con su equipo de atención para obtener una nueva receta.",
       "READY_AT": "Lista para recoger en {{pharmacy}}",
       "READY_SINCE": "Desde el {{date}}",
-      "NOT_REFILLABLE_CONTROLLED": "Este es un medicamento controlado: no se puede renovar desde el portal. Póngase en contacto con su equipo de atención para obtener una nueva receta."
+      "NOT_REFILLABLE_CONTROLLED": "Este es un medicamento controlado: no se puede renovar desde el portal. Póngase en contacto con su equipo de atención para obtener una nueva receta.",
+      "PRINTED_COPY": "Descargar la receta impresa",
+      "PRINTED_COPY_FAILED": "No se pudo abrir la receta impresa."
     },
     "LAB_RESULTS": {
+      "RESULT_PREFIX": "Resultado:",
       "TITLE": "Resultados de pruebas",
       "LOADING": "Cargando resultados…",
       "EMPTY_TITLE": "Sin resultados de pruebas",
@@ -5266,6 +5409,7 @@
       "PENDING_INTERPRETATION": "Análisis en curso: su resultado aparecerá aquí en cuanto el laboratorio lo valide."
     },
     "VISITS": {
+      "ASSESSMENT": "Valoración del médico",
       "TITLE": "Historial de visitas",
       "LOADING": "Cargando historial de visitas…",
       "EMPTY_TITLE": "Sin visitas registradas",
@@ -5274,14 +5418,27 @@
       "DATE": "Fecha",
       "PROVIDER": "Profesional",
       "DEPARTMENT": "Servicio",
-      "CHIEF_COMPLAINT": "Motivo principal",
-      "DIAGNOSIS": "Diagnóstico",
+      "CHIEF_COMPLAINT": "Motivo de la visita",
       "STATUS": "Estado",
       "NOT_ASSIGNED": "No asignado",
       "GENERAL": "General",
       "HOSPITAL_NAME_LABEL": "Hospital"
     },
     "BILLING": {
+      "DETAIL_FAILED": "No se pudo cargar la factura. Inténtelo de nuevo.",
+      "DOWNLOAD_FAILED": "No se pudo descargar el archivo. Inténtelo de nuevo.",
+      "DOWNLOAD_INVOICE": "Descargar la factura (PDF)",
+      "DOWNLOAD_RECEIPT": "Recibo (PDF)",
+      "HIDE_DETAIL": "Ocultar el detalle",
+      "LINES": "Lo facturado",
+      "LINE_DESCRIPTION": "Servicio",
+      "LINE_QUANTITY": "Cant.",
+      "LINE_TOTAL": "Total de la línea",
+      "LINE_UNIT_PRICE": "Precio unitario",
+      "NO_LINES": "Esta factura no tiene líneas detalladas.",
+      "NO_PAYMENTS": "Todavía no hay pagos.",
+      "PAYMENTS": "Pagos",
+      "SHOW_DETAIL": "Ver el detalle",
       "TITLE": "Facturación y pagos",
       "LOADING": "Cargando información de facturación…",
       "EMPTY_TITLE": "Sin estados de cuenta",
@@ -5296,7 +5453,7 @@
       "MAKE_PAYMENT": "Realizar un pago",
       "AMOUNT": "Importe",
       "PAYMENT_METHOD": "Método de pago",
-      "REFERENCE": "Referencia / ID de transacción (opcional)",
+      "REFERENCE": "Referencia / ID de transacción",
       "REFERENCE_PLACEHOLDER": "p. ej. TXN-123456",
       "REFERENCE_REQUIRED": "Indique la referencia del pago con tarjeta, transferencia o dinero móvil.",
       "ENTER_AMOUNT": "Introducir importe",
@@ -5567,6 +5724,30 @@
       "PRINT": "Imprimir resumen"
     },
     "ENUM": {
+      "LAB_ORDER_CHANNEL": {
+        "ELECTRONIC": "Electrónico",
+        "EMAIL": "Correo electrónico",
+        "FAX": "Fax",
+        "OTHER": "Otro",
+        "PHONE": "Teléfono",
+        "PORTAL": "Portal",
+        "WALK_IN": "Sin cita previa",
+        "WRITTEN": "Escrito"
+      },
+      "LAB_ORDER_PRIORITY": {
+        "ROUTINE": "Rutina",
+        "STAT": "Inmediato (STAT)",
+        "URGENT": "Urgente"
+      },
+      "LAB_SPECIMEN_STATUS": {
+        "COLLECTED": "Recolectada",
+        "COMPLETED": "Completada",
+        "IN_TRANSIT": "En tránsito",
+        "PENDING": "Pendiente",
+        "PROCESSING": "En proceso",
+        "RECEIVED": "Recibida",
+        "REJECTED": "Rechazada"
+      },
       "VITAL_TYPE": {
         "BLOOD_PRESSURE": "Presión arterial",
         "HEART_RATE": "Frecuencia cardíaca",
@@ -6182,7 +6363,10 @@
         "USER_RESTORE": "Usuario restaurado",
         "LAB_ORDER_CANCELLED": "Orden de laboratorio cancelada",
         "LAB_RESULT_SELF_RELEASED": "Resultado de laboratorio autovalidado",
-        "LAB_ORDER_ENTERED_IN_ERROR": "Orden de laboratorio registrada por error"
+        "LAB_ORDER_ENTERED_IN_ERROR": "Orden de laboratorio registrada por error",
+        "MEDICATION_DOSE_LIMITS_UPDATED": "Límites de dosis pediátricos modificados",
+        "PRESCRIPTION_CDS_OVERRIDDEN": "Alerta de apoyo a la decisión anulada en una receta",
+        "PRESCRIPTION_SIGN_REAUTHENTICATION": "Reautenticación para firmar una receta de estupefaciente"
       },
       "TREATMENT_PLAN_TASK_STATUS": {
         "CANCELLED": "Cancelada",
@@ -6256,9 +6440,10 @@
         "REFUSED": "Rechazada"
       },
       "MAR_TASK_STATUS": {
-        "COMPLETED": "Administrada",
+        "COMPLETED": "Tratamiento terminado",
         "DUE": "Por administrar",
-        "OVERDUE": "Atrasada"
+        "OVERDUE": "Atrasada",
+        "UPCOMING": "Próxima"
       },
       "PLATFORM_RELEASE_STATUS": {
         "CANCELLED": "Cancelada",
@@ -6285,21 +6470,29 @@
         "SCHEDULED": "Programada"
       },
       "NOTIFICATION_TYPE": {
+        "ADMIN_MESSAGE": "Mensaje de la administración",
+        "ANNOUNCEMENT": "Anuncio",
         "APPOINTMENT_REMINDER": "Recordatorio de cita",
         "BREAK_GLASS_OPT_OUT_OVERRIDE": "Acceso de emergencia a su historial",
+        "CHAT_MESSAGE": "Nuevo mensaje",
+        "CONSULTATION_UPDATE": "Interconsulta",
         "CRITICAL_IMAGING_FINDING": "Hallazgo de imagen crítico",
         "CRITICAL_IMAGING_FINDING_ESCALATION": "Escalamiento — hallazgo de imagen crítico",
         "CRITICAL_LAB_RESULT": "Resultado de laboratorio crítico",
         "CRITICAL_LAB_RESULT_ESCALATION": "Escalamiento — resultado de laboratorio crítico",
         "DISCHARGE_SUMMARY": "Informe de alta",
         "LAB_ORDER_RECEIVED": "Solicitud de laboratorio recibida",
+        "LAB_RESULT": "Resultado de laboratorio",
+        "LAB_SPECIMEN_REJECTED": "Muestra rechazada",
         "LICENSE_EXPIRY": "Vencimiento de licencia",
+        "MATERNITY_ALERT": "Alerta de maternidad",
         "MEDICATION_REFILL": "Renovación de medicamento",
         "NEWS2_ESCALATION": "Escalamiento NEWS2",
         "OBSTETRIC_ALERT": "Alerta obstétrica urgente",
         "OBSTETRIC_ALERT_ESCALATION": "Escalamiento de alerta obstétrica urgente",
         "PHARMACY_EVENT": "Aviso de farmacia",
         "POSITIVE_CULTURE_RESULT": "Cultivo positivo",
+        "PRENATAL_REMINDER": "Recordatorio de control prenatal",
         "PRO_CRITICAL_ITEM": "Ítem PRO crítico",
         "PRO_CRITICAL_ITEM_ESCALATION": "Escalamiento — ítem PRO crítico",
         "PRO_SCREEN_POSITIVE": "Cribado PRO positivo",
@@ -6694,11 +6887,27 @@
       },
       "TIMELINE_CATEGORY": {
         "ALLERGY": "Alergia",
+        "DIAGNOSIS": "Diagnóstico",
         "ENCOUNTER": "Consulta",
         "IMAGING": "Imagenología",
+        "LAB_ORDER": "Análisis solicitado",
         "LAB_RESULT": "Resultado de laboratorio",
+        "NOTE": "Nota clínica",
         "PRESCRIPTION": "Receta",
-        "PROCEDURE": "Procedimiento"
+        "PROCEDURE": "Procedimiento",
+        "REFERRAL": "Derivación",
+        "TREATMENT_PLAN": "Plan de tratamiento",
+        "CONSULTATION": "Solicitud de interconsulta",
+        "DISCHARGE_SUMMARY": "Resumen de alta",
+        "DOCUMENT": "Documento emitido",
+        "TRANSFUSION": "Solicitud de transfusión",
+        "PROCEDURE_ORDER": "Orden de procedimiento",
+        "OBGYN_REFERRAL": "Derivación a ginecoobstetricia",
+        "NURSING_NOTE": "Nota de enfermería",
+        "IMMUNIZATION": "Vacunación",
+        "DELIVERY": "Parto",
+        "DEATH": "Fallecimiento",
+        "MICRO_CULTURE": "Cultivo microbiológico"
       },
       "SPECIMEN_TYPE": {
         "BLOOD": "Sangre",
@@ -6770,10 +6979,23 @@
         "LEVEL_3_MAJOR": "Nivel 3 - mayor",
         "LEVEL_4_SEVERE": "Nivel 4 - grave",
         "LEVEL_5_CRITICAL": "Nivel 5 - crítico"
+      },
+      "MEDICATION_ADMINISTRATION_STATUS": {
+        "GIVEN": "Administrada",
+        "HELD": "Suspendida",
+        "MISSED": "Omitida",
+        "PENDING": "Pendiente",
+        "REFUSED": "Rechazada"
+      },
+      "NOTE_TEMPLATE": {
+        "DAR": "Nota DAR",
+        "SOAP": "Nota SOAP",
+        "SOAPIE": "Nota SOAPIE"
       }
     },
     "DOCUMENTS": {
       "TITLE": "Mis Documentos",
+      "TYPE_MEDICAL_CERTIFICATE": "Certificado médico",
       "UPLOAD": "Subir Documento",
       "CANCEL": "Cancelar",
       "SELECT_FILE": "Seleccionar Archivo",
@@ -7065,6 +7287,15 @@
       "TOP": "Tópica (TOP)",
       "INH": "Inhalada (INH)",
       "NEB": "Nebulizada (NEB)"
+    },
+    "CONTROLLED_PICKED_HINT": "Estupefaciente: la receta debe ser verificada por un farmacéutico antes de administrarse, y el paciente no puede solicitar su renovación.",
+    "SIGN_REAUTH": {
+      "TITLE": "Confirme su identidad para firmar",
+      "INTRO": "{{medication}} es un estupefaciente. Su receta solo se firma después de confirmar su identidad, únicamente para esta firma.",
+      "PASSWORD": "Su contraseña",
+      "CODE": "Código de su aplicación de autenticación (o un código de respaldo)",
+      "SUBMIT": "Firmar",
+      "FAILED": "No se pudo confirmar su identidad. La receta no está firmada."
     }
   },
   "PROFILE": {
@@ -7179,6 +7410,7 @@
     "PROFILE_PICTURE": "Foto de perfil",
     "PUSH_NOTIFICATIONS": "Notificaciones push",
     "RECENT_ACTIVITY": "Actividad reciente",
+    "RECORD_PHONE_SYNC_FAILED": "El teléfono de su cuenta se guardó, pero no se pudo actualizar su expediente de paciente. Pida a recepción que lo cambie.",
     "RECOVERY_ADDED": "Contacto de recuperación añadido.",
     "RECOVERY_CONTACT": "Contacto de recuperación",
     "RECOVERY_CONTACTS": "Contactos de recuperación",
@@ -7276,6 +7508,9 @@
     "FORGOT_PASSWORD_DESC_SMS": "¿Olvidó su contraseña actual? Podemos enviarle un enlace de restablecimiento por SMS."
   },
   "RECEPTION": {
+    "BOOK_RECALL": "Reservar cita",
+    "CLEAR_PATIENT": "Quitar el paciente",
+    "CLEAR_PROVIDER": "Quitar el profesional",
     "CLOSE_UNSEEN_TITLE": "Cerrar sin consulta",
     "CLOSE_UNSEEN_EXPLAIN": "Ningún clínico ha visto todavía a este paciente: la visita no puede cerrarse con el alta. Se cierra como «se fue sin ser atendido» o anulada, y no cuenta como consulta.",
     "CLOSE_UNSEEN_OUTCOME": "¿Cómo termina la visita?",
@@ -7284,6 +7519,9 @@
     "CLOSE_UNSEEN_CONFIRM": "Cerrar la visita",
     "CLOSE_UNSEEN_DONE": "La visita se cerró sin consulta.",
     "CLOSE_UNSEEN_FAILED": "No se pudo cerrar la visita. Inténtelo de nuevo.",
+    "PAYMENT_REFERENCE": "Referencia del pago",
+    "PAYMENT_REFERENCE_PLACEHOLDER": "N.º de transacción o de autorización",
+    "RECEIPT_FAILED": "No se pudo descargar el recibo.",
     "UNSEEN_OUTCOME": {
       "LEFT_WITHOUT_BEING_SEEN": "Se fue sin ser atendido",
       "CANCELLED": "Anulada"
@@ -7552,6 +7790,7 @@
     "CANCEL_FAILED": "Error al anular",
     "CANCEL_REFERRAL": "Cancelar referencia",
     "CANCEL_SUCCESS": "Referencia anulada",
+    "CHART_UNAVAILABLE": "La historia de este paciente aún no se puede abrir en su establecimiento. Registre al paciente en recepción para abrir su historia aquí.",
     "CLINICAL_INDICATION": "Indicación clínica",
     "CLINICAL_SUMMARY": "Resumen clínico",
     "CLOSE_DETAIL": "Cerrar detalle",
@@ -7587,6 +7826,7 @@
     "NOTES": "Notas",
     "NOTES_PLACEHOLDER": "Notas de la derivación...",
     "NO_REFERRALS": "No se encontraron derivaciones",
+    "OPEN_CHART": "Abrir historia",
     "PATIENT": "Paciente",
     "PATIENT_SUGGESTIONS": "Sugerencias de pacientes",
     "PENDING": "Pendiente",
@@ -8253,6 +8493,7 @@
     "DELETE_CONFIRM": "¿Está seguro?",
     "DELETE_USER": "Eliminar usuario",
     "DELETE_WARNING": "La cuenta se desactiva y se oculta. Puede restaurarse desde el filtro «Eliminado».",
+    "DELETE_WARNING_NO_RESTORE": "La cuenta se desactiva y se oculta. Solo un superadministrador puede restaurarla.",
     "DELETING": "Eliminando...",
     "EDIT_USER": "Editar usuario",
     "EMAIL": "Correo electrónico",
@@ -8363,7 +8604,8 @@
     "TEMPERATURE": "Temperatura",
     "TITLE": "Evaluación de triaje",
     "VITAL_SIGNS": "Signos vitales",
-    "WEIGHT": "Peso"
+    "WEIGHT": "Peso",
+    "FUNDAL_HEIGHT": "Altura uterina (cm) — embarazo"
   },
   "INTAKE": {
     "ADD_ALLERGY": "Agregar alergia",
@@ -8375,6 +8617,9 @@
     "CHIEF_COMPLAINT": "Motivo principal",
     "CHIEF_COMPLAINT_PLACEHOLDER": "Detalle el motivo de la visita...",
     "COMPLETED": "Admisión de enfermería completada exitosamente",
+    "DOCUMENTED_ALLERGIES": "Alergias ya registradas en la historia",
+    "DOCUMENTED_ALLERGIES_HINT": "Permanecen en la historia. Añada abajo solo una alergia que no figure en esta lista.",
+    "DOCUMENTED_MEDICATIONS": "Medicamentos prescritos aquí",
     "ENCOUNTER": "Consulta",
     "FALL_RISK": "Evaluación de riesgo de caída",
     "FALL_RISK_PLACEHOLDER": "Resultado de la escala de Morse, nivel de riesgo...",
@@ -8385,13 +8630,22 @@
     "PAIN_ASSESSMENT": "Evaluación del dolor",
     "PAIN_PLACEHOLDER": "Escala del dolor, localización, tipo...",
     "PATIENT": "Paciente",
+    "RECONCILED": "Añadido",
+    "RECONCILE_MEDICATION": "Añadir a la conciliación",
     "REMOVE_ALLERGY": "Quitar la alergia",
     "REMOVE_MEDICATION": "Quitar el medicamento",
     "STILL_TAKING": "Tratamiento en curso",
     "SUBMIT": "Enviar admisión",
     "SUBMIT_FAILED": "Error al enviar la admisión de enfermería. Inténtelo de nuevo.",
     "TITLE": "Admisión de enfermería",
-    "ALLERGY_SEVERITY_ROW": "Gravedad de la alergia, fila {{row}}"
+    "ALLERGY_SEVERITY_ROW": "Gravedad de la alergia, fila {{row}}",
+    "ALLERGEN_ROW": "Alérgeno, fila {{row}}",
+    "ALLERGY_CATEGORY_ROW": "Categoría de la alergia, fila {{row}}",
+    "ALLERGY_REACTION_ROW": "Reacción, fila {{row}}",
+    "MED_NAME_ROW": "Medicamento, fila {{row}}",
+    "MED_DOSAGE_ROW": "Dosis, fila {{row}}",
+    "MED_FREQUENCY_ROW": "Frecuencia, fila {{row}}",
+    "MED_ROUTE_ROW": "Vía, fila {{row}}"
   },
   "PRE_CHECKIN": {
     "ADDRESS": "Dirección",
@@ -8467,7 +8721,9 @@
     "COMPLETE_EXAM": "Completar examen",
     "READY_DISCHARGE": "Listo para alta",
     "NO_PATIENTS": "Sin pacientes",
-    "COLUMN_PATIENTS": "Pacientes: {{column}}"
+    "COLUMN_PATIENTS": "Pacientes: {{column}}",
+    "START_VISIT": "Iniciar la consulta",
+    "START_FAILED": "No se pudo iniciar la consulta."
   },
   "CHECKOUT": {
     "TITLE": "Alta del paciente",
@@ -8686,7 +8942,8 @@
     "TEST_TYPE_PATHOLOGY": "Anatomía patológica",
     "TITLE": "Alta",
     "WARNING_SIGNS": "Signos de alarma",
-    "WOUND_CARE": "Cuidado de heridas"
+    "WOUND_CARE": "Cuidado de heridas",
+    "NOT_ADMITTED": "Este paciente no tiene ninguna hospitalización en curso aquí: el alta solo se solicita para un paciente hospitalizado."
   },
   "CHART": {
     "ALLERGIES_WITHHELD": "Las alergias registradas en otros hospitales no se muestran: este paciente rechazó compartir su historial. Esta lista puede estar incompleta.",
@@ -8802,7 +9059,8 @@
     "VERIF_UNCONFIRMED": "Sin confirmar",
     "LAB_STATUS_QUALITATIVE": "Resultado cualitativo: lo interpreta el clínico",
     "LAB_STATUS_NOT_INTERPRETED": "Sin interpretar: sin intervalo de referencia",
-    "CODE_PLACEHOLDER": "ej. B54 (paludismo)"
+    "CODE_PLACEHOLDER": "ej. B54 (paludismo)",
+    "PREGNANCY": "Embarazo en curso: {{weeks}} semanas + {{days}} días"
   },
   "PHARMACY": {
     "QUEUE_CLAIM": {
@@ -8911,6 +9169,9 @@
     "EXPIRY_DATE": "Fecha de caducidad",
     "EXPIRY_REPORT": "Informe de caducidad",
     "EXP_SHORT": "cad.",
+    "FEFO_REASON": "Motivo para usar este lote",
+    "FEFO_REASON_REQUIRED": "Indique por qué usa este lote: otro lote caduca antes.",
+    "FEFO_WARNING": "El lote {{lot}} caduca antes ({{date}}) y aún le quedan {{left}}. Úselo primero o indique por qué usa este lote.",
     "FACILITY_CODE": "Código del centro",
     "FILTER_BY_TYPE": "Filtrar por tipo",
     "FORM": "Forma",
@@ -9013,6 +9274,39 @@
     "PRESCRIPTION_ID": "ID de la receta",
     "PRINTED_FOR_PATIENT": "Receta impresa para el paciente",
     "PRINT_FOR_PATIENT": "Imprimir para el paciente",
+    "NOT_ROUTABLE_HINT": "Esta receta ya no se puede derivar (ya dispensada, enviada o impresa).",
+    "PRINT_COPY_FAILED": "No se pudo abrir la copia impresa.",
+    "PRINT_LABEL_FAILED": "No se pudo abrir la etiqueta del lote.",
+    "PRINTED_COPY_HINT": "Esta receta se imprimió para que el paciente la dispense en una farmacia externa.",
+    "REGISTER_ALL_DRUGS": "Todos los estupefacientes",
+    "REGISTER_CLOSING": "Saldo final",
+    "REGISTER_COL_BALANCE": "Saldo",
+    "REGISTER_COL_DATE": "Fecha y hora",
+    "REGISTER_COL_MOVEMENT": "Movimiento",
+    "REGISTER_COL_PRESCRIBER": "Prescriptor",
+    "REGISTER_COL_QUANTITY": "Cantidad",
+    "REGISTER_COL_REASON": "Motivo",
+    "REGISTER_COL_RECORDED_BY": "Registrado por",
+    "REGISTER_COL_WITNESS": "Testigo",
+    "REGISTER_DISCREPANCY": "difiere del registro",
+    "REGISTER_DRUG": "Medicamento",
+    "REGISTER_EXPORT_CSV": "Exportar CSV",
+    "REGISTER_EXPORT_FAILED": "No se pudo exportar el registro.",
+    "REGISTER_EXPORT_PDF": "Exportar PDF",
+    "REGISTER_FROM": "Desde",
+    "REGISTER_LOAD_FAILED": "No se pudo cargar el registro.",
+    "REGISTER_NO_DRUGS": "Esta farmacia no tiene ningún estupefaciente.",
+    "REGISTER_NO_MOVEMENT": "Ningún movimiento en este periodo.",
+    "REGISTER_ON_SHELF": "En estante ahora",
+    "REGISTER_OPENING": "Saldo inicial",
+    "REGISTER_FILE_STEM": "registro-estupefacientes",
+    "REGISTER_PERIOD_INVALID": "Elija un periodo cuyo fin no sea anterior a su inicio.",
+    "REGISTER_SHOW": "Mostrar",
+    "REGISTER_SUBTITLE": "Todos los movimientos de los estupefacientes, con el saldo, el paciente, el prescriptor y el testigo.",
+    "REGISTER_TITLE": "Registro de estupefacientes",
+    "REGISTER_TO": "Hasta",
+    "REGISTER_TRUNCATED": "Solo se muestran los primeros movimientos del periodo; elija un periodo más corto.",
+    "REPRINT_COPY": "Volver a imprimir la copia",
     "PRINT_LOT_LABEL": "Imprimir etiqueta del lote",
     "PRODUCT_SCAN": "Etiqueta del envase",
     "PRODUCT_SCAN_PLACEHOLDER": "Escanear la etiqueta del lote",
@@ -9020,6 +9314,8 @@
     "QTY_ON_HAND": "Cant.: {{qty}}",
     "QTY_RECEIVED_LABEL": "Cant. recibida",
     "QTY_REQUESTED": "Cant. solicitada",
+    "QTY_REMAINING": "quedan {{qty}} por dispensar",
+    "ROUTED_QUANTITY": "Cantidad: {{qty}}",
     "QUANTITY": "Cantidad",
     "QUANTITY_RECEIVED": "Cantidad recibida",
     "REASON": "Motivo",
@@ -9046,6 +9342,12 @@
     "REORDER_QTY": "Cantidad a pedir: {{qty}}",
     "REORDER_THRESHOLD": "Umbral de reposición",
     "RETURN_REFERENCE": "Número de referencia de devolución",
+    "RETURN_DISPENSE": "Dispensación devuelta",
+    "RETURN_DISPENSE_REQUIRED": "Elija la dispensación de la que vuelve este stock, o indique la referencia de la transferencia devuelta.",
+    "RETURN_EXCEEDS_DISPENSE": "Esta devolución supera lo que esta dispensación aún puede recibir.",
+    "RETURN_NO_DISPENSE_HINT": "Ninguna dispensación de este lote tiene stock pendiente. Una devolución sin dispensación devuelve una transferencia.",
+    "RETURN_NO_DISPENSE_OPTION": "— Sin dispensación (devolución de una transferencia) —",
+    "RETURNABLE_OF": "{{left}} por devolver de {{given}} dispensados",
     "RETURN_REFERENCE_REQUIRED": "El número de referencia de devolución es obligatorio",
     "ROUTE": "Derivar",
     "ROUTED_TO_PARTNER": "Receta derivada a la farmacia asociada",
@@ -9073,8 +9375,11 @@
     "LEDGER_REASON_RECEIPT_LOT": "Recepción: lote {{lot}}",
     "LEDGER_REASON_RECEIPT": "Recepción",
     "LEDGER_REASON_DISPENSE": "Dispensación de una receta",
+    "LEDGER_REASON_DISPENSE_CANCELLED": "Dispensación anulada: stock repuesto",
+    "LEDGER_REASON_PREPARED_CANCELLED": "Preparación anulada: stock repuesto",
     "LEDGER_REASON_RETURN": "Devolución, ref. {{ref}}",
     "LEDGER_REASON_TRANSFER": "Transferencia a {{dest}}",
+    "LEDGER_REASON_FEFO": "lote elegido fuera de «primero en caducar, primero en salir»: {{reason}}",
     "ADJ_REASON_DAMAGE": "Daño",
     "ADJ_REASON_EXPIRY_WRITE_OFF": "Baja por caducidad",
     "ADJ_REASON_CYCLE_COUNT_VARIANCE": "Diferencia de inventario",
@@ -9212,7 +9517,43 @@
     "ROUTING_RX_SELECTED": "Receta:",
     "ATC_PLACEHOLDER": "ej. J01CA04 (amoxicilina)",
     "STRENGTH_PLACEHOLDER": "ej. 500",
-    "CATEGORY_PLACEHOLDER": "ej. Antibiótico"
+    "CATEGORY_PLACEHOLDER": "ej. Antibiótico",
+    "CANCEL_DISPENSE": "Anular la dispensación",
+    "LEDGER_REASON_RETURN_FILL": "Devolución, ref. lote {{lot}} dispensado el {{date}}",
+    "LEDGER_REASON_RETURN_FILL_DATE": "Devolución de la dispensación del {{date}}",
+    "DISPENSE_SPLIT_SUCCESS": "Dispensado en {{count}} dispensaciones, primero el lote de caducidad más próxima.",
+    "FEFO_SPLIT_HINT": "El lote de caducidad más próxima no cubre la cantidad: se vacía primero y luego el lote siguiente.",
+    "FEFO_SPLIT_PART": "{{quantity}} del lote {{lot}} (cad. {{date}})",
+    "REGISTER_RETURN_FILL": "Devolución, ref. lote {{lot}} dispensado el {{date}}",
+    "REGISTER_RETURN_FILL_DATE": "Devolución de la dispensación del {{date}}",
+    "DOSING": {
+      "ACTION": "Límites de dosis pediátricos",
+      "TITLE": "Límites de dosis pediátricos",
+      "INTRO": "Los usa el control de dosis de las recetas para niños. Por encima de un máximo habitual, el prescriptor debe dar un motivo para continuar; por encima del máximo diario absoluto, la dosis se rechaza. Deje vacío un campo cuando no se aplique ningún límite.",
+      "PER_DOSE_MG_KG": "Máximo habitual por dosis (mg/kg)",
+      "PER_DAY_MG_KG": "Máximo habitual por día (mg/kg/día)",
+      "SINGLE_DOSE_MG": "Máximo por dosis (mg)",
+      "DAILY_MAX_MG": "Máximo absoluto por día (mg)",
+      "DAILY_MAX_HINT": "Un bloqueo: un total diario por encima no puede prescribirse, ni siquiera con un motivo.",
+      "MANUAL_REVIEW_MONTHS": "Revisión manual antes de (meses)",
+      "MANUAL_REVIEW_HINT": "Por debajo de esta edad no se hace ningún control automático en mg/kg; un farmacéutico o un médico revisa la dosis. Vacío: 3 meses.",
+      "BANDS": "Tramos de peso (en lugar de mg/kg)",
+      "BANDS_HINT": "Desde el peso mínimo (incluido) hasta el máximo (excluido); deje vacío el último máximo.",
+      "BAND_MIN_KG": "Desde (kg)",
+      "BAND_MAX_KG": "Menos de (kg)",
+      "BAND_DOSE": "Dosis",
+      "BAND_UNIT": "Unidad",
+      "BAND_PER_DAY": "Dosis por día",
+      "ADD_BAND": "Añadir un tramo de peso",
+      "SOURCE": "Fuente de los valores",
+      "STATUS": "Estado",
+      "STATUS_PENDING": "Valor por defecto, pendiente de aprobación local",
+      "STATUS_APPROVED": "Aprobados por esta farmacia",
+      "BADGE_PENDING": "Límites pediátricos: por aprobar",
+      "BADGE_APPROVED": "Límites pediátricos aprobados",
+      "SAVED": "Límites de dosis pediátricos guardados",
+      "SAVE_FAILED": "No se pudieron guardar los límites de dosis pediátricos"
+    }
   },
   "LAB_QC": {
     "TITLE": "Panel de control de calidad",
@@ -9539,6 +9880,7 @@
     "STAY_HOLD": "En espera"
   },
   "COVERAGE": {
+    "PROVIDER_DEFAULTS_TO_PAYER": "Por defecto, el código de la aseguradora",
     "TAB": "Cobertura",
     "TAB_TITLE": "Seguro y registros hospitalarios",
     "INSURANCE_TITLE": "Pólizas de seguro",
@@ -9616,8 +9958,8 @@
   "PATIENT_DOCUMENTS": {
     "TAB": "Documentos",
     "TAB_TITLE": "Documentos que el paciente subió a través del portal",
-    "TITLE": "Documentos subidos por el paciente",
-    "HINT": "Resultados de laboratorio externos, cartas de derivación y otros archivos que el paciente añadió desde su portal. Solo lectura aquí; cada descarga queda registrada en el registro de auditoría.",
+    "TITLE": "Documentos del paciente",
+    "HINT": "Archivos que el paciente añadió desde su portal (resultados externos, cartas de derivación…) y documentos emitidos por el centro (certificados médicos). Solo lectura aquí; cada descarga queda registrada en el registro de auditoría.",
     "FILTER_TYPE": "Filtrar por tipo",
     "FILTER_ALL": "Todos los tipos",
     "LOADING": "Cargando documentos…",
@@ -9637,9 +9979,13 @@
     "PAGER": "Páginas de documentos",
     "PREVIOUS": "Anterior",
     "NEXT": "Siguiente",
-    "PAGE_OF": "Página {{page}} de {{total}}"
+    "PAGE_OF": "Página {{page}} de {{total}}",
+    "SOURCE_PATIENT": "Subido por el paciente",
+    "SOURCE_HOSPITAL": "Emitido por el centro"
   },
   "MED_HISTORY": {
+    "SOURCE_OF_RECORD": "Fuente",
+    "SOURCE_UNKNOWN": "No registrada",
     "TAB": "Historial",
     "TAB_TITLE": "Historial médico estructurado",
     "SOCIAL_TAB": "Social",
@@ -9707,12 +10053,12 @@
     "ADD_IMMUNIZATION": "Agregar vacuna",
     "EDIT_IMMUNIZATION": "Editar vacuna",
     "NO_IMMUNIZATIONS": "Sin vacunas registradas.",
-    "IMMUNIZATION_REQUIRED_FIELDS": "El código, el nombre de la vacuna y la fecha de administración son obligatorios",
+    "IMMUNIZATION_REQUIRED_FIELDS": "El nombre de la vacuna y la fecha de administración son obligatorios",
     "IMMUNIZATION_CREATED": "Vacuna registrada",
     "IMMUNIZATION_UPDATED": "Vacuna actualizada",
     "IMMUNIZATION_SAVE_ERROR": "Error al guardar la vacuna",
     "VACCINE": "Vacuna",
-    "VACCINE_CODE": "Código de vacuna (CVX)",
+    "VACCINE_CODE": "Código de vacuna (CVX, opcional)",
     "ADMINISTERED": "Administrada",
     "DOSE": "Dosis",
     "DOSE_NUMBER": "Número de dosis",
@@ -9740,10 +10086,36 @@
       "bm": "Bambara",
       "dyu": "Dioula",
       "mos": "Mooré"
-    }
+    },
+    "SOURCE": {
+      "EXTERNAL_RECORD": "Registro de otro establecimiento",
+      "GIVEN_HERE": "Administrada aquí",
+      "PATIENT_REPORT": "Declarada por el paciente o la familia",
+      "VACCINATION_CARD": "Cartilla de vacunación"
+    },
+    "PEV": {
+      "BCG": "BCG (tuberculosis)",
+      "HPV": "VPH (virus del papiloma humano)",
+      "MALARIA": "Vacuna contra la malaria",
+      "MENA": "Meningitis A (MenAfriVac)",
+      "PCV": "Neumococo conjugada (PCV)",
+      "PENTA": "Pentavalente (DTP-HepB-Hib)",
+      "ROTA": "Rotavirus",
+      "RR": "SR (sarampión-rubéola)",
+      "TD": "Td (tétanos-difteria)",
+      "VAA": "Fiebre amarilla",
+      "VPI": "VPI (polio inactivada)",
+      "VPO": "VPO (polio oral)",
+      "HEPB0": "Hepatitis B (dosis al nacer)"
+    },
+    "VACCINE_CODE_HINT": "Se rellena a partir de la vacuna del PEV elegida (tabla CVX de los CDC, verificada el 30/10/2026) o de una dosis anterior de la misma vacuna en esta historia. Opcional y editable; MenAfriVac y la vacuna contra la malaria no tienen código CVX."
   },
   "MATERNITY": {
+    "GA": "Edad gestacional",
+    "GA_SHORT": "{{weeks}} sem {{days}} d",
+    "GA_TODAY": "Edad gestacional hoy: {{weeks}} semanas {{days}} días",
     "LABOR_TAB": "Parto",
+    "PATIENT_NAME_UNAVAILABLE": "Paciente (nombre no disponible)",
     "TITLE": "Maternidad",
     "SUBTITLE": "Tablero de antecedentes maternos y derivaciones OB/GYN",
     "BOARD_TAB": "Tablero de Antecedentes",
@@ -9912,7 +10284,8 @@
     "NO_VERSIONS": "Sin versiones anteriores",
     "PARA_ABOVE_GRAVIDA": "La paridad (P) no puede ser mayor que la gravidez (G): cada parto contado en P es también un embarazo contado en G.",
     "OUTCOMES_ABOVE_GRAVIDA": "La paridad (P) más los abortos (A) no pueden ser mayores que la gravidez (G): cada embarazo termina como máximo en uno de ellos.",
-    "RECORDED_FUTURE": "Registrado: la fecha no puede estar en el futuro."
+    "RECORDED_FUTURE": "Registrado: la fecha no puede estar en el futuro.",
+    "DELIVERED_ON": "Dio a luz el {{date}}"
   },
   "ULTRASOUND": {
     "WORKLIST_ALL": "Todas las órdenes",
@@ -10081,7 +10454,8 @@
     "VISIT_LATE_PREGNANCY": "Embarazo tardío",
     "BOOK": "Programar",
     "BOOK_REASON": "Control prenatal (semana {{week}})",
-    "BOOK_HINT": "Programe una visita recomendada para convertirla en una cita; aparecerá entonces como programada. El día de la cita, registre la llegada de la paciente para abrir la consulta donde se registra la visita (constantes, exploración)."
+    "BOOK_HINT": "Programe una visita recomendada para convertirla en una cita; aparecerá entonces como programada. El día de la cita, registre la llegada de la paciente para abrir la consulta donde se registra la visita (constantes, exploración).",
+    "ANC_CONTACTS": "Controles prenatales realizados: {{done}} (siguiente: control {{next}})"
   },
   "PRO": {
     "HEADING": "Cribado de salud mental ({{instrument}})",
@@ -11017,7 +11391,7 @@
     "DEPARTMENT": "Servicio",
     "FROM": "Desde",
     "GENERATE": "Generar",
-    "GENERATED": "{{count}} espacios generados",
+    "GENERATED": "{{created}} espacios generados a partir de {{templates}} plantillas ({{skipped}} ya existentes)",
     "GENERATE_ERROR": "No se pudieron generar los espacios.",
     "GENERATE_HINT": "Los espacios se crean a partir de las plantillas activas para el rango elegido. Los espacios existentes no se modifican.",
     "GENERATE_TITLE": "Generar espacios",
@@ -11405,7 +11779,8 @@
       "VERIFY_FAILED": "Error en la verificación. Inténtelo de nuevo."
     },
     "VERIFYING": "Verificando…",
-    "VERIFY_FIVE_RIGHTS": "Verificar los cinco correctos"
+    "VERIFY_FIVE_RIGHTS": "Verificar los cinco correctos",
+    "PRESCRIBED": "Prescrito"
   },
   "CREDENTIALING": {
     "CURRENT_EXPIRY": "Caducidad actual",
@@ -11799,7 +12174,8 @@
       "ACCEPTED": "Aceptada",
       "REJECTED": "Rechazada",
       "PAID": "Pagada"
-    }
+    },
+    "PATIENT_UNNAMED": "Paciente (sin nombre en el expediente)"
   },
   "PHARMACY_CHECKOUT": {
     "TITLE": "Cobro en farmacia",
@@ -11826,7 +12202,8 @@
     "DISPENSE_PICK_PLACEHOLDER": "Elija una dispensación",
     "NO_DISPENSES": "No hay ninguna dispensación que cobrar en esta farmacia.",
     "DISPENSES_LOAD_FAILED": "No se pudieron cargar las dispensaciones de la farmacia.",
-    "ALREADY_PAID": "Esta dispensación ya está pagada. No se cobra un segundo pago."
+    "ALREADY_PAID": "Esta dispensación ya está pagada. No se cobra un segundo pago.",
+    "REFERENCE_REQUIRED": "Introduzca la referencia de la transacción de dinero móvil que muestra el teléfono del paciente."
   },
   "MY_PHARMACY_INVOICES": {
     "TITLE": "Mis facturas de farmacia",
@@ -11855,5 +12232,48 @@
     "RANGE": "{{field}}: el valor debe estar entre {{min}} y {{max}}.",
     "MIN": "{{field}}: el valor debe ser como mínimo {{min}}.",
     "FIELD_REASON": "{{field}}: {{reason}}"
+  },
+  "NURSING_NOTES": {
+    "ACTION": "Acción:",
+    "ASSESSMENT": "Valoración:",
+    "DATA": "Datos:",
+    "EDUCATION": "Educación:",
+    "EMPTY": "Aún no hay notas de enfermería para esta visita.",
+    "EVALUATION": "Evaluación:",
+    "IMPLEMENTATION": "Intervenciones:",
+    "LATE_ENTRY": "registro tardío",
+    "LOADING": "Cargando notas de enfermería…",
+    "LOAD_FAILED": "No se pudieron cargar las notas de enfermería.",
+    "NARRATIVE": "Nota:",
+    "OBJECTIVE": "Objetivo:",
+    "PLAN": "Plan:",
+    "RESPONSE": "Respuesta:",
+    "SUBJECTIVE": "Subjetivo:",
+    "TITLE": "Notas de cuidados de enfermería"
+  },
+  "MEDICAL_CERTIFICATE": {
+    "DAYS": "Días de baja",
+    "DAYS_REQUIRED": "Indique el número de días de baja (1 a 365).",
+    "DOWNLOAD": "Descargar el PDF",
+    "DOWNLOAD_FAILED": "No se pudo descargar el certificado.",
+    "ISSUE": "Emitir y firmar",
+    "ISSUED": "Certificado emitido y archivado en los documentos del paciente.",
+    "ISSUED_HINT": "El certificado firmado está en los documentos del paciente y en su portal del paciente.",
+    "ISSUE_FAILED": "No se pudo emitir el certificado.",
+    "ISSUING": "Emitiendo…",
+    "LANGUAGE": "Idioma del certificado",
+    "LANG_PATIENT": "Idioma del paciente",
+    "LANG_en": "Inglés",
+    "LANG_es": "Español",
+    "LANG_fr": "Francés",
+    "OPEN": "Certificado médico",
+    "REMARKS": "Texto / observaciones",
+    "REMARKS_REQUIRED": "Redacte lo que certifica.",
+    "START": "Primer día de baja",
+    "TITLE": "Certificado médico",
+    "TYPE": "Tipo de certificado",
+    "TYPE_ATTENDANCE": "Certificado de asistencia",
+    "TYPE_GENERAL": "Certificado médico",
+    "TYPE_SICK_LEAVE": "Baja laboral"
   }
 }

@@ -227,6 +227,21 @@ describe('MaternityComponent — new history for a patient who already has one (
     expect(notice()).toBeNull();
   });
 
+  it('QA D1005: the due date follows the LMP and the gestational age is shown', () => {
+    const page = fixture.componentInstance;
+    // Through the field, as the midwife types it (the page is OnPush).
+    const lmp = host().querySelector('#history-lmp') as HTMLInputElement;
+    lmp.value = '2026-05-20';
+    lmp.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    expect(page.historyForm.menstrualHistory?.estimatedDueDate).toBe('2027-02-24');
+    expect(host().querySelector('[data-testid="history-ga"]')).not.toBeNull();
+    // A due date the midwife typed herself is kept when the LMP changes.
+    page.historyForm.menstrualHistory!.estimatedDueDate = '2027-03-01';
+    page.onLmpChange('2026-05-21');
+    expect(page.historyForm.menstrualHistory?.estimatedDueDate).toBe('2027-03-01');
+  });
+
   it('a patient with no history (404) keeps the create open', () => {
     maternity.currentForPatient.and.returnValue(
       throwError(() => new HttpErrorResponse({ status: 404 })),
@@ -237,6 +252,34 @@ describe('MaternityComponent — new history for a patient who already has one (
 
     expect(notice()).toBeNull();
     expect(saveButton().disabled).toBeFalse();
+  });
+
+  it('QA D1082: a patient with no history (204, a null body) keeps the create open', () => {
+    maternity.currentForPatient.and.returnValue(of(null));
+
+    fixture.componentInstance.onHistoryPatientPicked({ id: 'p-new' } as never);
+    fixture.detectChanges();
+
+    expect(notice()).toBeNull();
+    expect(saveButton().disabled).toBeFalse();
+  });
+
+  it('QA D1067: the history list shows a delivered woman as delivered, never a running term', () => {
+    const page = fixture.componentInstance;
+    const lmp = new Date();
+    lmp.setDate(lmp.getDate() - 39 * 7 - 1);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const base = {
+      ...existing,
+      menstrualHistory: {
+        lastMenstrualPeriod: `${lmp.getFullYear()}-${pad(lmp.getMonth() + 1)}-${pad(lmp.getDate())}`,
+      },
+    };
+    expect(page.gestationalAgeOf(base)).not.toBeNull();
+    const delivered = { ...base, deliveredAt: '2026-10-30T17:12:00' };
+    expect(page.gestationalAgeOf(delivered)).toBeNull();
+    expect(page.deliveredAtOf(delivered)).toBe('2026-10-30T17:12:00');
+    expect(page.deliveredAtOf(base)).toBeNull();
   });
 
   it('a 409 on save shows the French reason, never the English server text, and the offer', () => {

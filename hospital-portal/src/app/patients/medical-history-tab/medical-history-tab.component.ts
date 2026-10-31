@@ -25,6 +25,7 @@ import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { PEV_VACCINES, pevCvx } from './pev-cvx';
 
 type HistorySection = 'social' | 'family' | 'immunizations';
 type FamilyFilter = 'all' | 'genetic' | 'screening-needed';
@@ -154,7 +155,7 @@ export class MedicalHistoryTabComponent implements OnInit {
     this.socialLoading.set(true);
     this.historyService.currentSocialHistory(this.patientId).subscribe({
       next: (current) => {
-        // Backend returns 200 with an empty body when none exists.
+        // None: an empty body (QA D1082 class: 204 No Content), read as null.
         this.currentSocial.set(current && current.id ? current : null);
         this.socialLoading.set(false);
       },
@@ -332,6 +333,40 @@ export class MedicalHistoryTabComponent implements OnInit {
     return immunization.nextDoseDueDate < this.todayIso();
   }
 
+  /**
+   * QA D1003: the Burkina Faso EPI (PEV) vaccines, offered by name so the
+   * vaccine is chosen rather than typed. Choosing one fills its verified CVX
+   * code (pev-cvx.ts); the code stays optional and editable.
+   */
+  readonly pevVaccines = PEV_VACCINES;
+  readonly immunizationSources = [
+    'GIVEN_HERE',
+    'VACCINATION_CARD',
+    'EXTERNAL_RECORD',
+    'PATIENT_REPORT',
+  ];
+
+  /** A source this form writes, which has a label; a legacy free-text source is shown as typed. */
+  isKnownSource(source: string | null | undefined): boolean {
+    return !!source && this.immunizationSources.includes(source);
+  }
+
+  /** A dose dated before today is a transcription unless the clinician says otherwise. */
+  onImmunizationDateChange(date: string): void {
+    this.immunizationForm.administrationDate = date;
+    if (!this.immunizationSourceTouched) {
+      this.immunizationForm.sourceOfRecord =
+        date && date < this.todayIso() ? 'VACCINATION_CARD' : 'GIVEN_HERE';
+    }
+  }
+
+  onImmunizationSourceChange(source: string): void {
+    this.immunizationSourceTouched = true;
+    this.immunizationForm.sourceOfRecord = source;
+  }
+
+  private immunizationSourceTouched = false;
+
   emptyImmunizationForm(): ImmunizationRequest {
     return {
       patientId: '',
@@ -341,6 +376,7 @@ export class MedicalHistoryTabComponent implements OnInit {
       administrationDate: this.todayIso(),
       // Uppercase COMPLETED is load-bearing for backend reminders/exports.
       status: 'COMPLETED',
+      sourceOfRecord: 'GIVEN_HERE',
     };
   }
 
@@ -350,6 +386,8 @@ export class MedicalHistoryTabComponent implements OnInit {
       patientId: this.patientId,
       hospitalId: this.hospitalId(),
     };
+    this.immunizationSourceTouched = false;
+    this.autoFilledCvx = null;
     this.editingImmunizationId.set(null);
     this.showImmunizationModal.set(true);
   }
@@ -364,9 +402,58 @@ export class MedicalHistoryTabComponent implements OnInit {
       vaccineDisplay: immunization.vaccineDisplay ?? '',
       administrationDate: immunization.administrationDate ?? this.todayIso(),
       status: immunization.status ?? 'COMPLETED',
+      // Review of #971: a dose recorded with no source stays without one (the
+      // server then keeps what is stored); it is never presumed given here.
+      sourceOfRecord: immunization.sourceOfRecord ?? '',
     };
+    this.immunizationSourceTouched = true;
+    this.autoFilledCvx = null;
     this.editingImmunizationId.set(immunization.id);
     this.showImmunizationModal.set(true);
+  }
+
+  /**
+   * QA D1003 (round 17): a PEV vaccine chosen by name fills its CVX code from
+   * the verified table (pev-cvx.ts). Any other vaccine takes the code an
+   * earlier dose of the same vaccine in this chart carries, when there is
+   * one. A code the clinician typed is never overwritten; one this method
+   * filled is replaced when the vaccine changes, and cleared when the new
+   * vaccine has no code, so a stale code never travels with another vaccine.
+   */
+  onVaccineChosen(display: string): void {
+    this.immunizationForm.vaccineDisplay = display;
+    const current = this.immunizationForm.vaccineCode?.trim() ?? '';
+    if (current && current !== this.autoFilledCvx) return;
+    const filled = pevCvx(this.pevVaccineNamed(display)) ?? this.earlierDoseCode(display);
+    this.immunizationForm.vaccineCode = filled ?? '';
+    this.autoFilledCvx = filled ?? null;
+  }
+
+  /** The CVX code the form filled itself, or null when the clinician typed it (or none). */
+  private autoFilledCvx: string | null = null;
+
+  /** The PEV vaccine whose label (in the reader's language) or key the text names. */
+  private pevVaccineNamed(display: string): string | undefined {
+    const name = (display ?? '').trim().toLocaleLowerCase();
+    if (!name) return undefined;
+    return this.pevVaccines.find(
+      (v) =>
+        v.toLocaleLowerCase() === name ||
+        String(this.translate.instant('MED_HISTORY.PEV.' + v))
+          .trim()
+          .toLocaleLowerCase() === name,
+    );
+  }
+
+  /** The code an earlier dose of the same vaccine in this chart carries. */
+  private earlierDoseCode(display: string): string | undefined {
+    const name = (display ?? '').trim().toLocaleLowerCase();
+    if (!name) return undefined;
+    const earlier = this.immunizations().find(
+      (i) =>
+        (i.vaccineDisplay ?? '').trim().toLocaleLowerCase() === name && !!i.vaccineCode?.trim(),
+    );
+    return earlier?.vaccineCode?.trim() || undefined;
   }
 
   closeImmunizationModal(): void {
@@ -375,11 +462,21 @@ export class MedicalHistoryTabComponent implements OnInit {
 
   submitImmunization(): void {
     const form = this.immunizationForm;
-    if (!form.vaccineCode.trim() || !form.vaccineDisplay.trim() || !form.administrationDate) {
+    // QA D1003: the CVX code is optional (a PEV vaccine may have none).
+    if (!form.vaccineDisplay.trim() || !form.administrationDate) {
       this.toast.error(this.translate.instant('MED_HISTORY.IMMUNIZATION_REQUIRED_FIELDS'));
       return;
     }
-    form.administeredByStaffId = this.auth.getUserProfile()?.staffId ?? form.administeredByStaffId;
+    // QA D1003: only a dose given here is credited to the clinician recording
+    // it, and only when it is recorded: an edit keeps the dose's vaccinator.
+    if (form.sourceOfRecord && form.sourceOfRecord !== 'GIVEN_HERE') {
+      form.administeredByStaffId = undefined;
+    } else if (!this.editingImmunizationId() && form.sourceOfRecord === 'GIVEN_HERE') {
+      form.administeredByStaffId = this.auth.getUserProfile()?.staffId ?? undefined;
+    }
+    if (!form.sourceOfRecord) {
+      form.sourceOfRecord = undefined;
+    }
     this.immunizationSaving.set(true);
     const editingId = this.editingImmunizationId();
     const op = editingId

@@ -165,6 +165,24 @@ describe('PatientDetailComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  it('QA D998: a chart that does not open here is explained on the page, not a toast and a bounce to the list', () => {
+    patientServiceSpy.getById.and.returnValue(
+      throwError(() => new HttpErrorResponse({ status: 404, statusText: 'Not Found' })),
+    );
+    const router = TestBed.inject(Router);
+    spyOn(router, 'navigate');
+
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    expect(component.unavailable()).toBeTrue();
+    expect(el.querySelector('[data-testid="chart-unavailable"]')?.textContent).toContain(
+      'REFERRALS.CHART_UNAVAILABLE',
+    );
+    expect(router.navigate).not.toHaveBeenCalled();
+    expect(toastSpy.error).not.toHaveBeenCalled();
+  });
+
   it('D61: the age reads in the active language, not a hard-coded "years"', () => {
     const translate = TestBed.inject(TranslateService);
     translate.setTranslation(
@@ -254,6 +272,26 @@ describe('PatientDetailComponent', () => {
     expect(
       fixture.nativeElement.querySelector('[data-testid="encounters-withheld"]'),
     ).not.toBeNull();
+  });
+
+  it('QA D927: the chart shows the nursing care notes to the roles that may read them', () => {
+    roleContextSpy.hasAnyActiveRole.and.callFake((roles: string[]) => roles.includes('ROLE_NURSE'));
+    fixture.detectChanges();
+    component.setTab('encounters');
+    fixture.detectChanges();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="nursing-notes-panel"]'),
+    ).not.toBeNull();
+  });
+
+  it('QA D927: a radiologist (encounters yes, GET /nurse/notes no) gets no nursing notes panel', () => {
+    roleContextSpy.hasAnyActiveRole.and.callFake((roles: string[]) =>
+      roles.includes('ROLE_RADIOLOGIST'),
+    );
+    fixture.detectChanges();
+    component.setTab('encounters');
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="nursing-notes-panel"]')).toBeNull();
   });
 
   it('QA D504: a complete vitals or encounters list shows no withheld note', () => {

@@ -10,7 +10,8 @@
       <app-hospital-scope-chip (scopeChange)="onScopeChange($event)" />
       @if (canAdmit()) {
         <button class="btn-primary" (click)="openCreate()">
-          <span class="material-symbols-outlined">add</span> {{ 'ADMISSIONS.NEW' | translate }}
+          <span class="material-symbols-outlined" aria-hidden="true">add</span>
+          {{ 'ADMISSIONS.NEW' | translate }}
         </button>
       }
     </div>
@@ -176,51 +177,67 @@
                   @if (a.status === 'ACTIVE') {
                     @if (canDischarge()) {
                       <button
+                        [attr.aria-label]="'ADMISSIONS.DISCHARGE' | translate"
                         class="action-link discharge-link"
                         (click)="confirmDischarge(a)"
                         [attr.title]="'ADMISSIONS.DISCHARGE' | translate"
                       >
-                        <span class="material-symbols-outlined">exit_to_app</span>
+                        <span class="material-symbols-outlined" aria-hidden="true"
+                          >exit_to_app</span
+                        >
                       </button>
                     }
                     @if (canApplyOrderSets()) {
                       <button
+                        [attr.aria-label]="'ORDER_SETS.OPEN_PICKER' | translate"
                         class="action-link"
                         (click)="openOrderSetPicker(a)"
                         [attr.title]="'ORDER_SETS.OPEN_PICKER' | translate"
                         data-testid="open-order-set-picker"
                       >
-                        <span class="material-symbols-outlined">playlist_add_check</span>
+                        <span class="material-symbols-outlined" aria-hidden="true"
+                          >playlist_add_check</span
+                        >
                       </button>
                     }
                     @if (canAssignBed()) {
                       <button
+                        [attr.aria-label]="'ADMISSIONS.ASSIGN_BED' | translate"
                         class="action-link"
                         (click)="openBedAssign(a)"
                         [attr.title]="'ADMISSIONS.ASSIGN_BED' | translate"
                         data-testid="open-bed-assign"
                       >
-                        <span class="material-symbols-outlined">bed</span>
+                        <span class="material-symbols-outlined" aria-hidden="true">bed</span>
                       </button>
                     }
                     @if (a.bedId && canUnassignBed()) {
                       <button
+                        [attr.aria-label]="'ADMISSIONS.UNASSIGN_BED' | translate"
                         class="action-link"
                         (click)="unassignBed(a)"
                         [attr.title]="'ADMISSIONS.UNASSIGN_BED' | translate"
                       >
-                        <span class="material-symbols-outlined">bed_off</span>
+                        <span class="material-symbols-outlined" aria-hidden="true">bed_off</span>
                       </button>
                     }
                   }
                   @if (canEditAdmission()) {
-                    <button class="action-link edit-link" (click)="openEdit(a)">
-                      <span class="material-symbols-outlined">edit</span>
+                    <button
+                      [attr.aria-label]="'COMMON.EDIT' | translate"
+                      class="action-link edit-link"
+                      (click)="openEdit(a)"
+                    >
+                      <span class="material-symbols-outlined" aria-hidden="true">edit</span>
                     </button>
                   }
                   @if (canCancelAdmission() && isCancellable(a)) {
-                    <button class="action-link delete-link" (click)="confirmDelete(a)">
-                      <span class="material-symbols-outlined">delete</span>
+                    <button
+                      [attr.aria-label]="'COMMON.DELETE' | translate"
+                      class="action-link delete-link"
+                      (click)="confirmDelete(a)"
+                    >
+                      <span class="material-symbols-outlined" aria-hidden="true">delete</span>
                     </button>
                   }
                 </div>
@@ -243,9 +260,13 @@
   >
     <div
       class="modal modal-lg"
+      role="dialog"
+      aria-modal="true"
+      [attr.aria-label]="'ORDER_SETS.OPEN_PICKER' | translate"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeOrderSetPicker(); $event.stopPropagation()"
+      appModalDialog
     >
       <app-order-set-picker
         [hospitalId]="ctx.hospitalId"
@@ -269,14 +290,22 @@
   >
     <div
       class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="admissions-dialog-1-title"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeBedAssign(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
-        <h2>{{ 'ADMISSIONS.ASSIGN_BED' | translate }}</h2>
-        <button class="modal-close" (click)="closeBedAssign()">
-          <span class="material-symbols-outlined">close</span>
+        <h2 id="admissions-dialog-1-title">{{ 'ADMISSIONS.ASSIGN_BED' | translate }}</h2>
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="modal-close"
+          (click)="closeBedAssign()"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -331,14 +360,24 @@
   <div class="modal-backdrop" tabindex="-1" (click)="closeModal()" (keydown.escape)="closeModal()">
     <div
       class="modal modal-lg"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="admissions-dialog-3-title"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="closeModal(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
-        <h2>{{ editing() ? ('ADMISSIONS.EDIT' | translate) : ('ADMISSIONS.NEW' | translate) }}</h2>
-        <button class="modal-close" (click)="closeModal()">
-          <span class="material-symbols-outlined">close</span>
+        <h2 id="admissions-dialog-3-title">
+          {{ editing() ? ('ADMISSIONS.EDIT' | translate) : ('ADMISSIONS.NEW' | translate) }}
+        </h2>
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="modal-close"
+          (click)="closeModal()"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -349,20 +388,19 @@
               <div class="picker-chip">
                 <div class="chip-avatar">{{ patientInitials(selectedPatient()!) }}</div>
                 <div class="chip-info">
-                  <span class="chip-name"
-                    >{{ selectedPatient()!.firstName }} {{ selectedPatient()!.lastName }}</span
-                  >
+                  <span class="chip-name">{{ selectedPatient() | personName }}</span>
                   @if (selectedPatient() | patientSubline; as sub) {
                     <span class="chip-sub">{{ sub }}</span>
                   }
                 </div>
                 <button
+                  [attr.aria-label]="'COMMON.CHANGE_PATIENT' | translate"
                   type="button"
                   class="chip-clear"
                   (click)="clearPatient()"
                   [title]="'COMMON.CHANGE_PATIENT' | translate"
                 >
-                  <span class="material-symbols-outlined">close</span>
+                  <span class="material-symbols-outlined" aria-hidden="true">close</span>
                 </button>
               </div>
             } @else {
@@ -396,7 +434,7 @@
                       >
                         <div class="opt-avatar">{{ patientInitials(p) }}</div>
                         <div class="opt-info">
-                          <span class="opt-name">{{ p.firstName }} {{ p.lastName }}</span>
+                          <span class="opt-name">{{ p | personName }}</span>
                           @if (p | patientSubline; as sub) {
                             <span class="opt-meta">{{ sub }}</span>
                           }
@@ -568,14 +606,22 @@
   >
     <div
       class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="admissions-dialog-4-title"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="cancelDelete(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
-        <h2>{{ 'ADMISSIONS.DELETE_TITLE' | translate }}</h2>
-        <button class="modal-close" (click)="cancelDelete()">
-          <span class="material-symbols-outlined">close</span>
+        <h2 id="admissions-dialog-4-title">{{ 'ADMISSIONS.DELETE_TITLE' | translate }}</h2>
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="modal-close"
+          (click)="cancelDelete()"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -607,17 +653,25 @@
   >
     <div
       class="modal modal-lg"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="admissions-dialog-5-title"
       tabindex="-1"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="$event.stopPropagation()"
+      (keydown.escape)="cancelDischarge(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="admissions-dialog-5-title">
           <span class="material-symbols-outlined modal-title-icon">exit_to_app</span>
           {{ 'ADMISSIONS.DISCHARGE_MODAL_TITLE' | translate }}
         </h2>
-        <button class="modal-close" (click)="cancelDischarge()">
-          <span class="material-symbols-outlined">close</span>
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="modal-close"
+          (click)="cancelDischarge()"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">

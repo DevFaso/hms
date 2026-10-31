@@ -3,6 +3,7 @@ package com.example.hms.service.scheduling;
 import com.example.hms.enums.RecallStatus;
 import com.example.hms.enums.RecallType;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.model.Appointment;
 import com.example.hms.model.Department;
@@ -135,6 +136,110 @@ public class PatientRecallServiceImpl implements PatientRecallService {
         return toDto(recallRepository.save(recall), hospitalId);
     }
 
+    /** QA D985: the booking request property a recall refusal is about. */
+    private static final String RECALL_FIELD = "recallId";
+
+    /** QA D985: how early a visit may come and still answer a recall. */
+    private static final int RECALL_EARLY_DAYS = 30;
+
+    @Override
+    @Transactional
+    public void scheduleOpenRecallFor(Appointment appointment, UUID recallId) {
+        if (appointment == null || appointment.getPatient() == null || appointment.getHospital() == null) {
+            return;
+        }
+        UUID hospitalId = appointment.getHospital().getId();
+        UUID patientId = appointment.getPatient().getId();
+        java.util.Optional<PatientRecall> target;
+        if (recallId != null) {
+            // Booked from the recall list: exactly that recall. One that is not
+            // this patient's, not this hospital's or no longer open is a refusal,
+            // never a silent no-op that leaves the recall chasing the patient.
+            // The refusal rolls the booking back and names the recallId field,
+            // so the form drops the recall and the next submit books without it.
+            PatientRecall named = recallRepository.findByIdAndHospital_Id(recallId, hospitalId)
+                .orElseThrow(() -> new FieldBusinessException(RECALL_FIELD, "recall.book.notFound"));
+            if (!OPEN_STATUSES.contains(named.getStatus())) {
+                throw new FieldBusinessException(RECALL_FIELD, "recall.book.notOpen");
+            }
+            if (named.getPatient() == null || !patientId.equals(named.getPatient().getId())) {
+                throw new FieldBusinessException(RECALL_FIELD, "recall.book.otherPatient");
+            }
+            target = java.util.Optional.of(named);
+        } else {
+            target = recallRepository.findByPatient_IdAndStatusIn(patientId, OPEN_STATUSES).stream()
+                .filter(r -> r.getHospital() != null && hospitalId.equals(r.getHospital().getId()))
+                .filter(r -> asksForThisVisit(r, appointment))
+                .min(java.util.Comparator.comparing(PatientRecall::getDueDate,
+                    java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())));
+        }
+        target.ifPresent(recall -> {
+            recall.setLinkedAppointment(appointment);
+            recall.setStatus(RecallStatus.SCHEDULED);
+            recallRepository.save(recall);
+        });
+    }
+
+    /**
+     * A recall visibly asks for this visit when it names the visit's
+     * department or clinician and the visit is not far ahead of its due date.
+     * An acute visit in another service, or months before the recall is due,
+     * does not answer it.
+     */
+    private static boolean asksForThisVisit(PatientRecall recall, Appointment appointment) {
+        boolean sameDepartment = recall.getDepartment() != null && appointment.getDepartment() != null
+            && recall.getDepartment().getId().equals(appointment.getDepartment().getId());
+        boolean sameClinician = recall.getPreferredProvider() != null && appointment.getStaff() != null
+            && recall.getPreferredProvider().getId().equals(appointment.getStaff().getId());
+        if (!sameDepartment && !sameClinician) {
+            return false;
+        }
+        return recall.getDueDate() == null || appointment.getAppointmentDate() == null
+            || !appointment.getAppointmentDate().isBefore(recall.getDueDate().minusDays(RECALL_EARLY_DAYS));
+    }
+
+    @Override
+    @Transactional
+    public void completeRecallsOf(UUID appointmentId) {
+        if (appointmentId == null) {
+            return;
+        }
+        for (PatientRecall recall : recallRepository.findByLinkedAppointment_IdAndStatus(
+                appointmentId, RecallStatus.SCHEDULED)) {
+            finish(recall, RecallStatus.CLOSED);
+        }
+    }
+
+    @Override
+    @Transactional
+    public void reopenRecallsOf(UUID appointmentId) {
+        if (appointmentId == null) {
+            return;
+        }
+        for (PatientRecall recall : recallRepository.findByLinkedAppointment_IdAndStatus(
+                appointmentId, RecallStatus.SCHEDULED)) {
+            // Open again, but still pointing at the visit (review round 18): if
+            // that visit is brought back (a missed one moved through
+            // RESCHEDULED), the recall follows it; a new booking for the recall
+            // replaces the link.
+            recall.setStatus(RecallStatus.PENDING);
+            recallRepository.save(recall);
+        }
+    }
+
+    @Override
+    @Transactional
+    public void rescheduleRecallsOf(UUID appointmentId) {
+        if (appointmentId == null) {
+            return;
+        }
+        for (PatientRecall recall : recallRepository.findByLinkedAppointment_IdAndStatus(
+                appointmentId, RecallStatus.PENDING)) {
+            recall.setStatus(RecallStatus.SCHEDULED);
+            recallRepository.save(recall);
+        }
+    }
+
     /* ---------------- helpers ---------------- */
 
     private PatientRecall finish(PatientRecall recall, RecallStatus status) {
@@ -165,7 +270,7 @@ public class PatientRecallServiceImpl implements PatientRecallService {
             .id(recall.getId())
             .hospitalId(recall.getHospital().getId())
             .patientId(patient.getId())
-            .patientName(patient.getFirstName() + " " + patient.getLastName())
+            .patientName(patient.getFullName())
             .mrn(mrn)
             .departmentId(recall.getDepartment() != null ? recall.getDepartment().getId() : null)
             .departmentName(recall.getDepartment() != null ? recall.getDepartment().getName() : null)

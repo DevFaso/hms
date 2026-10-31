@@ -360,6 +360,9 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
             .testCode(testDefinition != null ? testDefinition.getTestCode() : null)
             .status(resolveStatus(result, mapped))
             .released(result.isReleased())
+            // QA D1016: a released correction is marked, so the patient does not
+            // read it as a second, unrelated result.
+            .corrected(result.isReleased() && com.example.hms.service.lab.LabResultCorrections.isCorrection(result))
             .collectedAt(labOrder != null ? collectedAtByOrder.get(labOrder.getId()) : null)
             .resultedAt(result.getResultDate())
             .orderedBy(resolveStaffName(labOrder != null ? labOrder.getOrderingStaff() : null))

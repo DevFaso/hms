@@ -1,7 +1,8 @@
 import { EncounterResponse, EncounterService } from '../services/encounter.service';
 import { AuthService, LoginUserProfile } from '../auth/auth.service';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideHttpClient, withXhr } from '@angular/common/http';
+import { HttpErrorResponse, provideHttpClient, withXhr } from '@angular/common/http';
+import { MfaService } from '../auth/mfa.service';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ActivatedRoute, convertToParamMap } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -387,6 +388,92 @@ describe('PrescriptionsComponent — signing', () => {
     fixture.detectChanges();
   });
 
+  it('QA D934: a doctor is offered Sign on a nurse or midwife draft, not on a colleague doctor draft', () => {
+    spyOn(component, 'ownPrescriberStaffId').and.returnValue('me');
+    const colleague = {
+      ...rx('c1', 'PENDING_SIGNATURE'),
+      staffId: 'other',
+    } as PrescriptionResponse;
+    const midwifeDraft = {
+      ...rx('c2', 'PENDING_SIGNATURE'),
+      staffId: 'midwife',
+      awaitingPhysicianSignature: true,
+    } as PrescriptionResponse;
+    expect(component.canSign(colleague)).toBeFalse();
+    expect(component.canSign(midwifeDraft)).toBeTrue();
+    expect(
+      component.canSign({ ...midwifeDraft, status: 'SIGNED' } as PrescriptionResponse),
+    ).toBeFalse();
+  });
+
+  it('QA D922: picking a catalogue item sends its id; typing over it clears the id', () => {
+    component.openCreate();
+    const morphine = {
+      id: 'cat-1',
+      nameFr: 'Morphine',
+      genericName: 'morphine',
+      strength: '10',
+      strengthUnit: 'mg/ml',
+      controlled: true,
+    } as never;
+    component.catalogOptions.set([morphine]);
+    component.onMedicationNameChange('Morphine 10 mg/ml');
+    expect(component.form.medicationCatalogItemId).toBe('cat-1');
+    expect(component.pickedCatalogItem()?.controlled).toBeTrue();
+    component.onMedicationNameChange('Morphine 10 mg/ml retard');
+    expect(component.form.medicationCatalogItemId).toBeNull();
+  });
+
+  it('review of #975: a catalogue pick (and its controlled hint) does not carry into the next order', () => {
+    component.openCreate();
+    const morphine = {
+      id: 'cat-1',
+      nameFr: 'Morphine',
+      strength: '10',
+      strengthUnit: 'mg/ml',
+      controlled: true,
+    } as never;
+    component.catalogOptions.set([morphine]);
+    component.onMedicationNameChange('Morphine 10 mg/ml');
+    expect(component.pickedCatalogItem()?.controlled).toBeTrue();
+
+    component.closeModal();
+    expect(component.pickedCatalogItem()).toBeNull();
+
+    component.onMedicationNameChange('Morphine 10 mg/ml');
+    component.openCreate();
+    expect(component.pickedCatalogItem()).toBeNull();
+    expect(component.form.medicationCatalogItemId).toBeFalsy();
+  });
+
+  it('QA D922: two catalogue items reading the same send no id, and a form tells them apart', () => {
+    component.openCreate();
+    const tablet = { id: 'cat-t', nameFr: 'Codéine', strength: '30', strengthUnit: 'mg' } as never;
+    const syrup = { id: 'cat-s', nameFr: 'Codéine', strength: '30', strengthUnit: 'mg' } as never;
+    component.catalogOptions.set([tablet, syrup]);
+    component.onMedicationNameChange('Codéine 30 mg');
+    expect(component.form.medicationCatalogItemId).toBeNull();
+    expect(component.pickedCatalogItem()).toBeNull();
+
+    const tabletWithForm = { ...(tablet as object), form: 'TABLET' } as never;
+    component.catalogOptions.set([tabletWithForm, syrup]);
+    expect(component.catalogLabel(tabletWithForm)).not.toBe(component.catalogLabel(syrup));
+    component.onMedicationNameChange(component.catalogLabel(tabletWithForm));
+    expect(component.form.medicationCatalogItemId).toBe('cat-t');
+  });
+
+  it('QA D922: the catalogue id of an order being edited is kept', () => {
+    component.openEdit({
+      ...rx('e1', 'DRAFT'),
+      medicationName: 'Morphine',
+      medicationCatalogItemId: 'cat-1',
+      route: 'INTRAVENOUS',
+    } as PrescriptionResponse);
+    expect(component.form.medicationCatalogItemId).toBe('cat-1');
+    // QA D950: a stored English word opens on the form's own option.
+    expect(component.form.route).toBe('IV');
+  });
+
   it('QA D706: a new prescription without a quantity to dispense is not sent', () => {
     component.openCreate();
     component.form.medicationName = 'Morphine 10 mg';
@@ -700,6 +787,85 @@ describe('PrescriptionsComponent — signing', () => {
     component.signPrescription(rx('rx-1', 'DRAFT'));
 
     expect(toast.error).toHaveBeenCalledWith('t:PRESCRIPTIONS.TOAST.ACTION_FORBIDDEN');
+  });
+
+  describe('controlled-drug signature re-authentication (round 18)', () => {
+    let mfa: MfaService;
+
+    beforeEach(() => {
+      mfa = TestBed.inject(MfaService);
+    });
+
+    it('a controlled order opens the re-authentication dialog instead of signing', () => {
+      spyOn(mfa, 'getStatus').and.returnValue(of({ mfaEnabled: false }));
+      component.signPrescription({ ...rx('rx-1', 'DRAFT'), controlledSubstance: true });
+
+      expect(prescriptionService.sign).not.toHaveBeenCalled();
+      expect(component.signReauthTarget()?.id).toBe('rx-1');
+      expect(component.signReauthUsesCode()).toBeFalse();
+    });
+
+    it('sends the password, once, and clears it after a signature', () => {
+      spyOn(mfa, 'getStatus').and.returnValue(of({ mfaEnabled: false }));
+      component.signPrescription({ ...rx('rx-1', 'DRAFT'), controlledSubstance: true });
+      component.signReauthSecret = 's3cret';
+
+      component.submitSignReauth();
+
+      expect(prescriptionService.sign).toHaveBeenCalledWith('rx-1', { password: 's3cret' });
+      expect(component.signReauthTarget()).toBeNull();
+      expect(component.signReauthSecret).toBe('');
+    });
+
+    it('sends the authenticator code when one is enrolled', () => {
+      spyOn(mfa, 'getStatus').and.returnValue(of({ mfaEnabled: true }));
+      component.signPrescription({ ...rx('rx-1', 'DRAFT'), controlledSubstance: true });
+      component.signReauthSecret = ' 123456 ';
+
+      component.submitSignReauth();
+
+      expect(prescriptionService.sign).toHaveBeenCalledWith('rx-1', { mfaCode: '123456' });
+    });
+
+    it('a refused re-authentication stays in the dialog with the reason and an empty field', () => {
+      spyOn(mfa, 'getStatus').and.returnValue(of({ mfaEnabled: false }));
+      prescriptionService.sign.and.returnValue(
+        throwError(
+          () =>
+            new HttpErrorResponse({
+              status: 403,
+              error: { message: 'Code incorrect', code: 'mfa.stepup.invalid' },
+            }),
+        ),
+      );
+      component.signPrescription({ ...rx('rx-1', 'DRAFT'), controlledSubstance: true });
+      component.signReauthSecret = 'wrong';
+
+      component.submitSignReauth();
+
+      expect(component.signReauthTarget()?.id).toBe('rx-1');
+      expect(component.signReauthError()).toBe('Code incorrect');
+      expect(component.signReauthSecret).toBe('');
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it('a catalogue-controlled order the list did not flag opens the dialog on the step-up refusal', () => {
+      spyOn(mfa, 'getStatus').and.returnValue(of({ mfaEnabled: false }));
+      prescriptionService.sign.and.returnValue(
+        throwError(
+          () =>
+            new HttpErrorResponse({
+              status: 403,
+              error: { message: 'Saisissez votre mot de passe', code: 'mfa.stepup.required' },
+            }),
+        ),
+      );
+
+      component.signPrescription(rx('rx-1', 'DRAFT'));
+
+      expect(component.signReauthTarget()?.id).toBe('rx-1');
+      expect(component.signReauthError()).toBe('Saisissez votre mot de passe');
+    });
   });
 
   it('a non-403 failure without a body falls back to the generic sign failure', () => {

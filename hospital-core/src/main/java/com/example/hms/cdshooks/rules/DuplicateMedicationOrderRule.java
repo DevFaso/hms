@@ -86,14 +86,14 @@ public class DuplicateMedicationOrderRule implements CdsRule {
     private CdsCard buildCard(Prescription existing) {
         String summary = text.get("cds.duplicate.summary",
             "Possible duplicate order: {0} was prescribed on {1}",
-            existing.getMedicationName(), existing.getCreatedAt().toLocalDate().toString());
+            existing.getMedicationName(), text.date(existing.getCreatedAt().toLocalDate()));
         String detail = text.get("cds.duplicate.detail",
             "An active prescription for the same medication exists within the past "
                 + "{0} days (status: {1}). Verify the new order is intended.",
             String.valueOf(LOOKBACK.toDays()), text.enumWord(existing.getStatus()));
         return new CdsCard(
             summary, detail, CdsCard.Indicator.WARNING,
-            new Source(SOURCE_LABEL, null, null),
+            new Source(text.get("cds.source.duplicateOrder", SOURCE_LABEL), null, null),
             null, null, null, UUID.randomUUID().toString()
         );
     }

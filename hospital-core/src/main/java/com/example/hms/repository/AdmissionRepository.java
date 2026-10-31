@@ -132,7 +132,7 @@ public interface AdmissionRepository extends JpaRepository<Admission, UUID> {
     /**
      * Get current admission for patient (if any)
      */
-    @Query("SELECT a FROM Admission a WHERE a.patient.id = :patientId AND a.status IN ('PENDING', 'ACTIVE', 'ON_LEAVE') ORDER BY a.admissionDateTime DESC LIMIT 1")
+    @Query("SELECT a FROM Admission a WHERE a.patient.id = :patientId AND a.status IN ('PENDING', 'ACTIVE', 'ON_LEAVE', 'AWAITING_DISCHARGE') ORDER BY a.admissionDateTime DESC LIMIT 1")
     Optional<Admission> findCurrentAdmissionByPatient(@Param("patientId") UUID patientId);
 
     /**

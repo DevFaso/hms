@@ -185,7 +185,7 @@
         aria-modal="true"
         tabindex="-1"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="$event.stopPropagation()"
+        (keydown.escape)="closeBaseline(); $event.stopPropagation()"
       >
         <h2>{{ 'ADMIN_GOV.NEW_BASELINE' | translate }}</h2>
         <label class="form-field">
@@ -257,7 +257,7 @@
         aria-modal="true"
         tabindex="-1"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="$event.stopPropagation()"
+        (keydown.escape)="closeSimulation(); $event.stopPropagation()"
       >
         <h2>{{ 'ADMIN_GOV.SIMULATE_TITLE' | translate: { title: template.title } }}</h2>
         @if (!simResult()) {

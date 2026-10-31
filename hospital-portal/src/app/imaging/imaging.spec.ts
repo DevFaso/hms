@@ -427,6 +427,18 @@ describe('ImagingComponent — order actions by role (QA D527)', () => {
     expect(titles(el)).toContain('IMAGING.CANCEL_ORDER');
   });
 
+  // QA D1081: DOCTOR2_A was offered "Annuler la Demande" on DOCTOR_A's order
+  // and refused only after confirming.
+  it('D1081: a doctor who did not write the order is offered no Cancel', () => {
+    const el = render('ROLE_DOCTOR', { orderingProviderUserId: 'u-colleague' });
+    expect(titles(el)).not.toContain('IMAGING.CANCEL_ORDER');
+  });
+
+  it('D1081: the order author keeps Cancel', () => {
+    const mine = render('ROLE_DOCTOR', { orderingProviderUserId: 'u-me' });
+    expect(titles(mine)).toContain('IMAGING.CANCEL_ORDER');
+  });
+
   it('QA D611: a signed order offers no Edit, even to its ordering doctor', () => {
     const el = render('ROLE_DOCTOR', { providerSignedAt: '2026-10-23T09:00:00' });
     expect(titles(el)).not.toContain('IMAGING.EDIT_ORDER');

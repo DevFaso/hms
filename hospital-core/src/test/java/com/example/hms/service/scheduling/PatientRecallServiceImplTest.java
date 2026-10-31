@@ -72,6 +72,7 @@ class PatientRecallServiceImplTest {
         patientId = UUID.randomUUID();
         patient = mock(Patient.class);
         lenient().when(patient.getId()).thenReturn(patientId);
+        lenient().when(patient.getFullName()).thenReturn("Awa Traore"); // QA D1036: the whole name
         lenient().when(patient.getFirstName()).thenReturn("Awa");
         lenient().when(patient.getLastName()).thenReturn("Traore");
         lenient().when(patient.isRegisteredInHospital(hospitalId)).thenReturn(true);
@@ -231,5 +232,151 @@ class PatientRecallServiceImplTest {
 
         assertThatThrownBy(() -> service.closeRecall(strangeId, hospitalId))
             .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    // ── QA D985: booking the visit a recall asks for schedules it ──────────
+
+    private Appointment visit(com.example.hms.model.Department dept, com.example.hms.model.Staff staff,
+                              LocalDate date) {
+        Appointment a = new Appointment();
+        a.setId(UUID.randomUUID());
+        a.setPatient(patient);
+        a.setHospital(hospital);
+        a.setDepartment(dept);
+        a.setStaff(staff);
+        a.setAppointmentDate(date);
+        return a;
+    }
+
+    private com.example.hms.model.Department department() {
+        com.example.hms.model.Department d = new com.example.hms.model.Department();
+        d.setId(UUID.randomUUID());
+        return d;
+    }
+
+    @Test
+    void d985_aVisitInTheRecallsDepartmentSchedulesTheSoonestRecall() {
+        com.example.hms.model.Department dept = department();
+        PatientRecall later = existingRecall(RecallStatus.PENDING);
+        later.setDepartment(dept);
+        later.setDueDate(LocalDate.now().plusWeeks(4));
+        PatientRecall sooner = existingRecall(RecallStatus.NOTIFIED);
+        sooner.setDepartment(dept);
+        when(recallRepository.findByPatient_IdAndStatusIn(any(), any())).thenReturn(List.of(later, sooner));
+
+        Appointment a = visit(dept, null, LocalDate.now().plusWeeks(2));
+        service.scheduleOpenRecallFor(a, null);
+
+        assertThat(sooner.getStatus()).isEqualTo(RecallStatus.SCHEDULED);
+        assertThat(sooner.getLinkedAppointment()).isSameAs(a);
+        assertThat(later.getStatus()).isEqualTo(RecallStatus.PENDING);
+    }
+
+    @Test
+    void d985_aVisitTheRecallDoesNotAskForLeavesItOpen() {
+        com.example.hms.model.Department dept = department();
+        PatientRecall noTarget = existingRecall(RecallStatus.PENDING);
+        PatientRecall otherService = existingRecall(RecallStatus.PENDING);
+        otherService.setDepartment(department());
+        PatientRecall farAhead = existingRecall(RecallStatus.PENDING);
+        farAhead.setDepartment(dept);
+        farAhead.setDueDate(LocalDate.now().plusMonths(6));
+        Hospital elsewhere = new Hospital();
+        elsewhere.setId(UUID.randomUUID());
+        PatientRecall atAnotherHospital = existingRecall(RecallStatus.PENDING);
+        atAnotherHospital.setHospital(elsewhere);
+        atAnotherHospital.setDepartment(dept);
+        when(recallRepository.findByPatient_IdAndStatusIn(any(), any()))
+            .thenReturn(List.of(noTarget, otherService, farAhead, atAnotherHospital));
+
+        service.scheduleOpenRecallFor(visit(dept, null, LocalDate.now().plusDays(1)), null);
+
+        assertThat(List.of(noTarget, otherService, farAhead, atAnotherHospital))
+            .allMatch(r -> r.getStatus() == RecallStatus.PENDING);
+        verify(recallRepository, never()).save(any());
+    }
+
+    @Test
+    void d985_theRecallsClinicianAlsoMakesTheVisitTheOneItAsksFor() {
+        com.example.hms.model.Staff doctor = new com.example.hms.model.Staff();
+        doctor.setId(UUID.randomUUID());
+        PatientRecall recall = existingRecall(RecallStatus.PENDING);
+        recall.setPreferredProvider(doctor);
+        recall.setDueDate(null);
+        when(recallRepository.findByPatient_IdAndStatusIn(any(), any())).thenReturn(List.of(recall));
+
+        service.scheduleOpenRecallFor(visit(null, doctor, LocalDate.now().plusDays(3)), null);
+
+        assertThat(recall.getStatus()).isEqualTo(RecallStatus.SCHEDULED);
+    }
+
+    @Test
+    void d985_bookingFromTheRecallListLinksExactlyThatRecall_andNoOneElses() {
+        PatientRecall recall = existingRecall(RecallStatus.PENDING);
+        Appointment a = visit(null, null, LocalDate.now().plusDays(3));
+
+        service.scheduleOpenRecallFor(a, recall.getId());
+        assertThat(recall.getStatus()).isEqualTo(RecallStatus.SCHEDULED);
+
+        // Round 6: a named recall that cannot be linked is a refusal, never a silent no-op.
+        PatientRecall closed = existingRecall(RecallStatus.CLOSED);
+        // The refusal names the recallId field: the form drops the recall and resubmits without it.
+        UUID closedId = closed.getId();
+        assertThatThrownBy(() -> service.scheduleOpenRecallFor(a, closedId))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting(e -> ((com.example.hms.exception.FieldBusinessException) e).getField()
+                + "/" + ((com.example.hms.exception.FieldBusinessException) e).getMessageKey())
+            .isEqualTo("recallId/recall.book.notOpen");
+        assertThat(closed.getStatus()).isEqualTo(RecallStatus.CLOSED);
+
+        Patient someoneElse = mock(Patient.class);
+        when(someoneElse.getId()).thenReturn(UUID.randomUUID());
+        PatientRecall foreign = existingRecall(RecallStatus.PENDING);
+        foreign.setPatient(someoneElse);
+        UUID foreignId = foreign.getId();
+        assertThatThrownBy(() -> service.scheduleOpenRecallFor(a, foreignId))
+            .isInstanceOf(BusinessException.class);
+        assertThat(foreign.getStatus()).isEqualTo(RecallStatus.PENDING);
+
+        UUID unknown = UUID.randomUUID();
+        assertThatThrownBy(() -> service.scheduleOpenRecallFor(a, unknown))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting(e -> ((com.example.hms.exception.FieldBusinessException) e).getField())
+            .isEqualTo("recallId");
+    }
+
+    @Test
+    void d985_nothingToLinkWithoutAPatientOrHospital() {
+        service.scheduleOpenRecallFor(null, null);
+        service.scheduleOpenRecallFor(new Appointment(), null);
+        service.reopenRecallsOf(null);
+        service.completeRecallsOf(null);
+        verify(recallRepository, never()).save(any());
+    }
+
+    @Test
+    void d985_aCancelledVisitReopensItsRecall_andACompletedOneClosesIt() {
+        UUID appointmentId = UUID.randomUUID();
+        PatientRecall reopened = existingRecall(RecallStatus.SCHEDULED);
+        reopened.setLinkedAppointment(new Appointment());
+        when(recallRepository.findByLinkedAppointment_IdAndStatus(appointmentId, RecallStatus.SCHEDULED))
+            .thenReturn(List.of(reopened));
+        service.reopenRecallsOf(appointmentId);
+        assertThat(reopened.getStatus()).isEqualTo(RecallStatus.PENDING);
+        // Review round 18: the link stays, so the recall can follow the visit back.
+        assertThat(reopened.getLinkedAppointment()).isNotNull();
+
+        when(recallRepository.findByLinkedAppointment_IdAndStatus(appointmentId, RecallStatus.PENDING))
+            .thenReturn(List.of(reopened));
+        service.rescheduleRecallsOf(appointmentId);
+        assertThat(reopened.getStatus()).isEqualTo(RecallStatus.SCHEDULED);
+
+        PatientRecall fulfilled = existingRecall(RecallStatus.SCHEDULED);
+        UUID done = UUID.randomUUID();
+        when(recallRepository.findByLinkedAppointment_IdAndStatus(done, RecallStatus.SCHEDULED))
+            .thenReturn(List.of(fulfilled));
+        service.completeRecallsOf(done);
+        assertThat(fulfilled.getStatus()).isEqualTo(RecallStatus.CLOSED);
+        assertThat(fulfilled.getClosedAt()).isNotNull();
     }
 }

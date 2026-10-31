@@ -111,6 +111,23 @@ describe('BreakGlassReviewComponent', () => {
     expect(declarer.trim().startsWith('Kadi Sanogo')).toBeTrue();
   });
 
+  it('QA D992 class: a patient with no name on file is never shown as a slice of the id', () => {
+    service.listForHospital.and.returnValue(
+      of({
+        content: [session({ patientName: null, patientMrn: null })],
+        totalElements: 1,
+        totalPages: 1,
+      }),
+    );
+    component.reload();
+    fixture.detectChanges();
+    const patient =
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="patient"]')
+        ?.textContent ?? '';
+    expect(patient).toContain('BREAK_GLASS_REVIEW.PATIENT_UNNAMED');
+    expect(patient).not.toContain('22222222');
+  });
+
   it('switches to the whole register when the queue filter is turned off', () => {
     component.setQueueOnly(false);
     expect(service.listForHospital).toHaveBeenCalledWith(h1, 0, 20, undefined);

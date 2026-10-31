@@ -200,4 +200,67 @@ describe('FlowBoardComponent', () => {
       expect(component.statusChanged.emit).not.toHaveBeenCalled();
     });
   });
+
+  describe('QA D1023: keyboard and button paths (WCAG 2.1.1)', () => {
+    const board = (arrived: ReceptionQueueItem[], inProgress: ReceptionQueueItem[] = []) => ({
+      scheduled: [],
+      confirmed: [],
+      arrived,
+      inProgress,
+      completed: [],
+      noShow: [],
+      walkIn: [],
+    });
+
+    it('a never-seen card has a close-unseen button that opens the dialog request', () => {
+      spyOn(component.closeUnseenRequested, 'emit');
+      spyOn(component.patientClicked, 'emit');
+      component.board = board([makeItem({ patientName: 'Aïcha' })]);
+      component.ngOnChanges({ board: { currentValue: component.board } as never });
+      fixture.detectChanges();
+      const button = (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="flow-close-unseen"]',
+      ) as HTMLButtonElement;
+      expect(button).withContext('the button is rendered').toBeTruthy();
+      expect(button.getAttribute('aria-label')).toContain('Aïcha');
+      expect(button.closest('[role="button"]')).withContext('not nested in the card').toBeNull();
+      button.click();
+      expect(component.closeUnseenRequested.emit).toHaveBeenCalledWith({
+        encounterId: 'e1',
+        patientName: 'Aïcha',
+        outcome: 'LEFT_WITHOUT_BEING_SEEN',
+      });
+      expect(component.patientClicked.emit).not.toHaveBeenCalled();
+    });
+
+    it('a seen card has no close-unseen button', () => {
+      component.board = board([], [makeItem({ status: 'IN_PROGRESS' })]);
+      component.ngOnChanges({ board: { currentValue: component.board } as never });
+      fixture.detectChanges();
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('[data-testid="flow-close-unseen"]'),
+      ).toBeNull();
+    });
+
+    it('Alt+Right moves a card through the same rules as a drop', () => {
+      spyOn(component.statusChanged, 'emit');
+      const seen = makeItem({ status: 'IN_PROGRESS' });
+      component.board = board([], [seen]);
+      component.ngOnChanges({ board: { currentValue: component.board } as never });
+      component.moveCard(seen, 'inProgress', 1);
+      expect(component.statusChanged.emit).toHaveBeenCalledWith({
+        encounterId: 'e1',
+        newStatus: 'COMPLETED',
+      });
+      expect(component.localBoard.completed).toContain(seen);
+    });
+
+    it('Alt+Left from the first column does nothing', () => {
+      spyOn(component.statusChanged, 'emit');
+      const item = makeItem({ status: 'SCHEDULED' });
+      component.localBoard.scheduled = [item];
+      component.moveCard(item, 'scheduled', -1);
+      expect(component.statusChanged.emit).not.toHaveBeenCalled();
+    });
+  });
 });

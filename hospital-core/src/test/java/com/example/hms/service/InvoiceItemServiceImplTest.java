@@ -198,4 +198,31 @@ class InvoiceItemServiceImplTest {
             .isInstanceOf(ResourceNotFoundException.class);
         verify(itemRepository, never()).delete(any());
     }
+
+    /** QA D1088: a checkout line posted at zero is priced in place and keeps its owner and its service. */
+    @Test
+    void aZeroLinePricedInPlaceKeepsItsOwnerAndService_D1088() {
+        UserRoleHospitalAssignment clinician = new UserRoleHospitalAssignment();
+        clinician.setId(UUID.randomUUID());
+        clinician.setHospital(invoice.getHospital());
+        com.example.hms.model.Treatment chest = new com.example.hms.model.Treatment();
+        chest.setId(UUID.randomUUID());
+        InvoiceItem zero = InvoiceItem.builder().itemDescription("Radiographie thoracique").quantity(1)
+            .unitPrice(BigDecimal.ZERO).totalPrice(BigDecimal.ZERO).itemCategory(ItemCategory.SERVICE)
+            .assignment(clinician).relatedService(chest).build();
+        zero.setId(UUID.randomUUID());
+        zero.setBillingInvoice(invoice);
+        when(itemRepository.findById(zero.getId())).thenReturn(Optional.of(zero));
+        InvoiceItemRequestDTO priced = InvoiceItemRequestDTO.builder().billingInvoiceId(invoice.getId())
+            .itemDescription("Radiographie thoracique").quantity(1).unitPrice(new BigDecimal("7500"))
+            .itemCategory(ItemCategory.SERVICE).build();
+
+        var saved = service.updateInvoiceItem(zero.getId(), priced, Locale.FRENCH);
+
+        assertThat(saved.getId()).isEqualTo(zero.getId());
+        assertThat(zero.getUnitPrice()).isEqualByComparingTo("7500");
+        assertThat(zero.getAssignment()).isSameAs(clinician);
+        assertThat(zero.getRelatedService()).isSameAs(chest);
+        verify(billingInvoiceService).recomputeAndPersistTotals(invoice.getId());
+    }
 }

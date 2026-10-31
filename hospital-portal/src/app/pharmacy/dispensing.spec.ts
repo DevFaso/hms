@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { PrintLabelService } from '../services/print-label.service';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -331,7 +332,9 @@ describe('DispensingComponent', () => {
     component.selectPrescription(mockWorkQueue.data.content[0]);
     fixture.detectChanges();
     const el: HTMLElement = fixture.nativeElement;
-    expect(el.querySelector('#dispWitness')).toBeNull();
+    // QA D964: the shortest-dated lot is pre-selected, so the witness picker
+    // of a controlled lot shows as soon as the form opens.
+    expect(component.form.stockLotId).toBeTruthy();
 
     component.form.stockLotId = 'lot-fresh';
     component.onLotChange();
@@ -1166,6 +1169,7 @@ describe('DispensingComponent — work-queue claim (G13)', () => {
       'claimQueueRow',
       'takeOverQueueRow',
       'releaseQueueRow',
+      'getStockLotLabel',
     ]);
     pharmacySvc.getDispenseSettings.and.returnValue(
       of({
@@ -1631,6 +1635,146 @@ describe('DispensingComponent — work-queue claim (G13)', () => {
 
     expect(component.form.quantityRequested).toBe(30);
     expect(component.form.quantityDispensed).toBe(30);
+  });
+
+  it('QA D1001: a partly filled order starts at what remains, and the queue says so', async () => {
+    await render({ remainingQuantity: 10 });
+    pharmacySvc.claimQueueRow.and.returnValue(
+      of({ data: { ...myClaim, renewed: false } }) as never,
+    );
+    expect(exists('rx-remaining-rx-1')).toBeTrue();
+    click('rx-dispense-rx-1');
+
+    expect(component.form.quantityRequested).toBe(10);
+    expect(component.form.quantityDispensed).toBe(10);
+  });
+
+  it('QA D966: the lot label is fetched with the session and opened for printing', async () => {
+    await render();
+    const printSvc = TestBed.inject(PrintLabelService);
+    const open = spyOn(printSvc, 'openForPrint');
+    const windowOpen = spyOn(window, 'open');
+    const blob = new Blob(['%PDF-1.4'], { type: 'application/pdf' });
+    pharmacySvc.getStockLotLabel.and.returnValue(of(blob) as never);
+    component.form.stockLotId = 'lot-9';
+
+    component.printLotLabel();
+
+    expect(pharmacySvc.getStockLotLabel).toHaveBeenCalledWith('lot-9');
+    expect(open).toHaveBeenCalledWith(blob);
+    expect(windowOpen).not.toHaveBeenCalledWith(
+      '/pharmacy/stock-lots/lot-9/label.pdf',
+      jasmine.anything(),
+      jasmine.anything(),
+    );
+  });
+
+  describe('QA D964: first expired, first out', () => {
+    const lot = (id: string, expiryDate: string, remainingQuantity: number) => ({
+      id,
+      inventoryItemId: 'inv-1',
+      lotNumber: id.toUpperCase(),
+      expiryDate,
+      initialQuantity: 200,
+      remainingQuantity,
+      createdAt: '',
+      updatedAt: '',
+    });
+
+    async function openWithLots(): Promise<void> {
+      await render();
+      pharmacySvc.listDispensableLots.and.returnValue(
+        of({
+          data: [lot('long', '2099-06-30', 200), lot('court', '2098-01-31', 100)],
+        }) as never,
+      );
+      pharmacySvc.claimQueueRow.and.returnValue(
+        of({ data: { ...myClaim, renewed: false } }) as never,
+      );
+      click('rx-dispense-rx-1');
+      fixture.detectChanges();
+    }
+
+    it('pre-selects the shortest-dated lot that covers the fill', async () => {
+      await openWithLots();
+
+      expect(component.form.stockLotId).toBe('court');
+      expect(component.earlierLot()).toBeUndefined();
+      expect(exists('fefo-warning')).toBeFalse();
+    });
+
+    it('a later-dated lot needs a reason, which is sent with the fill', async () => {
+      await openWithLots();
+      component.form.stockLotId = 'long';
+      component.onLotChange();
+      component.verifyAttested.set(true);
+      fixture.detectChanges();
+
+      expect(exists('fefo-warning')).toBeTrue();
+      expect(component.fefoReasonMissing()).toBeTrue();
+
+      pharmacySvc.createDispense.and.returnValue(of({ data: {} }) as never);
+      component.form.fefoOverrideReason = '  lot court réservé aux urgences ';
+      expect(component.fefoReasonMissing()).toBeFalse();
+      component.submitDispense();
+
+      const body = pharmacySvc.createDispense.calls.mostRecent().args[0];
+      expect(body.stockLotId).toBe('long');
+      expect(body.fefoOverrideReason).toBe('lot court réservé aux urgences');
+    });
+
+    /**
+     * QA D1029: 130 tablets with 100 left in the shorter lot. Round 16
+     * pre-selected the later lot ("the one that covers the fill") and the whole
+     * quantity left it with no reason. The shorter lot is now chosen, emptied
+     * first, and the rest comes from the next lot: one fill per lot, in order.
+     */
+    it('QA D1029: a quantity above the shorter lot empties it first, then takes the rest from the next', async () => {
+      await openWithLots();
+      component.form.quantityDispensed = 130;
+      component.form.quantityRequested = 130;
+      fixture.detectChanges();
+
+      expect(component.form.stockLotId).toBe('court');
+      expect(component.earlierLot()).toBeUndefined();
+      expect(component.fefoSplit().map((p) => [p.lot.id, p.quantity])).toEqual([
+        ['court', 100],
+        ['long', 30],
+      ]);
+      expect(exists('fefo-split')).toBeTrue();
+
+      pharmacySvc.createDispense.and.returnValue(of({ data: {} }) as never);
+      component.verifyAttested.set(true);
+      component.submitDispense();
+      // The parts are sent one after the other, each once the previous one is recorded.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      const bodies = pharmacySvc.createDispense.calls.allArgs().map((a) => a[0]);
+      expect(bodies.map((b) => [b.stockLotId, b.quantityDispensed])).toEqual([
+        ['court', 100],
+        ['long', 30],
+      ]);
+      expect(bodies.every((b) => b.fefoOverrideReason === undefined)).toBeTrue();
+    });
+
+    it('QA D1029 (review of #978): an order that states no quantity is not split', async () => {
+      await openWithLots();
+      component.selectedPrescription = { ...component.selectedPrescription!, quantity: undefined };
+      component.form.quantityDispensed = 130;
+      expect(component.fefoSplit()).toEqual([]);
+    });
+
+    it('QA D1029: taking the later lot for a quantity the shorter one cannot cover still needs a reason', async () => {
+      await openWithLots();
+      component.form.quantityDispensed = 130;
+      component.form.stockLotId = 'long';
+      component.onLotChange();
+      fixture.detectChanges();
+
+      expect(component.earlierLot()?.id).toBe('court');
+      expect(component.fefoReasonMissing()).toBeTrue();
+      expect(component.fefoSplit()).toEqual([]);
+    });
   });
 
   it('Dispense on a colleague’s row then Cancel keeps the open form and its claim', async () => {

@@ -12,7 +12,12 @@
           {{ lastRefreshed() | serverTime | date: 'shortTime' }}</span
         >
       }
-      <button class="refresh-btn" (click)="refresh()" [title]="'COMMON.REFRESH' | translate">
+      <button
+        class="refresh-btn"
+        (click)="refresh()"
+        [title]="'COMMON.REFRESH' | translate"
+        [attr.aria-label]="'COMMON.REFRESH' | translate"
+      >
         <span class="material-symbols-outlined">refresh</span>
       </button>
     </div>
@@ -78,7 +83,8 @@
             <div class="workboard-card-meta">
               <span class="meta-item">
                 <span class="material-symbols-outlined">schedule</span>
-                {{ e.encounterDate | serverTime | date: 'shortTime' }}
+                <!-- QA D1039: the arrival time, never the visit day's midnight (00:00). -->
+                {{ waitStart(e) | serverTime | date: 'shortTime' }}
               </span>
             </div>
             <div class="workboard-card-actions">
@@ -90,6 +96,17 @@
               >
                 <span class="material-symbols-outlined">emergency</span>
                 {{ 'TRIAGE.TITLE' | translate }}
+              </button>
+              <!-- QA D954: a patient who leaves before being seen is closed here,
+                   with a reason, instead of staying in the queue. -->
+              <button
+                class="action-btn action-lwbs"
+                data-testid="awaiting-triage-lwbs"
+                (click)="openCloseUnseen(e)"
+                [title]="'NURSE.LEFT_WITHOUT_BEING_SEEN' | translate"
+              >
+                <span class="material-symbols-outlined" aria-hidden="true">directions_walk</span>
+                {{ 'NURSE.LEFT_WITHOUT_BEING_SEEN' | translate }}
               </button>
             </div>
           </div>
@@ -220,7 +237,13 @@
                       }
                     </td>
                     <td>{{ v.type | enumLabel: 'vitalTaskType' }}</td>
-                    <td>{{ v.dueTime | serverTime | date: 'shortTime' }}</td>
+                    <td>
+                      {{
+                        v.dueTime
+                          | serverTime
+                          | date: (isDueToday(v.dueTime) ? 'shortTime' : 'short')
+                      }}
+                    </td>
                     <td>
                       @if (v.overdue) {
                         <span class="badge-overdue">{{ 'NURSE.OVERDUE' | translate }}</span>
@@ -284,6 +307,13 @@
                     </td>
                     <td>
                       <strong>{{ m.medication }}</strong>
+                      @if (m.controlledSubstance) {
+                        <span
+                          class="status-badge status-controlled"
+                          [attr.data-testid]="'med-controlled-' + m.id"
+                          >{{ 'NURSE.CONTROLLED_SUBSTANCE' | translate }}</span
+                        >
+                      }
                       @if (m.cdsAdvisories?.length) {
                         <span
                           class="status-badge status-advisory"
@@ -294,15 +324,30 @@
                       }
                     </td>
                     <td>{{ m.dose }}</td>
-                    <td>{{ m.route }}</td>
-                    <td>{{ m.dueTime | serverTime | date: 'shortTime' }}</td>
+                    <td>{{ m.route | medicationRoute }}</td>
+                    <!-- QA D949: a dose not due today shows its date. -->
+                    <td>
+                      {{
+                        m.dueTime
+                          | serverTime
+                          | date: (isDueToday(m.dueTime) ? 'shortTime' : 'short')
+                      }}
+                    </td>
                     <td>
                       <span class="status-badge status-{{ m.status | lowercase }}">{{
                         m.status | enumLabel: 'marTaskStatus'
                       }}</span>
+                      <!-- QA D929: what happened to the last dose, so a held or
+                           refused dose is never read as given. -->
+                      @if (m.lastOutcome) {
+                        <span class="last-outcome" [attr.data-testid]="'med-last-outcome-' + m.id"
+                          >{{ 'NURSE.LAST_DOSE' | translate }}
+                          {{ m.lastOutcome | enumLabel: 'medicationAdministrationStatus' }}</span
+                        >
+                      }
                     </td>
                     <td class="action-cell">
-                      @if (m.status !== 'COMPLETED' && m.status !== 'GIVEN') {
+                      @if (canRecordDose(m)) {
                         <button
                           class="action-btn action-give"
                           (click)="administerMedication(m.id)"
@@ -330,10 +375,15 @@
                           <span class="material-symbols-outlined">cancel</span>
                           {{ 'NURSE.REFUSE' | translate }}
                         </button>
+                      } @else if (m.status === 'UPCOMING') {
+                        <span class="action-upcoming">
+                          <span class="material-symbols-outlined" aria-hidden="true">schedule</span>
+                          {{ 'NURSE.NOT_YET_DUE' | translate }}
+                        </span>
                       } @else {
                         <span class="action-done">
-                          <span class="material-symbols-outlined">task_alt</span>
-                          {{ 'NURSE.DONE' | translate }}
+                          <span class="material-symbols-outlined" aria-hidden="true">task_alt</span>
+                          {{ 'NURSE.COURSE_ENDED' | translate }}
                         </span>
                       }
                     </td>
@@ -384,7 +434,13 @@
                         o.priority | enumLabel: 'taskPriority'
                       }}</span>
                     </td>
-                    <td>{{ o.dueTime | serverTime | date: 'shortTime' }}</td>
+                    <td>
+                      {{
+                        o.dueTime
+                          | serverTime
+                          | date: (isDueToday(o.dueTime) ? 'shortTime' : 'short')
+                      }}
+                    </td>
                   </tr>
                 }
               </tbody>
@@ -460,19 +516,28 @@
                 <p class="handoff-note">{{ h.note || ('NURSE.NO_NOTES' | translate) }}</p>
                 @if (h.background) {
                   <p class="handoff-sbar">
-                    <strong>{{ 'NURSE.HANDOFF_BACKGROUND' | translate }}:</strong>
+                    <strong
+                      >{{ 'NURSE.HANDOFF_BACKGROUND' | translate
+                      }}{{ 'COMMON.COLON' | translate }}</strong
+                    >
                     {{ h.background }}
                   </p>
                 }
                 @if (h.assessment) {
                   <p class="handoff-sbar">
-                    <strong>{{ 'NURSE.HANDOFF_ASSESSMENT' | translate }}:</strong>
+                    <strong
+                      >{{ 'NURSE.HANDOFF_ASSESSMENT' | translate
+                      }}{{ 'COMMON.COLON' | translate }}</strong
+                    >
                     {{ h.assessment }}
                   </p>
                 }
                 @if (h.recommendation) {
                   <p class="handoff-sbar">
-                    <strong>{{ 'NURSE.HANDOFF_RECOMMENDATION' | translate }}:</strong>
+                    <strong
+                      >{{ 'NURSE.HANDOFF_RECOMMENDATION' | translate
+                      }}{{ 'COMMON.COLON' | translate }}</strong
+                    >
                     {{ h.recommendation }}
                   </p>
                 }
@@ -484,7 +549,10 @@
                     @if (h.recipientName) {
                       {{ 'NURSE.HANDOFF_TO' | translate }} {{ h.recipientName }} ·
                     }
-                    {{ h.updatedAt | serverTime | date: 'medium' }}
+                    <!-- QA D1075: the report time, never the completion time. -->
+                    <span [attr.data-testid]="'handoff-reported-at-' + h.id">{{
+                      handoffReportedAt(h) | serverTime | date: 'medium'
+                    }}</span>
                   </span>
                   @if (h.completedAt) {
                     <span
@@ -898,7 +966,11 @@
                   @if (task.dueAt) {
                     <span class="task-due" [class.overdue-text]="task.overdue">
                       {{ 'NURSE.DUE_LABEL' | translate }}
-                      {{ task.dueAt | serverTime | date: 'shortTime' }}
+                      {{
+                        task.dueAt
+                          | serverTime
+                          | date: (isDueToday(task.dueAt) ? 'shortTime' : 'short')
+                      }}
                       @if (task.overdue) {
                         <span class="overdue-badge">{{ 'NURSE.OVERDUE_BADGE' | translate }}</span>
                       }
@@ -1026,6 +1098,7 @@
       #reasonDialog
       (click)="$event.stopPropagation()"
       (keydown.escape)="cancelHoldRefuse()"
+      appModalDialog
     >
       <h3 id="reason-dialog-title">
         {{ reasonActionLabelKey() | translate }}
@@ -1044,13 +1117,21 @@
       } @else {
         <p>{{ 'NURSE.PROVIDE_REASON' | translate }}</p>
       }
+      <!-- QA D993: the reason box has a real label, not only a placeholder. -->
+      <label class="sr-only" for="mar-reason-input">{{ 'NURSE.ENTER_REASON' | translate }}</label>
       <textarea
+        id="mar-reason-input"
         class="reason-input"
         [ngModel]="reasonText()"
         (ngModelChange)="reasonText.set($event)"
         [placeholder]="'NURSE.ENTER_REASON' | translate"
         rows="3"
       ></textarea>
+      <!-- QA D922 (decision 2026-10-28): a controlled drug is given with a
+           second clinician of this hospital as witness. -->
+      @if (promptNeedsWitness()) {
+        <app-witness-picker inputId="mar-witness" (witnessChange)="witnessUserId.set($event)" />
+      }
       <div class="modal-actions">
         <button class="modal-btn modal-cancel" (click)="cancelHoldRefuse()">
           {{ 'COMMON.CANCEL' | translate }}
@@ -1058,7 +1139,7 @@
         <button
           class="modal-btn modal-confirm"
           (click)="confirmHoldRefuse()"
-          [disabled]="!reasonText()"
+          [disabled]="!reasonText() || (promptNeedsWitness() && !witnessUserId())"
         >
           {{ 'NURSE.CONFIRM' | translate }}
           {{ reasonActionLabelKey() | translate }}
@@ -1086,6 +1167,7 @@
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="closeVitalsDialog()"
+      appModalDialog
     >
       <h3 id="vitals-dialog-title">
         <span class="material-symbols-outlined">monitor_heart</span>
@@ -1204,21 +1286,24 @@
             (input)="updateVitalsField('heightCm', $any($event.target).value)"
           />
         </div>
-        <div class="vitals-field">
-          <label for="vf-head-circumference">
-            {{ 'NURSE.HEAD_CIRCUMFERENCE' | translate }} (cm)
-          </label>
-          <input
-            id="vf-head-circumference"
-            type="number"
-            step="0.1"
-            min="15"
-            max="70"
-            [placeholder]="'NURSE.VITALS_PLACEHOLDER.HEAD_CIRCUMFERENCE' | translate"
-            [value]="vitalsForm().headCircumferenceCm ?? ''"
-            (input)="updateVitalsField('headCircumferenceCm', $any($event.target).value)"
-          />
-        </div>
+        <!-- QA D1077: head circumference only on the growth age rule. -->
+        @if (showHeadCircumference()) {
+          <div class="vitals-field" data-testid="vitals-head-circumference">
+            <label for="vf-head-circumference">
+              {{ 'NURSE.HEAD_CIRCUMFERENCE' | translate }} (cm)
+            </label>
+            <input
+              id="vf-head-circumference"
+              type="number"
+              step="0.1"
+              min="15"
+              max="70"
+              [placeholder]="'NURSE.VITALS_PLACEHOLDER.HEAD_CIRCUMFERENCE' | translate"
+              [value]="vitalsForm().headCircumferenceCm ?? ''"
+              (input)="updateVitalsField('headCircumferenceCm', $any($event.target).value)"
+            />
+          </div>
+        }
         <!-- NEWS2 parameters (P3 #25b) -->
         <div class="vitals-field">
           <label for="vf-consciousness">{{ 'NURSE.CONSCIOUSNESS' | translate }}</label>
@@ -1242,6 +1327,19 @@
             />
             {{ 'NURSE.ON_OXYGEN' | translate }}
           </label>
+        </div>
+        <!-- QA D1045: the pain reassessment is charted with the ward vitals. -->
+        <div class="vitals-field">
+          <label for="vf-pain">{{ 'NURSE.PAIN_SCORE' | translate }}</label>
+          <input
+            id="vf-pain"
+            type="number"
+            min="0"
+            max="10"
+            step="1"
+            [value]="vitalsForm().painScale ?? ''"
+            (input)="updateVitalsField('painScale', $any($event.target).value)"
+          />
         </div>
         <div class="vitals-field vitals-field-full">
           <label for="vf-notes">{{ 'NURSE.NOTES' | translate }}</label>
@@ -1297,10 +1395,18 @@
       (keydown.enter)="$event.stopPropagation()"
       tabindex="-1"
       role="dialog"
+      aria-modal="true"
+      aria-labelledby="task-create-title"
+      (keydown.escape)="closeTaskCreate()"
+      appModalDialog
     >
       <div class="modal-header">
-        <h3>{{ 'NURSE.CREATE_TASK' | translate }}</h3>
-        <button class="modal-close" (click)="closeTaskCreate()">
+        <h3 id="task-create-title">{{ 'NURSE.CREATE_TASK' | translate }}</h3>
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="modal-close"
+          (click)="closeTaskCreate()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -1412,10 +1518,18 @@
       (keydown.enter)="$event.stopPropagation()"
       tabindex="-1"
       role="dialog"
+      aria-modal="true"
+      aria-labelledby="handoff-create-title"
+      (keydown.escape)="closeHandoffCreate()"
+      appModalDialog
     >
       <div class="modal-header">
-        <h3>{{ 'NURSE.NEW_HANDOFF' | translate }}</h3>
-        <button class="modal-close" (click)="closeHandoffCreate()">
+        <h3 id="handoff-create-title">{{ 'NURSE.NEW_HANDOFF' | translate }}</h3>
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="modal-close"
+          (click)="closeHandoffCreate()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -1544,10 +1658,20 @@
       (keydown.enter)="$event.stopPropagation()"
       tabindex="-1"
       role="dialog"
+      aria-modal="true"
+      aria-labelledby="care-note-title"
+      (keydown.escape)="closeCareNote()"
+      appModalDialog
     >
       <div class="modal-header">
-        <h3>{{ 'NURSE.CARE_NOTE' | translate }} — {{ careNoteFor()!.patientName }}</h3>
-        <button class="modal-close" (click)="closeCareNote()">
+        <h3 id="care-note-title">
+          {{ 'NURSE.CARE_NOTE' | translate }} — {{ careNoteFor()!.patientName }}
+        </h3>
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="modal-close"
+          (click)="closeCareNote()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -1557,6 +1681,7 @@
           <input
             id="cn-title"
             type="text"
+            maxlength="255"
             class="reason-input"
             [placeholder]="'NURSE.NOTE_TITLE' | translate"
             [value]="careNoteForm().title ?? ''"
@@ -1745,4 +1870,14 @@
     (dismissed)="intakeEncounter.set(null)"
     (intakeCompleted)="onIntakeCompleted()"
   ></app-nursing-intake-form>
+}
+
+<!-- QA D954: close a visit nobody has seen (left without being seen, or cancelled). -->
+@if (closeUnseenEncounter(); as target) {
+  <app-close-unseen-dialog
+    [encounterId]="target.id"
+    [patientName]="target.patientName"
+    (dismissed)="closeUnseenEncounter.set(null)"
+    (closed)="onUnseenVisitClosed()"
+  />
 }

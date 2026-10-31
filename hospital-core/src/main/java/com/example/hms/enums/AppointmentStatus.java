@@ -24,6 +24,24 @@ public enum AppointmentStatus {
         return label == null || label.startsWith("[Missing translation]") ? name() : label;
     }
 
+    /**
+     * QA D937: whether an appointment in this status still occupies its
+     * clinician's time. A cancelled booking or a no-show frees the slot; every
+     * other status keeps it. RESCHEDULED keeps it on purpose: rows written by
+     * the old portal reschedule (and any written by the prenatal path before
+     * it landed on SCHEDULED) are live visits at their new time, and freeing
+     * them would double-book the clinician. UNKNOWN keeps it, to stay safe.
+     * Every overlap check filters on this.
+     */
+    public boolean holdsSlot() {
+        return this != CANCELLED && this != NO_SHOW;
+    }
+
+    /** Whether {@code status} holds its slot; an appointment with no status does. */
+    public static boolean holdsSlot(AppointmentStatus status) {
+        return status == null || status.holdsSlot();
+    }
+
     /** The label of {@code status}, or a dash for an appointment that carries none. */
     public static String labelOf(AppointmentStatus status) {
         return status == null ? "—" : status.localizedLabel();

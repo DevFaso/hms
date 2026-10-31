@@ -1,0 +1,130 @@
+{
+  "admin-assignments/admin-assignments.html": {
+    "count": 9,
+    "why": "QA D1052 class (#975: reported, not yet fixed)"
+  },
+  "admin-governance/security-tab.html": {
+    "count": 3,
+    "why": "QA D1052 class (#975: reported, not yet fixed)"
+  },
+  "admin-governance/users-tab.html": {
+    "count": 5,
+    "why": "QA D1052 class (#975: reported, not yet fixed)"
+  },
+  "admin/integrations/dhis2-admin-page/dhis2-admin-page.component.ts": {
+    "count": 2,
+    "why": "QA D1052 class (#975: reported, not yet fixed)"
+  },
+  "analytics/kpi-cards/kpi-cards.component.html": {
+    "count": 1,
+    "why": "QA D1052 class (#975: reported, not yet fixed)"
+  },
+  "appointments/appointment-detail.html": {
+    "count": 1,
+    "why": "QA D1052 class (#975: reported, not yet fixed)"
+  },
+  "appointments/appointment-list.html": {
+    "count": 2,
+    "why": "QA D1052 class (#975: reported, not yet fixed)"
+  },
+  "dashboard/credential-renewal/credential-renewal.component.html": {
+    "count": 1,
+    "why": "QA D1052 class (#975: reported, not yet fixed)"
+  },
+  "dashboard/dashboard.html": {
+    "count": 2,
+    "why": "QA D1052 class (#975: reported, not yet fixed)"
+  },
+  "maternity/birth-plan-tab.html": {
+    "count": 6,
+    "why": "QA D1052 class (#975: reported, not yet fixed)"
+  },
+  "maternity/maternity.html": {
+    "count": 6,
+    "why": "QA D1052 class (#975: reported, not yet fixed)"
+  },
+  "maternity/prenatal-tab.html": {
+    "count": 1,
+    "why": "QA D1052 class (#975: reported, not yet fixed)"
+  },
+  "maternity/ultrasound-tab.html": {
+    "count": 2,
+    "why": "QA D1052 class (#975: reported, not yet fixed)"
+  },
+  "micro/microbiology.html": {
+    "count": 1,
+    "why": "QA D1052 class (#975: reported, not yet fixed)"
+  },
+  "mortality/mortality.html": {
+    "count": 1,
+    "why": "QA D1052 class (#975: reported, not yet fixed)"
+  },
+  "patient-portal/my-appointments/pre-checkin-form/pre-checkin-form.component.html": {
+    "count": 5,
+    "why": "QA D1052 class (#975: reported, not yet fixed)"
+  },
+  "patient-portal/my-documents/my-documents.component.html": {
+    "count": 1,
+    "why": "QA D1052 class (#975: reported, not yet fixed)"
+  },
+  "patient-portal/my-medical-history/my-medical-history.component.html": {
+    "count": 1,
+    "why": "QA D1052 class (#975: reported, not yet fixed)"
+  },
+  "patient-portal/my-records/my-records.component.html": {
+    "count": 3,
+    "why": "QA D1052 class (#975: reported, not yet fixed)"
+  },
+  "patient-portal/my-summaries/my-summaries.component.html": {
+    "count": 2,
+    "why": "QA D1052 class (#975: reported, not yet fixed)"
+  },
+  "patient-portal/my-vitals/my-vitals.component.html": {
+    "count": 1,
+    "why": "QA D1052 class (#975: reported, not yet fixed)"
+  },
+  "patients/bpa-panel/bpa-panel.component.html": {
+    "count": 1,
+    "why": "QA D1052 class (#975: reported, not yet fixed)"
+  },
+  "patients/medical-history-tab/medical-history-tab.component.html": {
+    "count": 11,
+    "why": "QA D1052 class (#975: reported, not yet fixed)"
+  },
+  "patients/micro/micro-tab.component.html": {
+    "count": 5,
+    "why": "QA D1052 class (#975: reported, not yet fixed)"
+  },
+  "patients/patient-detail.html": {
+    "count": 1,
+    "why": "QA D1052 class (#975: reported, not yet fixed)"
+  },
+  "patients/patient-list.html": {
+    "count": 4,
+    "why": "QA D1052 class (#975: reported, not yet fixed)"
+  },
+  "procedure-orders/procedure-orders.html": {
+    "count": 3,
+    "why": "QA D1052 class (#975: reported, not yet fixed)"
+  },
+  "reception/checkin-dialog/checkin-dialog.component.html": {
+    "count": 5,
+    "why": "QA D1052 class (#975: reported, not yet fixed)"
+  },
+  "reception/empi-candidates-panel/empi-candidates-panel.component.ts": {
+    "count": 2,
+    "why": "QA D1052 class (#975: reported, not yet fixed)"
+  },
+  "reception/payment-pending-panel/payment-pending-panel.component.html": {
+    "count": 1,
+    "why": "QA D1052 class (#975: reported, not yet fixed)"
+  },
+  "scheduling/scheduling.html": {
+    "count": 1,
+    "why": "QA D1052 class (#975: reported, not yet fixed)"
+  },
+  "users/user-list.html": {
+    "count": 2,
+    "why": "QA D1052 class (#975: reported, not yet fixed)"
+  }
+}

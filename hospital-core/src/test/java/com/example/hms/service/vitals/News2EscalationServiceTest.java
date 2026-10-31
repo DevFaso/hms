@@ -13,6 +13,7 @@ import org.springframework.context.support.StaticMessageSource;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
@@ -60,7 +61,8 @@ class News2EscalationServiceTest {
         Admission stay = new Admission();
         stay.setHospital(hospital);
         stay.setAttendingPhysician(doctor);
-        when(admissionRepository.findCurrentAdmissionByPatient(patient.getId())).thenReturn(Optional.of(stay));
+        when(admissionRepository.findByPatient_IdAndHospital_IdAndStatusIn(eq(patient.getId()), eq(hospitalId), any()))
+            .thenReturn(List.of(stay));
 
         NewsScoreCalculator.NewsScoreResult score =
             service.escalateIfNeeded(qaSet(patient), patient.getId(), hospitalId, "nurse_a");
@@ -79,8 +81,7 @@ class News2EscalationServiceTest {
         other.setId(UUID.randomUUID());
         Admission stay = new Admission();
         stay.setHospital(other);
-        when(admissionRepository.findCurrentAdmissionByPatient(patient.getId())).thenReturn(Optional.of(stay));
-
+        // QA D1065 class: the stay is read at the acting hospital only, so another hospital's is never found.
         service.escalateIfNeeded(qaSet(patient), patient.getId(), UUID.randomUUID(), "nurse_a");
 
         verify(notificationService).created(anyString(), eq("nurse_a"), anyString());
@@ -92,7 +93,6 @@ class News2EscalationServiceTest {
         messages.addMessage("news2.escalation.high", Locale.getDefault(), "HIGH {0} {1} {2}");
         Patient patient = new Patient();
         patient.setId(UUID.randomUUID());
-        when(admissionRepository.findCurrentAdmissionByPatient(patient.getId())).thenReturn(Optional.empty());
         // QA D265 set: NEWS2 14 (RR 30, SpO2 88, BP 85, HR 135, T 39.5, new confusion).
         PatientVitalSign triage = PatientVitalSign.builder()
             .patient(patient).recordedAt(LocalDateTime.now()).source("TRIAGE")

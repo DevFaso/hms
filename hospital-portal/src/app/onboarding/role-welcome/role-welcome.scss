@@ -50,8 +50,11 @@
 }
 
 .rw-logo-badge {
-  width: 3.5rem;
+  /* QA D941: "e-Keneya" wrapped out of a fixed 3.5rem square. */
+  min-width: 3.5rem;
   height: 3.5rem;
+  padding: 0 0.75rem;
+  white-space: nowrap;
   border-radius: 1rem;
   background: linear-gradient(135deg, #4338ca, #7c3aed);
   color: #f5f3ff;

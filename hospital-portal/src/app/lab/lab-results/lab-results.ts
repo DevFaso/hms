@@ -1,3 +1,6 @@
+import { LabCorrectionBadgeComponent } from '../shared/lab-correction-badge.component';
+import { textMatches } from '../../shared/person-search';
+import { CdkTrapFocus } from '@angular/cdk/a11y';
 import {
   Component,
   inject,
@@ -15,6 +18,7 @@ import {
   LabService,
   LabResultResponse,
   LabResultTrendPoint,
+  LabResultReferenceRange,
   LabResultRequest,
   LabOrderResponse,
   LabResultComparison,
@@ -35,6 +39,8 @@ import {
   serverInstant,
 } from '../../shared/date-utils';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { labSeverityFlag, labSeverityTone } from '../shared/lab-severity';
+import { LabValuePipe, formatLabNumber } from '../shared/lab-value.pipe';
 
 /**
  * D49: the order code the API sends is the order's UUID. Readers get its first
@@ -49,6 +55,9 @@ export { toServerDateTime, toLocalInputValue };
   selector: 'app-lab-results',
   standalone: true,
   imports: [
+    LabCorrectionBadgeComponent,
+    CdkTrapFocus,
+    LabValuePipe,
     ServerTimePipe,
     CommonModule,
     FormsModule,
@@ -584,7 +593,7 @@ export class LabResultsComponent implements OnInit {
       list = list.filter(
         (r) =>
           (r.labOrderCode ?? '').toLowerCase().includes(term) ||
-          (r.patientFullName ?? '').toLowerCase().includes(term) ||
+          textMatches(r.patientFullName, term) ||
           (r.labTestName ?? '').toLowerCase().includes(term) ||
           (r.resultValue ?? '').toLowerCase().includes(term),
       );
@@ -621,25 +630,54 @@ export class LabResultsComponent implements OnInit {
     const max = range.maxValue;
     const unit = range.unit ? ` ${range.unit}` : '';
 
+    // QA D1002: the limits in the reader's number format ("0,7 – 1,1 g/L").
     if (min != null && max != null) {
-      return `${min} – ${max}${unit}`;
+      return `${formatLabNumber(min)} – ${formatLabNumber(max)}${unit}`;
     }
     if (min != null) {
-      return `≥ ${min}${unit}`;
+      return `≥ ${formatLabNumber(min)}${unit}`;
     }
     if (max != null) {
-      return `≤ ${max}${unit}`;
+      return `≤ ${formatLabNumber(max)}${unit}`;
     }
     return '—';
   }
 
-  formatReferenceRangeAge(range: { ageMin?: number | null; ageMax?: number | null }): string {
+  formatReferenceRangeAge(range: {
+    ageMin?: number | null;
+    ageMax?: number | null;
+    ageUnit?: string | null;
+  }): string {
     const ageMin = range.ageMin;
     const ageMax = range.ageMax;
-    if (ageMin != null && ageMax != null) return `${ageMin}–${ageMax}`;
-    if (ageMin != null) return `${ageMin}+`;
-    if (ageMax != null) return `0–${ageMax}`;
-    return 'All ages';
+    // Round 18: a band in days or months says so ("0–7 jours"); years stay as before.
+    const unit = (range.ageUnit ?? 'YEARS').toUpperCase();
+    // Round 18: free-text source and the unit word come from fixed keys.
+    const suffix =
+      unit === 'DAYS'
+        ? ' ' + this.translate.instant('LAB_TEST_CONFIG.AGE_UNIT_DAYS')
+        : unit === 'MONTHS'
+          ? ' ' + this.translate.instant('LAB_TEST_CONFIG.AGE_UNIT_MONTHS')
+          : '';
+    if (ageMin != null && ageMax != null) return `${ageMin}–${ageMax}${suffix}`;
+    if (ageMin != null) return `${ageMin}+${suffix}`;
+    if (ageMax != null) return `0–${ageMax}${suffix}`;
+    return this.translate.instant('LAB_RESULTS.ALL_AGES');
+  }
+
+  /** Round 18: whether this listed range is the one the result was graded against. */
+  isGradedRange(result: LabResultResponse, range: LabResultReferenceRange): boolean {
+    const graded = result.gradedReferenceRange;
+    if (!graded) return false;
+    return (
+      graded.minValue === range.minValue &&
+      graded.maxValue === range.maxValue &&
+      (graded.unit ?? null) === (range.unit ?? null) &&
+      (graded.gender ?? null) === (range.gender ?? null) &&
+      (graded.ageMin ?? null) === (range.ageMin ?? null) &&
+      (graded.ageMax ?? null) === (range.ageMax ?? null) &&
+      (graded.ageUnit ?? null) === (range.ageUnit ?? null)
+    );
   }
 
   formatTrendDelta(sortedHistory: LabResultTrendPoint[], index: number): string {
@@ -706,7 +744,9 @@ export class LabResultsComponent implements OnInit {
    * that always failed for exactly the results that matter most.
    */
   isCritical(r: LabResultResponse): boolean {
-    return !!r.criticalNotifiedAt || (r.severityFlag ?? '').toUpperCase() === 'CRITICAL';
+    return (
+      !!r.criticalNotifiedAt || labSeverityFlag({ severityFlag: r.severityFlag }) === 'CRITICAL'
+    );
   }
 
   openReadBack(r: LabResultResponse): void {
@@ -798,15 +838,14 @@ export class LabResultsComponent implements OnInit {
     }
   }
 
+  /** QA D969: drawn from the one grade reading every lab screen shares (lab-severity.ts). */
   getSeverityClass(flag: string): string {
-    switch (flag?.toUpperCase()) {
-      case 'CRITICAL':
+    switch (labSeverityTone(labSeverityFlag({ severityFlag: flag }))) {
+      case 'critical':
         return 'severity-badge severity-critical';
-      case 'HIGH':
-      case 'LOW':
-      case 'ABNORMAL':
+      case 'abnormal':
         return 'severity-badge severity-high';
-      case 'NORMAL':
+      case 'normal':
         return 'severity-badge severity-normal';
       default:
         return 'severity-badge';

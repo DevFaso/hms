@@ -1,3 +1,4 @@
+import { RoleContextService } from '../core/role-context.service';
 import {
   Component,
   OnInit,
@@ -28,6 +29,8 @@ import {
 } from '../services/encounter.service';
 import { RovingFocusDirective } from '../shared/a11y/roving-focus.directive';
 import { TriageFormComponent } from '../nurse-station/triage-form/triage-form.component';
+import { CloseUnseenDialogComponent } from '../reception/close-unseen-dialog/close-unseen-dialog.component';
+import { actionRoles } from '../core/action-permissions';
 
 export interface TrackerColumn {
   key: keyof Pick<
@@ -45,6 +48,7 @@ export interface TrackerColumn {
 
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { mayStartVisit } from '../core/encounter-start';
 
 @Component({
   selector: 'app-patient-tracker',
@@ -58,6 +62,7 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
     RovingFocusDirective,
     TriageFormComponent,
     EnumLabelPipe,
+    CloseUnseenDialogComponent,
   ],
   templateUrl: './patient-tracker.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -67,6 +72,26 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
   private readonly trackerService = inject(PatientTrackerService);
   private readonly trackerWs = inject(PatientTrackerWsService);
   private readonly auth = inject(AuthService);
+  private readonly roleContext = inject(RoleContextService);
+  /**
+   * QA D954: a patient who leaves before anyone sees them is closed from the
+   * tracker too (the reception's close-unseen dialog, reused), by the roles
+   * the endpoint admits.
+   */
+  get canCloseUnseen(): boolean {
+    return this.auth.hasAnyRole(actionRoles('encounterCloseUnseen'));
+  }
+  readonly closeUnseenItem = signal<PatientTrackerItem | null>(null);
+
+  openCloseUnseen(item: PatientTrackerItem): void {
+    this.closeUnseenItem.set(item);
+  }
+
+  onUnseenVisitClosed(): void {
+    this.closeUnseenItem.set(null);
+    this.refresh();
+  }
+
   /**
    * QA D788: a visit IN_PROGRESS is checked out by its clinician (it closes their
    * consultation); the desk waits until the examination is completed.
@@ -252,6 +277,48 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
         this.toast.error(
           err?.error?.message || this.translate.instant('TRACKER.TRIAGE_INCOMPLETE'),
         );
+      },
+    });
+  }
+
+  /* ── Start — WAITING_FOR_PHYSICIAN → IN_PROGRESS (QA D1015) ─── */
+  get canStartVisit(): boolean {
+    // The role the user acts in, not every role held (D997 class).
+    return this.roleContext.hasAnyActiveRole(actionRoles('encounterStart'));
+  }
+
+  /**
+   * QA D1085: per card, the server's rule (core/encounter-start). The column
+   * offered "Démarrer" to a midwife on every waiting visit, and the server
+   * then refused her the ones not booked with her.
+   */
+  canStartItem(item: PatientTrackerItem): boolean {
+    if (!this.canStartVisit) return false;
+    return mayStartVisit(
+      {
+        superAdmin: this.roleContext.isSuperAdmin(),
+        // rbac-inline-ok: mirrors EncounterController#startEncounter's midwifeOnly test (ROLE_DOCTOR held or not).
+        doctor: this.roleContext.hasAnyActiveRole(['ROLE_DOCTOR']),
+        // rbac-inline-ok: mirrors EncounterController#startEncounter (a midwife leads her own visits).
+        midwife: this.roleContext.hasAnyActiveRole(['ROLE_MIDWIFE']),
+        userId: this.auth.getUserId(),
+      },
+      item.assignedProviderUserId,
+    );
+  }
+  startInProgress = signal(false);
+
+  startVisit(item: PatientTrackerItem): void {
+    this.startInProgress.set(true);
+    this.encounterService.startEncounter(item.encounterId).subscribe({
+      next: () => {
+        this.startInProgress.set(false);
+        this.loadBoard();
+      },
+      error: (err: { error?: { message?: string } } | null) => {
+        this.startInProgress.set(false);
+        // The server's reason (not the assigned clinician) in the reader's language.
+        this.toast.error(err?.error?.message || this.translate.instant('TRACKER.START_FAILED'));
       },
     });
   }

@@ -45,7 +45,7 @@ public class LabSpecimenController {
     @ApiResponse(responseCode = "404", description = "Lab order not found")
     public ResponseEntity<ApiResponseWrapper<LabSpecimenResponseDTO>> collectSpecimen(
         @PathVariable UUID id,
-        @RequestBody LabSpecimenRequestDTO requestDTO,
+        @jakarta.validation.Valid @RequestBody LabSpecimenRequestDTO requestDTO,
         @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
 
         // Override labOrderId with path variable to avoid inconsistency
@@ -109,6 +109,39 @@ public class LabSpecimenController {
         LabSpecimenResponseDTO received = labSpecimenService.receiveSpecimen(id, locale);
         auditSpecimen(received);
         return ResponseEntity.ok(ApiResponseWrapper.success(received));
+    }
+
+    /**
+     * QA D962: reject a specimen (haemolysed, wrong tube, insufficient volume)
+     * with a mandatory reason. The order goes back to awaiting collection and
+     * the ordering clinician is told.
+     * POST /lab-specimens/{id}/reject
+     */
+    @PostMapping("/lab-specimens/{id}/reject")
+    @PreAuthorize("hasAnyRole('LAB_TECHNICIAN', 'LAB_SCIENTIST', 'LAB_MANAGER', 'LAB_DIRECTOR', 'QUALITY_MANAGER', 'SUPER_ADMIN')")
+    @Operation(summary = "Reject Specimen",
+               description = "Marks the specimen REJECTED with a required reason, sends the order back to awaiting "
+                   + "collection and notifies the ordering clinician.")
+    @ApiResponse(responseCode = "200", description = "Specimen rejected")
+    @ApiResponse(responseCode = "400", description = "Reason missing, or the specimen cannot be rejected in its state")
+    @ApiResponse(responseCode = "404", description = "Specimen not found")
+    public ResponseEntity<ApiResponseWrapper<LabSpecimenResponseDTO>> rejectSpecimen(
+        @PathVariable UUID id,
+        @RequestBody(required = false) RejectSpecimenRequestDTO request,
+        @RequestHeader(name = "Accept-Language", required = false) Locale locale) {
+
+        LabSpecimenResponseDTO rejected = labSpecimenService.rejectSpecimen(id,
+            request == null ? null : request.getReason(), locale);
+        auditSpecimen(rejected);
+        return ResponseEntity.ok(ApiResponseWrapper.success(rejected));
+    }
+
+    /** QA D962: the body of a rejection. The reason is required (checked by the service, localised). */
+    static class RejectSpecimenRequestDTO {
+        private String reason;
+
+        public String getReason() { return reason; }
+        public void setReason(String reason) { this.reason = reason; }
     }
 
     /** QA D429: the lab audit row names the event, the specimen and its patient. Ids only. */

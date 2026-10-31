@@ -538,8 +538,9 @@ class PatientPortalServiceImplMvp4Test {
 
             PreCheckInRequestDTO dto = buildDto(apptId);
             assertThatThrownBy(() -> service.submitPreCheckIn(auth, dto))
-                    .isInstanceOf(IllegalStateException.class)
-                    .hasMessageContaining("SCHEDULED or CONFIRMED");
+                    .isInstanceOf(BusinessException.class)
+                    .extracting(e -> ((BusinessException) e).getMessageKey())
+                    .isEqualTo("portal.precheckin.status");
         }
 
         @Test
@@ -553,7 +554,7 @@ class PatientPortalServiceImplMvp4Test {
 
             PreCheckInRequestDTO dto = buildDto(apptId);
             assertThatThrownBy(() -> service.submitPreCheckIn(auth, dto))
-                    .isInstanceOf(IllegalStateException.class);
+                    .isInstanceOf(BusinessException.class);
         }
 
         @Test
@@ -568,7 +569,8 @@ class PatientPortalServiceImplMvp4Test {
             PreCheckInRequestDTO dto = buildDto(apptId);
             assertThatThrownBy(() -> service.submitPreCheckIn(auth, dto))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("1–7 days");
+                    .extracting(e -> ((BusinessException) e).getMessageKey())
+                    .isEqualTo("portal.precheckin.window");
         }
 
         @Test
@@ -583,7 +585,8 @@ class PatientPortalServiceImplMvp4Test {
             PreCheckInRequestDTO dto = buildDto(apptId);
             assertThatThrownBy(() -> service.submitPreCheckIn(auth, dto))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("1–7 days");
+                    .extracting(e -> ((BusinessException) e).getMessageKey())
+                    .isEqualTo("portal.precheckin.window");
         }
 
         @Test

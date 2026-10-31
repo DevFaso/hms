@@ -115,6 +115,7 @@
                   class="icon-btn"
                   (click)="viewSnapshot(snap)"
                   [title]="'COMMON.VIEW' | translate"
+                  [attr.aria-label]="'COMMON.VIEW' | translate"
                 >
                   <span class="material-symbols-outlined">visibility</span>
                 </button>
@@ -192,7 +193,7 @@
         aria-modal="true"
         tabindex="-1"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="$event.stopPropagation()"
+        (keydown.escape)="closeView(); $event.stopPropagation()"
       >
         <h2>
           {{ 'ADMIN_GOV.ENV_' + snap.environment | translate }} · v{{ snap.version }}
@@ -246,7 +247,7 @@
         aria-modal="true"
         tabindex="-1"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="$event.stopPropagation()"
+        (keydown.escape)="closeCreate(); $event.stopPropagation()"
       >
         <h2>{{ 'ADMIN_GOV.NEW_SNAPSHOT' | translate }}</h2>
         <div class="form-row">
@@ -304,6 +305,7 @@
                 class="icon-btn danger"
                 (click)="removeRow($index)"
                 [title]="'COMMON.DELETE' | translate"
+                [attr.aria-label]="'COMMON.DELETE' | translate"
               >
                 <span class="material-symbols-outlined">delete</span>
               </button>

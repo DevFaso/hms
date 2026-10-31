@@ -2,6 +2,7 @@ package com.example.hms.service;
 
 import com.example.hms.service.i18n.NotificationText;
 import com.example.hms.utility.ElapsedTime;
+import com.example.hms.utility.PatientMatchKeys;
 import com.example.hms.enums.AppointmentStatus;
 import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
@@ -63,9 +64,12 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -128,9 +132,11 @@ public class ReceptionServiceImpl implements ReceptionService {
                 ? Collections.emptyList()
                 : encounterRepo.findByAppointmentIdIn(appointmentIds);
 
-        LocalDateTime dayStart = date.atStartOfDay();
-        LocalDateTime dayEnd = date.plusDays(1).atStartOfDay();
-        List<Encounter> walkIns = encounterRepo.findWalkInsForHospitalAndPeriod(hospitalId, dayStart, dayEnd);
+        List<Encounter> carried = carriedOverVisits(hospitalId, date);
+        List<Encounter> walkIns = walkInsShownOn(hospitalId, date, carried);
+        // QA D1021: a booked visit checked in before midnight and still open
+        // counts on today's board too.
+        linkedEncounters = withCarriedBooked(linkedEncounters, carried);
 
         Map<UUID, Encounter> encounterByApptId = linkedEncounters.stream()
                 .filter(e -> e.getAppointment() != null)
@@ -174,8 +180,13 @@ public class ReceptionServiceImpl implements ReceptionService {
     @Override
     public List<ReceptionQueueItemDTO> getQueue(LocalDate date, UUID hospitalId, String status,
                                                   UUID departmentId, UUID providerId) {
+        // QA D1021: today's queue also carries the visits still open from an
+        // earlier day (a walk-in at 23:57, a late check-in): they used to drop
+        // off at midnight, still ARRIVED, and the desk could neither close
+        // them nor mark them left-without-being-seen.
+        List<Encounter> carried = carriedOverVisits(hospitalId, date);
         List<Appointment> appointments = applyQueueFilters(
-                appointmentRepo.findByHospital_IdAndAppointmentDate(hospitalId, date),
+                withCarriedAppointments(appointmentRepo.findByHospital_IdAndAppointmentDate(hospitalId, date), carried),
                 departmentId, providerId);
 
         Map<UUID, Encounter> encounterByApptId = buildEncounterMap(appointments);
@@ -188,7 +199,7 @@ public class ReceptionServiceImpl implements ReceptionService {
             items.add(buildQueueItem(appt, encounter, computedStatus, hospitalId));
         }
 
-        addWalkInItems(items, hospitalId, date, status);
+        addWalkInItems(items, hospitalId, date, status, carried);
         items.sort(Comparator.comparing(i -> i.getAppointmentTime() == null ? "" : i.getAppointmentTime()));
         return items;
     }
@@ -275,12 +286,14 @@ public class ReceptionServiceImpl implements ReceptionService {
 
         return FrontDeskPatientSnapshotDTO.builder()
                 .patientId(patientId)
-                .fullName(patient.getFirstName() + " " + patient.getLastName())
+                .fullName(patient.getFullName())
                 .mrn(mrn)
                 .dob(patient.getDateOfBirth())
                 .phone(patient.getPhoneNumberPrimary())
                 .email(patient.getEmail())
-                .address(patient.getAddress())
+                // QA D1074: a legacy pipe-joined composite shows its street lines.
+                .address(com.example.hms.utility.PatientAddressText.display(
+                        patient.getAddress(), patient.getAddressLine1(), patient.getAddressLine2()))
                 .insurance(insuranceSummary)
                 .billing(billingSummary)
                 .alerts(alerts)
@@ -335,7 +348,7 @@ public class ReceptionServiceImpl implements ReceptionService {
         return InsuranceIssueDTO.builder()
                 .appointmentId(appt.getId())
                 .patientId(pid)
-                .patientName(p.getFirstName() + " " + p.getLastName())
+                .patientName(p.getFullName())
                 .mrn(p.getMrnForHospital(appt.getHospital() != null ? appt.getHospital().getId() : null))
                 .appointmentTime(appt.getStartTime() != null ? appt.getStartTime().format(TIME_FMT) : null)
                 .issueType(issueType)
@@ -414,7 +427,7 @@ public class ReceptionServiceImpl implements ReceptionService {
         return ReceptionQueueItemDTO.builder()
                 .appointmentId(appt.getId())
                 .patientId(pid)
-                .patientName(p.getFirstName() + " " + p.getLastName())
+                .patientName(p.getFullName())
                 // QA D239: the MRN at this hospital, and the booked reason
                 // (else what triage recorded); both were hard-wired to null.
                 .mrn(p.getMrnForHospital(hospitalId))
@@ -438,12 +451,13 @@ public class ReceptionServiceImpl implements ReceptionService {
         if (walkIn.getStatus() == EncounterStatus.ARRIVED
                 || walkIn.getStatus() == EncounterStatus.TRIAGE
                 || walkIn.getStatus() == EncounterStatus.WAITING_FOR_PHYSICIAN) {
-            waitMins = (int) ElapsedTime.minutesBetween(walkIn.getEncounterDate(), LocalDateTime.now());
+            // QA D1039 class: from the arrival, never from the visit day's midnight.
+            waitMins = (int) com.example.hms.utility.EncounterWait.minutes(walkIn, LocalDateTime.now(java.time.ZoneId.systemDefault()));
         }
         return ReceptionQueueItemDTO.builder()
                 .appointmentId(null)
                 .patientId(p.getId())
-                .patientName(p.getFirstName() + " " + p.getLastName())
+                .patientName(p.getFullName())
                 .mrn(p.getMrnForHospital(walkInHospitalId))
                 .dateOfBirth(p.getDateOfBirth())
                 .appointmentTime(walkIn.getEncounterDate() != null
@@ -452,13 +466,23 @@ public class ReceptionServiceImpl implements ReceptionService {
                         ? walkIn.getStaff().getUser().getFirstName() + " " + walkIn.getStaff().getUser().getLastName()
                         : null)
                 .departmentName(walkIn.getDepartment() != null ? walkIn.getDepartment().getName() : null)
-                .appointmentReason(notBlank(walkIn.getChiefComplaint()) ? walkIn.getChiefComplaint() : "Walk-in")
+                .appointmentReason(walkInReason(walkIn))
                 .status(computedStatus)
                 .waitMinutes(waitMins)
                 .encounterId(walkIn.getId())
                 .hasInsuranceIssue(walkInHospitalId != null && detectInsuranceIssue(p.getId(), walkInHospitalId))
                 .hasOutstandingBalance(walkInHospitalId != null && detectOutstandingBalance(p.getId(), walkInHospitalId))
                 .build();
+    }
+
+    /**
+     * QA D944: a walk-in's reason is its chief complaint, else nothing: the
+     * queue shows its own translated placeholder. It used to be the English
+     * literal "Walk-in" in every language. Never the encounter notes: those
+     * are the clinician's, written during the visit, and not the desk's.
+     */
+    static String walkInReason(Encounter walkIn) {
+        return notBlank(walkIn.getChiefComplaint()) ? walkIn.getChiefComplaint() : null;
     }
 
     /** QA D239: the booked reason, else the chief complaint triage recorded, else the booking notes. */
@@ -492,6 +516,65 @@ public class ReceptionServiceImpl implements ReceptionService {
         return appointments;
     }
 
+    /** QA D1021: the statuses of a visit nobody has finished with yet. */
+    static final Set<EncounterStatus> OPEN_VISIT_STATUSES = EnumSet.of(
+            EncounterStatus.ARRIVED, EncounterStatus.TRIAGE, EncounterStatus.WAITING_FOR_PHYSICIAN,
+            EncounterStatus.IN_PROGRESS, EncounterStatus.AWAITING_RESULTS, EncounterStatus.READY_FOR_DISCHARGE);
+
+    /**
+     * QA D1021: the visits begun on an earlier day and still open, shown on
+     * today's queue, board and counts. Only for today: a past or future day
+     * shows what happened on it.
+     */
+    private List<Encounter> carriedOverVisits(UUID hospitalId, LocalDate date) {
+        if (hospitalId == null || date == null || !date.equals(LocalDate.now())) {
+            return List.of();
+        }
+        return encounterRepo.findOpenStartedBefore(hospitalId, date.atStartOfDay(), OPEN_VISIT_STATUSES);
+    }
+
+    /** The day's walk-ins plus the carried-over open ones (no appointment), each once. */
+    private List<Encounter> walkInsShownOn(UUID hospitalId, LocalDate date, List<Encounter> carried) {
+        List<Encounter> out = new ArrayList<>(encounterRepo.findWalkInsForHospitalAndPeriod(
+                hospitalId, date.atStartOfDay(), date.plusDays(1).atStartOfDay()));
+        Set<UUID> seen = out.stream().map(Encounter::getId).filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        for (Encounter e : carried) {
+            if (e.getAppointment() == null && (e.getId() == null || seen.add(e.getId()))) {
+                out.add(e);
+            }
+        }
+        return out;
+    }
+
+    /** The day's appointments plus those whose visit was carried over, each once. */
+    private static List<Appointment> withCarriedAppointments(List<Appointment> appointments, List<Encounter> carried) {
+        if (carried.isEmpty()) {
+            return appointments;
+        }
+        List<Appointment> out = new ArrayList<>(appointments);
+        Set<UUID> seen = appointments.stream().map(Appointment::getId).filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        carried.stream().map(Encounter::getAppointment).filter(Objects::nonNull)
+                .filter(a -> a.getId() == null || seen.add(a.getId()))
+                .forEach(out::add);
+        return out;
+    }
+
+    /** The day's linked visits plus the carried-over booked ones, each once. */
+    private static List<Encounter> withCarriedBooked(List<Encounter> linked, List<Encounter> carried) {
+        if (carried.isEmpty()) {
+            return linked;
+        }
+        List<Encounter> out = new ArrayList<>(linked);
+        Set<UUID> seen = linked.stream().map(Encounter::getId).filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        carried.stream()
+                .filter(e -> e.getAppointment() != null && (e.getId() == null || seen.add(e.getId())))
+                .forEach(out::add);
+        return out;
+    }
+
     private Map<UUID, Encounter> buildEncounterMap(List<Appointment> appointments) {
         List<UUID> appointmentIds = appointments.stream().map(Appointment::getId).toList();
         List<Encounter> linkedEncounters = appointmentIds.isEmpty()
@@ -507,15 +590,13 @@ public class ReceptionServiceImpl implements ReceptionService {
     }
 
     private void addWalkInItems(List<ReceptionQueueItemDTO> items, UUID hospitalId,
-                                 LocalDate date, String status) {
+                                 LocalDate date, String status, List<Encounter> carried) {
         if (excludedByStatusFilter(status, STATUS_WALK_IN)
                 && excludedByStatusFilter(status, STATUS_ARRIVED)
                 && excludedByStatusFilter(status, STATUS_IN_PROGRESS)) {
             return;
         }
-        LocalDateTime dayStart = date.atStartOfDay();
-        LocalDateTime dayEnd = date.plusDays(1).atStartOfDay();
-        List<Encounter> walkIns = encounterRepo.findWalkInsForHospitalAndPeriod(hospitalId, dayStart, dayEnd);
+        List<Encounter> walkIns = walkInsShownOn(hospitalId, date, carried);
 
         for (Encounter walkIn : walkIns) {
             String computedStatus = computeWalkInStatus(walkIn);
@@ -553,7 +634,8 @@ public class ReceptionServiceImpl implements ReceptionService {
 
     private int computeWaitMinutes(Encounter encounter) {
         if (encounter != null && encounter.getStatus() == EncounterStatus.ARRIVED) {
-            return (int) ElapsedTime.minutesBetween(encounter.getEncounterDate(), LocalDateTime.now());
+            // QA D1039 class: from the arrival, never from the visit day's midnight.
+            return (int) com.example.hms.utility.EncounterWait.minutes(encounter, LocalDateTime.now(java.time.ZoneId.systemDefault()));
         }
         return 0;
     }
@@ -574,27 +656,73 @@ public class ReceptionServiceImpl implements ReceptionService {
 
     // ── MVP 11: Duplicate Candidate Detection ─────────────────────────────────
 
+    /**
+     * QA D924: the phone number used to be ANDed with the name and the date of
+     * birth, and the phone is mandatory on the form, so only a patient with the
+     * same number was ever offered, and a second chart was created for
+     * everyone else. Candidates are now the patients whose name matches (a
+     * name + date-of-birth query first, then the name alone) OR who hold the
+     * same subscriber number, all folded by {@link PatientMatchKeys} (accents,
+     * phone formatting). The name scores 50, the date of birth 30 and the
+     * phone 20, with 40 to be offered: a same-name record is offered even with
+     * another date of birth (a transposed date must not hide it), and a shared
+     * family number alone is not.
+     */
     @Override
     public List<DuplicateCandidateDTO> getDuplicateCandidates(String name, String dob, String phone,
                                                                UUID hospitalId) {
-        String namePattern = (name != null && !name.isBlank())
-                ? "%" + name.trim().toLowerCase() + "%" : null;
-        String phonePattern = (phone != null && !phone.isBlank())
-                ? "%" + phone.trim() + "%" : null;
-        List<Patient> candidates = patientRepo.searchPatientsExtended(
-                null, namePattern, dob, phonePattern, null, hospitalId, true,
-                PageRequest.of(0, 20)).getContent();
+        if (hospitalId == null) {
+            // No hospital, no scope: a duplicate check never crosses tenants.
+            return List.of();
+        }
+        String namePattern = PatientMatchKeys.nameContainsPattern(name);
+        String dobValue = (dob != null && !dob.isBlank()) ? dob.trim() : null;
+        Map<UUID, Patient> candidates = new java.util.LinkedHashMap<>();
+        // The name is its own candidate source: a mistyped or transposed date
+        // of birth must not hide a same-name record (the D924 class, one field
+        // gating the others). The date only scores. A DOB alone (30) can never
+        // reach the threshold, so it asks nothing on its own.
+        if (namePattern != null && dobValue != null) {
+            // Same name and same date of birth first (80, a duplicate whatever
+            // the phone): a common name must not push it out of the capped
+            // name-only page below (review round 8).
+            patientRepo.searchPatientsExtended(
+                    null, namePattern, dobValue, null, null, hospitalId, true,
+                    PageRequest.of(0, 20)).getContent()
+                .forEach(p -> candidates.putIfAbsent(p.getId(), p));
+        }
+        if (namePattern != null) {
+            patientRepo.searchPatientsExtended(
+                    null, namePattern, null, null, null, hospitalId, true,
+                    PageRequest.of(0, 20)).getContent()
+                .forEach(p -> candidates.putIfAbsent(p.getId(), p));
+        }
+        String phoneKey = PatientMatchKeys.phoneKey(phone);
+        if (PatientMatchKeys.isSubscriberKey(phoneKey)) {
+            patientRepo.findAllByPhoneSubscriberAtHospital("%" + phoneKey, hospitalId,
+                    PageRequest.of(0, PatientRepository.PHONE_SUBSCRIBER_CAP)).stream()
+                .filter(Patient::isActive)
+                .forEach(p -> candidates.putIfAbsent(p.getId(), p));
+        }
 
-        return candidates.stream()
-                .map(p -> {
-                    int score = computeConfidenceScore(p, name, dob, phone);
+        // Scored once, first: a shared family number alone (20) is dropped
+        // before anyone's registrations are read for an MRN.
+        String callingCode = com.example.hms.utility.PhoneNumbers.callingCodeForCountry(
+                hospitalRepo.findById(hospitalId).map(Hospital::getCountry).orElse(null));
+        Map<Patient, Integer> scored = new java.util.LinkedHashMap<>();
+        candidates.values().forEach(p -> scored.put(p, computeConfidenceScore(p, name, dobValue, phone, callingCode)));
+        return scored.entrySet().stream()
+                .filter(e -> e.getValue() >= 40)
+                .map(e -> {
+                    Patient p = e.getKey();
+                    int score = e.getValue();
                     String mrn = p.getHospitalRegistrations().stream()
                             .filter(r -> r.getHospital() != null && hospitalId.equals(r.getHospital().getId()))
                             .map(PatientHospitalRegistration::getMrn)
                             .findFirst().orElse(null);
                     return DuplicateCandidateDTO.builder()
                             .patientId(p.getId())
-                            .fullName(p.getFirstName() + " " + p.getLastName())
+                            .fullName(p.getFullName())
                             .mrn(mrn)
                             .dateOfBirth(p.getDateOfBirth())
                             .phone(p.getPhoneNumberPrimary())
@@ -602,23 +730,27 @@ public class ReceptionServiceImpl implements ReceptionService {
                             .confidenceScore(score)
                             .build();
                 })
-                .filter(c -> c.getConfidenceScore() >= 40)
                 .sorted(Comparator.comparingInt(DuplicateCandidateDTO::getConfidenceScore).reversed())
                 .toList();
     }
 
-    private int computeConfidenceScore(Patient p, String name, String dob, String phone) {
+    /**
+     * Name 50 (accents and word order ignored), date of birth 30, same
+     * subscriber number 20. A shared family phone alone (20) is not a
+     * duplicate; the same name and birth date (80) is one whatever the phone.
+     */
+    private int computeConfidenceScore(Patient p, String name, String dob, String phone, String callingCode) {
         int score = 0;
-        if (name != null && !name.isBlank()) {
-            String fullName = (p.getFirstName() + " " + p.getLastName()).toLowerCase();
-            if (fullName.contains(name.trim().toLowerCase())) score += 50;
+        if (name != null && !name.isBlank()
+                && (PatientMatchKeys.nameContains(p.getFirstName() + " " + p.getLastName(), name)
+                    || PatientMatchKeys.nameContains(p.getLastName() + " " + p.getFirstName(), name))) {
+            score += 50;
         }
-        if (dob != null && !dob.isBlank() && p.getDateOfBirth() != null
-                && p.getDateOfBirth().toString().equals(dob)) {
+        if (dob != null && p.getDateOfBirth() != null && p.getDateOfBirth().toString().equals(dob)) {
             score += 30;
         }
-        if (phone != null && !phone.isBlank() && p.getPhoneNumberPrimary() != null
-                && p.getPhoneNumberPrimary().contains(phone.trim())) {
+        if (PatientMatchKeys.samePhone(p.getPhoneNumberPrimary(), phone, callingCode)
+                || PatientMatchKeys.samePhone(p.getPhoneNumberSecondary(), phone, callingCode)) {
             score += 20;
         }
         return Math.min(score, 100);
@@ -924,7 +1056,10 @@ public class ReceptionServiceImpl implements ReceptionService {
             }
         }
 
-        Appointment appointment = appointmentRepo.findById(request.getAppointmentId())
+        // QA D936: two check-ins of one appointment (double click, retry) are
+        // serialised; the second reads CHECKED_IN and is refused, so the patient
+        // is never billed two copays for one visit.
+        Appointment appointment = appointmentRepo.lockById(request.getAppointmentId()) // SELECT … FOR UPDATE
                 .orElseThrow(() -> new ResourceNotFoundException("appointment.notFound", request.getAppointmentId()));
 
         // Validate hospital scope
@@ -1002,9 +1137,12 @@ public class ReceptionServiceImpl implements ReceptionService {
 
         // 3c. QA D149: the copay collected at the desk becomes a paid invoice
         // on this encounter, with its cash payment in the ledger.
+        // QA D975: in the method the desk chose, with its reference.
+        com.example.hms.model.PaymentTransaction copayPayment = null;
         if (copay != null && copay.signum() > 0) {
             UUID actorUserId = userRepo.findByUsername(actorUsername).map(u -> u.getId()).orElse(null);
-            billingInvoiceService.recordCheckInCopay(encounter, copay, actorUserId);
+            copayPayment = billingInvoiceService.recordCheckInCopay(encounter, copay,
+                request.getCopayMethod(), request.getCopayReference(), actorUserId);
         }
 
         // 4. Audit trail
@@ -1024,7 +1162,7 @@ public class ReceptionServiceImpl implements ReceptionService {
                 patient.getId(), appointment.getId(), encounter.getCode(), actorUsername);
 
         // 5. Build response
-        String patientName = patient.getFirstName() + " " + patient.getLastName();
+        String patientName = patient.getFullName();
         return CheckInResponseDTO.builder()
                 .appointmentId(appointment.getId())
                 .appointmentStatus(appointment.getStatus())
@@ -1035,6 +1173,9 @@ public class ReceptionServiceImpl implements ReceptionService {
                 .patientName(patientName)
                 .arrivalTimestamp(encounter.getArrivalTimestamp())
                 .chiefComplaint(encounter.getChiefComplaint())
+                .copayInvoiceId(copayPayment != null && copayPayment.getInvoice() != null
+                        ? copayPayment.getInvoice().getId() : null)
+                .copayPaymentId(copayPayment != null ? copayPayment.getId() : null)
                 .message(messageSource.getMessage("reception.r7.checkedIn", new Object[] {patientName},
                         org.springframework.context.i18n.LocaleContextHolder.getLocale()))
                 .build();
@@ -1067,7 +1208,7 @@ public class ReceptionServiceImpl implements ReceptionService {
                 .id(e.getId())
                 .hospitalId(e.getHospital().getId())
                 .patientId(p.getId())
-                .patientName(p.getFirstName() + " " + p.getLastName())
+                .patientName(p.getFullName())
                 .mrn(mrn)
                 .departmentId(e.getDepartment().getId())
                 .departmentName(e.getDepartment().getName())

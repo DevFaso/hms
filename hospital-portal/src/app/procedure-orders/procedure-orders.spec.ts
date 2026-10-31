@@ -25,6 +25,7 @@ describe('ProcedureOrdersComponent', () => {
   beforeEach(() => {
     service = jasmine.createSpyObj<ProcedureOrderService>('ProcedureOrderService', [
       'update',
+      'cancel',
       'byHospital',
       'pendingConsent',
     ]);
@@ -115,5 +116,34 @@ describe('ProcedureOrdersComponent', () => {
     expect(toast.error).toHaveBeenCalledWith(
       "La date et l'heure prévues d'un acte ne peuvent pas être dans le passé.",
     );
+  });
+
+  // Product decision 2026-10-28: a colleague's cancel is refused with a 403
+  // (the error interceptor leaves it to the page); the server's translated
+  // reason is shown and the order stays open.
+  it("a refused cancel shows the server's reason and leaves the order as it was", () => {
+    const toast = TestBed.inject(ToastService);
+    spyOn(toast, 'error');
+    service.cancel.and.returnValue(
+      throwError(() => ({
+        status: 403,
+        error: {
+          message:
+            "Seul le clinicien qui a demandé cet acte peut annuler la demande, ou un médecin de cet établissement lorsqu'elle a été saisie par un infirmier ou une sage-femme.",
+        },
+      })),
+    );
+    component.viewedOrder.set(order);
+    component.openAction('cancel');
+    component.cancelReason = 'Patient declined';
+
+    component.submitCancel();
+
+    expect(service.cancel).toHaveBeenCalledOnceWith('o1', 'Patient declined');
+    expect(toast.error).toHaveBeenCalledWith(
+      "Seul le clinicien qui a demandé cet acte peut annuler la demande, ou un médecin de cet établissement lorsqu'elle a été saisie par un infirmier ou une sage-femme.",
+    );
+    expect(component.viewedOrder()?.status).toBe('ORDERED');
+    expect(component.actionBusy()).toBeFalse();
   });
 });

@@ -102,6 +102,16 @@ public interface PatientPortalService {
     // ── Billing / invoices ───────────────────────────────────────────────
     Page<BillingInvoiceResponseDTO> getMyInvoices(Authentication auth, Pageable pageable, Locale locale);
 
+    /** QA D982: one of my invoices with its lines and payments. */
+    com.example.hms.payload.dto.portal.PortalInvoiceDetailDTO getMyInvoiceDetail(Authentication auth, UUID invoiceId);
+
+    /** QA D982: my invoice as a PDF. */
+    com.example.hms.payload.dto.InvoicePdfResponseDTO getMyInvoicePdf(Authentication auth, UUID invoiceId, Locale locale);
+
+    /** QA D982: the receipt of one of my confirmed payments. */
+    com.example.hms.payload.dto.InvoicePdfResponseDTO getMyReceiptPdf(Authentication auth, UUID invoiceId, UUID paymentId,
+                                                                      Locale locale);
+
     // ── Pay an invoice ───────────────────────────────────────────────────
     BillingInvoiceResponseDTO recordMyPayment(Authentication auth, UUID invoiceId,
             com.example.hms.payload.dto.portal.PatientPaymentRequestDTO payment, Locale locale);

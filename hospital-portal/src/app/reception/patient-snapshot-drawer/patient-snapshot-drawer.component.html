@@ -107,7 +107,13 @@
         </div>
         @if (s.insurance.primaryPayer) {
           <div class="snap-field">
-            <span class="field-label">{{ 'RECEPTION.PRIMARY_PAYER' | translate }}</span>
+            <!-- QA D1038 / D986: with no primary policy the payer shown is the
+                 first linked one, so it is named as an insurer, never as the
+                 "primary payer" right under "No primary insurance". -->
+            <span class="field-label">{{
+              (s.insurance.hasPrimary ? 'RECEPTION.PRIMARY_PAYER' : 'RECEPTION.INSURANCE_PROVIDER')
+                | translate
+            }}</span>
             <span class="field-val">{{ s.insurance.primaryPayer }}</span>
           </div>
         }
@@ -177,7 +183,7 @@
         <div class="snap-field">
           <span class="field-label">{{ 'RECEPTION.TOTAL_BALANCE_DUE' | translate }}</span>
           <span class="field-val" [class.balance-due]="s.billing.totalBalanceDue > 0">
-            {{ s.billing.totalBalanceDue | number: '1.2-2' }}
+            {{ s.billing.totalBalanceDue | cfa }}
           </span>
         </div>
       </div>
@@ -200,6 +206,8 @@
     role="dialog"
     aria-modal="true"
     [attr.aria-label]="'RECEPTION.ATTEST_ELIGIBILITY' | translate"
+    appDialogFocus
+    (dialogDismiss)="showAttestModal.set(false)"
   >
     <div class="attest-header">
       <h3>{{ 'RECEPTION.ATTEST_ELIGIBILITY' | translate }}</h3>

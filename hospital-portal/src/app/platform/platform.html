@@ -307,6 +307,7 @@
                       <button
                         class="icon-btn icon-btn-success"
                         [title]="'PLATFORM.ACTIVATE' | translate"
+                        [attr.aria-label]="'PLATFORM.ACTIVATE' | translate"
                         (click)="changeServiceStatus(svc, 'ACTIVE')"
                       >
                         <span class="material-icons">check_circle</span>
@@ -316,6 +317,7 @@
                       <button
                         class="icon-btn icon-btn-warning"
                         [title]="'PLATFORM.DEACTIVATE' | translate"
+                        [attr.aria-label]="'PLATFORM.DEACTIVATE' | translate"
                         (click)="changeServiceStatus(svc, 'INACTIVE')"
                       >
                         <span class="material-icons">pause_circle</span>
@@ -324,6 +326,7 @@
                     <button
                       class="icon-btn"
                       [title]="'PLATFORM.VIEW_DETAILS' | translate"
+                      [attr.aria-label]="'PLATFORM.VIEW_DETAILS' | translate"
                       (click)="openServiceDetail(svc)"
                     >
                       <span class="material-icons">open_in_new</span>
@@ -556,6 +559,7 @@
        ═══════════════════════════════════════════ -->
   @if (serviceDrawerOpen()) {
     <div
+      [attr.aria-label]="'COMMON.CLOSE' | translate"
       class="drawer-backdrop"
       role="button"
       tabindex="0"
@@ -568,7 +572,11 @@
           <span class="material-icons">{{ serviceTypeIcon(selectedService()!.serviceType) }}</span>
           {{ serviceTypeLabel(selectedService()!.serviceType) }}
         </h2>
-        <button class="icon-btn" (click)="closeServiceDrawer()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="icon-btn"
+          (click)="closeServiceDrawer()"
+        >
           <span class="material-icons">close</span>
         </button>
       </div>
@@ -929,6 +937,7 @@
        ═══════════════════════════════════════════ -->
   @if (registerDrawerOpen()) {
     <div
+      [attr.aria-label]="'COMMON.CLOSE' | translate"
       class="drawer-backdrop"
       role="button"
       tabindex="0"
@@ -941,7 +950,11 @@
           <span class="material-icons">add_circle</span>
           {{ 'PLATFORM.REGISTER_NEW_SERVICE' | translate }}
         </h2>
-        <button class="icon-btn" (click)="closeRegisterDrawer()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="icon-btn"
+          (click)="closeRegisterDrawer()"
+        >
           <span class="material-icons">close</span>
         </button>
       </div>
@@ -1104,6 +1117,7 @@
        ═══════════════════════════════════════════ -->
   @if (catalogDetailOpen() && selectedCatalogItem(); as item) {
     <div
+      [attr.aria-label]="'COMMON.CLOSE' | translate"
       class="drawer-backdrop"
       role="button"
       tabindex="0"
@@ -1116,7 +1130,11 @@
           <span class="material-icons">{{ serviceTypeIcon(item.serviceType) }}</span>
           {{ item.displayName }}
         </h2>
-        <button class="icon-btn" (click)="closeCatalogDetail()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="icon-btn"
+          (click)="closeCatalogDetail()"
+        >
           <span class="material-icons">close</span>
         </button>
       </div>
@@ -1302,6 +1320,7 @@
        ═══════════════════════════════════════════ -->
   @if (releaseFormOpen()) {
     <div
+      [attr.aria-label]="'COMMON.CLOSE' | translate"
       class="drawer-backdrop"
       role="button"
       tabindex="0"
@@ -1314,7 +1333,11 @@
           <span class="material-icons">event</span>
           {{ 'PLATFORM.SCHEDULE_RELEASE_WINDOW' | translate }}
         </h2>
-        <button class="icon-btn" (click)="closeReleaseForm()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="icon-btn"
+          (click)="closeReleaseForm()"
+        >
           <span class="material-icons">close</span>
         </button>
       </div>

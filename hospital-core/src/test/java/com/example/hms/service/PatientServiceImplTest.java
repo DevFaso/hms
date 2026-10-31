@@ -211,6 +211,10 @@ class PatientServiceImplTest {
     @Mock
     private PatientAccountLinkGuard accountLinkGuard;
 
+    /** QA D959 — the visit rows have their own test (VisitTimelineRowsTest); none here. */
+    @Mock
+    private com.example.hms.service.timeline.VisitTimelineRows visitTimelineRows;
+
     @InjectMocks
     private PatientServiceImpl patientService;
 
@@ -390,6 +394,24 @@ class PatientServiceImplTest {
         verify(patientMapper, never()).toPatientDTO(patient, hospitalId);
     }
 
+    // Residual #13 class: an email held by a patient of another hospital first must not hide
+    // this hospital's holder of the same address.
+    @Test
+    void lookupPatientsByIdentifierEmailKeepsEveryHolderBeforeTheScopeFilter() {
+        Patient elsewhere = new Patient();
+        elsewhere.setId(UUID.randomUUID());
+        PatientResponseDTO scoped = PatientResponseDTO.builder().id(patientId).build();
+        when(patientRepository.findAllByEmailIgnoreCase("family@example.com")).thenReturn(List.of(elsewhere, patient));
+        when(registrationRepository.existsByPatientIdAndHospitalId(elsewhere.getId(), hospitalId)).thenReturn(false);
+        when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
+        when(patientMapper.toPatientDTO(patient, hospitalId)).thenReturn(scoped);
+        when(patientVitalSignService.getLatestSnapshot(patientId, hospitalId)).thenReturn(Optional.empty());
+
+        assertThat(patientService.lookupPatients("family@example.com", null, null, null, null, hospitalId, Locale.ENGLISH))
+            .extracting(PatientResponseDTO::getId)
+            .containsExactly(patientId);
+    }
+
     @Test
     void lookupPatientsWithoutHospitalScopeIsRefusedForStaff() {
         when(patientRepository.findByMrn("MRN-A1")).thenReturn(List.of(patient));
@@ -552,6 +574,39 @@ class PatientServiceImplTest {
         assertThat(patient.getPhoneVerifiedAt()).isNotNull();
         // Once for the new record, once for the stamp.
         verify(patientRepository, times(2)).save(patient);
+    }
+
+    @Test
+    void reviewRound16_anIvorianVerifiedNumberIsStampedThoughItIsStoredInE164() {
+        UUID userId = UUID.randomUUID();
+        UUID challengeId = UUID.randomUUID();
+        PatientRequestDTO request = PatientRequestDTO.builder()
+            .userId(userId)
+            .hospitalId(hospitalId)
+            .phoneVerificationId(challengeId)
+            .build();
+        User user = new User();
+        user.setId(userId);
+        user.setActive(true);
+        hospital.setCountry("CI");
+        patient.setPhoneNumberPrimary("07 01 23 45 67");
+
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+        when(patientMapper.toPatient(request, user)).thenReturn(patient);
+        when(patientRepository.save(patient)).thenReturn(patient);
+        // The challenge holds the number as the desk typed it.
+        when(phoneVerificationService.consumeVerifiedChallenge(challengeId, "07 01 23 45 67")).thenReturn(true);
+        when(registrationRepository.findByPatientIdAndHospitalIdAndActiveTrue(patientId, hospitalId))
+            .thenReturn(Optional.of(new PatientHospitalRegistration()));
+        when(patientMapper.toPatientDTO(patient, hospitalId))
+            .thenReturn(PatientResponseDTO.builder().id(patientId).build());
+        when(patientVitalSignService.getLatestSnapshot(patientId, hospitalId)).thenReturn(Optional.empty());
+
+        patientService.createPatientByStaff(request, Locale.ENGLISH);
+
+        assertThat(patient.getPhoneNumberPrimary()).isEqualTo("+225701234567");
+        assertThat(patient.getPhoneVerifiedAt()).isNotNull();
     }
 
     @Test
@@ -868,6 +923,57 @@ class PatientServiceImplTest {
         ))
             .isInstanceOf(BusinessException.class)
             .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("patient.r7.diagnosisRemoveReasonRequired"));
+    }
+
+    @Test
+    void getDoctorTimelineNamesTheTestAndTheVisitTypeInTheReadersLanguage_D958_D996() {
+        org.springframework.context.MessageSource previous = (org.springframework.context.MessageSource)
+            org.springframework.test.util.ReflectionTestUtils.getField(com.example.hms.utility.MessageUtil.class, "messageSource");
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
+        try {
+            UserRoleHospitalAssignment assignment = new UserRoleHospitalAssignment();
+            assignment.setId(UUID.randomUUID());
+            assignment.setHospital(hospital);
+            Encounter stay = Encounter.builder().patient(patient).hospital(hospital)
+                .encounterDate(LocalDateTime.now().minusDays(1)).encounterType(EncounterType.INPATIENT).build();
+            stay.setId(UUID.randomUUID());
+            com.example.hms.model.LabTestDefinition glycemia = new com.example.hms.model.LabTestDefinition();
+            glycemia.setName("Glycémie à jeun");
+            glycemia.setUnit("g/L");
+            LabOrder order = LabOrder.builder().patient(patient).hospital(hospital)
+                .labTestDefinition(glycemia)
+                .clinicalIndication("Fièvre 39,2 °C, suspicion de paludisme")
+                .orderingStaff(Staff.builder().hospital(hospital).build())
+                .build();
+            order.setId(UUID.randomUUID());
+            LabResult result = LabResult.builder().labOrder(order).released(true).resultValue("0.92")
+                .resultDate(LocalDateTime.now().minusHours(2)).build();
+            result.setId(UUID.randomUUID());
+            when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+            when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
+            when(encounterRepository.findByPatient_Id(patientId)).thenReturn(List.of(stay));
+            when(labResultRepository.findPatientResultsReadableAt(patientId, Set.of(hospitalId), hospitalId, false,
+                Pageable.unpaged())).thenReturn(List.of(result));
+
+            PatientTimelineResponseDTO response = patientService.getDoctorTimeline(patientId, hospitalId,
+                UUID.randomUUID(), assignment,
+                PatientTimelineAccessRequestDTO.builder().accessReason("Suivi").includeSensitiveData(true).build());
+
+            assertThat(response.getEntries())
+                .filteredOn(entry -> "LAB_RESULT".equals(entry.getCategory()))
+                .singleElement()
+                .extracting(PatientTimelineEntryDTO::getSummary)
+                .isEqualTo("Glycémie à jeun: 0.92 g/L");
+            assertThat(response.getEntries())
+                .filteredOn(entry -> "ENCOUNTER".equals(entry.getCategory()))
+                .singleElement()
+                .extracting(PatientTimelineEntryDTO::getSummary)
+                .isEqualTo("Hospitalisation");
+        } finally {
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+            com.example.hms.utility.MessageUtil.setMessageSource(previous);
+        }
     }
 
     @Test
@@ -1522,8 +1628,7 @@ class PatientServiceImplTest {
         otherHospital.setId(UUID.randomUUID());
         patient.getHospitalRegistrations().add(activeRegistrationAt(otherHospital));
 
-        when(patientRepository.findAllByPhoneNumberPrimary("+22670707070")).thenReturn(List.of(patient));
-        when(patientRepository.findAllByPhoneNumberSecondary("+22670707070")).thenReturn(List.of());
+        when(patientRepository.findAllByPhoneSubscriber(eq("%70707070"), any())).thenReturn(List.of(patient));
 
         var matches = patientService.findRegistrationMatches(null, "+22670707070", hospitalId);
 
@@ -1541,12 +1646,69 @@ class PatientServiceImplTest {
     }
 
     @Test
+    void qaD1061_aPhoneMatchSaysWhetherItIsTheSamePerson() {
+        // A child registered under the father's number: the father is listed,
+        // and the card is told he is NOT the person being registered.
+        patient.setPhoneNumberPrimary("+22676334455");
+        when(patientRepository.findAllByPhoneSubscriber(eq("%76334455"), any())).thenReturn(List.of(patient));
+
+        var child = patientService.findRegistrationMatches(null, "+22676334455", "Abdoul Aziz", "Nikiéma",
+            LocalDate.of(2021, 8, 19), hospitalId);
+        assertThat(child).singleElement().satisfies(m -> {
+            assertThat(m.getMatchedOn()).isEqualTo("PHONE");
+            assertThat(m.getSameIdentity()).isFalse();
+        });
+
+        var same = patientService.findRegistrationMatches(null, "+22676334455", "JANE", "doe",
+            LocalDate.of(1990, 1, 1), hospitalId);
+        assertThat(same).singleElement().satisfies(m -> assertThat(m.getSameIdentity()).isTrue());
+
+        // Without a name and date of birth there is nothing to compare: null, as before.
+        assertThat(patientService.findRegistrationMatches(null, "+22676334455", hospitalId))
+            .singleElement().satisfies(m -> assertThat(m.getSameIdentity()).isNull());
+    }
+
+    @Test
+    void qaD1064_theSamePersonAtAnotherHospitalOfTheOrganisationIsProposedWithAnotherPhone() {
+        com.example.hms.model.Organization organization = new com.example.hms.model.Organization();
+        organization.setId(UUID.randomUUID());
+        hospital.setOrganization(organization);
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+        Patient homonym = new Patient();
+        homonym.setId(UUID.randomUUID());
+        homonym.setFirstName("Jane");
+        homonym.setLastName("Smith");
+        homonym.setDateOfBirth(LocalDate.of(1990, 1, 1));
+        homonym.setHospitalRegistrations(new java.util.HashSet<>());
+        when(patientRepository.findByDateOfBirthInOrganization(LocalDate.of(1990, 1, 1), organization.getId()))
+            .thenReturn(List.of(patient, homonym));
+
+        var matches = patientService.findRegistrationMatches(null, "+22670440099", "Jané", "DOE",
+            LocalDate.of(1990, 1, 1), hospitalId);
+
+        // The same first name, last name and date of birth; never a mere same-birthday homonym.
+        assertThat(matches).singleElement().satisfies(m -> {
+            assertThat(m.getPatientId()).isEqualTo(patientId);
+            assertThat(m.getMatchedOn()).isEqualTo("IDENTITY");
+            assertThat(m.getSameIdentity()).isTrue();
+        });
+    }
+
+    @Test
+    void qaD1064_noIdentityMatchOutsideAnOrganisation() {
+        when(hospitalRepository.findById(hospitalId)).thenReturn(Optional.of(hospital));
+
+        assertThat(patientService.findRegistrationMatches(null, null, "Jane", "Doe", LocalDate.of(1990, 1, 1),
+            hospitalId)).isEmpty();
+        verify(patientRepository, never()).findByDateOfBirthInOrganization(any(), any());
+    }
+
+    @Test
     void findRegistrationMatchesFlagsAlreadyRegisteredHere() {
         patient.setPhoneNumberPrimary("+22670707070");
         patient.getHospitalRegistrations().add(activeRegistrationAt(hospital));
 
-        when(patientRepository.findAllByPhoneNumberPrimary("+22670707070")).thenReturn(List.of(patient));
-        when(patientRepository.findAllByPhoneNumberSecondary("+22670707070")).thenReturn(List.of());
+        when(patientRepository.findAllByPhoneSubscriber(eq("%70707070"), any())).thenReturn(List.of(patient));
 
         var matches = patientService.findRegistrationMatches(null, "+22670707070", hospitalId);
 
@@ -1563,8 +1725,7 @@ class PatientServiceImplTest {
         inactive.setActive(false);
         patient.getHospitalRegistrations().add(inactive);
 
-        when(patientRepository.findAllByPhoneNumberPrimary("+22670707070")).thenReturn(List.of(patient));
-        when(patientRepository.findAllByPhoneNumberSecondary("+22670707070")).thenReturn(List.of());
+        when(patientRepository.findAllByPhoneSubscriber(eq("%70707070"), any())).thenReturn(List.of(patient));
 
         var matches = patientService.findRegistrationMatches(null, "+22670707070", hospitalId);
 
@@ -1574,12 +1735,31 @@ class PatientServiceImplTest {
     }
 
     @Test
+    void reviewRound10_aShortNumberSharedByTwoRecordsMatchesBoth() {
+        // Too short to name a subscriber, so matched exactly as stored; a
+        // shared number lists every holder, as develop's match did.
+        patient.setPhoneNumberPrimary("700010");
+        Patient sibling = new Patient();
+        sibling.setId(UUID.randomUUID());
+        sibling.setFirstName("Awa");
+        sibling.setLastName("Doe");
+        sibling.setPhoneNumberSecondary("700010");
+        sibling.setHospitalRegistrations(new java.util.HashSet<>());
+        when(patientRepository.findAllByPhoneNumberPrimary("700010")).thenReturn(List.of(patient));
+        when(patientRepository.findAllByPhoneNumberSecondary("700010")).thenReturn(List.of(sibling, patient));
+
+        var matches = patientService.findRegistrationMatches(null, "700010", hospitalId);
+
+        assertThat(matches).extracting(com.example.hms.payload.dto.RegistrationMatchDTO::getPatientId)
+            .containsExactly(patientId, sibling.getId());
+    }
+
+    @Test
     void findRegistrationMatchesDedupesPhoneAndEmailHitsPreferringPhone() {
         patient.setPhoneNumberPrimary("+22670707070");
         patient.setEmail("jane@example.com");
 
-        when(patientRepository.findAllByPhoneNumberPrimary("+22670707070")).thenReturn(List.of(patient));
-        when(patientRepository.findAllByPhoneNumberSecondary("+22670707070")).thenReturn(List.of());
+        when(patientRepository.findAllByPhoneSubscriber(eq("%70707070"), any())).thenReturn(List.of(patient));
         when(patientRepository.findAllByEmailIgnoreCase("jane@example.com")).thenReturn(List.of(patient));
 
         var matches = patientService.findRegistrationMatches("jane@example.com", "+22670707070", hospitalId);
@@ -1594,7 +1774,20 @@ class PatientServiceImplTest {
 
         assertThat(matches).isEmpty();
         verify(patientRepository, never()).findAllByEmailIgnoreCase(any());
-        verify(patientRepository, never()).findAllByPhoneNumberPrimary(any());
+        verify(patientRepository, never()).findAllByPhoneSubscriber(any(), any());
+    }
+
+    @Test
+    void findRegistrationMatchesFindsTheSameSubscriberHoweverEitherSideIsWritten() {
+        // QA D942: "+22670001002" typed at B, "70001002" stored at A, matched on
+        // the eight national digits (the query folds the stored side to digits).
+        patient.setPhoneNumberPrimary("70001002");
+        when(patientRepository.findAllByPhoneSubscriber(eq("%70001002"), any())).thenReturn(List.of(patient));
+
+        for (String typed : List.of("+22670001002", "70 00 10 02", "0022670001002", "70001002")) {
+            var matches = patientService.findRegistrationMatches(null, typed, hospitalId);
+            assertThat(matches).as(typed).hasSize(1);
+        }
     }
 
     @Test

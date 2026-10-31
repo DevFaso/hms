@@ -39,12 +39,16 @@
               <span class="material-symbols-outlined">{{ labIcon(lab) }}</span>
             </div>
             <div class="pli-body">
-              <span class="pli-title">{{ lab.testName }}</span>
+              <span class="pli-title"
+                >{{ lab.testName }}
+                <!-- QA D1016: a corrected result is never shown as a second, new one -->
+                <app-lab-correction-badge [corrected]="lab.corrected" audience="patient"
+              /></span>
               @if (lab.isPending) {
                 <span class="pli-sub">{{ 'PORTAL.LAB_RESULTS.PENDING_RESULT' | translate }}</span>
               } @else {
                 <span class="pli-sub">
-                  {{ 'PORTAL.LAB_RESULTS.RESULT' | translate }}:
+                  {{ 'PORTAL.LAB_RESULTS.RESULT_PREFIX' | translate }}
                   <strong>{{ displayResult(lab.result) }}</strong>
                   @if (lab.referenceRange) {
                     &nbsp;({{ 'PORTAL.LAB_RESULTS.NORMAL_PREFIX' | translate }}
@@ -75,11 +79,14 @@
                 </div>
                 <div class="detail-item">
                   <span class="dl">{{ 'PORTAL.LAB_RESULTS.RESULT' | translate }}</span>
-                  <span class="dv" [class.text-danger]="lab.isAbnormal">{{
-                    lab.isPending
-                      ? ('PORTAL.LAB_RESULTS.PENDING_RESULT' | translate)
-                      : displayResult(lab.result)
-                  }}</span>
+                  <span class="dv" [class.text-danger]="lab.isAbnormal"
+                    >{{
+                      lab.isPending
+                        ? ('PORTAL.LAB_RESULTS.PENDING_RESULT' | translate)
+                        : displayResult(lab.result)
+                    }}
+                    <app-lab-correction-badge [corrected]="lab.corrected" audience="patient"
+                  /></span>
                 </div>
                 @if (lab.referenceRange) {
                   <div class="detail-item">

@@ -543,6 +543,9 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
      * {@code hms.lab.auto-verification.enabled=false} (the default) an ORU
      * observation lands here and stays "pending" for the patient until a
      * lab user releases it, so a worklist MUST be able to find it.
+     *
+     * <p>QA D963: STAT first, then URGENT, then the rest; the page's own sort
+     * (oldest result first by default) orders within each priority.
      */
     @EntityGraph(attributePaths = {
         "labOrder",
@@ -553,6 +556,8 @@ public interface LabResultRepository extends JpaRepository<LabResult, UUID> {
         SELECT r FROM LabResult r
         WHERE r.released = false
           AND COALESCE(r.labOrder.performingHospital.id, r.labOrder.hospital.id) = :hospitalId
+        ORDER BY
+          CASE r.labOrder.priority WHEN 'STAT' THEN 0 WHEN 'URGENT' THEN 1 ELSE 2 END
     """, countQuery = """
         SELECT COUNT(r) FROM LabResult r
         WHERE r.released = false

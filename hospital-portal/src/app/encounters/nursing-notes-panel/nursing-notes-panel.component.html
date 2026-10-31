@@ -1,0 +1,48 @@
+<section
+  class="nursing-notes"
+  data-testid="nursing-notes-panel"
+  aria-labelledby="nursing-notes-title"
+>
+  <h3 id="nursing-notes-title">{{ 'NURSING_NOTES.TITLE' | translate }}</h3>
+  @if (loading()) {
+    <p class="nursing-notes__state">{{ 'NURSING_NOTES.LOADING' | translate }}</p>
+  } @else if (failed()) {
+    <p class="nursing-notes__state">{{ 'NURSING_NOTES.LOAD_FAILED' | translate }}</p>
+  } @else if (notes().length === 0) {
+    <p class="nursing-notes__state">{{ 'NURSING_NOTES.EMPTY' | translate }}</p>
+  } @else {
+    <ul class="nursing-notes__list">
+      @for (note of notes(); track note.id) {
+        <li class="nursing-notes__item" data-testid="nursing-note">
+          <!-- QA D1044: the title the nurse gave the note. -->
+          @if (note.title) {
+            <p class="nursing-notes__title" data-testid="nursing-note-title">
+              <strong>{{ note.title }}</strong>
+            </p>
+          }
+          <p class="nursing-notes__meta">
+            <!-- QA D1076 class: the template by its name, never its code -->
+            <span class="nursing-notes__template">{{
+              note.template | enumLabel: 'noteTemplate'
+            }}</span>
+            {{ note.documentedAt | serverTime | date: 'short' }}
+            @if (note.authorName) {
+              — {{ note.authorName }}
+              @if (note.authorCredentials) {
+                ({{ note.authorCredentials }})
+              }
+            }
+            @if (note.lateEntry) {
+              <span class="nursing-notes__late">{{ 'NURSING_NOTES.LATE_ENTRY' | translate }}</span>
+            }
+          </p>
+          @for (part of parts(note); track part.labelKey) {
+            <p class="nursing-notes__part">
+              <strong>{{ part.labelKey | translate }}</strong> {{ part.text }}
+            </p>
+          }
+        </li>
+      }
+    </ul>
+  }
+</section>

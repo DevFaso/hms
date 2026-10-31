@@ -177,10 +177,7 @@ public class CheckOutMapper {
 
     private String derivePatientName(Encounter enc) {
         if (enc.getPatient() == null) return null;
-        String first = enc.getPatient().getFirstName();
-        String last = enc.getPatient().getLastName();
-        if (first == null && last == null) return null;
-        return ((first != null ? first : "") + " " + (last != null ? last : "")).trim();
+        return enc.getPatient().getFullName();
     }
 
     private String deriveProviderName(Encounter enc) {

@@ -40,6 +40,9 @@ import java.util.Set;
 @Transactional
 public class ImagingOrderServiceImpl implements ImagingOrderService {
 
+    /** QA D1066: refused on any write to a cancelled order. */
+    private static final String IMAGING_ORDER_CANCELLED_LOCKED = "imaging.order.cancelled.locked";
+
     private static final int DEFAULT_DUPLICATE_LOOKBACK_DAYS = 30;
 
     /**
@@ -81,6 +84,9 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         requireNotInThePast(request.getScheduledDate(), null);
         ImagingOrder imagingOrder = imagingOrderMapper.toEntity(request, patient, hospital);
         imagingOrder.setOrderedAt(LocalDateTime.now());
+        // QA D972 (round 18): an order belongs to the visit it was written in,
+        // which is how the checkout bills it.
+        imagingOrder.setEncounterId(visitOf(request.getEncounterId(), patient.getId(), hospital.getId()));
         // QA D302: the ordering provider is whoever is signed in. A free-text
         // name in the request is a claim, never shown as if a user had placed
         // the order; without a resolved user the order carries no provider.
@@ -101,10 +107,48 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         return imagingOrderMapper.toResponseDTO(saved, duplicateMatches);
     }
 
+    /** QA D972: the visits an order can belong to; null in a hand-built unit test. */
+    private com.example.hms.repository.EncounterRepository encounterRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setEncounterRepository(com.example.hms.repository.EncounterRepository encounterRepository) {
+        this.encounterRepository = encounterRepository;
+    }
+
+    /**
+     * QA D972 (round 18): the visit an imaging order is written in. A named
+     * visit must be this patient's, at this hospital: otherwise the order would
+     * be billed on someone else's invoice, so it is answered as not found. With
+     * none named (the imaging page has no visit field), the patient's open
+     * visit here, the latest one, is the order's visit, as an order entered in
+     * a real hospital's chart belongs to the current encounter; with no open
+     * visit the order stands alone and is not billed at a checkout.
+     */
+    private UUID visitOf(UUID requested, UUID patientId, UUID hospitalId) {
+        if (encounterRepository == null) {
+            return requested;
+        }
+        if (requested != null) {
+            return encounterRepository.findByIdAndHospital_Id(requested, hospitalId)
+                .filter(enc -> enc.getPatient() != null && patientId.equals(enc.getPatient().getId()))
+                .map(com.example.hms.model.Encounter::getId)
+                .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound", requested));
+        }
+        return encounterRepository.findByPatient_IdAndHospital_IdAndStatusNotIn(patientId, hospitalId,
+                com.example.hms.enums.EncounterStatus.CLOSED).stream()
+            .filter(enc -> enc.getEncounterDate() != null)
+            .max(java.util.Comparator.comparing(com.example.hms.model.Encounter::getEncounterDate))
+            .map(com.example.hms.model.Encounter::getId)
+            .orElse(null);
+    }
+
     @Override
     public ImagingOrderResponseDTO updateOrder(UUID orderId, ImagingOrderRequestDTO request, UUID callerUserId) {
         ImagingOrder order = getOrderInScope(orderId);
         requireEditableBy(order, callerUserId);
+        // QA D1066 class: a cancelled order is not edited back to life either.
+        com.example.hms.service.support.CancelledOrders.requireNotCancelled(order.getStatus(),
+            IMAGING_ORDER_CANCELLED_LOCKED);
 
         if (request.getPatientId() != null && (order.getPatient() == null || !request.getPatientId().equals(order.getPatient().getId()))) {
             Patient patient = patientRepository.findById(request.getPatientId())
@@ -125,14 +169,24 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         }
 
         requireNotInThePast(request.getScheduledDate(), order.getScheduledDate());
+        UUID visitBefore = order.getEncounterId();
         imagingOrderMapper.updateEntityFromRequest(order, request);
+        // QA D972: an edit keeps the order's visit (the form has no visit
+        // field), and a visit it names must be this patient's at this hospital.
+        if (request.getEncounterId() == null) {
+            order.setEncounterId(visitBefore);
+        } else if (order.getPatient() != null && order.getHospital() != null) {
+            order.setEncounterId(visitOf(request.getEncounterId(), order.getPatient().getId(),
+                order.getHospital().getId()));
+        }
 
+        // QA D970 (sibling): the order being edited is not a duplicate of itself.
         List<ImagingOrder> duplicateMatches = loadDuplicateMatches(
             order.getPatient() != null ? order.getPatient().getId() : null,
             order.getModality(),
             order.getBodyRegion(),
             request.getDuplicateLookbackDays()
-        );
+        ).stream().filter(match -> order.getId() == null || !order.getId().equals(match.getId())).toList();
         if (!duplicateMatches.isEmpty()) {
             order.setDuplicateOfRecentOrder(true);
             order.setDuplicateReferenceOrderId(duplicateMatches.get(0).getId());
@@ -148,6 +202,16 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
     @Override
     public ImagingOrderResponseDTO updateOrderStatus(UUID orderId, ImagingOrderStatusUpdateRequestDTO request) {
         ImagingOrder order = getOrderInScope(orderId);
+        // QA D930 class: a cancel ends the order for the patient; it is the
+        // ordering provider's or the imaging department's decision.
+        // QA D1066 (round 18): a cancelled order is closed - not reopened, not
+        // re-stamped. Undoing a cancellation is a new order, as in real hospitals.
+        com.example.hms.service.support.CancelledOrders.requireNotCancelled(order.getStatus(),
+            IMAGING_ORDER_CANCELLED_LOCKED);
+        boolean cancelling = request.getStatus() == ImagingOrderStatus.CANCELLED;
+        if (cancelling) {
+            requireCancelAuthor(order);
+        }
 
         requireNotInThePast(request.getScheduledDate(), order.getScheduledDate());
         order.setStatus(request.getStatus());
@@ -164,7 +228,7 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
         order.setStatusUpdatedAt(LocalDateTime.now());
         order.setStatusUpdatedBy(actorId);
 
-        if (request.getStatus() == ImagingOrderStatus.CANCELLED) {
+        if (cancelling) {
             order.setCancellationReason(request.getCancellationReason());
             order.setCancelledAt(LocalDateTime.now());
             order.setCancelledByUserId(actorId);
@@ -193,6 +257,53 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
             throw new com.example.hms.exception.ClientSafeAccessDeniedException(
                 com.example.hms.utility.MessageUtil.resolveOrRaw("imaging.order.notOrderingProvider"));
         }
+    }
+
+    /**
+     * QA D930 class: who may cancel an imaging order. Its ordering provider, a
+     * radiologist of the order's hospital (the department declines or calls
+     * off an exam), or a verified super-admin in global view. An order with no
+     * recorded provider (written before D302) keeps the old rule, as on edit
+     * ({@link #requireEditableBy}). Any other doctor in scope gets 403. Nobody
+     * reopens a cancelled order (QA D1066: a new order is placed instead).
+     */
+    private void requireCancelAuthor(ImagingOrder order) {
+        UUID orderingProvider = order.getOrderingProviderUserId();
+        if (orderingProvider == null || com.example.hms.security.CallerIdentity.isGlobalSuperAdmin()) {
+            return;
+        }
+        UUID caller = com.example.hms.security.CallerIdentity.currentUserId();
+        if (orderingProvider.equals(caller)) {
+            return;
+        }
+        UUID hospitalId = order.getHospital() != null ? order.getHospital().getId() : null;
+        if (caller != null && hospitalId != null && roleValidator.hasRole(caller, hospitalId, "RADIOLOGIST")) {
+            return;
+        }
+        throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+            com.example.hms.utility.MessageUtil.resolveOrRaw("imaging.order.cancelForbidden"));
+    }
+
+    /**
+     * QA D930 class: who may sign an unsigned order. Its ordering provider; a
+     * signing physician of the order's hospital when the provider is a nurse
+     * or midwife who drafts for a physician's signature (as on prescriptions,
+     * QA D934); a verified super-admin in global view; anyone in scope when no
+     * provider is recorded (written before D302).
+     */
+    private void requireSignatureAuthor(ImagingOrder order, UUID signerUserId) {
+        UUID orderingProvider = order.getOrderingProviderUserId();
+        if (orderingProvider == null || orderingProvider.equals(signerUserId)
+                || com.example.hms.security.CallerIdentity.isGlobalSuperAdmin()) {
+            return;
+        }
+        UUID hospitalId = order.getHospital() != null ? order.getHospital().getId() : null;
+        if (hospitalId != null && roleValidator.draftsForPhysicianSignature(orderingProvider, hospitalId)
+                && roleValidator.isSigningPhysician(signerUserId, hospitalId)) {
+            return;
+        }
+        throw new com.example.hms.exception.ClientSafeAccessDeniedException(
+            com.example.hms.utility.MessageUtil.resolveOrRaw("imaging.order.notOrderingProvider"));
     }
 
     /**
@@ -226,6 +337,9 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
     public ImagingOrderResponseDTO captureProviderSignature(UUID orderId, ImagingOrderSignatureRequestDTO request,
                                                             UUID signerUserId) {
         ImagingOrder order = getOrderInScope(orderId);
+        // QA D1066 class: a cancelled order is not signed into force.
+        com.example.hms.service.support.CancelledOrders.requireNotCancelled(order.getStatus(),
+            IMAGING_ORDER_CANCELLED_LOCKED);
         // QA D302: the signer and the signing time come from the session. A
         // body naming someone else is refused; a body-supplied time is ignored.
         com.example.hms.model.User signer = signerUserId == null ? null
@@ -247,6 +361,11 @@ public class ImagingOrderServiceImpl implements ImagingOrderService {
             throw new com.example.hms.exception.ClientSafeAccessDeniedException(
                 com.example.hms.utility.MessageUtil.resolveOrRaw("imaging.signature.alreadySigned"));
         }
+        // QA D930 class: signing an unsigned order made the signer its ordering
+        // provider, so any doctor in scope could take a colleague's draft. The
+        // ordering provider signs; a nurse's or midwife's draft is signed by a
+        // physician of the order's hospital (the prescription rule, QA D934).
+        requireSignatureAuthor(order, signer.getId());
         order.setOrderingProviderName(displayName(signer));
         order.setOrderingProviderNpi(request.getProviderNpi());
         order.setOrderingProviderUserId(signer.getId());

@@ -144,6 +144,13 @@ public interface LabOrderRepository extends JpaRepository<LabOrder, UUID>, LabOr
     /** True when the encounter has at least one lab order whose status is NOT in the given terminal set. */
     boolean existsByEncounter_IdAndStatusNotIn(UUID encounterId, java.util.Collection<LabOrderStatus> terminalStatuses);
 
+    /** QA D972 hand-off: the ids of a visit's lab orders, for the checkout event billing consumes. */
+    @org.springframework.data.jpa.repository.Query(
+        "select o.id from LabOrder o where o.encounter.id = :encounterId and o.status not in :excluded")
+    java.util.List<UUID> findIdsByEncounterIdAndStatusNotIn(
+        @org.springframework.data.repository.query.Param("encounterId") UUID encounterId,
+        @org.springframework.data.repository.query.Param("excluded") java.util.Collection<LabOrderStatus> excluded);
+
     // Count lab orders placed by a specific ordering staff with a given status
     long countByOrderingStaff_IdAndStatus(UUID staffId, LabOrderStatus status);
 

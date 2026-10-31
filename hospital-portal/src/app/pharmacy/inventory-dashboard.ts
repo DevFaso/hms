@@ -2,8 +2,10 @@ import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@ang
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { actionRoles } from '../core/action-permissions';
 import {
   PharmacyService,
   PharmacyResponse,
@@ -19,7 +21,14 @@ import { serverDateOrInstant } from '../shared/date-utils';
 @Component({
   selector: 'app-inventory-dashboard',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, CfaPipe],
+  imports: [
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    CfaPipe,
+    ModalDialogDirective,
+  ],
   templateUrl: './inventory-dashboard.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './inventory-dashboard.scss',
@@ -31,6 +40,15 @@ export class InventoryDashboardComponent implements OnInit {
   private readonly translate = inject(TranslateService);
 
   activeTab = signal<'stock' | 'alerts' | 'expiry'>('stock');
+
+  /**
+   * QA D965: "Trigger alerts" only for the roles the endpoint admits (store
+   * manager, hospital admin, super-admin); the pharmacist and the inventory
+   * clerk were offered it and got a 403 and the 403 page.
+   */
+  canTriggerAlerts(): boolean {
+    return this.roleContext.hasAnyActiveRoleExactly(actionRoles('inventoryReorderTrigger'));
+  }
 
   // Pharmacy selection
   pharmacies = signal<PharmacyResponse[]>([]);

@@ -57,7 +57,8 @@ public class MedicationCatalogController {
     }
 
     @GetMapping
-    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_STORE_MANAGER','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_SUPER_ADMIN')")
+    // QA D965: the inventory page's "Add item" lists the catalogue for the inventory clerk too.
+    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_STORE_MANAGER','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_INVENTORY_CLERK','ROLE_SUPER_ADMIN')")
     @Operation(summary = "List active medications",
         description = "Returns active medications for the resolved hospital scope. "
             + "Super-admins in global view (no JWT scope, no hospitalId param) "
@@ -66,24 +67,39 @@ public class MedicationCatalogController {
             @RequestParam(required = false) UUID hospitalId,
             Pageable pageable,
             Authentication auth) {
-        // Same super-admin global-view pattern as PharmacyRegistryController.list
-        // and InBasketController (PR #292).
-        UUID resolved = authUtils.resolveHospitalScope(auth, hospitalId, false);
-        if (resolved == null && !authUtils.hasAuthority(auth, "ROLE_SUPER_ADMIN")) {
-            throw new BusinessException("Hospital context is required. "
-                + "Pass hospitalId or ensure your token has a hospital scope.");
-        }
-        return ResponseEntity.ok(catalogService.listByHospital(resolved, pageable));
+        return ResponseEntity.ok(catalogService.listByHospital(resolveCatalogScope(auth, hospitalId), pageable));
     }
 
     @GetMapping("/search")
-    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_STORE_MANAGER','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')")
+    // QA D965: the catalogue page's search box, offered to the super-admin the list admits.
+    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_STORE_MANAGER','ROLE_HOSPITAL_ADMIN','ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_SUPER_ADMIN')")
     @Operation(summary = "Search medications by name, ATC code, or brand")
     public ResponseEntity<Page<MedicationCatalogItemResponseDTO>> search(
-            @RequestParam UUID hospitalId,
+            @RequestParam(required = false) UUID hospitalId,
             @RequestParam String q,
-            Pageable pageable) {
-        return ResponseEntity.ok(catalogService.search(hospitalId, q, pageable));
+            Pageable pageable,
+            Authentication auth) {
+        // QA D922: the hospital is the caller's acting scope, as on list. The
+        // portal never sent hospitalId, so every search answered 400 (the
+        // catalogue page's search box and the prescribing form's picker), and
+        // a caller-supplied id was searched whatever tenant it named.
+        return ResponseEntity.ok(catalogService.search(resolveCatalogScope(auth, hospitalId), q, pageable));
+    }
+
+    /**
+     * The hospital a catalogue read is scoped to. Same super-admin global-view
+     * pattern as PharmacyRegistryController.list and InBasketController (PR
+     * #292): {@code null} only for a verified super-admin with no hospital
+     * pinned (the whole platform catalogue); everyone else is refused without
+     * a scope. One rule for list, search and category (review of #975: the
+     * search refused the super-admin's global view the list served).
+     */
+    private UUID resolveCatalogScope(Authentication auth, UUID requestedHospitalId) {
+        UUID resolved = authUtils.resolveHospitalScope(auth, requestedHospitalId, false);
+        if (resolved == null && !authUtils.hasAuthority(auth, "ROLE_SUPER_ADMIN")) {
+            throw new BusinessException("pharmacy.hospitalContext.required");
+        }
+        return resolved;
     }
 
     @GetMapping("/category/{category}")
@@ -91,9 +107,10 @@ public class MedicationCatalogController {
     @Operation(summary = "List medications by category")
     public ResponseEntity<Page<MedicationCatalogItemResponseDTO>> listByCategory(
             @PathVariable String category,
-            @RequestParam UUID hospitalId,
-            Pageable pageable) {
-        return ResponseEntity.ok(catalogService.listByCategory(hospitalId, category, pageable));
+            @RequestParam(required = false) UUID hospitalId,
+            Pageable pageable,
+            Authentication auth) {
+        return ResponseEntity.ok(catalogService.listByCategory(resolveCatalogScope(auth, hospitalId), category, pageable));
     }
 
     @PutMapping("/{id}")
@@ -104,6 +121,22 @@ public class MedicationCatalogController {
             @PathVariable UUID id,
             @Valid @RequestBody MedicationCatalogItemRequestDTO dto) {
         return ResponseEntity.ok(catalogService.update(id, dto));
+    }
+
+    /**
+     * Round 18 (QA D935): the paediatric dose limits are the pharmacy's to set
+     * and approve, as a real formulary is (the round-17 QA found the
+     * pharmacist could not edit them at all). Scoped to the caller's acting
+     * hospital; the service audits MEDICATION_DOSE_LIMITS_UPDATED.
+     */
+    @PutMapping("/{id}/pediatric-dosing")
+    @WriteAudited(skip = true, reason = "service emits MEDICATION_DOSE_LIMITS_UPDATED")
+    @PreAuthorize("hasAnyAuthority('ROLE_PHARMACIST','ROLE_HOSPITAL_ADMIN')")
+    @Operation(summary = "Set or approve a medication's paediatric dose limits")
+    public ResponseEntity<MedicationCatalogItemResponseDTO> updatePediatricDosing(
+            @PathVariable UUID id,
+            @Valid @RequestBody com.example.hms.payload.dto.medication.PediatricDosingRequestDTO dto) {
+        return ResponseEntity.ok(catalogService.updatePediatricDosing(id, dto));
     }
 
     @DeleteMapping("/{id}")

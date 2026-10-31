@@ -46,4 +46,13 @@ public class LinkPatientInsuranceRequestDTO {
     @Schema(description = "Policy number of the insurance (for natural key upsert)", example = "POL1234567")
     private String policyNumber;
 
+    /**
+     * QA D925: the insurer's display name. Optional — a new policy without one
+     * is named after its payer code, because {@code provider_name} is required
+     * and the link used to answer 500 for every new policy.
+     */
+    @jakarta.validation.constraints.Size(max = 150)
+    @Schema(description = "Insurer display name; defaults to the payer code for a new policy", example = "CNAMU")
+    private String providerName;
+
 }

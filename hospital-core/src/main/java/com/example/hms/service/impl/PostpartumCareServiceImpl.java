@@ -774,7 +774,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         // QA D605: the team is told even when the documenter is unknown.
         boolean notifyDocumenter = documentedBy != null && documentedBy.getUsername() != null;
         String fullName = observation.getPatient() != null
-            ? (observation.getPatient().getFirstName() + " " + observation.getPatient().getLastName()).trim()
+            ? java.util.Objects.toString(observation.getPatient().getFullName(), "")
             : "";
         observation.getAlerts().stream()
             .filter(alert -> alert.getSeverity() == PostpartumAlertSeverity.URGENT)
@@ -792,7 +792,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
             notificationService.createNotification("postpartum.alert.notification",
                 new Object[]{typeKey, patientArg,
                     com.example.hms.service.maternity.ObstetricAlertEscalationWorker.alertMessageArg(
-                        messageKey, null, alert.getMessage())}, documentedBy.getUsername(), null);
+                        messageKey, null, alert.getMessage())}, documentedBy.getUsername(), "MATERNITY_ALERT");
         } catch (RuntimeException ex) {
             log.warn("Failed to create postpartum alert notification: {}", ex.getMessage());
         }

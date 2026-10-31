@@ -412,12 +412,8 @@
                 <span class="locked-name">{{
                   selectedStaff()!.hospitalName ?? ('ENCOUNTERS.HOSPITAL' | translate)
                 }}</span>
-                <span class="locked-sub"
-                  >{{ 'SCHEDULING.AUTO_MATCHED' | translate }} ·
-                  <span class="uuid-pill"
-                    >{{ selectedStaff()!.hospitalId | slice: 0 : 8 }}…</span
-                  ></span
-                >
+                <!-- QA D992 class: the hospital's name is above; its id is never shown. -->
+                <span class="locked-sub">{{ 'SCHEDULING.AUTO_MATCHED' | translate }}</span>
               </div>
             </div>
           } @else {

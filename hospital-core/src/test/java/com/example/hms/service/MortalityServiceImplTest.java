@@ -82,6 +82,7 @@ class MortalityServiceImplTest {
     @Mock private PatientChartAccess patientChartAccess;
     @Mock private RoleValidator roleValidator;
     @Mock private com.example.hms.service.BedAssignmentService bedAssignmentService;
+    @Mock private org.springframework.context.ApplicationEventPublisher eventPublisher;
     @Spy private Clock clock = Clock.systemDefaultZone();
     @Spy private MortalityMapper mapper = new MortalityMapper();
 
@@ -213,6 +214,9 @@ class MortalityServiceImplTest {
 
         assertThat(open.getStatus()).isEqualTo(EncounterStatus.COMPLETED);
         assertThat(result.getClosure().getEncountersClosed()).isEqualTo(1);
+        // QA D972 (round 18): the closed visit is stamped and handed to billing like a checkout.
+        assertThat(open.getCheckoutTimestamp()).isNotNull();
+        verify(eventPublisher).publishEvent(org.mockito.ArgumentMatchers.any(com.example.hms.event.EncounterCheckedOutEvent.class));
     }
 
     @Test

@@ -294,6 +294,8 @@ public class EncounterServiceImpl implements EncounterService {
      */
     private final PatientSubjectReadGuard subjectReadGuard;
     private final UserRepository userRepository;
+    /** QA D1060 / D1063: the follow-up placeholder takes the slot length and skips a slot held for an offer. */
+    private final com.example.hms.service.scheduling.AppointmentSlotPolicy slotPolicy;
     private final DischargeSummaryRepository dischargeSummaryRepository;
     private final NotificationService notificationService;
     private final EmailService emailService;
@@ -306,8 +308,22 @@ public class EncounterServiceImpl implements EncounterService {
     private final PatientTrackerEventPublisher trackerEventPublisher;
     private final com.example.hms.service.vitals.News2EscalationService news2EscalationService;
     private final com.example.hms.repository.scheduling.PatientRecallRepository patientRecallRepository;
+
+    /**
+     * QA D985 (branch C1): check-out closes the recall its visit answered.
+     * Setter-injected so the unit tests that build this service by
+     * constructor keep compiling; null there, and then nothing is closed.
+     */
+    private com.example.hms.service.scheduling.PatientRecallService recallService;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    void setRecallService(com.example.hms.service.scheduling.PatientRecallService recallService) {
+        this.recallService = recallService;
+    }
     /** QA D795: the stay's own department, which a transfer moves (BedAssignmentService, QA D237). */
     private final com.example.hms.repository.AdmissionRepository admissionRepository;
+    /** QA D972 hand-off: publishes {@link com.example.hms.event.EncounterCheckedOutEvent} at checkout. */
+    private final org.springframework.context.ApplicationEventPublisher eventPublisher;
 
         private void recordHistory(Encounter encounter, String changeType, String changedBy, String previousValuesJson) {
             EncounterHistory history = EncounterHistory.builder()
@@ -358,9 +374,9 @@ public class EncounterServiceImpl implements EncounterService {
         EncounterResolution ctx = resolveEncounterResolution(request, locale);
 
         LocalDateTime encounterDate = Optional.ofNullable(request.getEncounterDate()).orElse(LocalDateTime.now());
-        EncounterStatus status = Optional.ofNullable(request.getStatus()).orElse(EncounterStatus.ARRIVED);
-        // QA D761: a new encounter starts ARRIVED (a walk-in at the desk, who
-        // goes to triage next) or IN_PROGRESS (a clinician's own visit).
+        // QA D761: a new encounter is asked for as ARRIVED (a walk-in at the
+        // desk, who goes to triage next) or IN_PROGRESS (a clinician's own
+        // visit); with no status, defaultInitialStatus decides (QA D990).
         // Anything later is reached through its workflow step.
         if (request.getStatus() != null && !INITIAL_STATUSES.contains(request.getStatus())) {
             throw new BusinessException(messageSource.getMessage("encounter.status.initialInvalid",
@@ -378,12 +394,18 @@ public class EncounterServiceImpl implements EncounterService {
             ctx.appointment(),
             ctx.assignment());
 
-        applyEncounterDefaults(encounter, ctx.department(), encounterDate, status);
-        // QA D761: the entity defaults to IN_PROGRESS, so the defaults above
-        // never applied the requested status: the reception's ARRIVED walk-in
-        // was stored IN_PROGRESS and triage refused it. The request wins.
+        applyEncounterDefaults(encounter, ctx.department(), encounterDate, null);
+        // QA D761: the entity defaults to IN_PROGRESS, so applyEncounterDefaults
+        // never applies a status: the reception's ARRIVED walk-in was stored
+        // IN_PROGRESS and triage refused it. The request wins, else the default.
         if (request.getStatus() != null) {
             encounter.setStatus(request.getStatus());
+        } else {
+            encounter.setStatus(defaultInitialStatus(request.getEncounterType(), encounterDate));
+        }
+        // QA D990: an arrived patient waits from now, not from the visit day's midnight.
+        if (encounter.getStatus() == EncounterStatus.ARRIVED && encounter.getArrivalTimestamp() == null) {
+            encounter.setArrivalTimestamp(LocalDateTime.now(java.time.ZoneId.systemDefault()));
         }
         ensureEncounterCode(encounter);
 
@@ -430,6 +452,7 @@ public class EncounterServiceImpl implements EncounterService {
         EncounterStatus fallbackStatus = existing.getStatus() != null ? existing.getStatus() : EncounterStatus.ARRIVED;
         applyEncounterDefaults(merged, ctx.department(), fallbackDate, fallbackStatus);
         ensureEncounterCode(merged);
+        stampArrivalWhenMarkedArrived(merged, previousStatus);
 
         // QA D788: a status written here obeys the closing rules of the check-out.
         EncounterClosureRules.requireDirectTransition(previousStatus, merged.getStatus(),
@@ -477,6 +500,9 @@ public class EncounterServiceImpl implements EncounterService {
                     saved.getHospital() != null ? saved.getHospital().getId() : null,
                     ex);
             }
+            // QA D972: billing hears of the completed visit even if the summary
+            // or the notification above failed (they are best effort).
+            publishCheckedOutOnCompletion(saved);
         }
 
         recordHistory(saved, "UPDATED", resolveHistoryActor(request.getUpdatedBy(), ctx.staff()), previousValues);
@@ -1088,6 +1114,34 @@ public class EncounterServiceImpl implements EncounterService {
         if (exists) {
             throw new BusinessException(messageSource.getMessage("encounter.duplicate", null, locale));
         }
+    }
+
+    /**
+     * QA D990: with no status asked for, an emergency (urgences) visit dated
+     * today starts ARRIVED and goes through triage; it used to start
+     * IN_PROGRESS and never reached the triage queue. Every other visit keeps
+     * the IN_PROGRESS default (review of #971): a nurse- or midwife-led
+     * consultation must stay one she can check out herself, and a visit
+     * entered for another day is not an arrival now.
+     */
+    static EncounterStatus defaultInitialStatus(com.example.hms.enums.EncounterType type, LocalDateTime encounterDate) {
+        boolean today = encounterDate == null || encounterDate.toLocalDate().equals(java.time.LocalDate.now(java.time.ZoneId.systemDefault()));
+        if (today && type == com.example.hms.enums.EncounterType.EMERGENCY) {
+            return EncounterStatus.ARRIVED;
+        }
+        return EncounterStatus.IN_PROGRESS;
+    }
+
+    /** True when the signed-in user holds a physician role. */
+    private static boolean callerIsDoctor() {
+        org.springframework.security.core.Authentication auth =
+            org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null) {
+            return false;
+        }
+        return auth.getAuthorities().stream()
+            .map(org.springframework.security.core.GrantedAuthority::getAuthority)
+            .anyMatch(a -> "ROLE_DOCTOR".equals(a) || "ROLE_SURGEON".equals(a) || "ROLE_PHYSICIAN".equals(a));
     }
 
     private void applyEncounterDefaults(Encounter encounter,
@@ -1903,8 +1957,7 @@ public class EncounterServiceImpl implements EncounterService {
             .patientId(entity.getEncounter() != null && entity.getEncounter().getPatient() != null
                 ? entity.getEncounter().getPatient().getId() : null)
             .patientFullName(entity.getEncounter() != null && entity.getEncounter().getPatient() != null
-                ? joinName(entity.getEncounter().getPatient().getFirstName(),
-                entity.getEncounter().getPatient().getLastName())
+                ? entity.getEncounter().getPatient().getFullName()
                 : null)
             .patientPhoneNumber(entity.getEncounter() != null && entity.getEncounter().getPatient() != null
                 ? entity.getEncounter().getPatient().getPhoneNumberPrimary() : null)
@@ -2021,6 +2074,9 @@ public class EncounterServiceImpl implements EncounterService {
         if (request == null || request.getEsiScore() == null) {
             throw new BusinessException("triage.esi.required");
         }
+        // QA D1077: no fundal height for a man (sibling fix in branch 3's file, one call).
+        com.example.hms.service.support.PatientMeasureRules.requireFundalHeightApplicable(
+            encounter.getPatient(), request.getFundalHeightCm());
 
         // (a) Record vital signs as PatientVitalSign
         com.example.hms.model.PatientVitalSign vital = buildVitalSign(encounter, request, actorUsername);
@@ -2134,7 +2190,10 @@ public class EncounterServiceImpl implements EncounterService {
                 .heightCm(req.getHeightCm())
                 .onOxygen(req.getOnOxygen())
                 .consciousnessLevel(req.getConsciousnessLevel())
-                .notes(req.getPainScale() != null ? "Pain scale: " + req.getPainScale() : null)
+                // QA D989: stored chart text is written in the clinician's
+                // language, never an English label ("Pain scale: 8").
+                // QA D1031: the antenatal fundal height is charted beside it.
+                .notes(triageVitalNotes(req))
                 .build();
     }
 
@@ -2253,9 +2312,15 @@ public class EncounterServiceImpl implements EncounterService {
 
         StringBuilder noteBuilder = new StringBuilder();
 
-        appendSectionIfPresent(noteBuilder, "[Nursing Assessment]", request.getNursingAssessmentNotes());
-        appendSectionIfPresent(noteBuilder, "[Pain Assessment]", request.getPainAssessment());
-        appendSectionIfPresent(noteBuilder, "[Fall Risk]", request.getFallRiskDetail());
+        // QA D952: the section headers are written into the encounter notes,
+        // which the doctor reads, so they come from the bundle in the
+        // clinician's language rather than English literals.
+        appendSectionIfPresent(noteBuilder, storedText("encounter.intake.note.nursingAssessment"),
+                request.getNursingAssessmentNotes());
+        appendSectionIfPresent(noteBuilder, storedText("encounter.intake.note.painAssessment"),
+                request.getPainAssessment());
+        appendSectionIfPresent(noteBuilder, storedText("encounter.intake.note.fallRisk"),
+                request.getFallRiskDetail());
         appendMedicationReconciliation(noteBuilder, request.getMedications(), medicationCount);
 
         if (noteBuilder.isEmpty()) {
@@ -2282,7 +2347,7 @@ public class EncounterServiceImpl implements EncounterService {
         if (medications == null || medications.isEmpty()) {
             return;
         }
-        noteBuilder.append("[Medication Reconciliation] ").append(medicationCount).append(" medication(s) reported:\n");
+        noteBuilder.append(storedText("encounter.intake.note.medications", medicationCount)).append("\n");
         for (com.example.hms.payload.dto.NursingIntakeRequestDTO.MedicationReconciliationEntry med : medications) {
             appendMedicationLine(noteBuilder, med);
         }
@@ -2294,10 +2359,11 @@ public class EncounterServiceImpl implements EncounterService {
             StringBuilder noteBuilder,
             com.example.hms.payload.dto.NursingIntakeRequestDTO.MedicationReconciliationEntry med) {
 
-        noteBuilder.append("- ").append(med.getMedicationName() != null ? med.getMedicationName() : "Unknown");
+        noteBuilder.append("- ").append(med.getMedicationName() != null
+                ? med.getMedicationName() : storedText("encounter.intake.note.medicationUnknown"));
         if (med.getDosage() != null) noteBuilder.append(" ").append(med.getDosage());
         if (med.getFrequency() != null) noteBuilder.append(" ").append(med.getFrequency());
-        if (!med.isStillTaking()) noteBuilder.append(" (DISCONTINUED)");
+        if (!med.isStillTaking()) noteBuilder.append(" ").append(storedText("encounter.intake.note.medicationStopped"));
         if (med.getNotes() != null) noteBuilder.append(" — ").append(med.getNotes());
         noteBuilder.append("\n");
     }
@@ -2307,7 +2373,8 @@ public class EncounterServiceImpl implements EncounterService {
         String existingNotes = encounter.getNotes() != null ? encounter.getNotes() : "";
         String combined = existingNotes.isBlank()
                 ? noteBuilder.toString().trim()
-                : existingNotes + "\n\n--- Nursing Intake ---\n" + noteBuilder.toString().trim();
+                : existingNotes + "\n\n" + storedText("encounter.intake.note.separator") + "\n"
+                    + noteBuilder.toString().trim();
 
         if (combined.length() > 2048) {
             combined = combined.substring(0, 2048);
@@ -2369,6 +2436,11 @@ public class EncounterServiceImpl implements EncounterService {
                 && appointment.getStatus() != com.example.hms.enums.AppointmentStatus.CANCELLED) {
             appointment.setStatus(com.example.hms.enums.AppointmentStatus.COMPLETED);
             appointmentRepository.save(appointment);
+            // QA D985 (branch C1): the recall this visit answered is fulfilled,
+            // by the one rule the status action uses.
+            if (recallService != null) {
+                recallService.completeRecallsOf(appointment.getId());
+            }
         }
 
         // (c2) Feed the follow-up request into the recall worklist (P3 #22).
@@ -2396,7 +2468,37 @@ public class EncounterServiceImpl implements EncounterService {
                 avs.setPrescriptionSummary(medicationsAtDischarge(summary));
             }
         });
+        publishCheckedOut(encounter, now);
         return avs;
+    }
+
+    /** QA D990: a visit marked ARRIVED through PUT (a scheduled patient shows up) waits from now. */
+    private static void stampArrivalWhenMarkedArrived(Encounter merged, EncounterStatus previousStatus) {
+        if (merged.getStatus() == EncounterStatus.ARRIVED && previousStatus != EncounterStatus.ARRIVED
+                && merged.getArrivalTimestamp() == null) {
+            merged.setArrivalTimestamp(LocalDateTime.now(java.time.ZoneId.systemDefault()));
+        }
+    }
+
+    /** QA D972: a visit completed through PUT /encounters/{id} is handed to billing like a checkout. */
+    private void publishCheckedOutOnCompletion(Encounter encounter) {
+        publishCheckedOut(encounter, encounter.getCheckoutTimestamp() != null
+            ? encounter.getCheckoutTimestamp() : LocalDateTime.now(java.time.ZoneId.systemDefault()));
+    }
+
+    /**
+     * QA D972 hand-off (prepared in round 16): the clinic tells billing that a
+     * visit is complete through an event billing consumes after commit.
+     * Nothing here knows about invoices or about what is billable.
+     */
+    private void publishCheckedOut(Encounter encounter, LocalDateTime checkedOutAt) {
+        if (eventPublisher == null) {
+            return;
+        }
+        // QA D972 (round 18): billing reads every billable item of the visit
+        // itself, through its registry of billable order types; the clinic no
+        // longer picks the order types (imaging was left out of its lists).
+        eventPublisher.publishEvent(com.example.hms.event.EncounterCheckedOutEvent.of(encounter, checkedOutAt));
     }
 
     @Override
@@ -2442,6 +2544,10 @@ public class EncounterServiceImpl implements EncounterService {
                 && appointment.getStatus() != com.example.hms.enums.AppointmentStatus.CANCELLED) {
             appointment.setStatus(com.example.hms.enums.AppointmentStatus.CANCELLED);
             appointmentRepository.save(appointment);
+            // QA D985 (branch C1): the recall this visit answered is open again.
+            if (recallService != null) {
+                recallService.reopenRecallsOf(appointment.getId());
+            }
         }
 
         recordHistory(saved, "CLOSED_UNSEEN", actorUsername, previousValues);
@@ -2528,10 +2634,11 @@ public class EncounterServiceImpl implements EncounterService {
                     encounter.getId());
             return null;
         }
-        java.time.LocalTime start = freeFollowUpSlot(staff.getId(), date);
-        if (start == null) {
+        java.time.LocalTime[] slot = freeFollowUpSlot(staff.getId(), date);
+        if (slot == null) {
             return null;
         }
+        java.time.LocalTime start = slot[0];
         String reason = checkoutFollowUpReason(followUp);
         String notes = followUp.getNotes();
         Appointment saved = appointmentRepository.save(Appointment.builder()
@@ -2542,12 +2649,28 @@ public class EncounterServiceImpl implements EncounterService {
                 .department(department)
                 .appointmentDate(date)
                 .startTime(start)
-                .endTime(start.plusMinutes(FOLLOW_UP_SLOT_MINUTES))
+                .endTime(slot[1])
                 .status(com.example.hms.enums.AppointmentStatus.PENDING)
+                // QA D1073: the clinician who checked the patient out booked the follow-up.
+                .createdBy(followUpCreator())
                 .reason(reason.length() > 2048 ? reason.substring(0, 2048) : reason)
                 .notes(notes != null && notes.length() > 2048 ? notes.substring(0, 2048) : notes)
                 .build());
         return saved != null ? saved.getId() : null;
+    }
+
+    private boolean notHeld(UUID staffId, java.time.LocalDateTime start, java.time.LocalDateTime end) {
+        try {
+            slotPolicy.requireNoLiveHold(staffId, start, end);
+            return true;
+        } catch (BusinessException held) {
+            return false;
+        }
+    }
+
+    private User followUpCreator() {
+        UUID userId = roleValidator.getCurrentUserId();
+        return userId != null ? userRepository.findById(userId).orElse(null) : null;
     }
 
     private static final java.time.LocalTime FOLLOW_UP_PLACEHOLDER_START = java.time.LocalTime.of(8, 0);
@@ -2557,18 +2680,23 @@ public class EncounterServiceImpl implements EncounterService {
     /**
      * The first half-hour from 08:00 the clinician has nothing booked at, so
      * the placeholder never collides with uq_appt_staff_slot at flush (which
-     * would fail the whole checkout); null when the day is full.
+     * would fail the whole checkout), as {start, end}; null when the day is
+     * full. QA D1060: the end is the slot rules' (it was a flat 30 minutes);
+     * QA D1063: a slot held for a waitlist offer is skipped.
      */
-    private java.time.LocalTime freeFollowUpSlot(UUID staffId, java.time.LocalDate date) {
-        java.util.Set<java.time.LocalTime> taken = new java.util.HashSet<>();
-        if (staffId != null) {
-            appointmentRepository.findByStaff_IdAndAppointmentDate(staffId, date)
-                    .forEach(a -> taken.add(a.getStartTime()));
-        }
+    private java.time.LocalTime[] freeFollowUpSlot(UUID staffId, java.time.LocalDate date) {
+        // QA D937 class (branch C1): the same overlap rule as every booking
+        // path. A cancelled or missed booking frees its time, and a held one
+        // blocks any half-hour it overlaps, not only one starting at its minute.
+        java.util.List<Appointment> sameDay = staffId == null ? java.util.List.of()
+            : appointmentRepository.findByStaff_IdAndAppointmentDate(staffId, date);
         for (java.time.LocalTime t = FOLLOW_UP_PLACEHOLDER_START; !t.isAfter(FOLLOW_UP_PLACEHOLDER_LAST);
                 t = t.plusMinutes(FOLLOW_UP_SLOT_MINUTES)) {
-            if (!taken.contains(t)) {
-                return t;
+            java.time.LocalDateTime start = java.time.LocalDateTime.of(date, t);
+            java.time.LocalTime endTime = slotPolicy.endFor(staffId, date, t);
+            java.time.LocalDateTime end = java.time.LocalDateTime.of(date, endTime);
+            if (!AppointmentSlotRules.overlapsHeldSlot(sameDay, null, start, end) && notHeld(staffId, start, end)) {
+                return new java.time.LocalTime[] {t, endTime};
             }
         }
         return null;
@@ -2589,10 +2717,35 @@ public class EncounterServiceImpl implements EncounterService {
         return dueDate;
     }
 
-    private static String checkoutFollowUpReason(
+    private String checkoutFollowUpReason(
             com.example.hms.payload.dto.clinical.CheckOutRequestDTO.FollowUpAppointmentRequest followUp) {
         return followUp.getReason() != null && !followUp.getReason().isBlank()
-                ? followUp.getReason().trim() : "Follow-up after visit";
+                ? followUp.getReason().trim() : storedText("encounter.checkout.followUp.defaultReason");
+    }
+
+    /**
+     * Text the server writes into a stored clinical record (encounter notes,
+     * vitals notes, recall reasons). It is read by the hospital's clinicians,
+     * so it is rendered in the writing clinician's language from the bundle,
+     * never from an English literal (QA D952/D989 class).
+     * {@code StoredClinicalTextLiteralGuardTest} keeps literals out.
+     *
+     * <p>Here: the pain score and the fundal height of a triage, in the
+     * clinician's language (QA D989, D1031).
+     */
+    private String triageVitalNotes(com.example.hms.payload.dto.TriageSubmissionRequestDTO req) {
+        List<String> parts = new ArrayList<>();
+        if (req.getPainScale() != null) {
+            parts.add(storedText("triage.vitals.painScale", req.getPainScale()));
+        }
+        if (req.getFundalHeightCm() != null) {
+            parts.add(storedText("triage.vitals.fundalHeight", req.getFundalHeightCm()));
+        }
+        return parts.isEmpty() ? null : String.join(" · ", parts);
+    }
+
+    private String storedText(String key, Object... args) {
+        return messageSource.getMessage(key, args, org.springframework.context.i18n.LocaleContextHolder.getLocale());
     }
 
     /**
@@ -2601,7 +2754,7 @@ public class EncounterServiceImpl implements EncounterService {
      * discharge view and the patient portal read — carried no follow-up, so
      * the request looked dropped. It is now written there too, once.
      */
-    private static void addCheckoutFollowUp(
+    private void addCheckoutFollowUp(
             DischargeSummary summary,
             Encounter encounter,
             com.example.hms.payload.dto.clinical.CheckOutRequestDTO request) {
@@ -2628,6 +2781,34 @@ public class EncounterServiceImpl implements EncounterService {
             .build());
     }
 
+    /** Whether a staff record belongs to a physician at the visit's hospital (a covering doctor never takes another doctor's summary). */
+    private boolean isPhysicianAt(Staff staff, Encounter encounter) {
+        if (staff == null || staff.getUser() == null || encounter.getHospital() == null) {
+            return false;
+        }
+        UUID userId = staff.getUser().getId();
+        UUID hospitalId = encounter.getHospital().getId();
+        return roleValidator.isDoctor(userId, hospitalId) || roleValidator.isPhysician(userId, hospitalId)
+            || roleValidator.isSurgeon(userId, hospitalId);
+    }
+
+    /** The signed-in doctor's staff record at the visit's hospital, when the caller is a doctor who is not the clinician of record. */
+    private Staff closingDoctorAt(Encounter encounter) {
+        if (encounter.getHospital() == null || !callerIsDoctor()
+                || com.example.hms.security.CallerIdentity.isCaller(encounter.getStaff())) {
+            return null;
+        }
+        UUID caller = com.example.hms.security.CallerIdentity.currentUserId();
+        if (caller == null) {
+            return null;
+        }
+        // Review of #971: a physician AT this hospital; a doctor elsewhere who
+        // is a nurse here does not take the summary with her nurse record.
+        return staffRepository.findByUserIdAndHospitalId(caller, encounter.getHospital().getId())
+            .filter(s -> isPhysicianAt(s, encounter))
+            .orElse(null);
+    }
+
     private void upsertDischargeSummaryForCheckout(
         Encounter encounter,
         com.example.hms.payload.dto.clinical.CheckOutRequestDTO request,
@@ -2639,8 +2820,21 @@ public class EncounterServiceImpl implements EncounterService {
         summary.setEncounter(encounter);
         summary.setPatient(encounter.getPatient());
         summary.setHospital(encounter.getHospital());
-        summary.setDischargingProvider(encounter.getStaff());
-        summary.setAssignment(encounter.getAssignment());
+        // Review of #971 (D930): the summary belongs to the doctor who closes
+        // the visit when that is not its clinician of record (a nurse may
+        // have opened it); otherwise to the clinician of record, as before.
+        Staff closingDoctor = closingDoctorAt(encounter);
+        Staff current = summary.getDischargingProvider() != null ? summary.getDischargingProvider() : encounter.getStaff();
+        if (closingDoctor != null && !isPhysicianAt(current, encounter)) {
+            summary.setDischargingProvider(closingDoctor);
+            // Review of #971: the doctor's own assignment (her staff record's), never a nurse one she also holds.
+            // With none on her staff record, the visit's own (any active one she holds could be a nurse one).
+            summary.setAssignment(closingDoctor.getAssignment() != null ? closingDoctor.getAssignment()
+                : encounter.getAssignment());
+        } else if (summary.getDischargingProvider() == null) {
+            summary.setDischargingProvider(encounter.getStaff());
+            summary.setAssignment(encounter.getAssignment());
+        }
         summary.setDischargeDate(checkoutTime.toLocalDate());
         summary.setDischargeTime(checkoutTime);
         summary.setDisposition(DischargeDisposition.HOME);
@@ -2738,22 +2932,38 @@ public class EncounterServiceImpl implements EncounterService {
             return;
         }
 
-        String patientName = joinName(patient.getFirstName(), patient.getLastName());
-        String providerName = encounter.getStaff() != null ? encounter.getStaff().getName() : "your care team";
-        String subject = "Your After-Visit Summary is Ready";
-        String body = """
-            <h2>After-Visit Summary Available</h2>
-            <p>Dear %s,</p>
-            <p>Your visit summary for your recent encounter at <strong>%s</strong> is now available in the patient portal.</p>
-            <p><strong>Provider:</strong> %s</p>
-            <p>Please sign in to review your discharge instructions and follow-up details.</p>
-            """.formatted(patientName.isBlank() ? "Patient" : patientName, hospitalName, providerName);
+        // Read by the patient: their language, never English literals.
+        Locale patientLocale = patientLocaleResolver.resolve(patient, NotificationLocales.PATIENT_FALLBACK);
+        String subject = messageSource.getMessage("encounter.visitSummary.email.subject", null, patientLocale);
+        String body = visitSummaryEmailBody(encounter, patient, patientLocale);
 
         try {
             emailService.sendHtml(List.of(patientEmail), List.of(), List.of(), subject, body);
         } catch (Exception ignored) {
             // AVS persistence must not be rolled back due to email transport failures.
         }
+    }
+
+    /** The after-visit summary e-mail body, in the patient's language, every interpolated name escaped. */
+    private String visitSummaryEmailBody(Encounter encounter, Patient patient, Locale patientLocale) {
+        String patientName = java.util.Objects.toString(patient.getFullName(), "");
+        String providerName = encounter.getStaff() != null && encounter.getStaff().getName() != null
+            ? encounter.getStaff().getName()
+            : messageSource.getMessage("encounter.visitSummary.email.careTeamFallback", null, patientLocale);
+        String hospitalLabel = encounter.getHospital() != null && encounter.getHospital().getName() != null
+            ? encounter.getHospital().getName()
+            : messageSource.getMessage("encounter.visitSummary.hospitalFallback", null, patientLocale);
+        String greetingName = patientName.isBlank()
+            ? messageSource.getMessage("encounter.visitSummary.email.patientFallback", null, patientLocale)
+            : patientName;
+        return "<h2>" + messageSource.getMessage("encounter.visitSummary.email.title", null, patientLocale)
+            + "</h2><p>" + org.springframework.web.util.HtmlUtils.htmlEscape(messageSource.getMessage("encounter.visitSummary.email.greeting",
+                new Object[]{greetingName}, patientLocale))
+            + "</p><p>" + messageSource.getMessage("encounter.visitSummary.email.body",
+                new Object[]{org.springframework.web.util.HtmlUtils.htmlEscape(hospitalLabel)}, patientLocale)
+            + "</p><p><strong>" + messageSource.getMessage("encounter.visitSummary.email.provider", null, patientLocale)
+            + "</strong> " + org.springframework.web.util.HtmlUtils.htmlEscape(providerName) + "</p><p>"
+            + messageSource.getMessage("encounter.visitSummary.email.closing", null, patientLocale) + "</p>";
     }
 
     private static boolean isBlankText(String value) {
@@ -2814,7 +3024,9 @@ public class EncounterServiceImpl implements EncounterService {
             .filter(m -> !Boolean.FALSE.equals(m.getContinueAtDischarge()))
             .filter(m -> m.getReconciliationAction() != MedicationReconciliationAction.DISCONTINUED)
             .filter(m -> !isBlankText(m.getMedicationName()))
-            .map(m -> java.util.stream.Stream.of(m.getMedicationName(), m.getDosage(), m.getRoute(),
+            // QA D1025 class: the route in the reader's language.
+            .map(m -> java.util.stream.Stream.of(m.getMedicationName(), m.getDosage(),
+                    com.example.hms.service.emar.MedicationRoutes.label(m.getRoute()),
                     m.getFrequency(), m.getPatientInstructions())
                 .filter(part -> !isBlankText(part))
                 .map(String::trim)
@@ -2986,7 +3198,8 @@ public class EncounterServiceImpl implements EncounterService {
     @Override
     @Transactional
     public EncounterResponseDTO startEncounter(UUID encounterId, String actorUsername,
-                                                boolean isSuperAdmin, UUID callerHospitalId) {
+                                                boolean isSuperAdmin, UUID callerHospitalId,
+                                                boolean mustBeAssignedClinician) {
         Encounter encounter = requireEncounterInScope(encounterId, isSuperAdmin, callerHospitalId);
 
         if (!isSuperAdmin) {
@@ -2997,7 +3210,14 @@ public class EncounterServiceImpl implements EncounterService {
             if (user != null && encounterStaff != null
                     && encounterStaff.getUser() != null
                     && !encounterStaff.getUser().getId().equals(user.getId())) {
-                throw new BusinessException("encounter.notAssignedPhysician");
+                throw new BusinessException("encounter.start.notAssignedClinician");
+            }
+            // QA D1015: a midwife-led visit (antenatal care booked with the
+            // midwife) is started by that midwife; an unassigned visit stays
+            // with the physicians.
+            if (mustBeAssignedClinician && (user == null || encounterStaff == null
+                    || encounterStaff.getUser() == null)) {
+                throw new BusinessException("encounter.start.notAssignedClinician");
             }
         }
 

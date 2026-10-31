@@ -92,8 +92,18 @@
                   {{ 'APPOINTMENTS.COMPLETE' | translate }}
                 </button>
               }
+            }
+            <!--
+              QA D946: "Absent" is for a patient who never came: a SCHEDULED or
+              CONFIRMED appointment whose time has passed. The desk no longer
+              records a confirmation the patient never gave to reach it, and a
+              patient who arrived (CHECKED_IN, IN_PROGRESS) leaves through the
+              "left without being seen" closure instead.
+            -->
+            @if (appt.status === 'SCHEDULED' || appt.status === 'CONFIRMED') {
               <button
                 class="btn-xs btn-noshow"
+                data-testid="mark-no-show"
                 (click)="markAsNoShow()"
                 [disabled]="saving() || !hasAppointmentStarted"
                 [title]="
@@ -118,7 +128,9 @@
         <div class="detail-fields">
           <div class="field-row">
             <span class="field-label">{{ 'APPOINTMENTS.DATE' | translate }}</span>
-            <span class="field-value">{{ appt.appointmentDate }}</span>
+            <span class="field-value">{{
+              appt.appointmentDate | serverTime | date: 'mediumDate'
+            }}</span>
           </div>
           <div class="field-row">
             <span class="field-label">{{ 'APPOINTMENTS.TIME' | translate }}</span>
@@ -227,15 +239,23 @@
     tabindex="-1"
   >
     <dialog
+      aria-modal="true"
       class="modal"
       [open]="showReschedule()"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="closeReschedule()"
+      (keydown.escape)="$event.stopPropagation()"
+      appDialogFocus
+      (dialogDismiss)="closeReschedule()"
       tabindex="-1"
     >
       <div class="modal-header">
         <h2>{{ 'APPOINTMENTS.RESCHEDULE_APPOINTMENT' | translate }}</h2>
-        <button class="modal-close" (click)="closeReschedule()">
+        <button
+          type="button"
+          class="modal-close"
+          (click)="closeReschedule()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
@@ -251,27 +271,56 @@
               required
             />
           </div>
-          <div class="form-row-two">
-            <div class="field">
-              <label for="reschedStart">{{ 'APPOINTMENTS.START_TIME' | translate }} *</label>
-              <input
-                id="reschedStart"
-                type="time"
-                [(ngModel)]="rescheduleStart"
-                name="reschedStart"
-                required
-              />
-            </div>
-            <div class="field">
-              <label for="reschedEnd">{{ 'APPOINTMENTS.END_TIME' | translate }} *</label>
-              <input
-                id="reschedEnd"
-                type="time"
-                [(ngModel)]="rescheduleEnd"
-                name="reschedEnd"
-                required
-              />
-            </div>
+          <div class="field">
+            <label for="reschedStart">{{ 'APPOINTMENTS.START_TIME' | translate }} *</label>
+            <input
+              id="reschedStart"
+              type="time"
+              [(ngModel)]="rescheduleStart"
+              name="reschedStart"
+              required
+            />
+            <!-- QA D1060: the clinician's slot rules set how long the visit lasts. -->
+            <small class="field-hint" data-testid="resched-duration-note">{{
+              'APPOINTMENTS.DURATION_SET_BY_SLOTS' | translate
+            }}</small>
+          </div>
+          <!-- QA D1018 / D923: the clinician, the department and the reason
+               can change with the time. -->
+          <div class="field">
+            <label for="reschedStaff">{{ 'APPOINTMENTS.DOCTOR_STAFF' | translate }}</label>
+            <select
+              id="reschedStaff"
+              name="reschedStaff"
+              [ngModel]="rescheduleStaffId"
+              (ngModelChange)="onRescheduleStaffChange($event)"
+            >
+              @if (appointment(); as a) {
+                @if (!rescheduleStaffOptions().length || !hasRescheduleStaff(a.staffId)) {
+                  <option [value]="a.staffId">{{ a.staffName }}</option>
+                }
+              }
+              @for (s of rescheduleStaffOptions(); track s.id) {
+                <option [value]="s.id">{{ s.name }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="reschedDept">{{ 'APPOINTMENTS.DEPARTMENT' | translate }}</label>
+            <select id="reschedDept" name="reschedDept" [(ngModel)]="rescheduleDepartmentId">
+              @for (d of rescheduleDepartments(); track d.id) {
+                <option [value]="d.id">{{ d.name }}</option>
+              }
+            </select>
+          </div>
+          <div class="field">
+            <label for="reschedReason">{{ 'APPOINTMENTS.REASON' | translate }}</label>
+            <input
+              id="reschedReason"
+              name="reschedReason"
+              maxlength="2048"
+              [(ngModel)]="rescheduleReason"
+            />
           </div>
           <div class="field">
             <label for="reschedNotes">{{ 'APPOINTMENTS.NOTES_OPTIONAL' | translate }}</label>
@@ -310,15 +359,23 @@
     tabindex="-1"
   >
     <dialog
+      aria-modal="true"
       class="modal modal-confirm"
       [open]="showCancelConfirm()"
       (click)="$event.stopPropagation()"
-      (keydown.escape)="closeCancelConfirm()"
+      (keydown.escape)="$event.stopPropagation()"
+      appDialogFocus
+      (dialogDismiss)="closeCancelConfirm()"
       tabindex="-1"
     >
       <div class="modal-header">
         <h2>{{ 'APPOINTMENTS.CANCEL_APPOINTMENT' | translate }}</h2>
-        <button class="modal-close" (click)="closeCancelConfirm()">
+        <button
+          type="button"
+          class="modal-close"
+          (click)="closeCancelConfirm()"
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>

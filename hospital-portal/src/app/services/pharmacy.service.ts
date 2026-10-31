@@ -20,6 +20,32 @@ export interface MedicationCatalogItemRequest {
   description?: string;
 }
 
+/** Round 18 (QA D935): one weight band; min inclusive, max exclusive (null: no upper bound). */
+export interface PediatricWeightBand {
+  minWeightKg: number | null;
+  maxWeightKg: number | null;
+  dosePerAdministration: number | null;
+  doseUnit: string;
+  maxDosesPerDay: number | null;
+}
+
+export type PediatricDoseLimitStatus = 'DEFAULT_PENDING_APPROVAL' | 'APPROVED';
+
+/**
+ * Round 18 (QA D935): a catalogue item's paediatric dose limits, the
+ * pharmacy's to set and approve (PUT /medication-catalog/{id}/pediatric-dosing).
+ */
+export interface PediatricDosingRequest {
+  pediatricMaxDoseMgPerKg: number | null;
+  pediatricMaxDailyMgPerKg: number | null;
+  pediatricMaxSingleDoseMg: number | null;
+  pediatricMaxDailyMg: number | null;
+  pediatricManualReviewUnderMonths: number | null;
+  pediatricWeightBands: PediatricWeightBand[];
+  pediatricDoseSource: string | null;
+  pediatricDoseStatus: PediatricDoseLimitStatus;
+}
+
 export interface MedicationCatalogItemResponse {
   id: string;
   nameFr: string;
@@ -34,6 +60,17 @@ export interface MedicationCatalogItemResponse {
   category?: string;
   essentialList: boolean;
   controlled: boolean;
+  /** QA D935: mg per kg per dose, or null when the catalogue holds no ceiling. */
+  pediatricMaxDoseMgPerKg?: number | null;
+  /** Round 18 (QA D935): the rest of the paediatric limits, their source and approval. */
+  pediatricMaxDailyMgPerKg?: number | null;
+  pediatricMaxSingleDoseMg?: number | null;
+  pediatricMaxDailyMg?: number | null;
+  pediatricManualReviewUnderMonths?: number | null;
+  pediatricWeightBands?: PediatricWeightBand[];
+  pediatricDoseSource?: string | null;
+  pediatricDoseStatus?: PediatricDoseLimitStatus | null;
+  pediatricDoseReviewedAt?: string | null;
   active: boolean;
   description?: string;
   hospitalId?: string;
@@ -180,6 +217,69 @@ export interface StockTransactionRequest {
   /** ISO date (YYYY-MM-DD). */
   expiryDate?: string;
   unitCost?: number;
+  /**
+   * QA D964: why the chosen lot is taken although a shorter-dated usable lot
+   * of the same item could serve this movement. Required by the server only
+   * then; recorded with the movement.
+   */
+  fefoOverrideReason?: string;
+}
+
+/** QA D967: one movement of the controlled-drug register, with the drug's balance after it. */
+export interface ControlledRegisterEntry {
+  transactionId: string;
+  occurredAt?: string;
+  movementType: string;
+  /** Signed: in positive, out negative. */
+  quantity: number;
+  lotNumber?: string;
+  balanceAfter: number;
+  patientName?: string;
+  prescriberName?: string;
+  recordedBy?: string;
+  witnessedBy?: string;
+  /** Already in the reader's language. */
+  reason?: string;
+  /** QA D1084: a return booked against a fill: its lot, and the minute it was given (server time). */
+  reasonFillLot?: string | null;
+  reasonFillAt?: string | null;
+}
+
+/** QA D967: one controlled drug's page of the register. */
+export interface ControlledRegisterDrug {
+  inventoryItemId: string;
+  medicationName?: string;
+  unit?: string;
+  openingBalance: number;
+  closingBalance: number;
+  quantityOnHand?: number;
+  entries: ControlledRegisterEntry[];
+}
+
+/** QA D967: the controlled-drug (stupéfiants) register of a pharmacy over a period. */
+export interface ControlledRegister {
+  pharmacyId: string;
+  pharmacyName?: string;
+  from: string;
+  to: string;
+  truncated: boolean;
+  drugs: ControlledRegisterDrug[];
+}
+
+/**
+ * QA D932: a fill a return can be booked against (completed or partial, of
+ * the chosen item and lot, with stock still out).
+ */
+export interface ReturnableDispense {
+  dispenseId: string;
+  prescriptionId?: string;
+  patientName?: string;
+  medicationName?: string;
+  dispensedAt?: string;
+  quantityDispensed: number;
+  returnableQuantity: number;
+  unit?: string;
+  lotNumber?: string;
 }
 
 export interface StockTransactionResponse {
@@ -239,6 +339,12 @@ export interface DispenseRequest {
   substitution?: boolean;
   substitutionReason?: string;
   notes?: string;
+  /**
+   * QA D964: why the chosen lot is taken although a shorter-dated usable lot
+   * of the same item could serve this movement. Required by the server only
+   * then; recorded with the movement.
+   */
+  fefoOverrideReason?: string;
   /**
    * Roadmap row 4 / T-68 — optional client-supplied idempotency key the
    * offline-dispense queue mints when the user clicks Dispense. Allows the
@@ -398,12 +504,19 @@ export interface WorkQueuePrescription {
   dosage?: string;
   frequency?: string;
   quantity?: number;
+  /**
+   * QA D1001: what may still be dispensed on this order (the server's own
+   * ceiling: every fill owed minus the fills not cancelled). Absent when the
+   * order carries no quantity.
+   */
+  remainingQuantity?: number;
   quantityUnit?: string;
   status: string;
   createdAt?: string;
   patient?: {
     id: string;
     firstName?: string;
+    middleName?: string;
     lastName?: string;
   };
   staff?: {
@@ -482,10 +595,14 @@ export interface StockCheckResult {
   /** Null when `quantityOnHand` is an aggregate across all hospital dispensaries. */
   pharmacyId: string | null;
   quantityOnHand: number;
-  /** QA D913: the order's quantity; absent from a server that predates it. */
+  /** QA D913: what is still owed on the order; absent from a server that predates it. */
   quantityRequired?: number | null;
   sufficient: boolean;
   partnerPharmacies: PartnerOption[];
+  /** QA D966: the order's status (PRINTED_FOR_PATIENT once printed). */
+  prescriptionStatus?: string;
+  /** QA D966: whether a routing action can still be taken; the buttons follow it. */
+  routable?: boolean;
 }
 
 export interface PartnerOption {
@@ -555,6 +672,8 @@ export interface PharmacyPaymentRequest {
 
 export interface PharmacyPaymentResponse {
   id: string;
+  /** QA D1032: the readable receipt number (CODE-PH-YYYY-000001) the server assigns. */
+  receiptNumber?: string | null;
   dispenseId: string;
   patientId: string;
   hospitalId: string;
@@ -592,6 +711,8 @@ export interface PharmacyClaimResponse {
   id: string;
   dispenseId: string;
   patientId: string;
+  /** QA D992 class: shown instead of a slice of the patient id. */
+  patientName?: string | null;
   hospitalId: string;
   coverageReference?: string;
   claimStatus: PharmacyClaimStatus;
@@ -645,6 +766,17 @@ export class PharmacyService {
 
   deleteMedication(id: string): Observable<void> {
     return this.http.delete<void>(`/medication-catalog/${id}`);
+  }
+
+  /** Round 18 (QA D935): the pharmacy sets or approves an item's paediatric dose limits. */
+  updatePediatricDosing(
+    id: string,
+    req: PediatricDosingRequest,
+  ): Observable<MedicationCatalogItemResponse> {
+    return this.http.put<MedicationCatalogItemResponse>(
+      `/medication-catalog/${id}/pediatric-dosing`,
+      req,
+    );
   }
 
   // ── Pharmacy Registry ──
@@ -805,6 +937,56 @@ export class PharmacyService {
   listWitnessCandidates(): Observable<ApiResponse<StockWitnessCandidate[]>> {
     return this.http.get<ApiResponse<StockWitnessCandidate[]>>(
       '/pharmacy/stock-transactions/witness-candidates',
+    );
+  }
+
+  /** QA D967: the controlled-drug register (dates are ISO YYYY-MM-DD). */
+  getControlledRegister(
+    pharmacyId: string,
+    from: string,
+    to: string,
+    inventoryItemId?: string,
+  ): Observable<ApiResponse<ControlledRegister>> {
+    return this.http.get<ApiResponse<ControlledRegister>>('/pharmacy/controlled-register', {
+      params: this.registerParams(pharmacyId, from, to, inventoryItemId),
+    });
+  }
+
+  /** QA D967: the register as CSV or PDF, in the reader's language. */
+  exportControlledRegister(
+    format: 'csv' | 'pdf',
+    pharmacyId: string,
+    from: string,
+    to: string,
+    inventoryItemId?: string,
+  ): Observable<Blob> {
+    return this.http.get(`/pharmacy/controlled-register/export.${format}`, {
+      params: this.registerParams(pharmacyId, from, to, inventoryItemId),
+      responseType: 'blob',
+    });
+  }
+
+  private registerParams(
+    pharmacyId: string,
+    from: string,
+    to: string,
+    inventoryItemId?: string,
+  ): HttpParams {
+    let params = new HttpParams().set('pharmacyId', pharmacyId).set('from', from).set('to', to);
+    if (inventoryItemId) params = params.set('inventoryItemId', inventoryItemId);
+    return params;
+  }
+
+  /** QA D932: the fills a return of this item (and lot) can be booked against. */
+  listReturnableDispenses(
+    inventoryItemId: string,
+    stockLotId?: string,
+  ): Observable<ApiResponse<ReturnableDispense[]>> {
+    let params = new HttpParams().set('inventoryItemId', inventoryItemId);
+    if (stockLotId) params = params.set('stockLotId', stockLotId);
+    return this.http.get<ApiResponse<ReturnableDispense[]>>(
+      '/pharmacy/stock-transactions/returnable-dispenses',
+      { params },
     );
   }
 
@@ -1032,6 +1214,22 @@ export class PharmacyService {
       '/pharmacy/routing/route-to-partner',
       req,
     );
+  }
+
+  /** QA D966: the printed copy the patient takes to an outside pharmacy (PDF). */
+  getPrintedPrescriptionCopy(prescriptionId: string): Observable<Blob> {
+    return this.http.get(`/pharmacy/routing/print-for-patient/${prescriptionId}/document`, {
+      responseType: 'blob',
+    });
+  }
+
+  /**
+   * QA D966: the lot label as an authenticated blob. The page opened the bare
+   * URL in a new tab, which skips the /api prefix and the token, so it landed
+   * on the login page and printed nothing.
+   */
+  getStockLotLabel(stockLotId: string): Observable<Blob> {
+    return this.http.get(`/pharmacy/stock-lots/${stockLotId}/label.pdf`, { responseType: 'blob' });
   }
 
   printForPatient(prescriptionId: string): Observable<ApiResponse<RoutingDecisionResponse>> {

@@ -95,4 +95,35 @@ describe('PatientSnapshotDrawerComponent', () => {
     expect(component.showAttestModal()).toBe(true);
     expect(component.attestNotes()).toBe('');
   });
+
+  /** QA D1038 / D986: a non-primary policy is never labelled the primary payer. */
+  for (const hasPrimary of [true, false]) {
+    it(`labels the payer as ${hasPrimary ? 'primary' : 'an insurer'} when hasPrimary=${hasPrimary}`, () => {
+      mockReceptionService.getPatientSnapshot = () =>
+        of({
+          ...mockSnapshot,
+          alerts: { ...mockSnapshot.alerts, noPrimaryInsurance: !hasPrimary },
+          insurance: { ...mockSnapshot.insurance, hasPrimary },
+        });
+      component.patientId = 'p1';
+      component.ngOnChanges({
+        patientId: {
+          currentValue: 'p1',
+          previousValue: null,
+          firstChange: true,
+          isFirstChange: () => true,
+        },
+      });
+      fixture.detectChanges();
+      const labels = Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll('.field-label'),
+      ).map((e) => e.textContent?.trim());
+      expect(labels).toContain(
+        hasPrimary ? 'RECEPTION.PRIMARY_PAYER' : 'RECEPTION.INSURANCE_PROVIDER',
+      );
+      expect(labels).not.toContain(
+        hasPrimary ? 'RECEPTION.INSURANCE_PROVIDER' : 'RECEPTION.PRIMARY_PAYER',
+      );
+    });
+  }
 });

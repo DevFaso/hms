@@ -11,7 +11,7 @@ import { Observable } from 'rxjs';
  *    the client filters `active === false` itself.
  *  - Social-history create supersedes: prior records auto-deactivate and
  *    versionNumber auto-increments.
- *  - GET .../social/current returns 200 with an EMPTY body when none exists.
+ *  - GET .../social/current returns no body (204 No Content) when none exists.
  *  - The persisted immunization `overdue` flag is stale (only recomputed on
  *    writes) — compute overdue client-side from nextDoseDueDate.
  *  - No enums anywhere: coded-looking fields are free-text strings. The one
@@ -216,7 +216,8 @@ export interface ImmunizationBase {
 export interface ImmunizationRequest extends ImmunizationBase {
   patientId: string;
   hospitalId: string;
-  vaccineCode: string;
+  /** CDC CVX code; optional (QA D1003). */
+  vaccineCode?: string;
   vaccineDisplay: string;
   administrationDate: string;
   status: string;
@@ -249,7 +250,7 @@ export class MedicalHistoryService {
     return this.http.get<SocialHistoryResponse[]>(`${this.baseUrl}/patient/${patientId}/social`);
   }
 
-  /** 200 with an empty body when the patient has no active record. */
+  /** No body (204 No Content, QA D1082 class) when the patient has no active record. */
   currentSocialHistory(patientId: string): Observable<SocialHistoryResponse | null> {
     return this.http.get<SocialHistoryResponse | null>(
       `${this.baseUrl}/patient/${patientId}/social/current`,

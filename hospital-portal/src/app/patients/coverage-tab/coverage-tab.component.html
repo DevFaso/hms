@@ -68,17 +68,21 @@
                     type="button"
                     class="btn-secondary btn-sm"
                     [title]="'COMMON.EDIT' | translate"
+                    [attr.aria-label]="'COMMON.EDIT' | translate"
                     (click)="openEdit(i)"
+                    [attr.aria-label]="'COMMON.EDIT' | translate"
                   >
-                    <span class="material-symbols-outlined">edit</span>
+                    <span class="material-symbols-outlined" aria-hidden="true">edit</span>
                   </button>
                   <button
                     type="button"
                     class="btn-secondary btn-sm danger"
                     [title]="'COMMON.DELETE' | translate"
+                    [attr.aria-label]="'COMMON.DELETE' | translate"
                     (click)="confirmDelete(i)"
+                    [attr.aria-label]="'COMMON.DELETE' | translate"
                   >
-                    <span class="material-symbols-outlined">delete</span>
+                    <span class="material-symbols-outlined" aria-hidden="true">delete</span>
                   </button>
                 }
               </td>
@@ -319,6 +323,8 @@
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="$event.stopPropagation()"
+      appDialogFocus
+      (dialogDismiss)="closeLink()"
     >
       <div class="modal-header">
         <h2>{{ 'COVERAGE.LINK_INSURANCE' | translate }}</h2>
@@ -341,6 +347,19 @@
           <div class="field">
             <label for="cov-policy">{{ 'COVERAGE.POLICY' | translate }} *</label>
             <input id="cov-policy" type="text" [(ngModel)]="linkForm.policyNumber" />
+          </div>
+        </div>
+        <!-- QA D925: the insurer's name; the payer code stands in when left blank. -->
+        <div class="form-row">
+          <div class="field">
+            <label for="cov-link-provider">{{ 'COVERAGE.PROVIDER' | translate }}</label>
+            <input
+              id="cov-link-provider"
+              type="text"
+              maxlength="150"
+              [(ngModel)]="linkForm.providerName"
+              [placeholder]="'COVERAGE.PROVIDER_DEFAULTS_TO_PAYER' | translate"
+            />
           </div>
         </div>
         <div class="checkbox-row">
@@ -377,6 +396,8 @@
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="$event.stopPropagation()"
+      appDialogFocus
+      (dialogDismiss)="closeEdit()"
     >
       <div class="modal-header">
         <h2>{{ 'COVERAGE.EDIT_INSURANCE' | translate }}</h2>
@@ -465,6 +486,8 @@
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="$event.stopPropagation()"
+      appDialogFocus
+      (dialogDismiss)="closeDelete()"
     >
       <div class="modal-header">
         <h2>{{ 'COVERAGE.DELETE_TITLE' | translate }}</h2>
@@ -510,6 +533,8 @@
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="$event.stopPropagation()"
+      appDialogFocus
+      (dialogDismiss)="closeGuarantor()"
     >
       <div class="modal-header">
         <h2>
@@ -620,6 +645,8 @@
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="$event.stopPropagation()"
+      appDialogFocus
+      (dialogDismiss)="closeConsent()"
     >
       <div class="modal-header">
         <h2>{{ 'COVERAGE.RECORD_CONSENT' | translate }}</h2>
@@ -701,6 +728,8 @@
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="$event.stopPropagation()"
+      appDialogFocus
+      (dialogDismiss)="closeRevoke()"
     >
       <div class="modal-header">
         <h2>{{ 'COVERAGE.REVOKE_CONSENT' | translate }}</h2>

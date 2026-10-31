@@ -14,6 +14,7 @@ import { DrugInteractionEntry, DrugInteractionService } from '../services/drug-i
 import { InteractionSeverity } from '../services/medication-timeline.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 /**
  * Drug-interaction KB curation page (P2 #14).
@@ -27,7 +28,7 @@ import { RoleContextService } from '../core/role-context.service';
 @Component({
   selector: 'app-drug-interactions',
   standalone: true,
-  imports: [FormsModule, TranslateModule],
+  imports: [ModalDialogDirective, FormsModule, TranslateModule],
   templateUrl: './drug-interactions.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './drug-interactions.scss',

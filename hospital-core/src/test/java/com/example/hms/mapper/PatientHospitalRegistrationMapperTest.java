@@ -176,7 +176,7 @@ class PatientHospitalRegistrationMapperTest {
     private RegistrationDeskRow deskRow(UUID patientId, String username, String first, String last) {
         return new RegistrationDeskRow(
             UUID.randomUUID(), "mrn-DESK001",
-            patientId, username, first, last,
+            patientId, username, first, null, last,
             "awa@example.com", "+22670000001", "FEMALE",
             hospital.getId(), hospital.getName(), hospital.getCode(), "Ouagadougou",
             LocalDate.of(2026, 8, 1), true,

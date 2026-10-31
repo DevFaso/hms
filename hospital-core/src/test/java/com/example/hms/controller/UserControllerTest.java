@@ -30,6 +30,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -372,7 +373,7 @@ class UserControllerTest {
         authenticateAs("impostor", false, "ROLE_SUPER_ADMIN");
 
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
-                .get("/users").param("onlyDeleted", "true"))
+                .get("/users").param("includeDeleted", "true"))
             .andExpect(status().isOk());
 
         verify(userService).getAllUsers(0, 10, false, false);
@@ -415,10 +416,29 @@ class UserControllerTest {
         authenticateAs("hadmin", "ROLE_HOSPITAL_ADMIN");
 
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
-                .get("/users").param("includeDeleted", "true").param("onlyDeleted", "true"))
+                .get("/users").param("includeDeleted", "true"))
             .andExpect(status().isOk());
 
         verify(userService).getAllUsers(0, 10, false, false);
+    }
+
+    @Test
+    void onlyDeleted_isAnEmptyPageForHospitalAdmin_notTheLiveList() throws Exception {
+        // QA D919: the "Supprimé" filter showed a hospital admin every LIVE
+        // account, with edit and delete buttons, because the flag was dropped
+        // and the live view answered instead.
+        authenticateAs("hadmin", "ROLE_HOSPITAL_ADMIN");
+
+        for (String path : java.util.List.of("/users", "/users/search")) {
+            mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                    .get(path).param("includeDeleted", "true").param("onlyDeleted", "true"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").isEmpty());
+        }
+
+        verify(userService, never()).getAllUsers(
+            org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.anyInt(),
+            org.mockito.ArgumentMatchers.anyBoolean(), org.mockito.ArgumentMatchers.anyBoolean());
     }
 
     @Test

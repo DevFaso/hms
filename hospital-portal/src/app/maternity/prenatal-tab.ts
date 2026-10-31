@@ -149,6 +149,10 @@ export class PrenatalTabComponent implements OnInit {
     };
     const time = r.suggestedStartTime?.substring(0, 5);
     if (time && /^\d{2}:\d{2}$/.test(time)) params['time'] = time;
+    // QA D1055: the recommended length and the provider the calendar was planned with.
+    if (r.durationMinutes > 0) params['duration'] = String(r.durationMinutes);
+    const staffId = this.schedule()?.staffId;
+    if (staffId) params['staffId'] = staffId;
     return params;
   }
 

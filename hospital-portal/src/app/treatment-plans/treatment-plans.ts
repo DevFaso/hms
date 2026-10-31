@@ -1,3 +1,5 @@
+import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
+import { textMatches } from '../shared/person-search';
 import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -22,11 +24,16 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { missingRequiredMessage } from '../shared/required-fields';
 import { labelledRefusalReason } from '../shared/refusal-reason';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { AuthService } from '../auth/auth.service';
+import { AuthorshipService } from '../shared/authorship.service';
 
 @Component({
   selector: 'app-treatment-plans',
   standalone: true,
   imports: [
+    PersonNamePipe,
+    ModalDialogDirective,
     PatientSublinePipe,
     ServerTimePipe,
     CommonModule,
@@ -49,6 +56,8 @@ export class TreatmentPlansComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly scopeUrl = inject(HospitalScopeUrlService);
   private readonly translate = inject(TranslateService);
+  private readonly authorship = inject(AuthorshipService);
+  private readonly auth = inject(AuthService);
 
   /** Cross-tenant signals — drive the chip + Hospital column toggle. */
   protected readonly isSuperAdmin = this.roleContext.isSuperAdmin;
@@ -217,6 +226,15 @@ export class TreatmentPlansComponent implements OnInit {
     this.showModal.set(true);
   }
 
+  /**
+   * QA D1081: the plan's author rewrites it. The row names the author by
+   * user when the server sends it, else by staff record.
+   */
+  canEditPlan(p: TreatmentPlanResponse): boolean {
+    const myStaffId = this.auth.getUserProfile()?.staffId ?? null;
+    return this.authorship.isAuthor(p, !p.authorStaffId || p.authorStaffId === myStaffId);
+  }
+
   openEdit(p: TreatmentPlanResponse): void {
     this.form = {
       patientId: p.patientId ?? '',
@@ -314,9 +332,9 @@ export class TreatmentPlansComponent implements OnInit {
     if (term) {
       list = list.filter(
         (p) =>
-          (p.patientName ?? '').toLowerCase().includes(term) ||
+          textMatches(p.patientName, term) ||
           (p.problemStatement ?? '').toLowerCase().includes(term) ||
-          (p.authorStaffName ?? '').toLowerCase().includes(term),
+          textMatches(p.authorStaffName, term),
       );
     }
     this.filtered.set(list);

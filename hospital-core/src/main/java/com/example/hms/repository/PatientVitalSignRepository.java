@@ -20,6 +20,13 @@ public interface PatientVitalSignRepository extends JpaRepository<PatientVitalSi
 
     Optional<PatientVitalSign> findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(UUID patientId, UUID hospitalId);
 
+    /** Round 18 (QA D935): the latest row that records a weight, for the paediatric dose check. */
+    Optional<PatientVitalSign> findFirstByPatient_IdAndHospital_IdAndWeightKgIsNotNullOrderByRecordedAtDesc(
+        UUID patientId, UUID hospitalId);
+
+    /** Round 18 (QA D935): as above, without a hospital scope (the CDS hooks' unscoped calls). */
+    Optional<PatientVitalSign> findFirstByPatient_IdAndWeightKgIsNotNullOrderByRecordedAtDesc(UUID patientId);
+
     List<PatientVitalSign> findByPatient_IdOrderByRecordedAtDesc(UUID patientId, Pageable pageable);
 
     List<PatientVitalSign> findByPatient_IdAndHospital_IdOrderByRecordedAtDesc(UUID patientId, UUID hospitalId, Pageable pageable);

@@ -176,9 +176,10 @@ class GuardDriftRatchetTest {
         listed.put("DischargeSummaryController.updateDischargeSummary", DISCHARGESUMMARYCONTROLLER_REASON);
         listed.put("DispenseController.listByPrescription", DISPENSECONTROLLER_REASON);
         listed.put("EncounterController.cosignEncounterNote", ENCOUNTERCONTROLLER_REASON);
+        listed.put("EncounterController.issueMedicalCertificate",
+            "QA D961: a medical certificate or sick-leave note is signed by the licensed physician who examined the patient");
         listed.put("EncounterController.startEncounter", ENCOUNTERCONTROLLER_REASON);
         listed.put("GeneralReferralController.acknowledgeReferral", GENERALREFERRALCONTROLLER_REASON);
-        listed.put("GeneralReferralController.cancelReferral", GENERALREFERRALCONTROLLER_REASON);
         listed.put("GeneralReferralController.completeReferral", GENERALREFERRALCONTROLLER_REASON);
         listed.put("GeneralReferralController.getOverdueReferrals", GENERALREFERRALCONTROLLER_REASON);
         listed.put("GeneralReferralController.getReferralsByHospital", GENERALREFERRALCONTROLLER_REASON);
@@ -215,6 +216,8 @@ class GuardDriftRatchetTest {
         listed.put("MortalityController.recordDeath", MORTALITYCONTROLLER_REASON);
         listed.put("ObgynReferralController.acknowledgeReferral", OBGYNREFERRALCONTROLLER_REASON);
         listed.put("ObgynReferralController.addMessage", OBGYNREFERRALCONTROLLER_REASON);
+        // QA D1026: the cancel admits exactly the create's roles (midwife, doctor), so its author may withdraw it.
+        listed.put("ObgynReferralController.cancelReferral", OBGYNREFERRALCONTROLLER_REASON);
         listed.put("ObgynReferralController.completeReferral", OBGYNREFERRALCONTROLLER_REASON);
         listed.put("ObgynReferralController.createReferral", OBGYNREFERRALCONTROLLER_REASON);
         listed.put("ObgynReferralController.getReferralsForObgyn", OBGYNREFERRALCONTROLLER_REASON);
@@ -227,7 +230,6 @@ class GuardDriftRatchetTest {
         listed.put("PrescriptionController.cosign", PRESCRIPTIONCONTROLLER_REASON);
         listed.put("PrescriptionController.resolveClarification", PRESCRIPTIONCONTROLLER_REASON);
         listed.put("PrescriptionController.sign", PRESCRIPTIONCONTROLLER_REASON);
-        listed.put("ProcedureOrderController.cancelProcedureOrder", PROCEDUREORDERCONTROLLER_REASON);
         listed.put("RoiWorklistController.deny", ROIWORKLISTCONTROLLER_REASON);
         listed.put("RoiWorklistController.fulfil", ROIWORKLISTCONTROLLER_REASON);
         listed.put("StockOutRoutingController.listByPrescription", STOCKOUTROUTINGCONTROLLER_REASON);

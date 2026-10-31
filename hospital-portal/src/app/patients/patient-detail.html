@@ -11,6 +11,14 @@
     </div>
   }
 
+  @if (!loading() && unavailable()) {
+    <section class="restricted-state" data-testid="chart-unavailable" role="alert">
+      <span class="material-symbols-outlined">person_off</span>
+      <h2>{{ 'PATIENTS.CHART_UNAVAILABLE_TITLE' | translate }}</h2>
+      <p>{{ 'REFERRALS.CHART_UNAVAILABLE' | translate }}</p>
+    </section>
+  }
+
   @if (!loading() && restricted()) {
     <section class="restricted-state" data-testid="restricted-chart" role="alert">
       <span class="material-symbols-outlined">lock</span>
@@ -34,7 +42,7 @@
         [canEdit]="canEditPhoto()"
       />
       <div class="header-info">
-        <h1>{{ p.firstName }} {{ p.lastName }}</h1>
+        <h1>{{ fullName(p) }}</h1>
         <div class="header-meta">
           @if (p.mrn) {
             <span class="meta-tag mrn"
@@ -54,7 +62,8 @@
           }
           @if (p.dateOfBirth) {
             <span class="meta-tag" data-testid="header-dob"
-              ><span class="material-symbols-outlined">cake</span> {{ p.dateOfBirth }}</span
+              ><span class="material-symbols-outlined">cake</span>
+              {{ p.dateOfBirth | serverTime | date: 'mediumDate' }}</span
             >
           }
           @if (p.bloodType) {
@@ -77,6 +86,18 @@
           }
         </div>
       </div>
+      @if (canEditDemographics()) {
+        <!-- QA D926: the desk corrects the identity, contact and guardian. -->
+        <button
+          type="button"
+          class="btn-secondary wristband-btn"
+          data-testid="edit-demographics"
+          (click)="editingDemographics.set(true)"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+          {{ 'PATIENTS.EDIT_BUTTON' | translate }}
+        </button>
+      }
       @if (canDownloadRecord()) {
         <button
           type="button"
@@ -277,6 +298,7 @@
       }
       <app-patient-chart
         [patientId]="patient()!.id"
+        [patientGender]="patient()!.gender"
         [refreshToken]="accessEpoch()"
         (openRestricted)="openRestrictedRows()"
       />
@@ -393,7 +415,7 @@
           <div class="info-rows">
             <div class="info-row">
               <span class="label">{{ 'PATIENTS.FULL_NAME' | translate }}</span
-              ><span class="value">{{ p.firstName }} {{ p.lastName }}</span>
+              ><span class="value">{{ fullName(p) }}</span>
             </div>
             <div class="info-row">
               <span class="label">{{ 'PATIENTS.EMAIL' | translate }}</span
@@ -403,9 +425,17 @@
               <span class="label">{{ 'PATIENTS.PHONE' | translate }}</span
               ><span class="value">{{ p.phoneNumberPrimary ?? '—' }}</span>
             </div>
+            <!-- QA D1036 / D926: the second number and the postal code were
+                 stored at registration and shown nowhere. -->
+            <div class="info-row">
+              <span class="label">{{ 'PATIENTS.PHONE_SECONDARY' | translate }}</span
+              ><span class="value">{{ p.phoneNumberSecondary || '—' }}</span>
+            </div>
             <div class="info-row">
               <span class="label">{{ 'PATIENTS.DOB' | translate }}</span
-              ><span class="value">{{ p.dateOfBirth ?? '—' }}</span>
+              ><span class="value">{{
+                p.dateOfBirth ? (p.dateOfBirth | serverTime | date: 'mediumDate') : '—'
+              }}</span>
             </div>
             <div class="info-row">
               <span class="label">{{ 'PATIENTS.GENDER' | translate }}</span
@@ -422,6 +452,10 @@
             <div class="info-row">
               <span class="label">{{ 'PATIENTS.STATE' | translate }}</span
               ><span class="value">{{ p.state ?? '—' }}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">{{ 'PATIENTS.ZIP_CODE' | translate }}</span
+              ><span class="value">{{ p.zipCode || '—' }}</span>
             </div>
             <div class="info-row">
               <span class="label">{{ 'PATIENTS.ADDRESS' | translate }}</span
@@ -461,6 +495,37 @@
                 }
               </ul>
             </div>
+          }
+        </div>
+        <!-- QA D926: the parent or contact to call, captured at registration, shown on the chart. -->
+        <div class="info-card" data-testid="guardian-card">
+          <h3>
+            <span class="material-symbols-outlined" aria-hidden="true">family_restroom</span>
+            {{ 'PATIENTS.GUARDIAN_CARD' | translate }}
+          </h3>
+          @if (p.emergencyContactName || p.emergencyContactPhone) {
+            <div class="info-rows">
+              <div class="info-row">
+                <span class="label">{{ 'PATIENTS.EC_NAME' | translate }}</span
+                ><span class="value">{{ p.emergencyContactName || '—' }}</span>
+              </div>
+              <div class="info-row">
+                <span class="label">{{ 'PATIENTS.EC_RELATIONSHIP' | translate }}</span
+                ><span class="value">{{ p.emergencyContactRelationship || '—' }}</span>
+              </div>
+              <div class="info-row">
+                <span class="label">{{ 'PATIENTS.EC_PHONE' | translate }}</span
+                ><span class="value">
+                  @if (p.emergencyContactPhone) {
+                    <a [href]="'tel:' + p.emergencyContactPhone">{{ p.emergencyContactPhone }}</a>
+                  } @else {
+                    —
+                  }
+                </span>
+              </div>
+            </div>
+          } @else {
+            <p class="address-history-empty">{{ 'PATIENTS.EC_NONE' | translate }}</p>
           }
         </div>
         <div class="info-card">
@@ -758,6 +823,11 @@
           <p>{{ 'PATIENTS.NO_ENCOUNTERS_DESC' | translate }}</p>
         </div>
       }
+      <!-- QA D927: the nursing care notes, readable from the chart by the next
+           shift and the doctor (the encounter detail's panel, reused). -->
+      @if (canReadNursingNotes()) {
+        <app-nursing-notes-panel [patientId]="patientId" [hospitalId]="scopedHospitalId()" />
+      }
     }
 
     <!-- ═══ Appointments Tab ═══ -->
@@ -808,5 +878,12 @@
         </div>
       }
     }
+  }
+  @if (editingDemographics() && patient(); as current) {
+    <app-patient-demographics-edit
+      [patient]="current"
+      (dismissed)="editingDemographics.set(false)"
+      (saved)="onDemographicsSaved($event)"
+    />
   }
 </div>

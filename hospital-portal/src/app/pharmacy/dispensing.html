@@ -64,20 +64,26 @@
           <span class="material-symbols-outlined">medication</span>
           {{ 'PHARMACY.DISPENSE_MEDICATION' | translate }}
         </h3>
-        <button class="btn-text" (click)="closeForm()">
+        <button
+          [attr.aria-label]="'COMMON.CLOSE' | translate"
+          class="btn-text"
+          (click)="closeForm()"
+        >
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
 
       <div class="rx-summary">
-        <span class="rx-label">{{ 'PHARMACY.PRESCRIPTION' | translate }}:</span>
+        <span class="rx-label"
+          >{{ 'PHARMACY.PRESCRIPTION' | translate }}{{ 'COMMON.COLON' | translate }}</span
+        >
         <strong>{{ selectedPrescription?.medicationName }}</strong>
         <span class="rx-meta">
           {{ selectedPrescription?.dosage }} · {{ selectedPrescription?.frequency }}
         </span>
         <span class="rx-meta">
-          {{ 'PHARMACY.PATIENT' | translate }}: {{ selectedPrescription?.patient?.firstName }}
-          {{ selectedPrescription?.patient?.lastName }}
+          {{ 'PHARMACY.PATIENT' | translate }}{{ 'COMMON.COLON' | translate }}
+          {{ selectedPrescription?.patient | personName }}
         </span>
       </div>
 
@@ -137,6 +143,53 @@
               }
             </select>
           </div>
+          <!-- QA D964: first expired, first out. Taking a later-dated lot while a
+               shorter-dated one could serve the fill needs a reason. -->
+          @if (earlierLot(); as earlier) {
+            <div class="field fefo-field" data-testid="fefo-warning">
+              <label for="fefoReason">{{ 'PHARMACY.FEFO_REASON' | translate }} *</label>
+              <small class="field-hint" role="alert">{{
+                'PHARMACY.FEFO_WARNING'
+                  | translate
+                    : {
+                        lot: earlier.lotNumber,
+                        date: (earlier.expiryDate | serverTime | date: 'mediumDate'),
+                        left: earlier.remainingQuantity,
+                      }
+              }}</small>
+              <input
+                id="fefoReason"
+                type="text"
+                maxlength="300"
+                data-testid="fefo-reason"
+                [(ngModel)]="form.fefoOverrideReason"
+                name="fefoOverrideReason"
+                required
+              />
+            </div>
+          }
+          <!-- QA D1029: a fill larger than the shortest-dated lot empties it
+               first and takes the rest from the next lot, one fill per lot. -->
+          @if (fefoSplit(); as split) {
+            @if (split.length > 1) {
+              <div class="field full-width" data-testid="fefo-split">
+                <small class="field-hint" role="status">
+                  {{ 'PHARMACY.FEFO_SPLIT_HINT' | translate }}
+                  @for (part of split; track part.lot.id; let last = $last) {
+                    {{
+                      'PHARMACY.FEFO_SPLIT_PART'
+                        | translate
+                          : {
+                              quantity: part.quantity,
+                              lot: part.lot.lotNumber,
+                              date: (part.lot.expiryDate | serverTime | date: 'MMM yyyy'),
+                            }
+                    }}{{ last ? '' : ', ' }}
+                  }
+                </small>
+              </div>
+            }
+          }
           <!-- QA D654: a controlled substance leaves the shelf in front of a witness -->
           @if (lotIsControlled()) {
             <div class="field">
@@ -255,7 +308,9 @@
           <button
             type="submit"
             class="btn-primary"
-            [disabled]="saving() || form.quantityDispensed <= 0 || !verifyAttested()"
+            [disabled]="
+              saving() || form.quantityDispensed <= 0 || !verifyAttested() || fefoReasonMissing()
+            "
           >
             @if (saving()) {
               <span class="spinner"></span>
@@ -269,7 +324,13 @@
               type="button"
               class="btn-secondary"
               data-testid="mark-ready"
-              [disabled]="saving() || form.quantityDispensed <= 0 || !verifyAttested()"
+              [disabled]="
+                saving() ||
+                form.quantityDispensed <= 0 ||
+                !verifyAttested() ||
+                fefoReasonMissing() ||
+                fefoSplit().length > 1
+              "
               (click)="submitReady()"
             >
               {{ 'PHARMACY.MARK_READY' | translate }}
@@ -305,8 +366,8 @@
       <div class="rx-summary">
         <strong>{{ action.rx.medicationName }}</strong>
         <span class="rx-meta">
-          {{ 'PHARMACY.PATIENT' | translate }}: {{ action.rx.patient?.firstName }}
-          {{ action.rx.patient?.lastName }}
+          {{ 'PHARMACY.PATIENT' | translate }}{{ 'COMMON.COLON' | translate }}
+          {{ action.rx.patient | personName }}
         </span>
       </div>
       @if (action.kind === 'handOver') {
@@ -377,6 +438,9 @@
     <div
       class="form-card form-card-accent"
       role="alertdialog"
+      aria-modal="true"
+      appDialogFocus
+      (dialogDismiss)="cancelClaimAction()"
       aria-labelledby="claim-take-over-title"
       aria-describedby="claim-take-over-text"
       data-testid="claim-take-over"
@@ -390,8 +454,8 @@
       <div class="rx-summary">
         <strong>{{ action.rx.medicationName }}</strong>
         <span class="rx-meta">
-          {{ 'PHARMACY.PATIENT' | translate }}: {{ action.rx.patient?.firstName }}
-          {{ action.rx.patient?.lastName }}
+          {{ 'PHARMACY.PATIENT' | translate }}{{ 'COMMON.COLON' | translate }}
+          {{ action.rx.patient | personName }}
         </span>
       </div>
       <p id="claim-take-over-text" data-testid="claim-take-over-text">
@@ -479,10 +543,18 @@
           <tbody>
             @for (rx of workQueue(); track rx.id) {
               <tr>
-                <td>{{ rx.patient?.firstName }} {{ rx.patient?.lastName }}</td>
+                <td>{{ rx.patient | personName }}</td>
                 <td>{{ rx.medicationName }}</td>
                 <td>{{ rx.dosage }}</td>
-                <td>{{ rx.quantity }} {{ rx.quantityUnit }}</td>
+                <td>
+                  {{ rx.quantity }} {{ rx.quantityUnit }}
+                  <!-- QA D1001: a partly filled order says what is still owed -->
+                  @if (isPartlyDispensed(rx)) {
+                    <span class="cell-sub" [attr.data-testid]="'rx-remaining-' + rx.id">{{
+                      'PHARMACY.QTY_REMAINING' | translate: { qty: rx.remainingQuantity }
+                    }}</span>
+                  }
+                </td>
                 <td>
                   <span class="badge badge-info">{{
                     rx.status | enumLabel: 'prescriptionStatus'
@@ -585,7 +657,7 @@
                     <span class="refill-note">{{ 'PHARMACY.REFILL_NONE' | translate }}</span>
                   }
                 </td>
-                <td>{{ rx.staff?.user?.firstName }} {{ rx.staff?.user?.lastName }}</td>
+                <td>{{ rx.staff?.user | personName }}</td>
                 <td>
                   @if (rx.readyForCollection) {
                     <!-- G15: a prepared fill is handed over or its preparation
@@ -704,11 +776,21 @@
 
       <!-- Pagination -->
       <div class="pagination">
-        <button class="btn-text" [disabled]="queuePage === 0" (click)="prevPage()">
+        <button
+          [attr.aria-label]="'COMMON.PREVIOUS' | translate"
+          class="btn-text"
+          [disabled]="queuePage === 0"
+          (click)="prevPage()"
+        >
           <span class="material-symbols-outlined">chevron_left</span>
         </button>
         <span class="page-info">{{ queuePage + 1 }} / {{ queueTotalPages || 1 }}</span>
-        <button class="btn-text" [disabled]="queuePage >= queueTotalPages - 1" (click)="nextPage()">
+        <button
+          [attr.aria-label]="'COMMON.NEXT' | translate"
+          class="btn-text"
+          [disabled]="queuePage >= queueTotalPages - 1"
+          (click)="nextPage()"
+        >
           <span class="material-symbols-outlined">chevron_right</span>
         </button>
       </div>
@@ -809,7 +891,11 @@
                   <!-- G15: a PENDING row is a prepared fill; it is cancelled
                        from the work queue (stock back, patient told). -->
                   @if (d.status !== 'CANCELLED' && d.status !== 'PENDING') {
-                    <button class="btn-action danger" (click)="cancelDispense(d.id)">
+                    <button
+                      [attr.aria-label]="'PHARMACY.CANCEL_DISPENSE' | translate"
+                      class="btn-action danger"
+                      (click)="cancelDispense(d.id)"
+                    >
                       <span class="material-symbols-outlined">cancel</span>
                     </button>
                   }

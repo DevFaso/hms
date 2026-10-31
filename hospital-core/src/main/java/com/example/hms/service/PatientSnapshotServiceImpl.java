@@ -226,10 +226,11 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
         List<Encounter> encounters = loadEncounters(patientId, hospitalId, readable, reach, unlocked);
         PatientSnapshotDTO snapshot = PatientSnapshotDTO.builder()
                 .patientId(patient.getId())
-                .name(patient.getFirstName() + " " + patient.getLastName())
+                .name(patient.getFullName())
                 .age(computeAge(patient))
                 .sex(patient.getGender())
-                .mrn(patient.getId().toString())
+                // QA D1040 class: the hospital's MRN, never the patient's UUID.
+                .mrn(patient.getMrnForHospital(hospitalId))
                 .codeStatus(patient.getCodeStatus())
                 .allergies(buildAllergies(patientId, patient, hospitalId, reach))
                 // QA D504 (round 2): the list above is narrowed by the patient's opt-out; say so.
@@ -490,6 +491,7 @@ public class PatientSnapshotServiceImpl implements PatientSnapshotService {
                             .flag(labResultFlag(r))
                             .abnormalDirection(r.getAbnormalFlag() != null ? r.getAbnormalFlag().direction() : null)
                             .date(r.getResultDate() != null ? r.getResultDate().format(DATE_FMT) : "")
+                            .corrected(com.example.hms.service.lab.LabResultCorrections.isCorrection(r))
                             .build()));
         } catch (Exception e) {
             log.debug("Lab results query error: {}", e.getMessage());

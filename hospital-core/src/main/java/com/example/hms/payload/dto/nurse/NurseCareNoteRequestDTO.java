@@ -32,5 +32,6 @@ public class NurseCareNoteRequestDTO {
     private String narrative;
 
     /** Optional: short title / summary shown in the note list. */
+    @jakarta.validation.constraints.Size(max = 255)
     private String title;
 }
