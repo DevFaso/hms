@@ -278,9 +278,14 @@
       (click)="closeRecord()"
       (keydown.escape)="closeRecord()"
     ></div>
-    <div class="modal modal-wide">
+    <div
+      class="modal modal-wide"
+      appModalDialog
+      aria-labelledby="mortality-dialog-2-title"
+      (escaped)="closeRecord()"
+    >
       <div class="modal-header">
-        <h2>{{ 'MORTALITY.RECORD_DEATH' | translate }}</h2>
+        <h2 id="mortality-dialog-2-title">{{ 'MORTALITY.RECORD_DEATH' | translate }}</h2>
         <button class="modal-close" (click)="closeRecord()">&times;</button>
       </div>
       <div class="modal-body">
@@ -408,9 +413,14 @@
       (click)="closeAmend()"
       (keydown.escape)="closeAmend()"
     ></div>
-    <div class="modal">
+    <div
+      class="modal"
+      appModalDialog
+      aria-labelledby="mortality-dialog-1-title"
+      (escaped)="closeAmend()"
+    >
       <div class="modal-header">
-        <h2>{{ 'MORTALITY.AMEND' | translate }}</h2>
+        <h2 id="mortality-dialog-1-title">{{ 'MORTALITY.AMEND' | translate }}</h2>
         <button class="modal-close" (click)="closeAmend()">&times;</button>
       </div>
       <div class="modal-body">

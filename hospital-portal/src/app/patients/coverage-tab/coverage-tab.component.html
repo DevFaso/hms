@@ -318,6 +318,7 @@
   <div class="modal-backdrop" tabindex="-1" (click)="closeLink()" (keydown.escape)="closeLink()">
     <div
       class="modal"
+      aria-labelledby="coverage-tab-dialog-6-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
@@ -327,7 +328,7 @@
       (dialogDismiss)="closeLink()"
     >
       <div class="modal-header">
-        <h2>{{ 'COVERAGE.LINK_INSURANCE' | translate }}</h2>
+        <h2 id="coverage-tab-dialog-6-title">{{ 'COVERAGE.LINK_INSURANCE' | translate }}</h2>
         <button
           type="button"
           class="modal-close"
@@ -391,6 +392,7 @@
   <div class="modal-backdrop" tabindex="-1" (click)="closeEdit()" (keydown.escape)="closeEdit()">
     <div
       class="modal"
+      aria-labelledby="coverage-tab-dialog-5-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
@@ -400,7 +402,7 @@
       (dialogDismiss)="closeEdit()"
     >
       <div class="modal-header">
-        <h2>{{ 'COVERAGE.EDIT_INSURANCE' | translate }}</h2>
+        <h2 id="coverage-tab-dialog-5-title">{{ 'COVERAGE.EDIT_INSURANCE' | translate }}</h2>
         <button
           type="button"
           class="modal-close"
@@ -481,6 +483,7 @@
   >
     <div
       class="modal"
+      aria-labelledby="coverage-tab-dialog-4-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
@@ -490,7 +493,7 @@
       (dialogDismiss)="closeDelete()"
     >
       <div class="modal-header">
-        <h2>{{ 'COVERAGE.DELETE_TITLE' | translate }}</h2>
+        <h2 id="coverage-tab-dialog-4-title">{{ 'COVERAGE.DELETE_TITLE' | translate }}</h2>
         <button
           type="button"
           class="modal-close"
@@ -528,6 +531,7 @@
   >
     <div
       class="modal"
+      aria-labelledby="coverage-tab-dialog-3-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
@@ -537,7 +541,7 @@
       (dialogDismiss)="closeGuarantor()"
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="coverage-tab-dialog-3-title">
           {{
             (editingGuarantor() ? 'COVERAGE.EDIT_GUARANTOR' : 'COVERAGE.ADD_GUARANTOR') | translate
           }}
@@ -640,6 +644,7 @@
   >
     <div
       class="modal"
+      aria-labelledby="coverage-tab-dialog-2-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
@@ -649,7 +654,7 @@
       (dialogDismiss)="closeConsent()"
     >
       <div class="modal-header">
-        <h2>{{ 'COVERAGE.RECORD_CONSENT' | translate }}</h2>
+        <h2 id="coverage-tab-dialog-2-title">{{ 'COVERAGE.RECORD_CONSENT' | translate }}</h2>
         <button
           type="button"
           class="modal-close"
@@ -723,6 +728,7 @@
   >
     <div
       class="modal"
+      aria-labelledby="coverage-tab-dialog-1-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
@@ -732,7 +738,7 @@
       (dialogDismiss)="closeRevoke()"
     >
       <div class="modal-header">
-        <h2>{{ 'COVERAGE.REVOKE_CONSENT' | translate }}</h2>
+        <h2 id="coverage-tab-dialog-1-title">{{ 'COVERAGE.REVOKE_CONSENT' | translate }}</h2>
         <button
           type="button"
           class="modal-close"

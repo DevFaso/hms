@@ -235,8 +235,10 @@
         tabindex="-1"
         (click)="$event.stopPropagation()"
         (keydown.escape)="closeModal(); $event.stopPropagation()"
+        appModalDialog
+        aria-labelledby="admin-assignments-dialog-5-title"
       >
-        <h2>
+        <h2 id="admin-assignments-dialog-5-title">
           {{ (modal() === 'create' ? 'ASSIGN_ADMIN.NEW' : 'ASSIGN_ADMIN.EDIT') | translate }}
         </h2>
         @if (modal() === 'create') {
@@ -330,8 +332,12 @@
         tabindex="-1"
         (click)="$event.stopPropagation()"
         (keydown.escape)="closeModal(); $event.stopPropagation()"
+        appModalDialog
+        aria-labelledby="admin-assignments-dialog-4-title"
       >
-        <h2>{{ 'ASSIGN_ADMIN.MULTI_SCOPE_TITLE' | translate }}</h2>
+        <h2 id="admin-assignments-dialog-4-title">
+          {{ 'ASSIGN_ADMIN.MULTI_SCOPE_TITLE' | translate }}
+        </h2>
         @if (!multiResult()) {
           <label class="form-field">
             <span>{{ 'ASSIGN_ADMIN.USER_IDENTIFIER' | translate }} *</span>
@@ -448,8 +454,10 @@
         tabindex="-1"
         (click)="$event.stopPropagation()"
         (keydown.escape)="closeModal(); $event.stopPropagation()"
+        appModalDialog
+        aria-labelledby="admin-assignments-dialog-3-title"
       >
-        <h2>{{ 'ASSIGN_ADMIN.DETAIL_TITLE' | translate }}</h2>
+        <h2 id="admin-assignments-dialog-3-title">{{ 'ASSIGN_ADMIN.DETAIL_TITLE' | translate }}</h2>
         <div class="detail-grid">
           <div>
             <span class="label">{{ 'ASSIGN_ADMIN.USER' | translate }}</span>
@@ -543,8 +551,12 @@
         tabindex="-1"
         (click)="$event.stopPropagation()"
         (keydown.escape)="closeModal(); $event.stopPropagation()"
+        appModalDialog
+        aria-labelledby="admin-assignments-dialog-2-title"
       >
-        <h2>{{ 'ASSIGN_ADMIN.REGENERATE_TITLE' | translate }}</h2>
+        <h2 id="admin-assignments-dialog-2-title">
+          {{ 'ASSIGN_ADMIN.REGENERATE_TITLE' | translate }}
+        </h2>
         <p class="warning-note">
           <span class="material-symbols-outlined">warning</span>
           {{ 'ASSIGN_ADMIN.REGENERATE_WARNING' | translate }}
@@ -584,8 +596,10 @@
         tabindex="-1"
         (click)="$event.stopPropagation()"
         (keydown.escape)="closeModal(); $event.stopPropagation()"
+        appModalDialog
+        aria-labelledby="admin-assignments-dialog-1-title"
       >
-        <h2>{{ 'ASSIGN_ADMIN.IMPORT_TITLE' | translate }}</h2>
+        <h2 id="admin-assignments-dialog-1-title">{{ 'ASSIGN_ADMIN.IMPORT_TITLE' | translate }}</h2>
         @if (!importResult()) {
           <p class="form-hint">{{ 'ASSIGN_ADMIN.IMPORT_HINT' | translate }}</p>
           <label class="form-field">

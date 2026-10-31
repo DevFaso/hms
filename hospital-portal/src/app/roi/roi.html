@@ -122,6 +122,7 @@
 @if (showIntake()) {
   <div class="modal-backdrop" (click)="closeIntake()" aria-hidden="true"></div>
   <div
+    appModalDialog
     #intakeDialog
     class="modal"
     role="dialog"
@@ -234,6 +235,7 @@
 @if (deciding(); as d) {
   <div class="modal-backdrop" (click)="closeDecision()" aria-hidden="true"></div>
   <div
+    appModalDialog
     #decisionDialog
     class="modal"
     role="dialog"

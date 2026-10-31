@@ -23,6 +23,7 @@ import {
 import { ToastService } from '../../core/toast.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { canInvokeCds } from '../patient-chart/chart-access';
+import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 
 /**
  * Best-Practice Advisory panel rendered at the top of the patient
@@ -39,7 +40,7 @@ import { canInvokeCds } from '../patient-chart/chart-access';
 @Component({
   selector: 'app-bpa-panel',
   standalone: true,
-  imports: [FormsModule, TranslateModule, CdsCardListComponent],
+  imports: [ModalDialogDirective, FormsModule, TranslateModule, CdsCardListComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './bpa-panel.component.html',
   styleUrls: ['./bpa-panel.component.scss'],
@@ -97,6 +98,16 @@ export class BpaPanelComponent implements OnChanges, OnDestroy {
       return;
     }
     this.submitDecision('OVERRIDDEN');
+  }
+
+  /**
+   * QA D1004: Escape reaches the critical modal (focus is inside it), but a
+   * critical advisory closes only through an acknowledgement or a documented
+   * override, like its two buttons: Escape keeps it open, and the directive
+   * stops the key there so nothing behind the modal reacts to it either.
+   */
+  protected refuseEscape(): void {
+    // Intentionally empty: see above.
   }
 
   protected dismissModal(): void {

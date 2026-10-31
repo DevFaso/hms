@@ -95,8 +95,10 @@
         tabindex="-1"
         (click)="$event.stopPropagation()"
         (keydown.escape)="closeImport(); $event.stopPropagation()"
+        appModalDialog
+        aria-labelledby="users-tab-dialog-2-title"
       >
-        <h2>{{ 'ADMIN_GOV.IMPORT_USERS' | translate }}</h2>
+        <h2 id="users-tab-dialog-2-title">{{ 'ADMIN_GOV.IMPORT_USERS' | translate }}</h2>
         @if (!importResult()) {
           <p class="form-hint">{{ 'ADMIN_GOV.IMPORT_USERS_HINT' | translate }}</p>
           <label class="form-field">
@@ -228,8 +230,10 @@
         tabindex="-1"
         (click)="$event.stopPropagation()"
         (keydown.escape)="closeReset(); $event.stopPropagation()"
+        appModalDialog
+        aria-labelledby="users-tab-dialog-1-title"
       >
-        <h2>{{ 'ADMIN_GOV.FORCE_RESET' | translate }}</h2>
+        <h2 id="users-tab-dialog-1-title">{{ 'ADMIN_GOV.FORCE_RESET' | translate }}</h2>
         @if (!resetResult()) {
           <label class="form-field">
             <span>{{ 'ADMIN_GOV.RESET_IDENTIFIERS' | translate }} *</span>

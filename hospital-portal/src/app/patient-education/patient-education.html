@@ -291,6 +291,8 @@
   >
     <div
       class="modal modal-lg"
+      appModalDialog
+      aria-labelledby="patient-education-dialog-3-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
@@ -298,7 +300,7 @@
       (keydown.escape)="closeResourceModal(); $event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="patient-education-dialog-3-title">
           {{
             (editingResourceId() ? 'EDUCATION.EDIT_RESOURCE' : 'EDUCATION.NEW_RESOURCE') | translate
           }}
@@ -421,6 +423,8 @@
   >
     <div
       class="modal"
+      appModalDialog
+      aria-labelledby="patient-education-dialog-2-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
@@ -428,7 +432,7 @@
       (keydown.escape)="closeAssign(); $event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'EDUCATION.ASSIGN_TITLE' | translate }}</h2>
+        <h2 id="patient-education-dialog-2-title">{{ 'EDUCATION.ASSIGN_TITLE' | translate }}</h2>
         <button
           type="button"
           class="modal-close"
@@ -476,6 +480,8 @@
   >
     <div
       class="modal"
+      appModalDialog
+      aria-labelledby="patient-education-dialog-1-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
@@ -483,7 +489,7 @@
       (keydown.escape)="closeProgressModal(); $event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'EDUCATION.UPDATE_PROGRESS' | translate }}</h2>
+        <h2 id="patient-education-dialog-1-title">{{ 'EDUCATION.UPDATE_PROGRESS' | translate }}</h2>
         <button
           type="button"
           class="modal-close"

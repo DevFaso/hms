@@ -15,6 +15,7 @@ import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 type ActiveFilter = 'all' | 'active' | 'inactive';
 
@@ -28,7 +29,7 @@ type ActiveFilter = 'all' | 'active' | 'inactive';
   selector: 'app-registrations',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, TranslateModule, PatientPickerComponent],
+  imports: [FormsModule, TranslateModule, PatientPickerComponent, ModalDialogDirective],
   templateUrl: './registrations.html',
   styleUrl: './registrations.scss',
 })

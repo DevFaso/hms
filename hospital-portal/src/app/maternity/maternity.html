@@ -459,6 +459,7 @@
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="closeHistoryDetail(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
         <h2 id="maternity-dialog-1-title">
@@ -605,6 +606,7 @@
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="closeHistoryModal(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
         <h2 id="maternity-dialog-2-title">
@@ -981,6 +983,7 @@
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="closeReferralModal(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
         <h2 id="maternity-dialog-3-title">{{ 'MATERNITY.NEW_REFERRAL' | translate }}</h2>
@@ -1113,6 +1116,7 @@
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="closeReferral(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
         <h2 id="maternity-dialog-4-title">

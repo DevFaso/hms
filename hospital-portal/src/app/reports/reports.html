@@ -134,6 +134,8 @@
     [attr.aria-label]="'COMMON.CANCEL' | translate"
   ></div>
   <div
+    appModalDialog
+    (escaped)="showCreate.set(false)"
     class="modal-panel"
     role="dialog"
     aria-modal="true"

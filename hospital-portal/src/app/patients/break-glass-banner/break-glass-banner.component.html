@@ -40,6 +40,8 @@
 @if (modalOpen()) {
   <div
     class="bg-modal"
+    appModalDialog
+    aria-labelledby="break-glass-banner-dialog-1-title"
     role="dialog"
     aria-modal="true"
     tabindex="-1"
@@ -47,7 +49,7 @@
     (keydown.escape)="closeModal()"
   >
     <div class="bg-modal__panel">
-      <h3>{{ 'BREAK_GLASS.MODAL_TITLE' | translate }}</h3>
+      <h3 id="break-glass-banner-dialog-1-title">{{ 'BREAK_GLASS.MODAL_TITLE' | translate }}</h3>
       <p class="bg-modal__warn">{{ 'BREAK_GLASS.MODAL_WARN' | translate }}</p>
 
       <label class="bg-modal__label" for="bgReason">

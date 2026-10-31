@@ -19,11 +19,12 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { roleDescriptionKey } from './role-description';
 import { EnumLabelService } from '../core/enum-label.service';
 import { bareRole } from '../core/role-token';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 @Component({
   selector: 'app-role-list',
   standalone: true,
-  imports: [FormsModule, TranslateModule],
+  imports: [FormsModule, TranslateModule, ModalDialogDirective],
   templateUrl: './role-list.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './role-list.scss',

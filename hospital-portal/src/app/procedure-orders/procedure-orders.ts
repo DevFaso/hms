@@ -27,6 +27,7 @@ import {
 } from '../shared/date-utils';
 import { refusalReason } from '../shared/refusal-reason';
 import { AuthorshipService } from '../shared/authorship.service';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 type Worklist = 'all' | 'pending-consent' | ProcedureOrderStatus;
 
@@ -47,6 +48,7 @@ type Worklist = 'all' | 'pending-consent' | ProcedureOrderStatus;
     TranslateModule,
     PatientPickerComponent,
     EnumLabelPipe,
+    ModalDialogDirective,
   ],
   templateUrl: './procedure-orders.html',
   styleUrl: './procedure-orders.scss',

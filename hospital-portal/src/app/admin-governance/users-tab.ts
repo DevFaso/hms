@@ -15,12 +15,13 @@ import {
   isOpenForAssignment,
 } from '../services/hospital.service';
 import { ToastService } from '../core/toast.service';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 /** User governance: CSV import, forced password resets, rotation health. */
 @Component({
   selector: 'app-gov-users-tab',
   standalone: true,
-  imports: [FormsModule, TranslateModule],
+  imports: [ModalDialogDirective, FormsModule, TranslateModule],
   templateUrl: './users-tab.html',
   styleUrl: './admin-governance.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

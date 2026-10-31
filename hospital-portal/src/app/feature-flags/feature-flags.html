@@ -120,9 +120,12 @@
         (keydown.enter)="$event.stopPropagation()"
         tabindex="-1"
         role="dialog"
+        appModalDialog
+        aria-labelledby="feature-flags-dialog-1-title"
+        (escaped)="closeCreate()"
       >
         <div class="modal-header">
-          <h2>{{ 'FLAGS.CREATE_TITLE' | translate }}</h2>
+          <h2 id="feature-flags-dialog-1-title">{{ 'FLAGS.CREATE_TITLE' | translate }}</h2>
           <button
             [attr.aria-label]="'COMMON.CLOSE' | translate"
             class="btn-icon"

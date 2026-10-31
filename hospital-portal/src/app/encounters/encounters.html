@@ -654,6 +654,7 @@
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="closeAvs(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
         <h2 id="encounters-dialog-1-title">
@@ -741,6 +742,7 @@
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="closeModal(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
         <h2 id="encounters-dialog-2-title">
@@ -969,6 +971,7 @@
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="cancelDelete(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
         <h2 id="encounters-dialog-3-title">{{ 'ENCOUNTERS.DELETE' | translate }}</h2>

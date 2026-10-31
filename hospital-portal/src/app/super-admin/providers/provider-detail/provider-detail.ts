@@ -37,6 +37,7 @@ import { ProviderStaffRegisterComponent } from '../../../provider/provider-staff
 import { ProviderEvidenceFormComponent } from '../provider-evidence-form/provider-evidence-form';
 import { lifecycleBadgeClass, verificationBadgeClass } from '../provider-status';
 import { ServerTimePipe } from '../../../shared/pipes/server-time.pipe';
+import { ModalDialogDirective } from '../../../shared/a11y/modal-dialog.directive';
 
 /** A verification decision taken with a reason. */
 type DecisionKind = 'reject' | 'revoke';
@@ -73,6 +74,7 @@ const LIFECYCLE_REASON_MIN = 5;
     EnumLabelPipe,
     ProviderEvidenceFormComponent,
     ProviderStaffRegisterComponent,
+    ModalDialogDirective,
   ],
   templateUrl: './provider-detail.html',
   changeDetection: ChangeDetectionStrategy.Eager,

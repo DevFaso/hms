@@ -22,13 +22,15 @@
   <div class="modal-backdrop" tabindex="-1" (click)="closeModal()" (keydown.escape)="closeModal()">
     <div
       class="modal"
+      appModalDialog
+      aria-labelledby="patient-photo-dialog-1-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="closeModal()"
     >
-      <h3>{{ 'PATIENT_PHOTO.MODAL_TITLE' | translate }}</h3>
+      <h3 id="patient-photo-dialog-1-title">{{ 'PATIENT_PHOTO.MODAL_TITLE' | translate }}</h3>
 
       @if (!cameraActive()) {
         <div class="capture-options">

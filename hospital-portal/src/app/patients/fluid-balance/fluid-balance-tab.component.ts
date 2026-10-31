@@ -20,6 +20,7 @@ import {
 } from '../../services/fluid-balance.service';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { toServerDateTime } from '../../shared/date-utils';
+import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 
 type WindowPreset = '24h' | '48h' | '7d';
 
@@ -34,7 +35,7 @@ const WINDOW_HOURS: Record<WindowPreset, number> = { '24h': 24, '48h': 48, '7d':
 @Component({
   selector: 'app-fluid-balance-tab',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule],
+  imports: [ModalDialogDirective, ServerTimePipe, CommonModule, FormsModule, TranslateModule],
   templateUrl: './fluid-balance-tab.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './fluid-balance-tab.component.scss',

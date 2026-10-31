@@ -1,12 +1,13 @@
 <div class="modal-backdrop" tabindex="-1" (click)="close()" (keydown.escape)="close()">
   <div
+    appModalDialog
     class="modal modal-lg"
     role="dialog"
     aria-modal="true"
     aria-labelledby="provider-register-title"
     tabindex="-1"
     (click)="$event.stopPropagation()"
-    (keydown.escape)="close()"
+    (keydown.escape)="close(); $event.stopPropagation()"
   >
     <div class="modal-header">
       <h2 id="provider-register-title">{{ titleKey() | translate }}</h2>

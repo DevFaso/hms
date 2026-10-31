@@ -242,14 +242,16 @@
       tabindex="-1"
     >
       <dialog
+        appModalDialog
+        aria-labelledby="staff-list-dialog-1-title"
         class="modal modal-lg"
         [open]="showModal()"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="closeModal()"
+        (keydown.escape)="closeModal(); $event.stopPropagation()"
         tabindex="-1"
       >
         <div class="modal-header">
-          <h2>
+          <h2 id="staff-list-dialog-1-title">
             {{
               editing() ? ('STAFF.EDIT_STAFF' | translate) : ('STAFF.REGISTER_STAFF' | translate)
             }}
@@ -410,14 +412,16 @@
       tabindex="-1"
     >
       <dialog
+        appModalDialog
+        aria-labelledby="staff-list-dialog-2-title"
         class="modal"
         [open]="showDeleteConfirm()"
         (click)="$event.stopPropagation()"
-        (keydown.escape)="cancelDelete()"
+        (keydown.escape)="cancelDelete(); $event.stopPropagation()"
         tabindex="-1"
       >
         <div class="modal-header">
-          <h2>{{ 'STAFF.DEACTIVATE_STAFF' | translate }}</h2>
+          <h2 id="staff-list-dialog-2-title">{{ 'STAFF.DEACTIVATE_STAFF' | translate }}</h2>
           <button
             [attr.aria-label]="'COMMON.CLOSE' | translate"
             class="modal-close"

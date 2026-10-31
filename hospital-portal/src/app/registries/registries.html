@@ -190,6 +190,7 @@
   @if (showEnrollForm()) {
     <div class="modal-backdrop" (click)="closeEnrollForm()" aria-hidden="true"></div>
     <div
+      appModalDialog
       #enrollDialog
       class="modal"
       role="dialog"
@@ -284,6 +285,7 @@
   @if (statusTarget(); as target) {
     <div class="modal-backdrop" (click)="closeStatusModal()" aria-hidden="true"></div>
     <div
+      appModalDialog
       #statusDialog
       class="modal"
       role="dialog"

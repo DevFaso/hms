@@ -200,6 +200,7 @@
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="closeReschedule(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
         <h2 id="prenatal-tab-dialog-1-title">{{ 'PRENATAL.RESCHEDULE' | translate }}</h2>
@@ -259,6 +260,7 @@
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="closeReminder(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
         <h2 id="prenatal-tab-dialog-2-title">{{ 'PRENATAL.SEND_REMINDER' | translate }}</h2>

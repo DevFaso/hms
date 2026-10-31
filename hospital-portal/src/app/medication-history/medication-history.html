@@ -320,6 +320,8 @@
   >
     <div
       class="modal modal-lg"
+      appModalDialog
+      aria-labelledby="medication-history-dialog-1-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
@@ -327,7 +329,7 @@
       (keydown.escape)="closeFillModal(); $event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>
+        <h2 id="medication-history-dialog-1-title">
           {{
             (editingFillId() ? 'MED_TIMELINE.EDIT_FILL' : 'MED_TIMELINE.RECORD_FILL') | translate
           }}

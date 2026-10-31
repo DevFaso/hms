@@ -1,3 +1,4 @@
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { ChangeDetectionStrategy, Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -28,7 +29,14 @@ type UltrasoundWorklist = 'all' | 'pending' | 'high-risk' | 'follow-up' | 'anoma
 @Component({
   selector: 'app-ultrasound-tab',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, PatientPickerComponent],
+  imports: [
+    ModalDialogDirective,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    PatientPickerComponent,
+  ],
   templateUrl: './ultrasound-tab.html',
   styleUrl: './maternity.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
