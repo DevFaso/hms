@@ -1,3 +1,4 @@
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { personName } from '../shared/pipes/person-name.pipe';
 import { ChangeDetectionStrategy, Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -21,7 +22,14 @@ type BirthPlanFilter = 'all' | 'pending-review' | 'reviewed';
 @Component({
   selector: 'app-birth-plan-tab',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, PatientPickerComponent],
+  imports: [
+    ModalDialogDirective,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    PatientPickerComponent,
+  ],
   templateUrl: './birth-plan-tab.html',
   styleUrl: './maternity.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

@@ -1,3 +1,4 @@
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { personName } from '../shared/pipes/person-name.pipe';
 import {
   ChangeDetectionStrategy,
@@ -112,6 +113,7 @@ type MaternityTab =
   selector: 'app-maternity',
   standalone: true,
   imports: [
+    ModalDialogDirective,
     ServerTimePipe,
     CommonModule,
     FormsModule,

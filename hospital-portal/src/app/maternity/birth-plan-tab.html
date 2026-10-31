@@ -168,6 +168,7 @@
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="closePlan(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
         <h2 id="birth-plan-tab-dialog-1-title">
@@ -302,6 +303,7 @@
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="closePlanModal(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
         <h2 id="birth-plan-tab-dialog-2-title">
@@ -495,6 +497,7 @@
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="closeReview(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
         <h2 id="birth-plan-tab-dialog-3-title">{{ 'BIRTH_PLAN.REVIEW_TITLE' | translate }}</h2>
@@ -549,6 +552,7 @@
       tabindex="-1"
       (click)="$event.stopPropagation()"
       (keydown.escape)="closeDelete(); $event.stopPropagation()"
+      appModalDialog
     >
       <div class="modal-header">
         <h2 id="birth-plan-tab-dialog-4-title">{{ 'BIRTH_PLAN.DELETE_TITLE' | translate }}</h2>

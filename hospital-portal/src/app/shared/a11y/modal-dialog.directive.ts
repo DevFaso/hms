@@ -16,10 +16,9 @@ import {
  *   <div class="x-dialog" appModalDialog aria-labelledby="x-title" (escaped)="close()">
  *
  * It sets `role="dialog"` and `aria-modal="true"`, moves focus into the box
- * when it opens (its first `[autofocus]` control, else its first focusable
- * one, else the box itself), keeps Tab and Shift+Tab inside it, emits
- * `escaped` on Escape, and gives focus back to whatever had it when the
- * dialog closes.
+ * when it opens (its first focusable control, else the box itself), keeps
+ * Tab and Shift+Tab inside it, emits `escaped` on Escape, and gives focus
+ * back to whatever had it when the dialog closes.
  *
  * Bind `(escaped)` to the SAME method the dialog's Cancel button calls, so a
  * busy or unsaved-changes guard applies to Escape too. A box that already
@@ -67,8 +66,7 @@ export class ModalDialogDirective implements AfterViewInit, OnDestroy {
   ngAfterViewInit(): void {
     const box = this.box();
     if (box.contains(document.activeElement) && document.activeElement !== box) return;
-    const first =
-      box.querySelector<HTMLElement>('[autofocus]:not([disabled])') ?? this.focusable()[0];
+    const first = this.focusable()[0];
     if (first) {
       first.focus();
       return;

@@ -14,7 +14,7 @@ import { ModalDialogDirective } from './modal-dialog.directive';
   changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     <button id="opener" (click)="open.set(true)">Open</button>
-    <div id="page" (keydown.escape)="pageEscapes = pageEscapes + 1">
+    <div id="page" tabindex="-1" (keydown.escape)="pageEscapes = pageEscapes + 1">
       @if (open()) {
         <div class="modal-backdrop">
           <div id="box" appModalDialog aria-labelledby="t" (escaped)="close()">
@@ -38,16 +38,15 @@ import { ModalDialogDirective } from './modal-dialog.directive';
         </div>
       }
       @if (unbound()) {
-        <div id="unbound" appModalDialog aria-labelledby="t4" (keydown.escape)="unbound.set(false)">
+        <div
+          id="unbound"
+          appModalDialog
+          tabindex="-1"
+          aria-labelledby="t4"
+          (keydown.escape)="unbound.set(false)"
+        >
           <h2 id="t4">Own handler</h2>
           <button id="unbound-btn">OK</button>
-        </div>
-      }
-      @if (auto()) {
-        <div id="auto" appModalDialog aria-labelledby="t5" (escaped)="auto.set(false)">
-          <h2 id="t5">Autofocus</h2>
-          <button id="auto-x">x</button>
-          <input id="auto-field" autofocus />
         </div>
       }
     </div>
@@ -58,7 +57,6 @@ class HostComponent {
   confirm = signal(false);
   viewOnly = signal(false);
   unbound = signal(false);
-  auto = signal(false);
   busy = false;
   pageEscapes = 0;
   close(): void {
@@ -108,12 +106,6 @@ describe('ModalDialogDirective (QA D1004)', () => {
   it('moves focus into the dialog when it opens', () => {
     openDialog();
     expect(document.activeElement).toBe(el('first'));
-  });
-
-  it('prefers an [autofocus] control', () => {
-    fixture.componentInstance.auto.set(true);
-    fixture.detectChanges();
-    expect(document.activeElement).toBe(el('auto-field'));
   });
 
   it('focuses the box itself when it has nothing focusable', () => {
