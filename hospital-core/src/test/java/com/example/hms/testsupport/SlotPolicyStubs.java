@@ -17,6 +17,25 @@ public final class SlotPolicyStubs {
     private SlotPolicyStubs() {
     }
 
+    /**
+     * QA D1093: every time a test books for a patient is a published, free
+     * slot of {@link AppointmentSlotPolicy#DEFAULT_VISIT_MINUTES}; the policy's
+     * own refusals are tested in {@code AppointmentSlotPolicyTest}.
+     */
+    public static void publishedSlots(AppointmentSlotPolicy slotPolicy) {
+        lenient().when(slotPolicy.requirePublishedFreeSlot(any(), any(), any(), any())).thenAnswer(inv -> {
+            java.time.LocalDateTime start = inv.getArgument(1);
+            if (start == null) {
+                return null;
+            }
+            return com.example.hms.model.scheduling.AppointmentSlot.builder()
+                .slotDate(start.toLocalDate())
+                .startAt(start)
+                .endAt(start.plusMinutes(AppointmentSlotPolicy.DEFAULT_VISIT_MINUTES))
+                .build();
+        });
+    }
+
     public static void defaultLength(AppointmentSlotPolicy slotPolicy) {
         lenient().when(slotPolicy.endFor(any(), any(), any())).thenAnswer(inv -> {
             LocalTime start = inv.getArgument(2);

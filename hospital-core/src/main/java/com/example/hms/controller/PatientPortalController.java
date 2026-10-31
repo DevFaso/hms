@@ -398,6 +398,33 @@ public class PatientPortalController {
                 portalService.getProvidersForDepartment(auth, hospitalId, departmentId)));
     }
 
+    @Operation(summary = "List the published, free slots of a day",
+            description = "QA D1093: the slots a patient may book on a date at a hospital they are registered at; "
+                    + "a self-booking takes exactly one of them")
+    @GetMapping("/booking/hospitals/{hospitalId}/departments/{departmentId}/slots")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    @HospitalScopeExempt(reason = "A patient choosing where to book: the hospital is the booking target, and a patient's own scope holds no hospital")
+    public ResponseEntity<ApiResponseWrapper<List<Map<String, Object>>>> getOpenSlots(
+            Authentication auth, @PathVariable UUID hospitalId, @PathVariable UUID departmentId,
+            @RequestParam(required = false) UUID staffId,
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(
+                    iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate date) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                portalService.getOpenSlots(auth, hospitalId, departmentId, staffId, date)));
+    }
+
+    @Operation(summary = "List the slots my appointment can move to",
+            description = "QA D1093: the published, free slots of the same clinician on a date")
+    @GetMapping("/appointments/{appointmentId}/reschedule-slots")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<List<Map<String, Object>>>> getRescheduleSlots(
+            Authentication auth, @PathVariable UUID appointmentId,
+            @RequestParam @org.springframework.format.annotation.DateTimeFormat(
+                    iso = org.springframework.format.annotation.DateTimeFormat.ISO.DATE) java.time.LocalDate date) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(
+                portalService.getRescheduleSlots(auth, appointmentId, date)));
+    }
+
     // ── Cancel own appointment ───────────────────────────────────────────
 
     @Operation(summary = "Cancel my appointment",
