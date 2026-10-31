@@ -1080,7 +1080,13 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
 
     private static final int PHONE_ACTIVATION_MAX_FAILURES = 5;
     private static final long PHONE_ACTIVATION_WINDOW_MS = 15L * 60 * 1000;
-    /** Wrong-code times per number, oldest first (in memory: per instance, reset on restart). */
+    private static final int PHONE_ACTIVATION_TRACKED_MAX = 10_000;
+
+    private static boolean isStale(java.util.Deque<Long> failures, long cutoff) {
+        Long last = failures.peekLast();
+        return last == null || last < cutoff;
+    }
+    /** Wrong-code times per number, oldest first, thread-safe deques (in memory: per instance, reset on restart). */
     private final Map<String, java.util.Deque<Long>> phoneActivationFailures =
         new java.util.concurrent.ConcurrentHashMap<>();
 
@@ -1090,22 +1096,27 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             return;
         }
         long cutoff = System.currentTimeMillis() - PHONE_ACTIVATION_WINDOW_MS;
-        synchronized (failures) {
-            while (!failures.isEmpty() && failures.peekFirst() < cutoff) {
-                failures.pollFirst();
-            }
-            if (failures.size() >= PHONE_ACTIVATION_MAX_FAILURES) {
-                throw new BusinessException("users.verification.tooManyAttempts");
-            }
+        Long oldest = failures.peekFirst();
+        while (oldest != null && oldest < cutoff) {
+            failures.pollFirst();
+            oldest = failures.peekFirst();
+        }
+        if (failures.size() >= PHONE_ACTIVATION_MAX_FAILURES) {
+            throw new BusinessException("users.verification.tooManyAttempts");
         }
     }
 
     private void recordPhoneActivationFailure(String key) {
-        java.util.Deque<Long> failures =
-            phoneActivationFailures.computeIfAbsent(key, k -> new java.util.ArrayDeque<>());
-        synchronized (failures) {
-            failures.addLast(System.currentTimeMillis());
+        // Bounded: numbers whose wrong codes are all older than the window are
+        // forgotten once the map grows (a caller typing random numbers cannot
+        // grow it without limit; the per-IP rate limit slows it first).
+        if (phoneActivationFailures.size() > PHONE_ACTIVATION_TRACKED_MAX) {
+            long cutoff = System.currentTimeMillis() - PHONE_ACTIVATION_WINDOW_MS;
+            phoneActivationFailures.values().removeIf(d -> isStale(d, cutoff));
         }
+        phoneActivationFailures
+            .computeIfAbsent(key, k -> new java.util.concurrent.ConcurrentLinkedDeque<>())
+            .addLast(System.currentTimeMillis());
     }
 
     private BusinessException invalidConfirmationCode() {
