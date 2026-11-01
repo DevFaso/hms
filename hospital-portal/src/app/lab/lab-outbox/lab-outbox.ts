@@ -1,4 +1,4 @@
-import { CdkTrapFocus } from '@angular/cdk/a11y';
+import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 import {
   Component,
   OnInit,
@@ -35,7 +35,7 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 @Component({
   selector: 'app-lab-outbox',
   standalone: true,
-  imports: [CdkTrapFocus, ServerTimePipe, CommonModule, FormsModule, TranslateModule],
+  imports: [ModalDialogDirective, ServerTimePipe, CommonModule, FormsModule, TranslateModule],
   templateUrl: './lab-outbox.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lab-outbox.scss',

@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { expectKeyboardModal } from '../../testing/modal-dialog-keyboard';
 import { TranslateModule } from '@ngx-translate/core';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 
 import { LabOutboxComponent } from './lab-outbox';
 import {
@@ -187,5 +188,34 @@ describe('LabOutboxComponent', () => {
     expect(payload.textContent).toContain('MSH|^~\\&|HMS|');
     // The clicked message itself is filtered out of the siblings list.
     expect(component.detail()?.siblings.map((s) => s.id)).toEqual(['m-2']);
+  });
+
+  describe('the message dialog keeps the keyboard contract (QA D1154 / D1004 / D1125)', () => {
+    afterEach(() => (fixture.nativeElement as HTMLElement).remove());
+
+    it('"Voir le message" by keyboard: focus moves in while it loads, Escape closes, focus returns', () => {
+      const row = message({ id: 'm-1' });
+      setup(['ROLE_LAB_DIRECTOR'], pageOf([row]));
+      // The message is still loading when the dialog opens (the round-21 shape).
+      outboxService.getMessage.and.returnValue(new Subject<never>());
+      outboxService.getMessagesForOrder.and.returnValue(of([]));
+      document.body.appendChild(fixture.nativeElement);
+      const opener = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
+        '[data-testid="outbox-view-m-1"]',
+      )!;
+      expectKeyboardModal(fixture, opener);
+    });
+
+    it('once loaded, Escape still closes and gives focus back', () => {
+      const row = message({ id: 'm-1' });
+      setup(['ROLE_LAB_DIRECTOR'], pageOf([row]));
+      outboxService.getMessage.and.returnValue(of({ ...row, payload: 'MSH|^~\&|HMS|' }));
+      outboxService.getMessagesForOrder.and.returnValue(of([]));
+      document.body.appendChild(fixture.nativeElement);
+      const opener = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
+        '[data-testid="outbox-view-m-1"]',
+      )!;
+      expectKeyboardModal(fixture, opener);
+    });
   });
 });

@@ -216,6 +216,57 @@ function hasFocusDirective(tag) {
   return [...tag.attrs.keys()].some((k) => FOCUS_DIRECTIVE.test(k));
 }
 
+/** A control that can hold focus, written as a tag. */
+const FOCUSABLE_CONTROL =
+  /<(?:button|select|textarea)\b|<input\b(?![^>]*\btype\s*=\s*["']hidden["'])|<a\b[^>]*\b(?:href|routerLink)\b|\btabindex\s*=\s*["'](?!-1)\d/;
+
+/** `inner` without the bodies of its `@if` / `@else` / `@for` / `@switch` blocks. */
+function withoutBlocks(inner) {
+  let out = '';
+  let i = 0;
+  while (i < inner.length) {
+    const at = inner.indexOf('@', i);
+    if (at < 0) {
+      out += inner.slice(i);
+      break;
+    }
+    out += inner.slice(i, at);
+    const block = /^@(?:if|else|for|switch|case|default|defer|placeholder|loading|empty)\b/.exec(
+      inner.slice(at),
+    );
+    const brace = block ? inner.indexOf('{', at) : -1;
+    if (brace < 0) {
+      out += '@';
+      i = at + 1;
+      continue;
+    }
+    let depth = 0;
+    let k = brace;
+    for (; k < inner.length; k++) {
+      if (inner[k] === '{') depth++;
+      else if (inner[k] === '}' && --depth === 0) break;
+    }
+    i = k + 1;
+  }
+  return out;
+}
+
+/**
+ * QA D1154 / D1004 / D1125 (round 21): the lab outbox's message dialog
+ * trusted `cdkTrapFocus` + auto-capture, which focuses the first control
+ * present when the dialog opens. The card opened while the message was still
+ * loading, every control behind an `@if`: nothing was captured, focus stayed
+ * on "Voir le message", and the card's Escape never fired. The shared
+ * directives focus the dialog itself when it has nothing focusable.
+ */
+function capturesNothing(tag, inner, stack, directive, nativeDialog, componentSource) {
+  if (nativeDialog || directive !== null || COMPONENT_FOCUS.test(componentSource)) return false;
+  const keys = [...tag.attrs.keys()];
+  if (keys.some((k) => /^(?:appDialogFocus)$/.test(k)) || stack.some((s) => s.focus)) return false;
+  if (!keys.includes('cdkTrapFocus')) return false;
+  return !FOCUSABLE_CONTROL.test(withoutBlocks(inner ?? ''));
+}
+
 /**
  * A `(keydown)="onKey($event)"` whose OWN handler reads `'Escape'` — in the
  * binding itself, or in the body of the method it calls. An `'Escape'` check
@@ -470,6 +521,14 @@ export function dialogFindings(html, componentSource = html, dialogSelectors = n
           anchor: a,
           message:
             'hand-built dialog with no focus management: add appModalDialog (focus in, Tab kept inside, focus back on close)',
+        });
+      } else if (capturesNothing(tag, inner, stack, directive, nativeDialog, componentSource)) {
+        out.push({
+          line: tag.line,
+          rule: 'focus',
+          anchor: a,
+          message:
+            'cdkTrapFocus captures nothing when this dialog opens (every control is behind an @if, e.g. while it loads): focus stays on the opener and Escape never reaches it; use appModalDialog',
         });
       }
     } else if ([...classTokens(tag)].some((t) => CONTAINER_TOKEN.test(t))) {

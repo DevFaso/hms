@@ -428,6 +428,27 @@ export class EnumLabelService implements OnDestroy {
       MAIL_ORDER: 'Mail order',
       MOBILE_OUTREACH: 'Mobile unit',
     },
+    // QA D1148: the chart banner's directive chips and code status.
+    advanceDirectiveType: {
+      LIVING_WILL: 'Living will',
+      DURABLE_POWER_OF_ATTORNEY: 'Durable power of attorney',
+      DO_NOT_RESUSCITATE: 'Do not resuscitate (DNR)',
+      PHYSICIAN_ORDERS_FOR_LIFE_SUSTAINING_TREATMENT:
+        'Physician orders for life-sustaining treatment (POLST)',
+      OTHER: 'Other',
+    },
+    codeStatus: {
+      FULL_CODE: 'Full code',
+      DNR: 'Do not resuscitate (DNR)',
+      DNI: 'Do not intubate (DNI)',
+      COMFORT_ONLY: 'Comfort care only',
+      LIVING_WILL: 'Living will',
+      DURABLE_POWER_OF_ATTORNEY: 'Durable power of attorney',
+      DO_NOT_RESUSCITATE: 'Do not resuscitate (DNR)',
+      PHYSICIAN_ORDERS_FOR_LIFE_SUSTAINING_TREATMENT:
+        'Physician orders for life-sustaining treatment (POLST)',
+      OTHER: 'Other',
+    },
     imagingLaterality: {
       LEFT: 'Left',
       RIGHT: 'Right',

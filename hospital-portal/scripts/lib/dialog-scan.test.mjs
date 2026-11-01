@@ -168,7 +168,8 @@ test('QA D1030: a hand-built dialog must manage focus (shared directive, CDK tra
     scan(bare, bare).map((f) => f.rule),
     ['focus'],
   );
-  const trapped = `<div class="modal" role="dialog" aria-modal="true" aria-label="x" cdkTrapFocus (keydown.escape)="c()"></div>`;
+  // QA D1154 (round 21): the trap needs a control to capture; an empty one is the outbox shape.
+  const trapped = `<div class="modal" role="dialog" aria-modal="true" aria-label="x" cdkTrapFocus (keydown.escape)="c()"><button>OK</button></div>`;
   assert.deepEqual(scan(trapped, trapped), []);
   const directive = `<div class="modal" appModalDialog aria-label="x" (escaped)="c()"></div>`;
   assert.deepEqual(scan(directive, directive), []);
@@ -404,4 +405,33 @@ test('QA D1155: a field and a Close in exclusive @if/@else branches are a panel,
 test('QA D1155: an inline form outside any dialog is not this rule', () => {
   const html = `@if (open()) { <div class="f"><textarea></textarea><button (click)="cancel()">Cancel</button></div> }`;
   assert.deepEqual(subform(html), []);
+});
+
+test('QA D1154 (round 21): a cdkTrapFocus dialog whose every control is behind an @if captures nothing', () => {
+  const loading = `<div class="form-overlay" (click)="closeDetail()" (keydown.escape)="closeDetail()" tabindex="-1">
+    <div class="form-card" role="dialog" aria-modal="true" aria-labelledby="t" cdkTrapFocus
+      [cdkTrapFocusAutoCapture]="true" (keydown.escape)="closeDetail(); $event.stopPropagation()" tabindex="-1">
+      @if (detailLoading()) {
+        <div class="state-block"><span class="spin"></span></div>
+      } @else if (detail(); as d) {
+        <h2 id="t">Message</h2>
+        <button (click)="closeDetail()">Close</button>
+      }
+    </div>
+  </div>`;
+  const focus = (html) => scan(html, html).filter((f) => f.rule === 'focus');
+  assert.equal(focus(loading).length, 1);
+  assert.match(focus(loading)[0].message, /captures nothing/);
+  // A close button present from the first frame is captured.
+  const header = loading.replace(
+    'tabindex="-1">\n      @if',
+    'tabindex="-1">\n      <button class="x" (click)="closeDetail()">x</button>\n      @if',
+  );
+  assert.deepEqual(focus(header), []);
+  // The shared directive focuses the dialog itself when it has nothing to focus.
+  const directive = `<div class="form-card" appModalDialog aria-labelledby="t" (escaped)="closeDetail()">
+      <h2 id="t">Message</h2>
+      @if (detail()) { <button (click)="closeDetail()">Close</button> }
+    </div>`;
+  assert.deepEqual(focus(directive), []);
 });
