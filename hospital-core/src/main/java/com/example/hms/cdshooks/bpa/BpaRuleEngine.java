@@ -162,7 +162,11 @@ public class BpaRuleEngine {
         for (BpaRule rule : rules) {
             try {
                 List<CdsCard> ruleCards = rule.evaluate(context);
-                if (ruleCards != null) cards.addAll(ruleCards);
+                if (ruleCards != null) {
+                    for (CdsCard card : ruleCards) {
+                        cards.add(card.withUuid(stableCardUuid(rule.id(), card)));
+                    }
+                }
             } catch (RuntimeException ex) {
                 // Defensive: a buggy rule must not crash the chart load.
                 // Log with the throwable so the stack trace lands in
@@ -177,6 +181,21 @@ public class BpaRuleEngine {
             }
         }
         return cards;
+    }
+
+    /**
+     * QA D1194 (round 22): the card's id is the rule and its level, never a
+     * random value or the card's text. Cards were given a random uuid on every
+     * evaluation, so the 24-hour acknowledgement fell back to the summary
+     * TEXT - written in the language of whoever acknowledged it - and the
+     * same patient state was hidden in French and shown again in Spanish and
+     * English. The same rule at the same level is the same advisory in every
+     * language; a WARNING acknowledged does not hide the CRITICAL it becomes.
+     */
+    static String stableCardUuid(String ruleId, CdsCard card) {
+        String level = card.indicator() == null ? "" : card.indicator().wire();
+        return java.util.UUID.nameUUIDFromBytes(("hms-bpa:" + ruleId + ":" + level)
+            .getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();
     }
 
     /** Convenience: build context + evaluate. */

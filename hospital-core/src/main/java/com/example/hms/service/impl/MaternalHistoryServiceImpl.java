@@ -66,9 +66,7 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
     @Override
     public MaternalHistoryResponseDTO createMaternalHistory(MaternalHistoryRequestDTO request, String username) {
         log.info("Creating maternal history for patient ID: {}", request.getPatientId());
-        // QA D1148 class (round 21): a history records something.
-        com.example.hms.service.support.ClinicalContent.requireAnyAnswer(request, java.util.Set.of("patientId", "hospitalId", "recordedByStaffId",
-            "recordedDate", "updateReason"), "clinicalNotes", "maternalHistory.contentRequired");
+        requireHistoryContent(request);
         
         Patient patient = patientRepository.findById(request.getPatientId())
                 .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_WITH_ID, request.getPatientId()));
@@ -115,6 +113,18 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
         return toDto(saved);
     }
 
+    /**
+     * QA D1148 class (round 21): a history records something. QA D1182 class
+     * (round 22): an edit writes a NEW version from the request alone, so the
+     * edit is held to the same rule as the create - a blank edit saved an
+     * empty version over the recorded history.
+     */
+    static void requireHistoryContent(MaternalHistoryRequestDTO request) {
+        com.example.hms.service.support.ClinicalContent.requireAnyAnswer(request, java.util.Set.of("patientId",
+            "hospitalId", "recordedByStaffId", "recordedDate", "updateReason"), "clinicalNotes",
+            "maternalHistory.contentRequired");
+    }
+
     @Override
     public MaternalHistoryResponseDTO updateMaternalHistory(UUID id, MaternalHistoryRequestDTO request, String username) {
         log.info("Updating maternal history ID: {}", id);
@@ -123,6 +133,7 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
                 .orElseThrow(() -> new ResourceNotFoundException(MATERNAL_HISTORY_NOT_FOUND_WITH_ID, id));
         // QA r5 tenancy sweep: a write loads under the tenant guard.
         com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(existingHistory.getHospital(), MATERNAL_HISTORY_NOT_FOUND_WITH_ID, id);
+        requireHistoryContent(request);
         
         Patient patient = patientRepository.findById(request.getPatientId())
                 .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_WITH_ID, request.getPatientId()));

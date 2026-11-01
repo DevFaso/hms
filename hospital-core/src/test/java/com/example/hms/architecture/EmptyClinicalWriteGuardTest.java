@@ -95,6 +95,13 @@ class EmptyClinicalWriteGuardTest {
             "service/impl/MaternalHistoryServiceImpl.java#createMaternalHistory");
         CHECKED.put("HighRiskPregnancyCarePlanController.createPlan",
             "service/HighRiskPregnancyCarePlanServiceImpl.java#createPlan");
+        // QA D1182 (round 22): the edit paths, held to the create's rule (the
+        // four round-21 KNOWN_GAPS, drained to zero).
+        CHECKED.put("ImagingResultController.updateReport", "service/impl/ImagingReportServiceImpl.java#updateReport");
+        CHECKED.put("MaternalHistoryController.updateMaternalHistory",
+            "service/impl/MaternalHistoryServiceImpl.java#updateMaternalHistory");
+        CHECKED.put("HighRiskPregnancyCarePlanController.updatePlan",
+            "service/HighRiskPregnancyCarePlanServiceImpl.java#updatePlan");
     }
 
     /**
@@ -104,14 +111,13 @@ class EmptyClinicalWriteGuardTest {
     private static final Map<String, String> KNOWN_GAPS = new LinkedHashMap<>();
 
     static {
-        KNOWN_GAPS.put("ImagingResultController.updateReport",
-            "D1151 class: an edit of a recorded report; whether an edit may blank its findings is open");
-        KNOWN_GAPS.put("MicroCultureController.updateCulture",
-            "D1151 class: an edit of a recorded culture (null keeps the stored value)");
-        KNOWN_GAPS.put("MaternalHistoryController.updateMaternalHistory",
-            "D1148 class: an edit of a recorded history; the create is checked");
-        KNOWN_GAPS.put("HighRiskPregnancyCarePlanController.updatePlan",
-            "D1148 class: an edit of a recorded plan; the create is checked");
+        // Round 22 (QA D1182): empty - every edit path is CHECKED or NOT_FINDINGS. Must stay empty.
+    }
+
+    @Test
+    void noKnownGapIsLeft() {
+        assertThat(KNOWN_GAPS).as("QA D1182: the edit paths are checked; a new gap is a defect, not a list entry")
+            .isEmpty();
     }
 
     /** "Controller.method" -> why its body is not a record of clinical findings. */
@@ -150,6 +156,9 @@ class EmptyClinicalWriteGuardTest {
         NOT_FINDINGS.put("PatientController.getDoctorRecord", "a read carried in a POST body");
         NOT_FINDINGS.put("PatientController.getDoctorTimeline", "a read carried in a POST body");
         NOT_FINDINGS.put("MortalityController.amendDeathRecord", "an amendment of a recorded death, with its reason");
+        NOT_FINDINGS.put("MicroCultureController.updateCulture",
+            "a partial correction of an opened culture (QA D1182 review): a null keeps the stored value, so it"
+                + " cannot blank the culture; its findings (growth, isolates) are required at finalize");
         NOT_FINDINGS.put("MicroCultureController.createCulture",
             "opens a culture for a lab order (@NotNull labOrderId); growth and isolates are recorded on it later");
         NOT_FINDINGS.put("PatientController.updatePatientDiagnosis",

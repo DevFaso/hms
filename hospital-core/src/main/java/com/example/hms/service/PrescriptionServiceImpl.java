@@ -169,7 +169,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
         // DECISION SUPPORT: Check allergies before prescribing. QA D1149: after
         // the catalogue pick, so the item's ATC class is known to the check.
-        String allergyOverride = checkAllergyConflicts(patient, request, atcOf(catalogItem));
+        String allergyOverride = checkAllergyConflicts(patient, request, catalogItem);
 
         // CDS rule engine: drug-drug, duplicate-order, pediatric-dose
         List<CdsCard> advisories = withCrossReactivityAdvisory(patient, request.getMedicationName(),
@@ -1341,7 +1341,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
         // DECISION SUPPORT: Check allergies before updating prescription
         // (QA D1149: after the catalogue pick, with the item's ATC class).
-        String allergyOverride = checkAllergyConflicts(patient, request, atcOf(catalogItem));
+        String allergyOverride = checkAllergyConflicts(patient, request, catalogItem);
 
         // CDS rule engine: drug-drug, duplicate-order, pediatric-dose. QA D970:
         // the order being edited is not a duplicate of itself.
@@ -2121,22 +2121,26 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         return item == null ? null : item.getAtcCode();
     }
 
-    private String checkAllergyConflicts(Patient patient, PrescriptionRequestDTO request, String atcCode) {
+    private String checkAllergyConflicts(Patient patient, PrescriptionRequestDTO request,
+                                         com.example.hms.model.medication.MedicationCatalogItem catalogItem) {
         String medicationName = request.getMedicationName();
         if (medicationName == null || medicationName.isBlank()) {
             return null; // Cannot check without medication name
         }
+        String atcCode = atcOf(catalogItem);
 
         // A hard safety stop: an allergy recorded at ANY hospital counts.
         List<PatientAllergy> allergies = patientAllergyRepository.findByPatient_Id(patient.getId());
         String med = normalizeDrugText(medicationName);
+        String withSynonyms = drugTextForAllergyCheck(medicationName, catalogItem);
         String reason = request.getOverrideReason() != null ? request.getOverrideReason().trim() : "";
         // QA D432: the warning cited whichever matching entry came first, so a
         // moderate entry could hide a severe one for the same allergen. The
         // most severe matching entry is the one the prescriber is shown.
         Optional<PatientAllergy> worst = allergies.stream()
             .filter(PatientAllergy::isActive)
-            .filter(allergy -> matchesAllergen(med, allergy.getAllergenDisplay(), atcCode))
+            .filter(allergy -> matchesAllergen(med, allergy.getAllergenDisplay(), atcCode)
+                || matchesAllergen(withSynonyms, allergy.getAllergenDisplay(), atcCode))
             .max(java.util.Comparator.comparingInt(PrescriptionServiceImpl::allergySeverityRank));
         if (worst.isEmpty()) {
             return null;
@@ -2300,6 +2304,26 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         });
     }
 
+    /**
+     * QA D1183 (round 22): what the allergy check reads for the ordered drug -
+     * the typed name, the catalogue item's generic and brand names (the
+     * repository's own synonym data: a "Bactrim" item records its generic),
+     * and the generic names of a standard brand ({@code DrugClassAllergy}).
+     */
+    static String drugTextForAllergyCheck(String medicationName,
+                                          com.example.hms.model.medication.MedicationCatalogItem catalogItem) {
+        StringBuilder text = new StringBuilder(medicationName == null ? "" : medicationName);
+        if (catalogItem != null) {
+            for (String synonym : new String[] {catalogItem.getGenericName(), catalogItem.getBrandName(),
+                    catalogItem.getNameFr()}) {
+                if (synonym != null && !synonym.isBlank()) {
+                    text.append(' ').append(synonym);
+                }
+            }
+        }
+        return com.example.hms.service.allergy.DrugClassAllergy.withGenericNames(text.toString());
+    }
+
     /** Lower-case, accent-free form: "Pénicilline V" and "penicillin" must meet. */
     static String normalizeDrugText(String value) {
         if (value == null) {
@@ -2325,10 +2349,12 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         if (allergen.isEmpty() || med.isEmpty()) {
             return false;
         }
-        if (allergen.contains(med) || med.contains(allergen)) {
+        // QA D1183: a brand is read with its generic names on both rules.
+        String expanded = com.example.hms.service.allergy.DrugClassAllergy.withGenericNames(med);
+        if (allergen.contains(med) || expanded.contains(allergen)) {
             return true;
         }
-        return com.example.hms.service.allergy.DrugClassAllergy.covers(allergen, med, atcCode);
+        return com.example.hms.service.allergy.DrugClassAllergy.covers(allergen, expanded, atcCode);
     }
 
     private void handleAllergyConflict(Patient patient, PatientAllergy allergy, String medicationName,

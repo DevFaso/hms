@@ -136,7 +136,7 @@ public class PregnancyHypertensionProtocolRule implements BpaRule {
             null,
             null,
             null,
-            java.util.UUID.randomUUID().toString()
+            null // QA D1194: BpaRuleEngine gives the card its stable id (rule + level)
         );
     }
 

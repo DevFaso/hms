@@ -128,10 +128,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         imagingReportMapper.updateReportFromRequest(report, request);
         applyAuthoredStatus(report, request, imagingOrder, true);
         applyCriticalFlag(report, request);
-        // QA D1150 class (round 21): a report says what the study showed.
-        com.example.hms.service.support.ClinicalContent.requireAny("findings", "imaging.report.findingsRequired",
-            request.getTechnique(), request.getFindings(), request.getImpression(), request.getRecommendations(),
-            request.getMeasurements(), request.getAttachments());
+        requireReportFindings(report);
 
         enforceUniqueReportNumber(report.getReportNumber(), hospital.getId(), null);
         assignVersioningForCreate(report, imagingOrder.getId());
@@ -147,6 +144,18 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         // contract — a notification failure must not roll back the report.
         criticalNotificationService.notifyIfCritical(saved);
         return imagingReportMapper.toResponseDTO(saved);
+    }
+
+    /**
+     * QA D1150 / D1182 class (rounds 21 and 22): a report says what the study
+     * showed - a technique, findings, an impression, recommendations, a
+     * measurement or an attachment. Checked on the report as it will be saved,
+     * after the request is applied, on create AND on edit.
+     */
+    static void requireReportFindings(ImagingReport report) {
+        com.example.hms.service.support.ClinicalContent.requireAny("findings", "imaging.report.findingsRequired",
+            report.getTechnique(), report.getFindings(), report.getImpression(), report.getRecommendations(),
+            report.getMeasurements(), report.getAttachments());
     }
 
     @Override
@@ -188,6 +197,9 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         imagingReportMapper.updateReportFromRequest(report, request);
         applyAuthoredStatus(report, request, imagingOrder, false);
         applyCriticalFlag(report, request);
+        // QA D1182 class (round 22): the edit replaces the text of the read, so
+        // an edit with nothing in it saved a blank report the create refuses.
+        requireReportFindings(report);
 
         enforceUniqueReportNumber(report.getReportNumber(), hospital != null ? hospital.getId() : null, report.getId());
         report.setUpdatedBy(roleValidator.getCurrentUserId());

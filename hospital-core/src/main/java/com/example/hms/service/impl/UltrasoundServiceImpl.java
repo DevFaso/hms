@@ -300,7 +300,16 @@ public class UltrasoundServiceImpl implements UltrasoundService {
      * with every value null and read "RAPPORT Normal", with "Notify the
      * patient" offered: the finding category alone (preselected by the form)
      * is not a finding. At least one measurement, observation or written
-     * finding must be present. A deliberate yes/no on cardiac activity counts.
+     * finding must be present.
+     *
+     * <p>QA D1182 (round 22): the yes/no boxes (cardiac activity, movement,
+     * tone, nasal bone, anatomy survey complete, ...) are NOT findings: the
+     * report form pre-fills cardiac activity, movement and tone, so the edit
+     * of a blank report sent them as {@code true} and saved "RAPPORT Normal"
+     * with every value null. Create and edit go through here alike. A scan
+     * with no cardiac activity says so in the findings or the interpretation.
+     * {@code UltrasoundReportFindingsTest} sets every box at once and expects
+     * the refusal.
      */
     static void requireReportFindings(UltrasoundReportRequestDTO request) {
         com.example.hms.service.support.ClinicalContent.requireAny("findingsSummary",
@@ -311,9 +320,7 @@ public class UltrasoundServiceImpl implements UltrasoundService {
             request.getAbdominalCircumferenceMm(), request.getFemurLengthMm(), request.getEstimatedFetalWeightGrams(),
             request.getPlacentalLocation(), request.getPlacentalGrade(), request.getAmnioticFluidIndex(),
             request.getAmnioticFluidLevel(), request.getCervicalLengthMm(), request.getUmbilicalArteryDoppler(),
-            request.getUterineArteryDoppler(), request.getFetalHeartRate(),
-            request.getFetalCardiacActivity() != null ? request.getFetalCardiacActivity().toString() : null,
-            request.getAnatomyFindings(), request.getFindingsSummary(), request.getInterpretation(),
+            request.getUterineArteryDoppler(), request.getFetalHeartRate(), request.getAnatomyFindings(), request.getFindingsSummary(), request.getInterpretation(),
             request.getAnomalyDescription());
     }
 

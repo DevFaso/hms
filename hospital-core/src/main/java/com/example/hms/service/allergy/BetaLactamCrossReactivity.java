@@ -64,7 +64,8 @@ public final class BetaLactamCrossReactivity {
         if (medicationName == null || medicationName.isBlank() || allergies == null || allergies.isEmpty()) {
             return Optional.empty();
         }
-        String med = normalize(medicationName);
+        // QA D1183: a brand (Augmentin) is read with its generic names.
+        String med = DrugClassAllergy.withGenericNames(medicationName);
         Family ordered = familyOfDrug(med);
         if (ordered == Family.NONE) {
             return Optional.empty();

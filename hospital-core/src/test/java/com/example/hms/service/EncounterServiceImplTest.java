@@ -841,7 +841,9 @@ class EncounterServiceImplTest {
         when(patientVitalSignRepository.save(vital.capture())).thenReturn(saved);
         when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        service.submitTriage(encounterId, TriageSubmissionRequestDTO.builder().esiScore(3).painScale(8).build(),
+        // QA D1188 (round 22, changed request): a pain score alone is no longer
+        // a triage's vital sign; the score rides with one.
+        service.submitTriage(encounterId, TriageSubmissionRequestDTO.builder().esiScore(3).heartRateBpm(88).painScale(8).build(),
             null, true, null);
 
         // QA D1169 (round 21): was the French sentence "Douleur : 8/10" (QA D989), read
@@ -2577,7 +2579,7 @@ class EncounterServiceImplTest {
             PatientVitalSign v = new PatientVitalSign();
             v.setRecordedAt(LocalDateTime.now());
             org.mockito.Mockito.lenient().when(patientVitalSignRepository
-                .findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(eq(p.getId()), any()))
+                .findLatestObservationSet(eq(p.getId()), any()))
                 .thenReturn(Optional.of(v));
             if (hospitalId != null) {
                 Hospital h = new Hospital();

@@ -3302,4 +3302,17 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- V258 (round 22): QA D1147, prescriptions edited before #1001 kept the
+         first drug's display name (and its code when the edit sent none): the
+         display name follows the drug's name again, a linked item's code is
+         restored, and an orphan code of the old drug is dropped
+         (clinical.prescriptions only). Plain statements, no DO block.
+         Idempotent. -->
+    <changeSet id="V258-r22-prescription-display-name-backfill" author="hms-team" runOnChange="false">
+        <sqlFile path="V258__r22_prescription_display_name_backfill.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

@@ -172,6 +172,18 @@ class LabResultReleaseNotifierTest {
 
         verify(notificationService).createNotification(eq("lab.result.correction.notification"), args.capture(),
             eq("dr.sawadogo"), eq("LAB_RESULT"), eq(correction.getId()));
-        assertThat(args.getValue()).containsExactly("Hémoglobine", "Awa Ouedraogo", "10,4 g/dL", "6,5 g/dL");
+        // QA D1207 (round 22, changed assertion): the values travel raw and are
+        // formatted in each reader's locale when read ("10,4" in French, "10.4"
+        // in English), no longer pre-formatted in French here.
+        assertThat(args.getValue()).containsExactly("Hémoglobine", "Awa Ouedraogo",
+            com.example.hms.service.i18n.NotificationLocalizer.labValue("10.4", "g/dL"),
+            com.example.hms.service.i18n.NotificationLocalizer.labValue("6.5", "g/dL"));
+        com.example.hms.service.i18n.NotificationLocalizer localizer = new com.example.hms.service.i18n.NotificationLocalizer(
+            com.example.hms.i18n.TestMessageSources.bundles());
+        java.util.List<Object> stored = com.example.hms.service.i18n.NotificationLocalizer.storable(args.getValue());
+        assertThat(localizer.render("lab.result.correction.notification", stored, java.util.Locale.FRENCH))
+            .contains("10,4 g/dL").contains("6,5 g/dL");
+        assertThat(localizer.render("lab.result.correction.notification", stored, java.util.Locale.ENGLISH))
+            .contains("10.4 g/dL").contains("6.5 g/dL");
     }
 }
