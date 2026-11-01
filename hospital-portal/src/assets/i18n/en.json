@@ -7395,6 +7395,10 @@
     "OVERRIDE": {
       "ALLERGY_REASON": "Allergy override reason",
       "CDS_REASON": "Reason for overriding the critical alert"
+    },
+    "SIGN_ALLERGY": {
+      "TITLE": "Allergy warning: sign anyway?",
+      "REASON": "Reason for signing despite the allergy warning"
     }
   },
   "PROFILE": {
@@ -11915,7 +11919,12 @@
     "PRESCRIBED": "Prescribed",
     "ACTION_HOLD": "Hold the dose",
     "ACTION_REFUSED": "Patient refused",
-    "HOLD_REFUSE_REASON_LABEL": "Reason (required to hold the dose or record a refusal)"
+    "HOLD_REFUSE_REASON_LABEL": "Reason (required to hold the dose or record a refusal)",
+    "EARLY_DOSE": {
+      "TITLE": "Dose before the minimum interval",
+      "REASON_LABEL": "Why is this dose given before the minimum interval?",
+      "CONFIRM": "Give the dose early"
+    }
   },
   "CREDENTIALING": {
     "CURRENT_EXPIRY": "Current expiry",

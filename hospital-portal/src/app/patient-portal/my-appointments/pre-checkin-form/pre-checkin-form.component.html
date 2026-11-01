@@ -85,6 +85,7 @@
             <input
               id="phone"
               type="tel"
+              appPhoneField
               [(ngModel)]="phoneNumber"
               [placeholder]="'PRE_CHECKIN.PHONE_PLACEHOLDER' | translate"
             />
@@ -136,7 +137,7 @@
           <div class="form-grid-2">
             <div class="form-row">
               <label for="ecPhone">{{ 'PRE_CHECKIN.EC_PHONE' | translate }}</label>
-              <input id="ecPhone" type="tel" [(ngModel)]="emergencyContactPhone" />
+              <input id="ecPhone" type="tel" appPhoneField [(ngModel)]="emergencyContactPhone" />
             </div>
             <div class="form-row">
               <label for="ecRelation">{{ 'PRE_CHECKIN.EC_RELATIONSHIP' | translate }}</label>

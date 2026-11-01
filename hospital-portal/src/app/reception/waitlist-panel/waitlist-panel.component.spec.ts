@@ -268,6 +268,9 @@ describe('WaitlistPanelComponent', () => {
    * the picker, and a typed reversed range is refused on the end field.
    */
   it('QA D1215: the range ends bound each other and a reversed range is refused on the field', () => {
+    // The window is in the future of the pinned day (the past-end rule below).
+    jasmine.clock().install();
+    jasmine.clock().mockDate(new Date(2026, 10, 1, 9, 0));
     component.openAddForm();
     component.selectPatient({ id: 'p1', firstName: 'Hamed', lastName: 'Tiendrebeogo' } as any);
     component.selectedDeptId.set('d1');
@@ -296,5 +299,39 @@ describe('WaitlistPanelComponent', () => {
     component.submitAdd();
     fixture.detectChanges();
     expect(mockReceptionService.addToWaitlist).toHaveBeenCalledTimes(1);
+    jasmine.clock().uninstall();
+  });
+
+  /**
+   * QA D1215 (round 23, portal half of #1011): the server now also refuses a
+   * window that ends before today (`waitlist.dateRange.past`). The end picker
+   * starts at today, and a typed past end is refused on the field before any
+   * request is sent.
+   */
+  it('QA D1215: a window that already ended is refused on the end field, before the server refuses it', () => {
+    jasmine.clock().install();
+    try {
+      jasmine.clock().mockDate(new Date(2026, 10, 1, 9, 0));
+      component.openAddForm();
+      component.selectPatient({ id: 'p1', firstName: 'Hamed', lastName: 'Tiendrebeogo' } as any);
+      component.selectedDeptId.set('d1');
+      fixture.detectChanges();
+      const host: HTMLElement = fixture.nativeElement;
+      const to = host.querySelector<HTMLInputElement>('#wl-to')!;
+      expect(to.getAttribute('min')).withContext('the end picker starts today').toBe('2026-11-01');
+
+      component.dateTo.set('2026-10-20');
+      component.submitAdd();
+      fixture.detectChanges();
+      expect(mockReceptionService.addToWaitlist).not.toHaveBeenCalled();
+      expect(mockToastService.error).toHaveBeenCalledWith('DATE_RULES.NOT_IN_PAST');
+      expect(to.getAttribute('aria-invalid')).toBe('true');
+
+      component.dateTo.set('2026-11-01');
+      component.submitAdd();
+      expect(mockReceptionService.addToWaitlist).toHaveBeenCalledTimes(1);
+    } finally {
+      jasmine.clock().uninstall();
+    }
   });
 });

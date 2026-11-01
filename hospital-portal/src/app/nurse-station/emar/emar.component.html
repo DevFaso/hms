@@ -339,6 +339,23 @@
                 {{ 'EMAR.ACTION_REFUSED' | translate }}
               </button>
             </section>
+
+            <!-- QA D1210 (round 23): the server refused the dose as too soon after
+                 the last one. Its reason is shown, and the dose may be given early
+                 with the nurse's reason (kept on the MAR row). -->
+            @if (earlyDose(); as early) {
+              <app-reason-dialog
+                titleKey="EMAR.EARLY_DOSE.TITLE"
+                labelKey="EMAR.EARLY_DOSE.REASON_LABEL"
+                confirmKey="EMAR.EARLY_DOSE.CONFIRM"
+                dismissKey="COMMON.BACK"
+                [busy]="administerInFlight()"
+                (confirmed)="confirmEarlyDose($event)"
+                (cancelled)="earlyDose.set(null)"
+              >
+                <p class="form-error" role="alert" data-testid="early-dose-why">{{ early.why }}</p>
+              </app-reason-dialog>
+            }
           </article>
         } @else {
           <div class="emar__placeholder" data-testid="emar-placeholder">

@@ -584,7 +584,13 @@
         <div class="form-row">
           <div class="field">
             <label for="gua-phone">{{ 'COVERAGE.GUARANTOR_PHONE' | translate }}</label>
-            <input id="gua-phone" type="text" maxlength="20" [(ngModel)]="guarantorForm.phone" />
+            <input
+              id="gua-phone"
+              type="tel"
+              appPhoneField
+              maxlength="20"
+              [(ngModel)]="guarantorForm.phone"
+            />
           </div>
           <div class="field">
             <label for="gua-email">{{ 'COVERAGE.GUARANTOR_EMAIL' | translate }}</label>

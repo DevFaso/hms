@@ -283,6 +283,16 @@ export interface NurseCareNoteResponse {
   documentedAt: string;
 }
 
+/** PUT /nurse/medications/mar/{id}/administer (NurseMedicationAdministrationRequestDTO). */
+export interface MedicationAdministrationRequest {
+  status: string;
+  note?: string;
+  overrideReason?: string;
+  witnessUserId?: string;
+  /** QA D1210: why a dose is given before the minimum interval since the last one. */
+  earlyDoseReason?: string;
+}
+
 @Injectable({ providedIn: 'root' })
 export class NurseTaskService {
   private readonly http = inject(HttpClient);
@@ -324,9 +334,13 @@ export class NurseTaskService {
     );
   }
 
+  /**
+   * QA D1210 (round 23): `earlyDoseReason` answers the server's "dose too soon"
+   * refusal (nurse-station/early-dose.ts); it is sent only when the nurse gave one.
+   */
   administerMedication(
     taskId: string,
-    data: { status: string; note?: string; overrideReason?: string; witnessUserId?: string },
+    data: MedicationAdministrationRequest,
   ): Observable<NurseMedicationTask> {
     return this.http.put<NurseMedicationTask>(
       `${this.baseUrl}/medications/mar/${taskId}/administer`,

@@ -15,6 +15,7 @@ import { followFacility } from '../follow-facility';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { PhoneFieldDirective } from '../../shared/forms/phone-field.directive';
 /**
  * The facility profile (provider plan P1-T13, AC-6): the operational contact,
  * which the facility's PROVIDER_ADMIN may change (phone, email, website), and
@@ -31,6 +32,7 @@ import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive'
   selector: 'app-provider-profile',
   standalone: true,
   imports: [
+    PhoneFieldDirective,
     SubmitGuardDirective,
     ServerTimePipe,
     DatePipe,

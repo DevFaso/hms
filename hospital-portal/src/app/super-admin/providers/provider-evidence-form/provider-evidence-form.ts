@@ -3,6 +3,7 @@ import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
 
 import { FacilityType, ProviderEvidence } from '../../../services/provider.model';
+import { PhoneFieldDirective } from '../../../shared/forms/phone-field.directive';
 
 /** The text fields of the business identity layer (the address is edited on its own). */
 export type BusinessField =
@@ -42,7 +43,7 @@ export type ProfessionalField =
 @Component({
   selector: 'app-provider-evidence-form',
   standalone: true,
-  imports: [FormsModule, TranslateModule],
+  imports: [PhoneFieldDirective, FormsModule, TranslateModule],
   templateUrl: './provider-evidence-form.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './provider-evidence-form.scss',

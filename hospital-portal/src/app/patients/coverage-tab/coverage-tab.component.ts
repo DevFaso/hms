@@ -24,6 +24,7 @@ import { ToastService } from '../../core/toast.service';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { PhoneFieldDirective } from '../../shared/forms/phone-field.directive';
 /**
  * Coverage tab on patient detail (Phase 3 task 17): insurance policies and
  * hospital registrations for one patient. Insurance roles are HOSPITAL_ADMIN/
@@ -36,6 +37,7 @@ import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive'
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    PhoneFieldDirective,
     SubmitGuardDirective,
     DialogFocusDirective,
     ServerTimePipe,

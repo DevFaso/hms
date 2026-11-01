@@ -11,6 +11,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { PhoneFieldDirective } from '../shared/forms/phone-field.directive';
 
 interface Department {
   id: string;
@@ -42,6 +43,7 @@ interface DepartmentRequest {
   selector: 'app-department-list',
   standalone: true,
   imports: [
+    PhoneFieldDirective,
     SubmitGuardDirective,
     ModalDialogDirective,
     FormsModule,

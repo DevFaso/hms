@@ -36,12 +36,14 @@ import { PatientPortalService } from '../services/patient-portal.service';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { MeasurePipe } from '../shared/pipes/measure.pipe';
 import { FocusOnRenderDirective } from '../shared/a11y/focus-on-render.directive';
+import { PhoneFieldDirective } from '../shared/forms/phone-field.directive';
 type ProfileTab = 'overview' | 'edit' | 'security' | 'activity';
 
 @Component({
   selector: 'app-profile',
   standalone: true,
   imports: [
+    PhoneFieldDirective,
     SubmitGuardDirective,
     FocusOnRenderDirective,
     MeasurePipe,

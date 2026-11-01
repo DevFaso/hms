@@ -10,6 +10,18 @@ export interface SignReauthentication {
   password?: string;
   mfaCode?: string;
 }
+
+/**
+ * POST /prescriptions/{id}/sign (SignPrescriptionRequestDTO): the
+ * re-authentication of a controlled drug, and (QA D1183, round 23) the
+ * prescriber's reason for signing an order the allergy stop applies to when
+ * no acknowledgement was recorded at creation or edit (a documented allergy
+ * covers the drug, or the drug name could not be checked against a drug-class
+ * allergy: `prescription.allergy.unverifiable`).
+ */
+export interface SignPrescriptionBody extends SignReauthentication {
+  allergyOverrideReason?: string;
+}
 import { Injectable, inject } from '@angular/core';
 import { Observable, map } from 'rxjs';
 import { CdsCard } from '../shared/cds-card/cds-card.model';
@@ -316,18 +328,14 @@ export class PrescriptionService {
    * is the only path that records who signed, when, and a digest of what they
    * signed. Only the prescribing clinician can call it.
    */
-  sign(id: string, reauthentication?: SignReauthentication): Observable<PrescriptionResponse> {
+  sign(id: string, body?: SignPrescriptionBody): Observable<PrescriptionResponse> {
     // Round 18: a controlled drug is signed with the prescriber's
     // re-authentication in the body (never a header, never stored). The call
     // is marked as a step-up, so a refused password or code comes back to the
     // sign dialog instead of signing the user out or opening the 403 page.
-    return this.http.post<PrescriptionResponse>(
-      `${this.baseUrl}/${id}/sign`,
-      reauthentication ?? {},
-      {
-        context: new HttpContext().set(STEP_UP_REQUEST, true),
-      },
-    );
+    return this.http.post<PrescriptionResponse>(`${this.baseUrl}/${id}/sign`, body ?? {}, {
+      context: new HttpContext().set(STEP_UP_REQUEST, true),
+    });
   }
 
   /**

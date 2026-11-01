@@ -10,11 +10,13 @@ import { RoleContextService } from '../core/role-context.service';
 import { PharmacyService, PharmacyRequest, PharmacyResponse } from '../services/pharmacy.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { PhoneFieldDirective } from '../shared/forms/phone-field.directive';
 
 @Component({
   selector: 'app-pharmacy-registry',
   standalone: true,
   imports: [
+    PhoneFieldDirective,
     SubmitGuardDirective,
     FormsModule,
     TranslateModule,

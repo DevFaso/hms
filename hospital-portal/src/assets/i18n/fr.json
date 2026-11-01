@@ -7395,6 +7395,10 @@
     "OVERRIDE": {
       "ALLERGY_REASON": "Motif de dérogation à l’alerte d’allergie",
       "CDS_REASON": "Motif du passage outre l’alerte critique"
+    },
+    "SIGN_ALLERGY": {
+      "TITLE": "Alerte allergie : signer malgré tout ?",
+      "REASON": "Motif de la signature malgré l’alerte allergie"
     }
   },
   "PROFILE": {
@@ -11915,7 +11919,12 @@
     "PRESCRIBED": "Prescrit",
     "ACTION_HOLD": "Suspendre la dose",
     "ACTION_REFUSED": "Refus du patient",
-    "HOLD_REFUSE_REASON_LABEL": "Motif (obligatoire pour suspendre la dose ou enregistrer un refus)"
+    "HOLD_REFUSE_REASON_LABEL": "Motif (obligatoire pour suspendre la dose ou enregistrer un refus)",
+    "EARLY_DOSE": {
+      "TITLE": "Dose avant l’intervalle minimal",
+      "REASON_LABEL": "Pourquoi donner cette dose avant l’intervalle minimal ?",
+      "CONFIRM": "Administrer en avance"
+    }
   },
   "CREDENTIALING": {
     "CURRENT_EXPIRY": "Expiration actuelle",

@@ -31,6 +31,7 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refusalReason } from '../shared/refusal-reason';
+import { PhoneFieldDirective } from '../shared/forms/phone-field.directive';
 /**
  * Medication-history workspace (Phase 3 task 15): the /medication-history
  * timeline (prescriptions + external pharmacy fills with overlap/interaction
@@ -42,6 +43,7 @@ import { refusalReason } from '../shared/refusal-reason';
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    PhoneFieldDirective,
     SubmitGuardDirective,
     ModalDialogDirective,
     MedicationRoutePipe,

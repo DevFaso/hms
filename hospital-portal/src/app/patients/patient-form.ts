@@ -31,6 +31,7 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { MeasurePipe } from '../shared/pipes/measure.pipe';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { PhoneFieldDirective } from '../shared/forms/phone-field.directive';
 /**
  * QA D1118: the card names what the match is really on. A record found by the
  * same name and date of birth (matchedOn IDENTITY) was described as "a record
@@ -66,6 +67,7 @@ export function matchBasisSuffix(matches: readonly Pick<RegistrationMatch, 'matc
   selector: 'app-patient-form',
   standalone: true,
   imports: [
+    PhoneFieldDirective,
     SubmitGuardDirective,
     MeasurePipe,
     ModalDialogDirective,

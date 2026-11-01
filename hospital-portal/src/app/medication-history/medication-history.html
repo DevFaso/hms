@@ -418,7 +418,7 @@
         <div class="form-row">
           <div class="field">
             <label for="fill-phone">{{ 'MED_TIMELINE.PHARMACY_PHONE' | translate }}</label>
-            <input id="fill-phone" type="text" [(ngModel)]="fillForm.pharmacyPhone" />
+            <input id="fill-phone" type="tel" appPhoneField [(ngModel)]="fillForm.pharmacyPhone" />
           </div>
           <div class="field">
             <label for="fill-facility">{{ 'MED_TIMELINE.FACILITY_CODE' | translate }}</label>

@@ -890,6 +890,58 @@ describe('NurseStationComponent — two-tier polling', () => {
       expect(toastSpy.error).toHaveBeenCalledWith('Cette dose a déjà été enregistrée.');
     });
 
+    // QA D1210 (round 23, portal half): a dose given before the minimum gap
+    // since the last one is refused on earlyDoseReason (nurse.mar.doseTooSoon).
+    // The station's Give prompt stays open and the reason dialog opens over it
+    // (an appModalDialog modal under the shared reason dialog written as a
+    // sibling: the shape overlay-stack.spec.ts clicks with the mouse); the
+    // dose is re-sent with the reason, the witness and override kept.
+    it('D1210: a dose refused as too soon asks why, keeps the Give prompt, and is re-sent with the reason', () => {
+      const why = 'Dose trop rapprochée : prochaine au plus tôt à 13:00 (toutes les 4 h).';
+      nurseServiceSpy.administerMedication.and.returnValues(
+        throwError(() => ({
+          status: 400,
+          error: { message: why, field: 'earlyDoseReason', fieldErrors: { earlyDoseReason: why } },
+        })),
+        of({} as any),
+      );
+      component.medications.set([
+        { id: 'rx-mor', medication: 'Morphine', controlledSubstance: true } as any,
+      ]);
+      component.administerMedication('rx-mor');
+      component.reasonText.set('Pas de scanner au chevet');
+      component.witnessUserId.set('u-witness');
+      component.confirmHoldRefuse();
+
+      expect(component.reasonPrompt()).withContext('the Give prompt stays open').not.toBeNull();
+      expect(component.earlyDose()?.why).toBe(why);
+      expect(toastSpy.error).not.toHaveBeenCalled();
+
+      component.confirmEarlyDose('Douleur non contrôlée, avis du médecin');
+      expect(nurseServiceSpy.administerMedication.calls.mostRecent().args).toEqual([
+        'rx-mor',
+        {
+          status: 'GIVEN',
+          overrideReason: 'Pas de scanner au chevet',
+          witnessUserId: 'u-witness',
+          earlyDoseReason: 'Douleur non contrôlée, avis du médecin',
+        },
+      ]);
+      expect(component.reasonPrompt()).toBeNull();
+      expect(component.earlyDose()).toBeNull();
+    });
+
+    it('D1210: any other refusal of the dose keeps its toast, no early-dose dialog', () => {
+      nurseServiceSpy.administerMedication.and.returnValue(
+        throwError(() => ({ status: 400, error: { message: 'Témoin requis.' } })),
+      );
+      component.administerMedication('rx-1');
+      component.reasonText.set('Pas de scanner');
+      component.confirmHoldRefuse();
+      expect(component.earlyDose()).toBeNull();
+      expect(toastSpy.error).toHaveBeenCalledWith('Témoin requis.');
+    });
+
     it("D799: Give from the medications table shows the dose's cross-reactivity advisory first", () => {
       const card = {
         summary: 'Possible cross-reactivity: Ceftriaxone and the documented allergy to Penicillin',
