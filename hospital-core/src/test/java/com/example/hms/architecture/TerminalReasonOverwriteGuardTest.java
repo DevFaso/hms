@@ -99,7 +99,7 @@ class TerminalReasonOverwriteGuardTest {
             // a closing timestamp still unset
             + "|get(?:(?!(?:Revoked|Cancelled|Closed|Ended|Voided)At\\()\\w)*+(?:Revoked|Cancelled|Closed|Ended|Voided)At\\(\\)\\s*+[!=]=\\s*+null"
             // a load restricted to a live status
-            + "|\\bfind\\w*(?:AndStatus|IsNull)\\w*\\(");
+            + "|\\bfind(?:(?!AndStatus|IsNull)\\w)*+(?:AndStatus|IsNull)\\w*+\\(");
 
     private static final String UPSTREAM = "QA D1186 audit (round 22): the state check is upstream - ";
 
