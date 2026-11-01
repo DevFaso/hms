@@ -922,7 +922,10 @@ class PatientServiceImplTest {
         when(patientProblemRepository.findById(diagnosisId)).thenReturn(Optional.of(problem));
         com.example.hms.model.PatientProblemHistory removal = new com.example.hms.model.PatientProblemHistory();
         removal.setChangeType(com.example.hms.enums.ProblemChangeType.DELETED);
-        when(patientProblemHistoryRepository.findFirstByProblem_IdOrderByChangedAtDesc(diagnosisId))
+        when(patientProblemHistoryRepository.findFirstByProblem_IdAndChangeTypeInOrderByChangedAtDesc(
+            org.mockito.ArgumentMatchers.eq(diagnosisId), org.mockito.ArgumentMatchers.argThat(types -> types.contains(com.example.hms.enums.ProblemChangeType.DELETED)
+                && !types.contains(com.example.hms.enums.ProblemChangeType.UPDATED)
+                && !types.contains(com.example.hms.enums.ProblemChangeType.CHRONICITY_CHANGED))))
             .thenReturn(Optional.of(removal));
         when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
 
@@ -954,7 +957,10 @@ class PatientServiceImplTest {
         // Removed once, then set active again, then marked INACTIVE by the chart: the latest change is not a removal.
         com.example.hms.model.PatientProblemHistory statusChange = new com.example.hms.model.PatientProblemHistory();
         statusChange.setChangeType(com.example.hms.enums.ProblemChangeType.STATUS_CHANGED);
-        when(patientProblemHistoryRepository.findFirstByProblem_IdOrderByChangedAtDesc(diagnosisId))
+        when(patientProblemHistoryRepository.findFirstByProblem_IdAndChangeTypeInOrderByChangedAtDesc(
+            org.mockito.ArgumentMatchers.eq(diagnosisId), org.mockito.ArgumentMatchers.argThat(types -> types.contains(com.example.hms.enums.ProblemChangeType.DELETED)
+                && !types.contains(com.example.hms.enums.ProblemChangeType.UPDATED)
+                && !types.contains(com.example.hms.enums.ProblemChangeType.CHRONICITY_CHANGED))))
             .thenReturn(Optional.of(statusChange));
 
         patientService.deletePatientDiagnosis(patientId, hospitalId, diagnosisId, requesterUserId, "Saisie en double");
