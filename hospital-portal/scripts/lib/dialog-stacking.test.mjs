@@ -304,6 +304,10 @@ test('D1209: every dialog directive opens, raises and closes a layer of the one 
     assert.match(src, /\.raise\(\)/, `${name}: the layer is never raised`);
     assert.match(src, /\.close\(\)/, `${name}: the layer is never closed`);
     assert.match(src, /\.isTop\(\)/, `${name}: the keyboard does not follow the one stack`);
-    assert.doesNotMatch(src, /static readonly stack/, `${name}: a directive-specific stack is back`);
+    assert.doesNotMatch(
+      src,
+      /static readonly stack/,
+      `${name}: a directive-specific stack is back`,
+    );
   }
 });

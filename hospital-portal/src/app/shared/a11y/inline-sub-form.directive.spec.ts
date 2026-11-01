@@ -133,7 +133,10 @@ describe('inline sub-form: focus back to the opener after Escape or Discard (QA 
   }
 
   for (const kind of ['page', 'line'] as const) {
-    const where = kind === 'page' ? 'a page row editor (inventory price)' : 'a row editor in a dialog (invoice line)';
+    const where =
+      kind === 'page'
+        ? 'a page row editor (inventory price)'
+        : 'a row editor in a dialog (invoice line)';
 
     it(`${where}: Escape with nothing typed gives the keyboard back to the pencil`, async () => {
       const input = await open(kind, 'b');
@@ -157,7 +160,9 @@ describe('inline sub-form: focus back to the opener after Escape or Discard (QA 
       discard.click();
       await settle();
       expect(document.activeElement)
-        .withContext(`focus on ${document.activeElement?.tagName}.${(document.activeElement as HTMLElement)?.className}`)
+        .withContext(
+          `focus on ${document.activeElement?.tagName}.${(document.activeElement as HTMLElement)?.className}`,
+        )
         .toBe(el(`${kind}-edit-b`));
     });
   }

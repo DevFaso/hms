@@ -71,10 +71,7 @@ test('D1216: the lab shape — debounce, distinctUntilChanged, switchMap — is 
         switchMap((q) => this.patientService.list(h, q)),
       ).subscribe();`;
   assert.deepEqual(droppedRepeatSearches(lab), [{ stream: 'patientSearch$', line: 1 }]);
-  assert.deepEqual(
-    droppedRepeatSearches(lab.replace('distinctUntilChanged(),', '')),
-    [],
-  );
+  assert.deepEqual(droppedRepeatSearches(lab.replace('distinctUntilChanged(),', '')), []);
 });
 
 test('every portal source: a debounced server search never drops a repeated query', () => {

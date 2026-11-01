@@ -54,4 +54,3 @@ describe('person-search (QA D1019, D1020)', () => {
     expect(exactIdentifierFirst(rows, 'none', (r) => r.mrn)).toEqual(rows);
   });
 });
-

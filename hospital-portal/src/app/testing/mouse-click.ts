@@ -26,7 +26,13 @@ function intersect(a: Box, b: Box): Box {
 function visibleBox(el: Element): Box | null {
   let box: Box = el.getBoundingClientRect();
   box = intersect(box, { left: 0, top: 0, right: innerWidth, bottom: innerHeight });
-  for (let p = el.parentElement; p !== null; p = p.parentElement) {
+  // A fixed-position box is clipped by the viewport only: the scrolling
+  // ancestors above it (the page body, a test runner's frame) do not clip it.
+  for (
+    let child: Element = el, p = el.parentElement;
+    p !== null && getComputedStyle(child).position !== 'fixed';
+    child = p, p = p.parentElement
+  ) {
     const style = getComputedStyle(p);
     if (style.overflowX !== 'visible' || style.overflowY !== 'visible') {
       box = intersect(box, p.getBoundingClientRect());
@@ -60,7 +66,12 @@ function describe(el: Element | null): string {
 export function mouseClick(el: HTMLElement): void {
   const hit = hitAt(el);
   if (hit === null || !el.contains(hit)) {
-    throw new Error(`${describe(el)} is covered by ${describe(hit)}: a mouse cannot reach it`);
+    const r = el.getBoundingClientRect();
+    throw new Error(
+      `${describe(el)} is covered by ${describe(hit)}, so a mouse cannot reach it ` +
+        `(at ${Math.round(r.left)},${Math.round(r.top)} ${Math.round(r.width)}x${Math.round(r.height)} ` +
+        `in a ${innerWidth}x${innerHeight} window)`,
+    );
   }
   (hit as HTMLElement).click();
 }

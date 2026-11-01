@@ -44,7 +44,9 @@ const SHARED = new Map([
 /** Every control-flow block body: `{ start, end }` offsets of its braces. */
 export function blocksOf(html) {
   const out = [];
-  for (const m of html.matchAll(/@(?:if|else\s+if|for|case|switch)\s*\(|@(?:else|default|empty)\s*\{/g)) {
+  for (const m of html.matchAll(
+    /@(?:if|else\s+if|for|case|switch)\s*\(|@(?:else|default|empty)\s*\{/g,
+  )) {
     let brace = m.index + m[0].length - 1;
     if (html[brace] === '(') {
       const cond = balanced(html, brace, '(', ')');
@@ -164,8 +166,12 @@ test('every template: no dialog shows two buttons with the same label (allowlist
   let shared = 0;
   for (const { rel, text, lineOffset } of loadTemplates()) {
     shared += (text.match(/<app-(?:reason|confirm)-dialog\b/g) ?? []).length;
-    for (const f of duplicateLabelFindings(text)) offenders.push(`${rel}:${f.line + lineOffset} ${f.message}`);
+    for (const f of duplicateLabelFindings(text))
+      offenders.push(`${rel}:${f.line + lineOffset} ${f.message}`);
   }
-  assert.ok(shared >= 10, `only ${shared} shared reason/confirm dialogs found: the scan lost its shape`);
+  assert.ok(
+    shared >= 10,
+    `only ${shared} shared reason/confirm dialogs found: the scan lost its shape`,
+  );
   assert.deepEqual(offenders, []);
 });

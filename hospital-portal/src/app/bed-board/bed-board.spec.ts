@@ -444,8 +444,12 @@ describe('BedBoardComponent', () => {
       .withContext('the Précautions dialog stays open underneath')
       .toBeTrue();
     const dialog = reasonDialog(fixture)!;
-    expect(dialog.contains(document.activeElement)).withContext('focus is in the reason').toBeTrue();
-    const field = dialog.querySelector<HTMLTextAreaElement>('[data-testid="reason-dialog-reason"]')!;
+    expect(dialog.contains(document.activeElement))
+      .withContext('focus is in the reason')
+      .toBeTrue();
+    const field = dialog.querySelector<HTMLTextAreaElement>(
+      '[data-testid="reason-dialog-reason"]',
+    )!;
     mouseClick(field);
     field.value = 'Culture negative';
     field.dispatchEvent(new Event('input'));
@@ -497,7 +501,9 @@ describe('BedBoardComponent', () => {
     const confirm = dialog.querySelector<HTMLElement>('[data-testid="reason-dialog-confirm"]')!;
     expect(cancel.textContent!.trim()).toBe('COMMON.BACK');
     expect(confirm.textContent!.trim()).toBe('BED_BOARD.TRANSFER_CANCEL_CONFIRM');
-    const field = dialog.querySelector<HTMLTextAreaElement>('[data-testid="reason-dialog-reason"]')!;
+    const field = dialog.querySelector<HTMLTextAreaElement>(
+      '[data-testid="reason-dialog-reason"]',
+    )!;
     field.value = 'Bed no longer needed';
     field.dispatchEvent(new Event('input'));
     fixture.detectChanges();

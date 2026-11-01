@@ -43,7 +43,8 @@ test('every template: no row status pill reads as a plural (allowlist: none)', (
   for (const { rel, text } of loadTemplates()) {
     for (const key of sharedRowAndCountKeys(text)) {
       shared++;
-      if (readsPlural(key)) offenders.push(`${rel} ${key}: es "${value('es', key)}", fr "${value('fr', key)}"`);
+      if (readsPlural(key))
+        offenders.push(`${rel} ${key}: es "${value('es', key)}", fr "${value('fr', key)}"`);
     }
   }
   assert.ok(shared >= 3, `only ${shared} shared row/count keys found: the scan lost its shape`);

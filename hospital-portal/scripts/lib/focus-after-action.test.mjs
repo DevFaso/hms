@@ -126,16 +126,23 @@ test('QA D1131 class: a query box inside a dialog never asks before Escape', () 
 const BODY_COMPARE = /\b(?:activeElement|active)\s*[!=]==?\s*(?:document|doc)\.body\b/;
 const BODY_COMPARE_ALLOWED = new Map([
   ['shared/a11y/focus-rescue.ts', 'the rescue itself: it defines what "fell" means'],
-  ['shared/a11y/focus-return.ts', 'records the last focused element for an opener; never moves focus'],
+  [
+    'shared/a11y/focus-return.ts',
+    'records the last focused element for an opener; never moves focus',
+  ],
 ]);
 
 export function comparesFocusWithBody(source) {
-  return source.split('\n').some((line) => BODY_COMPARE.test(line) && !/^\s*(?:\/\/|\*)/.test(line));
+  return source
+    .split('\n')
+    .some((line) => BODY_COMPARE.test(line) && !/^\s*(?:\/\/|\*)/.test(line));
 }
 
 test('QA D1220: the scan sees a late return that yields to the rescue stand-in', () => {
   assert.equal(
-    comparesFocusWithBody(`const active = document.activeElement;\nif (active !== null && active !== document.body) return;`),
+    comparesFocusWithBody(
+      `const active = document.activeElement;\nif (active !== null && active !== document.body) return;`,
+    ),
     true,
   );
   assert.equal(comparesFocusWithBody(`if (!focusFell()) return;`), false);
@@ -145,7 +152,8 @@ test('QA D1220: every late focus return asks focusFell(), never "is focus on the
   const offenders = [];
   for (const file of walk(appDir, ['.ts'])) {
     const rel = relative(appDir, file).split(sep).join('/');
-    if (rel.endsWith('.spec.ts') || rel.startsWith('testing/') || BODY_COMPARE_ALLOWED.has(rel)) continue;
+    if (rel.endsWith('.spec.ts') || rel.startsWith('testing/') || BODY_COMPARE_ALLOWED.has(rel))
+      continue;
     if (comparesFocusWithBody(readFileSync(file, 'utf8'))) offenders.push(rel);
   }
   assert.deepEqual(offenders, [], 'use focusFell() from shared/a11y/focus-rescue.ts');

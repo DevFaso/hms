@@ -252,7 +252,8 @@ function pair(parent, child, how) {
  * template, which the caller reads.
  */
 function stacked(tag) {
-  if (['appModalDialog', 'appDialogA11y', 'appDialogFocus'].some((a) => tag.attrs.has(a))) return true;
+  if (['appModalDialog', 'appDialogA11y', 'appDialogFocus'].some((a) => tag.attrs.has(a)))
+    return true;
   if (tag.name === 'dialog') return true;
   return tag.name.includes('-') ? null : false;
 }
@@ -294,7 +295,8 @@ export function wholeDialogSelectors(components, templates) {
     const first = tags(template).find((t) => t.type === 'open');
     if (first === undefined) continue;
     const cls = first.attrs.get('class');
-    const cover = typeof cls === 'string' && /(?:^|[\s-])(?:backdrop|overlay|scrim)(?:\s|$)/.test(cls);
+    const cover =
+      typeof cls === 'string' && /(?:^|[\s-])(?:backdrop|overlay|scrim)(?:\s|$)/.test(cls);
     if (cover || isDialogTag(first, new Set())) out.add(selector[1]);
   }
   return out;
