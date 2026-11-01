@@ -319,7 +319,7 @@ class PharmacyServiceSupportTest {
 
         verify(smsService).send("+22670000000",
                 "Bonjour Awa, le médicament (Paracétamol) n'est pas disponible à la pharmacie "
-                        + "de l'hôpital. Elle a été envoyée à Pharmacie X.");
+                        + "de l'hôpital. Votre ordonnance a été envoyée à Pharmacie X.");
     }
 
     @Test

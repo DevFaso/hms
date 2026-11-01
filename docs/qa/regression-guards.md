@@ -547,3 +547,9 @@ cannot slip past it again.
 | `scripts/lib/glued-label.test.mjs` (new) | D1200: a value glued to a translated word (`{{ n }}{{ 'X.MIN_WAIT' \| translate }}`, an English plural `'s'`). The value goes into the sentence as a parameter. | Every template; 0 (flow board, 3 dashboard sites) |
 | `scripts/lib/badge-spacing.test.mjs` + `badge-spacing-scan.mjs` (new) | D1205 / D1167 / D1137: a status pill glued to the inline element or interpolation before it; a `&ngsp;` right after a block's `}` is dropped by Angular (shown by the lab-results spec). | Every template; 0 (142 pills in 72 templates spaced with `{{ ' ' }}`) |
 | `scripts/lib/lab-result-picker.test.mjs` (new) | D1204 / D1176: the "Nouveau résultat" picker offering an order the server refuses. The picker's excluded statuses equal `LabResultServiceImpl.requireSpecimenTaken`'s. | lab-results.ts against the server rule |
+
+## Guards added by the i18n review (fix/i18n-review-r22)
+
+| Guard | Class | Scope |
+|---|---|---|
+| `scripts/lib/sentence-case.test.mjs` + `sentence-case-scan.mjs` (new) | i18n review 2026-11-01: English title case copied into a French or Spanish label ("Mode de Paiement", "Fecha de Nacimiento", "Oui, Annuler"), 232 of the review's 330 typography findings. A capitalised word that is not the first word and does not follow `. ! ? : ; — – - ( [ / … « " “ ¿ ¡` fails. Not read: text in guillemets (a UI label quoted by name: `utilisez « Désactiver »`), identifiers glued to a capital or a digit (`SpO2`, `RxNorm`, `MenAfriVac`), example placeholders (`ex. Or, Argent`) and listed proper nouns, brands and units (`Burkina Faso`, `Rh`, `Mo`, `Google Authenticator`). | `fr.json` and `es.json`; 0 (790 values lowered, 42 rewritten by hand). The backend bundles are not read: their capitals are status and button names quoted in sentences and proper nouns (93 hits, none title case except 3 Spanish e-mail role labels, fixed). |
