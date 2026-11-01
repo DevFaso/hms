@@ -11177,7 +11177,8 @@
     "LAST_REVIEWED": "révisée",
     "TYPE_CHOOSE": "Choisir le type…",
     "STATUS_CHOOSE": "Choisir le statut…",
-    "REQUIRED_FIELDS": "Ce champ est obligatoire pour une directive."
+    "REQUIRED_FIELDS": "Ce champ est obligatoire pour une directive.",
+    "REVOKE_REASON": "Motif de la révocation"
   },
   "GROWTH": {
     "TAB": "Croissance",

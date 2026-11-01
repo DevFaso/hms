@@ -25,6 +25,7 @@ import { refusalReason } from '../../shared/refusal-reason';
 import { PatientChartChanges } from '../../interceptors/patient-chart-change.interceptor';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
+import { ReasonDialogComponent } from '../../shared/reason-dialog/reason-dialog.component';
 
 /**
  * Advance-directives tab on the patient chart (P2 #13).
@@ -61,7 +62,10 @@ const DIRECTIVE_FIELD_IDS = [
 @Component({
   selector: 'app-advance-directives-tab',
   standalone: true,
-  imports: [ModalDialogDirective, ServerTimePipe, CommonModule, FormsModule, TranslateModule],
+  imports: [
+    ModalDialogDirective,
+    ReasonDialogComponent,
+    ServerTimePipe, CommonModule, FormsModule, TranslateModule],
   templateUrl: './advance-directives-tab.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './advance-directives-tab.component.scss',
@@ -233,13 +237,19 @@ export class AdvanceDirectivesTabComponent implements OnInit {
     this.revokeTarget.set(null);
   }
 
-  executeRevoke(): void {
+  /**
+   * QA D1180 (round 22, regression of D1148): the server requires a reason to
+   * revoke a directive — an active DNR could no longer be revoked because the
+   * confirmation sent `{}`. The shared reason dialog asks for it.
+   */
+  executeRevoke(reason: string): void {
     const target = this.revokeTarget();
-    if (!target || this.revoking()) {
+    const why = reason.trim();
+    if (!target || this.revoking() || !why) {
       return;
     }
     this.revoking.set(true);
-    this.directiveService.revoke(target.id).subscribe({
+    this.directiveService.revoke(target.id, why).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('DIRECTIVES.REVOKED_TOAST'));
         this.revoking.set(false);

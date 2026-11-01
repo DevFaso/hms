@@ -180,10 +180,75 @@ describe('AdvanceDirectivesTabComponent', () => {
       fixture.nativeElement.querySelector('[data-testid="directive-revoke-modal"]'),
     ).not.toBeNull();
 
-    component.executeRevoke();
+    component.executeRevoke('Patient a changé d’avis');
 
-    expect(directiveService.revoke).toHaveBeenCalledWith('d-1');
+    expect(directiveService.revoke).toHaveBeenCalledWith('d-1', 'Patient a changé d’avis');
     expect(directiveService.listForPatient).toHaveBeenCalledTimes(2);
+  });
+
+  /**
+   * QA D1180 (round 22, regression): the server requires the reason; the
+   * confirmation had no field and sent `{}`, so an active DNR stayed on the
+   * banner. Driven through the real dialog: open, refuse empty, type, confirm.
+   */
+  describe('QA D1180: the revoke dialog asks for the reason', () => {
+    function openDialog(): HTMLElement {
+      const row = directive({ id: 'd-act', status: 'ACTIVE' });
+      setup([row]);
+      directiveService.revoke.and.returnValue(of({ ...row, status: 'REVOKED' }));
+      const host = fixture.nativeElement as HTMLElement;
+      document.body.appendChild(host);
+      host.querySelector<HTMLButtonElement>('[data-testid="directive-revoke-d-act"]')!.click();
+      fixture.detectChanges();
+      return host;
+    }
+
+    it('has a required reason field, and an empty confirm sends nothing and says why', () => {
+      const host = openDialog();
+      const field = host.querySelector<HTMLTextAreaElement>('[data-testid="reason-dialog-reason"]');
+      expect(field).withContext('the dialog asks for the reason').not.toBeNull();
+      expect(field!.required).toBeTrue();
+      host.querySelector<HTMLButtonElement>('[data-testid="reason-dialog-confirm"]')!.click();
+      fixture.detectChanges();
+      expect(directiveService.revoke).not.toHaveBeenCalled();
+      expect(field!.getAttribute('aria-invalid')).toBe('true');
+      expect(host.querySelector('[data-testid="submit-guard-reason"]')?.textContent?.trim())
+        .withContext('the refusal is said next to the button')
+        .toBeTruthy();
+      host.remove();
+    });
+
+    it('sends the typed reason in the body and reloads the banner', () => {
+      const host = openDialog();
+      const field = host.querySelector<HTMLTextAreaElement>('[data-testid="reason-dialog-reason"]')!;
+      field.value = '  Directive remplacée par une nouvelle  ';
+      field.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      host.querySelector<HTMLButtonElement>('[data-testid="reason-dialog-confirm"]')!.click();
+      fixture.detectChanges();
+      expect(directiveService.revoke).toHaveBeenCalledOnceWith(
+        'd-act',
+        'Directive remplacée par une nouvelle',
+      );
+      expect(host.querySelector('[data-testid="reason-dialog"]')).toBeNull();
+      host.remove();
+    });
+
+    it('shows the server refusal and keeps the dialog open on a 400', () => {
+      const host = openDialog();
+      directiveService.revoke.and.returnValue(
+        throwError(() => ({ status: 400, error: { message: 'Indiquez le motif' } })),
+      );
+      const field = host.querySelector<HTMLTextAreaElement>('[data-testid="reason-dialog-reason"]')!;
+      field.value = 'x';
+      field.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      host.querySelector<HTMLButtonElement>('[data-testid="reason-dialog-confirm"]')!.click();
+      fixture.detectChanges();
+      expect(toast.error).toHaveBeenCalledWith('Indiquez le motif');
+      expect(host.querySelector('[data-testid="reason-dialog"]')).not.toBeNull();
+      host.remove();
+    });
   });
 
   it('has no delete anywhere — a directive once in force is part of the record', () => {

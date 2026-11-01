@@ -11177,7 +11177,8 @@
     "LAST_REVIEWED": "reviewed",
     "TYPE_CHOOSE": "Choose the type…",
     "STATUS_CHOOSE": "Choose the status…",
-    "REQUIRED_FIELDS": "This field is required for a directive."
+    "REQUIRED_FIELDS": "This field is required for a directive.",
+    "REVOKE_REASON": "Reason for revoking"
   },
   "GROWTH": {
     "TAB": "Growth",
