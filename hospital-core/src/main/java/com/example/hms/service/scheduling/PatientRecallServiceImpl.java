@@ -59,9 +59,9 @@ public class PatientRecallServiceImpl implements PatientRecallService {
      * missed follow-ups. A due date further back (the QA's 01/01/2020) is a
      * typing error that would sit at the top of the list as overdue for good.
      */
-    static final int PAST_DUE_TOLERANCE_DAYS = 30;
+    public static final int PAST_DUE_TOLERANCE_DAYS = 30;
 
-    static void requireRecentDueDate(java.time.LocalDate dueDate, java.time.LocalDate today) {
+    public static void requireRecentDueDate(java.time.LocalDate dueDate, java.time.LocalDate today) {
         if (dueDate != null && dueDate.isBefore(today.minusDays(PAST_DUE_TOLERANCE_DAYS))) {
             throw new com.example.hms.exception.FieldBusinessException("dueDate", "recall.dueDate.tooFarInPast",
                 String.valueOf(PAST_DUE_TOLERANCE_DAYS));

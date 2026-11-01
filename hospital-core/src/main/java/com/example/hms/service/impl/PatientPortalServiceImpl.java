@@ -1838,9 +1838,9 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional(readOnly = true)
     public List<PatientLabResultResponseDTO> getProxyLabResults(Authentication auth, UUID patientId,
                                                                 int offset, int limit) {
-        verifyProxyAccess(auth, patientId, "VIEW_LAB_RESULTS");
-        // QA D1213: the proxy view pages like the patient's own.
-        return labResultService.getLabResultsForPatientPortal(patientId, offset, limit);
+        Patient patient = verifyProxyAccess(auth, patientId, "VIEW_LAB_RESULTS");
+        // QA D1213: the proxy view pages like the patient's own (the id the grant check resolved).
+        return labResultService.getLabResultsForPatientPortal(patient.getId(), offset, limit);
     }
 
     @Override

@@ -378,7 +378,7 @@ class PatientLabResultServiceImplTest {
         lenient().when(labResultMapper.toResponseDTO(any(LabResult.class))).thenAnswer(inv -> {
             LabResult r = inv.getArgument(0);
             LabResultResponseDTO dto = new LabResultResponseDTO();
-            dto.setId(r.getId());
+            dto.setId(r.getId().toString());
             return dto;
         });
         when(patientChartAccess.requireOwnRecord(patientId)).thenReturn(patient);

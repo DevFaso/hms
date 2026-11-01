@@ -282,7 +282,7 @@ public class DispenseVerificationService {
      * French name ("Amoxicilline"), any other reader the generic; no name at
      * all is said in the reader's language, never in English.
      */
-    static String describe(MedicationCatalogItem item) {
+    public static String describe(MedicationCatalogItem item) {
         boolean french = "fr".equals(org.springframework.context.i18n.LocaleContextHolder.getLocale().getLanguage());
         String name = french
             ? firstNonBlank(item.getNameFr(), item.getGenericName(), item.getBrandName())
