@@ -5987,3 +5987,6 @@ ships*, not for building — and check the shipped surface before trusting a
 ### Round-23 merge residuals (qa/r16-combined)
 - [ ] 6 hand-written patient pickers (found by #1010's D1216 sweep) should move onto `<app-patient-picker>`, so search, dedupe and focus behave the same everywhere.
 - [ ] The appointment cancel reason is typed inline in the edit form (#1009); move it to the shared reason dialog used by the other terminal actions.
+- [ ] (fix/r23-portal-siblings residuals) An allergy acknowledgement given at SIGNATURE is audited as "Allergy override recorded on edit": emit a distinct "recorded at signature" description (`PrescriptionServiceImpl`, the sign path) plus its alternative in `audit-description-patterns.ts` and AUDIT.DESC keys in EN/FR/ES.
+- [ ] D1209 guard gap: `scripts/lib/nested-dialog-scan.mjs` ignores a dialog opened inside a `.subscribe` callback (a reason dialog opened on a server refusal while its parent stays open, e.g. the nurse-station early-dose dialog over the Give prompt). Widen the scan and add a click-through DOM spec for that pair.
+- [ ] D1211: a server `validation.phone.invalid` 400 is shown through the generic refusal message, not mapped onto the phone field it names.
