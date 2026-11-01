@@ -11,7 +11,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Subject } from 'rxjs';
-import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
+import { debounceTime, switchMap } from 'rxjs/operators';
 import {
   LabService,
   LabOrderResponse,
@@ -383,7 +383,6 @@ export class LabComponent implements OnInit {
     this.patientSearch$
       .pipe(
         debounceTime(220),
-        distinctUntilChanged(),
         switchMap((q) => {
           this.patientSearchLoading.set(true);
           return this.patientService.list(this.patientSearchHospitalId(), q);

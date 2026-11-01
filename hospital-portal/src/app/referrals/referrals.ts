@@ -15,7 +15,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Subject } from 'rxjs';
-import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
+import { debounceTime, switchMap } from 'rxjs/operators';
 import {
   ReferralService,
   ReferralResponse,
@@ -393,7 +393,6 @@ export class ReferralsComponent implements OnInit {
     this.patientSearch$
       .pipe(
         debounceTime(220),
-        distinctUntilChanged(),
         switchMap((q) => {
           this.patientSearchLoading.set(true);
           return this.patientService.list(this.patientSearchHospitalId(), q);

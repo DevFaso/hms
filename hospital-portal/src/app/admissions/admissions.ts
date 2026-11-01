@@ -342,7 +342,6 @@ export class AdmissionsComponent implements OnInit {
     this.patientSearch$
       .pipe(
         debounceTime(220),
-        distinctUntilChanged(),
         switchMap((q) => {
           this.patientSearchLoading.set(true);
           // ── TENANT ISOLATION: scope patient search to the form's hospital ──

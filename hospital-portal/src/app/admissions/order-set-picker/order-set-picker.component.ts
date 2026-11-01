@@ -14,14 +14,7 @@ import {
 
 import { FormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
-import {
-  Subject,
-  Subscription,
-  debounceTime,
-  distinctUntilChanged,
-  switchMap,
-  takeUntil,
-} from 'rxjs';
+import { Subject, Subscription, debounceTime, switchMap, takeUntil } from 'rxjs';
 
 import {
   AppliedOrderSetSummary,
@@ -232,7 +225,6 @@ export class OrderSetPickerComponent implements OnChanges, OnDestroy {
     this.searchSubject
       .pipe(
         debounceTime(250),
-        distinctUntilChanged(),
         takeUntil(this.destroyed$),
         // Guard: when the host component renders before its hospitalId
         // input binding has propagated, an immediate request would hit

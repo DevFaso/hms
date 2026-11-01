@@ -371,7 +371,6 @@ export class EncountersComponent implements OnInit {
     this.patientSearch$
       .pipe(
         debounceTime(220),
-        distinctUntilChanged(),
         switchMap((q) => {
           this.patientSearchLoading.set(true);
           // ── TENANT ISOLATION: always scope patient search to the form's hospital ──
