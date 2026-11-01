@@ -72,8 +72,14 @@ Frontend RUM goes to Grafana Cloud Faro. The collector URL is per-environment:
 
 `docker compose up` brings up the full observability stack:
 
-- **Prometheus** scrapes `/api/actuator/prometheus` directly.
-- **Loki** + **Alloy** for logs. Alloy mounts the docker socket and tails container stdout, applying `application=hms` to the backend container.
+- **Alloy** scrapes `/api/actuator/prometheus` on the host-run backend (`host.docker.internal:8081`) and remote-writes to **Prometheus** — there is no direct
+  scrape job, and the backend is not a compose service. The endpoint is token-gated, so
+  Alloy presents `METRICS_SCRAPE_TOKEN` as `X-Metrics-Token`; see
+  [`docs/GRAFANA_CLOUD_SETUP.md`](./GRAFANA_CLOUD_SETUP.md).
+- **Loki** + **Alloy** for logs. Alloy mounts the docker socket and tails container
+  stdout. Note this means a **host-run backend's logs never reach Loki** — it is not a
+  container, and logback has no file appender. Metrics and probes are unaffected. See
+  the "Known gap" section of [`grafana/README.md`](../grafana/README.md).
 - **Grafana** at <http://localhost:3000> (admin/admin) auto-loads two provisioned dashboards: `HMS – Application Metrics & Logs` and `HMS – Business KPIs`.
 
 ## WebSocket / chat 401 troubleshooting

@@ -116,13 +116,22 @@ scrape_configs:
     params:
       module: [http_health_2xx]
     static_configs:
+      # The backend is not a compose service — it runs on the host under the `local`
+      # profile (port 8081), so probe it through the host gateway. Prometheus does not
+      # expand environment variables in this file, so these targets are literal: if you
+      # move the backend off 8081, edit them here. Note the `keycloak` compose profile
+      # also publishes host 8081 by default — see KEYCLOAK_HOST_PORT in docker-compose.yml.
+      # The previous value, `hms-backend:8080`, resolved to nothing: there is no such
+      # compose service, so every probe reported `down`.
+      # In production these targets become the public Railway domains — see
+      # docs/runbooks/synthetic-monitoring.md.
       - targets:
-          - http://hms-backend:8080/api/actuator/health/liveness
+          - http://host.docker.internal:8081/api/actuator/health/liveness
         labels:
           probe_target: 'backend-liveness'
           probe_module: 'http_health_2xx'
       - targets:
-          - http://hms-backend:8080/api/actuator/health/readiness
+          - http://host.docker.internal:8081/api/actuator/health/readiness
         labels:
           probe_target: 'backend-readiness'
           probe_module: 'http_health_2xx'
@@ -148,7 +157,7 @@ scrape_configs:
       module: [http_fhir_metadata_2xx]
     static_configs:
       - targets:
-          - http://hms-backend:8080/api/fhir/metadata
+          - http://host.docker.internal:8081/api/fhir/metadata
         labels:
           probe_target: 'fhir-capability-statement'
           probe_module: 'http_fhir_metadata_2xx'
@@ -174,7 +183,7 @@ scrape_configs:
       module: [http_smart_2xx]
     static_configs:
       - targets:
-          - http://hms-backend:8080/api/fhir/.well-known/smart-configuration
+          - http://host.docker.internal:8081/api/fhir/.well-known/smart-configuration
         labels:
           probe_target: 'smart-on-fhir-discovery'
           probe_module: 'http_smart_2xx'
@@ -200,7 +209,7 @@ scrape_configs:
       module: [http_cds_discovery_2xx]
     static_configs:
       - targets:
-          - http://hms-backend:8080/api/cds-services
+          - http://host.docker.internal:8081/api/cds-services
         labels:
           probe_target: 'cds-hooks-discovery'
           probe_module: 'http_cds_discovery_2xx'
