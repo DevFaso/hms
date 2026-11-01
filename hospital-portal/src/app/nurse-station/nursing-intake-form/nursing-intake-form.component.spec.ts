@@ -155,6 +155,7 @@ describe('NursingIntakeFormComponent', () => {
   it('should show error toast on failure', () => {
     mockEncounterService.submitNursingIntake.and.returnValue(
       throwError(() => ({
+        status: 400,
         error: { message: 'Invalid encounter status' },
       })),
     );

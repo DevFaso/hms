@@ -40,6 +40,34 @@ describe('DischargeComponent — encounter picker label', () => {
     opener.remove();
   });
 
+  it('QA D1160: "Annuler la demande" with no reason sends nothing and names the field', () => {
+    const fixture = TestBed.createComponent(DischargeComponent);
+    const cmp = fixture.componentInstance;
+    fixture.detectChanges();
+    Object.assign(cmp as unknown as Record<string, unknown>, {
+      staffId: 'staff-a',
+      hospitalId: 'h-1',
+    });
+    const http = TestBed.inject(HttpTestingController);
+    cmp.openCancel({ id: 'a-1', patientName: 'Awa Kaboré' } as never);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    host.querySelector<HTMLButtonElement>('[data-testid="discharge-cancel-confirm"]')!.click();
+    fixture.detectChanges();
+    http.expectNone((r) => r.url.includes('/cancel'));
+    expect(host.querySelector('#cancel-reason')?.getAttribute('aria-invalid')).toBe('true');
+    expect(host.querySelector('label[for="cancel-reason"]')?.textContent).toContain('*');
+
+    const reason = host.querySelector<HTMLTextAreaElement>('#cancel-reason')!;
+    reason.value = 'Etat clinique changé';
+    reason.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    expect(cmp.cancelReason).toBe('Etat clinique changé');
+    host.querySelector<HTMLButtonElement>('[data-testid="discharge-cancel-confirm"]')!.click();
+    const req = http.expectOne((r) => r.url.includes('/discharge-approvals/a-1/cancel'));
+    expect(req.request.params.get('reason')).toBe('Etat clinique changé');
+  });
+
   it('labels an encounter with the reader day of its stored time', () => {
     const stored = new Date(2026, 9, 24, 21, 0).toISOString().slice(0, 19);
     const label = component.encounterLabel({

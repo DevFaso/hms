@@ -350,24 +350,24 @@ export class DischargeComponent implements OnInit {
 
   submitCancel(): void {
     const target = this.cancelTarget();
-    if (!target || !this.staffId) return;
+    // QA D1160: never sent without the reason (the button's guard says so first).
+    const reason = this.cancelReason.trim();
+    if (!target || !this.staffId || !reason) return;
     this.cancelSubmitting.set(true);
-    this.dischargeService
-      .cancel(target.id, this.staffId, this.cancelReason.trim() || undefined)
-      .subscribe({
-        next: () => {
-          this.toast.success(this.translate.instant('DISCHARGE.CANCELLED_SUCCESS'));
-          this.cancelSubmitting.set(false);
-          this.closeCancel();
-          this.loadApprovals();
-        },
-        error: (err: unknown) => {
-          // QA D1111: the server's localized reason (a second request, a colleague's
-          // record…), the generic text only when it gives none.
-          this.toast.error(refusalReason(err) ?? this.translate.instant('DISCHARGE.CANCEL_ERROR'));
-          this.cancelSubmitting.set(false);
-        },
-      });
+    this.dischargeService.cancel(target.id, this.staffId, reason).subscribe({
+      next: () => {
+        this.toast.success(this.translate.instant('DISCHARGE.CANCELLED_SUCCESS'));
+        this.cancelSubmitting.set(false);
+        this.closeCancel();
+        this.loadApprovals();
+      },
+      error: (err: unknown) => {
+        // QA D1111: the server's localized reason (a second request, a colleague's
+        // record…), the generic text only when it gives none.
+        this.toast.error(refusalReason(err) ?? this.translate.instant('DISCHARGE.CANCEL_ERROR'));
+        this.cancelSubmitting.set(false);
+      },
+    });
   }
 
   openRequest(): void {

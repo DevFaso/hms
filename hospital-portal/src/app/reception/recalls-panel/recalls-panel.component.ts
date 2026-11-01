@@ -1,3 +1,5 @@
+import { ReasonDialogComponent } from '../../shared/reason-dialog/reason-dialog.component';
+import { focusWhenRendered } from '../../shared/a11y/focus-when-rendered';
 import { refusalReason } from '../../shared/refusal-reason';
 import { refuseFields } from '../../shared/forms/invalid-fields';
 import { PersonNamePipe, personName } from '../../shared/pipes/person-name.pipe';
@@ -43,6 +45,7 @@ type RecallFilter = 'ALL' | RecallStatus;
   selector: 'app-recalls-panel',
   standalone: true,
   imports: [
+    ReasonDialogComponent,
     PersonNamePipe,
     DialogFocusDirective,
     PatientSublinePipe,
@@ -219,13 +222,24 @@ export class RecallsPanelComponent implements OnInit {
     });
   }
 
-  cancelRecall(recall: RecallResponse): void {
+  /** QA D1157: "Annuler" asks why before anything is sent. */
+  readonly cancelling = signal<RecallResponse | null>(null);
+
+  askCancelRecall(recall: RecallResponse): void {
+    if (this.actingOnId()) return;
+    this.cancelling.set(recall);
+  }
+
+  cancelRecall(recall: RecallResponse, reason: string): void {
     if (this.actingOnId()) return;
     this.actingOnId.set(recall.id);
-    this.receptionService.cancelRecall(recall.id).subscribe({
+    this.receptionService.cancelRecall(recall.id, reason).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('RECEPTION.RECALL_CANCELLED'));
         this.actingOnId.set(null);
+        this.cancelling.set(null);
+        // The row leaves the open list: the keyboard lands on the list's filter, not the page body.
+        focusWhenRendered(this.host.nativeElement, '.filter-btn.active');
         this.loadRecalls();
       },
       error: (err) => {

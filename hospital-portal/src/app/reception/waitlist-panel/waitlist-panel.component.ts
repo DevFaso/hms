@@ -1,3 +1,5 @@
+import { ReasonDialogComponent } from '../../shared/reason-dialog/reason-dialog.component';
+import { focusWhenRendered } from '../../shared/a11y/focus-when-rendered';
 import { refusalReason } from '../../shared/refusal-reason';
 import { refuseFields } from '../../shared/forms/invalid-fields';
 import { PersonNamePipe, personName } from '../../shared/pipes/person-name.pipe';
@@ -42,6 +44,7 @@ type WaitlistStatus = 'ALL' | 'WAITING' | 'OFFERED' | 'CLOSED';
   selector: 'app-waitlist-panel',
   standalone: true,
   imports: [
+    ReasonDialogComponent,
     SubmitGuardDirective,
     PersonNamePipe,
     DialogFocusDirective,
@@ -308,13 +311,30 @@ export class WaitlistPanelComponent implements OnInit {
     return !!entry.offerExpiresAt && serverInstant(entry.offerExpiresAt).getTime() < Date.now();
   }
 
-  closeEntry(id: string): void {
-    this.receptionService.closeWaitlistEntry(id).subscribe({
+  /** QA D1157: "Fermer" asks why before anything is sent. */
+  readonly closing = signal<WaitlistEntryResponse | null>(null);
+  readonly closeBusy = signal(false);
+
+  askCloseEntry(entry: WaitlistEntryResponse): void {
+    this.closing.set(entry);
+  }
+
+  closeEntry(id: string, reason: string): void {
+    if (this.closeBusy()) return;
+    this.closeBusy.set(true);
+    this.receptionService.closeWaitlistEntry(id, reason).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('RECEPTION.ENTRY_CLOSED'));
+        this.closeBusy.set(false);
+        this.closing.set(null);
+        // The row leaves the list: the keyboard lands on the list's filter, not the page body.
+        focusWhenRendered(this.host.nativeElement, '.filter-btn.active');
         this.loadEntries();
       },
-      error: () => this.toast.error(this.translate.instant('RECEPTION.CLOSE_FAILED')),
+      error: (err: unknown) => {
+        this.closeBusy.set(false);
+        this.toast.error(refusalReason(err) ?? this.translate.instant('RECEPTION.CLOSE_FAILED'));
+      },
     });
   }
 

@@ -678,7 +678,10 @@ describe('EncountersComponent', () => {
 
   it("#965 review (k5.js replay): Sign under DOCTOR2_A's J1 names J1, never DOCTOR_A's J0", () => {
     encounterSpy.signNote.and.returnValue(
-      throwError(() => ({ error: { message: "Only the note's author can sign it." } })),
+      throwError(() => ({
+        status: 400,
+        error: { message: "Only the note's author can sign it." },
+      })),
     );
     component.selectEncounter(mockEncounter({ note: entryB, noteEntries: [draftA, entryB] }));
 
@@ -959,7 +962,10 @@ describe('EncountersComponent', () => {
     it('sign refusal is surfaced verbatim', () => {
       component.selectEncounter(mockEncounter({ note: note() }));
       encounterSpy.signNote.and.returnValue(
-        throwError(() => ({ error: { message: "Only the note's author can sign it." } })),
+        throwError(() => ({
+          status: 400,
+          error: { message: "Only the note's author can sign it." },
+        })),
       );
 
       component.signNote();
@@ -993,6 +999,7 @@ describe('EncountersComponent', () => {
       component.selectEncounter(mockEncounter({ note: note() }));
       encounterSpy.addNote.and.returnValue(
         throwError(() => ({
+          status: 400,
           error: {
             message: 'This note is signed and can no longer be edited. Append an addendum instead.',
           },

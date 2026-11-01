@@ -152,7 +152,7 @@ describe('LabOutboxComponent', () => {
     setup(['ROLE_LAB_MANAGER'], pageOf([row], 1));
     const backendMessage = 'Only a message in ERROR can be retried; this one is ACK.';
     outboxService.retry.and.returnValue(
-      throwError(() => ({ error: { message: backendMessage } }) as unknown),
+      throwError(() => ({ status: 400, error: { message: backendMessage } }) as unknown),
     );
 
     component.retry(row);

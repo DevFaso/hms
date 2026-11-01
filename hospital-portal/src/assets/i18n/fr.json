@@ -7852,7 +7852,13 @@
     "WALK_IN": "Enregistrement sans rendez-vous",
     "WALK_INS": "Sans rendez-vous",
     "WALK_INS_TODAY": "Sans rendez-vous aujourd'hui",
-    "LEFT_WITHOUT_BEING_SEEN": "Parti sans être vu"
+    "LEFT_WITHOUT_BEING_SEEN": "Parti sans être vu",
+    "RECALL_CANCEL_TITLE": "Annuler ce rappel ?",
+    "RECALL_CANCEL_REASON": "Motif de l'annulation du rappel",
+    "RECALL_CANCEL_CONFIRM": "Annuler le rappel",
+    "CLOSE_ENTRY_TITLE": "Fermer cette entrée de la liste d'attente ?",
+    "CLOSE_ENTRY_REASON": "Motif de la fermeture",
+    "CLOSE_ENTRY_CONFIRM": "Fermer l'entrée"
   },
   "REFERRALS": {
     "ACCEPTED": "Acceptée",
@@ -12434,5 +12440,8 @@
     "DISCARD_ASK": "Abandonner le texte saisi ?",
     "KEEP": "Continuer la saisie",
     "DISCARD": "Abandonner le texte"
+  },
+  "REASON_DIALOG": {
+    "REASON": "Motif"
   }
 }

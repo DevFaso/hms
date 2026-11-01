@@ -91,7 +91,7 @@
                 <button class="btn-sm btn-primary" (click)="openOfferModal(entry)">
                   {{ 'RECEPTION.OFFER_SLOT' | translate }}
                 </button>
-                <button class="btn-sm btn-ghost" (click)="closeEntry(entry.id)">
+                <button class="btn-sm btn-ghost" (click)="askCloseEntry(entry)">
                   {{ 'COMMON.CLOSE' | translate }}
                 </button>
               } @else if (entry.status === 'OFFERED') {
@@ -109,7 +109,7 @@
                 >
                   {{ 'RECEPTION.DECLINE_OFFER' | translate }}
                 </button>
-                <button class="btn-sm btn-ghost" (click)="closeEntry(entry.id)">
+                <button class="btn-sm btn-ghost" (click)="askCloseEntry(entry)">
                   {{ 'COMMON.CLOSE' | translate }}
                 </button>
               }
@@ -391,4 +391,16 @@
       </button>
     </div>
   </div>
+}
+
+<!-- QA D1157: a waitlist entry is closed with a reason, after a confirmation. -->
+@if (closing(); as entry) {
+  <app-reason-dialog
+    titleKey="RECEPTION.CLOSE_ENTRY_TITLE"
+    labelKey="RECEPTION.CLOSE_ENTRY_REASON"
+    confirmKey="RECEPTION.CLOSE_ENTRY_CONFIRM"
+    [busy]="closeBusy()"
+    (confirmed)="closeEntry(entry.id, $event)"
+    (cancelled)="closing.set(null)"
+  />
 }

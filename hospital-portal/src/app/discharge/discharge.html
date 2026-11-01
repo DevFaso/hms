@@ -381,15 +381,29 @@
           <strong>{{ cancelTarget()?.patientName }}</strong>
         </p>
         <div class="field">
-          <label for="cancel-reason">{{ 'DISCHARGE.CANCEL_REASON' | translate }}</label>
-          <textarea id="cancel-reason" rows="3" [(ngModel)]="cancelReason"></textarea>
+          <!-- QA D1160: a discharge request is cancelled with its reason. -->
+          <label for="cancel-reason">{{ 'DISCHARGE.CANCEL_REASON' | translate }} *</label>
+          <textarea
+            id="cancel-reason"
+            rows="3"
+            required
+            aria-required="true"
+            [(ngModel)]="cancelReason"
+          ></textarea>
         </div>
       </div>
       <div class="modal-actions">
         <button class="btn-secondary" (click)="closeCancel()">
           {{ 'COMMON.BACK' | translate }}
         </button>
-        <button class="btn-danger" [disabled]="cancelSubmitting()" (click)="submitCancel()">
+        <button
+          class="btn-danger"
+          data-testid="discharge-cancel-confirm"
+          [disabled]="cancelSubmitting()"
+          [appSubmitGuard]="!cancelReason.trim()"
+          [submitGuardFields]="['cancel-reason']"
+          (click)="submitCancel()"
+        >
           {{ 'DISCHARGE.CONFIRM_CANCEL' | translate }}
         </button>
       </div>

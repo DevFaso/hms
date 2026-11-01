@@ -7852,7 +7852,13 @@
     "WALK_IN": "Walk-in Registration",
     "WALK_INS": "Walk-ins",
     "WALK_INS_TODAY": "Walk-ins Today",
-    "LEFT_WITHOUT_BEING_SEEN": "Left without being seen"
+    "LEFT_WITHOUT_BEING_SEEN": "Left without being seen",
+    "RECALL_CANCEL_TITLE": "Cancel this recall?",
+    "RECALL_CANCEL_REASON": "Why is the recall cancelled",
+    "RECALL_CANCEL_CONFIRM": "Cancel the recall",
+    "CLOSE_ENTRY_TITLE": "Close this waitlist entry?",
+    "CLOSE_ENTRY_REASON": "Why is the entry closed",
+    "CLOSE_ENTRY_CONFIRM": "Close the entry"
   },
   "REFERRALS": {
     "ACCEPTED": "Accepted",
@@ -12434,5 +12440,8 @@
     "DISCARD_ASK": "Discard what you have typed?",
     "KEEP": "Keep writing",
     "DISCARD": "Discard the text"
+  },
+  "REASON_DIALOG": {
+    "REASON": "Reason"
   }
 }

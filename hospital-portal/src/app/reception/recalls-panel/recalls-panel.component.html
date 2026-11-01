@@ -99,7 +99,7 @@
                 <button
                   class="btn-sm btn-ghost"
                   [disabled]="actingOnId() === recall.id"
-                  (click)="cancelRecall(recall)"
+                  (click)="askCancelRecall(recall)"
                 >
                   {{ 'COMMON.CANCEL' | translate }}
                 </button>
@@ -263,4 +263,16 @@
       </button>
     </div>
   </div>
+}
+
+<!-- QA D1157: a recall is cancelled with a reason, after a confirmation. -->
+@if (cancelling(); as recall) {
+  <app-reason-dialog
+    titleKey="RECEPTION.RECALL_CANCEL_TITLE"
+    labelKey="RECEPTION.RECALL_CANCEL_REASON"
+    confirmKey="RECEPTION.RECALL_CANCEL_CONFIRM"
+    [busy]="actingOnId() === recall.id"
+    (confirmed)="cancelRecall(recall, $event)"
+    (cancelled)="cancelling.set(null)"
+  />
 }

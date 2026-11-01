@@ -177,7 +177,7 @@ describe('TriageFormComponent', () => {
 
   it('should show error toast on failure', () => {
     mockEncounterService.submitTriage.and.returnValue(
-      throwError(() => ({ error: { message: 'Invalid encounter status' } })),
+      throwError(() => ({ status: 400, error: { message: 'Invalid encounter status' } })),
     );
 
     component.submit();

@@ -7852,7 +7852,13 @@
     "WALK_IN": "Registro sin cita",
     "WALK_INS": "Sin cita",
     "WALK_INS_TODAY": "Sin cita hoy",
-    "LEFT_WITHOUT_BEING_SEEN": "Se fue sin ser atendido"
+    "LEFT_WITHOUT_BEING_SEEN": "Se fue sin ser atendido",
+    "RECALL_CANCEL_TITLE": "¿Cancelar este recordatorio?",
+    "RECALL_CANCEL_REASON": "Motivo de la cancelación del recordatorio",
+    "RECALL_CANCEL_CONFIRM": "Cancelar el recordatorio",
+    "CLOSE_ENTRY_TITLE": "¿Cerrar esta entrada de la lista de espera?",
+    "CLOSE_ENTRY_REASON": "Motivo del cierre",
+    "CLOSE_ENTRY_CONFIRM": "Cerrar la entrada"
   },
   "REFERRALS": {
     "ACCEPTED": "Aceptada",
@@ -12434,5 +12440,8 @@
     "DISCARD_ASK": "¿Descartar el texto escrito?",
     "KEEP": "Seguir escribiendo",
     "DISCARD": "Descartar el texto"
+  },
+  "REASON_DIALOG": {
+    "REASON": "Motivo"
   }
 }

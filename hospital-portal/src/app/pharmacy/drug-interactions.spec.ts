@@ -126,7 +126,7 @@ describe('DrugInteractionsComponent', () => {
     const backendMessage =
       'An interaction between these two drugs exists but was retired; reactivate it instead of re-creating it.';
     interactionService.create.and.returnValue(
-      throwError(() => ({ error: { message: backendMessage } }) as unknown),
+      throwError(() => ({ status: 400, error: { message: backendMessage } }) as unknown),
     );
     component.form = {
       drug1Code: '11289',

@@ -156,7 +156,9 @@ describe('ProfileComponent — editing the profile', () => {
       profiles.updateProfile.and.callFake((_id, data) =>
         of({ ...profile('old@example.test'), phoneNumber: data.phoneNumber ?? '' }),
       );
-      portal.updateMyProfile.and.returnValue(throwError(() => ({ error: { message: 'taken' } })));
+      portal.updateMyProfile.and.returnValue(
+        throwError(() => ({ status: 400, error: { message: 'taken' } })),
+      );
       const patient = asPatient();
       patient.updateField('phoneNumber', '+22676112233');
       patient.saveProfile();
@@ -169,7 +171,9 @@ describe('ProfileComponent — editing the profile', () => {
       profiles.getUserProfile.and.returnValue(
         of({ ...profile('old@example.test'), phoneNumber: '' }),
       );
-      portal.updateMyProfile.and.returnValue(throwError(() => ({ error: { message: 'taken' } })));
+      portal.updateMyProfile.and.returnValue(
+        throwError(() => ({ status: 400, error: { message: 'taken' } })),
+      );
       const patient = asPatient();
       patient.updateField('phoneNumber', '+22676112233');
       patient.saveProfile();
@@ -182,7 +186,7 @@ describe('ProfileComponent — editing the profile', () => {
         of({ ...profile('old@example.test'), phoneNumber: '' }),
       );
       profiles.updateProfile.and.returnValue(
-        throwError(() => ({ error: { message: 'phone used' } })),
+        throwError(() => ({ status: 400, error: { message: 'phone used' } })),
       );
       const patient = asPatient();
       patient.updateField('phoneNumber', '+22676112233');

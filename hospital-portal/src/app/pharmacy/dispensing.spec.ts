@@ -761,7 +761,10 @@ describe('DispensingComponent', () => {
 
   it('shows the server refusal when a hand-over fails', () => {
     pharmacySvc.handOver.and.returnValue(
-      throwError(() => ({ error: { message: 'This prescription can no longer be handed over.' } })),
+      throwError(() => ({
+        status: 400,
+        error: { message: 'This prescription can no longer be handed over.' },
+      })),
     );
     component.openHandOver(preparedRow as any);
 
