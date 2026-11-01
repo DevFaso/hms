@@ -5705,3 +5705,16 @@ ships*, not for building — and check the shipped surface before trusting a
   ROLE_SUPER_ADMIN for those. A complete fix is backend-side: return the held
   roles in the session bootstrap, and a required-role hint in 403 bodies.
 - **QA D601 follow-up (r9-lab-integrity):** lab test definitions and orders with results can no longer be hard-deleted, but dev already holds rows orphaned before the fix (definition 570c6b4d gone, its orders and released results left behind). They need a one-off data repair (restore the definition row as RETIRED from a backup, or re-point the orders) that the user must run; it is data, not code, so it is not in the PR. A DB-level FK `lab_orders.lab_test_definition_id` (the entity declares `fk_laborder_testdef`, the dev schema evidently lacks it) should be added in a migration once the orphans are repaired, since the migration would fail on them today.
+- **Blackbox liveness/readiness probes (PR #1007 follow-up):** two of the five
+  blackbox jobs target `/api/actuator/health/liveness` and `/readiness`.
+  `management.endpoint.health.probes.enabled` is never set — only
+  `add-additional-paths=true` — and `.claude/skills/synthetic-monitoring/SKILL.md`
+  records that Boot mounts those health groups automatically only under
+  Kubernetes. Against the **dev** Railway service both paths measurably return
+  200 (checked 2026-11-01), so the gap, if real, is profile-specific and would
+  affect the **local** profile the compose probes actually target — which could
+  not be verified without booting the local stack. If those two probes report
+  `probe_success=0` locally, set `management.endpoint.health.probes.enabled=true`
+  rather than repointing the targets again. Flagged in PR #1007 round 10; not
+  fixed there because the fix would have been a guess against a measurement that
+  contradicted it.

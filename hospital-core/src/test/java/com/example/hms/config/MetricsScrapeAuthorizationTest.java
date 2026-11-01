@@ -21,6 +21,8 @@ import java.util.Comparator;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -162,8 +164,29 @@ class MetricsScrapeAuthorizationTest {
     @Test
     @DisplayName("/actuator/metrics is not exposed — it carries the same data as the gated endpoint")
     void metricsEndpointIsNotExposed() throws IOException {
+        // Every source that declares the list, not just the global one. application-prod.yml
+        // carries its own `exposure.include`, which WINS in prod — so checking only
+        // application.properties would let `metrics` (or env, or heapdump) be re-added to the
+        // prod profile with this test still green. Same prod-only divergence this PR fixed for
+        // management.otlp.*.
         Properties props = PropertiesLoaderUtils.loadProperties(new ClassPathResource("application.properties"));
         String exposed = props.getProperty("management.endpoints.web.exposure.include", "");
+        assertExposureIsSafe(exposed, "application.properties");
+
+        for (String yaml : List.of("application-prod.yml", "application-dev.yml", "application-local.yml")) {
+            Path path = Path.of("src/main/resources", yaml);
+            if (!Files.exists(path)) {
+                continue;
+            }
+            String body = Files.readString(path, StandardCharsets.UTF_8);
+            Matcher m = Pattern.compile("include:\s*([^\n#]+)").matcher(body);
+            while (m.find()) {
+                assertExposureIsSafe(m.group(1), yaml);
+            }
+        }
+    }
+
+    private static void assertExposureIsSafe(String exposed, String source) {
 
         List<String> endpoints = Arrays.stream(exposed.split(","))
             .map(String::trim)
@@ -173,13 +196,15 @@ class MetricsScrapeAuthorizationTest {
         // Trimmed, because "health,info, metrics" is the same exposure as "…,metrics" to
         // Spring but a different string to split(",").
         assertThat(endpoints)
-            .as("/actuator/metrics only ever sat behind anyRequest().authenticated(), so any "
-                + "valid token — including a patient app's — could read the URI inventory")
+            .as("%s: /actuator/metrics only ever sat behind anyRequest().authenticated(), so "
+                + "any valid token — including a patient app's — could read the URI inventory",
+                source)
             .doesNotContain("metrics");
 
         // And a wildcard exposes it without ever naming it.
         assertThat(endpoints)
-            .as("`*` exposes every endpoint including metrics, env, beans and heapdump")
+            .as("%s: `*` exposes every endpoint including metrics, env, beans and heapdump",
+                source)
             .doesNotContain("*");
     }
 
