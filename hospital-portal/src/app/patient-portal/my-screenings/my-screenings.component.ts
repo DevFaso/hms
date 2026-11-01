@@ -59,6 +59,8 @@ export class MyScreeningsComponent implements OnInit {
    * patient when the request simply failed.
    */
   failed = signal(false);
+  /** QA D1212: the server's reason the read failed (a 4xx), when it gave one. */
+  failureReason = signal<string | null>(null);
   available = signal<ProSelfReportAvailable[]>([]);
   history = signal<ProSelfReportEntry[]>([]);
 
@@ -120,7 +122,8 @@ export class MyScreeningsComponent implements OnInit {
         this.history.set(report.history ?? []);
         this.loading.set(false);
       },
-      error: () => {
+      error: (err: unknown) => {
+        this.failureReason.set(refusalReason(err));
         this.failed.set(true);
         this.loading.set(false);
       },

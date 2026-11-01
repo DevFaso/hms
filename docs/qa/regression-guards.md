@@ -547,3 +547,13 @@ cannot slip past it again.
 | `scripts/lib/glued-label.test.mjs` (new) | D1200: a value glued to a translated word (`{{ n }}{{ 'X.MIN_WAIT' \| translate }}`, an English plural `'s'`). The value goes into the sentence as a parameter. | Every template; 0 (flow board, 3 dashboard sites) |
 | `scripts/lib/badge-spacing.test.mjs` + `badge-spacing-scan.mjs` (new) | D1205 / D1167 / D1137: a status pill glued to the inline element or interpolation before it; a `&ngsp;` right after a block's `}` is dropped by Angular (shown by the lab-results spec). | Every template; 0 (142 pills in 72 templates spaced with `{{ ' ' }}`) |
 | `scripts/lib/lab-result-picker.test.mjs` (new) | D1204 / D1176: the "Nouveau résultat" picker offering an order the server refuses. The picker's excluded statuses equal `LabResultServiceImpl.requireSpecimenTaken`'s. | lab-results.ts against the server rule |
+
+## Guards added or widened by round 23 (fix/r23-portal-patient-desk-billing)
+
+| Guard | Class it stops | Scope / allowlist |
+|---|---|---|
+| `scripts/lib/terminal-action-reason.test.mjs` (widened, rule 3) | D1217: a reason gate for a cancel or void that exempts a record by its status. `cancellingIssued()` skipped `'DRAFT'`, so draft invoices were cancelled with `cancelReason: null`. Any member named cancel / void / reason whose body names `'DRAFT'` fails. | Every portal `.ts`; 0 |
+| `scripts/lib/date-range-bounds.test.mjs` (new) | D1215: (1) a date or datetime-local input that ends a range (id, name or model says to / end / ends / until) with no lower bound bound to its start; (2) a front-desk date input that is neither bounded below nor pinned with why it may be in the past. A write form also refuses on submit (`shared/forms/date-rules.ts`). | Rule 1: every template, 0 (16 range ends now bound: the waitlist, the billing filter and 14 in other screens). Rule 2: `reception/`, 3 pins (cockpit day, waitlist window start, EMPI DOB search) |
+| `scripts/lib/portal-failure-reason.test.mjs` (new) | D1212: the patient portal shows a failure (an error / failed flag or an error toast) without the server's 4xx reason. | Every `patient-portal/**/*.ts`; 0 (13 handlers fixed) |
+| `scripts/lib/server-refusal-shown.test.mjs` (fixed) | D1212 sibling: `READ_KEY` matched `UPLOAD_FAILED` as a read because of the `LOAD` inside `UPLOAD`. It now reads `(?<!UP)LOAD`. | 1 site found and fixed (my-documents upload) |
+| `scripts/lib/raw-server-message.test.mjs` (pins shrunk) | D1156 class in the patient portal and billing. | patient-portal 8 → 0; billing.ts 11 → 10 |

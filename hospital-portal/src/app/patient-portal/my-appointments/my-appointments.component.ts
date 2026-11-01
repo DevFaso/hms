@@ -1,3 +1,4 @@
+import { refusalReason } from '../../shared/refusal-reason';
 import { refuseFields } from '../../shared/forms/invalid-fields';
 import {
   Component,
@@ -282,9 +283,7 @@ export class MyAppointmentsComponent implements OnInit {
       error: (err) => {
         this.cancelLoading.set(false);
         const msg =
-          err?.error?.message ||
-          err?.error?.error ||
-          this.translate.instant('PORTAL.APPOINTMENTS.CANCEL.FAILED');
+          refusalReason(err) ?? this.translate.instant('PORTAL.APPOINTMENTS.CANCEL.FAILED');
         this.cancelError.set(msg);
       },
     });
@@ -313,7 +312,7 @@ export class MyAppointmentsComponent implements OnInit {
       error: (err) => {
         this.rescheduleSlotsLoaded.set(true);
         this.rescheduleError.set(
-          err?.error?.message ?? this.translate.instant('PORTAL.APPOINTMENTS.SLOTS_FAILED'),
+          refusalReason(err) ?? this.translate.instant('PORTAL.APPOINTMENTS.SLOTS_FAILED'),
         );
       },
     });
@@ -371,9 +370,7 @@ export class MyAppointmentsComponent implements OnInit {
         error: (err) => {
           this.rescheduleLoading.set(false);
           const msg =
-            err?.error?.message ||
-            err?.error?.error ||
-            this.translate.instant('PORTAL.APPOINTMENTS.RESCHEDULE.FAILED');
+            refusalReason(err) ?? this.translate.instant('PORTAL.APPOINTMENTS.RESCHEDULE.FAILED');
           this.rescheduleError.set(msg);
         },
       });
@@ -458,7 +455,7 @@ export class MyAppointmentsComponent implements OnInit {
         error: (err) => {
           this.slotsLoaded.set(true);
           this.bookingError.set(
-            err?.error?.message ?? this.translate.instant('PORTAL.APPOINTMENTS.SLOTS_FAILED'),
+            refusalReason(err) ?? this.translate.instant('PORTAL.APPOINTMENTS.SLOTS_FAILED'),
           );
         },
       });
@@ -511,9 +508,7 @@ export class MyAppointmentsComponent implements OnInit {
       error: (err) => {
         this.bookingLoading.set(false);
         const msg =
-          err?.error?.message ||
-          err?.error?.error ||
-          this.translate.instant('PORTAL.APPOINTMENTS.BOOKING.FAILED');
+          refusalReason(err) ?? this.translate.instant('PORTAL.APPOINTMENTS.BOOKING.FAILED');
         this.bookingError.set(msg);
       },
     });

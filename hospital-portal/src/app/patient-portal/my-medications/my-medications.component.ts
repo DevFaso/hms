@@ -141,7 +141,7 @@ export class MyMedicationsComponent implements OnInit {
           // with a message written for the patient — show it rather than a
           // generic failure.
           this.toast.error(
-            err?.error?.message ?? this.translate.instant('PORTAL.MEDICATIONS.REFILL_FAILED'),
+            refusalReason(err) ?? this.translate.instant('PORTAL.MEDICATIONS.REFILL_FAILED'),
           );
           this.requestingRefill.set(null);
         },

@@ -19,6 +19,12 @@
       <div class="portal-spinner"></div>
       <span>{{ 'PORTAL.FAMILY.LOADING' | translate }}</span>
     </div>
+  } @else if (grantFailed()) {
+    <!-- QA D1212: a failed read of the grants is a failure, with the server's reason, not "no access" -->
+    <div class="portal-empty" data-testid="proxy-grant-failed" role="alert">
+      <span class="material-symbols-outlined empty-icon">error</span>
+      <p>{{ failureReason() ?? ('PORTAL.FAMILY.LOAD_ACCESS_FAILED' | translate) }}</p>
+    </div>
   } @else if (grantMissing()) {
     <div class="portal-empty" data-testid="proxy-no-access">
       <span class="material-symbols-outlined empty-icon">lock</span>
@@ -55,7 +61,10 @@
     } @else if (tabError()) {
       <div class="portal-empty" data-testid="proxy-tab-error">
         <span class="material-symbols-outlined empty-icon">error</span>
-        <p>{{ 'PORTAL.FAMILY.VIEWER.LOAD_FAILED' | translate }}</p>
+        <!-- QA D1212: the server's reason (a 4xx) when it gave one -->
+        <p data-testid="proxy-tab-error-reason">
+          {{ failureReason() ?? ('PORTAL.FAMILY.VIEWER.LOAD_FAILED' | translate) }}
+        </p>
         <button class="btn-primary" (click)="retryActiveTab()">
           {{ 'COMMON.RETRY' | translate }}
         </button>
@@ -177,6 +186,25 @@
               </tbody>
             </table>
           </div>
+          <!-- QA D1213 (sibling): the grantor's older results, one click away -->
+          @if (labPager.loadMoreFailed()) {
+            <p class="portal-inline-error" data-testid="proxy-labs-load-more-failed" role="alert">
+              {{ labMoreFailureReason() ?? ('PORTAL_PAGING.LAB_LOAD_MORE_FAILED' | translate) }}
+            </p>
+          }
+          @if (labPager.hasMore()) {
+            <div class="portal-load-more">
+              <button
+                type="button"
+                class="btn-secondary"
+                data-testid="proxy-labs-load-more"
+                [attr.aria-busy]="labPager.loading()"
+                (click)="loadMoreLabs()"
+              >
+                {{ 'PORTAL_PAGING.LAB_LOAD_MORE' | translate }}
+              </button>
+            </div>
+          }
         }
       }
 

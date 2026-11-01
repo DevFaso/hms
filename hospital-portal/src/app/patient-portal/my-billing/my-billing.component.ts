@@ -1,3 +1,5 @@
+import { refusalReason } from '../../shared/refusal-reason';
+import { blobRefusalReason } from '../../shared/blob-refusal';
 import { invoiceTone, InvoiceTone } from '../../shared/invoice-tone';
 import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
@@ -50,8 +52,12 @@ export class MyBillingComponent implements OnInit {
   detail = signal<PortalInvoiceDetail | null>(null);
   detailLoading = signal(false);
   detailError = signal(false);
+  /** QA D1212: the server's reason the detail could not be read (a 4xx), when it gave one. */
+  detailFailureReason = signal<string | null>(null);
   /** A failed PDF download, shown beside the detail instead of replacing it. */
   downloadError = signal(false);
+  /** QA D1212: the server's reason a PDF could not be downloaded, when it gave one. */
+  downloadFailureReason = signal<string | null>(null);
 
   toggleDetail(inv: PortalInvoice): void {
     if (this.openDetailId() === inv.id) {
@@ -69,8 +75,9 @@ export class MyBillingComponent implements OnInit {
         this.detail.set(d);
         this.detailLoading.set(false);
       },
-      error: () => {
+      error: (err: unknown) => {
         if (this.openDetailId() !== inv.id) return;
+        this.detailFailureReason.set(refusalReason(err));
         this.detailError.set(true);
         this.detailLoading.set(false);
       },
@@ -83,7 +90,7 @@ export class MyBillingComponent implements OnInit {
         this.downloadError.set(false);
         saveResponse(res, `invoice-${inv.invoiceNumber}.pdf`);
       },
-      error: () => this.downloadError.set(true),
+      error: (err: unknown) => this.downloadFailed(err),
     });
   }
 
@@ -96,8 +103,15 @@ export class MyBillingComponent implements OnInit {
           `receipt-${inv.invoiceNumber}-${(p.paymentDate ?? '').substring(0, 10)}.pdf`,
         );
       },
-      error: () => this.downloadError.set(true),
+      error: (err: unknown) => this.downloadFailed(err),
     });
+  }
+
+  /** A blob download's refusal arrives as a Blob: its reason is read from it (QA D1184 / D1212). */
+  private downloadFailed(err: unknown): void {
+    this.downloadFailureReason.set(null);
+    this.downloadError.set(true);
+    void blobRefusalReason(err).then((reason) => this.downloadFailureReason.set(reason));
   }
 
   // Payment dialog state
@@ -240,10 +254,7 @@ export class MyBillingComponent implements OnInit {
       },
       error: (err) => {
         this.payProcessing.set(false);
-        const msg =
-          err?.error?.message ||
-          err?.error?.error ||
-          this.translate.instant('PORTAL.BILLING.PAYMENT_FAILED');
+        const msg = refusalReason(err) ?? this.translate.instant('PORTAL.BILLING.PAYMENT_FAILED');
         this.payError.set(msg);
       },
     });

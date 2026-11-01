@@ -15,7 +15,7 @@
     <div class="portal-empty">
       <span class="material-symbols-outlined">error</span>
       <h3>{{ 'PRO.MY.LOAD_FAILED_TITLE' | translate }}</h3>
-      <p>{{ 'PRO.MY.LOAD_FAILED_DESC' | translate }}</p>
+      <p>{{ failureReason() ?? ('PRO.MY.LOAD_FAILED_DESC' | translate) }}</p>
       <button type="button" class="screen-btn" (click)="load()">
         {{ 'COMMON.RETRY' | translate }}
       </button>

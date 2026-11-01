@@ -11,6 +11,15 @@
       <div class="portal-spinner"></div>
       <p>{{ 'PORTAL.LAB_RESULTS.LOADING' | translate }}</p>
     </div>
+  } @else if (firstReadFailed()) {
+    <!-- QA D1213 / D1212: a failed read says so, with the server's reason, never "no results" -->
+    <div class="portal-empty" data-testid="lab-load-failed" role="alert">
+      <span class="material-symbols-outlined">error</span>
+      <p>{{ failureReason() ?? ('PORTAL_PAGING.LAB_LOAD_FAILED' | translate) }}</p>
+      <button type="button" class="btn-primary" (click)="retry()">
+        {{ 'COMMON.RETRY' | translate }}
+      </button>
+    </div>
   } @else if (results().length === 0) {
     <div class="portal-empty">
       <span class="material-symbols-outlined">biotech</span>
@@ -30,6 +39,7 @@
             tabindex="0"
             (keydown.enter)="toggleExpand(lab.id)"
             [class.expanded]="expandedId() === lab.id"
+            [attr.data-lab-id]="lab.id"
           >
             <div
               class="pli-icon"
@@ -119,6 +129,25 @@
           }
         }
       </div>
+      <!-- QA D1213: the older results are one click away, never silently cut -->
+      @if (pager.loadMoreFailed()) {
+        <p class="portal-inline-error" data-testid="lab-load-more-failed" role="alert">
+          {{ failureReason() ?? ('PORTAL_PAGING.LAB_LOAD_MORE_FAILED' | translate) }}
+        </p>
+      }
+      @if (pager.hasMore()) {
+        <div class="portal-load-more">
+          <button
+            type="button"
+            class="btn-secondary"
+            data-testid="lab-load-more"
+            [attr.aria-busy]="pager.loading()"
+            (click)="loadMore()"
+          >
+            {{ 'PORTAL_PAGING.LAB_LOAD_MORE' | translate }}
+          </button>
+        </div>
+      }
     </section>
   }
 </div>

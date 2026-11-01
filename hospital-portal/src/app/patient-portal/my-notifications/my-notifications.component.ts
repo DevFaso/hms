@@ -76,8 +76,10 @@ export class MyNotificationsComponent implements OnInit {
         this.totalElements.set(result.totalElements);
         this.loading.set(false);
       },
-      error: () => {
-        this.toast.error(this.translate.instant('PORTAL.NOTIFICATIONS.LOAD_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PORTAL.NOTIFICATIONS.LOAD_FAILED'),
+        );
         this.loading.set(false);
       },
     });

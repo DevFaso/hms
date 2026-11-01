@@ -634,3 +634,17 @@
     background: #f8fafc;
   }
 }
+
+// QA D1213: a paged portal list (lab results, the proxy's Labs tab) — the
+// older rows one click away, and why a later page could not be read.
+.portal-load-more {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+}
+
+.portal-inline-error {
+  margin: 12px 0 0;
+  color: #b91c1c;
+  text-align: center;
+}

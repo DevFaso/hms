@@ -249,6 +249,7 @@ describe('MyMedicationsComponent — refill visibility', () => {
     await render(med());
     requestRefill.and.returnValue(
       throwError(() => ({
+        status: 409,
         error: { message: 'You already have a refill request awaiting review' },
       })),
     );

@@ -92,8 +92,10 @@ export class MyDocumentsComponent implements OnInit {
         this.totalElements.set(result.totalElements);
         this.loading.set(false);
       },
-      error: () => {
-        this.toast.error(this.translate.instant('PORTAL.DOCUMENTS.LOAD_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PORTAL.DOCUMENTS.LOAD_FAILED'),
+        );
         this.loading.set(false);
       },
     });
@@ -144,9 +146,11 @@ export class MyDocumentsComponent implements OnInit {
           this.uploading.set(false);
           this.toast.success(this.translate.instant('PORTAL.DOCUMENTS.UPLOAD_SUCCESS'));
         },
-        error: () => {
+        error: (err: unknown) => {
           this.uploading.set(false);
-          this.toast.error(this.translate.instant('PORTAL.DOCUMENTS.UPLOAD_FAILED'));
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('PORTAL.DOCUMENTS.UPLOAD_FAILED'),
+          );
         },
       });
   }

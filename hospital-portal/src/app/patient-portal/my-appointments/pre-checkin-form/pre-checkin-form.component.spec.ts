@@ -143,7 +143,7 @@ describe('PreCheckinFormComponent', () => {
 
   it('should show error on submit failure', () => {
     portalSpy.submitPreCheckIn.and.returnValue(
-      throwError(() => ({ error: { message: 'Too early' } })),
+      throwError(() => ({ status: 400, error: { message: 'Too early' } })),
     );
 
     component.consentAcknowledged = true;

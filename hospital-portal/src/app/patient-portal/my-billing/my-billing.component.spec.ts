@@ -1,3 +1,4 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
@@ -404,6 +405,44 @@ describe('MyBillingComponent', () => {
       expect(host().querySelector('[data-testid="invoice-detail-inv1"]')?.textContent).toContain(
         'Consultation',
       );
+    });
+
+    it("QA D1212: a refused download shows the server's reason read from the blob body", async () => {
+      portal.getMyInvoiceDetail.and.returnValue(of(detail));
+      portal.getMyInvoicePdf.and.returnValue(
+        throwError(
+          () =>
+            new HttpErrorResponse({
+              status: 404,
+              error: new Blob([JSON.stringify({ message: "Le fichier n'est plus disponible." })], {
+                type: 'application/json',
+              }),
+            }),
+        ),
+      );
+      create([invoice()]);
+      component.toggleDetail(component.invoices()[0]);
+      component.downloadInvoice(component.invoices()[0]);
+      // Blob.text() resolves on its own schedule: wait for the reason, up to a second.
+      for (let i = 0; i < 50 && component.downloadFailureReason() === null; i++) {
+        await new Promise<void>((resolve) => setTimeout(resolve, 20));
+      }
+      fixture.detectChanges();
+      expect(host().querySelector('[data-testid="download-error"]')?.textContent).toContain(
+        "Le fichier n'est plus disponible.",
+      );
+    });
+
+    it("QA D1212: a refused invoice detail shows the server's reason", () => {
+      portal.getMyInvoiceDetail.and.returnValue(
+        throwError(() => ({ status: 403, error: { message: 'Facture d’un autre patient.' } })),
+      );
+      create([invoice()]);
+      component.toggleDetail(component.invoices()[0]);
+      fixture.detectChanges();
+      expect(
+        host().querySelector('[data-testid="invoice-detail-inv1"] [role="alert"]')?.textContent,
+      ).toContain('Facture d’un autre patient.');
     });
 
     it('says so when the invoice cannot be loaded', () => {
