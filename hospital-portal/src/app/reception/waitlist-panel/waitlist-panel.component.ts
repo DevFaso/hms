@@ -32,7 +32,7 @@ import { ReferralService, DepartmentMinimal } from '../../services/referral.serv
 import { StaffService, isClinicalProvider, StaffResponse } from '../../services/staff.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
-import { debounceTime, distinctUntilChanged, Subject, switchMap, catchError, of } from 'rxjs';
+import { debounceTime, Subject, switchMap, catchError, of } from 'rxjs';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { serverInstant } from '../../shared/date-utils';
 import { endsBeforeStart } from '../../shared/forms/date-rules';
@@ -136,7 +136,6 @@ export class WaitlistPanelComponent implements OnInit {
     this.patientSearch$
       .pipe(
         debounceTime(300),
-        distinctUntilChanged(),
         switchMap((q) => {
           if (!q || q.length < 2) return of([]);
           return this.patientService.list(hospitalId, q).pipe(catchError(() => of([])));

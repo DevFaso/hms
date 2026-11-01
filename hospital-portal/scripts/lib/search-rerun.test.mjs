@@ -32,16 +32,7 @@ const appDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'src', 
  * Pipes that dedupe a value that is NOT a typed query, or that another branch
  * owns this round, each with why.
  */
-const ALLOWED = new Map([
-  [
-    'reception/recalls-panel/recalls-panel.component.ts::patientSearch$',
-    'D1216 sibling owned by fix/r23-portal-patient-desk-billing (reception panels); flagged in the hand-back',
-  ],
-  [
-    'reception/waitlist-panel/waitlist-panel.component.ts::patientSearch$',
-    'D1216 sibling owned by fix/r23-portal-patient-desk-billing (reception panels); flagged in the hand-back',
-  ],
-]);
+const ALLOWED = new Map([]);
 
 /**
  * Every `.pipe(…)` of `source` that debounces, then drops a repeat

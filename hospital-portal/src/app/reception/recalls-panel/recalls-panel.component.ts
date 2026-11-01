@@ -29,7 +29,7 @@ import { PatientService, PatientResponse } from '../../services/patient.service'
 import { ReferralService, DepartmentMinimal } from '../../services/referral.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
-import { debounceTime, distinctUntilChanged, Subject, switchMap, catchError, of } from 'rxjs';
+import { debounceTime, Subject, switchMap, catchError, of } from 'rxjs';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { localDateString } from '../../shared/date-utils';
 import { isBeforeToday } from '../../shared/forms/date-rules';
@@ -119,7 +119,6 @@ export class RecallsPanelComponent implements OnInit {
     this.patientSearch$
       .pipe(
         debounceTime(300),
-        distinctUntilChanged(),
         switchMap((q) => {
           if (!q || q.length < 2) return of([]);
           return this.patientService.list(hospitalId, q).pipe(catchError(() => of([])));
