@@ -115,6 +115,22 @@ test('a substitution is blanked, not read as markup', () => {
   );
 });
 
+test('a multi-line substitution keeps the lines below it where the .ts file has them', () => {
+  const source = [
+    '@Component({ template: `<p>${',
+    '  cond',
+    '    ? A',
+    '    : B',
+    '}</p>',
+    '<i>{{ k.status }}</i>` })',
+    'class K {}',
+  ].join('\n');
+  const [tpl] = inlineTemplates(source);
+  const [hit] = rawEnumRenders(tpl.text);
+  // `{{ k.status }}` is on line 6 of the file.
+  assert.equal(hit.line + tpl.line - 1, 6);
+});
+
 test('templatesIn reads .html whole and .ts inline templates, never specs', () => {
   const dir = mkdtempSync(join(tmpdir(), 'p4-inline-'));
   try {

@@ -86,6 +86,17 @@ jobs:
       - name: RBAC inline-role gate
         run: npm run rbac:inline-roles
 
+      # QA round 16 (docs/qa/regression-guards.md): the classes of bug nine
+      # rounds kept re-finding on new screens, each read from every template
+      # and component rather than the one page QA happened to open. Modals
+      # without dialog semantics (D976/D988/D1004), icon buttons and fields
+      # with no accessible name (D988/D999/D1006/D993), hand-written patient
+      # pickers (D947), money printed without | cfa (D948), English sentences
+      # in component code, and UUID fragments on screen (D992). Each pins the
+      # sites that exist today with their defect id and fails on a new one.
+      - name: Round-16 regression guards
+        run: npm run guards
+
       # That gate reads Java, so its parser is the thing most likely to lie
       # quietly: the first version ended the constant list at a semicolon
       # inside a Javadoc sentence and hid seven real prescription statuses.
