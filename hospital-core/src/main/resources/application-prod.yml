@@ -52,7 +52,12 @@ management:
   otlp:
     metrics:
       export:
-        url: ${OTEL_EXPORTER_OTLP_ENDPOINT:}
+        # A FULL signal URL, not the gateway base — Boot's own default is
+        # http://localhost:4318/v1/metrics. Pointing this at the bare /otlp base
+        # (what OTEL_EXPORTER_OTLP_ENDPOINT holds, for the agent) makes every 60s
+        # push a rejected POST, and the business counters never reach Mimir.
+        # scripts/grafana-cloud-setup.sh sets this to <endpoint>/v1/metrics.
+        url: ${OTEL_METRICS_EXPORT_URL:}
         headers:
           Authorization: ${GRAFANA_OTLP_AUTH_HEADER:}
         enabled: ${OTEL_METRICS_ENABLED:false}

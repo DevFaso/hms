@@ -32,7 +32,15 @@ prometheus.scrape "metrics_integrations_integrations_spring_boot" {
 	// /actuator/prometheus is token-gated (SecurityConfig#metricsScrapeAuthorization) because on
 	// Railway the management port shares the public API hostname. Alloy must present the same
 	// METRICS_SCRAPE_TOKEN the backend was started with, or every scrape returns 403.
-	bearer_token = env("METRICS_SCRAPE_TOKEN")
+	//
+	// X-Metrics-Token rather than bearer_token on purpose: JwtAuthenticationFilter logs
+	// `[JWT] Token provided but invalid` at WARN for any Authorization: Bearer value that is
+	// not a JWT. With a bearer token that is one WARN per scrape, forever — shipped straight
+	// into the Loki pipeline this same stack collects, and counted by
+	// logback_events_total{level="warn"}. The custom header never reaches that filter.
+	http_headers = {
+		"X-Metrics-Token" = [env("METRICS_SCRAPE_TOKEN")],
+	}
 }
 
 // ── Keep only the metrics required by the Grafana dashboards ──────────────

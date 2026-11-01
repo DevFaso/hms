@@ -61,35 +61,42 @@ The console offers scope **sets** rather than individual scopes. The one you wan
 is **`set:alloy-data-write`**, which bundles `metrics:write`, `logs:write`,
 `traces:write` and `profiles:write`.
 
-Stack 1404501 already has policies, so you do not need a new one:
+Stack 1404501 carries two access policies (the rest were deleted 2026-11-01):
 
-| Policy | Scopes | Tokens | Use for the backend? |
-|---|---|---|---|
-| `stack-1404501-alloy` | `set:alloy-data-write` | none active (1 expired) | **Yes — add a token here** |
-| `stack-1404501-quickstart` | `set:alloy-data-write` | `windows-token`, in active use | No — don't share it |
-| `stack-1404501-integration-hms-token` | `metrics:read` + `set:alloy-data-write` | 1 | Workable, but carries a read scope it doesn't need |
-| `stack-1404501-hl-read` | read-only | — | No — cannot write |
-| `pdc-tiegoouedraogo-default` | `set:pdc-signing` | none | No — Private Data source Connect |
+| Policy | Scopes | Use for the backend? |
+|---|---|---|
+| **`stack-1404501-alloy`** | `set:alloy-data-write` | **Yes** — this is the one |
+| `pdc-tiegoouedraogo-default` | `set:pdc-signing` | No — Private Data source Connect |
 
-Go to **Administration → Users and access → Access policies →
-`stack-1404501-alloy` → Add token**, name it something like `hms-backend-otlp`,
-and copy the `glc_…` value — it is shown exactly once.
+**Administration → Users and access → Access policies → `stack-1404501-alloy` →
+Add token**, name it something like `hms-backend-otlp`, and copy the `glc_…`
+value — it is shown exactly once.
 
-Keeping the backend on its own token means you can revoke it without taking down
-whatever `windows-token` is feeding.
+> **Token expiry is an operational trap.** The current token on this policy
+> expires **8 February 2027**. Grafana Cloud does not warn you, and the failure
+> mode is silent: the agent keeps running, exports keep 401-ing, dashboards
+> simply go flat. Either mint a non-expiring token, or put the renewal on the
+> service-account rotation list in
+> [`docs/compliance/soc2-gap.md`](compliance/soc2-gap.md) and add an alert on the
+> metrics going absent. Deleting the other policies means this is now the single
+> credential the whole pipeline depends on.
 
 ### 2. Run the setup script
 
 ```bash
-# dev first, verify, then prod
-./scripts/grafana-cloud-setup.sh dev  glc_your_token_here
-./scripts/grafana-cloud-setup.sh prod glc_your_token_here
+# dev first, verify, then prod. Each prompts for the token with echo off.
+./scripts/grafana-cloud-setup.sh dev
+./scripts/grafana-cloud-setup.sh prod
 ```
 
-The script builds the base64 auth header, sets every variable on the right
-Railway service, and prints what it set (never the token). It does **not**
-trigger a deploy — Railway redeploys on the next push, or you redeploy manually
-when you are ready.
+The token is **not** an argument: argv is readable in the process list and lands
+in shell history, and this token can write every signal in the stack. The script
+reads it from `GRAFANA_CLOUD_TOKEN`, or prompts for it, and passes the two
+credential-bearing variables to Railway over stdin.
+
+It builds the base64 auth header, sets every variable on the right Railway
+service, and prints what it set (never the token). It does **not** trigger a
+deploy — `--skip-deploys` keeps that your decision.
 
 ### 3. What the script sets
 
@@ -102,11 +109,24 @@ when you are ready.
 | `OTEL_SERVICE_NAME` | `hms-backend` | `hms-backend` |
 | `OTEL_RESOURCE_ATTRIBUTES` | `deployment.environment=dev,service.namespace=hms` | `deployment.environment=prod,service.namespace=hms` |
 | `OTEL_METRICS_ENABLED` | `true` | `true` |
+| `OTEL_METRICS_EXPORTER` | `none` | `none` |
+| `OTEL_METRICS_EXPORT_URL` | `…/otlp/v1/metrics` | same |
 | `OTEL_TRACES_SAMPLER` | `parentbased_always_on` | `parentbased_traceidratio` |
 | `OTEL_TRACES_SAMPLER_ARG` | *(unset)* | `0.1` |
 
 `OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf` is required — the Grafana Cloud OTLP
 gateway does not accept the agent's default `grpc`.
+
+**One exporter owns each signal.** The agent does traces and logs; the Micrometer
+OTLP registry does metrics. `OTEL_METRICS_EXPORTER=none` turns off the agent's own
+metrics exporter — leaving both on publishes every series twice and doubles what
+you consume of the 10,000-series free allowance.
+
+`OTEL_METRICS_EXPORT_URL` exists because Micrometer wants a **full signal URL**
+(Boot's own default is `http://localhost:4318/v1/metrics`), while the agent wants
+the gateway **base**. They cannot share one variable: pointing Micrometer at the
+bare `/otlp` base turns every 60-second push into a rejected POST, and the
+business counters never reach Mimir while everything else looks healthy.
 
 The two auth variables carry the same credential in two formats because two
 exporters are active: the agent reads `OTEL_EXPORTER_OTLP_HEADERS`, and the
@@ -121,9 +141,20 @@ about whether they are authorized.
 railway logs --service hms-backend-dev | grep -i "OpenTelemetry agent enabled"
 ```
 
-Then in Grafana Cloud → **Explore** → Mimir, query
-`up{service_name="hms-backend"}` or
-`http_server_requests_seconds_count{deployment_environment="dev"}`.
+Then in Grafana Cloud → **Explore** → your Mimir datasource.
+
+Do **not** check with `up{…}`. `up` is synthesised by a scraper, and this is a
+push pipeline — it will never exist here, so a perfectly healthy setup reads as a
+total failure. Query a metric the application actually emits:
+
+```promql
+jvm_memory_used_bytes{deployment_environment="dev"}
+http_server_requests_seconds_count{deployment_environment="dev"}
+```
+
+Allow about two minutes: the Micrometer push step is 60s. Traces land in Tempo
+under `service.name = hms-backend`, logs in Loki under the same resource
+attributes.
 
 ### 5. Import the dashboards
 
@@ -167,11 +198,18 @@ that decide it (measured 2026-11-01 against the live services):
 
 | Free-tier allowance | HMS actual |
 |---|---|
-| 10,000 active metric series | ~1,850 on dev, fewer on prod → roughly 3,500 for both envs |
+| 10,000 active metric series | ~1,850 on dev, fewer on prod → roughly 3,500 for both envs, **counted once** because `OTEL_METRICS_EXPORTER=none` leaves a single exporter per signal. Leave the agent's metrics exporter on and this doubles. |
 | 50 GB logs / month | Well under, at current traffic |
 | 50 GB traces / month | **Only with sampling** — see below |
 | 14-day metrics retention | Enough for the SLO burn-rate windows (longest is 6 h) |
 | 3 active users | Enough for the current team |
+
+One thing to check before switching HMS on: anything *else* already pushing to
+this stack counts against the same 10,000 series. A Grafana Alloy quickstart on a
+workstation ships host and integration metrics by default, and a single host can
+be a few thousand series — potentially more than both HMS environments combined.
+Look at **Billing/Usage → active series** first, and trim or stop any collector
+you are not using.
 
 Traces are the one that can bite. The agent defaults to
 `parentbased_always_on` — 100% of requests. That is fine on dev and is what the
