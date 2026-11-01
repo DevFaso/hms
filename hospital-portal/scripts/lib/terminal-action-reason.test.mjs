@@ -159,7 +159,7 @@ export function resolveUrl(url, source) {
 
 /** `this.http.post<T>(`, also chained over a line break (`this.http\n  .post<T>(`). */
 const HTTP_CALL =
-  /\bhttp\s*\.\s*(post|put|patch|delete)\s*(?:<[^>()]*(?:<[^>()]*>[^>()]*)*>)?\s*\(/g;
+  /\bhttp\s*\.\s*(post|put|patch|delete)\s*(?:<[^<>()]*(?:<[^<>()]*>[^<>()]*)*>)?\s*\(/g;
 
 /** The text of the class member around `index` (from its header to its end). */
 function enclosingMethod(source, index) {
@@ -211,7 +211,7 @@ export function isEmptyBody(body) {
  */
 export function serverReasonContracts(java) {
   const entry =
-    /(?:CLINICAL_)?HANDLERS\.put\(\s*"([A-Z]+) ([^"]+)",\s*((?:"(?:[^"\\]|\\.)*"\s*\+?\s*)+)\)/g;
+    /(?:CLINICAL_)?HANDLERS\.put\(\s*"([A-Z]+) ([^"]+)",\s*("(?:[^"\\]|\\.)*"(?:\s*\+\s*"(?:[^"\\]|\\.)*")*)\s*\)/g;
   const out = [];
   for (const m of java.matchAll(entry)) {
     const value = [...m[3].matchAll(/"((?:[^"\\]|\\.)*)"/g)].map((s) => s[1]).join('');
