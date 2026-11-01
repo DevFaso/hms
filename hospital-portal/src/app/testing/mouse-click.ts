@@ -50,7 +50,7 @@ export function hitAt(el: Element): Element | null {
 }
 
 /** A short description of an element for an assertion message. */
-function describe(el: Element | null): string {
+function nameOf(el: Element | null): string {
   if (el === null) return 'nothing (it is off screen)';
   const cls =
     typeof el.className === 'string' && el.className
@@ -68,7 +68,7 @@ export function mouseClick(el: HTMLElement): void {
   if (hit === null || !el.contains(hit)) {
     const r = el.getBoundingClientRect();
     throw new Error(
-      `${describe(el)} is covered by ${describe(hit)}, so a mouse cannot reach it ` +
+      `${nameOf(el)} is covered by ${nameOf(hit)}, so a mouse cannot reach it ` +
         `(at ${Math.round(r.left)},${Math.round(r.top)} ${Math.round(r.width)}x${Math.round(r.height)} ` +
         `in a ${innerWidth}x${innerHeight} window)`,
     );

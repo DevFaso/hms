@@ -94,8 +94,9 @@ export class OverlayLayer {
       el !== null && el !== document.body && el !== document.documentElement;
       el = el.parentElement
     ) {
-      if (below.some((layer) => el!.contains(layer.host))) break;
-      if (isFixed(el)) root = el;
+      const node = el;
+      if (below.some((layer) => node.contains(layer.host))) break;
+      if (isFixed(node)) root = node;
     }
     this.root = root;
     const prev = root?.previousElementSibling;
