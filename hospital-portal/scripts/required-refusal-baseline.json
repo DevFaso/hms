@@ -81,10 +81,6 @@
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
     },
-    "src/app/billing/billing.ts::unmarked-refusal::sendEmail::BILLING.EMAIL_TO_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
     "src/app/billing/billing.ts::unmarked-refusal::submitAdjustment::BILLING.ADJUSTMENT_LINE_REQUIRED": {
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"

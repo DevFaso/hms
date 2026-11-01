@@ -117,7 +117,23 @@ test('QA D1106/D1115/D1116: every decimal on every screen goes through the share
       .filter((c) => !c.file.endsWith('app-locale.ts'))
       .flatMap((c) => decimalCodeFindings(c.text).map((f) => `${c.file}:${f.line} ${f.message}`)),
   ];
-  assert.deepEqual(offenders, []);
+  // A sibling in a folder another round-21 branch owns, pinned by its exact
+  // message so the merge that fixes it must delete it (a stale pin fails).
+  const pinned = new Map([
+    [
+      `src/app/profile/profile.html:318 percentage with a typed "%": use | measure: '%' — {{ securityScore() }}%`,
+      "QA D1166 sibling in profile/ (owned by fix/r21-portal-clinical-forms): the security score ring needs | measure: '%' : 0",
+    ],
+  ]);
+  assert.deepEqual(
+    offenders.filter((o) => !pinned.has(o)),
+    [],
+  );
+  assert.deepEqual(
+    [...pinned.keys()].filter((p) => !offenders.includes(p)),
+    [],
+    'a pinned sibling is fixed: delete its pin',
+  );
 });
 
 test('QA D1106/D1115/D1116 guard: the scan sees the round-19 shapes and passes the fixed ones', () => {
@@ -241,4 +257,22 @@ test('QA D1135 / D1106 guard: a percentage takes its sign from the formatter', (
   assert.equal(decimalCodeFindings("const label = pct + '%';").length, 1);
   assert.equal(decimalCodeFindings('const s = `${pct}%`;').length, 1);
   assert.deepEqual(decimalCodeFindings('barHeight(n: number) { return `${n * 100}%`; }'), []);
+});
+
+test('QA D1166 (round 21) guard: the sign typed after markup is a typed sign too', () => {
+  // The doctor dashboard ring ("0% Terminé") and the chart vitals ("97%").
+  const raw = [
+    '<span class="ring-pct">{{ scheduleProgress() }}<small>%</small></span>',
+    '<strong>{{ v.spo2Percent }}</strong\n  ><small>%</small>',
+    '<span class="score-number">{{ score() }}</span>\n<span class="score-percent">%</span>',
+    '<b>{{ x }}</b> %',
+  ];
+  for (const html of raw) assert.equal(decimalTemplateFindings(html)[0]?.rule, 'percent', html);
+  const clean = [
+    '<span class="ring-pct">{{ scheduleProgress() | measure: \'%\' : 0 }}</span>',
+    // Text or another interpolation between them: the "%" belongs to something else.
+    '<span>{{ a }}</span> sur <span>100 %</span>',
+    '<span>{{ a }}</span><span>{{ b }}</span>',
+  ];
+  for (const html of clean) assert.deepEqual(decimalTemplateFindings(html), [], html);
 });

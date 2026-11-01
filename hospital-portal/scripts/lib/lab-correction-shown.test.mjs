@@ -25,6 +25,7 @@
 // it is listed below with that reason, not skipped silently.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { join, dirname, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -270,4 +271,125 @@ test('QA D1137: the correction badge never sits between a value and its unit', (
     ).length,
     1,
   );
+});
+
+// QA D1167 / D1137 (round 21, NOT_FIXED a second time): the in-basket read
+// "12,8 g/dLCorrigéBas" and the portal dashboard "12,8 g/dLCorrigé (13,5 –
+// 17,5 g/dL)". Angular drops the whitespace-only text between `</span>` and
+// the next element, so a marker written on its own line is glued to its
+// neighbour in the text a screen reader speaks and a copy pastes (the CSS
+// margin only separates them on screen). The round-20 check saw only a unit
+// AFTER the badge.
+//
+// 1. The shared badge carries a word space on each side itself, so every one
+//    of its usages (enumerated below) is spaced by construction.
+// 2. A correction marker written by hand (the laboratory's own
+//    `status-correction` badge on /lab-results) and the status badges beside
+//    it are preceded by `&ngsp;` or `{{ ' ' }}` when an element comes before
+//    them in the same cell.
+const BADGE_SOURCE = join(appDir, 'lab', 'shared', 'lab-correction-badge.component.ts');
+
+export function badgeCarriesSpaces(source) {
+  const block = /@if\s*\(\s*corrected\(\)\s*\)\s*\{([\s\S]*?)\}\s*`/.exec(source)?.[1] ?? '';
+  return /^\s*&ngsp;\s*<span\b/.test(block) && /<\/span\s*>\s*&ngsp;\s*$/.test(block);
+}
+
+/**
+ * Is the element opening at `index` separated from what comes before it in the
+ * same cell? Whitespace, comments and the `@if (…) {` / `@else {` heads that
+ * wrap it are stepped over. A `&ngsp;` / `{{ ' ' }}` before it, or the opening
+ * tag of its cell (it is the first thing in it), is a separation; a closing tag
+ * or the `}` that ends the previous block is a neighbour it is glued to.
+ */
+export function spacedBefore(html, index) {
+  let text = html.slice(0, index);
+  for (;;) {
+    text = text.trimEnd();
+    if (text.endsWith('-->')) {
+      text = text.slice(0, text.lastIndexOf('<!--'));
+      continue;
+    }
+    const head = /(?:@if\s*\([^{}]*\)|@else(?:\s+if\s*\([^{}]*\))?)\s*\{$/.exec(text);
+    if (!head) break;
+    const isElse = head[0].startsWith('@else');
+    text = text.slice(0, head.index);
+    // `} @else {`: the branch before is never rendered with this one: step
+    // over it (and its own head) too.
+    if (isElse) text = withoutBlockBefore(text);
+  }
+  if (text.endsWith('&ngsp;') || /\{\{\s*' '\s*\}\}$/.test(text)) return true;
+  if (text.endsWith('>')) {
+    const open = text.lastIndexOf('<');
+    const tag = text.slice(open);
+    return !tag.startsWith('</') && !tag.endsWith('/>');
+  }
+  return false;
+}
+
+/** The `{ … }` block that ends `text` and the `@if (…)` / `@else` head that opens it, removed. */
+function withoutBlockBefore(text) {
+  const trimmed = text.trimEnd();
+  if (!trimmed.endsWith('}')) return text;
+  let depth = 0;
+  for (let i = trimmed.length - 1; i >= 0; i--) {
+    if (trimmed[i] === '}') depth++;
+    else if (trimmed[i] === '{' && --depth === 0) {
+      const before = trimmed.slice(0, i);
+      const head = /(?:@if\s*\([^{}]*\)|@else(?:\s+if\s*\([^{}]*\))?)\s*$/.exec(before);
+      if (!head) return text;
+      const rest = before.slice(0, head.index);
+      return head[0].startsWith('@else') ? withoutBlockBefore(rest) : rest;
+    }
+  }
+  return text;
+}
+
+/** A correction marker written by hand: the laboratory's own `status-correction` badge. */
+const HAND_MARKER = /<span\b[^>]*\bclass="[^"]*\bstatus-correction\b[^"]*"/g;
+
+test('QA D1167: the shared correction badge carries a word space on each side', () => {
+  assert.equal(badgeCarriesSpaces(readFileSync(BADGE_SOURCE, 'utf8')), true);
+  // Every usage, enumerated: each is the shared component, spaced by construction.
+  const usages = templatesIn(appDir).flatMap(({ file, text }) =>
+    [...text.matchAll(/<app-lab-correction-badge\b/g)].map(() =>
+      relative(appDir, file).replaceAll('\\', '/'),
+    ),
+  );
+  assert.ok(usages.length >= 15, `found ${usages.length} usages: ${usages.join(', ')}`);
+  const unspaced = '@if (corrected()) {\n      <span class="x">C</span>\n    }\n  `';
+  assert.equal(badgeCarriesSpaces(unspaced), false);
+});
+
+test('QA D1167: a hand-written correction marker is never glued to the badge before it', () => {
+  const offenders = templatesIn(appDir).flatMap(({ file, text }) =>
+    [...text.matchAll(HAND_MARKER)]
+      .filter((m) => !spacedBefore(text, m.index))
+      .map(
+        (m) =>
+          `${relative(appDir, file).replaceAll('\\', '/')}:${text.slice(0, m.index).split('\n').length} ${m[0].slice(0, 70)}`,
+      ),
+  );
+  assert.deepEqual(offenders, []);
+});
+
+test('QA D1167 guard: the spacing scan sees the round-21 shapes', () => {
+  const glued = `<td><span class="status-badge a">Publié</span>
+    @if (r.supersedesResultId) {
+      <!-- a correction -->
+      <span class="status-badge status-correction">Corrigé</span>
+    }</td>`;
+  const at = glued.indexOf('<span class="status-badge status-correction"');
+  assert.equal(spacedBefore(glued, at), false);
+  const fixed = glued.replace(
+    '<span class="status-badge status-correction"',
+    '&ngsp;<span class="status-badge status-correction"',
+  );
+  assert.equal(
+    spacedBefore(fixed, fixed.indexOf('<span class="status-badge status-correction"')),
+    true,
+  );
+  // The first thing in its cell needs no space.
+  const first = '<td>\n  <span class="status-badge x">A</span></td>';
+  assert.equal(spacedBefore(first, first.indexOf('<span')), true);
+  assert.equal(spacedBefore("{{ ' ' }}<span>", "{{ ' ' }}".length), true);
 });

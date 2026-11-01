@@ -26,8 +26,10 @@
 
 import {
   HttpClient,
+  HttpContext,
   HttpContextToken,
   HttpErrorResponse,
+  HttpEvent,
   HttpInterceptorFn,
   HttpRequest,
 } from '@angular/common/http';
@@ -171,31 +173,49 @@ function bootstrapOnce(http: HttpClient): Observable<void> {
 }
 
 /**
+ * QA D1145 (round 21): how many times a request refused for its CSRF token is
+ * replayed. One was not enough after a language switch (a full reload fires
+ * several writes at once): a sibling request sent while the stale cookie was
+ * being dropped is refused WITHOUT a cookie, and that refusal's own Set-Cookie
+ * lands after the fresh bootstrap token, so the single replay carried a token
+ * the cookie no longer matched, and the billing search came back empty.
+ */
+export const MAX_CSRF_REPLAYS = 2;
+
+/** Which replay this request is (0 = the original send). */
+const CSRF_ATTEMPT = new HttpContextToken<number>(() => 0);
+
+/**
  * Sends with the token; on a 403, when the cookie has changed since the token
- * was read (another response rotated it), replays once with the current one.
+ * was read (another response rotated it), replays with the current one.
  * QA D1145: when the server says the token itself is refused
  * (CSRF_TOKEN_INVALID) and the cookie has not changed, the cookie is stale:
- * it is dropped, a fresh one is fetched, and the request is replayed once.
- * Any other 403 is a real refusal and is passed on.
+ * it is dropped, a fresh one is fetched, and the request is replayed. At most
+ * MAX_CSRF_REPLAYS replays; only the last is marked CSRF_REPLAY, so the error
+ * interceptor reports the refusal once, when nothing is left to try. Any
+ * other 403 is a real refusal and is passed on.
  */
 function sendWithRetry(
   req: HttpRequest<unknown>,
   next: Parameters<HttpInterceptorFn>[1],
   token: string,
   http: HttpClient,
-) {
-  const replay = (fresh: string) =>
-    next(
-      req.clone({
-        setHeaders: { 'X-XSRF-TOKEN': fresh },
-        context: req.context.set(CSRF_REPLAY, true),
-      }),
-    );
+): Observable<HttpEvent<unknown>> {
+  const attempt = req.context.get(CSRF_ATTEMPT);
+  const replay = (fresh: string) => {
+    const nextAttempt = attempt + 1;
+    // A copy: the request already sent (and seen by the error interceptor) keeps its own context.
+    const context = new HttpContext();
+    for (const key of req.context.keys()) context.set(key, req.context.get(key));
+    context.set(CSRF_ATTEMPT, nextAttempt).set(CSRF_REPLAY, nextAttempt === MAX_CSRF_REPLAYS);
+    return sendWithRetry(req.clone({ context }), next, fresh, http);
+  };
   return next(req.clone({ setHeaders: { 'X-XSRF-TOKEN': token } })).pipe(
     catchError((err: unknown) => {
       if (!(err instanceof HttpErrorResponse) || err.status !== 403) {
         return throwError(() => err);
       }
+      if (attempt >= MAX_CSRF_REPLAYS) return throwError(() => err);
       const current = getCookieValue('XSRF-TOKEN');
       if (current && current !== token) {
         return replay(current);

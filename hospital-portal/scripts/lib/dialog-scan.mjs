@@ -40,7 +40,7 @@
  * the first heading inside it, so a pin survives the lines around it moving
  * and stops matching when the dialog is fixed or removed.
  */
-import { tags, innerHtml, attrValue, classTokens, hasAttr } from './html-tags.mjs';
+import { tags, innerHtml, attrValue, classTokens, hasAttr, lineOf } from './html-tags.mjs';
 import { balanced } from './js-scan.mjs';
 
 const CONTAINER_TOKEN =
@@ -73,14 +73,20 @@ export function isCover(tag) {
 export const LAYOUT_MARKUP = /<(?:router-outlet|main)\b/;
 
 /**
- * The one non-dialog panel a cover may stand for: a navigation drawer (the
- * shell's phone sidebar, an element holding a `<nav>`), which closes on its
- * own reachable `(keydown.escape)`. A landmark is not made a dialog because it
- * slides over the page on a phone.
+ * A panel that is a landmark on a wide screen and a modal over the page on a
+ * phone (the shell's navigation drawer) may stand behind a cover only when it
+ * carries `appDrawerDialog` with `(drawerClose)` bound: role and aria-modal
+ * while open, focus moved in, Tab kept inside, Escape from anywhere, focus
+ * back to the opener (shared/a11y/drawer-dialog.directive.ts).
+ *
+ * QA D1153 / D1125 (round 21): until round 20 an element holding a `<nav>`
+ * with its own `(keydown.escape)` passed here. That handler fired only once
+ * focus had been put inside by hand: focus stayed on Menu, Escape did nothing
+ * and Tab walked to the page under the backdrop. An Escape binding is no
+ * longer enough for a drawer.
  */
-function isNavDrawer(html, tokens, index) {
-  const inner = innerHtml(html, tokens, index) ?? '';
-  return /<nav\b/.test(inner) && hasEscapeAttr(tokens[index]);
+export function isDrawerDialog(tag) {
+  return tag.attrs.has('[appDrawerDialog]') && (tag.attrs.get('(drawerClose)') ?? '').trim() !== '';
 }
 
 /** Index of the element that ends right before `tokens[index]` opens, or -1. */
@@ -367,7 +373,7 @@ function coverFinding(html, tokens, index, childDialog) {
   )
     return null;
   const prevIndex = previousSiblingIndex(tokens, index);
-  if ([prevIndex, hasPanel ? nextIndex : -1].some((k) => k >= 0 && isNavDrawer(html, tokens, k)))
+  if ([prevIndex, hasPanel ? nextIndex : -1].some((k) => k >= 0 && isDrawerDialog(tokens[k])))
     return null;
   const tag = tokens[index];
   const panel = hasPanel ? next : tag;
@@ -378,6 +384,38 @@ function coverFinding(html, tokens, index, childDialog) {
     anchor: `${tag.attrs.get('class') ?? tag.name} + ${panelName}`,
     message:
       'a page-covering overlay whose panel is not a dialog: put appModalDialog (role, aria-modal, focus in, Escape, focus back) and a name on the panel',
+  };
+}
+
+/**
+ * QA D1153 / D1125 / D1004 (round 21): the cover rule saw a drawer or a menu
+ * only when a backdrop sat next to it. A panel NAMED a drawer, a menu, a side
+ * nav, an off-canvas or a sheet (a page column called a "sidebar" is layout,
+ * not an overlay; the whole class token, optionally with a
+ * -panel / -container / -box / -card / -wrapper suffix) pops over the page,
+ * with or without a backdrop: it must be a dialog (role, aria-modal, focus in,
+ * Escape, focus back), a drawer dialog (`appDrawerDialog` + `(drawerClose)`),
+ * or wrap one. An inline disclosure region (`<section>`, `<details>`) is part
+ * of the page, not an overlay.
+ */
+const PANEL_TOKEN =
+  /^(?:[a-z0-9]+-)*(?:drawer|menu|sidenav|offcanvas|sheet)(?:-(?:panel|container|box|card|wrapper))?$/;
+const INLINE_REGION_TAGS = new Set(['section', 'details']);
+
+function panelFinding(html, tokens, index, childDialog) {
+  const tag = tokens[index];
+  if (tag.type !== 'open' || INLINE_REGION_TAGS.has(tag.name)) return null;
+  if (![...classTokens(tag)].some((t) => PANEL_TOKEN.test(t))) return null;
+  if (isDrawerDialog(tag) || isOrWrapsDialog(html, tokens, index, childDialog)) return null;
+  // A panel right after a cover (or a cover itself) is the cover rule's to report: not twice.
+  const prev = previousSiblingIndex(tokens, index);
+  if (isCover(tag) || (prev >= 0 && isCover(tokens[prev]))) return null;
+  return {
+    line: tag.line,
+    rule: 'panel',
+    anchor: anchor(tag, innerHtml(html, tokens, index)),
+    message:
+      'a drawer/menu panel that is not a dialog: put appModalDialog (or appDrawerDialog for a panel that is a modal only on a phone) and a name on it',
   };
 }
 
@@ -450,6 +488,10 @@ export function dialogFindings(html, componentSource = html, dialogSelectors = n
     if (!stack.some((s) => s.isDialog) && isCover(tag)) {
       const cover = coverFinding(html, tokens, index, childDialog);
       if (cover) out.push(cover);
+    }
+    if (!stack.some((s) => s.isDialog)) {
+      const panel = panelFinding(html, tokens, index, childDialog);
+      if (panel) out.push(panel);
     }
     const directive = directiveDialog(tag);
     const role = attrValue(tag, 'role') ?? (directive ? 'dialog' : undefined);
@@ -563,6 +605,7 @@ export function dialogFindings(html, componentSource = html, dialogSelectors = n
       });
     }
   });
+  out.push(...openerFindings(html, componentSource, childDialog));
   return out.concat(
     subFormFindings(html, tokens, componentSource),
     labelIconFindings(html, tokens),
@@ -840,4 +883,137 @@ export function labelIconFindings(html, tokens = tags(html)) {
     }
   });
   return out;
+}
+
+/**
+ * QA D1146 (round 21, a regression from the D1124 fix): the portal booking
+ * opener was wrapped in `@if (!showBookingForm())`, so the button was
+ * DESTROYED while its dialog was open. The dialog directive remembered it,
+ * found it disconnected on close, and focus fell to BODY (Escape, the close
+ * button and a keyboard open all failed). A re-created button is a new
+ * element: focus can never come back to it.
+ *
+ * Rule `opener`: a clickable element (a `(click)` binding) rendered only while
+ * a dialog's condition is FALSE — inside `@if (!cond)`, the `@else` of
+ * `@if (cond) { <dialog> }`, or `*ngIf="!cond"` — whose click reads that
+ * condition (in the binding or in the body of the method it calls). Keep the
+ * opener rendered; refuse a second open in the handler instead.
+ */
+const COMMENT = /<!--[\s\S]*?-->/g;
+
+function blankComments(html) {
+  return html.replace(COMMENT, (m) => m.replace(/[^\n]/g, ' '));
+}
+
+/** The `{ … }` group that opens at `open` (comments already blanked); braces only. */
+function braceGroupEnd(html, open) {
+  let depth = 0;
+  for (let i = open; i < html.length; i++) {
+    if (html[i] === '{') depth++;
+    else if (html[i] === '}' && --depth === 0) return i;
+  }
+  return html.length - 1;
+}
+
+/** The identifier a condition reads: `showForm()` / `this.showForm` / `state.open` → its last name. */
+function conditionName(cond) {
+  const m = /([A-Za-z_$][\w$]*)\s*(?:\(\s*\))?\s*$/.exec(cond.trim());
+  return m ? m[1] : null;
+}
+
+/** Every `@if (cond) { … } [@else { … }]` block: condition, then-body, else-body. */
+function ifBlocks(html) {
+  const out = [];
+  for (const m of html.matchAll(/@if\s*\(/g)) {
+    const condGroup = balanced(html, m.index + m[0].length - 1);
+    const cond = condGroup.slice(1, -1).split(';')[0].trim();
+    const afterCond = m.index + m[0].length - 1 + condGroup.length;
+    const open = html.indexOf('{', afterCond);
+    if (open < 0 || html.slice(afterCond, open).trim() !== '') continue;
+    const close = braceGroupEnd(html, open);
+    const block = { cond, start: open, body: html.slice(open + 1, close), elseBody: null };
+    const elseMatch = /^\s*@else\s*\{/.exec(html.slice(close + 1));
+    if (elseMatch) {
+      const elseOpen = close + elseMatch[0].length;
+      block.elseBody = html.slice(elseOpen + 1, braceGroupEnd(html, elseOpen));
+    }
+    out.push(block);
+  }
+  return out;
+}
+
+const NEGATED = /^!\s*(?!=)([\s\S]+)$/;
+
+function clickReads(tag, name, componentSource) {
+  const binding = tag.attrs.get('(click)') ?? '';
+  const escaped = (id) => id.replace(/\$/g, String.raw`\$`);
+  const reads = new RegExp(String.raw`\b${escaped(name)}\b`);
+  if (reads.test(binding)) return true;
+  const handler = /^\s*(?:this\.)?([A-Za-z_$][\w$]*)\s*\(/.exec(binding)?.[1];
+  if (!handler) return false;
+  const declaration = new RegExp(
+    String.raw`(?:^|[\s;}])${escaped(handler)}\s*\([^)]*\)\s*(?::[^{;]+)?\{`,
+    'gm',
+  );
+  for (const d of componentSource.matchAll(declaration)) {
+    if (reads.test(balanced(componentSource, d.index + d[0].length - 1, '{', '}'))) return true;
+  }
+  return false;
+}
+
+function openerFindings(html, componentSource, childDialog) {
+  const clean = blankComments(html);
+  const blocks = ifBlocks(clean);
+  const opensDialog = (body) =>
+    DIALOG_MARKUP.test(body) || (childDialog !== null && childDialog.test(body));
+  const dialogConditions = new Set(
+    blocks
+      .filter((b) => opensDialog(b.body))
+      .map((b) => conditionName(b.cond))
+      .filter(Boolean),
+  );
+  // Regions rendered only while a dialog condition is false.
+  const hiding = [];
+  for (const b of blocks) {
+    const negated = NEGATED.exec(b.cond);
+    const name = negated ? conditionName(negated[1]) : null;
+    if (name && dialogConditions.has(name) && !/[&|?]/.test(b.cond))
+      hiding.push({ name, body: b.body });
+    const own = conditionName(b.cond);
+    if (b.elseBody !== null && opensDialog(b.body) && own)
+      hiding.push({ name: own, body: b.elseBody });
+  }
+  for (const tag of tags(clean)) {
+    const ngIf = NEGATED.exec((attrValue(tag, '*ngIf') ?? '').replace(/['"]/g, '').trim());
+    const name = ngIf ? conditionName(ngIf[1]) : null;
+    if (name && dialogConditions.has(name)) {
+      hiding.push({ name, body: clean.slice(tag.start, closeTagEnd(clean, tag)) });
+    }
+  }
+  const out = [];
+  const seen = new Set();
+  for (const { name, body } of hiding) {
+    for (const tag of tags(body)) {
+      if (tag.type !== 'open' || !tag.attrs.has('(click)')) continue;
+      if (!clickReads(tag, name, componentSource)) continue;
+      const key = `${name}::${tag.attrs.get('(click)')}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({
+        line: lineOf(clean, clean.indexOf(body)) + tag.line - 1,
+        rule: 'opener',
+        anchor: `${tag.attrs.get('class') ?? tag.name} (click)="${(tag.attrs.get('(click)') ?? '').trim()}" hidden while ${name}`,
+        message: `the opener is not rendered while its dialog (${name}) is open, so focus cannot come back to it on close: keep it rendered and refuse a second open in its handler`,
+      });
+    }
+  }
+  return out;
+}
+
+/** End offset of the element `tag` opens (its close tag), in `html`. */
+function closeTagEnd(html, tag) {
+  const tokens = tags(html);
+  const index = tokens.findIndex((t) => t.start === tag.start);
+  if (index < 0) return tag.end;
+  return tokens[closeIndexOf(tokens, index)].end;
 }

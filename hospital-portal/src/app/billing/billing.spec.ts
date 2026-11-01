@@ -117,6 +117,32 @@ describe('BillingComponent', () => {
     expect(component.loading()).toBeFalse();
   });
 
+  // QA D1145 (round 21): after a language switch a refused search showed
+  // "No invoices found" with zero totals, which reads as an empty ledger.
+  it('a failed read says so with a retry, never "No invoices found" and zero totals', () => {
+    billingSpy.searchInvoices.and.returnValue(throwError(() => new Error('boom')));
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const failed = host.querySelector('[data-testid="billing-load-failed"]');
+    expect(failed).withContext('the failure is on the page').not.toBeNull();
+    expect(failed!.getAttribute('role')).toBe('alert');
+    expect(host.querySelector('.empty-state:not(.load-failed)')).toBeNull();
+    const values = Array.from(host.querySelectorAll('.summary-cards .card-value')).map((v) =>
+      v.textContent!.trim(),
+    );
+    expect(values.length).toBeGreaterThan(0);
+    expect(values.every((v) => v === '—'))
+      .withContext(values.join(' | '))
+      .toBeTrue();
+
+    billingSpy.searchInvoices.and.returnValue(of(mockPage([mockInvoice()])));
+    (failed!.querySelector('button') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    expect(host.querySelector('[data-testid="billing-load-failed"]')).toBeNull();
+    expect(component.invoices().length).toBe(1);
+    expect(host.querySelector('.summary-cards .card-value')!.textContent!.trim()).not.toBe('—');
+  });
+
   it('paid tab requests only PAID invoices', () => {
     fixture.detectChanges();
     billingSpy.searchInvoices.calls.reset();
@@ -363,6 +389,36 @@ describe('BillingComponent', () => {
     component.sendEmail();
     expect(toastSpy.error).toHaveBeenCalled();
     expect(billingSpy.emailInvoice).not.toHaveBeenCalled();
+  });
+
+  // QA D1179 (round 21): "pas-un-email" reached the server, whose raw Jakarta
+  // text came back in a toast. The form refuses it on the field first.
+  it('a malformed To or Cc address is refused on its field and nothing is sent', () => {
+    fixture.detectChanges();
+    document.body.appendChild(fixture.nativeElement);
+    try {
+      component.openEmail(component.invoices()[0]);
+      fixture.detectChanges();
+      const host = fixture.nativeElement as HTMLElement;
+      component.emailTo.set('pas-un-email');
+      component.emailCc.set('ok@x.test');
+      component.sendEmail();
+      expect(billingSpy.emailInvoice).not.toHaveBeenCalled();
+      const to = host.querySelector<HTMLInputElement>('#email-to')!;
+      expect(to.getAttribute('aria-invalid')).toBe('true');
+      expect(host.querySelector('#email-cc')!.hasAttribute('aria-invalid')).toBeFalse();
+      expect(document.activeElement).toBe(to);
+      expect(toastSpy.error).toHaveBeenCalledWith('BILLING.EMAIL_ADDRESS_INVALID');
+
+      component.emailTo.set('a@x.test');
+      component.emailCc.set('b@x');
+      component.sendEmail();
+      expect(billingSpy.emailInvoice).not.toHaveBeenCalled();
+      expect(to.hasAttribute('aria-invalid')).toBeFalse();
+      expect(host.querySelector('#email-cc')!.getAttribute('aria-invalid')).toBe('true');
+    } finally {
+      (fixture.nativeElement as HTMLElement).remove();
+    }
   });
 
   it('sendEmail splits recipients after success', () => {
@@ -882,6 +938,34 @@ describe('BillingComponent', () => {
       expect(billingSpy.createInvoiceItem).not.toHaveBeenCalled();
       expect(billingSpy.deleteInvoiceItem).not.toHaveBeenCalled();
       expect(component.editingLineId()).toBeNull();
+    });
+
+    // QA D1155 class (round 21, sibling found by #1000): Escape in the line
+    // editor closed the whole invoice dialog; focus did not move into it.
+    it('the line editor takes focus, and Escape closes only it with focus back on its button', () => {
+      document.body.appendChild(fixture.nativeElement);
+      try {
+        const host = fixture.nativeElement as HTMLElement;
+        const opener = host.querySelector<HTMLElement>('[data-testid="line-edit-line-0"]')!;
+        opener.focus();
+        opener.click();
+        fixture.detectChanges();
+        TestBed.tick();
+        const qty = host.querySelector<HTMLElement>('#line-edit-qty')!;
+        expect(document.activeElement).withContext('focus in the line editor').toBe(qty);
+        qty.dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+        );
+        fixture.detectChanges();
+        TestBed.tick();
+        expect(component.editingLineId()).toBeNull();
+        expect(component.selectedInvoice())
+          .withContext('the invoice dialog stays open')
+          .not.toBeNull();
+        expect(document.activeElement).toBe(host.querySelector('[data-testid="line-edit-line-0"]'));
+      } finally {
+        (fixture.nativeElement as HTMLElement).remove();
+      }
     });
   });
 

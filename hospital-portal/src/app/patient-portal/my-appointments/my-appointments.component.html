@@ -4,13 +4,15 @@
       <span class="material-symbols-outlined">calendar_month</span>
       {{ 'PORTAL.APPOINTMENTS.TITLE' | translate }}
     </h1>
-    <!-- QA D1124: offered while the booking form is closed (re-opening it would wipe the form). -->
-    @if (!showBookingForm()) {
-      <button class="booking-btn" (click)="openBookingForm()">
-        <span class="material-symbols-outlined">add_circle</span>
-        {{ 'PORTAL.APPOINTMENTS.BOOKING.TITLE' | translate }}
-      </button>
-    }
+    <!--
+      QA D1146 (regression of the D1124 fix): the opener stays rendered while the
+      booking form is open, so focus comes back to it on close; a second open is
+      refused in openBookingForm() (re-opening would wipe the form, QA D1124).
+    -->
+    <button class="booking-btn" data-testid="booking-open" (click)="openBookingForm()">
+      <span class="material-symbols-outlined">add_circle</span>
+      {{ 'PORTAL.APPOINTMENTS.BOOKING.TITLE' | translate }}
+    </button>
   </div>
 
   <!-- Booking Form Overlay -->
@@ -32,7 +34,7 @@
       >
         <div class="booking-header">
           <h2 id="appt-dialog-title-1">
-            <span class="material-symbols-outlined">event_available</span>
+            <span class="material-symbols-outlined" aria-hidden="true">event_available</span>
             {{ 'PORTAL.APPOINTMENTS.BOOKING.FORM_TITLE' | translate }}
           </h2>
           <button
@@ -465,7 +467,7 @@
       >
         <div class="booking-header">
           <h2 id="appt-dialog-title-2">
-            <span class="material-symbols-outlined">event_busy</span>
+            <span class="material-symbols-outlined" aria-hidden="true">event_busy</span>
             {{ 'PORTAL.APPOINTMENTS.CANCEL.TITLE' | translate }}
           </h2>
           <button
@@ -548,7 +550,7 @@
       >
         <div class="booking-header">
           <h2 id="appt-dialog-title-3">
-            <span class="material-symbols-outlined">edit_calendar</span>
+            <span class="material-symbols-outlined" aria-hidden="true">edit_calendar</span>
             {{ 'PORTAL.APPOINTMENTS.RESCHEDULE.TITLE' | translate }}
           </h2>
           <button

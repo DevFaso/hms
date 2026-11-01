@@ -302,14 +302,26 @@ test('QA D1125 (round 20): (keydown.escape) on an element that can never hold fo
   assert.deepEqual(scan(wrapper, wrapper), []);
 });
 
-test('QA D1125 (round 20): a navigation drawer closing on its own Escape is the one non-dialog panel', () => {
-  const sidebar = `<aside class="sidebar" (keydown.escape)="closeSidebarFromKeyboard()"><nav><a href="/">x</a></nav></aside>
+test('QA D1153 (round 21): a navigation drawer behind a backdrop must be a drawer dialog, an Escape binding is not enough', () => {
+  // Round 20 accepted `<aside (keydown.escape)>` holding a <nav>: its handler
+  // fired only once focus had been put inside by hand (focus stayed on Menu,
+  // Escape did nothing, Tab reached the page under the backdrop).
+  const escapeOnly = `<aside class="sidebar" (keydown.escape)="closeSidebarFromKeyboard()"><nav><a href="/">x</a></nav></aside>
     <div class="sidebar-backdrop" aria-hidden="true" (click)="closeSidebar()"></div>
     <div class="main-area"><main><router-outlet /></main></div>`;
-  assert.deepEqual(scan(sidebar, sidebar), []);
-  const noEscape = sidebar.replace(' (keydown.escape)="closeSidebarFromKeyboard()"', '');
   assert.deepEqual(
-    scan(noEscape, noEscape).map((f) => f.rule),
+    scan(escapeOnly, escapeOnly).map((f) => f.rule),
+    ['overlay'],
+  );
+  const drawer = escapeOnly.replace(
+    ' (keydown.escape)="closeSidebarFromKeyboard()"',
+    ' [appDrawerDialog]="phoneDrawerOpen()" (drawerClose)="closeSidebarFromKeyboard()"',
+  );
+  assert.deepEqual(scan(drawer, drawer), []);
+  // The directive with nothing bound to its close is not a drawer dialog.
+  const unbound = drawer.replace(' (drawerClose)="closeSidebarFromKeyboard()"', '');
+  assert.deepEqual(
+    scan(unbound, unbound).map((f) => f.rule),
     ['overlay'],
   );
 });
@@ -460,4 +472,66 @@ test('QA D1155 (review round 1): a field row and an actions row as siblings in t
   const reset = VIEW_DIALOG(`<div class="field"><textarea id="r"></textarea></div>
       <div class="modal-actions"><button (click)="submitReset()">Reset</button></div>`);
   assert.deepEqual(subform(reset), []);
+});
+
+test('QA D1153 / D1125 (round 21): a drawer or a menu panel is read with or without a backdrop', () => {
+  const menu = `<div class="profile-menu"><a href="/profile">Profile</a></div>`;
+  assert.deepEqual(
+    scan(menu, menu).map((f) => `${f.rule}:${f.anchor}`),
+    ['panel:profile-menu'],
+  );
+  const fixedMenu = menu.replace(
+    'class="profile-menu"',
+    'class="profile-menu" appModalDialog aria-label="Menu" (escaped)="c()"',
+  );
+  assert.deepEqual(scan(fixedMenu, fixedMenu), []);
+  const drawer = `<aside class="history-drawer"><h3>History</h3><button>x</button></aside>`;
+  assert.deepEqual(
+    scan(drawer, drawer).map((f) => f.rule),
+    ['panel'],
+  );
+  // An inline disclosure region is part of the page; a page column called a sidebar is layout.
+  const region = `<section class="history-drawer"><h3>History</h3></section>
+    <div class="conv-sidebar"><button>x</button></div><div class="drawer-header"><h2>t</h2></div>`;
+  assert.deepEqual(scan(region, region), []);
+});
+
+test('QA D1146 (round 21): an opener rendered only while its dialog is closed cannot take focus back', () => {
+  // #996 wrapped the portal booking button in @if (!showBookingForm()).
+  const ts = `
+  openBookingForm(): void { this.showBookingForm.set(true); }`;
+  const html = `<button class="booking-btn" (click)="openBookingForm()">Book</button>
+    @if (showBookingForm()) {
+      <div class="booking-form-card" appModalDialog aria-labelledby="t" (escaped)="close()"><h2 id="t">Book</h2></div>
+    }`;
+  assert.deepEqual(scan(html, html + ts), []);
+  const hidden = html.replace(
+    '<button class="booking-btn" (click)="openBookingForm()">Book</button>',
+    '@if (!showBookingForm()) { <button class="booking-btn" (click)="openBookingForm()">Book</button> }',
+  );
+  const findings = scan(hidden, hidden + ts);
+  assert.deepEqual(
+    findings.map((f) => f.rule),
+    ['opener'],
+  );
+  assert.equal(findings[0].line, 1);
+  // The @else of the dialog's own @if, and *ngIf="!cond", are the same shape.
+  const elseShape = `@if (showBookingForm()) {
+      <div appModalDialog aria-labelledby="t" (escaped)="close()"><h2 id="t">Book</h2></div>
+    } @else {
+      <button (click)="openBookingForm()">Book</button>
+    }`;
+  assert.deepEqual(
+    scan(elseShape, elseShape + ts).map((f) => `${f.rule}:${f.line}`),
+    ['opener:4'],
+  );
+  const ngIf = `<button *ngIf="!showBookingForm()" (click)="openBookingForm()">Book</button>
+    <div *ngIf="showBookingForm()">@if (showBookingForm()) {<div appModalDialog aria-label="b" (escaped)="c()"></div>}</div>`;
+  assert.deepEqual(
+    scan(ngIf, ngIf + ts).map((f) => f.rule),
+    ['opener'],
+  );
+  // A control hidden while the dialog is open that does not open it is not its opener.
+  const other = hidden.replace('(click)="openBookingForm()"', '(click)="refresh()"');
+  assert.deepEqual(scan(other, other + ts + ' refresh(): void { this.load(); }'), []);
 });

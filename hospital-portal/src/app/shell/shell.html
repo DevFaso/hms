@@ -14,8 +14,19 @@
     unlabeled; it remains a `complementary` landmark by default, which
     is the correct ARIA role for a non-primary side region.
   -->
-  <!-- QA D1125: Escape on the phone drawer closes it (an aria-hidden backdrop never gets the key). -->
-  <aside class="sidebar" tabindex="-1" (keydown.escape)="closeSidebarFromKeyboard()">
+  <!--
+    QA D1153 / D1125: on a phone the open drawer is a modal over the page
+    (appDrawerDialog: role and aria-modal, focus in, Tab kept inside, Escape
+    from anywhere - the Menu button included - and focus back to Menu). On a
+    wide screen it stays a landmark.
+  -->
+  <aside
+    class="sidebar"
+    tabindex="-1"
+    [appDrawerDialog]="phoneDrawerOpen()"
+    [attr.aria-label]="phoneDrawerOpen() ? ('SHELL.MENU' | translate) : null"
+    (drawerClose)="closeSidebarFromKeyboard()"
+  >
     <div class="sidebar-header">
       <div class="logo-area">
         <app-brand-mark [size]="30" tone="onDark" />
@@ -180,7 +191,8 @@
   }
 
   <!-- Main Content -->
-  <div class="main-area">
+  <!-- QA D1153: the page behind the open phone drawer is out of reach (Tab, clicks, readers). -->
+  <div class="main-area" [attr.inert]="phoneDrawerOpen() ? '' : null">
     <!-- Header -->
     <header class="topbar" role="banner">
       <div class="topbar-left">

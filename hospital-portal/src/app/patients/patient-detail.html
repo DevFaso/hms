@@ -687,8 +687,8 @@
                   <div class="vital-metric">
                     <span class="material-symbols-outlined">air</span>
                     <div>
-                      <strong>{{ v.spo2Percent }}</strong
-                      ><small>%</small>
+                      <!-- QA D1166: "97 %" in FR/ES, from the formatter. -->
+                      <strong>{{ v.spo2Percent | measure: '%' : 0 }}</strong>
                     </div>
                     <span class="vital-label">{{ 'PATIENTS.SPO2' | translate }}</span>
                   </div>

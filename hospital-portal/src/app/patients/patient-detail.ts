@@ -1,4 +1,5 @@
 import { LocaleNumberPipe } from '../shared/pipes/lab-value.pipe';
+import { MeasurePipe } from '../shared/pipes/measure.pipe';
 import { glucoseMgDlToMmol } from '../shared/glucose-units';
 import { formatDecimal } from '../shared/i18n/app-locale';
 import {
@@ -77,6 +78,7 @@ type TabKey =
   standalone: true,
   imports: [
     LocaleNumberPipe,
+    MeasurePipe,
     NursingNotesPanelComponent,
     ClockTimePipe,
     ServerTimePipe,

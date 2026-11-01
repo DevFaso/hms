@@ -12,6 +12,8 @@ import {
   ViewChild,
   AfterViewInit,
   ChangeDetectionStrategy,
+  Injector,
+  afterNextRender,
 } from '@angular/core';
 import { NavigationEnd, RouterOutlet, RouterLink, RouterLinkActive, Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
@@ -45,6 +47,7 @@ import {
 import { ProviderContextService } from '../core/provider-context.service';
 import { SkipLinkComponent } from '../shared/a11y/skip-link.component';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { DrawerDialogDirective } from '../shared/a11y/drawer-dialog.directive';
 import { BrandMarkComponent } from '../shared/brand-mark/brand-mark.component';
 import { HospitalScopeGateService } from '../core/hospital-scope-gate.service';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
@@ -90,6 +93,7 @@ function isMobileViewport(): boolean {
     BrandMarkComponent,
     RoleLabelPipe,
     ModalDialogDirective,
+    DrawerDialogDirective,
   ],
   templateUrl: './shell.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -125,6 +129,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly providerContext = inject(ProviderContextService);
   private readonly empiStatus = inject(EmpiStatusService);
   readonly translate = inject(TranslateService);
+  private readonly injector = inject(Injector);
   private notifSub?: Subscription;
   private readCountSub?: Subscription;
 
@@ -137,6 +142,18 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    * "did nothing" (QA D116).
    */
   sidebarCollapsed = signal(isMobileViewport());
+  /** Whether the viewport is a phone's (the sidebar is then a drawer over the page). */
+  private readonly phoneViewport = signal(isMobileViewport());
+  /**
+   * QA D1153 / D1125 (round 21): the drawer open on a phone is a modal over the
+   * page (appDrawerDialog: focus in, Tab kept inside, Escape from anywhere,
+   * focus back to Menu); the page behind it is inert. On a wide screen the
+   * expanded sidebar is a landmark beside the page, never a modal.
+   */
+  readonly phoneDrawerOpen = computed(() => this.phoneViewport() && !this.sidebarCollapsed());
+  private readonly phoneQuery = globalThis.matchMedia?.(MOBILE_SIDEBAR_QUERY);
+  private readonly onPhoneQueryChange = (event: MediaQueryListEvent): void =>
+    this.phoneViewport.set(event.matches);
   profileMenuOpen = signal(false);
   notifPanelOpen = signal(false);
   unreadCount = signal(0);
@@ -1662,6 +1679,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   ngOnInit(): void {
+    // A test double of matchMedia may carry no listener API.
+    this.phoneQuery?.addEventListener?.('change', this.onPhoneQueryChange);
     this.userProfile.set(this.auth.getUserProfile());
     this.permissions.loadFromBackend();
     // QA D987: the duplicate-patient entry depends on the matcher being on.
@@ -1710,15 +1729,25 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         // A successful navigation proves the chunk graph is healthy — re-arm
         // the one-shot stale-chunk reload guard (see app.config.ts).
         sessionStorage.removeItem('hms-chunk-reload');
+        const focusMain = () => this.mainContent?.nativeElement.focus({ preventScroll: true });
+        // QA D1153: the open phone drawer keeps the page inert until this
+        // render; <main> takes focus once it is reachable again (the drawer
+        // then leaves focus where it is instead of sending it back to Menu).
+        if (this.phoneDrawerOpen()) {
+          this.sidebarCollapsed.set(true);
+          afterNextRender(focusMain, { injector: this.injector });
+          return;
+        }
         if (isMobileViewport()) this.sidebarCollapsed.set(true);
         // queueMicrotask defers until after the new component has
         // rendered into the outlet so focus actually lands on the
         // freshly painted <main>, not the previous one.
-        queueMicrotask(() => this.mainContent?.nativeElement.focus({ preventScroll: true }));
+        queueMicrotask(focusMain);
       });
   }
 
   ngOnDestroy(): void {
+    this.phoneQuery?.removeEventListener?.('change', this.onPhoneQueryChange);
     this.notifSub?.unsubscribe();
     this.readCountSub?.unsubscribe();
     this.routerSub?.unsubscribe();
@@ -1901,8 +1930,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    */
   closeSidebarFromKeyboard(): void {
     if (this.sidebarCollapsed() || !isMobileViewport()) return;
+    // appDrawerDialog gives focus back to the Menu button that opened the drawer.
     this.sidebarCollapsed.set(true);
-    globalThis.document?.querySelector<HTMLElement>('.mobile-toggle')?.focus();
   }
 
   toggleProfileMenu(): void {

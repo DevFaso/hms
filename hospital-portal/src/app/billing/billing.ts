@@ -1,7 +1,10 @@
 import { textMatches } from '../shared/person-search';
 import {
   Component,
+  computed,
   ElementRef,
+  Injector,
+  afterNextRender,
   inject,
   OnInit,
   signal,
@@ -41,12 +44,17 @@ import { saveResponse } from '../shared/download-file';
 import { cfaAmountMessageKey, cfaAmountProblem } from '../shared/cfa-amount';
 import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
 import { refuseFields } from '../shared/forms/invalid-fields';
+import { emailAddresses, invalidEmailAddresses } from '../shared/forms/email-address';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 type BillingTab = 'all' | 'outstanding' | 'paid' | 'overdue';
 
 /** The cancellation reason's field (QA D1069), marked when it is refused (QA D1072). */
 const CANCEL_REASON_ID = 'bill-cancel-reason';
+/** The invoice e-mail's address fields (QA D1179), marked when an address is refused. */
+const EMAIL_TO_ID = 'email-to';
+const EMAIL_CC_ID = 'email-cc';
+const EMAIL_FIELD_IDS = [EMAIL_TO_ID, EMAIL_CC_ID];
 
 @Component({
   selector: 'app-billing',
@@ -74,6 +82,7 @@ export class BillingComponent implements OnInit {
   private readonly roleContext = inject(RoleContextService);
   private readonly translate = inject(TranslateService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
 
   // Permission-gated action flags
   /** QA D1059: the cashier's daily cash closing, opened from the page header. */
@@ -121,6 +130,15 @@ export class BillingComponent implements OnInit {
   filtered = signal<BillingInvoiceResponse[]>([]);
   searchTerm = '';
   loading = signal(true);
+  /**
+   * QA D1145 (round 21): the invoice list could not be read. Shown in place of
+   * the list with a retry: a failed read is never "No invoices found" with
+   * zero totals (it read as an empty ledger after a language switch).
+   */
+  loadFailed = signal(false);
+  /** QA D1145: the totals could not be read; the tiles say "—", never 0. */
+  private readonly summaryFailed = signal(false);
+  readonly statsUnknown = computed(() => this.loadFailed() || this.summaryFailed());
   activeTab = signal<BillingTab>('all');
   selectedInvoice = signal<BillingInvoiceResponse | null>(null);
 
@@ -571,6 +589,7 @@ ${this.translate.instant('BILLING.SUPPLEMENTARY_CONFIRM')}`)
 
   loadInvoices(page = 0): void {
     this.loading.set(true);
+    this.loadFailed.set(false);
     if (this.activeTab() === 'overdue') {
       // Dedicated server-side worklist (SENT/PARTIALLY_PAID past due).
       this.billingService.getOverdue().subscribe({
@@ -583,10 +602,7 @@ ${this.translate.instant('BILLING.SUPPLEMENTARY_CONFIRM')}`)
           this.applyFilter();
           this.loading.set(false);
         },
-        error: () => {
-          this.toast.error(this.translate.instant('BILLING.LOAD_FAILED'));
-          this.loading.set(false);
-        },
+        error: () => this.listLoadFailed(),
       });
       return;
     }
@@ -626,11 +642,17 @@ ${this.translate.instant('BILLING.SUPPLEMENTARY_CONFIRM')}`)
           this.applyFilter();
           this.loading.set(false);
         },
-        error: () => {
-          this.toast.error(this.translate.instant('BILLING.LOAD_FAILED'));
-          this.loading.set(false);
-        },
+        error: () => this.listLoadFailed(),
       });
+  }
+
+  /** QA D1145: the list and its totals are not shown as empty when the read failed. */
+  private listLoadFailed(): void {
+    this.toast.error(this.translate.instant('BILLING.LOAD_FAILED'));
+    this.invoices.set([]);
+    this.applyFilter();
+    this.loadFailed.set(true);
+    this.loading.set(false);
   }
 
   /**
@@ -640,7 +662,8 @@ ${this.translate.instant('BILLING.SUPPLEMENTARY_CONFIRM')}`)
   private refreshStats(): void {
     // QA D1059: the tiles follow the list's date filter (the invoice date, as the search reads it).
     this.billingService.getSummary(this.appliedRange).subscribe({
-      next: (summary) =>
+      next: (summary) => {
+        this.summaryFailed.set(false);
         this.stats.set({
           total: Number(summary?.total ?? 0),
           paid: Number(summary?.paid ?? 0),
@@ -648,8 +671,9 @@ ${this.translate.instant('BILLING.SUPPLEMENTARY_CONFIRM')}`)
           overdue: Number(summary?.overdue ?? 0),
           totalRevenue: Number(summary?.totalRevenue ?? 0),
           balance: Number(summary?.balance ?? 0),
-        }),
-      error: () => undefined,
+        });
+      },
+      error: () => this.summaryFailed.set(true),
     });
   }
 
@@ -804,10 +828,36 @@ ${this.translate.instant('BILLING.SUPPLEMENTARY_CONFIRM')}`)
     this.editingLineId.set(item.id);
     this.editLineQuantity.set(item.quantity ?? 1);
     this.editLineUnitPrice.set(Number(item.unitPrice) > 0 ? Number(item.unitPrice) : null);
+    // QA D1155 class (an inline sub-form inside a dialog): focus moves into the line editor.
+    afterNextRender(() => this.lineField('line-edit-qty')?.focus(), { injector: this.injector });
   }
 
   cancelEditLine(): void {
+    const id = this.editingLineId();
     this.editingLineId.set(null);
+    // Focus back on the line's edit button, not to the page (the editor is gone).
+    if (id !== null) {
+      afterNextRender(() => this.lineField(`line-edit-${id}`, true)?.focus(), {
+        injector: this.injector,
+      });
+    }
+  }
+
+  /**
+   * QA D1155 class: Escape inside the line editor closes only the editor; the
+   * invoice dialog around it stays open (its own Escape would discard it).
+   */
+  onLineEditEscape(event: Event): void {
+    event.stopPropagation();
+    event.preventDefault();
+    this.cancelEditLine();
+  }
+
+  private lineField(key: string, byTestId = false): HTMLElement | null {
+    const root = this.host.nativeElement;
+    return byTestId
+      ? root.querySelector<HTMLElement>(`[data-testid="${CSS.escape(key)}"]`)
+      : root.querySelector<HTMLElement>(`#${CSS.escape(key)}`);
   }
 
   canSaveLine(): boolean {
@@ -1024,18 +1074,26 @@ ${this.translate.instant('BILLING.SUPPLEMENTARY_CONFIRM')}`)
   sendEmail(): void {
     const inv = this.emailInv();
     if (!inv) return;
-    const to = this.emailTo()
-      .split(/[\s,;]+/)
-      .map((a) => a.trim())
-      .filter(Boolean);
+    const to = emailAddresses(this.emailTo());
+    const cc = emailAddresses(this.emailCc());
     if (to.length === 0) {
-      this.toast.error(this.translate.instant('BILLING.EMAIL_TO_REQUIRED'));
+      this.refuseEmail([EMAIL_TO_ID], this.translate.instant('BILLING.EMAIL_TO_REQUIRED'));
       return;
     }
-    const cc = this.emailCc()
-      .split(/[\s,;]+/)
-      .map((a) => a.trim())
-      .filter(Boolean);
+    // QA D1179: a malformed address is refused on its field, in the reader's
+    // language, before anything is sent (the server answered in raw Jakarta text).
+    const badTo = invalidEmailAddresses(to);
+    const badCc = invalidEmailAddresses(cc);
+    if (badTo.length > 0 || badCc.length > 0) {
+      this.refuseEmail(
+        [...(badTo.length > 0 ? [EMAIL_TO_ID] : []), ...(badCc.length > 0 ? [EMAIL_CC_ID] : [])],
+        this.translate.instant('BILLING.EMAIL_ADDRESS_INVALID', {
+          addresses: [...badTo, ...badCc].join(', '),
+        }),
+      );
+      return;
+    }
+    refuseFields(this.host.nativeElement, [], EMAIL_FIELD_IDS, '');
     this.emailSending.set(true);
     this.billingService
       .emailInvoice(inv.id, {
@@ -1060,6 +1118,12 @@ ${this.translate.instant('BILLING.SUPPLEMENTARY_CONFIRM')}`)
           );
         },
       });
+  }
+
+  /** QA D1072 / D1179: the refused address field is marked and focused; the toast says it too. */
+  private refuseEmail(fields: string[], message: string): void {
+    refuseFields(this.host.nativeElement, fields, EMAIL_FIELD_IDS, message);
+    this.toast.error(message);
   }
 
   /* ── Payment ── */

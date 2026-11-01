@@ -2226,7 +2226,8 @@
     "ADJUSTMENT_REVERSAL_REASON": "Motivo de la anulación",
     "ADJUSTMENT_REVERSAL_REASON_REQUIRED": "Indique el motivo de la anulación de este ajuste.",
     "ADJUSTMENT_REVERSAL_NOTE": "El importe vuelve a lo que se adeuda. El dinero ya recibido, como el copago pagado en la admisión, sigue registrado.",
-    "ADJUSTMENT_REVERSAL_FAILED": "No se pudo anular el ajuste."
+    "ADJUSTMENT_REVERSAL_FAILED": "No se pudo anular el ajuste.",
+    "EMAIL_ADDRESS_INVALID": "Dirección de correo electrónico no válida: {{ addresses }}"
   },
   "CHAT": {
     "ACCESS_DENIED": "No tiene permiso para acceder a la mensajería.",
@@ -8798,7 +8799,8 @@
     "UPDATED_DEMOGRAPHICS": "Datos actualizados",
     "YES": "Sí",
     "ZIP": "Código postal",
-    "DATE_AT_TIME": "{{date}} a las {{time}}"
+    "DATE_AT_TIME": "{{date}} a las {{time}}",
+    "EMAIL_INVALID": "Introduzca una dirección de correo electrónico válida o deje el campo vacío."
   },
   "TRACKER": {
     "TITLE": "Tablero de seguimiento de pacientes",

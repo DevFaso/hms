@@ -2226,7 +2226,8 @@
     "ADJUSTMENT_REVERSAL_REASON": "Reason for undoing it",
     "ADJUSTMENT_REVERSAL_REASON_REQUIRED": "Give the reason for undoing this adjustment.",
     "ADJUSTMENT_REVERSAL_NOTE": "The amount goes back on what is owed. Money already received, such as the copay paid at check-in, stays recorded.",
-    "ADJUSTMENT_REVERSAL_FAILED": "The adjustment could not be undone."
+    "ADJUSTMENT_REVERSAL_FAILED": "The adjustment could not be undone.",
+    "EMAIL_ADDRESS_INVALID": "Not a valid e-mail address: {{ addresses }}"
   },
   "CHAT": {
     "ACCESS_DENIED": "You do not have permission to access chat.",
@@ -8798,7 +8799,8 @@
     "UPDATED_DEMOGRAPHICS": "Updated Demographics",
     "YES": "Yes",
     "ZIP": "Zip Code",
-    "DATE_AT_TIME": "{{date}} at {{time}}"
+    "DATE_AT_TIME": "{{date}} at {{time}}",
+    "EMAIL_INVALID": "Enter a valid e-mail address, or leave the field empty."
   },
   "TRACKER": {
     "TITLE": "Patient Tracker Board",
