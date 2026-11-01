@@ -14,9 +14,20 @@
 
 set -euo pipefail
 
-# ── Grafana Cloud stack (instance 1404501, zone prod-us-east-2) ──────────────
-readonly GRAFANA_INSTANCE_ID="1404501"
-readonly OTLP_ENDPOINT="https://otlp-gateway-prod-us-east-2.grafana.net/otlp"
+# ── Grafana Cloud stack ──────────────────────────────────────────────────────
+# Instance 1404501. The zone is prod-us-east-0: every access policy on this stack
+# (stack-1404501-alloy, -quickstart, -hl-read, -integration-hms-token) is created
+# there, and policies live in their stack's region. An earlier version of
+# docs/GRAFANA_CLOUD_SETUP.md said prod-us-east-2, which is wrong — and wrong in the
+# worst way, because the other region's gateway also exists and answers a
+# mis-regioned token with a bare 401, exactly like a bad token would.
+#
+# Confirm against Grafana Cloud -> your stack -> OpenTelemetry, which prints the
+# endpoint and instance ID verbatim. Override without editing this file:
+#   GRAFANA_ZONE=prod-us-east-2 ./scripts/grafana-cloud-setup.sh dev glc_...
+readonly GRAFANA_INSTANCE_ID="${GRAFANA_INSTANCE_ID:-1404501}"
+readonly GRAFANA_ZONE="${GRAFANA_ZONE:-prod-us-east-0}"
+readonly OTLP_ENDPOINT="https://otlp-gateway-${GRAFANA_ZONE}.grafana.net/otlp"
 
 usage() {
     cat >&2 <<USAGE
@@ -24,10 +35,15 @@ Usage: $0 <dev|prod> <glc_token>
 
 Arguments:
   dev|prod    Which Railway environment to configure.
-  glc_token   Grafana Cloud access policy token. Needs metrics:write,
-              logs:write and traces:write, and nothing else.
-              Mint it at: Grafana Cloud -> Administration -> Users and access
-              -> Access policies.
+  glc_token   Grafana Cloud access policy token with write scope.
+              The console offers scope SETS rather than individual scopes:
+              'set:alloy-data-write' is the one you want (it bundles
+              metrics:write, logs:write, traces:write, profiles:write).
+              On stack 1404501 the 'stack-1404501-alloy' policy already has
+              exactly that scope and no active token — add one there rather
+              than reusing the quickstart policy's token.
+              Grafana Cloud -> Administration -> Users and access
+              -> Access policies -> Add token.
 
 Example:
   $0 dev glc_eyJvIjoi...
@@ -77,6 +93,7 @@ fi
 
 echo "Configuring Grafana Cloud export for ${SERVICE}"
 echo "  stack instance : ${GRAFANA_INSTANCE_ID}"
+echo "  zone           : ${GRAFANA_ZONE}"
 echo "  OTLP endpoint  : ${OTLP_ENDPOINT}"
 echo "  traces sampler : ${TRACES_SAMPLER}${TRACES_SAMPLER_ARG:+ @ ${TRACES_SAMPLER_ARG}}"
 echo

@@ -29,7 +29,7 @@ As of 2026-11-01 neither `hms-backend-dev` nor `hms-backend-prod` had any
 ```
 ┌──────────────┐    OTLP/HTTP     ┌─────────────────────────────┐
 │  HMS Backend │ ───────────────► │  Grafana Cloud OTLP Gateway │
-│  (Railway)   │                  │  otlp-gateway-prod-us-east-2│
+│  (Railway)   │                  │  otlp-gateway-prod-us-east-0│
 │              │                  ├─────────────────────────────┤
 │  OTEL Agent  │                  │  Tempo   → Traces           │
 │  (javaagent) │                  │  Mimir   → Metrics          │
@@ -37,7 +37,18 @@ As of 2026-11-01 neither `hms-backend-dev` nor `hms-backend-prod` had any
 └──────────────┘                  └─────────────────────────────┘
 ```
 
-**Stack instance ID: `1404501`** · zone `prod-us-east-2`.
+**Stack instance ID: `1404501`** · zone **`prod-us-east-0`**.
+
+> The zone is the one correction to the recovered doc, and it matters. The original
+> said `prod-us-east-2`; every access policy on this stack (`stack-1404501-alloy`,
+> `-quickstart`, `-hl-read`, `-integration-hms-token`) is created in
+> `prod-us-east-0`, and policies live in their stack's region. The other region's
+> gateway also exists and answers a mis-regioned token with a bare `401` —
+> indistinguishable from a bad token, which is a long afternoon of debugging.
+>
+> Confirm verbatim at **Grafana Cloud → your stack → OpenTelemetry**, which prints
+> the endpoint and instance ID. If it disagrees, no code change is needed:
+> `GRAFANA_ZONE=prod-us-east-2 ./scripts/grafana-cloud-setup.sh dev glc_…`
 
 Production uses **push**, not scrape. That matters for security: see
 [Why the scrape endpoint is closed](#why-the-scrape-endpoint-is-closed).
@@ -46,9 +57,26 @@ Production uses **push**, not scrape. That matters for security: see
 
 ### 1. Mint an access policy token
 
-In Grafana Cloud → **Administration → Users and access → Access policies**,
-create a policy scoped to `metrics:write`, `logs:write`, `traces:write`, then
-add a token to it. The token looks like `glc_…` and is shown once.
+The console offers scope **sets** rather than individual scopes. The one you want
+is **`set:alloy-data-write`**, which bundles `metrics:write`, `logs:write`,
+`traces:write` and `profiles:write`.
+
+Stack 1404501 already has policies, so you do not need a new one:
+
+| Policy | Scopes | Tokens | Use for the backend? |
+|---|---|---|---|
+| `stack-1404501-alloy` | `set:alloy-data-write` | none active (1 expired) | **Yes — add a token here** |
+| `stack-1404501-quickstart` | `set:alloy-data-write` | `windows-token`, in active use | No — don't share it |
+| `stack-1404501-integration-hms-token` | `metrics:read` + `set:alloy-data-write` | 1 | Workable, but carries a read scope it doesn't need |
+| `stack-1404501-hl-read` | read-only | — | No — cannot write |
+| `pdc-tiegoouedraogo-default` | `set:pdc-signing` | none | No — Private Data source Connect |
+
+Go to **Administration → Users and access → Access policies →
+`stack-1404501-alloy` → Add token**, name it something like `hms-backend-otlp`,
+and copy the `glc_…` value — it is shown exactly once.
+
+Keeping the backend on its own token means you can revoke it without taking down
+whatever `windows-token` is feeding.
 
 ### 2. Run the setup script
 
@@ -67,7 +95,7 @@ when you are ready.
 
 | Variable | dev | prod |
 |---|---|---|
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | `https://otlp-gateway-prod-us-east-2.grafana.net/otlp` | same |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `https://otlp-gateway-prod-us-east-0.grafana.net/otlp` | same |
 | `OTEL_EXPORTER_OTLP_PROTOCOL` | `http/protobuf` | same |
 | `OTEL_EXPORTER_OTLP_HEADERS` | `Authorization=Basic <base64(1404501:glc_…)>` | same |
 | `GRAFANA_OTLP_AUTH_HEADER` | `Basic <base64(1404501:glc_…)>` | same |
