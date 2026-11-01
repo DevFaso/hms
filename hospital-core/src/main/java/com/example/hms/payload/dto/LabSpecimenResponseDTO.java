@@ -30,6 +30,10 @@ public class LabSpecimenResponseDTO {
     private String currentLocation;
     private String status;
     private String notes;
+    /** QA D962: set when the specimen was rejected. */
+    private String rejectionReason;
+    private LocalDateTime rejectedAt;
+    private UUID rejectedById;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

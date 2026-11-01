@@ -137,6 +137,8 @@ class ServiceWriteTenantLoadCoverageTest {
         entry("PatientPortalServiceImpl.requestMedicationRefill#findById", OWN_ROW + " (the patient's own prescription)"),
         entry("PatientServiceImpl.fetchPatient#findByIdUnscoped", PATIENT),
         entry("PatientVitalSignServiceImpl.resolveAssignment#findById", ACTOR),
+        entry("PrescriptionCopyPdfService.copyForPatient#findById", OWN_ROW
+            + " (QA D966: a read; 404 unless the prescription is the calling patient's own)"),
         entry("PatientVitalSignServiceImpl.resolveRegistration#findById", UNSWEPT),
         entry("PermissionServiceImpl.createPermission#findById", ACTOR),
         entry("PharmacySaleServiceImpl.buildLine#findById", SHARED),

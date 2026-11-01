@@ -75,6 +75,7 @@ class LabResultServiceImplLifecycleTest {
     @Mock private com.example.hms.service.recordaccess.CrossHospitalReachRecorder reachRecorder;
     @Mock private com.example.hms.service.recordaccess.RecordAccessPolicy recordAccessPolicy;
     @Mock private InBasketService inBasketService;
+    @Mock private com.example.hms.service.lab.LabResultReleaseNotifier releaseNotifier;
 
     @InjectMocks
     private LabResultServiceImpl service;
@@ -360,6 +361,74 @@ class LabResultServiceImplLifecycleTest {
         assertThat(released.getSupersededByResultId()).isEqualTo(correction.getId());
         assertThat(released.getResultValue()).isEqualTo("4.1");
         verify(labOrderRepository, atLeastOnce()).findWithLockById(order.getId());
+    }
+
+    @Test
+    @DisplayName("QA D931 — releasing a correction closes the superseded result's open in-basket items")
+    void releasingACorrectionClosesTheSupersededItems() {
+        LabResult released = resultOn(order, true);
+        LabResult correction = stubReleasableCorrectionOf(released);
+
+        service.releaseLabResult(correction.getId(), true, Locale.ENGLISH);
+
+        verify(inBasketService).removeOpenItemsForReference(released.getId(), "LAB_RESULT");
+    }
+
+    @Test
+    @DisplayName("QA D931 — a released correction is filed as a correction, at least URGENT, naming old and new")
+    void aReleasedCorrectionIsFiledAsACorrection() {
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        try {
+            com.example.hms.model.User doctor = new com.example.hms.model.User();
+            doctor.setId(UUID.randomUUID());
+            com.example.hms.model.Staff orderingStaff = new com.example.hms.model.Staff();
+            orderingStaff.setUser(doctor);
+            order.setOrderingStaff(orderingStaff);
+            LabResult released = resultOn(order, true);
+            released.setResultValue("Positif");
+            LabResult correction = stubReleasableCorrectionOf(released);
+            correction.setResultValue("Négatif");
+            when(labResultMapper.severityFlagOf(correction)).thenReturn("NORMAL");
+            ArgumentCaptor<com.example.hms.payload.dto.clinical.CreateInBasketItemRequest> filed =
+                ArgumentCaptor.forClass(com.example.hms.payload.dto.clinical.CreateInBasketItemRequest.class);
+
+            service.releaseLabResult(correction.getId(), true, Locale.ENGLISH);
+
+            verify(inBasketService).createItemInNewTransaction(filed.capture());
+            assertThat(filed.getValue().getPriority()).isEqualTo(com.example.hms.enums.InBasketPriority.URGENT);
+            assertThat(filed.getValue().getTitle()).isEqualTo("Correction : Potassium");
+            assertThat(filed.getValue().getBody()).isEqualTo("Ancienne valeur Positif, nouvelle valeur Négatif");
+            verify(releaseNotifier).correctionReleased(correction, released);
+        } finally {
+            com.example.hms.utility.MessageUtil.setMessageSource(null);
+        }
+    }
+
+    @Test
+    @DisplayName("QA D931 — a correction that paged as critical is not announced a second time")
+    void aCriticalCorrectionIsNotAnnouncedTwice() {
+        LabResult released = resultOn(order, true);
+        LabResult correction = stubReleasableCorrectionOf(released);
+        org.mockito.Mockito.doAnswer(inv -> {
+            correction.setCriticalNotifiedAt(LocalDateTime.now());
+            return null;
+        }).when(criticalValueNotificationService).notifyIfCritical(org.mockito.ArgumentMatchers.same(correction), any());
+
+        service.releaseLabResult(correction.getId(), true, Locale.ENGLISH);
+
+        verify(releaseNotifier, never()).correctionReleased(any(), any());
+        verify(releaseNotifier).patientResultReleased(correction);
+    }
+
+    @Test
+    @DisplayName("QA D938 — every release tells the patient")
+    void aReleaseTellsThePatient() {
+        LabResult released = resultOn(order, true);
+        LabResult correction = stubReleasableCorrectionOf(released);
+
+        service.releaseLabResult(correction.getId(), true, Locale.ENGLISH);
+
+        verify(releaseNotifier).patientResultReleased(correction);
     }
 
     @Test
@@ -899,6 +968,8 @@ class LabResultServiceImplLifecycleTest {
         verify(labResultRepository, atLeastOnce()).save(saved.capture());
         assertThat(saved.getAllValues()).anyMatch(r -> r.isReleased() && "Autoverification".equals(r.getReleasedByDisplay()));
         assertThat(order.getStatus()).isEqualTo(LabOrderStatus.COMPLETED);
+        // QA D938: an auto-verified release tells the patient like any other.
+        verify(releaseNotifier).patientResultReleased(any(LabResult.class));
     }
 
     @Test

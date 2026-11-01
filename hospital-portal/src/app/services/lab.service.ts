@@ -25,6 +25,8 @@ export interface LabOrderResponse {
   notes: string;
   primaryDiagnosisCode: string;
   additionalDiagnosisCodes: string[];
+  /** QA D963: ROUTINE, URGENT or STAT (LabOrderResponseDTO.priority). */
+  priority?: string | null;
   orderChannel: string;
   /**
    * Why the order was cancelled, or (QA D820) why it was voided as entered in
@@ -39,6 +41,8 @@ export interface LabResultResponse {
   id: string;
   labOrderId: string | null;
   labOrderCode: string;
+  /** QA D963: the order's priority, so the release queue flags STAT and URGENT. */
+  orderPriority?: string | null;
   patientId: string | null;
   patientFullName: string;
   /** QA D527: no longer sent (always null); kept so older payloads still type. */
@@ -329,6 +333,9 @@ export interface LabSpecimen {
   currentLocation: string | null;
   status: LabSpecimenStatus;
   notes: string | null;
+  /** QA D962: why the laboratory rejected it (status REJECTED). */
+  rejectionReason?: string | null;
+  rejectedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -670,6 +677,13 @@ export class LabService {
   receiveSpecimen(specimenId: string): Observable<LabSpecimen> {
     return this.http
       .post<ApiWrapper<LabSpecimen>>(`/lab-specimens/${specimenId}/receive`, null)
+      .pipe(map((res) => res.data));
+  }
+
+  /** QA D962: reject a specimen with a reason; the order goes back to awaiting collection. */
+  rejectSpecimen(specimenId: string, reason: string): Observable<LabSpecimen> {
+    return this.http
+      .post<ApiWrapper<LabSpecimen>>(`/lab-specimens/${specimenId}/reject`, { reason })
       .pipe(map((res) => res.data));
   }
 

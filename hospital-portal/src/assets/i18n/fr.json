@@ -2185,6 +2185,7 @@
     "CLEAR_SEARCH": "Effacer la recherche",
     "CLOSE": "Fermer",
     "CLOSE_DETAIL_PANEL": "Fermer le panneau de détails",
+    "COLON": " :",
     "COMPLETED": "Terminé",
     "CONFIRM": "Confirmer",
     "CREATE": "Créer",
@@ -3403,16 +3404,6 @@
     "ORDERED_BY": "Demandé par",
     "ORDERED_DATE": "Date de Demande",
     "ORDER_CHANNEL": "Canal de commande",
-    "ORDER_CHANNEL_OPTION": {
-      "ELECTRONIC": "Électronique",
-      "EMAIL": "E-mail",
-      "FAX": "Fax",
-      "OTHER": "Autre",
-      "PHONE": "Téléphone",
-      "PORTAL": "Portail",
-      "WALK_IN": "Sans rendez-vous",
-      "WRITTEN": "Écrit"
-    },
     "ORDER_CODE": "Code de commande",
     "ORDER_DATE": "Date de commande",
     "PATIENT": "Patient",
@@ -3440,13 +3431,6 @@
     "SELECT_TEST": "Sélectionner le test",
     "SENT_TO": "Envoyé à",
     "SPECIMENS": "Échantillons",
-    "SPECIMEN_STATUS_COLLECTED": "Prélevé",
-    "SPECIMEN_STATUS_COMPLETED": "Terminé",
-    "SPECIMEN_STATUS_IN_TRANSIT": "En transit",
-    "SPECIMEN_STATUS_PENDING": "En attente",
-    "SPECIMEN_STATUS_PROCESSING": "En traitement",
-    "SPECIMEN_STATUS_RECEIVED": "Réceptionné",
-    "SPECIMEN_STATUS_REJECTED": "Rejeté",
     "SPECIMEN_TYPE": "Type d’échantillon",
     "SPECIMEN_TYPE_PLACEHOLDER": "p. ex. Sang total, Urine, Écouvillon",
     "STATUS_FILTER": "Statut",
@@ -3492,6 +3476,18 @@
       "CONFIRM": "Déclarer saisie par erreur",
       "DONE": "La demande est déclarée saisie par erreur.",
       "FAILED": "La demande n'a pas pu être déclarée saisie par erreur."
+    },
+    "REJECT_SPECIMEN": {
+      "ACTION": "Rejeter",
+      "CONFIRM": "Rejeter l’échantillon",
+      "DONE": "Échantillon rejeté. La demande attend un nouveau prélèvement et le prescripteur a été prévenu.",
+      "EXPLAIN": "L’échantillon est refusé et la demande attend un nouveau prélèvement. Le prescripteur est informé du motif. Échantillon :",
+      "FAILED": "L’échantillon n’a pas pu être rejeté.",
+      "REASON": "Motif du rejet",
+      "REASON_PLACEHOLDER": "ex. hémolysé, tube inadapté, volume insuffisant, non étiqueté",
+      "REASON_VALUE": "Motif : {{reason}}",
+      "REJECTED_ON_ORDER": "Échantillon rejeté par le laboratoire : un nouveau prélèvement est nécessaire",
+      "TITLE": "Rejeter l’échantillon"
     }
   },
   "LAB_STAFF": {
@@ -3573,6 +3569,8 @@
     "REFLEX_ACTIVATE": "Activer",
     "REFLEX_ADD": "Ajouter la règle",
     "REFLEX_CONDITION": "Condition",
+    "REFLEX_CONDITION_SEVERITY": "Gravité = {{flag}}",
+    "REFLEX_CONDITION_THRESHOLD": "Valeur {{operator}} {{value}}",
     "REFLEX_COND_SEVERITY": "Indicateur de sévérité",
     "REFLEX_COND_THRESHOLD": "Seuil numérique",
     "REFLEX_CREATED": "Règle réflexe créée",
@@ -3626,6 +3624,9 @@
     "EXPECTED_RESULT_SHORT": "Attendu : {{value}}"
   },
   "LAB_RESULTS": {
+    "ALL_AGES": "Tous âges",
+    "CORRECTED": "Corrigé",
+    "CORRECTED_HINT": "Ce résultat corrige un résultat validé auparavant ; l’ancienne valeur reste au dossier, marquée remplacée.",
     "TITLE": "Résultats de laboratoire",
     "SUBTITLE": "Gérer les résultats des analyses de laboratoire",
     "LOADING": "Chargement des résultats…",
@@ -3714,6 +3715,7 @@
     "EXPECTED_RESULT": "Résultat attendu"
   },
   "LAB_RELEASE": {
+    "FLAG_ABNORMAL": "Anormal",
     "TITLE": "File de validation",
     "SUBTITLE": "Résultats en attente de validation par le laboratoire",
     "AWAITING_COUNT": "{{count}} en attente de validation",
@@ -3958,6 +3960,7 @@
     "BILLING": "Facturation",
     "CONSULTATIONS": "Demandes d'avis",
     "CARE_TEAM": "Équipe soignante",
+    "CONTROLLED_REGISTER": "Registre des stupéfiants",
     "DASHBOARD": "Tableau de bord",
     "DEPARTMENTS": "Départements",
     "DOCUMENTS": "Documents",
@@ -4413,7 +4416,12 @@
     "OPEN_EMAR": "Ouvrir l'eMAR pour scanner",
     "HANDOFF_RECIPIENT": "Transmis à",
     "HANDOFF_RECIPIENT_PLACEHOLDER": "Choisir un collègue",
-    "HANDOFF_TO": "à"
+    "HANDOFF_TO": "à",
+    "LEFT_WITHOUT_BEING_SEEN": "Parti sans être vu",
+    "LAST_DOSE": "Dernière dose :",
+    "NOT_YET_DUE": "Pas encore due",
+    "COURSE_ENDED": "Traitement terminé",
+    "CONTROLLED_SUBSTANCE": "Stupéfiant"
   },
   "ONBOARDING": {
     "ABILITIES_TITLE": "Vos capacités",
@@ -5243,9 +5251,12 @@
       "NOT_REFILLABLE": "Cette ordonnance ne peut plus être renouvelée. Contactez votre équipe soignante pour une nouvelle ordonnance.",
       "READY_AT": "Prête à retirer à {{pharmacy}}",
       "READY_SINCE": "Depuis le {{date}}",
-      "NOT_REFILLABLE_CONTROLLED": "Ce médicament est un médicament contrôlé : il ne peut pas être renouvelé depuis le portail. Contactez votre équipe soignante pour une nouvelle ordonnance."
+      "NOT_REFILLABLE_CONTROLLED": "Ce médicament est un médicament contrôlé : il ne peut pas être renouvelé depuis le portail. Contactez votre équipe soignante pour une nouvelle ordonnance.",
+      "PRINTED_COPY": "Télécharger l’ordonnance imprimée",
+      "PRINTED_COPY_FAILED": "L’ordonnance imprimée n’a pas pu être ouverte."
     },
     "LAB_RESULTS": {
+      "RESULT_PREFIX": "Résultat :",
       "TITLE": "Résultats d’analyses",
       "LOADING": "Chargement des résultats…",
       "EMPTY_TITLE": "Aucun résultat",
@@ -5533,6 +5544,30 @@
       "ADDITIONAL_NOTES": "Notes supplémentaires"
     },
     "ENUM": {
+      "LAB_ORDER_CHANNEL": {
+        "ELECTRONIC": "Électronique",
+        "EMAIL": "E-mail",
+        "FAX": "Fax",
+        "OTHER": "Autre",
+        "PHONE": "Téléphone",
+        "PORTAL": "Portail",
+        "WALK_IN": "Sans rendez-vous",
+        "WRITTEN": "Écrit"
+      },
+      "LAB_ORDER_PRIORITY": {
+        "ROUTINE": "Routine",
+        "STAT": "Immédiat (STAT)",
+        "URGENT": "Urgent"
+      },
+      "LAB_SPECIMEN_STATUS": {
+        "COLLECTED": "Prélevé",
+        "COMPLETED": "Terminé",
+        "IN_TRANSIT": "En transit",
+        "PENDING": "En attente",
+        "PROCESSING": "En traitement",
+        "RECEIVED": "Réceptionné",
+        "REJECTED": "Rejeté"
+      },
       "VITAL_TYPE": {
         "BLOOD_PRESSURE": "Pression artérielle",
         "HEART_RATE": "Fréquence cardiaque",
@@ -6222,9 +6257,10 @@
         "REFUSED": "Refusée"
       },
       "MAR_TASK_STATUS": {
-        "COMPLETED": "Administré",
+        "COMPLETED": "Traitement terminé",
         "DUE": "À administrer",
-        "OVERDUE": "En retard"
+        "OVERDUE": "En retard",
+        "UPCOMING": "À venir"
       },
       "PLATFORM_RELEASE_STATUS": {
         "CANCELLED": "Annulée",
@@ -6259,6 +6295,8 @@
         "CRITICAL_LAB_RESULT_ESCALATION": "Escalade — résultat de laboratoire critique",
         "DISCHARGE_SUMMARY": "Compte rendu de sortie",
         "LAB_ORDER_RECEIVED": "Demande d’analyse reçue",
+        "LAB_RESULT": "Résultat d’analyse",
+        "LAB_SPECIMEN_REJECTED": "Échantillon rejeté",
         "LICENSE_EXPIRY": "Expiration de licence",
         "MEDICATION_REFILL": "Renouvellement d'ordonnance",
         "NEWS2_ESCALATION": "Escalade NEWS2",
@@ -6736,6 +6774,13 @@
         "LEVEL_3_MAJOR": "Niveau 3 - majeur",
         "LEVEL_4_SEVERE": "Niveau 4 - sévère",
         "LEVEL_5_CRITICAL": "Niveau 5 - critique"
+      },
+      "MEDICATION_ADMINISTRATION_STATUS": {
+        "GIVEN": "Administrée",
+        "HELD": "Suspendue",
+        "MISSED": "Manquée",
+        "PENDING": "En attente",
+        "REFUSED": "Refusée"
       }
     },
     "DOCUMENTS": {
@@ -7065,7 +7110,8 @@
       "TOP": "Topique (TOP)",
       "INH": "Inhalée (INH)",
       "NEB": "Nébulisation (NEB)"
-    }
+    },
+    "CONTROLLED_PICKED_HINT": "Stupéfiant : l'ordonnance doit être vérifiée par un pharmacien avant administration, et le patient ne peut pas en demander le renouvellement."
   },
   "PROFILE": {
     "ACCOUNT_AGE": "Ancienneté du compte",
@@ -8911,6 +8957,9 @@
     "EXPIRY_DATE": "Date d'expiration",
     "EXPIRY_REPORT": "Rapport d'Expiration",
     "EXP_SHORT": "exp.",
+    "FEFO_REASON": "Motif du choix de ce lot",
+    "FEFO_REASON_REQUIRED": "Indiquez pourquoi vous utilisez ce lot : un autre lot expire plus tôt.",
+    "FEFO_WARNING": "Le lot {{lot}} expire plus tôt ({{date}}) et couvre cette quantité. Prenez-le, ou indiquez pourquoi vous utilisez ce lot.",
     "FACILITY_CODE": "Code Établissement",
     "FILTER_BY_TYPE": "Filtrer par type",
     "FORM": "Forme",
@@ -9013,6 +9062,39 @@
     "PRESCRIPTION_ID": "ID de prescription",
     "PRINTED_FOR_PATIENT": "Prescription imprimée pour le patient",
     "PRINT_FOR_PATIENT": "Imprimer pour le patient",
+    "NOT_ROUTABLE_HINT": "Cette ordonnance ne peut plus être orientée (déjà délivrée, envoyée ou imprimée).",
+    "PRINT_COPY_FAILED": "La copie imprimée n’a pas pu être ouverte.",
+    "PRINT_LABEL_FAILED": "L’étiquette du lot n’a pas pu être ouverte.",
+    "PRINTED_COPY_HINT": "Cette ordonnance a été imprimée pour que le patient la fasse délivrer dans une pharmacie extérieure.",
+    "REGISTER_ALL_DRUGS": "Tous les stupéfiants",
+    "REGISTER_CLOSING": "Solde de clôture",
+    "REGISTER_COL_BALANCE": "Solde",
+    "REGISTER_COL_DATE": "Date et heure",
+    "REGISTER_COL_MOVEMENT": "Mouvement",
+    "REGISTER_COL_PRESCRIBER": "Prescripteur",
+    "REGISTER_COL_QUANTITY": "Quantité",
+    "REGISTER_COL_REASON": "Motif",
+    "REGISTER_COL_RECORDED_BY": "Saisi par",
+    "REGISTER_COL_WITNESS": "Témoin",
+    "REGISTER_DISCREPANCY": "diffère du registre",
+    "REGISTER_DRUG": "Médicament",
+    "REGISTER_EXPORT_CSV": "Exporter en CSV",
+    "REGISTER_EXPORT_FAILED": "Le registre n’a pas pu être exporté.",
+    "REGISTER_EXPORT_PDF": "Exporter en PDF",
+    "REGISTER_FROM": "Du",
+    "REGISTER_LOAD_FAILED": "Le registre n’a pas pu être chargé.",
+    "REGISTER_NO_DRUGS": "Cette pharmacie ne détient aucun stupéfiant.",
+    "REGISTER_NO_MOVEMENT": "Aucun mouvement sur la période.",
+    "REGISTER_ON_SHELF": "En stock actuellement",
+    "REGISTER_OPENING": "Solde d’ouverture",
+    "REGISTER_FILE_STEM": "registre-stupefiants",
+    "REGISTER_PERIOD_INVALID": "Choisissez une période dont la fin n’est pas avant le début.",
+    "REGISTER_SHOW": "Afficher",
+    "REGISTER_SUBTITLE": "Tous les mouvements des stupéfiants, avec le solde courant, le patient, le prescripteur et le témoin.",
+    "REGISTER_TITLE": "Registre des stupéfiants",
+    "REGISTER_TO": "Au",
+    "REGISTER_TRUNCATED": "Seuls les premiers mouvements de la période sont affichés ; choisissez une période plus courte.",
+    "REPRINT_COPY": "Réimprimer la copie",
     "PRINT_LOT_LABEL": "Imprimer l’étiquette du lot",
     "PRODUCT_SCAN": "Étiquette de la boîte",
     "PRODUCT_SCAN_PLACEHOLDER": "Scanner l’étiquette du lot",
@@ -9020,6 +9102,8 @@
     "QTY_ON_HAND": "Qté : {{qty}}",
     "QTY_RECEIVED_LABEL": "Quantité Reçue",
     "QTY_REQUESTED": "Qté demandée",
+    "QTY_REMAINING": "reste {{qty}} à délivrer",
+    "ROUTED_QUANTITY": "Quantité : {{qty}}",
     "QUANTITY": "Quantité",
     "QUANTITY_RECEIVED": "Quantité Reçue",
     "REASON": "Raison",
@@ -9046,6 +9130,12 @@
     "REORDER_QTY": "Quantité à commander : {{qty}}",
     "REORDER_THRESHOLD": "Seuil de Réapprovisionnement",
     "RETURN_REFERENCE": "Référence de retour",
+    "RETURN_DISPENSE": "Délivrance retournée",
+    "RETURN_DISPENSE_REQUIRED": "Choisissez la délivrance dont ce stock revient, ou indiquez la référence du transfert retourné.",
+    "RETURN_EXCEEDS_DISPENSE": "Ce retour dépasse ce que cette délivrance peut encore reprendre.",
+    "RETURN_NO_DISPENSE_HINT": "Aucune délivrance de ce lot n’a de stock encore sorti. Un retour sans délivrance rend un transfert.",
+    "RETURN_NO_DISPENSE_OPTION": "— Aucune délivrance (retour d’un transfert) —",
+    "RETURNABLE_OF": "{{left}} à reprendre sur {{given}} délivrés",
     "RETURN_REFERENCE_REQUIRED": "La référence de retour est obligatoire",
     "ROUTE": "Acheminer",
     "ROUTED_TO_PARTNER": "Prescription acheminée vers la pharmacie partenaire",
@@ -9073,8 +9163,11 @@
     "LEDGER_REASON_RECEIPT_LOT": "Réception : lot {{lot}}",
     "LEDGER_REASON_RECEIPT": "Réception",
     "LEDGER_REASON_DISPENSE": "Dispensation d’une ordonnance",
+    "LEDGER_REASON_DISPENSE_CANCELLED": "Délivrance annulée : stock remis en rayon",
+    "LEDGER_REASON_PREPARED_CANCELLED": "Préparation annulée : stock remis en rayon",
     "LEDGER_REASON_RETURN": "Retour, réf. {{ref}}",
     "LEDGER_REASON_TRANSFER": "Transfert vers {{dest}}",
+    "LEDGER_REASON_FEFO": "lot choisi hors « premier périmé, premier sorti » : {{reason}}",
     "ADJ_REASON_DAMAGE": "Dommage",
     "ADJ_REASON_EXPIRY_WRITE_OFF": "Mise au rebut (péremption)",
     "ADJ_REASON_CYCLE_COUNT_VARIANCE": "Écart d’inventaire",
@@ -9212,7 +9305,9 @@
     "ROUTING_RX_SELECTED": "Ordonnance :",
     "ATC_PLACEHOLDER": "ex. J01CA04 (amoxicilline)",
     "STRENGTH_PLACEHOLDER": "ex. 500",
-    "CATEGORY_PLACEHOLDER": "ex. Antibiotique"
+    "CATEGORY_PLACEHOLDER": "ex. Antibiotique",
+    "PEDIATRIC_MAX_DOSE_MG_PER_KG": "Dose pédiatrique maximale (mg/kg par prise)",
+    "PEDIATRIC_MAX_DOSE_HINT": "Facultatif. À saisir uniquement depuis la référence de votre établissement ; le contrôle de prescription signale une dose d'enfant supérieure."
   },
   "LAB_QC": {
     "TITLE": "Tableau de bord du contrôle qualité",

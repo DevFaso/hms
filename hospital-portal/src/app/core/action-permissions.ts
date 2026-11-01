@@ -71,6 +71,17 @@ export const ACTION_PERMISSIONS = {
       'ROLE_SUPER_ADMIN',
     ],
   },
+  labSpecimenReject: {
+    endpoint: 'LabSpecimenController#rejectSpecimen',
+    roles: [
+      'ROLE_LAB_TECHNICIAN',
+      'ROLE_LAB_SCIENTIST',
+      'ROLE_LAB_MANAGER',
+      'ROLE_LAB_DIRECTOR',
+      'ROLE_QUALITY_MANAGER',
+      'ROLE_SUPER_ADMIN',
+    ],
+  },
   imagingReportsByHospital: {
     endpoint: 'ImagingResultController#getReportsByHospital',
     roles: ['ROLE_SUPER_ADMIN', 'ROLE_DOCTOR', 'ROLE_RADIOLOGIST'],
@@ -189,6 +200,11 @@ export const ACTION_PERMISSIONS = {
   allergyDeactivate: {
     endpoint: 'PatientController#deactivatePatientAllergy',
     roles: ['ROLE_DOCTOR', 'ROLE_NURSE', 'ROLE_PHARMACIST'],
+  },
+  // QA D965: sending the reorder alerts is the store's act, not the pharmacist's.
+  inventoryReorderTrigger: {
+    endpoint: 'pharmacy.InventoryController#triggerReorderAlerts',
+    roles: ['ROLE_STORE_MANAGER', 'ROLE_HOSPITAL_ADMIN', 'ROLE_SUPER_ADMIN'],
   },
 } as const satisfies Record<string, ActionPermission>;
 

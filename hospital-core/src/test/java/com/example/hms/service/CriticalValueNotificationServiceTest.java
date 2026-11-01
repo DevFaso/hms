@@ -118,6 +118,23 @@ class CriticalValueNotificationServiceTest {
     }
 
     @Test
+    void d931_aCriticalCorrectionSaysItIsACorrectionAndNamesTheReplacedValue() {
+        LabResult original = new LabResult();
+        original.setId(UUID.randomUUID());
+        original.setResultValue("10.4");
+        original.setResultUnit("mmol/L");
+        result.setSupersedesResultId(original.getId());
+        result.setAbnormalFlag(AbnormalFlag.CRITICAL);
+        when(labResultRepository.findById(original.getId())).thenReturn(java.util.Optional.of(original));
+
+        service.notifyIfCritical(result);
+
+        verify(notificationService).created(
+            contains("CORRIGÉ : Potassium 7,1 mmol/L pour Bea Ward (remplace 10,4 mmol/L)"),
+            eq("dr.diallo"), eq("CRITICAL_LAB_RESULT"));
+    }
+
+    @Test
     void notifiesForComputedHighSeverity() {
         when(labResultMapper.severityFlagOf(result)).thenReturn("HIGH");
         when(labResultMapper.raisesCriticalAlert("HIGH")).thenReturn(true);

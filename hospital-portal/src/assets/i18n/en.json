@@ -2185,6 +2185,7 @@
     "CLEAR_SEARCH": "Clear search",
     "CLOSE": "Close",
     "CLOSE_DETAIL_PANEL": "Close detail panel",
+    "COLON": ":",
     "COMPLETED": "Completed",
     "CONFIRM": "Confirm",
     "CREATE": "Create",
@@ -3403,16 +3404,6 @@
     "ORDERED_BY": "Ordered By",
     "ORDERED_DATE": "Ordered Date",
     "ORDER_CHANNEL": "Order Channel",
-    "ORDER_CHANNEL_OPTION": {
-      "ELECTRONIC": "Electronic",
-      "EMAIL": "Email",
-      "FAX": "Fax",
-      "OTHER": "Other",
-      "PHONE": "Phone",
-      "PORTAL": "Portal",
-      "WALK_IN": "Walk-In",
-      "WRITTEN": "Written"
-    },
     "ORDER_CODE": "Order Code",
     "ORDER_DATE": "Order Date",
     "PATIENT": "Patient",
@@ -3440,13 +3431,6 @@
     "SELECT_TEST": "Select test",
     "SENT_TO": "Sent to",
     "SPECIMENS": "Specimens",
-    "SPECIMEN_STATUS_COLLECTED": "Collected",
-    "SPECIMEN_STATUS_COMPLETED": "Completed",
-    "SPECIMEN_STATUS_IN_TRANSIT": "In transit",
-    "SPECIMEN_STATUS_PENDING": "Pending",
-    "SPECIMEN_STATUS_PROCESSING": "Processing",
-    "SPECIMEN_STATUS_RECEIVED": "Received",
-    "SPECIMEN_STATUS_REJECTED": "Rejected",
     "SPECIMEN_TYPE": "Specimen type",
     "SPECIMEN_TYPE_PLACEHOLDER": "e.g. Whole blood, Urine, Swab",
     "STATUS_FILTER": "Status",
@@ -3492,6 +3476,18 @@
       "CONFIRM": "Mark as entered in error",
       "DONE": "The order is marked as entered in error.",
       "FAILED": "The order could not be marked as entered in error."
+    },
+    "REJECT_SPECIMEN": {
+      "ACTION": "Reject",
+      "CONFIRM": "Reject the specimen",
+      "DONE": "Specimen rejected. The order is back to awaiting collection and the ordering clinician has been notified.",
+      "EXPLAIN": "The specimen is refused and the order goes back to awaiting a new collection. The ordering clinician is told the reason. Specimen:",
+      "FAILED": "The specimen could not be rejected.",
+      "REASON": "Reason for rejection",
+      "REASON_PLACEHOLDER": "e.g. haemolysed, wrong tube, insufficient volume, unlabelled",
+      "REASON_VALUE": "Reason: {{reason}}",
+      "REJECTED_ON_ORDER": "Specimen rejected by the laboratory: a new sample is needed",
+      "TITLE": "Reject the specimen"
     }
   },
   "LAB_STAFF": {
@@ -3573,6 +3569,8 @@
     "REFLEX_ACTIVATE": "Activate",
     "REFLEX_ADD": "Add rule",
     "REFLEX_CONDITION": "Condition",
+    "REFLEX_CONDITION_SEVERITY": "Severity = {{flag}}",
+    "REFLEX_CONDITION_THRESHOLD": "Value {{operator}} {{value}}",
     "REFLEX_COND_SEVERITY": "Severity flag",
     "REFLEX_COND_THRESHOLD": "Numeric threshold",
     "REFLEX_CREATED": "Reflex rule created",
@@ -3626,6 +3624,9 @@
     "EXPECTED_RESULT_SHORT": "Expected: {{value}}"
   },
   "LAB_RESULTS": {
+    "ALL_AGES": "All ages",
+    "CORRECTED": "Corrected",
+    "CORRECTED_HINT": "This result corrects a result released earlier; the earlier value stays on record, marked superseded.",
     "TITLE": "Lab Results",
     "SUBTITLE": "Manage laboratory test results",
     "LOADING": "Loading lab results…",
@@ -3714,6 +3715,7 @@
     "EXPECTED_RESULT": "Expected result"
   },
   "LAB_RELEASE": {
+    "FLAG_ABNORMAL": "Abnormal",
     "TITLE": "Release Worklist",
     "SUBTITLE": "Results waiting for the laboratory to release them",
     "AWAITING_COUNT": "{{count}} awaiting release",
@@ -3955,6 +3957,7 @@
     "AUDIT_LOGS": "Audit Logs",
     "AUDIT_SEARCH": "Audit Search",
     "BED_MANAGEMENT": "Bed Management",
+    "CONTROLLED_REGISTER": "Controlled-Drug Register",
     "EMERGENCY_CONTROLS": "Emergency Controls",
     "SUBSCRIPTIONS": "Subscriptions",
     "DATA_RESIDENCY": "Data Residency",
@@ -4413,7 +4416,12 @@
     "OPEN_EMAR": "Open the eMAR to scan instead",
     "HANDOFF_RECIPIENT": "Handed over to",
     "HANDOFF_RECIPIENT_PLACEHOLDER": "Choose a colleague",
-    "HANDOFF_TO": "to"
+    "HANDOFF_TO": "to",
+    "LEFT_WITHOUT_BEING_SEEN": "Left without being seen",
+    "LAST_DOSE": "Last dose:",
+    "NOT_YET_DUE": "Not yet due",
+    "COURSE_ENDED": "Course ended",
+    "CONTROLLED_SUBSTANCE": "Controlled substance"
   },
   "ONBOARDING": {
     "ABILITIES_TITLE": "Your Abilities",
@@ -5243,9 +5251,12 @@
       "NOT_REFILLABLE": "This prescription can no longer be refilled. Please contact your care team for a new prescription.",
       "READY_AT": "Ready for collection at {{pharmacy}}",
       "READY_SINCE": "Since {{date}}",
-      "NOT_REFILLABLE_CONTROLLED": "This is a controlled medicine: it cannot be renewed from the portal. Please contact your care team for a new prescription."
+      "NOT_REFILLABLE_CONTROLLED": "This is a controlled medicine: it cannot be renewed from the portal. Please contact your care team for a new prescription.",
+      "PRINTED_COPY": "Download the printed prescription",
+      "PRINTED_COPY_FAILED": "The printed prescription could not be opened."
     },
     "LAB_RESULTS": {
+      "RESULT_PREFIX": "Result:",
       "TITLE": "Test Results",
       "LOADING": "Loading test results...",
       "EMPTY_TITLE": "No test results",
@@ -5567,6 +5578,30 @@
       "PRINT": "Print Summary"
     },
     "ENUM": {
+      "LAB_ORDER_CHANNEL": {
+        "ELECTRONIC": "Electronic",
+        "EMAIL": "Email",
+        "FAX": "Fax",
+        "OTHER": "Other",
+        "PHONE": "Phone",
+        "PORTAL": "Portal",
+        "WALK_IN": "Walk-In",
+        "WRITTEN": "Written"
+      },
+      "LAB_ORDER_PRIORITY": {
+        "ROUTINE": "Routine",
+        "STAT": "STAT (immediate)",
+        "URGENT": "Urgent"
+      },
+      "LAB_SPECIMEN_STATUS": {
+        "COLLECTED": "Collected",
+        "COMPLETED": "Completed",
+        "IN_TRANSIT": "In transit",
+        "PENDING": "Pending",
+        "PROCESSING": "Processing",
+        "RECEIVED": "Received",
+        "REJECTED": "Rejected"
+      },
       "VITAL_TYPE": {
         "BLOOD_PRESSURE": "Blood Pressure",
         "HEART_RATE": "Heart Rate",
@@ -6256,9 +6291,10 @@
         "REFUSED": "Refused"
       },
       "MAR_TASK_STATUS": {
-        "COMPLETED": "Completed",
+        "COMPLETED": "Course ended",
         "DUE": "Due",
-        "OVERDUE": "Overdue"
+        "OVERDUE": "Overdue",
+        "UPCOMING": "Upcoming"
       },
       "PLATFORM_RELEASE_STATUS": {
         "CANCELLED": "Cancelled",
@@ -6293,6 +6329,8 @@
         "CRITICAL_LAB_RESULT_ESCALATION": "Critical Lab Result Escalation",
         "DISCHARGE_SUMMARY": "Discharge Summary",
         "LAB_ORDER_RECEIVED": "Lab order received",
+        "LAB_RESULT": "Lab result",
+        "LAB_SPECIMEN_REJECTED": "Specimen rejected",
         "LICENSE_EXPIRY": "License Expiry",
         "MEDICATION_REFILL": "Medication Refill",
         "NEWS2_ESCALATION": "NEWS2 escalation",
@@ -6770,6 +6808,13 @@
         "LEVEL_3_MAJOR": "Level 3 - major",
         "LEVEL_4_SEVERE": "Level 4 - severe",
         "LEVEL_5_CRITICAL": "Level 5 - critical"
+      },
+      "MEDICATION_ADMINISTRATION_STATUS": {
+        "GIVEN": "Given",
+        "HELD": "Held",
+        "MISSED": "Missed",
+        "PENDING": "Pending",
+        "REFUSED": "Refused"
       }
     },
     "DOCUMENTS": {
@@ -7065,7 +7110,8 @@
       "TOP": "Topical (TOP)",
       "INH": "Inhaled (INH)",
       "NEB": "Nebulised (NEB)"
-    }
+    },
+    "CONTROLLED_PICKED_HINT": "Controlled substance: the order needs a pharmacist's verification before it is given, and the patient cannot request a renewal."
   },
   "PROFILE": {
     "ACCOUNT_AGE": "Account Age",
@@ -8911,6 +8957,9 @@
     "EXPIRY_DATE": "Expiry Date",
     "EXPIRY_REPORT": "Expiry Report",
     "EXP_SHORT": "exp.",
+    "FEFO_REASON": "Reason for using this lot",
+    "FEFO_REASON_REQUIRED": "Give the reason for using this lot: another lot expires earlier.",
+    "FEFO_WARNING": "Lot {{lot}} expires earlier ({{date}}) and covers this quantity. Take it, or say why you use this lot.",
     "FACILITY_CODE": "Facility Code",
     "FILTER_BY_TYPE": "Filter by type",
     "FORM": "Form",
@@ -9013,6 +9062,39 @@
     "PRESCRIPTION_ID": "Prescription ID",
     "PRINTED_FOR_PATIENT": "Prescription printed for patient",
     "PRINT_FOR_PATIENT": "Print for Patient",
+    "NOT_ROUTABLE_HINT": "This order can no longer be routed (already dispensed, sent or printed).",
+    "PRINT_COPY_FAILED": "The printed copy could not be opened.",
+    "PRINT_LABEL_FAILED": "The lot label could not be opened.",
+    "PRINTED_COPY_HINT": "This prescription was printed for the patient to fill at an outside pharmacy.",
+    "REGISTER_ALL_DRUGS": "All controlled drugs",
+    "REGISTER_CLOSING": "Closing balance",
+    "REGISTER_COL_BALANCE": "Balance",
+    "REGISTER_COL_DATE": "Date and time",
+    "REGISTER_COL_MOVEMENT": "Movement",
+    "REGISTER_COL_PRESCRIBER": "Prescriber",
+    "REGISTER_COL_QUANTITY": "Quantity",
+    "REGISTER_COL_REASON": "Reason",
+    "REGISTER_COL_RECORDED_BY": "Recorded by",
+    "REGISTER_COL_WITNESS": "Witness",
+    "REGISTER_DISCREPANCY": "differs from the register",
+    "REGISTER_DRUG": "Drug",
+    "REGISTER_EXPORT_CSV": "Export CSV",
+    "REGISTER_EXPORT_FAILED": "The register could not be exported.",
+    "REGISTER_EXPORT_PDF": "Export PDF",
+    "REGISTER_FROM": "From",
+    "REGISTER_LOAD_FAILED": "The register could not be loaded.",
+    "REGISTER_NO_DRUGS": "This pharmacy keeps no controlled drug.",
+    "REGISTER_NO_MOVEMENT": "No movement in this period.",
+    "REGISTER_ON_SHELF": "On the shelf now",
+    "REGISTER_OPENING": "Opening balance",
+    "REGISTER_FILE_STEM": "controlled-drug-register",
+    "REGISTER_PERIOD_INVALID": "Choose a period whose end is not before its start.",
+    "REGISTER_SHOW": "Show",
+    "REGISTER_SUBTITLE": "Every movement of the controlled drugs, with the running balance, patient, prescriber and witness.",
+    "REGISTER_TITLE": "Controlled-drug register",
+    "REGISTER_TO": "To",
+    "REGISTER_TRUNCATED": "Only the first movements of the period are shown; choose a shorter period.",
+    "REPRINT_COPY": "Print the copy again",
     "PRINT_LOT_LABEL": "Print lot label",
     "PRODUCT_SCAN": "Pack label",
     "PRODUCT_SCAN_PLACEHOLDER": "Scan the lot label",
@@ -9020,6 +9102,8 @@
     "QTY_ON_HAND": "Qty: {{qty}}",
     "QTY_RECEIVED_LABEL": "Qty Received",
     "QTY_REQUESTED": "Qty Requested",
+    "QTY_REMAINING": "{{qty}} still to dispense",
+    "ROUTED_QUANTITY": "Quantity: {{qty}}",
     "QUANTITY": "Quantity",
     "QUANTITY_RECEIVED": "Quantity Received",
     "REASON": "Reason",
@@ -9046,6 +9130,12 @@
     "REORDER_QTY": "Reorder qty: {{qty}}",
     "REORDER_THRESHOLD": "Reorder Threshold",
     "RETURN_REFERENCE": "Return Reference Number",
+    "RETURN_DISPENSE": "Dispense returned",
+    "RETURN_DISPENSE_REQUIRED": "Choose the dispense this stock comes back from, or give the reference of the transfer it returns.",
+    "RETURN_EXCEEDS_DISPENSE": "This return is more than what this dispense can still take back.",
+    "RETURN_NO_DISPENSE_HINT": "No dispense of this lot has stock still out. A return without a dispense gives back a transfer.",
+    "RETURN_NO_DISPENSE_OPTION": "— No dispense (return of a transfer) —",
+    "RETURNABLE_OF": "{{left}} returnable of {{given}} dispensed",
     "RETURN_REFERENCE_REQUIRED": "Return reference number is required",
     "ROUTE": "Route",
     "ROUTED_TO_PARTNER": "Prescription routed to partner pharmacy",
@@ -9073,8 +9163,11 @@
     "LEDGER_REASON_RECEIPT_LOT": "Goods receipt: lot {{lot}}",
     "LEDGER_REASON_RECEIPT": "Goods receipt",
     "LEDGER_REASON_DISPENSE": "Dispensed for a prescription",
+    "LEDGER_REASON_DISPENSE_CANCELLED": "Dispense cancelled: stock put back",
+    "LEDGER_REASON_PREPARED_CANCELLED": "Prepared fill cancelled: stock put back",
     "LEDGER_REASON_RETURN": "Return, ref. {{ref}}",
     "LEDGER_REASON_TRANSFER": "Transfer to {{dest}}",
+    "LEDGER_REASON_FEFO": "lot chosen outside first-expired-first-out: {{reason}}",
     "ADJ_REASON_DAMAGE": "Damage",
     "ADJ_REASON_EXPIRY_WRITE_OFF": "Expiry write-off",
     "ADJ_REASON_CYCLE_COUNT_VARIANCE": "Stock count variance",
@@ -9212,7 +9305,9 @@
     "ROUTING_RX_SELECTED": "Prescription:",
     "ATC_PLACEHOLDER": "e.g. J01CA04 (amoxicillin)",
     "STRENGTH_PLACEHOLDER": "e.g. 500",
-    "CATEGORY_PLACEHOLDER": "e.g. Antibiotic"
+    "CATEGORY_PLACEHOLDER": "e.g. Antibiotic",
+    "PEDIATRIC_MAX_DOSE_MG_PER_KG": "Paediatric maximum dose (mg/kg per dose)",
+    "PEDIATRIC_MAX_DOSE_HINT": "Optional. Enter it only from your hospital's reference; the prescription check flags a child's dose above it."
   },
   "LAB_QC": {
     "TITLE": "Quality Control Dashboard",

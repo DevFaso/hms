@@ -79,6 +79,11 @@ const PAGE_HANDLED_403_ACTION_PATTERNS = [
   /\/prescriptions\/[^/?]+(\?|$)/,
   // QA D661: a refused referral action is reported by the page's toast.
   /\/referrals\/[^/?]+\/(acknowledge|schedule|start|complete|reject|cancel|submit)(\?|$)/,
+  // QA D965: the reorder-alert trigger reports its refusal in the inventory
+  // page's toast; the redirect replaced the stock screen. Listed by endpoint,
+  // not as a blanket /pharmacy/ (review of #975): a write whose page has no
+  // error handler must still reach the 403 page rather than fail silently.
+  /\/pharmacy\/inventory\/reorder-alerts(\/|\?|$)/,
 ];
 
 const SILENT_401_PATTERNS = [/\/chat\/mark-read\//];

@@ -29,6 +29,13 @@ public class WorkQueuePrescriptionDTO {
     private String dosage;
     private String frequency;
     private BigDecimal quantity;
+    /**
+     * QA D1001: what may still be dispensed on this order (every fill owed,
+     * refills included, minus the fills not cancelled) - the ceiling the
+     * dispense refuses above. The form pre-fills it instead of the prescribed
+     * quantity; null when the order carries no quantity at all.
+     */
+    private BigDecimal remainingQuantity;
     private String quantityUnit;
     private String status;
     private LocalDateTime createdAt;

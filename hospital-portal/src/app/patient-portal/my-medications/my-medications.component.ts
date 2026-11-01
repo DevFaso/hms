@@ -19,6 +19,7 @@ import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { currentMedications } from '../current-medications';
 import { ToastService } from '../../core/toast.service';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { PrintLabelService } from '../../services/print-label.service';
 
 @Component({
   selector: 'app-my-medications',
@@ -32,6 +33,8 @@ export class MyMedicationsComponent implements OnInit {
   private readonly portal = inject(PatientPortalService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  /** Review of #975: the one open-for-print idiom the pharmacy pages use. */
+  private readonly printLabel = inject(PrintLabelService);
 
   medications = signal<MedicationSummary[]>([]);
   /**
@@ -54,6 +57,19 @@ export class MyMedicationsComponent implements OnInit {
   expandedMedId = signal<string | null>(null);
   expandedRxId = signal<string | null>(null);
   requestingRefill = signal<string | null>(null);
+
+  /**
+   * QA D966: a prescription printed for me offers its copy; the page said
+   * "Imprimée pour le patient" with nothing to download.
+   */
+  openPrintedCopy(rxId: string, event?: Event): void {
+    event?.stopPropagation();
+    this.portal.getMyPrintedPrescription(rxId).subscribe({
+      next: (blob) => this.printLabel.openForPrint(blob),
+      error: () =>
+        this.toast.error(this.translate.instant('PORTAL.MEDICATIONS.PRINTED_COPY_FAILED')),
+    });
+  }
 
   ngOnInit() {
     let pending = 3;

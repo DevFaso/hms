@@ -31,7 +31,8 @@ class ActionPermissionsMirrorTest {
 
     private static final Path MAP = Path.of("..", "hospital-portal", "src", "app", "core", "action-permissions.ts");
     private static final Pattern ACTION_LINE = Pattern.compile("(\\w+): \\{");
-    private static final Pattern ENDPOINT_LINE = Pattern.compile("endpoint: '(\\w+)#(\\w+)',");
+    // A controller in a sub-package is named with it ('pharmacy.InventoryController#...').
+    private static final Pattern ENDPOINT_LINE = Pattern.compile("endpoint: '([\\w.]+)#(\\w+)',");
     private static final Pattern QUOTED = Pattern.compile("'([A-Z_]+)'");
     private static final Pattern SIMPLE_EXPRESSION = Pattern.compile(
         "^(hasAnyAuthority|hasAuthority|hasAnyRole|hasRole)\\(\\s*'[A-Z_]+'(\\s*,\\s*'[A-Z_]+')*\\s*\\)$");
