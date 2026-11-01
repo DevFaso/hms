@@ -1,3 +1,5 @@
+import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.component';
+import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { personName } from '../shared/pipes/person-name.pipe';
 import { isOrderCancellable } from '../shared/order-lifecycle';
@@ -117,6 +119,8 @@ type MaternityTab =
   selector: 'app-maternity',
   standalone: true,
   imports: [
+    InlineDiscardAskComponent,
+    InlineSubFormDirective,
     SubmitGuardDirective,
     ModalDialogDirective,
     ServerTimePipe,

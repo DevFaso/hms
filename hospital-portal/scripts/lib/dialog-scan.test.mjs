@@ -312,3 +312,96 @@ test('QA D1125 (round 20): a navigation drawer closing on its own Escape is the 
     ['overlay'],
   );
 });
+
+// QA D1155 / D1144 / D1131 (round 21): Escape in an inline action form inside a
+// dialog bubbled to the dialog, which closed and dropped the typed reason.
+const VIEW_DIALOG = (
+  form,
+) => `<div class="modal-backdrop" tabindex="-1" (click)="closeOrder()" (keydown.escape)="closeOrder()">
+  <div class="modal" appModalDialog aria-labelledby="t" (escaped)="closeOrder()">
+    <h2 id="t">Order</h2>
+    @if (showCancelPrompt()) {
+      ${form}
+    }
+    <button (click)="closeOrder()">Close</button>
+  </div>
+</div>`;
+
+const subform = (html, source = html) =>
+  scan(html, source)
+    .filter((f) => f.rule === 'subform')
+    .map((f) => f.anchor);
+
+test('QA D1155: an inline cancel form inside a dialog without appInlineSubForm is reported', () => {
+  const html = VIEW_DIALOG(`<div class="action-form">
+        <h3>Cancel the order</h3>
+        <textarea id="r" [(ngModel)]="reason"></textarea>
+        <button (click)="closeCancelPrompt()">Cancel</button>
+        <button (click)="submitCancel()">Confirm</button>
+      </div>`);
+  assert.deepEqual(subform(html), ['action-form <Cancel the order>']);
+});
+
+test('QA D1155: the same form with appInlineSubForm and (dismissed) passes; without (dismissed) it does not', () => {
+  const form = `<div class="action-form" appInlineSubForm #f="inlineSubForm" (dismissed)="closeCancelPrompt()">
+        <textarea id="r"></textarea>
+        <button (click)="closeCancelPrompt()">Cancel</button>
+        <app-inline-discard-ask [form]="f" />
+      </div>`;
+  assert.deepEqual(subform(VIEW_DIALOG(form)), []);
+  assert.equal(
+    subform(VIEW_DIALOG(form.replace(' (dismissed)="closeCancelPrompt()"', ''))).length,
+    1,
+  );
+});
+
+test('QA D1131: a form whose own (keydown.escape) handler stops the key passes (the encounter addendum)', () => {
+  const form = `<div class="addendum-form" (keydown.escape)="onAddendumEscape($event)">
+        <textarea></textarea><button (click)="closeAddendumForm(true)">Cancel</button>
+      </div>`;
+  const html = VIEW_DIALOG(form);
+  const stops = `${html}\nonAddendumEscape(event: Event): void { event.stopPropagation(); this.close(); }`;
+  assert.deepEqual(subform(html, stops), []);
+  const bubbles = `${html}\nonAddendumEscape(event: Event): void { this.close(); }`;
+  assert.equal(subform(html, bubbles).length, 1);
+});
+
+test('QA D1155: a flag switched off by the button counts as the form closing itself; the dialog close does not', () => {
+  const flag = VIEW_DIALOG(
+    `<div class="consent"><input id="by" /><button (click)="consent.set(false)">Cancel</button></div>`,
+  );
+  assert.equal(subform(flag).length, 1);
+  // A conditional section whose only button closes the whole dialog is the dialog's own body.
+  const body = VIEW_DIALOG(
+    `<div class="extra"><input id="x" /><button (click)="closeOrder()">Close</button></div>`,
+  );
+  assert.deepEqual(subform(body), []);
+  // No text field: nothing typed to lose.
+  const noField = VIEW_DIALOG(
+    `<div class="x"><input type="checkbox" /><button (click)="hideX()">Hide</button></div>`,
+  );
+  assert.deepEqual(subform(noField), []);
+});
+
+test('QA D1155: a field and a Close in exclusive @if/@else branches are a panel, not a form; separate @if cells are one form', () => {
+  const panel = VIEW_DIALOG(`<div class="cds">
+        @if (blocked()) {
+          <textarea id="override"></textarea>
+        } @else {
+          <button (click)="dismissAdvisories()">Close</button>
+        }
+      </div>`);
+  assert.deepEqual(subform(panel), []);
+  const row = VIEW_DIALOG(`<table class="lines">
+        <tr>
+          @if (editing()) { <td><input id="qty" /></td> }
+          @if (editing()) { <td><button (click)="cancelEditLine()">Cancel</button></td> }
+        </tr>
+      </table>`);
+  assert.deepEqual(subform(row), ['lines']);
+});
+
+test('QA D1155: an inline form outside any dialog is not this rule', () => {
+  const html = `@if (open()) { <div class="f"><textarea></textarea><button (click)="cancel()">Cancel</button></div> }`;
+  assert.deepEqual(subform(html), []);
+});

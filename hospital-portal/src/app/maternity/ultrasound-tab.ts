@@ -1,3 +1,5 @@
+import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.component';
+import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import {
   ChangeDetectionStrategy,
@@ -42,6 +44,8 @@ type UltrasoundWorklist = 'all' | 'pending' | 'high-risk' | 'follow-up' | 'anoma
   selector: 'app-ultrasound-tab',
   standalone: true,
   imports: [
+    InlineDiscardAskComponent,
+    InlineSubFormDirective,
     SubmitGuardDirective,
     ModalDialogDirective,
     ServerTimePipe,

@@ -12401,5 +12401,10 @@
     "VERIFY_FIELDS": "Complete primero el paciente, el medicamento, la dosis y la vía.",
     "VERIFY_FIRST": "Verifique primero los cinco correctos.",
     "WITNESS": "Elija el testigo (un segundo profesional de este establecimiento)."
+  },
+  "INLINE_FORM": {
+    "DISCARD_ASK": "¿Descartar el texto escrito?",
+    "KEEP": "Seguir escribiendo",
+    "DISCARD": "Descartar el texto"
   }
 }

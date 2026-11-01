@@ -792,8 +792,15 @@
             </button>
           </div>
         } @else {
-          <!-- Edit form -->
-          <form class="edit-form" (ngSubmit)="saveService()">
+          <!-- Edit form. QA D1155 class: Escape here leaves the edit (asking first
+               when a field was changed), never the whole drawer. -->
+          <form
+            class="edit-form"
+            appInlineSubForm
+            #serviceEditForm="inlineSubForm"
+            (dismissed)="cancelEditService()"
+            (ngSubmit)="saveService()"
+          >
             <p class="muted-text form-hint">{{ 'PLATFORM.CLEAR_FIELD_HINT' | translate }}</p>
             <div class="form-group">
               <label for="editProvider">{{ 'PLATFORM.PROVIDER' | translate }}</label>
@@ -938,6 +945,7 @@
                 }
               </button>
             </div>
+            <app-inline-discard-ask [form]="serviceEditForm" />
           </form>
         }
       </div>

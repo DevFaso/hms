@@ -12401,5 +12401,10 @@
     "VERIFY_FIELDS": "Fill in the patient, medication, dose and route first.",
     "VERIFY_FIRST": "Verify the five rights first.",
     "WITNESS": "Choose the witness (a second clinician of this hospital)."
+  },
+  "INLINE_FORM": {
+    "DISCARD_ASK": "Discard what you have typed?",
+    "KEEP": "Keep writing",
+    "DISCARD": "Discard the text"
   }
 }

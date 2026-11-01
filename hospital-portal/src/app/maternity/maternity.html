@@ -1189,7 +1189,13 @@
         </div>
 
         @if (referralAction(); as action) {
-          <div class="view-section action-form">
+          <!-- QA D1155: Escape here closes only this form, and asks before dropping typed text. -->
+          <div
+            class="view-section action-form"
+            appInlineSubForm
+            #referralActionForm="inlineSubForm"
+            (dismissed)="cancelReferralAction()"
+          >
             <h3>
               {{
                 (action === 'acknowledge'
@@ -1236,6 +1242,7 @@
                 {{ 'COMMON.CONFIRM' | translate }}
               </button>
             </div>
+            <app-inline-discard-ask [form]="referralActionForm" />
           </div>
         }
 

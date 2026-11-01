@@ -1,3 +1,4 @@
+import { fakeAsync, tick } from '@angular/core/testing';
 import { expectKeyboardModal } from '../testing/modal-dialog-keyboard';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
@@ -439,4 +440,104 @@ describe('historyFormProblem (QA D809, D821)', () => {
     expect(historyFormProblem(form({ obstetricHistory: { para: 2 } }), now)).toBeNull();
     expect(historyFormProblem(form({ recordedDate: '2026-10-25T12:05' }), now)).toBeNull();
   });
+});
+
+/**
+ * QA D1155 (round 21): Escape in a referral's inline action form (cancel,
+ * acknowledge, complete) closed the whole referral dialog and dropped the
+ * typed text.
+ */
+describe('MaternityComponent — referral action forms keep Escape (QA D1155)', () => {
+  let fixture: ComponentFixture<MaternityComponent>;
+  const host = (): HTMLElement => fixture.nativeElement as HTMLElement;
+  const text = () => host().querySelector<HTMLTextAreaElement>('#referral-action-text');
+  const escape = (target: Element) => {
+    target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    fixture.detectChanges();
+    tick();
+  };
+
+  beforeEach(() => {
+    const emptyPage = of({ content: [], totalElements: 0, totalPages: 0, number: 0, size: 20 });
+    const maternity = jasmine.createSpyObj<MaternityService>('MaternityService', ['highRisk']);
+    maternity.highRisk.and.returnValue(emptyPage);
+    const referrals = jasmine.createSpyObj<ObgynReferralService>('ObgynReferralService', [
+      'summary',
+      'byHospital',
+      'assignedTo',
+      'messages',
+    ]);
+    referrals.messages.and.returnValue(of([]));
+    referrals.summary.and.returnValue(of(null) as never);
+    referrals.assignedTo.and.returnValue(of(emptyPage) as never);
+    const patients = jasmine.createSpyObj<PatientService>('PatientService', ['list']);
+    patients.list.and.returnValue(of([]));
+    const auth = jasmine.createSpyObj<AuthService>('AuthService', [
+      'getHospitalId',
+      'getUserProfile',
+    ]);
+    TestBed.configureTestingModule({
+      imports: [MaternityComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        { provide: MaternityService, useValue: maternity },
+        { provide: ObgynReferralService, useValue: referrals },
+        { provide: PatientService, useValue: patients },
+        { provide: AuthService, useValue: auth },
+        { provide: ToastService, useValue: jasmine.createSpyObj('ToastService', ['error']) },
+        {
+          provide: RoleContextService,
+          useValue: roleContextStub({
+            superAdmin: false,
+            hospitalId: 'h-1',
+            roles: ['ROLE_DOCTOR'],
+          }),
+        },
+      ],
+    });
+    fixture = TestBed.createComponent(MaternityComponent);
+    fixture.detectChanges();
+    document.body.appendChild(host());
+  });
+
+  afterEach(() => host().remove());
+
+  it('"Accuser réception": Escape closes only the form, asks over typed text, and gives the keyboard back', fakeAsync(() => {
+    const cmp = fixture.componentInstance;
+    cmp.openReferral({ id: 'r-1', status: 'SUBMITTED', patientId: 'p-1' } as never);
+    fixture.detectChanges();
+    const opener = Array.from(
+      host().querySelectorAll<HTMLButtonElement>('.modal-actions button'),
+    ).find((b) => b.textContent?.includes('MATERNITY.ACKNOWLEDGE'))!;
+    opener.focus();
+    opener.click();
+    fixture.detectChanges();
+    tick();
+    expect(document.activeElement).toBe(text());
+
+    text()!.value = 'Vue en consultation';
+    text()!.dispatchEvent(new Event('input'));
+    escape(text()!);
+    expect(cmp.viewedReferral()).not.toBeNull();
+    expect(cmp.referralAction()).toBe('acknowledge');
+    expect(text()!.value).toBe('Vue en consultation');
+    expect(document.activeElement).toBe(host().querySelector('[data-testid="inline-keep"]'));
+
+    host().querySelector<HTMLButtonElement>('[data-testid="inline-discard"]')!.click();
+    fixture.detectChanges();
+    tick();
+    expect(cmp.referralAction()).toBeNull();
+    expect(cmp.viewedReferral()).not.toBeNull();
+    expect(document.activeElement).toBe(opener);
+
+    // An untouched form closes on the first Escape, the dialog stays.
+    opener.click();
+    fixture.detectChanges();
+    tick();
+    escape(text()!);
+    expect(cmp.referralAction()).toBeNull();
+    expect(cmp.viewedReferral()).not.toBeNull();
+    expect(document.activeElement).toBe(opener);
+  }));
 });

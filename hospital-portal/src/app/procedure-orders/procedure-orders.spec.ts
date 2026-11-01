@@ -1,5 +1,7 @@
-import { TestBed } from '@angular/core/testing';
-import { TranslateService } from '@ngx-translate/core';
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
+import { provideHttpClient, withXhr } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 
 import { ProcedureOrdersComponent } from './procedure-orders';
@@ -7,6 +9,7 @@ import { ProcedureOrderResponse, ProcedureOrderService } from '../services/proce
 import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
 import { ToastService } from '../core/toast.service';
+import { roleContextStub } from '../testing/role-context.stub';
 
 const order: ProcedureOrderResponse = {
   id: 'o1',
@@ -146,4 +149,93 @@ describe('ProcedureOrdersComponent', () => {
     expect(component.viewedOrder()?.status).toBe('ORDERED');
     expect(component.actionBusy()).toBeFalse();
   });
+});
+
+/**
+ * QA D1155 sibling (round 21): the order dialog's schedule / consent / cancel
+ * steps are inline forms; Escape in one closed the whole dialog with the
+ * typed text, and closing a step dropped the keyboard on the page body (its
+ * opener is hidden while the step is open).
+ */
+describe('ProcedureOrdersComponent — inline steps keep Escape (QA D1155)', () => {
+  let fixture: ComponentFixture<ProcedureOrdersComponent>;
+  const host = (): HTMLElement => fixture.nativeElement as HTMLElement;
+  const escape = (target: Element) => {
+    target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    fixture.detectChanges();
+    tick();
+  };
+
+  beforeEach(() => {
+    const service = jasmine.createSpyObj<ProcedureOrderService>('ProcedureOrderService', [
+      'byHospital',
+      'pendingConsent',
+    ]);
+    service.byHospital.and.returnValue(of([]));
+    TestBed.configureTestingModule({
+      imports: [ProcedureOrdersComponent, TranslateModule.forRoot()],
+      providers: [
+        provideHttpClient(withXhr()),
+        provideHttpClientTesting(),
+        { provide: ProcedureOrderService, useValue: service },
+        {
+          provide: AuthService,
+          useValue: { getHospitalId: () => 'h1', getUserProfile: () => null },
+        },
+        {
+          provide: RoleContextService,
+          useValue: roleContextStub({
+            superAdmin: false,
+            hospitalId: 'h1',
+            roles: ['ROLE_DOCTOR'],
+          }),
+        },
+        { provide: ToastService, useValue: { success: () => undefined, error: () => undefined } },
+      ],
+    });
+    fixture = TestBed.createComponent(ProcedureOrdersComponent);
+    fixture.detectChanges();
+    document.body.appendChild(host());
+  });
+
+  afterEach(() => host().remove());
+
+  it('the cancel step: Escape closes only the step, asks over a typed reason, and the keyboard returns to its button', fakeAsync(() => {
+    const cmp = fixture.componentInstance;
+    spyOn(cmp, 'canCancelOrder').and.returnValue(true);
+    cmp.openOrder(order);
+    fixture.detectChanges();
+    host().querySelector<HTMLButtonElement>('[data-proc-action="cancel"]')!.click();
+    fixture.detectChanges();
+    tick();
+    const reason = host().querySelector<HTMLTextAreaElement>('#proc-cancel-reason')!;
+    expect(document.activeElement).toBe(reason);
+
+    reason.value = 'Le patient refuse';
+    reason.dispatchEvent(new Event('input'));
+    escape(reason);
+    expect(cmp.viewedOrder()).not.toBeNull();
+    expect(cmp.detailAction()).toBe('cancel');
+    expect(document.activeElement).toBe(host().querySelector('[data-testid="inline-keep"]'));
+
+    host().querySelector<HTMLButtonElement>('[data-testid="inline-discard"]')!.click();
+    fixture.detectChanges();
+    tick();
+    expect(cmp.detailAction()).toBeNull();
+    expect(cmp.viewedOrder()).not.toBeNull();
+    expect(document.activeElement).toBe(host().querySelector('[data-proc-action="cancel"]'));
+  }));
+
+  it('the consent step: a prefilled name is not "typed"; Escape closes the step at once', fakeAsync(() => {
+    const cmp = fixture.componentInstance;
+    cmp.openOrder(order);
+    fixture.detectChanges();
+    host().querySelector<HTMLButtonElement>('[data-proc-action="consent"]')!.click();
+    fixture.detectChanges();
+    tick();
+    escape(host().querySelector('#proc-consent-by')!);
+    expect(cmp.detailAction()).toBeNull();
+    expect(cmp.viewedOrder()).not.toBeNull();
+    expect(document.activeElement).toBe(host().querySelector('[data-proc-action="consent"]'));
+  }));
 });

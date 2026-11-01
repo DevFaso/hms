@@ -12401,5 +12401,10 @@
     "VERIFY_FIELDS": "Renseignez d’abord le patient, le médicament, la dose et la voie.",
     "VERIFY_FIRST": "Vérifiez d’abord les cinq B.",
     "WITNESS": "Choisissez le témoin (un second soignant de cet établissement)."
+  },
+  "INLINE_FORM": {
+    "DISCARD_ASK": "Abandonner le texte saisi ?",
+    "KEEP": "Continuer la saisie",
+    "DISCARD": "Abandonner le texte"
   }
 }

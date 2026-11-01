@@ -1,4 +1,4 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { HttpErrorResponse } from '@angular/common/http';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError, Observable, Subject } from 'rxjs';
@@ -511,6 +511,49 @@ describe('PlatformComponent', () => {
       expect(c.isLinkBusy('h1')).toBeTrue();
     });
   });
+
+  /* ── QA D1155 class (round 21): the drawer's edit form keeps Escape ── */
+
+  it('QA D1155: Escape in the service edit form leaves the edit (asking first over a change), never the drawer', fakeAsync(() => {
+    document.body.appendChild(fixture.nativeElement);
+    try {
+      c.openServiceDetail(orgService({ provider: 'OpenMRS' }));
+      fixture.detectChanges();
+      const host = fixture.nativeElement as HTMLElement;
+      const edit = Array.from(host.querySelectorAll<HTMLButtonElement>('.drawer-footer button'))[0];
+      edit.focus();
+      edit.click();
+      fixture.detectChanges();
+      tick();
+      const provider = host.querySelector<HTMLInputElement>('#editProvider')!;
+      expect(document.activeElement).toBe(provider);
+      const escape = () => {
+        provider.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+        fixture.detectChanges();
+        tick();
+      };
+
+      // Untouched (the prefilled provider is not "typed"): the edit closes, the drawer stays.
+      escape();
+      expect(c.editingService()).toBeFalse();
+      expect(c.serviceDrawerOpen()).toBeTrue();
+
+      Array.from(host.querySelectorAll<HTMLButtonElement>('.drawer-footer button'))[0].click();
+      fixture.detectChanges();
+      tick();
+      const field = host.querySelector<HTMLInputElement>('#editProvider')!;
+      field.value = 'OpenMRS 3';
+      field.dispatchEvent(new Event('input'));
+      field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      fixture.detectChanges();
+      tick();
+      expect(c.editingService()).toBeTrue();
+      expect(c.serviceDrawerOpen()).toBeTrue();
+      expect(host.querySelector('[data-testid="inline-discard-ask"]')).not.toBeNull();
+    } finally {
+      (fixture.nativeElement as HTMLElement).remove();
+    }
+  }));
 
   /* ── D5: clearing fields ── */
 
