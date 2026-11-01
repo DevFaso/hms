@@ -42,6 +42,9 @@ test('the scan sees the shapes the review found', () => {
   assert.deepEqual(words('Commandes Labo Aujourd’hui'), ['Labo', 'Aujourd']);
   assert.deepEqual(words('{{count}} échecs - réparez le récepteur puis Reprendre.'), ['Reprendre']);
   assert.deepEqual(words('Créez votre compte Super Administrateur'), ['Super', 'Administrateur']);
+  assert.deepEqual(words('Estudios (Últimos 30 días)'), ['Últimos']);
+  assert.deepEqual(words('Nom du Quartier'), ['Quartier']);
+  assert.deepEqual(words('Prescrire de l’Amoxicilline'), ['Amoxicilline']);
 });
 
 test('sentence starts, quoted labels, identifiers, examples and proper nouns are not title case', () => {
@@ -64,7 +67,12 @@ test('sentence starts, quoted labels, identifiers, examples and proper nouns are
     'Paiement par Mobile Money',
     'Score d’Apgar à 5 minutes',
     '{{name}} Patient',
-    'Bienvenue (Nouveau compte)',
+    'Stockage (Gio)',
+    'Numéro d’inscription à l’Ordre',
+    'Coloration de Gram',
+    'ex. : Secteur 30, Quartier Dassasgho',
+    'Adresse : Secteur 30, Quartier Dassasgho',
+    '(Nouveau compte) créé',
   ];
   for (const v of clean) assert.deepEqual(titleCasedWords(v), [], v);
 });

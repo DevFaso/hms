@@ -10,8 +10,10 @@
  * because the English source was title-cased.
  *
  * Not flagged:
- *  - the first word (the first one with a letter: `← Retour`), and a word after `. ! ? : ; — – - ( [ / … « " “ ¿ ¡ •`
- *    (a new sentence, a label after its colon, an example after `ex. :`);
+ *  - the first word (the first one with a letter: `← Retour`), and a word after
+ *    `. ! ? : ; — – - [ / … « " “ ¿ ¡ •` (a new sentence, a label after its
+ *    colon, an example after `ex. :`). A word right after `(` IS read:
+ *    `Estudios (Últimos 30 días)` is title case;
  *  - text inside guillemets (`« Validé par son auteur »`, `«Validar»`): a UI
  *    label quoted by its name keeps its own capital;
  *  - a word glued to another capital or a digit (`SpO2`, `RxNorm`, `MenAfriVac`,
@@ -33,8 +35,6 @@ export const PROPER_NOUNS = new Set([
   'Uagadugú',
   'Kadiogo',
   'Dassasgho',
-  'Secteur',
-  'Quartier',
   'Paris',
   'París',
   'France',
@@ -53,20 +53,16 @@ export const PROPER_NOUNS = new Set([
   'Cerner',
   'Java',
   'Doppler',
-  'Gram',
   'Morse',
   'Apgar',
-  'Amoxicilline',
-  'Amoxicillin',
   'Web',
   'Internet',
-  // professional bodies
-  'Ordre',
   // abbreviations and units
   'Dr',
   'Rh',
   'Rx',
   'Mo',
+  'Gio',
 ]);
 
 /** Multi-word proper names, removed before the scan. */
@@ -86,13 +82,18 @@ export const PROPER_PHRASES = [
   /Moov Money/g,
   /Mobile Money/g,
   /Pharmacie Centrale/g,
+  // address parts, the professional order and an eponym, only in their phrase
+  /Secteur \d+/g,
+  /Quartier \p{Lu}\p{L}+/gu,
+  /l['’]Ordre/g,
+  /de Gram/g,
 ];
 
 /** `ex.`, `p. ex.`, `p. ej.`, `ej.`, `e.g.` at the start of a placeholder. */
 const EXAMPLE = /^\s*(?:p\.\s?)?(?:ex|ej)\.|^\s*e\.g\./i;
-const OPENERS = new Set([...'.!?:;—–-([/…«"“¿¡•·|>\n', '\u0002']);
+const OPENERS = new Set([...'.!?:;—–-[/…«"“¿¡•·|>\n', '\u0002']);
 const SPACE = /[ \u00a0\u202f'’]/u;
-const WORD = /(?<=[ \u00a0\u202f'’])(\p{Lu}\p{Ll}+)(?![\p{L}\p{N}])/gu;
+const WORD = /(?<=[ \u00a0\u202f'’(])(\p{Lu}\p{Ll}+)(?![\p{L}\p{N}])/gu;
 
 /**
  * The title-cased words of one French or Spanish value, in order.
