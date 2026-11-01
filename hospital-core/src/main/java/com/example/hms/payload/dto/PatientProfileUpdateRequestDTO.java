@@ -38,9 +38,11 @@ public class PatientProfileUpdateRequestDTO {
     private String gender;
 
     @Size(max = 100)
+    @com.example.hms.validation.PhoneNumber
     private String phoneNumberPrimary;
 
     @Size(max = 100)
+    @com.example.hms.validation.PhoneNumber
     private String phoneNumberSecondary;
 
     @Email(message = "{validation.email.invalid}")
@@ -82,6 +84,7 @@ public class PatientProfileUpdateRequestDTO {
     private String emergencyContactName;
 
     @Size(max = 20)
+    @com.example.hms.validation.PhoneNumber
     private String emergencyContactPhone;
 
     /** QA D926: who the emergency contact or guardian is to the patient ("Mère"). */

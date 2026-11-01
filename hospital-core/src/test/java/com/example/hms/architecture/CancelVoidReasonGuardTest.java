@@ -529,4 +529,41 @@ class CancelVoidReasonGuardTest {
     private static String first(String[] values) {
         return values == null || values.length == 0 ? "" : values[0];
     }
+
+    /**
+     * QA D1217 (round 23): every write of an invoice's CANCELLED status keeps
+     * a reason. A DRAFT invoice with priced lines was cancelled with
+     * cancelReason null (the D1069 draft exemption, withdrawn by decision),
+     * and the copay carried onto a visit invoice was cancelled with none.
+     * A file that writes {@code InvoiceStatus.CANCELLED} must set the reason
+     * ({@code setCancelReason(}) or go through the update path's
+     * {@code recordCancellation(} at least as many times.
+     */
+    @Test
+    void everyInvoiceCancellationKeepsAReason() throws IOException {
+        Pattern cancelWrite = Pattern.compile("setStatus\\((?:com\\.example\\.hms\\.enums\\.)?InvoiceStatus\\.CANCELLED\\)");
+        Pattern reasonWrite = Pattern.compile("setCancelReason\\(|recordCancellation\\(invoice");
+        Map<String, String> missing = new LinkedHashMap<>();
+        int sites = 0;
+        try (Stream<Path> files = Files.walk(MAIN)) {
+            for (Path file : files.filter(f -> f.toString().endsWith(".java")).toList()) {
+                String src = com.example.hms.testsupport.SourceScan.stripComments(Files.readString(file));
+                // Per method: the reason is written in the method that writes CANCELLED.
+                Matcher write = cancelWrite.matcher(src);
+                while (write.find()) {
+                    sites++;
+                    int start = src.lastIndexOf("\n    }", write.start());
+                    int end = src.indexOf("\n    }", write.end());
+                    String method = src.substring(Math.max(start, 0), end < 0 ? src.length() : end);
+                    if (!reasonWrite.matcher(method).find()) {
+                        missing.put(MAIN.relativize(file).toString().replace('\\', '/') + ":"
+                            + com.example.hms.testsupport.SourceScan.lineOf(src, write.start()),
+                            "CANCELLED written without a reason in the same method");
+                    }
+                }
+            }
+        }
+        assertThat(sites).as("the scan found the invoice cancellations").isPositive();
+        assertThat(missing).as("an invoice cancelled without a kept reason (QA D1217)").isEmpty();
+    }
 }

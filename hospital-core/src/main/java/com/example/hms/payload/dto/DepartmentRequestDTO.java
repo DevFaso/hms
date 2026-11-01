@@ -41,6 +41,7 @@ public class DepartmentRequestDTO {
 
     @Size(max = 20, message = "{department.phone.size}")
     @Pattern(regexp = "^[\\d\\s\\-()+]*$", message = "{department.phone.pattern}")
+    @com.example.hms.validation.PhoneNumber
     private String phoneNumber;
 
     @Email(message = "{department.email.invalid}")
@@ -65,6 +66,7 @@ public class DepartmentRequestDTO {
 
     // Emergency contact information
     @Size(max = 20)
+    @com.example.hms.validation.PhoneNumber
     private String emergencyPhone;
 
     // Operational hours

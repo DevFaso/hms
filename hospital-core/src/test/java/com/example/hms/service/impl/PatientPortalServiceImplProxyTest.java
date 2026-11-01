@@ -111,7 +111,7 @@ class PatientPortalServiceImplProxyTest {
         @DisplayName("canonical VIEW_* scope grants access")
         void canonicalScope_allowed() {
             stubActiveGrant(buildGrant("VIEW_APPOINTMENTS", null));
-            when(patientRepository.findById(grantorPatientId)).thenReturn(Optional.of(grantor));
+            when(patientRepository.findByIdUnscoped(grantorPatientId)).thenReturn(Optional.of(grantor));
             when(appointmentService.getAppointmentsForVerifiedPatient(grantorPatientId))
                     .thenReturn(List.of(AppointmentResponseDTO.builder().id(UUID.randomUUID()).build()));
 
@@ -121,11 +121,41 @@ class PatientPortalServiceImplProxyTest {
             assertThat(result).hasSize(1);
         }
 
+        /**
+         * QA D1212 (round 23): the grantor is registered only at another
+         * hospital than the proxy's. The tenant-scoped finder sees no such
+         * patient under the proxy's hospital (404 "Patient introuvable"); the
+         * grant is the authority, so the grantor is read unscoped.
+         */
+        @Test
+        @DisplayName("QA D1212: a grantor registered only at another hospital is reached through the grant")
+        void grantorAtAnotherHospital_reached() {
+            stubActiveGrant(buildGrant("VIEW_APPOINTMENTS", null));
+            org.mockito.Mockito.lenient().when(patientRepository.findById(grantorPatientId)).thenReturn(Optional.empty());
+            when(patientRepository.findByIdUnscoped(grantorPatientId)).thenReturn(Optional.of(grantor));
+            when(appointmentService.getAppointmentsForVerifiedPatient(grantorPatientId))
+                    .thenReturn(List.of(AppointmentResponseDTO.builder().id(UUID.randomUUID()).build()));
+
+            assertThat(service.getProxyAppointments(auth, grantorPatientId, Locale.FRENCH)).hasSize(1);
+            org.mockito.Mockito.verify(patientRepository, org.mockito.Mockito.never()).findById(grantorPatientId);
+        }
+
+        @Test
+        @DisplayName("QA D1212: without an active grant the unscoped read never happens")
+        void noGrant_noUnscopedRead() {
+            stubActiveGrant(null);
+
+            org.assertj.core.api.Assertions.assertThatThrownBy(
+                    () -> service.getProxyAppointments(auth, grantorPatientId, Locale.FRENCH))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+            org.mockito.Mockito.verify(patientRepository, org.mockito.Mockito.never()).findByIdUnscoped(any());
+        }
+
         @Test
         @DisplayName("legacy un-prefixed scope is normalized and grants access")
         void legacyScope_normalized() {
             stubActiveGrant(buildGrant("APPOINTMENTS,LAB_RESULTS", null));
-            when(patientRepository.findById(grantorPatientId)).thenReturn(Optional.of(grantor));
+            when(patientRepository.findByIdUnscoped(grantorPatientId)).thenReturn(Optional.of(grantor));
             when(appointmentService.getAppointmentsForVerifiedPatient(grantorPatientId))
                     .thenReturn(List.of());
 
@@ -136,7 +166,7 @@ class PatientPortalServiceImplProxyTest {
         @DisplayName("ALL scope grants every domain")
         void allScope_allowed() {
             stubActiveGrant(buildGrant("ALL", null));
-            when(patientRepository.findById(grantorPatientId)).thenReturn(Optional.of(grantor));
+            when(patientRepository.findByIdUnscoped(grantorPatientId)).thenReturn(Optional.of(grantor));
             when(appointmentService.getAppointmentsForVerifiedPatient(grantorPatientId))
                     .thenReturn(List.of());
 
@@ -169,7 +199,7 @@ class PatientPortalServiceImplProxyTest {
         @DisplayName("future expiry still grants access")
         void futureExpiry_allowed() {
             stubActiveGrant(buildGrant("ALL", LocalDateTime.now().plusDays(30)));
-            when(patientRepository.findById(grantorPatientId)).thenReturn(Optional.of(grantor));
+            when(patientRepository.findByIdUnscoped(grantorPatientId)).thenReturn(Optional.of(grantor));
             when(appointmentService.getAppointmentsForVerifiedPatient(grantorPatientId))
                     .thenReturn(List.of());
 

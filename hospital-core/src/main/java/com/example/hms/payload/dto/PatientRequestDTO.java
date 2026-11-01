@@ -61,8 +61,10 @@ public class PatientRequestDTO {
     // characters) is stored in E.164 after this check; 15 refused a normal
     // written form. 30 leaves room for separators, the column holds 100.
     @Size(max = 30, message = "{patient.phoneNumberPrimary.size}")
+    @com.example.hms.validation.PhoneNumber
     private String phoneNumberPrimary;
 
+    @com.example.hms.validation.PhoneNumber
     private String phoneNumberSecondary;
 
     // Optional since V107 — phone-first: most patients have no email address.
@@ -78,6 +80,7 @@ public class PatientRequestDTO {
 
     // Guardian/emergency contact info - optional here, validated manually if under 18
     private String emergencyContactName;
+    @com.example.hms.validation.PhoneNumber
     private String emergencyContactPhone;
     private String emergencyContactRelationship;
 

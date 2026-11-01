@@ -6,7 +6,6 @@ import com.example.hms.enums.DispenseCheck;
 import com.example.hms.exception.BusinessException;
 import com.example.hms.exception.BusinessRuleException;
 import com.example.hms.exception.ConflictException;
-import com.example.hms.model.Patient;
 import com.example.hms.model.PatientAllergy;
 import com.example.hms.model.User;
 import com.example.hms.model.pharmacy.StockLot;
@@ -36,7 +35,6 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.UUID;
 import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -112,13 +110,12 @@ class RoundSixFrenchTextTest {
 
     @Test
     void d333_theAllergyAlertNamesTheSeverityInFrench() {
-        PrescriptionServiceImpl service = Mockito.mock(PrescriptionServiceImpl.class, Mockito.CALLS_REAL_METHODS);
-        Patient patient = new Patient();
-        patient.setId(UUID.randomUUID());
         PatientAllergy unknown = new PatientAllergy();
         unknown.setAllergenDisplay("Pénicilline");
-        Throwable alert = catchThrowable(() -> ReflectionTestUtils.invokeMethod(service, "handleAllergyConflict",
-            patient, unknown, "Amoxicilline", Boolean.FALSE, ""));
+        // QA D1183 (round 23, changed call): the allergy stop builds its card in
+        // allergyConflictCard (handleAllergyConflict was folded into allergyBlock);
+        // the card summary is the refusal's message.
+        Throwable alert = new CdsCriticalBlockException(cardSummary(unknown), java.util.List.of());
         assertThat(alert).isInstanceOf(CdsCriticalBlockException.class);
         // QA D1134 (changed assertion): "gravité" is feminine, so "inconnue" (was pinned as "inconnu").
         assertThat(alert.getMessage()).contains("(gravité : inconnue)").doesNotContain("UNKNOWN");
@@ -126,16 +123,19 @@ class RoundSixFrenchTextTest {
         PatientAllergy severe = new PatientAllergy();
         severe.setAllergenDisplay("Pénicilline");
         severe.setSeverity(AllergySeverity.SEVERE);
-        Throwable severeAlert = catchThrowable(() -> ReflectionTestUtils.invokeMethod(service, "handleAllergyConflict",
-            patient, severe, "Amoxicilline", Boolean.FALSE, ""));
-        assertThat(severeAlert.getMessage()).contains("(gravité : sévère)").doesNotContain("SEVERE");
+        String severeAlert = cardSummary(severe);
+        assertThat(severeAlert).contains("(gravité : sévère)").doesNotContain("SEVERE");
 
         PatientAllergy mild = new PatientAllergy();
         mild.setAllergenDisplay("Pénicilline");
         mild.setSeverity(AllergySeverity.MILD);
-        Throwable mildAlert = catchThrowable(() -> ReflectionTestUtils.invokeMethod(service, "handleAllergyConflict",
-            patient, mild, "Amoxicilline", Boolean.FALSE, ""));
-        assertThat(mildAlert.getMessage()).contains("(gravité : légère)");
+        assertThat(cardSummary(mild)).contains("(gravité : légère)");
+    }
+
+    private static String cardSummary(PatientAllergy allergy) {
+        com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard card = ReflectionTestUtils.invokeMethod(
+            PrescriptionServiceImpl.class, "allergyConflictCard", allergy, "Amoxicilline");
+        return card.summary();
     }
 
     @Test

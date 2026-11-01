@@ -404,9 +404,47 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .currentMedications(safeMedications(patientId, hospitalId))
                 .recentVitals(safeVitals(patientId))
                 .immunizations(safeImmunizations(patientId))
+                .activeDiagnoses(activeDiagnosesOf(patientId))
                 .allergies(splitToList(patient.getAllergies()))
                 .chronicConditions(splitToList(patient.getChronicConditions()))
                 .build();
+    }
+
+    /**
+     * QA D1214 (round 23): the patient's active diagnoses for "Pathologies
+     * actives". The health summary never set the field, so the card was empty
+     * for every patient. The doctor's diagnoses land in
+     * {@code clinical.patient_problems} (ACTIVE); V14-era rows in
+     * {@code patient_diagnoses} are read as the medical history reads them.
+     * The patient's own record at every hospital (design Q1): no hospital
+     * scope. The display text, the code when there is none; each once.
+     */
+    private List<String> activeDiagnosesOf(UUID patientId) {
+        java.util.LinkedHashSet<String> out = new java.util.LinkedHashSet<>();
+        try {
+            if (patientProblemRepository != null) {
+                patientProblemRepository.findByPatient_IdAndStatusOrderByCreatedAtDesc(
+                        patientId, com.example.hms.enums.ProblemStatus.ACTIVE)
+                    .forEach(p -> addDiagnosisLabel(out, p.getProblemDisplay(), p.getProblemCode()));
+            }
+            if (patientDiagnosisRepository != null) {
+                patientDiagnosisRepository.findByPatient_IdOrderByDiagnosedAtDesc(patientId).stream()
+                    .filter(d -> "ACTIVE".equalsIgnoreCase(d.getStatus()))
+                    .forEach(d -> addDiagnosisLabel(out, d.getDescription(), d.getIcdCode()));
+            }
+        } catch (RuntimeException ex) {
+            // Partial availability, as the other cards of the summary: a failed
+            // read is logged, never a broken page.
+            log.warn("Active diagnoses unavailable for the health summary: {}", ex.getClass().getSimpleName());
+        }
+        return List.copyOf(out);
+    }
+
+    private static void addDiagnosisLabel(java.util.Set<String> out, String display, String code) {
+        String label = display != null && !display.isBlank() ? display.trim() : code;
+        if (label != null && !label.isBlank()) {
+            out.add(label.trim());
+        }
     }
 
     // ── Lab results ──────────────────────────────────────────────────────
@@ -418,6 +456,14 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         // Own results at every hospital (design Q1); PatientChartAccess admits
         // the owner with no hospital.
         return labResultService.getLabResultsForPatientPortal(patient.getId(), null, limit);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<PatientLabResultResponseDTO> getMyLabResults(Authentication auth, int offset, int limit) {
+        Patient patient = findPatient(auth);
+        // QA D1213: every current result reachable, window by window.
+        return labResultService.getLabResultsForPatientPortal(patient.getId(), offset, limit);
     }
 
     // ── Medications ──────────────────────────────────────────────────────
@@ -1727,7 +1773,12 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             throw new AccessDeniedException("Your proxy access does not include " + requiredPermission);
         }
 
-        return patientRepository.findById(patientId)
+        // QA D1212 (round 23): the grant is the patient's, not a hospital's. A
+        // grantor registered only at another hospital than the proxy's was
+        // looked up under the PROXY's hospital scope and answered 404. The
+        // active, unexpired, in-scope grant checked above is the authority, so
+        // the grantor is read without tenant scope.
+        return patientRepository.findByIdUnscoped(patientId)
                 .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
     }
 
@@ -1785,6 +1836,15 @@ public class PatientPortalServiceImpl implements PatientPortalService {
 
     @Override
     @Transactional(readOnly = true)
+    public List<PatientLabResultResponseDTO> getProxyLabResults(Authentication auth, UUID patientId,
+                                                                int offset, int limit) {
+        Patient patient = verifyProxyAccess(auth, patientId, "VIEW_LAB_RESULTS");
+        // QA D1213: the proxy view pages like the patient's own (the id the grant check resolved).
+        return labResultService.getLabResultsForPatientPortal(patient.getId(), offset, limit);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public List<PatientLabResultResponseDTO> getProxyLabResults(Authentication auth, UUID patientId, int limit) {
         Patient patient = verifyProxyAccess(auth, patientId, "VIEW_LAB_RESULTS");
         UUID hospitalId = resolvePatientHospitalId(patient);
@@ -1807,6 +1867,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .profile(toProfileDTO(patient))
                 .recentLabResults(safeLabResults(patient.getId(), hospitalId))
                 .currentMedications(safeMedications(patient.getId(), hospitalId))
+                .activeDiagnoses(activeDiagnosesOf(patient.getId()))
                 .recentVitals(safeVitals(patient.getId()))
                 .immunizations(safeImmunizations(patient.getId()))
                 .allergies(splitToList(patient.getAllergies()))

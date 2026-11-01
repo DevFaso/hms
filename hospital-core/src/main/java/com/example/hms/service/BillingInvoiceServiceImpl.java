@@ -263,6 +263,11 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     }
 
     private void moveCopayOnto(BillingInvoice copay, BillingInvoice target) {
+        // QA D1186 class: a copay already cancelled is never cancelled again
+        // (its kept reason and stamps would be overwritten).
+        if (copay.getStatus() == InvoiceStatus.CANCELLED) {
+            return;
+        }
         BigDecimal credit = copayCredit(copay);
         for (PaymentTransaction row : paymentTransactionRepository.findByInvoice_IdOrderByCreatedAtAsc(copay.getId())) {
             if (row.getStatus() == PaymentStatus.CONFIRMED) {
@@ -272,6 +277,12 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         }
         copay.setAmountPaid(BigDecimal.ZERO);
         copay.setStatus(InvoiceStatus.CANCELLED);
+        // QA D1217: every cancellation says why, when and by whom - here the
+        // server's reason: the copay was carried onto the visit invoice.
+        copay.setCancelReason(com.example.hms.utility.MessageUtil.resolveOrRaw("billing.invoice.copayCreditedReason",
+            target.getInvoiceNumber()));
+        copay.setCancelledAt(java.time.LocalDateTime.now(java.time.ZoneId.systemDefault()));
+        copay.setCancelledBy(roleValidator.getCurrentUserId());
         copay.setCreditedToInvoice(target); // QA D428
         invoiceRepository.save(copay);
         settle(target, credit);
@@ -937,13 +948,17 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     /**
      * QA D1069: an issued invoice is a document the patient may hold; it is
      * cancelled only with the reason why, kept with when and by whom, as a
-     * discount, a waiver or a credit note keeps its reason (D974). A draft
-     * was never issued: its reason is kept when given, not required.
+     * discount, a waiver or a credit note keeps its reason (D974).
+     *
+     * <p>QA D1217 (round 23, decision): a DRAFT too. Drafts are generated at
+     * checkout with priced lines, and real hospitals audit every void; the
+     * D1069 draft exemption is withdrawn.
      */
     private void recordCancellation(BillingInvoice invoice, String reason, boolean wasDraft) {
         String why = reason == null ? "" : reason.trim();
-        if (why.isEmpty() && !wasDraft) {
-            throw new BusinessException("billing.invoice.cancelReasonRequired");
+        if (why.isEmpty()) {
+            throw new com.example.hms.exception.FieldBusinessException("cancelReason",
+                wasDraft ? "billing.invoice.cancelReasonRequiredAll" : "billing.invoice.cancelReasonRequired");
         }
         if (why.length() > CANCEL_REASON_MAX) {
             throw new BusinessException("billing.invoice.cancelReasonTooLong", String.valueOf(CANCEL_REASON_MAX));

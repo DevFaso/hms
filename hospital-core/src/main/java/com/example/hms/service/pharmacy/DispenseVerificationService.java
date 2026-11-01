@@ -275,18 +275,26 @@ public class DispenseVerificationService {
         return inventoryItem == null ? null : inventoryItem.getMedicationCatalogItem();
     }
 
-    /** Human-readable name of a catalogue item, for the refusal message. */
-    private String describe(MedicationCatalogItem item) {
-        String name = firstNonBlank(
-            item.getGenericName(), item.getBrandName(), item.getNameFr());
-        return name == null ? "an unnamed product" : name;
+    /**
+     * Human-readable name of a catalogue item, for the refusal message.
+     * QA D1221 (round 23): in the reader's language. The catalogue keeps a
+     * French name and a generic (INN) name: a French reader is shown the
+     * French name ("Amoxicilline"), any other reader the generic; no name at
+     * all is said in the reader's language, never in English.
+     */
+    public static String describe(MedicationCatalogItem item) {
+        boolean french = "fr".equals(org.springframework.context.i18n.LocaleContextHolder.getLocale().getLanguage());
+        String name = french
+            ? firstNonBlank(item.getNameFr(), item.getGenericName(), item.getBrandName())
+            : firstNonBlank(item.getGenericName(), item.getNameFr(), item.getBrandName());
+        return name == null ? com.example.hms.utility.MessageUtil.resolve("pharmacy.check.unnamedProduct") : name;
     }
 
-    /** Human-readable name of what was prescribed, for the refusal message. */
+    /** Human-readable name of what was prescribed, for the refusal message (the reader's words when none). */
     private String describePrescribed(Prescription rx) {
         String name = firstNonBlank(
             rx.getMedicationDisplayName(), rx.getMedicationName(), rx.getMedicationCode());
-        return name == null ? "prescribed medication" : name;
+        return name == null ? com.example.hms.utility.MessageUtil.resolve("pharmacy.check.prescribedMedication") : name;
     }
 
     private static String firstNonBlank(String... candidates) {

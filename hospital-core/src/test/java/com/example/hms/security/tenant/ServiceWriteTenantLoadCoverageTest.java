@@ -130,6 +130,9 @@ class ServiceWriteTenantLoadCoverageTest {
         entry("ObstetricAlertEscalationWorker.escalateOne#findByIdUnscoped", SYSTEM + " (QA D659: the patient the escalation row was raised for, to name her in the reminder; the reminder goes only to that row's hospital staff)"),
         entry("ObstetricAlertEscalationWorker.escalateOne#findById", SYSTEM + " (the escalation row carries its own hospital; no user scope exists in a sweep)"),
         entry("PatientChartAccess.requireOwnRecord#findByIdUnscoped", OWN_ROW + " (the patient's own chart)"),
+        entry("PatientPortalServiceImpl.verifyProxyAccess#findByIdUnscoped", "QA D1212 (round 23): the grantor's"
+            + " record, read only after the caller's active, unexpired, in-scope proxy grant FROM that grantor is verified;"
+            + " the grant is patient-owned, not a hospital's, so the proxy's tenancy is not the bound"),
         entry("PatientEducationServiceImpl.incrementResourceViewCount#findById", SHARED),
         entry("PatientEducationServiceImpl.submitQuestion#findById", UNSWEPT),
         entry("PatientEducationServiceImpl.trackProgress#findById", UNSWEPT),

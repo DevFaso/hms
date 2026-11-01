@@ -948,16 +948,42 @@ class BillingInvoiceServiceImplTest {
         assertEquals("billing.invoice.cancelReasonRequired", refused.getMessageKey());
     }
 
+    /**
+     * QA D1217 (round 23, decision): a DRAFT is no longer cancelled without a
+     * reason - real hospitals audit every void. This replaces the D1069 test
+     * {@code updateInvoice_aDraftIsCancelledWithoutAReason_D1069}, whose
+     * exemption the decision withdrew.
+     */
     @Test
-    void updateInvoice_aDraftIsCancelledWithoutAReason_D1069() {
+    void updateInvoice_aDraftIsNotCancelledWithoutAReason_D1217() {
         BillingInvoice invoice = existingInvoice(InvoiceStatus.DRAFT, "0");
+        UUID invoiceId = invoice.getId();
+        BillingInvoiceRequestDTO noReason = editOf().status(InvoiceStatus.CANCELLED).cancelReason("   ").build();
 
-        billingInvoiceService.updateInvoice(invoice.getId(), editOf().status(InvoiceStatus.CANCELLED).build(),
+        com.example.hms.exception.BusinessException refused = assertThrows(
+            com.example.hms.exception.BusinessException.class,
+            () -> billingInvoiceService.updateInvoice(invoiceId, noReason, Locale.FRENCH));
+
+        assertEquals("billing.invoice.cancelReasonRequiredAll", refused.getMessageKey());
+        assertEquals(InvoiceStatus.DRAFT, invoice.getStatus());
+        assertNull(invoice.getCancelReason());
+        verify(invoiceRepository, never()).save(any());
+    }
+
+    @Test
+    void updateInvoice_aDraftCancellationKeepsItsReasonWhenAndWho_D1217() {
+        BillingInvoice invoice = existingInvoice(InvoiceStatus.DRAFT, "0");
+        UUID clerk = UUID.randomUUID();
+        when(roleValidator.getCurrentUserId()).thenReturn(clerk);
+
+        billingInvoiceService.updateInvoice(invoice.getId(),
+            editOf().status(InvoiceStatus.CANCELLED).cancelReason("Visite annulée, brouillon inutile").build(),
             Locale.FRENCH);
 
         assertEquals(InvoiceStatus.CANCELLED, invoice.getStatus());
-        assertNull(invoice.getCancelReason());
+        assertEquals("Visite annulée, brouillon inutile", invoice.getCancelReason());
         assertNotNull(invoice.getCancelledAt());
+        assertEquals(clerk, invoice.getCancelledBy());
     }
 
     /** QA D612: invoiceDate 2026-10-23, dueDate 2026-10-01 gave a 500. */

@@ -40,7 +40,17 @@ class DrugAllergyBrandEntryPointsTest {
     private static final Set<String> CHECKS = Set.of(
         "service/PrescriptionServiceImpl.java",
         "cdshooks/service/MedicationAllergyCdsService.java",
-        "service/allergy/BetaLactamCrossReactivity.java");
+        "service/allergy/BetaLactamCrossReactivity.java",
+        "service/allergy/AllergyDrugIdentity.java");
+
+    /**
+     * QA D1183 (round 23): the stops (a block, not only an advisory) must go
+     * through the INN identity and its safety net, so a name the rule cannot
+     * resolve is never passed in silence.
+     */
+    private static final Set<String> STOPS = Set.of(
+        "service/PrescriptionServiceImpl.java",
+        "cdshooks/service/MedicationAllergyCdsService.java");
 
     /** Files that read an allergy and a medication without comparing them, and why. */
     private static final Map<String, String> NOT_CHECKS = Map.of(
@@ -57,6 +67,22 @@ class DrugAllergyBrandEntryPointsTest {
         "Pénicilline, Augmentin 1 g",
         "Amoxicilline, Augmentin 1 g",
         "penicillin, AUGMENTIN",
+        // QA D1183 round 23: every brand the three areas typed.
+        "Sulfamides, Septrin",
+        "Sulfamides, Septrin forte 960 mg",
+        "Sulfamides, Fansidar",
+        "Sulfamides, Eusaprim",
+        "Sulfamides, Bactrim",
+        "Pénicilline, Totapen 500 mg",
+        "Pénicilline, Orbénine 500 mg",
+        "Pénicilline, Ospen 1 MUI",
+        "Pénicilline, Augmentin",
+        "Pénicilline, Clamoxyl 1 g",
+        "Pénicilline, Extencilline 2,4 MUI",
+        "Pénicilline, Oracilline",
+        "Ampicilline, Totapen",
+        "Cloxacilline, Orbénine",
+        "penicilina, ospen",
     })
     void thePrescriptionCheckBlocksABrandTypedFreeText(String allergen, String medication) {
         String med = PrescriptionServiceImpl.normalizeDrugText(medication);
@@ -124,6 +150,14 @@ class DrugAllergyBrandEntryPointsTest {
                 SourceScan.MANDATE)
             .isEmpty();
         assertThat(bypassing).as("an allergy check that does not call DrugClassAllergy").isEmpty();
+        for (String stop : STOPS) {
+            String src = SourceScan.stripComments(Files.readString(MAIN.resolve(stop), StandardCharsets.UTF_8));
+            assertThat(src)
+                .as("%s is an allergy STOP: it must read the drug through AllergyDrugIdentity and apply its"
+                    + " safety net (QA D1183)", stop)
+                .contains("AllergyDrugIdentity.of(")
+                .contains("unverifiableClassAllergy(");
+        }
     }
 
     private static PatientAllergy allergy(String display) {

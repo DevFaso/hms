@@ -26,5 +26,6 @@ public class BootstrapSignupRequest {
     private String lastName;
 
     @NotBlank
+    @com.example.hms.validation.PhoneNumber
     private String phoneNumber;
 }

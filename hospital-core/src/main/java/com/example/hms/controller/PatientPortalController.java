@@ -150,8 +150,15 @@ public class PatientPortalController {
     @PreAuthorize("hasAuthority('ROLE_PATIENT')")
     public ResponseEntity<ApiResponseWrapper<List<PatientLabResultResponseDTO>>> getMyLabResults(
             Authentication auth,
-            @RequestParam(defaultValue = "20") int limit) {
-        List<PatientLabResultResponseDTO> results = portalService.getMyLabResults(auth, limit);
+            @RequestParam(defaultValue = "20") int limit,
+            @RequestParam(required = false) Integer offset) {
+        // QA D1213 (round 23): offset skips CURRENT results (superseded rows
+        // are removed first); without it the read is unchanged for the
+        // dashboard and the mobile apps. A plain list, no total: the portal
+        // asks for limit + 1 to know whether there is more.
+        List<PatientLabResultResponseDTO> results = offset == null
+            ? portalService.getMyLabResults(auth, limit)
+            : portalService.getMyLabResults(auth, offset, limit);
         return ResponseEntity.ok(ApiResponseWrapper.success(results));
     }
 
@@ -679,8 +686,12 @@ public class PatientPortalController {
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<ApiResponseWrapper<List<PatientLabResultResponseDTO>>> getProxyLabResults(
             Authentication auth, @PathVariable UUID patientId,
-            @RequestParam(defaultValue = "50") int limit) {
-        List<PatientLabResultResponseDTO> data = portalService.getProxyLabResults(auth, patientId, limit);
+            @RequestParam(defaultValue = "50") int limit,
+            @RequestParam(required = false) Integer offset) {
+        // QA D1213: the same offset contract as the patient's own list.
+        List<PatientLabResultResponseDTO> data = offset == null
+            ? portalService.getProxyLabResults(auth, patientId, limit)
+            : portalService.getProxyLabResults(auth, patientId, offset, limit);
         return ResponseEntity.ok(ApiResponseWrapper.success(data));
     }
 

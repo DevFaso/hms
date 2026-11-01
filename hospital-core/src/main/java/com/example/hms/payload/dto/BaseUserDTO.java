@@ -27,6 +27,7 @@ public abstract class BaseUserDTO {
     private String lastName;
 
     @NotBlank(message = "{user.phoneNumber.required}")
+    @com.example.hms.validation.PhoneNumber
     private String phoneNumber;
 
     private LocalDate dateOfBirth;

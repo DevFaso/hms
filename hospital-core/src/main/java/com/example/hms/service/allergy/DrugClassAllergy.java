@@ -36,6 +36,24 @@ import java.util.regex.Pattern;
  * </ul>
  * Nothing else is added. A catalogue item's own generic name is the other
  * source (the prescription check reads it with the typed name).
+ *
+ * <p>QA D1183 / D1149 (round 23, sixth round): a short brand list always
+ * misses the next brand (Septrin, Fansidar, Eusaprim, Totapen, Orbénine and
+ * Ospen passed). The rule is now the active ingredient (INN):
+ * <ul>
+ *   <li>class membership by the WHO INN stems the repository already used
+ *       ("-cillin" for the penicillins, "sulfa-" for the sulfonamides,
+ *       "cef-"/"ceph-" and "-penem" for the other beta-lactams) and by the
+ *       WHO ATC groups (J01C penicillins, J01EB to J01EE sulfonamides) of a
+ *       catalogue item;</li>
+ *   <li>a brand -&gt; INN map limited to brands registered in West Africa,
+ *       each a standard brand equivalence (see {@link #BRAND_GENERICS});</li>
+ *   <li>the safety net: a name that resolves to no INN at all
+ *       ({@code AllergyDrugIdentity.resolved}) while the patient carries a drug-class
+ *       allergy ({@link #namesDrugClass}) is never passed in silence - the
+ *       prescriber must acknowledge "allergy check impossible"
+ *       ({@code AllergyDrugIdentity}).</li>
+ * </ul>
  */
 public final class DrugClassAllergy {
 
@@ -55,15 +73,43 @@ public final class DrugClassAllergy {
     /** WHO ATC sulfonamide groups (J01EA, trimethoprim alone, is left out). */
     private static final Pattern SULFONAMIDE_ATC = Pattern.compile("^J01E[BCDE]");
 
+    /** WHO ATC group J01C: beta-lactam antibacterials, penicillins. */
+    private static final Pattern PENICILLIN_ATC = Pattern.compile("^J01C");
+
+    private static final String COTRIMOXAZOLE_INN = "sulfamethoxazole trimethoprim co-trimoxazole";
+
+    private static final String PENICILLIN_V_INN =
+        "phenoxymethylpenicillin phenoxymethylpenicilline fenoximetilpenicilina penicillin v";
+
     /**
-     * QA D1183: brand -&gt; generic names, ONLY the standard equivalences named
-     * in the class comment. The generic is written in the three languages the
-     * allergy list is kept in, so an allergy to "amoxicilline" meets Augmentin.
+     * QA D1183: brand -&gt; INN, ONLY standard brand equivalences of brands
+     * registered and prescribed in West Africa (round 23 decision; no other
+     * brand is added). The INN is written in the three languages the allergy
+     * list is kept in, so an allergy to "ampicilline" meets Totapen.
+     * <ul>
+     *   <li>Bactrim, Bactrim Forte, Septrin, Septrin Forte, Eusaprim (and the
+     *       existing Septra) -&gt; sulfamethoxazole + trimethoprim;</li>
+     *   <li>Fansidar -&gt; sulfadoxine + pyrimethamine;</li>
+     *   <li>Totapen -&gt; ampicillin; Orbénine -&gt; cloxacillin;</li>
+     *   <li>Ospen, Oracilline -&gt; phenoxymethylpenicillin (penicillin V);</li>
+     *   <li>Augmentin -&gt; amoxicillin + clavulanic acid; Clamoxyl -&gt; amoxicillin;</li>
+     *   <li>Extencilline -&gt; benzathine benzylpenicillin.</li>
+     * </ul>
      */
-    private static final Map<Pattern, String> BRAND_GENERICS = Map.of(
-        Pattern.compile("\\bbactrim\\b"), "sulfamethoxazole trimethoprim co-trimoxazole",
-        Pattern.compile("\\bseptra\\b"), "sulfamethoxazole trimethoprim co-trimoxazole",
-        Pattern.compile("\\baugmentin\\b"), "amoxicillin amoxicilline amoxicilina clavulanic acid");
+    static final Map<Pattern, String> BRAND_GENERICS = Map.ofEntries(
+        Map.entry(Pattern.compile("\\bbactrim\\b"), COTRIMOXAZOLE_INN),
+        Map.entry(Pattern.compile("\\bseptra\\b"), COTRIMOXAZOLE_INN),
+        Map.entry(Pattern.compile("\\bseptrin\\b"), COTRIMOXAZOLE_INN),
+        Map.entry(Pattern.compile("\\beusaprim\\b"), COTRIMOXAZOLE_INN),
+        Map.entry(Pattern.compile("\\bfansidar\\b"), "sulfadoxine pyrimethamine sulfadoxina pirimetamina"),
+        Map.entry(Pattern.compile("\\btotapen\\b"), "ampicillin ampicilline ampicilina"),
+        Map.entry(Pattern.compile("\\borbenine\\b"), "cloxacillin cloxacilline cloxacilina"),
+        Map.entry(Pattern.compile("\\bospen\\b"), PENICILLIN_V_INN),
+        Map.entry(Pattern.compile("\\boracilline\\b"), PENICILLIN_V_INN),
+        Map.entry(Pattern.compile("\\baugmentin\\b"), "amoxicillin amoxicilline amoxicilina clavulanic acid"),
+        Map.entry(Pattern.compile("\\bclamoxyl\\b"), "amoxicillin amoxicilline amoxicilina"),
+        Map.entry(Pattern.compile("\\bextencilline\\b"),
+            "benzathine benzylpenicillin benzathine benzylpenicilline penicilina benzatinica"));
 
     private DrugClassAllergy() {
     }
@@ -88,6 +134,42 @@ public final class DrugClassAllergy {
         return out.toString();
     }
 
+    /** Whether the name carries one of the cited brands ({@link #BRAND_GENERICS}). */
+    public static boolean carriesBrand(String medication) {
+        String med = normalize(medication);
+        return !med.isEmpty() && BRAND_GENERICS.keySet().stream().anyMatch(p -> p.matcher(med).find());
+    }
+
+    /**
+     * QA D1183: whether the text (typed name, already read with its generic
+     * names) names a member of a drug class the allergy check knows, by its
+     * INN stem: a penicillin, a sulfonamide or co-trimoxazole, a
+     * cephalosporin or a carbapenem. Such a name is resolved: the class
+     * rules can judge it.
+     */
+    public static boolean namesClassMember(String medicationText) {
+        String med = normalize(medicationText);
+        return isPenicillin(med) || isSulfonamide(med, null)
+            || BetaLactamCrossReactivity.familyOfDrug(med) != BetaLactamCrossReactivity.Family.NONE;
+    }
+
+    /**
+     * QA D1183: whether an allergy names a drug CLASS (or a member of one) the
+     * check reasons about: penicillins, sulfonamides, cephalosporins,
+     * carbapenems, beta-lactams, or one of their members by INN stem. The
+     * safety net fires for these allergies only: an allergy to aspirin is
+     * checked by name, as before.
+     */
+    public static boolean namesDrugClass(String allergen) {
+        String a = normalize(allergen);
+        if (a.isEmpty()) {
+            return false;
+        }
+        return classOfAllergen(a) != DrugClass.NONE
+            || BetaLactamCrossReactivity.familyOfAllergen(BetaLactamCrossReactivity.normalize(allergen))
+                != BetaLactamCrossReactivity.Family.NONE;
+    }
+
     /** The drug classes an allergy may name. */
     enum DrugClass { PENICILLIN, SULFONAMIDE, NONE }
 
@@ -105,7 +187,7 @@ public final class DrugClassAllergy {
             return false;
         }
         return switch (classOfAllergen(a)) {
-            case PENICILLIN -> isPenicillin(med);
+            case PENICILLIN -> isPenicillin(med) || atcIn(PENICILLIN_ATC, atcCode);
             case SULFONAMIDE -> isSulfonamide(med, atcCode);
             case NONE -> false;
         };
@@ -135,7 +217,11 @@ public final class DrugClassAllergy {
                 || COTRIMOXAZOLE.matcher(normalizedMedication).find()) {
             return true;
         }
-        return atcCode != null && SULFONAMIDE_ATC.matcher(atcCode.trim().toUpperCase(Locale.ROOT)).find();
+        return atcIn(SULFONAMIDE_ATC, atcCode);
+    }
+
+    private static boolean atcIn(Pattern group, String atcCode) {
+        return atcCode != null && group.matcher(atcCode.trim().toUpperCase(Locale.ROOT)).find();
     }
 
     /** Lower-case, accent-free form: "Sulfaméthoxazole" and "sulfamethoxazole" must meet. */

@@ -372,6 +372,50 @@ class PatientPortalLabResultsIT extends BaseIT {
                 .executeUpdate());
     }
 
+    /**
+     * QA D1213 (round 23), through the real chain and database: A2 had 21
+     * released results, two corrected away, 19 current; the list at limit 20
+     * showed 17 and dropped the oldest (a critical K 6.8 among them), and
+     * there was no way to page. Both reads now filter before they cut.
+     */
+    @Test
+    @DisplayName("QA D1213: every current result is reachable, by the list and by the pages")
+    void everyCurrentResultIsReachable() throws Exception {
+        labResultRepository.delete(result);
+        java.util.List<LabResult> rows = new java.util.ArrayList<>();
+        for (int i = 0; i < 21; i++) {
+            LabOrder own = labOrderRepository.save(LabOrder.builder()
+                .patient(patient).orderingStaff(order.getOrderingStaff()).labTestDefinition(hemoglobin)
+                .hospital(hospital).assignment(assignment)
+                .orderDatetime(LocalDateTime.now().minusDays(30))
+                .clinicalIndication("Suivi").status(LabOrderStatus.RESULTED).build());
+            rows.add(labResultRepository.save(LabResult.builder()
+                .labOrder(own).actorType(ActorType.SYSTEM).actorLabel("MLLP:SYSMEX/LAB_A")
+                .resultValue(String.valueOf(10 + i)).resultUnit("g/dL")
+                .resultDate(LocalDateTime.now().minusHours(2L + i))
+                .testCode("HGB").sourceSendingApplication("SYSMEX").sourceSendingFacility("LAB_A")
+                .sourceMessageControlId("MSG-D1213-" + i).sourceObservationSetId("1")
+                .observationResultStatus("F").released(true).build()));
+        }
+        rows.get(3).setSupersededByResultId(rows.get(2).getId());
+        rows.get(10).setSupersededByResultId(rows.get(9).getId());
+        labResultRepository.save(rows.get(3));
+        labResultRepository.save(rows.get(10));
+
+        mockMvc.perform(get(MY_LAB_RESULTS).param("limit", "20").contextPath(API).with(patient()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data", hasSize(19)));
+        mockMvc.perform(get(MY_LAB_RESULTS).param("offset", "0").param("limit", "11")
+                .contextPath(API).with(patient()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data", hasSize(11)));
+        mockMvc.perform(get(MY_LAB_RESULTS).param("offset", "10").param("limit", "11")
+                .contextPath(API).with(patient()))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data", hasSize(9)))
+            .andExpect(jsonPath("$.data[8].id").value(rows.get(20).getId().toString()));
+    }
+
     @Test
     @DisplayName("the patient sees the released final alone, not a pending row beside it")
     void aReleasedFinalHidesItsPreliminaryFromThePatient() throws Exception {

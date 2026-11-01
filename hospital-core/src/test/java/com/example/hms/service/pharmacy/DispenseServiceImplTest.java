@@ -902,6 +902,36 @@ class DispenseServiceImplTest {
             verify(dispenseRepository, never()).save(any(Dispense.class));
         }
 
+        /**
+         * QA D1221 (round 23): a paracetamol order filled from an amoxicillin
+         * lot was first told to take another (shorter-dated) amoxicillin lot.
+         * The wrong-drug refusal comes first; the FEFO rule is never asked.
+         */
+        @Test
+        @DisplayName("QA D1221: a lot of the wrong drug gets the wrong-drug refusal before any FEFO refusal")
+        void aWrongDrugLotIsRefusedAsTheWrongDrugBeforeFefo() {
+            DispenseRequestDTO dto = buildRequest();
+            dto.setStockLotId(stockLotId);
+            prescription.setMedicationName("Paracétamol 500 mg");
+            prescription.setMedicationCode(null);
+            prescription.setMedicationCatalogItemId(null);
+            when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+            when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+            when(pharmacyRepository.findById(pharmacyId)).thenReturn(Optional.of(pharmacy));
+            when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+            org.mockito.Mockito.lenient().when(roleValidator.getCurrentUserId()).thenReturn(userId);
+            org.mockito.Mockito.lenient().when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(stockLotRepository.findById(stockLotId)).thenReturn(Optional.of(stockLot));
+            org.mockito.Mockito.lenient().when(fefoLotPolicy.requireFefoOrReason(any(), any()))
+                    .thenThrow(new BusinessException("pharmacy.fefo.reasonRequired", "LOT-A-R21-02b", "10 nov. 2026"));
+
+            assertThatThrownBy(() -> service.createDispense(dto))
+                    .isInstanceOf(BusinessException.class)
+                    .extracting("messageKey").isEqualTo("pharmacy.dispense.refused");
+            verify(fefoLotPolicy, never()).requireFefoOrReason(any(), any());
+            verify(stockLotRepository, never()).decrementRemaining(any(), any(), any());
+        }
+
         @Test
         @DisplayName("QA D964: the reason for skipping the shorter-dated lot is kept in the fill's notes")
         void aFefoOverrideReasonIsRecordedOnTheFill() {

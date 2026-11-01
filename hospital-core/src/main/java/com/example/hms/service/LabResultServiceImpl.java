@@ -273,7 +273,7 @@ public class LabResultServiceImpl implements LabResultService {
         // first-level cache.
         LabOrderStatus committedStatus = labOrderRepository.findStatusById(lockedOrder.getId());
         if (!ingested) {
-            requireSpecimenTaken(committedStatus, lockedOrder);
+            requireSpecimenTaken(committedStatus, lockedOrder, labSpecimenRepository);
         }
 
         // QA D708 (round 10) narrows what follows: an order is one test
@@ -872,8 +872,15 @@ public class LabResultServiceImpl implements LabResultService {
      * collected (still ORDERED or PENDING). A point-of-care test is measured
      * at the bedside with no specimen workflow and is exempt; an analyzer's
      * message is evidence of its own sample.
+     *
+     * <p>QA D1204 (round 23): a rejected specimen sends the order back to
+     * awaiting collection, and the refusal said "no specimen has been
+     * collected", which is false and hides why. An order whose specimen the
+     * laboratory rejected (and that has no live specimen since) gets its own
+     * refusal: the specimen was rejected, collect a new one.
      */
-    private static void requireSpecimenTaken(LabOrderStatus committedStatus, LabOrder labOrder) {
+    static void requireSpecimenTaken(LabOrderStatus committedStatus, LabOrder labOrder,
+                                     com.example.hms.repository.LabSpecimenRepository specimens) {
         if (committedStatus != LabOrderStatus.ORDERED && committedStatus != LabOrderStatus.PENDING) {
             return;
         }
@@ -881,7 +888,10 @@ public class LabResultServiceImpl implements LabResultService {
         if (test != null && test.isPointOfCare()) {
             return;
         }
-        throw new BusinessException(com.example.hms.utility.MessageUtil.resolve("labresult.specimen.required"));
+        boolean rejected = specimens != null && labOrder.getId() != null
+            && specimens.findByLabOrder_Id(labOrder.getId()).stream()
+                .anyMatch(s -> s.getStatus() == com.example.hms.enums.LabSpecimenStatus.REJECTED);
+        throw new BusinessException(rejected ? "labresult.specimen.rejected" : "labresult.specimen.required");
     }
 
     /** Clock skew tolerated between the entering workstation and the server. */

@@ -26,4 +26,13 @@ public class NurseMedicationAdministrationRequestDTO {
      * Required for a GIVEN dose of a controlled drug, ignored otherwise.
      */
     private java.util.UUID witnessUserId;
+
+    /**
+     * QA D1210 (round 23): why a scheduled dose is given before the minimum
+     * interval since the last GIVEN dose of the same order has passed
+     * ({@code MarDoseInterval}). Required only then; kept on the MAR row as its
+     * reason and audited.
+     */
+    @Size(max = 1024)
+    private String earlyDoseReason;
 }

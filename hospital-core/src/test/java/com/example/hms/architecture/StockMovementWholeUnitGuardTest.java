@@ -91,9 +91,15 @@ class StockMovementWholeUnitGuardTest {
         int check = src.indexOf("requireWholeUnitsOfFill(dto, stockLot, prescription);", fill);
         int verify = src.indexOf("dispenseVerificationService.verify(", fill);
         assertThat(fill).isPositive();
-        assertThat(check).as("validateFill asks the whole-unit rule, before verification")
+        // QA D1221 (round 23, changed assertion): the wrong-drug check now
+        // comes FIRST (a lot of the wrong drug is refused as such before its
+        // units, form or FEFO order are judged); verification moves no stock,
+        // so the whole-unit rule still runs before any stock moves.
+        int stockMoves = src.indexOf("decrementRemaining(", fill);
+        assertThat(check).as("validateFill asks the whole-unit rule, after the identity check")
                 .isGreaterThan(fill)
-                .isLessThan(verify);
+                .isGreaterThan(verify);
+        assertThat(stockMoves < 0 || check < stockMoves).as("the whole-unit rule before stock moves").isTrue();
         // Both the one-step fill and the prepared fill go through validateFill.
         assertThat(src.split("validateFill\\(dto, ", -1)).hasSizeGreaterThanOrEqualTo(3);
     }

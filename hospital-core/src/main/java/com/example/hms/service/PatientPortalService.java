@@ -84,6 +84,9 @@ public interface PatientPortalService {
     // ── Lab results ──────────────────────────────────────────────────────
     List<PatientLabResultResponseDTO> getMyLabResults(Authentication auth, int limit);
 
+    /** QA D1213: the patient's current lab results from {@code offset}, at most {@code limit}, newest first. */
+    List<PatientLabResultResponseDTO> getMyLabResults(Authentication auth, int offset, int limit);
+
     // ── Medications ──────────────────────────────────────────────────────
     List<PatientMedicationResponseDTO> getMyMedications(Authentication auth, int limit);
 
@@ -225,6 +228,9 @@ public interface PatientPortalService {
 
     /** View grantor's lab results as proxy. */
     List<PatientLabResultResponseDTO> getProxyLabResults(Authentication auth, UUID patientId, int limit);
+
+    /** QA D1213: the grantor's current lab results from {@code offset}, at most {@code limit}. */
+    List<PatientLabResultResponseDTO> getProxyLabResults(Authentication auth, UUID patientId, int offset, int limit);
 
     /** View grantor's billing invoices as proxy. */
     Page<BillingInvoiceResponseDTO> getProxyBilling(Authentication auth, UUID patientId, Pageable pageable, java.util.Locale locale);

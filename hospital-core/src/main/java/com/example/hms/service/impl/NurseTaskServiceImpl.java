@@ -461,6 +461,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         String note = request != null ? request.getNote() : null;
         String overrideReason = request != null ? request.getOverrideReason() : null;
         UUID witnessUserId = request != null ? request.getWitnessUserId() : null;
+        String earlyDoseReason = request != null ? request.getEarlyDoseReason() : null;
         requireReasonForWithheldDose(marStatus, note);
 
         // Try to find a real prescription matching the task ID
@@ -475,7 +476,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             requirePharmacistVerification(rx, marStatus);
             // QA D922: a controlled dose is given with a witness, refused before anything is written.
             User witness = controlledAdministrationWitness.resolve(rx, marStatus, witnessUserId, nurseUserId);
-            return persistMarRecord(rx, nurseUserId, hospitalId, marStatus, note, overrideReason, witness);
+            return persistMarRecord(rx, nurseUserId, hospitalId,
+                new AdministrationOutcome(marStatus, note, overrideReason, witness, earlyDoseReason));
         }
 
         // Fall back: check existing MAR records
@@ -490,12 +492,17 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             // QA D922: a controlled dose is given with a witness, refused before anything is written.
             marRecord.setWitnessUser(controlledAdministrationWitness.resolve(
                 marRecord.getPrescription(), marStatus, witnessUserId, nurseUserId));
+            // QA D1210: never sooner than the minimum interval since the last GIVEN, without a reason.
+            String early = requireDoseInterval(marRecord.getPrescription(), marStatus, marRecord.getId(), earlyDoseReason);
             marRecord.setStatus(marStatus);
             marRecord.setAdministeredAt(LocalDateTime.now());
             marRecord.setNotes(note);
             if (marStatus == MedicationAdministrationStatus.HELD
                 || marStatus == MedicationAdministrationStatus.REFUSED) {
                 marRecord.setReason(note);
+            }
+            if (early != null) {
+                marRecord.setReason(early);
             }
             resolveNurseStaff(nurseUserId, hospitalId).ifPresent(marRecord::setAdministeredByStaff);
             recordOverrideOnAdminister(marRecord, marStatus, overrideReason);
@@ -1244,6 +1251,24 @@ public class NurseTaskServiceImpl implements NurseTaskService {
      */
     static final Duration EARLY_ADMINISTRATION_WINDOW = Duration.ofHours(1);
 
+    /**
+     * QA D1210: the minimum-interval rule ({@link MarDoseInterval}) on the
+     * order's own rows, the row being finalised left out. Every write that
+     * records an administration calls it (MarDoseIntervalGuardTest).
+     *
+     * @return the early-dose reason to keep on the row, or {@code null}
+     */
+    private String requireDoseInterval(Prescription rx, MedicationAdministrationStatus status,
+                                       UUID finalisedRowId, String earlyDoseReason) {
+        if (rx == null || rx.getId() == null || status != MedicationAdministrationStatus.GIVEN) {
+            return null;
+        }
+        return MarDoseInterval.requireIntervalOrReason(rx, status,
+            MarDoseInterval.lastGivenAt(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId()),
+                finalisedRowId),
+            LocalDateTime.now(), EARLY_ADMINISTRATION_WINDOW, earlyDoseReason);
+    }
+
     /** The slot the next administration fills; refuses when the course has none left. */
     private LocalDateTime requireNextDue(Prescription rx) {
         LocalDateTime now = LocalDateTime.now();
@@ -1376,18 +1401,22 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     }
 
     private NurseMedicationTaskResponseDTO persistMarRecord(
-        Prescription rx, UUID nurseUserId, UUID hospitalId,
-        MedicationAdministrationStatus status, String note, String overrideReason, User witness
+        Prescription rx, UUID nurseUserId, UUID hospitalId, AdministrationOutcome outcome
     ) {
+        MedicationAdministrationStatus status = outcome.status();
+        String note = outcome.note();
+        String overrideReason = outcome.overrideReason();
+        User witness = outcome.witness();
         LocalDateTime slot = requireNextDue(rx);
         Optional<MedicationAdministrationRecord> verified = findPendingForSlot(rx, slot);
         if (verified.isPresent()) {
             // The bedside verify call already materialised this dose: finalise
             // that row so its five-rights scan counts, instead of demanding an
             // override as if nothing had been scanned (D78).
-            return finalizeVerifiedRow(rx, verified.get(), nurseUserId, hospitalId,
-                new AdministrationOutcome(status, note, overrideReason, witness));
+            return finalizeVerifiedRow(rx, verified.get(), nurseUserId, hospitalId, outcome);
         }
+        // QA D1210: never sooner than the minimum interval since the last GIVEN, without a reason.
+        String early = requireDoseInterval(rx, status, null, outcome.earlyDoseReason());
         MedicationAdministrationRecord marRecord = MedicationAdministrationRecord.builder()
             .prescription(rx)
             .patient(rx.getPatient())
@@ -1399,7 +1428,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .administeredAt(LocalDateTime.now())
             .status(status)
             .reason(status == MedicationAdministrationStatus.HELD
-                || status == MedicationAdministrationStatus.REFUSED ? note : null)
+                || status == MedicationAdministrationStatus.REFUSED ? note : early)
             .notes(note)
             .witnessUser(witness)
             .build();
@@ -1441,9 +1470,14 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .build();
     }
 
-    /** What the nurse records on a dose: its status, the note, the override reason and the witness. */
+    /**
+     * What the nurse records on a dose: its status, the note, the override
+     * reason, the witness and (QA D1210) why it is given before the minimum
+     * interval since the last GIVEN dose.
+     */
     private record AdministrationOutcome(
-        MedicationAdministrationStatus status, String note, String overrideReason, User witness) {
+        MedicationAdministrationStatus status, String note, String overrideReason, User witness,
+        String earlyDoseReason) {
     }
 
     private NurseMedicationTaskResponseDTO finalizeVerifiedRow(
@@ -1455,12 +1489,16 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         User witness = outcome.witness();
         String overrideReason = outcome.overrideReason();
         requireScanByAdministeringNurse(marRecord, status, nurseUserId, hospitalId);
+        // QA D1210: never sooner than the minimum interval since the last GIVEN, without a reason.
+        String early = requireDoseInterval(rx, status, marRecord.getId(), outcome.earlyDoseReason());
         marRecord.setWitnessUser(witness);
         marRecord.setStatus(status);
         marRecord.setAdministeredAt(LocalDateTime.now());
         marRecord.setNotes(note);
         if (status == MedicationAdministrationStatus.HELD || status == MedicationAdministrationStatus.REFUSED) {
             marRecord.setReason(note);
+        } else if (early != null) {
+            marRecord.setReason(early);
         }
         resolveNurseStaff(nurseUserId, hospitalId).ifPresent(marRecord::setAdministeredByStaff);
         recordOverrideOnAdminister(marRecord, status, overrideReason);
