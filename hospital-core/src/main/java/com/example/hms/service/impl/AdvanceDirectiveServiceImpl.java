@@ -89,6 +89,11 @@ public class AdvanceDirectiveServiceImpl implements AdvanceDirectiveService {
         // to ACTIVE, so one click recorded an active DNR.
         com.example.hms.service.support.ClinicalContent.requirePresent(request.getStatus(), "status",
             "advanceDirective.status.required");
+        // QA D1186 class (round 22, review round 2): a revocation is recorded
+        // only by revoke(), with its reason - not created already revoked.
+        if (request.getStatus() == AdvanceDirectiveStatus.REVOKED) {
+            throw new BusinessException("advanceDirective.revoke.useRevoke");
+        }
         directive.setStatus(request.getStatus());
         applyEditableFields(directive, request);
         validateDates(directive);

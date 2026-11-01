@@ -1713,10 +1713,12 @@ public class PatientServiceImpl implements PatientService {
         // QA D1186 class (round 22): a removed diagnosis stays removed; a second
         // removal overwrote the recorded reason and wrote another DELETED row.
         // INACTIVE alone is not "removed": it is also a status the chart sets,
-        // so the removal history decides (review round 1).
+        // so the removal history decides (review round 1): removed means the
+        // latest change is the removal - a diagnosis set active again after a
+        // removal and later marked INACTIVE can be removed (review round 2).
         if (problem.getStatus() == ProblemStatus.INACTIVE
-                && patientProblemHistoryRepository.existsByProblem_IdAndChangeType(
-                    problem.getId(), ProblemChangeType.DELETED)) {
+                && patientProblemHistoryRepository.findFirstByProblem_IdOrderByChangedAtDesc(problem.getId())
+                    .map(h -> h.getChangeType() == ProblemChangeType.DELETED).orElse(false)) {
             throw new BusinessException("patient.r22.diagnosisAlreadyRemoved");
         }
         Staff staff = resolveStaffContext(requesterUserId, problem.getHospital().getId());

@@ -920,8 +920,10 @@ class PatientServiceImplTest {
         problem.setStatus(ProblemStatus.INACTIVE);
         problem.setStatusChangeReason("Erreur de saisie");
         when(patientProblemRepository.findById(diagnosisId)).thenReturn(Optional.of(problem));
-        when(patientProblemHistoryRepository.existsByProblem_IdAndChangeType(
-            diagnosisId, com.example.hms.enums.ProblemChangeType.DELETED)).thenReturn(true);
+        com.example.hms.model.PatientProblemHistory removal = new com.example.hms.model.PatientProblemHistory();
+        removal.setChangeType(com.example.hms.enums.ProblemChangeType.DELETED);
+        when(patientProblemHistoryRepository.findFirstByProblem_IdOrderByChangedAtDesc(diagnosisId))
+            .thenReturn(Optional.of(removal));
         when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
 
         assertThatThrownBy(() -> patientService.deletePatientDiagnosis(
@@ -949,8 +951,11 @@ class PatientServiceImplTest {
         when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
         when(staffRepository.findByUserIdAndHospitalId(requesterUserId, hospitalId)).thenReturn(Optional.of(staff));
         when(objectMapper.writeValueAsString(any())).thenReturn("{}");
-        when(patientProblemHistoryRepository.existsByProblem_IdAndChangeType(
-            diagnosisId, com.example.hms.enums.ProblemChangeType.DELETED)).thenReturn(false);
+        // Removed once, then set active again, then marked INACTIVE by the chart: the latest change is not a removal.
+        com.example.hms.model.PatientProblemHistory statusChange = new com.example.hms.model.PatientProblemHistory();
+        statusChange.setChangeType(com.example.hms.enums.ProblemChangeType.STATUS_CHANGED);
+        when(patientProblemHistoryRepository.findFirstByProblem_IdOrderByChangedAtDesc(diagnosisId))
+            .thenReturn(Optional.of(statusChange));
 
         patientService.deletePatientDiagnosis(patientId, hospitalId, diagnosisId, requesterUserId, "Saisie en double");
 

@@ -226,6 +226,20 @@ class AdvanceDirectiveServiceImplTest {
     }
 
     @Test
+    void aDirectiveIsNotCreatedAlreadyRevoked_D1186() {
+        AdvanceDirectiveRequestDTO req = request();
+        req.setStatus(AdvanceDirectiveStatus.REVOKED);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        org.mockito.Mockito.lenient().when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        org.mockito.Mockito.lenient().when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+
+        assertThatThrownBy(() -> service.create(patientId, req))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("advanceDirective.revoke.useRevoke");
+        verify(directiveRepository, never()).save(any());
+    }
+
+    @Test
     void anEditNeitherRevokesNorUnrevokes_D1186() {
         UUID id = UUID.randomUUID();
         AdvanceDirective revoked = new AdvanceDirective();
