@@ -4,14 +4,6 @@
 server:
   port: 8081
 
-# Matches the Alloy default in docker-compose.yml, so `docker compose up` collects backend
-# metrics with no extra setup. Local-only: the property defaults to blank everywhere else,
-# which leaves /actuator/prometheus closed. Never set this value in a deployed environment.
-app:
-  observability:
-    metrics:
-      scrape-token: ${METRICS_SCRAPE_TOKEN:local-dev-scrape-token}
-
 spring:
   config:
     activate:
@@ -53,3 +45,10 @@ app:
   # Frontend base URL — localhost only for local dev.
   frontend:
     base-url: http://localhost:4200
+  # Matches the Alloy default in docker-compose.yml, so `docker compose up` collects
+  # backend metrics with no extra setup. Local-only: the property defaults to blank
+  # everywhere else, which leaves /actuator/prometheus closed. Never set this in a
+  # deployed environment.
+  observability:
+    metrics:
+      scrape-token: ${METRICS_SCRAPE_TOKEN:local-dev-scrape-token}

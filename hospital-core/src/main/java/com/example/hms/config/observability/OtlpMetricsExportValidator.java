@@ -30,14 +30,20 @@ public class OtlpMetricsExportValidator {
 
     private static final Logger log = LoggerFactory.getLogger(OtlpMetricsExportValidator.class);
 
+    /** Micrometer posts to the metrics signal URL, not the OTLP gateway base. */
+    private static final String SIGNAL_PATH = "/v1/metrics";
+
     private final boolean enabled;
     private final String url;
+    private final String authorization;
 
     public OtlpMetricsExportValidator(
             @Value("${management.otlp.metrics.export.enabled:false}") boolean enabled,
-            @Value("${management.otlp.metrics.export.url:}") String url) {
+            @Value("${management.otlp.metrics.export.url:}") String url,
+            @Value("${management.otlp.metrics.export.headers.Authorization:}") String authorization) {
         this.enabled = enabled;
         this.url = url;
+        this.authorization = authorization;
     }
 
     @PostConstruct
@@ -60,6 +66,24 @@ public class OtlpMetricsExportValidator {
                 + "Micrometer's. Set OTEL_METRICS_EXPORT_URL via "
                 + "scripts/grafana-cloud-setup.sh. Ignore this if you are running a collector "
                 + "locally on purpose.", url);
+        } else if (!url.endsWith(SIGNAL_PATH)) {
+            // The specific mistake the loopback message describes but could not detect: the
+            // agent's variable holds the gateway BASE, Micrometer's wants the metrics signal
+            // URL. Copying the base here yields a rejected POST every 60s, and nothing says so.
+            log.error("The OTLP metrics URL does not end in {} ({}). Micrometer needs the "
+                + "metrics signal URL, not the gateway base that OTEL_EXPORTER_OTLP_ENDPOINT "
+                + "holds for the agent — pushing to the base is rejected, and the failure is "
+                + "swallowed. Append {} unless a non-standard collector route is intended.",
+                SIGNAL_PATH, url, SIGNAL_PATH);
+        }
+
+        if (authorization == null || authorization.isBlank()) {
+            log.error("OTEL_METRICS_ENABLED=true and an OTLP metrics URL is set, but no "
+                + "Authorization header is configured. Grafana Cloud answers 401 to every "
+                + "push and Micrometer swallows the failure, so the dashboards stay empty "
+                + "with no error. Set GRAFANA_OTLP_AUTH_HEADER — note it is a SEPARATE "
+                + "Railway variable from OTEL_EXPORTER_OTLP_HEADERS, which the agent reads. "
+                + "scripts/grafana-cloud-setup.sh sets both from one token.");
         }
     }
 
