@@ -164,8 +164,14 @@
     <div class="critical-banner">
       <span class="material-symbols-outlined critical-pulse">emergency</span>
       <strong>
-        {{ criticalAlerts().length }} {{ 'DASHBOARD.CRITICAL_ALERT' | translate
-        }}{{ criticalAlerts().length > 1 ? 's' : '' }}
+        <!-- QA D1200 class (round 22): the count and its noun in one sentence per
+             language, not an English 's' glued to a translated label. -->
+        {{
+          (criticalAlerts().length > 1
+            ? 'DASHBOARD.CRITICAL_ALERTS_MANY'
+            : 'DASHBOARD.CRITICAL_ALERTS_ONE'
+          ) | translate: { count: criticalAlerts().length }
+        }}
         {{ 'DASHBOARD.REQUIRE_IMMEDIATE_ATTENTION' | translate }}
       </strong>
       <div class="critical-names">
@@ -925,10 +931,10 @@
                     @if (alert.severity === 'EXPIRED') {
                       {{ 'DASHBOARD.EXPIRED_LABEL' | translate }}
                     } @else if (alert.severity === 'CRITICAL') {
-                      {{ alert.daysUntilExpiry }}{{ 'DASHBOARD.DAYS_SHORT' | translate }} —
+                      {{ 'DASHBOARD.DAYS_LEFT_SHORT' | translate: { days: alert.daysUntilExpiry } }} —
                       {{ 'DASHBOARD.CRITICAL' | translate }}
                     } @else {
-                      {{ alert.daysUntilExpiry }}{{ 'DASHBOARD.DAYS_SHORT' | translate }}
+                      {{ 'DASHBOARD.DAYS_LEFT_SHORT' | translate: { days: alert.daysUntilExpiry } }}
                     }
                   </span>
                   <!-- Tier 2 item 40. The alert used to be the end of the

@@ -46,7 +46,15 @@
       </p>
 
       @if (showOptOutForm()) {
-        <div class="opt-out-form" data-testid="opt-out-form">
+        <!-- QA D1198 (round 22): the form that replaced the button takes the keyboard;
+             Escape closes it (asking first over a typed reason). -->
+        <div
+          class="opt-out-form"
+          data-testid="opt-out-form"
+          appInlineSubForm
+          #optOutForm="inlineSubForm"
+          (dismissed)="cancelOptOut()"
+        >
           <label for="opt-out-reason">{{
             'PORTAL.SHARING.OPT_OUT.REASON_LABEL' | translate
           }}</label>
@@ -57,6 +65,7 @@
             [(ngModel)]="optOutReason"
             [placeholder]="'PORTAL.SHARING.OPT_OUT.REASON_PLACEHOLDER' | translate"
           ></textarea>
+          <app-inline-discard-ask [form]="optOutForm" />
           <div class="opt-out-actions">
             <button
               type="button"

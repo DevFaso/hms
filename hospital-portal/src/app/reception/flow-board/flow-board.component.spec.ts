@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { FlowBoardComponent } from './flow-board.component';
 import { DragDropModule, CdkDragDrop } from '@angular/cdk/drag-drop';
 import { ToastService } from '../../core/toast.service';
@@ -90,6 +90,28 @@ describe('FlowBoardComponent', () => {
       },
     });
     expect(component.localBoard.scheduled.length).toBe(1);
+  });
+
+  it('QA D1200: the wait time is a sentence of the reader language, not "706Attente min."', () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', { RECEPTION: { WAIT_DURATION: 'Attente : {{minutes}} min' } });
+    translate.use('fr');
+    const board = {
+      scheduled: [],
+      confirmed: [],
+      arrived: [makeItem({ waitMinutes: 706 })],
+      inProgress: [],
+      completed: [],
+      noShow: [],
+      walkIn: [],
+    };
+    component.board = board;
+    component.ngOnChanges({
+      board: { currentValue: board, previousValue: null, firstChange: true, isFirstChange: () => true },
+    });
+    fixture.detectChanges();
+    const wait = (fixture.nativeElement as HTMLElement).querySelector('.card-wait');
+    expect(wait?.textContent?.trim()).toBe('Attente : 706 min');
   });
 
   it('should have 7 columns', () => {

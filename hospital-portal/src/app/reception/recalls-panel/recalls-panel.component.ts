@@ -211,6 +211,9 @@ export class RecallsPanelComponent implements OnInit {
       next: () => {
         this.toast.success(this.translate.instant('RECEPTION.RECALL_CLOSED'));
         this.actingOnId.set(null);
+        // QA D1199 (round 22): the row leaves the open list with its "Fermer":
+        // the keyboard lands on the list's filter, as after a cancel, not the page body.
+        focusWhenRendered(this.host.nativeElement, '.filter-btn.active');
         this.loadRecalls();
       },
       error: (err) => {

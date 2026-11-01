@@ -35,6 +35,7 @@ import { serverInstant } from '../shared/date-utils';
 import { PatientPortalService } from '../services/patient-portal.service';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { MeasurePipe } from '../shared/pipes/measure.pipe';
+import { FocusOnRenderDirective } from '../shared/a11y/focus-on-render.directive';
 type ProfileTab = 'overview' | 'edit' | 'security' | 'activity';
 
 @Component({
@@ -42,6 +43,7 @@ type ProfileTab = 'overview' | 'edit' | 'security' | 'activity';
   standalone: true,
   imports: [
     SubmitGuardDirective,
+    FocusOnRenderDirective,
     MeasurePipe,
     FormsModule,
     TranslateModule,

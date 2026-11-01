@@ -2546,12 +2546,10 @@
     "CONSULTS_PENDING": "Consults Pending",
     "CONSULT_REQUESTS": "Consult Requests",
     "CRITICAL": "CRITICAL",
-    "CRITICAL_ALERT": "Critical Alert",
     "CRITICAL_LABS": "Critical Labs",
     "CRITICAL_RESULTS": "Critical Results",
     "CURRENT_MEDICATIONS": "Current Medications",
     "DAILY_COLLECTIONS_30D": "Daily Collections (30d)",
-    "DAYS_SHORT": "d",
     "DEPARTMENTS": "Departments",
     "DIRECTOR_APPROVAL_STATUS": "Director Approval Status",
     "DISCHARGED_TODAY": "Discharged Today",
@@ -2882,7 +2880,10 @@
     "AGING_1_30": "1–30 days",
     "AGING_31_60": "31–60 days",
     "AGING_61_90": "61–90 days",
-    "AGING_90_PLUS": "90+ days"
+    "AGING_90_PLUS": "90+ days",
+    "CRITICAL_ALERTS_ONE": "{{count}} critical alert",
+    "CRITICAL_ALERTS_MANY": "{{count}} critical alerts",
+    "DAYS_LEFT_SHORT": "{{days}} d"
   },
   "DELIVERY": {
     "ACTIVATION_EMAIL_QUEUED": "The activation e-mail (with each role's code) is queued for sending.",
@@ -5717,7 +5718,9 @@
         "TITLE": "{{name}}'s Health Data",
         "TITLE_FALLBACK": "Shared Health Data"
       },
-      "USER_NOT_FOUND": "No account has this username. Check the spelling with the person you want to give access to."
+      "USER_NOT_FOUND": "No account has this username. Check the spelling with the person you want to give access to.",
+      "REVOKE_CONFIRM_TITLE": "Revoke this access?",
+      "REVOKE_CONFIRM_MESSAGE": "This person will no longer see your record. You can grant access again later."
     },
     "MEDICAL_HISTORY": {
       "TITLE": "Medical and Family History",
@@ -7726,7 +7729,6 @@
     "MARK_VERIFIED": "Mark Verified",
     "MEDICATIONS": "Medications",
     "METHOD": "Method",
-    "MIN_WAIT": "Min Wait",
     "MISSING_INSURANCE_LABEL": "Missing Insurance",
     "MRN": "MRN",
     "NORMAL": "Normal",
@@ -7864,7 +7866,8 @@
     "RECALL_CANCEL_CONFIRM": "Cancel the recall",
     "CLOSE_ENTRY_TITLE": "Close this waitlist entry?",
     "CLOSE_ENTRY_REASON": "Why is the entry closed",
-    "CLOSE_ENTRY_CONFIRM": "Close the entry"
+    "CLOSE_ENTRY_CONFIRM": "Close the entry",
+    "WAIT_DURATION": "{{minutes}} min wait"
   },
   "REFERRALS": {
     "ACCEPTED": "Accepted",

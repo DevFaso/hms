@@ -2546,12 +2546,10 @@
     "CONSULTS_PENDING": "Consultations en Attente",
     "CONSULT_REQUESTS": "Demandes de Consultation",
     "CRITICAL": "CRITIQUE",
-    "CRITICAL_ALERT": "Alerte Critique",
     "CRITICAL_LABS": "Résultats Critiques",
     "CRITICAL_RESULTS": "Résultats Critiques",
     "CURRENT_MEDICATIONS": "Médicaments Actuels",
     "DAILY_COLLECTIONS_30D": "Recouvrements Quotidiens (30j)",
-    "DAYS_SHORT": "j",
     "DEPARTMENTS": "Départements",
     "DIRECTOR_APPROVAL_STATUS": "Statut d'Approbation du Directeur",
     "DISCHARGED_TODAY": "Sortis Aujourd'hui",
@@ -2882,7 +2880,10 @@
     "AGING_1_30": "1 à 30 jours",
     "AGING_31_60": "31 à 60 jours",
     "AGING_61_90": "61 à 90 jours",
-    "AGING_90_PLUS": "Plus de 90 jours"
+    "AGING_90_PLUS": "Plus de 90 jours",
+    "CRITICAL_ALERTS_ONE": "{{count}} alerte critique",
+    "CRITICAL_ALERTS_MANY": "{{count}} alertes critiques",
+    "DAYS_LEFT_SHORT": "{{days}} j"
   },
   "DELIVERY": {
     "ACTIVATION_EMAIL_QUEUED": "L'e-mail d'activation (avec le code de chaque rôle) est en file d'envoi.",
@@ -5717,7 +5718,9 @@
         "TITLE": "Données de santé de {{name}}",
         "TITLE_FALLBACK": "Données de santé partagées"
       },
-      "USER_NOT_FOUND": "Aucun compte ne porte cet identifiant. Vérifiez l’orthographe auprès de la personne à qui vous voulez donner accès."
+      "USER_NOT_FOUND": "Aucun compte ne porte cet identifiant. Vérifiez l’orthographe auprès de la personne à qui vous voulez donner accès.",
+      "REVOKE_CONFIRM_TITLE": "Révoquer cet accès ?",
+      "REVOKE_CONFIRM_MESSAGE": "Cette personne ne verra plus votre dossier. Vous pourrez lui redonner l'accès plus tard."
     },
     "SUMMARIES": {
       "TITLE": "Résumés après visite",
@@ -7726,7 +7729,6 @@
     "MARK_VERIFIED": "Marquer comme vérifié",
     "MEDICATIONS": "Médicaments",
     "METHOD": "Méthode",
-    "MIN_WAIT": "Attente min.",
     "MISSING_INSURANCE_LABEL": "Assurance manquante",
     "MRN": "N° dossier",
     "NORMAL": "Normal",
@@ -7864,7 +7866,8 @@
     "RECALL_CANCEL_CONFIRM": "Annuler le rappel",
     "CLOSE_ENTRY_TITLE": "Fermer cette entrée de la liste d'attente ?",
     "CLOSE_ENTRY_REASON": "Motif de la fermeture",
-    "CLOSE_ENTRY_CONFIRM": "Fermer l'entrée"
+    "CLOSE_ENTRY_CONFIRM": "Fermer l'entrée",
+    "WAIT_DURATION": "Attente : {{minutes}} min"
   },
   "REFERRALS": {
     "ACCEPTED": "Acceptée",
