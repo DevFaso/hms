@@ -4,7 +4,7 @@ import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Router } from '@angular/router';
-import { DispensingComponent } from './dispensing';
+import { DispensingComponent, sameDispenseUnit } from './dispensing';
 import { PharmacyService } from '../services/pharmacy.service';
 import { AuthService } from '../auth/auth.service';
 import { ToastService } from '../core/toast.service';
@@ -318,7 +318,7 @@ describe('DispensingComponent', () => {
 
   it('should show error on dispense failure', () => {
     pharmacySvc.createDispense.and.returnValue(
-      throwError(() => ({ error: { message: 'Insufficient stock' } })),
+      throwError(() => ({ status: 409, error: { message: 'Insufficient stock' } })),
     );
 
     component.form = {
@@ -339,6 +339,7 @@ describe('DispensingComponent', () => {
     const message = 'A serious interaction alert stops this dispense: [major] A ↔ B: bleeding.';
     pharmacySvc.createDispense.and.returnValue(
       throwError(() => ({
+        status: 422,
         error: {
           message,
           cdsAdvisories: [{ summary: '[major] A ↔ B: bleeding', indicator: 'critical' }],
@@ -760,7 +761,10 @@ describe('DispensingComponent', () => {
 
   it('shows the server refusal when a hand-over fails', () => {
     pharmacySvc.handOver.and.returnValue(
-      throwError(() => ({ error: { message: 'This prescription can no longer be handed over.' } })),
+      throwError(() => ({
+        status: 400,
+        error: { message: 'This prescription can no longer be handed over.' },
+      })),
     );
     component.openHandOver(preparedRow as any);
 
@@ -1846,6 +1850,27 @@ describe('DispensingComponent — work-queue claim (G13)', () => {
       click('rx-dispense-rx-1');
       fixture.detectChanges();
     }
+
+    it('QA D1163: a "flacon" order is not offered tablet lots, and says why', async () => {
+      await openWithLots();
+      component.orderUnit.set('flacon');
+      component.stockLots.set([
+        { ...lot('cp', '2098-01-31', 100), unit: 'comprimé' },
+        { ...lot('fl', '2099-01-31', 10), unit: 'Flacons' },
+      ]);
+      fixture.detectChanges();
+      const options = Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLOptionElement>(
+          '#stockLot option',
+        ),
+      ).map((o) => o.value);
+      expect(options).toEqual(['', 'fl']);
+      expect(exists('other-form-lots')).toBeTrue();
+      // A lot whose unit the server does not send is still offered (the server checks).
+      expect(sameDispenseUnit(undefined, 'flacon')).toBeTrue();
+      expect(sameDispenseUnit('Comprimés', 'comprimé')).toBeTrue();
+      expect(sameDispenseUnit('comprimé', 'flacon')).toBeFalse();
+    });
 
     it('pre-selects the shortest-dated lot that covers the fill', async () => {
       await openWithLots();

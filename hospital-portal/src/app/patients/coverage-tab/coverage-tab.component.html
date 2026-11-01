@@ -684,7 +684,8 @@
             </select>
           </div>
           <div class="field">
-            <label for="con-name">{{ 'COVERAGE.CONSENT_SIGNED_BY' | translate }}</label>
+            <!-- QA D1148: a consent names who gave it; it is never stored unsigned. -->
+            <label for="con-name">{{ 'COVERAGE.CONSENT_SIGNED_BY' | translate }} *</label>
             <input
               id="con-name"
               type="text"
@@ -715,6 +716,8 @@
           class="btn-primary"
           data-testid="consent-save"
           [disabled]="consentSaving()"
+          [appSubmitGuard]="!consentForm.signedName.trim()"
+          [submitGuardFields]="['con-name']"
           (click)="submitConsent()"
         >
           {{ 'COMMON.SAVE' | translate }}

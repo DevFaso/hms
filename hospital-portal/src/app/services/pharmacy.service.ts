@@ -195,6 +195,11 @@ export interface StockLotResponse {
    * mints one.
    */
   barcodeValue?: string;
+  /**
+   * QA D1163: the unit (dosage form) of the stock item the lot belongs to,
+   * when the server sends it; a lot of another form than the order is not offered.
+   */
+  unit?: string | null;
   createdAt: string;
   updatedAt: string;
 }

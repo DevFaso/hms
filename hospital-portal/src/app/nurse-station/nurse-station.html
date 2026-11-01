@@ -1126,7 +1126,10 @@
         <p>{{ 'NURSE.PROVIDE_REASON' | translate }}</p>
       }
       <!-- QA D993: the reason box has a real label, not only a placeholder. -->
-      <label class="sr-only" for="mar-reason-input">{{ 'NURSE.ENTER_REASON' | translate }}</label>
+      <!-- QA D1173: the label is a name ("Motif"), not the placeholder's instruction. -->
+      <label class="sr-only" for="mar-reason-input">{{
+        'NURSE.MAR_REASON_LABEL' | translate
+      }}</label>
       <textarea
         id="mar-reason-input"
         class="reason-input"
@@ -1179,7 +1182,7 @@
       appModalDialog
     >
       <h3 id="vitals-dialog-title">
-        <span class="material-symbols-outlined">monitor_heart</span>
+        <span class="material-symbols-outlined" aria-hidden="true">monitor_heart</span>
         {{ 'NURSE.RECORD_VITALS' | translate }} — {{ vitalsCaptureFor()?.patientName }}
       </h3>
       <div class="vitals-form-grid">

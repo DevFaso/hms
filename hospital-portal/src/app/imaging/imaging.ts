@@ -1,3 +1,4 @@
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { textMatches } from '../shared/person-search';
 import {
   Component,
@@ -31,7 +32,11 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { actionRoles } from '../core/action-permissions';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
-import { refusalReason } from '../shared/refusal-reason';
+import {
+  labelledRefusalReason,
+  refusalReason,
+  refusedFieldReasons,
+} from '../shared/refusal-reason';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { AuthorshipService } from '../shared/authorship.service';
 import { CANCEL_REASON_REQUIRED_KEY, isOrderCancellable } from '../shared/order-lifecycle';
@@ -73,10 +78,35 @@ interface ReportForm {
   reportStatus: AuthorableReportStatus;
 }
 
+/** The new-order form: each request field's element id (QA D1156). */
+const ORDER_FIELD_IDS: Readonly<Record<string, string>> = {
+  patientId: 'img-patientSearch',
+  hospitalId: 'img-hospitalId',
+  modality: 'img-modality',
+  priority: 'img-priority',
+  studyType: 'img-studyType',
+  bodyRegion: 'img-bodyRegion',
+  laterality: 'img-laterality',
+  clinicalQuestion: 'img-clinicalQ',
+};
+
+/** The new-order form: each request field's label key (QA D1156). */
+const ORDER_FIELD_LABELS: Readonly<Record<string, string>> = {
+  patientId: 'PATIENTS.PATIENT_NAME',
+  hospitalId: 'ENCOUNTERS.HOSPITAL',
+  modality: 'IMAGING.MODALITY',
+  priority: 'IMAGING.PRIORITY',
+  studyType: 'IMAGING.STUDY_TYPE',
+  bodyRegion: 'IMAGING.BODY_REGION',
+  laterality: 'IMAGING.LATERALITY',
+  clinicalQuestion: 'IMAGING.CLINICAL_QUESTION',
+};
+
 @Component({
   selector: 'app-imaging',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     ModalDialogDirective,
     ServerTimePipe,
     CommonModule,
@@ -382,9 +412,20 @@ export class ImagingComponent implements OnInit {
         this.saving.set(false);
         this.load();
       },
-      error: (err: { error?: { message?: string } } | null) => {
+      error: (err: unknown) => {
         // QA D611: the server's reason stays in the open modal; nothing typed is lost.
-        const reason = err?.error?.message ?? null;
+        // QA D1156: a validation refusal names its fields by their labels and
+        // marks them, never the bare "must not be null" text.
+        const reason = labelledRefusalReason(err, this.translate, ORDER_FIELD_LABELS);
+        const refused = refusedFieldReasons(err, ORDER_FIELD_IDS);
+        if (refused.length > 0) {
+          // Each field carries the server's own reason for it, not always "required".
+          refuseFields(this.host.nativeElement, [], Object.values(ORDER_FIELD_IDS), '');
+          // Reversed: each call focuses its field, so the first refused one ends up focused.
+          for (const [id, text] of [...refused].reverse()) {
+            refuseFields(this.host.nativeElement, [id], [id], text);
+          }
+        }
         this.formError.set(reason);
         this.toast.error(reason ?? this.translate.instant('IMAGING.ORDER_SAVE_ERROR'));
         this.saving.set(false);

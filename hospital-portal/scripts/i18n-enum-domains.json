@@ -26,6 +26,12 @@
   "trackerAcuity": {
     "reason": "PatientTrackerItemDTO.acuityLevel is a String PatientTrackerMapper.deriveAcuityLevel DERIVES: ESI-<score> (1-5), else an EncounterUrgency name (EMERGENT, URGENT, ROUTINE, LOW), else ROUTINE. PORTAL.ENUM.TRACKER_ACUITY keys all nine; check by hand when that method or EncounterUrgency changes (QA D528/D663)."
   },
+  "advanceDirectiveType": {
+    "enum": "hospital-core/src/main/java/com/example/hms/enums/AdvanceDirectiveType.java"
+  },
+  "codeStatus": {
+    "reason": "Patient.codeStatus is a free-text String column (V13: FULL_CODE / DNR / DNI / COMFORT_ONLY); PORTAL.ENUM.CODE_STATUS keys those four and every AdvanceDirectiveType name; any other typed text falls back to the pipe (QA D1148)."
+  },
   "fulfillmentMode": {
     "enum": "hospital-core/src/main/java/com/example/hms/enums/PharmacyFulfillmentMode.java"
   },

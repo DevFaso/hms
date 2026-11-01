@@ -61,7 +61,24 @@ describe('NursingIntakeFormComponent', () => {
   });
 
   it('should allow submit when encounter is set and not saving', () => {
+    component.nursingAssessmentNotes.set('Alerte, orientée');
     expect(component.canSubmit).toBeTrue();
+  });
+
+  it('QA D1158: an intake with only the copied complaint is refused and says what it needs', () => {
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const submit = host.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+    submit.click();
+    fixture.detectChanges();
+    expect(mockEncounterService.submitNursingIntake).not.toHaveBeenCalled();
+    expect(host.querySelector('[data-testid="submit-guard-reason"]')?.textContent?.trim()).toBe(
+      'INTAKE.ASSESSMENT_REQUIRED',
+    );
+    expect(host.querySelector('#nursingNotes')?.getAttribute('aria-invalid')).toBe('true');
+    // A blank allergy row added and left empty is not an assessment either.
+    component.addAllergy();
+    expect(component.canSubmit).toBeFalse();
   });
 
   it('should not allow submit when saving is in progress', () => {
@@ -155,9 +172,11 @@ describe('NursingIntakeFormComponent', () => {
   it('should show error toast on failure', () => {
     mockEncounterService.submitNursingIntake.and.returnValue(
       throwError(() => ({
+        status: 400,
         error: { message: 'Invalid encounter status' },
       })),
     );
+    component.nursingAssessmentNotes.set('Alerte, orientée');
 
     component.submit();
 
@@ -167,6 +186,7 @@ describe('NursingIntakeFormComponent', () => {
 
   it('should show generic error when no message in error response', () => {
     mockEncounterService.submitNursingIntake.and.returnValue(throwError(() => ({})));
+    component.nursingAssessmentNotes.set('Alerte, orientée');
 
     component.submit();
 

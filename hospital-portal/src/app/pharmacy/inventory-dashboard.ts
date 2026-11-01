@@ -1,3 +1,5 @@
+import { refusalReason } from '../shared/refusal-reason';
+import { FocusOnRenderDirective } from '../shared/a11y/focus-on-render.directive';
 import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -22,6 +24,7 @@ import { serverDateOrInstant } from '../shared/date-utils';
   selector: 'app-inventory-dashboard',
   standalone: true,
   imports: [
+    FocusOnRenderDirective,
     ServerTimePipe,
     CommonModule,
     FormsModule,
@@ -216,7 +219,7 @@ export class InventoryDashboardComponent implements OnInit {
       },
       error: (err) => {
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('PHARMACY.ITEM_CREATE_FAILED'),
+          refusalReason(err) ?? this.translate.instant('PHARMACY.ITEM_CREATE_FAILED'),
         );
         this.saving.set(false);
       },
@@ -255,7 +258,7 @@ export class InventoryDashboardComponent implements OnInit {
         },
         error: (err) => {
           this.toast.error(
-            err?.error?.message ?? this.translate.instant('PHARMACY.PRICE_SAVE_FAILED'),
+            refusalReason(err) ?? this.translate.instant('PHARMACY.PRICE_SAVE_FAILED'),
           );
         },
       });

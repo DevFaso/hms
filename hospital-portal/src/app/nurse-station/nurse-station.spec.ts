@@ -748,7 +748,10 @@ describe('NurseStationComponent — two-tier polling', () => {
 
   it('sends plausible vitals and shows the server field message on a 400', () => {
     nurseServiceSpy.captureVitals.and.returnValue(
-      throwError(() => ({ error: { fieldErrors: { spo2Percent: 'SpO2 out of range' } } })),
+      throwError(() => ({
+        status: 400,
+        error: { fieldErrors: { spo2Percent: 'SpO2 out of range' } },
+      })),
     );
     component.recordVitals('p1', 'Awa');
     component.updateVitalsField('spo2Percent', '97');
@@ -875,7 +878,10 @@ describe('NurseStationComponent — two-tier polling', () => {
 
     it("D78: a refusal shows the server's localised reason, not the generic toast", () => {
       nurseServiceSpy.administerMedication.and.returnValue(
-        throwError(() => ({ error: { message: 'Cette dose a déjà été enregistrée.' } })),
+        throwError(() => ({
+          status: 400,
+          error: { message: 'Cette dose a déjà été enregistrée.' },
+        })),
       );
       component.promptHoldRefuse('rx-1', 'HELD');
       component.reasonText.set('NPO');

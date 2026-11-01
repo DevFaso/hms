@@ -580,7 +580,9 @@
     >
       <div class="drawer-header">
         <h2 id="platform-service-drawer-title">
-          <span class="material-icons">{{ serviceTypeIcon(selectedService()!.serviceType) }}</span>
+          <span class="material-icons" aria-hidden="true">{{
+            serviceTypeIcon(selectedService()!.serviceType)
+          }}</span>
           {{ serviceTypeLabel(selectedService()!.serviceType) }}
         </h2>
         <button
@@ -792,8 +794,15 @@
             </button>
           </div>
         } @else {
-          <!-- Edit form -->
-          <form class="edit-form" (ngSubmit)="saveService()">
+          <!-- Edit form. QA D1155 class: Escape here leaves the edit (asking first
+               when a field was changed), never the whole drawer. -->
+          <form
+            class="edit-form"
+            appInlineSubForm
+            #serviceEditForm="inlineSubForm"
+            (dismissed)="cancelEditService()"
+            (ngSubmit)="saveService()"
+          >
             <p class="muted-text form-hint">{{ 'PLATFORM.CLEAR_FIELD_HINT' | translate }}</p>
             <div class="form-group">
               <label for="editProvider">{{ 'PLATFORM.PROVIDER' | translate }}</label>
@@ -938,6 +947,7 @@
                 }
               </button>
             </div>
+            <app-inline-discard-ask [form]="serviceEditForm" />
           </form>
         }
       </div>
@@ -964,7 +974,7 @@
     >
       <div class="drawer-header">
         <h2 id="platform-register-drawer-title">
-          <span class="material-icons">add_circle</span>
+          <span class="material-icons" aria-hidden="true">add_circle</span>
           {{ 'PLATFORM.REGISTER_NEW_SERVICE' | translate }}
         </h2>
         <button
@@ -1149,7 +1159,9 @@
     >
       <div class="drawer-header">
         <h2 id="platform-catalog-drawer-title">
-          <span class="material-icons">{{ serviceTypeIcon(item.serviceType) }}</span>
+          <span class="material-icons" aria-hidden="true">{{
+            serviceTypeIcon(item.serviceType)
+          }}</span>
           {{ item.displayName }}
         </h2>
         <button
@@ -1359,7 +1371,7 @@
     >
       <div class="drawer-header">
         <h2 id="platform-release-drawer-title">
-          <span class="material-icons">event</span>
+          <span class="material-icons" aria-hidden="true">event</span>
           {{ 'PLATFORM.SCHEDULE_RELEASE_WINDOW' | translate }}
         </h2>
         <button

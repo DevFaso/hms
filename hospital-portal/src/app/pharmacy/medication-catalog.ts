@@ -1,3 +1,4 @@
+import { refusalReason } from '../shared/refusal-reason';
 import {
   Component,
   computed,
@@ -236,7 +237,7 @@ export class MedicationCatalogComponent implements OnInit {
       },
       error: (err) => {
         const msg =
-          err?.error?.message ??
+          refusalReason(err) ??
           this.translate.instant(
             existing ? 'PHARMACY.MED_UPDATE_FAILED' : 'PHARMACY.MED_CREATE_FAILED',
           );
@@ -269,7 +270,7 @@ export class MedicationCatalogComponent implements OnInit {
       },
       error: (err) => {
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('PHARMACY.MED_DELETE_FAILED'),
+          refusalReason(err) ?? this.translate.instant('PHARMACY.MED_DELETE_FAILED'),
         );
         this.deleting.set(false);
       },
@@ -355,7 +356,7 @@ export class MedicationCatalogComponent implements OnInit {
       },
       error: (err) => {
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('PHARMACY.DOSING.SAVE_FAILED'),
+          refusalReason(err) ?? this.translate.instant('PHARMACY.DOSING.SAVE_FAILED'),
         );
         this.dosingSaving.set(false);
       },

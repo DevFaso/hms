@@ -161,7 +161,15 @@
           <!-- QA D1126 / D1132: why the visit was cancelled or marked a no-show. -->
           @if (appt.statusReason) {
             <div class="field-row" data-testid="status-reason">
-              <span class="field-label">{{ 'APPOINTMENTS.STATUS_REASON' | translate }}</span>
+              <!-- QA D1171: never a second "Motif" next to the visit's own reason. -->
+              <span class="field-label">{{
+                (appt.status === 'CANCELLED'
+                  ? 'APPOINTMENTS.STATUS_REASON_CANCELLED'
+                  : appt.status === 'NO_SHOW'
+                    ? 'APPOINTMENTS.STATUS_REASON_NO_SHOW'
+                    : 'APPOINTMENTS.STATUS_REASON'
+                ) | translate
+              }}</span>
               <span class="field-value">{{ appt.statusReason }}</span>
             </div>
           }

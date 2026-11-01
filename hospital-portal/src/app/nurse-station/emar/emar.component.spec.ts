@@ -276,6 +276,29 @@ describe('EmarComponent (P1 #8 — five-rights barcode-scan loop)', () => {
     });
   });
 
+  it('QA D1159: "Suspendre" and "Refus du patient" need a reason, sent as the note', () => {
+    nurseSpy.getMedicationMAR.and.returnValue(of([sampleTask]));
+    nurseSpy.administerMedication.and.returnValue(of(sampleTask));
+    fixture.detectChanges();
+    component['selectTask'](sampleTask);
+    fixture.detectChanges();
+    const held = root().querySelector<HTMLButtonElement>('[data-testid="emar-administer-held"]')!;
+    held.click();
+    fixture.detectChanges();
+    expect(nurseSpy.administerMedication).not.toHaveBeenCalled();
+    expect(root().querySelector('#emar-hold-reason')?.getAttribute('aria-invalid')).toBe('true');
+
+    const reason = root().querySelector<HTMLTextAreaElement>('#emar-hold-reason')!;
+    reason.value = 'Patiente à jeun pour le bloc';
+    reason.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    held.click();
+    expect(nurseSpy.administerMedication).toHaveBeenCalledOnceWith(sampleTask.id, {
+      status: 'HELD',
+      note: 'Patiente à jeun pour le bloc',
+    });
+  });
+
   it('QA D233: a refused administration shows the server reason', () => {
     nurseSpy.getMedicationMAR.and.returnValue(of([sampleTask]));
     nurseSpy.administerMedication.and.returnValue(
@@ -290,6 +313,8 @@ describe('EmarComponent (P1 #8 — five-rights barcode-scan loop)', () => {
 
     fixture.detectChanges();
     component['selectTask'](sampleTask);
+    // QA D1159: a refusal is recorded with its reason.
+    component['holdRefuseReason'].set('Nausées');
     component['administer']('REFUSED');
 
     expect(toastSpy.error).toHaveBeenCalledOnceWith(
@@ -421,10 +446,15 @@ describe('EmarComponent (P1 #8 — five-rights barcode-scan loop)', () => {
 
     fixture.detectChanges();
     component['selectTask'](blockedTask);
+    // QA D1159: with its reason, as every hold is recorded.
+    component['holdRefuseReason'].set('En attente de la pharmacie');
 
     component['administer']('HELD');
 
-    expect(nurseSpy.administerMedication).toHaveBeenCalledWith(blockedTask.id, { status: 'HELD' });
+    expect(nurseSpy.administerMedication).toHaveBeenCalledWith(blockedTask.id, {
+      status: 'HELD',
+      note: 'En attente de la pharmacie',
+    });
   });
 
   it('states the block before the scan steps, and marks the row in the queue', () => {

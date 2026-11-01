@@ -1,4 +1,5 @@
 import {
+  ElementRef,
   Component,
   Input,
   OnInit,
@@ -29,6 +30,35 @@ import { PEV_VACCINES, pevCvx } from './pev-cvx';
 import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { refuseFields } from '../../shared/forms/invalid-fields';
+import { hasClinicalContent } from '../../shared/forms/clinical-content';
+import { refusalReason } from '../../shared/refusal-reason';
+
+/** QA D1148: what a social-history version records; one of them is required. */
+const SOCIAL_CONTENT_FIELDS = [
+  'tobaccoUse',
+  'tobaccoType',
+  'tobaccoPacksPerDay',
+  'alcoholUse',
+  'alcoholFrequency',
+  'alcoholDrinksPerWeek',
+  'recreationalDrugUse',
+  'drugTypesUsed',
+  'exerciseFrequency',
+  'dietType',
+  'occupation',
+  'employmentStatus',
+  'livingArrangement',
+  'housingStability',
+  'preferredLanguage',
+  'interpreterNeeded',
+  'feelsSafeAtHome',
+  'abuseHistory',
+  'socialIsolationRisk',
+  'stressLevel',
+  'mentalHealthSupport',
+  'additionalNotes',
+] as const;
 type HistorySection = 'social' | 'family' | 'immunizations';
 type FamilyFilter = 'all' | 'genetic' | 'screening-needed';
 
@@ -62,6 +92,7 @@ export class MedicalHistoryTabComponent implements OnInit {
   private readonly roleContext = inject(RoleContextService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject(ElementRef<HTMLElement>);
 
   /** Social/family writes; immunization writes additionally allow PHARMACIST. */
   readonly canEditSocialFamily = this.roleContext.hasAnyActiveRole([
@@ -209,6 +240,17 @@ export class MedicalHistoryTabComponent implements OnInit {
 
   submitSocial(): void {
     if (!this.socialForm.patientId || !this.socialForm.recordedDate) return;
+    if (!hasClinicalContent(this.socialForm, SOCIAL_CONTENT_FIELDS)) {
+      // QA D1148: an empty version was stored and superseded the record.
+      refuseFields(
+        this.host.nativeElement,
+        ['sh-occupation'],
+        ['sh-occupation'],
+        this.translate.instant('MED_HISTORY.SOCIAL_EMPTY'),
+      );
+      return;
+    }
+    refuseFields(this.host.nativeElement, [], ['sh-occupation'], '');
     this.socialForm.recordedByStaffId = this.auth.getUserProfile()?.staffId ?? undefined;
     this.socialSaving.set(true);
     this.historyService.createSocialHistory(this.socialForm).subscribe({
@@ -218,8 +260,10 @@ export class MedicalHistoryTabComponent implements OnInit {
         this.closeSocialModal();
         this.loadSocial();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('MED_HISTORY.SOCIAL_SAVE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('MED_HISTORY.SOCIAL_SAVE_ERROR'),
+        );
         this.socialSaving.set(false);
       },
     });

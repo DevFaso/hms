@@ -77,8 +77,11 @@
               <td>{{ member.licenseNumber ?? '—' }}</td>
               <td>
                 @if (editingId() === member.id) {
+                  <!-- QA D1175 class: the select takes the keyboard from the pencil it replaced. -->
                   <select
                     class="role-select"
+                    appFocusOnRender
+                    [focusOnRenderReturn]="'.btn-edit'"
                     [attr.title]="'LAB_STAFF.SELECT_ROLE' | translate"
                     [ngModel]="editRoleCode()"
                     (ngModelChange)="editRoleCode.set($event)"

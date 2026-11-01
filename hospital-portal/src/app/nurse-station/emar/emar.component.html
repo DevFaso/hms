@@ -284,6 +284,20 @@
               }
             }
 
+            <!-- QA D1159: a held or refused dose says why (the station MAR already asks). -->
+            <label class="emar__override" for="emar-hold-reason">
+              <span>{{ 'EMAR.HOLD_REFUSE_REASON_LABEL' | translate }}</span>
+              <textarea
+                id="emar-hold-reason"
+                data-testid="emar-hold-reason"
+                class="emar__input emar__input--multiline"
+                rows="2"
+                maxlength="500"
+                [value]="holdRefuseReason()"
+                (input)="holdRefuseReason.set($any($event.target).value)"
+              ></textarea>
+            </label>
+
             <section class="emar__actions">
               <button
                 type="button"
@@ -304,18 +318,22 @@
                 class="emar__btn emar__btn--ghost"
                 data-testid="emar-administer-held"
                 [disabled]="administerInFlight()"
+                [appSubmitGuard]="holdRefuseReasonMissing()"
+                [submitGuardFields]="['emar-hold-reason']"
                 (click)="administer('HELD')"
               >
-                {{ 'NURSE.HOLD' | translate }}
+                {{ 'EMAR.ACTION_HOLD' | translate }}
               </button>
               <button
                 type="button"
                 class="emar__btn emar__btn--ghost"
                 data-testid="emar-administer-refused"
                 [disabled]="administerInFlight()"
+                [appSubmitGuard]="holdRefuseReasonMissing()"
+                [submitGuardFields]="['emar-hold-reason']"
                 (click)="administer('REFUSED')"
               >
-                {{ 'MED_HISTORY.STATUS_REFUSED' | translate }}
+                {{ 'EMAR.ACTION_REFUSED' | translate }}
               </button>
             </section>
           </article>

@@ -1,3 +1,5 @@
+import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.component';
+import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive';
 import { Subscription } from 'rxjs';
 import {
   Component,
@@ -173,6 +175,8 @@ function linkKey(serviceId: string, hospitalId: string): string {
   selector: 'app-platform',
   standalone: true,
   imports: [
+    InlineDiscardAskComponent,
+    InlineSubFormDirective,
     ServerTimePipe,
     CommonModule,
     FormsModule,

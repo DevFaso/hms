@@ -18,6 +18,16 @@
  *            itself). QA D1004 (round 19): a handler on a DESCENDANT does not
  *            count — a typeahead's `(keydown.escape)` clears its list, it
  *            does not close the dialog.
+ *  subform — QA D1155 / D1144 / D1131 (round 21): an inline action form
+ *            INSIDE a dialog (a block opened from the dialog — `@if (…) { … }`
+ *            or an `<ng-template>` — whose element holds a text field and a
+ *            button closing that form, not the dialog) without
+ *            `appInlineSubForm` + `(dismissed)` (or its own `(keydown.escape)`
+ *            handler that stops the key). Escape there bubbled to the dialog,
+ *            which closed and dropped the typed reason.
+ *  label-icon — QA D1174 (round 21): the element a dialog's aria-labelledby
+ *            names holds an icon-font span without aria-hidden="true", so the
+ *            ligature ("monitor_heart") is read as the first word of the name.
  *  focus   — the dialog (or an ancestor) carries no focus-managing directive.
  *            QA D1004 (round 19): a NESTED dialog's directive does not count
  *            for the dialog around it (the outer form still kept focus on its
@@ -207,6 +217,57 @@ const COMPONENT_FOCUS = /MatDialog|@angular\/cdk\/dialog|\bDialogRef\b|\bFocusTr
 
 function hasFocusDirective(tag) {
   return [...tag.attrs.keys()].some((k) => FOCUS_DIRECTIVE.test(k));
+}
+
+/** A control that can hold focus, written as a tag. */
+const FOCUSABLE_CONTROL =
+  /<(?:button|select|textarea)\b|<input\b(?![^>]*\btype\s*=\s*["']hidden["'])|<a\b[^>]*\b(?:href|routerLink)\b|\btabindex\s*=\s*["'](?!-1)\d/;
+
+/** `inner` without the bodies of its `@if` / `@else` / `@for` / `@switch` blocks. */
+function withoutBlocks(inner) {
+  let out = '';
+  let i = 0;
+  while (i < inner.length) {
+    const at = inner.indexOf('@', i);
+    if (at < 0) {
+      out += inner.slice(i);
+      break;
+    }
+    out += inner.slice(i, at);
+    const block = /^@(?:if|else|for|switch|case|default|defer|placeholder|loading|empty)\b/.exec(
+      inner.slice(at),
+    );
+    const brace = block ? inner.indexOf('{', at) : -1;
+    if (brace < 0) {
+      out += '@';
+      i = at + 1;
+      continue;
+    }
+    let depth = 0;
+    let k = brace;
+    for (; k < inner.length; k++) {
+      if (inner[k] === '{') depth++;
+      else if (inner[k] === '}' && --depth === 0) break;
+    }
+    i = k + 1;
+  }
+  return out;
+}
+
+/**
+ * QA D1154 / D1004 / D1125 (round 21): the lab outbox's message dialog
+ * trusted `cdkTrapFocus` + auto-capture, which focuses the first control
+ * present when the dialog opens. The card opened while the message was still
+ * loading, every control behind an `@if`: nothing was captured, focus stayed
+ * on "Voir le message", and the card's Escape never fired. The shared
+ * directives focus the dialog itself when it has nothing focusable.
+ */
+function capturesNothing(tag, inner, stack, directive, nativeDialog, componentSource) {
+  if (nativeDialog || directive !== null || COMPONENT_FOCUS.test(componentSource)) return false;
+  const keys = [...tag.attrs.keys()];
+  if (keys.some((k) => /^(?:appDialogFocus)$/.test(k)) || stack.some((s) => s.focus)) return false;
+  if (!keys.includes('cdkTrapFocus')) return false;
+  return !FOCUSABLE_CONTROL.test(withoutBlocks(inner ?? ''));
 }
 
 /**
@@ -464,6 +525,14 @@ export function dialogFindings(html, componentSource = html, dialogSelectors = n
           message:
             'hand-built dialog with no focus management: add appModalDialog (focus in, Tab kept inside, focus back on close)',
         });
+      } else if (capturesNothing(tag, inner, stack, directive, nativeDialog, componentSource)) {
+        out.push({
+          line: tag.line,
+          rule: 'focus',
+          anchor: a,
+          message:
+            'cdkTrapFocus captures nothing when this dialog opens (every control is behind an @if, e.g. while it loads): focus stays on the opener and Escape never reaches it; use appModalDialog',
+        });
       }
     } else if ([...classTokens(tag)].some((t) => CONTAINER_TOKEN.test(t))) {
       const inner = innerHtml(html, tokens, index);
@@ -491,6 +560,282 @@ export function dialogFindings(html, componentSource = html, dialogSelectors = n
         isDialog,
         escape: hasEscapeAttr(tag) || hasKeydownEscape(tag, componentSource),
         focus: hasFocusDirective(tag),
+      });
+    }
+  });
+  return out.concat(
+    subFormFindings(html, tokens, componentSource),
+    labelIconFindings(html, tokens),
+  );
+}
+
+/** A field that holds what the reader types (a checkbox or a file is not text to lose). */
+const NON_TEXT_INPUTS = new Set(['checkbox', 'radio', 'hidden', 'file', 'button', 'submit']);
+/** A button handler that closes a form: a method so named, or a flag switched off. */
+const CLOSE_METHOD = /cancel|close|dismiss|hide|back|discard|stop|exit|abort/i;
+const FLAG_OFF = /\.set\(\s*(?:false|null|'')\s*\)|=\s*(?:false|null|undefined)\b/;
+const TRANSPARENT_TAGS = new Set(['ng-container', 'ng-template']);
+const DIALOG_CLOSE_OUTPUTS = ['(escaped)', '(keydown.escape)', '(dialogClose)', '(dialogDismiss)'];
+
+function calledMethod(binding) {
+  return /^\s*(?:this\.)?([A-Za-z_$][\w$]*)\s*\(/.exec(binding ?? '')?.[1];
+}
+
+function isDialogTag(tag) {
+  const role = (attrValue(tag, 'role') ?? '').replace(/['"]/g, '').trim();
+  return tag.name === 'dialog' || DIALOG_ROLES.has(role) || directiveDialog(tag) !== null;
+}
+
+/** The method names that close a dialog: its Escape outputs, and a backdrop's click. */
+function dialogClosers(tag) {
+  const out = new Set();
+  for (const output of DIALOG_CLOSE_OUTPUTS) {
+    const name = calledMethod(tag.attrs.get(output));
+    if (name) out.add(name);
+  }
+  if (isCover(tag)) {
+    const name = calledMethod(tag.attrs.get('(click)'));
+    if (name) out.add(name);
+  }
+  return out;
+}
+
+/** `(keydown.escape)` on the form itself whose handler stops the key (the encounter addendum's shape). */
+function ownStoppingEscape(tag, componentSource) {
+  return escapeBindings(tag).some((binding) => {
+    if (STOPS_PROPAGATION.test(binding)) return !SWALLOW_ONLY.test(binding);
+    const handler = calledMethod(binding);
+    if (!handler) return false;
+    const declaration = new RegExp(
+      String.raw`(?:^|[\s;}])${handler.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\s*\([^)]*\)\s*(?::[^{;]+)?\{`,
+      'gm',
+    );
+    for (const m of componentSource.matchAll(declaration)) {
+      const body = balanced(componentSource, m.index + m[0].length - 1, '{', '}');
+      if (/\.stopPropagation\(\)/.test(body)) return true;
+    }
+    return false;
+  });
+}
+
+function hasSubFormContract(tag, componentSource) {
+  if (tag.attrs.has('appInlineSubForm')) {
+    return (tag.attrs.get('(dismissed)') ?? '').trim() !== '';
+  }
+  return ownStoppingEscape(tag, componentSource);
+}
+
+/**
+ * Index just past the bracket that closes the one at `open`. Plain counting:
+ * Angular's block syntax makes a literal `{` / `}` in template text an error
+ * (it is written `&#123;`), and attribute values and interpolations nest
+ * their own brackets in pairs, while quote-aware matching misreads an
+ * apostrophe in French text as an open string.
+ */
+function closeOfBracket(html, open, opener, closer) {
+  let depth = 0;
+  for (let i = open; i < html.length; i++) {
+    if (html[i] === opener) depth++;
+    else if (html[i] === closer && --depth === 0) return i + 1;
+  }
+  return html.length;
+}
+
+/**
+ * Each `@if (…) { … }` / `@else if (…) { … }` / `@else { … }` block body and
+ * `<ng-template>` body: `{ start, end, chain }` (`end` is the closing `}`).
+ * The bodies of one `@if … @else if … @else` chain share a `chain` number:
+ * two of them are never on screen together.
+ */
+function blockBodies(html, tokens) {
+  const out = [];
+  let chains = 0;
+  for (const m of html.matchAll(/@(?:if\s*\(|else\b)/g)) {
+    let from = m.index + m[0].length;
+    let chain;
+    if (m[0].startsWith('@if')) {
+      from = closeOfBracket(html, from - 1, '(', ')');
+      chain = chains++;
+    } else {
+      const elseIf = /^\s*if\s*\(/.exec(html.slice(from));
+      if (elseIf) from = closeOfBracket(html, from + elseIf[0].length - 1, '(', ')');
+      // The body this `@else` continues ends right before it.
+      const closing = html.slice(0, m.index).trimEnd().length - 1;
+      chain = out.find((b) => b.end === closing)?.chain ?? chains++;
+    }
+    const brace = html.indexOf('{', from);
+    if (brace < 0) continue;
+    out.push({ start: brace + 1, end: closeOfBracket(html, brace, '{', '}') - 1, chain });
+  }
+  tokens.forEach((tag, index) => {
+    if (tag.type !== 'open' || tag.name !== 'ng-template') return;
+    const close = closeIndexOf(tokens, index);
+    out.push({ start: tag.end, end: tokens[close].start, chain: chains++ });
+  });
+  return out;
+}
+
+function isTextField(tag) {
+  if (tag.name === 'textarea' || tag.name === 'select') return true;
+  if (tag.name !== 'input') return false;
+  const type = (attrValue(tag, 'type') ?? 'text').replace(/['"]/g, '').trim();
+  return !NON_TEXT_INPUTS.has(type);
+}
+
+function closesForm(tag, dialogClosers) {
+  if (tag.name !== 'button') return false;
+  const binding = tag.attrs.get('(click)');
+  if (!binding) return false;
+  const name = calledMethod(binding);
+  if (name) return CLOSE_METHOD.test(name) && !dialogClosers.has(name);
+  return FLAG_OFF.test(binding);
+}
+
+/**
+ * Whether the element at `index` holds a text field and a button that closes
+ * the form (not the dialog) that can be on screen together. A field in an
+ * `@if` and a "Close" in its `@else` are two states of a panel, not a form
+ * with its own Cancel (the prescription dialog's CDS advisories); a field and
+ * a Cancel in two separate `@if (editing)` cells of one row are one form
+ * (an invoice line edited in place).
+ */
+function closesItselfWithAField(tokens, index, blocks, dialogClosers) {
+  const from = tokens[index].end;
+  const to = tokens[closeIndexOf(tokens, index)].start;
+  return rangeClosesItselfWithAField(tokens, index + 1, from, to, blocks, dialogClosers);
+}
+
+/** {@link closesItselfWithAField} over the tokens from `first` whose text lies in [from, to). */
+function rangeClosesItselfWithAField(tokens, first, from, to, blocks, dialogClosers) {
+  const inner = blocks.filter((b) => b.start >= from && b.end <= to);
+  const branchesAt = (pos) => inner.filter((b) => pos >= b.start && pos < b.end);
+  const fields = [];
+  const closes = [];
+  for (let k = first; k < tokens.length && tokens[k].start < to; k++) {
+    const t = tokens[k];
+    if (t.type !== 'open') continue;
+    if (isTextField(t)) fields.push(branchesAt(t.start));
+    else if (closesForm(t, dialogClosers)) closes.push(branchesAt(t.start));
+  }
+  const exclusive = (a, b) => a.some((x) => b.some((y) => x.chain === y.chain && x !== y));
+  return fields.some((f) => closes.some((c) => !exclusive(f, c)));
+}
+
+/**
+ * QA D1155 / D1144 / D1131 (round 21): an inline sub-form inside a dialog
+ * must keep Escape to itself (appInlineSubForm). See the header.
+ */
+export function subFormFindings(html, tokens = tags(html), componentSource = html) {
+  const dialogs = [];
+  const stack = [];
+  tokens.forEach((tag, index) => {
+    if (tag.type === 'close') {
+      for (let k = stack.length - 1; k >= 0; k--) {
+        if (stack[k].name === tag.name) {
+          stack.length = k;
+          break;
+        }
+      }
+      return;
+    }
+    const closers = dialogClosers(tag);
+    if (isDialogTag(tag)) {
+      const all = new Set(closers);
+      for (const s of stack) for (const c of s.closers) all.add(c);
+      dialogs.push({
+        start: tag.end,
+        end: tokens[closeIndexOf(tokens, index)].start,
+        closers: all,
+      });
+    }
+    if (!tag.selfClosing) stack.push({ name: tag.name, closers });
+  });
+  if (dialogs.length === 0) return [];
+  const out = [];
+  const seen = new Set();
+  const blocks = blockBodies(html, tokens);
+  for (const { start, end } of blocks) {
+    const dialog = dialogs.filter((d) => start > d.start && start < d.end).at(-1);
+    if (!dialog) continue;
+    let depth = 0;
+    const tops = [];
+    let candidate = false;
+    tokens.forEach((tag, index) => {
+      if (tag.start < start || tag.start >= end) return;
+      // `<ng-container>` / `<ng-template>` render no element: their children stand at their level.
+      if (TRANSPARENT_TAGS.has(tag.name)) return;
+      if (tag.type === 'close') {
+        depth--;
+        return;
+      }
+      const topLevel = depth === 0;
+      if (!tag.selfClosing) depth++;
+      if (topLevel) tops.push(index);
+      if (!topLevel || seen.has(index) || isDialogTag(tag)) return;
+      const inner = innerHtml(html, tokens, index) ?? '';
+      if (DIALOG_MARKUP.test(inner)) return;
+      if (!closesItselfWithAField(tokens, index, blocks, dialog.closers)) return;
+      candidate = true;
+      seen.add(index);
+      if (hasSubFormContract(tag, componentSource)) return;
+      out.push({
+        line: tag.line,
+        rule: 'subform',
+        anchor: anchor(tag, inner),
+        message:
+          'an inline form inside a dialog without appInlineSubForm + (dismissed): Escape in it closes the whole dialog and drops the typed text',
+      });
+    });
+    // The field and its Cancel in two sibling elements of the block (a field
+    // row, then an actions row): the block itself is the form, and with no
+    // single root it cannot carry the directive.
+    if (candidate || tops.length < 2 || tops.some((i) => seen.has(i))) continue;
+    if (DIALOG_MARKUP.test(html.slice(start, end))) continue;
+    if (!rangeClosesItselfWithAField(tokens, tops[0], start, end, blocks, dialog.closers)) continue;
+    seen.add(tops[0]);
+    const first = tokens[tops[0]];
+    out.push({
+      line: first.line,
+      rule: 'subform',
+      anchor: anchor(first, innerHtml(html, tokens, tops[0]) ?? ''),
+      message:
+        'an inline form inside a dialog (its field and its Cancel in sibling elements) without one root carrying appInlineSubForm + (dismissed)',
+    });
+  }
+  return out;
+}
+
+/** An icon-font element: its text is a ligature name, never words to read. */
+const ICON_CLASS = /\bmaterial-(?:symbols|icons)\b/;
+
+/**
+ * QA D1174 (round 21): the vitals dialog was announced as "monitor_heart
+ * Saisir les signes vitaux": the icon in its title had no aria-hidden.
+ */
+export function labelIconFindings(html, tokens = tags(html)) {
+  const out = [];
+  const named = new Set();
+  for (const tag of tokens) {
+    if (tag.type !== 'open') continue;
+    const ids = attrValue(tag, 'aria-labelledby');
+    if (ids) for (const id of ids.replace(/['"]/g, '').split(/\s+/)) if (id) named.add(id);
+  }
+  tokens.forEach((tag, index) => {
+    if (tag.type !== 'open' || tag.selfClosing) return;
+    const id = (attrValue(tag, 'id') ?? '').replace(/['"]/g, '').trim();
+    if (!id || !named.has(id)) return;
+    const end = closeIndexOf(tokens, index);
+    for (let k = index + 1; k < end; k++) {
+      const t = tokens[k];
+      if (t.type !== 'open' || !ICON_CLASS.test(t.attrs.get('class') ?? '')) continue;
+      const hidden = (attrValue(t, 'aria-hidden') ?? '').replace(/['"]/g, '').trim() === 'true';
+      if (hidden) continue;
+      out.push({
+        line: t.line,
+        rule: 'label-icon',
+        anchor: `#${id}`,
+        message:
+          'an icon inside the element that names a dialog has no aria-hidden="true": its ligature is read as part of the name',
       });
     }
   });

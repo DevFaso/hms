@@ -1,3 +1,4 @@
+import { refusalReason } from '../../shared/refusal-reason';
 import {
   Component,
   EventEmitter,
@@ -117,7 +118,8 @@ export class TriageFormComponent {
 
   /* ── Clinical assessment ────────────────── */
   chiefComplaint = signal('');
-  esiScore = signal<number>(3);
+  /** QA D1158: never preset (an untouched form reached the doctor as ESI 3); the nurse picks it. */
+  esiScore = signal<number | null>(null);
   fallRisk = signal(false);
   fallRiskScore = signal<number | null>(null);
 
@@ -192,8 +194,40 @@ export class TriageFormComponent {
     );
   }
 
+  /** QA D1158: a triage records at least one measured vital sign. */
+  hasVitalSign(): boolean {
+    return [
+      this.temperatureCelsius(),
+      this.heartRateBpm(),
+      this.respiratoryRateBpm(),
+      this.systolicBpMmHg(),
+      this.diastolicBpMmHg(),
+      this.spo2Percent(),
+    ].some((v) => v !== null && v !== undefined && `${v}`.trim() !== '');
+  }
+
+  private esiChosen(): boolean {
+    const esi = this.esiScore();
+    return esi !== null && esi >= 1 && esi <= 5;
+  }
+
   get canSubmit(): boolean {
-    return !!this.encounter?.id && this.esiScore() >= 1 && this.esiScore() <= 5 && !this.saving();
+    return !!this.encounter?.id && this.esiChosen() && this.hasVitalSign() && !this.saving();
+  }
+
+  /**
+   * QA D1158: why "Soumettre le triage" refuses, for the submit guard: the
+   * ESI (marked), else a translated "at least one vital sign" (the first vital marked).
+   */
+  submitBlockReason(): string | boolean {
+    if (!this.encounter?.id || !this.esiChosen()) return true;
+    if (!this.hasVitalSign()) return this.translate.instant('TRIAGE.VITAL_REQUIRED') as string;
+    return false;
+  }
+
+  /** The fields the submit guard marks, matching {@link submitBlockReason}. */
+  submitGuardFieldIds(): string[] {
+    return this.esiChosen() ? ['temperature'] : ['esiScore'];
   }
 
   submit(): void {
@@ -201,6 +235,9 @@ export class TriageFormComponent {
       this.toast.error(this.translate.instant('TRIAGE.NO_ENCOUNTER_SELECTED'));
       return;
     }
+    const esiScore = this.esiScore();
+    // QA D1158: the submit guard says why first; nothing empty is ever sent.
+    if (esiScore === null || !this.hasVitalSign()) return;
 
     const implausible = firstImplausibleVital({
       temperatureCelsius: this.temperatureCelsius(),
@@ -225,7 +262,7 @@ export class TriageFormComponent {
     this.saving.set(true);
 
     const request: TriageSubmissionRequest = {
-      esiScore: this.esiScore(),
+      esiScore,
       chiefComplaint: this.chiefComplaint() || undefined,
       temperatureCelsius: this.temperatureCelsius() ?? undefined,
       heartRateBpm: this.heartRateBpm() ?? undefined,
@@ -252,7 +289,7 @@ export class TriageFormComponent {
       },
       error: (err) => {
         this.saving.set(false);
-        const msg = err?.error?.message ?? this.translate.instant('TRIAGE.SUBMIT_FAILED');
+        const msg = refusalReason(err) ?? this.translate.instant('TRIAGE.SUBMIT_FAILED');
         this.toast.error(msg);
       },
     });

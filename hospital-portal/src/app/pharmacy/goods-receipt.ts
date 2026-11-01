@@ -1,3 +1,4 @@
+import { refusalReason } from '../shared/refusal-reason';
 import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -186,7 +187,7 @@ export class GoodsReceiptComponent implements OnInit {
         this.loadInventoryItems();
       },
       error: (err) => {
-        this.toast.error(err?.error?.message ?? this.translate.instant('PHARMACY.RECEIVE_FAILED'));
+        this.toast.error(refusalReason(err) ?? this.translate.instant('PHARMACY.RECEIVE_FAILED'));
         this.saving.set(false);
       },
     });

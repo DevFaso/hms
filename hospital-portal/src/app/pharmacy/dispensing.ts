@@ -1,3 +1,4 @@
+import { refusalReason } from '../shared/refusal-reason';
 import {
   Component,
   computed,
@@ -130,6 +131,31 @@ const CLARIFICATION_RESOLVED_LABEL_KEY = 'PHARMACY.ATTENTION.CLARIFICATION_RESOL
 export const UNRECOGNISED_ATTENTION = {
   labelKey: 'PHARMACY.ATTENTION.UNRECOGNISED',
 };
+
+/** A unit read for comparison: case, accents and a plural "s" do not matter. */
+function unitKey(unit: string | null | undefined): string {
+  return (unit ?? '')
+    .normalize('NFD')
+    .replaceAll(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+    .replace(/s$/, '');
+}
+
+/**
+ * QA D1163: whether a lot can fill an order written in `orderUnit`. An infant
+ * "1 flacon" order was filled from a tablet lot. Either side unknown (an old
+ * order, a server that does not send the lot's unit) leaves the lot offered:
+ * the server's check is the control.
+ */
+export function sameDispenseUnit(
+  lotUnit: string | null | undefined,
+  orderUnit: string | null | undefined,
+): boolean {
+  const lot = unitKey(lotUnit);
+  const order = unitKey(orderUnit);
+  return lot === '' || order === '' || lot === order;
+}
 
 @Component({
   selector: 'app-dispensing',
@@ -518,7 +544,7 @@ export class DispensingComponent implements OnInit, OnDestroy {
 
   /** A claim call was refused: say why and show the queue as it now is. */
   private claimRefused(err: { status?: number; error?: { message?: string } }): void {
-    this.toast.error(err?.error?.message ?? this.translate.instant('PHARMACY.QUEUE_CLAIM.FAILED'));
+    this.toast.error(refusalReason(err) ?? this.translate.instant('PHARMACY.QUEUE_CLAIM.FAILED'));
     this.loadWorkQueue(true);
   }
 
@@ -611,7 +637,19 @@ export class DispensingComponent implements OnInit, OnDestroy {
   readonly dispensableLots = computed(() =>
     this.stockLots()
       .filter((lot) => lot.remainingQuantity > 0 && !this.isExpired(lot))
+      .filter((lot) => sameDispenseUnit(lot.unit, this.orderUnit()))
       .sort((a, b) => a.expiryDate.localeCompare(b.expiryDate)),
+  );
+
+  /** QA D1163: the unit the open order was written in ("flacon", "comprimé"). */
+  readonly orderUnit = signal<string | null>(null);
+
+  /** QA D1163: lots of the drug in another form than the order, kept off the list. */
+  readonly otherFormLots = computed(
+    () =>
+      this.stockLots().filter(
+        (lot) => lot.remainingQuantity > 0 && !sameDispenseUnit(lot.unit, this.orderUnit()),
+      ).length,
   );
 
   /**
@@ -803,9 +841,7 @@ export class DispensingComponent implements OnInit, OnDestroy {
       return;
     }
     const refused = () =>
-      this.toast.error(
-        err?.error?.message ?? this.translate.instant('PHARMACY.QUEUE_CLAIM.FAILED'),
-      );
+      this.toast.error(refusalReason(err) ?? this.translate.instant('PHARMACY.QUEUE_CLAIM.FAILED'));
     // The visible list refreshes with its own filter; the decision does not
     // read it, because MINE / UNCLAIMED omit exactly the row a colleague has
     // just claimed.
@@ -891,6 +927,7 @@ export class DispensingComponent implements OnInit, OnDestroy {
     this.form.medicationName = rx.medicationName ?? '';
     // QA D1141: the unit the order was written in (fills were saved without one).
     this.form.unit = rx.quantityUnit ?? '';
+    this.orderUnit.set(rx.quantityUnit ?? null);
     // QA D432 then D1001: the fill starts at what is still owed on the order
     // (the server's ceiling), not at 0 and not at the full prescribed amount,
     // which a partly filled order refuses ("il reste au plus 10").
@@ -980,7 +1017,7 @@ export class DispensingComponent implements OnInit, OnDestroy {
       error: (err) => {
         this.saving.set(false);
         this.noteCdsAlerts(err);
-        this.toast.error(err?.error?.message ?? this.translate.instant('PHARMACY.DISPENSE_FAILED'));
+        this.toast.error(refusalReason(err) ?? this.translate.instant('PHARMACY.DISPENSE_FAILED'));
       },
     });
   }
@@ -1063,7 +1100,7 @@ export class DispensingComponent implements OnInit, OnDestroy {
       error: (err) => {
         this.saving.set(false);
         this.noteCdsAlerts(err);
-        this.toast.error(err?.error?.message ?? this.translate.instant('PHARMACY.READY_FAILED'));
+        this.toast.error(refusalReason(err) ?? this.translate.instant('PHARMACY.READY_FAILED'));
       },
     });
   }
@@ -1117,7 +1154,7 @@ export class DispensingComponent implements OnInit, OnDestroy {
 
   private readyActionFailed(err: { error?: { message?: string } }, fallbackKey: string): void {
     this.readyActionSaving.set(false);
-    this.toast.error(err?.error?.message ?? this.translate.instant(fallbackKey));
+    this.toast.error(refusalReason(err) ?? this.translate.instant(fallbackKey));
   }
 
   /** Whole days a prepared fill has waited, for the queue's cue. */
@@ -1180,7 +1217,7 @@ export class DispensingComponent implements OnInit, OnDestroy {
         this.loadWorkQueue();
       },
       error: (err) =>
-        this.toast.error(err?.error?.message ?? this.translate.instant('PHARMACY.CANCEL_FAILED')),
+        this.toast.error(refusalReason(err) ?? this.translate.instant('PHARMACY.CANCEL_FAILED')),
     });
   }
 

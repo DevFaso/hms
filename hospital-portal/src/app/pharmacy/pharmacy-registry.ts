@@ -1,3 +1,4 @@
+import { refusalReason } from '../shared/refusal-reason';
 import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
@@ -175,7 +176,7 @@ export class PharmacyRegistryComponent implements OnInit {
       },
       error: (err) => {
         const msg =
-          err?.error?.message ??
+          refusalReason(err) ??
           this.translate.instant(
             existing ? 'PHARMACY.TOAST.UPDATE_FAILED' : 'PHARMACY.TOAST.CREATE_FAILED',
           );
@@ -208,7 +209,7 @@ export class PharmacyRegistryComponent implements OnInit {
       },
       error: (err) => {
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('PHARMACY.TOAST.DELETE_FAILED'),
+          refusalReason(err) ?? this.translate.instant('PHARMACY.TOAST.DELETE_FAILED'),
         );
         this.deleting.set(false);
       },

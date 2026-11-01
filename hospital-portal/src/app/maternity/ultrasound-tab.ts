@@ -1,3 +1,5 @@
+import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.component';
+import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import {
   ChangeDetectionStrategy,
@@ -8,7 +10,8 @@ import {
   signal,
 } from '@angular/core';
 import { CANCEL_REASON_REQUIRED_KEY, isOrderCancellable } from '../shared/order-lifecycle';
-import { refuseFields } from '../shared/forms/invalid-fields';
+import { blankFields, refuseFields } from '../shared/forms/invalid-fields';
+import { hasClinicalContent } from '../shared/forms/clinical-content';
 import { focusWhenRendered } from '../shared/a11y/focus-when-rendered';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -38,10 +41,46 @@ import { AuthorshipService } from '../shared/authorship.service';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 type UltrasoundWorklist = 'all' | 'pending' | 'high-risk' | 'follow-up' | 'anomalies';
 
+/** The report form: the finding stays empty until the clinician picks one (QA D1150). */
+export type UltrasoundReportForm = Omit<UltrasoundReportRequest, 'findingCategory'> & {
+  findingCategory: UltrasoundReportRequest['findingCategory'] | '';
+};
+
+/** The fields the report form may refuse. */
+const REPORT_FIELD_IDS = ['rep-date', 'rep-category', 'rep-summary'];
+
+/** The measured or written findings of a report: at least one is required (QA D1150). */
+const FINDING_FIELDS: readonly (keyof UltrasoundReportRequest)[] = [
+  'fetalHeartRate',
+  'gestationalAgeAtScan',
+  'gestationalAgeDays',
+  'numberOfFetuses',
+  'estimatedFetalWeightGrams',
+  'biparietalDiameterMm',
+  'headCircumferenceMm',
+  'abdominalCircumferenceMm',
+  'femurLengthMm',
+  'nuchalTranslucencyMm',
+  'crownRumpLengthMm',
+  'findingsSummary',
+  'interpretation',
+  'anomalyDescription',
+  'anatomyFindings',
+];
+
+/** Whether the report records at least one finding (QA D1150). */
+export function hasUltrasoundFinding(
+  form: UltrasoundReportForm | Partial<UltrasoundReportRequest>,
+): boolean {
+  return hasClinicalContent(form, FINDING_FIELDS);
+}
+
 @Component({
   selector: 'app-ultrasound-tab',
   standalone: true,
   imports: [
+    InlineDiscardAskComponent,
+    InlineSubFormDirective,
     SubmitGuardDirective,
     ModalDialogDirective,
     ServerTimePipe,
@@ -140,7 +179,7 @@ export class UltrasoundTabComponent implements OnInit {
   showReportModal = signal(false);
   reportTargetOrder = signal<UltrasoundOrderResponse | null>(null);
   reportSaving = signal(false);
-  reportForm: UltrasoundReportRequest = this.emptyReportForm();
+  reportForm: UltrasoundReportForm = this.emptyReportForm();
   templateLoading = signal(false);
   reportActionBusy = signal(false);
 
@@ -282,7 +321,16 @@ export class UltrasoundTabComponent implements OnInit {
 
   submitOrder(): void {
     if (!this.hospitalId || !this.orderForm.patientId) {
-      this.toast.error(this.translate.instant('ULTRASOUND.ORDER_REQUIRED_FIELDS'));
+      // QA D1156 class: the missing patient is marked where it is asked for.
+      refuseFields(
+        this.host.nativeElement,
+        this.orderForm.patientId ? [] : ['us-patient'],
+        ['us-patient'],
+        this.translate.instant('ULTRASOUND.ORDER_REQUIRED_FIELDS'),
+      );
+      if (this.orderForm.patientId) {
+        this.toast.error(this.translate.instant('ULTRASOUND.ORDER_REQUIRED_FIELDS'));
+      }
       return;
     }
     this.orderForm.hospitalId = this.hospitalId;
@@ -372,10 +420,15 @@ export class UltrasoundTabComponent implements OnInit {
 
   /* ── Report ── */
 
-  emptyReportForm(): UltrasoundReportRequest {
+  /**
+   * QA D1150: the finding is never preselected. A blank report saved with the
+   * seeded "NORMAL" read back as "Rapport Normal" with "Notify the patient"
+   * offered; the clinician now picks the finding.
+   */
+  emptyReportForm(): UltrasoundReportForm {
     return {
       scanDate: localDateString(),
-      findingCategory: 'NORMAL',
+      findingCategory: '',
       reportFinalized: false,
     };
   }
@@ -401,7 +454,7 @@ export class UltrasoundTabComponent implements OnInit {
       this.reportForm = {
         ...fields,
         scanDate: existing.scanDate ?? localDateString(),
-        findingCategory: existing.findingCategory ?? 'NORMAL',
+        findingCategory: existing.findingCategory ?? '',
         reportFinalized: false,
         providerReviewNotes: providerReviewNotes ?? undefined,
       };
@@ -421,9 +474,9 @@ export class UltrasoundTabComponent implements OnInit {
   }
 
   /** Form values as seeded by openReport — used to distinguish defaults. */
-  private reportSeed: UltrasoundReportRequest = this.emptyReportForm();
+  private reportSeed: UltrasoundReportForm = this.emptyReportForm();
   /** Form values after the last template application (or the seed). */
-  private reportBaseline: UltrasoundReportRequest = this.emptyReportForm();
+  private reportBaseline: UltrasoundReportForm = this.emptyReportForm();
 
   applyTemplate(kind: 'nuchal-translucency' | 'anatomy-scan'): void {
     this.templateLoading.set(true);
@@ -444,7 +497,7 @@ export class UltrasoundTabComponent implements OnInit {
           ...this.reportSeed,
           ...this.stripEmpty(template as UltrasoundReportRequest),
           ...userChanged,
-        } as UltrasoundReportRequest;
+        } as UltrasoundReportForm;
         this.reportBaseline = { ...this.reportForm };
         this.templateLoading.set(false);
       },
@@ -465,12 +518,36 @@ export class UltrasoundTabComponent implements OnInit {
 
   submitReport(): void {
     const order = this.reportTargetOrder();
-    if (!order || !this.reportForm.scanDate || !this.reportForm.findingCategory) {
-      this.toast.error(this.translate.instant('ULTRASOUND.REPORT_REQUIRED_FIELDS'));
+    if (!order) return;
+    const form = this.reportForm;
+    // QA D1150: the date and the finding are named where they are missing, and
+    // a report with no finding at all (no measurement, summary or
+    // interpretation) is refused — it must never read as "Normal".
+    const missing = blankFields(
+      { 'rep-date': form.scanDate, 'rep-category': form.findingCategory },
+      ['rep-date', 'rep-category'],
+    );
+    if (missing.length > 0) {
+      refuseFields(
+        this.host.nativeElement,
+        missing,
+        REPORT_FIELD_IDS,
+        this.translate.instant('ULTRASOUND.REPORT_REQUIRED_FIELDS'),
+      );
       return;
     }
+    if (!hasUltrasoundFinding(form)) {
+      refuseFields(
+        this.host.nativeElement,
+        ['rep-summary'],
+        REPORT_FIELD_IDS,
+        this.translate.instant('ULTRASOUND.REPORT_NO_FINDINGS'),
+      );
+      return;
+    }
+    refuseFields(this.host.nativeElement, [], REPORT_FIELD_IDS, '');
     this.reportSaving.set(true);
-    this.ultrasoundService.submitReport(order.id, this.reportForm).subscribe({
+    this.ultrasoundService.submitReport(order.id, form as UltrasoundReportRequest).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('ULTRASOUND.REPORT_SAVED'));
         this.reportSaving.set(false);

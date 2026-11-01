@@ -344,8 +344,10 @@ export class ReceptionService {
     return this.http.post<WaitlistEntryResponse>(`${this.base}/waitlist/${id}/decline-offer`, {});
   }
 
-  closeWaitlistEntry(id: string): Observable<void> {
-    return this.http.post<void>(`${this.base}/waitlist/${id}/close`, {});
+  /** QA D1157: a waitlist entry is closed with the reason it was closed for. */
+  closeWaitlistEntry(id: string, reason: string): Observable<void> {
+    // In the body only: free text in a query string lands in proxy and access logs.
+    return this.http.post<void>(`${this.base}/waitlist/${id}/close`, { reason });
   }
 
   // ── P3 #22: Patient recalls ────────────────────────────────────────────────
@@ -365,8 +367,9 @@ export class ReceptionService {
     return this.http.post<RecallResponse>(`/recalls/${id}/close`, {});
   }
 
-  cancelRecall(id: string): Observable<RecallResponse> {
-    return this.http.post<RecallResponse>(`/recalls/${id}/cancel`, {});
+  /** QA D1157: a recall is cancelled with the reason it was cancelled for. */
+  cancelRecall(id: string, reason: string): Observable<RecallResponse> {
+    return this.http.post<RecallResponse>(`/recalls/${id}/cancel`, { reason });
   }
 
   linkRecallAppointment(id: string, appointmentId: string): Observable<RecallResponse> {

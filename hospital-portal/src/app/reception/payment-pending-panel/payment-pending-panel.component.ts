@@ -1,3 +1,4 @@
+import { refusalReason } from '../../shared/refusal-reason';
 import {
   Component,
   Input,
@@ -155,7 +156,7 @@ export class PaymentPendingPanelComponent {
         },
         error: (err) => {
           this.paying.set(false);
-          const msg = err?.error?.message ?? this.translate.instant('RECEPTION.PAYMENT_FAILED');
+          const msg = refusalReason(err) ?? this.translate.instant('RECEPTION.PAYMENT_FAILED');
           this.toast.error(msg);
         },
       });

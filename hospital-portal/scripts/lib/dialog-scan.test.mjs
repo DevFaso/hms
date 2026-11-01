@@ -168,7 +168,8 @@ test('QA D1030: a hand-built dialog must manage focus (shared directive, CDK tra
     scan(bare, bare).map((f) => f.rule),
     ['focus'],
   );
-  const trapped = `<div class="modal" role="dialog" aria-modal="true" aria-label="x" cdkTrapFocus (keydown.escape)="c()"></div>`;
+  // QA D1154 (round 21): the trap needs a control to capture; an empty one is the outbox shape.
+  const trapped = `<div class="modal" role="dialog" aria-modal="true" aria-label="x" cdkTrapFocus (keydown.escape)="c()"><button>OK</button></div>`;
   assert.deepEqual(scan(trapped, trapped), []);
   const directive = `<div class="modal" appModalDialog aria-label="x" (escaped)="c()"></div>`;
   assert.deepEqual(scan(directive, directive), []);
@@ -311,4 +312,152 @@ test('QA D1125 (round 20): a navigation drawer closing on its own Escape is the 
     scan(noEscape, noEscape).map((f) => f.rule),
     ['overlay'],
   );
+});
+
+// QA D1155 / D1144 / D1131 (round 21): Escape in an inline action form inside a
+// dialog bubbled to the dialog, which closed and dropped the typed reason.
+const VIEW_DIALOG = (
+  form,
+) => `<div class="modal-backdrop" tabindex="-1" (click)="closeOrder()" (keydown.escape)="closeOrder()">
+  <div class="modal" appModalDialog aria-labelledby="t" (escaped)="closeOrder()">
+    <h2 id="t">Order</h2>
+    @if (showCancelPrompt()) {
+      ${form}
+    }
+    <button (click)="closeOrder()">Close</button>
+  </div>
+</div>`;
+
+const subform = (html, source = html) =>
+  scan(html, source)
+    .filter((f) => f.rule === 'subform')
+    .map((f) => f.anchor);
+
+test('QA D1155: an inline cancel form inside a dialog without appInlineSubForm is reported', () => {
+  const html = VIEW_DIALOG(`<div class="action-form">
+        <h3>Cancel the order</h3>
+        <textarea id="r" [(ngModel)]="reason"></textarea>
+        <button (click)="closeCancelPrompt()">Cancel</button>
+        <button (click)="submitCancel()">Confirm</button>
+      </div>`);
+  assert.deepEqual(subform(html), ['action-form <Cancel the order>']);
+});
+
+test('QA D1155: the same form with appInlineSubForm and (dismissed) passes; without (dismissed) it does not', () => {
+  const form = `<div class="action-form" appInlineSubForm #f="inlineSubForm" (dismissed)="closeCancelPrompt()">
+        <textarea id="r"></textarea>
+        <button (click)="closeCancelPrompt()">Cancel</button>
+        <app-inline-discard-ask [form]="f" />
+      </div>`;
+  assert.deepEqual(subform(VIEW_DIALOG(form)), []);
+  assert.equal(
+    subform(VIEW_DIALOG(form.replace(' (dismissed)="closeCancelPrompt()"', ''))).length,
+    1,
+  );
+});
+
+test('QA D1131: a form whose own (keydown.escape) handler stops the key passes (the encounter addendum)', () => {
+  const form = `<div class="addendum-form" (keydown.escape)="onAddendumEscape($event)">
+        <textarea></textarea><button (click)="closeAddendumForm(true)">Cancel</button>
+      </div>`;
+  const html = VIEW_DIALOG(form);
+  const stops = `${html}\nonAddendumEscape(event: Event): void { event.stopPropagation(); this.close(); }`;
+  assert.deepEqual(subform(html, stops), []);
+  const bubbles = `${html}\nonAddendumEscape(event: Event): void { this.close(); }`;
+  assert.equal(subform(html, bubbles).length, 1);
+});
+
+test('QA D1155: a flag switched off by the button counts as the form closing itself; the dialog close does not', () => {
+  const flag = VIEW_DIALOG(
+    `<div class="consent"><input id="by" /><button (click)="consent.set(false)">Cancel</button></div>`,
+  );
+  assert.equal(subform(flag).length, 1);
+  // A conditional section whose only button closes the whole dialog is the dialog's own body.
+  const body = VIEW_DIALOG(
+    `<div class="extra"><input id="x" /><button (click)="closeOrder()">Close</button></div>`,
+  );
+  assert.deepEqual(subform(body), []);
+  // No text field: nothing typed to lose.
+  const noField = VIEW_DIALOG(
+    `<div class="x"><input type="checkbox" /><button (click)="hideX()">Hide</button></div>`,
+  );
+  assert.deepEqual(subform(noField), []);
+});
+
+test('QA D1155: a field and a Close in exclusive @if/@else branches are a panel, not a form; separate @if cells are one form', () => {
+  const panel = VIEW_DIALOG(`<div class="cds">
+        @if (blocked()) {
+          <textarea id="override"></textarea>
+        } @else {
+          <button (click)="dismissAdvisories()">Close</button>
+        }
+      </div>`);
+  assert.deepEqual(subform(panel), []);
+  const row = VIEW_DIALOG(`<table class="lines">
+        <tr>
+          @if (editing()) { <td><input id="qty" /></td> }
+          @if (editing()) { <td><button (click)="cancelEditLine()">Cancel</button></td> }
+        </tr>
+      </table>`);
+  assert.deepEqual(subform(row), ['lines']);
+});
+
+test('QA D1155: an inline form outside any dialog is not this rule', () => {
+  const html = `@if (open()) { <div class="f"><textarea></textarea><button (click)="cancel()">Cancel</button></div> }`;
+  assert.deepEqual(subform(html), []);
+});
+
+test('QA D1154 (round 21): a cdkTrapFocus dialog whose every control is behind an @if captures nothing', () => {
+  const loading = `<div class="form-overlay" (click)="closeDetail()" (keydown.escape)="closeDetail()" tabindex="-1">
+    <div class="form-card" role="dialog" aria-modal="true" aria-labelledby="t" cdkTrapFocus
+      [cdkTrapFocusAutoCapture]="true" (keydown.escape)="closeDetail(); $event.stopPropagation()" tabindex="-1">
+      @if (detailLoading()) {
+        <div class="state-block"><span class="spin"></span></div>
+      } @else if (detail(); as d) {
+        <h2 id="t">Message</h2>
+        <button (click)="closeDetail()">Close</button>
+      }
+    </div>
+  </div>`;
+  const focus = (html) => scan(html, html).filter((f) => f.rule === 'focus');
+  assert.equal(focus(loading).length, 1);
+  assert.match(focus(loading)[0].message, /captures nothing/);
+  // A close button present from the first frame is captured.
+  const header = loading.replace(
+    'tabindex="-1">\n      @if',
+    'tabindex="-1">\n      <button class="x" (click)="closeDetail()">x</button>\n      @if',
+  );
+  assert.deepEqual(focus(header), []);
+  // The shared directive focuses the dialog itself when it has nothing to focus.
+  const directive = `<div class="form-card" appModalDialog aria-labelledby="t" (escaped)="closeDetail()">
+      <h2 id="t">Message</h2>
+      @if (detail()) { <button (click)="closeDetail()">Close</button> }
+    </div>`;
+  assert.deepEqual(focus(directive), []);
+});
+
+test('QA D1174 (round 21): an icon in the title that names a dialog must be aria-hidden', () => {
+  const html = `<div class="modal" appModalDialog aria-labelledby="vt" (escaped)="c()">
+    <h3 id="vt"><span class="material-symbols-outlined">monitor_heart</span> Vitals</h3>
+    <button>OK</button></div>`;
+  const icons = (h) => scan(h, h).filter((f) => f.rule === 'label-icon');
+  assert.deepEqual(
+    icons(html).map((f) => f.anchor),
+    ['#vt'],
+  );
+  assert.deepEqual(icons(html.replace('outlined">', 'outlined" aria-hidden="true">')), []);
+});
+
+test('QA D1155 (review round 1): a field row and an actions row as siblings in the block is one form', () => {
+  const siblings = VIEW_DIALOG(`<div class="field"><textarea id="r"></textarea></div>
+      <div class="modal-actions"><button (click)="stopEditing()">Cancel</button></div>`);
+  assert.equal(subform(siblings).length, 1);
+  const unset = VIEW_DIALOG(
+    `<div class="f"><input id="x" /><button (click)="action = undefined">Cancel</button></div>`,
+  );
+  assert.equal(subform(unset).length, 1);
+  // A submit named "submitReset" is not a Cancel.
+  const reset = VIEW_DIALOG(`<div class="field"><textarea id="r"></textarea></div>
+      <div class="modal-actions"><button (click)="submitReset()">Reset</button></div>`);
+  assert.deepEqual(subform(reset), []);
 });

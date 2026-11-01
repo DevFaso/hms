@@ -1,3 +1,4 @@
+import { refusalReason } from '../../shared/refusal-reason';
 import { refuseFields } from '../../shared/forms/invalid-fields';
 import { PersonNamePipe, personName } from '../../shared/pipes/person-name.pipe';
 import { DialogFocusDirective } from '../../shared/a11y/dialog-focus.directive';
@@ -186,7 +187,7 @@ export class WalkInDialogComponent implements OnInit {
       },
       error: (err) => {
         this.saving.set(false);
-        const msg = err?.error?.message ?? this.translate.instant('RECEPTION.WALKIN_FAILED');
+        const msg = refusalReason(err) ?? this.translate.instant('RECEPTION.WALKIN_FAILED');
         this.toast.error(msg);
       },
     });

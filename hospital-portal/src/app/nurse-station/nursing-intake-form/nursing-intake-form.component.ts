@@ -1,3 +1,4 @@
+import { refusalReason } from '../../shared/refusal-reason';
 import {
   Component,
   EventEmitter,
@@ -121,8 +122,33 @@ export class NursingIntakeFormComponent {
     );
   }
 
+  /** QA D1158: what the intake records beyond the copied complaint (a blank added row is not one). */
+  hasAssessment(): boolean {
+    return (
+      this.allergies().some((a) => !!a.allergenDisplay?.trim()) ||
+      this.medications().some((m) => !!m.medicationName?.trim()) ||
+      !!this.nursingAssessmentNotes().trim() ||
+      !!this.painAssessment().trim() ||
+      !!this.fallRiskDetail().trim() ||
+      this.chiefComplaint().trim() !== (this.encounter?.chiefComplaint ?? '').trim()
+    );
+  }
+
   get canSubmit(): boolean {
-    return !!this.encounter?.id && !this.saving();
+    return !!this.encounter?.id && this.hasAssessment() && !this.saving();
+  }
+
+  /**
+   * QA D1158: why "Soumettre l'admission" refuses. An intake carrying only the
+   * complaint copied from check-in was accepted (twice); it now records the
+   * assessment — allergies, medications, pain, fall risk or nursing notes.
+   */
+  submitBlockReason(): string | null {
+    if (!this.encounter?.id) return this.translate.instant('INTAKE.NO_ENCOUNTER') as string;
+    if (!this.hasAssessment()) {
+      return this.translate.instant('INTAKE.ASSESSMENT_REQUIRED') as string;
+    }
+    return null;
   }
 
   trackByIndex(index: number): number {
@@ -216,6 +242,8 @@ export class NursingIntakeFormComponent {
       this.toast.error(this.translate.instant('INTAKE.NO_ENCOUNTER'));
       return;
     }
+    // QA D1158: the submit guard says why first; an empty intake is never sent.
+    if (!this.hasAssessment()) return;
 
     this.saving.set(true);
 
@@ -242,7 +270,7 @@ export class NursingIntakeFormComponent {
       },
       error: (err) => {
         this.saving.set(false);
-        const msg = err?.error?.message ?? this.translate.instant('INTAKE.SUBMIT_FAILED');
+        const msg = refusalReason(err) ?? this.translate.instant('INTAKE.SUBMIT_FAILED');
         this.toast.error(msg);
       },
     });

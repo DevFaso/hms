@@ -404,7 +404,7 @@ describe('StockRoutingComponent', () => {
 
   it('should show backend error when stock check fails', () => {
     pharmacySvc.checkStock.and.returnValue(
-      throwError(() => ({ error: { message: 'Stock lookup failed' } })),
+      throwError(() => ({ status: 400, error: { message: 'Stock lookup failed' } })),
     );
     component.prescriptionId = 'rx-1';
 

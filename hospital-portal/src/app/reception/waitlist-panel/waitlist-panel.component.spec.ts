@@ -1,4 +1,4 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { WaitlistPanelComponent } from './waitlist-panel.component';
 import { SUBLINE_AWA, SUBLINE_FATIMATA } from '../../testing/patient-subline.fixtures';
 import { TranslateModule } from '@ngx-translate/core';
@@ -172,7 +172,10 @@ describe('WaitlistPanelComponent', () => {
 
     it('surfaces the backend refusal verbatim when the offer fails', () => {
       mockReceptionService.offerWaitlistSlot.and.returnValue(
-        throwError(() => ({ error: { message: 'That slot is no longer available.' } })),
+        throwError(() => ({
+          status: 400,
+          error: { message: 'That slot is no longer available.' },
+        })),
       );
       component.openOfferModal(entry());
       component.selectedSlotId.set('slot-1');
@@ -216,4 +219,46 @@ describe('WaitlistPanelComponent', () => {
       expect(component.offerExpired(entry())).toBe(false);
     });
   });
+
+  it('QA D1157: "Fermer" asks for a reason in a dialog before closing the entry', fakeAsync(() => {
+    mockReceptionService.getWaitlist.and.returnValue(of([entry({ id: 'w9', status: 'WAITING' })]));
+    component.loadEntries();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    document.body.appendChild(host);
+    try {
+      const opener = Array.from(host.querySelectorAll<HTMLButtonElement>('td button')).find((b) =>
+        b.textContent?.includes('COMMON.CLOSE'),
+      )!;
+      opener.focus();
+      opener.click();
+      fixture.detectChanges();
+      tick();
+      expect(mockReceptionService.closeWaitlistEntry).not.toHaveBeenCalled();
+      const dialog = host.querySelector<HTMLElement>('[data-testid="reason-dialog"]')!;
+      expect(dialog.contains(document.activeElement)).toBeTrue();
+
+      host.querySelector<HTMLButtonElement>('[data-testid="reason-dialog-confirm"]')!.click();
+      fixture.detectChanges();
+      expect(mockReceptionService.closeWaitlistEntry).not.toHaveBeenCalled();
+
+      const reason = host.querySelector<HTMLTextAreaElement>(
+        '[data-testid="reason-dialog-reason"]',
+      )!;
+      reason.value = 'Patient vu en urgence';
+      reason.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      host.querySelector<HTMLButtonElement>('[data-testid="reason-dialog-confirm"]')!.click();
+      fixture.detectChanges();
+      tick();
+      expect(mockReceptionService.closeWaitlistEntry).toHaveBeenCalledWith(
+        'w9',
+        'Patient vu en urgence',
+      );
+      expect(host.querySelector('[data-testid="reason-dialog"]')).toBeNull();
+      expect(document.activeElement?.classList.contains('filter-btn')).toBeTrue();
+    } finally {
+      host.remove();
+    }
+  }));
 });

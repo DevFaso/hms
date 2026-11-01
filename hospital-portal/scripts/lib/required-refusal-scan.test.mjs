@@ -68,3 +68,22 @@ export class F {
 `;
   assert.deepEqual(requiredRefusalFindings(src), []);
 });
+
+test('QA D1158: a submit guard reason RETURNED to [appSubmitGuard] (which marks the fields) passes', () => {
+  const src = `
+export class F {
+  submitBlockReason(): string | null {
+    if (!this.hasVitalSign()) return this.translate.instant('TRIAGE.VITAL_REQUIRED') as string;
+    return null;
+  }
+  onSubmit(): void {
+    this.toast.error(this.translate.instant('TRIAGE.VITAL_REQUIRED'));
+  }
+}
+`;
+  // The toast in onSubmit still counts; only the returned reason is exempt.
+  assert.deepEqual(
+    requiredRefusalFindings(src).map((f) => f.anchor),
+    ['onSubmit::TRIAGE.VITAL_REQUIRED'],
+  );
+});

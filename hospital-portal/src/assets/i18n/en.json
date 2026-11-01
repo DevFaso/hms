@@ -1461,12 +1461,14 @@
     "VIEW_MANAGE_SUBTITLE": "View and manage appointment details",
     "YES_CANCEL": "Yes, Cancel",
     "DURATION_SET_BY_SLOTS": "The visit's length is set by the clinician's appointment slots.",
-    "STATUS_REASON": "Reason",
+    "STATUS_REASON": "Reason for the status change",
     "STATUS_REASON_LABEL": "Reason (required)",
     "STATUS_REASON_REQUIRED": "Give the reason before confirming.",
     "NO_SHOW_DIALOG_TITLE": "Mark as no-show",
     "NO_SHOW_CONFIRM_MESSAGE": "The patient did not come to this appointment.",
-    "CONFIRM_NO_SHOW": "Mark as no-show"
+    "CONFIRM_NO_SHOW": "Mark as no-show",
+    "STATUS_REASON_CANCELLED": "Reason for the cancellation",
+    "STATUS_REASON_NO_SHOW": "Reason for the no-show"
   },
   "APPOINTMENT_CALENDAR": {
     "TITLE": "Appointment calendar",
@@ -3182,7 +3184,8 @@
     "NOTE_EARLIER_ENTRIES": "Earlier entries of this stay",
     "ADDENDUM_DISCARD_ASK": "Discard the addendum you have typed?",
     "ADDENDUM_KEEP": "Keep writing",
-    "ADDENDUM_DISCARD": "Discard the text"
+    "ADDENDUM_DISCARD": "Discard the text",
+    "NOTE_EMPTY": "Write at least one section of the note before saving it."
   },
   "FCP": {
     "CONFIRM_PASSWORD": "Confirm Password",
@@ -4567,7 +4570,8 @@
       "LOAD_FAILED": "The list of witnesses could not be loaded.",
       "REQUIRED": "Choose the witness of this controlled dose."
     },
-    "PAIN_SCORE": "Pain (0-10)"
+    "PAIN_SCORE": "Pain (0-10)",
+    "MAR_REASON_LABEL": "Reason"
   },
   "ONBOARDING": {
     "ABILITIES_TITLE": "Your Abilities",
@@ -7044,6 +7048,24 @@
         "DAR": "DAR note",
         "SOAP": "SOAP note",
         "SOAPIE": "SOAPIE note"
+      },
+      "ADVANCE_DIRECTIVE_TYPE": {
+        "LIVING_WILL": "Living will",
+        "DURABLE_POWER_OF_ATTORNEY": "Durable power of attorney",
+        "DO_NOT_RESUSCITATE": "Do not resuscitate (DNR)",
+        "PHYSICIAN_ORDERS_FOR_LIFE_SUSTAINING_TREATMENT": "Physician orders for life-sustaining treatment (POLST)",
+        "OTHER": "Other"
+      },
+      "CODE_STATUS": {
+        "LIVING_WILL": "Living will",
+        "DURABLE_POWER_OF_ATTORNEY": "Durable power of attorney",
+        "DO_NOT_RESUSCITATE": "Do not resuscitate (DNR)",
+        "PHYSICIAN_ORDERS_FOR_LIFE_SUSTAINING_TREATMENT": "Physician orders for life-sustaining treatment (POLST)",
+        "OTHER": "Other",
+        "FULL_CODE": "Full code",
+        "DNR": "Do not resuscitate (DNR)",
+        "DNI": "Do not intubate (DNI)",
+        "COMFORT_ONLY": "Comfort care only"
       }
     },
     "DOCUMENTS": {
@@ -7835,7 +7857,13 @@
     "WALK_IN": "Walk-in Registration",
     "WALK_INS": "Walk-ins",
     "WALK_INS_TODAY": "Walk-ins Today",
-    "LEFT_WITHOUT_BEING_SEEN": "Left without being seen"
+    "LEFT_WITHOUT_BEING_SEEN": "Left without being seen",
+    "RECALL_CANCEL_TITLE": "Cancel this recall?",
+    "RECALL_CANCEL_REASON": "Why is the recall cancelled",
+    "RECALL_CANCEL_CONFIRM": "Cancel the recall",
+    "CLOSE_ENTRY_TITLE": "Close this waitlist entry?",
+    "CLOSE_ENTRY_REASON": "Why is the entry closed",
+    "CLOSE_ENTRY_CONFIRM": "Close the entry"
   },
   "REFERRALS": {
     "ACCEPTED": "Accepted",
@@ -8677,7 +8705,9 @@
     "TITLE": "Triage Assessment",
     "VITAL_SIGNS": "Vital Signs",
     "WEIGHT": "Weight",
-    "FUNDAL_HEIGHT": "Fundal height (cm) — pregnancy"
+    "FUNDAL_HEIGHT": "Fundal height (cm) — pregnancy",
+    "ESI_CHOOSE": "Choose the ESI level…",
+    "VITAL_REQUIRED": "Record at least one vital sign (temperature, pulse, respiratory rate, blood pressure or SpO2)."
   },
   "INTAKE": {
     "ADD_ALLERGY": "Add Allergy",
@@ -8717,7 +8747,8 @@
     "MED_NAME_ROW": "Medication, row {{row}}",
     "MED_DOSAGE_ROW": "Dosage, row {{row}}",
     "MED_FREQUENCY_ROW": "Frequency, row {{row}}",
-    "MED_ROUTE_ROW": "Route, row {{row}}"
+    "MED_ROUTE_ROW": "Route, row {{row}}",
+    "ASSESSMENT_REQUIRED": "Record the assessment before submitting: allergies, medications, pain, fall risk or nursing notes."
   },
   "PRE_CHECKIN": {
     "ADDRESS": "Address",
@@ -9633,7 +9664,8 @@
       "LABEL": "Interaction override reason",
       "HINT": "A serious interaction stops this fill: give the reason to dispense anyway. It is recorded with the dispense."
     },
-    "ALERT_OVERRIDDEN": "Alert overridden by the prescriber: see the reason on the prescription"
+    "ALERT_OVERRIDDEN": "Alert overridden by the prescriber: see the reason on the prescription",
+    "LOTS_OTHER_FORM": "{{count}} lot(s) of this drug in another form are not offered: the order is written in \"{{unit}}\"."
   },
   "LAB_QC": {
     "TITLE": "Quality Control Dashboard",
@@ -10188,7 +10220,8 @@
       "VPO": "OPV (oral polio)",
       "HEPB0": "Hepatitis B (birth dose)"
     },
-    "VACCINE_CODE_HINT": "Filled from the PEV vaccine chosen (CDC CVX table, checked 2026-10-30), or from an earlier dose of the same vaccine in this chart. Optional and editable; MenAfriVac and the malaria vaccine have no CVX code."
+    "VACCINE_CODE_HINT": "Filled from the PEV vaccine chosen (CDC CVX table, checked 2026-10-30), or from an earlier dose of the same vaccine in this chart. Optional and editable; MenAfriVac and the malaria vaccine have no CVX code.",
+    "SOCIAL_EMPTY": "Record at least one item (habits, occupation, living situation or notes) before saving a new version."
   },
   "MATERNITY": {
     "GA": "Gestational age",
@@ -10448,7 +10481,9 @@
     "AC_MM": "AC (mm)",
     "FL_MM": "FL (mm)",
     "NT_MM": "NT (mm)",
-    "CRL_MM": "CRL (mm)"
+    "CRL_MM": "CRL (mm)",
+    "FINDING_CHOOSE": "Choose the finding…",
+    "REPORT_NO_FINDINGS": "Record at least one finding (a measurement, the summary or the interpretation) before saving the report."
   },
   "BIRTH_PLAN": {
     "TITLE": "Birth plan",
@@ -10720,7 +10755,9 @@
     "APGAR_TEN": "APGAR at 10 min",
     "TEMPERATURE": "Temperature (°C)",
     "SYSTOLIC": "Systolic (mmHg)",
-    "DIASTOLIC": "Diastolic (mmHg)"
+    "DIASTOLIC": "Diastolic (mmHg)",
+    "OBSERVATION_EMPTY": "Record at least one observation (a vital sign, the uterus, the lochia or the blood loss) before saving.",
+    "ASSESSMENT_EMPTY": "Record at least one finding (an APGAR score, a vital sign or the examination) before saving."
   },
   "ASSIGN_ADMIN": {
     "TITLE": "Assignment Administration",
@@ -11135,7 +11172,10 @@
     "REVOKE_WARNING": "A directive that was once in force stays in the record — revoking marks it no longer applicable, it does not delete it.",
     "REVOKED_TOAST": "Directive revoked.",
     "REVOKE_ERROR": "Could not revoke the directive.",
-    "LAST_REVIEWED": "reviewed"
+    "LAST_REVIEWED": "reviewed",
+    "TYPE_CHOOSE": "Choose the type…",
+    "STATUS_CHOOSE": "Choose the status…",
+    "REQUIRED_FIELDS": "This field is required for a directive."
   },
   "GROWTH": {
     "TAB": "Growth",
@@ -11810,7 +11850,7 @@
     "TRANSFERS_LOAD_ERROR": "Waiting transfers could not be loaded."
   },
   "EMAR": {
-    "ACTION_RECORD_GIVEN": "Record GIVEN",
+    "ACTION_RECORD_GIVEN": "Record as given",
     "ADMIN_STATUS": {
       "GIVEN": "given",
       "HELD": "held",
@@ -11860,7 +11900,10 @@
     },
     "VERIFYING": "Verifying…",
     "VERIFY_FIVE_RIGHTS": "Verify five rights",
-    "PRESCRIBED": "Prescribed"
+    "PRESCRIBED": "Prescribed",
+    "ACTION_HOLD": "Hold the dose",
+    "ACTION_REFUSED": "Patient refused",
+    "HOLD_REFUSE_REASON_LABEL": "Reason (required to hold the dose or record a refusal)"
   },
   "CREDENTIALING": {
     "CURRENT_EXPIRY": "Current expiry",
@@ -12403,5 +12446,13 @@
     "VERIFY_FIELDS": "Fill in the patient, medication, dose and route first.",
     "VERIFY_FIRST": "Verify the five rights first.",
     "WITNESS": "Choose the witness (a second clinician of this hospital)."
+  },
+  "INLINE_FORM": {
+    "DISCARD_ASK": "Discard what you have typed?",
+    "KEEP": "Keep writing",
+    "DISCARD": "Discard the text"
+  },
+  "REASON_DIALOG": {
+    "REASON": "Reason"
   }
 }

@@ -166,26 +166,32 @@
       tabindex="-1"
       data-testid="outbox-detail-modal"
     >
+      <!-- QA D1154 / D1004 / D1125: the shared modal directive takes the keyboard
+           in as soon as the dialog opens (the old focus trap never captured: the
+           card rendered while the message was still loading), closes on Escape
+           and gives focus back to "Voir le message". The title is there from the
+           first frame, so the dialog is named while it loads. -->
       <div
         class="form-card detail-card"
-        role="dialog"
-        aria-modal="true"
+        appModalDialog
         aria-labelledby="lab-outbox-dialog-title-1"
-        cdkTrapFocus
-        [cdkTrapFocusAutoCapture]="true"
-        (keydown.escape)="closeDetail(); $event.stopPropagation()"
+        (escaped)="closeDetail()"
         (click)="$event.stopPropagation()"
+        (keydown.escape)="$event.stopPropagation()"
         tabindex="-1"
       >
+        <h2 id="lab-outbox-dialog-title-1">
+          {{ 'LAB_OUTBOX.DETAIL_TITLE' | translate }}
+          @if (detail(); as d) {
+            <span class="mono">{{ d.message.messageType }}</span>
+          }
+        </h2>
         @if (detailLoading()) {
-          <div class="state-block">
-            <span class="material-symbols-outlined spin">progress_activity</span>
+          <div class="state-block" role="status">
+            <span class="material-symbols-outlined spin" aria-hidden="true">progress_activity</span>
+            <span class="sr-only">{{ 'COMMON.LOADING' | translate }}</span>
           </div>
         } @else if (detail(); as d) {
-          <h2 id="lab-outbox-dialog-title-1">
-            {{ 'LAB_OUTBOX.DETAIL_TITLE' | translate }}
-            <span class="mono">{{ d.message.messageType }}</span>
-          </h2>
           <p>
             <span class="status-badge" [attr.data-status]="d.message.status">
               {{ 'LAB_OUTBOX.STATUS_' + d.message.status | translate }}

@@ -1461,12 +1461,14 @@
     "VIEW_MANAGE_SUBTITLE": "Voir et gérer les détails du rendez-vous",
     "YES_CANCEL": "Oui, Annuler",
     "DURATION_SET_BY_SLOTS": "La durée de la visite est fixée par les créneaux du praticien.",
-    "STATUS_REASON": "Motif",
+    "STATUS_REASON": "Motif du changement de statut",
     "STATUS_REASON_LABEL": "Motif (obligatoire)",
     "STATUS_REASON_REQUIRED": "Indiquez le motif avant de confirmer.",
     "NO_SHOW_DIALOG_TITLE": "Marquer comme absent",
     "NO_SHOW_CONFIRM_MESSAGE": "Le patient ne s'est pas présenté à ce rendez-vous.",
-    "CONFIRM_NO_SHOW": "Marquer comme absent"
+    "CONFIRM_NO_SHOW": "Marquer comme absent",
+    "STATUS_REASON_CANCELLED": "Motif de l'annulation",
+    "STATUS_REASON_NO_SHOW": "Motif de l'absence"
   },
   "APPOINTMENT_CALENDAR": {
     "TITLE": "Calendrier des rendez-vous",
@@ -3148,7 +3150,7 @@
     "NO_ENCOUNTERS": "Aucune consultation trouvée",
     "NO_HOSPITAL": "Aucun hôpital n'est associé à votre compte. Veuillez contacter un administrateur.",
     "PATIENT_SEARCH": "Rechercher un patient…",
-    "PROVIDER": "Médecin",
+    "PROVIDER": "Praticien",
     "READY_FOR_DISCHARGE": "Prêt pour la sortie",
     "SAVE_FAILED": "Échec de l'enregistrement de la consultation",
     "SCHEDULED": "Planifiée",
@@ -3182,7 +3184,8 @@
     "NOTE_EARLIER_ENTRIES": "Entrées précédentes de ce séjour",
     "ADDENDUM_DISCARD_ASK": "Abandonner l’addendum saisi ?",
     "ADDENDUM_KEEP": "Continuer la saisie",
-    "ADDENDUM_DISCARD": "Abandonner le texte"
+    "ADDENDUM_DISCARD": "Abandonner le texte",
+    "NOTE_EMPTY": "Rédigez au moins une section de la note avant de l'enregistrer."
   },
   "FCP": {
     "CONFIRM_PASSWORD": "Confirmer le mot de passe",
@@ -4567,7 +4570,8 @@
       "LOAD_FAILED": "La liste des témoins n’a pas pu être chargée.",
       "REQUIRED": "Choisissez le témoin de cette administration de stupéfiant."
     },
-    "PAIN_SCORE": "Douleur (0-10)"
+    "PAIN_SCORE": "Douleur (0-10)",
+    "MAR_REASON_LABEL": "Motif"
   },
   "ONBOARDING": {
     "ABILITIES_TITLE": "Vos capacités",
@@ -7010,6 +7014,24 @@
         "DAR": "Note DAR",
         "SOAP": "Note SOAP",
         "SOAPIE": "Note SOAPIE"
+      },
+      "ADVANCE_DIRECTIVE_TYPE": {
+        "LIVING_WILL": "Testament de vie",
+        "DURABLE_POWER_OF_ATTORNEY": "Mandat de protection durable",
+        "DO_NOT_RESUSCITATE": "Ne pas réanimer (DNR)",
+        "PHYSICIAN_ORDERS_FOR_LIFE_SUSTAINING_TREATMENT": "Ordonnances médicales de maintien en vie (POLST)",
+        "OTHER": "Autre"
+      },
+      "CODE_STATUS": {
+        "LIVING_WILL": "Testament de vie",
+        "DURABLE_POWER_OF_ATTORNEY": "Mandat de protection durable",
+        "DO_NOT_RESUSCITATE": "Ne pas réanimer (DNR)",
+        "PHYSICIAN_ORDERS_FOR_LIFE_SUSTAINING_TREATMENT": "Ordonnances médicales de maintien en vie (POLST)",
+        "OTHER": "Autre",
+        "FULL_CODE": "Réanimation complète",
+        "DNR": "Ne pas réanimer (DNR)",
+        "DNI": "Ne pas intuber (DNI)",
+        "COMFORT_ONLY": "Soins de confort uniquement"
       }
     },
     "DOCUMENTS": {
@@ -7835,7 +7857,13 @@
     "WALK_IN": "Enregistrement sans rendez-vous",
     "WALK_INS": "Sans rendez-vous",
     "WALK_INS_TODAY": "Sans rendez-vous aujourd'hui",
-    "LEFT_WITHOUT_BEING_SEEN": "Parti sans être vu"
+    "LEFT_WITHOUT_BEING_SEEN": "Parti sans être vu",
+    "RECALL_CANCEL_TITLE": "Annuler ce rappel ?",
+    "RECALL_CANCEL_REASON": "Motif de l'annulation du rappel",
+    "RECALL_CANCEL_CONFIRM": "Annuler le rappel",
+    "CLOSE_ENTRY_TITLE": "Fermer cette entrée de la liste d'attente ?",
+    "CLOSE_ENTRY_REASON": "Motif de la fermeture",
+    "CLOSE_ENTRY_CONFIRM": "Fermer l'entrée"
   },
   "REFERRALS": {
     "ACCEPTED": "Acceptée",
@@ -8677,7 +8705,9 @@
     "TITLE": "Évaluation de triage",
     "VITAL_SIGNS": "Signes vitaux",
     "WEIGHT": "Poids",
-    "FUNDAL_HEIGHT": "Hauteur utérine (cm) — grossesse"
+    "FUNDAL_HEIGHT": "Hauteur utérine (cm) — grossesse",
+    "ESI_CHOOSE": "Choisir le niveau ESI…",
+    "VITAL_REQUIRED": "Saisissez au moins un signe vital (température, pouls, fréquence respiratoire, tension ou SpO2)."
   },
   "INTAKE": {
     "ADD_ALLERGY": "Ajouter une allergie",
@@ -8717,7 +8747,8 @@
     "MED_NAME_ROW": "Médicament, ligne {{row}}",
     "MED_DOSAGE_ROW": "Posologie, ligne {{row}}",
     "MED_FREQUENCY_ROW": "Fréquence, ligne {{row}}",
-    "MED_ROUTE_ROW": "Voie, ligne {{row}}"
+    "MED_ROUTE_ROW": "Voie, ligne {{row}}",
+    "ASSESSMENT_REQUIRED": "Saisissez l'évaluation avant de soumettre : allergies, médicaments, douleur, risque de chute ou notes infirmières."
   },
   "PRE_CHECKIN": {
     "ADDRESS": "Adresse",
@@ -8783,7 +8814,7 @@
     "COL_IN_PROGRESS": "En cours",
     "COL_AWAITING_RESULTS": "En attente de résultats",
     "COL_READY_DISCHARGE": "Prêt pour la sortie",
-    "PROVIDER": "Médecin",
+    "PROVIDER": "Praticien",
     "ROOM": "Salle",
     "DEPT": "Service",
     "PRE_CHECKIN_BADGE": "Pré-enregistré",
@@ -9633,7 +9664,8 @@
       "LABEL": "Motif de dérogation (interaction)",
       "HINT": "Une interaction grave arrête cette délivrance : indiquez le motif pour délivrer malgré tout. Il est enregistré avec la délivrance."
     },
-    "ALERT_OVERRIDDEN": "Alerte outrepassée par le prescripteur : voir le motif sur l’ordonnance"
+    "ALERT_OVERRIDDEN": "Alerte outrepassée par le prescripteur : voir le motif sur l’ordonnance",
+    "LOTS_OTHER_FORM": "{{count}} lot(s) de ce médicament sous une autre forme ne sont pas proposés : l'ordonnance est rédigée en « {{unit}} »."
   },
   "LAB_QC": {
     "TITLE": "Tableau de bord du contrôle qualité",
@@ -10188,7 +10220,8 @@
       "VPO": "VPO (polio oral)",
       "HEPB0": "Hépatite B (dose de naissance)"
     },
-    "VACCINE_CODE_HINT": "Rempli à partir du vaccin PEV choisi (table CVX du CDC, vérifiée le 30/10/2026) ou d’une dose antérieure du même vaccin dans ce dossier. Facultatif et modifiable ; le MenAfriVac et le vaccin antipaludique n’ont pas de code CVX."
+    "VACCINE_CODE_HINT": "Rempli à partir du vaccin PEV choisi (table CVX du CDC, vérifiée le 30/10/2026) ou d’une dose antérieure du même vaccin dans ce dossier. Facultatif et modifiable ; le MenAfriVac et le vaccin antipaludique n’ont pas de code CVX.",
+    "SOCIAL_EMPTY": "Saisissez au moins un élément (habitudes, profession, conditions de vie ou notes) avant d'enregistrer une nouvelle version."
   },
   "MATERNITY": {
     "GA": "Terme",
@@ -10448,7 +10481,9 @@
     "AC_MM": "PA (mm)",
     "FL_MM": "LF (mm)",
     "NT_MM": "CN (mm)",
-    "CRL_MM": "LCC (mm)"
+    "CRL_MM": "LCC (mm)",
+    "FINDING_CHOOSE": "Choisir le résultat…",
+    "REPORT_NO_FINDINGS": "Saisissez au moins un résultat (une mesure, le résumé ou l'interprétation) avant d'enregistrer le compte rendu."
   },
   "BIRTH_PLAN": {
     "TITLE": "Plan de naissance",
@@ -10720,7 +10755,9 @@
     "APGAR_TEN": "APGAR à 10 min",
     "TEMPERATURE": "Température (°C)",
     "SYSTOLIC": "Systolique (mmHg)",
-    "DIASTOLIC": "Diastolique (mmHg)"
+    "DIASTOLIC": "Diastolique (mmHg)",
+    "OBSERVATION_EMPTY": "Saisissez au moins une observation (un signe vital, l'utérus, les lochies ou les pertes sanguines) avant d'enregistrer.",
+    "ASSESSMENT_EMPTY": "Saisissez au moins un résultat (un score d'APGAR, un signe vital ou l'examen) avant d'enregistrer."
   },
   "ASSIGN_ADMIN": {
     "TITLE": "Administration des Affectations",
@@ -11135,7 +11172,10 @@
     "REVOKE_WARNING": "Une directive qui a été en vigueur reste dans le dossier — la révocation la marque comme non applicable, elle ne la supprime pas.",
     "REVOKED_TOAST": "Directive révoquée.",
     "REVOKE_ERROR": "Impossible de révoquer la directive.",
-    "LAST_REVIEWED": "révisée"
+    "LAST_REVIEWED": "révisée",
+    "TYPE_CHOOSE": "Choisir le type…",
+    "STATUS_CHOOSE": "Choisir le statut…",
+    "REQUIRED_FIELDS": "Ce champ est obligatoire pour une directive."
   },
   "GROWTH": {
     "TAB": "Croissance",
@@ -11810,7 +11850,7 @@
     "TRANSFERS_LOAD_ERROR": "Les transferts en attente n'ont pas pu être chargés."
   },
   "EMAR": {
-    "ACTION_RECORD_GIVEN": "Enregistrer ADMINISTRÉE",
+    "ACTION_RECORD_GIVEN": "Enregistrer comme administrée",
     "ADMIN_STATUS": {
       "GIVEN": "administrée",
       "HELD": "suspendue",
@@ -11860,7 +11900,10 @@
     },
     "VERIFYING": "Vérification en cours…",
     "VERIFY_FIVE_RIGHTS": "Vérifier les cinq B",
-    "PRESCRIBED": "Prescrit"
+    "PRESCRIBED": "Prescrit",
+    "ACTION_HOLD": "Suspendre la dose",
+    "ACTION_REFUSED": "Refus du patient",
+    "HOLD_REFUSE_REASON_LABEL": "Motif (obligatoire pour suspendre la dose ou enregistrer un refus)"
   },
   "CREDENTIALING": {
     "CURRENT_EXPIRY": "Expiration actuelle",
@@ -12403,5 +12446,13 @@
     "VERIFY_FIELDS": "Renseignez d’abord le patient, le médicament, la dose et la voie.",
     "VERIFY_FIRST": "Vérifiez d’abord les cinq B.",
     "WITNESS": "Choisissez le témoin (un second soignant de cet établissement)."
+  },
+  "INLINE_FORM": {
+    "DISCARD_ASK": "Abandonner le texte saisi ?",
+    "KEEP": "Continuer la saisie",
+    "DISCARD": "Abandonner le texte"
+  },
+  "REASON_DIALOG": {
+    "REASON": "Motif"
   }
 }

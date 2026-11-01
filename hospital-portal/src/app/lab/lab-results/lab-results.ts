@@ -1,3 +1,4 @@
+import { refusalReason } from '../../shared/refusal-reason';
 import { LabCorrectionBadgeComponent } from '../shared/lab-correction-badge.component';
 import { textMatches } from '../../shared/person-search';
 import { CdkTrapFocus } from '@angular/cdk/a11y';
@@ -52,6 +53,20 @@ export { shortOrderCode };
 
 /** D49 (moved to shared/date-utils for the admission form, QA D622). */
 export { toServerDateTime, toLocalInputValue };
+
+/**
+ * QA D1176: the order statuses that never take a NEW result — one is already
+ * recorded (RESULTED, VERIFIED, COMPLETED: the server answers 409
+ * "labresult.alreadyRecorded") or the order is closed (CANCELLED,
+ * ENTERED_IN_ERROR).
+ */
+const ORDER_STATUSES_WITHOUT_NEW_RESULT: ReadonlySet<string> = new Set([
+  'RESULTED',
+  'VERIFIED',
+  'COMPLETED',
+  'CANCELLED',
+  'ENTERED_IN_ERROR',
+]);
 
 @Component({
   selector: 'app-lab-results',
@@ -261,7 +276,10 @@ export class LabResultsComponent implements OnInit {
     return this.roleContext.activeHospitalId ?? this.auth.getHospitalId();
   }
 
+  /** The orders "New result" offers (QA D1176), plus the order of a result being edited or corrected. */
   orders = signal<LabOrderResponse[]>([]);
+  /** Every order a result can be filed against, whatever its status. */
+  private resultableOrders: LabOrderResponse[] = [];
   private activeAssignmentId = '';
 
   /* ── CRUD signals ── */
@@ -292,13 +310,14 @@ export class LabResultsComponent implements OnInit {
     this.loadResults();
     // QA D645: an order whose test definition no longer resolves has nothing a
     // result can be entered against; it is not offered ("— — —" in the picker).
-    this.labService.listOrders({ size: 500 }).subscribe((list) =>
+    this.labService.listOrders({ size: 500 }).subscribe((list) => {
       // QA D645/D648: an order whose test definition was deleted carries a
       // "deleted test" label but cannot take a result; it stays out of the picker.
-      this.orders.set(
-        list.filter((o) => !o.labTestDefinitionMissing && !!(o.labTestName || o.labTestCode)),
-      ),
-    );
+      this.resultableOrders = list.filter(
+        (o) => !o.labTestDefinitionMissing && !!(o.labTestName || o.labTestCode),
+      );
+      this.orders.set(this.pickableOrders());
+    });
     this.profileService.getAssignments().subscribe({
       next: (assignments) => {
         const active = assignments.find((a: { active: boolean }) => a.active);
@@ -326,6 +345,17 @@ export class LabResultsComponent implements OnInit {
 
   /* ── CRUD ── */
 
+  /**
+   * QA D1176: "New result" listed every order; one that already carries a
+   * result (or is closed) was refused with a 409 only after the form was
+   * filled. Such orders are corrected from their released result instead.
+   */
+  private pickableOrders(keepOrderId?: string | null): LabOrderResponse[] {
+    return this.resultableOrders.filter(
+      (o) => !ORDER_STATUSES_WITHOUT_NEW_RESULT.has(o.status) || o.id === keepOrderId,
+    );
+  }
+
   openCreate(): void {
     this.form = this.emptyForm();
     this.editing.set(false);
@@ -340,6 +370,7 @@ export class LabResultsComponent implements OnInit {
    * marked superseded and both stay on record.
    */
   openCorrection(r: LabResultResponse): void {
+    this.orders.set(this.pickableOrders(r.labOrderId));
     this.form = {
       ...this.emptyForm(),
       labOrderId: r.labOrderId ?? '',
@@ -359,6 +390,7 @@ export class LabResultsComponent implements OnInit {
   }
 
   openEdit(r: LabResultResponse): void {
+    this.orders.set(this.pickableOrders(r.labOrderId));
     this.form = {
       labOrderId: r.labOrderId ?? '',
       assignmentId: this.activeAssignmentId,
@@ -376,6 +408,8 @@ export class LabResultsComponent implements OnInit {
 
   closeModal(): void {
     this.showModal.set(false);
+    // The order an edit or a correction added back leaves the "New result" picker.
+    if (this.resultableOrders.length > 0) this.orders.set(this.pickableOrders());
   }
 
   onOrderChange(orderId: string): void {
@@ -437,12 +471,7 @@ export class LabResultsComponent implements OnInit {
         // ("ask an administrator to mark this test as point-of-care"), and a
         // generic "could not save" throws that away and leaves the ward
         // thinking the system is broken.
-        const serverMessage = err?.error?.message;
-        this.toast.error(
-          typeof serverMessage === 'string' && serverMessage.trim()
-            ? serverMessage
-            : this.translate.instant('LAB_RESULTS.SAVE_ERROR'),
-        );
+        this.toast.error(refusalReason(err) ?? this.translate.instant('LAB_RESULTS.SAVE_ERROR'));
         this.saving.set(false);
       },
     });
@@ -806,7 +835,7 @@ export class LabResultsComponent implements OnInit {
         // A mismatch is the interesting case, and the server explains it in
         // clinical terms — show that rather than a generic failure.
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('LAB_RESULTS.READ_BACK_ERROR'),
+          refusalReason(err) ?? this.translate.instant('LAB_RESULTS.READ_BACK_ERROR'),
         );
         this.readBackSubmitting.set(false);
       },

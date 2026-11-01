@@ -1,3 +1,6 @@
+import { ReasonDialogComponent } from '../../shared/reason-dialog/reason-dialog.component';
+import { focusWhenRendered } from '../../shared/a11y/focus-when-rendered';
+import { refusalReason } from '../../shared/refusal-reason';
 import { refuseFields } from '../../shared/forms/invalid-fields';
 import { PersonNamePipe, personName } from '../../shared/pipes/person-name.pipe';
 import { RouterLink } from '@angular/router';
@@ -42,6 +45,7 @@ type RecallFilter = 'ALL' | RecallStatus;
   selector: 'app-recalls-panel',
   standalone: true,
   imports: [
+    ReasonDialogComponent,
     PersonNamePipe,
     DialogFocusDirective,
     PatientSublinePipe,
@@ -193,7 +197,7 @@ export class RecallsPanelComponent implements OnInit {
       },
       error: (err) => {
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('RECEPTION.RECALL_CREATE_FAILED'),
+          refusalReason(err) ?? this.translate.instant('RECEPTION.RECALL_CREATE_FAILED'),
         );
         this.saving.set(false);
       },
@@ -211,25 +215,36 @@ export class RecallsPanelComponent implements OnInit {
       },
       error: (err) => {
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('RECEPTION.RECALL_ACTION_FAILED'),
+          refusalReason(err) ?? this.translate.instant('RECEPTION.RECALL_ACTION_FAILED'),
         );
         this.actingOnId.set(null);
       },
     });
   }
 
-  cancelRecall(recall: RecallResponse): void {
+  /** QA D1157: "Annuler" asks why before anything is sent. */
+  readonly cancelling = signal<RecallResponse | null>(null);
+
+  askCancelRecall(recall: RecallResponse): void {
+    if (this.actingOnId()) return;
+    this.cancelling.set(recall);
+  }
+
+  cancelRecall(recall: RecallResponse, reason: string): void {
     if (this.actingOnId()) return;
     this.actingOnId.set(recall.id);
-    this.receptionService.cancelRecall(recall.id).subscribe({
+    this.receptionService.cancelRecall(recall.id, reason).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('RECEPTION.RECALL_CANCELLED'));
         this.actingOnId.set(null);
+        this.cancelling.set(null);
+        // The row leaves the open list: the keyboard lands on the list's filter, not the page body.
+        focusWhenRendered(this.host.nativeElement, '.filter-btn.active');
         this.loadRecalls();
       },
       error: (err) => {
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('RECEPTION.RECALL_ACTION_FAILED'),
+          refusalReason(err) ?? this.translate.instant('RECEPTION.RECALL_ACTION_FAILED'),
         );
         this.actingOnId.set(null);
       },

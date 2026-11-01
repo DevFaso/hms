@@ -188,7 +188,10 @@ describe('CoverageTabComponent (P3 #21 additions)', () => {
     fixture.detectChanges();
     component.openConsent();
     extrasSpy.recordConsent.and.returnValue(
-      throwError(() => ({ error: { message: 'Patient is not registered at this hospital.' } })),
+      throwError(() => ({
+        status: 400,
+        error: { message: 'Patient is not registered at this hospital.' },
+      })),
     );
 
     component.submitConsent();

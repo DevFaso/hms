@@ -1,3 +1,5 @@
+import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.component';
+import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive';
 import { ChangeDetectionStrategy, Component, OnInit, inject, signal } from '@angular/core';
 import { isOrderCancellable } from '../shared/order-lifecycle';
 import { CommonModule } from '@angular/common';
@@ -44,6 +46,8 @@ type Worklist = 'all' | 'pending-consent' | ProcedureOrderStatus;
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    InlineDiscardAskComponent,
+    InlineSubFormDirective,
     SubmitGuardDirective,
     ServerTimePipe,
     CommonModule,

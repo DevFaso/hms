@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  ElementRef,
   EventEmitter,
   inject,
   Input,
@@ -12,12 +13,14 @@ import {
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, NgForm } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Subject, of } from 'rxjs';
 import { catchError, debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 import { EncounterNoteRequest, EncounterNoteTemplate } from '../../services/encounter.service';
 import { SmartPhrase, SmartPhraseService } from '../../services/smart-phrase.service';
 import { toServerDateTime } from '../../shared/date-utils';
+import { refuseFields } from '../../shared/forms/invalid-fields';
+import { hasClinicalContent } from '../../shared/forms/clinical-content';
 
 type NoteFieldKey =
   | 'chiefComplaint'
@@ -32,6 +35,22 @@ type NoteFieldKey =
   | 'implementation'
   | 'evaluation'
   | 'patientInstructions';
+
+/** The written sections of a note: the payload carries the non-blank ones, and one is required (QA D1151). */
+const NOTE_CONTENT_FIELDS: readonly NoteFieldKey[] = [
+  'chiefComplaint',
+  'historyOfPresentIllness',
+  'reviewOfSystems',
+  'physicalExam',
+  'diagnosticResults',
+  'subjective',
+  'objective',
+  'assessment',
+  'plan',
+  'implementation',
+  'evaluation',
+  'patientInstructions',
+];
 
 interface SmartPhrasePopupState {
   fieldKey: NoteFieldKey;
@@ -63,6 +82,8 @@ interface SmartPhrasePopupState {
 })
 export class EncounterNoteFormComponent implements OnInit, OnDestroy {
   private readonly smartPhraseService = inject(SmartPhraseService);
+  private readonly translate = inject(TranslateService);
+  private readonly host = inject(ElementRef<HTMLElement>);
 
   @Input() saving = false;
   @Input() hospitalId: string | null = null;
@@ -276,25 +297,23 @@ export class EncounterNoteFormComponent implements OnInit, OnDestroy {
       return;
     }
     const value = this.form();
+    // QA D1151: a note with every section empty was saved and then offered
+    // for signature; the first clinical section says what is missing.
+    if (!hasClinicalContent(value, [...NOTE_CONTENT_FIELDS, 'summary'])) {
+      refuseFields(
+        this.host.nativeElement,
+        ['note-subjective'],
+        ['note-subjective'],
+        this.translate.instant('ENCOUNTERS.NOTE_EMPTY'),
+      );
+      return;
+    }
+    refuseFields(this.host.nativeElement, [], ['note-subjective'], '');
     // Strip empty strings so we don't write blank columns over real data
     const payload: EncounterNoteRequest = {
       template: value.template,
     };
-    const stringFields: NoteFieldKey[] = [
-      'chiefComplaint',
-      'historyOfPresentIllness',
-      'reviewOfSystems',
-      'physicalExam',
-      'diagnosticResults',
-      'subjective',
-      'objective',
-      'assessment',
-      'plan',
-      'implementation',
-      'evaluation',
-      'patientInstructions',
-    ];
-    for (const key of stringFields) {
+    for (const key of NOTE_CONTENT_FIELDS) {
       const v = (value[key] as string | undefined)?.trim();
       if (v) {
         (payload as unknown as Record<string, unknown>)[key] = v;

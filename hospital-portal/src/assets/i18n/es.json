@@ -1461,12 +1461,14 @@
     "VIEW_MANAGE_SUBTITLE": "Ver y gestionar detalles de la cita",
     "YES_CANCEL": "Sí, Cancelar",
     "DURATION_SET_BY_SLOTS": "La duración de la visita la fijan los turnos del profesional.",
-    "STATUS_REASON": "Motivo",
+    "STATUS_REASON": "Motivo del cambio de estado",
     "STATUS_REASON_LABEL": "Motivo (obligatorio)",
     "STATUS_REASON_REQUIRED": "Indique el motivo antes de confirmar.",
     "NO_SHOW_DIALOG_TITLE": "Marcar como ausente",
     "NO_SHOW_CONFIRM_MESSAGE": "El paciente no acudió a esta cita.",
-    "CONFIRM_NO_SHOW": "Marcar como ausente"
+    "CONFIRM_NO_SHOW": "Marcar como ausente",
+    "STATUS_REASON_CANCELLED": "Motivo de la cancelación",
+    "STATUS_REASON_NO_SHOW": "Motivo de la inasistencia"
   },
   "APPOINTMENT_CALENDAR": {
     "TITLE": "Calendario de citas",
@@ -3182,7 +3184,8 @@
     "NOTE_EARLIER_ENTRIES": "Entradas anteriores de esta estancia",
     "ADDENDUM_DISCARD_ASK": "¿Descartar el addendum escrito?",
     "ADDENDUM_KEEP": "Seguir escribiendo",
-    "ADDENDUM_DISCARD": "Descartar el texto"
+    "ADDENDUM_DISCARD": "Descartar el texto",
+    "NOTE_EMPTY": "Escriba al menos una sección de la nota antes de guardarla."
   },
   "FCP": {
     "CONFIRM_PASSWORD": "Confirmar contraseña",
@@ -4567,7 +4570,8 @@
       "LOAD_FAILED": "No se pudo cargar la lista de testigos.",
       "REQUIRED": "Elija al testigo de esta administración de estupefaciente."
     },
-    "PAIN_SCORE": "Dolor (0-10)"
+    "PAIN_SCORE": "Dolor (0-10)",
+    "MAR_REASON_LABEL": "Motivo"
   },
   "ONBOARDING": {
     "ABILITIES_TITLE": "Sus capacidades",
@@ -7044,6 +7048,24 @@
         "DAR": "Nota DAR",
         "SOAP": "Nota SOAP",
         "SOAPIE": "Nota SOAPIE"
+      },
+      "ADVANCE_DIRECTIVE_TYPE": {
+        "LIVING_WILL": "Testamento vital",
+        "DURABLE_POWER_OF_ATTORNEY": "Poder notarial duradero",
+        "DO_NOT_RESUSCITATE": "No reanimar (DNR)",
+        "PHYSICIAN_ORDERS_FOR_LIFE_SUSTAINING_TREATMENT": "Órdenes médicas de tratamiento de soporte vital (POLST)",
+        "OTHER": "Otro"
+      },
+      "CODE_STATUS": {
+        "LIVING_WILL": "Testamento vital",
+        "DURABLE_POWER_OF_ATTORNEY": "Poder notarial duradero",
+        "DO_NOT_RESUSCITATE": "No reanimar (DNR)",
+        "PHYSICIAN_ORDERS_FOR_LIFE_SUSTAINING_TREATMENT": "Órdenes médicas de tratamiento de soporte vital (POLST)",
+        "OTHER": "Otro",
+        "FULL_CODE": "Reanimación completa",
+        "DNR": "No reanimar (DNR)",
+        "DNI": "No intubar (DNI)",
+        "COMFORT_ONLY": "Solo cuidados de confort"
       }
     },
     "DOCUMENTS": {
@@ -7835,7 +7857,13 @@
     "WALK_IN": "Registro sin cita",
     "WALK_INS": "Sin cita",
     "WALK_INS_TODAY": "Sin cita hoy",
-    "LEFT_WITHOUT_BEING_SEEN": "Se fue sin ser atendido"
+    "LEFT_WITHOUT_BEING_SEEN": "Se fue sin ser atendido",
+    "RECALL_CANCEL_TITLE": "¿Cancelar este recordatorio?",
+    "RECALL_CANCEL_REASON": "Motivo de la cancelación del recordatorio",
+    "RECALL_CANCEL_CONFIRM": "Cancelar el recordatorio",
+    "CLOSE_ENTRY_TITLE": "¿Cerrar esta entrada de la lista de espera?",
+    "CLOSE_ENTRY_REASON": "Motivo del cierre",
+    "CLOSE_ENTRY_CONFIRM": "Cerrar la entrada"
   },
   "REFERRALS": {
     "ACCEPTED": "Aceptada",
@@ -8677,7 +8705,9 @@
     "TITLE": "Evaluación de triaje",
     "VITAL_SIGNS": "Signos vitales",
     "WEIGHT": "Peso",
-    "FUNDAL_HEIGHT": "Altura uterina (cm) — embarazo"
+    "FUNDAL_HEIGHT": "Altura uterina (cm) — embarazo",
+    "ESI_CHOOSE": "Elegir el nivel ESI…",
+    "VITAL_REQUIRED": "Registre al menos un signo vital (temperatura, pulso, frecuencia respiratoria, tensión o SpO2)."
   },
   "INTAKE": {
     "ADD_ALLERGY": "Agregar alergia",
@@ -8717,7 +8747,8 @@
     "MED_NAME_ROW": "Medicamento, fila {{row}}",
     "MED_DOSAGE_ROW": "Dosis, fila {{row}}",
     "MED_FREQUENCY_ROW": "Frecuencia, fila {{row}}",
-    "MED_ROUTE_ROW": "Vía, fila {{row}}"
+    "MED_ROUTE_ROW": "Vía, fila {{row}}",
+    "ASSESSMENT_REQUIRED": "Registre la evaluación antes de enviar: alergias, medicamentos, dolor, riesgo de caída o notas de enfermería."
   },
   "PRE_CHECKIN": {
     "ADDRESS": "Dirección",
@@ -8783,7 +8814,7 @@
     "COL_IN_PROGRESS": "En curso",
     "COL_AWAITING_RESULTS": "Esperando resultados",
     "COL_READY_DISCHARGE": "Listo para alta",
-    "PROVIDER": "Médico",
+    "PROVIDER": "Profesional",
     "ROOM": "Sala",
     "DEPT": "Depto.",
     "PRE_CHECKIN_BADGE": "Pre-registro",
@@ -9633,7 +9664,8 @@
       "LABEL": "Motivo de anulación (interacción)",
       "HINT": "Una interacción grave detiene esta dispensación: indique el motivo para dispensar de todos modos. Se registra con la dispensación."
     },
-    "ALERT_OVERRIDDEN": "Alerta anulada por el prescriptor: vea el motivo en la receta"
+    "ALERT_OVERRIDDEN": "Alerta anulada por el prescriptor: vea el motivo en la receta",
+    "LOTS_OTHER_FORM": "{{count}} lote(s) de este medicamento en otra forma no se ofrecen: la orden está escrita en «{{unit}}»."
   },
   "LAB_QC": {
     "TITLE": "Panel de control de calidad",
@@ -10188,7 +10220,8 @@
       "VPO": "VPO (polio oral)",
       "HEPB0": "Hepatitis B (dosis al nacer)"
     },
-    "VACCINE_CODE_HINT": "Se rellena a partir de la vacuna del PEV elegida (tabla CVX de los CDC, verificada el 30/10/2026) o de una dosis anterior de la misma vacuna en esta historia. Opcional y editable; MenAfriVac y la vacuna contra la malaria no tienen código CVX."
+    "VACCINE_CODE_HINT": "Se rellena a partir de la vacuna del PEV elegida (tabla CVX de los CDC, verificada el 30/10/2026) o de una dosis anterior de la misma vacuna en esta historia. Opcional y editable; MenAfriVac y la vacuna contra la malaria no tienen código CVX.",
+    "SOCIAL_EMPTY": "Registre al menos un elemento (hábitos, ocupación, situación de vida o notas) antes de guardar una nueva versión."
   },
   "MATERNITY": {
     "GA": "Edad gestacional",
@@ -10448,7 +10481,9 @@
     "AC_MM": "PA (mm)",
     "FL_MM": "LF (mm)",
     "NT_MM": "TN (mm)",
-    "CRL_MM": "LCN (mm)"
+    "CRL_MM": "LCN (mm)",
+    "FINDING_CHOOSE": "Elegir el hallazgo…",
+    "REPORT_NO_FINDINGS": "Registre al menos un hallazgo (una medida, el resumen o la interpretación) antes de guardar el informe."
   },
   "BIRTH_PLAN": {
     "TITLE": "Plan de parto",
@@ -10720,7 +10755,9 @@
     "APGAR_TEN": "APGAR al minuto 10",
     "TEMPERATURE": "Temperatura (°C)",
     "SYSTOLIC": "Sistólica (mmHg)",
-    "DIASTOLIC": "Diastólica (mmHg)"
+    "DIASTOLIC": "Diastólica (mmHg)",
+    "OBSERVATION_EMPTY": "Registre al menos una observación (un signo vital, el útero, los loquios o la pérdida de sangre) antes de guardar.",
+    "ASSESSMENT_EMPTY": "Registre al menos un hallazgo (una puntuación de APGAR, un signo vital o la exploración) antes de guardar."
   },
   "ASSIGN_ADMIN": {
     "TITLE": "Administración de Asignaciones",
@@ -11135,7 +11172,10 @@
     "REVOKE_WARNING": "Una directiva que estuvo en vigor permanece en el expediente — revocarla la marca como no aplicable, no la elimina.",
     "REVOKED_TOAST": "Directiva revocada.",
     "REVOKE_ERROR": "No se pudo revocar la directiva.",
-    "LAST_REVIEWED": "revisada"
+    "LAST_REVIEWED": "revisada",
+    "TYPE_CHOOSE": "Elegir el tipo…",
+    "STATUS_CHOOSE": "Elegir el estado…",
+    "REQUIRED_FIELDS": "Este campo es obligatorio para una directiva."
   },
   "GROWTH": {
     "TAB": "Crecimiento",
@@ -11810,7 +11850,7 @@
     "TRANSFERS_LOAD_ERROR": "No se pudieron cargar los traslados pendientes."
   },
   "EMAR": {
-    "ACTION_RECORD_GIVEN": "Registrar ADMINISTRADA",
+    "ACTION_RECORD_GIVEN": "Registrar como administrada",
     "ADMIN_STATUS": {
       "GIVEN": "administrada",
       "HELD": "suspendida",
@@ -11860,7 +11900,10 @@
     },
     "VERIFYING": "Verificando…",
     "VERIFY_FIVE_RIGHTS": "Verificar los cinco correctos",
-    "PRESCRIBED": "Prescrito"
+    "PRESCRIBED": "Prescrito",
+    "ACTION_HOLD": "Suspender la dosis",
+    "ACTION_REFUSED": "Rechazo del paciente",
+    "HOLD_REFUSE_REASON_LABEL": "Motivo (obligatorio para suspender la dosis o registrar un rechazo)"
   },
   "CREDENTIALING": {
     "CURRENT_EXPIRY": "Caducidad actual",
@@ -12403,5 +12446,13 @@
     "VERIFY_FIELDS": "Complete primero el paciente, el medicamento, la dosis y la vía.",
     "VERIFY_FIRST": "Verifique primero los cinco correctos.",
     "WITNESS": "Elija el testigo (un segundo profesional de este establecimiento)."
+  },
+  "INLINE_FORM": {
+    "DISCARD_ASK": "¿Descartar el texto escrito?",
+    "KEEP": "Seguir escribiendo",
+    "DISCARD": "Descartar el texto"
+  },
+  "REASON_DIALOG": {
+    "REASON": "Motivo"
   }
 }

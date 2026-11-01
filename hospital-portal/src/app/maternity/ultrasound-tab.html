@@ -273,7 +273,13 @@
           </div>
         }
         @if (showCancelPrompt()) {
-          <div class="view-section action-form">
+          <!-- QA D1155: Escape here closes only the prompt, and asks before dropping a typed reason. -->
+          <div
+            class="view-section action-form"
+            appInlineSubForm
+            #cancelForm="inlineSubForm"
+            (dismissed)="closeCancelPrompt()"
+          >
             <h3>{{ 'ULTRASOUND.CANCEL_ORDER' | translate }}</h3>
             <div class="field">
               <label for="us-cancel-reason"
@@ -295,6 +301,7 @@
                 {{ 'COMMON.CONFIRM' | translate }}
               </button>
             </div>
+            <app-inline-discard-ask [form]="cancelForm" />
           </div>
         }
       </div>
@@ -521,6 +528,8 @@
           <div class="field">
             <label for="rep-category">{{ 'ULTRASOUND.FINDING' | translate }} *</label>
             <select id="rep-category" [(ngModel)]="reportForm.findingCategory">
+              <!-- QA D1150: never preselected; the clinician picks the finding. -->
+              <option value="" disabled>{{ 'ULTRASOUND.FINDING_CHOOSE' | translate }}</option>
               @for (c of findingCategories; track c) {
                 <option [value]="c">{{ 'ULTRASOUND.FINDING_' + c | translate }}</option>
               }

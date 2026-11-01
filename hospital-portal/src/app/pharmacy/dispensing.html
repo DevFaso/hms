@@ -146,6 +146,13 @@
                 </option>
               }
             </select>
+            @if (otherFormLots() > 0) {
+              <!-- QA D1163: lots of another form than the order are not offered. -->
+              <small class="field-hint" data-testid="other-form-lots">{{
+                'PHARMACY.LOTS_OTHER_FORM'
+                  | translate: { count: otherFormLots(), unit: orderUnit() ?? '' }
+              }}</small>
+            }
           </div>
           <!-- QA D964: first expired, first out. Taking a later-dated lot while a
                shorter-dated one could serve the fill needs a reason. -->

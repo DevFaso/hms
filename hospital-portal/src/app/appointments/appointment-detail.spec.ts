@@ -323,6 +323,16 @@ describe('AppointmentDetailComponent', () => {
         '[data-testid="status-reason"]',
       ) as HTMLElement;
       expect(row?.textContent).toContain('Doctor away');
+      // QA D1171: its label is not the visit's "Reason" a second time.
+      const labels = Array.from(row.parentElement!.querySelectorAll('.field-label')).map((l) =>
+        l.textContent?.trim(),
+      );
+      expect(row.querySelector('.field-label')?.textContent?.trim()).toBe(
+        'APPOINTMENTS.STATUS_REASON_CANCELLED',
+      );
+      expect(new Set(labels).size)
+        .withContext('no label repeats in the appointment card')
+        .toBe(labels.length);
     });
   });
 });
