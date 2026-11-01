@@ -149,7 +149,12 @@
       </label>
       <label class="date-filter">
         <span>{{ 'BILLING.TO_DATE' | translate }}</span>
-        <input type="date" [ngModel]="filterToDate()" (ngModelChange)="filterToDate.set($event)" />
+        <input
+          type="date"
+          [attr.min]="filterFromDate() || null"
+          [ngModel]="filterToDate()"
+          (ngModelChange)="filterToDate.set($event)"
+        />
       </label>
       <button type="button" class="btn-secondary" (click)="applyServerFilters()">
         {{ 'COMMON.APPLY' | translate }}
@@ -887,8 +892,8 @@
             }
           </div>
         </div>
-        <!-- QA D1069: cancelling an issued invoice asks why; the reason is kept with it -->
-        @if (cancellingIssued()) {
+        <!-- QA D1069 / D1217: cancelling any invoice, a draft too, asks why; the reason is kept with it -->
+        @if (cancelling()) {
           <div class="form-row">
             <div class="field">
               <label for="bill-cancel-reason">{{ 'BILLING.CANCEL_REASON' | translate }} *</label>
@@ -900,7 +905,7 @@
                 rows="2"
                 required
                 [attr.aria-invalid]="!form.cancelReason?.trim()"
-                [placeholder]="'BILLING.CANCEL_REASON_PLACEHOLDER' | translate"
+                [placeholder]="'INVOICE_CANCEL.REASON_PLACEHOLDER' | translate"
               ></textarea>
             </div>
           </div>

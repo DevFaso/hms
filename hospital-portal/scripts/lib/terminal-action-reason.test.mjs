@@ -374,3 +374,64 @@ test('QA D1180 guard: the server list is parsed with its reason source', () => {
     { verb: 'POST', path: '/pharmacy/claims/{id}/reject', kind: 'body', field: 'rejectionReason' },
   ]);
 });
+
+/**
+ * QA D1217 (round 23): DRAFT invoices were cancelled with `cancelReason: null`.
+ * The edit form asked for the reason only through `cancellingIssued()`, whose
+ * body exempted `'DRAFT'` (the round-19 D1069 exception). The user's rule
+ * since round 23: real hospitals audit every void, drafts included.
+ *
+ * Rule 3: a member that decides whether a cancel / void asks for a reason
+ * (its name says cancel, void or reason) never exempts a record by naming the
+ * DRAFT status. Returns `[memberName, line]` for each such member.
+ */
+export function draftExemptReasonGates(source) {
+  const header =
+    /^ {2}(?:(?:public|private|protected|static|async|override|readonly)\s+)*([A-Za-z_$][\w$]*)\s*(?:<[^>\n]*>)?\(/gm;
+  const out = [];
+  for (const h of source.matchAll(header)) {
+    if (!/cancel|void|reason/i.test(h[1])) continue;
+    const brace = source.indexOf('{', source.indexOf(')', h.index));
+    if (brace < 0) continue;
+    if (/['"]DRAFT['"]/.test(balanced(source, brace, '{', '}'))) {
+      out.push([h[1], source.slice(0, h.index).split('\n').length]);
+    }
+  }
+  return out;
+}
+
+test('QA D1217: no reason gate of a cancel or void exempts a DRAFT', () => {
+  const problems = [];
+  let files = 0;
+  for (const file of walk(appDir, ['.ts'])) {
+    if (file.endsWith('.spec.ts')) continue;
+    files++;
+    const rel = relative(appDir, file).replaceAll('\\', '/');
+    for (const [name, line] of draftExemptReasonGates(readFileSync(file, 'utf8'))) {
+      problems.push(`${rel}:${line} ${name}() exempts a DRAFT from the reason`);
+    }
+  }
+  assert.ok(files > 400, `every source file must be read, saw ${files}`);
+  assert.deepEqual(problems, [], 'every cancel asks why, a draft too (QA D1217)');
+});
+
+test('QA D1217 guard: the scan sees the round-23 shape and passes the fix', () => {
+  const before = [
+    'export class X {',
+    '  cancellingIssued(): boolean {',
+    '    const current = this.editingStatus();',
+    "    return this.form.status === 'CANCELLED' && current !== 'DRAFT';",
+    '  }',
+    '}',
+  ].join('\n');
+  assert.deepEqual(draftExemptReasonGates(before), [['cancellingIssued', 2]]);
+  const after = [
+    'export class X {',
+    '  cancelling(): boolean {',
+    "    return this.form.status === 'CANCELLED' && this.editingStatus() !== 'CANCELLED';",
+    '  }',
+    "  statusOptions() { return ['DRAFT', 'SENT', 'CANCELLED']; }",
+    '}',
+  ].join('\n');
+  assert.deepEqual(draftExemptReasonGates(after), []);
+});

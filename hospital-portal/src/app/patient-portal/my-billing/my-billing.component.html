@@ -125,12 +125,12 @@
                 <p class="pli-meta">{{ 'PORTAL.BILLING.LOADING' | translate }}</p>
               } @else if (detailError()) {
                 <p class="pay-error" role="alert">
-                  {{ 'PORTAL.BILLING.DETAIL_FAILED' | translate }}
+                  {{ detailFailureReason() ?? ('PORTAL.BILLING.DETAIL_FAILED' | translate) }}
                 </p>
               } @else if (detail(); as d) {
                 @if (downloadError()) {
                   <p class="pay-error" role="alert" data-testid="download-error">
-                    {{ 'PORTAL.BILLING.DOWNLOAD_FAILED' | translate }}
+                    {{ downloadFailureReason() ?? ('PORTAL.BILLING.DOWNLOAD_FAILED' | translate) }}
                   </p>
                 }
                 <h3 class="detail-title">{{ 'PORTAL.BILLING.LINES' | translate }}</h3>

@@ -12466,5 +12466,18 @@
   },
   "REASON_DIALOG": {
     "REASON": "Motivo"
+  },
+  "INVOICE_CANCEL": {
+    "REASON_PLACEHOLDER": "¿Por qué se anula esta factura? El motivo se conserva con ella.",
+    "REASON_REQUIRED": "Indique el motivo de la anulación de esta factura."
+  },
+  "DATE_RULES": {
+    "END_BEFORE_START": "La fecha de fin debe ser igual o posterior a la fecha de inicio.",
+    "NOT_IN_PAST": "Esta fecha no puede estar en el pasado."
+  },
+  "PORTAL_PAGING": {
+    "LAB_LOAD_MORE": "Mostrar resultados más antiguos",
+    "LAB_LOAD_FAILED": "No se pudieron cargar sus resultados de análisis.",
+    "LAB_LOAD_MORE_FAILED": "No se pudieron cargar los resultados más antiguos. Inténtelo de nuevo."
   }
 }

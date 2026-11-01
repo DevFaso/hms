@@ -1,3 +1,4 @@
+import { refusalReason } from '../../../shared/refusal-reason';
 import {
   Component,
   ElementRef,
@@ -192,7 +193,7 @@ export class PreCheckinFormComponent implements OnInit, OnChanges {
       },
       error: (err) => {
         this.saving.set(false);
-        this.errorMessage.set(err?.error?.message || this.translate.instant('PRE_CHECKIN.ERROR'));
+        this.errorMessage.set(refusalReason(err) ?? this.translate.instant('PRE_CHECKIN.ERROR'));
       },
     });
   }

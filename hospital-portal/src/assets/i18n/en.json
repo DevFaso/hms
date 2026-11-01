@@ -12466,5 +12466,18 @@
   },
   "REASON_DIALOG": {
     "REASON": "Reason"
+  },
+  "INVOICE_CANCEL": {
+    "REASON_PLACEHOLDER": "Why is this invoice cancelled? The reason is kept with it.",
+    "REASON_REQUIRED": "Give the reason for cancelling this invoice."
+  },
+  "DATE_RULES": {
+    "END_BEFORE_START": "The end date must be on or after the start date.",
+    "NOT_IN_PAST": "This date cannot be in the past."
+  },
+  "PORTAL_PAGING": {
+    "LAB_LOAD_MORE": "Show older results",
+    "LAB_LOAD_FAILED": "Your test results could not be loaded.",
+    "LAB_LOAD_MORE_FAILED": "The older results could not be loaded. Try again."
   }
 }

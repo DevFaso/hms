@@ -87,6 +87,7 @@
       <span>{{ 'INTEGRATION_MESSAGES.FILTER.TO' | translate }}</span>
       <input
         type="datetime-local"
+        [attr.min]="fromDate() || null"
         [ngModel]="toDate()"
         (ngModelChange)="toDate.set($event)"
         name="toDate"

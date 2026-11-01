@@ -324,7 +324,7 @@ describe('MyAppointmentsComponent', () => {
 
     it('should set bookingError on failure', () => {
       portalService.bookAppointment.and.returnValue(
-        throwError(() => ({ error: { message: 'Staff not available' } })),
+        throwError(() => ({ status: 409, error: { message: 'Staff not available' } })),
       );
       component.selectedHospitalId = 'h1';
       component.selectedDepartmentId = 'd1';
@@ -592,7 +592,7 @@ describe('MyAppointmentsComponent — cancel and reschedule', () => {
   it('submitCancel keeps the modal open and shows the error on failure', () => {
     fixture.detectChanges();
     portal.cancelAppointment.and.returnValue(
-      throwError(() => ({ error: { message: 'Appointment is already cancelled' } })),
+      throwError(() => ({ status: 409, error: { message: 'Appointment is already cancelled' } })),
     );
 
     component.openCancel(appt({ id: 'a-9' }));

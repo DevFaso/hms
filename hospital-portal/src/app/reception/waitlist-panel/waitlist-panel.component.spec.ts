@@ -261,4 +261,40 @@ describe('WaitlistPanelComponent', () => {
       host.remove();
     }
   }));
+
+  /**
+   * QA D1215 (round 23): an entry "from 20/11 to 10/11" was saved (201) and
+   * could never be offered a slot. Each end of the range bounds the other in
+   * the picker, and a typed reversed range is refused on the end field.
+   */
+  it('QA D1215: the range ends bound each other and a reversed range is refused on the field', () => {
+    component.openAddForm();
+    component.selectPatient({ id: 'p1', firstName: 'Hamed', lastName: 'Tiendrebeogo' } as any);
+    component.selectedDeptId.set('d1');
+    component.dateFrom.set('2026-11-20');
+    component.dateTo.set('2026-11-10');
+    fixture.detectChanges();
+    const host: HTMLElement = fixture.nativeElement;
+    const from = host.querySelector<HTMLInputElement>('#wl-from')!;
+    const to = host.querySelector<HTMLInputElement>('#wl-to')!;
+    expect(from.getAttribute('max')).toBe('2026-11-10');
+    expect(to.getAttribute('min')).toBe('2026-11-20');
+
+    component.submitAdd();
+    fixture.detectChanges();
+
+    expect(mockReceptionService.addToWaitlist).not.toHaveBeenCalled();
+    expect(mockToastService.error).toHaveBeenCalledWith('DATE_RULES.END_BEFORE_START');
+    expect(to.getAttribute('aria-invalid')).toBe('true');
+    expect(host.querySelector('#wl-to-invalid-msg')?.textContent).toBe(
+      'DATE_RULES.END_BEFORE_START',
+    );
+    expect(document.activeElement).toBe(to);
+
+    // A one-day window (start = end) is a valid range.
+    component.dateTo.set('2026-11-20');
+    component.submitAdd();
+    fixture.detectChanges();
+    expect(mockReceptionService.addToWaitlist).toHaveBeenCalledTimes(1);
+  });
 });

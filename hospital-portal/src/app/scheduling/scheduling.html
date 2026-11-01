@@ -453,7 +453,13 @@
             <span class="material-symbols-outlined">event</span>
             {{ 'SCHEDULING.END_DATE' | translate }} <span class="required">*</span>
           </label>
-          <input id="bulk-endDate" class="form-input" type="date" [(ngModel)]="bulk.endDate" />
+          <input
+            id="bulk-endDate"
+            class="form-input"
+            type="date"
+            [attr.min]="bulk.startDate || null"
+            [(ngModel)]="bulk.endDate"
+          />
         </div>
       </div>
 

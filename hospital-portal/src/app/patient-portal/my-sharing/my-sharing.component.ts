@@ -60,6 +60,8 @@ export class MySharingComponent implements OnInit {
   optOutLoading = signal(true);
   /** Load failure is shown as such, never as "sharing is on". */
   optOutFailed = signal(false);
+  /** QA D1212: the server's reason the opt-out state could not be read, when it gave one. */
+  optOutFailureReason = signal<string | null>(null);
   optOutSaving = signal(false);
   showOptOutForm = signal(false);
   optOutReason = '';
@@ -73,6 +75,8 @@ export class MySharingComponent implements OnInit {
    * a patient when what actually happened is that the request failed.
    */
   logFailed = signal(false);
+  /** QA D1212: the server's reason the access log could not be read, when it gave one. */
+  logFailureReason = signal<string | null>(null);
   accessLog = signal<AccessLogEntry[]>([]);
   /**
    * Per-category counts across the whole history, not just the loaded page.
@@ -88,7 +92,8 @@ export class MySharingComponent implements OnInit {
         this.patientId = profile.id ?? '';
         this.loadOptOut();
       },
-      error: () => {
+      error: (err: unknown) => {
+        this.optOutFailureReason.set(refusalReason(err));
         this.optOutFailed.set(true);
         this.optOutLoading.set(false);
       },
@@ -108,7 +113,8 @@ export class MySharingComponent implements OnInit {
         this.accessLog.set(accounting.entries);
         this.loadingLog.set(false);
       },
-      error: () => {
+      error: (err: unknown) => {
+        this.logFailureReason.set(refusalReason(err));
         this.logFailed.set(true);
         this.loadingLog.set(false);
       },
@@ -212,7 +218,8 @@ export class MySharingComponent implements OnInit {
         this.optOut.set(state);
         this.optOutLoading.set(false);
       },
-      error: () => {
+      error: (err: unknown) => {
+        this.optOutFailureReason.set(refusalReason(err));
         this.optOutFailed.set(true);
         this.optOutLoading.set(false);
       },

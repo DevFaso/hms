@@ -8,6 +8,7 @@ import {
   PortalInvoice,
   formatTime,
   mapPortalInvoice,
+  mergeDiagnoses,
 } from './patient-portal.service';
 
 /**
@@ -554,5 +555,102 @@ describe('PatientPortalService encounters (QA D981)', () => {
     });
     expect(reason).toBe('Paludisme grave, admis pour artésunate IV');
     expect(assessment).toBe('Stable');
+  });
+});
+
+describe('PatientPortalService lab result pages (QA D1213)', () => {
+  let service: PatientPortalService;
+  let httpMock: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [PatientPortalService, provideHttpClient(), provideHttpClientTesting()],
+    });
+    service = TestBed.inject(PatientPortalService);
+    httpMock = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => httpMock.verify());
+
+  const row = (i: number) => ({ id: `l${i}`, testName: 'K', status: 'NORMAL', released: true });
+
+  it('asks offset and one look-ahead row, shows the page and says whether there is more', () => {
+    let page: { items: unknown[]; hasMore: boolean } | undefined;
+    service.getMyLabResultsPage(20).subscribe((p) => (page = p));
+    const req = httpMock.expectOne((r) => r.url === '/me/patient/lab-results');
+    expect(req.request.params.get('offset')).toBe('20');
+    expect(req.request.params.get('limit')).toBe('21');
+    req.flush({ data: Array.from({ length: 21 }, (_, i) => row(i)) });
+    expect(page?.items.length).toBe(20);
+    expect(page?.hasMore).toBeTrue();
+  });
+
+  it('the last page has no more', () => {
+    let page: { items: unknown[]; hasMore: boolean } | undefined;
+    service.getMyLabResultsPage(0).subscribe((p) => (page = p));
+    httpMock
+      .expectOne((r) => r.url === '/me/patient/lab-results')
+      .flush({ data: [row(1), row(2)] });
+    expect(page?.items.length).toBe(2);
+    expect(page?.hasMore).toBeFalse();
+  });
+
+  it('does not swallow a failure (the page shows it, never an empty list)', () => {
+    let failed = false;
+    service.getMyLabResultsPage(0).subscribe({ error: () => (failed = true) });
+    httpMock
+      .expectOne((r) => r.url === '/me/patient/lab-results')
+      .flush({ message: 'x' }, { status: 403, statusText: 'Forbidden' });
+    expect(failed).toBeTrue();
+  });
+
+  it("the proxy's Labs tab reads the grantor's pages with the same contract", () => {
+    service.getProxyLabResultsPage('p-9', 40).subscribe();
+    const req = httpMock.expectOne((r) => r.url === '/me/patient/proxy-access/p-9/lab-results');
+    expect(req.request.params.get('offset')).toBe('40');
+    expect(req.request.params.get('limit')).toBe('21');
+    req.flush({ data: [] });
+  });
+});
+
+describe('mergeDiagnoses (QA D1214)', () => {
+  it('lists the active problems and the chronic conditions, each once, blanks dropped', () => {
+    expect(
+      mergeDiagnoses(
+        ['Paludisme à Plasmodium falciparum, simple', ' '],
+        ['Hypertension', 'paludisme à plasmodium falciparum, simple'],
+      ),
+    ).toEqual(['Paludisme à Plasmodium falciparum, simple', 'Hypertension']);
+  });
+
+  it('an empty active list no longer hides the chronic conditions (the round-23 shape)', () => {
+    expect(mergeDiagnoses([], ['Diabète de type 2'])).toEqual(['Diabète de type 2']);
+    expect(mergeDiagnoses(null, null)).toEqual([]);
+  });
+
+  it('reads a problem sent as an object, with its code', () => {
+    expect(
+      mergeDiagnoses([{ display: 'Paludisme simple', code: 'B50.9' }, { name: 'Asthme' }], []),
+    ).toEqual(['Paludisme simple (B50.9)', 'Asthme']);
+  });
+
+  it('the health summary carries the merged list to every patient surface', () => {
+    TestBed.configureTestingModule({
+      providers: [PatientPortalService, provideHttpClient(), provideHttpClientTesting()],
+    });
+    const service = TestBed.inject(PatientPortalService);
+    const httpMock = TestBed.inject(HttpTestingController);
+    let mine: string[] = [];
+    let proxy: string[] = [];
+    service.getHealthSummary().subscribe((s) => (mine = s.activeDiagnoses));
+    service.getProxyRecords('p-1').subscribe((s) => (proxy = s.activeDiagnoses));
+    const body = {
+      data: { activeDiagnoses: ['Paludisme simple'], chronicConditions: ['Hypertension'] },
+    };
+    httpMock.expectOne('/me/patient/health-summary').flush(body);
+    httpMock.expectOne('/me/patient/proxy-access/p-1/records').flush(body);
+    expect(mine).toEqual(['Paludisme simple', 'Hypertension']);
+    expect(proxy).toEqual(['Paludisme simple', 'Hypertension']);
+    httpMock.verify();
   });
 });

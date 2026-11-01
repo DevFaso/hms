@@ -72,8 +72,8 @@ export class MyFamilyAccessComponent implements OnInit {
         this.proxies.set(list);
         this.loading.set(false);
       },
-      error: () => {
-        this.toast.error(this.translate.instant('PORTAL.FAMILY.LOAD_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('PORTAL.FAMILY.LOAD_FAILED'));
         this.loading.set(false);
       },
     });
@@ -88,8 +88,10 @@ export class MyFamilyAccessComponent implements OnInit {
           this.proxyAccess.set(list);
           this.loadingReceived.set(false);
         },
-        error: () => {
-          this.toast.error(this.translate.instant('PORTAL.FAMILY.LOAD_ACCESS_FAILED'));
+        error: (err: unknown) => {
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('PORTAL.FAMILY.LOAD_ACCESS_FAILED'),
+          );
           this.loadingReceived.set(false);
         },
       });

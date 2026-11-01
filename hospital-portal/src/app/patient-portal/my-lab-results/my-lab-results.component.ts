@@ -1,8 +1,18 @@
-import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  computed,
+  OnInit,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
 import { LabCorrectionBadgeComponent } from '../../lab/shared/lab-correction-badge.component';
 import { PatientPortalService, LabResultSummary } from '../../services/patient-portal.service';
+import { LabResultPager } from '../lab-result-pager';
+import { focusWhenRendered } from '../../shared/a11y/focus-when-rendered';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { localizeDecimals } from '../../shared/i18n/app-locale';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
@@ -24,17 +34,41 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 })
 export class MyLabResultsComponent implements OnInit {
   private readonly portal = inject(PatientPortalService);
-  results = signal<LabResultSummary[]>([]);
-  loading = signal(true);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+
+  /** QA D1213: every current result, page by page (see LabResultPager). */
+  readonly pager = new LabResultPager((offset) => this.portal.getMyLabResultsPage(offset));
+  readonly results = this.pager.results;
+  /** The server's reason the last read failed (a 4xx), when it gave one. */
+  readonly failureReason = this.pager.failureReason;
+  /** The first read only: a later page keeps the list on screen. */
+  readonly loading = computed(() => this.pager.loading() && this.results().length === 0);
+  /** The first read failed: the page says so (and why), never "no results". */
+  readonly firstReadFailed = computed(() => this.pager.loadFailed() && this.results().length === 0);
   expandedId = signal<string | null>(null);
 
   ngOnInit() {
-    this.portal.getMyLabResults().subscribe({
-      next: (r) => {
-        this.results.set(r);
-        this.loading.set(false);
-      },
-      error: () => this.loading.set(false),
+    this.pager.reload();
+  }
+
+  /** Reads the first page again after it failed. */
+  retry(): void {
+    this.pager.reload();
+  }
+
+  /**
+   * Shows the older results. When none are left the button goes, so the
+   * keyboard moves to the first result just added (or, when the page added
+   * nothing, the last one shown) rather than the page body.
+   */
+  loadMore(): void {
+    this.pager.loadMore((fresh) => {
+      if (this.pager.hasMore()) return;
+      // The first row just added, or (a page that added nothing) the last row shown.
+      const target = fresh[0] ?? this.results().at(-1);
+      if (target) {
+        focusWhenRendered(this.host.nativeElement, `[data-lab-id="${CSS.escape(target.id)}"]`);
+      }
     });
   }
 

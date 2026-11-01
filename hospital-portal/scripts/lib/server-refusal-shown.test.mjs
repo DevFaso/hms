@@ -26,7 +26,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const appDir = join(here, '..', '..', 'src', 'app');
 
 /** A read's generic message: a load, a missing record, an empty answer. */
-const READ_KEY = /LOAD|NOT_FOUND|NO_|_NONE|TEMPLATE/;
+const READ_KEY = /(?<!UP)LOAD|NOT_FOUND|NO_|_NONE|TEMPLATE/;
 
 /**
  * An error handler (with or without the error parameter) whose toast shows a

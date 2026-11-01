@@ -9,13 +9,14 @@ import {
   PatientPortalService,
   PortalAppointment,
   MedicationSummary,
-  LabResultSummary,
   PortalInvoice,
   HealthSummaryDTO,
   ProxyResponse,
 } from '../../../services/patient-portal.service';
 import { EnumLabelPipe } from '../../../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../../../shared/pipes/server-time.pipe';
+import { refusalReason } from '../../../shared/refusal-reason';
+import { LabResultPager } from '../../lab-result-pager';
 import { ClockTimePipe } from '../../../shared/pipes/clock-time.pipe';
 
 export type ProxyTabKey = 'appointments' | 'medications' | 'labResults' | 'billing' | 'records';
@@ -109,15 +110,32 @@ export class ProxyDataViewerComponent implements OnInit {
   grant = signal<ProxyResponse | null>(null);
   grantLoading = signal(true);
   grantMissing = signal(false);
+  /**
+   * QA D1212 (round 23): the grants could not be read. Shown as a failure
+   * with the server's reason, not as "no access" (which it is not).
+   */
+  grantFailed = signal(false);
   tabs = signal<ProxyTab[]>([]);
   activeTab = signal<ProxyTabKey | null>(null);
 
   tabLoading = signal(false);
   tabError = signal(false);
+  /**
+   * QA D1212 (round 23): the server's reason a tab could not be read (a 4xx:
+   * the grant expired, the record is not reachable). A proxy saw only
+   * "Impossible de charger cette section" for a 404 that said why.
+   */
+  failureReason = signal<string | null>(null);
 
   appointments = signal<PortalAppointment[]>([]);
   medications = signal<MedicationSummary[]>([]);
-  labResults = signal<LabResultSummary[]>([]);
+  /** QA D1213 (sibling): the grantor's lab results, page by page, as on /my-lab-results. */
+  readonly labPager = new LabResultPager((offset) =>
+    this.portal.getProxyLabResultsPage(this.patientId, offset),
+  );
+  readonly labResults = this.labPager.results;
+  /** The server's reason a later Labs page failed, when it gave one. */
+  readonly labMoreFailureReason = this.labPager.failureReason;
   invoices = signal<PortalInvoice[]>([]);
   records = signal<HealthSummaryDTO | null>(null);
 
@@ -143,9 +161,10 @@ export class ProxyDataViewerComponent implements OnInit {
           this.selectTab(visible[0].key);
         }
       },
-      error: () => {
+      error: (err: unknown) => {
         this.grantLoading.set(false);
-        this.grantMissing.set(true);
+        this.failureReason.set(refusalReason(err));
+        this.grantFailed.set(true);
       },
     });
   }
@@ -153,6 +172,7 @@ export class ProxyDataViewerComponent implements OnInit {
   selectTab(key: ProxyTabKey): void {
     this.activeTab.set(key);
     this.tabError.set(false);
+    this.failureReason.set(null);
     if (this.loadedTabs.has(key)) return;
     this.tabLoading.set(true);
 
@@ -162,7 +182,8 @@ export class ProxyDataViewerComponent implements OnInit {
         this.loadedTabs.add(key);
         this.tabLoading.set(false);
       },
-      error: () => {
+      error: (err: unknown) => {
+        this.failureReason.set(refusalReason(err));
         this.tabLoading.set(false);
         this.tabError.set(true);
       },
@@ -180,9 +201,7 @@ export class ProxyDataViewerComponent implements OnInit {
           .subscribe(done((v) => this.medications.set(v)));
         break;
       case 'labResults':
-        this.portal
-          .getProxyLabResults(this.patientId)
-          .subscribe(done((v) => this.labResults.set(v)));
+        this.loadLabs();
         break;
       case 'billing':
         this.portal.getProxyBilling(this.patientId).subscribe(done((v) => this.invoices.set(v)));
@@ -191,6 +210,29 @@ export class ProxyDataViewerComponent implements OnInit {
         this.portal.getProxyRecords(this.patientId).subscribe(done((v) => this.records.set(v)));
         break;
     }
+  }
+
+  /**
+   * The Labs tab reads through its pager; its first page decides the tab's
+   * loading and error state like the other tabs.
+   */
+  private loadLabs(): void {
+    this.labPager.reload(
+      () => {
+        this.loadedTabs.add('labResults');
+        this.tabLoading.set(false);
+      },
+      () => {
+        this.failureReason.set(this.labPager.failureReason());
+        this.tabLoading.set(false);
+        this.tabError.set(true);
+      },
+    );
+  }
+
+  /** Shows the grantor's older results. */
+  loadMoreLabs(): void {
+    this.labPager.loadMore();
   }
 
   retryActiveTab(): void {

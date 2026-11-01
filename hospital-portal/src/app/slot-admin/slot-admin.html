@@ -245,7 +245,7 @@
           </label>
           <label for="gen-to"
             >{{ 'SLOT_ADMIN.TO' | translate }}
-            <input id="gen-to" type="date" [(ngModel)]="genTo" />
+            <input id="gen-to" type="date" [attr.min]="genFrom || null" [(ngModel)]="genTo" />
           </label>
           <button
             class="btn-primary"
@@ -297,7 +297,7 @@
         </label>
         <label for="slot-to"
           >{{ 'SLOT_ADMIN.TO' | translate }}
-          <input id="slot-to" type="date" [(ngModel)]="slotTo" />
+          <input id="slot-to" type="date" [attr.min]="slotFrom || null" [(ngModel)]="slotTo" />
         </label>
         <button class="btn-secondary" (click)="searchSlots()" data-testid="slot-search">
           <span class="material-symbols-outlined">search</span>

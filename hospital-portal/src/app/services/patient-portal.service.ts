@@ -57,6 +57,24 @@ export interface HealthSummaryDTO {
   activeDiagnoses: string[];
 }
 
+/** QA D1213: how many lab results a portal page shows at a time. */
+export const LAB_RESULTS_PAGE_SIZE = 20;
+
+/** One page of lab results, and whether an older one exists. */
+export interface LabResultPage {
+  items: LabResultSummary[];
+  hasMore: boolean;
+}
+
+/** The rows of a page asked for with one look-ahead row (`limit = size + 1`). */
+function toLabResultPage(
+  rows: LabResultApiResponse[] | null | undefined,
+  size: number,
+): LabResultPage {
+  const mapped = (rows ?? []).map(mapLabResult);
+  return { items: mapped.slice(0, size), hasMore: mapped.length > size };
+}
+
 export interface LabResultSummary {
   id: string;
   testName: string;
@@ -183,8 +201,57 @@ interface HealthSummaryRaw {
   recentVitals: PatientVitalSignRaw[];
   immunizations: ImmunizationApiResponse[];
   allergies: string[];
-  activeDiagnoses: string[];
-  chronicConditions: string[];
+  /**
+   * QA D1214: the patient's ACTIVE problems. Display strings today; an object
+   * per problem (`{ display | name | problem | description, code }`) is read
+   * too, so the backend may send either shape.
+   */
+  activeDiagnoses: (string | PortalDiagnosisRaw)[] | null;
+  chronicConditions: (string | PortalDiagnosisRaw)[] | null;
+}
+
+/** One problem when the backend sends an object rather than a display string. */
+interface PortalDiagnosisRaw {
+  display?: string | null;
+  name?: string | null;
+  problem?: string | null;
+  description?: string | null;
+  code?: string | null;
+  icdCode?: string | null;
+}
+
+/** The text a patient reads for one problem: its name, with its code when there is one. */
+function diagnosisLabel(d: string | PortalDiagnosisRaw | null | undefined): string {
+  if (typeof d === 'string') return d.trim();
+  if (!d) return '';
+  const name = (d.display ?? d.name ?? d.problem ?? d.description ?? '').trim();
+  const code = (d.code ?? d.icdCode ?? '').trim();
+  if (!name) return code;
+  return code && !name.includes(code) ? `${name} (${code})` : name;
+}
+
+/**
+ * QA D1214 (round 23): "Pathologies actives" was always empty. The mapper
+ * read `activeDiagnoses ?? chronicConditions`, so an empty `activeDiagnoses`
+ * list hid every chronic condition, and the backend never filled
+ * `activeDiagnoses` at all. Every patient-facing surface (my-records, the
+ * patient dashboard, the proxy Records tab) goes through this one merge: the
+ * active problems and the chronic conditions, blanks dropped, each named once.
+ */
+export function mergeDiagnoses(
+  active: readonly (string | PortalDiagnosisRaw)[] | null | undefined,
+  chronic: readonly (string | PortalDiagnosisRaw)[] | null | undefined,
+): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const d of [...(active ?? []), ...(chronic ?? [])]) {
+    const label = diagnosisLabel(d);
+    const key = label.toLocaleLowerCase();
+    if (!label || seen.has(key)) continue;
+    seen.add(key);
+    out.push(label);
+  }
+  return out;
 }
 
 /**
@@ -405,7 +472,7 @@ function mapHealthSummary(d: HealthSummaryRaw | null | undefined): HealthSummary
       totalDosesInSeries: im.totalDosesInSeries ?? null,
     })),
     allergies: d?.allergies ?? [],
-    activeDiagnoses: d?.activeDiagnoses ?? d?.chronicConditions ?? [],
+    activeDiagnoses: mergeDiagnoses(d?.activeDiagnoses, d?.chronicConditions),
   };
 }
 
@@ -1199,6 +1266,29 @@ export class PatientPortalService {
       );
   }
 
+  /**
+   * QA D1213 (round 23): one page of the patient's lab results, newest first.
+   * `/my-lab-results` read `limit=20` once, so a patient with more lost the
+   * older ones (a critical K 6,8 among them) with no way to reach them.
+   *
+   * Contract (`GET /api/me/patient/lab-results?offset={n}&limit={k}`): the
+   * patient's CURRENT results (released and pending; superseded rows already
+   * removed by the server), newest first; skip the first `offset` of them and
+   * return at most `limit`. The list shape is unchanged (the dashboard and
+   * the mobile apps read it), and `offset` defaults to 0. The page asks for
+   * one row more than it shows: that row only says whether there is more.
+   *
+   * Errors are not swallowed here (unlike {@link getMyLabResults}): the page
+   * says that a load failed, and why, rather than showing "no results".
+   */
+  getMyLabResultsPage(offset: number, size = LAB_RESULTS_PAGE_SIZE): Observable<LabResultPage> {
+    return this.http
+      .get<ApiWrapper<LabResultApiResponse[]>>(`${this.base}/lab-results`, {
+        params: { offset, limit: size + 1 },
+      })
+      .pipe(map((r) => toLabResultPage(r.data, size)));
+  }
+
   getMyVitals(limit = 10): Observable<VitalSignSummary[]> {
     return this.http
       .get<ApiWrapper<PatientVitalSignRaw[]>>(`${this.base}/vitals`, { params: { limit } })
@@ -1716,6 +1806,24 @@ export class PatientPortalService {
         },
       )
       .pipe(map((r) => (r.data ?? []).map(mapLabResult)));
+  }
+
+  /**
+   * QA D1213 (sibling): one page of a grantor's lab results for a proxy, with
+   * the same contract as {@link getMyLabResultsPage}
+   * (`GET /api/me/patient/proxy-access/{patientId}/lab-results?offset=&limit=`).
+   */
+  getProxyLabResultsPage(
+    patientId: string,
+    offset: number,
+    size = LAB_RESULTS_PAGE_SIZE,
+  ): Observable<LabResultPage> {
+    return this.http
+      .get<ApiWrapper<LabResultApiResponse[]>>(
+        `${this.base}/proxy-access/${patientId}/lab-results`,
+        { params: { offset, limit: size + 1 } },
+      )
+      .pipe(map((r) => toLabResultPage(r.data, size)));
   }
 
   getProxyBilling(patientId: string): Observable<PortalInvoice[]> {

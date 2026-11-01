@@ -394,18 +394,16 @@ export class BillingComponent implements OnInit {
   }
 
   /**
-   * QA D1069: the edit moves an issued invoice to CANCELLED, so the reason is
-   * asked for (the server refuses the move without it).
+   * QA D1069: the edit moves an invoice to CANCELLED, so the reason is asked
+   * for (the server refuses the move without it).
+   *
+   * QA D1217 (round 23): a DRAFT too. The round-19 rule exempted drafts, and a
+   * draft generated at checkout, priced lines and all, was cancelled with
+   * `cancelReason: null`. Real hospitals audit every void: no status is exempt.
    */
-  cancellingIssued(): boolean {
+  cancelling(): boolean {
     const current = this.editingStatus();
-    return (
-      this.editing() &&
-      this.form.status === 'CANCELLED' &&
-      !!current &&
-      current !== 'DRAFT' &&
-      current !== 'CANCELLED'
-    );
+    return this.editing() && this.form.status === 'CANCELLED' && current !== 'CANCELLED';
   }
 
   /** QA D614: an issued invoice keeps its patient; it is cancelled and re-issued instead. */
@@ -524,10 +522,10 @@ export class BillingComponent implements OnInit {
     // QA D1069: only a cancellation carries a reason; any other edit sends none.
     if (this.form.status !== 'CANCELLED') {
       this.form.cancelReason = undefined;
-    } else if (this.cancellingIssued() && !this.form.cancelReason?.trim()) {
+    } else if (this.cancelling() && !this.form.cancelReason?.trim()) {
       // QA D1072 (round-18 merge): the missing reason is marked under its field
       // and focused, not only named in a toast.
-      const message = this.translate.instant('BILLING.CANCEL_REASON_REQUIRED');
+      const message = this.translate.instant('INVOICE_CANCEL.REASON_REQUIRED');
       refuseFields(this.host.nativeElement, [CANCEL_REASON_ID], [CANCEL_REASON_ID], message);
       this.toast.error(message);
       return;
@@ -560,7 +558,7 @@ ${this.translate.instant('BILLING.SUPPLEMENTARY_CONFIRM')}`)
           }
           return;
         }
-        this.toast.error(err.error?.message ?? this.translate.instant('BILLING.SAVE_FAILED'));
+        this.toast.error(refusalReason(err) ?? this.translate.instant('BILLING.SAVE_FAILED'));
       },
     });
   }
