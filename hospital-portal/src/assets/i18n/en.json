@@ -4566,7 +4566,8 @@
       "LOAD_FAILED": "The list of witnesses could not be loaded.",
       "REQUIRED": "Choose the witness of this controlled dose."
     },
-    "PAIN_SCORE": "Pain (0-10)"
+    "PAIN_SCORE": "Pain (0-10)",
+    "MAR_REASON_LABEL": "Reason"
   },
   "ONBOARDING": {
     "ABILITIES_TITLE": "Your Abilities",
@@ -8700,7 +8701,9 @@
     "TITLE": "Triage Assessment",
     "VITAL_SIGNS": "Vital Signs",
     "WEIGHT": "Weight",
-    "FUNDAL_HEIGHT": "Fundal height (cm) — pregnancy"
+    "FUNDAL_HEIGHT": "Fundal height (cm) — pregnancy",
+    "ESI_CHOOSE": "Choose the ESI level…",
+    "VITAL_REQUIRED": "Record at least one vital sign (temperature, pulse, respiratory rate, blood pressure or SpO2)."
   },
   "INTAKE": {
     "ADD_ALLERGY": "Add Allergy",
@@ -8740,7 +8743,8 @@
     "MED_NAME_ROW": "Medication, row {{row}}",
     "MED_DOSAGE_ROW": "Dosage, row {{row}}",
     "MED_FREQUENCY_ROW": "Frequency, row {{row}}",
-    "MED_ROUTE_ROW": "Route, row {{row}}"
+    "MED_ROUTE_ROW": "Route, row {{row}}",
+    "ASSESSMENT_REQUIRED": "Record the assessment before submitting: allergies, medications, pain, fall risk or nursing notes."
   },
   "PRE_CHECKIN": {
     "ADDRESS": "Address",
@@ -11842,7 +11846,7 @@
     "TRANSFERS_LOAD_ERROR": "Waiting transfers could not be loaded."
   },
   "EMAR": {
-    "ACTION_RECORD_GIVEN": "Record GIVEN",
+    "ACTION_RECORD_GIVEN": "Record as given",
     "ADMIN_STATUS": {
       "GIVEN": "given",
       "HELD": "held",
@@ -11892,7 +11896,10 @@
     },
     "VERIFYING": "Verifying…",
     "VERIFY_FIVE_RIGHTS": "Verify five rights",
-    "PRESCRIBED": "Prescribed"
+    "PRESCRIBED": "Prescribed",
+    "ACTION_HOLD": "Hold the dose",
+    "ACTION_REFUSED": "Patient refused",
+    "HOLD_REFUSE_REASON_LABEL": "Reason (required to hold the dose or record a refusal)"
   },
   "CREDENTIALING": {
     "CURRENT_EXPIRY": "Current expiry",

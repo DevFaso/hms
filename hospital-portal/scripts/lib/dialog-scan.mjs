@@ -25,6 +25,9 @@
  *            `appInlineSubForm` + `(dismissed)` (or its own `(keydown.escape)`
  *            handler that stops the key). Escape there bubbled to the dialog,
  *            which closed and dropped the typed reason.
+ *  label-icon — QA D1174 (round 21): the element a dialog's aria-labelledby
+ *            names holds an icon-font span without aria-hidden="true", so the
+ *            ligature ("monitor_heart") is read as the first word of the name.
  *  focus   — the dialog (or an ancestor) carries no focus-managing directive.
  *            QA D1004 (round 19): a NESTED dialog's directive does not count
  *            for the dialog around it (the outer form still kept focus on its
@@ -560,7 +563,10 @@ export function dialogFindings(html, componentSource = html, dialogSelectors = n
       });
     }
   });
-  return out.concat(subFormFindings(html, tokens, componentSource));
+  return out.concat(
+    subFormFindings(html, tokens, componentSource),
+    labelIconFindings(html, tokens),
+  );
 }
 
 /** A field that holds what the reader types (a checkbox or a file is not text to lose). */
@@ -772,5 +778,42 @@ export function subFormFindings(html, tokens = tags(html), componentSource = htm
       });
     });
   }
+  return out;
+}
+
+/** An icon-font element: its text is a ligature name, never words to read. */
+const ICON_CLASS = /\bmaterial-(?:symbols|icons)\b/;
+
+/**
+ * QA D1174 (round 21): the vitals dialog was announced as "monitor_heart
+ * Saisir les signes vitaux": the icon in its title had no aria-hidden.
+ */
+export function labelIconFindings(html, tokens = tags(html)) {
+  const out = [];
+  const named = new Set();
+  for (const tag of tokens) {
+    if (tag.type !== 'open') continue;
+    const ids = attrValue(tag, 'aria-labelledby');
+    if (ids) for (const id of ids.replace(/['"]/g, '').split(/\s+/)) if (id) named.add(id);
+  }
+  tokens.forEach((tag, index) => {
+    if (tag.type !== 'open' || tag.selfClosing) return;
+    const id = (attrValue(tag, 'id') ?? '').replace(/['"]/g, '').trim();
+    if (!id || !named.has(id)) return;
+    const end = closeIndexOf(tokens, index);
+    for (let k = index + 1; k < end; k++) {
+      const t = tokens[k];
+      if (t.type !== 'open' || !ICON_CLASS.test(t.attrs.get('class') ?? '')) continue;
+      const hidden = (attrValue(t, 'aria-hidden') ?? '').replace(/['"]/g, '').trim() === 'true';
+      if (hidden) continue;
+      out.push({
+        line: t.line,
+        rule: 'label-icon',
+        anchor: `#${id}`,
+        message:
+          'an icon inside the element that names a dialog has no aria-hidden="true": its ligature is read as part of the name',
+      });
+    }
+  });
   return out;
 }

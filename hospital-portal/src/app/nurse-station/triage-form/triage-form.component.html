@@ -67,6 +67,8 @@
             name="esiScore"
             required
           >
+            <!-- QA D1158: never preset; the nurse chooses the acuity. -->
+            <option [ngValue]="null" disabled>{{ 'TRIAGE.ESI_CHOOSE' | translate }}</option>
             @for (opt of esiOptions; track opt) {
               <option [ngValue]="opt.value">
                 {{ opt.label }}
@@ -320,8 +322,8 @@
           type="submit"
           class="btn btn-primary"
           [disabled]="saving()"
-          [appSubmitGuard]="!canSubmit"
-          [submitGuardFields]="['esiScore']"
+          [appSubmitGuard]="submitBlockReason()"
+          [submitGuardFields]="submitGuardFieldIds()"
         >
           @if (saving()) {
             <span>{{ 'COMMON.SAVING' | translate }}...</span>

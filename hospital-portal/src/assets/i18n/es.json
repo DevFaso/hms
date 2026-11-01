@@ -4566,7 +4566,8 @@
       "LOAD_FAILED": "No se pudo cargar la lista de testigos.",
       "REQUIRED": "Elija al testigo de esta administración de estupefaciente."
     },
-    "PAIN_SCORE": "Dolor (0-10)"
+    "PAIN_SCORE": "Dolor (0-10)",
+    "MAR_REASON_LABEL": "Motivo"
   },
   "ONBOARDING": {
     "ABILITIES_TITLE": "Sus capacidades",
@@ -8700,7 +8701,9 @@
     "TITLE": "Evaluación de triaje",
     "VITAL_SIGNS": "Signos vitales",
     "WEIGHT": "Peso",
-    "FUNDAL_HEIGHT": "Altura uterina (cm) — embarazo"
+    "FUNDAL_HEIGHT": "Altura uterina (cm) — embarazo",
+    "ESI_CHOOSE": "Elegir el nivel ESI…",
+    "VITAL_REQUIRED": "Registre al menos un signo vital (temperatura, pulso, frecuencia respiratoria, tensión o SpO2)."
   },
   "INTAKE": {
     "ADD_ALLERGY": "Agregar alergia",
@@ -8740,7 +8743,8 @@
     "MED_NAME_ROW": "Medicamento, fila {{row}}",
     "MED_DOSAGE_ROW": "Dosis, fila {{row}}",
     "MED_FREQUENCY_ROW": "Frecuencia, fila {{row}}",
-    "MED_ROUTE_ROW": "Vía, fila {{row}}"
+    "MED_ROUTE_ROW": "Vía, fila {{row}}",
+    "ASSESSMENT_REQUIRED": "Registre la evaluación antes de enviar: alergias, medicamentos, dolor, riesgo de caída o notas de enfermería."
   },
   "PRE_CHECKIN": {
     "ADDRESS": "Dirección",
@@ -11842,7 +11846,7 @@
     "TRANSFERS_LOAD_ERROR": "No se pudieron cargar los traslados pendientes."
   },
   "EMAR": {
-    "ACTION_RECORD_GIVEN": "Registrar ADMINISTRADA",
+    "ACTION_RECORD_GIVEN": "Registrar como administrada",
     "ADMIN_STATUS": {
       "GIVEN": "administrada",
       "HELD": "suspendida",
@@ -11892,7 +11896,10 @@
     },
     "VERIFYING": "Verificando…",
     "VERIFY_FIVE_RIGHTS": "Verificar los cinco correctos",
-    "PRESCRIBED": "Prescrito"
+    "PRESCRIBED": "Prescrito",
+    "ACTION_HOLD": "Suspender la dosis",
+    "ACTION_REFUSED": "Rechazo del paciente",
+    "HOLD_REFUSE_REASON_LABEL": "Motivo (obligatorio para suspender la dosis o registrar un rechazo)"
   },
   "CREDENTIALING": {
     "CURRENT_EXPIRY": "Caducidad actual",

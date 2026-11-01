@@ -227,6 +227,7 @@ export class EmarComponent implements OnInit, OnDestroy {
     this.doseScan.set('');
     this.routeScan.set('');
     this.overrideReason.set('');
+    this.holdRefuseReason.set('');
     this.witnessUserId.set(null);
     this.verification.set(null);
     this.scannerError.set(null);
@@ -328,10 +329,20 @@ export class EmarComponent implements OnInit, OnDestroy {
       });
   }
 
+  /** QA D1159: why the dose is held or refused; required for those two outcomes. */
+  protected readonly holdRefuseReason = signal('');
+
+  protected holdRefuseReasonMissing(): boolean {
+    return this.holdRefuseReason().trim() === '';
+  }
+
   protected administer(status: 'GIVEN' | 'HELD' | 'REFUSED'): void {
     const task = this.activeTask();
     if (!task) return;
     if (status === 'GIVEN' && !this.canAdminister()) return;
+    // QA D1159: never a HELD/REFUSED record without its reason (the buttons' guard says so first).
+    const holdReason = this.holdRefuseReason().trim();
+    if (status !== 'GIVEN' && !holdReason) return;
 
     this.administerInFlight.set(true);
     const payload: {
@@ -343,6 +354,7 @@ export class EmarComponent implements OnInit, OnDestroy {
     if (this.needsOverride() && status === 'GIVEN') {
       payload.overrideReason = this.overrideReason().trim();
     }
+    if (status !== 'GIVEN') payload.note = holdReason;
     const witness = this.witnessUserId();
     if (status === 'GIVEN' && this.needsWitness() && witness) {
       payload.witnessUserId = witness;

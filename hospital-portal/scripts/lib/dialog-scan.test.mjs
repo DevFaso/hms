@@ -435,3 +435,15 @@ test('QA D1154 (round 21): a cdkTrapFocus dialog whose every control is behind a
     </div>`;
   assert.deepEqual(focus(directive), []);
 });
+
+test('QA D1174 (round 21): an icon in the title that names a dialog must be aria-hidden', () => {
+  const html = `<div class="modal" appModalDialog aria-labelledby="vt" (escaped)="c()">
+    <h3 id="vt"><span class="material-symbols-outlined">monitor_heart</span> Vitals</h3>
+    <button>OK</button></div>`;
+  const icons = (h) => scan(h, h).filter((f) => f.rule === 'label-icon');
+  assert.deepEqual(
+    icons(html).map((f) => f.anchor),
+    ['#vt'],
+  );
+  assert.deepEqual(icons(html.replace('outlined">', 'outlined" aria-hidden="true">')), []);
+});

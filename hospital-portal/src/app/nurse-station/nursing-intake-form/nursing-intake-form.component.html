@@ -287,7 +287,8 @@
           type="submit"
           class="btn btn-primary"
           [disabled]="saving()"
-          [appSubmitGuard]="encounter?.id ? null : ('INTAKE.NO_ENCOUNTER' | translate)"
+          [appSubmitGuard]="submitBlockReason()"
+          [submitGuardFields]="['nursingNotes']"
         >
           @if (saving()) {
             <span>{{ 'COMMON.SAVING' | translate }}...</span>

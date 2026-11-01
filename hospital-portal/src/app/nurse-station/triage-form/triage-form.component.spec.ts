@@ -62,6 +62,36 @@ describe('TriageFormComponent', () => {
     fixture.detectChanges();
   });
 
+  /** QA D1158: a triage the nurse actually filled — an acuity and one vital sign. */
+  function fillMinimum(): void {
+    component.esiScore.set(3);
+    component.heartRateBpm.set(88);
+  }
+
+  it('QA D1158: the ESI is not preset and an empty triage is refused, field by field', () => {
+    const el = fixture.nativeElement as HTMLElement;
+    document.body.appendChild(el);
+    try {
+      expect(component.esiScore()).toBeNull();
+      expect(component.canSubmit).toBeFalse();
+      const submit = el.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+      submit.click();
+      fixture.detectChanges();
+      expect(mockEncounterService.submitTriage).not.toHaveBeenCalled();
+      expect(el.querySelector('#esiScore')?.getAttribute('aria-invalid')).toBe('true');
+
+      component.esiScore.set(2);
+      fixture.detectChanges();
+      submit.click();
+      fixture.detectChanges();
+      expect(mockEncounterService.submitTriage).not.toHaveBeenCalled();
+      expect(el.querySelector('#temperature')?.getAttribute('aria-invalid')).toBe('true');
+      expect(el.textContent).toContain('TRIAGE.VITAL_REQUIRED');
+    } finally {
+      el.remove();
+    }
+  });
+
   // QA D1077: the triage form offered and stored a fundal height for a man.
   it('D1077: offers no fundal height for a patient recorded as male, and sends none', () => {
     mockPatientService.getById.and.returnValue(
@@ -73,6 +103,7 @@ describe('TriageFormComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
     expect(el.querySelector('[data-testid="triage-fundal-height"]')).toBeNull();
     component.fundalHeightCm.set(28);
+    fillMinimum();
     component.submit();
     const sent = mockEncounterService.submitTriage.calls.mostRecent().args[1];
     expect(sent.fundalHeightCm).toBeUndefined();
@@ -139,7 +170,7 @@ describe('TriageFormComponent', () => {
   });
 
   it('should allow submit when ESI score is valid and encounter is set', () => {
-    component.esiScore.set(3);
+    fillMinimum();
     expect(component.canSubmit).toBeTrue();
   });
 
@@ -157,7 +188,7 @@ describe('TriageFormComponent', () => {
     mockEncounterService.submitTriage.and.returnValue(of(sampleResponse));
     const emitSpy = spyOn(component.triageCompleted, 'emit');
 
-    component.esiScore.set(3);
+    fillMinimum();
     component.chiefComplaint.set('Headache');
     component.roomAssignment.set('ER-Bay-3');
     component.submit();
@@ -179,6 +210,7 @@ describe('TriageFormComponent', () => {
     mockEncounterService.submitTriage.and.returnValue(
       throwError(() => ({ status: 400, error: { message: 'Invalid encounter status' } })),
     );
+    fillMinimum();
 
     component.submit();
 
@@ -188,6 +220,7 @@ describe('TriageFormComponent', () => {
 
   it('should show generic error when no message in error response', () => {
     mockEncounterService.submitTriage.and.returnValue(throwError(() => ({})));
+    fillMinimum();
 
     component.submit();
 

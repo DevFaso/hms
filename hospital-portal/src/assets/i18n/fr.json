@@ -4566,7 +4566,8 @@
       "LOAD_FAILED": "La liste des témoins n’a pas pu être chargée.",
       "REQUIRED": "Choisissez le témoin de cette administration de stupéfiant."
     },
-    "PAIN_SCORE": "Douleur (0-10)"
+    "PAIN_SCORE": "Douleur (0-10)",
+    "MAR_REASON_LABEL": "Motif"
   },
   "ONBOARDING": {
     "ABILITIES_TITLE": "Vos capacités",
@@ -8700,7 +8701,9 @@
     "TITLE": "Évaluation de triage",
     "VITAL_SIGNS": "Signes vitaux",
     "WEIGHT": "Poids",
-    "FUNDAL_HEIGHT": "Hauteur utérine (cm) — grossesse"
+    "FUNDAL_HEIGHT": "Hauteur utérine (cm) — grossesse",
+    "ESI_CHOOSE": "Choisir le niveau ESI…",
+    "VITAL_REQUIRED": "Saisissez au moins un signe vital (température, pouls, fréquence respiratoire, tension ou SpO2)."
   },
   "INTAKE": {
     "ADD_ALLERGY": "Ajouter une allergie",
@@ -8740,7 +8743,8 @@
     "MED_NAME_ROW": "Médicament, ligne {{row}}",
     "MED_DOSAGE_ROW": "Posologie, ligne {{row}}",
     "MED_FREQUENCY_ROW": "Fréquence, ligne {{row}}",
-    "MED_ROUTE_ROW": "Voie, ligne {{row}}"
+    "MED_ROUTE_ROW": "Voie, ligne {{row}}",
+    "ASSESSMENT_REQUIRED": "Saisissez l'évaluation avant de soumettre : allergies, médicaments, douleur, risque de chute ou notes infirmières."
   },
   "PRE_CHECKIN": {
     "ADDRESS": "Adresse",
@@ -11842,7 +11846,7 @@
     "TRANSFERS_LOAD_ERROR": "Les transferts en attente n'ont pas pu être chargés."
   },
   "EMAR": {
-    "ACTION_RECORD_GIVEN": "Enregistrer ADMINISTRÉE",
+    "ACTION_RECORD_GIVEN": "Enregistrer comme administrée",
     "ADMIN_STATUS": {
       "GIVEN": "administrée",
       "HELD": "suspendue",
@@ -11892,7 +11896,10 @@
     },
     "VERIFYING": "Vérification en cours…",
     "VERIFY_FIVE_RIGHTS": "Vérifier les cinq B",
-    "PRESCRIBED": "Prescrit"
+    "PRESCRIBED": "Prescrit",
+    "ACTION_HOLD": "Suspendre la dose",
+    "ACTION_REFUSED": "Refus du patient",
+    "HOLD_REFUSE_REASON_LABEL": "Motif (obligatoire pour suspendre la dose ou enregistrer un refus)"
   },
   "CREDENTIALING": {
     "CURRENT_EXPIRY": "Expiration actuelle",
