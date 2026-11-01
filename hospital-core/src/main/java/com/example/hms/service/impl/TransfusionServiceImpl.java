@@ -245,6 +245,11 @@ public class TransfusionServiceImpl implements TransfusionService {
         if (unit.getStatus() == BloodUnitStatus.TRANSFUSED) {
             throw new BusinessException("transfusion.unit.alreadyTransfused", unit.getUnitNumber());
         }
+        // QA D1186 class (round 22): a discarded unit stays discarded; a second
+        // discard overwrote the reason recorded for the destruction.
+        if (unit.getStatus() == BloodUnitStatus.DISCARDED) {
+            throw new BusinessException("transfusion.unit.alreadyDiscarded", unit.getUnitNumber());
+        }
         unit.setStatus(BloodUnitStatus.DISCARDED);
         unit.setDiscardReason(reason);
         return mapper.toDto(unitRepository.save(unit));

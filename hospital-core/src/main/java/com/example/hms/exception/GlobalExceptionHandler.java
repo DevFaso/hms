@@ -740,7 +740,9 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Object> handleAccessDenied(AccessDeniedException ex, WebRequest req) {
         log.warn("Access denied: {}", ex.getMessage());
         if (ex instanceof ClientSafeAccessDeniedException && ex.getMessage() != null) {
-            return buildErrorResponse(HttpStatus.FORBIDDEN, ex.getMessage(), req);
+            // QA D1187 (round 22): a thrower may hand a bundle KEY; it is resolved
+            // in the request locale here, and a resolved sentence passes unchanged.
+            return buildErrorResponse(HttpStatus.FORBIDDEN, passThrough(ex.getMessage()), req);
         }
         // The opaque default is localized now (D174), so clients that hid it by
         // comparing the English literal key on this code instead.

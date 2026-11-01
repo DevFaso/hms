@@ -60,7 +60,7 @@ public class PatientRecallServiceImpl implements PatientRecallService {
         Patient patient = patientRepository.findById(request.getPatientId())
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", request.getPatientId()));
         if (!patient.isRegisteredInHospital(hospitalId)) {
-            throw new BusinessException("The patient is not registered at this hospital.");
+            throw new BusinessException("recall.patient.notRegistered");
         }
 
         Department department = null;
@@ -102,7 +102,9 @@ public class PatientRecallServiceImpl implements PatientRecallService {
         // SCHEDULED may close too — that is the recall completing normally.
         if (!OPEN_STATUSES.contains(recall.getStatus())
             && recall.getStatus() != RecallStatus.SCHEDULED) {
-            throw new BusinessException("This recall is already " + recall.getStatus() + ".");
+            // QA D1187 (round 22): the refusal is a key, in the reader's language.
+            throw new BusinessException(recall.getStatus() == RecallStatus.CANCELLED
+                ? "recall.close.alreadyCancelled" : "recall.close.alreadyClosed");
         }
         return toDto(finish(recall, RecallStatus.CLOSED), hospitalId);
     }
@@ -112,7 +114,7 @@ public class PatientRecallServiceImpl implements PatientRecallService {
     public RecallResponseDTO cancelRecall(UUID recallId, UUID hospitalId, String reason) {
         PatientRecall recall = loadScoped(recallId, hospitalId);
         if (!OPEN_STATUSES.contains(recall.getStatus())) {
-            throw new BusinessException("Only a pending or notified recall can be cancelled.");
+            throw new BusinessException("recall.cancel.notOpen");
         }
         // QA D1157 (round 21): a cancelled recall says why, on the server.
         recall.setCloseReason(com.example.hms.service.support.CancelledOrders.requireCancelReason(reason));
@@ -124,14 +126,14 @@ public class PatientRecallServiceImpl implements PatientRecallService {
     public RecallResponseDTO linkAppointment(UUID recallId, UUID hospitalId, UUID appointmentId) {
         PatientRecall recall = loadScoped(recallId, hospitalId);
         if (!OPEN_STATUSES.contains(recall.getStatus())) {
-            throw new BusinessException("Only a pending or notified recall can be scheduled.");
+            throw new BusinessException("recall.link.notOpen");
         }
         Appointment appointment = appointmentRepository.findById(appointmentId)
             .filter(a -> a.getHospital() != null && hospitalId.equals(a.getHospital().getId()))
             .orElseThrow(() -> new ResourceNotFoundException("appointment.notFound", appointmentId));
         if (appointment.getPatient() == null
             || !recall.getPatient().getId().equals(appointment.getPatient().getId())) {
-            throw new BusinessException("That appointment belongs to a different patient.");
+            throw new BusinessException("recall.link.otherPatient");
         }
         recall.setLinkedAppointment(appointment);
         recall.setStatus(RecallStatus.SCHEDULED);

@@ -167,7 +167,11 @@
                   ? 'APPOINTMENTS.STATUS_REASON_CANCELLED'
                   : appt.status === 'NO_SHOW'
                     ? 'APPOINTMENTS.STATUS_REASON_NO_SHOW'
-                    : 'APPOINTMENTS.STATUS_REASON'
+                    : appt.status === 'SCHEDULED' ||
+                        appt.status === 'PENDING' ||
+                        appt.status === 'CONFIRMED'
+                      ? 'APPOINTMENTS.STATUS_REASON_RESCHEDULED'
+                      : 'APPOINTMENTS.STATUS_REASON'
                 ) | translate
               }}</span>
               <span class="field-value">{{ appt.statusReason }}</span>

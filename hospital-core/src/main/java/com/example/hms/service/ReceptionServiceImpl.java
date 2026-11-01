@@ -86,6 +86,9 @@ public class ReceptionServiceImpl implements ReceptionService {
     private static final DateTimeFormatter EXPIRY_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
     private static final String WAITLIST_STATUS_WAITING = "WAITING";
     private static final String WAITLIST_STATUS_OFFERED = "OFFERED";
+    private static final String WAITLIST_STATUS_CLOSED = "CLOSED";
+    /** How far a slot's hold end may be from the offer's expiry and still be that offer's hold. */
+    private static final long OFFER_HOLD_TOLERANCE_MINUTES = 2;
     private static final int DEFAULT_OFFER_HOURS = 48;
     private static final String STATUS_ARRIVED = "ARRIVED";
     private static final String STATUS_WALK_IN = "WALK_IN";
@@ -879,7 +882,7 @@ public class ReceptionServiceImpl implements ReceptionService {
         Appointment appointment = appointmentRepo.findById(booked.getAppointmentId())
                 .orElseThrow(() -> new ResourceNotFoundException("appointment.notFound", booked.getAppointmentId()));
         entry.setOfferedAppointment(appointment);
-        entry.setStatus("CLOSED");
+        entry.setStatus(WAITLIST_STATUS_CLOSED);
         return toWaitlistResponse(waitlistRepo.save(entry), hospitalId);
     }
 
@@ -924,12 +927,28 @@ public class ReceptionServiceImpl implements ReceptionService {
      */
     private void releaseOfferedSlot(AppointmentWaitlist entry) {
         AppointmentSlot slot = entry.getOfferedSlot();
-        if (slot != null && slot.getStatus() == SlotStatus.HELD) {
+        if (slot != null && slot.getStatus() == SlotStatus.HELD && holdIsThisOffer(slot, entry)) {
             slot.setHeldUntil(null);
             slot.setHeldByUserId(null);
             slot.setStatus(SlotStatus.OPEN);
             slotRepo.save(slot);
         }
+    }
+
+    /**
+     * QA D1185 (round 22, review round 1): the hold on the slot is this offer's.
+     * offer() holds the slot until the offer expires, so the two times agree to
+     * the minute. Once an offer lapses, the slot can be held again by someone
+     * else before the sweep runs, and closing or declining the old entry must
+     * not free that other hold. An entry without an expiry (or a hold without
+     * an end) cannot be told apart and keeps the old behaviour.
+     */
+    static boolean holdIsThisOffer(AppointmentSlot slot, AppointmentWaitlist entry) {
+        if (entry.getOfferExpiresAt() == null || slot.getHeldUntil() == null) {
+            return true;
+        }
+        long apart = Math.abs(java.time.Duration.between(slot.getHeldUntil(), entry.getOfferExpiresAt()).toMinutes());
+        return apart <= OFFER_HOLD_TOLERANCE_MINUTES;
     }
 
     private void notifyOffer(AppointmentWaitlist entry, AppointmentSlot slot, LocalDateTime expiry) {
@@ -958,10 +977,24 @@ public class ReceptionServiceImpl implements ReceptionService {
     public void closeWaitlistEntry(UUID waitlistId, UUID hospitalId, String reason) {
         AppointmentWaitlist entry = waitlistRepo.findByIdAndHospital_Id(waitlistId, hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException(WAITLIST_ENTRY_NOT_FOUND_KEY, waitlistId));
+        // QA D1186 (round 22): a closed entry stays closed, and the reason it
+        // was closed with (the D1157 record) is never overwritten.
+        if (WAITLIST_STATUS_CLOSED.equals(entry.getStatus())) {
+            throw new BusinessException("waitlist.close.alreadyClosed");
+        }
         // QA D1157 (round 21): closing an entry says why, on the server; an
         // empty body closed it at once and nothing recorded the decision.
-        entry.setCloseReason(com.example.hms.service.support.CancelledOrders.requireCancelReason(reason));
-        entry.setStatus("CLOSED");
+        String closeReason = com.example.hms.service.support.CancelledOrders.requireCancelReason(reason);
+        // QA D1185 (round 22): closing an OFFERED entry withdraws the offer and
+        // frees the held slot at once, as a decline and the expiry sweep do;
+        // the slot stayed HELD (and out of search) until the hold expired.
+        if (WAITLIST_STATUS_OFFERED.equals(entry.getStatus())) {
+            releaseOfferedSlot(entry);
+            entry.setOfferedSlot(null);
+            entry.setOfferExpiresAt(null);
+        }
+        entry.setCloseReason(closeReason);
+        entry.setStatus(WAITLIST_STATUS_CLOSED);
         waitlistRepo.save(entry);
     }
 

@@ -1180,6 +1180,19 @@ class TransfusionServiceImplTest {
     }
 
     @Test
+    void aDiscardedUnitIsNotDiscardedAgainAndKeepsItsReason_D1186() {
+        BloodUnit gone = unit(AboGroup.O, RhFactor.NEGATIVE, BloodProductType.PLATELETS,
+            BloodUnitStatus.DISCARDED);
+        gone.setDiscardReason("Cold chain breach");
+        UUID goneId = gone.getId();
+
+        assertThatThrownBy(() -> service.discardUnit(goneId, "Second reason"))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("transfusion.unit.alreadyDiscarded");
+        assertThat(gone.getDiscardReason()).isEqualTo("Cold chain breach");
+    }
+
+    @Test
     void aRequestMayBeTiedToAnEncounterAtTheSameHospital() {
         when(bloodGroupRepository.findByPatient_IdAndHospital_IdAndSupersededFalse(patientId, hospitalId))
             .thenReturn(Optional.of(group(AboGroup.A, RhFactor.POSITIVE, AntibodyScreenResult.NEGATIVE)));

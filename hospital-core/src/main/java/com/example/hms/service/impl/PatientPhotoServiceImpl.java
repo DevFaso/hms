@@ -23,11 +23,15 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Filesystem-backed patient photos (P3 #21). The storage directory is a
- * SIBLING of the public upload dir, never inside it — {@code /uploads/**}
- * is served permitAll and a patient photo must only leave the server
- * through the authenticated streaming endpoint. Validation mirrors the
- * profile-image rules (5 MB, image/*, extension allowlist).
+ * Filesystem-backed patient photos (P3 #21). A patient photo leaves the
+ * server only through the authenticated streaming endpoint: the only upload
+ * path served without a token is {@code /uploads/profile-images/**}
+ * (WebConfig, SecurityConfig), so the directory may sit under the upload root.
+ * QA D1184 (round 22): it does by default ({@code <app.upload.dir>/patient-photos}),
+ * because a sibling of the upload root is not on the persistent volume mounted
+ * there: the old default, {@code patient-photos} relative to the working
+ * directory, was on the container's own disk and lost at every deploy.
+ * Validation mirrors the profile-image rules (5 MB, image/*, extension allowlist).
  */
 @Slf4j
 @Service
@@ -42,7 +46,7 @@ public class PatientPhotoServiceImpl implements PatientPhotoService {
     private final Path photoDir;
 
     public PatientPhotoServiceImpl(PatientRepository patientRepository,
-                                   @Value("${app.patient-photo.dir:patient-photos}") String photoDir) {
+                                   @Value("${app.patient-photo.dir:${app.upload.dir:uploads}/patient-photos}") String photoDir) {
         this.patientRepository = patientRepository;
         this.photoDir = Paths.get(photoDir).toAbsolutePath().normalize();
     }
@@ -50,12 +54,12 @@ public class PatientPhotoServiceImpl implements PatientPhotoService {
     @Override
     public LocalDateTime upload(UUID patientId, UUID hospitalId, MultipartFile file) {
         if (hospitalId == null) {
-            throw new BusinessException("An active hospital is required to store a patient photo.");
+            throw new BusinessException("patient.photo.hospitalRequired");
         }
         Patient patient = patientRepository.findById(patientId)
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
         if (!patient.isRegisteredInHospital(hospitalId)) {
-            throw new BusinessException("Patient is not registered at this hospital.");
+            throw new BusinessException("patient.photo.notRegistered");
         }
         validate(file);
 
@@ -80,7 +84,7 @@ public class PatientPhotoServiceImpl implements PatientPhotoService {
             Files.createDirectories(photoDir);
             Path target = photoDir.resolve(filename).normalize();
             if (!target.startsWith(photoDir)) {
-                throw new BusinessException("Invalid file name.");
+                throw new BusinessException("patient.photo.invalidName");
             }
             Files.copy(file.getInputStream(), target, StandardCopyOption.REPLACE_EXISTING);
 
@@ -106,7 +110,12 @@ public class PatientPhotoServiceImpl implements PatientPhotoService {
             throw new ResourceNotFoundException("patientPhoto.notFound", patientId);
         }
         Path path = photoDir.resolve(storedName).normalize();
-        if (!path.startsWith(photoDir) || !Files.exists(path)) {
+        if (!path.startsWith(photoDir)) {
+            throw new ResourceNotFoundException("patientPhoto.notFound", patientId);
+        }
+        if (!Files.exists(path)) {
+            // QA D1184 (round 22): recorded but gone from the disk.
+            log.warn("Patient photo file missing under '{}' (directory present: {})", photoDir, Files.isDirectory(photoDir));
             throw new ResourceNotFoundException("patientPhoto.notFound", patientId);
         }
         try {
@@ -120,7 +129,7 @@ public class PatientPhotoServiceImpl implements PatientPhotoService {
     @Override
     public void delete(UUID patientId, UUID hospitalId) {
         if (hospitalId == null) {
-            throw new BusinessException("An active hospital is required to remove a patient photo.");
+            throw new BusinessException("patient.photo.hospitalRequiredRemove");
         }
         Patient patient = loadScoped(patientId, hospitalId);
         String storedName = patient.getPhotoFilePath();
@@ -145,18 +154,18 @@ public class PatientPhotoServiceImpl implements PatientPhotoService {
 
     private void validate(MultipartFile file) {
         if (file == null || file.isEmpty()) {
-            throw new BusinessException("A photo file is required.");
+            throw new BusinessException("patient.photo.required");
         }
         if (file.getSize() > MAX_PHOTO_SIZE) {
-            throw new BusinessException("The photo exceeds the 5 MB limit.");
+            throw new BusinessException("patient.photo.tooLarge");
         }
         String contentType = file.getContentType();
         if (contentType == null || !contentType.toLowerCase(Locale.ROOT).startsWith("image/")) {
-            throw new BusinessException("Only image files are accepted.");
+            throw new BusinessException("patient.photo.imageOnly");
         }
         String extension = extensionOf(file.getOriginalFilename());
         if (!ALLOWED_EXTENSIONS.contains(extension)) {
-            throw new BusinessException("Unsupported image type. Allowed: jpg, jpeg, png, gif, webp.");
+            throw new BusinessException("patient.photo.typeUnsupported");
         }
     }
 

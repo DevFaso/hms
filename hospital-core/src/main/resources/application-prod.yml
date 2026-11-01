@@ -110,5 +110,11 @@ app:
   # Directory where uploaded files are stored.
   # On Railway, set APP_UPLOAD_DIR to the persistent-volume mount path
   # (e.g. /data/uploads) so files survive redeployments.
+  # QA D1184: the two must match EXACTLY. The dev volume was mounted at
+  # "/data/uploads " (trailing space) while APP_UPLOAD_DIR said /data/uploads,
+  # so every file landed on the container's own disk and was lost at the next
+  # deploy. UploadStoragePersistenceCheck logs a WARN at startup when the
+  # directory is not under RAILWAY_VOLUME_MOUNT_PATH or not on a mount at all.
+  # Patient photos default to <upload dir>/patient-photos (same volume).
   upload:
     dir: ${APP_UPLOAD_DIR:uploads}

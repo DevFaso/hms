@@ -24,6 +24,7 @@ import { serverLocalDate } from '../../shared/date-utils';
 import { refusalReason } from '../../shared/refusal-reason';
 
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { blobRefusalReason } from '../../shared/blob-refusal';
 /**
  * QA D961: the doctor issues a dated, signed medical certificate or
  * sick-leave note from the visit, in French, English or Spanish. The PDF is
@@ -118,7 +119,11 @@ export class MedicalCertificateDialogComponent implements OnInit {
         anchor.click();
         setTimeout(() => URL.revokeObjectURL(url), 0);
       },
-      error: () => this.toast.error(this.translate.instant('MEDICAL_CERTIFICATE.DOWNLOAD_FAILED')),
+      // QA D1184: a file the disk no longer holds says so, in the reader's language.
+      error: (err: unknown) =>
+        void blobRefusalReason(err).then((reason) =>
+          this.toast.error(reason ?? this.translate.instant('MEDICAL_CERTIFICATE.DOWNLOAD_FAILED')),
+        ),
     });
   }
 }

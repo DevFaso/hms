@@ -132,7 +132,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
             AppointmentStatus.PENDING, AppointmentStatus.RESCHEDULED);
 
 
-    private static final String MSG_UNABLE_RESOLVE_USER = "Unable to resolve user from authentication";
+    private static final String MSG_UNABLE_RESOLVE_USER = "patient.refill.decision.userUnresolved";
     private static final String MEDICATION_REFILL_NOTIFICATION_TYPE = "MEDICATION_REFILL";
 
     /**
@@ -874,13 +874,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         // QA D1126: the patient's own reason, when given, is kept like the desk's.
         // Optional here on purpose: the shipped iOS app labels it "Reason
         // (optional)", and the patient is the author of the cancellation.
-        appointment.setStatusReason(dto.getReason() != null && !dto.getReason().isBlank()
-                ? dto.getReason().trim() : null);
-        if (dto.getReason() != null && !dto.getReason().isBlank()) {
-            String existingNotes = appointment.getNotes() != null ? appointment.getNotes() : "";
-            appointment.setNotes(existingNotes + (existingNotes.isEmpty() ? "" : " | ")
-                    + "Patient cancelled: " + dto.getReason());
-        }
+        // QA D1196 (round 22): the reason is data, in its own column, and every
+        // reader labels it in their own language. It was also appended to the
+        // notes as "Patient cancelled: ...", in English for good.
+        appointment.setStatusReason(patientReason(dto.getReason()));
         appointmentRepository.save(appointment);
         // The appointment owns its slot (P3 #22): a patient cancelling from the
         // portal frees the time for the next patient just like a desk cancel.
@@ -907,6 +904,15 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     /** The status a visit the patient moves lands on: SCHEDULED, a tentative PENDING one staying PENDING. */
     private static AppointmentStatus movedStatus(AppointmentStatus current) {
         return current == AppointmentStatus.PENDING ? AppointmentStatus.PENDING : AppointmentStatus.SCHEDULED;
+    }
+
+    /**
+     * QA D1196 (round 22): the patient's own reason for a cancel or a move, as
+     * data: trimmed, null when blank. The request DTOs cap it at 500, the
+     * status_reason column's length.
+     */
+    static String patientReason(String reason) {
+        return reason == null || reason.isBlank() ? null : reason.trim();
     }
 
     /**
@@ -988,11 +994,11 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         // booking (PENDING, the check-out follow-up of QA D526) stays tentative:
         // moving it is not the clinic confirming it (review round 13).
         appointment.setStatus(movedStatus(appointment.getStatus()));
-        if (dto.getReason() != null && !dto.getReason().isBlank()) {
-            String existingNotes = appointment.getNotes() != null ? appointment.getNotes() : "";
-            appointment.setNotes(existingNotes + (existingNotes.isEmpty() ? "" : " | ")
-                    + "Patient rescheduled: " + dto.getReason());
-        }
+        // QA D1196 (round 22): the patient's reason for the move is stored as
+        // data (the status reason the appointment screens label in the reader's
+        // language), never glued into the notes as "Patient rescheduled: ...".
+        // No reason given: the previous status reason does not describe this move.
+        appointment.setStatusReason(patientReason(dto.getReason()));
         appointmentRepository.save(appointment);
         // QA D1093: the old slot goes back on offer and the new one is taken.
         slotInventoryService.releaseForAppointment(appointment.getId());
@@ -1126,7 +1132,8 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         // A request the provider has put on hold has not been decided yet, so the
         // patient can still withdraw it.
         if (refill.getStatus() != RefillStatus.REQUESTED && refill.getStatus() != RefillStatus.PAUSED) {
-            throw new BusinessException("Only pending refill requests can be cancelled. Current status: " + refill.getStatus());
+            // QA D1187 class (round 22): a key, in the reader's language.
+            throw new BusinessException("patient.refill.cancel.notPending");
         }
 
         refill.setStatus(RefillStatus.CANCELLED);
@@ -1653,6 +1660,11 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         if (!proxy.getGrantorPatient().getId().equals(patientId)) {
             // Somebody else's grant answers exactly as a missing one.
             throw new ResourceNotFoundException("proxyGrant.notFound", proxyId);
+        }
+        // QA D1186 class (round 22): a revoked grant stays revoked; a second
+        // revoke re-stamped revokedAt, so the record no longer said when.
+        if (proxy.getStatus() == ProxyStatus.REVOKED) {
+            throw new BusinessException("proxyGrant.alreadyRevoked");
         }
 
         proxy.setStatus(ProxyStatus.REVOKED);

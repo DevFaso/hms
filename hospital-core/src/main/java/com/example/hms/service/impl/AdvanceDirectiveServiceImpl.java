@@ -89,6 +89,11 @@ public class AdvanceDirectiveServiceImpl implements AdvanceDirectiveService {
         // to ACTIVE, so one click recorded an active DNR.
         com.example.hms.service.support.ClinicalContent.requirePresent(request.getStatus(), "status",
             "advanceDirective.status.required");
+        // QA D1186 class (round 22, review round 2): a revocation is recorded
+        // only by revoke(), with its reason - not created already revoked.
+        if (request.getStatus() == AdvanceDirectiveStatus.REVOKED) {
+            throw new BusinessException("advanceDirective.revoke.useRevoke");
+        }
         directive.setStatus(request.getStatus());
         applyEditableFields(directive, request);
         validateDates(directive);
@@ -102,6 +107,16 @@ public class AdvanceDirectiveServiceImpl implements AdvanceDirectiveService {
     public AdvanceDirectiveResponseDTO update(UUID id, AdvanceDirectiveRequestDTO request) {
         AdvanceDirective directive = loadScoped(id);
         if (request.getStatus() != null) {
+            // QA D1186 class (round 22, review round 1): a revocation is recorded
+            // only by revoke(), with its reason, and is not undone by an edit -
+            // PUT status=REVOKED stored no reason, and PUT ACTIVE on a revoked
+            // directive let the next revoke overwrite the first reason. Undoing a
+            // revocation is a new directive, as in real hospitals.
+            boolean revoked = directive.getStatus() == AdvanceDirectiveStatus.REVOKED;
+            if (revoked != (request.getStatus() == AdvanceDirectiveStatus.REVOKED)) {
+                throw new BusinessException(revoked
+                    ? "advanceDirective.revoked.locked" : "advanceDirective.revoke.useRevoke");
+            }
             directive.setStatus(request.getStatus());
         }
         applyEditableFields(directive, request);
@@ -132,6 +147,11 @@ public class AdvanceDirectiveServiceImpl implements AdvanceDirectiveService {
     @Transactional
     public AdvanceDirectiveResponseDTO revoke(UUID id, String reason) {
         AdvanceDirective directive = loadScoped(id);
+        // QA D1186 class (round 22): a revoked directive stays revoked; a second
+        // revoke overwrote the reason it was revoked for.
+        if (directive.getStatus() == AdvanceDirectiveStatus.REVOKED) {
+            throw new BusinessException("advanceDirective.revoke.alreadyRevoked");
+        }
         // QA D1148 (round 21): a revoked directive says why, on the server.
         directive.setRevocationReason(com.example.hms.service.support.CancelledOrders.requireCancelReason(reason));
         directive.setStatus(AdvanceDirectiveStatus.REVOKED);
@@ -158,7 +178,7 @@ public class AdvanceDirectiveServiceImpl implements AdvanceDirectiveService {
         // client-supplied id would otherwise be a cross-tenant write vector.
         UUID targetId = activeHospitalId != null ? activeHospitalId : requestedHospitalId;
         if (targetId == null) {
-            throw new BusinessException("A hospital is required to record an advance directive.");
+            throw new BusinessException("advanceDirective.hospital.required");
         }
         return hospitalRepository.findClinicalById(targetId)
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", targetId));
@@ -183,7 +203,7 @@ public class AdvanceDirectiveServiceImpl implements AdvanceDirectiveService {
     private void validateDates(AdvanceDirective directive) {
         if (directive.getEffectiveDate() != null && directive.getExpirationDate() != null
             && directive.getExpirationDate().isBefore(directive.getEffectiveDate())) {
-            throw new BusinessException("An advance directive cannot expire before it takes effect.");
+            throw new BusinessException("advanceDirective.expiryBeforeEffective");
         }
     }
 }

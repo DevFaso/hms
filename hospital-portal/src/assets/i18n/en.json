@@ -1468,7 +1468,8 @@
     "NO_SHOW_CONFIRM_MESSAGE": "The patient did not come to this appointment.",
     "CONFIRM_NO_SHOW": "Mark as no-show",
     "STATUS_REASON_CANCELLED": "Reason for the cancellation",
-    "STATUS_REASON_NO_SHOW": "Reason for the no-show"
+    "STATUS_REASON_NO_SHOW": "Reason for the no-show",
+    "STATUS_REASON_RESCHEDULED": "Reason for the reschedule"
   },
   "APPOINTMENT_CALENDAR": {
     "TITLE": "Appointment calendar",

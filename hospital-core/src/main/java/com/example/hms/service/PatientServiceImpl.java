@@ -224,6 +224,9 @@ public class PatientServiceImpl implements PatientService {
     private final LabResultMapper labResultMapper;
     private final PatientProblemRepository patientProblemRepository;
     private final PatientProblemHistoryRepository patientProblemHistoryRepository;
+    /** The history rows that set a problem's status (QA D1186 class, round 22). */
+    private static final java.util.Set<ProblemChangeType> STATUS_CHANGE_TYPES = java.util.EnumSet.of(
+        ProblemChangeType.CREATED, ProblemChangeType.STATUS_CHANGED, ProblemChangeType.DELETED);
     private final PatientProblemMapper patientProblemMapper;
     private final PatientSurgicalHistoryRepository patientSurgicalHistoryRepository;
     private final PatientSurgicalHistoryMapper patientSurgicalHistoryMapper;
@@ -1710,6 +1713,19 @@ public class PatientServiceImpl implements PatientService {
         }
 
         PatientProblem problem = loadPatientProblem(patientId, hospitalId, diagnosisId);
+        // QA D1186 class (round 22): a removed diagnosis stays removed; a second
+        // removal overwrote the recorded reason and wrote another DELETED row.
+        // INACTIVE alone is not "removed": it is also a status the chart sets,
+        // so the removal history decides (review round 1): removed means the
+        // latest STATUS change is the removal - a diagnosis set active again
+        // after a removal and later marked INACTIVE can be removed (review
+        // round 2), and a note edit after a removal does not reopen it (round 3).
+        if (problem.getStatus() == ProblemStatus.INACTIVE
+                && patientProblemHistoryRepository.findFirstByProblem_IdAndChangeTypeInOrderByChangedAtDesc(
+                        problem.getId(), STATUS_CHANGE_TYPES)
+                    .map(h -> h.getChangeType() == ProblemChangeType.DELETED).orElse(false)) {
+            throw new BusinessException("patient.r22.diagnosisAlreadyRemoved");
+        }
         Staff staff = resolveStaffContext(requesterUserId, problem.getHospital().getId());
         String beforeSnapshot = serializeProblemSnapshot(problem);
 

@@ -910,6 +910,66 @@ class PatientServiceImplTest {
     }
 
     @Test
+    void aRemovedDiagnosisIsNotRemovedAgainAndKeepsItsReason_D1186() {
+        UUID requesterUserId = UUID.randomUUID();
+        UUID diagnosisId = UUID.randomUUID();
+        PatientProblem problem = new PatientProblem();
+        problem.setId(diagnosisId);
+        problem.setPatient(patient);
+        problem.setHospital(hospital);
+        problem.setStatus(ProblemStatus.INACTIVE);
+        problem.setStatusChangeReason("Erreur de saisie");
+        when(patientProblemRepository.findById(diagnosisId)).thenReturn(Optional.of(problem));
+        com.example.hms.model.PatientProblemHistory removal = new com.example.hms.model.PatientProblemHistory();
+        removal.setChangeType(com.example.hms.enums.ProblemChangeType.DELETED);
+        when(patientProblemHistoryRepository.findFirstByProblem_IdAndChangeTypeInOrderByChangedAtDesc(
+            org.mockito.ArgumentMatchers.eq(diagnosisId), org.mockito.ArgumentMatchers.argThat(types -> types.contains(com.example.hms.enums.ProblemChangeType.DELETED)
+                && !types.contains(com.example.hms.enums.ProblemChangeType.UPDATED)
+                && !types.contains(com.example.hms.enums.ProblemChangeType.CHRONICITY_CHANGED))))
+            .thenReturn(Optional.of(removal));
+        when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
+
+        assertThatThrownBy(() -> patientService.deletePatientDiagnosis(
+            patientId, hospitalId, diagnosisId, requesterUserId, "Second motif"))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("patient.r22.diagnosisAlreadyRemoved");
+        assertThat(problem.getStatusChangeReason()).isEqualTo("Erreur de saisie");
+        verify(patientProblemRepository, never()).save(any());
+    }
+
+    @Test
+    void aDiagnosisMarkedInactiveCanStillBeRemoved_D1186() throws Exception {
+        // INACTIVE is also a status the chart sets: only a removal (a DELETED
+        // history row) makes the next removal a duplicate.
+        UUID requesterUserId = UUID.randomUUID();
+        UUID diagnosisId = UUID.randomUUID();
+        PatientProblem problem = new PatientProblem();
+        problem.setId(diagnosisId);
+        problem.setPatient(patient);
+        problem.setHospital(hospital);
+        problem.setStatus(ProblemStatus.INACTIVE);
+        Staff staff = new Staff();
+        staff.setId(UUID.randomUUID());
+        when(patientProblemRepository.findById(diagnosisId)).thenReturn(Optional.of(problem));
+        when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
+        when(staffRepository.findByUserIdAndHospitalId(requesterUserId, hospitalId)).thenReturn(Optional.of(staff));
+        when(objectMapper.writeValueAsString(any())).thenReturn("{}");
+        // Removed once, then set active again, then marked INACTIVE by the chart: the latest change is not a removal.
+        com.example.hms.model.PatientProblemHistory statusChange = new com.example.hms.model.PatientProblemHistory();
+        statusChange.setChangeType(com.example.hms.enums.ProblemChangeType.STATUS_CHANGED);
+        when(patientProblemHistoryRepository.findFirstByProblem_IdAndChangeTypeInOrderByChangedAtDesc(
+            org.mockito.ArgumentMatchers.eq(diagnosisId), org.mockito.ArgumentMatchers.argThat(types -> types.contains(com.example.hms.enums.ProblemChangeType.DELETED)
+                && !types.contains(com.example.hms.enums.ProblemChangeType.UPDATED)
+                && !types.contains(com.example.hms.enums.ProblemChangeType.CHRONICITY_CHANGED))))
+            .thenReturn(Optional.of(statusChange));
+
+        patientService.deletePatientDiagnosis(patientId, hospitalId, diagnosisId, requesterUserId, "Saisie en double");
+
+        assertThat(problem.getStatusChangeReason()).isEqualTo("Saisie en double");
+        verify(patientProblemRepository).save(problem);
+    }
+
+    @Test
     void deletePatientDiagnosisRequiresReason() {
         UUID requesterUserId = UUID.randomUUID();
         UUID diagnosisId = UUID.randomUUID();

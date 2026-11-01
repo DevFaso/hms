@@ -123,7 +123,7 @@ class PatientRecallServiceImplTest {
         RecallRequestDTO req = request();
         assertThatThrownBy(() -> service.createRecall(req, hospitalId, "reception1"))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("not registered");
+            .hasMessageContaining("recall.patient.notRegistered");
         verify(recallRepository, never()).save(any());
     }
 
@@ -192,7 +192,7 @@ class PatientRecallServiceImplTest {
 
         assertThatThrownBy(() -> service.cancelRecall(recallId, hospitalId, "no longer needed"))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("pending or notified");
+            .hasMessageContaining("recall.cancel.notOpen");
 
         assertThat(service.closeRecall(recallId, hospitalId).getStatus())
             .isEqualTo(RecallStatus.CLOSED);
@@ -238,7 +238,7 @@ class PatientRecallServiceImplTest {
         UUID recallId = recall.getId();
         assertThatThrownBy(() -> service.linkAppointment(recallId, hospitalId, appointmentId))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("different patient");
+            .hasMessageContaining("recall.link.otherPatient");
     }
 
     @Test

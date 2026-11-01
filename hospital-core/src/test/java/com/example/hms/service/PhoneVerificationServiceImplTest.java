@@ -143,7 +143,7 @@ class PhoneVerificationServiceImplTest {
 
         assertThatThrownBy(() -> service.requestRegistrationVerification("+22670707070", staffUserId, hospitalId))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("wait");
+            .hasMessageContaining("phoneVerification.cooldown");
         verify(ikoddiGateway, never()).sendOtp(anyString(), any());
     }
 

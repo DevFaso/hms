@@ -292,4 +292,32 @@ class PatientPortalServiceImplProxyTest {
             assertThat(captor.getValue().getPermissions()).isEqualTo("VIEW_APPOINTMENTS,VIEW_MEDICATIONS");
         }
     }
+
+    @Nested
+    @DisplayName("revokeProxy (QA D1186 class)")
+    class RevokeProxy {
+
+        @Test
+        @DisplayName("a revoked grant is not revoked again: revokedAt keeps the first revocation")
+        void revokedGrantIsNotRevokedAgain_D1186() {
+            User grantorUser = new User();
+            grantorUser.setId(UUID.randomUUID());
+            grantor.setUser(grantorUser);
+            LocalDateTime firstRevocation = LocalDateTime.now().minusDays(3);
+            PatientProxy grant = buildGrant("ALL", null);
+            grant.setStatus(ProxyStatus.REVOKED);
+            grant.setRevokedAt(firstRevocation);
+
+            when(authUtils.resolveUserId(auth)).thenReturn(Optional.of(grantorUser.getId()));
+            when(patientRepository.findByUserId(grantorUser.getId())).thenReturn(Optional.of(grantor));
+            when(patientProxyRepository.findById(grant.getId())).thenReturn(Optional.of(grant));
+
+            UUID grantId = grant.getId();
+            org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.revokeProxy(auth, grantId))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                    .extracting("messageKey").isEqualTo("proxyGrant.alreadyRevoked");
+            assertThat(grant.getRevokedAt()).isEqualTo(firstRevocation);
+            org.mockito.Mockito.verify(patientProxyRepository, org.mockito.Mockito.never()).save(any());
+        }
+    }
 }

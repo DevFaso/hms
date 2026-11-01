@@ -1468,7 +1468,8 @@
     "NO_SHOW_CONFIRM_MESSAGE": "Le patient ne s'est pas présenté à ce rendez-vous.",
     "CONFIRM_NO_SHOW": "Marquer comme absent",
     "STATUS_REASON_CANCELLED": "Motif de l'annulation",
-    "STATUS_REASON_NO_SHOW": "Motif de l'absence"
+    "STATUS_REASON_NO_SHOW": "Motif de l'absence",
+    "STATUS_REASON_RESCHEDULED": "Motif du report"
   },
   "APPOINTMENT_CALENDAR": {
     "TITLE": "Calendrier des rendez-vous",

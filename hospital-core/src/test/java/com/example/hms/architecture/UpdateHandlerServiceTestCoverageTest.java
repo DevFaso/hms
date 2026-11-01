@@ -104,8 +104,6 @@ class UpdateHandlerServiceTestCoverageTest {
 
     /** {@code Controller#handler -> service.method} with no test today. Shrink only. */
     private static final Map<String, Allowance> ALLOWED = GuardAllowlist.allow(
-        "AdvanceDirectiveController#update -> advanceDirectiveService.update", 1,
-            DARK + " (a generic name: no test of AdvanceDirectiveService calls update)",
         "BedManagementController#updateBed -> bedManagementService.updateBed", 1, DARK,
         "NotificationController#markAllRead -> notificationService.markAllReadForUser", 1, DARK,
         "PatientController#updatePatientAllergy -> patientService.updatePatientAllergy", 1, DARK,
