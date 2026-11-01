@@ -834,10 +834,10 @@ describe('BillingComponent', () => {
       billingSpy.updateInvoice.and.returnValue(of(mockInvoice({ status: 'CANCELLED' })));
       component.openEdit(mockInvoice({ status: 'SENT' }));
       component.form.status = 'CANCELLED';
-      expect(component.cancellingIssued()).toBeTrue();
+      expect(component.cancelling()).toBeTrue();
       component.submitForm();
       expect(billingSpy.updateInvoice).not.toHaveBeenCalled();
-      expect(toastSpy.error).toHaveBeenCalledWith('BILLING.CANCEL_REASON_REQUIRED');
+      expect(toastSpy.error).toHaveBeenCalledWith('INVOICE_CANCEL.REASON_REQUIRED');
       component.form.cancelReason = 'Facturé au mauvais patient';
       component.submitForm();
       expect(billingSpy.updateInvoice.calls.mostRecent().args[1].cancelReason).toBe(
@@ -854,7 +854,7 @@ describe('BillingComponent', () => {
       const field: HTMLElement = fixture.nativeElement.querySelector('#bill-cancel-reason');
       expect(field.getAttribute('aria-invalid')).toBe('true');
       const message = fixture.nativeElement.querySelector('#bill-cancel-reason-invalid-msg');
-      expect(message?.textContent).toBe('BILLING.CANCEL_REASON_REQUIRED');
+      expect(message?.textContent).toBe('INVOICE_CANCEL.REASON_REQUIRED');
       expect(field.getAttribute('aria-describedby')).toContain('bill-cancel-reason-invalid-msg');
     });
 
@@ -863,18 +863,59 @@ describe('BillingComponent', () => {
         mockInvoice({ status: 'PAID', amountPaid: 0, totalAmount: 0, balanceDue: 0 }),
       );
       component.form.status = 'CANCELLED';
-      expect(component.cancellingIssued()).toBeTrue();
+      expect(component.cancelling()).toBeTrue();
     });
 
-    it('a draft, or an edit that does not cancel, sends no reason', () => {
+    it('an edit that does not cancel sends no reason', () => {
       billingSpy.updateInvoice.and.returnValue(of(mockInvoice()));
-      component.openEdit(mockInvoice({ status: 'DRAFT' }));
-      component.form.status = 'CANCELLED';
-      expect(component.cancellingIssued()).toBeFalse();
       component.openEdit(mockInvoice({ status: 'SENT' }));
       component.form.cancelReason = 'left over';
       component.submitForm();
       expect(billingSpy.updateInvoice.calls.mostRecent().args[1].cancelReason).toBeUndefined();
+    });
+
+    /**
+     * QA D1217 (round 23): DRAFT -000046 was cancelled from the edit form with
+     * no reason field at all, and the server stored `cancelReason: null`. A
+     * draft is cancelled like any invoice: the reason is asked for where the
+     * clerk is looking, a blank one is refused, and the typed one is sent.
+     */
+    it('QA D1217: cancelling a DRAFT asks for the reason in the form, refuses a blank one and sends it', async () => {
+      billingSpy.updateInvoice.and.returnValue(of(mockInvoice({ status: 'CANCELLED' })));
+      fixture.detectChanges();
+      component.openEdit(mockInvoice({ status: 'DRAFT', totalAmount: 1500 }));
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+      const host: HTMLElement = fixture.nativeElement;
+      expect(host.querySelector('#bill-cancel-reason')).toBeNull();
+
+      const status = host.querySelector<HTMLSelectElement>('#bill-status')!;
+      const cancelled = Array.from(status.options).findIndex((o) => o.value === 'CANCELLED');
+      expect(cancelled).toBeGreaterThan(-1);
+      status.selectedIndex = cancelled;
+      status.dispatchEvent(new Event('change'));
+      fixture.detectChanges();
+      await fixture.whenStable();
+      expect(component.cancelling()).toBeTrue();
+      const field = host.querySelector<HTMLTextAreaElement>('#bill-cancel-reason');
+      expect(field).withContext('the reason field is shown for a draft').not.toBeNull();
+
+      component.submitForm();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      expect(billingSpy.updateInvoice).not.toHaveBeenCalled();
+      expect(field!.getAttribute('aria-invalid')).toBe('true');
+      expect(field!.getAttribute('aria-describedby')).toContain('bill-cancel-reason-invalid-msg');
+
+      field!.value = 'Doublon du passage en caisse';
+      field!.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      component.submitForm();
+      expect(billingSpy.updateInvoice).toHaveBeenCalledTimes(1);
+      const sent = billingSpy.updateInvoice.calls.mostRecent().args[1];
+      expect(sent.status).toBe('CANCELLED');
+      expect(sent.cancelReason).toBe('Doublon du passage en caisse');
     });
 
     it('shows the recorded reason on the cancelled invoice', () => {
