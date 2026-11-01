@@ -50,6 +50,7 @@ public class UpdateUserRequestDTO {
     private String lastName;
 
     @Schema(description = "Phone number; omit to keep current")
+    @com.example.hms.validation.PhoneNumber
     private String phoneNumber;
 
     @JsonProperty("active")

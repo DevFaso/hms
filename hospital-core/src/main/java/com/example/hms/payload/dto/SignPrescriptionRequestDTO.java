@@ -20,7 +20,7 @@ import lombok.ToString;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@ToString(exclude = {"password", "mfaCode"})
+@ToString(exclude = {"password", "mfaCode", "allergyOverrideReason"})
 public class SignPrescriptionRequestDTO {
 
     @Size(max = 256)
@@ -29,4 +29,14 @@ public class SignPrescriptionRequestDTO {
     /** A current six-digit TOTP code, or an unused backup code. */
     @Size(max = 32)
     private String mfaCode;
+
+    /**
+     * QA D1183 (round 23): the prescriber's reason for signing an order the
+     * allergy stop applies to (a documented allergy covers the drug, or the
+     * drug name could not be checked against a drug-class allergy) when no
+     * acknowledgement was recorded at creation or edit. Stored on the order
+     * and audited as a digest, like the creation override.
+     */
+    @Size(max = 1024)
+    private String allergyOverrideReason;
 }

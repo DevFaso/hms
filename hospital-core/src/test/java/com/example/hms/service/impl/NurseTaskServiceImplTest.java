@@ -3494,6 +3494,115 @@ class NurseTaskServiceImplTest {
         verify(marRepository, never()).save(any(MedicationAdministrationRecord.class));
     }
 
+    /* ── QA D1210 (round 23): the minimum interval since the last GIVEN, on every write path ── */
+
+    private MedicationAdministrationRecord givenAt(Prescription rx, LocalDateTime slot, LocalDateTime administeredAt) {
+        MedicationAdministrationRecord r = closedDose(rx, slot, MedicationAdministrationStatus.GIVEN);
+        r.setAdministeredAt(administeredAt);
+        return r;
+    }
+
+    @Test
+    void D1210_theQaMorphineQ4hDoseAMinuteAfterTheLateOneIsRefused() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "q4h");
+        rx.setMedicationName("Morphine 2 mg IV");
+        // First slot six hours ago, given late a minute ago: the second slot is already overdue.
+        rx.setCreatedAt(LocalDateTime.now().minusHours(6));
+        when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
+        when(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId()))
+            .thenReturn(List.of(givenAt(rx, rx.getCreatedAt(), LocalDateTime.now().minusMinutes(1))));
+        UUID rxId = rx.getId();
+        UUID nurseId = UUID.randomUUID();
+        NurseMedicationAdministrationRequestDTO given = givenRequest();
+
+        assertThatThrownBy(() -> service.recordMedicationAdministration(rxId, nurseId, hospitalId, given))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "nurse.mar.doseTooSoon")
+            .hasFieldOrPropertyWithValue("field", "earlyDoseReason");
+        verify(marRepository, never()).save(any(MedicationAdministrationRecord.class));
+    }
+
+    @Test
+    void D1210_anEarlyDoseWithAReasonIsRecordedWithTheReasonOnTheRow() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "TID");
+        rx.setCreatedAt(LocalDateTime.now().minusHours(10));
+        when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
+        when(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId()))
+            .thenReturn(List.of(givenAt(rx, rx.getCreatedAt(), LocalDateTime.now().minusMinutes(2))));
+        ArgumentCaptor<MedicationAdministrationRecord> saved = ArgumentCaptor.forClass(MedicationAdministrationRecord.class);
+        when(marRepository.save(saved.capture())).thenAnswer(i -> i.getArgument(0));
+        NurseMedicationAdministrationRequestDTO given = givenRequest();
+        given.setEarlyDoseReason("Leaving for theatre; surgeon asked for the dose now");
+
+        service.recordMedicationAdministration(rx.getId(), UUID.randomUUID(), hospitalId, given);
+
+        assertThat(saved.getValue().getStatus()).isEqualTo(MedicationAdministrationStatus.GIVEN);
+        assertThat(saved.getValue().getReason()).isEqualTo("Leaving for theatre; surgeon asked for the dose now");
+    }
+
+    @Test
+    void D1210_aDoseOnTimeSinceTheLastOneNeedsNoReason() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "q4h");
+        rx.setCreatedAt(LocalDateTime.now().minusHours(8));
+        when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
+        when(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId()))
+            .thenReturn(List.of(givenAt(rx, rx.getCreatedAt(), LocalDateTime.now().minusHours(4))));
+        marSaveEchoes();
+
+        NurseMedicationTaskResponseDTO out =
+            service.recordMedicationAdministration(rx.getId(), UUID.randomUUID(), hospitalId, givenRequest());
+
+        assertThat(out.getStatus()).isEqualTo("GIVEN");
+    }
+
+    @Test
+    void D1210_theVerifiedRowPathIsHeldToTheSameInterval() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "q4h");
+        rx.setCreatedAt(LocalDateTime.now().minusHours(6));
+        MedicationAdministrationRecord first = givenAt(rx, rx.getCreatedAt(), LocalDateTime.now().minusMinutes(1));
+        MedicationAdministrationRecord verified =
+            closedDose(rx, rx.getCreatedAt().plusHours(4), MedicationAdministrationStatus.PENDING);
+        verified.setFiveRightsStatus(FiveRightsStatus.VERIFIED);
+        when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
+        when(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId()))
+            .thenReturn(List.of(verified, first));
+        UUID rxId = rx.getId();
+        UUID nurseId = UUID.randomUUID();
+        NurseMedicationAdministrationRequestDTO given = statusRequest("GIVEN");
+
+        assertThatThrownBy(() -> service.recordMedicationAdministration(rxId, nurseId, hospitalId, given))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "nurse.mar.doseTooSoon");
+        assertThat(verified.getStatus()).isEqualTo(MedicationAdministrationStatus.PENDING);
+    }
+
+    @Test
+    void D1210_theMarRowIdPathIsHeldToTheSameInterval() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "q4h");
+        rx.setCreatedAt(LocalDateTime.now().minusHours(6));
+        MedicationAdministrationRecord first = givenAt(rx, rx.getCreatedAt(), LocalDateTime.now().minusMinutes(1));
+        MedicationAdministrationRecord pending =
+            closedDose(rx, rx.getCreatedAt().plusHours(4), MedicationAdministrationStatus.PENDING);
+        when(marRepository.findById(pending.getId())).thenReturn(Optional.of(pending));
+        when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
+        when(marRepository.findStatusById(pending.getId())).thenReturn(Optional.of(MedicationAdministrationStatus.PENDING));
+        when(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId()))
+            .thenReturn(List.of(pending, first));
+        UUID marId = pending.getId();
+        UUID nurseId = UUID.randomUUID();
+        NurseMedicationAdministrationRequestDTO given = givenRequest();
+
+        assertThatThrownBy(() -> service.recordMedicationAdministration(marId, nurseId, hospitalId, given))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("messageKey", "nurse.mar.doseTooSoon");
+        verify(marRepository, never()).save(any(MedicationAdministrationRecord.class));
+    }
+
     @Test
     void D136_aDischargedPatientsInpatientOrderIsNoLongerDue() {
         UUID nurseId = UUID.randomUUID();

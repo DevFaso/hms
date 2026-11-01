@@ -56,6 +56,7 @@ public class ProviderBusinessIdentityDTO {
 
     @NotBlank
     @Size(max = 30)
+    @com.example.hms.validation.PhoneNumber
     private String companyPhone;
 
     @NotBlank

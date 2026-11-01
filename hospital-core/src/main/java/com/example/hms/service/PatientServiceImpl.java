@@ -492,7 +492,7 @@ public class PatientServiceImpl implements PatientService {
     /** Phones (stored by the facility rule, QA D942) and the e-mail (unique to one record, D113). */
     private void patchContacts(Patient patient, PatientProfileUpdateRequestDTO request, String country) {
         if (request.getPhoneNumberPrimary() != null) {
-            String phone = normalizePhone(request.getPhoneNumberPrimary(), country);
+            String phone = normalizePhone(request.getPhoneNumberPrimary(), country, "phoneNumberPrimary");
             if (phone == null) {
                 throw new BusinessException("patient.r16.phoneRequired");
             }
@@ -501,7 +501,7 @@ public class PatientServiceImpl implements PatientService {
             patient.setPhoneNumberPrimary(phone);
         }
         if (request.getPhoneNumberSecondary() != null) {
-            patient.setPhoneNumberSecondary(normalizePhone(request.getPhoneNumberSecondary(), country));
+            patient.setPhoneNumberSecondary(normalizePhone(request.getPhoneNumberSecondary(), country, "phoneNumberSecondary"));
         }
         if (request.getEmail() != null) {
             String email = trimToNull(request.getEmail());
@@ -540,7 +540,7 @@ public class PatientServiceImpl implements PatientService {
     private void patchCareFields(Patient patient, PatientProfileUpdateRequestDTO request, String country) {
         applyNullable(request.getEmergencyContactName(), patient::setEmergencyContactName);
         if (request.getEmergencyContactPhone() != null) {
-            patient.setEmergencyContactPhone(normalizePhone(request.getEmergencyContactPhone(), country));
+            patient.setEmergencyContactPhone(normalizePhone(request.getEmergencyContactPhone(), country, "emergencyContactPhone"));
         }
         applyNullable(request.getEmergencyContactRelationship(), patient::setEmergencyContactRelationship);
         applyNullable(request.getPreferredPharmacy(), patient::setPreferredPharmacy);
@@ -595,17 +595,29 @@ public class PatientServiceImpl implements PatientService {
      * (PhoneNumbers.normalizeFacilityPhone): E.164 for a country PhoneNumbers
      * knows, or written with an international prefix ("70 00 10 02" at a
      * Burkina hospital becomes "+22670001002"); a national number for a
-     * country it does not know keeps its digits (never a guessed +226). A
-     * value that is not a phone number is kept as typed, trimmed. {@code null}
-     * for a blank value.
+     * country it does not know keeps its digits (never a guessed +226).
+     * {@code null} for a blank value.
+     *
+     * <p>QA D1211 (round 23): a value that is not a phone number at all
+     * ("12ab", "appeler le voisin") is refused on its field with the shared
+     * phone message ({@code @PhoneNumber}), instead of being kept as typed. A
+     * valid national number for a country the facility rule cannot place is
+     * still kept as its digits ({@link com.example.hms.validation.PhoneNumberValidator}).
      */
-    private static String normalizePhone(String raw, String country) {
+    private static String normalizePhone(String raw, String country, String field) {
         String trimmed = trimToNull(raw);
         if (trimmed == null) {
             return null;
         }
         String normalized = PhoneNumbers.normalizeFacilityPhone(trimmed, country);
-        return normalized != null ? normalized : trimmed;
+        if (normalized != null) {
+            return normalized;
+        }
+        if (!com.example.hms.validation.PhoneNumberValidator.isPhoneNumber(trimmed)) {
+            throw new com.example.hms.exception.FieldBusinessException(field,
+                com.example.hms.validation.PhoneNumber.MESSAGE_KEY);
+        }
+        return trimmed;
     }
 
     /** The calling code a national number typed at this hospital takes (Burkina Faso when unknown). */
@@ -632,9 +644,10 @@ public class PatientServiceImpl implements PatientService {
     /** Stores every number of a new or edited record in its canonical form (QA D942). */
     private static void normalizePhones(Patient patient, Hospital hospital) {
         String country = hospital == null ? null : hospital.getCountry();
-        patient.setPhoneNumberPrimary(normalizePhone(patient.getPhoneNumberPrimary(), country));
-        patient.setPhoneNumberSecondary(normalizePhone(patient.getPhoneNumberSecondary(), country));
-        patient.setEmergencyContactPhone(normalizePhone(patient.getEmergencyContactPhone(), country));
+        patient.setPhoneNumberPrimary(normalizePhone(patient.getPhoneNumberPrimary(), country, "phoneNumberPrimary"));
+        patient.setPhoneNumberSecondary(normalizePhone(patient.getPhoneNumberSecondary(), country, "phoneNumberSecondary"));
+        patient.setEmergencyContactPhone(
+            normalizePhone(patient.getEmergencyContactPhone(), country, "emergencyContactPhone"));
     }
 
     /**

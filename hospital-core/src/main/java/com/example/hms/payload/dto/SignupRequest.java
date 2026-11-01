@@ -27,6 +27,7 @@ public class SignupRequest extends BaseUserDTO {
     private String emergencyContactName;
 
     @NotBlank
+    @com.example.hms.validation.PhoneNumber
     private String emergencyContactPhone;
 
     @NotBlank

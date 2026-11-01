@@ -169,7 +169,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
         // DECISION SUPPORT: Check allergies before prescribing. QA D1149: after
         // the catalogue pick, so the item's ATC class is known to the check.
-        String allergyOverride = checkAllergyConflicts(patient, request, catalogItem);
+        String allergyOverride = checkAllergyConflicts(patient, request, catalogItem, hospitalId);
 
         // CDS rule engine: drug-drug, duplicate-order, pediatric-dose
         List<CdsCard> advisories = withCrossReactivityAdvisory(patient, request.getMedicationName(),
@@ -467,6 +467,12 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // only once a pharmacist or another physician recorded the review.
         // Before the re-authentication, so no code is spent on a refusal.
         requirePediatricDoseReviewAtSigning(prescription, signingCards, signer);
+        // QA D1183 (round 23): Septrin and Totapen were SIGNED for allergic
+        // patients. The allergy stop is re-run on the order being signed, so
+        // an order saved before the rule knew its drug, or before the safety
+        // net existed, is never signed without the acknowledgement on record.
+        // Before the re-authentication, so no code is spent on a refusal.
+        String allergyAcknowledgement = requireAllergyAcknowledgedAtSigning(prescription, reauthentication);
 
         if (controlledResolver.isControlled(prescription)) {
             controlledSubstanceGuard.requireCosignedFor(prescription, PrescriptionStatus.SIGNED);
@@ -494,6 +500,10 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
         logger.info("Prescription {} signed by staff {}", prescription.getId(), signer.getId());
         PrescriptionResponseDTO signed = prescriptionMapper.toResponseDTO(prescriptionRepository.save(prescription));
+        if (allergyAcknowledgement != null) {
+            auditAllergyOverrideAfterCommit(prescription, signer.getUser() != null ? signer.getUser().getId() : null,
+                allergyAcknowledgement, "Allergy override recorded at signature");
+        }
         // QA D793: the signature is the last look before the pharmacy and the
         // ward act on the order, so the cross-reactivity advisory is repeated
         // here (it never blocks the signature).
@@ -503,6 +513,37 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             signed.setCdsAdvisories(advisories);
         }
         return signed;
+    }
+
+    /**
+     * QA D1183 (round 23): the allergy stop at the signature. An order the
+     * stop applies to is signed only when an allergy acknowledgement is on
+     * record (made at creation or edit), or the signer gives one now in
+     * {@code allergyOverrideReason}; it is then recorded on the order and
+     * audited. Otherwise the same critical card as at creation is returned.
+     *
+     * @return the reason recorded now, or {@code null}
+     */
+    private String requireAllergyAcknowledgedAtSigning(
+            Prescription prescription, com.example.hms.payload.dto.SignPrescriptionRequestDTO request) {
+        if (prescription.isAllergiesReviewed() || prescription.getPatient() == null
+                || prescription.getPatient().getId() == null) {
+            return null;
+        }
+        UUID hospitalId = prescription.getHospital() != null ? prescription.getHospital().getId() : null;
+        Optional<CdsCard> block = allergyBlock(prescription.getMedicationName(),
+            allergyItems(prescription.getMedicationName(), savedOrderItem(prescription), hospitalId),
+            patientAllergyRepository.findByPatient_Id(prescription.getPatient().getId()));
+        if (block.isEmpty()) {
+            return null;
+        }
+        String reason = request == null || request.getAllergyOverrideReason() == null
+            ? "" : request.getAllergyOverrideReason().trim();
+        if (reason.isEmpty()) {
+            throw new CdsCriticalBlockException(block.get().summary(), List.of(block.get()));
+        }
+        recordAllergyOverride(prescription, reason);
+        return reason;
     }
 
     /**
@@ -525,25 +566,57 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     /** The decision-support cards for an order already saved, against the catalogue item behind it. */
     private List<CdsCard> evaluateSavedOrder(Prescription prescription) {
         UUID hospitalId = prescription.getHospital() != null ? prescription.getHospital().getId() : null;
-        com.example.hms.model.medication.MedicationCatalogItem item = null;
-        if (medicationCatalogItemRepository != null && hospitalId != null) {
-            if (prescription.getMedicationCatalogItemId() != null) {
-                item = medicationCatalogItemRepository
-                    .findByIdAndHospital_Id(prescription.getMedicationCatalogItemId(), hospitalId).orElse(null);
-            } else {
-                // Review round 3: an order left unlinked (its typed name matched
-                // several uncontrolled items) is checked as creation checks it,
-                // against the strictest of the items its name names.
-                List<com.example.hms.model.medication.MedicationCatalogItem> named =
-                    catalogItemsNamed(prescription.getMedicationName(), hospitalId);
-                item = named.isEmpty() ? null : strictestPediatricCeiling(named);
-            }
-        }
+        com.example.hms.model.medication.MedicationCatalogItem item = savedOrderItem(prescription);
         List<CdsCard> cards = cdsRuleEngine.evaluateProposedPrescription(prescription.getPatient(), hospitalId,
             new com.example.hms.cdshooks.rules.CdsRuleEngine.ProposedOrder(prescription.getMedicationName(),
                 prescription.getMedicationCode(), prescription.getDosage(), prescription.getFrequency(), item,
                 prescription.getId()));
         return cards == null ? List.of() : cards;
+    }
+
+    /**
+     * QA D1183 (round 23): the catalogue items the allergy check reads the
+     * drug through - the picked item, else every active item the typed name
+     * names in this hospital's catalogue AND the national list (V95), so a
+     * drug the pharmacy knows by its generic name is resolved to its INN and
+     * only a name nobody recorded reaches the safety net.
+     */
+    private List<com.example.hms.model.medication.MedicationCatalogItem> allergyItems(
+            String medicationName, com.example.hms.model.medication.MedicationCatalogItem picked, UUID hospitalId) {
+        if (picked != null) {
+            return List.of(picked);
+        }
+        if (medicationCatalogItemRepository == null || hospitalId == null
+                || medicationName == null || medicationName.isBlank()) {
+            return List.of();
+        }
+        org.springframework.data.domain.Page<com.example.hms.model.medication.MedicationCatalogItem> page =
+            medicationCatalogItemRepository.findActivePage(hospitalId, org.springframework.data.domain.Pageable.unpaged());
+        if (page == null) {
+            return List.of();
+        }
+        return page.getContent().stream()
+            .filter(item -> com.example.hms.service.pharmacy.DispenseVerificationService
+                .namesCatalogItem(medicationName, item))
+            .toList();
+    }
+
+    /** The catalogue item behind a saved order: its link, else the strictest item its name names. */
+    private com.example.hms.model.medication.MedicationCatalogItem savedOrderItem(Prescription prescription) {
+        UUID hospitalId = prescription.getHospital() != null ? prescription.getHospital().getId() : null;
+        if (medicationCatalogItemRepository == null || hospitalId == null) {
+            return null;
+        }
+        if (prescription.getMedicationCatalogItemId() != null) {
+            return medicationCatalogItemRepository
+                .findByIdAndHospital_Id(prescription.getMedicationCatalogItemId(), hospitalId).orElse(null);
+        }
+        // Review round 3: an order left unlinked (its typed name matched
+        // several uncontrolled items) is checked as creation checks it,
+        // against the strictest of the items its name names.
+        List<com.example.hms.model.medication.MedicationCatalogItem> named =
+            catalogItemsNamed(prescription.getMedicationName(), hospitalId);
+        return named.isEmpty() ? null : strictestPediatricCeiling(named);
     }
 
     /* -- Paediatric manual dose review (round 19, QA D1096) ------------- */
@@ -1341,7 +1414,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
         // DECISION SUPPORT: Check allergies before updating prescription
         // (QA D1149: after the catalogue pick, with the item's ATC class).
-        String allergyOverride = checkAllergyConflicts(patient, request, catalogItem);
+        String allergyOverride = checkAllergyConflicts(patient, request, catalogItem, hospitalId);
 
         // CDS rule engine: drug-drug, duplicate-order, pediatric-dose. QA D970:
         // the order being edited is not a duplicate of itself.
@@ -2117,36 +2190,57 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      *
      * @return the override reason to record, or {@code null} when no allergy matched
      */
-    private static String atcOf(com.example.hms.model.medication.MedicationCatalogItem item) {
-        return item == null ? null : item.getAtcCode();
-    }
-
     private String checkAllergyConflicts(Patient patient, PrescriptionRequestDTO request,
-                                         com.example.hms.model.medication.MedicationCatalogItem catalogItem) {
+                                         com.example.hms.model.medication.MedicationCatalogItem catalogItem,
+                                         UUID hospitalId) {
         String medicationName = request.getMedicationName();
         if (medicationName == null || medicationName.isBlank()) {
             return null; // Cannot check without medication name
         }
-        String atcCode = atcOf(catalogItem);
-
         // A hard safety stop: an allergy recorded at ANY hospital counts.
         List<PatientAllergy> allergies = patientAllergyRepository.findByPatient_Id(patient.getId());
-        String med = normalizeDrugText(medicationName);
-        String withSynonyms = drugTextForAllergyCheck(medicationName, catalogItem);
         String reason = request.getOverrideReason() != null ? request.getOverrideReason().trim() : "";
-        // QA D432: the warning cited whichever matching entry came first, so a
-        // moderate entry could hide a severe one for the same allergen. The
-        // most severe matching entry is the one the prescriber is shown.
-        Optional<PatientAllergy> worst = allergies.stream()
-            .filter(PatientAllergy::isActive)
-            .filter(allergy -> matchesAllergen(med, allergy.getAllergenDisplay(), atcCode)
-                || matchesAllergen(withSynonyms, allergy.getAllergenDisplay(), atcCode))
-            .max(java.util.Comparator.comparingInt(PrescriptionServiceImpl::allergySeverityRank));
-        if (worst.isEmpty()) {
+        Optional<CdsCard> block = allergyBlock(medicationName, allergyItems(medicationName, catalogItem, hospitalId),
+            allergies);
+        if (block.isEmpty()) {
             return null;
         }
-        handleAllergyConflict(patient, worst.get(), medicationName, request.getForceOverride(), reason);
+        logger.warn("ALLERGY ALERT: patient {} has a documented allergy the prescribed drug may meet. Override: {}",
+            patient.getId(), request.getForceOverride());
+        if (!Boolean.TRUE.equals(request.getForceOverride()) || reason.isEmpty()) {
+            // Sent as a critical CDS card so the prescribing screen shows the
+            // alert and offers the override (with its mandatory reason).
+            throw new CdsCriticalBlockException(block.get().summary(), List.of(block.get()));
+        }
         return reason;
+    }
+
+    /**
+     * QA D83 / D1149 / D1183: the allergy stop for this drug, or empty.
+     * <ol>
+     *   <li>An active allergy that covers the drug - by name, by INN class
+     *       (a cited brand read as its INN), or by the catalogue item's ATC
+     *       group. QA D432: the most severe matching entry is the one cited.</li>
+     *   <li>THE SAFETY NET (round 23): the drug resolves to no active
+     *       ingredient (a free-text name no catalogue item, cited brand or INN
+     *       stem explains) while the patient has a drug-class allergy: the
+     *       check is impossible, and the prescriber must acknowledge it.</li>
+     * </ol>
+     * The same rule for the creation, the edit and the signature.
+     */
+    private Optional<CdsCard> allergyBlock(String medicationName,
+                                           List<com.example.hms.model.medication.MedicationCatalogItem> items,
+                                           List<PatientAllergy> allergies) {
+        com.example.hms.service.allergy.AllergyDrugIdentity identity =
+            com.example.hms.service.allergy.AllergyDrugIdentity.of(medicationName, items);
+        Optional<PatientAllergy> worst = identity.matchingAllergies(allergies).stream()
+            .max(java.util.Comparator.comparingInt(PrescriptionServiceImpl::allergySeverityRank));
+        if (worst.isPresent()) {
+            return Optional.of(allergyConflictCard(worst.get(), medicationName));
+        }
+        return identity.unverifiableClassAllergy(allergies)
+            .map(allergy -> com.example.hms.service.allergy.UnverifiableAllergyCard.of(medicationName,
+                com.example.hms.service.allergy.AllergyDrugIdentity.displayOf(allergy)));
     }
 
     /**
@@ -2312,16 +2406,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      */
     static String drugTextForAllergyCheck(String medicationName,
                                           com.example.hms.model.medication.MedicationCatalogItem catalogItem) {
-        StringBuilder text = new StringBuilder(medicationName == null ? "" : medicationName);
-        if (catalogItem != null) {
-            for (String synonym : new String[] {catalogItem.getGenericName(), catalogItem.getBrandName(),
-                    catalogItem.getNameFr()}) {
-                if (synonym != null && !synonym.isBlank()) {
-                    text.append(' ').append(synonym);
-                }
-            }
-        }
-        return com.example.hms.service.allergy.DrugClassAllergy.withGenericNames(text.toString());
+        return com.example.hms.service.allergy.AllergyDrugIdentity.of(medicationName,
+            catalogItem == null ? List.of() : List.of(catalogItem)).text();
     }
 
     /** Lower-case, accent-free form: "Pénicilline V" and "penicillin" must meet. */
@@ -2357,27 +2443,17 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         return com.example.hms.service.allergy.DrugClassAllergy.covers(allergen, expanded, atcCode);
     }
 
-    private void handleAllergyConflict(Patient patient, PatientAllergy allergy, String medicationName,
-                                       Boolean forceOverride, String reason) {
+    private static CdsCard allergyConflictCard(PatientAllergy allergy, String medicationName) {
         String severityStr = allergy.getSeverity() != null ? allergy.getSeverity().name() : "UNKNOWN";
-
-        logger.warn("ALLERGY ALERT: patient {} has a documented {} allergy matching the prescribed drug. Override: {}",
-                   patient.getId(), severityStr, forceOverride);
-
-        if (!Boolean.TRUE.equals(forceOverride) || reason.isEmpty()) {
-            // Sent as a critical CDS card so the prescribing screen shows the
-            // alert and offers the override (with its mandatory reason).
-            // QA D333: the severity is shown in the reader's language, never as the enum constant.
-            // QA D1134: the feminine form, it is read after "gravité" ("gravité : inconnue").
-            String severityLabel = com.example.hms.utility.MessageUtil.resolveOrRaw("cds.severity." + severityStr);
-            String message = com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.allergy.conflict",
-                allergy.getAllergenDisplay(), severityLabel, medicationName);
-            CdsCard card = new CdsCard(message, null, CdsCard.Indicator.CRITICAL,
-                new com.example.hms.cdshooks.dto.CdsHookDtos.Source(
-                    com.example.hms.service.allergy.CrossReactivityAdvisory.sourceLabel(), null, null),
-                null, null, null, UUID.randomUUID().toString());
-            throw new CdsCriticalBlockException(message, List.of(card));
-        }
+        // QA D333: the severity is shown in the reader's language, never as the enum constant.
+        // QA D1134: the feminine form, it is read after "gravité" ("gravité : inconnue").
+        String severityLabel = com.example.hms.utility.MessageUtil.resolveOrRaw("cds.severity." + severityStr);
+        String message = com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.allergy.conflict",
+            com.example.hms.service.allergy.AllergyDrugIdentity.displayOf(allergy), severityLabel, medicationName);
+        return new CdsCard(message, null, CdsCard.Indicator.CRITICAL,
+            new com.example.hms.cdshooks.dto.CdsHookDtos.Source(
+                com.example.hms.service.allergy.CrossReactivityAdvisory.sourceLabel(), null, null),
+            null, null, null, UUID.randomUUID().toString());
     }
 
     /** Strip newline/carriage-return characters to prevent log-injection attacks (S5145). */

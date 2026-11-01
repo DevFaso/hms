@@ -57,6 +57,14 @@ public class MedicationPrescribeRulesCdsService implements CdsHookService {
     private final PatientRepository patientRepository;
     private final MedicationCatalogItemRepository catalogRepository;
 
+    /** QA D1183: the shared allergy cards; absent in unit tests built by hand. */
+    private MedicationAllergyCdsService allergyCheck;
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setAllergyCheck(MedicationAllergyCdsService allergyCheck) {
+        this.allergyCheck = allergyCheck;
+    }
+
     public MedicationPrescribeRulesCdsService(CdsRuleEngine ruleEngine,
                                               PatientRepository patientRepository,
                                               MedicationCatalogItemRepository catalogRepository) {
@@ -99,6 +107,11 @@ public class MedicationPrescribeRulesCdsService implements CdsHookService {
             ProposedMedication proposed = MedicationDraftExtractor.extract(draft);
             if (proposed.name() == null && proposed.code() == null) continue;
 
+            // QA D1183 (round 23): the allergy stop's cards while the order is
+            // composed - the same rule as the prescription and order-sign.
+            if (allergyCheck != null && proposed.name() != null) {
+                cards.addAll(allergyCheck.allergyCardsForPatient(patientId, hospitalId, proposed.name(), proposed.code()));
+            }
             cards.addAll(ruleEngine.evaluateProposedPrescription(
                 patient, hospitalId,
                 proposed.name(),

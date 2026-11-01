@@ -48,6 +48,7 @@ public class AdminSignupRequest {
     private String lastName;
 
     @NotBlank(message = "{adminSignup.phoneNumber.required}")
+    @com.example.hms.validation.PhoneNumber
     private String phoneNumber;
 
     // IMPORTANT: keep nullable so receptionists aren't forced to send it

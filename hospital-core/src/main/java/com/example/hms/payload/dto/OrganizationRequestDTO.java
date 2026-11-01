@@ -49,6 +49,7 @@ public class OrganizationRequestDTO {
 
     @Size(max = 32)
     @com.fasterxml.jackson.annotation.JsonAlias("primaryContactPhone")
+    @com.example.hms.validation.PhoneNumber
     private String contactPhone;
 
     @Size(max = 120)

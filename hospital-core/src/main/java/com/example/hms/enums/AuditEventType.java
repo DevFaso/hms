@@ -135,6 +135,8 @@ public enum AuditEventType {
     MEDICATION_DEACTIVATED,
     /** Round 18 (QA D935): the pharmacy set or approved an item's paediatric dose limits. */
     MEDICATION_DOSE_LIMITS_UPDATED,
+    /** QA D1210: a scheduled dose given before the minimum interval since the last one, with a reason. */
+    MEDICATION_EARLY_DOSE_GIVEN,
     /** Round 18 (QA D935): a prescriber overrode a critical dose-check (CDS) alert, with a reason. */
     PRESCRIPTION_CDS_OVERRIDDEN,
     /** Round 18: the prescriber's re-authentication when signing a controlled-drug order (success or failure). */

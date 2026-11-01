@@ -23,6 +23,7 @@ public class GuarantorRequestDTO {
     private String relationship;
 
     @Size(max = 20)
+    @com.example.hms.validation.PhoneNumber
     private String phone;
 
     @Email(message = "{validation.email.invalid}")

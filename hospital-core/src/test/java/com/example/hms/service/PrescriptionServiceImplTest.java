@@ -1200,6 +1200,195 @@ class PrescriptionServiceImplTest {
         assertThat(audit.getValue().getEventDescription()).doesNotContain("Benefit");
     }
 
+    // ═══════════════ QA D1183 / D1149 round 23: INN class + safety net ═══════════════
+
+    /** QA D1183: an active catalogue item (this hospital's or the national list) named {@code generic}. */
+    private void stubCatalogueKnows(String generic) {
+        com.example.hms.model.medication.MedicationCatalogItem item =
+            new com.example.hms.model.medication.MedicationCatalogItem();
+        item.setId(UUID.randomUUID());
+        item.setNameFr(generic);
+        item.setGenericName(generic);
+        lenient().when(catalogRepo.findActivePage(any(), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(item)));
+    }
+
+    private PrescriptionRequestDTO d1183Request(String medication, boolean force, String reason) {
+        return PrescriptionRequestDTO.builder()
+            .patientId(patientId).staffId(staffId).encounterId(encounterId)
+            .medicationName(medication).dosage(TEST_DOSAGE).frequency(TEST_FREQUENCY)
+            .forceOverride(force).overrideReason(reason)
+            .build();
+    }
+
+    private void d1183StubCreate(String allergen) {
+        UserRoleHospitalAssignment encounterAssignment = new UserRoleHospitalAssignment();
+        encounterAssignment.setId(UUID.randomUUID());
+        encounterAssignment.setHospital(encounter.getHospital());
+        encounter.setAssignment(encounterAssignment);
+        UUID currentUser = staff.getUser().getId();
+        PatientAllergy allergy = new PatientAllergy();
+        allergy.setActive(true);
+        allergy.setAllergenDisplay(allergen);
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(authService.getCurrentUserId()).thenReturn(currentUser);
+        when(roleValidator.canCreatePrescription(currentUser, hospitalId)).thenReturn(true);
+        when(patientAllergyRepository.findByPatient_Id(patientId)).thenReturn(List.of(allergy));
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest(name = "create {1} typed free-text, allergy {0}: blocked")
+    @org.junit.jupiter.params.provider.CsvSource({
+        "Sulfamides, Septrin", "Sulfamides, Septrin forte", "Sulfamides, Fansidar", "Sulfamides, Eusaprim",
+        "Sulfamides, Bactrim", "Pénicilline, Totapen", "Pénicilline, Orbénine", "Pénicilline, Ospen",
+        "Pénicilline, Augmentin",
+    })
+    void d1183_everyQaBrandTypedFreeTextIsBlockedAtCreation(String allergen, String medication) {
+        d1183StubCreate(allergen);
+        PrescriptionRequestDTO request = d1183Request(medication, false, null);
+        assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.FRENCH))
+            .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class);
+        verify(prescriptionRepository, never()).save(any());
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest(name = "create {1} picked from the catalogue, allergy {0}: blocked")
+    @org.junit.jupiter.params.provider.CsvSource({
+        "Sulfamides, Septrin, Sulfaméthoxazole + Triméthoprime",
+        "Sulfamides, Septrin forte, Sulfaméthoxazole + Triméthoprime",
+        "Sulfamides, Fansidar, Sulfadoxine + Pyriméthamine",
+        "Sulfamides, Eusaprim, Sulfaméthoxazole + Triméthoprime",
+        "Sulfamides, Bactrim, Sulfaméthoxazole + Triméthoprime",
+        "Pénicilline, Totapen, Ampicilline",
+        "Pénicilline, Orbénine, Cloxacilline",
+        "Pénicilline, Ospen, Phénoxyméthylpénicilline",
+        "Pénicilline, Augmentin, Amoxicilline + acide clavulanique",
+    })
+    void d1183_everyQaBrandPickedFromTheCatalogueIsBlockedAtCreation(String allergen, String brand, String generic) {
+        d1183StubCreate(allergen);
+        com.example.hms.model.medication.MedicationCatalogItem item =
+            new com.example.hms.model.medication.MedicationCatalogItem();
+        item.setId(UUID.randomUUID());
+        item.setNameFr(brand);
+        item.setGenericName(generic);
+        PrescriptionRequestDTO request = d1183Request(brand, false, null);
+        request.setMedicationCatalogItemId(item.getId());
+        lenient().when(catalogRepo.findByIdAndHospital_Id(item.getId(), hospitalId))
+            .thenReturn(Optional.of(item));
+        lenient().when(catalogRepo.findActivePage(any(), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(item)));
+        lenient().when(catalogRepo.findByHospital_IdAndActiveTrue(any(), any()))
+            .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(item)));
+        assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.FRENCH))
+            .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class);
+        verify(prescriptionRepository, never()).save(any());
+    }
+
+    @Test
+    void d1183_anUnknownFreeTextNameWithAClassAllergyNeedsAnAcknowledgement() {
+        d1183StubCreate("Pénicilline");
+        PrescriptionRequestDTO request = d1183Request("Zorbalix 500 mg", false, null);
+        assertThatThrownBy(() -> prescriptionService.createPrescription(request, Locale.FRENCH))
+            .isInstanceOfSatisfying(com.example.hms.cdshooks.CdsCriticalBlockException.class, ex ->
+                assertThat(ex.getCards()).singleElement().satisfies(card -> {
+                    assertThat(card.indicator())
+                        .isEqualTo(com.example.hms.cdshooks.dto.CdsHookDtos.CdsCard.Indicator.CRITICAL);
+                    assertThat(card.summary()).contains("Zorbalix").contains("Pénicilline");
+                }));
+        verify(prescriptionRepository, never()).save(any());
+    }
+
+    @Test
+    void d1183_theSafetyNetAcknowledgementIsRecordedAndAudited() {
+        PrescriptionRequestDTO request =
+            d1183Request("Zorbalix 500 mg", true, "Checked with the pharmacist: not a penicillin");
+        d1183StubCreate("Pénicilline");
+        Prescription mappedEntity = new Prescription();
+        when(prescriptionMapper.toEntity(request, patient, staff, encounter)).thenReturn(mappedEntity);
+        when(prescriptionRepository.save(mappedEntity)).thenReturn(mappedEntity);
+        when(prescriptionMapper.toResponseDTO(mappedEntity)).thenReturn(PrescriptionResponseDTO.builder().build());
+
+        prescriptionService.createPrescription(request, Locale.FRENCH);
+
+        assertThat(mappedEntity.isAllergiesReviewed()).isTrue();
+        assertThat(mappedEntity.getOverrideReason()).isEqualTo("Checked with the pharmacist: not a penicillin");
+        verify(auditEventLogService).logEvent(org.mockito.ArgumentMatchers.argThat(e ->
+            e.getEventType() == com.example.hms.enums.AuditEventType.PRESCRIPTION_ALLERGY_OVERRIDDEN));
+    }
+
+    @Test
+    void d1183_anUnknownNameWithoutAClassAllergyIsNotBlocked() {
+        PrescriptionRequestDTO request = d1183Request("Zorbalix 500 mg", false, null);
+        d1183StubCreate("Aspirine");
+        Prescription mappedEntity = new Prescription();
+        when(prescriptionMapper.toEntity(request, patient, staff, encounter)).thenReturn(mappedEntity);
+        when(prescriptionRepository.save(mappedEntity)).thenReturn(mappedEntity);
+        when(prescriptionMapper.toResponseDTO(mappedEntity)).thenReturn(PrescriptionResponseDTO.builder().build());
+
+        prescriptionService.createPrescription(request, Locale.FRENCH);
+
+        assertThat(mappedEntity.isAllergiesReviewed()).isFalse();
+    }
+
+    @Test
+    void d1183_aTotapenDraftSavedBeforeTheRuleIsNotSignedWithoutAnAcknowledgement() {
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(prescriberUserId);
+        rx.setMedicationName("Totapen 1 g");
+        PatientAllergy allergy = new PatientAllergy();
+        allergy.setActive(true);
+        allergy.setAllergenDisplay("Pénicilline");
+        stubSignable(rx, prescriberUserId);
+        when(patientAllergyRepository.findByPatient_Id(rx.getPatient().getId())).thenReturn(List.of(allergy));
+        UUID rxId = rx.getId();
+
+        assertThatThrownBy(() -> prescriptionService.signPrescription(rxId, null, Locale.FRENCH))
+            .isInstanceOf(com.example.hms.cdshooks.CdsCriticalBlockException.class);
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.DRAFT);
+        assertThat(rx.getSignatureValue()).isNull();
+    }
+
+    @Test
+    void d1183_theSignerMayAcknowledgeTheAllergyAtTheSignatureAndItIsRecorded() {
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(prescriberUserId);
+        rx.setMedicationName("Septrin forte");
+        PatientAllergy allergy = new PatientAllergy();
+        allergy.setActive(true);
+        allergy.setAllergenDisplay("Sulfamides");
+        stubSignable(rx, prescriberUserId);
+        when(patientAllergyRepository.findByPatient_Id(rx.getPatient().getId())).thenReturn(List.of(allergy));
+        when(prescriptionRepository.save(any(Prescription.class))).thenAnswer(i -> i.getArgument(0));
+        when(prescriptionMapper.toResponseDTO(any(Prescription.class))).thenReturn(new PrescriptionResponseDTO());
+
+        prescriptionService.signPrescription(rx.getId(),
+            com.example.hms.payload.dto.SignPrescriptionRequestDTO.builder()
+                .allergyOverrideReason("Tolerated co-trimoxazole in 2025, documented").build(),
+            Locale.FRENCH);
+
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.SIGNED);
+        assertThat(rx.isAllergiesReviewed()).isTrue();
+        assertThat(rx.getOverrideReason()).isEqualTo("Tolerated co-trimoxazole in 2025, documented");
+        verify(auditEventLogService).logEvent(org.mockito.ArgumentMatchers.argThat(e ->
+            e.getEventType() == com.example.hms.enums.AuditEventType.PRESCRIPTION_ALLERGY_OVERRIDDEN));
+    }
+
+    @Test
+    void d1183_anOrderAcknowledgedAtCreationIsSignedWithoutAskingAgain() {
+        UUID prescriberUserId = UUID.randomUUID();
+        Prescription rx = signablePrescription(prescriberUserId);
+        rx.setMedicationName("Totapen 1 g");
+        rx.setAllergiesReviewed(true);
+        rx.setOverrideReason("reviewed");
+        stubSignable(rx, prescriberUserId);
+        when(prescriptionRepository.save(any(Prescription.class))).thenAnswer(i -> i.getArgument(0));
+        when(prescriptionMapper.toResponseDTO(any(Prescription.class))).thenReturn(new PrescriptionResponseDTO());
+
+        prescriptionService.signPrescription(rx.getId(), null, Locale.FRENCH);
+
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.SIGNED);
+    }
+
     @Test
     void updateThatNoLongerConflictsClearsTheStaleAllergyOverrideAndAuditsIt() {
         UUID prescriptionId = UUID.randomUUID();
@@ -1377,6 +1566,9 @@ class PrescriptionServiceImplTest {
         allergy.setActive(true);
         allergy.setAllergenDisplay("Penicillin"); // does not match Ibuprofen
         allergy.setSeverity(com.example.hms.enums.AllergySeverity.SEVERE);
+        // QA D1183 (round 23): the drug is known to the catalogue, so the check
+        // judges it (a free-text name nobody recorded reaches the safety net).
+        stubCatalogueKnows("Ibuprofen");
 
         when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
@@ -1645,6 +1837,8 @@ class PrescriptionServiceImplTest {
         PatientAllergy allergy = new PatientAllergy();
         allergy.setActive(true);
         allergy.setAllergenDisplay("Pénicilline");
+        // QA D1183 (round 23): the catalogue knows the drug, so the check judges it.
+        stubCatalogueKnows("Paracétamol");
         when(prescriptionRepository.findById(rx.getId())).thenReturn(java.util.Optional.of(rx));
         when(roleValidator.requireActiveHospitalId()).thenReturn(rx.getHospital().getId());
         when(roleValidator.getCurrentUserId()).thenReturn(prescriberUserId);
