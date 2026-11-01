@@ -107,6 +107,32 @@ class MedicationAllergyCdsServiceTest {
             .contains("penicillin");
     }
 
+    @org.junit.jupiter.params.ParameterizedTest(name = "{1} against {0}")
+    @org.junit.jupiter.params.provider.CsvSource({
+        "Sulfamides, Bactrim forte",
+        "Sulfamides, Septra",
+        "Pénicilline, Augmentin 1 g",
+        "Amoxicilline, Augmentin 1 g",
+    })
+    @DisplayName("QA D1183: a brand typed in the order is read with its generic names")
+    void aBrandNameRaisesTheAllergyCard_D1183(String allergen, String medication) {
+        UUID patientId = UUID.randomUUID();
+        Patient patient = patient(patientId, UUID.randomUUID());
+        PatientAllergy a = new PatientAllergy();
+        a.setPatient(patient);
+        a.setAllergenDisplay(allergen);
+        a.setActive(true);
+        when(allergyRepo.findByPatient_Id(patientId)).thenReturn(List.of(a));
+        when(patientRepo.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(ruleEngine.buildContext(any(), any(), any(), any(), any())).thenReturn(mock(CdsRuleContext.class));
+        when(ddiRule.evaluate(any())).thenReturn(List.of());
+
+        CdsHookResponse response = service.evaluate(signRequest(patientId, medication));
+
+        assertThat(response.cards()).hasSize(1);
+        assertThat(response.cards().get(0).indicator()).isEqualTo(CdsCard.Indicator.CRITICAL);
+    }
+
     @Test
     @DisplayName("case-insensitive match and inactive allergies are ignored")
     void caseInsensitiveAndIgnoresInactiveAllergies() {

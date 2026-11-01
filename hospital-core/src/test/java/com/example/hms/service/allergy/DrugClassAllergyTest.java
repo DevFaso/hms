@@ -47,7 +47,8 @@ class DrugClassAllergyTest {
     void noDrugClassRuleIsWrittenOutsideTheAllergyPackage() throws java.io.IOException {
         java.nio.file.Path main = java.nio.file.Path.of("src/main/java/com/example/hms");
         java.util.regex.Pattern stem =
-            java.util.regex.Pattern.compile("\"(penicil|cillin|cilin|sulfa|sulpha|sulfonamid|cotrimox)");
+            // QA D1183: a brand name (Bactrim, Septra, Augmentin) is class data too.
+            java.util.regex.Pattern.compile("\"(penicil|cillin|cilin|sulfa|sulpha|sulfonamid|cotrimox|bactrim|septra|augmentin)");
         java.util.List<String> offenders = new java.util.ArrayList<>();
         try (java.util.stream.Stream<java.nio.file.Path> walk = java.nio.file.Files.walk(main)) {
             for (java.nio.file.Path file : walk.filter(p -> p.toString().endsWith(".java")).toList()) {
@@ -72,6 +73,51 @@ class DrugClassAllergyTest {
         assertThat(DrugClassAllergy.covers("Sulfamides", "Bactrim forte", " j01ec02 ")).isTrue();
         assertThat(DrugClassAllergy.covers("Sulfamides", "Triméthoprime", "J01EA01"))
             .as("trimethoprim alone is not a sulfonamide").isFalse();
-        assertThat(DrugClassAllergy.covers("Sulfamides", "Bactrim forte", null)).isFalse();
+        // QA D1183 (round 22, changed assertion): this pinned the defect - the
+        // brand alone, with no ATC code, passed a sulfonamide allergy.
+        assertThat(DrugClassAllergy.covers("Sulfamides", "Bactrim forte", null)).isTrue();
+    }
+
+    /**
+     * QA D1183 (round 22): the brand names clinicians type, against the class
+     * allergies as they are recorded, in the three languages. Only the
+     * standard equivalences of the brief (Bactrim/Bactrim Forte/Septra,
+     * Augmentin) are data; everything else stays a non-match.
+     */
+    @ParameterizedTest(name = "{0} covers {1}")
+    @CsvSource({
+        "Sulfamides, Bactrim",
+        "Sulfamides, Bactrim forte 960 mg",
+        "Sulfamides, BACTRIM FORTE",
+        "sulfonamides, Septra DS",
+        "Sulfamidas, Bactrim",
+        "Cotrimoxazole, Bactrim",
+        "Sulfaméthoxazole, Bactrim forte",
+        "Pénicilline, Augmentin 1 g",
+        "penicillin, Augmentin",
+        "Penicilina, augmentin 875/125",
+    })
+    void aBrandIsReadWithItsGenericNames_D1183(String allergen, String medication) {
+        assertThat(DrugClassAllergy.covers(allergen, medication, null)).isTrue();
+    }
+
+    @ParameterizedTest(name = "{0} does not cover {1}")
+    @CsvSource({
+        "Sulfamides, Augmentin",
+        "Pénicilline, Bactrim forte",
+        "Pénicilline, Bactrimix",
+        "Sulfamides, Augmentine-like syrup",
+    })
+    void aBrandCoversOnlyItsOwnClass_D1183(String allergen, String medication) {
+        assertThat(DrugClassAllergy.covers(allergen, medication, null)).isFalse();
+    }
+
+    @Test
+    void theGenericNamesAreAppendedOnlyForAKnownBrand_D1183() {
+        assertThat(DrugClassAllergy.withGenericNames("Bactrim Forte"))
+            .isEqualTo("bactrim forte sulfamethoxazole trimethoprim co-trimoxazole");
+        assertThat(DrugClassAllergy.withGenericNames("Augmentin")).contains("amoxicilline").contains("clavulanic");
+        assertThat(DrugClassAllergy.withGenericNames("Paracétamol 500 mg")).isEqualTo("paracetamol 500 mg");
+        assertThat(DrugClassAllergy.withGenericNames(null)).isEmpty();
     }
 }

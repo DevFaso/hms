@@ -1,6 +1,7 @@
 package com.example.hms.service.allergy;
 
 import java.util.Locale;
+import java.util.Map;
 import java.util.regex.Pattern;
 
 /**
@@ -22,6 +23,19 @@ import java.util.regex.Pattern;
  * </ul>
  * Text is compared lower-case and accent-free, as the allergy list is kept in
  * French, English and Spanish words rather than codes. Pure functions.
+ *
+ * <p>QA D1183 (round 22): clinicians type BRAND names. Bactrim passed a
+ * "Sulfamides" allergy and Augmentin was signed for a penicillin-allergic
+ * patient. The repository holds no brand data, so a medication name carrying
+ * one of these standard brand equivalences is read with its generic names
+ * ({@link #withGenericNames}) before any class rule:
+ * <ul>
+ *   <li>Bactrim (Bactrim Forte), Septra -&gt; sulfamethoxazole + trimethoprim
+ *       (co-trimoxazole);</li>
+ *   <li>Augmentin -&gt; amoxicillin + clavulanic acid.</li>
+ * </ul>
+ * Nothing else is added. A catalogue item's own generic name is the other
+ * source (the prescription check reads it with the typed name).
  */
 public final class DrugClassAllergy {
 
@@ -41,7 +55,37 @@ public final class DrugClassAllergy {
     /** WHO ATC sulfonamide groups (J01EA, trimethoprim alone, is left out). */
     private static final Pattern SULFONAMIDE_ATC = Pattern.compile("^J01E[BCDE]");
 
+    /**
+     * QA D1183: brand -&gt; generic names, ONLY the standard equivalences named
+     * in the class comment. The generic is written in the three languages the
+     * allergy list is kept in, so an allergy to "amoxicilline" meets Augmentin.
+     */
+    private static final Map<Pattern, String> BRAND_GENERICS = Map.of(
+        Pattern.compile("\\bbactrim\\b"), "sulfamethoxazole trimethoprim co-trimoxazole",
+        Pattern.compile("\\bseptra\\b"), "sulfamethoxazole trimethoprim co-trimoxazole",
+        Pattern.compile("\\baugmentin\\b"), "amoxicillin amoxicilline amoxicilina clavulanic acid");
+
     private DrugClassAllergy() {
+    }
+
+    /**
+     * The medication's name followed by the generic names of any brand it
+     * carries ("bactrim forte" -&gt; "bactrim forte sulfamethoxazole
+     * trimethoprim co-trimoxazole"); the name alone when it carries none.
+     * Accepts raw or normalized text; returns normalized text.
+     */
+    public static String withGenericNames(String medication) {
+        String med = normalize(medication);
+        if (med.isEmpty()) {
+            return med;
+        }
+        StringBuilder out = new StringBuilder(med);
+        for (Map.Entry<Pattern, String> brand : BRAND_GENERICS.entrySet()) {
+            if (brand.getKey().matcher(med).find()) {
+                out.append(' ').append(brand.getValue());
+            }
+        }
+        return out.toString();
     }
 
     /** The drug classes an allergy may name. */
@@ -56,7 +100,7 @@ public final class DrugClassAllergy {
      */
     public static boolean covers(String allergen, String medication, String atcCode) {
         String a = normalize(allergen);
-        String med = normalize(medication);
+        String med = withGenericNames(medication);
         if (a.isEmpty()) {
             return false;
         }
@@ -95,7 +139,7 @@ public final class DrugClassAllergy {
     }
 
     /** Lower-case, accent-free form: "Sulfaméthoxazole" and "sulfamethoxazole" must meet. */
-    static String normalize(String value) {
+    public static String normalize(String value) {
         if (value == null) {
             return "";
         }

@@ -2162,13 +2162,7 @@ public class EncounterServiceImpl implements EncounterService {
         if (request == null || request.getEsiScore() == null) {
             throw new BusinessException("triage.esi.required");
         }
-        // QA D1158 (round 21): a triage records at least one vital sign; an
-        // empty form stored an all-null vitals row and sent the patient to the
-        // doctor ranked, with no assessment behind the rank.
-        com.example.hms.service.support.ClinicalContent.requireAny("vitals", "triage.vitals.required",
-            request.getTemperatureCelsius(), request.getHeartRateBpm(), request.getRespiratoryRateBpm(),
-            request.getSystolicBpMmHg(), request.getDiastolicBpMmHg(), request.getSpo2Percent(),
-            request.getConsciousnessLevel(), request.getPainScale(), request.getWeightKg(), request.getHeightCm());
+        requireTriageFindings(request);
         // (a) Record vital signs as PatientVitalSign
         com.example.hms.model.PatientVitalSign vital = buildVitalSign(encounter, request, actorUsername);
         // QA D1077: no fundal height for a man, no head circumference for an
@@ -2297,6 +2291,42 @@ public class EncounterServiceImpl implements EncounterService {
 
     // ──────────────────────────────────────────────────────────────
     // MVP 3 — Nursing Intake Flowsheet
+    /**
+     * QA D1158 (round 21): a triage records at least one vital sign; an empty
+     * form stored an all-null vitals row and sent the patient to the doctor
+     * ranked, with no assessment behind the rank.
+     *
+     * <p>QA D1188 (round 22): the vital signs are the six the triage form asks
+     * for - temperature, heart rate, respiratory rate, systolic and diastolic
+     * pressure, SpO2 - exactly the portal's rule ("Saisissez au moins un
+     * signe vital"). A weight, a height, a pain score, the consciousness level
+     * or the oxygen box alone was accepted and ranked the patient: they are
+     * recorded WITH a vital sign, never instead of one.
+     */
+    static void requireTriageFindings(com.example.hms.payload.dto.TriageSubmissionRequestDTO request) {
+        com.example.hms.service.support.ClinicalContent.requireAny("vitals", "triage.vitals.required",
+            request.getTemperatureCelsius(), request.getHeartRateBpm(), request.getRespiratoryRateBpm(),
+            request.getSystolicBpMmHg(), request.getDiastolicBpMmHg(), request.getSpo2Percent());
+    }
+
+    /**
+     * QA D1188 (round 22): the medication rows of an intake that name a
+     * medication. A row with no name (`{}`, `{"medicationName": ""}`, or a
+     * dose with no drug) recorded nothing but was counted and written into
+     * the doctor's notes as "Médicament sans nom" - and counted as the
+     * intake's content. The portal drops such rows before sending; the
+     * server drops them too, before the content check.
+     */
+    static java.util.List<com.example.hms.payload.dto.NursingIntakeRequestDTO.MedicationReconciliationEntry> namedMedications(
+            com.example.hms.payload.dto.NursingIntakeRequestDTO request) {
+        if (request == null || request.getMedications() == null) {
+            return java.util.List.of();
+        }
+        return request.getMedications().stream()
+            .filter(m -> m != null && m.getMedicationName() != null && !m.getMedicationName().isBlank())
+            .toList();
+    }
+
     // ──────────────────────────────────────────────────────────────
 
     @Override
@@ -2321,9 +2351,21 @@ public class EncounterServiceImpl implements EncounterService {
         // QA D1158 (round 21): an intake records an assessment. The prefilled
         // complaint alone is not one: an empty form was stored as a completed
         // intake (and a repeat of it too).
+        // QA D1188 (round 22): a medication row with no name is not content.
+        java.util.List<com.example.hms.payload.dto.NursingIntakeRequestDTO.MedicationReconciliationEntry> medications =
+            namedMedications(request);
+        if (request != null) {
+            request.setMedications(medications);
+            // An allergy row names its allergen (@NotBlank at the edge); a null row is dropped too.
+            if (request.getAllergies() != null) {
+                request.setAllergies(request.getAllergies().stream()
+                    .filter(a -> a != null && a.getAllergenDisplay() != null && !a.getAllergenDisplay().isBlank())
+                    .toList());
+            }
+        }
         com.example.hms.service.support.ClinicalContent.requireAny("nursingAssessmentNotes",
             "encounter.intake.contentRequired", request == null ? null : request.getAllergies(),
-            request == null ? null : request.getMedications(),
+            medications,
             request == null ? null : request.getNursingAssessmentNotes(),
             request == null ? null : request.getPainAssessment(),
             request == null ? null : request.getFallRiskDetail());
@@ -3414,9 +3456,9 @@ public class EncounterServiceImpl implements EncounterService {
         LocalDateTime since = encounter.getArrivalTimestamp() != null
             ? encounter.getArrivalTimestamp() : encounter.getEncounterDate();
         boolean vitalsTaken = encounter.getPatient() != null && encounter.getHospital() != null
+            // QA D1188 (round 22): an observation set, not a weight or a pain score alone.
             && patientVitalSignRepository
-                .findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(
-                    encounter.getPatient().getId(), encounter.getHospital().getId())
+                .findLatestObservationSet(encounter.getPatient().getId(), encounter.getHospital().getId())
                 .map(v -> since == null || (v.getRecordedAt() != null && !v.getRecordedAt().isBefore(since)))
                 .orElse(false);
         if (encounter.getEsiScore() == null || !vitalsTaken) {

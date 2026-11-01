@@ -156,9 +156,11 @@ public class MedicationAllergyCdsService implements CdsHookService {
        ===================================================================== */
 
     private CdsCard allergyCard(String medText, Set<String> haystacks) {
-        String norm = medText.toLowerCase(Locale.ROOT);
+        // QA D1183 (round 22): a brand (Augmentin, Bactrim) is read with its
+        // generic names, accent-free, so an allergy to "amoxicilline" meets it.
+        String norm = com.example.hms.service.allergy.DrugClassAllergy.withGenericNames(medText);
         return haystacks.stream()
-            .filter(norm::contains)
+            .filter(allergen -> norm.contains(com.example.hms.service.allergy.DrugClassAllergy.normalize(allergen)))
             .findFirst()
             .map(allergen -> buildAllergyCard(medText, allergen))
             .orElse(null);

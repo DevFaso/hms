@@ -187,7 +187,7 @@ class NurseTaskServiceImplTest {
         lenient().doReturn(EVERY_PATIENT_IN_A_STAY).when(service).activeStaysByPatient(any());
 
         // Default stubs so synthetic/fallback paths activate in existing tests
-        lenient().when(vitalSignRepository.findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(any(), any()))
+        lenient().when(vitalSignRepository.findLatestObservationSet(any(), any()))
             .thenReturn(Optional.empty());
         lenient().when(prescriptionRepository.findByPatient_IdAndHospital_Id(any(), any()))
             .thenReturn(List.of());
@@ -548,7 +548,7 @@ class NurseTaskServiceImplTest {
             .temperatureCelsius(38.9).heartRateBpm(112).respiratoryRateBpm(26)
             .systolicBpMmHg(95).diastolicBpMmHg(60).spo2Percent(91)
             .build();
-        when(vitalSignRepository.findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(patientId, hospitalId))
+        when(vitalSignRepository.findLatestObservationSet(patientId, hospitalId))
             .thenReturn(Optional.of(last));
 
         try (MockedStatic<LocalDateTime> mockedNow = mockStatic(LocalDateTime.class)) {
@@ -941,7 +941,7 @@ class NurseTaskServiceImplTest {
 
         // Last vitals recorded 1 hour ago — within the 4h overdue threshold
         PatientVitalSign vs = PatientVitalSign.builder().recordedAt(fixedNow.minusHours(1)).build();
-        when(vitalSignRepository.findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(patientId, hospitalId))
+        when(vitalSignRepository.findLatestObservationSet(patientId, hospitalId))
             .thenReturn(Optional.of(vs));
 
         try (MockedStatic<LocalDateTime> mockedNow = mockStatic(LocalDateTime.class)) {
@@ -970,7 +970,7 @@ class NurseTaskServiceImplTest {
 
         // Last vitals recorded 6 hours ago — beyond the 4h overdue threshold
         PatientVitalSign vs = PatientVitalSign.builder().recordedAt(fixedNow.minusHours(6)).build();
-        when(vitalSignRepository.findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(patientId, hospitalId))
+        when(vitalSignRepository.findLatestObservationSet(patientId, hospitalId))
             .thenReturn(Optional.of(vs));
 
         try (MockedStatic<LocalDateTime> mockedNow = mockStatic(LocalDateTime.class)) {
@@ -1613,7 +1613,7 @@ class NurseTaskServiceImplTest {
             .thenReturn(List.of(patient(patientId, "Summary Pat", "Summary", "Pat")));
 
         // Patient has no vitals → should count as vitalsDue=1
-        when(vitalSignRepository.findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(patientId, hospitalId))
+        when(vitalSignRepository.findLatestObservationSet(patientId, hospitalId))
             .thenReturn(Optional.empty());
 
         // One active prescription that's DUE
@@ -1658,7 +1658,7 @@ class NurseTaskServiceImplTest {
 
         // Vitals recorded recently — not overdue
         PatientVitalSign vs = PatientVitalSign.builder().recordedAt(fixedNow.minusHours(1)).build();
-        when(vitalSignRepository.findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(patientId, hospitalId))
+        when(vitalSignRepository.findLatestObservationSet(patientId, hospitalId))
             .thenReturn(Optional.of(vs));
 
         Patient mockPatient = mock(Patient.class);
@@ -1793,7 +1793,7 @@ class NurseTaskServiceImplTest {
 
         // Exactly 4h ago → dueTime = now-4h+2h = now-2h → overdue=true
         PatientVitalSign vs = PatientVitalSign.builder().recordedAt(fixedNow.minusHours(4)).build();
-        when(vitalSignRepository.findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(patientId, hospitalId))
+        when(vitalSignRepository.findLatestObservationSet(patientId, hospitalId))
             .thenReturn(Optional.of(vs));
 
         try (MockedStatic<LocalDateTime> mockedNow = mockStatic(LocalDateTime.class)) {
@@ -1841,7 +1841,7 @@ class NurseTaskServiceImplTest {
         adm.setStatus(AdmissionStatus.ACTIVE);
 
         when(admissionRepository.findActiveAdmissionsByHospital(hospitalId)).thenReturn(List.of(adm));
-        when(vitalSignRepository.findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(patientId, hospitalId))
+        when(vitalSignRepository.findLatestObservationSet(patientId, hospitalId))
             .thenReturn(Optional.empty());
         when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
             .thenReturn(List.of());
@@ -1885,7 +1885,7 @@ class NurseTaskServiceImplTest {
         activePending.setCreatedAt(LocalDateTime.now().minusHours(6));
 
         when(admissionRepository.findActiveAdmissionsByHospital(hospitalId)).thenReturn(List.of(adm));
-        when(vitalSignRepository.findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(patientId, hospitalId))
+        when(vitalSignRepository.findLatestObservationSet(patientId, hospitalId))
             .thenReturn(Optional.of(PatientVitalSign.builder().recordedAt(LocalDateTime.now()).build()));
         when(prescriptionRepository.findByPatient_IdAndHospital_Id(patientId, hospitalId))
             .thenReturn(List.of(activePending));

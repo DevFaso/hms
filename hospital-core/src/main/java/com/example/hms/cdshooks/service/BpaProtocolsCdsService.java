@@ -89,9 +89,16 @@ public class BpaProtocolsCdsService implements CdsHookService {
 
     /**
      * Drop cards the clinician has already acknowledged or overridden within
-     * the suppression window. Match by stable {@code uuid} when present; fall
-     * back to the {summary, indicator} pair so v0 cards (no uuid) still
-     * suppress correctly.
+     * the suppression window.
+     *
+     * <p>QA D1194 (round 22): keyed by rule, patient and user. A BPA card's
+     * uuid is the rule and its level ({@code BpaRuleEngine.stableCardUuid}),
+     * so it is matched by uuid only - never by its summary, which is text in
+     * the reader's language (an acknowledgement recorded in French hid the
+     * card in French and nowhere else). Only the viewer's own
+     * acknowledgements count: each clinician acknowledges an advisory for
+     * themself, as in a hospital EHR. The {summary, indicator} fallback is
+     * kept for a card that carries no uuid.
      */
     private List<CdsCard> suppressAcknowledged(List<CdsCard> cards, UUID patientId) {
         if (cards == null || cards.isEmpty()) {
@@ -101,8 +108,12 @@ public class BpaProtocolsCdsService implements CdsHookService {
         // clinical roles and runs PatientChartAccess.require on context.patientId
         // before any service evaluates, so the auth-gated service path is not
         // needed here.
+        UUID viewerId = com.example.hms.security.context.HospitalContextHolder.getContextOrEmpty().getPrincipalUserId();
+        if (viewerId == null) {
+            return cards;
+        }
         List<CdsAcknowledgement> active =
-                acknowledgementRepository.findActiveForPatient(patientId, LocalDateTime.now());
+                acknowledgementRepository.findActiveForPatientAndUser(patientId, viewerId, LocalDateTime.now());
         if (active.isEmpty()) {
             return cards;
         }
@@ -115,8 +126,8 @@ public class BpaProtocolsCdsService implements CdsHookService {
                 .collect(Collectors.toSet());
         return cards.stream()
                 .filter(c -> {
-                    if (c.uuid() != null && ackedUuids.contains(c.uuid())) {
-                        return false;
+                    if (c.uuid() != null && !c.uuid().isBlank()) {
+                        return !ackedUuids.contains(c.uuid());
                     }
                     String indicator = c.indicator() != null ? c.indicator().wire() : null;
                     return !ackedFingerprints.contains(fingerprint(c.summary(), indicator));

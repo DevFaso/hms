@@ -525,7 +525,6 @@ public class CriticalValueNotificationService {
      * locale anyway — so the body is rendered in the staff locale.
      */
     private NotificationText buildText(LabResult result, boolean escalation) {
-        java.util.Locale locale = NotificationLocales.STAFF;
         LabOrder order = result.getLabOrder();
         // QA D665: keyed so the reader's language is used; QA D648: an order
         // whose definition was deleted names a deleted test.
@@ -541,12 +540,13 @@ public class CriticalValueNotificationService {
             ? order.getPatient().getFullName()
             : NotificationLocalizer.key("patient.fallback.generic");
         // QA D1095: the value is never sent without its unit (the definition's when none was typed).
-        String value = withUnit(localizedValue(result.getResultValue(), locale), result);
+        // QA D1207 (round 22): formatted in each reader's locale when read, not in the staff locale here.
+        Object value = valueArg(result);
         // QA D931: a critical CORRECTION says so, and names the value it
         // replaces; the clinician may have acted on that one.
         if (!escalation && result.getSupersedesResultId() != null) {
-            String replaced = labResultRepository.findById(result.getSupersedesResultId())
-                .map(old -> withUnit(localizedValue(old.getResultValue(), locale), old))
+            Object replaced = labResultRepository.findById(result.getSupersedesResultId())
+                .map(CriticalValueNotificationService::valueArg)
                 .orElse(null);
             if (replaced != null) {
                 return NotificationText.of("lab.critical.correction.notification",
@@ -556,6 +556,16 @@ public class CriticalValueNotificationService {
         return NotificationText.of(
             escalation ? "lab.critical.escalation" : "lab.critical.notification",
             testName, value, patientName);
+    }
+
+    /**
+     * QA D1207 (round 22): a result's value and unit as a notification
+     * argument, formatted in the reader's locale when the notification is
+     * read (and in the staff locale for an SMS, which is rendered once).
+     */
+    public static Object valueArg(LabResult result) {
+        return com.example.hms.service.i18n.NotificationLocalizer.labValue(result.getResultValue(),
+            com.example.hms.mapper.LabResultMapper.unitOf(result));
     }
 
     /** QA D1095: the value, a space and its unit; the value alone for a test with no unit (no double space). */

@@ -23,6 +23,46 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  */
 class EmptyClinicalWriteRulesTest {
 
+    /**
+     * QA D1182 (round 22): the report form pre-fills cardiac activity,
+     * movement and tone; the edit of a blank report sent them and saved
+     * "RAPPORT Normal". Every yes/no box of the report, ticked at once, with
+     * the category and the date, is still a blank report.
+     */
+    @Test
+    void everyYesNoBoxTickedIsStillABlankUltrasoundReport_D1182() {
+        UltrasoundReportRequestDTO boxes = new UltrasoundReportRequestDTO();
+        boxes.setScanDate(LocalDate.of(2026, 11, 1));
+        boxes.setFindingCategory(UltrasoundFindingCategory.NORMAL);
+        org.springframework.beans.BeanWrapper bean = new org.springframework.beans.BeanWrapperImpl(boxes);
+        int ticked = 0;
+        for (java.beans.PropertyDescriptor p : bean.getPropertyDescriptors()) {
+            if (p.getPropertyType() == Boolean.class && p.getWriteMethod() != null) {
+                bean.setPropertyValue(p.getName(), Boolean.TRUE);
+                ticked++;
+            }
+        }
+        assertThat(ticked).as("yes/no boxes on the report").isGreaterThanOrEqualTo(9);
+        // The fetus count defaults to 1 on the entity and the form: not a finding (#1005 review).
+        boxes.setNumberOfFetuses(1);
+        assertThatThrownBy(() -> UltrasoundServiceImpl.requireReportFindings(boxes))
+            .isInstanceOf(FieldBusinessException.class)
+            .extracting("messageKey").isEqualTo("ultrasound.report.findingsRequired");
+    }
+
+    /** QA D1182 class (round 22): a maternal-history edit writes a new version from its body alone. */
+    @Test
+    void aBlankMaternalHistoryEditIsRefused_D1182() {
+        com.example.hms.payload.dto.clinical.MaternalHistoryRequestDTO blank =
+            new com.example.hms.payload.dto.clinical.MaternalHistoryRequestDTO();
+        blank.setPatientId(java.util.UUID.randomUUID());
+        blank.setHospitalId(java.util.UUID.randomUUID());
+        blank.setUpdateReason("correction");
+        assertThatThrownBy(() -> MaternalHistoryServiceImpl.requireHistoryContent(blank))
+            .isInstanceOf(FieldBusinessException.class)
+            .extracting("messageKey").isEqualTo("maternalHistory.contentRequired");
+    }
+
     @Test
     void aBlankUltrasoundReportIsRefusedEvenWithACategory_D1150() {
         UltrasoundReportRequestDTO blank = new UltrasoundReportRequestDTO();
@@ -35,10 +75,16 @@ class EmptyClinicalWriteRulesTest {
         UltrasoundReportRequestDTO filled = new UltrasoundReportRequestDTO();
         filled.setFetalHeartRate(142);
         assertThatCode(() -> UltrasoundServiceImpl.requireReportFindings(filled)).doesNotThrowAnyException();
+        // QA D1182 (round 22, changed assertion): a yes/no box alone is no
+        // longer a finding - the form pre-fills cardiac activity, so the box
+        // cannot tell a default from a decision. "No cardiac activity" is
+        // written in the findings or the interpretation.
         UltrasoundReportRequestDTO noActivity = new UltrasoundReportRequestDTO();
         noActivity.setFetalCardiacActivity(Boolean.FALSE);
-        assertThatCode(() -> UltrasoundServiceImpl.requireReportFindings(noActivity))
-            .as("a deliberate 'no cardiac activity' is a finding").doesNotThrowAnyException();
+        assertThatThrownBy(() -> UltrasoundServiceImpl.requireReportFindings(noActivity))
+            .isInstanceOf(FieldBusinessException.class);
+        noActivity.setInterpretation("Absence d'activité cardiaque");
+        assertThatCode(() -> UltrasoundServiceImpl.requireReportFindings(noActivity)).doesNotThrowAnyException();
     }
 
     @Test

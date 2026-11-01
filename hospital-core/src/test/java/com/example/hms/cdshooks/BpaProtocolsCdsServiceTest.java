@@ -79,9 +79,6 @@ class BpaProtocolsCdsServiceTest {
             CdsCard.Indicator.WARNING, new Source("HMS", null, null),
             null, null, null, UUID.randomUUID().toString());
         when(engine.evaluateForPatient(patient, hospitalId)).thenReturn(List.of(card));
-        when(acknowledgements.findActiveForPatient(any(UUID.class), any(LocalDateTime.class)))
-            .thenReturn(List.of());
-
         CdsHookResponse response = service.evaluate(viewRequest(patientId));
         assertThat(response.cards()).containsExactly(card);
     }
@@ -107,10 +104,87 @@ class BpaProtocolsCdsServiceTest {
             .cardSummary("Sepsis")
             .indicator("critical")
             .build();
-        when(acknowledgements.findActiveForPatient(any(UUID.class), any(LocalDateTime.class)))
-            .thenReturn(List.of(ackEntry));
+        // QA D1194 (round 22, changed stub): the viewer's own acknowledgements are read.
+        UUID viewer = UUID.randomUUID();
+        when(acknowledgements.findActiveForPatientAndUser(any(UUID.class), org.mockito.ArgumentMatchers.eq(viewer),
+            any(LocalDateTime.class))).thenReturn(List.of(ackEntry));
 
-        CdsHookResponse response = service.evaluate(viewRequest(patientId));
+        CdsHookResponse response = asViewer(viewer, () -> service.evaluate(viewRequest(patientId)));
         assertThat(response.cards()).containsExactly(fresh);
+    }
+
+    /**
+     * QA D1194 (round 22): an acknowledgement recorded in French (its summary
+     * is French) hides the same advisory in Spanish and English, because the
+     * card is matched by its stable id, never by its text; and a card with an
+     * id is never hidden by an acknowledgement of a same-text card with
+     * another id.
+     */
+    @Test
+    void theAcknowledgementHoldsInEveryLanguageAndIsMatchedByIdOnly_D1194() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Patient patient = Patient.builder().build();
+        patient.setId(patientId);
+        patient.setHospitalId(hospitalId);
+        when(patients.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        String stable = UUID.nameUUIDFromBytes("hms-bpa:pregnancy-htn:critical".getBytes(
+            java.nio.charset.StandardCharsets.UTF_8)).toString();
+        CdsAcknowledgement french = CdsAcknowledgement.builder()
+            .cardUuid(stable).cardSummary("Hypertension de la grossesse").indicator("critical").build();
+        CdsAcknowledgement sameTextOtherCard = CdsAcknowledgement.builder()
+            .cardUuid(UUID.randomUUID().toString()).cardSummary("Hypertension in pregnancy").indicator("critical").build();
+        UUID viewer = UUID.randomUUID();
+        when(acknowledgements.findActiveForPatientAndUser(any(UUID.class), org.mockito.ArgumentMatchers.eq(viewer),
+            any(LocalDateTime.class))).thenReturn(List.of(french, sameTextOtherCard));
+
+        for (String summary : List.of("Hypertension de la grossesse", "Hipertensión en el embarazo",
+                "Hypertension in pregnancy")) {
+            CdsCard card = new CdsCard(summary, null, CdsCard.Indicator.CRITICAL,
+                new Source("HMS", null, null), null, null, null, stable);
+            when(engine.evaluateForPatient(patient, hospitalId)).thenReturn(List.of(card));
+            assertThat(asViewer(viewer, () -> service.evaluate(viewRequest(patientId))).cards())
+                .as("acknowledged in French, read as %s", summary).isEmpty();
+        }
+
+        CdsCard otherCard = new CdsCard("Hypertension in pregnancy", null, CdsCard.Indicator.CRITICAL,
+            new Source("HMS", null, null), null, null, null, UUID.randomUUID().toString());
+        when(engine.evaluateForPatient(patient, hospitalId)).thenReturn(List.of(otherCard));
+        assertThat(asViewer(viewer, () -> service.evaluate(viewRequest(patientId))).cards())
+            .as("a card with an id is matched by id, never by its text").containsExactly(otherCard);
+    }
+
+    /** QA D1194: another clinician's acknowledgement does not hide the card from this one; no viewer, no hiding. */
+    @Test
+    void onlyTheViewersOwnAcknowledgementsCount_D1194() {
+        UUID patientId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        Patient patient = Patient.builder().build();
+        patient.setId(patientId);
+        patient.setHospitalId(hospitalId);
+        when(patients.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        CdsCard card = new CdsCard("Sepsis", null, CdsCard.Indicator.CRITICAL,
+            new Source("HMS", null, null), null, null, null, UUID.randomUUID().toString());
+        when(engine.evaluateForPatient(patient, hospitalId)).thenReturn(List.of(card));
+        UUID viewer = UUID.randomUUID();
+        when(acknowledgements.findActiveForPatientAndUser(any(UUID.class), any(UUID.class), any(LocalDateTime.class)))
+            .thenReturn(List.of());
+
+        assertThat(asViewer(viewer, () -> service.evaluate(viewRequest(patientId))).cards()).containsExactly(card);
+        verify(acknowledgements).findActiveForPatientAndUser(org.mockito.ArgumentMatchers.eq(patientId),
+            org.mockito.ArgumentMatchers.eq(viewer), any(LocalDateTime.class));
+        verify(acknowledgements, never()).findActiveForPatient(any(), any());
+
+        assertThat(service.evaluate(viewRequest(patientId)).cards()).containsExactly(card);
+    }
+
+    private static <T> T asViewer(UUID userId, java.util.function.Supplier<T> call) {
+        com.example.hms.security.context.HospitalContextHolder.setContext(
+            com.example.hms.security.context.HospitalContext.builder().principalUserId(userId).build());
+        try {
+            return call.get();
+        } finally {
+            com.example.hms.security.context.HospitalContextHolder.clear();
+        }
     }
 }

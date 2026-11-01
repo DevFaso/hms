@@ -601,7 +601,17 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
             plan.setRegistration(observation.getRegistration());
         }
 
-        if (plan.isImmediatePhase() && !plan.isImmediateWindowCompleted()) {
+        boolean monitoringCheck = isMonitoringCheck(request);
+        LocalDateTime dueBefore = plan.getNextDueAt();
+        if (!monitoringCheck) {
+            // QA D1181 (round 22): a mood, education or discharge note is
+            // recorded, but it checks nothing - it moved the next 15-minute
+            // check of a haemorrhaging mother by 15 minutes and cleared
+            // "En retard". Only a check moves the clock; a note can at most
+            // escalate the shift monitoring, which brings the next check
+            // forward, never back.
+            applyNonCheckScheduling(plan, observation, request, escalateMonitoring, dueBefore);
+        } else if (plan.isImmediatePhase() && !plan.isImmediateWindowCompleted()) {
             // QA D268: a haemorrhage on this plan, now or earlier in the window,
             // keeps the 15-minute checks until the midwife confirms
             // stabilization; the clock and the check count alone do not end them.
@@ -631,8 +641,9 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
      * QA D1151 (round 21): an observation records something. Blank ones were
      * saved with every vital null and counted as the 15-minute checks of a
      * haemorrhaging woman. At least one finding is required: a vital sign,
-     * the uterus, the lochia, the perineum, bleeding, the mood, education or
-     * a discharge note.
+     * the uterus, the lochia, the perineum, bleeding, a sign of infection
+     * (round 22: foul lochia, uterine tenderness, chills were refused as
+     * "nothing entered"), the mood, education or a discharge note.
      */
     static void requireObservationFindings(PostpartumObservationRequestDTO request) {
         com.example.hms.service.support.ClinicalContent.requireAny("temperatureCelsius",
@@ -642,21 +653,29 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
             request.getFundusHeightCm(), request.getFundusTone(), request.getBladderStatus(),
             request.getLochiaAmount(), request.getLochiaCharacter(), request.getLochiaNotes(),
             request.getPerineumFindings(), request.getEstimatedBloodLossMl(), request.getExcessiveBleeding(),
-            request.getUterineAtonySuspected(), request.getHemorrhageProtocolActivated(),
+            request.getUterineAtonySuspected(), request.getFoulLochiaOdor(), request.getUterineTenderness(),
+            request.getChillsOrRigors(), request.getHemorrhageProtocolActivated(),
             request.getStabilizationConfirmed(), request.getMoodStatus(), request.getSupportStatus(),
             request.getSleepStatus(), request.getPsychosocialNotes(), request.getEducationTopics(),
             request.getEducationNotes(), request.getDischargeSafetyNotes());
     }
 
     /**
-     * QA D1151: what counts as one of the immediate-recovery checks - a vital
-     * sign or an assessment of the uterus or the bleeding. An education or a
-     * discharge note is recorded but checks nothing.
+     * QA D1151 / D1181: what counts as a monitoring check - a vital sign or an
+     * assessment of the uterus or the bleeding. Only a check counts toward the
+     * immediate-recovery checks and moves the next-due time. A mood, sleep,
+     * support, pain, bladder, perineum, education or discharge entry is
+     * recorded but checks nothing. A ticked box counts only when ticked
+     * ({@code Boolean.FALSE} is the form's default, not a finding).
+     * {@code PostpartumMonitoringCheckGuardTest} classifies every request
+     * property, so a new one cannot reach the clock unclassified.
      */
     static boolean isMonitoringCheck(PostpartumObservationRequestDTO request) {
         Object[] checks = {request.getTemperatureCelsius(), request.getSystolicBpMmHg(), request.getDiastolicBpMmHg(),
             request.getPulseBpm(), request.getRespirationsPerMin(), request.getFundusHeightCm(), request.getFundusTone(),
-            request.getLochiaAmount(), request.getEstimatedBloodLossMl()};
+            request.getLochiaAmount(), request.getLochiaCharacter(), request.getEstimatedBloodLossMl(),
+            request.getExcessiveBleeding(), request.getUterineAtonySuspected(), request.getUterineTenderness(),
+            request.getFoulLochiaOdor()};
         for (Object check : checks) {
             if (com.example.hms.service.support.ClinicalContent.isPresent(check)) {
                 return true;
@@ -688,6 +707,32 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         } else {
             plan.setNextDueAt(observation.getObservationTime()
                 .plusMinutes(PostpartumCarePlan.IMMEDIATE_INTERVAL_MINUTES));
+        }
+    }
+
+    /**
+     * QA D1181: an observation that is not a monitoring check leaves the
+     * immediate-recovery window, the check count and the next-due time as they
+     * were. In the shift phase an escalation (a critical alert, or enhanced
+     * monitoring asked for) still applies, but the next check can only come
+     * earlier than it was due, never later.
+     */
+    private void applyNonCheckScheduling(PostpartumCarePlan plan,
+                                         PostpartumObservation observation,
+                                         PostpartumObservationRequestDTO request,
+                                         boolean escalateMonitoring,
+                                         LocalDateTime dueBefore) {
+        if (plan.isImmediatePhase() && !plan.isImmediateWindowCompleted()) {
+            return;
+        }
+        boolean escalation = escalateMonitoring || Boolean.TRUE.equals(request.getEnhancedMonitoring());
+        if (!escalation) {
+            return;
+        }
+        applyShiftPhaseScheduling(plan, observation, request, escalateMonitoring);
+        LocalDateTime dueAfter = plan.getNextDueAt();
+        if (dueBefore != null && (dueAfter == null || dueAfter.isAfter(dueBefore))) {
+            plan.setNextDueAt(dueBefore);
         }
     }
 

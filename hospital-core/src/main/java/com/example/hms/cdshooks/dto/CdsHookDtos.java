@@ -90,6 +90,12 @@ public final class CdsHookDtos {
             this(summary, detail, indicator, source, links, suggestions, selectionBehavior, uuid, hardStop, null);
         }
 
+        /** This card with another {@code uuid}; every other field is kept. */
+        public CdsCard withUuid(String newUuid) {
+            return new CdsCard(summary, detail, indicator, source, links, suggestions, selectionBehavior, newUuid,
+                hardStop, reviewRequired);
+        }
+
         /** Whether no override may pass this card. */
         public boolean blocksOverride() {
             return Boolean.TRUE.equals(hardStop);

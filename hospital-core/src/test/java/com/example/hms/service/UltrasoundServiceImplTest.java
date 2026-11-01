@@ -303,6 +303,34 @@ class UltrasoundServiceImplTest {
         verify(orderRepository).save(order);
     }
 
+    /** QA D1182 (round 22): the EDIT of a report with only the form's default boxes is refused, nothing saved. */
+    @Test
+    void createOrUpdateReport_refusesAnEditWithOnlyTheDefaultBoxes() {
+        UltrasoundReportRequestDTO request = UltrasoundReportRequestDTO.builder()
+            .scanDate(LocalDate.now())
+            .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL)
+            .fetalCardiacActivity(Boolean.TRUE)
+            .fetalMovementObserved(Boolean.TRUE)
+            .fetalToneNormal(Boolean.TRUE)
+            .build();
+        UltrasoundOrder order = new UltrasoundOrder();
+        order.setId(orderId);
+        order.setHospital(hospital);
+        order.setStatus(UltrasoundOrderStatus.IN_PROGRESS);
+        UltrasoundReport existingReport = new UltrasoundReport();
+        existingReport.setUltrasoundOrder(order);
+        existingReport.setHospital(hospital);
+        existingReport.setReportReviewedByProvider(false);
+        when(orderRepository.findById(orderId)).thenReturn(Optional.of(order));
+        when(reportRepository.findByUltrasoundOrderId(orderId)).thenReturn(Optional.of(existingReport));
+
+        assertThatThrownBy(() -> ultrasoundService.createOrUpdateReport(orderId, request, null))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting("messageKey").isEqualTo("ultrasound.report.findingsRequired");
+        verify(ultrasoundMapper, never()).updateReportFromRequest(any(), any());
+        verify(reportRepository, never()).save(any());
+    }
+
     @Test
     void createOrUpdateReport_throwsWhenOrderCancelled() {
         UltrasoundReportRequestDTO request = UltrasoundReportRequestDTO.builder()

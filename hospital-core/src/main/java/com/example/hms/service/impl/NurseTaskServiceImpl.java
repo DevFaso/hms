@@ -255,9 +255,10 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     /** The vitals round of one admitted patient, or {@code null} when none falls in the window. */
     private NurseVitalTaskResponseDTO vitalTaskFor(PatientContext ctx, UUID hospitalId, LocalDateTime now,
                                                    Duration effectiveWindow) {
-        // Find the most recent vital sign for this patient at this hospital
+        // QA D1181 class: the most recent observation set here (a weight alone
+        // is not a vitals round and does not restart its clock).
         Optional<PatientVitalSign> last = vitalSignRepository
-            .findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(ctx.patientId(), hospitalId);
+            .findLatestObservationSet(ctx.patientId(), hospitalId);
 
         // Compute when the next vitals check is due
         LocalDateTime dueTime;
@@ -1102,7 +1103,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         for (PatientContext ctx : patients) {
             if (ctx.patientId() == null || !admitted.contains(ctx.patientId())) continue;
             Optional<LocalDateTime> lastRecorded = vitalSignRepository
-                .findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(ctx.patientId(), hospitalId)
+                .findLatestObservationSet(ctx.patientId(), hospitalId)
                 .map(v -> v.getRecordedAt());
             if (lastRecorded.isEmpty() || lastRecorded.get().isBefore(overdueThreshold)) {
                 count++;
@@ -1673,7 +1674,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         if (patient == null) return null;
 
         Optional<LocalDateTime> lastVitals = vitalSignRepository
-            .findFirstByPatient_IdAndHospital_IdOrderByRecordedAtDesc(patient.getId(), hospitalId)
+            .findLatestObservationSet(patient.getId(), hospitalId)
             .map(PatientVitalSign::getRecordedAt);
 
         boolean vitalsDue = lastVitals.isEmpty() || lastVitals.get().isBefore(overdueThreshold);

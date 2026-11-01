@@ -104,8 +104,9 @@ public class LabResultReleaseNotifier {
         Object[] args = {
             testNameOf(order),
             patientNameOf(order),
-            valueOf(superseded),
-            valueOf(correction)
+            // QA D1207 (round 22): formatted in the reader's locale when read.
+            CriticalValueNotificationService.valueArg(superseded),
+            CriticalValueNotificationService.valueArg(correction)
         };
         TransactionCallbacks.afterCommit(() -> {
             try {

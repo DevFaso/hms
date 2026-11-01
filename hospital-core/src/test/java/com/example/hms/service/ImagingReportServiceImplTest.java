@@ -266,10 +266,28 @@ class ImagingReportServiceImplTest {
         LocalDateTime flaggedAt = LocalDateTime.now().minusHours(2);
         report.setCriticalResultFlaggedAt(flaggedAt);
 
+        // QA D1182 (round 22, changed request): an edit carries the read; the
+        // flag alone would blank every finding and is now refused.
         imagingReportService.updateReport(reportId,
-            ImagingReportUpsertRequestDTO.builder().criticalFinding(Boolean.FALSE).build());
+            ImagingReportUpsertRequestDTO.builder().impression("Normal study.").criticalFinding(Boolean.FALSE).build());
 
         assertThat(report.getCriticalResultFlaggedAt()).isEqualTo(flaggedAt);
+    }
+
+    /** QA D1182 class (round 22): the edit of a read is held to the same findings rule as its create. */
+    @Test
+    void anEditThatBlanksTheReadIsRefusedAndNothingIsSaved_D1182() {
+        ImagingReport report = persistedReport();
+        report.setImpression("Normal study.");
+
+        assertThatThrownBy(() -> imagingReportService.updateReport(reportId,
+            ImagingReportUpsertRequestDTO.builder().contrastAdministered(Boolean.TRUE).build()))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey()).isEqualTo("imaging.report.findingsRequired");
+        verify(imagingReportRepository, never()).save(any(ImagingReport.class));
+
+        imagingReportService.updateReport(reportId, ImagingReportUpsertRequestDTO.builder().findings("Small effusion").build());
+        verify(imagingReportRepository).save(report);
     }
 
     /** QA D1098 (round 19): reports were written and signed FINAL on cancelled orders. */
