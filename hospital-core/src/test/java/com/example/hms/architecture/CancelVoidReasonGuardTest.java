@@ -529,4 +529,47 @@ class CancelVoidReasonGuardTest {
     private static String first(String[] values) {
         return values == null || values.length == 0 ? "" : values[0];
     }
+
+    /**
+     * QA D1217 (round 23): every write of an invoice's CANCELLED status keeps
+     * a reason. A DRAFT invoice with priced lines was cancelled with
+     * cancelReason null (the D1069 draft exemption, withdrawn by decision),
+     * and the copay carried onto a visit invoice was cancelled with none.
+     * A file that writes {@code InvoiceStatus.CANCELLED} must set the reason
+     * ({@code setCancelReason(}) or go through the update path's
+     * {@code recordCancellation(} at least as many times.
+     */
+    @Test
+    void everyInvoiceCancellationKeepsAReason() throws IOException {
+        Pattern cancelWrite = Pattern.compile("setStatus\\((?:com\\.example\\.hms\\.enums\\.)?InvoiceStatus\\.CANCELLED\\)");
+        Pattern reasonWrite = Pattern.compile("setCancelReason\\(|recordCancellation\\(invoice");
+        Map<String, String> missing = new LinkedHashMap<>();
+        int sites = 0;
+        try (Stream<Path> files = Files.walk(MAIN)) {
+            for (Path file : files.filter(f -> f.toString().endsWith(".java")).toList()) {
+                String src = com.example.hms.testsupport.SourceScan.stripComments(Files.readString(file));
+                int writes = count(cancelWrite, src);
+                if (writes == 0) {
+                    continue;
+                }
+                sites += writes;
+                int reasons = count(reasonWrite, src);
+                if (reasons < writes) {
+                    missing.put(MAIN.relativize(file).toString().replace('\\', '/'),
+                        writes + " cancellation(s), " + reasons + " reason write(s)");
+                }
+            }
+        }
+        assertThat(sites).as("the scan found the invoice cancellations").isPositive();
+        assertThat(missing).as("an invoice cancelled without a kept reason (QA D1217)").isEmpty();
+    }
+
+    private static int count(Pattern pattern, String src) {
+        Matcher m = pattern.matcher(src);
+        int n = 0;
+        while (m.find()) {
+            n++;
+        }
+        return n;
+    }
 }

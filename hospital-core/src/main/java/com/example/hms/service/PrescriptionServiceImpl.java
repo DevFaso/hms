@@ -502,7 +502,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         PrescriptionResponseDTO signed = prescriptionMapper.toResponseDTO(prescriptionRepository.save(prescription));
         if (allergyAcknowledgement != null) {
             auditAllergyOverrideAfterCommit(prescription, signer.getUser() != null ? signer.getUser().getId() : null,
-                allergyAcknowledgement, "Allergy override recorded at signature");
+                allergyAcknowledgement, "Allergy override recorded on edit");
         }
         // QA D793: the signature is the last look before the pharmacy and the
         // ward act on the order, so the cross-reactivity advisory is repeated
@@ -540,7 +540,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         String reason = request == null || request.getAllergyOverrideReason() == null
             ? "" : request.getAllergyOverrideReason().trim();
         if (reason.isEmpty()) {
-            throw new CdsCriticalBlockException(block.get().summary(), List.of(block.get()));
+            String message = block.get().summary();
+            throw new CdsCriticalBlockException(message, List.of(block.get()));
         }
         recordAllergyOverride(prescription, reason);
         return reason;
@@ -2210,7 +2211,8 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         if (!Boolean.TRUE.equals(request.getForceOverride()) || reason.isEmpty()) {
             // Sent as a critical CDS card so the prescribing screen shows the
             // alert and offers the override (with its mandatory reason).
-            throw new CdsCriticalBlockException(block.get().summary(), List.of(block.get()));
+            String message = block.get().summary();
+            throw new CdsCriticalBlockException(message, List.of(block.get()));
         }
         return reason;
     }

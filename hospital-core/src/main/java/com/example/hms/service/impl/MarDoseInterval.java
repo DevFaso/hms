@@ -25,7 +25,9 @@ import java.util.UUID;
  * <p>The rule measures from the last REAL administration (the last GIVEN row
  * of the same order, at its {@code administeredAt}): the next dose may not be
  * recorded GIVEN before {@link #minimumGap} has passed, unless the nurse
- * records why (a reason, kept on the row and audited). The minimum gap is the
+ * records why (a reason, kept on the MAR row - itself the administration
+ * record, with who and when - and audited with the write by the
+ * WriteAuditInterceptor's DATA_UPDATE row). The minimum gap is the
  * frequency's interval less the early-administration window the "due" rule
  * already uses ({@code NurseTaskServiceImpl.EARLY_ADMINISTRATION_WINDOW}, one
  * hour), and never less than half the interval (the round-23 decision's

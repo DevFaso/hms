@@ -891,8 +891,7 @@ public class LabResultServiceImpl implements LabResultService {
         boolean rejected = specimens != null && labOrder.getId() != null
             && specimens.findByLabOrder_Id(labOrder.getId()).stream()
                 .anyMatch(s -> s.getStatus() == com.example.hms.enums.LabSpecimenStatus.REJECTED);
-        throw new BusinessException(com.example.hms.utility.MessageUtil.resolve(
-            rejected ? "labresult.specimen.rejected" : "labresult.specimen.required"));
+        throw new BusinessException(rejected ? "labresult.specimen.rejected" : "labresult.specimen.required");
     }
 
     /** Clock skew tolerated between the entering workstation and the server. */

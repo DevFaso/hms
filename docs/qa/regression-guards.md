@@ -39,6 +39,16 @@ reverted (PR body of the guard PR records the runs).
 | `mapper/MedicationCatalogItemDtoCoverageTest` (extended) | A catalogue column no request can write; round 18: every paediatric limit the dose rule reads is on the pharmacy's dosing request. | D935 | 2 server-set columns (reviewer, time) |
 | `architecture/ControlledSigningReauthenticationGuardTest` | A path that writes `PrescriptionStatus.SIGNED` without the prescriber's re-authentication for a controlled drug; the signature must re-authenticate before SIGNED. | r18 section 6 (D922 class) | 2 non-signature sites, each with its reason |
 
+### Round 23 (`fix/r23-backend`)
+
+| Guard | Class it stops | QA defects | Allowlist today |
+|---|---|---|---|
+| `service/DrugAllergyBrandEntryPointsTest` (extended) | An allergy STOP (prescription create/edit/sign, CDS order-sign and medication-prescribe) that reads the drug without the INN identity (`AllergyDrugIdentity`) and its safety net: a brand nobody listed, or an unknown free-text name, passed a class allergy in silence. | D1149, D1183 | **0** |
+| `architecture/MarDoseIntervalGuardTest` | A MAR write that stamps an administration time without the minimum-interval rule since the last GIVEN (`MarDoseInterval`). | D1210 | 1 (the entity itself) |
+| `validation/PhoneFieldValidationGuardTest` | A phone-named text field of a request payload without `@PhoneNumber`. Read-only payloads are placed by name or listed with a reason. | D1211 | 5 read-only classes, each with its reason |
+| `architecture/CancelVoidReasonGuardTest#everyInvoiceCancellationKeepsAReason` | An invoice set to CANCELLED without a kept reason (drafts included; the D1069 draft exemption is withdrawn). | D1217 | **0** |
+| `architecture/R23BackendClassGuardsTest` | The "no specimen" refusal that cannot tell a rejected specimen (D1204); a proxy read that looks the grantor up under the proxy's tenancy (D1212); a lab-result pairing that cuts before the filter (D1213); a health summary built without `activeDiagnoses` (D1214); a request date range with no reversed-range check (D1215); a fill that checks form, units or FEFO before the wrong-drug check (D1221). | D1204, D1212, D1213, D1214, D1215, D1221 | date ranges: 5 listed with their check |
+
 ### Already in place before round 16 (extend these, do not duplicate)
 
 | Guard | Class |

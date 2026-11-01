@@ -460,6 +460,48 @@ class PatientPortalServiceImplPhase1Test {
             assertThat(result.getChronicConditions()).containsExactly("Hypertension", "Diabetes");
         }
 
+        /**
+         * QA D1214 (round 23): "Pathologies actives" was empty for every
+         * patient - the summary never set activeDiagnoses. The doctor's
+         * ACTIVE problems (and V14-era ACTIVE diagnoses) are listed, once
+         * each; a resolved problem and an inactive legacy row are not.
+         */
+        @Test
+        @DisplayName("QA D1214: the doctor's active diagnoses reach the patient's summary")
+        void getHealthSummary_listsActiveDiagnoses() {
+            stubPatientResolution();
+            com.example.hms.repository.PatientProblemRepository problems =
+                org.mockito.Mockito.mock(com.example.hms.repository.PatientProblemRepository.class);
+            com.example.hms.repository.PatientDiagnosisRepository diagnoses =
+                org.mockito.Mockito.mock(com.example.hms.repository.PatientDiagnosisRepository.class);
+            org.springframework.test.util.ReflectionTestUtils.setField(service, "patientProblemRepository", problems);
+            org.springframework.test.util.ReflectionTestUtils.setField(service, "patientDiagnosisRepository", diagnoses);
+            com.example.hms.model.PatientProblem malaria = new com.example.hms.model.PatientProblem();
+            malaria.setProblemDisplay("Paludisme à Plasmodium falciparum, simple");
+            malaria.setProblemCode("B50.9");
+            com.example.hms.model.PatientProblem codeOnly = new com.example.hms.model.PatientProblem();
+            codeOnly.setProblemCode("I10");
+            when(problems.findByPatient_IdAndStatusOrderByCreatedAtDesc(patientId,
+                    com.example.hms.enums.ProblemStatus.ACTIVE)).thenReturn(List.of(malaria, codeOnly));
+            com.example.hms.model.PatientDiagnosis legacySame = new com.example.hms.model.PatientDiagnosis();
+            legacySame.setDescription("Paludisme à Plasmodium falciparum, simple");
+            legacySame.setStatus("ACTIVE");
+            com.example.hms.model.PatientDiagnosis legacyResolved = new com.example.hms.model.PatientDiagnosis();
+            legacyResolved.setDescription("Fracture ancienne");
+            legacyResolved.setStatus("RESOLVED");
+            when(diagnoses.findByPatient_IdOrderByDiagnosedAtDesc(patientId))
+                .thenReturn(List.of(legacySame, legacyResolved));
+            when(labResultService.getLabResultsForPatientPortal(any(), any(), anyInt())).thenReturn(List.of());
+            when(medicationService.getMedicationsForPatientPortal(any(), any(), anyInt())).thenReturn(List.of());
+            when(vitalSignService.getRecentVitalsForPatientPortal(any(), anyInt())).thenReturn(List.of());
+            when(immunizationService.getImmunizationsByPatientId(any())).thenReturn(List.of());
+
+            HealthSummaryDTO result = service.getHealthSummary(auth, Locale.FRENCH);
+
+            assertThat(result.getActiveDiagnoses())
+                .containsExactly("Paludisme à Plasmodium falciparum, simple", "I10");
+        }
+
         @Test
         @DisplayName("should return empty lists when sub-services throw (partial availability)")
         void getHealthSummary_subServiceFailure_returnsEmptyLists() {

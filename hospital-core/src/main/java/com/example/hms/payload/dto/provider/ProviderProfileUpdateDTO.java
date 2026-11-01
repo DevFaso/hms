@@ -37,7 +37,6 @@ public class ProviderProfileUpdateDTO {
     @NotBlank(message = "{hospital.phoneNumber.required}")
     // QA D833: same rule as the hospital form (PhoneNumbers.normalizeFacilityPhone).
     @Size(max = 30, message = "{hospital.phoneNumber.size}")
-    @com.example.hms.validation.PhoneNumber
     private String phoneNumber;
 
     @Email(message = "{hospital.email.invalid}")

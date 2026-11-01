@@ -196,16 +196,15 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
 
     @Override
     @Transactional(readOnly = true)
-    public com.example.hms.payload.dto.portal.PortalLabResultPageDTO getLabResultsPageForPatientPortal(
-            UUID patientId, int page, int size) {
+    public List<PatientLabResultResponseDTO> getLabResultsForPatientPortal(UUID patientId, int offset, int limit) {
         Patient patient = patientChartAccess.requireOwnRecord(patientId);
-        int pageSize = size > 0 ? Math.min(size, MAX_LIMIT) : DEFAULT_LIMIT;
-        int pageIndex = Math.max(page, 0);
-        long neededLong = ((long) pageIndex + 1) * pageSize + 1;
-        int needed = (int) Math.min(neededLong, Integer.MAX_VALUE / 2);
+        int pageSize = limit > 0 ? Math.min(limit, MAX_LIMIT) : DEFAULT_LIMIT;
+        int skip = Math.max(offset, 0);
+        int needed = (int) Math.min((long) skip + pageSize, Integer.MAX_VALUE / 2);
         // Read a window of the patient's rows, filter it, and widen it until
-        // it holds the page plus one row (is there a next page?) or the
-        // patient has no more rows: the filter never cuts a page short.
+        // it holds offset + limit current rows or the patient has no more
+        // rows: the filter never cuts a page short, and offset skips CURRENT
+        // rows only.
         int window = needed;
         List<LabResult> visible;
         while (true) {
@@ -216,15 +215,13 @@ public class PatientLabResultServiceImpl implements PatientLabResultService {
             }
             window = (int) Math.min((long) window * 2, Integer.MAX_VALUE / 2);
         }
-        int from = (int) Math.min((long) pageIndex * pageSize, visible.size());
+        int from = Math.min(skip, visible.size());
         int to = Math.min(from + pageSize, visible.size());
         List<LabResult> slice = visible.subList(from, to);
         Map<UUID, LocalDateTime> collectedAtByOrder = collectionTimesOf(slice);
-        List<PatientLabResultResponseDTO> content = slice.stream()
+        return slice.stream()
             .map(result -> toResponse(result, true, collectedAtByOrder))
             .toList();
-        return new com.example.hms.payload.dto.portal.PortalLabResultPageDTO(content, pageIndex, pageSize,
-            visible.size() > to);
     }
 
     private static List<LabResult> currentFor(boolean clinicalReader, List<LabResult> rows) {

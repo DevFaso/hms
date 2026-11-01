@@ -263,6 +263,11 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     }
 
     private void moveCopayOnto(BillingInvoice copay, BillingInvoice target) {
+        // QA D1186 class: a copay already cancelled is never cancelled again
+        // (its kept reason and stamps would be overwritten).
+        if (copay.getStatus() == InvoiceStatus.CANCELLED) {
+            return;
+        }
         BigDecimal credit = copayCredit(copay);
         for (PaymentTransaction row : paymentTransactionRepository.findByInvoice_IdOrderByCreatedAtAsc(copay.getId())) {
             if (row.getStatus() == PaymentStatus.CONFIRMED) {
@@ -896,7 +901,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         }
         boolean cancelling = nextStatus == InvoiceStatus.CANCELLED && invoice.getStatus() != InvoiceStatus.CANCELLED;
         if (cancelling) {
-            recordCancellation(invoice, dto.getCancelReason());
+            recordCancellation(invoice, dto.getCancelReason(), wasDraft);
         }
         invoice.setStatus(nextStatus);
         // D656: an issued invoice keeps its notes (checked unchanged above).
@@ -949,11 +954,11 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
      * checkout with priced lines, and real hospitals audit every void; the
      * D1069 draft exemption is withdrawn.
      */
-    private void recordCancellation(BillingInvoice invoice, String reason) {
+    private void recordCancellation(BillingInvoice invoice, String reason, boolean wasDraft) {
         String why = reason == null ? "" : reason.trim();
         if (why.isEmpty()) {
             throw new com.example.hms.exception.FieldBusinessException("cancelReason",
-                "billing.invoice.cancelReasonRequiredAll");
+                wasDraft ? "billing.invoice.cancelReasonRequiredAll" : "billing.invoice.cancelReasonRequired");
         }
         if (why.length() > CANCEL_REASON_MAX) {
             throw new BusinessException("billing.invoice.cancelReasonTooLong", String.valueOf(CANCEL_REASON_MAX));

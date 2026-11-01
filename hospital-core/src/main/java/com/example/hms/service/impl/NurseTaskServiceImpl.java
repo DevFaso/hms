@@ -507,7 +507,6 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             resolveNurseStaff(nurseUserId, hospitalId).ifPresent(marRecord::setAdministeredByStaff);
             recordOverrideOnAdminister(marRecord, marStatus, overrideReason);
             marRepository.save(marRecord);
-            auditEarlyDose(marRecord, nurseUserId, early);
 
             Patient patient = marRecord.getPatient();
             return NurseMedicationTaskResponseDTO.builder()
@@ -1270,43 +1269,6 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             LocalDateTime.now(), EARLY_ADMINISTRATION_WINDOW, earlyDoseReason);
     }
 
-    /** Optional: the audit trail of an early dose (absent in unit tests built by hand). */
-    private com.example.hms.service.AuditEventLogService auditEventLogService;
-
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
-    void setAuditEventLogService(com.example.hms.service.AuditEventLogService auditEventLogService) {
-        this.auditEventLogService = auditEventLogService;
-    }
-
-    /**
-     * QA D1210: after commit, who gave which order's dose early. Ids only: the
-     * reason is kept on the MAR row, never copied into the unencrypted audit.
-     */
-    private void auditEarlyDose(MedicationAdministrationRecord mar, UUID nurseUserId, String earlyReason) {
-        if (earlyReason == null || auditEventLogService == null || mar == null) {
-            return;
-        }
-        UUID marId = mar.getId();
-        UUID patientId = mar.getPatient() != null ? mar.getPatient().getId() : null;
-        UUID prescriptionId = mar.getPrescription() != null ? mar.getPrescription().getId() : null;
-        com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
-            try {
-                auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
-                    .eventType(com.example.hms.enums.AuditEventType.MEDICATION_EARLY_DOSE_GIVEN)
-                    .status(com.example.hms.enums.AuditStatus.SUCCESS)
-                    .userId(nurseUserId)
-                    .patientId(patientId)
-                    .eventDescription("Scheduled dose given before the minimum interval, with a recorded reason:"
-                        + " prescription " + prescriptionId)
-                    .entityType("MEDICATION_ADMINISTRATION")
-                    .resourceId(marId != null ? marId.toString() : null)
-                    .build());
-            } catch (RuntimeException ex) {
-                log.warn("Early-dose audit not written for MAR {}: {}", marId, ex.getClass().getSimpleName());
-            }
-        });
-    }
-
     /** The slot the next administration fills; refuses when the course has none left. */
     private LocalDateTime requireNextDue(Prescription rx) {
         LocalDateTime now = LocalDateTime.now();
@@ -1486,7 +1448,6 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             marRecord.setScanVerifiedAt(LocalDateTime.now());
         }
         MedicationAdministrationRecord saved = marRepository.save(marRecord);
-        auditEarlyDose(saved, nurseUserId, early);
 
         log.info("MAR recorded: prescriptionId={}, status={}, fiveRights={}, nurse={}",
             rx.getId(), status, marRecord.getFiveRightsStatus(), nurseUserId);
@@ -1542,7 +1503,6 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         resolveNurseStaff(nurseUserId, hospitalId).ifPresent(marRecord::setAdministeredByStaff);
         recordOverrideOnAdminister(marRecord, status, overrideReason);
         MedicationAdministrationRecord saved = marRepository.save(marRecord);
-        auditEarlyDose(saved, nurseUserId, early);
         return NurseMedicationTaskResponseDTO.builder()
             .requiresPharmacistVerification(pharmacistVerificationService.requiresVerification(rx))
             .pharmacistVerified(pharmacistVerificationService.isVerified(rx))

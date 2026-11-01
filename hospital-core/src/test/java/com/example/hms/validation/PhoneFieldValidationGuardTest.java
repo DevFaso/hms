@@ -48,10 +48,21 @@ class PhoneFieldValidationGuardTest {
             + " (account enumeration)",
         "ProgramEnrollmentResponseDTO", "a response");
 
+    /**
+     * Writes whose service already applies the STRICTER facility phone rule
+     * (QA D833, E.164 for the facility's country) on the field and answers
+     * with the field error the screen shows; {@code @PhoneNumber} would
+     * answer first with a looser rule. Each names the file and the call.
+     */
+    private static final Map<String, String> SERVICE_VALIDATED = Map.of(
+        "ProviderProfileUpdateDTO",
+            "service/provider/ProviderAdminServiceImpl.java#PhoneNumbers.normalizeFacilityPhone(");
+
     @Test
     void everyPhoneFieldARequestCanWriteIsValidated() throws IOException, ClassNotFoundException {
         Set<String> unchecked = new TreeSet<>();
         Set<String> staleAllowlist = new TreeSet<>(READ_ONLY.keySet());
+        Set<String> staleServiceChecks = new TreeSet<>(SERVICE_VALIDATED.keySet());
         int checked = 0;
         for (Class<?> type : payloadClasses()) {
             for (Field field : type.getDeclaredFields()) {
@@ -60,6 +71,13 @@ class PhoneFieldValidationGuardTest {
                     continue;
                 }
                 String simple = type.getSimpleName();
+                if (simple.endsWith("Builder")) {
+                    continue; // Lombok's builder: the class it builds carries the constraint
+                }
+                if (SERVICE_VALIDATED.containsKey(simple)) {
+                    staleServiceChecks.remove(simple);
+                    continue;
+                }
                 if (READ_ONLY.containsKey(simple)) {
                     staleAllowlist.remove(simple);
                     continue;
@@ -79,6 +97,12 @@ class PhoneFieldValidationGuardTest {
                 + " in READ_ONLY with the reason it is not a write%s", SourceScan.MANDATE)
             .isEmpty();
         assertThat(staleAllowlist).as("a READ_ONLY entry no longer has a phone field: delete it").isEmpty();
+        assertThat(staleServiceChecks).as("a SERVICE_VALIDATED entry no longer has a phone field: delete it").isEmpty();
+        for (Map.Entry<String, String> e : SERVICE_VALIDATED.entrySet()) {
+            String[] where = e.getValue().split("#", 2);
+            assertThat(Files.readString(Path.of("src/main/java/com/example/hms").resolve(where[0])))
+                .as("%s: its phone rule is gone from %s", e.getKey(), where[0]).contains(where[1]);
+        }
     }
 
     @Test
