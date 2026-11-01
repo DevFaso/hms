@@ -18,11 +18,12 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { relative } from 'node:path';
+import { relative, sep } from 'node:path';
 
 import { templatesIn } from './inline-templates.mjs';
 import { tags } from './html-tags.mjs';
 import { closeIndexOf } from './dialog-scan.mjs';
+import { walk } from './walk.mjs';
 
 const DIALOG_ATTRS = ['appModalDialog', 'appDialogFocus', 'appDialogA11y'];
 
@@ -111,4 +112,48 @@ test('QA D1131 class: a query box inside a dialog never asks before Escape', () 
   const html = '<div appModalDialog aria-label="x"><input id="patientSearch" type="text" /></div>';
   assert.deepEqual(unmarkedQueryFields(html), [1]);
   assert.deepEqual(unmarkedQueryFields(html.replace('<input', '<input data-escape-discards')), []);
+});
+
+// QA D1220 (round 23; the D1191 / D1195 focus sibling): a late focus return
+// that asks "did the keyboard fall to the BODY?" never runs once the focus
+// rescue has put focus on its stand-in (the row's cell, the table body), so
+// Escape or "Discard" in a row editor left the keyboard on a TD / TBODY
+// instead of the pencil. Every late return asks `focusFell()` (focus-rescue.ts:
+// the body OR the rescue's stand-in). Rule: no portal `.ts` compares the
+// focused element with `document.body` to decide whether to move focus,
+// outside the rescue itself. Allowlist: focus-return.ts, which RECORDS the
+// last focused element (it never moves focus).
+const BODY_COMPARE = /\b(?:activeElement|active)\s*[!=]==?\s*(?:document|doc)\.body\b/;
+const BODY_COMPARE_ALLOWED = new Map([
+  ['shared/a11y/focus-rescue.ts', 'the rescue itself: it defines what "fell" means'],
+  ['shared/a11y/focus-return.ts', 'records the last focused element for an opener; never moves focus'],
+]);
+
+export function comparesFocusWithBody(source) {
+  return source.split('\n').some((line) => BODY_COMPARE.test(line) && !/^\s*(?:\/\/|\*)/.test(line));
+}
+
+test('QA D1220: the scan sees a late return that yields to the rescue stand-in', () => {
+  assert.equal(
+    comparesFocusWithBody(`const active = document.activeElement;\nif (active !== null && active !== document.body) return;`),
+    true,
+  );
+  assert.equal(comparesFocusWithBody(`if (!focusFell()) return;`), false);
+});
+
+test('QA D1220: every late focus return asks focusFell(), never "is focus on the body?"', () => {
+  const offenders = [];
+  for (const file of walk(appDir, ['.ts'])) {
+    const rel = relative(appDir, file).split(sep).join('/');
+    if (rel.endsWith('.spec.ts') || rel.startsWith('testing/') || BODY_COMPARE_ALLOWED.has(rel)) continue;
+    if (comparesFocusWithBody(readFileSync(file, 'utf8'))) offenders.push(rel);
+  }
+  assert.deepEqual(offenders, [], 'use focusFell() from shared/a11y/focus-rescue.ts');
+  for (const rel of [
+    'shared/a11y/inline-sub-form.directive.ts',
+    'shared/a11y/focus-on-render.directive.ts',
+    'shared/a11y/drawer-dialog.directive.ts',
+  ]) {
+    assert.match(read(rel), /focusFell\(\)/, `${rel} must ask focusFell()`);
+  }
 });

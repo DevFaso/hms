@@ -12,6 +12,7 @@ import {
 } from '@angular/core';
 
 import { captureOpener, restoreFocus } from './focus-return';
+import { focusFell, focusStandIn } from './focus-rescue';
 import { focusWhenRendered } from './focus-when-rendered';
 
 /** The fields whose typed text an Escape must not throw away unasked. */
@@ -60,8 +61,8 @@ const FIRST_CONTROL = [
  *   `<app-inline-discard-ask>`); Escape on that question goes back to the text.
  * - When the form goes away and nothing else took the keyboard (it would
  *   otherwise fall to the page body), focus goes back to the control that
- *   opened it — or to the element `inlineSubFormReturn` names inside the
- *   dialog, when given (an opener hidden while the form is open, as an
+ *   opened it — or to the element `inlineSubFormReturn` names in the form's
+ *   row or dialog, when given (an opener hidden while the form is open, as an
  *   `@if (!action())` button, is a new element afterwards); failing both, to
  *   the dialog itself — never to the page body.
  *
@@ -93,11 +94,14 @@ export class InlineSubFormDirective implements AfterViewInit, OnDestroy {
   private readonly initial = new WeakMap<Element, string>();
   /** The dialog the form sits in, found while the form is still attached to it. */
   private dialog: HTMLElement | null = null;
+  /** The table row / list item the form sits in (a row editor), found the same way. */
+  private row: HTMLElement | null = null;
 
   ngAfterViewInit(): void {
     const box = this.box();
     this.dialog =
       box.parentElement?.closest<HTMLElement>('[role="dialog"], [aria-modal="true"]') ?? null;
+    this.row = box.parentElement?.closest<HTMLElement>('tr, li, [role="row"]') ?? null;
     // ngModel writes its value a tick later: read the starting values after it.
     setTimeout(() => {
       for (const field of this.textFields()) {
@@ -110,26 +114,42 @@ export class InlineSubFormDirective implements AfterViewInit, OnDestroy {
 
   ngOnDestroy(): void {
     // Whoever closed the form may move the keyboard on purpose (a success
-    // handler focusing the dialog's Close); only a keyboard left on the page
-    // body goes back to the opener.
+    // handler focusing the dialog's Close); only a keyboard that FELL — to
+    // the page body, or to the stand-in the focus rescue put it on (the row's
+    // cell, the table body: QA D1220) — goes back to the opener.
     const opener = this.opener;
     const dialog = this.dialog;
+    const row = this.row;
     const returnTo = this.inlineSubFormReturn();
     setTimeout(() => {
-      const active = document.activeElement;
-      if (active !== null && active !== document.body) return;
-      const named =
-        returnTo && dialog?.isConnected ? dialog.querySelector<HTMLElement>(returnTo) : null;
+      if (!focusFell()) return;
+      const named = returnTo ? this.findReturn(returnTo, dialog, row) : null;
       if (named) {
         named.focus();
       } else if (opener?.isConnected && (!dialog || dialog.contains(opener))) {
         // Only an opener inside the dialog: focus never leaves a dialog still open.
         restoreFocus(opener);
       } else if (dialog?.isConnected) {
-        if (!dialog.hasAttribute('tabindex')) dialog.setAttribute('tabindex', '-1');
-        dialog.focus();
+        // A stand-in: a row editor's own return (appFocusOnRender) may still
+        // put the keyboard on the pencil after this.
+        focusStandIn(dialog);
       }
     }, 0);
+  }
+
+  /** The named return target: in the form's row, else its dialog, else the page. */
+  private findReturn(
+    selector: string,
+    dialog: HTMLElement | null,
+    row: HTMLElement | null,
+  ): HTMLElement | null {
+    for (const scope of [row, dialog]) {
+      const hit = scope?.isConnected ? scope.querySelector<HTMLElement>(selector) : null;
+      if (hit) return hit;
+    }
+    // Never out of a dialog still open: the page is searched only for a
+    // form that sits in no dialog.
+    return dialog ? null : document.querySelector<HTMLElement>(selector);
   }
 
   /**

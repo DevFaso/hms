@@ -1,5 +1,7 @@
 import { AfterViewInit, Directive, ElementRef, OnDestroy, inject, input } from '@angular/core';
 
+import { focusFell } from './focus-rescue';
+
 /**
  * QA D1175 / D1144 (round 21): an inline editor that REPLACES the control
  * that opened it (a price shown as text with a pencil, the pencil swapped
@@ -24,6 +26,10 @@ import { AfterViewInit, Directive, ElementRef, OnDestroy, inject, input } from '
  *
  * `scripts/lib/inline-editor-focus.test.mjs` fails the build for a row
  * editor (`@if (editingX() === row.id) { <field> }`) without it.
+ *
+ * QA D1220 (round 23): "nothing else took the keyboard" includes the focus
+ * rescue's stand-in (the price cell it focused when the editor left): the
+ * pencil still gets the keyboard back (focus-rescue.ts `focusFell`).
  */
 @Directive({
   selector: '[appFocusOnRender]',
@@ -50,8 +56,7 @@ export class FocusOnRenderDirective implements AfterViewInit, OnDestroy {
     const selector = this.focusOnRenderReturn();
     if (!scope || !selector) return;
     setTimeout(() => {
-      const active = document.activeElement;
-      if (active !== null && active !== document.body) return;
+      if (!focusFell()) return;
       if (scope.isConnected) scope.querySelector<HTMLElement>(selector)?.focus();
     }, 0);
   }
