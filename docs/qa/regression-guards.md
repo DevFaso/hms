@@ -579,3 +579,9 @@ cannot slip past it again.
 | `scripts/lib/portal-failure-reason.test.mjs` (new) | D1212: the patient portal shows a failure (an error / failed flag or an error toast) without the server's 4xx reason. | Every `patient-portal/**/*.ts`; 0 (13 handlers fixed) |
 | `scripts/lib/server-refusal-shown.test.mjs` (fixed) | D1212 sibling: `READ_KEY` matched `UPLOAD_FAILED` as a read because of the `LOAD` inside `UPLOAD`. It now reads `(?<!UP)LOAD`. | 1 site found and fixed (my-documents upload) |
 | `scripts/lib/raw-server-message.test.mjs` (pins shrunk) | D1156 class in the patient portal and billing. | patient-portal 8 → 0; billing.ts 11 → 10 |
+
+## Guards added by the i18n review (fix/i18n-review-r22)
+
+| Guard | Class | Scope |
+|---|---|---|
+| `scripts/lib/sentence-case.test.mjs` + `sentence-case-scan.mjs` (new) | i18n review 2026-11-01: English title case copied into a French or Spanish label ("Mode de Paiement", "Fecha de Nacimiento", "Oui, Annuler"), 232 of the review's 330 typography findings. A capitalised word that is not the first word and does not follow `. ! ? : ; — – - [ / … « " “ ¿ ¡` (a word right after `(` is read) fails. Not read: text in guillemets (a UI label quoted by name: `utilisez « Désactiver »`), identifiers glued to a capital or a digit (`SpO2`, `RxNorm`, `MenAfriVac`), example placeholders (`ex. Or, Argent`) and listed proper nouns, brands and units (`Burkina Faso`, `Rh`, `Mo`, `Google Authenticator`). | `fr.json` and `es.json`; 0 (790 values lowered, 45 rewritten by hand). The backend bundles are not read: their capitals are status and button names quoted in sentences and proper nouns (93 hits, none title case except 3 Spanish e-mail role labels, fixed). |

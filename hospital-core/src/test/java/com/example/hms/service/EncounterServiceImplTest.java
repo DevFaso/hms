@@ -814,7 +814,7 @@ class EncounterServiceImplTest {
             .contains("[Évaluation infirmière]")
             .contains("[Évaluation de la douleur]")
             .contains("[Risque de chute]")
-            .contains("[Réconciliation médicamenteuse] 1 médicament déclaré :")
+            .contains("[Conciliation médicamenteuse] 1 médicament déclaré :")
             .contains("Paracétamol (arrêté)")
             .doesNotContain("Nursing")
             .doesNotContain("medication(s)")
