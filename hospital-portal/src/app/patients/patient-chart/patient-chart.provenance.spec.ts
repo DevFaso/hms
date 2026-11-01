@@ -98,6 +98,25 @@ describe('PatientChartComponent — timeline provenance', () => {
     component.patientId = 'p-1';
   }
 
+  it('QA D996: a visit row is labelled by its own type, not "Consultation" for every one', () => {
+    setup([]);
+    expect(component.timelineKind(entry({ metadata: { encounterType: 'INPATIENT' } }))).toEqual({
+      domain: 'encounterType',
+      value: 'INPATIENT',
+    });
+    expect(component.timelineKind(entry({ category: 'NOTE' }))).toEqual({
+      domain: 'timelineCategory',
+      value: 'NOTE',
+    });
+  });
+
+  it('QA D959: the new visit rows have their own icons', () => {
+    setup([]);
+    for (const category of ['DIAGNOSIS', 'LAB_ORDER', 'NOTE', 'REFERRAL']) {
+      expect(component.timelineIcon(category)).withContext(category).not.toBe('event_note');
+    }
+  });
+
   it('reads the source hospital off a row', () => {
     setup([]);
 

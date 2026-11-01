@@ -234,4 +234,133 @@ class DisclosureAccountingServiceImplTest {
         assertThat(out.getExternalDisclosures()).isZero();
         assertThat(out.getEntries()).isEmpty();
     }
+
+    @Test
+    @DisplayName("QA D979: the same person sharing the record again within 30 minutes shows once")
+    void repeatsFoldIntoOneLine() {
+        LocalDateTime now = LocalDateTime.now();
+        List<AuditEventLog> rows = new java.util.ArrayList<>();
+        for (int i = 0; i < 5; i++) {
+            AuditEventLog share = row(AuditEventType.RECORD_SHARE, "PATIENT", "Joséphine Hien");
+            share.setEventTimestamp(now.minusSeconds(10L * i));
+            rows.add(share);
+        }
+        AuditEventLog later = row(AuditEventType.RECORD_SHARE, "PATIENT", "Joséphine Hien");
+        later.setEventTimestamp(now.minusHours(2));
+        rows.add(later);
+        AuditEventLog emergency1 = row(AuditEventType.BREAK_GLASS_ACCESS, "BREAK_GLASS_SESSION", "Dr X");
+        AuditEventLog emergency2 = row(AuditEventType.BREAK_GLASS_ACCESS, "BREAK_GLASS_SESSION", "Dr X");
+        rows.add(emergency1);
+        rows.add(emergency2);
+        when(auditRepository.findDisclosuresForPatient(any(), any(), any(), any(), any()))
+            .thenReturn(new PageImpl<>(rows));
+
+        List<AccessLogEntryDTO> shown = service.getEntriesAsPatientSees(patientId, null, null, pageable).getContent();
+
+        assertThat(shown).filteredOn(e -> e.getCategory() == DisclosureCategory.SHARED_WITH_PROVIDER).hasSize(2);
+        // The staff accounting of disclosures keeps every row.
+        assertThat(service.getEntries(patientId, null, null, pageable).getContent())
+            .filteredOn(e -> e.getCategory() == DisclosureCategory.SHARED_WITH_PROVIDER).hasSize(6);
+        // Every emergency access stays a line of its own.
+        assertThat(shown).filteredOn(e -> e.getCategory() == DisclosureCategory.EMERGENCY_ACCESS).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("QA D979: a repeat across a page boundary shows once, and the pager counts the lines shown")
+    void aRepeatAcrossAPageBoundaryShowsOnce() {
+        LocalDateTime now = LocalDateTime.now();
+        List<AuditEventLog> rows = new java.util.ArrayList<>();
+        for (int i = 0; i < 25; i++) {
+            AuditEventLog share = row(AuditEventType.RECORD_SHARE, "PATIENT", "Joséphine Hien");
+            share.setEventTimestamp(now.minusSeconds(10L * i));
+            rows.add(share);
+        }
+        when(auditRepository.findDisclosuresForPatient(any(), any(), any(), any(), any()))
+            .thenReturn(new PageImpl<>(rows));
+
+        org.springframework.data.domain.Page<AccessLogEntryDTO> page =
+            service.getEntriesAsPatientSees(patientId, null, null, PageRequest.of(0, 20));
+
+        assertThat(page.getContent()).hasSize(1);
+        assertThat(page.getTotalElements()).isEqualTo(1);
+        assertThat(page.getTotalPages()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("QA D979: rows beyond the fold window follow, read a window-sized page at a time")
+    void olderRowsFollowInOrder() {
+        List<AuditEventLog> window = new java.util.ArrayList<>();
+        LocalDateTime now = LocalDateTime.now();
+        for (int i = 0; i < 2000; i++) {
+            AuditEventLog r = row(AuditEventType.BREAK_GLASS_ACCESS, "BREAK_GLASS_SESSION", "Dr " + i);
+            r.setEventTimestamp(now.minusMinutes(i));
+            window.add(r);
+        }
+        AuditEventLog oldest = row(AuditEventType.BREAK_GLASS_ACCESS, "BREAK_GLASS_SESSION", "Dr old");
+        when(auditRepository.findDisclosuresForPatient(any(), any(), any(), any(), any())).thenAnswer(inv -> {
+            org.springframework.data.domain.Pageable p = inv.getArgument(4);
+            return new PageImpl<>(p.getPageNumber() == 0 ? window : List.of(oldest), p, 2001);
+        });
+
+        org.springframework.data.domain.Page<AccessLogEntryDTO> last =
+            service.getEntriesAsPatientSees(patientId, null, null, PageRequest.of(100, 20));
+
+        assertThat(last.getTotalElements()).isEqualTo(2001);
+        assertThat(last.getContent()).extracting(AccessLogEntryDTO::getActor).containsExactly("Dr old");
+    }
+
+    @Test
+    @DisplayName("QA D979: unpaged, the patient's list folds every row; the accounting keeps the counts")
+    void theUnpagedPatientListFoldsEveryRow() {
+        LocalDateTime now = LocalDateTime.now();
+        List<AuditEventLog> rows = new java.util.ArrayList<>();
+        for (int i = 0; i < 3; i++) {
+            AuditEventLog share = row(AuditEventType.RECORD_SHARE, "PATIENT", "Dr Lu");
+            share.setEventTimestamp(now.minusSeconds(5L * i));
+            rows.add(share);
+        }
+        when(auditRepository.findDisclosuresForPatient(any(), any(), any(), any(), any()))
+            .thenReturn(new PageImpl<>(rows));
+        when(auditRepository.countDisclosureCategoriesForPatient(any(), any(), any(), any()))
+            .thenReturn(List.<Object[]>of(new Object[] {AuditEventType.RECORD_SHARE, "PATIENT", 3L}));
+
+        assertThat(service.getEntriesAsPatientSees(patientId, null, null, Pageable.unpaged()).getContent()).hasSize(1);
+
+        var accounting = service.getAccountingAsPatientSees(patientId, null, null, Pageable.unpaged());
+        assertThat(accounting.getEntries()).hasSize(1);
+        assertThat(accounting.getTotalEvents()).isEqualTo(3);
+        assertThat(accounting.getCountsByCategory()).containsEntry(DisclosureCategory.SHARED_WITH_PROVIDER, 3L);
+    }
+
+    @Test
+    @DisplayName("QA D979: a page that straddles the folded lines and the older rows reads both")
+    void aPageStraddlingTheWindowReadsBoth() {
+        List<AuditEventLog> window = new java.util.ArrayList<>();
+        LocalDateTime now = LocalDateTime.now();
+        for (int i = 0; i < 2000; i++) {
+            AuditEventLog r = row(AuditEventType.BREAK_GLASS_ACCESS, "BREAK_GLASS_SESSION", "Dr " + i);
+            r.setEventTimestamp(now.minusMinutes(i));
+            window.add(r);
+        }
+        List<AuditEventLog> older = List.of(
+            row(AuditEventType.BREAK_GLASS_ACCESS, "BREAK_GLASS_SESSION", "Dr old 1"),
+            row(AuditEventType.BREAK_GLASS_ACCESS, "BREAK_GLASS_SESSION", "Dr old 2"));
+        when(auditRepository.findDisclosuresForPatient(any(), any(), any(), any(), any())).thenAnswer(inv -> {
+            org.springframework.data.domain.Pageable p = inv.getArgument(4);
+            return new PageImpl<>(p.getPageNumber() == 0 ? window : older, p, 2002);
+        });
+
+        org.springframework.data.domain.Page<AccessLogEntryDTO> page =
+            service.getEntriesAsPatientSees(patientId, null, null, PageRequest.of(1998, 1));
+        org.springframework.data.domain.Page<AccessLogEntryDTO> straddle =
+            service.getEntriesAsPatientSees(patientId, null, null, PageRequest.of(199, 10));
+
+        assertThat(page.getContent()).extracting(AccessLogEntryDTO::getActor).containsExactly("Dr 1998");
+        assertThat(straddle.getContent()).extracting(AccessLogEntryDTO::getActor)
+            .containsExactly("Dr 1990", "Dr 1991", "Dr 1992", "Dr 1993", "Dr 1994", "Dr 1995", "Dr 1996",
+                "Dr 1997", "Dr 1998", "Dr 1999");
+        org.springframework.data.domain.Page<AccessLogEntryDTO> tail =
+            service.getEntriesAsPatientSees(patientId, null, null, PageRequest.of(1000, 2));
+        assertThat(tail.getContent()).extracting(AccessLogEntryDTO::getActor).containsExactly("Dr old 1", "Dr old 2");
+    }
 }

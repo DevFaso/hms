@@ -950,7 +950,7 @@ public class LaborServiceImpl implements LaborService {
             notificationService.createNotification("labor.alert.notification",
                 new Object[]{typeKey, patientArg,
                     com.example.hms.service.maternity.ObstetricAlertEscalationWorker.alertMessageArg(
-                        messageKey, messageArgs, alert.getMessage())}, documentedBy.getUsername(), null);
+                        messageKey, messageArgs, alert.getMessage())}, documentedBy.getUsername(), "MATERNITY_ALERT");
         } catch (RuntimeException ex) {
             log.warn("Failed to create labor alert notification: {}", ex.getMessage());
         }

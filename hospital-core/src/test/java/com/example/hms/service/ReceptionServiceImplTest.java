@@ -121,6 +121,8 @@ class ReceptionServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        // QA D936: check-in reads the appointment under a row lock; the lock answers what the plain read would.
+        lenient().when(appointmentRepo.lockById(any())).thenAnswer(inv -> appointmentRepo.findById(inv.getArgument(0)));
         patient = new Patient();
         patient.setId(patientId);
         patient.setFirstName("John");
@@ -1586,6 +1588,8 @@ class ReceptionServiceImplTest {
             verify(appointmentRepo).save(any(Appointment.class));
             verify(encounterRepo).save(any(Encounter.class));
             verify(auditEventLogService).logEvent(any());
+            // QA D936: the appointment is read under a row lock.
+            verify(appointmentRepo).lockById(appointmentId);
             // No consent fields on the request — nothing recorded (P3 #21).
             verify(treatmentConsentService, org.mockito.Mockito.never())
                 .record(any(), any(), any(), any(), any());

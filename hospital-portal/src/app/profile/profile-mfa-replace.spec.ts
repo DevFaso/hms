@@ -11,6 +11,7 @@ import { MfaEnrollmentResponse, MfaService } from '../auth/mfa.service';
 import { OidcAuthService } from '../auth/oidc-auth.service';
 import { ToastService } from '../core/toast.service';
 import { CredentialHealth, ProfileService, UserProfile } from '../services/profile.service';
+import { PatientPortalService } from '../services/patient-portal.service';
 
 const user: UserProfile = {
   id: 'u1',
@@ -99,6 +100,7 @@ describe('ProfileComponent — replacing the authenticator', () => {
         { provide: AuthService, useValue: auth },
         { provide: MfaService, useValue: mfa },
         { provide: OidcAuthService, useValue: { authenticated: signal(false) } },
+        { provide: PatientPortalService, useValue: { updateMyProfile: () => of({}) } },
       ],
     }).compileComponents();
 

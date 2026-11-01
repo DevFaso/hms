@@ -186,6 +186,7 @@ public interface BillingInvoiceRepository extends JpaRepository<BillingInvoice, 
     /** QA D210: the paid check-in copays of a visit, still standing on their own. */
     List<BillingInvoice> findByEncounter_IdAndCheckInCopayTrueAndStatus(UUID encounterId, InvoiceStatus status);
 
+
     /** The invoice an earlier create with this idempotency key produced (QA D94). */
     java.util.Optional<BillingInvoice> findByHospital_IdAndClientRequestId(UUID hospitalId, UUID clientRequestId);
 

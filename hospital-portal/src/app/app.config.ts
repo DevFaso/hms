@@ -17,6 +17,7 @@ import { hospitalCacheInterceptor } from './interceptors/hospital-cache.intercep
 import { errorInterceptor } from './interceptors/error.interceptor';
 import { offlineDispenseInterceptor } from './interceptors/offline-dispense.interceptor';
 import { languageInterceptor } from './interceptors/language.interceptor';
+import { patientChartChangeInterceptor } from './interceptors/patient-chart-change.interceptor';
 import { currentLocale } from './shared/i18n/app-locale';
 
 /**
@@ -62,6 +63,8 @@ export const appConfig: ApplicationConfig = {
         languageInterceptor,
         csrfInterceptor,
         hospitalCacheInterceptor,
+        // QA D957: a write on a patient's chart refreshes every summary of it.
+        patientChartChangeInterceptor,
         // Roadmap row 4 / T-68 — must run BEFORE errorInterceptor so a queued
         // (synthetic 202) response is not treated as a real error and routed
         // through the auth-refresh / toast path. Order is the chain order.

@@ -44,7 +44,7 @@ public class InvoiceItemController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT','ROLE_RECEPTIONIST')")
     @Operation(summary = "Get Invoice Item by ID")
     public ResponseEntity<InvoiceItemResponseDTO> getInvoiceItemById(
         @PathVariable UUID id,
@@ -53,7 +53,7 @@ public class InvoiceItemController {
     }
 
     @GetMapping("/invoice/{invoiceId}")
-    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT')")
+    @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT','ROLE_RECEPTIONIST')")
     @Operation(summary = "Get Items by Invoice ID")
     public ResponseEntity<List<InvoiceItemResponseDTO>> getItemsByInvoiceId(
         @PathVariable UUID invoiceId,

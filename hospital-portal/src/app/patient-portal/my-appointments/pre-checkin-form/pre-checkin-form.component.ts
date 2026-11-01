@@ -22,11 +22,19 @@ import {
 } from '../../../services/patient-portal.service';
 import { ServerTimePipe } from '../../../shared/pipes/server-time.pipe';
 import { ClockTimePipe } from '../../../shared/pipes/clock-time.pipe';
+import { DialogA11yDirective } from '../../../shared/a11y/dialog-a11y.directive';
 
 @Component({
   selector: 'app-pre-checkin-form',
   standalone: true,
-  imports: [ClockTimePipe, ServerTimePipe, CommonModule, FormsModule, TranslateModule],
+  imports: [
+    ClockTimePipe,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    DialogA11yDirective,
+  ],
   templateUrl: './pre-checkin-form.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './pre-checkin-form.component.scss',

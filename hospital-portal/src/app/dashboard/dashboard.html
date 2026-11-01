@@ -675,7 +675,7 @@
                     justify-content: flex-end;
                     height: 100%;
                   "
-                  [title]="point.date + ': $' + (point.amount | number: '1.0-0')"
+                  [title]="point.date + ': ' + (point.amount | cfa)"
                 >
                   <div
                     style="

@@ -474,6 +474,25 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         return billingInvoiceService.getInvoicesForPortalPatient(patientId, pageable, locale);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public com.example.hms.payload.dto.portal.PortalInvoiceDetailDTO getMyInvoiceDetail(Authentication auth, UUID invoiceId) {
+        return billingInvoiceService.getPortalInvoiceDetail(invoiceId, resolvePatientId(auth));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public com.example.hms.payload.dto.InvoicePdfResponseDTO getMyInvoicePdf(Authentication auth, UUID invoiceId, Locale locale) {
+        return billingInvoiceService.getPortalInvoicePdf(invoiceId, resolvePatientId(auth), locale);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public com.example.hms.payload.dto.InvoicePdfResponseDTO getMyReceiptPdf(Authentication auth, UUID invoiceId,
+                                                                             UUID paymentId, Locale locale) {
+        return billingInvoiceService.getPortalReceiptPdf(invoiceId, paymentId, resolvePatientId(auth), locale);
+    }
+
     // ── Pay an invoice ───────────────────────────────────────────────────
 
     @Override
@@ -995,7 +1014,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional(readOnly = true)
     public Page<AccessLogEntryDTO> getMyAccessLog(Authentication auth, Pageable pageable) {
         UUID patientId = resolvePatientId(auth);
-        return disclosureAccountingService.getEntries(patientId, null, null, pageable);
+        return disclosureAccountingService.getEntriesAsPatientSees(patientId, null, null, pageable);
     }
 
     @Override
@@ -1006,7 +1025,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                                                              java.time.LocalDateTime to,
                                                              Pageable pageable) {
         UUID patientId = resolvePatientId(auth);
-        return disclosureAccountingService.getAccounting(patientId, from, to, pageable);
+        return disclosureAccountingService.getAccountingAsPatientSees(patientId, from, to, pageable);
     }
 
     // ── Private helpers ──────────────────────────────────────────────────
@@ -1967,17 +1986,16 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         // Only allow pre-check-in for upcoming SCHEDULED/CONFIRMED appointments
         if (appointment.getStatus() != com.example.hms.enums.AppointmentStatus.SCHEDULED
                 && appointment.getStatus() != com.example.hms.enums.AppointmentStatus.CONFIRMED) {
-            throw new IllegalStateException(
-                    "Pre-check-in is only available for SCHEDULED or CONFIRMED appointments. Current: "
-                            + appointment.getStatus());
+            // QA D940: in the patient's language, not a hard-coded English string.
+            throw new BusinessException("portal.precheckin.status");
         }
 
-        // Validate timing: 1-7 days before appointment
+        // Validate timing: from 7 days before the appointment to the day itself
         java.time.LocalDate today = java.time.LocalDate.now();
         java.time.LocalDate apptDate = appointment.getAppointmentDate();
         long daysUntil = java.time.temporal.ChronoUnit.DAYS.between(today, apptDate);
         if (daysUntil < 0 || daysUntil > 7) {
-            throw new BusinessException("Pre-check-in is available 1–7 days before your appointment.");
+            throw new BusinessException("portal.precheckin.window");
         }
 
         // 1) Update demographics if provided
