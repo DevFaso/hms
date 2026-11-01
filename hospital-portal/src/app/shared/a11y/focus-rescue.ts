@@ -112,6 +112,8 @@ export function focusStandIn(el: HTMLElement): void {
  */
 export function focusFell(doc: Document = document): boolean {
   const active = doc.activeElement;
+  // Focus moved on from the stand-in (even with no rescue installed to see it).
+  if (standIn !== null && active !== standIn) standIn = null;
   return active === null || active === doc.body || (standIn !== null && active === standIn);
 }
 
