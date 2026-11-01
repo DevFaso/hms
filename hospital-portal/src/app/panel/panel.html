@@ -186,6 +186,7 @@
     <label class="field">
       <span>{{ 'PANEL.STAFF_FILTER' | translate }}</span>
       <input
+        data-escape-discards
         type="text"
         name="panelStaffFilter"
         [ngModel]="staffFilter()"

@@ -18,6 +18,13 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { relative } from 'node:path';
+
+import { templatesIn } from './inline-templates.mjs';
+import { tags } from './html-tags.mjs';
+import { closeIndexOf } from './dialog-scan.mjs';
+
+const DIALOG_ATTRS = ['appModalDialog', 'appDialogFocus', 'appDialogA11y'];
 
 const appDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'src', 'app');
 const read = (rel) => readFileSync(join(appDir, rel), 'utf8');
@@ -70,4 +77,38 @@ test('guards: the scans see the shapes they stop', () => {
     ngOnDestroy() { this.typedText.destroy(); }
     @HostListener('document:keydown', ['$event']) d(event) { if (this.typedText.intercept(event)) return; }`;
   assert.equal(keepsTypedText(wired), true);
+});
+
+// A search or picker box inside a dialog holds a query, not work: Escape there
+// must close as before, so it carries `data-escape-discards` (or is
+// type="search" / role="combobox"). 15 such boxes were marked in round 22.
+const QUERY_HINT = /search|query|filter|recherch/i;
+const MARKED = /type="?search|data-escape-discards|combobox/;
+const NOT_TEXT = /type=["']?(?:checkbox|radio|hidden|date)/;
+
+export function unmarkedQueryFields(html) {
+  const tk = tags(html);
+  const out = [];
+  tk.forEach((t, i) => {
+    if (t.type !== 'open' || !DIALOG_ATTRS.some((d) => t.attrs.has(d))) return;
+    for (const x of tk.slice(i + 1, closeIndexOf(tk, i))) {
+      if (x.type !== 'open' || x.name !== 'input') continue;
+      const s = [...x.attrs].map(([k, v]) => `${k}=${v ?? ''}`).join(' ');
+      if (QUERY_HINT.test(s) && !MARKED.test(s) && !NOT_TEXT.test(s)) out.push(x.line);
+    }
+  });
+  return out;
+}
+
+test('QA D1131 class: a query box inside a dialog never asks before Escape', () => {
+  const found = [];
+  for (const { file, text, lineOffset } of templatesIn(appDir)) {
+    for (const line of unmarkedQueryFields(text)) {
+      found.push(`${relative(appDir, file).replaceAll('\\', '/')}:${line + (lineOffset ?? 0)}`);
+    }
+  }
+  assert.deepEqual(found, [], 'mark the search box data-escape-discards');
+  const html = '<div appModalDialog aria-label="x"><input id="patientSearch" type="text" /></div>';
+  assert.deepEqual(unmarkedQueryFields(html), [1]);
+  assert.deepEqual(unmarkedQueryFields(html.replace('<input', '<input data-escape-discards')), []);
 });
