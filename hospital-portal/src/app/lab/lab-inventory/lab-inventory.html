@@ -179,7 +179,7 @@
                     'LAB_INVENTORY.LOW_STOCK' | translate
                   }}</span>
                 } @else {
-                  <span class="status-badge ok">{{ 'LAB_INVENTORY.IN_STOCK' | translate }}</span>
+                  {{ ' ' }}<span class="status-badge ok">{{ 'LAB_INVENTORY.IN_STOCK' | translate }}</span>
                 }
               </td>
               @if (canManage()) {

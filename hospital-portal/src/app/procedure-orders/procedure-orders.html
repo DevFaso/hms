@@ -218,16 +218,16 @@
                 </span>
               }
               @if (o.requiresSedation) {
-                <span class="flag-badge">
+                {{ ' ' }}<span class="flag-badge">
                   {{ 'PROCEDURES.SEDATION' | translate
                   }}{{ o.sedationType ? ('COMMON.COLON' | translate) + ' ' + o.sedationType : '' }}
                 </span>
               }
               @if (o.bloodProductsRequired) {
-                <span class="flag-badge">{{ 'PROCEDURES.BLOOD_PRODUCTS' | translate }}</span>
+                {{ ' ' }}<span class="flag-badge">{{ 'PROCEDURES.BLOOD_PRODUCTS' | translate }}</span>
               }
               @if (o.imagingGuidanceRequired) {
-                <span class="flag-badge">{{ 'PROCEDURES.IMAGING_GUIDANCE' | translate }}</span>
+                {{ ' ' }}<span class="flag-badge">{{ 'PROCEDURES.IMAGING_GUIDANCE' | translate }}</span>
               }
             </p>
             @if (o.specialEquipmentNeeded) {

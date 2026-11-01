@@ -616,7 +616,7 @@
                   }
                   <!-- G15: a fill prepared and waiting at the counter. -->
                   @if (rx.readyForCollection; as ready) {
-                    <span
+                    {{ ' ' }}<span
                       class="badge badge-success"
                       [attr.data-testid]="'rx-ready-' + rx.id"
                       [title]="
@@ -941,7 +941,7 @@
                       }
                     </span>
                   } @else {
-                    <span class="badge badge-muted">{{ 'PHARMACY.NOT_SCANNED' | translate }}</span>
+                    {{ ' ' }}<span class="badge badge-muted">{{ 'PHARMACY.NOT_SCANNED' | translate }}</span>
                   }
                 </td>
                 <td>{{ d.dispensedByName }}</td>

@@ -53,13 +53,13 @@
             </span>
           }
           @if (specialization()) {
-            <span class="doctor-chip specialty-chip">
+            {{ ' ' }}<span class="doctor-chip specialty-chip">
               <span class="material-symbols-outlined">medical_services</span>
               {{ specialization() | enumLabel: 'specialization' }}
             </span>
           }
           @if (departmentName() && departmentName() !== specialization()) {
-            <span class="doctor-chip dept-chip">
+            {{ ' ' }}<span class="doctor-chip dept-chip">
               <span class="material-symbols-outlined">domain</span>
               {{ departmentName() }}
             </span>
@@ -85,7 +85,7 @@
             </span>
           }
           @if (departmentName(); as dept) {
-            <span class="doctor-chip dept-chip">
+            {{ ' ' }}<span class="doctor-chip dept-chip">
               <span class="material-symbols-outlined">domain</span>
               {{ dept }}
             </span>
@@ -846,7 +846,7 @@
               <h2 class="card-title">{{ 'DASHBOARD.CONSULTATION_BACKLOG' | translate }}</h2>
               <span class="count-badge">{{ consultBacklog().length }}</span>
               @if (overdueConsults() > 0) {
-                <span
+                {{ ' ' }}<span
                   class="count-badge"
                   style="background: #fee2e2; color: #dc2626; margin-left: 4px"
                   >{{ overdueConsults() }} {{ 'DASHBOARD.OVERDUE' | translate }}</span
@@ -891,7 +891,7 @@
               <h2 class="card-title">{{ 'DASHBOARD.LICENSE_EXPIRY_ALERTS' | translate }}</h2>
               <span class="count-badge">{{ licenseAlerts().length }}</span>
               @if (expiredLicenseCount() > 0) {
-                <span
+                {{ ' ' }}<span
                   class="count-badge"
                   style="background: #fee2e2; color: #dc2626; margin-left: 4px"
                   >{{ expiredLicenseCount() }} {{ 'DASHBOARD.EXPIRED' | translate }}</span
@@ -1347,7 +1347,7 @@
                   >
                     <span class="material-symbols-outlined inbox-group-icon">{{ group.icon }}</span>
                     <span class="inbox-group-label">{{ group.label }}</span>
-                    <span class="count-badge count-badge-sm">{{ group.items.length }}</span>
+                    {{ ' ' }}<span class="count-badge count-badge-sm">{{ group.items.length }}</span>
                     <span class="material-symbols-outlined inbox-chevron">{{
                       inboxCollapsedSections().has(group.category) ? 'expand_more' : 'expand_less'
                     }}</span>

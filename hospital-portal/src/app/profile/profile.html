@@ -188,7 +188,7 @@
                 </div>
                 <div class="info-item">
                   <span class="info-label">{{ 'PROFILE.ROLE' | translate }}</span>
-                  <span class="info-value profile-type-badge">{{ sessionProfileType() }}</span>
+                  {{ ' ' }}<span class="info-value profile-type-badge">{{ sessionProfileType() }}</span>
                 </div>
                 @if (showLicenseNumber()) {
                   <div class="info-item">
@@ -786,7 +786,7 @@
                           }}</span>
                         }
                         @if (mfa.primaryFactor) {
-                          <span class="badge-primary">{{ 'PROFILE.PRIMARY' | translate }}</span>
+                          {{ ' ' }}<span class="badge-primary">{{ 'PROFILE.PRIMARY' | translate }}</span>
                         }
                       </div>
                     </div>

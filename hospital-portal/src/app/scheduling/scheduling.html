@@ -154,7 +154,7 @@
                       <span class="shift-staff-name">{{ shift.staffName }}</span>
                       <span class="shift-time">{{ formatShiftRange(shift) }}</span>
                       @if (shift.crossMidnight && shift.shiftEndDate === day.date) {
-                        <span class="cross-midnight-badge">{{
+                        {{ ' ' }}<span class="cross-midnight-badge">{{
                           'SCHEDULING.SHIFT_CONTD' | translate
                         }}</span>
                       }
@@ -242,7 +242,7 @@
               <div class="leave-title-row">
                 <span class="leave-staff-name">{{ leave.staffName }}</span>
                 <span class="leave-type-label">{{ leave.leaveType | enumLabel: 'leaveType' }}</span>
-                <span class="leave-status-badge" [attr.data-status]="leave.status">{{
+                {{ ' ' }}<span class="leave-status-badge" [attr.data-status]="leave.status">{{
                   leave.status | enumLabel: 'leaveStatus'
                 }}</span>
               </div>
@@ -339,7 +339,7 @@
               <span class="chip-avatar">{{ staffInitials(selectedStaff()!) }}</span>
               <div class="chip-info">
                 <span class="chip-name">{{ selectedStaff()!.name }}</span>
-                <span class="chip-sub">{{
+                {{ ' ' }}<span class="chip-sub">{{
                   (selectedStaff()!.jobTitle | enumLabel: 'jobTitle') ||
                     (selectedStaff()!.roleName | roleLabel) ||
                     ('SCHEDULING.STAFF_FALLBACK' | translate)

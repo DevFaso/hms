@@ -106,7 +106,7 @@
                 } @else if (s.revokedAt) {
                   <span class="chip revoked">{{ 'BREAK_GLASS_REVIEW.REVOKED' | translate }}</span>
                 } @else {
-                  <span class="chip expired">{{ 'BREAK_GLASS_REVIEW.EXPIRED' | translate }}</span>
+                  {{ ' ' }}<span class="chip expired">{{ 'BREAK_GLASS_REVIEW.EXPIRED' | translate }}</span>
                 }
               </td>
               <td class="num">{{ s.auditCount }}</td>

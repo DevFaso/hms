@@ -258,9 +258,9 @@
               <span class="flag-chip">{{ 'DRUG_INTERACTIONS.FLAG_AVOID' | translate }}</span>
             }
             @if (derivedFlags(form.severity).adjust) {
-              <span class="flag-chip">{{ 'DRUG_INTERACTIONS.FLAG_ADJUST' | translate }}</span>
+              {{ ' ' }}<span class="flag-chip">{{ 'DRUG_INTERACTIONS.FLAG_ADJUST' | translate }}</span>
             }
-            <span class="flag-chip">{{ 'DRUG_INTERACTIONS.FLAG_MONITOR' | translate }}</span>
+            {{ ' ' }}<span class="flag-chip">{{ 'DRUG_INTERACTIONS.FLAG_MONITOR' | translate }}</span>
           </p>
           <label for="ddi-recommendation"
             >{{ 'DRUG_INTERACTIONS.RECOMMENDATION' | translate }} *

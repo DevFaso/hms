@@ -606,7 +606,7 @@
               </div>
               <div class="detail-item">
                 <span class="detail-label">{{ 'COMMON.STATUS' | translate }}</span>
-                <span
+                {{ ' ' }}<span
                   class="status-pill"
                   [ngClass]="serviceStatusClass(selectedService()!.status)"
                   >{{ selectedService()!.status | enumLabel: 'platformServiceStatus' }}</span

@@ -272,7 +272,7 @@
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span
-              ><span class="status-badge" [class]="getStatusClass(o.status)">{{
+              >{{ ' ' }}<span class="status-badge" [class]="getStatusClass(o.status)">{{
                 o.status | enumLabel: 'labOrderStatus'
               }}</span>
             </div>
@@ -375,7 +375,7 @@
                 <div class="chip-info">
                   <span class="chip-name">{{ selectedPatient() | personName }}</span>
                   @if (selectedPatient() | patientSubline; as sub) {
-                    <span class="chip-sub">{{ sub }}</span>
+                    {{ ' ' }}<span class="chip-sub">{{ sub }}</span>
                   }
                 </div>
                 <button

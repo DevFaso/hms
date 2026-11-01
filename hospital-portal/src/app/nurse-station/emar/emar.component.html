@@ -42,7 +42,7 @@
                 <span class="emar__queue-patient">{{ task.patientName }}</span>
                 <span class="emar__queue-med">{{ task.medication }}</span>
                 @if (task.controlledSubstance) {
-                  <span
+                  {{ ' ' }}<span
                     class="emar__queue-chip emar__queue-chip--controlled"
                     [attr.data-testid]="'emar-controlled-chip-' + task.id"
                     >{{ 'NURSE.CONTROLLED_SUBSTANCE' | translate }}</span
@@ -58,14 +58,14 @@
                      planning a round needs to see which doses they cannot give
                      before they walk to the bed. -->
                 @if (task.cdsAdvisories?.length) {
-                  <span
+                  {{ ' ' }}<span
                     class="emar__queue-chip emar__queue-chip--advisory"
                     [attr.data-testid]="'emar-advisory-chip-' + task.id"
                     >{{ 'EMAR.ALLERGY_ADVISORY_CHIP' | translate }}</span
                   >
                 }
                 @if (task.requiresPharmacistVerification && !task.pharmacistVerified) {
-                  <span
+                  {{ ' ' }}<span
                     class="emar__queue-chip emar__queue-chip--blocked"
                     [attr.data-testid]="'emar-pharm-chip-' + task.id"
                     >{{ 'EMAR.PHARMACIST_PENDING_CHIP' | translate }}</span

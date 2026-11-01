@@ -58,7 +58,7 @@
                         }}</span>
                       }
                       @if (org.lifecycleState && org.lifecycleState !== 'ACTIVE') {
-                        <span
+                        {{ ' ' }}<span
                           class="lifecycle-chip"
                           [style.background]="lifecycleColor(org.lifecycleState) + '14'"
                           [style.color]="lifecycleColor(org.lifecycleState)"
@@ -81,7 +81,7 @@
                         }}</span>
                       }
                       @if (org.lifecycleState && org.lifecycleState !== 'ACTIVE') {
-                        <span
+                        {{ ' ' }}<span
                           class="lifecycle-chip"
                           [style.background]="lifecycleColor(org.lifecycleState) + '14'"
                           [style.color]="lifecycleColor(org.lifecycleState)"

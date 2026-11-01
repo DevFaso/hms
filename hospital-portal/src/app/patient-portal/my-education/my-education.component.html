@@ -73,7 +73,7 @@
                 <span class="material-symbols-outlined edu-type-icon">
                   {{ item.resourceType === 'VIDEO' ? 'play_circle' : 'article' }}
                 </span>
-                <span class="portal-status-chip" [attr.data-status]="item.comprehensionStatus">
+                {{ ' ' }}<span class="portal-status-chip" [attr.data-status]="item.comprehensionStatus">
                   {{ item.comprehensionStatus | enumLabel: 'status' }}
                 </span>
               </div>

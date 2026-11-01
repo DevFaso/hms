@@ -37,7 +37,7 @@
     <div class="snapshot-meta">
       <span class="badge badge-info">v{{ snap.version }}</span>
       @if (snap.label) {
-        <span class="badge badge-muted">{{ snap.label }}</span>
+        {{ ' ' }}<span class="badge badge-muted">{{ snap.label }}</span>
       }
       <span class="meta-text">
         {{ snap.createdBy || '—' }} · {{ snap.createdAt | serverTime | date: 'medium' }}

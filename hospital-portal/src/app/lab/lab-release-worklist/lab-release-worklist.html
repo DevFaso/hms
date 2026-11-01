@@ -95,7 +95,7 @@
               <td>
                 <span class="test-name">{{ row.labTestName }}</span>
                 @if (isUrgentPriority(row)) {
-                  <span
+                  {{ ' ' }}<span
                     class="priority-badge"
                     [class.priority-stat]="row.orderPriority === 'STAT'"
                     [attr.data-testid]="'release-priority-' + row.id"

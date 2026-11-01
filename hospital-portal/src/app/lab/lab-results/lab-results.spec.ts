@@ -265,6 +265,29 @@ describe('LabResultsComponent', () => {
     });
   });
 
+  // QA D1205 / D1167 / D1137 (round 22): "RectificationEn attente de publication".
+  it('QA D1205: every badge pair of the status cell is separated by a word space', () => {
+    fixture.detectChanges();
+    flushInit([
+      mockResult({ id: 'r-pend', released: false, supersedesResultId: 'result-0' }),
+      mockResult({
+        id: 'r-rel',
+        released: true,
+        supersedesResultId: 'result-0',
+        supersededByResultId: 'result-9',
+      }),
+    ]);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const cells = Array.from(host.querySelectorAll<HTMLElement>('tbody tr')).map((tr) =>
+      Array.from(tr.querySelectorAll('td')).find((td) => td.querySelector('.status-badge')),
+    );
+    const pending = cells[0]!.textContent!.replace(/\s+/g, ' ').trim();
+    expect(pending).toBe('LAB_RESULTS.CORRECTION LAB_RESULTS.PENDING_RELEASE');
+    const released = cells[1]!.textContent!.replace(/\s+/g, ' ').trim();
+    expect(released).toContain('LAB_RESULTS.RELEASED LAB_RESULTS.SUPERSEDED LAB_RESULTS.CORRECTED');
+  });
+
   it('should open create modal', () => {
     fixture.detectChanges();
     flushInit();
@@ -967,6 +990,36 @@ describe('LabResultsComponent — rendered delete gate and order picker', () => 
     );
 
     expect(component.orders().map((o) => o.id)).toEqual(['o-glu']);
+  });
+
+  it('QA D1204: "New result" offers no order whose specimen was never taken or was rejected', () => {
+    setup(['ROLE_LAB_SCIENTIST']);
+    const order = (id: string, status: string) => ({
+      id,
+      labOrderCode: id,
+      patientId: 'p-1',
+      labTestName: 'NFS',
+      labTestCode: 'CBC',
+      status,
+    });
+    flushInit(
+      [],
+      [
+        order('LAB-000029', 'ORDERED'), // never collected
+        order('LAB-000032', 'PENDING'), // specimen rejected, back to awaiting collection
+        order('o-collected', 'COLLECTED'),
+        order('o-received', 'RECEIVED'),
+        order('o-running', 'IN_PROGRESS'),
+      ],
+    );
+    component.openCreate();
+    fixture.detectChanges();
+    const picker = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLOptionElement>(
+        '#lr-orderId option',
+      ),
+    ).map((o) => o.value);
+    expect(picker).toEqual(['', 'o-collected', 'o-received', 'o-running']);
   });
 
   it('QA D1176: "New result" offers no order that already has a result or is closed; a correction keeps its own', () => {

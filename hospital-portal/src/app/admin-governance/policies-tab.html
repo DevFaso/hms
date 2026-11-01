@@ -40,10 +40,10 @@
           <div class="policy-title">
             <span class="cell-main">{{ policy.name }}</span>
             <code>{{ policy.code }}</code>
-            <span class="badge badge-info">{{
+            {{ ' ' }}<span class="badge badge-info">{{
               'ADMIN_GOV.PT_' + policy.policyType | translate
             }}</span>
-            <span
+            {{ ' ' }}<span
               class="badge"
               [class.badge-success]="policy.active"
               [class.badge-danger]="!policy.active"
@@ -51,7 +51,7 @@
               {{ (policy.active ? 'COMMON.ACTIVE' : 'COMMON.INACTIVE') | translate }}
             </span>
             @if (policy.enforceStrict) {
-              <span class="badge badge-danger">{{ 'ADMIN_GOV.STRICT' | translate }}</span>
+              {{ ' ' }}<span class="badge badge-danger">{{ 'ADMIN_GOV.STRICT' | translate }}</span>
             }
           </div>
           <div class="policy-org">

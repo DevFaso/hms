@@ -51,7 +51,7 @@
                 {{ dept.staffCount }}
               </span>
             }
-            <span class="status-badge" [class.active]="dept.active">
+            {{ ' ' }}<span class="status-badge" [class.active]="dept.active">
               {{ dept.active ? ('COMMON.ACTIVE' | translate) : ('COMMON.INACTIVE' | translate) }}
             </span>
             <div class="action-group">

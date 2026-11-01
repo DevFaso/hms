@@ -269,7 +269,7 @@
                 <div class="followup-item">
                   <strong>{{ f.label }}</strong
                   ><span>{{ f.dueOn ? (f.dueOn | serverTime | date: 'mediumDate') : '—' }}</span
-                  ><span
+                  >{{ ' ' }}<span
                     class="status-badge {{
                       f.status === 'COMPLETED' ? 'status-completed' : 'status-pending'
                     }}"
@@ -331,7 +331,7 @@
                 <div class="chip-info">
                   <span class="chip-name">{{ selectedPatient() | personName }}</span>
                   @if (selectedPatient() | patientSubline; as sub) {
-                    <span class="chip-sub">{{ sub }}</span>
+                    {{ ' ' }}<span class="chip-sub">{{ sub }}</span>
                   }
                 </div>
                 <button

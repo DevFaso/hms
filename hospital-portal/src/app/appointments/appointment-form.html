@@ -57,7 +57,7 @@
               <div class="chip-info">
                 <span class="chip-name">{{ selectedPatient() | personName }}</span>
                 @if (selectedPatient() | patientSubline; as sub) {
-                  <span class="chip-sub">{{ sub }}</span>
+                  {{ ' ' }}<span class="chip-sub">{{ sub }}</span>
                 }
               </div>
               <button
@@ -136,7 +136,7 @@
               <div class="chip-avatar staff-avatar">{{ staffInitials(selectedStaff()!) }}</div>
               <div class="chip-info">
                 <span class="chip-name">{{ selectedStaff()!.name }}</span>
-                <span class="chip-sub"
+                {{ ' ' }}<span class="chip-sub"
                   >{{ selectedStaff()!.jobTitle | enumLabel: 'jobTitle'
                   }}{{
                     selectedStaff()!.hospitalName ? ' · ' + selectedStaff()!.hospitalName : ''

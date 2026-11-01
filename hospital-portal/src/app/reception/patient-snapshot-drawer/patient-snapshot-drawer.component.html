@@ -50,16 +50,16 @@
             }}</span>
           }
           @if (s.alerts.missingInsurance) {
-            <span class="alert-chip danger">{{ 'RECEPTION.NO_INSURANCE' | translate }}</span>
+            {{ ' ' }}<span class="alert-chip danger">{{ 'RECEPTION.NO_INSURANCE' | translate }}</span>
           }
           @if (s.alerts.expiredInsurance) {
-            <span class="alert-chip danger">{{ 'RECEPTION.EXPIRED_INSURANCE' | translate }}</span>
+            {{ ' ' }}<span class="alert-chip danger">{{ 'RECEPTION.EXPIRED_INSURANCE' | translate }}</span>
           }
           @if (s.alerts.noPrimaryInsurance) {
-            <span class="alert-chip warn">{{ 'RECEPTION.NO_PRIMARY_INSURANCE' | translate }}</span>
+            {{ ' ' }}<span class="alert-chip warn">{{ 'RECEPTION.NO_PRIMARY_INSURANCE' | translate }}</span>
           }
           @if (s.alerts.outstandingBalance) {
-            <span class="alert-chip danger">{{ 'RECEPTION.OUTSTANDING_BALANCE' | translate }}</span>
+            {{ ' ' }}<span class="alert-chip danger">{{ 'RECEPTION.OUTSTANDING_BALANCE' | translate }}</span>
           }
         </div>
       }
@@ -156,7 +156,7 @@
         @if (s.insurance.verifiedAt) {
           <div class="snap-field">
             <span class="field-label">{{ 'RECEPTION.ELIGIBILITY_VERIFIED' | translate }}</span>
-            <span class="field-val attested-chip">
+            {{ ' ' }}<span class="field-val attested-chip">
               <span class="material-symbols-outlined small">verified</span>
               {{ s.insurance.verifiedBy }} ·
               {{ s.insurance.verifiedAt | serverTime | date: 'mediumDate' }}

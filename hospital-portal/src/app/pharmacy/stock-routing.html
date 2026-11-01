@@ -146,7 +146,7 @@
           <span class="label"
             >{{ 'PHARMACY.STATUS' | translate }}{{ 'COMMON.COLON' | translate }}</span
           >
-          <span
+          {{ ' ' }}<span
             class="badge"
             data-testid="stock-status"
             [class.badge-success]="stockStatus() === 'IN_STOCK'"

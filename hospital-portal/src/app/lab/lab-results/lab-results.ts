@@ -68,6 +68,21 @@ const ORDER_STATUSES_WITHOUT_NEW_RESULT: ReadonlySet<string> = new Set([
   'ENTERED_IN_ERROR',
 ]);
 
+/**
+ * QA D1204 / D1176 (round 22): the server refuses a hand-entered result on an
+ * order whose specimen was never taken or was rejected
+ * (LabResultServiceImpl.requireSpecimenTaken: status ORDERED or PENDING,
+ * "Aucun prélèvement n'a encore été enregistré…"). The picker offered them
+ * and the refusal came only after "Créer". The server exempts point-of-care
+ * tests, but that flag is neither sent with an order nor settable from the
+ * portal, so no order the portal can show is exempt.
+ * `scripts/lib/lab-result-picker.test.mjs` holds this list to the server's.
+ */
+export const ORDER_STATUSES_AWAITING_SPECIMEN: ReadonlySet<string> = new Set([
+  'ORDERED',
+  'PENDING',
+]);
+
 @Component({
   selector: 'app-lab-results',
   standalone: true,
@@ -352,7 +367,10 @@ export class LabResultsComponent implements OnInit {
    */
   private pickableOrders(keepOrderId?: string | null): LabOrderResponse[] {
     return this.resultableOrders.filter(
-      (o) => !ORDER_STATUSES_WITHOUT_NEW_RESULT.has(o.status) || o.id === keepOrderId,
+      (o) =>
+        o.id === keepOrderId ||
+        (!ORDER_STATUSES_WITHOUT_NEW_RESULT.has(o.status) &&
+          !ORDER_STATUSES_AWAITING_SPECIMEN.has(o.status)),
     );
   }
 

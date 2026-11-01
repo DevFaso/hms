@@ -410,11 +410,11 @@
               {{ 'ASSIGN_ADMIN.REQUESTED' | translate }}{{ 'COMMON.COLON' | translate }}
               {{ multiResult()!.requestedAssignments }}
             </span>
-            <span class="badge badge-success">
+            {{ ' ' }}<span class="badge badge-success">
               {{ 'ASSIGN_ADMIN.CREATED_N' | translate }}{{ 'COMMON.COLON' | translate }}
               {{ multiResult()!.createdAssignments }}
             </span>
-            <span class="badge badge-muted">
+            {{ ' ' }}<span class="badge badge-muted">
               {{ 'ASSIGN_ADMIN.SKIPPED' | translate }}{{ 'COMMON.COLON' | translate }}
               {{ multiResult()!.skippedAssignments }}
             </span>
@@ -687,15 +687,15 @@
               {{ 'ASSIGN_ADMIN.PROCESSED' | translate }}{{ 'COMMON.COLON' | translate }}
               {{ importResult()!.processed }}
             </span>
-            <span class="badge badge-success">
+            {{ ' ' }}<span class="badge badge-success">
               {{ 'ASSIGN_ADMIN.CREATED_N' | translate }}{{ 'COMMON.COLON' | translate }}
               {{ importResult()!.created }}
             </span>
-            <span class="badge badge-muted">
+            {{ ' ' }}<span class="badge badge-muted">
               {{ 'ASSIGN_ADMIN.SKIPPED' | translate }}{{ 'COMMON.COLON' | translate }}
               {{ importResult()!.skipped }}
             </span>
-            <span class="badge badge-danger">
+            {{ ' ' }}<span class="badge badge-danger">
               {{ 'ASSIGN_ADMIN.FAILED' | translate }}{{ 'COMMON.COLON' | translate }}
               {{ importResult()!.failed }}
             </span>

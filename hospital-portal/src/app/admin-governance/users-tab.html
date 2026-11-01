@@ -166,11 +166,11 @@
               {{ 'ASSIGN_ADMIN.PROCESSED' | translate }}{{ 'COMMON.COLON' | translate }}
               {{ importResult()!.processed }}
             </span>
-            <span class="badge badge-success">
+            {{ ' ' }}<span class="badge badge-success">
               {{ 'ADMIN_GOV.IMPORTED' | translate }}{{ 'COMMON.COLON' | translate }}
               {{ importResult()!.imported }}
             </span>
-            <span class="badge badge-danger">
+            {{ ' ' }}<span class="badge badge-danger">
               {{ 'ASSIGN_ADMIN.FAILED' | translate }}{{ 'COMMON.COLON' | translate }}
               {{ importResult()!.failed }}
             </span>
@@ -275,7 +275,7 @@
               {{ 'ASSIGN_ADMIN.REQUESTED' | translate }}{{ 'COMMON.COLON' | translate }}
               {{ resetResult()!.requested }}
             </span>
-            <span class="badge badge-success">
+            {{ ' ' }}<span class="badge badge-success">
               {{ 'ADMIN_GOV.SUCCEEDED' | translate }}{{ 'COMMON.COLON' | translate }}
               {{ resetResult()!.succeeded }}
             </span>

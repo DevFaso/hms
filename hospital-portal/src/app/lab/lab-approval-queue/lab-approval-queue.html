@@ -290,7 +290,7 @@
           </div>
           <div class="detail-field">
             <span class="field-label">{{ 'LAB_APPROVAL.FIELD.APPROVAL_STATUS' | translate }}</span>
-            <span class="status-badge" [class]="getApprovalStatusClass(def.approvalStatus)">
+            {{ ' ' }}<span class="status-badge" [class]="getApprovalStatusClass(def.approvalStatus)">
               {{ 'LAB.APPROVAL_STATUS.' + def.approvalStatus | translate }}
             </span>
           </div>
@@ -335,7 +335,7 @@
                   <span class="study-type">{{
                     study.studyType | enumLabel: 'validationStudyType'
                   }}</span>
-                  <span class="status-badge" [class]="studyPassedClass(study.passed)">
+                  {{ ' ' }}<span class="status-badge" [class]="studyPassedClass(study.passed)">
                     {{
                       (study.passed ? 'LAB_APPROVAL.STUDIES.PASSED' : 'LAB_APPROVAL.STUDIES.FAILED')
                         | translate

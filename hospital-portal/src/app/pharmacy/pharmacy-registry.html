@@ -64,7 +64,7 @@
             @if (p.fulfillmentMode) {
               <span class="meta-chip">{{ p.fulfillmentMode | enumLabel: 'fulfillmentMode' }}</span>
             }
-            <span class="status-badge" [class.active]="p.active">
+            {{ ' ' }}<span class="status-badge" [class.active]="p.active">
               {{ p.active ? ('COMMON.ACTIVE' | translate) : ('COMMON.INACTIVE' | translate) }}
             </span>
             @if (canManage()) {

@@ -16,7 +16,7 @@
         <p class="page-subtitle">
           <span class="code-badge">{{ org.code }}</span>
           @if (lifecycle(); as lc) {
-            <span
+            {{ ' ' }}<span
               class="state-chip"
               [style.background]="stateColor() + '14'"
               [style.color]="stateColor()"
@@ -36,7 +36,7 @@
         <div class="lifecycle-grid">
           <div class="lifecycle-row">
             <span class="lifecycle-label">{{ 'TENANT_LIFECYCLE.FIELD.STATE' | translate }}</span>
-            <span
+            {{ ' ' }}<span
               class="state-chip"
               [style.background]="stateColor() + '14'"
               [style.color]="stateColor()"
