@@ -28,7 +28,7 @@ const RAW = /\berr(?:or)?\??\.error\??\.message\b/g;
 
 /** Pre-existing sites outside the round-21 folders: QA D1156 class, shrinks only. */
 const PINS = new Map([
-  ['admin-assignments/admin-assignments.ts', 6],
+  ['admin-assignments/admin-assignments.ts', 5],
   ['admin-governance/matrix-tab.ts', 1],
   ['admin-governance/policies-tab.ts', 2],
   ['admin-governance/security-tab.ts', 3],
