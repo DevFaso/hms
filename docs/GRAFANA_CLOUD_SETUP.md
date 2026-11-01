@@ -16,7 +16,7 @@ config — the pipeline is dormant and activates the moment
 | OTEL Java agent v2.12.0 | [`Dockerfile`](../Dockerfile) (`ADD`, line 50) | In the image |
 | Conditional `-javaagent` attach | [`Dockerfile`](../Dockerfile) (lines 104-112) | Fires when `OTEL_EXPORTER_OTLP_ENDPOINT` is set |
 | Micrometer OTLP registry | [`hospital-core/build.gradle`](../hospital-core/build.gradle) | On the classpath |
-| OTLP metrics export config | [`application-prod.yml`](../hospital-core/src/main/resources/application-prod.yml) | Reads `GRAFANA_OTLP_AUTH_HEADER` |
+| OTLP metrics export config | [`application.properties`](../hospital-core/src/main/resources/application.properties) | Reads `GRAFANA_OTLP_AUTH_HEADER` + `OTEL_METRICS_EXPORT_URL`. Global, not prod-only — dev boots the `dev` profile and would never load `application-prod.yml`. |
 | 7 dashboards, recording + alert rules | [`grafana/`](../grafana/) | Written, importable |
 | Per-alert response runbook | [`docs/runbooks/grafana-observability.md`](runbooks/grafana-observability.md) | Written |
 | Railway env vars | Railway | **The only missing piece** |
@@ -30,7 +30,7 @@ backend — it does *not* follow the `-<env>` pattern) had any
 ```
 ┌──────────────┐    OTLP/HTTP     ┌─────────────────────────────┐
 │  HMS Backend │ ───────────────► │  Grafana Cloud OTLP Gateway │
-│  (Railway)   │                  │  otlp-gateway-prod-us-east-0│
+│  (Railway)   │                  │  otlp-gateway-prod-us-east-2│
 │              │                  ├─────────────────────────────┤
 │  OTEL Agent  │                  │  Tempo   → Traces           │
 │  (javaagent) │                  │  Mimir   → Metrics          │
@@ -38,18 +38,40 @@ backend — it does *not* follow the `-<env>` pattern) had any
 └──────────────┘                  └─────────────────────────────┘
 ```
 
-**Stack instance ID: `1404501`** · zone **`prod-us-east-0`**.
+**Stack instance ID: `1404501`** · zone **`prod-us-east-2`**.
 
-> The zone is the one correction to the recovered doc, and it matters. The original
-> said `prod-us-east-2`; every access policy on this stack (`stack-1404501-alloy`,
-> `-quickstart`, `-hl-read`, `-integration-hms-token`) is created in
-> `prod-us-east-0`, and policies live in their stack's region. The other region's
-> gateway also exists and answers a mis-regioned token with a bare `401` —
-> indistinguishable from a bad token, which is a long afternoon of debugging.
+> **The zone is counter-intuitive, so it is worth stating how it was established.**
+> Every access policy on this stack is labelled `prod-us-east-0`, which looks like
+> it should settle the question — it does not. The access-policy region label does
+> **not** determine the OTLP gateway zone. Posting to both gateways with the real
+> token gave:
 >
-> Confirm verbatim at **Grafana Cloud → your stack → OpenTelemetry**, which prints
-> the endpoint and instance ID. If it disagrees, no code change is needed:
-> `GRAFANA_ZONE=prod-us-east-2 ./scripts/grafana-cloud-setup.sh dev`
+> | Gateway | Result |
+> |---|---|
+> | `otlp-gateway-prod-us-east-2` | **`200`** — authenticated and accepted |
+> | `otlp-gateway-prod-us-east-0` | `502` |
+>
+> So `prod-us-east-2` is correct, and the value in the original (deleted) version of
+> this document was right. Do not "correct" it to `us-east-0` on the basis of the
+> policy labels without re-running this probe:
+>
+> ```powershell
+> $sec = Read-Host -AsSecureString "Grafana token"
+> $GLC = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec))
+> $B64 = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes("1404501:$GLC"))
+> foreach ($Z in 'prod-us-east-2','prod-us-east-0') {
+>   $code = 0
+>   try {
+>     $r = Invoke-WebRequest -Uri "https://otlp-gateway-$Z.grafana.net/otlp/v1/metrics" -Method POST -Headers @{Authorization = "Basic $B64"} -ContentType 'application/x-protobuf' -Body ([byte[]]@()) -UseBasicParsing
+>     $code = [int]$r.StatusCode
+>   } catch { if ($_.Exception.Response) { $code = [int]$_.Exception.Response.StatusCode } }
+>   "{0,-16} HTTP {1}" -f $Z, $code
+> }
+> Remove-Variable GLC, B64, sec
+> ```
+>
+> A `401` on both means the token is wrong, not the region. Override without a code
+> change: `GRAFANA_ZONE=prod-us-east-0 ./scripts/grafana-cloud-setup.sh dev`.
 
 Production uses **push**, not scrape. That matters for security: see
 [Why the scrape endpoint is closed](#why-the-scrape-endpoint-is-closed).
@@ -103,7 +125,7 @@ deploy — `--skip-deploys` keeps that your decision.
 
 | Variable | dev | prod |
 |---|---|---|
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | `https://otlp-gateway-prod-us-east-0.grafana.net/otlp` | same |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `https://otlp-gateway-prod-us-east-2.grafana.net/otlp` | same |
 | `OTEL_EXPORTER_OTLP_PROTOCOL` | `http/protobuf` | same |
 | `OTEL_EXPORTER_OTLP_HEADERS` | `Authorization=Basic <base64(1404501:glc_…)>` | same |
 | `GRAFANA_OTLP_AUTH_HEADER` | `Basic <base64(1404501:glc_…)>` | same |
@@ -132,7 +154,7 @@ business counters never reach Mimir while everything else looks healthy.
 The two auth variables carry the same credential in two formats because two
 exporters are active: the agent reads `OTEL_EXPORTER_OTLP_HEADERS`, and the
 Micrometer OTLP registry reads `GRAFANA_OTLP_AUTH_HEADER` via
-`application-prod.yml`. Keep them in sync, or metrics and traces will disagree
+`application.properties`. Keep them in sync, or metrics and traces will disagree
 about whether they are authorized.
 
 ### 4. Verify

@@ -122,6 +122,21 @@ class MetricsScrapeAuthorizationTest {
     }
 
     @Test
+    @DisplayName("a configured token stored with surrounding whitespace still matches")
+    void configuredTokenIsTrimmed() throws ReflectiveOperationException {
+        // Railway's UI keeps a trailing newline on a pasted secret. Comparing the presented
+        // value trimmed against an untrimmed configured value 403s every correct scrape.
+        for (String stored : List.of(TOKEN + "\n", " " + TOKEN, TOKEN + "  ")) {
+            var gate = gateWithToken(stored);
+            var request = new MockHttpServletRequest("GET", "/actuator/prometheus");
+            request.addHeader("X-Metrics-Token", TOKEN);
+            assertThat(granted(gate, request))
+                .as("configured token stored as [%s]", stored)
+                .isTrue();
+        }
+    }
+
+    @Test
     @DisplayName("an unrelated proxy-injected Bearer does not shadow a correct X-Metrics-Token")
     void bearerDoesNotShadowCustomHeader() throws ReflectiveOperationException {
         var gate = gateWithToken(TOKEN);

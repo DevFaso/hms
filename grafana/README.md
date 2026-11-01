@@ -134,7 +134,7 @@ from a self-hosted node), override these on the `alloy` service:
 
 ```yaml
 environment:
-  GRAFANA_METRICS_URL:   https://prometheus-prod-us-east-0.grafana.net/api/prom/push
+  GRAFANA_METRICS_URL:   https://prometheus-prod-us-east-2.grafana.net/api/prom/push
   GRAFANA_METRICS_USER:  "1404501"
   GRAFANA_METRICS_TOKEN: "glc_…"
 ```

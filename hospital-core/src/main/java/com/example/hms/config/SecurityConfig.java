@@ -429,7 +429,10 @@ public class SecurityConfig {
             if (metricsScrapeToken == null || metricsScrapeToken.isBlank()) {
                 return new AuthorizationDecision(false);
             }
-            byte[] expected = metricsScrapeToken.getBytes(StandardCharsets.UTF_8);
+            // Trim the configured value as well as the presented one. Railway's UI happily
+            // stores a trailing newline on a pasted secret, and an untrimmed comparison would
+            // then reject every correct scrape with a 403 nothing in the logs explains.
+            byte[] expected = metricsScrapeToken.trim().getBytes(StandardCharsets.UTF_8);
             for (String presented : presentedScrapeTokens(context.getRequest())) {
                 if (MessageDigest.isEqual(presented.getBytes(StandardCharsets.UTF_8), expected)) {
                     return new AuthorizationDecision(true);

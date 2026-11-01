@@ -130,7 +130,7 @@ docker compose --profile observability up -d
 
 # Inspect the raw probe output for one target — useful while authoring
 # new modules in blackbox.yml.
-Invoke-WebRequest -Uri "http://localhost:9115/probe?target=http://hms-backend:8080/api/actuator/health/liveness&module=http_health_2xx" `
+Invoke-WebRequest -Uri "http://localhost:9115/probe?target=http://host.docker.internal:8081/api/actuator/health/liveness&module=http_health_2xx" `
     | Select-Object -ExpandProperty Content
 
 # Confirm Prometheus is scraping the new jobs.

@@ -96,8 +96,10 @@ Profile-only exporter targets are covered by `HmsExporterDown` (ticket-only).
 
 - If `job=integrations/spring-boot` → the backend is down or its
   `/api/actuator/prometheus` endpoint is failing, *or* Alloy is failing to
-  scrape/forward. Hit `curl http://hms-backend:8081/api/actuator/health`
-  and check both `hms-backend` and `alloy` container logs.
+  scrape/forward. The backend is not a compose service — it runs on the host, so
+  hit `curl http://localhost:8081/api/actuator/health` and check the backend's own
+  console plus `docker compose logs alloy`. A 403 on `/api/actuator/prometheus`
+  means Alloy's `METRICS_SCRAPE_TOKEN` does not match the backend's.
 - If `job=alloy` → Alloy is down; backend metrics will stop flowing even
   if the backend itself is healthy. Check `docker compose logs alloy`.
 - If `job=loki` → log shipping is broken; the SLO error-rate signal is
@@ -231,11 +233,12 @@ extend the disk, or scale the host.
 **What it means.** `process_start_time_seconds` changed more than twice
 in 10 minutes — backend is in a crash loop.
 
-1. `docker compose logs hms-backend --tail=400`.
+1. The backend's own console (it runs on the host, not in compose). In production,
+   `railway logs --service hms-backend-core` (prod) or `hms-backend-dev`.
 2. Check the "Errors & Warnings" panel on the Application Metrics
    dashboard for the last fatal exception before each restart.
 3. If the restart loop traces to a bad config / migration, hold the next
-   container start with `docker compose stop hms-backend` and fix forward.
+   start with Ctrl-C on the `bootRun` process and fix forward.
 
 ---
 

@@ -166,7 +166,11 @@ services:
   # and scrapes Spring Boot Prometheus metrics. Requires the docker socket to
   # be mounted read-only.
   alloy:
-    image: grafana/alloy:v1.4.2
+    # v1.10.0, not v1.4.2: `http_headers` on prometheus.scrape (used to present the
+    # metrics scrape token) is unrecognised through at least v1.7.5, and Alloy refuses
+    # to start the whole scrape node rather than warning. Verified by running each tag
+    # against this repo's config.alloy.
+    image: grafana/alloy:v1.10.0
     container_name: hms-alloy
     command:
       - run

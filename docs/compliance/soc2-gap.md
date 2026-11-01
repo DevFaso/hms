@@ -44,7 +44,9 @@ month we delay the Type I cutover delays Type II by an equal month.
   defaults to `false` and has never been set in either environment, so no log has
   reached Splunk. Not currently a vendor; treat as an integration point.
 - Grafana Cloud (OTLP ingest) — metrics + traces + logs. Agent, dashboards and alert
-  rules exist; the Railway variables that activate them were only set from 2026-11-01
+  rules exist, but the Railway variables that activate them are **not set in either
+  environment** as of 2026-11-01, so nothing is being exported yet; activation is a
+  deliberate operator step
   (see [`docs/GRAFANA_CLOUD_SETUP.md`](../GRAFANA_CLOUD_SETUP.md)).
 - Twilio + Gmail SMTP — patient communication
 - GitHub + GitHub Actions — source control + CI/CD

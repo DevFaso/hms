@@ -18,17 +18,19 @@
 set -euo pipefail
 
 # ── Grafana Cloud stack ──────────────────────────────────────────────────────
-# Instance 1404501, zone prod-us-east-0 — every access policy on this stack is
-# created there, and policies live in their stack's region. An earlier version of
-# docs/GRAFANA_CLOUD_SETUP.md said prod-us-east-2, which is wrong in the worst
-# way: the other region's gateway also exists and answers a mis-regioned token
-# with a bare 401, exactly like a bad token would.
+# Instance 1404501, zone prod-us-east-2 — confirmed by posting to both gateways with
+# the real token: us-east-2 answered 200, us-east-0 answered 502.
 #
-# Confirm against Grafana Cloud -> your stack -> OpenTelemetry, which prints the
-# endpoint and instance ID verbatim. Override without editing this file:
-#   GRAFANA_ZONE=prod-us-east-2 ./scripts/grafana-cloud-setup.sh dev
+# This was briefly changed to prod-us-east-0 on the reasoning that the stack's access
+# policies are all labelled prod-us-east-0 and a policy lives in its stack's region.
+# That reasoning is wrong — the access-policy region label does not determine the OTLP
+# gateway zone — and the original value here was right. Do not "fix" it back without
+# re-running the two-gateway probe in docs/GRAFANA_CLOUD_SETUP.md.
+#
+# Override without editing this file:
+#   GRAFANA_ZONE=prod-us-east-0 ./scripts/grafana-cloud-setup.sh dev
 readonly GRAFANA_INSTANCE_ID="${GRAFANA_INSTANCE_ID:-1404501}"
-readonly GRAFANA_ZONE="${GRAFANA_ZONE:-prod-us-east-0}"
+readonly GRAFANA_ZONE="${GRAFANA_ZONE:-prod-us-east-2}"
 readonly OTLP_ENDPOINT="https://otlp-gateway-${GRAFANA_ZONE}.grafana.net/otlp"
 
 usage() {
