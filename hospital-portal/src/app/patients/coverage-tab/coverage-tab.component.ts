@@ -1,3 +1,4 @@
+import { refusalReason } from '../../shared/refusal-reason';
 import { DialogFocusDirective } from '../../shared/a11y/dialog-focus.directive';
 import { ChangeDetectionStrategy, Component, Input, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
@@ -181,7 +182,7 @@ export class CoverageTabComponent implements OnInit {
       error: (err) => {
         this.guarantorSaving.set(false);
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('COVERAGE.GUARANTOR_SAVE_ERROR'),
+          refusalReason(err) ?? this.translate.instant('COVERAGE.GUARANTOR_SAVE_ERROR'),
         );
       },
     });
@@ -195,7 +196,7 @@ export class CoverageTabComponent implements OnInit {
       next: () => this.loadGuarantors(),
       error: (err) => {
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('COVERAGE.GUARANTOR_SAVE_ERROR'),
+          refusalReason(err) ?? this.translate.instant('COVERAGE.GUARANTOR_SAVE_ERROR'),
         );
       },
     });
@@ -230,7 +231,7 @@ export class CoverageTabComponent implements OnInit {
         error: (err) => {
           this.consentSaving.set(false);
           this.toast.error(
-            err?.error?.message ?? this.translate.instant('COVERAGE.CONSENT_SAVE_ERROR'),
+            refusalReason(err) ?? this.translate.instant('COVERAGE.CONSENT_SAVE_ERROR'),
           );
         },
       });
@@ -265,7 +266,7 @@ export class CoverageTabComponent implements OnInit {
       error: (err) => {
         this.revokeBusy.set(false);
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('COVERAGE.CONSENT_SAVE_ERROR'),
+          refusalReason(err) ?? this.translate.instant('COVERAGE.CONSENT_SAVE_ERROR'),
         );
       },
     });

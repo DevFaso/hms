@@ -1,3 +1,4 @@
+import { refusalReason } from '../../shared/refusal-reason';
 import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 import {
   Component,
@@ -167,7 +168,7 @@ export class LabOutboxComponent implements OnInit {
       error: (err) => {
         // The backend refusal names the actual state — surface it verbatim
         // rather than a generic failure.
-        const message = err?.error?.message ?? this.translate.instant('LAB_OUTBOX.RETRY_ERROR');
+        const message = refusalReason(err) ?? this.translate.instant('LAB_OUTBOX.RETRY_ERROR');
         this.toast.error(message);
         this.retryingId.set(null);
       },

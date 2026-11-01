@@ -1,3 +1,4 @@
+import { refusalReason } from '../../shared/refusal-reason';
 import {
   Component,
   inject,
@@ -202,7 +203,7 @@ export class ReceptionCockpitComponent implements OnInit {
         // QA D788: the server says why (a visit nobody saw, the clinician's
         // steps), and the card goes back where it was.
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('RECEPTION.STATUS_UPDATE_FAILED'),
+          refusalReason(err) ?? this.translate.instant('RECEPTION.STATUS_UPDATE_FAILED'),
         );
         this.reloadFlowBoard();
       },

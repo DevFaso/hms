@@ -1,3 +1,4 @@
+import { refusalReason } from '../shared/refusal-reason';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import {
   Component,
@@ -425,9 +426,7 @@ export class StockAdjustmentComponent implements OnInit {
         this.loadInventoryItems();
       },
       error: (err) => {
-        this.toast.error(
-          err?.error?.message ?? this.translate.instant('PHARMACY.TX_RECORD_FAILED'),
-        );
+        this.toast.error(refusalReason(err) ?? this.translate.instant('PHARMACY.TX_RECORD_FAILED'));
         this.saving.set(false);
       },
     });

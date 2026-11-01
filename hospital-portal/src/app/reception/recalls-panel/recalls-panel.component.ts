@@ -1,3 +1,4 @@
+import { refusalReason } from '../../shared/refusal-reason';
 import { refuseFields } from '../../shared/forms/invalid-fields';
 import { PersonNamePipe, personName } from '../../shared/pipes/person-name.pipe';
 import { RouterLink } from '@angular/router';
@@ -193,7 +194,7 @@ export class RecallsPanelComponent implements OnInit {
       },
       error: (err) => {
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('RECEPTION.RECALL_CREATE_FAILED'),
+          refusalReason(err) ?? this.translate.instant('RECEPTION.RECALL_CREATE_FAILED'),
         );
         this.saving.set(false);
       },
@@ -211,7 +212,7 @@ export class RecallsPanelComponent implements OnInit {
       },
       error: (err) => {
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('RECEPTION.RECALL_ACTION_FAILED'),
+          refusalReason(err) ?? this.translate.instant('RECEPTION.RECALL_ACTION_FAILED'),
         );
         this.actingOnId.set(null);
       },
@@ -229,7 +230,7 @@ export class RecallsPanelComponent implements OnInit {
       },
       error: (err) => {
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('RECEPTION.RECALL_ACTION_FAILED'),
+          refusalReason(err) ?? this.translate.instant('RECEPTION.RECALL_ACTION_FAILED'),
         );
         this.actingOnId.set(null);
       },

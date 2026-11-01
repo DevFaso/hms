@@ -719,7 +719,7 @@ export class EncountersComponent implements OnInit {
         // Surface the backend refusal verbatim (house rule) — a signed-note
         // lock or client-asserted-signature refusal must reach the clinician.
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('ENCOUNTERS.NOTE_SAVE_FAILED'),
+          refusalReason(err) ?? this.translate.instant('ENCOUNTERS.NOTE_SAVE_FAILED'),
         );
         this.savingNote.set(false);
       },
@@ -793,7 +793,7 @@ export class EncountersComponent implements OnInit {
       error: (err) => {
         this.signingNote.set(false);
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('ENCOUNTERS.NOTE_SIGN_FAILED'),
+          refusalReason(err) ?? this.translate.instant('ENCOUNTERS.NOTE_SIGN_FAILED'),
         );
       },
     });
@@ -814,7 +814,7 @@ export class EncountersComponent implements OnInit {
       error: (err) => {
         this.signingEntryId.set(null);
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('ENCOUNTERS.NOTE_SIGN_FAILED'),
+          refusalReason(err) ?? this.translate.instant('ENCOUNTERS.NOTE_SIGN_FAILED'),
         );
       },
     });
@@ -835,7 +835,7 @@ export class EncountersComponent implements OnInit {
       error: (err) => {
         this.cosigningEntryId.set(null);
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('ENCOUNTERS.NOTE_COSIGN_FAILED'),
+          refusalReason(err) ?? this.translate.instant('ENCOUNTERS.NOTE_COSIGN_FAILED'),
         );
       },
     });
@@ -877,7 +877,7 @@ export class EncountersComponent implements OnInit {
       error: (err) => {
         this.cosigningNote.set(false);
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('ENCOUNTERS.NOTE_COSIGN_FAILED'),
+          refusalReason(err) ?? this.translate.instant('ENCOUNTERS.NOTE_COSIGN_FAILED'),
         );
       },
     });

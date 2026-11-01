@@ -9650,7 +9650,8 @@
       "LABEL": "Motivo de anulación (interacción)",
       "HINT": "Una interacción grave detiene esta dispensación: indique el motivo para dispensar de todos modos. Se registra con la dispensación."
     },
-    "ALERT_OVERRIDDEN": "Alerta anulada por el prescriptor: vea el motivo en la receta"
+    "ALERT_OVERRIDDEN": "Alerta anulada por el prescriptor: vea el motivo en la receta",
+    "LOTS_OTHER_FORM": "{{count}} lote(s) de este medicamento en otra forma no se ofrecen: la orden está escrita en «{{unit}}»."
   },
   "LAB_QC": {
     "TITLE": "Panel de control de calidad",

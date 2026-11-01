@@ -1,3 +1,4 @@
+import { refusalReason } from '../shared/refusal-reason';
 import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -148,7 +149,7 @@ export class PharmacyCheckoutComponent implements OnInit {
       },
       error: (err) => {
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('PHARMACY.CHECKOUT_DISPENSE_NOT_FOUND'),
+          refusalReason(err) ?? this.translate.instant('PHARMACY.CHECKOUT_DISPENSE_NOT_FOUND'),
         );
         this.dispense.set(null);
         this.loading.set(false);
@@ -210,7 +211,7 @@ export class PharmacyCheckoutComponent implements OnInit {
         this.loading.set(false);
       },
       error: (err) => {
-        this.toast.error(err?.error?.message ?? this.translate.instant('PHARMACY.PAYMENT_FAILED'));
+        this.toast.error(refusalReason(err) ?? this.translate.instant('PHARMACY.PAYMENT_FAILED'));
         this.loading.set(false);
       },
     });

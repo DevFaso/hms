@@ -248,9 +248,7 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
     this.encounterService.getById(item.encounterId).subscribe({
       next: (encounter) => this.triageEncounter.set(encounter),
       error: (err: { error?: { message?: string } } | null) =>
-        this.toast.error(
-          err?.error?.message || this.translate.instant('TRACKER.TRIAGE_INCOMPLETE'),
-        ),
+        this.toast.error(refusalReason(err) ?? this.translate.instant('TRACKER.TRIAGE_INCOMPLETE')),
     });
   }
 
@@ -277,9 +275,7 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
         this.triageInProgress.set(false);
         // QA D155: the server refuses a triage with no vitals or ESI; say so
         // rather than leaving the card where it was without a word.
-        this.toast.error(
-          err?.error?.message || this.translate.instant('TRACKER.TRIAGE_INCOMPLETE'),
-        );
+        this.toast.error(refusalReason(err) ?? this.translate.instant('TRACKER.TRIAGE_INCOMPLETE'));
       },
     });
   }
@@ -339,7 +335,7 @@ export class PatientTrackerComponent implements OnInit, OnDestroy {
       error: (err: { error?: { message?: string } } | null) => {
         this.startInProgress.set(false);
         // The server's reason (not the assigned clinician) in the reader's language.
-        this.toast.error(err?.error?.message || this.translate.instant('TRACKER.START_FAILED'));
+        this.toast.error(refusalReason(err) ?? this.translate.instant('TRACKER.START_FAILED'));
       },
     });
   }

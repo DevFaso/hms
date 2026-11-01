@@ -1,3 +1,4 @@
+import { refusalReason } from '../shared/refusal-reason';
 import { ChangeDetectionStrategy, Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -128,7 +129,7 @@ export class ControlledRegisterComponent implements OnInit {
           this.loading.set(false);
           this.failed.set(true);
           this.toast.error(
-            err?.error?.message ?? this.translate.instant('PHARMACY.REGISTER_LOAD_FAILED'),
+            refusalReason(err) ?? this.translate.instant('PHARMACY.REGISTER_LOAD_FAILED'),
           );
         },
       });

@@ -1,3 +1,4 @@
+import { refusalReason } from '../shared/refusal-reason';
 import {
   Component,
   OnInit,
@@ -196,7 +197,7 @@ export class DrugInteractionsComponent implements OnInit {
         // "exists but was retired; reactivate it instead" is actionable —
         // surface the backend refusal verbatim.
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('DRUG_INTERACTIONS.SAVE_ERROR'),
+          refusalReason(err) ?? this.translate.instant('DRUG_INTERACTIONS.SAVE_ERROR'),
         );
         this.saving.set(false);
       },
@@ -226,7 +227,7 @@ export class DrugInteractionsComponent implements OnInit {
       },
       error: (err) => {
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('DRUG_INTERACTIONS.DEACTIVATE_ERROR'),
+          refusalReason(err) ?? this.translate.instant('DRUG_INTERACTIONS.DEACTIVATE_ERROR'),
         );
         this.deactivating.set(false);
       },
@@ -247,7 +248,7 @@ export class DrugInteractionsComponent implements OnInit {
       },
       error: (err) => {
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('DRUG_INTERACTIONS.REACTIVATE_ERROR'),
+          refusalReason(err) ?? this.translate.instant('DRUG_INTERACTIONS.REACTIVATE_ERROR'),
         );
         this.reactivatingId.set(null);
       },

@@ -1,3 +1,4 @@
+import { refusalReason } from '../../shared/refusal-reason';
 import { LabCorrectionBadgeComponent } from '../shared/lab-correction-badge.component';
 import { textMatches } from '../../shared/person-search';
 import { CdkTrapFocus } from '@angular/cdk/a11y';
@@ -470,12 +471,7 @@ export class LabResultsComponent implements OnInit {
         // ("ask an administrator to mark this test as point-of-care"), and a
         // generic "could not save" throws that away and leaves the ward
         // thinking the system is broken.
-        const serverMessage = err?.error?.message;
-        this.toast.error(
-          typeof serverMessage === 'string' && serverMessage.trim()
-            ? serverMessage
-            : this.translate.instant('LAB_RESULTS.SAVE_ERROR'),
-        );
+        this.toast.error(refusalReason(err) ?? this.translate.instant('LAB_RESULTS.SAVE_ERROR'));
         this.saving.set(false);
       },
     });
@@ -839,7 +835,7 @@ export class LabResultsComponent implements OnInit {
         // A mismatch is the interesting case, and the server explains it in
         // clinical terms — show that rather than a generic failure.
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('LAB_RESULTS.READ_BACK_ERROR'),
+          refusalReason(err) ?? this.translate.instant('LAB_RESULTS.READ_BACK_ERROR'),
         );
         this.readBackSubmitting.set(false);
       },

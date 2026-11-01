@@ -1,3 +1,4 @@
+import { refusalReason } from '../../shared/refusal-reason';
 import {
   Component,
   EventEmitter,
@@ -252,7 +253,7 @@ export class TriageFormComponent {
       },
       error: (err) => {
         this.saving.set(false);
-        const msg = err?.error?.message ?? this.translate.instant('TRIAGE.SUBMIT_FAILED');
+        const msg = refusalReason(err) ?? this.translate.instant('TRIAGE.SUBMIT_FAILED');
         this.toast.error(msg);
       },
     });

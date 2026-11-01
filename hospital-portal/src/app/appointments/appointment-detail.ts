@@ -1,3 +1,4 @@
+import { refusalReason } from '../shared/refusal-reason';
 import { refuseFields } from '../shared/forms/invalid-fields';
 import { StaffService, StaffResponse, isClinicalProvider } from '../services/staff.service';
 import { DialogFocusDirective } from '../shared/a11y/dialog-focus.directive';
@@ -321,7 +322,7 @@ export class AppointmentDetailComponent implements OnInit {
       },
       error: (err) => {
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('APPOINTMENTS.RESCHEDULE_FAILED'),
+          refusalReason(err) ?? this.translate.instant('APPOINTMENTS.RESCHEDULE_FAILED'),
         );
         this.saving.set(false);
       },
@@ -378,7 +379,7 @@ export class AppointmentDetailComponent implements OnInit {
       },
       error: (err) => {
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('APPOINTMENTS.CANCEL_FAILED'),
+          refusalReason(err) ?? this.translate.instant('APPOINTMENTS.CANCEL_FAILED'),
         );
         this.cancelling.set(false);
       },
@@ -422,7 +423,7 @@ export class AppointmentDetailComponent implements OnInit {
       },
       error: (err) => {
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('APPOINTMENTS.STATUS_UPDATE_FAILED'),
+          refusalReason(err) ?? this.translate.instant('APPOINTMENTS.STATUS_UPDATE_FAILED'),
         );
         this.saving.set(false);
       },
@@ -462,9 +463,7 @@ export class AppointmentDetailComponent implements OnInit {
         this.saving.set(false);
       },
       error: (err) => {
-        this.toast.error(
-          err?.error?.message ?? this.translate.instant('RECEPTION.CHECK_IN_FAILED'),
-        );
+        this.toast.error(refusalReason(err) ?? this.translate.instant('RECEPTION.CHECK_IN_FAILED'));
         this.saving.set(false);
       },
     });

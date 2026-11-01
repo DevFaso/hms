@@ -1,3 +1,4 @@
+import { refusalReason } from '../shared/refusal-reason';
 import {
   Component,
   inject,
@@ -343,7 +344,7 @@ export class ProfileComponent implements OnInit {
         this.mfaError.set(
           refusal
             ? this.translate.instant(refusal)
-            : (err?.error?.message ?? this.translate.instant('PROFILE.MFA_ENROLL_FAILED')),
+            : (refusalReason(err) ?? this.translate.instant('PROFILE.MFA_ENROLL_FAILED')),
         );
         this.mfaLoading.set(false);
       },
@@ -369,7 +370,7 @@ export class ProfileComponent implements OnInit {
       },
       error: (err) => {
         this.mfaError.set(
-          err?.error?.message ?? this.translate.instant('PROFILE.MFA_CODE_REJECTED'),
+          refusalReason(err) ?? this.translate.instant('PROFILE.MFA_CODE_REJECTED'),
         );
         this.mfaLoading.set(false);
       },
@@ -457,7 +458,7 @@ export class ProfileComponent implements OnInit {
       error: (err) => {
         this.recoverySaving.set(false);
         this.recoveryError.set(
-          err?.error?.message ?? this.translate.instant('PROFILE.RECOVERY_SAVE_FAILED'),
+          refusalReason(err) ?? this.translate.instant('PROFILE.RECOVERY_SAVE_FAILED'),
         );
       },
     });
@@ -484,7 +485,7 @@ export class ProfileComponent implements OnInit {
       error: (err) => {
         this.recoverySaving.set(false);
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('PROFILE.RECOVERY_REMOVE_FAILED'),
+          refusalReason(err) ?? this.translate.instant('PROFILE.RECOVERY_REMOVE_FAILED'),
         );
       },
     });
@@ -511,7 +512,7 @@ export class ProfileComponent implements OnInit {
       error: (err) => {
         this.verificationSending.set(false);
         this.verificationError.set(
-          err?.error?.message ?? this.translate.instant('PROFILE.VERIFICATION_SEND_FAILED'),
+          refusalReason(err) ?? this.translate.instant('PROFILE.VERIFICATION_SEND_FAILED'),
         );
       },
     });
@@ -538,7 +539,7 @@ export class ProfileComponent implements OnInit {
       error: (err) => {
         this.verificationSending.set(false);
         this.verificationError.set(
-          err?.error?.message ?? this.translate.instant('PROFILE.VERIFICATION_FAILED'),
+          refusalReason(err) ?? this.translate.instant('PROFILE.VERIFICATION_FAILED'),
         );
       },
     });
@@ -760,7 +761,7 @@ export class ProfileComponent implements OnInit {
       error: (err) => {
         this.saving.set(false);
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('PROFILE.RECORD_PHONE_SYNC_FAILED'),
+          refusalReason(err) ?? this.translate.instant('PROFILE.RECORD_PHONE_SYNC_FAILED'),
         );
       },
     });
@@ -802,7 +803,7 @@ export class ProfileComponent implements OnInit {
         error: (err) => {
           undoRecordPhone?.();
           this.saving.set(false);
-          this.toast.error(err?.error?.message ?? this.translate.instant('PROFILE.UPDATE_FAILED'));
+          this.toast.error(refusalReason(err) ?? this.translate.instant('PROFILE.UPDATE_FAILED'));
         },
       });
     } else if (emailChanged) {
@@ -834,7 +835,7 @@ export class ProfileComponent implements OnInit {
         },
         error: (err) => {
           const refusal =
-            err?.error?.message ?? this.translate.instant('PROFILE.RECORD_PHONE_SYNC_FAILED');
+            refusalReason(err) ?? this.translate.instant('PROFILE.RECORD_PHONE_SYNC_FAILED');
           this.profileService
             .updateProfile(before.id, {
               firstName: updated.firstName,
@@ -879,7 +880,7 @@ export class ProfileComponent implements OnInit {
       },
       error: (err) => {
         this.saving.set(false);
-        this.toast.error(err?.error?.message ?? this.translate.instant('PROFILE.UPDATE_FAILED'));
+        this.toast.error(refusalReason(err) ?? this.translate.instant('PROFILE.UPDATE_FAILED'));
       },
     });
   }
@@ -912,7 +913,7 @@ export class ProfileComponent implements OnInit {
           if (current) this.resetEditForm(current);
         }
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('PROFILE.VERIFICATION_FAILED'),
+          refusalReason(err) ?? this.translate.instant('PROFILE.VERIFICATION_FAILED'),
         );
       },
     });
@@ -977,7 +978,7 @@ export class ProfileComponent implements OnInit {
       error: (err) => {
         this.uploadingAvatar.set(false);
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('PROFILE.PHOTO_UPLOAD_FAILED'),
+          refusalReason(err) ?? this.translate.instant('PROFILE.PHOTO_UPLOAD_FAILED'),
         );
       },
     });

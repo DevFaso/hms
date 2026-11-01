@@ -1,3 +1,4 @@
+import { refusalReason } from '../../shared/refusal-reason';
 import { refuseFields } from '../../shared/forms/invalid-fields';
 import { PersonNamePipe, personName } from '../../shared/pipes/person-name.pipe';
 import { DialogFocusDirective } from '../../shared/a11y/dialog-focus.directive';
@@ -212,7 +213,7 @@ export class WaitlistPanelComponent implements OnInit {
       },
       error: (err) => {
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('RECEPTION.ADD_WAITLIST_FAILED'),
+          refusalReason(err) ?? this.translate.instant('RECEPTION.ADD_WAITLIST_FAILED'),
         );
         this.saving.set(false);
       },
@@ -261,7 +262,7 @@ export class WaitlistPanelComponent implements OnInit {
         this.loadEntries();
       },
       error: (err) => {
-        this.toast.error(err?.error?.message ?? this.translate.instant('RECEPTION.OFFER_FAILED'));
+        this.toast.error(refusalReason(err) ?? this.translate.instant('RECEPTION.OFFER_FAILED'));
         this.offering.set(false);
       },
     });
@@ -278,7 +279,7 @@ export class WaitlistPanelComponent implements OnInit {
       },
       error: (err) => {
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('RECEPTION.ACCEPT_OFFER_FAILED'),
+          refusalReason(err) ?? this.translate.instant('RECEPTION.ACCEPT_OFFER_FAILED'),
         );
         this.actingOnEntryId.set(null);
       },
@@ -296,7 +297,7 @@ export class WaitlistPanelComponent implements OnInit {
       },
       error: (err) => {
         this.toast.error(
-          err?.error?.message ?? this.translate.instant('RECEPTION.DECLINE_OFFER_FAILED'),
+          refusalReason(err) ?? this.translate.instant('RECEPTION.DECLINE_OFFER_FAILED'),
         );
         this.actingOnEntryId.set(null);
       },

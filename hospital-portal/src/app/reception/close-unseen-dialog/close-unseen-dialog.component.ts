@@ -1,3 +1,4 @@
+import { refusalReason } from '../../shared/refusal-reason';
 import { DialogFocusDirective } from '../../shared/a11y/dialog-focus.directive';
 import {
   ChangeDetectionStrategy,
@@ -70,7 +71,7 @@ export class CloseUnseenDialogComponent implements OnInit {
         error: (err) => {
           this.saving.set(false);
           this.error.set(
-            err?.error?.message ?? this.translate.instant('RECEPTION.CLOSE_UNSEEN_FAILED'),
+            refusalReason(err) ?? this.translate.instant('RECEPTION.CLOSE_UNSEEN_FAILED'),
           );
         },
       });
