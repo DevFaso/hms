@@ -49,14 +49,8 @@ management:
       show-details: when_authorized
       show-components: when_authorized
       roles: SUPER_ADMIN
-  otlp:
-    metrics:
-      export:
-        url: ${OTEL_EXPORTER_OTLP_ENDPOINT:}
-        headers:
-          Authorization: ${GRAFANA_OTLP_AUTH_HEADER:}
-        enabled: ${OTEL_METRICS_ENABLED:false}
-        step: 60s
+  # OTLP metrics export now lives in application.properties so the dev profile gets it
+  # too — see "Micrometer OTLP metrics export" there. Prod adds no overrides.
 
 # ===================== Seed Data =====================
 # Roles and org security data are managed by Liquibase migrations

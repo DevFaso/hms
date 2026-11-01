@@ -89,7 +89,9 @@ not breaking, but worth keeping consistent across envs.
 
 ---
 
-## 2. `hms-backend-<env>` (Spring Boot, `hospital-core`) — one per environment
+## 2. The backend services (Spring Boot, `hospital-core`) — one per environment
+
+> **Service names do not follow the `-<env>` pattern.** Dev is `hms-backend-dev`; **prod is `hms-backend-core`**, not `hms-backend-prod`. `<env>` is used below only as shorthand for "the backend service in that environment". Targeting `hms-backend-prod` with the Railway CLI fails against a service that does not exist.
 
 The whole OIDC posture lives in env vars; there are no per-profile YAML
 defaults. From [`hospital-core/src/main/resources/application.properties`](../../hospital-core/src/main/resources/application.properties):
@@ -110,6 +112,25 @@ app.auth.oidc.required=${OIDC_REQUIRED:false}
 | `JWT_PRIVATE_KEY` / `JWT_PUBLIC_KEY` / `JWT_PREVIOUS_PUBLIC_KEY` | secret | unset (HMAC mode) | unset | RS256 mode is Phase 6; leave unset for now. When set in any env, that env switches to RS256 — must be set in lockstep with the matching public key on JWT consumers. |
 | `DATABASE_URL` (or `SPRING_DATASOURCE_URL` + USERNAME / PASSWORD) | derived | `${{hms-db-dev.DATABASE_URL}}` | same, `-prod` | **MUST.** Application Postgres — separate DB from `hms-keycloak-<env>-db`. |
 | Encryption keys (AES) | secret | (env-specific) | (env-specific) | **MUST.** Per memory `hms-prod-secrets-exposed-2026-05-09.md`, prod set is currently unrotated post-exposure; tier-4 rotation is a separate ticket. Refer to that runbook before touching. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | public | `https://otlp-gateway-prod-us-east-2.grafana.net/otlp` | same | **SHOULD.** The single switch that activates observability: the Dockerfile entrypoint attaches `-javaagent` only when this is non-empty, so leaving it unset means no traces, metrics or logs reach Grafana Cloud. Don't hand-set — run [`scripts/grafana-cloud-setup.sh`](../../scripts/grafana-cloud-setup.sh). |
+| `OTEL_EXPORTER_OTLP_PROTOCOL` | public | `http/protobuf` | same | **MUST** when the endpoint is set. The Grafana Cloud gateway rejects the agent's default `grpc`, and the failure is a quiet export error rather than a boot failure. |
+| `OTEL_EXPORTER_OTLP_HEADERS` | secret | `Authorization=Basic <base64(1404501:glc_…)>` | same | **MUST** when the endpoint is set. Read by the OTEL agent. Instance `1404501`. |
+| `GRAFANA_OTLP_AUTH_HEADER` | secret | `Basic <base64(1404501:glc_…)>` | same | **MUST** when the endpoint is set. Same credential, different format — read by the Micrometer OTLP registry via `application.properties` (global, so the dev profile gets it too). Must stay in lockstep with `OTEL_EXPORTER_OTLP_HEADERS`, or metrics and traces disagree about authorization. |
+| `OTEL_SERVICE_NAME` | public | `hms-backend` | `hms-backend` | **SHOULD.** Becomes `service_name` on every series and span. Keep it identical across envs — `OTEL_RESOURCE_ATTRIBUTES` is what separates them. |
+| `OTEL_RESOURCE_ATTRIBUTES` | public | `deployment.environment=dev,service.namespace=hms` | `deployment.environment=prod,…` | **SHOULD.** The only thing distinguishing dev from prod series in a shared Grafana Cloud stack. Getting this wrong silently merges the two environments' metrics. |
+| `OTEL_METRICS_ENABLED` | public | `true` | `true` | **SHOULD.** Gates the Micrometer OTLP exporter (`management.otlp.metrics.export.enabled`). Traces/logs flow from the agent regardless. |
+| `OTEL_TRACES_SAMPLER` / `OTEL_TRACES_SAMPLER_ARG` | public | `parentbased_always_on` / unset | `parentbased_traceidratio` / `0.1` | **SHOULD.** The agent defaults to 100% sampling. Traces are the signal that can outgrow the free tier's 50 GB/month, so prod ratio-samples. Raise temporarily for an investigation. |
+| `METRICS_SCRAPE_TOKEN` | secret | unset | unset | **SHOULD stay unset.** Gates `GET /api/actuator/prometheus`; blank = closed to everyone. Railway serves the management port on the public API hostname, so a public scrape endpoint leaks the whole URI inventory and business counters (it did, until this was gated). Production pushes over OTLP and never needs to be pulled. Set it only for a deliberate Grafana Cloud hosted-Prometheus scrape job. |
+| `OTEL_METRICS_EXPORTER` | public | `none` | `none` | **MUST** when the endpoint is set. Stops the *agent* exporting metrics. Metrics are owned by the Micrometer OTLP registry; leaving the agent's exporter on duplicates every series and doubles free-tier consumption. One exporter per signal: agent = traces + logs, Micrometer = metrics. |
+| `OTEL_METRICS_EXPORT_URL` | public | `<endpoint>/v1/metrics` | same | **MUST** when `OTEL_METRICS_ENABLED=true`. Micrometer wants a FULL signal URL (Boot's default is `…:4318/v1/metrics`), not the gateway base that `OTEL_EXPORTER_OTLP_ENDPOINT` holds for the agent. Pointing it at the bare `/otlp` makes every 60s push a rejected POST and the business counters never arrive. |
+| `SPLUNK_HEC_ENABLED` (+ `SPLUNK_HEC_URL` / `_TOKEN`) | secret | `false` | `false` | **MAY.** Additive SIEM log shipping. Enabling without URL + token fails the context at boot by design (`SplunkLoggingProperties`). Has never been enabled in either environment. |
+
+> **Observability (Grafana Cloud).** These were absent from this matrix and unset on
+> both backends until 2026-11-01, so the entire pipeline — agent, dashboards, alert
+> rules, runbook — sat dormant. See
+> [`docs/GRAFANA_CLOUD_SETUP.md`](../GRAFANA_CLOUD_SETUP.md) for the one-command
+> setup, the free-tier arithmetic, and why the scrape endpoint is closed.
+
 
 **Verify with:** the boot log of each backend should print:
 

@@ -5962,3 +5962,17 @@ ships*, not for building — and check the shipped surface before trusting a
 - [ ] D1196 sibling (mobile): the Android app sends the English literal "Patient cancelled" as the cancel reason (`AppointmentsScreen.kt`), which now lands in `statusReason`; send the patient's text or nothing.
 - [ ] D1185 edge: `offerWaitlistSlot` counts the offer window in elapsed minutes (`ElapsedTime`) while `hold()` adds wall-clock minutes; across a DST change in a non-UTC zone `holdIsThisOffer` would not recognise the offer's own hold. Deployments are UTC today.
 - [ ] Test assertions `hasMessageContaining("<message.key>")` (61 sites) depend on test order (MessageUtil's static source): move them to `extracting("messageKey")` and lower `MessageKeyAssertionGuardTest.BASELINE` (round-22 merge).
+
+- **Blackbox liveness/readiness probes (PR #1007 follow-up):** two of the five
+  blackbox jobs target `/api/actuator/health/liveness` and `/readiness`.
+  `management.endpoint.health.probes.enabled` is never set — only
+  `add-additional-paths=true` — and `.claude/skills/synthetic-monitoring/SKILL.md`
+  records that Boot mounts those health groups automatically only under
+  Kubernetes. Against the **dev** Railway service both paths measurably return
+  200 (checked 2026-11-01), so the gap, if real, is profile-specific and would
+  affect the **local** profile the compose probes actually target — which could
+  not be verified without booting the local stack. If those two probes report
+  `probe_success=0` locally, set `management.endpoint.health.probes.enabled=true`
+  rather than repointing the targets again. Flagged in PR #1007 round 10; not
+  fixed there because the fix would have been a guess against a measurement that
+  contradicted it.
