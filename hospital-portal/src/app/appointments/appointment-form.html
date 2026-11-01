@@ -294,13 +294,7 @@
 
       <div class="form-actions">
         <a routerLink="/appointments" class="btn-secondary">{{ 'COMMON.CANCEL' | translate }}</a>
-        <button
-          appSubmitGuard
-          submitGuardRequired
-          type="submit"
-          class="btn-primary"
-          [disabled]="saving()"
-        >
+        <button type="submit" class="btn-primary" [disabled]="saving()">
           @if (saving()) {
             <span class="mini-spinner"></span>
             {{ 'APPOINTMENTS.CREATING' | translate }}

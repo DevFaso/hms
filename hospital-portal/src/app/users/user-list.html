@@ -573,11 +573,11 @@
               {{ 'COMMON.CANCEL' | translate }}
             </button>
             <button
-              appSubmitGuard
-              submitGuardRequired
               type="submit"
               class="btn-primary"
               [disabled]="saving()"
+              appSubmitGuard
+              submitGuardRequired
             >
               {{
                 saving()

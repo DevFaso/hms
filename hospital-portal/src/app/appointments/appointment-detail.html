@@ -365,13 +365,7 @@
           <button type="button" class="btn-secondary" (click)="closeReschedule()">
             {{ 'COMMON.CANCEL' | translate }}
           </button>
-          <button
-            appSubmitGuard
-            submitGuardRequired
-            type="submit"
-            class="btn-primary"
-            [disabled]="saving()"
-          >
+          <button type="submit" class="btn-primary" [disabled]="saving()">
             {{
               saving()
                 ? ('COMMON.SAVING' | translate)

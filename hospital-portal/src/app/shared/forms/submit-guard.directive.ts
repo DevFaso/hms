@@ -168,7 +168,12 @@ export class SubmitGuardDirective {
       'input[required], select[required], textarea[required]',
     );
     return Array.from(controls)
-      .filter((el) => !(el as HTMLInputElement).disabled && el.getAttribute('type') !== 'hidden')
+      .filter(
+        (el) =>
+          !(el as HTMLInputElement).disabled &&
+          el.getAttribute('type') !== 'hidden' &&
+          el.closest('[hidden]') === null,
+      )
       .map((el) => {
         if (!el.id) el.id = `submit-guard-field-${++SubmitGuardDirective.nextId}`;
         return el.id;

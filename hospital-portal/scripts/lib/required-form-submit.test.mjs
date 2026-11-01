@@ -12,22 +12,35 @@
 // (`type="submit"`, or a button with no type) carry `[appSubmitGuard]`
 // (a reason the component computes) or `submitGuardRequired` (the guard reads
 // the form's required fields at click time and names the blank ones;
-// shared/forms/submit-guard.directive.ts). Allowlist: none.
+// shared/forms/submit-guard.directive.ts) — or its submit handler refuses by
+// itself, field by field (`refuseFields`, `focusFirstInvalid`, `blankFields`:
+// the patient registration form and five others name their own fields; the
+// guard would replace their wording with the generic one). Allowlist: none.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { existsSync, readFileSync } from 'node:fs';
 import { relative, join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { templatesIn } from './inline-templates.mjs';
 import { tags } from './html-tags.mjs';
 import { closeIndexOf } from './dialog-scan.mjs';
+import { memberBody } from './disabled-control-scan.mjs';
 
 const appDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'src', 'app');
 
 const FIELD = new Set(['input', 'select', 'textarea']);
 
+/** A submit handler that refuses blank required fields itself, naming each one. */
+const SELF_REFUSAL = /\brefuseFields\(|\bfocusFirstInvalid\(|\bblankFields\(/;
+
+/** The method a binding calls (`save($event)` → `save`). */
+function handlerName(binding) {
+  return /^\s*(?:this\.)?([A-Za-z_$][\w$]*)\s*\(/.exec(binding ?? '')?.[1] ?? null;
+}
+
 /** The forms of a template that hold a required field and whose submit is unguarded: `{ line }`. */
-export function unguardedRequiredForms(html) {
+export function unguardedRequiredForms(html, componentTs = '') {
   const tokens = tags(html);
   const out = [];
   tokens.forEach((t, i) => {
@@ -44,7 +57,13 @@ export function unguardedRequiredForms(html) {
     const guarded = submits.some(
       (b) => b.attrs.has('[appSubmitGuard]') || b.attrs.has('submitGuardRequired'),
     );
-    if (!guarded) out.push({ line: t.line });
+    if (guarded) return;
+    const handlers = [t.attrs.get('(ngSubmit)'), t.attrs.get('(submit)')]
+      .concat(submits.map((b) => b.attrs.get('(click)')))
+      .map(handlerName)
+      .filter(Boolean);
+    if (handlers.some((h) => SELF_REFUSAL.test(memberBody(componentTs, h)))) return;
+    out.push({ line: t.line });
   });
   return out;
 }
@@ -55,7 +74,9 @@ test('QA D1193: no form with required fields can be sent empty', () => {
   for (const { file, text, lineOffset } of templatesIn(appDir)) {
     forms += tags(text).filter((t) => t.type === 'open' && t.name === 'form').length;
     const rel = relative(appDir, file).replaceAll('\\', '/');
-    for (const f of unguardedRequiredForms(text))
+    const tsFile = file.endsWith('.html') ? file.replace(/\.html$/, '.ts') : file;
+    const componentTs = existsSync(tsFile) ? readFileSync(tsFile, 'utf8') : '';
+    for (const f of unguardedRequiredForms(text, componentTs))
       found.push(`${rel}:${f.line + (lineOffset ?? 0)}`);
   }
   assert.ok(forms >= 50, `every form must be read, saw ${forms}`);
@@ -81,6 +102,13 @@ test('QA D1193 guard: the scan sees the lab instrument form and accepts the guar
   assert.deepEqual(unguardedRequiredForms(reasoned), []);
   const noType = broken.replace('type="submit" ', '');
   assert.equal(unguardedRequiredForms(noType).length, 1);
+  // A handler that refuses field by field itself is not this class.
+  const selfChecked = broken.replace('(ngSubmit)="save()"', '(ngSubmit)="onSubmit()"');
+  const ts =
+    '  onSubmit(): void {\n    if (refuseFields(this.host, blankFields(v, ids), ids, msg)) return;\n  }\n';
+  assert.deepEqual(unguardedRequiredForms(selfChecked, ts), []);
+  const passThrough = '  onSubmit(): void {\n    this.save();\n  }\n';
+  assert.equal(unguardedRequiredForms(selfChecked, passThrough).length, 1);
   const optional = '<form><input name="q" /><button>Go</button></form>';
   assert.deepEqual(unguardedRequiredForms(optional), []);
 });

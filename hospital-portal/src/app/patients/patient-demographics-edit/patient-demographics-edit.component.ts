@@ -20,7 +20,6 @@ import {
 import { ToastService } from '../../core/toast.service';
 import { DialogFocusDirective } from '../../shared/a11y/dialog-focus.directive';
 import { localDateString } from '../../shared/date-utils';
-import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 
 /**
  * QA D926: the front desk corrects a registered patient's identity, contact
@@ -40,7 +39,7 @@ const DEMOGRAPHICS_FIELD_IDS: Readonly<Record<string, string>> = {
 @Component({
   selector: 'app-patient-demographics-edit',
   standalone: true,
-  imports: [SubmitGuardDirective, FormsModule, TranslateModule, DialogFocusDirective],
+  imports: [FormsModule, TranslateModule, DialogFocusDirective],
   templateUrl: './patient-demographics-edit.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: [
