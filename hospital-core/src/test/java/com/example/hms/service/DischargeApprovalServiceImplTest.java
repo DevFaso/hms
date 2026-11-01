@@ -525,6 +525,41 @@ class DischargeApprovalServiceImplTest {
             .isEqualTo("dischargeApproval.cancel.noRequester");
     }
 
+    // ---- QA D1160 (round 21): a withdrawn or refused request says why ----
+
+    @Test
+    void cancelWithoutAReasonIsRefused_D1160() {
+        DischargeApproval approval = buildApproval(DischargeStatus.PENDING);
+        when(dischargeApprovalRepository.findById(approvalId)).thenReturn(Optional.of(approval));
+
+        for (String blank : new String[] {null, "", "   "}) {
+            assertThatThrownBy(() -> service.cancel(approvalId, nurseStaffId, blank))
+                .isInstanceOf(BusinessException.class)
+                .extracting(e -> ((BusinessException) e).getMessageKey())
+                .isEqualTo("order.lifecycle.cancelReasonRequired");
+        }
+        assertThat(approval.getStatus()).isEqualTo(DischargeStatus.PENDING);
+        verify(dischargeApprovalRepository, never()).save(any());
+    }
+
+    @Test
+    void rejectWithoutAReasonIsRefused_D1160() {
+        DischargeApproval approval = buildApproval(DischargeStatus.PENDING);
+        when(dischargeApprovalRepository.findById(approvalId)).thenReturn(Optional.of(approval));
+        DischargeApprovalDecisionDTO decision = DischargeApprovalDecisionDTO.builder()
+            .doctorStaffId(doctorStaffId)
+            .doctorAssignmentId(doctorAssignmentId)
+            .rejectionReason("  ")
+            .build();
+
+        assertThatThrownBy(() -> service.reject(approvalId, decision))
+            .isInstanceOf(BusinessException.class)
+            .extracting(e -> ((BusinessException) e).getMessageKey())
+            .isEqualTo("order.lifecycle.cancelReasonRequired");
+        assertThat(approval.getStatus()).isEqualTo(DischargeStatus.PENDING);
+        verify(dischargeApprovalRepository, never()).save(any());
+    }
+
     // ---- getById ----
 
     @Test

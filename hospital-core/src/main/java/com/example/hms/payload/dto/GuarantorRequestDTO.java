@@ -25,7 +25,7 @@ public class GuarantorRequestDTO {
     @Size(max = 20)
     private String phone;
 
-    @Email
+    @Email(message = "{validation.email.invalid}")
     @Size(max = 150)
     private String email;
 

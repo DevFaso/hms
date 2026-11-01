@@ -1687,6 +1687,8 @@
       "RX_BACK_ORDER_DATE": "Prescription {{rx}} put on back order, restock expected on {{date}}",
       "RX_BACK_ORDER": "Prescription {{rx}} put on back order",
       "RX_PRINTED": "Prescription {{rx}} printed for the patient",
+      "RX_SIGNED_WITHDRAWN_BY_PRESCRIBER": "Signed prescription withdrawn by its prescriber",
+      "RX_SIGNED_WITHDRAWN_BY_COLLEAGUE": "Signed prescription withdrawn by another prescriber of the hospital",
       "RX_ROUTED_PARTNER": "Prescription {{rx}} sent to partner pharmacy {{pharmacy}}",
       "RX_CLARIFICATION_REQUESTED": "Clarification requested on prescription {{rx}}",
       "RX_CLARIFICATION_RESOLVED": "Clarification resolved on prescription {{rx}}; back to {{status}}",

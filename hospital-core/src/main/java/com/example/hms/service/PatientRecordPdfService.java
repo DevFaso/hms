@@ -140,7 +140,7 @@ public class PatientRecordPdfService {
             pages.wrapped(t.get("pdf.record.allergies.summary", allergySummary.trim()));
         } else {
             pages.rows(storyboard.getAllergies(), a -> join(SEPARATOR,
-                a.getAllergenDisplay(), label(t, a.getSeverity()), a.getReaction(),
+                a.getAllergenDisplay(), severityLabel(t, a.getSeverity()), a.getReaction(),
                 label(t, a.getVerificationStatus())));
         }
     }
@@ -267,6 +267,17 @@ public class PatientRecordPdfService {
      * the reader's language: the PDF bundle, then the shared clinical enum
      * bundle, then the code made readable - never the raw constant.
      */
+    /**
+     * QA D1168 (D1134 class, round 21): a severity is read as the allergy's
+     * "gravité", so it takes the feminine {@code cds.severity.*} word
+     * ("modérée"), as the chart and the alert do; the generic enum word was
+     * masculine ("Pénicilline - modéré - … - Confirmée").
+     */
+    static String severityLabel(PdfLabels t, String code) {
+        if (code == null || code.isBlank()) return null;
+        return t.getOrCode("cds.severity." + code, label(t, code));
+    }
+
     static String label(PdfLabels t, String code) {
         if (code == null || code.isBlank()) return null;
         String readable = code.replace('_', ' ').toLowerCase(java.util.Locale.ROOT);

@@ -128,16 +128,57 @@ public class TreatmentPlanServiceImpl implements TreatmentPlanService {
         }
         // QA D1127: the edit is the author's, so it never moves the plan to APPROVED.
         requireNotApprovedByWrite(plan.getStatus(), requestDTO.getStatus());
+        // QA D1066 class (round 21, with D1162): a cancelled plan is closed to edits too.
+        com.example.hms.service.support.CancelledOrders.requireNotCancelled(plan.getStatus(),
+            "treatmentPlan.cancelled.locked");
         validateEncounterContext(encounter, hospital, patient);
         // QA D401: the patient must be registered at the hospital the row is written in.
         patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
 
         var context = new TreatmentPlanMapper.TreatmentPlanContext(hospital, encounter, assignment, author, supervising, signOff);
+        com.example.hms.enums.TreatmentPlanStatus statusBefore = plan.getStatus();
+        java.util.List<Object> contentBefore = clinicalContent(plan);
         plan.setPatient(patient);
         treatmentPlanMapper.applyRequest(plan, requestDTO, context);
+        // QA D1162 (round 21, user decision): the approval was given to the
+        // plan as it was. An edit of its content sends it back for review; it
+        // used to stay APPROVED under the colleague's approval.
+        plan.setStatus(statusAfterEdit(statusBefore, !contentBefore.equals(clinicalContent(plan)), plan.getStatus()));
         applyFollowUps(plan, requestDTO.getFollowUps());
         TreatmentPlan saved = treatmentPlanRepository.save(plan);
         return treatmentPlanMapper.toResponseDTO(saved);
+    }
+
+    /**
+     * QA D1162: an APPROVED plan whose clinical content an edit changed goes
+     * back to IN_REVIEW, unless the same edit archives or cancels it. An edit
+     * that echoes the approved content unchanged keeps the approval.
+     */
+    static com.example.hms.enums.TreatmentPlanStatus statusAfterEdit(
+            com.example.hms.enums.TreatmentPlanStatus before, boolean contentChanged,
+            com.example.hms.enums.TreatmentPlanStatus after) {
+        if (before == com.example.hms.enums.TreatmentPlanStatus.APPROVED && contentChanged
+                && after == com.example.hms.enums.TreatmentPlanStatus.APPROVED) {
+            return com.example.hms.enums.TreatmentPlanStatus.IN_REVIEW;
+        }
+        return after;
+    }
+
+    /** What a reviewer approved: the patient, the visit and every clinical field of the plan. */
+    private static java.util.List<Object> clinicalContent(TreatmentPlan plan) {
+        return java.util.Arrays.asList(
+            plan.getPatient() != null ? plan.getPatient().getId() : null,
+            plan.getEncounter() != null ? plan.getEncounter().getId() : null,
+            plan.getProblemStatement(),
+            plan.getTherapeuticGoalsJson(),
+            plan.getMedicationPlanJson(),
+            plan.getLifestylePlanJson(),
+            plan.getTimelineSummary(),
+            plan.getFollowUpSummary(),
+            plan.getReferralPlanJson(),
+            plan.getResponsiblePartiesJson(),
+            plan.getTimelineStartDate(),
+            plan.getTimelineReviewDate());
     }
 
     @Override

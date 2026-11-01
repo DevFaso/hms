@@ -3278,4 +3278,27 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- V256 (round 21): QA D1157, the reason a waitlist entry is closed or a
+         recall cancelled is required and kept (close_reason on
+         scheduling.appointment_waitlist and scheduling.patient_recalls).
+         Plain statements, no DO block. Idempotent. -->
+    <changeSet id="V256-r21-waitlist-and-recall-close-reason" author="hms-team" runOnChange="false">
+        <sqlFile path="V256__r21_waitlist_and_recall_close_reason.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
+    <!-- V257 (round 21): QA D1169, the pain score and the fundal height of a
+         vitals row are numbers (pain_score, fundal_height_cm on
+         clinical.patient_vital_signs), moved out of the notes where they were
+         stored as a sentence in the nurse's language. Plain statements, no DO
+         block. Idempotent. -->
+    <changeSet id="V257-r21-vital-sign-pain-and-fundal-height" author="hms-team" runOnChange="false">
+        <sqlFile path="V257__r21_vital_sign_pain_and_fundal_height.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>

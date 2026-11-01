@@ -1102,7 +1102,10 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
             oldest = failures.peekFirst();
         }
         if (failures.size() >= PHONE_ACTIVATION_MAX_FAILURES) {
-            throw new BusinessException("users.verification.tooManyAttempts");
+            // QA D1152: the lock ends by itself after the window; the old text
+            // told the patient to request a new code this page does not offer.
+            throw new BusinessException("assignment.phoneActivation.tooManyAttempts",
+                PHONE_ACTIVATION_WINDOW_MS / 60_000);
         }
     }
 

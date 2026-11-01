@@ -422,6 +422,14 @@ public class LaborServiceImpl implements LaborService {
                 && request.getObservationTime().isBefore(episode.getLaborOnsetAt())) {
             throw new BusinessException("maternity.partograph.beforeOnset");
         }
+        // QA D1151 class (round 21): a partograph entry charts an observation.
+        com.example.hms.service.support.ClinicalContent.requireAny("fetalHeartRateBpm", "maternity.partograph.findingsRequired",
+            request.getFetalHeartRateBpm(), request.getLiquorColour(), request.getMouldingDegree(),
+            request.getCervicalDilationCm(), request.getDescentFifths(), request.getContractionsPerTenMinutes(),
+            request.getContractionDurationSeconds(), request.getOxytocinDropsPerMinute(), request.getDrugsGiven(),
+            request.getIvFluids(), request.getPulseBpm(), request.getSystolicBpMmHg(), request.getDiastolicBpMmHg(),
+            request.getTemperatureCelsius(), request.getUrineOutputMl(), request.getUrineProtein(),
+            request.getUrineAcetone(), request.getNotes());
 
         Staff recordedBy = resolveStaff(request.getRecordedByStaffId(), episode.getHospital());
         if (recordedBy != null) {

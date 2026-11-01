@@ -4,9 +4,9 @@ public record EmailInvoiceRequest(
     @jakarta.validation.constraints.NotEmpty
     java.util.List<
         @jakarta.validation.constraints.NotBlank
-        @jakarta.validation.constraints.Email String> to,
-    java.util.List<@jakarta.validation.constraints.Email String> cc,
-    java.util.List<@jakarta.validation.constraints.Email String> bcc,
+        @jakarta.validation.constraints.Email(message = "{validation.email.invalid}") String> to,
+    java.util.List<@jakarta.validation.constraints.Email(message = "{validation.email.invalid}") String> cc,
+    java.util.List<@jakarta.validation.constraints.Email(message = "{validation.email.invalid}") String> bcc,
     String message,
     String locale,
     Boolean attachPdf

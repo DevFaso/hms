@@ -854,6 +854,8 @@ class NurseTaskServiceImplTest {
 
         NurseMedicationAdministrationRequestDTO request = new NurseMedicationAdministrationRequestDTO();
         request.setStatus(" held ");
+        // QA D1159: a held dose says why.
+        request.setNote("Patient au bloc");
 
         NurseMedicationTaskResponseDTO normalized = service.recordMedicationAdministration(
             taskId,
@@ -2097,8 +2099,10 @@ class NurseTaskServiceImplTest {
         verify(vitalSignRepository).save(captor.capture());
         PatientVitalSign saved = captor.getValue();
         assertThat(saved.getHeartRateBpm()).isEqualTo(72);
-        // QA D1045: the ward pain reassessment is charted (the bundle text, or its key without bundles).
-        assertThat(saved.getNotes()).isNotBlank();
+        // QA D1045: the ward pain reassessment is charted. QA D1169: as a number, rendered
+        // in the reader's language when read (it was stored as the nurse's sentence).
+        assertThat(saved.getPainScore()).isEqualTo(4);
+        assertThat(saved.getNotes()).isNull();
         assertThat(saved.isClinicallySignificant()).isFalse();
     }
 
@@ -3213,6 +3217,8 @@ class NurseTaskServiceImplTest {
         NurseMedicationAdministrationRequestDTO request =
             new NurseMedicationAdministrationRequestDTO();
         request.setStatus(status);
+        // QA D1159: a held or refused dose says why.
+        request.setNote("Patient nauséeux");
         return request;
     }
 

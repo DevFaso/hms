@@ -1687,6 +1687,8 @@
       "RX_BACK_ORDER_DATE": "Receta {{rx}} en espera de existencias, reposición prevista el {{date}}",
       "RX_BACK_ORDER": "Receta {{rx}} en espera de existencias",
       "RX_PRINTED": "Receta {{rx}} impresa para el paciente",
+      "RX_SIGNED_WITHDRAWN_BY_PRESCRIBER": "Receta firmada retirada por su prescriptor",
+      "RX_SIGNED_WITHDRAWN_BY_COLLEAGUE": "Receta firmada retirada por otro prescriptor del establecimiento",
       "RX_ROUTED_PARTNER": "Receta {{rx}} enviada a la farmacia asociada {{pharmacy}}",
       "RX_CLARIFICATION_REQUESTED": "Aclaración solicitada sobre la receta {{rx}}",
       "RX_CLARIFICATION_RESOLVED": "Aclaración resuelta en la receta {{rx}}; vuelve a {{status}}",

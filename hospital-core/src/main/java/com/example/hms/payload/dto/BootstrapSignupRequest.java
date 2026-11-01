@@ -12,7 +12,7 @@ public class BootstrapSignupRequest {
     private String username;
 
     @NotBlank
-    @Email
+    @Email(message = "{validation.email.invalid}")
     private String email;
 
     @NotBlank

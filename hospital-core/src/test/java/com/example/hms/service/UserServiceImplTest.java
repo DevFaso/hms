@@ -1424,6 +1424,24 @@ class UserServiceImplTest {
             assertThat(saved.getPasswordHash()).isEqualTo("$2a$10$existingHash");
         }
 
+        @ParameterizedTest(name = "blank {0} is refused")
+        @org.junit.jupiter.params.provider.ValueSource(strings = {"firstName", "lastName"})
+        @DisplayName("QA D1170: a name sent blank is refused, not silently kept, and nothing is saved")
+        void aBlankNameIsRefused_D1170(String field) {
+            org.mockito.Mockito.lenient().when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            if ("firstName".equals(field)) {
+                dto.setFirstName("  ");
+            } else {
+                dto.setLastName("");
+            }
+
+            assertThatThrownBy(() -> userService.updateUser(userId, dto))
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                    .extracting("field").isEqualTo(field);
+            verify(userRepository, never()).save(any(User.class));
+        }
+
         @ParameterizedTest(name = "phone \"{0}\" -> {1}")
         @CsvSource({
             "'70 20 20 20', +22670202020",

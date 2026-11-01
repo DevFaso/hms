@@ -1703,11 +1703,22 @@ public class UserServiceImpl implements UserService {
         if (hasText(dto.getEmail())) {
             user.setEmail(dto.getEmail());
         }
+        // QA D1170 (round 21): a name sent blank is refused, not skipped. It
+        // used to be dropped silently and the profile page reported success
+        // while the old name stayed. Absent (null) still keeps the stored one.
+        requireNotBlankWhenSent(dto.getFirstName(), "firstName", "user.update.firstName.blank");
+        requireNotBlankWhenSent(dto.getLastName(), "lastName", "user.update.lastName.blank");
         if (hasText(dto.getFirstName())) {
-            user.setFirstName(dto.getFirstName());
+            user.setFirstName(dto.getFirstName().trim());
         }
         if (hasText(dto.getLastName())) {
-            user.setLastName(dto.getLastName());
+            user.setLastName(dto.getLastName().trim());
+        }
+    }
+
+    private static void requireNotBlankWhenSent(String value, String field, String messageKey) {
+        if (value != null && value.isBlank()) {
+            throw new com.example.hms.exception.FieldBusinessException(field, messageKey);
         }
     }
 

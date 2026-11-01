@@ -368,6 +368,17 @@ class PatientRecordPdfServiceTest {
         assertThat(PatientRecordPdfService.label(t, null)).isNull();
     }
 
+    /** QA D1168 (D1134 class): the allergy's severity is the feminine "gravité" word, as on the chart. */
+    @Test
+    void theAllergySeverityAgreesWithGraviteInEveryLocale_D1168() {
+        org.springframework.context.MessageSource real = com.example.hms.i18n.TestMessageSources.bundles();
+        assertThat(PatientRecordPdfService.severityLabel(PdfLabels.of(real, Locale.FRENCH), "MODERATE"))
+            .isEqualTo("modérée");
+        assertThat(PatientRecordPdfService.severityLabel(PdfLabels.of(real, Locale.forLanguageTag("es")), "MODERATE"))
+            .isEqualTo("moderada");
+        assertThat(PatientRecordPdfService.severityLabel(PdfLabels.of(real, Locale.FRENCH), null)).isNull();
+    }
+
     @Test
     void d740_anUnreleasedResultPrintsAsPendingWithNoValueOrFlag() throws Exception {
         // Re-test D740: record.pdf printed "Kaliémie (KAL-A) - 1.8 mmol/L - Critique" before release.

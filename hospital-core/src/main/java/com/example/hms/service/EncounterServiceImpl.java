@@ -137,11 +137,8 @@ public class EncounterServiceImpl implements EncounterService {
 
     // Helper to validate staff role
     private void validateStaffRole(UUID userId, UUID hospitalId, Locale locale) {
-        boolean allowed =
-            roleValidator.isDoctor(userId, hospitalId) ||
-            roleValidator.isNurse(userId, hospitalId)  ||
-            roleValidator.isHospitalAdmin(userId, hospitalId);
-        if (!allowed) {
+        // QA D1164: the one provider list (the midwife, physician and surgeon were missing).
+        if (!roleValidator.isEncounterProvider(userId, hospitalId)) {
             String msg = messageSource.getMessage(MSG_ENCOUNTER_STAFF_INVALID, null, locale);
             throw new BusinessException(msg);
         }
@@ -158,7 +155,7 @@ public class EncounterServiceImpl implements EncounterService {
 
         // Optional: validate role in hospital context
         UUID hospitalId = staff.getHospital() != null ? staff.getHospital().getId() : null;
-        if (staff.getUser() == null || !roleValidator.isDoctor(staff.getUser().getId(), hospitalId)) {
+        if (staff.getUser() == null || !roleValidator.isEncounterProvider(staff.getUser().getId(), hospitalId)) {
             throw new BusinessException(messageSource.getMessage(MSG_ENCOUNTER_STAFF_INVALID, null, locale));
         }
 
@@ -344,12 +341,40 @@ public class EncounterServiceImpl implements EncounterService {
         if (billingInvoiceRepository == null) {
             return;
         }
-        billingInvoiceRepository.findByEncounter_IdAndCheckInCopayTrueAndStatus(
-                encounterId, com.example.hms.enums.InvoiceStatus.PAID).stream()
+        // QA D1165 (round 21): a partly paid copay holds money too, and is
+        // reversed in billing first, as a paid one is.
+        billingInvoiceRepository.findByEncounter_IdAndCheckInCopayTrueAndStatusIn(encounterId, java.util.List.of(
+                com.example.hms.enums.InvoiceStatus.PAID, com.example.hms.enums.InvoiceStatus.PARTIALLY_PAID)).stream()
             .findFirst()
             .ifPresent(copay -> {
                 throw new BusinessException("encounter.closeUnseen.paidCopay", copay.getInvoiceNumber());
             });
+    }
+
+    /**
+     * QA D1165 (round 21): a visit closed unseen owes no copay. Once billing
+     * had reversed the payment (the close refuses a standing one), the copay
+     * invoice was left SENT with its full amount due, counted as outstanding
+     * and shown on the portal as a balance. It is cancelled with the reason
+     * the visit was closed for, and stamped as every cancellation is.
+     */
+    private void voidUnpaidCopays(UUID encounterId, String reason) {
+        if (billingInvoiceRepository == null) {
+            return;
+        }
+        UUID actor = com.example.hms.security.CallerIdentity.currentUserId();
+        for (com.example.hms.model.BillingInvoice copay : billingInvoiceRepository
+                .findByEncounter_IdAndCheckInCopayTrueAndStatusIn(encounterId, java.util.List.of(
+                    com.example.hms.enums.InvoiceStatus.DRAFT, com.example.hms.enums.InvoiceStatus.SENT))) {
+            if (copay.getAmountPaid() != null && copay.getAmountPaid().signum() > 0) {
+                continue;
+            }
+            copay.setStatus(com.example.hms.enums.InvoiceStatus.CANCELLED);
+            copay.setCancelReason(reason);
+            copay.setCancelledAt(LocalDateTime.now());
+            copay.setCancelledBy(actor);
+            billingInvoiceRepository.save(copay);
+        }
     }
     /** QA D795: the stay's own department, which a transfer moves (BedAssignmentService, QA D237). */
     private final com.example.hms.repository.AdmissionRepository admissionRepository;
@@ -613,6 +638,11 @@ public class EncounterServiceImpl implements EncounterService {
             request.getAuthorUserId(), request.getAuthorName(), locale);
         EncounterNote note = upsertEncounterNoteInternal(encounter, sessionAuthor, request, locale, null,
             encounter.getStatus(), true);
+        // QA D1151 class (round 21): a note says something. A note with every
+        // section empty was saved and offered for signature. Checked on the
+        // note as saved (an edit sends only the sections it changes); thrown
+        // inside the transaction, so nothing is written.
+        requireNoteContent(note);
         // QA D513: updatedAt is stamped at flush; the response was mapped
         // before it and reported the previous edit's time.
         encounterNoteRepository.flush();
@@ -748,6 +778,8 @@ public class EncounterServiceImpl implements EncounterService {
             throw new org.springframework.security.access.AccessDeniedException(
                 "Only the note's author can sign it.");
         }
+        // QA D1151: an empty note is not signed (an older blank row may exist).
+        requireNoteContent(note);
 
         LocalDateTime signedAt = LocalDateTime.now();
         note.setSignedAt(signedAt);
@@ -1248,6 +1280,15 @@ public class EncounterServiceImpl implements EncounterService {
         } else if (note.getTemplate() == null) {
             note.setTemplate(EncounterNoteTemplate.SOAP);
         }
+    }
+
+    /** QA D1151: at least one section of the note carries text. */
+    static void requireNoteContent(EncounterNote note) {
+        com.example.hms.service.support.ClinicalContent.requireAny("subjective", "encounter.note.contentRequired",
+            note.getChiefComplaint(), note.getHistoryOfPresentIllness(), note.getReviewOfSystems(),
+            note.getPhysicalExam(), note.getDiagnosticResults(), note.getSubjective(), note.getObjective(),
+            note.getAssessment(), note.getPlan(), note.getImplementation(), note.getEvaluation(),
+            note.getPatientInstructions(), note.getSummary());
     }
 
     private void applyTextSections(EncounterNote note, EncounterNoteRequestDTO request) {
@@ -1893,7 +1934,7 @@ public class EncounterServiceImpl implements EncounterService {
         Staff staff = staffRepository.findById(staffId)
             .orElseThrow(() -> new ResourceNotFoundException(MSG_STAFF_NOT_FOUND, staffId));
 
-        if (staff.getUser() == null || !roleValidator.isDoctor(staff.getUser().getId(), null)) {
+        if (staff.getUser() == null || !roleValidator.isEncounterProvider(staff.getUser().getId(), null)) {
             throw new BusinessException(messageSource.getMessage(MSG_ENCOUNTER_STAFF_INVALID, null, locale));
         }
 
@@ -2121,6 +2162,13 @@ public class EncounterServiceImpl implements EncounterService {
         if (request == null || request.getEsiScore() == null) {
             throw new BusinessException("triage.esi.required");
         }
+        // QA D1158 (round 21): a triage records at least one vital sign; an
+        // empty form stored an all-null vitals row and sent the patient to the
+        // doctor ranked, with no assessment behind the rank.
+        com.example.hms.service.support.ClinicalContent.requireAny("vitals", "triage.vitals.required",
+            request.getTemperatureCelsius(), request.getHeartRateBpm(), request.getRespiratoryRateBpm(),
+            request.getSystolicBpMmHg(), request.getDiastolicBpMmHg(), request.getSpo2Percent(),
+            request.getConsciousnessLevel(), request.getPainScale(), request.getWeightKg(), request.getHeightCm());
         // (a) Record vital signs as PatientVitalSign
         com.example.hms.model.PatientVitalSign vital = buildVitalSign(encounter, request, actorUsername);
         // QA D1077: no fundal height for a man, no head circumference for an
@@ -2240,7 +2288,10 @@ public class EncounterServiceImpl implements EncounterService {
                 // QA D989: stored chart text is written in the clinician's
                 // language, never an English label ("Pain scale: 8").
                 // QA D1031: the antenatal fundal height is charted beside it.
-                .notes(triageVitalNotes(req))
+                // QA D1169: the pain score and the fundal height are numbers,
+                // rendered in the reader's language when read (VitalSignNotes).
+                .painScore(req.getPainScale())
+                .fundalHeightCm(req.getFundalHeightCm())
                 .build();
     }
 
@@ -2266,6 +2317,16 @@ public class EncounterServiceImpl implements EncounterService {
                 && current != EncounterStatus.IN_PROGRESS) {
             throw new BusinessException("encounter.intake.wrongStatus", EncounterStatus.labelOf(current));
         }
+
+        // QA D1158 (round 21): an intake records an assessment. The prefilled
+        // complaint alone is not one: an empty form was stored as a completed
+        // intake (and a repeat of it too).
+        com.example.hms.service.support.ClinicalContent.requireAny("nursingAssessmentNotes",
+            "encounter.intake.contentRequired", request == null ? null : request.getAllergies(),
+            request == null ? null : request.getMedications(),
+            request == null ? null : request.getNursingAssessmentNotes(),
+            request == null ? null : request.getPainAssessment(),
+            request == null ? null : request.getFallRiskDetail());
 
         // Resolve recorder staff
         Staff recorderStaff = resolveStaffFromUsername(actorUsername, encounter.getHospital());
@@ -2586,6 +2647,7 @@ public class EncounterServiceImpl implements EncounterService {
         extra.put(UNSEEN_CLOSED_AT_FIELD, now.toString());
         encounter.setExtraFields(extra);
         Encounter saved = encounterRepository.save(encounter);
+        voidUnpaidCopays(saved.getId(), request.getReason().trim());
         trackerEventPublisher.publishStatusTransition(saved,
             previous != null ? previous.name() : null, closedAs.name());
 
@@ -2822,17 +2884,6 @@ public class EncounterServiceImpl implements EncounterService {
      * <p>Here: the pain score and the fundal height of a triage, in the
      * clinician's language (QA D989, D1031).
      */
-    private String triageVitalNotes(com.example.hms.payload.dto.TriageSubmissionRequestDTO req) {
-        List<String> parts = new ArrayList<>();
-        if (req.getPainScale() != null) {
-            parts.add(storedText("triage.vitals.painScale", req.getPainScale()));
-        }
-        if (req.getFundalHeightCm() != null) {
-            parts.add(storedText("triage.vitals.fundalHeight", req.getFundalHeightCm()));
-        }
-        return parts.isEmpty() ? null : String.join(" · ", parts);
-    }
-
     private String storedText(String key, Object... args) {
         return messageSource.getMessage(key, args, org.springframework.context.i18n.LocaleContextHolder.getLocale());
     }

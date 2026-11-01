@@ -85,6 +85,23 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
     private final CrossHospitalReachRecorder reachRecorder;
     private final MessageSource messageSource;
 
+    /**
+     * QA D1151 (round 21): a newborn assessment records something; a blank
+     * one was saved with no Apgar and no vitals. At least an Apgar score, a
+     * vital sign or an examination finding is required.
+     */
+    static void requireAssessmentFindings(NewbornAssessmentRequestDTO request) {
+        com.example.hms.service.support.ClinicalContent.requireAny("apgarOneMinute",
+            "maternity.newborn.findingsRequired",
+            request.getApgarOneMinute(), request.getApgarFiveMinute(), request.getApgarTenMinute(),
+            request.getApgarNotes(), request.getTemperatureCelsius(), request.getHeartRateBpm(),
+            request.getRespirationsPerMin(), request.getSystolicBpMmHg(), request.getDiastolicBpMmHg(),
+            request.getOxygenSaturationPercent(), request.getGlucoseMgDl(), request.getExamGeneralAppearance(),
+            request.getExamHeadNeck(), request.getExamChestLungs(), request.getExamCardiac(),
+            request.getExamAbdomen(), request.getExamGenitourinary(), request.getExamSkin(),
+            request.getExamNeurological(), request.getExamMusculoskeletal(), request.getExamNotes());
+    }
+
     @Override
     public NewbornAssessmentResponseDTO recordAssessment(UUID patientId,
                                                          NewbornAssessmentRequestDTO request,
@@ -93,6 +110,7 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
         if (request == null) {
             throw new BusinessException("maternity.newborn.payloadRequired");
         }
+        requireAssessmentFindings(request);
         Patient patient = patientRepository.findById(patientId)
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
         boolean recordedOnNewbornChart = isNeonate(patient);

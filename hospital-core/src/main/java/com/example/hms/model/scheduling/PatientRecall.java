@@ -137,6 +137,11 @@ public class PatientRecall extends BaseEntity {
     @Column(name = "closed_by_user_id")
     private UUID closedByUserId;
 
+    /** QA D1157 (V256): why a recall was cancelled; required by the server since round 21. */
+    @Size(max = 500)
+    @Column(name = "close_reason", length = 500)
+    private String closeReason;
+
     @Column(name = "created_by", length = 255)
     private String createdBy;
 }

@@ -5932,3 +5932,13 @@ ships*, not for building — and check the shipped surface before trusting a
 - [ ] `POST /assignments/public/activate-by-phone`: an unknown number answers slightly faster than a wrong code (no assignment query); bounded by the per-IP rate limit and the per-number lockout. Equalise if it matters.
 - [ ] The per-number wrong-code lockout is in memory, per instance; move it to a shared store for a multi-instance deploy.
 - [x] D1140 / D1138 siblings in fix/r20-portal-forms files (`waitlist-panel.component.html`, `birth-plan-tab.html`): fixed by #996, pins removed from `iso-date-display.test.mjs` and `glued-colon-baseline.json` at the round-20 merge.
+
+## Standing debt — round 21 (fix/r21-core-clinical-rules)
+- [ ] D1157 class: `PUT /refills/{id}/reject` takes optional `providerNotes`; require a reason once the portal refill screen asks for one (`CancelVoidReasonGuardTest` KNOWN GAP).
+- [ ] D1157 class: `PUT /roi-requests/{id}/cancel` takes an optional note (deny requires it); require it with the ROI worklist dialog (KNOWN GAP).
+- [ ] D1148 class: `PUT /advance-directives/{id}/revoke` takes no body; add a reason column and the directive tab's revoke reason together (KNOWN GAP).
+- [ ] D1151 / D1148 class: edits of a recorded imaging report, micro culture, maternal history and high-risk plan are not checked for emptying the record (`EmptyClinicalWriteGuardTest` KNOWN_GAPS); the creates are.
+- [ ] D1148: the check-in desk's consent (`ReceptionServiceImpl`, source CHECK_IN) is recorded best effort and may still carry no signer; the desk dialog should require the name (portal) before the server can refuse it without losing the consent silently.
+- [ ] D1161 / D660: the author can still edit the content (drug, dose) of a sent, partly filled or partner-held order (G13/G15 design: the edit voids the prepared fill and ends the queue claim). Whether a post-signature content edit should be refused like SIGNED (withdraw and re-prescribe) is a product decision; only the withdrawal is under the signed rule now.
+- [ ] D1149: sulfonamide class membership is by drug-name stem, co-trimoxazole (the interaction base's trimethoprim/sulfamethoxazole) and catalogue ATC J01EB-J01EE. A brand name with no ATC code on its catalogue item, and non-antibacterial sulfonamides (furosemide, thiazides, sulfonylureas), are not matched: no class data for them exists in the repo.
+- [ ] D1163: unit families (solid dose / container / measured) are a vocabulary table in `DispenseUnitForms`; a unit it does not know is never refused. A coded dose-form on the catalogue item and the prescription would replace it.

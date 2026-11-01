@@ -224,6 +224,7 @@ class UltrasoundServiceImplTest {
     void createOrUpdateReport_createsNewReportAndAdvancesOrderStatus() {
         UUID performedBy = UUID.randomUUID();
         UltrasoundReportRequestDTO request = UltrasoundReportRequestDTO.builder()
+            .findingsSummary("Grossesse évolutive")
             .scanDate(LocalDate.now())
             .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL)
             .build();
@@ -269,6 +270,7 @@ class UltrasoundServiceImplTest {
     @Test
     void createOrUpdateReport_updatesExistingReport() {
         UltrasoundReportRequestDTO request = UltrasoundReportRequestDTO.builder()
+            .findingsSummary("Grossesse évolutive")
             .scanDate(LocalDate.now())
             .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL)
             .scanPerformedBy("Tech One")
@@ -304,6 +306,7 @@ class UltrasoundServiceImplTest {
     @Test
     void createOrUpdateReport_throwsWhenOrderCancelled() {
         UltrasoundReportRequestDTO request = UltrasoundReportRequestDTO.builder()
+            .findingsSummary("Grossesse évolutive")
             .scanDate(LocalDate.now())
             .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL)
             .build();
@@ -325,6 +328,7 @@ class UltrasoundServiceImplTest {
     @Test
     void createOrUpdateReport_throwsWhenReportAlreadyReviewed() {
         UltrasoundReportRequestDTO request = UltrasoundReportRequestDTO.builder()
+            .findingsSummary("Grossesse évolutive")
             .scanDate(LocalDate.now())
             .findingCategory(com.example.hms.enums.UltrasoundFindingCategory.NORMAL)
             .build();

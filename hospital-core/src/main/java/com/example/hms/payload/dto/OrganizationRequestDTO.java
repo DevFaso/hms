@@ -42,7 +42,7 @@ public class OrganizationRequestDTO {
      * DTO, so Jackson dropped them and the organisation kept no contact. Null leaves
      * the stored value alone on an update.
      */
-    @jakarta.validation.constraints.Email
+    @jakarta.validation.constraints.Email(message = "{validation.email.invalid}")
     @Size(max = 255)
     @com.fasterxml.jackson.annotation.JsonAlias("primaryContactEmail")
     private String contactEmail;

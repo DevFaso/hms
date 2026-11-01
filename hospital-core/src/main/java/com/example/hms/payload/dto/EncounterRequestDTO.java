@@ -38,7 +38,7 @@ public class EncounterRequestDTO {
     /** Staff resolution */
     private UUID staffId;
     private String staffIdentifier;        // username/license/code
-    @Email
+    @Email(message = "{validation.email.invalid}")
     private String staffEmail;             // optional; if present must be a valid email
 
     /** Hospital resolution (receptionist JWT overrides anyway) */

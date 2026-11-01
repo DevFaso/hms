@@ -255,15 +255,23 @@ public class PrescriptionMapper {
             target.setHospital(staff.getHospital());
         }
 
+        // QA D1147: an edit that names another drug must not keep the old
+        // drug's code either: a code left behind keys the catalogue, the CDS
+        // rules and the pharmacy on a drug the order no longer is.
+        boolean drugChanged = !sameDrugName(target.getMedicationName(), dto.getMedicationName());
         target.setMedicationName(dto.getMedicationName());
         if (dto.getMedicationCode() != null) {
             target.setMedicationCode(dto.getMedicationCode());
+        } else if (drugChanged) {
+            target.setMedicationCode(null);
         }
         // D654: an edit names its catalog pick again, or falls back to the code.
         target.setMedicationCatalogItemId(dto.getMedicationCatalogItemId());
-        if (!notBlank(target.getMedicationDisplayName())) {
-            target.setMedicationDisplayName(dto.getMedicationName());
-        }
+        // QA D1147: the display name is a copy of the drug's name, rewritten on
+        // every edit. It was written only while blank, so the list, the
+        // pharmacist's view and the record PDF kept naming the first drug of an
+        // order edited to Morphine.
+        target.setMedicationDisplayName(dto.getMedicationName());
 
         target.setDosage(dto.getDosage());
         target.setFrequency(dto.getFrequency());
@@ -306,6 +314,14 @@ public class PrescriptionMapper {
 
     private boolean notBlank(String s) {
         return s != null && !s.isBlank();
+    }
+
+    /** The same drug name, ignoring case and surrounding blanks. */
+    private static boolean sameDrugName(String a, String b) {
+        if (a == null || b == null) {
+            return a == null && b == null;
+        }
+        return a.trim().equalsIgnoreCase(b.trim());
     }
 
     private String resolveStaffFullName(Staff staff) {

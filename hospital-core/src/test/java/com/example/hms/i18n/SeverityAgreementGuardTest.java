@@ -35,7 +35,10 @@ class SeverityAgreementGuardTest {
 
     private static final Path MAIN = Path.of("src/main/java/com/example/hms");
     private static final Pattern MASCULINE_SEVERITY = Pattern.compile(
-        "enumWord\\([^;)\\n]*[Ss]everity|\"cds\\.enum\\.\"\\s*+\\+[^;\\n]*[Ss]everity");
+        "enumWord\\([^;)\\n]*[Ss]everity|\"cds\\.enum\\.\"\\s*+\\+[^;\\n]*[Ss]everity"
+            // QA D1168 (round 21): a generic enum-label helper (the record PDF's label(t, code))
+            // fed a severity takes the masculine cds.enum word as well.
+            + "|\\blabel\\([^;)\\n]*[Ss]everity");
 
     @Test
     void noSeverityIsWrittenWithTheMasculineEnumWords() throws IOException {
@@ -61,6 +64,10 @@ class SeverityAgreementGuardTest {
         assertThat(MASCULINE_SEVERITY.matcher("resolveOrRaw(\"cds.enum.\" + interaction.getSeverity().name())")
             .find()).isTrue();
         assertThat(MASCULINE_SEVERITY.matcher("text.enumWord(existing.getStatus())").find()).isFalse();
+        // QA D1168: the record PDF's generic label helper.
+        assertThat(MASCULINE_SEVERITY.matcher("label(t, a.getSeverity())").find()).isTrue();
+        assertThat(MASCULINE_SEVERITY.matcher("severityLabel(t, a.getSeverity())").find()).isFalse();
+        assertThat(MASCULINE_SEVERITY.matcher("label(t, a.getVerificationStatus())").find()).isFalse();
     }
 
     @Test

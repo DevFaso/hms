@@ -24,7 +24,7 @@ public interface PatientRecallService {
     RecallResponseDTO closeRecall(UUID recallId, UUID hospitalId);
 
     /** Created in error or no longer wanted. Never deletes. */
-    RecallResponseDTO cancelRecall(UUID recallId, UUID hospitalId);
+    RecallResponseDTO cancelRecall(UUID recallId, UUID hospitalId, String reason);
 
     /** An appointment was booked for this recall: mark SCHEDULED and link it. */
     RecallResponseDTO linkAppointment(UUID recallId, UUID hospitalId, UUID appointmentId);

@@ -169,11 +169,28 @@ class PatientRecallServiceImplTest {
     }
 
     @Test
+    void aCancelWithoutAReasonIsRefused_D1157() {
+        PatientRecall pending = existingRecall(RecallStatus.PENDING);
+        UUID recallId = pending.getId();
+
+        for (String blank : new String[] {null, "", "  "}) {
+            assertThatThrownBy(() -> service.cancelRecall(recallId, hospitalId, blank))
+                .isInstanceOf(BusinessException.class)
+                .extracting("messageKey").isEqualTo("order.lifecycle.cancelReasonRequired");
+        }
+        assertThat(pending.getStatus()).isEqualTo(RecallStatus.PENDING);
+
+        assertThat(service.cancelRecall(recallId, hospitalId, " Created in error ").getCloseReason())
+            .isEqualTo("Created in error");
+        assertThat(pending.getStatus()).isEqualTo(RecallStatus.CANCELLED);
+    }
+
+    @Test
     void aScheduledRecallCanCloseButNotCancel() {
         PatientRecall scheduled = existingRecall(RecallStatus.SCHEDULED);
         UUID recallId = scheduled.getId();
 
-        assertThatThrownBy(() -> service.cancelRecall(recallId, hospitalId))
+        assertThatThrownBy(() -> service.cancelRecall(recallId, hospitalId, "no longer needed"))
             .isInstanceOf(BusinessException.class)
             .hasMessageContaining("pending or notified");
 

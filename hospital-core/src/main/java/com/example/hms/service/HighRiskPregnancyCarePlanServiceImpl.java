@@ -84,6 +84,9 @@ public class HighRiskPregnancyCarePlanServiceImpl implements HighRiskPregnancyCa
     @Override
     public HighRiskPregnancyCarePlanResponseDTO createPlan(HighRiskPregnancyCarePlanRequestDTO request, String username) {
         Objects.requireNonNull(request, "High-risk pregnancy care plan request is required");
+        // QA D1148 class (round 21): a care plan plans something.
+        com.example.hms.service.support.ClinicalContent.requireAnyAnswer(request, java.util.Set.of("patientId", "hospitalId", "active"),
+            "riskProfile", "highRiskPlan.contentRequired");
         User user = getUserOrThrow(username);
         assertProviderAccess(user);
 

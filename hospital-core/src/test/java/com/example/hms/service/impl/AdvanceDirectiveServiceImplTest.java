@@ -99,22 +99,37 @@ class AdvanceDirectiveServiceImplTest {
     }
 
     private AdvanceDirectiveRequestDTO request() {
+        // QA D1148: the clinician states the status, and an active DNR names its physician and date.
         return AdvanceDirectiveRequestDTO.builder()
             .directiveType(AdvanceDirectiveType.DO_NOT_RESUSCITATE)
+            .status(AdvanceDirectiveStatus.ACTIVE)
+            .physicianName("Dr Ouédraogo")
+            .effectiveDate(LocalDate.of(2026, 1, 15))
             .description("Do not resuscitate")
             .build();
     }
 
     @Test
-    void createDefaultsToActive() {
-        // A newly recorded directive is in force. Requiring the caller to say so
-        // would make "forgot to set status" mean "not in force", which is the
-        // wrong way round for a DNR.
+    void createNeverDefaultsTheStatus_D1148() {
+        // QA D1148 (round 21, user decision): the old default made one click on
+        // an untouched form an ACTIVE DNR. The clinician states the status.
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(directiveRepository.save(any(AdvanceDirective.class))).thenAnswer(i -> i.getArgument(0));
+        AdvanceDirectiveRequestDTO noStatus = request();
+        noStatus.setStatus(null);
 
+        assertThatThrownBy(() -> service.create(patientId, noStatus))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting("field").isEqualTo("status");
+        verify(directiveRepository, never()).save(any());
+
+        AdvanceDirectiveRequestDTO noPhysician = request();
+        noPhysician.setPhysicianName(null);
+        assertThatThrownBy(() -> service.create(patientId, noPhysician))
+            .extracting("field").isEqualTo("physicianName");
+
+        when(directiveRepository.save(any(AdvanceDirective.class))).thenAnswer(i -> i.getArgument(0));
         assertThat(service.create(patientId, request()).getStatus())
             .isEqualTo(AdvanceDirectiveStatus.ACTIVE.name());
     }

@@ -344,6 +344,31 @@ class RoleValidatorTest {
         assertThat(roleValidator.canOrderLabTests(userId, hospitalId)).isFalse();
     }
 
+    /** QA D1164 (round 21): the walk-in takes the midwife (and a physician or surgeon) as its provider. */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"MIDWIFE", "NURSE", "DOCTOR", "PHYSICIAN", "SURGEON",
+        "HOSPITAL_ADMIN"})
+    void isEncounterProvider_admitsEveryRoleThatRunsAVisit(String code) {
+        UUID userId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+            eq(userId), eq(hospitalId), anySet()))
+            .thenAnswer(i -> i.<java.util.Set<String>>getArgument(2).contains(code));
+
+        assertThat(roleValidator.isEncounterProvider(userId, hospitalId)).isTrue();
+    }
+
+    @Test
+    void isEncounterProvider_refusesAReceptionist() {
+        UUID userId = UUID.randomUUID();
+        UUID hospitalId = UUID.randomUUID();
+        when(assignmentRepository.existsActiveByUserAndHospitalAndAnyRoleCode(
+            eq(userId), eq(hospitalId), anySet()))
+            .thenAnswer(i -> i.<java.util.Set<String>>getArgument(2).contains("RECEPTIONIST"));
+
+        assertThat(roleValidator.isEncounterProvider(userId, hospitalId)).isFalse();
+    }
+
     private static com.example.hms.model.UserRoleHospitalAssignment assignmentInRole(String code) {
         com.example.hms.model.Role role = new com.example.hms.model.Role();
         role.setCode(code);

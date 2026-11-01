@@ -955,9 +955,12 @@ public class ReceptionServiceImpl implements ReceptionService {
 
     @Override
     @Transactional
-    public void closeWaitlistEntry(UUID waitlistId, UUID hospitalId) {
+    public void closeWaitlistEntry(UUID waitlistId, UUID hospitalId, String reason) {
         AppointmentWaitlist entry = waitlistRepo.findByIdAndHospital_Id(waitlistId, hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException(WAITLIST_ENTRY_NOT_FOUND_KEY, waitlistId));
+        // QA D1157 (round 21): closing an entry says why, on the server; an
+        // empty body closed it at once and nothing recorded the decision.
+        entry.setCloseReason(com.example.hms.service.support.CancelledOrders.requireCancelReason(reason));
         entry.setStatus("CLOSED");
         waitlistRepo.save(entry);
     }
@@ -1235,6 +1238,7 @@ public class ReceptionServiceImpl implements ReceptionService {
                 .offerExpiresAt(e.getOfferExpiresAt())
                 .createdAt(e.getCreatedAt())
                 .createdBy(e.getCreatedBy())
+                .closeReason(e.getCloseReason())
                 .build();
     }
 }
