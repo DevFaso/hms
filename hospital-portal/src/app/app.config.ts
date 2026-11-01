@@ -1,4 +1,5 @@
 import { installDecimalCommaSupport } from './shared/decimal-comma';
+import { installFocusRescue } from './shared/a11y/focus-rescue';
 import { ApplicationConfig, LOCALE_ID, provideAppInitializer, inject } from '@angular/core';
 import { DOCUMENT, registerLocaleData } from '@angular/common';
 import localeFr from '@angular/common/locales/fr';
@@ -90,5 +91,8 @@ export const appConfig: ApplicationConfig = {
     provideAppInitializer(() => inject(OidcAuthService).initialize()),
     // QA D505: comma decimals in every numeric input, whatever the browser locale.
     provideAppInitializer(() => installDecimalCommaSupport(inject(DOCUMENT))),
+    // QA D1202 / D1198 / D1199 / D1197: focus never falls to the page body when
+    // the control that held it goes away (shared/a11y/focus-rescue.ts).
+    provideAppInitializer(() => installFocusRescue(inject(DOCUMENT))),
   ],
 };

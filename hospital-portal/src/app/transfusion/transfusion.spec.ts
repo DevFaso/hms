@@ -324,7 +324,7 @@ describe('TransfusionComponent', () => {
   });
 
   it('discarding a unit asks the reason in the shared dialog', () => {
-    txSpy.discardUnit.and.returnValue(of(undefined as never));
+    txSpy.discardUnit.and.returnValue(of(mockUnit()));
     const fixture = TestBed.createComponent(TransfusionComponent);
     fixture.componentInstance.discardUnit({ id: 'u-1' } as never);
     answerReasonDialog(fixture, '');
