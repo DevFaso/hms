@@ -691,9 +691,18 @@ export class ProfileComponent implements OnInit {
    * failure because the email step was refused, and a sent code is not
    * reported as a changed email.
    */
+  /**
+   * QA D1170: a blank first or last name. The server skipped it and answered
+   * "Profile updated" while keeping the old name; the form now names the field.
+   */
+  blankName(): boolean {
+    const data = this.editForm();
+    return !(data.firstName ?? '').trim() || !(data.lastName ?? '').trim();
+  }
+
   saveProfile(): void {
     const u = this.user();
-    if (!u || this.saving()) return;
+    if (!u || this.saving() || this.blankName()) return;
 
     const data = this.editForm();
     const emailChanged = this.emailChanged();

@@ -1461,12 +1461,14 @@
     "VIEW_MANAGE_SUBTITLE": "Ver y gestionar detalles de la cita",
     "YES_CANCEL": "Sí, Cancelar",
     "DURATION_SET_BY_SLOTS": "La duración de la visita la fijan los turnos del profesional.",
-    "STATUS_REASON": "Motivo",
+    "STATUS_REASON": "Motivo del cambio de estado",
     "STATUS_REASON_LABEL": "Motivo (obligatorio)",
     "STATUS_REASON_REQUIRED": "Indique el motivo antes de confirmar.",
     "NO_SHOW_DIALOG_TITLE": "Marcar como ausente",
     "NO_SHOW_CONFIRM_MESSAGE": "El paciente no acudió a esta cita.",
-    "CONFIRM_NO_SHOW": "Marcar como ausente"
+    "CONFIRM_NO_SHOW": "Marcar como ausente",
+    "STATUS_REASON_CANCELLED": "Motivo de la cancelación",
+    "STATUS_REASON_NO_SHOW": "Motivo de la inasistencia"
   },
   "APPOINTMENT_CALENDAR": {
     "TITLE": "Calendario de citas",
@@ -8810,7 +8812,7 @@
     "COL_IN_PROGRESS": "En curso",
     "COL_AWAITING_RESULTS": "Esperando resultados",
     "COL_READY_DISCHARGE": "Listo para alta",
-    "PROVIDER": "Médico",
+    "PROVIDER": "Profesional",
     "ROOM": "Sala",
     "DEPT": "Depto.",
     "PRE_CHECKIN_BADGE": "Pre-registro",

@@ -116,6 +116,23 @@ describe('ProfileComponent — editing the profile', () => {
   const byId = (id: string): HTMLInputElement | null =>
     fixture.nativeElement.querySelector(`#${id}`);
 
+  it('QA D1170: a blank first name is refused where it is typed, never "saved"', () => {
+    const first = byId('editFirstName')!;
+    first.value = '   ';
+    first.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    const save = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+      '.edit-form button[type="submit"]',
+    )!;
+    save.click();
+    fixture.detectChanges();
+    expect(profiles.updateProfile).not.toHaveBeenCalled();
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(byId('editFirstName')?.getAttribute('aria-invalid')).toBe('true');
+    component.saveProfile();
+    expect(profiles.updateProfile).not.toHaveBeenCalled();
+  });
+
   it('QA D844: a patient sees no staff counters (roles, assignments, security %) in the header', () => {
     // PATIENT_B1 holds ROLE_PATIENT only.
     auth.getRoles.and.returnValue(['ROLE_PATIENT']);
