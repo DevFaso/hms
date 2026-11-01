@@ -52,10 +52,14 @@
         @if (editingSection() === 'medical') {
           <!-- QA D1191 / D1195 class (round 22): Escape closes only the note, asking
                first over typed text, and puts back the saved note. -->
-          <div appInlineSubForm #medicalNote="inlineSubForm" (dismissed)="cancelNoteEdit('medical')">
+          <div
+            appInlineSubForm
+            #medicalNote="inlineSubForm"
+            (dismissed)="cancelNoteEdit('medical')"
+          >
             <textarea
               class="notes-textarea"
-            [attr.aria-label]="'PORTAL.MEDICAL_HISTORY.PERSONAL_NOTES_MEDICAL' | translate"
+              [attr.aria-label]="'PORTAL.MEDICAL_HISTORY.PERSONAL_NOTES_MEDICAL' | translate"
               [value]="medicalNotes()"
               (input)="onNoteChange('medical', $any($event.target).value)"
               rows="3"
@@ -121,10 +125,14 @@
         @if (editingSection() === 'surgical') {
           <!-- QA D1191 / D1195 class (round 22): Escape closes only the note, asking
                first over typed text, and puts back the saved note. -->
-          <div appInlineSubForm #surgicalNote="inlineSubForm" (dismissed)="cancelNoteEdit('surgical')">
+          <div
+            appInlineSubForm
+            #surgicalNote="inlineSubForm"
+            (dismissed)="cancelNoteEdit('surgical')"
+          >
             <textarea
               class="notes-textarea"
-            [attr.aria-label]="'PORTAL.MEDICAL_HISTORY.PERSONAL_NOTES_SURGICAL' | translate"
+              [attr.aria-label]="'PORTAL.MEDICAL_HISTORY.PERSONAL_NOTES_SURGICAL' | translate"
               [value]="surgicalNotes()"
               (input)="onNoteChange('surgical', $any($event.target).value)"
               rows="3"
@@ -202,7 +210,7 @@
           <div appInlineSubForm #familyNote="inlineSubForm" (dismissed)="cancelNoteEdit('family')">
             <textarea
               class="notes-textarea"
-            [attr.aria-label]="'PORTAL.MEDICAL_HISTORY.PERSONAL_NOTES_FAMILY' | translate"
+              [attr.aria-label]="'PORTAL.MEDICAL_HISTORY.PERSONAL_NOTES_FAMILY' | translate"
               [value]="familyNotes()"
               (input)="onNoteChange('family', $any($event.target).value)"
               rows="3"
@@ -312,7 +320,7 @@
           <div appInlineSubForm #socialNote="inlineSubForm" (dismissed)="cancelNoteEdit('social')">
             <textarea
               class="notes-textarea"
-            [attr.aria-label]="'PORTAL.MEDICAL_HISTORY.PERSONAL_NOTES_SOCIAL' | translate"
+              [attr.aria-label]="'PORTAL.MEDICAL_HISTORY.PERSONAL_NOTES_SOCIAL' | translate"
               [value]="socialNotes()"
               (input)="onNoteChange('social', $any($event.target).value)"
               rows="3"

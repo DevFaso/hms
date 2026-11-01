@@ -49,6 +49,7 @@ import { shortOrderCode } from '../../shared/lab/order-code';
 import { DialogFocusDirective } from '../../shared/a11y/dialog-focus.directive';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { LabCorrectionBadgeComponent } from '../../lab/shared/lab-correction-badge.component';
+import { refusalReason } from '../../shared/refusal-reason';
 
 type ChartSection = 'allergies' | 'problems' | 'updates' | 'timeline' | 'labs';
 
@@ -685,8 +686,8 @@ export class PatientChartComponent implements OnInit, OnChanges {
         this.closeAllergyModal();
         this.loadAllergies();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('CHART.ALLERGY_SAVE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('CHART.ALLERGY_SAVE_ERROR'));
         this.allergySaving.set(false);
       },
     });
@@ -717,7 +718,10 @@ export class PatientChartComponent implements OnInit, OnChanges {
           this.closeDeactivateAllergy();
           this.loadAllergies();
         },
-        error: () => this.toast.error(this.translate.instant('CHART.ALLERGY_SAVE_ERROR')),
+        error: (err: unknown) =>
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('CHART.ALLERGY_SAVE_ERROR'),
+          ),
       });
   }
 
@@ -812,8 +816,8 @@ export class PatientChartComponent implements OnInit, OnChanges {
         this.closeProblemModal();
         this.loadProblems();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('CHART.PROBLEM_SAVE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('CHART.PROBLEM_SAVE_ERROR'));
         this.problemSaving.set(false);
       },
     });
@@ -844,7 +848,10 @@ export class PatientChartComponent implements OnInit, OnChanges {
           this.closeDeleteProblem();
           this.loadProblems();
         },
-        error: () => this.toast.error(this.translate.instant('CHART.PROBLEM_SAVE_ERROR')),
+        error: (err: unknown) =>
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('CHART.PROBLEM_SAVE_ERROR'),
+          ),
       });
   }
 
@@ -907,8 +914,8 @@ export class PatientChartComponent implements OnInit, OnChanges {
           this.closeUpdateModal();
           this.loadUpdates();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('CHART.UPDATE_SAVE_ERROR'));
+        error: (err: unknown) => {
+          this.toast.error(refusalReason(err) ?? this.translate.instant('CHART.UPDATE_SAVE_ERROR'));
           this.updateSaving.set(false);
         },
       });

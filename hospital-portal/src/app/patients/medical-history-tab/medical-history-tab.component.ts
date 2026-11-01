@@ -358,8 +358,10 @@ export class MedicalHistoryTabComponent implements OnInit {
         this.closeFamilyModal();
         this.loadFamily();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('MED_HISTORY.FAMILY_SAVE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('MED_HISTORY.FAMILY_SAVE_ERROR'),
+        );
         this.familySaving.set(false);
       },
     });
@@ -547,8 +549,10 @@ export class MedicalHistoryTabComponent implements OnInit {
         this.closeImmunizationModal();
         this.loadImmunizations();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('MED_HISTORY.IMMUNIZATION_SAVE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('MED_HISTORY.IMMUNIZATION_SAVE_ERROR'),
+        );
         this.immunizationSaving.set(false);
       },
     });
@@ -563,8 +567,10 @@ export class MedicalHistoryTabComponent implements OnInit {
         // Endpoint returns an empty body — refetch for the updated flags.
         this.loadImmunizations();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('MED_HISTORY.REMINDER_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('MED_HISTORY.REMINDER_ERROR'),
+        );
         this.reminderBusyId.set(null);
       },
     });

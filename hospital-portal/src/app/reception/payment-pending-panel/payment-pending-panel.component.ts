@@ -174,10 +174,14 @@ export class PaymentPendingPanelComponent {
         if (!latest) return;
         this.billing.getReceiptPdf(invoiceId, latest.id).subscribe({
           next: (res) => saveResponse(res, 'recu.pdf'),
-          error: () => this.toast.error(this.translate.instant('RECEPTION.RECEIPT_FAILED')),
+          error: (err: unknown) =>
+            this.toast.error(
+              refusalReason(err) ?? this.translate.instant('RECEPTION.RECEIPT_FAILED'),
+            ),
         });
       },
-      error: () => this.toast.error(this.translate.instant('RECEPTION.RECEIPT_FAILED')),
+      error: (err: unknown) =>
+        this.toast.error(refusalReason(err) ?? this.translate.instant('RECEPTION.RECEIPT_FAILED')),
     });
   }
 }

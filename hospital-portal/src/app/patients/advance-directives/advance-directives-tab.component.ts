@@ -65,7 +65,11 @@ const DIRECTIVE_FIELD_IDS = [
   imports: [
     ModalDialogDirective,
     ReasonDialogComponent,
-    ServerTimePipe, CommonModule, FormsModule, TranslateModule],
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+  ],
   templateUrl: './advance-directives-tab.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './advance-directives-tab.component.scss',

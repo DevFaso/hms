@@ -83,6 +83,11 @@ test('QA D1124 / D1089: no control is disabled for anything but a request in fli
 test('QA D1124 guard: the scan sees every shape the defect had', () => {
   // Round 19 (amounts) and round 20 (fields, flags, reasons, getters, computeds).
   assert.equal(silentReason('payProcessing() || !payAmount || payAmount <= 0'), 'payAmount');
+  // Round 22 (D1206): a data gerund at the END of a name is not a request in flight.
+  assert.equal(silentReason('submitting() || requiredTextMissing()'), 'requiredTextMissing');
+  assert.equal(inFlight('requiredTextMissing'), false);
+  assert.equal(inFlight('itemsPending'), false);
+  assert.equal(inFlight('reviewSubmitting'), true);
   assert.equal(silentReason('saving() || !form.medicationName'), 'form.medicationName');
   assert.equal(
     silentReason('saving() || form.quantityDispensed <= 0 || !verifyAttested()'),

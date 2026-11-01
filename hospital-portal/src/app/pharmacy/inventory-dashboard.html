@@ -404,7 +404,13 @@
             <button type="button" class="btn-secondary" (click)="closeCreateModal()">
               {{ 'COMMON.CANCEL' | translate }}
             </button>
-            <button type="submit" class="btn-primary" [disabled]="saving()">
+            <button
+              appSubmitGuard
+              submitGuardRequired
+              type="submit"
+              class="btn-primary"
+              [disabled]="saving()"
+            >
               {{ saving() ? ('COMMON.CREATING' | translate) : ('COMMON.CREATE' | translate) }}
             </button>
           </div>

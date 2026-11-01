@@ -37,7 +37,8 @@
         aria-modal="true"
         aria-labelledby="lab-inventory-dialog-title-1"
         appModalDialog
-        (keydown.escape)="cancelForm(); $event.stopPropagation()"
+        (escaped)="cancelForm()"
+        (keydown.escape)="$event.stopPropagation()"
         (click)="$event.stopPropagation()"
         tabindex="-1"
       >
@@ -99,7 +100,13 @@
             <button type="button" class="btn-secondary" (click)="cancelForm()">
               {{ 'COMMON.CANCEL' | translate }}
             </button>
-            <button type="submit" class="btn-primary" [disabled]="saving()">
+            <button
+              appSubmitGuard
+              submitGuardRequired
+              type="submit"
+              class="btn-primary"
+              [disabled]="saving()"
+            >
               @if (saving()) {
                 <span class="material-symbols-outlined spin">progress_activity</span>
               }
@@ -179,7 +186,8 @@
                     'LAB_INVENTORY.LOW_STOCK' | translate
                   }}</span>
                 } @else {
-                  {{ ' ' }}<span class="status-badge ok">{{ 'LAB_INVENTORY.IN_STOCK' | translate }}</span>
+                  {{ ' '
+                  }}<span class="status-badge ok">{{ 'LAB_INVENTORY.IN_STOCK' | translate }}</span>
                 }
               </td>
               @if (canManage()) {

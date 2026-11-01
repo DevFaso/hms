@@ -95,9 +95,22 @@ const IN_FLIGHT = [
 const PAGER =
   /^(?:page|currentPage|pageIndex|[a-z]\w*Page|totalPages|[a-z]\w*TotalPages|hasNext|hasPrev|hasPrevious|[a-z]\w*Has(?:Next|Prev|Previous)|atEarliest\w*|atLatest\w*)$/;
 
-/** Whether one identifier segment names a request in flight. */
+/** The last camelCase word of an identifier, lower-cased (`requiredTextMissing` → `missing`). */
+function lastWord(word) {
+  const parts = word.split(/(?=[A-Z])/);
+  return parts[parts.length - 1].toLowerCase();
+}
+
+/**
+ * Whether one identifier segment names a request in flight.
+ * QA D1206 (round 22): `requiredTextMissing()` ends in "-ing" and passed as
+ * "a request in flight", so "Envoyer la question" stayed silently disabled.
+ * A name whose LAST word is a data gerund (missing, pending, remaining…) is
+ * data, wherever it sits.
+ */
 export function inFlight(word) {
-  return !NOT_IN_FLIGHT.test(word) && IN_FLIGHT.some((re) => re.test(word));
+  if (NOT_IN_FLIGHT.test(word) || NOT_IN_FLIGHT.test(lastWord(word))) return false;
+  return IN_FLIGHT.some((re) => re.test(word));
 }
 
 /** The expression with its string and template literals and numbers blanked. */

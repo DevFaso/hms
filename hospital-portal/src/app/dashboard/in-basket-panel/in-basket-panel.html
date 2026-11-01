@@ -4,7 +4,8 @@
     <h3 class="panel-title">
       <span>{{ 'inBasket.title' | translate }}</span>
       @if (badgeCount() > 0) {
-        {{ ' ' }}<span class="badge" [attr.aria-label]="'inBasket.unreadCount' | translate">{{
+        {{ ' '
+        }}<span class="badge" [attr.aria-label]="'inBasket.unreadCount' | translate">{{
           badgeCount()
         }}</span>
       }
@@ -92,10 +93,14 @@
               <span class="item-header">
                 <span class="item-title">{{ item.title }}</span>
                 @if (item.priority === 'CRITICAL') {
-                  {{ ' ' }}<span class="priority-badge critical">{{ 'inBasket.critical' | translate }}</span>
+                  {{ ' '
+                  }}<span class="priority-badge critical">{{
+                    'inBasket.critical' | translate
+                  }}</span>
                 }
                 @if (item.priority === 'URGENT') {
-                  {{ ' ' }}<span class="priority-badge urgent">{{ 'inBasket.urgent' | translate }}</span>
+                  {{ ' '
+                  }}<span class="priority-badge urgent">{{ 'inBasket.urgent' | translate }}</span>
                 }
               </span>
               @if (item.body) {

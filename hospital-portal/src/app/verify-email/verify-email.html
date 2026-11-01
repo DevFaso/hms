@@ -64,7 +64,13 @@
                   />
                 </div>
               </div>
-              <button type="submit" class="rp-btn-primary" [disabled]="resendLoading">
+              <button
+                appSubmitGuard
+                submitGuardRequired
+                type="submit"
+                class="rp-btn-primary"
+                [disabled]="resendLoading"
+              >
                 @if (resendLoading) {
                   <span class="rp-spinner"></span>
                   <span>{{ 'LOGIN.SENDING' | translate }}</span>

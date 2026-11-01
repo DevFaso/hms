@@ -31,6 +31,7 @@ import { deliveryWarningKeys, hasActivationSent } from '../shared/delivery-warni
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { refusalReason } from '../shared/refusal-reason';
 
 type ModalKind = 'create' | 'multi' | 'edit' | 'detail' | 'regen' | 'import' | null;
 
@@ -433,7 +434,8 @@ export class AdminAssignmentsComponent implements OnInit {
           this.toast.info(this.translate.instant('DELIVERY.NOTHING_TO_SEND'));
         }
       },
-      error: () => this.toast.error(this.translate.instant('ASSIGN_ADMIN.ACTION_ERROR')),
+      error: (err: unknown) =>
+        this.toast.error(refusalReason(err) ?? this.translate.instant('ASSIGN_ADMIN.ACTION_ERROR')),
     });
   }
 

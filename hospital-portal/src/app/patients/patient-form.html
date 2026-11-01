@@ -491,7 +491,13 @@
           </button>
         </div>
       }
-      <button type="submit" class="btn-primary" [disabled]="saving">
+      <button
+        appSubmitGuard
+        submitGuardRequired
+        type="submit"
+        class="btn-primary"
+        [disabled]="saving"
+      >
         @if (saving) {
           <span class="spinner-sm"></span>
         }

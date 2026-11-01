@@ -132,7 +132,8 @@
         </span>
       }
       @if (employmentTypeFilter) {
-        {{ ' ' }}<span class="filter-chip">
+        {{ ' '
+        }}<span class="filter-chip">
           {{ employmentTypeFilter | enumLabel: 'employmentType' }}
           <button
             [attr.aria-label]="'COMMON.REMOVE_FILTER' | translate"
@@ -144,7 +145,8 @@
         </span>
       }
       @if (jobTitleFilter) {
-        {{ ' ' }}<span class="filter-chip">
+        {{ ' '
+        }}<span class="filter-chip">
           {{ jobTitleFilter | enumLabel: 'jobTitle' }}
           <button
             [attr.aria-label]="'COMMON.REMOVE_FILTER' | translate"
@@ -386,7 +388,13 @@
             <button type="button" class="btn-secondary" (click)="closeModal()">
               {{ 'COMMON.CANCEL' | translate }}
             </button>
-            <button type="submit" class="btn-primary" [disabled]="saving()">
+            <button
+              appSubmitGuard
+              submitGuardRequired
+              type="submit"
+              class="btn-primary"
+              [disabled]="saving()"
+            >
               {{
                 saving()
                   ? editing()

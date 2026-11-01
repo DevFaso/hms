@@ -28,7 +28,6 @@ const KNOWN = {
   'lock-screen/lock-screen.html': 1,
   'mfa/mfa-challenge.html': 1,
   'mfa/mfa-enroll.html': 1,
-  'patient-portal/my-medical-history/my-medical-history.component.html': 4,
   'profile/profile.html': 1,
 };
 

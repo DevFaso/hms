@@ -162,7 +162,9 @@ export class MyFamilyAccessComponent implements OnInit {
       },
       error: (err: unknown) => {
         this.revokeBusy.set(false);
-        this.toast.error(refusalReason(err) ?? this.translate.instant('PORTAL.FAMILY.REVOKE_FAILED'));
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PORTAL.FAMILY.REVOKE_FAILED'),
+        );
       },
     });
   }

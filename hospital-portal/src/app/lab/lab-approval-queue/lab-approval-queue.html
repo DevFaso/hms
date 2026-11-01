@@ -259,7 +259,8 @@
       aria-modal="true"
       aria-labelledby="lab-approval-dialog-title-1"
       appModalDialog
-      (keydown.escape)="closeDetail(); $event.stopPropagation()"
+      (escaped)="closeDetail()"
+      (keydown.escape)="$event.stopPropagation()"
     >
       <div class="panel-header">
         <h2 id="lab-approval-dialog-title-1">
@@ -290,7 +291,8 @@
           </div>
           <div class="detail-field">
             <span class="field-label">{{ 'LAB_APPROVAL.FIELD.APPROVAL_STATUS' | translate }}</span>
-            {{ ' ' }}<span class="status-badge" [class]="getApprovalStatusClass(def.approvalStatus)">
+            {{ ' '
+            }}<span class="status-badge" [class]="getApprovalStatusClass(def.approvalStatus)">
               {{ 'LAB.APPROVAL_STATUS.' + def.approvalStatus | translate }}
             </span>
           </div>
@@ -335,7 +337,8 @@
                   <span class="study-type">{{
                     study.studyType | enumLabel: 'validationStudyType'
                   }}</span>
-                  {{ ' ' }}<span class="status-badge" [class]="studyPassedClass(study.passed)">
+                  {{ ' '
+                  }}<span class="status-badge" [class]="studyPassedClass(study.passed)">
                     {{
                       (study.passed ? 'LAB_APPROVAL.STUDIES.PASSED' : 'LAB_APPROVAL.STUDIES.FAILED')
                         | translate
@@ -615,7 +618,8 @@
       aria-modal="true"
       aria-labelledby="lab-approval-dialog-title-2"
       appModalDialog
-      (keydown.escape)="closeStudyModal(); $event.stopPropagation()"
+      (escaped)="closeStudyModal()"
+      (keydown.escape)="$event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
     >
@@ -746,7 +750,8 @@
       aria-modal="true"
       aria-labelledby="lab-approval-dialog-title-3"
       appModalDialog
-      (keydown.escape)="closeApprovalModal(); $event.stopPropagation()"
+      (escaped)="closeApprovalModal()"
+      (keydown.escape)="$event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
     >

@@ -28,6 +28,7 @@ import { ToastService } from '../../core/toast.service';
 import { EnumLabelService } from '../../core/enum-label.service';
 import { bareRole } from '../../core/role-token';
 import { refusalReason } from '../../shared/refusal-reason';
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 
 interface HospitalOption {
   id: string;
@@ -118,7 +119,7 @@ const EMPTY_FORM: IntakeFormState = {
 @Component({
   selector: 'app-adt-intake-config',
   standalone: true,
-  imports: [FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [FormsModule, TranslateModule, EnumLabelPipe, SubmitGuardDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="adt-intake" data-testid="adt-intake-admin">
@@ -447,6 +448,8 @@ const EMPTY_FORM: IntakeFormState = {
             type="submit"
             class="btn-primary"
             [disabled]="saving()"
+            appSubmitGuard
+            submitGuardRequired
             data-testid="adt-intake-save"
           >
             {{ saving() ? ('ADT_INTAKE.SAVING' | translate) : ('ADT_INTAKE.SAVE' | translate) }}

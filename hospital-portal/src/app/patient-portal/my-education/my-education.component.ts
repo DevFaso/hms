@@ -18,6 +18,7 @@ import { ToastService } from '../../core/toast.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { DialogA11yDirective } from '../../shared/a11y/dialog-a11y.directive';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { refusalReason } from '../../shared/refusal-reason';
 
 type EducationTab = 'assigned' | 'completed' | 'questions';
 
@@ -139,10 +140,12 @@ export class MyEducationComponent implements OnInit {
           this.toast.success(this.translate.instant('PORTAL.EDUCATION.SAVED'));
         }
       },
-      error: () => {
+      error: (err: unknown) => {
         this.savingProgress.set(false);
         if (notify) {
-          this.toast.error(this.translate.instant('PORTAL.EDUCATION.SAVE_FAILED'));
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('PORTAL.EDUCATION.SAVE_FAILED'),
+          );
         }
       },
     });
@@ -191,9 +194,11 @@ export class MyEducationComponent implements OnInit {
           this.closeAsk();
           this.toast.success(this.translate.instant('PORTAL.EDUCATION.QUESTION_SENT'));
         },
-        error: () => {
+        error: (err: unknown) => {
           this.askSubmitting.set(false);
-          this.toast.error(this.translate.instant('PORTAL.EDUCATION.QUESTION_FAILED'));
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('PORTAL.EDUCATION.QUESTION_FAILED'),
+          );
         },
       });
   }

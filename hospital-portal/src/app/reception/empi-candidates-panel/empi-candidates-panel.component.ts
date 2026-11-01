@@ -17,6 +17,7 @@ import { EmpiCandidateMatch, EmpiCandidateQuery, EmpiService } from '../../servi
 import { ToastService } from '../../core/toast.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { MeasurePipe } from '../../shared/pipes/measure.pipe';
+import { refusalReason } from '../../shared/refusal-reason';
 
 interface CandidateFormState {
   firstName: string;
@@ -513,8 +514,8 @@ export class EmpiCandidatesPanelComponent {
           matches.filter((match) => match.patientId !== secondary.patientId),
         );
       },
-      error: () => {
-        this.toast.error(this.translate.instant('EMPI.TOAST.MERGE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('EMPI.TOAST.MERGE_FAILED'));
         this.merging.set(false);
         this.mergeArmed.set(false);
       },

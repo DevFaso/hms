@@ -51,6 +51,7 @@ describe('NurseStationComponent — two-tier polling', () => {
       'captureVitals',
       'administerMedication',
       'getAdministrationWitnessCandidates',
+      'createCareNote',
     ]);
     toastSpy = jasmine.createSpyObj('ToastService', ['info', 'success', 'error', 'warn']);
     routerSpy = jasmine.createSpyObj('Router', ['navigate']);
@@ -942,6 +943,48 @@ describe('NurseStationComponent — two-tier polling', () => {
       (td) => td.textContent?.trim(),
     );
     expect(cells).toContain(expected);
+  });
+
+  // QA D1189 (round 22): an empty care note was refused by the server and the
+  // nurse read only "Échec de l'enregistrement de la note de soins".
+  describe('QA D1189: the care note says why it is refused', () => {
+    function openNote(): HTMLElement {
+      component.openCareNote('p1', 'Adjaratou Sankara');
+      fixture.detectChanges();
+      return fixture.nativeElement as HTMLElement;
+    }
+
+    it('an empty note (or a title alone) is refused at the narrative, with the server’s reason, and nothing is sent', () => {
+      const host = openNote();
+      component.updateCareNoteField('title', 'Surveillance');
+      fixture.detectChanges();
+      host.querySelector<HTMLButtonElement>('[data-testid="care-note-save"]')!.click();
+      fixture.detectChanges();
+      expect(nurseServiceSpy.createCareNote).not.toHaveBeenCalled();
+      expect(host.querySelector('#cn-narrative')?.getAttribute('aria-invalid')).toBe('true');
+      expect(host.querySelector('[data-testid="submit-guard-reason"]')?.textContent?.trim()).toBe(
+        'NURSE.CARE_NOTE_EMPTY',
+      );
+    });
+
+    it('a refusal the server sends anyway is shown as sent, not as a generic toast', () => {
+      const host = openNote();
+      component.updateCareNoteField('dataPart', 'TA 12/8, apyrétique');
+      fixture.detectChanges();
+      nurseServiceSpy.createCareNote.and.returnValue(
+        throwError(() => ({
+          status: 400,
+          error: { message: 'Rédigez la note : une note de soins vide n’est pas enregistrée.' },
+        })),
+      );
+      host.querySelector<HTMLButtonElement>('[data-testid="care-note-save"]')!.click();
+      fixture.detectChanges();
+      expect(nurseServiceSpy.createCareNote).toHaveBeenCalled();
+      expect(toastSpy.error).toHaveBeenCalledWith(
+        'Rédigez la note : une note de soins vide n’est pas enregistrée.',
+      );
+      expect(toastSpy.error).not.toHaveBeenCalledWith('NURSE.TOAST.NOTE_FAILED');
+    });
   });
 });
 

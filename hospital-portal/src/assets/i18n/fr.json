@@ -4573,7 +4573,8 @@
       "REQUIRED": "Choisissez le témoin de cette administration de stupéfiant."
     },
     "PAIN_SCORE": "Douleur (0-10)",
-    "MAR_REASON_LABEL": "Motif"
+    "MAR_REASON_LABEL": "Motif",
+    "CARE_NOTE_EMPTY": "Rédigez la note : une note de soins vide n'est pas enregistrée."
   },
   "ONBOARDING": {
     "ABILITIES_TITLE": "Vos capacités",

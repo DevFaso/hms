@@ -21,11 +21,13 @@ import { CfaPipe } from '../shared/pipes/cfa.pipe';
 import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive';
 import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.component';
 import { serverDateOrInstant } from '../shared/date-utils';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 
 @Component({
   selector: 'app-inventory-dashboard',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     FocusOnRenderDirective,
     InlineSubFormDirective,
     InlineDiscardAskComponent,
@@ -172,7 +174,10 @@ export class InventoryDashboardComponent implements OnInit {
   triggerReorderAlerts(): void {
     this.svc.triggerReorderAlerts().subscribe({
       next: () => this.toast.success(this.translate.instant('PHARMACY.ALERTS_TRIGGERED')),
-      error: () => this.toast.error(this.translate.instant('PHARMACY.ALERTS_TRIGGER_FAILED')),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PHARMACY.ALERTS_TRIGGER_FAILED'),
+        ),
     });
   }
 

@@ -20,6 +20,7 @@ import {
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { refusalReason } from '../../shared/refusal-reason';
 /**
  * A mother answers her own mental-health screening (EPDS) from home while a
  * postpartum plan is open for her (Tier 2 item 47).
@@ -172,8 +173,8 @@ export class MyScreeningsComponent implements OnInit {
           this.cancel();
           this.toast.success(this.translate.instant('PRO.MY.SUBMITTED'));
         },
-        error: () => {
-          this.toast.error(this.translate.instant('PRO.MY.SUBMIT_ERROR'));
+        error: (err: unknown) => {
+          this.toast.error(refusalReason(err) ?? this.translate.instant('PRO.MY.SUBMIT_ERROR'));
           this.submitting.set(false);
         },
       });

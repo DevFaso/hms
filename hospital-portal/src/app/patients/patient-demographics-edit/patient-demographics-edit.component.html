@@ -249,7 +249,13 @@
       <button type="button" class="btn btn-secondary" (click)="dismissed.emit()">
         {{ 'COMMON.CANCEL' | translate }}
       </button>
-      <button type="submit" class="btn btn-primary" [disabled]="saving()">
+      <button
+        appSubmitGuard
+        submitGuardRequired
+        type="submit"
+        class="btn btn-primary"
+        [disabled]="saving()"
+      >
         {{ (saving() ? 'COMMON.SAVING' : 'COMMON.SAVE') | translate }}
       </button>
     </div>

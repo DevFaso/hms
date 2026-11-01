@@ -4573,7 +4573,8 @@
       "REQUIRED": "Choose the witness of this controlled dose."
     },
     "PAIN_SCORE": "Pain (0-10)",
-    "MAR_REASON_LABEL": "Reason"
+    "MAR_REASON_LABEL": "Reason",
+    "CARE_NOTE_EMPTY": "Write the note: an empty care note is not saved."
   },
   "ONBOARDING": {
     "ABILITIES_TITLE": "Your Abilities",

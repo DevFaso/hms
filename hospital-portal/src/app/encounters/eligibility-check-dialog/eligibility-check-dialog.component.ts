@@ -23,6 +23,7 @@ import {
 import { ToastService } from '../../core/toast.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
+import { refusalReason } from '../../shared/refusal-reason';
 
 interface SchemeOption {
   value: EligibilityScheme;
@@ -153,9 +154,11 @@ export class EligibilityCheckDialogComponent implements OnInit, OnChanges {
               }),
         );
       },
-      error: () => {
+      error: (err: unknown) => {
         this.running.set(false);
-        this.toast.error(this.translate.instant('ENCOUNTERS.ELIGIBILITY.CHECK_FAILED'));
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('ENCOUNTERS.ELIGIBILITY.CHECK_FAILED'),
+        );
       },
     });
   }

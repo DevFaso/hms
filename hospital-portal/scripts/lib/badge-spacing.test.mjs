@@ -29,7 +29,11 @@ test('QA D1205: no status pill runs into the word before it, in any template', (
     for (const g of gluedBadges(text)) found.push(`${rel}:${g.line + (lineOffset ?? 0)} ${g.tag}`);
   }
   assert.ok(templates > 200, `every template must be read, saw ${templates}`);
-  assert.deepEqual(found, [], "separate it with {{ ' ' }} (a &ngsp; right after a block's } is dropped)");
+  assert.deepEqual(
+    found,
+    [],
+    "separate it with {{ ' ' }} (a &ngsp; right after a block's } is dropped)",
+  );
 });
 
 test('QA D1205 guard: the scan sees the round-22 row and the shapes that are spaced', () => {
@@ -39,9 +43,18 @@ test('QA D1205 guard: the scan sees the round-22 row and the shapes that are spa
       }
       &ngsp;<span class="status-badge status-pending">P</span>
     </td>`;
-  assert.equal(gluedBefore(pending, pending.indexOf('<span class="status-badge status-pending"')), true);
-  const fixed = pending.replace('&ngsp;<span class="status-badge status-pending"', "{{ ' ' }}<span class=\"status-badge status-pending\"");
-  assert.equal(gluedBefore(fixed, fixed.indexOf('<span class="status-badge status-pending"')), false);
+  assert.equal(
+    gluedBefore(pending, pending.indexOf('<span class="status-badge status-pending"')),
+    true,
+  );
+  const fixed = pending.replace(
+    '&ngsp;<span class="status-badge status-pending"',
+    '{{ \' \' }}<span class="status-badge status-pending"',
+  );
+  assert.equal(
+    gluedBefore(fixed, fixed.indexOf('<span class="status-badge status-pending"')),
+    false,
+  );
   // `&ngsp;` that does not follow a block's `}` is kept by Angular.
   const inBlock = `<span class="status-badge a">A</span>
       @if (x) {

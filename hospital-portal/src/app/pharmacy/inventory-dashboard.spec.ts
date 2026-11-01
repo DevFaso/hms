@@ -176,7 +176,9 @@ describe('InventoryDashboardComponent price column (QA D835)', () => {
       fixture.detectChanges();
       tick();
       expect(host.querySelector('[data-testid="price-input-inv-1"]')).toBeNull();
-      expect(svc.updateInventoryItem).withContext('Escape never saves the price').not.toHaveBeenCalled();
+      expect(svc.updateInventoryItem)
+        .withContext('Escape never saves the price')
+        .not.toHaveBeenCalled();
       expect(host.querySelector('[data-testid="price-inv-1"]')!.textContent).toContain('25');
       expect(document.activeElement).toBe(host.querySelector('[data-testid="price-edit-inv-1"]'));
     } finally {

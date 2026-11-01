@@ -25,6 +25,7 @@ import { localDateString } from '../shared/date-utils';
 import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
 import { comboboxKey } from '../shared/a11y/combobox-keys';
 import { labelledRefusalReason } from '../shared/refusal-reason';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 
 /** QA D984: the label each refused field is reported under. */
 const APPOINTMENT_FIELD_LABELS: Readonly<Record<string, string>> = {
@@ -47,6 +48,7 @@ const APPOINTMENT_FORM_REQUIRED_IDS = ['date', 'start', 'apptPatientSearch', 'ap
   selector: 'app-appointment-form',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     PersonNamePipe,
     PatientSublinePipe,
     FormsModule,

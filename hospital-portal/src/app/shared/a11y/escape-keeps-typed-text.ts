@@ -137,7 +137,8 @@ export class EscapeKeepsTypedText {
 
   /** The reader chose to throw the text away: the Escape goes on and the dialog closes as before. */
   discard(): void {
-    const from = this.askedFrom?.isConnected && this.box.contains(this.askedFrom) ? this.askedFrom : this.box;
+    const from =
+      this.askedFrom?.isConnected && this.box.contains(this.askedFrom) ? this.askedFrom : this.box;
     this.removeQuestion();
     this.typed.clear();
     const escape = new KeyboardEvent('keydown', {
@@ -166,7 +167,8 @@ export class EscapeKeepsTypedText {
 
   private showQuestion(): void {
     const active = document.activeElement;
-    this.askedFrom = active instanceof HTMLElement && this.box.contains(active) ? active : this.firstTyped();
+    this.askedFrom =
+      active instanceof HTMLElement && this.box.contains(active) ? active : this.firstTyped();
     const doc = this.box.ownerDocument;
     const ask = doc.createElement('div');
     ask.className = 'inline-discard dialog-discard';

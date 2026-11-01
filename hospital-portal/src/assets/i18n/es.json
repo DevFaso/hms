@@ -4573,7 +4573,8 @@
       "REQUIRED": "Elija al testigo de esta administración de estupefaciente."
     },
     "PAIN_SCORE": "Dolor (0-10)",
-    "MAR_REASON_LABEL": "Motivo"
+    "MAR_REASON_LABEL": "Motivo",
+    "CARE_NOTE_EMPTY": "Redacte la nota: una nota de cuidados vacía no se guarda."
   },
   "ONBOARDING": {
     "ABILITIES_TITLE": "Sus capacidades",

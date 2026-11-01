@@ -516,8 +516,8 @@ export class LabResultsComponent implements OnInit {
         this.deleting.set(false);
         this.loadResults();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('LAB_RESULTS.DELETE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('LAB_RESULTS.DELETE_ERROR'));
         this.deleting.set(false);
       },
     });
@@ -788,8 +788,8 @@ export class LabResultsComponent implements OnInit {
           this.closeSign();
           this.loadResults();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('LAB_RESULTS.SIGN_ERROR'));
+        error: (err: unknown) => {
+          this.toast.error(refusalReason(err) ?? this.translate.instant('LAB_RESULTS.SIGN_ERROR'));
           this.signSubmitting.set(false);
         },
       });
@@ -871,7 +871,10 @@ export class LabResultsComponent implements OnInit {
         this.criticalList.update((list) => list.filter((row) => row.id !== r.id));
         this.applyFilter();
       },
-      error: () => this.toast.error(this.translate.instant('LAB_RESULTS.ACKNOWLEDGE_ERROR')),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('LAB_RESULTS.ACKNOWLEDGE_ERROR'),
+        ),
     });
   }
 
@@ -882,8 +885,8 @@ export class LabResultsComponent implements OnInit {
         this.comparison.set(cmp);
         this.comparisonLoading.set(false);
       },
-      error: () => {
-        this.toast.error(this.translate.instant('LAB_RESULTS.COMPARE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('LAB_RESULTS.COMPARE_ERROR'));
         this.comparisonLoading.set(false);
       },
     });

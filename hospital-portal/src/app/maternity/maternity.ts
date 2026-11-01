@@ -482,8 +482,8 @@ export class MaternityComponent implements OnInit {
         this.reviewBusyId.set(null);
         this.replaceHistory(updated);
       },
-      error: () => {
-        this.toast.error(this.translate.instant('MATERNITY.REVIEW_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('MATERNITY.REVIEW_ERROR'));
         this.reviewBusyId.set(null);
       },
     });
@@ -497,8 +497,8 @@ export class MaternityComponent implements OnInit {
         this.reviewBusyId.set(null);
         this.replaceHistory(updated);
       },
-      error: () => {
-        this.toast.error(this.translate.instant('MATERNITY.RISK_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('MATERNITY.RISK_ERROR'));
         this.reviewBusyId.set(null);
       },
     });
@@ -872,8 +872,10 @@ export class MaternityComponent implements OnInit {
         this.loadSummary();
         this.loadReferrals();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('MATERNITY.REFERRAL_SAVE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('MATERNITY.REFERRAL_SAVE_ERROR'),
+        );
         this.referralSaving.set(false);
       },
     });
@@ -918,8 +920,10 @@ export class MaternityComponent implements OnInit {
         this.messageDraft = '';
         this.messageSending.set(false);
       },
-      error: () => {
-        this.toast.error(this.translate.instant('MATERNITY.MESSAGE_SEND_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('MATERNITY.MESSAGE_SEND_ERROR'),
+        );
         this.messageSending.set(false);
       },
     });

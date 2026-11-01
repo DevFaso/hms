@@ -19,9 +19,9 @@ import { ModalDialogDirective } from './modal-dialog.directive';
   changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     <button id="opener" type="button">Open</button>
-    <div id="page" (keydown.escape)="pageEscapes = pageEscapes + 1">
+    <div id="page" tabindex="-1" (keydown.escape)="pageEscapes = pageEscapes + 1">
       @if (modal()) {
-        <div class="modal-backdrop" (keydown.escape)="modal.set(false)">
+        <div class="modal-backdrop" tabindex="-1" (keydown.escape)="modal.set(false)">
           <div id="modal" appModalDialog aria-label="Precautions" (escaped)="modal.set(false)">
             <input id="modal-reason" type="text" [value]="prefill" />
             <input id="modal-search" type="search" />
@@ -43,7 +43,14 @@ import { ModalDialogDirective } from './modal-dialog.directive';
         </div>
       }
       @if (focusDlg()) {
-        <div id="focus" appDialogFocus role="dialog" aria-modal="true" aria-label="F" (dialogDismiss)="focusDlg.set(false)">
+        <div
+          id="focus"
+          appDialogFocus
+          role="dialog"
+          aria-modal="true"
+          aria-label="F"
+          (dialogDismiss)="focusDlg.set(false)"
+        >
           <textarea id="focus-reason"></textarea>
         </div>
       }

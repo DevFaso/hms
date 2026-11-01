@@ -65,7 +65,7 @@ test('QA D1200: no value is glued to a translated word in any template', () => {
     }
   }
   assert.ok(templates > 200, `every template must be read, saw ${templates}`);
-  assert.deepEqual(found, [], "put the value in the sentence: translate: { name: value }");
+  assert.deepEqual(found, [], 'put the value in the sentence: translate: { name: value }');
 });
 
 test('QA D1200 guard: the scan sees the flow board, the days and the plural, not punctuation', () => {
@@ -75,8 +75,7 @@ test('QA D1200 guard: the scan sees the flow board, the days and the plural, not
   ]);
   const days = "{{ alert.daysUntilExpiry }}{{ 'DASHBOARD.DAYS_SHORT' | translate }}";
   assert.equal(gluedLabels(days).length, 1);
-  const plural =
-    "{{ n }} {{ 'DASHBOARD.CRITICAL_ALERT' | translate\n}}{{ n > 1 ? 's' : '' }}";
+  const plural = "{{ n }} {{ 'DASHBOARD.CRITICAL_ALERT' | translate\n}}{{ n > 1 ? 's' : '' }}";
   assert.equal(gluedLabels(plural)[0].key, 'plural s');
   assert.deepEqual(gluedLabels("{{ 'A.LABEL' | translate }}{{ 'COMMON.COLON' | translate }}"), []);
   assert.deepEqual(gluedLabels("{{ 'A.PHONE' | translate }}{{ required ? ' *' : '' }}"), []);

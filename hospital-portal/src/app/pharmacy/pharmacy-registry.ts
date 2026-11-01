@@ -9,11 +9,18 @@ import { HospitalService, HospitalResponse } from '../services/hospital.service'
 import { RoleContextService } from '../core/role-context.service';
 import { PharmacyService, PharmacyRequest, PharmacyResponse } from '../services/pharmacy.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 
 @Component({
   selector: 'app-pharmacy-registry',
   standalone: true,
-  imports: [FormsModule, TranslateModule, EnumLabelPipe, ModalDialogDirective],
+  imports: [
+    SubmitGuardDirective,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+    ModalDialogDirective,
+  ],
   templateUrl: './pharmacy-registry.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './pharmacy-registry.scss',

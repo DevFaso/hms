@@ -14,11 +14,19 @@ import {
 import { CfaPipe } from '../shared/pipes/cfa.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { localDateString } from '../shared/date-utils';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 
 @Component({
   selector: 'app-goods-receipt',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, CfaPipe],
+  imports: [
+    SubmitGuardDirective,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    CfaPipe,
+  ],
   templateUrl: './goods-receipt.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './goods-receipt.scss',

@@ -10,6 +10,7 @@ import { ProfileService } from '../services/profile.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 
 interface Department {
   id: string;
@@ -40,7 +41,13 @@ interface DepartmentRequest {
 @Component({
   selector: 'app-department-list',
   standalone: true,
-  imports: [ModalDialogDirective, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [
+    SubmitGuardDirective,
+    ModalDialogDirective,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+  ],
   templateUrl: './department-list.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './department-list.scss',

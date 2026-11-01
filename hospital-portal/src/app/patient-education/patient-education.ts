@@ -29,6 +29,7 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { MeasurePipe } from '../shared/pipes/measure.pipe';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { refusalReason } from '../shared/refusal-reason';
 /**
  * Patient-education workspace (Phase 3 task 18): resource library + assign/
  * progress views against /patient-education. Backend role quirks honored:
@@ -263,8 +264,8 @@ export class PatientEducationComponent implements OnInit {
           editingId ? list.map((r) => (r.id === saved.id ? saved : r)) : [saved, ...list],
         );
       },
-      error: () => {
-        this.toast.error(this.translate.instant('EDUCATION.SAVE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('EDUCATION.SAVE_ERROR'));
         this.resourceSaving.set(false);
       },
     });
@@ -290,8 +291,8 @@ export class PatientEducationComponent implements OnInit {
         // Soft delete — the active-only list will no longer include it.
         this.resources.update((list) => list.filter((r) => r.id !== target.id));
       },
-      error: () => {
-        this.toast.error(this.translate.instant('EDUCATION.DELETE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('EDUCATION.DELETE_ERROR'));
         this.deleteBusy.set(false);
       },
     });
@@ -352,8 +353,8 @@ export class PatientEducationComponent implements OnInit {
               : [created, ...list];
           });
         },
-        error: () => {
-          this.toast.error(this.translate.instant('EDUCATION.ASSIGN_ERROR'));
+        error: (err: unknown) => {
+          this.toast.error(refusalReason(err) ?? this.translate.instant('EDUCATION.ASSIGN_ERROR'));
           this.assignBusy.set(false);
         },
       });
@@ -390,8 +391,10 @@ export class PatientEducationComponent implements OnInit {
         this.closeProgressModal();
         this.progressEntries.update((list) => list.map((e) => (e.id === updated.id ? updated : e)));
       },
-      error: () => {
-        this.toast.error(this.translate.instant('EDUCATION.PROGRESS_UPDATE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('EDUCATION.PROGRESS_UPDATE_ERROR'),
+        );
         this.progressSaving.set(false);
       },
     });

@@ -45,6 +45,7 @@ import { ActivatedRoute } from '@angular/router';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { refusalReason } from '../shared/refusal-reason';
 @Component({
   selector: 'app-lab',
   standalone: true,
@@ -618,8 +619,8 @@ export class LabComponent implements OnInit {
         this.deleting.set(false);
         this.loadOrders();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('LAB.TOAST.DELETE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('LAB.TOAST.DELETE_FAILED'));
         this.deleting.set(false);
       },
     });
@@ -768,8 +769,8 @@ export class LabComponent implements OnInit {
         this.closeApprovalModal();
         this.processingApproval.set(false);
       },
-      error: () => {
-        this.toast.error(this.translate.instant('LAB.TOAST.APPROVAL_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('LAB.TOAST.APPROVAL_FAILED'));
         this.processingApproval.set(false);
       },
     });
@@ -886,8 +887,10 @@ export class LabComponent implements OnInit {
         this.receivingSpecimenId.set(null);
         this.loadSpecimens(order.id);
       },
-      error: () => {
-        this.toast.error(this.translate.instant('LAB.TOAST.SPECIMEN_RECEIVE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('LAB.TOAST.SPECIMEN_RECEIVE_FAILED'),
+        );
         this.receivingSpecimenId.set(null);
       },
     });

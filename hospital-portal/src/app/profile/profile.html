@@ -188,7 +188,8 @@
                 </div>
                 <div class="info-item">
                   <span class="info-label">{{ 'PROFILE.ROLE' | translate }}</span>
-                  {{ ' ' }}<span class="info-value profile-type-badge">{{ sessionProfileType() }}</span>
+                  {{ ' '
+                  }}<span class="info-value profile-type-badge">{{ sessionProfileType() }}</span>
                 </div>
                 @if (showLicenseNumber()) {
                   <div class="info-item">
@@ -666,7 +667,12 @@
 
               <!-- Replacing the authenticator: the step-up first -->
               @if (mfaStep() === 'stepup') {
-                <div class="mfa-enroll-inline" data-testid="mfa-stepup" tabindex="-1" appFocusOnRender>
+                <div
+                  class="mfa-enroll-inline"
+                  data-testid="mfa-stepup"
+                  tabindex="-1"
+                  appFocusOnRender
+                >
                   <p>{{ 'PROFILE.MFA_REPLACE_INTRO' | translate }}</p>
                   <form (ngSubmit)="submitMfaStepUp()" class="mfa-verify-form">
                     <label class="sr-only" for="mfaStepUpCode">{{
@@ -720,7 +726,12 @@
 
               <!-- Inline enrollment: Verify step -->
               @else if (mfaStep() === 'verify') {
-                <div class="mfa-enroll-inline" data-testid="mfa-verify" tabindex="-1" appFocusOnRender>
+                <div
+                  class="mfa-enroll-inline"
+                  data-testid="mfa-verify"
+                  tabindex="-1"
+                  appFocusOnRender
+                >
                   <p>{{ 'PROFILE.MFA_ENTER_CODE' | translate }}</p>
                   <form (ngSubmit)="verifyMfaCode()" class="mfa-verify-form">
                     <input
@@ -744,7 +755,12 @@
 
               <!-- Inline enrollment: Backup codes step -->
               @else if (mfaStep() === 'backup') {
-                <div class="mfa-enroll-inline" data-testid="mfa-backup" tabindex="-1" appFocusOnRender>
+                <div
+                  class="mfa-enroll-inline"
+                  data-testid="mfa-backup"
+                  tabindex="-1"
+                  appFocusOnRender
+                >
                   <h4>{{ 'PROFILE.BACKUP_CODES' | translate }}</h4>
                   <p>{{ 'PROFILE.BACKUP_CODES_HINT' | translate }}</p>
                   <div class="backup-codes-grid">
@@ -786,7 +802,8 @@
                           }}</span>
                         }
                         @if (mfa.primaryFactor) {
-                          {{ ' ' }}<span class="badge-primary">{{ 'PROFILE.PRIMARY' | translate }}</span>
+                          {{ ' '
+                          }}<span class="badge-primary">{{ 'PROFILE.PRIMARY' | translate }}</span>
                         }
                       </div>
                     </div>

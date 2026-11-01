@@ -35,7 +35,14 @@ interface StatusOption {
   selector: 'app-pharmacy-claims',
   standalone: true,
   imports: [
-    ReasonDialogComponent,ServerTimePipe, CommonModule, FormsModule, TranslateModule, DatePipe, CfaPipe],
+    ReasonDialogComponent,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    DatePipe,
+    CfaPipe,
+  ],
   templateUrl: './pharmacy-claims.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './pharmacy-claims.scss',
@@ -92,7 +99,10 @@ export class PharmacyClaimsComponent implements OnInit {
         this.toast.success(this.translate.instant('PHARMACY.CLAIM_SUBMITTED'));
         this.load();
       },
-      error: () => this.toast.error(this.translate.instant('PHARMACY.CLAIM_SUBMIT_FAILED')),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PHARMACY.CLAIM_SUBMIT_FAILED'),
+        ),
     });
   }
 
@@ -102,7 +112,10 @@ export class PharmacyClaimsComponent implements OnInit {
         this.toast.success(this.translate.instant('PHARMACY.CLAIM_ACCEPTED'));
         this.load();
       },
-      error: () => this.toast.error(this.translate.instant('PHARMACY.CLAIM_ACCEPT_FAILED')),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PHARMACY.CLAIM_ACCEPT_FAILED'),
+        ),
     });
   }
 
@@ -139,21 +152,28 @@ export class PharmacyClaimsComponent implements OnInit {
         this.toast.success(this.translate.instant('PHARMACY.PAYMENT_RECORDED'));
         this.load();
       },
-      error: () => this.toast.error(this.translate.instant('PHARMACY.CLAIM_PAY_FAILED')),
+      error: (err: unknown) =>
+        this.toast.error(refusalReason(err) ?? this.translate.instant('PHARMACY.CLAIM_PAY_FAILED')),
     });
   }
 
   exportCsv(): void {
     this.pharmacy.exportClaimsCsv(['SUBMITTED', 'ACCEPTED']).subscribe({
       next: (blob) => this.download(blob, 'pharmacy-claims.csv'),
-      error: () => this.toast.error(this.translate.instant('PHARMACY.CLAIM_EXPORT_CSV_FAILED')),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PHARMACY.CLAIM_EXPORT_CSV_FAILED'),
+        ),
     });
   }
 
   exportFhir(): void {
     this.pharmacy.exportClaimsFhir(['SUBMITTED', 'ACCEPTED']).subscribe({
       next: (blob) => this.download(blob, 'pharmacy-claims.fhir.json'),
-      error: () => this.toast.error(this.translate.instant('PHARMACY.CLAIM_EXPORT_FHIR_FAILED')),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PHARMACY.CLAIM_EXPORT_FHIR_FAILED'),
+        ),
     });
   }
 

@@ -107,7 +107,12 @@ describe('FlowBoardComponent', () => {
     };
     component.board = board;
     component.ngOnChanges({
-      board: { currentValue: board, previousValue: null, firstChange: true, isFirstChange: () => true },
+      board: {
+        currentValue: board,
+        previousValue: null,
+        firstChange: true,
+        isFirstChange: () => true,
+      },
     });
     fixture.detectChanges();
     const wait = (fixture.nativeElement as HTMLElement).querySelector('.card-wait');

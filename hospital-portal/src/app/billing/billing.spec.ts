@@ -946,7 +946,9 @@ describe('BillingComponent', () => {
     // asked about before Escape drops it, and nothing is saved.
     const tick = () => new Promise((resolve) => setTimeout(resolve));
     const escapeOn = (el: Element) =>
-      el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+      el.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+      );
 
     it('the line editor takes focus, and Escape closes only it with focus back on its button', async () => {
       document.body.appendChild(fixture.nativeElement);

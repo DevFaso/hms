@@ -46,7 +46,11 @@ function onFocusIn(event: Event): void {
   held = target;
   armed = true;
   trail = [];
-  for (let el = target.parentElement; el && el !== target.ownerDocument.body; el = el.parentElement) {
+  for (
+    let el = target.parentElement;
+    el && el !== target.ownerDocument.body;
+    el = el.parentElement
+  ) {
     trail.push(el);
   }
 }
@@ -57,7 +61,12 @@ function onFocusOut(event: Event): void {
   // Decided after the event: removed elements fire focusout in some browsers.
   setTimeout(() => {
     const doc = target.ownerDocument;
-    if (held === target && target.isConnected && !isDisabled(target) && doc.activeElement === doc.body) {
+    if (
+      held === target &&
+      target.isConnected &&
+      !isDisabled(target) &&
+      doc.activeElement === doc.body
+    ) {
       armed = false;
     }
   }, 0);

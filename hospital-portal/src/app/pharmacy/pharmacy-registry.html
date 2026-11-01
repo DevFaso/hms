@@ -64,7 +64,8 @@
             @if (p.fulfillmentMode) {
               <span class="meta-chip">{{ p.fulfillmentMode | enumLabel: 'fulfillmentMode' }}</span>
             }
-            {{ ' ' }}<span class="status-badge" [class.active]="p.active">
+            {{ ' '
+            }}<span class="status-badge" [class.active]="p.active">
               {{ p.active ? ('COMMON.ACTIVE' | translate) : ('COMMON.INACTIVE' | translate) }}
             </span>
             @if (canManage()) {
@@ -317,7 +318,13 @@
             <button type="button" class="btn-secondary" (click)="closeModal()">
               {{ 'COMMON.CANCEL' | translate }}
             </button>
-            <button type="submit" class="btn-primary" [disabled]="saving()">
+            <button
+              appSubmitGuard
+              submitGuardRequired
+              type="submit"
+              class="btn-primary"
+              [disabled]="saving()"
+            >
               {{
                 saving()
                   ? editing()

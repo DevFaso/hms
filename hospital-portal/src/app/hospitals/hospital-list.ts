@@ -10,6 +10,7 @@ import { ToastService } from '../core/toast.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { OrgTextPipe } from '../shared/pipes/org-text.pipe';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 
 type RequiredHospitalField = 'name' | 'phoneNumber' | 'country' | 'city' | 'address';
 
@@ -25,7 +26,14 @@ const REQUIRED_HOSPITAL_FIELDS: readonly { key: RequiredHospitalField; inputId: 
 @Component({
   selector: 'app-hospital-list',
   standalone: true,
-  imports: [ModalDialogDirective, FormsModule, RouterLink, TranslateModule, OrgTextPipe],
+  imports: [
+    SubmitGuardDirective,
+    ModalDialogDirective,
+    FormsModule,
+    RouterLink,
+    TranslateModule,
+    OrgTextPipe,
+  ],
   templateUrl: './hospital-list.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './hospital-list.scss',

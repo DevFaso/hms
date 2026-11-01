@@ -140,14 +140,17 @@ export function resolveUrl(url, source) {
     const lead = /^\{[^}]*\}/.exec(out);
     const name = lead ? variableName(lead[0]) : null;
     if (!name) break;
-    const decl = new RegExp(
-      `\\b${name}\\s*(?::\\s*string\\s*)?=\\s*['\`]([^'\`$]*)['\`]`,
-    ).exec(source);
+    const decl = new RegExp(`\\b${name}\\s*(?::\\s*string\\s*)?=\\s*['\`]([^'\`$]*)['\`]`).exec(
+      source,
+    );
     if (!decl) break;
     out = decl[1].replace(/^\/api(?=\/)/, '') + out.slice(lead[0].length);
   }
   const unresolved = /^\{[^}]*\}/.test(out);
-  return (unresolved ? '{?}' + out.replace(/^\{[^}]*\}/, '') : out).replace(/\{(?!\?\})[^}]*\}/g, '{}');
+  return (unresolved ? '{?}' + out.replace(/^\{[^}]*\}/, '') : out).replace(
+    /\{(?!\?\})[^}]*\}/g,
+    '{}',
+  );
 }
 
 const HTTP_CALL = /\bhttp\.(post|put|patch|delete)\s*(?:<[^>()]*(?:<[^>()]*>[^>()]*)*>)?\s*\(/g;
@@ -337,7 +340,10 @@ test('QA D1180 guard: the scan sees the regression and the shapes a reason trave
   assert.ok(isEmptyBody(httpCalls(concat)[0].body));
   // Paths of another resource never match, nor does a base the file does not declare.
   assert.equal(urlMatches('/consents/{}/revoke', '/advance-directives/{id}/revoke'), false);
-  assert.equal(httpCalls('return this.http.post(`${this.other}/${id}/cancel`, {});')[0].url, '{?}/{}/cancel');
+  assert.equal(
+    httpCalls('return this.http.post(`${this.other}/${id}/cancel`, {});')[0].url,
+    '{?}/{}/cancel',
+  );
   assert.equal(urlMatches('{?}/{}/cancel', '/recalls/{id}/cancel'), false);
 });
 

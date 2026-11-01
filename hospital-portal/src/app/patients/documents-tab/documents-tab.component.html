@@ -67,7 +67,8 @@
               <td>
                 <span class="type-chip">{{ typeLabelKey(doc.documentType) | translate }}</span>
                 <!-- QA D1048: who the document comes from. -->
-                {{ ' ' }}<span class="source-chip" data-testid="document-source">
+                {{ ' '
+                }}<span class="source-chip" data-testid="document-source">
                   {{
                     (doc.issuedByHospital
                       ? 'PATIENT_DOCUMENTS.SOURCE_HOSPITAL'

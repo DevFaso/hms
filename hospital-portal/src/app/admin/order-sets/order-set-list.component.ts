@@ -23,7 +23,14 @@ import { refusalReason } from '../../shared/refusal-reason';
   selector: 'app-order-set-list',
   standalone: true,
   imports: [
-    ReasonDialogComponent,ServerTimePipe, CommonModule, FormsModule, RouterLink, TranslateModule, EnumLabelPipe],
+    ReasonDialogComponent,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    RouterLink,
+    TranslateModule,
+    EnumLabelPipe,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="order-set-admin" data-testid="order-set-admin">
@@ -218,7 +225,9 @@ export class OrderSetListComponent implements OnInit {
       },
       error: (err: unknown) => {
         this.deactivateBusy.set(false);
-        this.toast.error(refusalReason(err) ?? this.translate.instant('ORDER_SETS.DEACTIVATE_FAILED'));
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('ORDER_SETS.DEACTIVATE_FAILED'),
+        );
       },
     });
   }

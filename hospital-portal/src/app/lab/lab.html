@@ -231,7 +231,8 @@
         aria-modal="true"
         aria-labelledby="lab-dialog-title-1"
         appModalDialog
-        (keydown.escape)="closeDetail(); $event.stopPropagation()"
+        (escaped)="closeDetail()"
+        (keydown.escape)="$event.stopPropagation()"
       >
         <div class="panel-header">
           <h2 id="lab-dialog-title-1">
@@ -272,7 +273,8 @@
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span
-              >{{ ' ' }}<span class="status-badge" [class]="getStatusClass(o.status)">{{
+              >{{ ' '
+              }}<span class="status-badge" [class]="getStatusClass(o.status)">{{
                 o.status | enumLabel: 'labOrderStatus'
               }}</span>
             </div>
@@ -349,7 +351,8 @@
       aria-modal="true"
       aria-labelledby="lab-dialog-title-2"
       appModalDialog
-      (keydown.escape)="closeModal(); $event.stopPropagation()"
+      (escaped)="closeModal()"
+      (keydown.escape)="$event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
     >
@@ -634,7 +637,8 @@
       role="dialog"
       aria-modal="true"
       appModalDialog
-      (keydown.escape)="closeVoid(); $event.stopPropagation()"
+      (escaped)="closeVoid()"
+      (keydown.escape)="$event.stopPropagation()"
       aria-labelledby="lab-void-title"
       tabindex="-1"
       (click)="$event.stopPropagation()"
@@ -700,7 +704,8 @@
       aria-modal="true"
       aria-labelledby="lab-dialog-title-3"
       appModalDialog
-      (keydown.escape)="cancelDelete(); $event.stopPropagation()"
+      (escaped)="cancelDelete()"
+      (keydown.escape)="$event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
     >
@@ -747,7 +752,8 @@
       aria-modal="true"
       aria-labelledby="lab-dialog-title-4"
       appModalDialog
-      (keydown.escape)="closeSpecimens(); $event.stopPropagation()"
+      (escaped)="closeSpecimens()"
+      (keydown.escape)="$event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
     >
@@ -923,7 +929,8 @@
       aria-modal="true"
       aria-labelledby="lab-reject-title"
       appModalDialog
-      (keydown.escape)="closeReject(); $event.stopPropagation()"
+      (escaped)="closeReject()"
+      (keydown.escape)="$event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
       data-testid="lab-reject-modal"

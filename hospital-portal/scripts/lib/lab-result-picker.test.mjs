@@ -55,7 +55,11 @@ test('QA D1204: the result picker leaves out every status the server refuses for
   const server = serverNoSpecimenStatuses(readFileSync(SERVER, 'utf8'));
   assert.ok(server.length >= 2, `the server rule must be read, saw ${server.join(',')}`);
   const portal = portalSet(readFileSync(PORTAL, 'utf8'), 'ORDER_STATUSES_AWAITING_SPECIMEN');
-  assert.deepEqual(portal, server, 'the picker offers an order the server refuses (or hides one it accepts)');
+  assert.deepEqual(
+    portal,
+    server,
+    'the picker offers an order the server refuses (or hides one it accepts)',
+  );
   assert.match(
     readFileSync(PORTAL, 'utf8'),
     /!ORDER_STATUSES_AWAITING_SPECIMEN\.has\(o\.status\)/,
@@ -73,7 +77,10 @@ test('QA D1204 guard: the server rule is read as written', () => {
     }`;
   assert.deepEqual(serverNoSpecimenStatuses(java), ['ORDERED', 'PENDING']);
   assert.deepEqual(
-    portalSet("export const X: ReadonlySet<string> = new Set([\n  'PENDING',\n  'ORDERED',\n]);", 'X'),
+    portalSet(
+      "export const X: ReadonlySet<string> = new Set([\n  'PENDING',\n  'ORDERED',\n]);",
+      'X',
+    ),
     ['ORDERED', 'PENDING'],
   );
 });

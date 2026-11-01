@@ -220,7 +220,9 @@ describe('AdvanceDirectivesTabComponent', () => {
 
     it('sends the typed reason in the body and reloads the banner', () => {
       const host = openDialog();
-      const field = host.querySelector<HTMLTextAreaElement>('[data-testid="reason-dialog-reason"]')!;
+      const field = host.querySelector<HTMLTextAreaElement>(
+        '[data-testid="reason-dialog-reason"]',
+      )!;
       field.value = '  Directive remplacée par une nouvelle  ';
       field.dispatchEvent(new Event('input'));
       fixture.detectChanges();
@@ -239,7 +241,9 @@ describe('AdvanceDirectivesTabComponent', () => {
       directiveService.revoke.and.returnValue(
         throwError(() => ({ status: 400, error: { message: 'Indiquez le motif' } })),
       );
-      const field = host.querySelector<HTMLTextAreaElement>('[data-testid="reason-dialog-reason"]')!;
+      const field = host.querySelector<HTMLTextAreaElement>(
+        '[data-testid="reason-dialog-reason"]',
+      )!;
       field.value = 'x';
       field.dispatchEvent(new Event('input'));
       fixture.detectChanges();

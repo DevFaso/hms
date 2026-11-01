@@ -764,8 +764,10 @@ export class ProfileComponent implements OnInit {
         this.saveAccount(u, data, emailChanged, newEmail, password, false, () => {
           if (previous) {
             this.patientPortal.updateMyProfile({ phoneNumberPrimary: previous }).subscribe({
-              error: () =>
-                this.toast.error(this.translate.instant('PROFILE.RECORD_PHONE_SYNC_FAILED')),
+              error: (err: unknown) =>
+                this.toast.error(
+                  refusalReason(err) ?? this.translate.instant('PROFILE.RECORD_PHONE_SYNC_FAILED'),
+                ),
             });
           }
         }),
@@ -860,10 +862,12 @@ export class ProfileComponent implements OnInit {
                 this.saving.set(false);
                 this.toast.error(refusal);
               },
-              error: () => {
+              error: (err: unknown) => {
                 this.applySavedProfile(updated);
                 this.saving.set(false);
-                this.toast.error(this.translate.instant('PROFILE.RECORD_PHONE_SYNC_FAILED'));
+                this.toast.error(
+                  refusalReason(err) ?? this.translate.instant('PROFILE.RECORD_PHONE_SYNC_FAILED'),
+                );
               },
             });
         },
@@ -1014,9 +1018,11 @@ export class ProfileComponent implements OnInit {
         }
         this.toast.success(this.translate.instant('PROFILE.PHOTO_REMOVED'));
       },
-      error: () => {
+      error: (err: unknown) => {
         this.uploadingAvatar.set(false);
-        this.toast.error(this.translate.instant('PROFILE.PHOTO_REMOVE_FAILED'));
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PROFILE.PHOTO_REMOVE_FAILED'),
+        );
       },
     });
   }
@@ -1083,7 +1089,10 @@ export class ProfileComponent implements OnInit {
     }
     request.subscribe({
       next: () => this.toast.success(this.translate.instant('PROFILE.RESET_LINK_SENT')),
-      error: () => this.toast.error(this.translate.instant('PROFILE.RESET_REQUEST_FAILED')),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PROFILE.RESET_REQUEST_FAILED'),
+        ),
     });
   }
 

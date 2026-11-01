@@ -154,7 +154,8 @@
         </span>
       }
       @if (statusFilter) {
-        {{ ' ' }}<span class="filter-chip">
+        {{ ' '
+        }}<span class="filter-chip">
           {{ 'COMMON.STATUS' | translate }}{{ 'COMMON.COLON' | translate }}
           {{ (statusFilter === 'active' ? 'COMMON.ACTIVE' : 'COMMON.INACTIVE') | translate }}
           <button
@@ -167,7 +168,8 @@
         </span>
       }
       @if (bloodTypeFilter) {
-        {{ ' ' }}<span class="filter-chip">
+        {{ ' '
+        }}<span class="filter-chip">
           {{ 'PATIENTS.BLOOD' | translate }}{{ 'COMMON.COLON' | translate }} {{ bloodTypeFilter }}
           <button
             [attr.aria-label]="'COMMON.REMOVE_FILTER' | translate"
@@ -179,7 +181,8 @@
         </span>
       }
       @if (hospitalFilter) {
-        {{ ' ' }}<span class="filter-chip">
+        {{ ' '
+        }}<span class="filter-chip">
           {{ 'ENCOUNTERS.HOSPITAL' | translate }}{{ 'COMMON.COLON' | translate }}
           {{ hospitalName(hospitalFilter) }}
           <button

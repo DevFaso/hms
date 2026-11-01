@@ -17,6 +17,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ReceptionService, FrontDeskPatientSnapshot } from '../reception.service';
 import { ToastService } from '../../core/toast.service';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { refusalReason } from '../../shared/refusal-reason';
 
 @Component({
   selector: 'app-patient-snapshot-drawer',
@@ -91,8 +92,8 @@ export class PatientSnapshotDrawerComponent implements OnChanges {
         this.attestSaving.set(false);
         if (this.patientId) this.loadSnapshot(this.patientId);
       },
-      error: () => {
-        this.toast.error(this.translate.instant('RECEPTION.ATTEST_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('RECEPTION.ATTEST_FAILED'));
         this.attestSaving.set(false);
       },
     });

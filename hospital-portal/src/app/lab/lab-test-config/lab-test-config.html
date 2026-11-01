@@ -218,7 +218,8 @@
         aria-modal="true"
         [attr.aria-labelledby]="'rangeEditorTitle'"
         appModalDialog
-        (keydown.escape)="closeRangeEditor(); $event.stopPropagation()"
+        (escaped)="closeRangeEditor()"
+        (keydown.escape)="$event.stopPropagation()"
         (click)="$event.stopPropagation()"
       >
         <div class="modal-header">
@@ -406,7 +407,8 @@
         aria-modal="true"
         aria-labelledby="lab-test-config-dialog-title-1"
         appModalDialog
-        (keydown.escape)="closeDefModal(); $event.stopPropagation()"
+        (escaped)="closeDefModal()"
+        (keydown.escape)="$event.stopPropagation()"
         tabindex="-1"
         (click)="$event.stopPropagation()"
       >
@@ -598,7 +600,8 @@
         aria-modal="true"
         aria-labelledby="lab-test-config-dialog-title-2"
         appModalDialog
-        (keydown.escape)="cancelDeleteDef(); $event.stopPropagation()"
+        (escaped)="cancelDeleteDef()"
+        (keydown.escape)="$event.stopPropagation()"
         tabindex="-1"
         (click)="$event.stopPropagation()"
       >
@@ -655,7 +658,8 @@
         aria-modal="true"
         aria-labelledby="lab-test-config-dialog-title-3"
         appModalDialog
-        (keydown.escape)="closeReflexRules(); $event.stopPropagation()"
+        (escaped)="closeReflexRules()"
+        (keydown.escape)="$event.stopPropagation()"
         tabindex="-1"
         (click)="$event.stopPropagation()"
       >

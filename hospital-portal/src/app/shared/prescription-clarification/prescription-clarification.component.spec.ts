@@ -162,11 +162,20 @@ describe('PrescriptionClarificationComponent', () => {
     expect(consequence!.textContent).toContain('PRESCRIPTIONS.CLARIFICATION.BLOCKS_DISPENSING');
   });
 
-  it('refuses to send an empty question but allows an empty answer', () => {
+  // QA D1206 (round 22): the button was disabled with no reason given; it now
+  // stays clickable, refuses, marks the question and says why next to it.
+  it('refuses to send an empty question, saying why at the field, but allows an empty answer', () => {
     create(['ROLE_PHARMACIST'], { mode: 'PHARMACY' });
     el('rx-clarification-open-rx-1')!.click();
     fixture.detectChanges();
-    expect((el('rx-clarification-submit-rx-1') as HTMLButtonElement).disabled).toBeTrue();
+    const send = el('rx-clarification-submit-rx-1') as HTMLButtonElement;
+    expect(send.disabled).withContext('never a dead button').toBeFalse();
+    send.click();
+    fixture.detectChanges();
+    expect(prescriptions.requestClarification).not.toHaveBeenCalled();
+    expect(el('rx-clarification-text-rx-1')!.getAttribute('aria-invalid')).toBe('true');
+    expect(el('submit-guard-reason')?.textContent?.trim()).toBeTruthy();
+    expect(send.getAttribute('aria-describedby')).toContain(el('submit-guard-reason')!.id);
 
     create(['ROLE_DOCTOR'], { mode: 'PRESCRIBER', status: 'PENDING_CLARIFICATION' });
     el('rx-clarification-open-rx-1')!.click();

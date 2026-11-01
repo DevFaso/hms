@@ -6,6 +6,7 @@ import { ToastService } from '../../core/toast.service';
 import { Router } from '@angular/router';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { refusalReason } from '../../shared/refusal-reason';
 
 @Component({
   selector: 'app-my-notifications',
@@ -102,8 +103,10 @@ export class MyNotificationsComponent implements OnInit {
         );
         this.unreadCount.update((c) => Math.max(c - 1, 0));
       },
-      error: () =>
-        this.toast.error(this.translate.instant('PORTAL.NOTIFICATIONS.MARK_READ_FAILED')),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PORTAL.NOTIFICATIONS.MARK_READ_FAILED'),
+        ),
     });
   }
 
@@ -117,9 +120,11 @@ export class MyNotificationsComponent implements OnInit {
         if (updated > 0)
           this.toast.success(this.translate.instant('PORTAL.NOTIFICATIONS.MARK_ALL_SUCCESS'));
       },
-      error: () => {
+      error: (err: unknown) => {
         this.markingAll.set(false);
-        this.toast.error(this.translate.instant('PORTAL.NOTIFICATIONS.MARK_READ_FAILED'));
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PORTAL.NOTIFICATIONS.MARK_READ_FAILED'),
+        );
       },
     });
   }

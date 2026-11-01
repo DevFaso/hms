@@ -269,7 +269,8 @@
                 <div class="followup-item">
                   <strong>{{ f.label }}</strong
                   ><span>{{ f.dueOn ? (f.dueOn | serverTime | date: 'mediumDate') : '—' }}</span
-                  >{{ ' ' }}<span
+                  >{{ ' '
+                  }}<span
                     class="status-badge {{
                       f.status === 'COMPLETED' ? 'status-completed' : 'status-pending'
                     }}"

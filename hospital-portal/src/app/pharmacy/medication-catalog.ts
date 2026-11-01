@@ -21,11 +21,18 @@ import {
   PediatricDosingRequest,
   PediatricWeightBand,
 } from '../services/pharmacy.service';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 
 @Component({
   selector: 'app-medication-catalog',
   standalone: true,
-  imports: [FormsModule, TranslateModule, EnumLabelPipe, ModalDialogDirective],
+  imports: [
+    SubmitGuardDirective,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+    ModalDialogDirective,
+  ],
   templateUrl: './medication-catalog.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './medication-catalog.scss',

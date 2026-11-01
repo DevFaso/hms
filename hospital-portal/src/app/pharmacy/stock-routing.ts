@@ -29,6 +29,7 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { PrintLabelService } from '../services/print-label.service';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { refusalReason } from '../shared/refusal-reason';
 @Component({
   selector: 'app-stock-routing',
   standalone: true,
@@ -469,7 +470,10 @@ export class StockRoutingComponent implements OnInit {
   private openPrintedCopy(prescriptionId: string): void {
     this.svc.getPrintedPrescriptionCopy(prescriptionId).subscribe({
       next: (blob) => this.printService.openForPrint(blob),
-      error: () => this.toast.error(this.translate.instant('PHARMACY.PRINT_COPY_FAILED')),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PHARMACY.PRINT_COPY_FAILED'),
+        ),
     });
   }
 

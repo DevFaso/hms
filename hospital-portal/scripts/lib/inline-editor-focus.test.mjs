@@ -36,8 +36,7 @@ const appDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'src', 
  * `@if (editingX() === row.id)`, `=== row.key`, `=== 'section'`: a block keyed to
  * one item of a list (a row, a section edited in place).
  */
-const ROW_EDITOR =
-  /@if\s*\(\s*(editing\w*)\(\)\s*===\s*(?:[\w.]+|'[^']*')\s*\)\s*\{/g;
+const ROW_EDITOR = /@if\s*\(\s*(editing\w*)\(\)\s*===\s*(?:[\w.]+|'[^']*')\s*\)\s*\{/g;
 
 const PINS = new Map();
 

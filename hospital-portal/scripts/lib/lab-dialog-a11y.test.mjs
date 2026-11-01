@@ -144,7 +144,9 @@ test('QA D968 (siblings): every detail or form overlay outside lab/ is a complet
       ...overlayOffenders(html, relative(appDir, file).replaceAll('\\', '/'), SIDE_PANEL),
     );
   }
-  assert.ok(panels >= 19, `expected the side panels outside lab/, saw ${panels}`);
+  // 18 since round 22: the advance-directive revoke confirmation is the shared
+  // <app-reason-dialog> now (QA D1180), no longer a form-overlay of its own.
+  assert.ok(panels >= 18, `expected the side panels outside lab/, saw ${panels}`);
   assert.deepEqual(offenders, []);
 });
 

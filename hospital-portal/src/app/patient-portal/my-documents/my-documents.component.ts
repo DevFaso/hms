@@ -12,6 +12,7 @@ import { currentLocale } from '../../shared/i18n/app-locale';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { refusalReason } from '../../shared/refusal-reason';
 /**
  * The largest file the upload endpoint accepts: spring.servlet.multipart
  * max-file-size is 10MB (the backend is being aligned on this one number).
@@ -186,9 +187,11 @@ export class MyDocumentsComponent implements OnInit {
         this.deleting.set(null);
         this.toast.success(this.translate.instant('PORTAL.DOCUMENTS.DELETE_SUCCESS'));
       },
-      error: () => {
+      error: (err: unknown) => {
         this.deleting.set(null);
-        this.toast.error(this.translate.instant('PORTAL.DOCUMENTS.DELETE_FAILED'));
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PORTAL.DOCUMENTS.DELETE_FAILED'),
+        );
       },
     });
   }

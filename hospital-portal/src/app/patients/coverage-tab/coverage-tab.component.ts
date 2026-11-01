@@ -339,8 +339,8 @@ export class CoverageTabComponent implements OnInit {
           this.closeLink();
           this.loadInsurances();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('COVERAGE.LINK_ERROR'));
+        error: (err: unknown) => {
+          this.toast.error(refusalReason(err) ?? this.translate.instant('COVERAGE.LINK_ERROR'));
           this.linkSaving.set(false);
         },
       });
@@ -382,8 +382,8 @@ export class CoverageTabComponent implements OnInit {
         this.closeEdit();
         this.insurances.update((list) => list.map((i) => (i.id === updated.id ? updated : i)));
       },
-      error: () => {
-        this.toast.error(this.translate.instant('COVERAGE.UPDATE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('COVERAGE.UPDATE_ERROR'));
         this.editSaving.set(false);
       },
     });
@@ -411,8 +411,8 @@ export class CoverageTabComponent implements OnInit {
         this.closeDelete();
         this.insurances.update((list) => list.filter((i) => i.id !== target.id));
       },
-      error: () => {
-        this.toast.error(this.translate.instant('COVERAGE.DELETE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('COVERAGE.DELETE_ERROR'));
         this.deleteBusy.set(false);
       },
     });

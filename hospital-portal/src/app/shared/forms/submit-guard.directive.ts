@@ -1,4 +1,12 @@
-import { DestroyRef, Directive, ElementRef, effect, inject, input } from '@angular/core';
+import {
+  DestroyRef,
+  Directive,
+  ElementRef,
+  booleanAttribute,
+  effect,
+  inject,
+  input,
+} from '@angular/core';
 import { TranslateService } from '@ngx-translate/core';
 
 import { invalidMessageId, refuseFields } from './invalid-fields';
@@ -39,6 +47,21 @@ const BLOCKED_KEY = 'COMMON.SUBMIT_BLOCKED_REQUIRED';
  *
  * The fields are `submitGuardFields` (ids, looked up in the enclosing form or
  * dialog); without them only the reason is shown.
+ *
+ * QA D1193 / D1089 (round 22): a form whose fields carry `required` but whose
+ * submit button checked nothing posted empty (the lab instrument and
+ * inventory "Créer": the server answered "ne doit pas être vide", or a generic
+ * toast). With `submitGuardRequired` the guard reads the form itself at click
+ * time: every rendered, enabled `[required]` control that is blank is marked
+ * and named ("Champs obligatoires manquants : Nom, N° de série"), and nothing
+ * is sent:
+ *
+ * ```html
+ * <button type="submit" [disabled]="saving()" appSubmitGuard submitGuardRequired>Créer</button>
+ * ```
+ *
+ * `scripts/lib/required-form-submit.test.mjs` fails the build for a `<form>`
+ * with required fields whose submit button carries neither.
  * `scripts/lib/silent-disabled-submit.test.mjs` fails the build on a button
  * disabled for anything but a request in flight or a pager's end.
  */
@@ -56,6 +79,8 @@ export class SubmitGuardDirective {
   readonly appSubmitGuard = input<unknown>(null);
   /** The ids of the fields the guard is about, in reading order. */
   readonly submitGuardFields = input<readonly string[] | null>(null);
+  /** QA D1193: refuse while any `[required]` control of the form is blank (read at click time). */
+  readonly submitGuardRequired = input(false, { transform: booleanAttribute });
 
   private readonly host = inject(ElementRef<HTMLElement>);
   private readonly translate = inject(TranslateService);
@@ -79,12 +104,22 @@ export class SubmitGuardDirective {
   }
 
   private onClick(event: Event): void {
-    const reason = this.appSubmitGuard();
+    let reason = this.appSubmitGuard();
+    let all = this.fieldIds();
+    if (!reason && this.submitGuardRequired()) {
+      const required = this.requiredFieldIds();
+      if (required.some((id) => isBlank(this.root().querySelector(`#${CSS.escape(id)}`)))) {
+        reason = true;
+        all = [...new Set([...all, ...required])];
+      } else if (this.marked.length > 0) {
+        // Every required field is filled now: the earlier refusal goes away.
+        this.clear();
+      }
+    }
     if (!reason) return;
     event.preventDefault();
     event.stopImmediatePropagation();
     const root = this.root();
-    const all = this.fieldIds();
     const blank = all.filter((id) => isBlank(root.querySelector(`#${CSS.escape(id)}`)));
     this.marked = all;
     if (blank.length > 0) {
@@ -121,6 +156,23 @@ export class SubmitGuardDirective {
    */
   private fieldIds(): string[] {
     return [...(this.submitGuardFields() ?? [])];
+  }
+
+  /**
+   * The ids of the rendered, enabled `[required]` controls of the form, in
+   * reading order; a control without an id is given one, so it can be marked
+   * and named.
+   */
+  private requiredFieldIds(): string[] {
+    const controls = this.root().querySelectorAll<HTMLElement>(
+      'input[required], select[required], textarea[required]',
+    );
+    return Array.from(controls)
+      .filter((el) => !(el as HTMLInputElement).disabled && el.getAttribute('type') !== 'hidden')
+      .map((el) => {
+        if (!el.id) el.id = `submit-guard-field-${++SubmitGuardDirective.nextId}`;
+        return el.id;
+      });
   }
 
   private messageId(): string {

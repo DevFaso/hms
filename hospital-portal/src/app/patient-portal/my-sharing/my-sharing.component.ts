@@ -21,6 +21,7 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { InlineSubFormDirective } from '../../shared/a11y/inline-sub-form.directive';
 import { InlineDiscardAskComponent } from '../../shared/a11y/inline-discard-ask.component';
 import { focusWhenRendered } from '../../shared/a11y/focus-when-rendered';
+import { refusalReason } from '../../shared/refusal-reason';
 
 /**
  * "Who accessed my record" (E9 #66, decision D7).
@@ -170,9 +171,11 @@ export class MySharingComponent implements OnInit {
         this.focusAfter('[data-testid="opt-out-revoke"]');
         this.toast.success(this.translate.instant('PORTAL.SHARING.OPT_OUT.SAVED_ON'));
       },
-      error: () => {
+      error: (err: unknown) => {
         this.optOutSaving.set(false);
-        this.toast.error(this.translate.instant('PORTAL.SHARING.OPT_OUT.FAILED'));
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PORTAL.SHARING.OPT_OUT.FAILED'),
+        );
       },
     });
   }
@@ -187,9 +190,11 @@ export class MySharingComponent implements OnInit {
         this.focusAfter('[data-testid="opt-out-enable"]');
         this.toast.success(this.translate.instant('PORTAL.SHARING.OPT_OUT.SAVED_OFF'));
       },
-      error: () => {
+      error: (err: unknown) => {
         this.optOutSaving.set(false);
-        this.toast.error(this.translate.instant('PORTAL.SHARING.OPT_OUT.FAILED'));
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PORTAL.SHARING.OPT_OUT.FAILED'),
+        );
       },
     });
   }

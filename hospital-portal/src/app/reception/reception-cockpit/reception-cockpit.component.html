@@ -167,7 +167,8 @@
                     >
                   }
                   @if (item.hasOutstandingBalance) {
-                    {{ ' ' }}<span
+                    {{ ' '
+                    }}<span
                       class="flag-chip danger"
                       [title]="'RECEPTION.OUTSTANDING_BALANCE' | translate"
                       >$</span

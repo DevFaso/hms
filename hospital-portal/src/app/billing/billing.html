@@ -375,7 +375,8 @@
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span
-              >{{ ' ' }}<span class="status-badge" [class]="getStatusClass(inv.status)">{{
+              >{{ ' '
+              }}<span class="status-badge" [class]="getStatusClass(inv.status)">{{
                 (inv.status | enumLabel: 'invoiceStatus') || '—'
               }}</span>
               @if (inv.creditedToInvoiceNumber) {
@@ -505,7 +506,11 @@
                           >
                             {{ 'COMMON.SAVE' | translate }}
                           </button>
-                          <button type="button" class="btn-secondary btn-sm" (click)="cancelEditLine()">
+                          <button
+                            type="button"
+                            class="btn-secondary btn-sm"
+                            (click)="cancelEditLine()"
+                          >
                             {{ 'COMMON.CANCEL' | translate }}
                           </button>
                           <app-inline-discard-ask [form]="lineForm" />
@@ -635,7 +640,8 @@
                     <span class="field-hint">{{ a.reason }}</span>
                     @if (a.reversedAt) {
                       <!-- QA D1105: a reversed adjustment stays on the ledger, with why. -->
-                      {{ ' ' }}<span
+                      {{ ' '
+                      }}<span
                         class="badge badge-muted"
                         [attr.data-testid]="'adjustment-reversed-' + a.id"
                       >

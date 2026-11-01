@@ -188,7 +188,8 @@
                       'LAB_RESULTS.CORRECTION' | translate
                     }}</span>
                   }
-                  {{ ' ' }}<span class="status-badge status-pending">{{
+                  {{ ' '
+                  }}<span class="status-badge status-pending">{{
                     'LAB_RESULTS.PENDING_RELEASE' | translate
                   }}</span>
                 }
@@ -326,7 +327,8 @@
         aria-modal="true"
         aria-labelledby="lab-results-dialog-title-1"
         appModalDialog
-        (keydown.escape)="closeDetail(); $event.stopPropagation()"
+        (escaped)="closeDetail()"
+        (keydown.escape)="$event.stopPropagation()"
       >
         <div class="panel-header">
           <h2 id="lab-results-dialog-title-1">
@@ -555,7 +557,8 @@
       aria-modal="true"
       aria-labelledby="lab-results-dialog-title-2"
       appModalDialog
-      (keydown.escape)="closeModal(); $event.stopPropagation()"
+      (escaped)="closeModal()"
+      (keydown.escape)="$event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
     >
@@ -711,7 +714,8 @@
       role="dialog"
       aria-modal="true"
       appModalDialog
-      (keydown.escape)="cancelSelfRelease(); $event.stopPropagation()"
+      (escaped)="cancelSelfRelease()"
+      (keydown.escape)="$event.stopPropagation()"
       [attr.aria-label]="
         (isSelfRelease(target)
           ? 'LAB_RESULTS.SELF_RELEASE_TITLE'
@@ -791,7 +795,8 @@
       aria-modal="true"
       aria-labelledby="lab-results-dialog-title-3"
       appModalDialog
-      (keydown.escape)="cancelDelete(); $event.stopPropagation()"
+      (escaped)="cancelDelete()"
+      (keydown.escape)="$event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
     >
@@ -838,7 +843,8 @@
       aria-modal="true"
       aria-labelledby="lab-results-dialog-title-4"
       appModalDialog
-      (keydown.escape)="closeSign(); $event.stopPropagation()"
+      (escaped)="closeSign()"
+      (keydown.escape)="$event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
     >
@@ -896,7 +902,8 @@
       aria-modal="true"
       aria-labelledby="lab-results-dialog-title-5"
       appModalDialog
-      (keydown.escape)="closeCompare(); $event.stopPropagation()"
+      (escaped)="closeCompare()"
+      (keydown.escape)="$event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
     >
@@ -1017,7 +1024,8 @@
       aria-modal="true"
       aria-labelledby="lab-results-dialog-title-6"
       appModalDialog
-      (keydown.escape)="closeReadBack(); $event.stopPropagation()"
+      (escaped)="closeReadBack()"
+      (keydown.escape)="$event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
     >

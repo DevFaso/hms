@@ -313,14 +313,16 @@
                     <td>
                       <strong>{{ m.medication }}</strong>
                       @if (m.controlledSubstance) {
-                        {{ ' ' }}<span
+                        {{ ' '
+                        }}<span
                           class="status-badge status-controlled"
                           [attr.data-testid]="'med-controlled-' + m.id"
                           >{{ 'NURSE.CONTROLLED_SUBSTANCE' | translate }}</span
                         >
                       }
                       @if (m.cdsAdvisories?.length) {
-                        {{ ' ' }}<span
+                        {{ ' '
+                        }}<span
                           class="status-badge status-advisory"
                           [attr.data-testid]="'med-advisory-' + m.id"
                           [title]="m.cdsAdvisories![0].summary"
@@ -613,7 +615,8 @@
                     <span class="cell-primary">{{ p.patientName }}</span>
                   }
                   @if (p.acuityLevel) {
-                    {{ ' ' }}<span class="acuity-badge {{ acuityCssClass(p.acuityLevel) }}">
+                    {{ ' '
+                    }}<span class="acuity-badge {{ acuityCssClass(p.acuityLevel) }}">
                       {{ acuityLabel(p.acuityLevel) }}
                     </span>
                   }
@@ -957,7 +960,8 @@
               >
                 <div class="task-card-header">
                   <span class="task-category">{{ taskCategoryLabel(task.category) }}</span>
-                  {{ ' ' }}<span class="task-priority-badge">{{
+                  {{ ' '
+                  }}<span class="task-priority-badge">{{
                     task.priority | enumLabel: 'taskPriority'
                   }}</span>
                 </div>
@@ -1853,10 +1857,15 @@
         >
           {{ 'COMMON.CANCEL' | translate }}
         </button>
+        <!-- QA D1189 (round 22): an empty note is refused here, with the reason the
+             server would give, at the narrative field; never a generic toast. -->
         <button
           class="modal-btn modal-confirm"
           (click)="submitCareNote()"
           [disabled]="careNoteCreating()"
+          [appSubmitGuard]="careNoteEmptyReason()"
+          [submitGuardFields]="['cn-narrative']"
+          data-testid="care-note-save"
         >
           @if (careNoteCreating()) {
             <span class="material-symbols-outlined">hourglass_empty</span>

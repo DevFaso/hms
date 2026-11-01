@@ -47,6 +47,7 @@ import { emailAddresses, invalidEmailAddresses } from '../shared/forms/email-add
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive';
 import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.component';
+import { refusalReason } from '../shared/refusal-reason';
 type BillingTab = 'all' | 'outstanding' | 'paid' | 'overdue';
 
 /** The cancellation reason's field (QA D1069), marked when it is refused (QA D1072). */
@@ -581,8 +582,8 @@ ${this.translate.instant('BILLING.SUPPLEMENTARY_CONFIRM')}`)
         this.deleting.set(false);
         this.loadInvoices(this.page());
       },
-      error: () => {
-        this.toast.error(this.translate.instant('BILLING.DELETE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('BILLING.DELETE_FAILED'));
         this.deleting.set(false);
       },
     });
@@ -1021,7 +1022,8 @@ ${this.translate.instant('BILLING.SUPPLEMENTARY_CONFIRM')}`)
           res,
           `receipt-${inv.invoiceNumber}-${(p.paymentDate ?? '').substring(0, 10)}.pdf`,
         ),
-      error: () => this.toast.error(this.translate.instant('BILLING.PDF_FAILED')),
+      error: (err: unknown) =>
+        this.toast.error(refusalReason(err) ?? this.translate.instant('BILLING.PDF_FAILED')),
     });
   }
 
@@ -1029,7 +1031,8 @@ ${this.translate.instant('BILLING.SUPPLEMENTARY_CONFIRM')}`)
   downloadPdf(inv: BillingInvoiceResponse): void {
     this.billingService.getInvoicePdf(inv.id).subscribe({
       next: (res) => saveResponse(res, `invoice-${inv.invoiceNumber}.pdf`),
-      error: () => this.toast.error(this.translate.instant('BILLING.PDF_FAILED')),
+      error: (err: unknown) =>
+        this.toast.error(refusalReason(err) ?? this.translate.instant('BILLING.PDF_FAILED')),
     });
   }
 

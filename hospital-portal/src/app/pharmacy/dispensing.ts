@@ -747,7 +747,10 @@ export class DispensingComponent implements OnInit, OnDestroy {
     // token), then opened for printing; a refusal is said, not a blank tab.
     this.svc.getStockLotLabel(lotId).subscribe({
       next: (blob) => this.printService.openForPrint(blob),
-      error: () => this.toast.error(this.translate.instant('PHARMACY.PRINT_LABEL_FAILED')),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PHARMACY.PRINT_LABEL_FAILED'),
+        ),
     });
   }
 

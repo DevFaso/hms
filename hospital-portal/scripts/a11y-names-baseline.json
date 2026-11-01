@@ -138,10 +138,6 @@
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
     },
-    "src/app/patient-portal/my-medical-history/my-medical-history.component.html::field-label::textarea text": {
-      "count": 4,
-      "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"
-    },
     "src/app/profile/profile.html::field-label::input mfaTotpCode": {
       "count": 1,
       "why": "pre-existing (class D988/D999/D1006): unnamed control; name it with the next touch of the page"

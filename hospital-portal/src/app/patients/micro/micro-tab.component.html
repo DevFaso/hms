@@ -42,7 +42,8 @@
               >
                 {{ statusLabel(culture.status) }}
               </span>
-              {{ ' ' }}<span
+              {{ ' '
+              }}<span
                 class="growth-pill"
                 [class.growth]="culture.growthResult === 'GROWTH'"
                 [class.no-growth]="culture.growthResult === 'NO_GROWTH'"
