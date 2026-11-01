@@ -141,9 +141,17 @@ export class DrawerDialogDirective implements OnChanges, OnDestroy {
   private giveFocusBack(schedule: (restore: () => void) => void): void {
     const opener = this.opener;
     this.opener = null;
+    if (!this.focusIsHere()) return;
+    // Checked again when it runs: a navigation that closed the drawer may have
+    // moved focus to the new page meanwhile, and that focus stays.
+    schedule(() => {
+      if (this.focusIsHere()) restoreFocus(opener);
+    });
+  }
+
+  private focusIsHere(): boolean {
     const active = document.activeElement;
-    const focusWasHere = active === null || active === document.body || this.box().contains(active);
-    if (focusWasHere) schedule(() => restoreFocus(opener));
+    return active === null || active === document.body || this.box().contains(active);
   }
 
   private box(): HTMLElement {

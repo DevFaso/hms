@@ -12,6 +12,8 @@ import {
   ViewChild,
   AfterViewInit,
   ChangeDetectionStrategy,
+  Injector,
+  afterNextRender,
 } from '@angular/core';
 import { NavigationEnd, RouterOutlet, RouterLink, RouterLinkActive, Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
@@ -127,6 +129,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   private readonly providerContext = inject(ProviderContextService);
   private readonly empiStatus = inject(EmpiStatusService);
   readonly translate = inject(TranslateService);
+  private readonly injector = inject(Injector);
   private notifSub?: Subscription;
   private readCountSub?: Subscription;
 
@@ -1726,11 +1729,20 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
         // A successful navigation proves the chunk graph is healthy — re-arm
         // the one-shot stale-chunk reload guard (see app.config.ts).
         sessionStorage.removeItem('hms-chunk-reload');
+        const focusMain = () => this.mainContent?.nativeElement.focus({ preventScroll: true });
+        // QA D1153: the open phone drawer keeps the page inert until this
+        // render; <main> takes focus once it is reachable again (the drawer
+        // then leaves focus where it is instead of sending it back to Menu).
+        if (this.phoneDrawerOpen()) {
+          this.sidebarCollapsed.set(true);
+          afterNextRender(focusMain, { injector: this.injector });
+          return;
+        }
         if (isMobileViewport()) this.sidebarCollapsed.set(true);
         // queueMicrotask defers until after the new component has
         // rendered into the outlet so focus actually lands on the
         // freshly painted <main>, not the previous one.
-        queueMicrotask(() => this.mainContent?.nativeElement.focus({ preventScroll: true }));
+        queueMicrotask(focusMain);
       });
   }
 

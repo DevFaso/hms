@@ -3,7 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
-import { provideRouter, Route } from '@angular/router';
+import { provideRouter, Route, Router } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { of } from 'rxjs';
 
@@ -1338,6 +1338,18 @@ describe('ShellComponent — inbox surfaces live in the topbar', () => {
       (document.activeElement as HTMLElement).blur();
       press(document.body, 'Tab');
       expect(aside.contains(document.activeElement)).toBeTrue();
+      fixture.destroy();
+    });
+
+    it('a navigation from the open drawer closes it and puts focus on the new page, not on Menu', async () => {
+      const { fixture, menu } = phoneShell();
+      openFromMenu(fixture, menu);
+      await TestBed.inject(Router).navigateByUrl('/');
+      fixture.detectChanges();
+      TestBed.tick();
+      expect(fixture.componentInstance.sidebarCollapsed()).toBeTrue();
+      const main = (fixture.nativeElement as HTMLElement).querySelector('#main-content');
+      expect(document.activeElement).withContext('focus on <main>').toBe(main);
       fixture.destroy();
     });
 
