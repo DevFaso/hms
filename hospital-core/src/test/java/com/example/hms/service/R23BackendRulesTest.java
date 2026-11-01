@@ -127,17 +127,19 @@ class R23BackendRulesTest {
     @Test
     void d1215_aRecallDueYearsAgoIsRefusedAndOneDueLastWeekIsKept() {
         LocalDate today = LocalDate.of(2026, 11, 1);
-        assertThatThrownBy(() -> PatientRecallServiceImpl.requireRecentDueDate(LocalDate.of(2020, 1, 1), today))
+        LocalDate yearsAgo = LocalDate.of(2020, 1, 1);
+        LocalDate lastWeek = today.minusDays(7);
+        LocalDate atTolerance = today.minusDays(PatientRecallServiceImpl.PAST_DUE_TOLERANCE_DAYS);
+        LocalDate pastTolerance = today.minusDays(PatientRecallServiceImpl.PAST_DUE_TOLERANCE_DAYS + 1L);
+        assertThatThrownBy(() -> PatientRecallServiceImpl.requireRecentDueDate(yearsAgo, today))
             .isInstanceOf(FieldBusinessException.class)
             .hasFieldOrPropertyWithValue("field", "dueDate")
             .extracting("messageKey").isEqualTo("recall.dueDate.tooFarInPast");
-        assertThatCode(() -> PatientRecallServiceImpl.requireRecentDueDate(today.minusDays(7), today))
+        assertThatCode(() -> PatientRecallServiceImpl.requireRecentDueDate(lastWeek, today))
             .doesNotThrowAnyException();
-        assertThatCode(() -> PatientRecallServiceImpl.requireRecentDueDate(
-                today.minusDays(PatientRecallServiceImpl.PAST_DUE_TOLERANCE_DAYS), today))
+        assertThatCode(() -> PatientRecallServiceImpl.requireRecentDueDate(atTolerance, today))
             .doesNotThrowAnyException();
-        assertThatThrownBy(() -> PatientRecallServiceImpl.requireRecentDueDate(
-                today.minusDays(PatientRecallServiceImpl.PAST_DUE_TOLERANCE_DAYS + 1L), today))
+        assertThatThrownBy(() -> PatientRecallServiceImpl.requireRecentDueDate(pastTolerance, today))
             .isInstanceOf(FieldBusinessException.class);
     }
 

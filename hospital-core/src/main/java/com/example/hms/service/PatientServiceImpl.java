@@ -133,6 +133,10 @@ import com.example.hms.service.recordaccess.BreakGlassGate;
 @RequiredArgsConstructor
 @Slf4j
 public class PatientServiceImpl implements PatientService {
+
+    private static final String FIELD_PHONE_PRIMARY = "phoneNumberPrimary";
+    private static final String FIELD_PHONE_SECONDARY = "phoneNumberSecondary";
+    private static final String FIELD_EMERGENCY_PHONE = "emergencyContactPhone";
     /** QA D1079: "label: value" in the reader's typography (a space before the colon in French). */
     static final String LAB_SUMMARY_LABEL_VALUE_KEY = "timeline.labResult.labelValue";
     private static final String USER_NOT_FOUND_KEY = "user.notFound";
@@ -492,7 +496,7 @@ public class PatientServiceImpl implements PatientService {
     /** Phones (stored by the facility rule, QA D942) and the e-mail (unique to one record, D113). */
     private void patchContacts(Patient patient, PatientProfileUpdateRequestDTO request, String country) {
         if (request.getPhoneNumberPrimary() != null) {
-            String phone = normalizePhone(request.getPhoneNumberPrimary(), country, "phoneNumberPrimary");
+            String phone = normalizePhone(request.getPhoneNumberPrimary(), country, FIELD_PHONE_PRIMARY);
             if (phone == null) {
                 throw new BusinessException("patient.r16.phoneRequired");
             }
@@ -501,7 +505,7 @@ public class PatientServiceImpl implements PatientService {
             patient.setPhoneNumberPrimary(phone);
         }
         if (request.getPhoneNumberSecondary() != null) {
-            patient.setPhoneNumberSecondary(normalizePhone(request.getPhoneNumberSecondary(), country, "phoneNumberSecondary"));
+            patient.setPhoneNumberSecondary(normalizePhone(request.getPhoneNumberSecondary(), country, FIELD_PHONE_SECONDARY));
         }
         if (request.getEmail() != null) {
             String email = trimToNull(request.getEmail());
@@ -540,7 +544,7 @@ public class PatientServiceImpl implements PatientService {
     private void patchCareFields(Patient patient, PatientProfileUpdateRequestDTO request, String country) {
         applyNullable(request.getEmergencyContactName(), patient::setEmergencyContactName);
         if (request.getEmergencyContactPhone() != null) {
-            patient.setEmergencyContactPhone(normalizePhone(request.getEmergencyContactPhone(), country, "emergencyContactPhone"));
+            patient.setEmergencyContactPhone(normalizePhone(request.getEmergencyContactPhone(), country, FIELD_EMERGENCY_PHONE));
         }
         applyNullable(request.getEmergencyContactRelationship(), patient::setEmergencyContactRelationship);
         applyNullable(request.getPreferredPharmacy(), patient::setPreferredPharmacy);
@@ -562,14 +566,14 @@ public class PatientServiceImpl implements PatientService {
         m.put("middleName", p.getMiddleName());
         m.put("dateOfBirth", p.getDateOfBirth());
         m.put("gender", p.getGender());
-        m.put("phoneNumberPrimary", p.getPhoneNumberPrimary());
-        m.put("phoneNumberSecondary", p.getPhoneNumberSecondary());
+        m.put(FIELD_PHONE_PRIMARY, p.getPhoneNumberPrimary());
+        m.put(FIELD_PHONE_SECONDARY, p.getPhoneNumberSecondary());
         m.put("email", p.getEmail());
         m.put("ethnicity", p.getEthnicity());
         m.put("address", Arrays.asList(p.getAddressLine1(), p.getAddressLine2(), p.getCity(), p.getState(),
             p.getZipCode(), p.getCountry(), p.getAddress()));
         m.put("emergencyContactName", p.getEmergencyContactName());
-        m.put("emergencyContactPhone", p.getEmergencyContactPhone());
+        m.put(FIELD_EMERGENCY_PHONE, p.getEmergencyContactPhone());
         m.put("emergencyContactRelationship", p.getEmergencyContactRelationship());
         m.put("preferredPharmacy", p.getPreferredPharmacy());
         m.put("careTeamNotes", p.getCareTeamNotes());
@@ -644,10 +648,10 @@ public class PatientServiceImpl implements PatientService {
     /** Stores every number of a new or edited record in its canonical form (QA D942). */
     private static void normalizePhones(Patient patient, Hospital hospital) {
         String country = hospital == null ? null : hospital.getCountry();
-        patient.setPhoneNumberPrimary(normalizePhone(patient.getPhoneNumberPrimary(), country, "phoneNumberPrimary"));
-        patient.setPhoneNumberSecondary(normalizePhone(patient.getPhoneNumberSecondary(), country, "phoneNumberSecondary"));
+        patient.setPhoneNumberPrimary(normalizePhone(patient.getPhoneNumberPrimary(), country, FIELD_PHONE_PRIMARY));
+        patient.setPhoneNumberSecondary(normalizePhone(patient.getPhoneNumberSecondary(), country, FIELD_PHONE_SECONDARY));
         patient.setEmergencyContactPhone(
-            normalizePhone(patient.getEmergencyContactPhone(), country, "emergencyContactPhone"));
+            normalizePhone(patient.getEmergencyContactPhone(), country, FIELD_EMERGENCY_PHONE));
     }
 
     /**

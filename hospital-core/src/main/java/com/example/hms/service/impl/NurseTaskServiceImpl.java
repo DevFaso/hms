@@ -1266,7 +1266,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         return MarDoseInterval.requireIntervalOrReason(rx, status,
             MarDoseInterval.lastGivenAt(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId()),
                 finalisedRowId),
-            LocalDateTime.now(), EARLY_ADMINISTRATION_WINDOW, earlyDoseReason);
+            LocalDateTime.now(java.time.ZoneId.systemDefault()), EARLY_ADMINISTRATION_WINDOW, earlyDoseReason);
     }
 
     /** The slot the next administration fills; refuses when the course has none left. */

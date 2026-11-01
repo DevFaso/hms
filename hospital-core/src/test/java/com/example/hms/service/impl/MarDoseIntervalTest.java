@@ -45,8 +45,10 @@ class MarDoseIntervalTest {
 
     @Test
     void theQaAmoxicillinTidDoseBackToBackIsRefused() {
-        assertThatThrownBy(() -> MarDoseInterval.requireIntervalOrReason(rx("TID"),
-                MedicationAdministrationStatus.GIVEN, Optional.of(NOW.minusSeconds(40)), NOW, WINDOW, null))
+        var tid = rx("TID");
+        Optional<java.time.LocalDateTime> fortySecondsAgo = Optional.of(NOW.minusSeconds(40));
+        assertThatThrownBy(() -> MarDoseInterval.requireIntervalOrReason(tid,
+                MedicationAdministrationStatus.GIVEN, fortySecondsAgo, NOW, WINDOW, null))
             .isInstanceOf(FieldBusinessException.class);
     }
 

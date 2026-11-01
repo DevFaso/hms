@@ -91,8 +91,8 @@ class R23BackendClassGuardsTest {
         String src = read("service/impl/PatientLabResultServiceImpl.java");
         String pairing = methodBody(src, "private List<LabResult> resolvePairs(");
         assertThat(pairing).doesNotContain(".limit(");
-        assertThat(src).doesNotContainPattern("resolvePairs\\([^)]*,[^)]*,[^)]*\\)");
-        assertThat(src).contains("limited(currentFor(");
+        assertThat(src).doesNotContainPattern("resolvePairs\\([^)]*,[^)]*,[^)]*\\)")
+            .contains("limited(currentFor(");
     }
 
     /**
@@ -137,12 +137,25 @@ class R23BackendClassGuardsTest {
         "payload/dto/OnCallScheduleRequestDTO.java",
             "service/impl/OnCallScheduleServiceImpl.java#getEndTime().isAfter(request.getStartTime())");
 
-    private static final Pattern START_FIELD = Pattern.compile(
-        "private (?:java\\.time\\.)?(?:LocalDate|LocalDateTime|OffsetDateTime|Instant) "
-            + "\\w*(?:From|Start|start[A-Z]\\w*|effective[A-Z]\\w*)\\s*;");
-    private static final Pattern END_FIELD = Pattern.compile(
-        "private (?:java\\.time\\.)?(?:LocalDate|LocalDateTime|OffsetDateTime|Instant) "
-            + "\\w*(?:To|End|end[A-Z]\\w*|expiration[A-Z]\\w*)\\s*;");
+    /** A date-typed field; its name decides whether it opens or closes a range. */
+    private static final Pattern DATE_FIELD = Pattern.compile(
+        "private (?:java\\.time\\.)?(?:LocalDate|LocalDateTime|OffsetDateTime|Instant) (\\w++)\\s*+;");
+    private static final Pattern START_INFIX = Pattern.compile("start[A-Z]|effective[A-Z]");
+    private static final Pattern END_INFIX = Pattern.compile("end[A-Z]|expiration[A-Z]");
+
+    private static boolean hasDateField(String src, boolean start) {
+        java.util.regex.Matcher m = DATE_FIELD.matcher(src);
+        while (m.find()) {
+            String name = m.group(1);
+            boolean hit = start
+                ? name.endsWith("From") || name.endsWith("Start") || START_INFIX.matcher(name).find()
+                : name.endsWith("To") || name.endsWith("End") || END_INFIX.matcher(name).find();
+            if (hit) {
+                return true;
+            }
+        }
+        return false;
+    }
 
     @Test
     void d1215_everyRequestDateRangeRefusesAReversedRange() throws IOException {
@@ -153,7 +166,7 @@ class R23BackendClassGuardsTest {
             if (!rel.startsWith("payload/") || !rel.contains("Request")) {
                 return;
             }
-            if (START_FIELD.matcher(src).find() && END_FIELD.matcher(src).find()) {
+            if (hasDateField(src, true) && hasDateField(src, false)) {
                 String check = RANGE_CHECKS.get(rel);
                 if (check == null) {
                     unlisted.add(rel);
@@ -181,8 +194,8 @@ class R23BackendClassGuardsTest {
         String body = methodBody(read("service/pharmacy/DispenseServiceImpl.java"),
             "private FillContext validateFill(");
         int verify = body.indexOf("dispenseVerificationService.verify(");
-        assertThat(verify).isPositive();
-        assertThat(verify).isLessThan(body.indexOf("DispenseUnitForms.requireCompatible("))
+        assertThat(verify).isPositive()
+            .isLessThan(body.indexOf("DispenseUnitForms.requireCompatible("))
             .isLessThan(body.indexOf("requireWholeUnitsOfFill("))
             .isLessThan(body.indexOf("recordFefoOverride("));
     }

@@ -70,6 +70,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -471,9 +472,9 @@ class PatientPortalServiceImplPhase1Test {
         void getHealthSummary_listsActiveDiagnoses() {
             stubPatientResolution();
             com.example.hms.repository.PatientProblemRepository problems =
-                org.mockito.Mockito.mock(com.example.hms.repository.PatientProblemRepository.class);
+                mock(com.example.hms.repository.PatientProblemRepository.class);
             com.example.hms.repository.PatientDiagnosisRepository diagnoses =
-                org.mockito.Mockito.mock(com.example.hms.repository.PatientDiagnosisRepository.class);
+                mock(com.example.hms.repository.PatientDiagnosisRepository.class);
             org.springframework.test.util.ReflectionTestUtils.setField(service, "patientProblemRepository", problems);
             org.springframework.test.util.ReflectionTestUtils.setField(service, "patientDiagnosisRepository", diagnoses);
             com.example.hms.model.PatientProblem malaria = new com.example.hms.model.PatientProblem();

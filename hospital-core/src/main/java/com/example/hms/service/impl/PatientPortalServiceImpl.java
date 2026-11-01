@@ -124,6 +124,8 @@ import com.example.hms.utility.RoleNames;
 @RequiredArgsConstructor
 @Slf4j
 public class PatientPortalServiceImpl implements PatientPortalService {
+
+    private static final String PROXY_VIEW_LAB_RESULTS = "VIEW_LAB_RESULTS";
     private static final String APPOINTMENT_NOT_FOUND_KEY = "appointment.notFound";
     private static final String PROVIDER_UNAVAILABLE_KEY = "portal.booking.providerUnavailable";
     /** QA D717: the only states a patient may still cancel or reschedule from the portal. */
@@ -1794,7 +1796,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private static final Map<String, String> LEGACY_PERMISSION_ALIASES = Map.of(
             "APPOINTMENTS", "VIEW_APPOINTMENTS",
             "MEDICATIONS", "VIEW_MEDICATIONS",
-            "LAB_RESULTS", "VIEW_LAB_RESULTS",
+            "LAB_RESULTS", PROXY_VIEW_LAB_RESULTS,
             "BILLING", "VIEW_BILLING",
             "RECORDS", "VIEW_RECORDS");
 
@@ -1838,7 +1840,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional(readOnly = true)
     public List<PatientLabResultResponseDTO> getProxyLabResults(Authentication auth, UUID patientId,
                                                                 int offset, int limit) {
-        Patient patient = verifyProxyAccess(auth, patientId, "VIEW_LAB_RESULTS");
+        Patient patient = verifyProxyAccess(auth, patientId, PROXY_VIEW_LAB_RESULTS);
         // QA D1213: the proxy view pages like the patient's own (the id the grant check resolved).
         return labResultService.getLabResultsForPatientPortal(patient.getId(), offset, limit);
     }
@@ -1846,7 +1848,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Override
     @Transactional(readOnly = true)
     public List<PatientLabResultResponseDTO> getProxyLabResults(Authentication auth, UUID patientId, int limit) {
-        Patient patient = verifyProxyAccess(auth, patientId, "VIEW_LAB_RESULTS");
+        Patient patient = verifyProxyAccess(auth, patientId, PROXY_VIEW_LAB_RESULTS);
         UUID hospitalId = resolvePatientHospitalId(patient);
         return labResultService.getLabResultsForPatientPortal(patient.getId(), hospitalId, limit);
     }

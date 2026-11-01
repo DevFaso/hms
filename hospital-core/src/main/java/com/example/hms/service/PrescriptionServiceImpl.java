@@ -391,6 +391,32 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         return prescription.getHospital() != null && subjectReadGuard.callerOwns(prescription.getPatient());
     }
 
+    /** The prescription to sign: in the caller's hospital and never signed before. */
+    private Prescription loadSignable(UUID id) {
+        Prescription prescription = prescriptionRepository.findById(id)
+            .orElseThrow(() -> new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND));
+
+        // Same 404-not-403 idiom as getPrescriptionById: a prescription at
+        // another hospital must not be distinguishable from one that does not
+        // exist.
+        UUID hospitalId = roleValidator.requireActiveHospitalId();
+        if (hospitalId != null
+                && prescription.getHospital() != null
+                && !prescription.getHospital().getId().equals(hospitalId)) {
+            throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
+        }
+
+        // Re-signing is refused rather than made idempotent. A second signature
+        // over altered content would silently replace the first, destroying the
+        // only record of what was originally authorised. Checked before the
+        // identity test so that "this is already signed" is the answer even when
+        // the caller is not the prescriber.
+        if (prescription.getSignatureValue() != null) {
+            throw new BusinessException("prescription.sign.alreadySigned");
+        }
+        return prescription;
+    }
+
     /**
      * The signing ceremony (P2 #16).
      *
@@ -417,27 +443,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     public PrescriptionResponseDTO signPrescription(UUID id,
                                                     com.example.hms.payload.dto.SignPrescriptionRequestDTO reauthentication,
                                                     Locale locale) {
-        Prescription prescription = prescriptionRepository.findById(id)
-            .orElseThrow(() -> new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND));
-
-        // Same 404-not-403 idiom as getPrescriptionById: a prescription at
-        // another hospital must not be distinguishable from one that does not
-        // exist.
-        UUID hospitalId = roleValidator.requireActiveHospitalId();
-        if (hospitalId != null
-                && prescription.getHospital() != null
-                && !prescription.getHospital().getId().equals(hospitalId)) {
-            throw new ResourceNotFoundException(PRESCRIPTION_NOT_FOUND);
-        }
-
-        // Re-signing is refused rather than made idempotent. A second signature
-        // over altered content would silently replace the first, destroying the
-        // only record of what was originally authorised. Checked before the
-        // identity test so that "this is already signed" is the answer even when
-        // the caller is not the prescriber.
-        if (prescription.getSignatureValue() != null) {
-            throw new BusinessException("prescription.sign.alreadySigned");
-        }
+        Prescription prescription = loadSignable(id);
 
         PrescriptionStatus status = prescription.getStatus();
         if (status != null && status != PrescriptionStatus.DRAFT

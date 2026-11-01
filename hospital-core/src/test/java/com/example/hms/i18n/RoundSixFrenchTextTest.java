@@ -112,9 +112,8 @@ class RoundSixFrenchTextTest {
     void d333_theAllergyAlertNamesTheSeverityInFrench() {
         PatientAllergy unknown = new PatientAllergy();
         unknown.setAllergenDisplay("Pénicilline");
-        // QA D1183 (round 23, changed call): the allergy stop builds its card in
-        // allergyConflictCard (handleAllergyConflict was folded into allergyBlock);
-        // the card summary is the refusal's message.
+        // QA D1183 (round 23, changed call): the allergy stop now builds its card in
+        // the allergy-conflict card helper, and the card summary is the refusal's message.
         Throwable alert = new CdsCriticalBlockException(cardSummary(unknown), java.util.List.of());
         assertThat(alert).isInstanceOf(CdsCriticalBlockException.class);
         // QA D1134 (changed assertion): "gravité" is feminine, so "inconnue" (was pinned as "inconnu").

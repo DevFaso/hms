@@ -137,7 +137,7 @@ class PatientPortalServiceImplProxyTest {
                     .thenReturn(List.of(AppointmentResponseDTO.builder().id(UUID.randomUUID()).build()));
 
             assertThat(service.getProxyAppointments(auth, grantorPatientId, Locale.FRENCH)).hasSize(1);
-            org.mockito.Mockito.verify(patientRepository, org.mockito.Mockito.never()).findById(grantorPatientId);
+            verify(patientRepository, never()).findById(grantorPatientId);
         }
 
         @Test
@@ -148,7 +148,7 @@ class PatientPortalServiceImplProxyTest {
             org.assertj.core.api.Assertions.assertThatThrownBy(
                     () -> service.getProxyAppointments(auth, grantorPatientId, Locale.FRENCH))
                 .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
-            org.mockito.Mockito.verify(patientRepository, org.mockito.Mockito.never()).findByIdUnscoped(any());
+            verify(patientRepository, never()).findByIdUnscoped(any());
         }
 
         @Test
