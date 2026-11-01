@@ -69,6 +69,10 @@ const PINS = new Map([
     'an integration endpoint revoked by an administrator, not a clinical record',
   ],
   [
+    'services/patient-portal.service.ts::/me/patient/refills/{}/cancel',
+    'the patient withdrawing their own refill request before anyone acted on it ("OWN REASON" in CancelVoidReasonGuardTest); seen since round 22, when the scan learned chained `this.http\\n  .put(` calls',
+  ],
+  [
     'services/staff-scheduling.service.ts::/staff/scheduling/leaves/{}/cancel',
     'a staff member withdrawing their own leave request, not a clinical record',
   ],
@@ -153,7 +157,9 @@ export function resolveUrl(url, source) {
   );
 }
 
-const HTTP_CALL = /\bhttp\.(post|put|patch|delete)\s*(?:<[^>()]*(?:<[^>()]*>[^>()]*)*>)?\s*\(/g;
+/** `this.http.post<T>(`, also chained over a line break (`this.http\n  .post<T>(`). */
+const HTTP_CALL =
+  /\bhttp\s*\.\s*(post|put|patch|delete)\s*(?:<[^>()]*(?:<[^>()]*>[^>()]*)*>)?\s*\(/g;
 
 /** The text of the class member around `index` (from its header to its end). */
 function enclosingMethod(source, index) {
@@ -334,6 +340,10 @@ test('QA D1180 guard: the scan sees the regression and the shapes a reason trave
     declared +
     '  cancel(id: string) {\n    return this.http.post<T>(`${this.baseUrl}/${id}/cancel`, null);\n  }';
   assert.match(missingReason(httpCalls(noParam)[0], param), /no 'reason' query parameter/);
+  // A call chained over a line break is read (the lab void and specimen reject are written so).
+  const chained =
+    'return this.http\n      .post<W>(`/lab-orders/${id}/void`, {})\n      .pipe(map(unwrap));';
+  assert.equal(httpCalls(chained)[0]?.url, '/lab-orders/{}/void');
   // A concatenated URL and a `null` body are read too.
   const concat = "return this.http.post<void>('/recalls/' + id + '/cancel', null);";
   assert.equal(httpCalls(concat)[0].url, '/recalls/{}/cancel');
