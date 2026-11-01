@@ -46,7 +46,8 @@ class PhoneFieldValidationGuardTest {
         "ProviderProfileDTO", "the provider profile the server returns (writes go through ProviderProfileUpdateDTO)",
         "PasswordResetRequestDTO", "a lookup key: an unknown value finds nobody and the answer must not differ"
             + " (account enumeration)",
-        "ProgramEnrollmentResponseDTO", "a response");
+        "ProgramEnrollmentResponseDTO", "a response",
+        "RegistrationDeskRow", "a read projection of the registration desk list");
 
     /**
      * Writes whose service already applies the STRICTER facility phone rule

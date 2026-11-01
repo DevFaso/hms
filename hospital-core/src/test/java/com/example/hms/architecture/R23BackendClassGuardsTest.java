@@ -105,7 +105,7 @@ class R23BackendClassGuardsTest {
         int builders = 0;
         for (Map.Entry<String, String> e : mainSources().entrySet()) {
             String src = e.getValue();
-            Matcher m = Pattern.compile("HealthSummaryDTO\\.builder\\(\\)").matcher(src);
+            Matcher m = Pattern.compile("\\bHealthSummaryDTO\\.builder\\(\\)").matcher(src);
             while (m.find()) {
                 builders++;
                 int end = src.indexOf(".build()", m.end());
@@ -130,7 +130,11 @@ class R23BackendClassGuardsTest {
         "payload/dto/scheduling/SessionTemplateRequestDTO.java",
             "service/scheduling/SessionTemplateServiceImpl.java#getEffectiveTo().isBefore(",
         "payload/dto/PatientInsuranceRequestDTO.java", "payload/dto/PatientInsuranceRequestDTO.java#isDateRangeValid(",
-        "payload/dto/PatientPrimaryCareRequestDTO.java", "payload/dto/PatientPrimaryCareRequestDTO.java#isDateRangeValid(");
+        "payload/dto/PatientPrimaryCareRequestDTO.java", "payload/dto/PatientPrimaryCareRequestDTO.java#isDateRangeValid(",
+        "payload/dto/AdvanceDirectiveRequestDTO.java",
+            "service/impl/AdvanceDirectiveServiceImpl.java#getExpirationDate().isBefore(",
+        "payload/dto/OnCallScheduleRequestDTO.java",
+            "service/impl/OnCallScheduleServiceImpl.java#getEndTime().isAfter(request.getStartTime())");
 
     private static final Pattern START_FIELD = Pattern.compile(
         "private (?:java\\.time\\.)?(?:LocalDate|LocalDateTime|OffsetDateTime|Instant) "
