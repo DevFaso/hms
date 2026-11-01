@@ -11,11 +11,13 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
 
 import java.io.IOException;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Comparator;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
@@ -53,15 +55,21 @@ class MetricsScrapeAuthorizationTest {
     }
 
     /**
-     * SecurityConfig is a {@code @RequiredArgsConstructor} bean with a wide collaborator list, and
-     * none of them are touched by the authorization gate. Allocating without running a constructor
-     * keeps this test from having to mock a dozen unrelated beans.
+     * SecurityConfig is a {@code @RequiredArgsConstructor} bean with a wide collaborator list, none
+     * of which the authorization gate touches. The generated constructor <em>is</em> invoked, with
+     * a null for every collaborator — that is safe here precisely because the gate reads only the
+     * {@code metricsScrapeToken} field and the request, so no null is ever dereferenced. This
+     * keeps the test from having to mock a dozen unrelated beans.
+     *
+     * <p>The constructor is selected by arity rather than by {@code getDeclaredConstructors()[0]},
+     * whose ordering the JLS does not specify.
      */
     private static SecurityConfig newSecurityConfig() throws ReflectiveOperationException {
-        var ctor = SecurityConfig.class.getDeclaredConstructors()[0];
+        var ctor = Arrays.stream(SecurityConfig.class.getDeclaredConstructors())
+            .max(Comparator.comparingInt(Constructor::getParameterCount))
+            .orElseThrow(() -> new AssertionError("SecurityConfig has no constructor"));
         ctor.setAccessible(true);
-        Object[] args = new Object[ctor.getParameterCount()];
-        return (SecurityConfig) ctor.newInstance(args);
+        return (SecurityConfig) ctor.newInstance(new Object[ctor.getParameterCount()]);
     }
 
     private static boolean granted(AuthorizationManager<RequestAuthorizationContext> gate,
@@ -193,14 +201,21 @@ class MetricsScrapeAuthorizationTest {
         Path source = Path.of("src/main/java/com/example/hms/config/SecurityConfig.java");
         assertThat(source).as("SecurityConfig source must be readable from the module dir").exists();
 
-        List<String> offending = Files.readAllLines(source, StandardCharsets.UTF_8).stream()
-            .filter(line -> line.contains("/actuator/prometheus"))
-            .filter(line -> line.contains("permitAll"))
-            .toList();
+        // Whitespace-normalised, not line-by-line: a line filter is defeated by a formatter
+        // wrapping the call as `.requestMatchers("/actuator/prometheus")\n    .permitAll()`,
+        // which reopens the hole with the test still green.
+        String normalised = Files.readString(source, StandardCharsets.UTF_8)
+            .replaceAll("\\s+", " ");
 
-        assertThat(offending)
+        assertThat(normalised)
             .as("/actuator/prometheus must stay behind metricsScrapeAuthorization() — "
                 + "it exposes the whole URI inventory and business counters")
-            .isEmpty();
+            .doesNotContain("\"/actuator/prometheus\" ) .permitAll()")
+            .doesNotContain("\"/actuator/prometheus\").permitAll()");
+
+        // The matcher must still be present and gated, so deleting the line cannot pass either.
+        assertThat(normalised)
+            .as("the token gate must remain wired to the metrics endpoint")
+            .contains(".requestMatchers(\"/actuator/prometheus\").access(metricsScrapeAuthorization())");
     }
 }

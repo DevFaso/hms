@@ -77,8 +77,10 @@ services:
   # ── Keycloak (profile: keycloak) ───────────────────────────
   # Local-dev Identity Provider for S-03 (see docs/tasks-keycloak.md).
   #   docker compose --profile keycloak up -d keycloak
-  # Admin console: http://localhost:8081/  (admin / admin)
-  # Issuer URI for the backend: http://localhost:8081/realms/hms
+  # Admin console: http://localhost:8085/  (admin / admin)
+  # Issuer URI for the backend: http://localhost:8085/realms/hms
+  # Port 8085, not 8081: the backend owns host 8081 under the `local` profile, and the
+  # observability probes/scrape target it there. Override with KEYCLOAK_HOST_PORT.
   # Realm is imported from keycloak/realm-export.json on first boot.
   # Production deployment is a managed Railway service, NOT this container.
   keycloak:
@@ -103,13 +105,13 @@ services:
       KC_HTTP_PORT: "8080"
       KC_HEALTH_ENABLED: "true"
     ports:
-      # Host 8081 is also where the backend listens under the `local` profile
-      # (application-local.yml, app.backend.base-url, the e2e helper). With the
-      # keycloak profile up, whichever binds first wins and the observability
-      # stack's probes/scrape silently hit the wrong service. Remap Keycloak when
-      # you need both: KEYCLOAK_HOST_PORT=8085 docker compose --profile keycloak up -d
-      # (then the issuer becomes http://localhost:8085/realms/hms).
-      - "${KEYCLOAK_HOST_PORT:-8081}:8080"
+      # Defaults to 8085 because host 8081 belongs to the backend under the `local`
+      # profile (application-local.yml, app.backend.base-url, the e2e helper), and the
+      # new Alloy scrape and all five blackbox probes target it there. Sharing the port
+      # meant whichever bound first won and the probes silently measured Keycloak.
+      # Set KEYCLOAK_HOST_PORT=8081 to restore the old mapping if you have local
+      # clients configured against it.
+      - "${KEYCLOAK_HOST_PORT:-8085}:8080"
       - "9000:9000"
     volumes:
       - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
@@ -196,7 +198,9 @@ services:
       # The backend is not a compose service — it runs on the host under the `local` profile
       # (port 8081). Override if you run it elsewhere.
       HMS_BACKEND_ADDRESS: ${HMS_BACKEND_ADDRESS:-host.docker.internal:8081}
-      # Must match the METRICS_SCRAPE_TOKEN the backend was started with, otherwise
+      # Must match the backend's own token. application-local.yml sets the same default,
+      # so the `local` profile works with no extra setup; if you run the backend under a
+      # different profile you must export METRICS_SCRAPE_TOKEN for BOTH. Otherwise
       # /api/actuator/prometheus answers 401 and no backend series are collected.
       METRICS_SCRAPE_TOKEN: ${METRICS_SCRAPE_TOKEN:-local-dev-scrape-token}
     # `host.docker.internal` is built in on Docker Desktop (macOS/Windows) but not on Linux,

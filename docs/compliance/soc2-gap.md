@@ -91,7 +91,7 @@ Status legend:
 
 | Ref | Criterion | Status | Evidence / gap |
 |---|---|---|---|
-| CC2.1 | Obtains or generates relevant quality information | 🟡 Partial | `support.audit_event_logs` is the real, load-bearing control and is fully wired. Grafana Cloud export was dormant until 2026-11-01 (env vars unset; see [`docs/GRAFANA_CLOUD_SETUP.md`](../GRAFANA_CLOUD_SETUP.md)). Splunk HEC is code-complete but has never been enabled. This row previously read "fully wired" for all three — an auditor finding that over two disabled exporters is worse than an honest gap. |
+| CC2.1 | Obtains or generates relevant quality information | 🟡 Partial | `support.audit_event_logs` is the real, load-bearing control and is fully wired. Grafana Cloud export is still dormant as of 2026-11-01 — the agent, dashboards and alert rules exist but the Railway variables that activate them are unset in both environments, so nothing is exported yet (see [`docs/GRAFANA_CLOUD_SETUP.md`](../GRAFANA_CLOUD_SETUP.md)). Splunk HEC is code-complete but has never been enabled. This row previously read "fully wired" for all three — an auditor finding that over two disabled exporters is worse than an honest gap. |
 | CC2.2 | Internally communicates information | 🟡 Partial | Runbooks exist (`docs/runbooks/`); no centralised security-communications channel documented |
 | CC2.3 | Communicates with external parties | ❌ Gap | No public security contact, no `security.txt`, no vulnerability disclosure policy. **Action:** add `.well-known/security.txt` + `docs/compliance/policies/vulnerability-disclosure.md` |
 
@@ -220,6 +220,7 @@ matrix at [`soc2-controls.csv`](./soc2-controls.csv).
 | 14 | Documented on-call rotation + escalation policy | CC7.4 | Platform | S |
 | 15 | Weekly automated restore-test GitHub Action against throwaway env | A1.3 | Platform | M |
 | 16 | Service-account key-rotation runbook (Twilio, Gmail, Splunk HEC, Keycloak client secret) | CC6.7 | Backend | S |
+| 16a | **Grafana Cloud access-policy token (`stack-1404501-alloy`) expires 2027-02-08.** It is the single credential the whole observability pipeline depends on, and the failure mode is silent — the agent keeps running, exports 401, dashboards go flat with no alert. Renew it, or mint a non-expiring token, and add an alert on metrics going absent. See [`docs/GRAFANA_CLOUD_SETUP.md`](../GRAFANA_CLOUD_SETUP.md). | CC6.7, CC7.2 | Platform | S |
 | 17 | Onboarding / offboarding checklist + permission-revocation playbook | CC6.3, CC1.5 | Compliance | S |
 
 ### P2 — close during the observation window (Type II preparation)

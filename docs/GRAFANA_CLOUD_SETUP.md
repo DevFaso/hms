@@ -287,5 +287,5 @@ docker compose --profile observability up -d
   `traces:write` and nothing else.
 - OTLP export is HTTPS with Basic auth.
 - Rotating the token means re-running the setup script for both environments; it
-  is on the service-account rotation list in
-  [`docs/compliance/soc2-gap.md`](compliance/soc2-gap.md).
+  is tracked as row 16a of the remediation backlog in
+  [`docs/compliance/soc2-gap.md`](compliance/soc2-gap.md) — an open item, not a solved one.

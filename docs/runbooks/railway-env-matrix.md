@@ -89,7 +89,9 @@ not breaking, but worth keeping consistent across envs.
 
 ---
 
-## 2. `hms-backend-<env>` (Spring Boot, `hospital-core`) — one per environment
+## 2. The backend services (Spring Boot, `hospital-core`) — one per environment
+
+> **Service names do not follow the `-<env>` pattern.** Dev is `hms-backend-dev`; **prod is `hms-backend-core`**, not `hms-backend-prod`. `<env>` is used below only as shorthand for "the backend service in that environment". Targeting `hms-backend-prod` with the Railway CLI fails against a service that does not exist.
 
 The whole OIDC posture lives in env vars; there are no per-profile YAML
 defaults. From [`hospital-core/src/main/resources/application.properties`](../../hospital-core/src/main/resources/application.properties):
