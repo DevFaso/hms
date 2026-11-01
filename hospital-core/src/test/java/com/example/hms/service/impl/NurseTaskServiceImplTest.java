@@ -3278,6 +3278,22 @@ class NurseTaskServiceImplTest {
             .doesNotThrowAnyException();
     }
 
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"HELD", "REFUSED"})
+    void aWithheldDoseWithoutAReasonIsRefusedBeforeAnythingIsWritten_D1159(String status) {
+        // QA D1159 (round 21): the eMAR sent {"status":"HELD"} alone and the record kept no reason.
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = highRiskRx(hospitalId, false);
+        org.mockito.Mockito.lenient().when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
+        NurseMedicationAdministrationRequestDTO request = statusRequest(status);
+        request.setNote("  ");
+
+        assertThatThrownBy(() -> service.recordMedicationAdministration(rx.getId(), UUID.randomUUID(), hospitalId, request))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting("messageKey").isEqualTo("nurse.mar.reasonRequired");
+        verify(marRepository, never()).save(any());
+    }
+
     @Test
     void anUnverifiedHighRiskDoseCanStillBeRecordedAsREFUSED() {
         UUID hospitalId = UUID.randomUUID();
