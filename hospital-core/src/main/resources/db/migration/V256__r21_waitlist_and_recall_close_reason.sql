@@ -1,4 +1,4 @@
--- V256 (QA D1157, round 21).
+-- V256 (QA D1157 and D1148, round 21).
 -- Closing a waitlist entry and cancelling a recall acted on one click: the
 -- server accepted an empty body, so nothing recorded why a patient left the
 -- waitlist or why a planned recall was dropped. The reason is now required
@@ -11,3 +11,7 @@ ALTER TABLE scheduling.appointment_waitlist
 
 ALTER TABLE scheduling.patient_recalls
     ADD COLUMN IF NOT EXISTS close_reason VARCHAR(500);
+
+-- QA D1148: an advance directive was revoked with no reason either.
+ALTER TABLE clinical.advance_directives
+    ADD COLUMN IF NOT EXISTS revocation_reason VARCHAR(500);

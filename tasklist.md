@@ -5936,7 +5936,6 @@ ships*, not for building — and check the shipped surface before trusting a
 ## Standing debt — round 21 (fix/r21-core-clinical-rules)
 - [ ] D1157 class: `PUT /refills/{id}/reject` takes optional `providerNotes`; require a reason once the portal refill screen asks for one (`CancelVoidReasonGuardTest` KNOWN GAP).
 - [ ] D1157 class: `PUT /roi-requests/{id}/cancel` takes an optional note (deny requires it); require it with the ROI worklist dialog (KNOWN GAP).
-- [ ] D1148 class: `PUT /advance-directives/{id}/revoke` takes no body; add a reason column and the directive tab's revoke reason together (KNOWN GAP).
 - [ ] D1151 / D1148 class: edits of a recorded imaging report, micro culture, maternal history and high-risk plan are not checked for emptying the record (`EmptyClinicalWriteGuardTest` KNOWN_GAPS); the creates are.
 - [ ] D1148: the check-in desk's consent (`ReceptionServiceImpl`, source CHECK_IN) is recorded best effort and may still carry no signer; the desk dialog should require the name (portal) before the server can refuse it without losing the consent silently.
 - [ ] D1161 / D660: the author can still edit the content (drug, dose) of a sent, partly filled or partner-held order (G13/G15 design: the edit voids the prepared fill and ends the queue claim). Whether a post-signature content edit should be refused like SIGNED (withdraw and re-prescribe) is a product decision; only the withdrawal is under the signed rule now.

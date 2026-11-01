@@ -425,8 +425,7 @@ class CancelVoidReasonGuardTest {
             "KNOWN GAP (D1157 class, standing debt): RoiDecisionDTO.note is optional on cancel (deny requires it);"
                 + " the ROI worklist dialog has no field yet");
         CLINICAL_HANDLERS.put("PUT /advance-directives/{id}/revoke",
-            "KNOWN GAP (D1148 class, standing debt): the revoke takes no body; the directive tab's revoke dialog"
-                + " (portal-clinical-forms branch) and a reason column are needed together");
+            "CloseReasonRequestDTO.reason -> service/impl/AdvanceDirectiveServiceImplTest#aRevokeWithoutAReasonIsRefused_D1148");
     }
 
     /** QA D1159: a dose held or refused is not a path of its own; its rule is on the one MAR writer. */

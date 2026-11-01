@@ -37,6 +37,35 @@ class DrugClassAllergyTest {
         assertThat(DrugClassAllergy.covers(allergen, medication, null)).isFalse();
     }
 
+    /**
+     * The guard: a drug-class rule lives in this package. The penicillin rule
+     * was hand-copied into the prescription check, so the sulfonamide class
+     * never reached it; a class stem written as a string literal anywhere else
+     * fails.
+     */
+    @Test
+    void noDrugClassRuleIsWrittenOutsideTheAllergyPackage() throws java.io.IOException {
+        java.nio.file.Path main = java.nio.file.Path.of("src/main/java/com/example/hms");
+        java.util.regex.Pattern stem =
+            java.util.regex.Pattern.compile("\"(penicil|cillin|cilin|sulfa|sulpha|sulfonamid|cotrimox)");
+        java.util.List<String> offenders = new java.util.ArrayList<>();
+        try (java.util.stream.Stream<java.nio.file.Path> walk = java.nio.file.Files.walk(main)) {
+            for (java.nio.file.Path file : walk.filter(p -> p.toString().endsWith(".java")).toList()) {
+                if (file.toString().replace('\\', '/').contains("/service/allergy/")) {
+                    continue;
+                }
+                for (String line : java.nio.file.Files.readAllLines(file)) {
+                    String code = line.trim();
+                    if (!code.startsWith("*") && !code.startsWith("//") && !code.startsWith("/*")
+                            && stem.matcher(code.toLowerCase(java.util.Locale.ROOT)).find()) {
+                        offenders.add(main.relativize(file) + ": " + code);
+                    }
+                }
+            }
+        }
+        assertThat(offenders).as("a drug-class allergy rule outside DrugClassAllergy (QA D1149)").isEmpty();
+    }
+
     @Test
     void theCatalogueItemsAtcCodePlacesABrandNameInItsClass() {
         assertThat(DrugClassAllergy.covers("Sulfamides", "Bactrim forte", "J01EE01")).isTrue();

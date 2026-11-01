@@ -358,7 +358,7 @@ public class EncounterServiceImpl implements EncounterService {
      * and shown on the portal as a balance. It is cancelled with the reason
      * the visit was closed for, and stamped as every cancellation is.
      */
-    private void voidUnpaidCopays(UUID encounterId, String reason) {
+    private void voidUnpaidCopays(UUID encounterId, String reason, LocalDateTime closedAt) {
         if (billingInvoiceRepository == null) {
             return;
         }
@@ -371,7 +371,7 @@ public class EncounterServiceImpl implements EncounterService {
             }
             copay.setStatus(com.example.hms.enums.InvoiceStatus.CANCELLED);
             copay.setCancelReason(reason);
-            copay.setCancelledAt(LocalDateTime.now());
+            copay.setCancelledAt(closedAt);
             copay.setCancelledBy(actor);
             billingInvoiceRepository.save(copay);
         }
@@ -2647,7 +2647,7 @@ public class EncounterServiceImpl implements EncounterService {
         extra.put(UNSEEN_CLOSED_AT_FIELD, now.toString());
         encounter.setExtraFields(extra);
         Encounter saved = encounterRepository.save(encounter);
-        voidUnpaidCopays(saved.getId(), request.getReason().trim());
+        voidUnpaidCopays(saved.getId(), request.getReason().trim(), now);
         trackerEventPublisher.publishStatusTransition(saved,
             previous != null ? previous.name() : null, closedAs.name());
 

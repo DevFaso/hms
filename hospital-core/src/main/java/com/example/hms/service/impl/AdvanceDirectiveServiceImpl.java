@@ -130,8 +130,10 @@ public class AdvanceDirectiveServiceImpl implements AdvanceDirectiveService {
 
     @Override
     @Transactional
-    public AdvanceDirectiveResponseDTO revoke(UUID id) {
+    public AdvanceDirectiveResponseDTO revoke(UUID id, String reason) {
         AdvanceDirective directive = loadScoped(id);
+        // QA D1148 (round 21): a revoked directive says why, on the server.
+        directive.setRevocationReason(com.example.hms.service.support.CancelledOrders.requireCancelReason(reason));
         directive.setStatus(AdvanceDirectiveStatus.REVOKED);
         directive.setLastReviewedAt(LocalDateTime.now());
         return mapper.toResponseDto(directiveRepository.save(directive));

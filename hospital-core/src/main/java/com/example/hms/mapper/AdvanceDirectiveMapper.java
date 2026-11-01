@@ -30,6 +30,7 @@ public class AdvanceDirectiveMapper {
             .documentLocation(directive.getDocumentLocation())
             .sourceSystem(directive.getSourceSystem())
             .lastReviewedAt(directive.getLastReviewedAt())
+            .revocationReason(directive.getRevocationReason())
             .build();
     }
 }

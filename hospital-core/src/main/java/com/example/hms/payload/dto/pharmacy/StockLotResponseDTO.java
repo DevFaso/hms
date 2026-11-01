@@ -23,6 +23,8 @@ public class StockLotResponseDTO {
     private UUID id;
     private UUID inventoryItemId;
     private String lotNumber;
+    /** QA D1163: the stock item's unit, so the fill form offers only lots of the prescribed form. */
+    private String unit;
     private LocalDate expiryDate;
     private BigDecimal initialQuantity;
     private BigDecimal remainingQuantity;

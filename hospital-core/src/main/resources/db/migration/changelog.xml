@@ -3280,7 +3280,8 @@
 
     <!-- V256 (round 21): QA D1157, the reason a waitlist entry is closed or a
          recall cancelled is required and kept (close_reason on
-         scheduling.appointment_waitlist and scheduling.patient_recalls).
+         scheduling.appointment_waitlist and scheduling.patient_recalls), and
+         D1148, an advance directive's revocation reason (clinical.advance_directives).
          Plain statements, no DO block. Idempotent. -->
     <changeSet id="V256-r21-waitlist-and-recall-close-reason" author="hms-team" runOnChange="false">
         <sqlFile path="V256__r21_waitlist_and_recall_close_reason.sql"
