@@ -34,8 +34,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 class EncounterProviderRoleGuardTest {
 
     private static final Path MAIN = Path.of("src/main/java/com/example/hms");
+    /** A line that declares something called like a method: words, then a name, then "(". */
     private static final Pattern METHOD = Pattern.compile(
-        "(?m)^\\s*(?:(?:public|private|protected|static|final|synchronized)\\s+)*[\\w<>\\[\\],.? ]+\\s+(\\w+)\\s*\\([^;{]*\\)\\s*(?:throws [\\w., ]+)?\\{");
+        "(?m)^[ \\t]*+(?:[\\w<>\\[\\],.?]++[ \\t]++)++(\\w+)[ \\t]*+\\(");
     private static final Pattern HAND_LIST = Pattern.compile(
         "roleValidator\\.is(Doctor|Nurse|Midwife|Physician|Surgeon|HospitalAdmin)\\(");
 
@@ -58,7 +59,12 @@ class EncounterProviderRoleGuardTest {
                 }
                 Matcher m = METHOD.matcher(source);
                 while (m.find()) {
-                    int open = source.indexOf('{', m.end() - 1);
+                    int close = SourceScan.closingParen(source, m.end() - 1);
+                    int open = source.indexOf('{', close);
+                    int semicolon = source.indexOf(';', close);
+                    if (open < 0 || (semicolon >= 0 && semicolon < open)) {
+                        continue;
+                    }
                     String body = source.substring(open, SourceScan.closingBrace(source, open) + 1);
                     if (!body.contains("MSG_ENCOUNTER_STAFF_INVALID") && !body.contains("encounter.staff.invalid")) {
                         continue;

@@ -52,6 +52,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class EmptyClinicalWriteGuardTest {
 
+    /** The constraints that make a property required (NotInClinicalFuture is a date rule, not one of them). */
+    private static final Set<Class<? extends Annotation>> REQUIRED_CONSTRAINTS = Set.of(
+        jakarta.validation.constraints.NotNull.class, jakarta.validation.constraints.NotBlank.class,
+        jakarta.validation.constraints.NotEmpty.class, jakarta.validation.constraints.AssertTrue.class);
+
     private static final Path MAIN = Path.of("src/main/java/com/example/hms");
 
     /** The controllers whose writes record clinical content. */
@@ -227,7 +232,7 @@ class EmptyClinicalWriteGuardTest {
         for (ConstraintViolation<Object> v : validator.validate(empty)) {
             String property = v.getPropertyPath().toString();
             Class<? extends Annotation> constraint = v.getConstraintDescriptor().getAnnotation().annotationType();
-            boolean required = constraint.getSimpleName().startsWith("Not") || "AssertTrue".equals(constraint.getSimpleName());
+            boolean required = REQUIRED_CONSTRAINTS.contains(constraint);
             if (required && !property.isEmpty() && !NOT_CONTENT.matcher(property).matches()) {
                 return true;
             }

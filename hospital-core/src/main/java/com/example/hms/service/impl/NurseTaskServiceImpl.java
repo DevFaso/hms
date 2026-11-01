@@ -2082,6 +2082,16 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         notificationRepository.save(notification);
     }
 
+    /** Every part a care note can say something in (DAR, SOAPIE, narrative). */
+    private static Object[] careNoteParts(NurseCareNoteRequestDTO request) {
+        if (request == null) {
+            return new Object[0];
+        }
+        return new Object[]{request.getDataPart(), request.getActionPart(), request.getResponsePart(),
+            request.getSubjective(), request.getObjective(), request.getAssessment(), request.getPlan(),
+            request.getImplementation(), request.getEvaluation(), request.getNarrative()};
+    }
+
     @Override
     @Transactional
     public NurseCareNoteResponseDTO createCareNote(UUID patientId, UUID nurseUserId,
@@ -2092,11 +2102,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
         // QA D1151 class (round 21): a care note says something.
         com.example.hms.service.support.ClinicalContent.requireAny("narrative", "nurse.careNote.contentRequired",
-            request == null ? null : request.getDataPart(), request == null ? null : request.getActionPart(),
-            request == null ? null : request.getResponsePart(), request == null ? null : request.getSubjective(),
-            request == null ? null : request.getObjective(), request == null ? null : request.getAssessment(),
-            request == null ? null : request.getPlan(), request == null ? null : request.getImplementation(),
-            request == null ? null : request.getEvaluation(), request == null ? null : request.getNarrative());
+            careNoteParts(request));
 
         if (!patient.isRegisteredInHospital(hospitalId)) {
             throw new BusinessException("nurse.patient.notRegisteredHere");

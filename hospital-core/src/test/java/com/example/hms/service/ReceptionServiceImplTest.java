@@ -1425,8 +1425,8 @@ class ReceptionServiceImplTest {
                         .isInstanceOf(com.example.hms.exception.BusinessException.class)
                         .extracting("messageKey").isEqualTo("order.lifecycle.cancelReasonRequired");
             }
-            verify(entry, org.mockito.Mockito.never()).setStatus(org.mockito.ArgumentMatchers.anyString());
-            verify(waitlistRepo, org.mockito.Mockito.never()).save(entry);
+            verify(entry, never()).setStatus(org.mockito.ArgumentMatchers.anyString());
+            verify(waitlistRepo, never()).save(entry);
         }
 
         @Test

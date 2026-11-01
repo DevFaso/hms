@@ -768,7 +768,7 @@ class EncounterServiceImplTest {
                 TriageSubmissionRequestDTO.builder().esiScore(3).build(), "nurse1", true, null))
             .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
             .extracting("messageKey").isEqualTo("triage.vitals.required");
-        org.mockito.Mockito.verify(patientVitalSignRepository, org.mockito.Mockito.never()).save(any());
+        verify(patientVitalSignRepository, never()).save(any());
         assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.ARRIVED);
     }
 
@@ -1016,7 +1016,7 @@ class EncounterServiceImplTest {
         assertThatThrownBy(() -> service.submitNursingIntake(encounterId, request, "nurse1", true, null))
             .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
             .extracting("messageKey").isEqualTo("encounter.intake.contentRequired");
-        org.mockito.Mockito.verify(encounterRepository, org.mockito.Mockito.never()).save(any(Encounter.class));
+        verify(encounterRepository, never()).save(any(Encounter.class));
     }
 
     // ---------- checkOut (MVP 6) ----------
@@ -1512,7 +1512,7 @@ class EncounterServiceImplTest {
 
         service.checkOut(encounterId, CheckOutRequestDTO.builder().build(), "doctor1", true, null);
 
-        verify(patientRecallRepository, org.mockito.Mockito.never()).save(any());
+        verify(patientRecallRepository, never()).save(any());
     }
 
     @Test

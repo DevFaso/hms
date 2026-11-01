@@ -266,9 +266,8 @@ public class PatientRecordPdfService {
      * D85: a stored code (SIGNED, WAITING_FOR_PHYSICIAN, SEVERE...) printed in
      * the reader's language: the PDF bundle, then the shared clinical enum
      * bundle, then the code made readable - never the raw constant.
-     */
-    /**
-     * QA D1168 (D1134 class, round 21): a severity is read as the allergy's
+     *
+     * <p>QA D1168 (D1134 class, round 21): a severity is read as the allergy's
      * "gravité", so it takes the feminine {@code cds.severity.*} word
      * ("modérée"), as the chart and the alert do; the generic enum word was
      * masculine ("Pénicilline - modéré - … - Confirmée").

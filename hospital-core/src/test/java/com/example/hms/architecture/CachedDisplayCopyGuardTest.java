@@ -33,9 +33,55 @@ class CachedDisplayCopyGuardTest {
 
     private static final Path MAIN = Path.of("src/main/java/com/example/hms");
 
-    /** {@code if (<cond reading getXDisplayY()>) { … setXDisplayY(} - the same property both sides. */
-    static final Pattern SET_ONLY_WHEN_BLANK = Pattern.compile(
-        "if\\s*\\(([^{;]*?)\\b(\\w+)\\.get(\\w*Display\\w*)\\(\\)([^{;]*?)\\)\\s*\\{?\\s*\\2\\.set\\3\\(");
+    private static final Pattern IF_OPEN = Pattern.compile("\\bif\\s*\\(");
+    private static final Pattern GETTER = Pattern.compile("\\b(\\w+)\\.get(\\w+)\\(\\)");
+
+    /**
+     * {@code if (<cond reading x.getYDisplayZ() for blank>) { … x.setYDisplayZ(} - the same object and
+     * property both sides. Returns {@code "<line> <property>"} per hit. Scanned by hand (the condition is
+     * cut at its own closing parenthesis), so no pattern backtracks over the source.
+     */
+    static List<String> setOnlyWhenBlank(String source) {
+        List<String> hits = new ArrayList<>();
+        Matcher open = IF_OPEN.matcher(source);
+        while (open.find()) {
+            int paren = open.end() - 1;
+            int close = SourceScan.closingParen(source, paren);
+            if (close >= source.length()) {
+                continue;
+            }
+            String condition = source.substring(paren + 1, close);
+            if (condition.indexOf('{') >= 0 || condition.indexOf(';') >= 0 || !readsBlank(condition)) {
+                continue;
+            }
+            int next = skipSpaces(source, close + 1);
+            if (next < source.length() && source.charAt(next) == '{') {
+                next = skipSpaces(source, next + 1);
+            }
+            Matcher getter = GETTER.matcher(condition);
+            while (getter.find()) {
+                String property = getter.group(2);
+                if (property.contains("Display")
+                        && source.startsWith(getter.group(1) + ".set" + property + "(", next)) {
+                    hits.add(SourceScan.lineOf(source, open.start()) + " " + property);
+                }
+            }
+        }
+        return hits;
+    }
+
+    private static boolean readsBlank(String condition) {
+        return condition.contains("null") || condition.contains("lank") || condition.contains("hasText")
+            || condition.contains("isEmpty");
+    }
+
+    private static int skipSpaces(String source, int from) {
+        int i = from;
+        while (i < source.length() && Character.isWhitespace(source.charAt(i))) {
+            i++;
+        }
+        return i;
+    }
 
     @Test
     void noDisplayCopyIsWrittenOnlyWhileBlank() throws IOException {
@@ -43,14 +89,8 @@ class CachedDisplayCopyGuardTest {
         try (Stream<Path> walk = Files.walk(MAIN)) {
             for (Path file : walk.filter(p -> p.toString().endsWith(".java")).toList()) {
                 String source = Files.readString(file, StandardCharsets.UTF_8);
-                Matcher m = SET_ONLY_WHEN_BLANK.matcher(source);
-                while (m.find()) {
-                    String condition = m.group(1) + m.group(4);
-                    if (condition.contains("null") || condition.contains("lank") || condition.contains("hasText")
-                            || condition.contains("isEmpty")) {
-                        int line = 1 + (int) source.substring(0, m.start()).chars().filter(ch -> ch == '\n').count();
-                        offenders.add(MAIN.relativize(file) + ":" + line + " " + m.group(3));
-                    }
+                for (String hit : setOnlyWhenBlank(source)) {
+                    offenders.add(MAIN.relativize(file) + ":" + hit);
                 }
             }
         }
@@ -62,15 +102,13 @@ class CachedDisplayCopyGuardTest {
 
     @Test
     void theScanSeesTheD1147Shape() {
-        assertThat(SET_ONLY_WHEN_BLANK.matcher(
-            "if (!notBlank(target.getMedicationDisplayName())) {\n    target.setMedicationDisplayName(dto.getMedicationName());")
-            .find()).isTrue();
-        assertThat(SET_ONLY_WHEN_BLANK.matcher(
-            "if (entity.getAllergenDisplay() == null) entity.setAllergenDisplay(x);").find()).isTrue();
-        assertThat(SET_ONLY_WHEN_BLANK.matcher("target.setMedicationDisplayName(dto.getMedicationName());").find())
-            .isFalse();
-        assertThat(SET_ONLY_WHEN_BLANK.matcher(
-            "if (request.getProblemDisplay() != null) {\n    problem.setProblemDisplay(x);").find())
-            .as("a partial update that reads the request is not the class").isFalse();
+        assertThat(setOnlyWhenBlank(
+            "if (!notBlank(target.getMedicationDisplayName())) {\n    target.setMedicationDisplayName(dto.getMedicationName());"))
+            .containsExactly("1 MedicationDisplayName");
+        assertThat(setOnlyWhenBlank("if (entity.getAllergenDisplay() == null) entity.setAllergenDisplay(x);"))
+            .hasSize(1);
+        assertThat(setOnlyWhenBlank("target.setMedicationDisplayName(dto.getMedicationName());")).isEmpty();
+        assertThat(setOnlyWhenBlank("if (request.getProblemDisplay() != null) {\n    problem.setProblemDisplay(x);"))
+            .as("a partial update that reads the request is not the class").isEmpty();
     }
 }
