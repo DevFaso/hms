@@ -46,9 +46,12 @@ import static org.assertj.core.api.Assertions.assertThat;
  *       {@code isInProgress()}, an open-status set, a conditional claim); or</li>
  *   <li>be listed below with the reason its state check lives elsewhere.</li>
  * </ul>
- * A heuristic, not a proof: a method that reads SOME other status (the blood
- * unit refused TRANSFUSED and re-discarded DISCARDED) passes only when it also
- * names the status it writes, which is exactly what the D1186 shape lacked.
+ * A heuristic, not a proof. It catches the D1186 shapes (no status read at all;
+ * the blood unit that read only TRANSFUSED, a non-terminal state). It is
+ * satisfied by a comparison with ANY terminal-named state or by a
+ * must-be-in-state ({@code != X}) check, and it reads only the method's own
+ * body, so a wrong terminal state or a check in a caller needs the unit test
+ * of that service (each D1186 fix has one).
  */
 @DisplayName("A record closed with a reason cannot be closed again (the reason is never overwritten)")
 class TerminalReasonOverwriteGuardTest {

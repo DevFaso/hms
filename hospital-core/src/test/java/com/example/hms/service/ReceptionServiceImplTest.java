@@ -1469,6 +1469,27 @@ class ReceptionServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D1185: a slot re-held by someone else after the offer lapsed is not freed by the close")
+        void aHoldThatIsNotThisOffersIsLeftAlone_D1185() {
+            UUID waitlistId = UUID.randomUUID();
+            LocalDateTime lapsed = LocalDateTime.now().minusHours(1);
+            AppointmentSlot slot = offerSlot(LocalDateTime.now().plusDays(1));
+            slot.setStatus(SlotStatus.HELD);
+            slot.setHeldUntil(LocalDateTime.now().plusHours(47));
+            AppointmentWaitlist entry = AppointmentWaitlist.builder()
+                    .status("OFFERED").offeredSlot(slot).offerExpiresAt(lapsed).build();
+            when(waitlistRepo.findByIdAndHospital_Id(waitlistId, hospitalId))
+                    .thenReturn(Optional.of(entry));
+
+            service.closeWaitlistEntry(waitlistId, hospitalId, "Plus besoin");
+
+            assertThat(slot.getStatus()).isEqualTo(SlotStatus.HELD);
+            verify(slotRepo, never()).save(slot);
+            assertThat(entry.getOfferedSlot()).isNull();
+            assertThat(entry.getStatus()).isEqualTo("CLOSED");
+        }
+
+        @Test
         @DisplayName("QA D1185: a refused close of an OFFERED entry leaves the slot held")
         void aRefusedCloseLeavesTheOfferAlone_D1185() {
             UUID waitlistId = UUID.randomUUID();

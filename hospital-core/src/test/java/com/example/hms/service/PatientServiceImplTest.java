@@ -920,6 +920,8 @@ class PatientServiceImplTest {
         problem.setStatus(ProblemStatus.INACTIVE);
         problem.setStatusChangeReason("Erreur de saisie");
         when(patientProblemRepository.findById(diagnosisId)).thenReturn(Optional.of(problem));
+        when(patientProblemHistoryRepository.existsByProblem_IdAndChangeType(
+            diagnosisId, com.example.hms.enums.ProblemChangeType.DELETED)).thenReturn(true);
         when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
 
         assertThatThrownBy(() -> patientService.deletePatientDiagnosis(
@@ -928,6 +930,32 @@ class PatientServiceImplTest {
             .extracting("messageKey").isEqualTo("patient.r22.diagnosisAlreadyRemoved");
         assertThat(problem.getStatusChangeReason()).isEqualTo("Erreur de saisie");
         verify(patientProblemRepository, never()).save(any());
+    }
+
+    @Test
+    void aDiagnosisMarkedInactiveCanStillBeRemoved_D1186() throws Exception {
+        // INACTIVE is also a status the chart sets: only a removal (a DELETED
+        // history row) makes the next removal a duplicate.
+        UUID requesterUserId = UUID.randomUUID();
+        UUID diagnosisId = UUID.randomUUID();
+        PatientProblem problem = new PatientProblem();
+        problem.setId(diagnosisId);
+        problem.setPatient(patient);
+        problem.setHospital(hospital);
+        problem.setStatus(ProblemStatus.INACTIVE);
+        Staff staff = new Staff();
+        staff.setId(UUID.randomUUID());
+        when(patientProblemRepository.findById(diagnosisId)).thenReturn(Optional.of(problem));
+        when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
+        when(staffRepository.findByUserIdAndHospitalId(requesterUserId, hospitalId)).thenReturn(Optional.of(staff));
+        when(objectMapper.writeValueAsString(any())).thenReturn("{}");
+        when(patientProblemHistoryRepository.existsByProblem_IdAndChangeType(
+            diagnosisId, com.example.hms.enums.ProblemChangeType.DELETED)).thenReturn(false);
+
+        patientService.deletePatientDiagnosis(patientId, hospitalId, diagnosisId, requesterUserId, "Saisie en double");
+
+        assertThat(problem.getStatusChangeReason()).isEqualTo("Saisie en double");
+        verify(patientProblemRepository).save(problem);
     }
 
     @Test

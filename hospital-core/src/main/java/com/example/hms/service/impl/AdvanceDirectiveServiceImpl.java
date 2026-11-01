@@ -102,6 +102,16 @@ public class AdvanceDirectiveServiceImpl implements AdvanceDirectiveService {
     public AdvanceDirectiveResponseDTO update(UUID id, AdvanceDirectiveRequestDTO request) {
         AdvanceDirective directive = loadScoped(id);
         if (request.getStatus() != null) {
+            // QA D1186 class (round 22, review round 1): a revocation is recorded
+            // only by revoke(), with its reason, and is not undone by an edit -
+            // PUT status=REVOKED stored no reason, and PUT ACTIVE on a revoked
+            // directive let the next revoke overwrite the first reason. Undoing a
+            // revocation is a new directive, as in real hospitals.
+            boolean revoked = directive.getStatus() == AdvanceDirectiveStatus.REVOKED;
+            if (revoked != (request.getStatus() == AdvanceDirectiveStatus.REVOKED)) {
+                throw new BusinessException(revoked
+                    ? "advanceDirective.revoked.locked" : "advanceDirective.revoke.useRevoke");
+            }
             directive.setStatus(request.getStatus());
         }
         applyEditableFields(directive, request);

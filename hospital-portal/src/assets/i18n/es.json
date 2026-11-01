@@ -1468,7 +1468,8 @@
     "NO_SHOW_CONFIRM_MESSAGE": "El paciente no acudió a esta cita.",
     "CONFIRM_NO_SHOW": "Marcar como ausente",
     "STATUS_REASON_CANCELLED": "Motivo de la cancelación",
-    "STATUS_REASON_NO_SHOW": "Motivo de la inasistencia"
+    "STATUS_REASON_NO_SHOW": "Motivo de la inasistencia",
+    "STATUS_REASON_RESCHEDULED": "Motivo de la reprogramación"
   },
   "APPOINTMENT_CALENDAR": {
     "TITLE": "Calendario de citas",

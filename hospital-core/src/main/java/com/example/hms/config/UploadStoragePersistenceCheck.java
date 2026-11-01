@@ -59,7 +59,9 @@ public class UploadStoragePersistenceCheck {
     public void warnWhenStorageIsNotPersistent() {
         String uploadDir = env.getProperty("app.upload.dir", "uploads");
         String photoDir = env.getProperty("app.patient-photo.dir", uploadDir + "/patient-photos");
-        List<String> mountPoints = readMountPoints();
+        // The root-filesystem rule only means something in a container: on a
+        // developer's machine or a CI host the root filesystem is persistent.
+        List<String> mountPoints = runsInAContainer() ? readMountPoints() : List.of();
         String volumeMount = env.getProperty(VOLUME_MOUNT_ENV);
         boolean onRailway = env.getProperty(RAILWAY_ENV) != null;
         for (String dir : List.of(uploadDir, photoDir)) {
@@ -81,7 +83,7 @@ public class UploadStoragePersistenceCheck {
         List<String> warnings = new ArrayList<>();
         Path dir;
         try {
-            dir = Paths.get(directory).toAbsolutePath().normalize();
+            dir = realOrNormalized(Paths.get(directory).toAbsolutePath().normalize());
         } catch (InvalidPathException ex) {
             warnings.add("the storage directory '" + directory + "' is not a valid path");
             return warnings;
@@ -103,6 +105,18 @@ public class UploadStoragePersistenceCheck {
             warnings.add("'" + dir + "' is on the container's root filesystem, not on a mounted volume");
         }
         return warnings;
+    }
+
+    /** The real path when the directory exists (a symlink onto a volume is on the volume), else as written. */
+    static Path realOrNormalized(Path dir) {
+        if (!Files.exists(dir)) {
+            return dir;
+        }
+        try {
+            return dir.toRealPath();
+        } catch (IOException ex) {
+            return dir;
+        }
     }
 
     static String absolute(String directory) {
@@ -131,6 +145,10 @@ public class UploadStoragePersistenceCheck {
             }
         }
         return best;
+    }
+
+    private boolean runsInAContainer() {
+        return env.getProperty(RAILWAY_ENV) != null || Files.exists(Paths.get("/.dockerenv"));
     }
 
     private static List<String> readMountPoints() {

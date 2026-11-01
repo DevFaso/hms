@@ -36,10 +36,45 @@ class ActivationResendStateGuardTest {
         "\\n    (?:(?:private|public|protected|static|final|synchronized)\\s++)++(?:[\\w<>,.?\\[\\]]++\\s++)++"
             + "(resend\\w*+)\\s*+\\((?:[^;{()\"]|\"[^\";{]*+\"|\\((?:[^;{()\"]|\"[^\";{]*+\")*+\\))*+\\)\\s*+(?:throws [\\w., ]++)?+\\{");
 
+    /** The activation state of the user or the assignment, not of any object (a hospital's isActive). */
     static final Pattern STATE_CHECK = Pattern.compile(
-        "getConfirmationVerifiedAt\\(\\)|\\.isActive\\(\\)|\\.getActive\\(\\)|\\bclaimActivationResend\\("
+        "getConfirmationVerifiedAt\\(\\)|\\bclaimActivationResend\\("
+            + "|\\b(?:[Uu]ser|[Aa]ssignment)\\w*+(?:\\.get\\(\\))?+\\.(?:isActive|getActive)\\(\\)"
             // a controller handing over to a service resend method, which the scan reads itself
             + "|\\b\\w*Service\\.resend\\w*+\\(");
+
+    static List<String> offenders(String file, String source) {
+        List<String> out = new ArrayList<>();
+        Matcher m = RESEND_METHOD.matcher(source);
+        while (m.find()) {
+            int open = m.end() - 1;
+            String body = source.substring(open, SourceScan.closingBrace(source, open) + 1);
+            if (!STATE_CHECK.matcher(body).find()) {
+                out.add(file + "#" + m.group(1));
+            }
+        }
+        return out;
+    }
+
+    @Test
+    @DisplayName("the scan catches the r22 resend and accepts its fix; another object's isActive does not count")
+    void catchesTheRoundTwentyTwoShape() {
+        String before = """
+            class S {
+                public void resendNotifications(UUID id) {
+                    UserRoleHospitalAssignment assignment = findChangeable(id);
+                    if (!assignment.getHospital().isActive()) { throw x; }
+                    notifyAssignee(assignment);
+                }
+            }
+            """;
+        assertThat(offenders("S", before)).containsExactly("S#resendNotifications");
+        String after = before.replace("notifyAssignee(assignment);",
+            "if (assignment.getConfirmationVerifiedAt() != null) { throw y; }\n        notifyAssignee(assignment);");
+        assertThat(offenders("S", after)).isEmpty();
+        assertThat(offenders("S", before.replace("assignment.getHospital().isActive()", "userOpt.get().isActive()")))
+            .isEmpty();
+    }
 
     @Test
     @DisplayName("every resend method checks that the activation is still pending")
@@ -52,12 +87,8 @@ class ActivationResendStateGuardTest {
                 Matcher m = RESEND_METHOD.matcher(source);
                 while (m.find()) {
                     methods++;
-                    int open = m.end() - 1;
-                    String body = source.substring(open, SourceScan.closingBrace(source, open) + 1);
-                    if (!STATE_CHECK.matcher(body).find()) {
-                        offenders.add(file.getFileName() + "#" + m.group(1));
-                    }
                 }
+                offenders.addAll(offenders(file.getFileName().toString(), source));
             }
         }
         assertThat(methods).as("the scan found the resend methods").isGreaterThanOrEqualTo(5);

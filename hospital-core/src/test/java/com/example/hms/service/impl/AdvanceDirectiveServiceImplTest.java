@@ -226,6 +226,32 @@ class AdvanceDirectiveServiceImplTest {
     }
 
     @Test
+    void anEditNeitherRevokesNorUnrevokes_D1186() {
+        UUID id = UUID.randomUUID();
+        AdvanceDirective revoked = new AdvanceDirective();
+        revoked.setId(id);
+        revoked.setHospital(hospital);
+        revoked.setStatus(AdvanceDirectiveStatus.REVOKED);
+        revoked.setRevocationReason("Premier motif");
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(directiveRepository.findById(id)).thenReturn(Optional.of(revoked));
+
+        AdvanceDirectiveRequestDTO reactivate = new AdvanceDirectiveRequestDTO();
+        reactivate.setStatus(AdvanceDirectiveStatus.ACTIVE);
+        assertThatThrownBy(() -> service.update(id, reactivate))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("advanceDirective.revoked.locked");
+
+        revoked.setStatus(AdvanceDirectiveStatus.ACTIVE);
+        AdvanceDirectiveRequestDTO revokeByEdit = new AdvanceDirectiveRequestDTO();
+        revokeByEdit.setStatus(AdvanceDirectiveStatus.REVOKED);
+        assertThatThrownBy(() -> service.update(id, revokeByEdit))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("advanceDirective.revoke.useRevoke");
+        verify(directiveRepository, never()).save(any());
+    }
+
+    @Test
     void anotherHospitalsDirectiveReadsAsAbsent() {
         UUID id = UUID.randomUUID();
         AdvanceDirective foreign = new AdvanceDirective();
