@@ -23,6 +23,7 @@ import {
   PrescriptionRequest,
   CommunityPharmacyService,
   CommunityPharmacyOption,
+  SignPrescriptionBody,
 } from '../services/prescription.service';
 import {
   DispenseResponse,
@@ -1107,6 +1108,18 @@ export class PrescriptionsComponent implements OnInit {
   readonly signReauthUsesCode = signal(false);
   readonly signReauthError = signal('');
   signReauthSecret = '';
+  /** Round 18: the sign dialog asks for the re-authentication (a controlled drug, or a step-up refusal). */
+  readonly signNeedsSecret = signal(false);
+  /**
+   * QA D1183 (round 23, portal half): the critical allergy cards the server
+   * answered the signature with (a documented allergy covers the drug, or
+   * "Vérification des allergies impossible" for a drug name it cannot place
+   * while the patient has a drug-class allergy). Signing then needs the
+   * prescriber's reason, sent as `allergyOverrideReason`; without this the
+   * order could never be signed.
+   */
+  readonly signAllergyCards = signal<CdsCard[]>([]);
+  signAllergyReason = '';
 
   signPrescription(p: PrescriptionResponse): void {
     if (p.controlledSubstance) {
@@ -1121,6 +1134,7 @@ export class PrescriptionsComponent implements OnInit {
     this.signReauthSecret = '';
     this.signReauthError.set('');
     this.signReauthUsesCode.set(false);
+    this.signNeedsSecret.set(true);
     this.signReauthTarget.set(p);
     this.mfa.getStatus().subscribe({
       next: (status) => this.signReauthUsesCode.set(!!status?.mfaEnabled),
@@ -1128,27 +1142,57 @@ export class PrescriptionsComponent implements OnInit {
     });
   }
 
+  /** QA D1183: the sign dialog with the allergy cards and the reason (and the secret again for a controlled drug). */
+  private openSignAllergy(p: PrescriptionResponse, cards: CdsCard[]): void {
+    const needsSecret = this.signNeedsSecret() || !!p.controlledSubstance;
+    if (needsSecret && !this.signReauthTarget()) {
+      this.openSignReauth(p);
+    }
+    this.signReauthSecret = '';
+    this.signReauthError.set('');
+    this.signAllergyReason = '';
+    this.signAllergyCards.set(cards);
+    this.signNeedsSecret.set(needsSecret);
+    this.signReauthTarget.set(p);
+  }
+
   closeSignReauth(): void {
     this.signReauthSecret = '';
     this.signReauthError.set('');
+    this.signAllergyReason = '';
+    this.signAllergyCards.set([]);
+    this.signNeedsSecret.set(false);
     this.signReauthTarget.set(null);
+  }
+
+  /** What the sign dialog still lacks before it can send. */
+  signDialogIncomplete(): boolean {
+    return (
+      (this.signNeedsSecret() && !this.signReauthSecret.trim()) ||
+      (this.signAllergyCards().length > 0 && !this.signAllergyReason.trim())
+    );
   }
 
   submitSignReauth(): void {
     const target = this.signReauthTarget();
-    const secret = this.signReauthSecret;
-    if (!target || !secret.trim() || this.signingId()) return;
-    this.doSign(
-      target,
-      this.signReauthUsesCode() ? { mfaCode: secret.trim() } : { password: secret },
-    );
+    if (!target || this.signDialogIncomplete() || this.signingId()) return;
+    const body: SignPrescriptionBody = {};
+    if (this.signNeedsSecret()) {
+      const secret = this.signReauthSecret;
+      if (this.signReauthUsesCode()) body.mfaCode = secret.trim();
+      else body.password = secret;
+    }
+    if (this.signAllergyCards().length > 0) {
+      body.allergyOverrideReason = this.signAllergyReason.trim();
+    }
+    this.doSign(target, body);
   }
 
-  private doSign(p: PrescriptionResponse, reauth?: { password?: string; mfaCode?: string }): void {
+  private doSign(p: PrescriptionResponse, body?: SignPrescriptionBody): void {
     this.actionError.set('');
     this.signingId.set(p.id);
-    const signed$ = reauth
-      ? this.prescriptionService.sign(p.id, reauth)
+    const signed$ = body
+      ? this.prescriptionService.sign(p.id, body)
       : this.prescriptionService.sign(p.id);
     signed$.subscribe({
       next: (signed) => {
@@ -1171,6 +1215,13 @@ export class PrescriptionsComponent implements OnInit {
         // prescriber with no idea what to do next.
         const msg = this.extractErrorMessage(err);
         this.signingId.set(null);
+        // QA D1183 (round 23): the allergy stop at the signature answers with
+        // its critical cards; the dialog shows them and asks for the reason.
+        const cards = this.extractCdsCards(err);
+        if (cards.length > 0 && !body?.allergyOverrideReason) {
+          this.openSignAllergy(p, cards);
+          return;
+        }
         // Round 18: a refused re-authentication (missing, wrong, locked) is
         // shown in the sign dialog, which opens if the list did not know the
         // drug was controlled; the secret typed is cleared either way.
@@ -1179,6 +1230,7 @@ export class PrescriptionsComponent implements OnInit {
           if (!this.signReauthTarget()) {
             this.openSignReauth(p);
           }
+          this.signNeedsSecret.set(true);
           this.signReauthError.set(
             msg || this.translate.instant('PRESCRIPTIONS.SIGN_REAUTH.FAILED'),
           );

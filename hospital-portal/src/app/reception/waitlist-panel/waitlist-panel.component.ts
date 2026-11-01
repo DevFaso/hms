@@ -34,8 +34,8 @@ import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
 import { debounceTime, Subject, switchMap, catchError, of } from 'rxjs';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
-import { serverInstant } from '../../shared/date-utils';
-import { endsBeforeStart } from '../../shared/forms/date-rules';
+import { localDateString, serverInstant } from '../../shared/date-utils';
+import { endsBeforeStart, isBeforeToday } from '../../shared/forms/date-rules';
 import { PatientSublinePipe } from '../../shared/patient-picker/patient-subline';
 
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
@@ -105,6 +105,17 @@ export class WaitlistPanelComponent implements OnInit {
   selectedDeptId = signal('');
   dateFrom = signal('');
   dateTo = signal('');
+  /**
+   * QA D1215 (round 23, portal half): the server refuses a window that ends
+   * before today (`waitlist.dateRange.past`); the picker never offers one.
+   */
+  readonly today = signal(localDateString());
+
+  /** The earliest end the picker offers: the start, and never before today. */
+  dateToMin(): string {
+    const from = this.dateFrom();
+    return from && from > this.today() ? from : this.today();
+  }
   priority = signal<'ROUTINE' | 'URGENT' | 'STAT'>('ROUTINE');
   reason = signal('');
   readonly priorities = ['ROUTINE', 'URGENT', 'STAT'] as const;
@@ -180,6 +191,7 @@ export class WaitlistPanelComponent implements OnInit {
     this.staffQuery.set('');
     this.dateFrom.set('');
     this.dateTo.set('');
+    this.today.set(localDateString());
     this.priority.set('ROUTINE');
     this.reason.set('');
     this.showAddForm.set(true);
@@ -205,6 +217,14 @@ export class WaitlistPanelComponent implements OnInit {
     // that slips past them is refused here, on the field, with the reason.
     if (endsBeforeStart(this.dateFrom(), this.dateTo())) {
       const message = this.translate.instant('DATE_RULES.END_BEFORE_START');
+      refuseFields(this.host.nativeElement, ['wl-to'], WAITLIST_FIELDS, message);
+      this.toast.error(message);
+      return;
+    }
+    // QA D1215 (round 23): a window that is already over can never be offered a slot.
+    this.today.set(localDateString());
+    if (isBeforeToday(this.dateTo(), this.today())) {
+      const message = this.translate.instant('DATE_RULES.NOT_IN_PAST');
       refuseFields(this.host.nativeElement, ['wl-to'], WAITLIST_FIELDS, message);
       this.toast.error(message);
       return;

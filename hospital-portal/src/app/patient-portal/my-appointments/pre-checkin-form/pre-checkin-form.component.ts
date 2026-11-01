@@ -29,6 +29,7 @@ import { DialogA11yDirective } from '../../../shared/a11y/dialog-a11y.directive'
 import { SubmitGuardDirective } from '../../../shared/forms/submit-guard.directive';
 import { refuseFields } from '../../../shared/forms/invalid-fields';
 import { isEmailAddress } from '../../../shared/forms/email-address';
+import { PhoneFieldDirective } from '../../../shared/forms/phone-field.directive';
 /** The e-mail field, marked when its address is refused (QA D1179 class). */
 const EMAIL_FIELD_ID = 'email';
 
@@ -36,6 +37,7 @@ const EMAIL_FIELD_ID = 'email';
   selector: 'app-pre-checkin-form',
   standalone: true,
   imports: [
+    PhoneFieldDirective,
     SubmitGuardDirective,
     ClockTimePipe,
     ServerTimePipe,

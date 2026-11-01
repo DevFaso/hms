@@ -74,6 +74,7 @@
         <input
           id="phonePrimary"
           type="tel"
+          appPhoneField
           [(ngModel)]="form.phoneNumberPrimary"
           name="phoneNumberPrimary"
           [required]="phoneRequired"
@@ -165,6 +166,7 @@
         <input
           id="phoneSecondary"
           type="tel"
+          appPhoneField
           [(ngModel)]="form.phoneNumberSecondary"
           name="phoneNumberSecondary"
           [attr.aria-invalid]="serverFieldErrors['phoneNumberSecondary'] ? true : null"
@@ -358,6 +360,7 @@
         <input
           id="ecPhone"
           type="tel"
+          appPhoneField
           [(ngModel)]="form.emergencyContactPhone"
           name="emergencyContactPhone"
           (ngModelChange)="onGuardianPhoneChange()"

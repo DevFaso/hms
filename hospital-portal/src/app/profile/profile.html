@@ -430,6 +430,7 @@
                     <label for="editPhone">{{ 'PROFILE.PHONE_NUMBER' | translate }}</label>
                     <input
                       type="tel"
+                      appPhoneField
                       id="editPhone"
                       [ngModel]="editForm().phoneNumber"
                       (ngModelChange)="updateField('phoneNumber', $event)"

@@ -893,6 +893,153 @@ describe('PrescriptionsComponent — signing', () => {
     });
   });
 
+  // QA D1183 (round 23, portal half): POST /prescriptions/{id}/sign now runs
+  // the allergy stop (a documented allergy, or the CRITICAL "Vérification des
+  // allergies impossible" for a free-text drug the server cannot place while
+  // the patient has a drug-class allergy) and refuses without an
+  // acknowledgement. The sign button showed the refusal as a toast and the
+  // order could never be signed: the request had no way to carry the reason.
+  describe('QA D1183: the allergy stop at the signature', () => {
+    const unverifiable = {
+      summary: 'Vérification des allergies impossible',
+      detail:
+        "Le nom « Septrine » n'a pas pu être rapproché d'une substance active ; le patient est allergique aux sulfamides.",
+      indicator: 'critical',
+      source: { label: 'HMS' },
+    };
+    const refusal = () =>
+      throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 400,
+            error: {
+              error: 'CDS Critical Advisory',
+              message: 'Vérification des allergies impossible',
+              cdsAdvisories: [unverifiable],
+            },
+          }),
+      );
+    const dialog = () =>
+      (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
+        '[data-testid="rx-sign-reauth"]',
+      );
+    const type = (el: HTMLInputElement | HTMLTextAreaElement, value: string) => {
+      el.value = value;
+      el.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+    };
+
+    it('shows the card with its detail, refuses a blank reason, and signs with allergyOverrideReason', async () => {
+      prescriptionService.sign.and.returnValues(refusal(), of(rx('rx-1', 'SIGNED')));
+      component.signPrescription(rx('rx-1', 'DRAFT'));
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      const box = dialog()!;
+      expect(box).withContext('the sign dialog opens on the refusal').not.toBeNull();
+      const cards = box.querySelector('[data-testid="rx-sign-allergy-cards"]')!;
+      expect(cards.textContent).toContain('Vérification des allergies impossible');
+      expect(cards.textContent).toContain('Septrine');
+      expect(box.querySelector('#rx-sign-reauth-secret'))
+        .withContext('not a controlled drug: no password')
+        .toBeNull();
+      expect(toast.error).not.toHaveBeenCalled();
+
+      const submit = box.querySelector<HTMLButtonElement>('[data-testid="rx-sign-submit"]')!;
+      submit.click();
+      fixture.detectChanges();
+      expect(prescriptionService.sign).toHaveBeenCalledTimes(1);
+
+      type(
+        box.querySelector<HTMLTextAreaElement>('#rx-sign-allergy-reason')!,
+        'Tolérance documentée, avis allergologue',
+      );
+      submit.click();
+      fixture.detectChanges();
+      expect(prescriptionService.sign.calls.mostRecent().args).toEqual([
+        'rx-1',
+        { allergyOverrideReason: 'Tolérance documentée, avis allergologue' },
+      ]);
+      expect(component.signReauthTarget()).toBeNull();
+      expect(toast.success).toHaveBeenCalled();
+    });
+
+    it('a controlled drug asks for the reason and the re-authentication again, sent together', () => {
+      const mfa = TestBed.inject(MfaService);
+      spyOn(mfa, 'getStatus').and.returnValue(of({ mfaEnabled: false }));
+      prescriptionService.sign.and.returnValues(refusal(), of(rx('rx-1', 'SIGNED')));
+      component.signPrescription({ ...rx('rx-1', 'DRAFT'), controlledSubstance: true });
+      component.signReauthSecret = 's3cret';
+      component.submitSignReauth();
+      fixture.detectChanges();
+
+      expect(component.signAllergyCards().length).toBe(1);
+      expect(component.signReauthSecret).withContext('the secret is never kept').toBe('');
+      expect(component.signDialogIncomplete()).toBeTrue();
+      component.signReauthSecret = 's3cret';
+      component.signAllergyReason = 'Bénéfice supérieur au risque';
+      component.submitSignReauth();
+      expect(prescriptionService.sign.calls.mostRecent().args).toEqual([
+        'rx-1',
+        { password: 's3cret', allergyOverrideReason: 'Bénéfice supérieur au risque' },
+      ]);
+    });
+
+    it('a second refusal after the reason was given is shown, not looped', () => {
+      prescriptionService.sign.and.returnValues(refusal(), refusal());
+      // QA D1142: a 400 re-reads the row.
+      prescriptionService.getById.and.returnValue(of(rx('rx-1', 'DRAFT')));
+      component.signPrescription(rx('rx-1', 'DRAFT'));
+      component.signAllergyReason = 'Motif';
+      component.submitSignReauth();
+      expect(component.signReauthTarget()).toBeNull();
+      expect(toast.error).toHaveBeenCalledWith('Vérification des allergies impossible');
+    });
+  });
+
+  // QA D1183: create and edit reach the safety net for a free-text name too;
+  // its card is shown with its detail and the existing override is sent.
+  it('QA D1183: the unverifiable card at creation is shown with its detail; the override reason is sent', () => {
+    const card = {
+      summary: 'Vérification des allergies impossible',
+      detail: "« Septrine » n'a pas pu être rapproché d'une substance active.",
+      indicator: 'critical',
+      source: { label: 'HMS' },
+    };
+    // A copy of each body as sent: closing the modal resets the same form object afterwards.
+    const sent: Record<string, unknown>[] = [];
+    prescriptionService.create.and.callFake((req) => {
+      sent.push({ ...req });
+      return sent.length === 1
+        ? throwError(
+            () =>
+              new HttpErrorResponse({
+                status: 400,
+                error: { message: card.summary, cdsAdvisories: [card] },
+              }),
+          )
+        : of(rx('rx-9', 'DRAFT'));
+    });
+    component.openCreate();
+    component.form = { ...component.form, medicationName: 'Septrine', quantity: 10 } as never;
+    component.submitForm();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('[data-testid="cds-advisories"]')?.textContent).toContain('Septrine');
+    expect(component.cdsCriticalBlocked()).toBeTrue();
+    component.form.forceOverride = true;
+    component.form.overrideReason = 'Cotrimoxazole déjà toléré';
+    component.submitForm();
+    expect(sent.length).toBe(2);
+    expect(sent[1]).toEqual(
+      jasmine.objectContaining({
+        forceOverride: true,
+        overrideReason: 'Cotrimoxazole déjà toléré',
+      }),
+    );
+  });
+
   it('a non-403 failure without a body falls back to the generic sign failure', () => {
     const translate = TestBed.inject(TranslateService);
     spyOn(translate, 'instant').and.callFake(((key: string) => `t:${key}`) as never);

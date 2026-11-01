@@ -435,3 +435,214 @@ test('QA D1217 guard: the scan sees the round-23 shape and passes the fix', () =
   ].join('\n');
   assert.deepEqual(draftExemptReasonGates(after), []);
 });
+
+// ── Round 23: a server write rule the portal cannot satisfy (the D1180 class, widened) ──
+//
+// #1011 added refusals that ask for a field ONLY in some cases: a dose given
+// before the minimum interval (`earlyDoseReason`, D1210), a signature the
+// allergy stop applies to (`allergyOverrideReason`, D1183), a cancelled DRAFT
+// invoice (`cancelReason`, D1217), a free-text drug the allergy check cannot
+// place (`overrideReason`, the D1183 safety net). Rules 1-2 above see only an
+// empty body sent to an end-of-record path; these bodies were never empty,
+// they just could not carry the new field: the eMAR and the sign button were
+// dead ends, the D1180 class again.
+//
+// Rule 4: every conditional contract below is true on the server (its request
+// DTO declares the field, its refusal key is in the backend bundles), and the
+// portal both CAN send it (each call to that endpoint has a body, method or
+// declared body type that names the field) and DOES ask for it (a screen
+// outside services/ names it).
+//
+// Rule 5: every String `…Reason` field of a hospital-core write request DTO
+// (payload/**/*Request*.java) is named by some portal source, or pinned with
+// why. A reason the server starts reading that no portal file mentions is a
+// reason no user can give: it fails here in the same build.
+
+const HMS_MAIN = join(here, '..', '..', '..', 'hospital-core', 'src', 'main');
+const PAYLOAD_DIR = join(HMS_MAIN, 'java', 'com', 'example', 'hms', 'payload');
+const BUNDLE_DIR = join(HMS_MAIN, 'resources', 'i18n');
+
+/** The refusals that ask for a field only in some cases, and where the server declares it. */
+export const CONDITIONAL_CONTRACTS = [
+  {
+    verb: 'PUT',
+    path: '/nurse/medications/mar/{taskId}/administer',
+    field: 'earlyDoseReason',
+    dto: 'dto/nurse/NurseMedicationAdministrationRequestDTO.java',
+    key: 'nurse.mar.doseTooSoon',
+    defect: 'D1210',
+  },
+  {
+    verb: 'POST',
+    path: '/prescriptions/{id}/sign',
+    field: 'allergyOverrideReason',
+    dto: 'dto/SignPrescriptionRequestDTO.java',
+    key: 'prescription.allergy.unverifiable',
+    defect: 'D1183',
+  },
+  {
+    verb: 'POST',
+    path: '/prescriptions',
+    field: 'overrideReason',
+    dto: 'dto/PrescriptionRequestDTO.java',
+    key: 'prescription.allergy.unverifiable',
+    defect: 'D1183',
+  },
+  {
+    verb: 'PUT',
+    path: '/prescriptions/{id}',
+    field: 'overrideReason',
+    dto: 'dto/PrescriptionRequestDTO.java',
+    key: 'prescription.allergy.unverifiable',
+    defect: 'D1183',
+  },
+  {
+    verb: 'PUT',
+    path: '/billing-invoices/{id}',
+    field: 'cancelReason',
+    dto: 'dto/BillingInvoiceRequestDTO.java',
+    key: 'billing.invoice.cancelReasonRequiredAll',
+    defect: 'D1217',
+  },
+];
+
+/** Reason fields of write requests that no portal screen sends, each with why. */
+const REASON_FIELD_PINS = new Map();
+
+/** The `private String xReason;` fields of a Java source. */
+export function reasonFields(java) {
+  return [...java.matchAll(/\bprivate\s+String\s+(\w+Reason)\s*;/g)].map((m) => m[1]);
+}
+
+/** Every reason field of every write request DTO: `[{ field, file }]`. */
+function serverReasonFields() {
+  const out = [];
+  for (const file of walk(PAYLOAD_DIR, ['.java'])) {
+    if (!/Request[^/\\]*\.java$/.test(file)) continue;
+    const rel = relative(PAYLOAD_DIR, file).replaceAll('\\', '/');
+    for (const field of reasonFields(readFileSync(file, 'utf8'))) out.push({ field, file: rel });
+  }
+  return out;
+}
+
+/** Whether the backend bundles define `key`. */
+function bundleHasKey(key) {
+  const line = new RegExp(`^${key.replaceAll('.', '\\.')}\\s*=`, 'm');
+  return walk(BUNDLE_DIR, ['.properties']).some((f) => line.test(readFileSync(f, 'utf8')));
+}
+
+/**
+ * Whether a portal call can carry `field`: its body names it, or its method
+ * does (a typed parameter, a spread), or an interface / type the method names
+ * is declared in the same file and lists it.
+ */
+export function callCarries(call, source, field) {
+  const named = new RegExp(`\\b${field}\\b`);
+  if (named.test(call.body) || named.test(call.method)) return true;
+  for (const m of source.matchAll(/\b(?:interface|type)\s+([A-Z]\w*)[^{=]*[{=]\s*\{?/g)) {
+    if (!new RegExp(`\\b${m[1]}\\b`).test(call.method)) continue;
+    const open = source.indexOf('{', m.index);
+    if (open >= 0 && named.test(balanced(source, open, '{', '}'))) return true;
+  }
+  return false;
+}
+
+function portalSources() {
+  return walk(appDir, ['.ts', '.html'])
+    .filter((f) => !f.endsWith('.spec.ts'))
+    .map((f) => ({
+      rel: relative(appDir, f).replaceAll('\\', '/'),
+      text: readFileSync(f, 'utf8'),
+    }));
+}
+
+/** Every problem with one conditional contract, against the server and the portal. */
+function contractProblems(c, sources) {
+  const problems = [];
+  const dto = readFileSync(join(PAYLOAD_DIR, c.dto), 'utf8');
+  if (!new RegExp(`\\bprivate\\s+\\w+\\s+${c.field}\\s*;`).test(dto)) {
+    problems.push(`${c.defect}: ${c.dto} no longer declares ${c.field}: update the contract`);
+  }
+  if (!bundleHasKey(c.key)) {
+    problems.push(`${c.defect}: the refusal key ${c.key} is gone from the bundles`);
+  }
+  const callers = sources
+    .filter(({ rel }) => rel.endsWith('.ts'))
+    .flatMap(({ rel, text }) =>
+      httpCalls(text)
+        .filter((call) => call.verb === c.verb && urlMatches(call.url, c.path))
+        .map((call) => ({ rel, call, text })),
+    );
+  if (callers.length === 0) problems.push(`${c.defect}: no portal call to ${c.verb} ${c.path}`);
+  for (const { rel, call, text } of callers) {
+    if (!callCarries(call, text, c.field)) {
+      problems.push(
+        `${c.defect}: ${rel}:${call.line} ${c.verb} ${c.path} cannot carry '${c.field}'`,
+      );
+    }
+  }
+  const named = new RegExp(`\\b${c.field}\\b`);
+  if (!sources.some(({ rel, text }) => !rel.startsWith('services/') && named.test(text))) {
+    problems.push(`${c.defect}: no screen asks for '${c.field}' (only the service names it)`);
+  }
+  return problems;
+}
+
+test('Round 23: every conditional server contract has a portal call that can send it and a screen that asks for it', () => {
+  const sources = portalSources();
+  const problems = CONDITIONAL_CONTRACTS.flatMap((c) => contractProblems(c, sources));
+  assert.deepEqual(problems, [], 'the server can refuse without this field: let the user give it');
+});
+
+test('Round 23: every reason a write request declares is named by the portal, or pinned with why', () => {
+  const fields = serverReasonFields();
+  assert.ok(fields.length >= 30, `the server reason fields must be read, saw ${fields.length}`);
+  const portal = portalSources()
+    .filter(({ rel }) => rel.endsWith('.ts'))
+    .map(({ text }) => text)
+    .join('\n');
+  const missing = fields
+    .filter(({ field }) => !REASON_FIELD_PINS.has(field))
+    .filter(({ field }) => !new RegExp(`\\b${field}\\b`).test(portal))
+    .map(({ field, file }) => `${file}: ${field}`);
+  assert.deepEqual(missing, [], 'the server reads a reason no portal screen can send');
+  const stale = [...REASON_FIELD_PINS.keys()].filter((f) => new RegExp(`\\b${f}\\b`).test(portal));
+  assert.deepEqual(stale, [], 'a pinned reason is now sent: delete its pin');
+});
+
+test('Round 23 guard: the scans see the round-23 shapes', () => {
+  assert.deepEqual(reasonFields('  private String earlyDoseReason;\n  private String note;'), [
+    'earlyDoseReason',
+  ]);
+  // The round-23 shape: a typed body whose interface lacks the new field.
+  const before = [
+    'export interface Req { status: string; overrideReason?: string }',
+    'export class S {',
+    '  administer(id: string, data: Req) {',
+    '    return this.http.put(`/nurse/medications/mar/${id}/administer`, data);',
+    '  }',
+    '}',
+  ].join('\n');
+  const [call] = httpCalls(before);
+  assert.ok(urlMatches(call.url, '/nurse/medications/mar/{taskId}/administer'));
+  assert.equal(callCarries(call, before, 'earlyDoseReason'), false);
+  const after = before.replace(
+    'overrideReason?: string',
+    'overrideReason?: string; earlyDoseReason?: string',
+  );
+  assert.equal(callCarries(httpCalls(after)[0], after, 'earlyDoseReason'), true);
+  // An interface that extends another, and a body object literal, are read too.
+  const extended = [
+    'export interface Base { password?: string }',
+    'export interface Body extends Base { allergyOverrideReason?: string }',
+    'export class S {',
+    '  sign(id: string, body?: Body) {',
+    '    return this.http.post(`/prescriptions/${id}/sign`, body ?? {});',
+    '  }',
+    '}',
+  ].join('\n');
+  assert.equal(callCarries(httpCalls(extended)[0], extended, 'allergyOverrideReason'), true);
+  const literal = 'return this.http.post(`/prescriptions/${id}/sign`, { allergyOverrideReason });';
+  assert.equal(callCarries(httpCalls(literal)[0], literal, 'allergyOverrideReason'), true);
+  assert.equal(callCarries(httpCalls(literal)[0], literal, 'earlyDoseReason'), false);
+});

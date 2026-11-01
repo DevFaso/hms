@@ -21,6 +21,7 @@ import {
 import { RoleLabelPipe } from '../../shared/pipes/role-label.pipe';
 
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { PhoneFieldDirective } from '../../shared/forms/phone-field.directive';
 
 type PageState =
   'loading' | 'loaded' | 'already-verified' | 'success' | 'not-found' | 'error' | 'by-phone';
@@ -28,7 +29,14 @@ type PageState =
 @Component({
   selector: 'app-role-welcome',
   standalone: true,
-  imports: [SubmitGuardDirective, FormsModule, RouterModule, TranslateModule, RoleLabelPipe],
+  imports: [
+    PhoneFieldDirective,
+    SubmitGuardDirective,
+    FormsModule,
+    RouterModule,
+    TranslateModule,
+    RoleLabelPipe,
+  ],
   templateUrl: './role-welcome.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./role-welcome.scss'],

@@ -11,6 +11,8 @@ import {
   NurseTaskService,
 } from '../../services/nurse-task.service';
 import { ToastService } from '../../core/toast.service';
+import { mouseClick } from '../../testing/mouse-click';
+import { reasonDialog } from '../../shared/reason-dialog/reason-dialog.testing';
 
 describe('EmarComponent (P1 #8 — five-rights barcode-scan loop)', () => {
   let fixture: ComponentFixture<EmarComponent>;
@@ -320,6 +322,102 @@ describe('EmarComponent (P1 #8 — five-rights barcode-scan loop)', () => {
     expect(toastSpy.error).toHaveBeenCalledOnceWith(
       'Les cinq vérifications ont échoué : motif de dérogation requis.',
     );
+  });
+
+  // QA D1210 (round 23, portal half): the server refuses a dose given before
+  // the minimum gap since the last one (nurse.mar.doseTooSoon on the field
+  // earlyDoseReason) unless the nurse says why. The eMAR showed the refusal as
+  // a toast and offered no way to give the dose early: a dead end.
+  const tooSoon = () =>
+    throwError(
+      () =>
+        new HttpErrorResponse({
+          status: 400,
+          error: {
+            message:
+              'Dose trop rapprochée : dernière dose le 01/11 10:00, prochaine au plus tôt 13:00 (toutes les 4 h).',
+            field: 'earlyDoseReason',
+            fieldErrors: {
+              earlyDoseReason:
+                'Dose trop rapprochée : dernière dose le 01/11 10:00, prochaine au plus tôt 13:00 (toutes les 4 h).',
+            },
+          },
+        }),
+    ) as Observable<NurseMedicationTask>;
+
+  it('QA D1210: a dose refused as too soon shows why and is given early with the reason (witness kept)', () => {
+    const morphine: NurseMedicationTask = {
+      ...sampleTask,
+      id: 'task-mor',
+      controlledSubstance: true,
+    };
+    nurseSpy.getMedicationMAR.and.returnValue(of([morphine]));
+    nurseSpy.administerMedication.and.returnValues(tooSoon(), of(morphine));
+    fixture.detectChanges();
+    component['selectTask'](morphine);
+    component['verification'].set({
+      marId: morphine.id,
+      outcomes: { PATIENT: true, DRUG: true, DOSE: true, ROUTE: true, TIME: true },
+      failedChecks: [],
+      failureReasons: {},
+      allPassed: true,
+      verifiedAt: '2026-04-30T08:01:00',
+    });
+    component['witnessUserId'].set('u-witness');
+    fixture.detectChanges();
+    // The panel's button sits below the test window's fold; the dialog it opens is a fixed overlay.
+    root().querySelector<HTMLButtonElement>('[data-testid="emar-administer-given"]')!.click();
+    fixture.detectChanges();
+
+    const dialog = reasonDialog(fixture)!;
+    expect(dialog).withContext('the reason is asked for').not.toBeNull();
+    expect(dialog.querySelector('[data-testid="early-dose-why"]')?.textContent).toContain(
+      'prochaine au plus tôt 13:00',
+    );
+    expect(toastSpy.error).not.toHaveBeenCalled();
+    const field = dialog.querySelector<HTMLTextAreaElement>(
+      '[data-testid="reason-dialog-reason"]',
+    )!;
+    mouseClick(field);
+    field.value = 'Douleur EVA 9/10, avis du médecin de garde';
+    field.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    mouseClick(dialog.querySelector<HTMLElement>('[data-testid="reason-dialog-confirm"]')!);
+    fixture.detectChanges();
+
+    expect(nurseSpy.administerMedication).toHaveBeenCalledTimes(2);
+    expect(nurseSpy.administerMedication.calls.mostRecent().args).toEqual([
+      morphine.id,
+      {
+        status: 'GIVEN',
+        witnessUserId: 'u-witness',
+        earlyDoseReason: 'Douleur EVA 9/10, avis du médecin de garde',
+      },
+    ]);
+    expect(reasonDialog(fixture)).toBeNull();
+    expect(toastSpy.success).toHaveBeenCalled();
+  });
+
+  it('QA D1210: "Retour" on the early-dose reason records nothing', () => {
+    nurseSpy.getMedicationMAR.and.returnValue(of([sampleTask]));
+    nurseSpy.administerMedication.and.returnValue(tooSoon());
+    fixture.detectChanges();
+    component['selectTask'](sampleTask);
+    component['holdRefuseReason'].set('');
+    component['verification'].set({
+      marId: sampleTask.id,
+      outcomes: { PATIENT: true, DRUG: true, DOSE: true, ROUTE: true, TIME: true },
+      failedChecks: [],
+      failureReasons: {},
+      allPassed: true,
+      verifiedAt: '2026-04-30T08:01:00',
+    });
+    component['administer']('GIVEN');
+    const dialog = reasonDialog(fixture)!;
+    mouseClick(dialog.querySelector<HTMLElement>('[data-testid="reason-dialog-cancel"]')!);
+    fixture.detectChanges();
+    expect(reasonDialog(fixture)).toBeNull();
+    expect(nurseSpy.administerMedication).toHaveBeenCalledTimes(1);
   });
 
   it('does not call administer when GIVEN is requested without verification or override', () => {

@@ -200,6 +200,7 @@
                   [class.invalid]="isMissing('phoneNumber')"
                   [attr.aria-invalid]="isMissing('phoneNumber') || null"
                   type="tel"
+                  appPhoneField
                   [(ngModel)]="form.phoneNumber"
                   name="phoneNumber"
                   [placeholder]="'HOSPITALS.PHONE_PLACEHOLDER' | translate"

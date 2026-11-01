@@ -580,6 +580,13 @@ cannot slip past it again.
 | `scripts/lib/server-refusal-shown.test.mjs` (fixed) | D1212 sibling: `READ_KEY` matched `UPLOAD_FAILED` as a read because of the `LOAD` inside `UPLOAD`. It now reads `(?<!UP)LOAD`. | 1 site found and fixed (my-documents upload) |
 | `scripts/lib/raw-server-message.test.mjs` (pins shrunk) | D1156 class in the patient portal and billing. | patient-portal 8 → 0; billing.ts 11 → 10 |
 
+## Guards added or widened by round 23 (fix/r23-portal-siblings)
+
+| Guard | Class it stops | Scope / allowlist |
+|---|---|---|
+| `scripts/lib/terminal-action-reason.test.mjs` (widened, rules 4-5) | The D1180 class widened (round 23: D1210, D1183, D1217): a server write rule that refuses unless a field is sent, and no portal screen can send it. #1011 refused an early dose without `earlyDoseReason` and a signature the allergy stop applies to without `allergyOverrideReason`; the portal's request types could not carry either, so the eMAR and the sign button were dead ends. Rule 4: each conditional contract (endpoint, field, DTO, refusal key) is checked against the server (the DTO declares the field, the key is in the bundles) and the portal (every call to the endpoint can carry the field through its body, method or declared body type, and a screen outside `services/` asks for it). Rule 5: every String `…Reason` field of a write request DTO (`payload/**/*Request*.java`, 34 files) is named by a portal source, or pinned with why. | 5 contracts (administer `earlyDoseReason`, sign `allergyOverrideReason`, create/edit `overrideReason`, invoice `cancelReason`); 0 reason pins |
+| `scripts/lib/phone-field.test.mjs` (new) | D1211 (portal half): a phone input checked only by the server (`@PhoneNumber`, 27 fields), so a non-number came back as a banner after the save. Every phone input (`type="tel"`, or an id/name/model that says phone) carries `appPhoneField` (`shared/forms/phone-field.directive.ts`: the server rule `isFacilityPhone`, message on the field), and its component imports the directive (Angular ignores an unimported attribute directive silently). | Every template (`.html` and inline); 22 inputs; 2 pins (login bootstrap phone, user-list login phone: each has its own stricter check) |
+
 ## Guards added by the i18n review (fix/i18n-review-r22)
 
 | Guard | Class | Scope |

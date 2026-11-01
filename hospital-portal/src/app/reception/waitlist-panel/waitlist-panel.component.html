@@ -253,7 +253,7 @@
             id="wl-to"
             class="form-input"
             type="date"
-            [attr.min]="dateFrom() || null"
+            [attr.min]="dateToMin()"
             [ngModel]="dateTo()"
             (ngModelChange)="dateTo.set($event)"
           />

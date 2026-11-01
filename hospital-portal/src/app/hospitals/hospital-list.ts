@@ -11,6 +11,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { OrgTextPipe } from '../shared/pipes/org-text.pipe';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { PhoneFieldDirective } from '../shared/forms/phone-field.directive';
 
 type RequiredHospitalField = 'name' | 'phoneNumber' | 'country' | 'city' | 'address';
 
@@ -27,6 +28,7 @@ const REQUIRED_HOSPITAL_FIELDS: readonly { key: RequiredHospitalField; inputId: 
   selector: 'app-hospital-list',
   standalone: true,
   imports: [
+    PhoneFieldDirective,
     SubmitGuardDirective,
     ModalDialogDirective,
     FormsModule,

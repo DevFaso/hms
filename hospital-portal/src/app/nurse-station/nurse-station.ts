@@ -40,6 +40,7 @@ import {
   NurseInboxItem,
   NurseCareNoteRequest,
   NurseCareNoteResponse,
+  MedicationAdministrationRequest,
 } from '../services/nurse-task.service';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { PatientResponse, PatientService } from '../services/patient.service';
@@ -73,6 +74,8 @@ import { offersHeadCircumference } from '../shared/patient-measures';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refusalReason } from '../shared/refusal-reason';
+import { ReasonDialogComponent } from '../shared/reason-dialog/reason-dialog.component';
+import { earlyDoseRefusal } from './early-dose';
 type FilterMode = 'me' | 'unit' | 'all';
 type SectionType =
   | 'vitals'
@@ -114,6 +117,7 @@ export function localInputToUtcIso(value: string | undefined | null): string | u
     ServerTimePipe,
     CdsCardListComponent,
     WitnessPickerComponent,
+    ReasonDialogComponent,
   ],
   templateUrl: './nurse-station.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -581,9 +585,8 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
       this.toast.error(this.translate.instant('NURSE.WITNESS.REQUIRED'));
       return;
     }
-    this.actionInProgress.set(prompt.taskId);
     const witness = this.witnessUserId();
-    const payload =
+    const payload: MedicationAdministrationRequest =
       prompt.action === 'GIVEN'
         ? {
             status: 'GIVEN',
@@ -591,6 +594,33 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
             ...(this.promptNeedsWitness() && witness ? { witnessUserId: witness } : {}),
           }
         : { status: prompt.action, note: reason };
+    this.sendAdministration(prompt, payload);
+  }
+
+  /**
+   * QA D1210 (round 23): the dose the server refused as too soon after the
+   * last one, with its reason (last dose, earliest next time). It opens over
+   * the Give prompt, which stays open underneath; the nurse may give the dose
+   * early with a reason, or go back to the prompt.
+   */
+  readonly earlyDose = signal<{
+    prompt: { taskId: string; action: 'GIVEN' | 'HELD' | 'REFUSED' };
+    payload: MedicationAdministrationRequest;
+    why: string;
+  } | null>(null);
+
+  /** QA D1210: the same dose again, with the nurse's reason for giving it early. */
+  confirmEarlyDose(reason: string): void {
+    const early = this.earlyDose();
+    if (!early || this.actionInProgress()) return;
+    this.sendAdministration(early.prompt, { ...early.payload, earlyDoseReason: reason });
+  }
+
+  private sendAdministration(
+    prompt: { taskId: string; action: 'GIVEN' | 'HELD' | 'REFUSED' },
+    payload: MedicationAdministrationRequest,
+  ): void {
+    this.actionInProgress.set(prompt.taskId);
     this.nurseService.administerMedication(prompt.taskId, payload).subscribe({
       next: () => {
         // prompt.action is already 'HELD' | 'REFUSED' (see promptHoldRefuse
@@ -603,17 +633,26 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
           }),
         );
         this.actionInProgress.set(null);
+        this.earlyDose.set(null);
         this.reasonPrompt.set(null);
         this.loadAll();
       },
       error: (err: unknown) => {
-        this.toast.error(this.actionError(err));
         this.actionInProgress.set(null);
+        // QA D1210: too soon after the last dose: say why and ask for the reason.
+        const tooSoon = earlyDoseRefusal(err);
+        if (tooSoon && !payload.earlyDoseReason) {
+          this.earlyDose.set({ prompt, payload, why: tooSoon });
+          return;
+        }
+        this.earlyDose.set(null);
+        this.toast.error(this.actionError(err));
       },
     });
   }
 
   cancelHoldRefuse(): void {
+    this.earlyDose.set(null);
     this.reasonPrompt.set(null);
     this.reasonText.set('');
     this.witnessUserId.set(null);

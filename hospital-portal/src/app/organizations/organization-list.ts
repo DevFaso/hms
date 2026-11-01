@@ -27,11 +27,13 @@ import { EnumLabelService } from '../core/enum-label.service';
 import { OrgTextPipe, seededOrgTextKey } from '../shared/pipes/org-text.pipe';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { PhoneFieldDirective } from '../shared/forms/phone-field.directive';
 
 @Component({
   selector: 'app-organization-list',
   standalone: true,
   imports: [
+    PhoneFieldDirective,
     SubmitGuardDirective,
     ModalDialogDirective,
     FormsModule,
