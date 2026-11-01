@@ -40,8 +40,12 @@ month we delay the Type I cutover delays Type II by an equal month.
 - `patient-android-app` and `patient-ios-app` — patient mobile clients
 - `keycloak/` — identity provider (currently OIDC, Phase C cutover pending)
 - Railway-hosted PostgreSQL (managed) — primary datastore
-- Splunk Cloud (HEC ingest) — centralised log + audit aggregation
-- Grafana Cloud (OTel ingest) — metrics + traces
+- Splunk Cloud (HEC ingest) — **code-complete but never enabled.** `SPLUNK_HEC_ENABLED`
+  defaults to `false` and has never been set in either environment, so no log has
+  reached Splunk. Not currently a vendor; treat as an integration point.
+- Grafana Cloud (OTLP ingest) — metrics + traces + logs. Agent, dashboards and alert
+  rules exist; the Railway variables that activate them were only set from 2026-11-01
+  (see [`docs/GRAFANA_CLOUD_SETUP.md`](../GRAFANA_CLOUD_SETUP.md)).
 - Twilio + Gmail SMTP — patient communication
 - GitHub + GitHub Actions — source control + CI/CD
 
@@ -85,7 +89,7 @@ Status legend:
 
 | Ref | Criterion | Status | Evidence / gap |
 |---|---|---|---|
-| CC2.1 | Obtains or generates relevant quality information | ✅ Present | Splunk HEC + Grafana Cloud + audit log table (`support.audit_event_logs`) — fully wired |
+| CC2.1 | Obtains or generates relevant quality information | 🟡 Partial | `support.audit_event_logs` is the real, load-bearing control and is fully wired. Grafana Cloud export was dormant until 2026-11-01 (env vars unset; see [`docs/GRAFANA_CLOUD_SETUP.md`](../GRAFANA_CLOUD_SETUP.md)). Splunk HEC is code-complete but has never been enabled. This row previously read "fully wired" for all three — an auditor finding that over two disabled exporters is worse than an honest gap. |
 | CC2.2 | Internally communicates information | 🟡 Partial | Runbooks exist (`docs/runbooks/`); no centralised security-communications channel documented |
 | CC2.3 | Communicates with external parties | ❌ Gap | No public security contact, no `security.txt`, no vulnerability disclosure policy. **Action:** add `.well-known/security.txt` + `docs/compliance/policies/vulnerability-disclosure.md` |
 

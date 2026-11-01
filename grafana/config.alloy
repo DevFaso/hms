@@ -3,9 +3,12 @@
 // In production (Railway), the OTEL Java Agent exports directly to Grafana Cloud.
 
 // ── Spring Boot metrics discovery ──────────────────────────────────────────
+// The backend is NOT a compose service — it runs on the host (`./gradlew :hospital-core:bootRun`,
+// local profile, port 8081). `host.docker.internal` is what resolves back to the host from inside
+// the container; the compose file adds the `host-gateway` alias so this also works on Linux.
 discovery.relabel "metrics_integrations_integrations_spring_boot" {
 	targets = [{
-		__address__ = "hms-backend:8081",
+		__address__ = env("HMS_BACKEND_ADDRESS"),
 	}]
 
 	rule {
@@ -25,6 +28,11 @@ prometheus.scrape "metrics_integrations_integrations_spring_boot" {
 	forward_to   = [prometheus.relabel.metrics_integrations_integrations_spring_boot.receiver]
 	job_name     = "integrations/spring-boot"
 	metrics_path = "/api/actuator/prometheus"
+
+	// /actuator/prometheus is token-gated (SecurityConfig#metricsScrapeAuthorization) because on
+	// Railway the management port shares the public API hostname. Alloy must present the same
+	// METRICS_SCRAPE_TOKEN the backend was started with, or every scrape returns 403.
+	bearer_token = env("METRICS_SCRAPE_TOKEN")
 }
 
 // ── Keep only the metrics required by the Grafana dashboards ──────────────

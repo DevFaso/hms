@@ -24,6 +24,8 @@ import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
+import org.springframework.security.authorization.AuthorizationDecision;
+import org.springframework.security.authorization.AuthorizationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -37,6 +39,7 @@ import org.springframework.security.oauth2.server.resource.web.BearerTokenResolv
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.intercept.AuthorizationFilter;
+import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
@@ -45,6 +48,8 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.List;
 
 import static com.example.hms.config.SecurityConstants.ROLE_DOCTOR;
@@ -269,6 +274,20 @@ public class SecurityConfig {
     /** The provider MFA gate (AC-13), carried by the confinement filter; same slice reason. */
     private final ObjectProvider<ProviderMfaGate> providerMfaGateProvider;
 
+    /**
+     * Shared secret that authorizes a Prometheus scrape of {@code /actuator/prometheus}.
+     *
+     * <p>Blank (the default) means the endpoint is closed to everyone — which is the correct
+     * production posture here, because Railway publishes the management port on the same public
+     * hostname as the API and metrics carry the whole endpoint inventory. Prod/dev export metrics
+     * by push instead (OTEL Java agent -> Grafana Cloud OTLP gateway).
+     *
+     * <p>Set {@code METRICS_SCRAPE_TOKEN} only where something must genuinely pull, e.g. the local
+     * docker-compose Alloy collector or a Grafana Cloud hosted-Prometheus scrape job.
+     */
+    @Value("${app.observability.metrics.scrape-token:}")
+    private String metricsScrapeToken;
+
     @Value("${app.cors.allowed-origins:http://localhost:4200}")
     private String allowedOrigins;
 
@@ -393,6 +412,42 @@ public class SecurityConfig {
         return source;
     }
 
+    /**
+     * Authorizes {@code GET /actuator/prometheus} against the configured scrape token.
+     *
+     * <p>Deliberately an {@link AuthorizationManager} rather than a servlet {@code Filter}: adding a
+     * filter bean with dependencies to this context breaks every {@code @WebMvcTest} controller
+     * slice, which has already cost this codebase a 257-failure run (PR #536).
+     *
+     * <p>The token may arrive as {@code Authorization: Bearer <token>} (what Prometheus, Alloy and
+     * Grafana Cloud all emit natively) or as {@code X-Metrics-Token}. Comparison is constant-time so
+     * the endpoint cannot be used as a timing oracle for the token.
+     */
+    private AuthorizationManager<RequestAuthorizationContext> metricsScrapeAuthorization() {
+        return (authentication, context) -> {
+            if (metricsScrapeToken == null || metricsScrapeToken.isBlank()) {
+                return new AuthorizationDecision(false);
+            }
+            String presented = presentedScrapeToken(context.getRequest());
+            if (presented == null) {
+                return new AuthorizationDecision(false);
+            }
+            return new AuthorizationDecision(MessageDigest.isEqual(
+                presented.getBytes(StandardCharsets.UTF_8),
+                metricsScrapeToken.getBytes(StandardCharsets.UTF_8)));
+        };
+    }
+
+    /** Extracts the presented scrape credential, or {@code null} when the request carries none. */
+    private static String presentedScrapeToken(HttpServletRequest request) {
+        String authorization = request.getHeader("Authorization");
+        if (authorization != null && authorization.regionMatches(true, 0, "Bearer ", 0, 7)) {
+            return authorization.substring(7).trim();
+        }
+        String headerToken = request.getHeader("X-Metrics-Token");
+        return headerToken == null || headerToken.isBlank() ? null : headerToken.trim();
+    }
+
     @Bean
     @Order(1)
     @SuppressWarnings({"java:S3330", "java:S4502"})
@@ -509,7 +564,12 @@ public class SecurityConfig {
 
                 // -------------------- Public / Health --------------------
                 .requestMatchers("/error").permitAll()
-                .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info", "/actuator/prometheus").permitAll()
+                .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
+                // Metrics scrape is NOT public: the series expose the full URI inventory,
+                // JVM/DB internals and business counters. Production ships metrics by PUSH
+                // (OTEL agent -> Grafana Cloud OTLP), so this endpoint stays closed unless a
+                // scrape token is configured. See docs/GRAFANA_CLOUD_SETUP.md.
+                .requestMatchers("/actuator/prometheus").access(metricsScrapeAuthorization())
                 .requestMatchers("/.well-known/jwks.json").permitAll()
                 // FHIR conformance discovery — public per HL7 FHIR R4 spec
                 // (clients query /fhir/metadata before authenticating)

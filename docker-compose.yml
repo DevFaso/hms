@@ -183,6 +183,16 @@ services:
       GRAFANA_METRICS_URL: ${GRAFANA_METRICS_URL:-http://prometheus:9090/api/v1/write}
       GRAFANA_METRICS_USER: ${GRAFANA_METRICS_USER:-}
       GRAFANA_METRICS_TOKEN: ${GRAFANA_METRICS_TOKEN:-}
+      # The backend is not a compose service — it runs on the host under the `local` profile
+      # (port 8081). Override if you run it elsewhere.
+      HMS_BACKEND_ADDRESS: ${HMS_BACKEND_ADDRESS:-host.docker.internal:8081}
+      # Must match the METRICS_SCRAPE_TOKEN the backend was started with, otherwise
+      # /api/actuator/prometheus answers 403 and no backend series are collected.
+      METRICS_SCRAPE_TOKEN: ${METRICS_SCRAPE_TOKEN:-local-dev-scrape-token}
+    # `host.docker.internal` is built in on Docker Desktop (macOS/Windows) but not on Linux,
+    # where this alias makes it resolve to the host.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       loki:
         condition: service_healthy
@@ -283,6 +293,9 @@ services:
       - '--config.file=/etc/blackbox_exporter/config.yml'
     volumes:
       - ./grafana/blackbox.yml:/etc/blackbox_exporter/config.yml:ro
+    # The probe targets in grafana/prometheus.yml point at the host-run backend.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   # ── Grafana ────────────────────────────────────────────────
   grafana:

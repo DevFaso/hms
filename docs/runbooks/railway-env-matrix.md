@@ -110,6 +110,23 @@ app.auth.oidc.required=${OIDC_REQUIRED:false}
 | `JWT_PRIVATE_KEY` / `JWT_PUBLIC_KEY` / `JWT_PREVIOUS_PUBLIC_KEY` | secret | unset (HMAC mode) | unset | RS256 mode is Phase 6; leave unset for now. When set in any env, that env switches to RS256 — must be set in lockstep with the matching public key on JWT consumers. |
 | `DATABASE_URL` (or `SPRING_DATASOURCE_URL` + USERNAME / PASSWORD) | derived | `${{hms-db-dev.DATABASE_URL}}` | same, `-prod` | **MUST.** Application Postgres — separate DB from `hms-keycloak-<env>-db`. |
 | Encryption keys (AES) | secret | (env-specific) | (env-specific) | **MUST.** Per memory `hms-prod-secrets-exposed-2026-05-09.md`, prod set is currently unrotated post-exposure; tier-4 rotation is a separate ticket. Refer to that runbook before touching. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | public | `https://otlp-gateway-prod-us-east-2.grafana.net/otlp` | same | **SHOULD.** The single switch that activates observability: the Dockerfile entrypoint attaches `-javaagent` only when this is non-empty, so leaving it unset means no traces, metrics or logs reach Grafana Cloud. Don't hand-set — run [`scripts/grafana-cloud-setup.sh`](../../scripts/grafana-cloud-setup.sh). |
+| `OTEL_EXPORTER_OTLP_PROTOCOL` | public | `http/protobuf` | same | **MUST** when the endpoint is set. The Grafana Cloud gateway rejects the agent's default `grpc`, and the failure is a quiet export error rather than a boot failure. |
+| `OTEL_EXPORTER_OTLP_HEADERS` | secret | `Authorization=Basic <base64(1404501:glc_…)>` | same | **MUST** when the endpoint is set. Read by the OTEL agent. Instance `1404501`. |
+| `GRAFANA_OTLP_AUTH_HEADER` | secret | `Basic <base64(1404501:glc_…)>` | same | **MUST** when the endpoint is set. Same credential, different format — read by the Micrometer OTLP registry via `application-prod.yml`. Must stay in lockstep with `OTEL_EXPORTER_OTLP_HEADERS`, or metrics and traces disagree about authorization. |
+| `OTEL_SERVICE_NAME` | public | `hms-backend` | `hms-backend` | **SHOULD.** Becomes `service_name` on every series and span. Keep it identical across envs — `OTEL_RESOURCE_ATTRIBUTES` is what separates them. |
+| `OTEL_RESOURCE_ATTRIBUTES` | public | `deployment.environment=dev,service.namespace=hms` | `deployment.environment=prod,…` | **SHOULD.** The only thing distinguishing dev from prod series in a shared Grafana Cloud stack. Getting this wrong silently merges the two environments' metrics. |
+| `OTEL_METRICS_ENABLED` | public | `true` | `true` | **SHOULD.** Gates the Micrometer OTLP exporter (`management.otlp.metrics.export.enabled`). Traces/logs flow from the agent regardless. |
+| `OTEL_TRACES_SAMPLER` / `OTEL_TRACES_SAMPLER_ARG` | public | `parentbased_always_on` / unset | `parentbased_traceidratio` / `0.1` | **SHOULD.** The agent defaults to 100% sampling. Traces are the signal that can outgrow the free tier's 50 GB/month, so prod ratio-samples. Raise temporarily for an investigation. |
+| `METRICS_SCRAPE_TOKEN` | secret | unset | unset | **SHOULD stay unset.** Gates `GET /api/actuator/prometheus`; blank = closed to everyone. Railway serves the management port on the public API hostname, so a public scrape endpoint leaks the whole URI inventory and business counters (it did, until this was gated). Production pushes over OTLP and never needs to be pulled. Set it only for a deliberate Grafana Cloud hosted-Prometheus scrape job. |
+| `SPLUNK_HEC_ENABLED` (+ `SPLUNK_HEC_URL` / `_TOKEN`) | secret | `false` | `false` | **MAY.** Additive SIEM log shipping. Enabling without URL + token fails the context at boot by design (`SplunkLoggingProperties`). Note `docs/compliance/soc2-gap.md` describes this as wired — it has never been enabled in either env. |
+
+> **Observability (Grafana Cloud).** These were absent from this matrix and unset on
+> both backends until 2026-11-01, so the entire pipeline — agent, dashboards, alert
+> rules, runbook — sat dormant. See
+> [`docs/GRAFANA_CLOUD_SETUP.md`](../GRAFANA_CLOUD_SETUP.md) for the one-command
+> setup, the free-tier arithmetic, and why the scrape endpoint is closed.
+
 
 **Verify with:** the boot log of each backend should print:
 
