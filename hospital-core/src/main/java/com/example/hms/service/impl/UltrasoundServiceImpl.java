@@ -309,13 +309,14 @@ public class UltrasoundServiceImpl implements UltrasoundService {
      * with every value null. Create and edit go through here alike. A scan
      * with no cardiac activity says so in the findings or the interpretation.
      * {@code UltrasoundReportFindingsTest} sets every box at once and expects
-     * the refusal.
+     * the refusal. The number of fetuses is not a finding either: the entity
+     * and the form default it to 1, so it cannot tell a default from a count.
      */
     static void requireReportFindings(UltrasoundReportRequestDTO request) {
         com.example.hms.service.support.ClinicalContent.requireAny("findingsSummary",
             "ultrasound.report.findingsRequired",
             request.getGestationalAgeAtScan(), request.getGestationalAgeDays(), request.getNuchalTranslucencyMm(),
-            request.getCrownRumpLengthMm(), request.getEstimatedDueDate(), request.getNumberOfFetuses(),
+            request.getCrownRumpLengthMm(), request.getEstimatedDueDate(),
             request.getFetalPosition(), request.getBiparietalDiameterMm(), request.getHeadCircumferenceMm(),
             request.getAbdominalCircumferenceMm(), request.getFemurLengthMm(), request.getEstimatedFetalWeightGrams(),
             request.getPlacentalLocation(), request.getPlacentalGrade(), request.getAmnioticFluidIndex(),

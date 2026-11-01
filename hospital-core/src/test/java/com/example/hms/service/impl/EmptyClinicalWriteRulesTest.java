@@ -43,6 +43,8 @@ class EmptyClinicalWriteRulesTest {
             }
         }
         assertThat(ticked).as("yes/no boxes on the report").isGreaterThanOrEqualTo(9);
+        // The fetus count defaults to 1 on the entity and the form: not a finding (#1005 review).
+        boxes.setNumberOfFetuses(1);
         assertThatThrownBy(() -> UltrasoundServiceImpl.requireReportFindings(boxes))
             .isInstanceOf(FieldBusinessException.class)
             .extracting("messageKey").isEqualTo("ultrasound.report.findingsRequired");
