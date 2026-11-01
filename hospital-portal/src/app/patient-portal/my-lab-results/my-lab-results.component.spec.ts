@@ -234,6 +234,9 @@ describe('MyLabResultsComponent', () => {
       fixture.detectChanges();
       expect(el.querySelectorAll('[data-lab-id]').length).toBe(20);
       expect(el.querySelector('[data-testid="lab-load-more"]')).toBeNull();
+      // The button went: the keyboard lands on the last row shown, not the page body.
+      await new Promise((resolve) => setTimeout(resolve));
+      expect(document.activeElement?.getAttribute('data-lab-id')).toBe('l19');
     });
 
     it('a failed first read says so, with the server reason, never "no results"', async () => {

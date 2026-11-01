@@ -58,12 +58,16 @@ export class MyLabResultsComponent implements OnInit {
 
   /**
    * Shows the older results. When none are left the button goes, so the
-   * keyboard moves to the first result just added rather than the page body.
+   * keyboard moves to the first result just added (or, when the page added
+   * nothing, the last one shown) rather than the page body.
    */
   loadMore(): void {
     this.pager.loadMore((fresh) => {
-      if (!this.pager.hasMore() && fresh.length > 0) {
-        focusWhenRendered(this.host.nativeElement, `[data-lab-id="${CSS.escape(fresh[0].id)}"]`);
+      if (this.pager.hasMore()) return;
+      // The first row just added, or (a page that added nothing) the last row shown.
+      const target = fresh[0] ?? this.results().at(-1);
+      if (target) {
+        focusWhenRendered(this.host.nativeElement, `[data-lab-id="${CSS.escape(target.id)}"]`);
       }
     });
   }
