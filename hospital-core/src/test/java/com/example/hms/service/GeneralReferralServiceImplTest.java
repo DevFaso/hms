@@ -369,10 +369,79 @@ class GeneralReferralServiceImplTest {
         when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
         when(staffRepository.findById(receivingProviderId)).thenReturn(Optional.of(receivingProvider));
         when(referralRepository.save(any(GeneralReferral.class))).thenAnswer(inv -> inv.getArgument(0));
+        // QA D955: the receiving physician acknowledges, not the referrer.
+        when(roleValidator.getCurrentUserId()).thenReturn(receivingProvider.getUser().getId());
 
         GeneralReferralResponseDTO result = service.acknowledgeReferral(referralId, "Acknowledged", receivingProviderId);
 
         assertThat(result.getStatus()).isEqualTo(ReferralStatus.ACKNOWLEDGED);
+    }
+
+    @Test
+    @DisplayName("QA D955: the referrer cannot acknowledge her own internal referral as its receiver")
+    void qaD955_theReferrerCannotBeTheReceiver() {
+        GeneralReferral referral = buildReferral();
+        referral.setStatus(ReferralStatus.SUBMITTED);
+        when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
+
+        assertThatThrownBy(() -> service.acknowledgeReferral(referralId, "self", referringProviderId))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        verify(referralRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("QA D955: a referral cannot be created with its referrer as receiver")
+    void qaD955_theReferrerCannotBeTheReceiverAtCreation() {
+        GeneralReferralRequestDTO dto = buildRequest();
+        dto.setReceivingProviderId(referringProviderId);
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(staffRepository.findById(referringProviderId)).thenReturn(Optional.of(referringProvider));
+
+        assertThatThrownBy(() -> service.createReferral(dto))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        verify(referralRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("QA D955: a colleague cannot name the referrer as the receiver either")
+    void qaD955_theReferrerCannotBeNamedTheReceiver() {
+        GeneralReferral referral = buildReferral();
+        referral.setStatus(ReferralStatus.SUBMITTED);
+        when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
+        when(roleValidator.getCurrentUserId()).thenReturn(receivingProvider.getUser().getId());
+        when(staffRepository.findById(referringProviderId)).thenReturn(Optional.of(referringProvider));
+
+        assertThatThrownBy(() -> service.acknowledgeReferral(referralId, "colleague", referringProviderId))
+            .isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest(name = "{0}")
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"start", "complete", "reject", "schedule"})
+    @DisplayName("QA D955: every receiving-side step is refused to the clinician who sent the referral")
+    void qaD955_noReceivingSideStepForTheReferrer(String step) {
+        GeneralReferral referral = buildReferral();
+        referral.setStatus(ReferralStatus.ACKNOWLEDGED);
+        when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
+
+        org.assertj.core.api.ThrowableAssert.ThrowingCallable call = switch (step) {
+            case "start" -> () -> service.startReferral(referralId);
+            case "complete" -> () -> service.completeReferral(referralId, "s", "f");
+            case "reject" -> () -> {
+                com.example.hms.payload.dto.referral.RejectReferralRequestDTO r =
+                    new com.example.hms.payload.dto.referral.RejectReferralRequestDTO();
+                r.setReason("no");
+                service.rejectReferral(referralId, r);
+            };
+            default -> () -> {
+                com.example.hms.payload.dto.referral.ScheduleReferralRequestDTO r =
+                    new com.example.hms.payload.dto.referral.ScheduleReferralRequestDTO();
+                r.setAppointmentTime(java.time.LocalDateTime.now().plusDays(1));
+                service.scheduleReferral(referralId, r);
+            };
+        };
+        assertThatThrownBy(call).isInstanceOf(com.example.hms.exception.ClientSafeAccessDeniedException.class);
+        verify(referralRepository, never()).save(any());
     }
 
     // ── completeReferral ────────────────────────────────────────────────────
@@ -384,6 +453,7 @@ class GeneralReferralServiceImplTest {
         referral.setStatus(ReferralStatus.ACKNOWLEDGED);
         when(referralRepository.findById(referralId)).thenReturn(Optional.of(referral));
         when(referralRepository.save(any(GeneralReferral.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(roleValidator.getCurrentUserId()).thenReturn(receivingProvider.getUser().getId());
 
         GeneralReferralResponseDTO result = service.completeReferral(referralId, "Summary text", "Follow-up plan");
 

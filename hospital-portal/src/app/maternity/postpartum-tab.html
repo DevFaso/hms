@@ -71,7 +71,7 @@
           [disabled]="!screeningAvailable()"
           [title]="screeningAvailable() ? '' : ('PRO.NOT_LOADED' | translate)"
         >
-          <span class="material-symbols-outlined">psychology</span>
+          <span class="material-symbols-outlined" aria-hidden="true">psychology</span>
           {{ 'PRO.ADMINISTER' | translate }}
         </button>
       </div>
@@ -197,7 +197,7 @@
     <div class="filter-bar">
       <h3 class="section-heading">{{ 'POSTPARTUM.OBSERVATIONS' | translate }}</h3>
       <button class="btn-primary" (click)="openObservation()">
-        <span class="material-symbols-outlined">add</span>
+        <span class="material-symbols-outlined" aria-hidden="true">add</span>
         {{ 'POSTPARTUM.NEW_OBSERVATION' | translate }}
       </button>
     </div>
@@ -271,7 +271,7 @@
     <div class="filter-bar">
       <h3 class="section-heading">{{ 'POSTPARTUM.ASSESSMENTS' | translate }}</h3>
       <button class="btn-primary" (click)="openAssessment()">
-        <span class="material-symbols-outlined">add</span>
+        <span class="material-symbols-outlined" aria-hidden="true">add</span>
         {{ 'POSTPARTUM.NEW_ASSESSMENT' | translate }}
       </button>
     </div>
@@ -360,6 +360,7 @@
   >
     <div
       class="modal modal-lg"
+      aria-labelledby="postpartum-tab-dialog-1-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
@@ -367,13 +368,13 @@
       (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'POSTPARTUM.NEW_OBSERVATION' | translate }}</h2>
+        <h2 id="postpartum-tab-dialog-1-title">{{ 'POSTPARTUM.NEW_OBSERVATION' | translate }}</h2>
         <button
           class="modal-close"
           (click)="closeObservation()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -580,6 +581,7 @@
   >
     <div
       class="modal modal-lg"
+      aria-labelledby="postpartum-tab-dialog-2-title"
       role="dialog"
       aria-modal="true"
       tabindex="-1"
@@ -587,13 +589,13 @@
       (keydown.escape)="$event.stopPropagation()"
     >
       <div class="modal-header">
-        <h2>{{ 'POSTPARTUM.NEW_ASSESSMENT' | translate }}</h2>
+        <h2 id="postpartum-tab-dialog-2-title">{{ 'POSTPARTUM.NEW_ASSESSMENT' | translate }}</h2>
         <button
           class="modal-close"
           (click)="closeAssessment()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -777,7 +779,7 @@
           (click)="closeScreening()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">
@@ -871,7 +873,7 @@
           (click)="closeAcknowledge()"
           [attr.aria-label]="'COMMON.CLOSE' | translate"
         >
-          <span class="material-symbols-outlined">close</span>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
       </div>
       <div class="modal-body">

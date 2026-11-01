@@ -28,6 +28,9 @@ import { PatientService, PatientResponse } from '../services/patient.service';
 import { DepartmentLookupService, DepartmentOption } from '../services/department-lookup.service';
 import { ToastService } from '../core/toast.service';
 import { AuthService } from '../auth/auth.service';
+import { NursingNotesPanelComponent } from './nursing-notes-panel/nursing-notes-panel.component';
+import { NursingNoteService } from '../services/nursing-note.service';
+import { MedicalCertificateDialogComponent } from './medical-certificate-dialog/medical-certificate-dialog.component';
 import { RoleContextService } from '../core/role-context.service';
 import { HospitalScopeUrlService } from '../core/hospital-scope-url.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -55,6 +58,8 @@ import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
     HospitalScopeChipComponent,
     EnumLabelPipe,
     CheckoutDialogComponent,
+    NursingNotesPanelComponent,
+    MedicalCertificateDialogComponent,
   ],
   templateUrl: './encounters.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -672,8 +677,52 @@ export class EncountersComponent implements OnInit {
 
   /* ── Note sign/co-sign ceremony (P3 #20) ── */
 
-  /** No client-side role gate, matching the prescriptions pattern: whoever
-   *  passes the route guard sees the button; the backend arbitrates
+  /** QA D961: the certificate dialog. */
+  readonly showCertificateDialog = signal(false);
+
+  /**
+   * QA D961: a doctor issues a certificate from a visit the patient was seen
+   * in (the server refuses a visit closed unseen, cancelled or not started).
+   */
+  canIssueCertificate(enc: EncounterResponse): boolean {
+    const unseen = [
+      'SCHEDULED',
+      'ARRIVED',
+      'TRIAGE',
+      'WAITING_FOR_PHYSICIAN',
+      'CANCELLED',
+      'LEFT_WITHOUT_BEING_SEEN',
+    ];
+    return (
+      this.auth.hasAnyRole(actionRoles('encounterMedicalCertificate')) &&
+      !!enc.status &&
+      !unseen.includes(enc.status)
+    );
+  }
+
+  /** QA D927: only the roles `GET /nurse/notes` admits load the panel (a refused read would leave the page). */
+  get canReadNursingNotes(): boolean {
+    return this.auth.hasAnyRole(NursingNoteService.READER_ROLES);
+  }
+
+  /**
+   * QA D995: only the note's author signs it and only another clinician
+   * co-signs it (the server refuses the rest), so the buttons are offered
+   * accordingly instead of leading to a refusal. A note with no recorded
+   * author keeps both, and the server decides.
+   */
+  isNoteAuthor(note: EncounterNoteResponse | null): boolean {
+    const me = this.auth.getUserId();
+    return !note?.authorUserId || (!!me && note.authorUserId === me);
+  }
+
+  isOtherClinicianNote(note: EncounterNoteResponse | null): boolean {
+    const me = this.auth.getUserId();
+    return !note?.authorUserId || !me || note.authorUserId !== me;
+  }
+
+  /** Matching the prescriptions pattern, the backend arbitrates; whoever
+   *  is offered the button (see isNoteAuthor) has it checked again there
    *  (author-only for sign, non-author DOCTOR at the hospital for co-sign)
    *  and its refusal is surfaced verbatim. */
   signNote(): void {

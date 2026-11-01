@@ -79,6 +79,12 @@ const PAGE_HANDLED_403_ACTION_PATTERNS = [
   /\/prescriptions\/[^/?]+(\?|$)/,
   // QA D661: a refused referral action is reported by the page's toast.
   /\/referrals\/[^/?]+\/(acknowledge|schedule|start|complete|reject|cancel|submit)(\?|$)/,
+  // QA D995/D933: every encounter workflow action (triage, intake, notes,
+  // sign, co-sign, checkout, LWBS, status steps) and every discharge write is
+  // answered in the open form or a toast; a 403 page lost the typed form.
+  /\/encounters\/[^/?]+\/(triage|complete-triage|nursing-intake|notes|notes\/addendums|notes\/sign|notes\/cosign|checkout|close-unseen|start|complete-examination|ready-for-discharge|medical-certificate)(\?|$)/,
+  /\/discharge-summaries\/[^/?]+(\/finalize)?(\?|$)/,
+  /\/discharge-approvals\/[^/?]+\/(approve|reject|cancel)(\?|$)/,
 ];
 
 const SILENT_401_PATTERNS = [/\/chat\/mark-read\//];

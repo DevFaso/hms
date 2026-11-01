@@ -154,6 +154,8 @@ export interface DischargeSummary {
   providerSignature?: string;
   providerSignatureDateTime?: string;
   isFinalized: boolean;
+  /** Review of #971 (D930): whether the signed-in user may update or delete this draft, as the server decides. */
+  editableByCaller?: boolean | null;
   finalizedAt?: string;
   additionalNotes?: string;
   createdAt?: string;

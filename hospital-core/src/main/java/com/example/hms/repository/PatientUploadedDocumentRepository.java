@@ -29,6 +29,44 @@ public interface PatientUploadedDocumentRepository extends JpaRepository<Patient
     Page<PatientUploadedDocument> findByPatient_IdAndDeletedAtIsNullOrderByCreatedAtDesc(
             UUID patientId, Pageable pageable);
 
+    /**
+     * QA D961: the staff list at a hospital: the patient's own uploads, and
+     * the documents this hospital issued (another hospital's certificate is
+     * not shown).
+     */
+    @org.springframework.data.jpa.repository.Query(
+        "select d from PatientUploadedDocument d where d.patient.id = :patientId and d.deletedAt is null"
+            + " and (d.issuingHospital is null or d.issuingHospital.id = :hospitalId)")
+    Page<PatientUploadedDocument> findForStaff(
+        @org.springframework.data.repository.query.Param("patientId") UUID patientId,
+        @org.springframework.data.repository.query.Param("hospitalId") UUID hospitalId,
+        Pageable pageable);
+
+    /** {@link #findForStaff} filtered by document type. */
+    @org.springframework.data.jpa.repository.Query(
+        "select d from PatientUploadedDocument d where d.patient.id = :patientId and d.deletedAt is null"
+            + " and d.documentType = :documentType"
+            + " and (d.issuingHospital is null or d.issuingHospital.id = :hospitalId)")
+    Page<PatientUploadedDocument> findForStaffByType(
+        @org.springframework.data.repository.query.Param("patientId") UUID patientId,
+        @org.springframework.data.repository.query.Param("hospitalId") UUID hospitalId,
+        @org.springframework.data.repository.query.Param("documentType") PatientDocumentType documentType,
+        Pageable pageable);
+
+    /**
+     * QA D961 (review of #971): the FHIR read paths (DocumentReference search,
+     * Patient/$everything) at a hospital: the {@link #findForStaff} rows, newest
+     * first, with the mapper-walked associations fetched in the page query.
+     */
+    @org.springframework.data.jpa.repository.EntityGraph(attributePaths = {"patient", "uploadedByUser"})
+    @org.springframework.data.jpa.repository.Query(
+        "select d from PatientUploadedDocument d where d.patient.id = :patientId and d.deletedAt is null"
+            + " and (d.issuingHospital is null or d.issuingHospital.id = :hospitalId) order by d.createdAt desc")
+    Page<PatientUploadedDocument> findForStaffNewestFirst(
+        @org.springframework.data.repository.query.Param("patientId") UUID patientId,
+        @org.springframework.data.repository.query.Param("hospitalId") UUID hospitalId,
+        Pageable pageable);
+
     /** Fetch a single document only if it belongs to the patient and is not deleted. */
     Optional<PatientUploadedDocument> findByIdAndPatient_IdAndDeletedAtIsNull(UUID id, UUID patientId);
 }

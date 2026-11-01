@@ -47,6 +47,15 @@ public class PatientUploadedDocument extends BaseEntity {
     @JoinColumn(name = "uploaded_by_user_id", nullable = false)
     private User uploadedByUser;
 
+    /**
+     * QA D961: the hospital that issued a document a clinician generated (a
+     * medical certificate). Staff of another hospital do not see it; null for
+     * the patient's own uploads, which follow the patient as before.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "issuing_hospital_id")
+    private Hospital issuingHospital;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "document_type", nullable = false, length = 50)
     private PatientDocumentType documentType;
