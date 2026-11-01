@@ -1,4 +1,4 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { ActivatedRoute } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
@@ -81,6 +81,63 @@ describe('MyAppointmentsComponent', () => {
       expect(portalService.getSchedulingHospitals).toHaveBeenCalled();
       expect(component.hospitals().length).toBe(1);
     });
+  });
+
+  // QA D1146 (regression of the D1124 fix, round 21): the opener was wrapped in
+  // `@if (!showBookingForm())`, so it was destroyed while the dialog was open
+  // and focus fell to BODY on every close. Driven at DOM level, the way the
+  // patient meets it: keyboard open, Escape, the close button.
+  describe('QA D1146: the booking dialog gives focus back to its opener', () => {
+    function attach(): HTMLElement {
+      document.body.appendChild(fixture.nativeElement);
+      fixture.detectChanges();
+      return (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
+        '[data-testid="booking-open"]',
+      )!;
+    }
+
+    function openByKeyboard(opener: HTMLElement): HTMLElement {
+      opener.focus();
+      opener.click();
+      fixture.detectChanges();
+      tick();
+      const dialog = document.activeElement?.closest<HTMLElement>('[role="dialog"]') ?? null;
+      expect(dialog).withContext('focus moved into the booking dialog').not.toBeNull();
+      expect(dialog!.getAttribute('aria-modal')).toBe('true');
+      return dialog!;
+    }
+
+    afterEach(() => (fixture.nativeElement as HTMLElement).remove());
+
+    it('Escape closes it and focus is back on "Planifier un rendez-vous"', fakeAsync(() => {
+      const opener = attach();
+      const dialog = openByKeyboard(opener);
+      expect(opener.isConnected).withContext('the opener stays on the page').toBeTrue();
+      (document.activeElement as HTMLElement).dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+      );
+      fixture.detectChanges();
+      expect(dialog.isConnected).withContext('Escape closed the dialog').toBeFalse();
+      expect(document.activeElement).withContext('focus back on the opener').toBe(opener);
+    }));
+
+    it('the close button closes it and focus is back on the opener', fakeAsync(() => {
+      const opener = attach();
+      const dialog = openByKeyboard(opener);
+      dialog.querySelector<HTMLElement>('.booking-close')!.click();
+      fixture.detectChanges();
+      expect(dialog.isConnected).toBeFalse();
+      expect(document.activeElement).toBe(opener);
+    }));
+
+    it('QA D1124 still holds: a second open does not wipe the form being filled', fakeAsync(() => {
+      const opener = attach();
+      openByKeyboard(opener);
+      component.selectedHospitalId = 'h1';
+      component.openBookingForm();
+      expect(component.selectedHospitalId).toBe('h1');
+      expect(portalService.getSchedulingHospitals).toHaveBeenCalledTimes(1);
+    }));
   });
 
   describe('closeBookingForm', () => {

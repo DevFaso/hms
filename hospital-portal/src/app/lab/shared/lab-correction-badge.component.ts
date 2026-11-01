@@ -23,9 +23,16 @@ import { TranslateModule } from '@ngx-translate/core';
   standalone: true,
   imports: [TranslateModule],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  // QA D1167 / D1137 (round 21): a word space on each side of the badge, from
+  // the badge itself. Angular drops the whitespace-only text between
+  // `</span>` and `<app-lab-correction-badge>`, so the in-basket read
+  // "12,8 g/dLCorrigéBas" and the portal dashboard "12,8 g/dLCorrigé (13,5 –
+  // 17,5 g/dL)" — in the text a screen reader speaks and a copy pastes, the
+  // margin only separates them on screen. Every usage gets the spaces by
+  // construction (lab-correction-shown.test.mjs holds them).
   template: `
     @if (corrected()) {
-      <span
+      &ngsp;<span
         class="lab-correction-badge"
         data-testid="lab-correction-badge"
         [title]="
@@ -35,7 +42,7 @@ import { TranslateModule } from '@ngx-translate/core';
           ) | translate
         "
         >{{ 'LAB_RESULTS.CORRECTED' | translate }}</span
-      >
+      >&ngsp;
     }
   `,
   styles: [

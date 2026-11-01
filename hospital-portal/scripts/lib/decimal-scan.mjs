@@ -133,8 +133,15 @@ export function decimalTemplateFindings(html, componentSource = '') {
     // `{{ rate }}%` printed "16.7%" in French; even `{{ rate | number }}%`
     // glues the sign ("16,7%" where French writes "16,7 %"). The sign belongs
     // to the formatter: `| measure: '%'` (formatMeasure).
-    const after = html.slice(m.index + m[0].length, m.index + m[0].length + 3);
-    if ((/^\s*%/.test(after) || /\+\s*'\s?%'/.test(expr)) && !/\|\s*measure\s*:\s*'%'/.test(expr)) {
+    // QA D1166 / D1106 / D1135 (round 21, NOT_FIXED a third time): the sign
+    // was typed after markup the round-20 scan did not step over — the
+    // dashboard ring's `{{ progress }}<small>%</small>` ("0% Terminé") and the
+    // chart vitals' `<strong>{{ v.spo2Percent }}</strong><small>%</small>`
+    // ("97%"). Any tags between the interpolation and the "%" are stepped over.
+    if (
+      (typedPercentFollows(html, m.index + m[0].length) || /\+\s*'\s?%'/.test(expr)) &&
+      !/\|\s*measure\s*:\s*'%'/.test(expr)
+    ) {
       findings.push({
         line,
         rule: 'percent',
@@ -169,6 +176,24 @@ export function decimalTemplateFindings(html, componentSource = '') {
     }
   }
   return findings;
+}
+
+/**
+ * Is the next visible character after `from` a typed "%"? Whitespace and any
+ * tags (`</strong>`, `<small>`, `</span>`) in between are stepped over; text
+ * or another interpolation stops the search. A loop, not a regular
+ * expression, so no template can make it backtrack.
+ */
+export function typedPercentFollows(html, from) {
+  let i = from;
+  for (;;) {
+    while (i < html.length && /\s/.test(html[i])) i++;
+    if (html[i] !== '<' || !/[a-zA-Z/]/.test(html[i + 1] ?? '')) break;
+    const close = html.indexOf('>', i);
+    if (close < 0) return false;
+    i = close + 1;
+  }
+  return html[i] === '%';
 }
 
 /** A translation parameter named for a rate or a percentage, and its value (up to `,` or `}`). */

@@ -110,7 +110,8 @@
             />
           </svg>
           <div class="ring-label">
-            <span class="ring-pct">{{ scheduleProgress() }}<small>%</small></span>
+            <!-- QA D1166: the sign from the formatter ("0 %" in FR/ES, "0%" in EN). -->
+            <span class="ring-pct">{{ scheduleProgress() | measure: '%' : 0 }}</span>
             <span class="ring-sub">{{ 'DASHBOARD.DONE' | translate }}</span>
           </div>
         </div>

@@ -34,42 +34,44 @@
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon total">receipt_long</span>
       <div class="card-info">
-        <span class="card-value">{{ stats().total }}</span
+        <span class="card-value">{{ statsUnknown() ? '—' : stats().total }}</span
         ><span class="card-label">{{ 'BILLING.TOTAL_INVOICES' | translate }}</span>
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon paid">check_circle</span>
       <div class="card-info">
-        <span class="card-value">{{ stats().paid }}</span
+        <span class="card-value">{{ statsUnknown() ? '—' : stats().paid }}</span
         ><span class="card-label">{{ 'BILLING.PAID' | translate }}</span>
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon pending">schedule</span>
       <div class="card-info">
-        <span class="card-value">{{ stats().outstanding }}</span
+        <span class="card-value">{{ statsUnknown() ? '—' : stats().outstanding }}</span
         ><span class="card-label">{{ 'BILLING.OUTSTANDING_COUNT' | translate }}</span>
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon overdue">warning</span>
       <div class="card-info">
-        <span class="card-value">{{ stats().overdue }}</span
+        <span class="card-value">{{ statsUnknown() ? '—' : stats().overdue }}</span
         ><span class="card-label">{{ 'BILLING.OVERDUE' | translate }}</span>
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon revenue">payments</span>
       <div class="card-info">
-        <span class="card-value">{{ formatCurrency(stats().totalRevenue) }}</span
+        <span class="card-value">{{
+          statsUnknown() ? '—' : formatCurrency(stats().totalRevenue)
+        }}</span
         ><span class="card-label">{{ 'BILLING.REVENUE' | translate }}</span>
       </div>
     </div>
     <div class="summary-card">
       <span class="material-symbols-outlined card-icon outstanding">account_balance</span>
       <div class="card-info">
-        <span class="card-value">{{ formatCurrency(stats().balance) }}</span
+        <span class="card-value">{{ statsUnknown() ? '—' : formatCurrency(stats().balance) }}</span
         ><span class="card-label">{{ 'BILLING.OUTSTANDING' | translate }}</span>
       </div>
     </div>
@@ -82,7 +84,7 @@
       (click)="setTab('all')"
       [title]="'BILLING.TAB_ALL_TITLE' | translate"
     >
-      {{ 'COMMON.ALL' | translate }} ({{ stats().total }})
+      {{ 'COMMON.ALL' | translate }} ({{ statsUnknown() ? '—' : stats().total }})
     </button>
     <button
       class="tab"
@@ -90,7 +92,9 @@
       (click)="setTab('outstanding')"
       [title]="'BILLING.OUTSTANDING_COUNT' | translate"
     >
-      {{ 'BILLING.OUTSTANDING_COUNT' | translate }} ({{ stats().outstanding }})
+      {{ 'BILLING.OUTSTANDING_COUNT' | translate }} ({{
+        statsUnknown() ? '—' : stats().outstanding
+      }})
     </button>
     <button
       class="tab"
@@ -98,7 +102,7 @@
       (click)="setTab('paid')"
       [title]="'BILLING.TAB_PAID_TITLE' | translate"
     >
-      {{ 'BILLING.PAID' | translate }} ({{ stats().paid }})
+      {{ 'BILLING.PAID' | translate }} ({{ statsUnknown() ? '—' : stats().paid }})
     </button>
     <button
       class="tab"
@@ -106,7 +110,7 @@
       (click)="setTab('overdue')"
       [title]="'BILLING.TAB_OVERDUE_TITLE' | translate"
     >
-      {{ 'BILLING.OVERDUE' | translate }} ({{ stats().overdue }})
+      {{ 'BILLING.OVERDUE' | translate }} ({{ statsUnknown() ? '—' : stats().overdue }})
     </button>
   </div>
 
@@ -163,7 +167,18 @@
     </div>
   }
 
-  @if (!loading() && filtered().length > 0) {
+  @if (!loading() && loadFailed()) {
+    <!-- QA D1145: a failed read says so, with a retry; never an empty ledger. -->
+    <div class="empty-state load-failed" role="alert" data-testid="billing-load-failed">
+      <span class="material-symbols-outlined empty-icon" aria-hidden="true">error</span>
+      <h3>{{ 'BILLING.LOAD_FAILED' | translate }}</h3>
+      <button type="button" class="btn-secondary" (click)="loadInvoices(page())">
+        {{ 'COMMON.RETRY' | translate }}
+      </button>
+    </div>
+  }
+
+  @if (!loading() && !loadFailed() && filtered().length > 0) {
     <div class="data-table">
       <table>
         <thead>
@@ -300,7 +315,7 @@
     }
   }
 
-  @if (!loading() && filtered().length === 0) {
+  @if (!loading() && !loadFailed() && filtered().length === 0) {
     <div class="empty-state">
       <span class="material-symbols-outlined empty-icon">receipt_long</span>
       <h3>{{ 'BILLING.NO_INVOICES' | translate }}</h3>
@@ -1071,6 +1086,8 @@
           <input
             id="email-to"
             type="text"
+            inputmode="email"
+            autocomplete="email"
             [ngModel]="emailTo()"
             (ngModelChange)="emailTo.set($event)"
             [placeholder]="'BILLING.EMAIL_TO_HINT' | translate"
@@ -1081,6 +1098,8 @@
           <input
             id="email-cc"
             type="text"
+            inputmode="email"
+            autocomplete="email"
             [ngModel]="emailCc()"
             (ngModelChange)="emailCc.set($event)"
           />

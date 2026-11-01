@@ -1,5 +1,5 @@
 import { EmpiStatusService } from '../reception/empi-status.service';
-import { TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
@@ -7,7 +7,7 @@ import { provideRouter, Route } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { of } from 'rxjs';
 
-import { ShellComponent } from './shell';
+import { MOBILE_SIDEBAR_QUERY, ShellComponent } from './shell';
 import { AuthService } from '../auth/auth.service';
 import { PermissionService } from '../core/permission.service';
 import { RoleContextService } from '../core/role-context.service';
@@ -1243,6 +1243,115 @@ describe('ShellComponent — inbox surfaces live in the topbar', () => {
       fixture.destroy();
     });
   }
+
+  // QA D1153 / D1125 / D1004 (round 21): at 375 px the drawer never took
+  // focus, Escape from the Menu button did nothing and Tab walked to the
+  // language select behind the backdrop.
+  describe('the phone drawer is a keyboard modal', () => {
+    function phoneShell(): { fixture: ComponentFixture<ShellComponent>; menu: HTMLElement } {
+      spyOn(globalThis, 'matchMedia').and.callFake(
+        (q: string) => ({ matches: q === MOBILE_SIDEBAR_QUERY }) as MediaQueryList,
+      );
+      const fixture = build(['ROLE_PATIENT'], 'ROLE_PATIENT');
+      document.body.appendChild(fixture.nativeElement);
+      attached.push(fixture.nativeElement);
+      fixture.detectChanges();
+      const host = fixture.nativeElement as HTMLElement;
+      // The test browser is wider than a phone, so the CSS hides the Menu button.
+      const menu = host.querySelector<HTMLElement>('.mobile-toggle')!;
+      menu.style.display = 'inline-flex';
+      return { fixture, menu };
+    }
+
+    function openFromMenu(
+      fixture: ComponentFixture<ShellComponent>,
+      menu: HTMLElement,
+    ): HTMLElement {
+      menu.focus();
+      menu.click();
+      fixture.detectChanges();
+      TestBed.tick();
+      const aside = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
+        'aside.sidebar',
+      )!;
+      expect(aside.getAttribute('role')).toBe('dialog');
+      expect(aside.getAttribute('aria-modal')).toBe('true');
+      expect((aside.getAttribute('aria-label') ?? '').trim()).not.toBe('');
+      expect(aside.contains(document.activeElement))
+        .withContext('focus moved into the drawer')
+        .toBeTrue();
+      return aside;
+    }
+
+    function press(target: EventTarget, key: string, shiftKey = false): void {
+      target.dispatchEvent(
+        new KeyboardEvent('keydown', { key, shiftKey, bubbles: true, cancelable: true }),
+      );
+    }
+
+    const attached: HTMLElement[] = [];
+    afterEach(() => attached.splice(0).forEach((el) => el.remove()));
+
+    it('focus moves in, Escape closes it and focus is back on Menu', () => {
+      const { fixture, menu } = phoneShell();
+      openFromMenu(fixture, menu);
+      const mainArea = (fixture.nativeElement as HTMLElement).querySelector('.main-area')!;
+      expect(mainArea.hasAttribute('inert')).withContext('the page behind is inert').toBeTrue();
+      press(document.activeElement!, 'Escape');
+      fixture.detectChanges();
+      TestBed.tick();
+      expect(fixture.componentInstance.sidebarCollapsed()).toBeTrue();
+      expect(document.activeElement).withContext('focus back on Menu').toBe(menu);
+      expect(mainArea.hasAttribute('inert')).toBeFalse();
+      fixture.destroy();
+    });
+
+    it('Escape pressed with focus outside the drawer (on Menu, or fallen to the page) still closes it', () => {
+      const { fixture, menu } = phoneShell();
+      openFromMenu(fixture, menu);
+      (document.activeElement as HTMLElement).blur();
+      press(document.body, 'Escape');
+      fixture.detectChanges();
+      TestBed.tick();
+      expect(fixture.componentInstance.sidebarCollapsed()).toBeTrue();
+      expect(document.activeElement).toBe(menu);
+      fixture.destroy();
+    });
+
+    it('Tab and Shift+Tab stay inside the drawer', () => {
+      const { fixture, menu } = phoneShell();
+      const aside = openFromMenu(fixture, menu);
+      const focusable = Array.from(
+        aside.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), input:not([disabled])',
+        ),
+      ).filter((el) => el.getClientRects().length > 0);
+      const last = focusable[focusable.length - 1];
+      last.focus();
+      press(last, 'Tab');
+      expect(document.activeElement)
+        .withContext('Tab from the last control wraps')
+        .toBe(focusable[0]);
+      press(focusable[0], 'Tab', true);
+      expect(document.activeElement).withContext('Shift+Tab from the first wraps').toBe(last);
+      // Focus that left the drawer is brought back in by Tab.
+      (document.activeElement as HTMLElement).blur();
+      press(document.body, 'Tab');
+      expect(aside.contains(document.activeElement)).toBeTrue();
+      fixture.destroy();
+    });
+
+    it('on a wide screen the expanded sidebar is a landmark, not a modal', () => {
+      spyOn(globalThis, 'matchMedia').and.callFake(() => ({ matches: false }) as MediaQueryList);
+      const fixture = build(['ROLE_PATIENT'], 'ROLE_PATIENT');
+      fixture.detectChanges();
+      const host = fixture.nativeElement as HTMLElement;
+      expect(fixture.componentInstance.sidebarCollapsed()).toBeFalse();
+      expect(host.querySelector('aside.sidebar')!.hasAttribute('role')).toBeFalse();
+      expect(host.querySelector('aside.sidebar')!.hasAttribute('aria-modal')).toBeFalse();
+      expect(host.querySelector('.main-area')!.hasAttribute('inert')).toBeFalse();
+    });
+  });
 
   it('a provider user whose settings are being asked again keeps the provider home, never the hospital nav', () => {
     const fixture = build(['ROLE_PHARMACIST'], 'ROLE_PHARMACIST', true);

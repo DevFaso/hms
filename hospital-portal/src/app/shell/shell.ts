@@ -45,6 +45,7 @@ import {
 import { ProviderContextService } from '../core/provider-context.service';
 import { SkipLinkComponent } from '../shared/a11y/skip-link.component';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { DrawerDialogDirective } from '../shared/a11y/drawer-dialog.directive';
 import { BrandMarkComponent } from '../shared/brand-mark/brand-mark.component';
 import { HospitalScopeGateService } from '../core/hospital-scope-gate.service';
 import { HospitalScopeChipComponent } from '../shared/hospital-scope-chip/hospital-scope-chip.component';
@@ -90,6 +91,7 @@ function isMobileViewport(): boolean {
     BrandMarkComponent,
     RoleLabelPipe,
     ModalDialogDirective,
+    DrawerDialogDirective,
   ],
   templateUrl: './shell.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -137,6 +139,18 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    * "did nothing" (QA D116).
    */
   sidebarCollapsed = signal(isMobileViewport());
+  /** Whether the viewport is a phone's (the sidebar is then a drawer over the page). */
+  private readonly phoneViewport = signal(isMobileViewport());
+  /**
+   * QA D1153 / D1125 (round 21): the drawer open on a phone is a modal over the
+   * page (appDrawerDialog: focus in, Tab kept inside, Escape from anywhere,
+   * focus back to Menu); the page behind it is inert. On a wide screen the
+   * expanded sidebar is a landmark beside the page, never a modal.
+   */
+  readonly phoneDrawerOpen = computed(() => this.phoneViewport() && !this.sidebarCollapsed());
+  private readonly phoneQuery = globalThis.matchMedia?.(MOBILE_SIDEBAR_QUERY);
+  private readonly onPhoneQueryChange = (event: MediaQueryListEvent): void =>
+    this.phoneViewport.set(event.matches);
   profileMenuOpen = signal(false);
   notifPanelOpen = signal(false);
   unreadCount = signal(0);
@@ -1662,6 +1676,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   ngOnInit(): void {
+    // A test double of matchMedia may carry no listener API.
+    this.phoneQuery?.addEventListener?.('change', this.onPhoneQueryChange);
     this.userProfile.set(this.auth.getUserProfile());
     this.permissions.loadFromBackend();
     // QA D987: the duplicate-patient entry depends on the matcher being on.
@@ -1719,6 +1735,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   ngOnDestroy(): void {
+    this.phoneQuery?.removeEventListener?.('change', this.onPhoneQueryChange);
     this.notifSub?.unsubscribe();
     this.readCountSub?.unsubscribe();
     this.routerSub?.unsubscribe();
@@ -1901,8 +1918,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    */
   closeSidebarFromKeyboard(): void {
     if (this.sidebarCollapsed() || !isMobileViewport()) return;
+    // appDrawerDialog gives focus back to the Menu button that opened the drawer.
     this.sidebarCollapsed.set(true);
-    globalThis.document?.querySelector<HTMLElement>('.mobile-toggle')?.focus();
   }
 
   toggleProfileMenu(): void {

@@ -1,3 +1,4 @@
+import { resetStoredLangForTests } from '../shared/i18n/app-locale';
 import { TestBed, ComponentFixture } from '@angular/core/testing';
 import { ActivatedRoute, Router, provideRouter } from '@angular/router';
 import { HttpErrorResponse, provideHttpClient, withXhr } from '@angular/common/http';
@@ -504,6 +505,35 @@ describe('PatientDetailComponent', () => {
       const metrics = card.querySelectorAll('.vital-metric');
       expect(metrics.length).toBeGreaterThan(0);
     });
+
+    // QA D1166 (round 21): the chart showed SpO2 "97%" in French and Spanish.
+    for (const [lang, expected] of [
+      ['fr', '98 %'],
+      ['es', '98 %'],
+      ['en', '98%'],
+    ]) {
+      it(`shows SpO2 with the ${lang} percent spacing ("${expected}")`, () => {
+        const saved = localStorage.getItem('lang');
+        localStorage.setItem('lang', lang);
+        resetStoredLangForTests();
+        try {
+          vitalServiceSpy.getRecent.and.returnValue(
+            of({ items: [vitalWithMetrics], withheld: false }),
+          );
+          fixture.detectChanges();
+          component.setTab('vitals');
+          fixture.detectChanges();
+          const strongs = Array.from(
+            (fixture.nativeElement as HTMLElement).querySelectorAll('.vital-metric strong'),
+          ).map((s) => s.textContent!.replace(/\s+/g, ' ').trim());
+          expect(strongs).toContain(expected);
+        } finally {
+          if (saved === null) localStorage.removeItem('lang');
+          else localStorage.setItem('lang', saved);
+          resetStoredLangForTests();
+        }
+      });
+    }
 
     it('should show empty state when no vitals exist', () => {
       vitalServiceSpy.getRecent.and.returnValue(of({ items: [], withheld: false }));

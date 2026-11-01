@@ -5932,3 +5932,8 @@ ships*, not for building — and check the shipped surface before trusting a
 - [ ] `POST /assignments/public/activate-by-phone`: an unknown number answers slightly faster than a wrong code (no assignment query); bounded by the per-IP rate limit and the per-number lockout. Equalise if it matters.
 - [ ] The per-number wrong-code lockout is in memory, per instance; move it to a shared store for a multi-instance deploy.
 - [x] D1140 / D1138 siblings in fix/r20-portal-forms files (`waitlist-panel.component.html`, `birth-plan-tab.html`): fixed by #996, pins removed from `iso-date-display.test.mjs` and `glued-colon-baseline.json` at the round-20 merge.
+
+## Standing debt — round 21 (fix/r21-portal-shell-a11y-typography)
+- [ ] D1179 class: 17 e-mail fields send the address to the server unchecked (allowlisted in `hospital-portal/scripts/lib/email-field-check.test.mjs`): departments, hospitals, login (bootstrap, resend activation), organizations, patients (coverage guarantor, demographics edit, registration), pharmacy registry, platform (2), profile, provider (profile, staff register, provider form), users, verify-email. Each calls `isEmailAddress` and `refuseFields` on its field, then its entry is deleted.
+- [ ] D1166 sibling in `profile/profile.html` (security score "NN%"): `| measure: '%' : 0`, then delete its pin in `scripts/lib/lab-locale-format.test.mjs` (owned by fix/r21-portal-clinical-forms in round 21).
+- [ ] D1145 class beyond billing: 32 `error: () => this.x.set([])` handlers portal-wide show a failed read as an empty list (billing's main list and totals fixed in round 21). A guard plus an error state per list.

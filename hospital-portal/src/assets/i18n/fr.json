@@ -2222,7 +2222,8 @@
     "ADJUSTMENT_REVERSAL_REASON": "Motif de l'annulation",
     "ADJUSTMENT_REVERSAL_REASON_REQUIRED": "Indiquez le motif de l'annulation de cet ajustement.",
     "ADJUSTMENT_REVERSAL_NOTE": "Le montant revient sur ce qui reste dû. L'argent déjà reçu, comme le ticket modérateur payé à l'accueil, reste enregistré.",
-    "ADJUSTMENT_REVERSAL_FAILED": "L'ajustement n'a pas pu être annulé."
+    "ADJUSTMENT_REVERSAL_FAILED": "L'ajustement n'a pas pu être annulé.",
+    "EMAIL_ADDRESS_INVALID": "Adresse e-mail non valide : {{ addresses }}"
   },
   "CHAT": {
     "ACCESS_DENIED": "Vous n'avez pas l'autorisation d'accéder à la messagerie.",
@@ -8765,7 +8766,8 @@
     "UPDATED_DEMOGRAPHICS": "Données mises à jour",
     "YES": "Oui",
     "ZIP": "Code postal",
-    "DATE_AT_TIME": "{{date}} à {{time}}"
+    "DATE_AT_TIME": "{{date}} à {{time}}",
+    "EMAIL_INVALID": "Saisissez une adresse e-mail valide, ou laissez le champ vide."
   },
   "TRACKER": {
     "TITLE": "Tableau de suivi des patients",

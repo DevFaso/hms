@@ -157,7 +157,7 @@
                     'LAB_RESULTS.RELEASED' | translate
                   }}</span>
                   @if (r.supersededByResultId) {
-                    <span
+                    &ngsp;<span
                       class="status-badge status-superseded"
                       [title]="'LAB_RESULTS.SUPERSEDED_HINT' | translate"
                       [attr.data-testid]="'superseded-' + r.id"
@@ -166,7 +166,8 @@
                   }
                   @if (r.supersedesResultId) {
                     <!-- QA D931: a released correction stays marked as one. -->
-                    <span
+                    <!-- QA D1167: a word space, or it reads "PubliéCorrigé" (Angular drops the line break). -->
+                    &ngsp;<span
                       class="status-badge status-correction"
                       [title]="'LAB_RESULTS.CORRECTED_HINT' | translate"
                       [attr.data-testid]="'corrected-' + r.id"
@@ -174,7 +175,7 @@
                     >
                   }
                   @if (r.selfReleased) {
-                    <span
+                    &ngsp;<span
                       class="status-badge status-self-released"
                       [title]="'LAB_RESULTS.SELF_RELEASED_HINT' | translate"
                       data-testid="self-released-badge"
@@ -187,7 +188,7 @@
                       'LAB_RESULTS.CORRECTION' | translate
                     }}</span>
                   }
-                  <span class="status-badge status-pending">{{
+                  &ngsp;<span class="status-badge status-pending">{{
                     'LAB_RESULTS.PENDING_RELEASE' | translate
                   }}</span>
                 }

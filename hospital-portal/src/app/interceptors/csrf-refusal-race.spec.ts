@@ -4,7 +4,12 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { Router } from '@angular/router';
 import { of } from 'rxjs';
 
-import { CSRF_REPLAY, csrfInterceptor, resetCsrfBootstrapForTests } from './csrf.interceptor';
+import {
+  CSRF_REPLAY,
+  MAX_CSRF_REPLAYS,
+  csrfInterceptor,
+  resetCsrfBootstrapForTests,
+} from './csrf.interceptor';
 import { errorInterceptor, clearReportedSilent403s } from './error.interceptor';
 import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
@@ -104,7 +109,9 @@ describe('CSRF refusal vs the forbidden page (QA D1145)', () => {
 
     const replay = httpMock.expectOne('/billing-invoices/search');
     expect(replay.request.headers.get('X-XSRF-TOKEN')).toBe('fresh');
-    expect(replay.request.context.get(CSRF_REPLAY)).toBeTrue();
+    // Round 21: the first of MAX_CSRF_REPLAYS replays; only the last is marked for reporting.
+    expect(replay.request.context.get(CSRF_REPLAY)).toBeFalse();
+    expect(first.request.context.get(CSRF_REPLAY)).toBeFalse();
     replay.flush({ content: [] });
 
     expect(body).toEqual({ content: [] });
@@ -123,23 +130,59 @@ describe('CSRF refusal vs the forbidden page (QA D1145)', () => {
     expect(router.navigate).not.toHaveBeenCalledWith(['/error/403']);
   });
 
-  it('a replay refused again is reported on the page, in the reader language, never as a forbidden page', () => {
+  it('a request refused on every replay is reported once on the page, in the reader language, never as a forbidden page', () => {
     setXsrfCookie('stale');
     let status = 0;
     http.post('/billing-invoices/search', {}).subscribe({ error: (e) => (status = e.status) });
     httpMock
       .expectOne('/billing-invoices/search')
       .flush(CSRF_BODY, { status: 403, statusText: 'Forbidden' });
-    const bootstrap = httpMock.expectOne('/auth/csrf-token');
-    setXsrfCookie('fresh');
-    bootstrap.flush(null);
-    httpMock
-      .expectOne('/billing-invoices/search')
-      .flush(CSRF_BODY, { status: 403, statusText: 'Forbidden' });
+    // Round 21 (declared): MAX_CSRF_REPLAYS replays, each with a fresh token,
+    // before the refusal reaches the page. Before, the first replay's refusal did.
+    for (let replay = 1; replay <= MAX_CSRF_REPLAYS; replay++) {
+      const bootstrap = httpMock.expectOne('/auth/csrf-token');
+      setXsrfCookie(`fresh-${replay}`);
+      bootstrap.flush(null);
+      const sent = httpMock.expectOne('/billing-invoices/search');
+      expect(sent.request.headers.get('X-XSRF-TOKEN')).toBe(`fresh-${replay}`);
+      expect(sent.request.context.get(CSRF_REPLAY)).toBe(replay === MAX_CSRF_REPLAYS);
+      sent.flush(CSRF_BODY, { status: 403, statusText: 'Forbidden' });
+    }
+    httpMock.expectNone('/auth/csrf-token');
 
     expect(status).toBe(403);
     expect(router.navigate).not.toHaveBeenCalledWith(['/error/403']);
     expect(toast.error).toHaveBeenCalledOnceWith(CSRF_BODY.message);
+  });
+
+  // QA D1145 (round 21, NOT_FIXED in r20): after a language switch the reload
+  // fires several writes at once. A sibling sent while the stale cookie was
+  // being dropped is refused WITHOUT a cookie, and that refusal's Set-Cookie
+  // lands after the fresh bootstrap token: the single replay carried a token
+  // the cookie no longer matched, and the billing list came back empty.
+  it('a replay refused because a sibling rotated the cookie meanwhile is replayed again with the current cookie', () => {
+    setXsrfCookie('stale');
+    let body: unknown;
+    http.post('/billing-invoices/search', {}).subscribe((b) => (body = b));
+    httpMock
+      .expectOne('/billing-invoices/search')
+      .flush(CSRF_BODY, { status: 403, statusText: 'Forbidden' });
+    const bootstrap = httpMock.expectOne('/auth/csrf-token');
+    setXsrfCookie('from-bootstrap');
+    bootstrap.flush(null);
+    const firstReplay = httpMock.expectOne('/billing-invoices/search');
+    expect(firstReplay.request.headers.get('X-XSRF-TOKEN')).toBe('from-bootstrap');
+    // The sibling's refusal set a newer cookie before this replay reached the server.
+    setXsrfCookie('from-sibling-refusal');
+    firstReplay.flush(CSRF_BODY, { status: 403, statusText: 'Forbidden' });
+
+    const secondReplay = httpMock.expectOne('/billing-invoices/search');
+    expect(secondReplay.request.headers.get('X-XSRF-TOKEN')).toBe('from-sibling-refusal');
+    secondReplay.flush({ content: [{ id: 'i1' }] });
+
+    expect(body).toEqual({ content: [{ id: 'i1' }] });
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(router.navigate).not.toHaveBeenCalledWith(['/error/403']);
   });
 
   it('a real role refusal (ACCESS_DENIED) still goes to the forbidden page, with no replay', () => {

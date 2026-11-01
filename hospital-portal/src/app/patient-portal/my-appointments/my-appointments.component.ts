@@ -382,6 +382,9 @@ export class MyAppointmentsComponent implements OnInit {
   // ── Booking form actions ─────────────────────────────────────────
 
   openBookingForm(): void {
+    // QA D1124: the opener stays on the page (QA D1146: focus returns to it);
+    // a second open while the form is up would wipe what was typed.
+    if (this.showBookingForm()) return;
     this.showBookingForm.set(true);
     this.bookingError.set(null);
     this.bookingSuccess.set(false);
