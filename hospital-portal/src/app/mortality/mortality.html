@@ -63,7 +63,13 @@
       <label for="mort-from">{{ 'MORTALITY.FROM' | translate }}</label>
       <input id="mort-from" type="date" [(ngModel)]="from" (change)="loadRegister()" />
       <label for="mort-to">{{ 'MORTALITY.TO' | translate }}</label>
-      <input id="mort-to" type="date" [(ngModel)]="to" (change)="loadRegister()" />
+      <input
+        id="mort-to"
+        type="date"
+        [attr.min]="from || null"
+        [(ngModel)]="to"
+        (change)="loadRegister()"
+      />
     </div>
   </div>
 

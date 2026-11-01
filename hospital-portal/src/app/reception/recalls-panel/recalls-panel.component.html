@@ -191,6 +191,7 @@
             id="rc-due"
             class="form-input"
             type="date"
+            [attr.min]="today()"
             [ngModel]="dueDate()"
             (ngModelChange)="dueDate.set($event)"
           />

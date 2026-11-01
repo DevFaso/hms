@@ -32,6 +32,7 @@ import { ToastService } from '../../core/toast.service';
 import { debounceTime, distinctUntilChanged, Subject, switchMap, catchError, of } from 'rxjs';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { localDateString } from '../../shared/date-utils';
+import { isBeforeToday } from '../../shared/forms/date-rules';
 import { PatientSublinePipe } from '../../shared/patient-picker/patient-subline';
 
 type RecallFilter = 'ALL' | RecallStatus;
@@ -41,6 +42,9 @@ type RecallFilter = 'ALL' | RecallStatus;
  * Fed by checkout follow-up requests and manual desk entry; the sweep
  * notifies patients as due dates approach, and the desk books from here.
  */
+/** Every field the add form may refuse, so a corrected one loses its mark. */
+const RECALL_FIELDS = ['rc-patient', 'rc-due', 'rc-reason'];
+
 @Component({
   selector: 'app-recalls-panel',
   standalone: true,
@@ -97,6 +101,8 @@ export class RecallsPanelComponent implements OnInit {
   recallType = signal<RecallType>('FOLLOW_UP');
   readonly recallTypes: RecallType[] = ['FOLLOW_UP', 'PREVENTIVE', 'RESULT_FOLLOW_UP', 'OTHER'];
   dueDate = signal('');
+  /** QA D1215: the earliest due date the picker offers (a recall is never due in the past). */
+  readonly today = signal(localDateString());
   reason = signal('');
   notes = signal('');
 
@@ -152,6 +158,7 @@ export class RecallsPanelComponent implements OnInit {
   }
 
   openAddForm(): void {
+    this.today.set(localDateString());
     this.selectedPatient.set(null);
     this.patientQuery.set('');
     this.selectedDeptId.set('');
@@ -172,10 +179,20 @@ export class RecallsPanelComponent implements OnInit {
           !this.dueDate() ? 'rc-due' : null,
           !this.reason().trim() ? 'rc-reason' : null,
         ].filter((id): id is string => id !== null),
-        ['rc-patient', 'rc-due', 'rc-reason'],
+        RECALL_FIELDS,
         this.translate.instant('COMMON.FIELD_REQUIRED'),
       );
       this.toast.error(this.translate.instant('RECEPTION.RECALL_FIELDS_REQUIRED'));
+      return;
+    }
+    // QA D1215 (round 23): a recall due in 2020 sat at the top of the list as
+    // overdue the moment it was made. The picker starts at today; a typed past
+    // date is refused here, on the field, with the reason.
+    this.today.set(localDateString());
+    if (isBeforeToday(this.dueDate(), this.today())) {
+      const message = this.translate.instant('DATE_RULES.NOT_IN_PAST');
+      refuseFields(this.host.nativeElement, ['rc-due'], RECALL_FIELDS, message);
+      this.toast.error(message);
       return;
     }
     if (this.saving()) return;

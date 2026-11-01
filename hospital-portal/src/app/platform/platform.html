@@ -1448,6 +1448,7 @@
               <label for="relEndsAt">{{ 'PLATFORM.ENDS_AT' | translate }} *</label>
               <input
                 id="relEndsAt"
+                [attr.min]="releaseForm().startsAt || null"
                 type="datetime-local"
                 class="form-input"
                 [ngModel]="releaseForm().endsAt"

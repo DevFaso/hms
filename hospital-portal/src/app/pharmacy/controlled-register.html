@@ -70,7 +70,7 @@
       </label>
       <label class="field">
         {{ 'PHARMACY.REGISTER_TO' | translate }}
-        <input type="date" name="to" [(ngModel)]="to" />
+        <input type="date" name="to" [attr.min]="from || null" [(ngModel)]="to" />
       </label>
       <button class="btn-primary" type="submit" data-testid="register-load" [disabled]="loading()">
         {{ 'PHARMACY.REGISTER_SHOW' | translate }}

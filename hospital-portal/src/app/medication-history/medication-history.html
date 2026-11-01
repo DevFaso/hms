@@ -33,6 +33,7 @@
         <input
           type="date"
           [(ngModel)]="endDate"
+          [attr.min]="startDate || null"
           [attr.aria-label]="'MED_TIMELINE.END_DATE' | translate"
         />
         <button type="button" class="btn-secondary btn-sm" (click)="load()">

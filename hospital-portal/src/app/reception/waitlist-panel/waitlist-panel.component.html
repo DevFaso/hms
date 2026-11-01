@@ -242,6 +242,7 @@
             id="wl-from"
             class="form-input"
             type="date"
+            [attr.max]="dateTo() || null"
             [ngModel]="dateFrom()"
             (ngModelChange)="dateFrom.set($event)"
           />
@@ -252,6 +253,7 @@
             id="wl-to"
             class="form-input"
             type="date"
+            [attr.min]="dateFrom() || null"
             [ngModel]="dateTo()"
             (ngModelChange)="dateTo.set($event)"
           />

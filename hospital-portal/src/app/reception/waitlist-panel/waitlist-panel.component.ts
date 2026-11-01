@@ -35,10 +35,14 @@ import { ToastService } from '../../core/toast.service';
 import { debounceTime, distinctUntilChanged, Subject, switchMap, catchError, of } from 'rxjs';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { serverInstant } from '../../shared/date-utils';
+import { endsBeforeStart } from '../../shared/forms/date-rules';
 import { PatientSublinePipe } from '../../shared/patient-picker/patient-subline';
 
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 type WaitlistStatus = 'ALL' | 'WAITING' | 'OFFERED' | 'CLOSED';
+
+/** Every field the add form may refuse, so a corrected one loses its mark. */
+const WAITLIST_FIELDS = ['wl-patient', 'wl-dept', 'wl-to'];
 
 @Component({
   selector: 'app-waitlist-panel',
@@ -191,10 +195,19 @@ export class WaitlistPanelComponent implements OnInit {
           !this.selectedPatient() ? 'wl-patient' : null,
           !this.selectedDeptId() ? 'wl-dept' : null,
         ].filter((id): id is string => id !== null),
-        ['wl-patient', 'wl-dept'],
+        WAITLIST_FIELDS,
         this.translate.instant('COMMON.FIELD_REQUIRED'),
       );
       this.toast.error(this.translate.instant('RECEPTION.PATIENT_DEPT_REQUIRED'));
+      return;
+    }
+    // QA D1215 (round 23): a window that ends before it starts can never be
+    // offered a slot. The picker bounds each end by the other; a typed date
+    // that slips past them is refused here, on the field, with the reason.
+    if (endsBeforeStart(this.dateFrom(), this.dateTo())) {
+      const message = this.translate.instant('DATE_RULES.END_BEFORE_START');
+      refuseFields(this.host.nativeElement, ['wl-to'], WAITLIST_FIELDS, message);
+      this.toast.error(message);
       return;
     }
     const req: WaitlistEntryRequest = {

@@ -32,7 +32,13 @@
     </label>
     <label for="oncall-to"
       >{{ 'ON_CALL.TO' | translate }}
-      <input id="oncall-to" type="date" [(ngModel)]="filterTo" (change)="load()" />
+      <input
+        id="oncall-to"
+        type="date"
+        [attr.min]="filterFrom || null"
+        [(ngModel)]="filterTo"
+        (change)="load()"
+      />
     </label>
     <span class="filter-hint">{{ 'ON_CALL.DEFAULT_WINDOW' | translate }}</span>
   </div>

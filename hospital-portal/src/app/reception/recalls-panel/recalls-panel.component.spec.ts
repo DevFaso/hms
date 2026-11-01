@@ -11,6 +11,10 @@ import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
 import { of, throwError } from 'rxjs';
 import { provideRouter } from '@angular/router';
+import { localDateString } from '../../shared/date-utils';
+
+/** A due date the form accepts: a past one is refused since QA D1215. */
+const FUTURE_DUE = localDateString(new Date(Date.now() + 30 * 86_400_000));
 
 function recall(overrides: Partial<RecallResponse> = {}): RecallResponse {
   return {
@@ -127,7 +131,7 @@ describe('RecallsPanelComponent', () => {
   it('creates a manual recall', () => {
     component.openAddForm();
     component.selectPatient({ id: 'p1', firstName: 'Awa', lastName: 'Traore' } as any);
-    component.dueDate.set('2026-10-01');
+    component.dueDate.set(FUTURE_DUE);
     component.reason.set('Repeat HbA1c');
 
     component.submitAdd();
@@ -136,7 +140,7 @@ describe('RecallsPanelComponent', () => {
       patientId: 'p1',
       departmentId: null,
       recallType: 'FOLLOW_UP',
-      dueDate: '2026-10-01',
+      dueDate: FUTURE_DUE,
       reason: 'Repeat HbA1c',
       notes: null,
     });
@@ -153,7 +157,7 @@ describe('RecallsPanelComponent', () => {
     );
     component.openAddForm();
     component.selectPatient({ id: 'p1', firstName: 'Awa', lastName: 'Traore' } as any);
-    component.dueDate.set('2026-10-01');
+    component.dueDate.set(FUTURE_DUE);
     component.reason.set('Repeat HbA1c');
 
     component.submitAdd();
@@ -260,5 +264,35 @@ describe('RecallsPanelComponent', () => {
     expect(component.isOverdue(recall({ dueDate: '2000-01-01' }))).toBe(true);
     expect(component.isOverdue(recall({ dueDate: '2999-01-01' }))).toBe(false);
     expect(component.isOverdue(recall({ dueDate: '2000-01-01', status: 'CLOSED' }))).toBe(false);
+  });
+
+  /**
+   * QA D1215 (round 23): a recall due 01/01/2020 was created (201, "Rappel
+   * créé") and sat at the top of the list as overdue. The picker starts at
+   * today, and a typed past date is refused on the field with the reason.
+   */
+  it('QA D1215: the due-date picker starts today and a past due date is refused on the field', () => {
+    component.openAddForm();
+    fixture.detectChanges();
+    const host: HTMLElement = fixture.nativeElement;
+    const due = host.querySelector<HTMLInputElement>('#rc-due')!;
+    expect(due.getAttribute('min')).toBe(localDateString());
+
+    component.selectPatient({ id: 'p1', firstName: 'Awa', lastName: 'Traore' } as any);
+    component.dueDate.set('2020-01-01');
+    component.reason.set('Repeat HbA1c');
+    component.submitAdd();
+    fixture.detectChanges();
+
+    expect(mockReceptionService.createRecall).not.toHaveBeenCalled();
+    expect(mockToastService.error).toHaveBeenCalledWith('DATE_RULES.NOT_IN_PAST');
+    expect(due.getAttribute('aria-invalid')).toBe('true');
+    expect(host.querySelector('#rc-due-invalid-msg')?.textContent).toBe('DATE_RULES.NOT_IN_PAST');
+    expect(document.activeElement).toBe(due);
+
+    // Today is a valid due date.
+    component.dueDate.set(localDateString());
+    component.submitAdd();
+    expect(mockReceptionService.createRecall).toHaveBeenCalledTimes(1);
   });
 });
