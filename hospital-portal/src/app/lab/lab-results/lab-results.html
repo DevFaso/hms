@@ -188,10 +188,12 @@
                       'LAB_RESULTS.CORRECTION' | translate
                     }}</span>
                   }
-                  {{ ' '
-                  }}<span class="status-badge status-pending">{{
-                    'LAB_RESULTS.PENDING_RELEASE' | translate
-                  }}</span>
+                  {{
+                    ' '
+                  }}<!-- QA D1222: the row's own singular key, not the filter chip's count label. --><span
+                    class="status-badge status-pending"
+                    >{{ 'LAB_RESULTS.ROW_PENDING_RELEASE' | translate }}</span
+                  >
                 }
               </td>
               <td>

@@ -3852,7 +3852,8 @@
     "RANGE_SOURCE": "Source",
     "UNIT_FROM_TEST": "Unité de l'examen : {{unit}}. Une valeur dans une autre unité risque de ne pas être évaluée.",
     "UNGRADED_RELEASE_TITLE": "Valider un résultat non évalué",
-    "UNGRADED_RELEASE_CONFIRM": "Je l'ai vérifié, valider"
+    "UNGRADED_RELEASE_CONFIRM": "Je l'ai vérifié, valider",
+    "ROW_PENDING_RELEASE": "En attente de publication"
   },
   "LAB_RELEASE": {
     "FLAG_ABNORMAL": "Anormal",

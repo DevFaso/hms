@@ -283,7 +283,8 @@ describe('LabResultsComponent', () => {
       Array.from(tr.querySelectorAll('td')).find((td) => td.querySelector('.status-badge')),
     );
     const pending = cells[0]!.textContent!.replace(/\s+/g, ' ').trim();
-    expect(pending).toBe('LAB_RESULTS.CORRECTION LAB_RESULTS.PENDING_RELEASE');
+    // QA D1222: the row pill has its own singular key (es "Pendiente de publicación").
+    expect(pending).toBe('LAB_RESULTS.CORRECTION LAB_RESULTS.ROW_PENDING_RELEASE');
     const released = cells[1]!.textContent!.replace(/\s+/g, ' ').trim();
     expect(released).toContain('LAB_RESULTS.RELEASED LAB_RESULTS.SUPERSEDED LAB_RESULTS.CORRECTED');
   });
