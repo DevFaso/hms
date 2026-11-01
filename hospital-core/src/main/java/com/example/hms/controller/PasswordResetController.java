@@ -44,7 +44,7 @@ public class PasswordResetController {
 
     /**
      * The older query-parameter form. QA D787: it answered 400 to a phone
-     * number (the parameter was {@code @Email}); it now takes the same
+     * number (the parameter was {@code @Email(message = "{validation.email.invalid}")}); it now takes the same
      * identifiers as {@code /request}, as {@code email}, {@code identifier}
      * or {@code phone}.
      */

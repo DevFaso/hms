@@ -296,7 +296,7 @@ class EncounterServiceImplTest {
         EncounterResponseDTO dto = new EncounterResponseDTO();
 
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
-        when(roleValidator.isDoctor(userId, null)).thenReturn(true);
+        when(roleValidator.isEncounterProvider(userId, null)).thenReturn(true);
         when(encounterRepository.findByStaff_Id(staffId)).thenReturn(List.of(encounter));
         when(encounterMapper.toEncounterResponseDTO(encounter)).thenReturn(dto);
 
@@ -323,7 +323,7 @@ class EncounterServiceImplTest {
         staff.setId(staffId);
 
         when(staffRepository.findById(staffId)).thenReturn(Optional.of(staff));
-        when(roleValidator.isDoctor(userId, null)).thenReturn(false);
+        when(roleValidator.isEncounterProvider(userId, null)).thenReturn(false);
         when(messageSource.getMessage(anyString(), any(), any(Locale.class))).thenReturn("invalid");
 
         assertThatThrownBy(() -> service.getEncountersByDoctorId(staffId, locale))
@@ -646,7 +646,7 @@ class EncounterServiceImplTest {
     @Test
     void submitTriage_encounterNotFound_throws() {
         UUID encounterId = UUID.randomUUID();
-        TriageSubmissionRequestDTO request = TriageSubmissionRequestDTO.builder().esiScore(2).build();
+        TriageSubmissionRequestDTO request = TriageSubmissionRequestDTO.builder().esiScore(2).heartRateBpm(88).build();
 
         when(encounterRepository.findById(any(UUID.class))).thenReturn(Optional.empty());
         // The not-found refusal now carries the message KEY, not resolved prose,
@@ -663,7 +663,7 @@ class EncounterServiceImplTest {
         encounter.setId(encounterId);
         encounter.setStatus(EncounterStatus.COMPLETED);
 
-        TriageSubmissionRequestDTO request = TriageSubmissionRequestDTO.builder().esiScore(2).build();
+        TriageSubmissionRequestDTO request = TriageSubmissionRequestDTO.builder().esiScore(2).heartRateBpm(88).build();
 
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
 
@@ -688,6 +688,7 @@ class EncounterServiceImplTest {
 
         TriageSubmissionRequestDTO request = TriageSubmissionRequestDTO.builder()
                 .esiScore(1)
+                .heartRateBpm(130) // QA D1158: a triage records at least one vital sign
                 .build();
 
         PatientVitalSign savedVital = new PatientVitalSign();
@@ -722,7 +723,7 @@ class EncounterServiceImplTest {
         enc2.setHospital(hospital);
         enc2.setPatient(patient);
 
-        TriageSubmissionRequestDTO req2 = TriageSubmissionRequestDTO.builder().esiScore(2).build();
+        TriageSubmissionRequestDTO req2 = TriageSubmissionRequestDTO.builder().esiScore(2).heartRateBpm(88).build();
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(enc2));
         when(patientVitalSignRepository.save(any(PatientVitalSign.class))).thenReturn(savedVital);
         when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -736,7 +737,7 @@ class EncounterServiceImplTest {
         enc4.setHospital(hospital);
         enc4.setPatient(patient);
 
-        TriageSubmissionRequestDTO req4 = TriageSubmissionRequestDTO.builder().esiScore(4).build();
+        TriageSubmissionRequestDTO req4 = TriageSubmissionRequestDTO.builder().esiScore(4).heartRateBpm(88).build();
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(enc4));
 
         assertThat(service.submitTriage(encounterId, req4, "nurse1", true, null).getUrgency()).isEqualTo("LOW");
@@ -748,10 +749,27 @@ class EncounterServiceImplTest {
         enc5.setHospital(hospital);
         enc5.setPatient(patient);
 
-        TriageSubmissionRequestDTO req5 = TriageSubmissionRequestDTO.builder().esiScore(5).build();
+        TriageSubmissionRequestDTO req5 = TriageSubmissionRequestDTO.builder().esiScore(5).heartRateBpm(88).build();
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(enc5));
 
         assertThat(service.submitTriage(encounterId, req5, "nurse1", true, null).getUrgency()).isEqualTo("LOW");
+    }
+
+    @Test
+    void submitTriage_withoutAnyVitalSignIsRefused_D1158() {
+        UUID encounterId = UUID.randomUUID();
+        Encounter encounter = new Encounter();
+        encounter.setId(encounterId);
+        encounter.setStatus(EncounterStatus.ARRIVED);
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+
+        // QA D1158 (round 21): an empty triage stored an all-null vitals row and ranked the patient.
+        assertThatThrownBy(() -> service.submitTriage(encounterId,
+                TriageSubmissionRequestDTO.builder().esiScore(3).build(), "nurse1", true, null))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting("messageKey").isEqualTo("triage.vitals.required");
+        org.mockito.Mockito.verify(patientVitalSignRepository, org.mockito.Mockito.never()).save(any());
+        assertThat(encounter.getStatus()).isEqualTo(EncounterStatus.ARRIVED);
     }
 
     // ---------- submitNursingIntake ----------
@@ -804,7 +822,7 @@ class EncounterServiceImplTest {
     }
 
     @Test
-    void qaD989_theTriagePainScoreIsStoredInTheCliniciansLanguage() {
+    void qaD1169_theTriagePainScoreIsStoredAsANumber() {
         answerFromTheRealFrenchBundles();
         UUID encounterId = UUID.randomUUID();
         Hospital hospital = new Hospital();
@@ -826,7 +844,10 @@ class EncounterServiceImplTest {
         service.submitTriage(encounterId, TriageSubmissionRequestDTO.builder().esiScore(3).painScale(8).build(),
             null, true, null);
 
-        assertThat(vital.getValue().getNotes()).isEqualTo("Douleur : 8/10");
+        // QA D1169 (round 21): was the French sentence "Douleur : 8/10" (QA D989), read
+        // untranslated in Spanish and English; the number is rendered at read time.
+        assertThat(vital.getValue().getPainScore()).isEqualTo(8);
+        assertThat(vital.getValue().getNotes()).isNull();
     }
 
     @Test
@@ -974,7 +995,7 @@ class EncounterServiceImplTest {
     }
 
     @Test
-    void submitNursingIntake_emptyRequest_noNoteRecorded() {
+    void submitNursingIntake_emptyRequestIsRefused_D1158() {
         UUID encounterId = UUID.randomUUID();
         Hospital hospital = new Hospital();
         hospital.setId(UUID.randomUUID());
@@ -990,13 +1011,12 @@ class EncounterServiceImplTest {
         NursingIntakeRequestDTO request = NursingIntakeRequestDTO.builder().build();
 
         when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
-        when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        NursingIntakeResponseDTO result = service.submitNursingIntake(encounterId, request, "nurse1", true, null);
-
-        assertThat(result.isNursingNoteRecorded()).isFalse();
-        assertThat(result.getAllergyCount()).isZero();
-        assertThat(result.getMedicationCount()).isZero();
+        // QA D1158 (round 21): an empty intake was stored as completed; it is refused now.
+        assertThatThrownBy(() -> service.submitNursingIntake(encounterId, request, "nurse1", true, null))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting("messageKey").isEqualTo("encounter.intake.contentRequired");
+        org.mockito.Mockito.verify(encounterRepository, org.mockito.Mockito.never()).save(any(Encounter.class));
     }
 
     // ---------- checkOut (MVP 6) ----------
@@ -2913,9 +2933,7 @@ class EncounterServiceImplTest {
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
         when(patientHospitalRegistrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId))
             .thenReturn(true);
-        when(roleValidator.isDoctor(newUserId, hospitalId)).thenReturn(false);
-        when(roleValidator.isNurse(newUserId, hospitalId)).thenReturn(false);
-        when(roleValidator.isHospitalAdmin(newUserId, hospitalId)).thenReturn(false);
+        when(roleValidator.isEncounterProvider(newUserId, hospitalId)).thenReturn(false);
 
         // The after-visit summary bell entry is rendered through the message
         // source in the patient's language; lenient, since not every path notifies.
@@ -3094,7 +3112,7 @@ class EncounterServiceImplTest {
                     isNull(), any(Patient.class), any(Staff.class), any(Hospital.class),
                     org.mockito.ArgumentMatchers.<Appointment>isNull(), any()))
                 .thenReturn(fresh);
-            when(roleValidator.isDoctor(userId, hospitalId)).thenReturn(true);
+            when(roleValidator.isEncounterProvider(userId, hospitalId)).thenReturn(true);
             com.example.hms.payload.dto.EncounterRequestDTO request = request(null, LocalDateTime.now());
             request.setEncounterType(com.example.hms.enums.EncounterType.EMERGENCY);
             request.setStatus(EncounterStatus.ARRIVED);
@@ -3114,7 +3132,7 @@ class EncounterServiceImplTest {
                     isNull(), any(Patient.class), any(Staff.class), any(Hospital.class),
                     org.mockito.ArgumentMatchers.<Appointment>isNull(), any()))
                 .thenReturn(fresh);
-            when(roleValidator.isDoctor(userId, hospitalId)).thenReturn(true);
+            when(roleValidator.isEncounterProvider(userId, hospitalId)).thenReturn(true);
             actWithRole("ROLE_DOCTOR");
 
             service.createEncounter(request(null, LocalDateTime.now()), locale);
@@ -3142,7 +3160,7 @@ class EncounterServiceImplTest {
                     isNull(), any(Patient.class), any(Staff.class), any(Hospital.class),
                     org.mockito.ArgumentMatchers.<Appointment>isNull(), any()))
                 .thenReturn(fresh);
-            org.mockito.Mockito.lenient().when(roleValidator.isDoctor(userId, hospitalId)).thenReturn(true);
+            org.mockito.Mockito.lenient().when(roleValidator.isEncounterProvider(userId, hospitalId)).thenReturn(true);
             actWithRole("ROLE_NURSE");
             LocalDateTime before = LocalDateTime.now().minusSeconds(1);
             com.example.hms.payload.dto.EncounterRequestDTO request = request(null, LocalDate.now().atStartOfDay());
@@ -3162,7 +3180,7 @@ class EncounterServiceImplTest {
                     isNull(), any(Patient.class), any(Staff.class), any(Hospital.class),
                     org.mockito.ArgumentMatchers.<Appointment>isNull(), any()))
                 .thenReturn(fresh);
-            org.mockito.Mockito.lenient().when(roleValidator.isDoctor(userId, hospitalId)).thenReturn(true);
+            org.mockito.Mockito.lenient().when(roleValidator.isEncounterProvider(userId, hospitalId)).thenReturn(true);
             actWithRole("ROLE_MIDWIFE");
 
             service.createEncounter(request(null, LocalDateTime.now()), locale);
@@ -3180,7 +3198,7 @@ class EncounterServiceImplTest {
                     isNull(), any(Patient.class), any(Staff.class), any(Hospital.class),
                     org.mockito.ArgumentMatchers.<Appointment>isNull(), any()))
                 .thenReturn(fresh);
-            org.mockito.Mockito.lenient().when(roleValidator.isDoctor(userId, hospitalId)).thenReturn(true);
+            org.mockito.Mockito.lenient().when(roleValidator.isEncounterProvider(userId, hospitalId)).thenReturn(true);
             actWithRole("ROLE_NURSE");
 
             com.example.hms.payload.dto.EncounterRequestDTO past = request(null, LocalDateTime.now().minusDays(7));
@@ -3199,7 +3217,7 @@ class EncounterServiceImplTest {
                     isNull(), any(Patient.class), any(Staff.class), any(Hospital.class),
                     org.mockito.ArgumentMatchers.<Appointment>isNull(), any()))
                 .thenReturn(fresh);
-            org.mockito.Mockito.lenient().when(roleValidator.isDoctor(userId, hospitalId)).thenReturn(true);
+            org.mockito.Mockito.lenient().when(roleValidator.isEncounterProvider(userId, hospitalId)).thenReturn(true);
             actWithRole("ROLE_DOCTOR");
             com.example.hms.payload.dto.EncounterRequestDTO request = request(null, LocalDateTime.now());
             request.setEncounterType(com.example.hms.enums.EncounterType.EMERGENCY);
@@ -3225,7 +3243,7 @@ class EncounterServiceImplTest {
                     isNull(), any(Patient.class), any(Staff.class), any(Hospital.class),
                     org.mockito.ArgumentMatchers.<Appointment>isNull(), any()))
                 .thenReturn(encounter());
-            when(roleValidator.isDoctor(userId, hospitalId)).thenReturn(true);
+            when(roleValidator.isEncounterProvider(userId, hospitalId)).thenReturn(true);
             com.example.hms.payload.dto.EncounterRequestDTO request =
                 request(note(UUID.randomUUID(), "stable"), LocalDateTime.now());
 
@@ -3668,8 +3686,62 @@ class EncounterServiceImplTest {
 
             assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
             assertThat(appointment.getStatusReason()).isEqualTo("Parti avant l'appel");
-            verify(invoices).findByEncounter_IdAndCheckInCopayTrueAndStatus(encounter.getId(),
-                com.example.hms.enums.InvoiceStatus.PAID);
+            verify(invoices).findByEncounter_IdAndCheckInCopayTrueAndStatusIn(encounter.getId(), java.util.List.of(
+                com.example.hms.enums.InvoiceStatus.PAID, com.example.hms.enums.InvoiceStatus.PARTIALLY_PAID));
+        }
+
+        @Test
+        @DisplayName("QA D1165: a copay billing reversed is cancelled when the visit closes unseen, not left due")
+        void qaD1165_aReversedCopayIsCancelledWhenTheVisitClosesUnseen() {
+            Encounter encounter = visit(EncounterStatus.ARRIVED);
+            com.example.hms.repository.BillingInvoiceRepository invoices =
+                mock(com.example.hms.repository.BillingInvoiceRepository.class);
+            com.example.hms.model.BillingInvoice reversed = new com.example.hms.model.BillingInvoice();
+            reversed.setInvoiceNumber("CHWF6646-2026-000013");
+            reversed.setStatus(com.example.hms.enums.InvoiceStatus.SENT);
+            reversed.setAmountPaid(java.math.BigDecimal.ZERO);
+            reversed.setTotalAmount(new java.math.BigDecimal("1500"));
+            when(invoices.findByEncounter_IdAndCheckInCopayTrueAndStatusIn(encounter.getId(), java.util.List.of(
+                com.example.hms.enums.InvoiceStatus.DRAFT, com.example.hms.enums.InvoiceStatus.SENT)))
+                .thenReturn(java.util.List.of(reversed));
+            when(invoices.findByEncounter_IdAndCheckInCopayTrueAndStatusIn(encounter.getId(), java.util.List.of(
+                com.example.hms.enums.InvoiceStatus.PAID, com.example.hms.enums.InvoiceStatus.PARTIALLY_PAID)))
+                .thenReturn(java.util.List.of());
+            service.setBillingInvoiceRepository(invoices);
+            when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
+            when(encounterMapper.toEncounterResponseDTO(any())).thenReturn(new EncounterResponseDTO());
+
+            service.closeUnseen(encounter.getId(), com.example.hms.payload.dto.clinical.CloseUnseenVisitRequestDTO.builder()
+                    .outcome(com.example.hms.enums.UnseenVisitOutcome.LEFT_WITHOUT_BEING_SEEN)
+                    .reason(" Parti avant l'appel ").build(),
+                "receptionist1", true, null);
+
+            assertThat(reversed.getStatus()).isEqualTo(com.example.hms.enums.InvoiceStatus.CANCELLED);
+            assertThat(reversed.getCancelReason()).isEqualTo("Parti avant l'appel");
+            assertThat(reversed.getCancelledAt()).isNotNull();
+            verify(invoices).save(reversed);
+        }
+
+        @Test
+        @DisplayName("QA D1165: a partly paid copay holds money too and stops the close until it is reversed")
+        void qaD1165_aPartlyPaidCopayStopsTheClose() {
+            Encounter encounter = visit(EncounterStatus.ARRIVED);
+            com.example.hms.repository.BillingInvoiceRepository invoices =
+                mock(com.example.hms.repository.BillingInvoiceRepository.class);
+            com.example.hms.model.BillingInvoice partly = new com.example.hms.model.BillingInvoice();
+            partly.setInvoiceNumber("CHW-2026-000070");
+            partly.setStatus(com.example.hms.enums.InvoiceStatus.PARTIALLY_PAID);
+            when(invoices.findByEncounter_IdAndCheckInCopayTrueAndStatusIn(encounter.getId(), java.util.List.of(
+                com.example.hms.enums.InvoiceStatus.PAID, com.example.hms.enums.InvoiceStatus.PARTIALLY_PAID)))
+                .thenReturn(java.util.List.of(partly));
+            service.setBillingInvoiceRepository(invoices);
+
+            assertThatThrownBy(() -> service.closeUnseen(encounter.getId(),
+                    com.example.hms.payload.dto.clinical.CloseUnseenVisitRequestDTO.builder()
+                        .outcome(com.example.hms.enums.UnseenVisitOutcome.LEFT_WITHOUT_BEING_SEEN).reason("Parti").build(),
+                    "receptionist1", true, null))
+                .satisfies(ex -> assertThat(keyOf(ex)).isEqualTo("encounter.closeUnseen.paidCopay"));
+            verify(encounterRepository, never()).save(any());
         }
 
         @org.junit.jupiter.params.ParameterizedTest(name = "{0}")
@@ -3681,8 +3753,9 @@ class EncounterServiceImplTest {
                 mock(com.example.hms.repository.BillingInvoiceRepository.class);
             com.example.hms.model.BillingInvoice copay = new com.example.hms.model.BillingInvoice();
             copay.setInvoiceNumber("CHW-2026-000063");
-            when(invoices.findByEncounter_IdAndCheckInCopayTrueAndStatus(encounter.getId(),
-                com.example.hms.enums.InvoiceStatus.PAID)).thenReturn(java.util.List.of(copay));
+            when(invoices.findByEncounter_IdAndCheckInCopayTrueAndStatusIn(encounter.getId(), java.util.List.of(
+                com.example.hms.enums.InvoiceStatus.PAID, com.example.hms.enums.InvoiceStatus.PARTIALLY_PAID)))
+                .thenReturn(java.util.List.of(copay));
             service.setBillingInvoiceRepository(invoices);
 
             assertThatThrownBy(() -> service.closeUnseen(encounter.getId(),

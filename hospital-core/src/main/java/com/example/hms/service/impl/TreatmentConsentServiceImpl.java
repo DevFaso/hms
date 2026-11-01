@@ -64,6 +64,14 @@ public class TreatmentConsentServiceImpl implements TreatmentConsentService {
         if (request == null || request.getMethod() == null) {
             throw new BusinessException("A consent capture method is required.");
         }
+        // QA D1148 (round 21, user decision): a consent recorded in the chart
+        // names who gave it; one was stored with no signer. The pre-check-in
+        // signs with the patient's own name; the check-in desk records it
+        // best effort with what the desk typed (its dialog asks for the name).
+        if (source == null || source == TreatmentConsentSource.MANUAL) {
+            com.example.hms.service.support.ClinicalContent.requirePresent(request.getSignedName(), "signedName",
+                "treatmentConsent.signedName.required");
+        }
         Patient patient = patientRepository.findById(patientId)
             .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
         Hospital hospital = hospitalRepository.findClinicalById(hospitalId)

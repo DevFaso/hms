@@ -66,6 +66,9 @@ public class MaternalHistoryServiceImpl implements MaternalHistoryService {
     @Override
     public MaternalHistoryResponseDTO createMaternalHistory(MaternalHistoryRequestDTO request, String username) {
         log.info("Creating maternal history for patient ID: {}", request.getPatientId());
+        // QA D1148 class (round 21): a history records something.
+        com.example.hms.service.support.ClinicalContent.requireAnyAnswer(request, java.util.Set.of("patientId", "hospitalId", "recordedByStaffId",
+            "recordedDate", "updateReason"), "clinicalNotes", "maternalHistory.contentRequired");
         
         Patient patient = patientRepository.findById(request.getPatientId())
                 .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_WITH_ID, request.getPatientId()));

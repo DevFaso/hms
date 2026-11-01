@@ -204,6 +204,74 @@ class MessageBundleParityTest {
             .isEmpty();
     }
 
+    /**
+     * QA D1152 / D1123 class (round 21): a key the code hands to the message
+     * source that no bundle defines. {@code messageSource.getMessage(key, args,
+     * "English default", locale)} answers the English default in every
+     * language, and {@code MessageUtil.resolveOrRaw} or an exception the
+     * global handler passes through shows the raw key: "Invalid confirmation
+     * code." reached French and Spanish patients because
+     * {@code assignment.confirmation.invalid} was in no bundle.
+     * {@link #thrownKeysExist} read only two exception types; this reads every
+     * {@code getMessage(…)}, {@code MessageUtil.resolve(…)} /
+     * {@code resolveOrRaw(…)} and {@code new …Exception(…)} whose first
+     * argument is a key literal or a same-file key constant.
+     */
+    @Test
+    @DisplayName("every key the code resolves through the message source is in the bundles")
+    void everyKeyTheCodeResolvesExists() throws IOException {
+        Properties base = load("");
+        List<String> sites = resolvedKeySites();
+
+        assertThat(sites).as("The scan found no resolved keys").hasSizeGreaterThan(500);
+
+        List<String> missing = sites.stream()
+            .map(site -> site.split("\\|", -1))
+            .filter(parts -> base.getProperty(parts[1]) == null)
+            .map(parts -> parts[0] + " :: " + parts[1])
+            .toList();
+
+        assertThat(missing)
+            .as("Keys the code resolves that no bundle defines - every reader gets the English default or "
+                    + "the raw key:%n%s", String.join(System.lineSeparator(), missing))
+            .isEmpty();
+    }
+
+    private static final Pattern RESOLVED_KEY_CALL = Pattern.compile(
+        "(?:\\bgetMessage|MessageUtil\\.resolve|MessageUtil\\.resolveOrRaw|new\\s+\\w*Exception)\\s*\\(\\s*"
+            + "(?:\"(" + KEY.pattern() + ")\"|([A-Z][A-Z0-9_]*+))\\s*[,)]");
+
+    /** Dotted literals that are not message keys: package and class names. */
+    private static final Pattern NOT_A_KEY = Pattern.compile("(?:java|javax|jakarta|org|com|spring|hibernate)\\..*");
+
+    /** {@code file:line|key} for every resolved key site ({@link #everyKeyTheCodeResolvesExists}). */
+    static List<String> resolvedKeySites() throws IOException {
+        List<String> out = new ArrayList<>();
+        try (Stream<Path> files = Files.walk(MAIN_JAVA)) {
+            for (Path file : files.filter(p -> p.toString().endsWith(".java")).toList()) {
+                String source = Files.readString(file, StandardCharsets.UTF_8);
+                if (source.contains("import ca.uhn.fhir.rest.server.exceptions.")) {
+                    continue;
+                }
+                Map<String, String> constants = new HashMap<>();
+                Matcher c = KEY_CONSTANT.matcher(source);
+                while (c.find()) {
+                    constants.put(c.group(1), c.group(2));
+                }
+                Matcher m = RESOLVED_KEY_CALL.matcher(source);
+                while (m.find()) {
+                    String key = m.group(1) != null ? m.group(1) : constants.get(m.group(2));
+                    if (key == null || NOT_A_KEY.matcher(key).matches()) {
+                        continue;
+                    }
+                    int line = 1 + (int) source.substring(0, m.start()).chars().filter(ch -> ch == '\n').count();
+                    out.add(file.getFileName() + ":" + line + "|" + key);
+                }
+            }
+        }
+        return out;
+    }
+
     /** One locale's bundle: every area file with that suffix, merged. */
     static Properties load(String suffix) throws IOException {
         Properties bundle = new Properties();

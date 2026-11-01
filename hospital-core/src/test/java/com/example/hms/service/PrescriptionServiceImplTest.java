@@ -5049,6 +5049,135 @@ class PrescriptionServiceImplTest {
     }
 
 
+    // ═══════════════ QA D1161 (round 21): signed orders, every withdrawal path ═══════════════
+
+    /** A colleague's withdrawal of a signed order is allowed with its reason, and audited as a colleague's. */
+    @Test
+    void qaD1161_aColleaguesWithdrawalOfASignedOrderIsAuditedAsSuch() {
+        UUID id = UUID.randomUUID();
+        Prescription rx = signedRow(id);
+        UUID callerId = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(id, hospitalId)).thenReturn(Optional.of(rx));
+        when(authService.getCurrentUserId()).thenReturn(callerId);
+        when(roleValidator.isDoctor(callerId, hospitalId)).thenReturn(true);
+        when(prescriptionRepository.save(rx)).thenReturn(rx);
+        when(prescriptionMapper.toResponseDTO(rx)).thenReturn(PrescriptionResponseDTO.builder().id(id).build());
+        PrescriptionRequestDTO request = buildRequest();
+        request.setStatus(com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
+        request.setWithdrawalReason("Respiratory depression, stopped by the covering doctor");
+
+        prescriptionService.updatePrescription(id, request, Locale.FRENCH);
+
+        org.mockito.ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> audit =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        assertThat(audit.getValue().getEventType()).isEqualTo(com.example.hms.enums.AuditEventType.PRESCRIPTION_DISCONTINUED);
+        assertThat(audit.getValue().getUserId()).isEqualTo(callerId);
+        assertThat(String.valueOf(audit.getValue().getDetails())).contains("\"byPrescriber\":false").contains("\"from\":\"SIGNED\"")
+            .doesNotContain("Respiratory");
+        assertThat(audit.getValue().getEventDescription()).contains("another prescriber");
+    }
+
+    /** The prescriber's own withdrawal is audited too, as the prescriber's. */
+    @Test
+    void qaD1161_thePrescribersWithdrawalIsAuditedAsThePrescribers() {
+        UUID id = UUID.randomUUID();
+        Prescription rx = signedRow(id);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(id, hospitalId)).thenReturn(Optional.of(rx));
+        when(authService.getCurrentUserId()).thenReturn(staff.getUser().getId());
+        when(prescriptionRepository.save(rx)).thenReturn(rx);
+        when(prescriptionMapper.toResponseDTO(rx)).thenReturn(PrescriptionResponseDTO.builder().id(id).build());
+        PrescriptionRequestDTO request = buildRequest();
+        request.setStatus(com.example.hms.enums.PrescriptionStatus.CANCELLED);
+        request.setWithdrawalReason("Wrong patient");
+
+        prescriptionService.updatePrescription(id, request, Locale.FRENCH);
+
+        org.mockito.ArgumentCaptor<com.example.hms.payload.dto.AuditEventRequestDTO> audit =
+            org.mockito.ArgumentCaptor.forClass(com.example.hms.payload.dto.AuditEventRequestDTO.class);
+        verify(auditEventLogService).logEvent(audit.capture());
+        assertThat(String.valueOf(audit.getValue().getDetails())).contains("\"byPrescriber\":true");
+    }
+
+    /**
+     * Withdrawing an order a signature led to is held to the signed rule: a
+     * colleague prescriber of the hospital may, with a reason, audited; a
+     * withdrawal with no reason is refused for every such status.
+     */
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = com.example.hms.enums.PrescriptionStatus.class,
+        names = {"TRANSMITTED", "TRANSMISSION_FAILED", "PARTIALLY_FILLED", "PENDING_STOCK", "SENT_TO_PARTNER",
+            "PARTNER_ACCEPTED", "PARTNER_REJECTED", "PRINTED_FOR_PATIENT", "DISPENSED", "PARTNER_DISPENSED",
+            "PENDING_CLARIFICATION"})
+    void qaD1161_aSignedOrderInAnyLaterStatusIsWithdrawnUnderTheSignedRule(
+            com.example.hms.enums.PrescriptionStatus status) {
+        UUID id = UUID.randomUUID();
+        Prescription rx = signedRow(id);
+        rx.setStatus(status);
+        UUID callerId = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(id, hospitalId)).thenReturn(Optional.of(rx));
+        PrescriptionRequestDTO blank = buildRequest();
+        blank.setStatus(com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
+        blank.setWithdrawalReason(" ");
+
+        assertThatThrownBy(() -> prescriptionService.updatePrescription(id, blank, Locale.FRENCH))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("prescription.signed.withdrawalReason.required");
+        assertThat(rx.getStatus()).isEqualTo(status);
+
+        when(authService.getCurrentUserId()).thenReturn(callerId);
+        lenient().when(roleValidator.getCurrentUserId()).thenReturn(callerId);
+        when(roleValidator.isDoctor(callerId, hospitalId)).thenReturn(true);
+        when(prescriptionRepository.save(rx)).thenReturn(rx);
+        when(prescriptionMapper.toResponseDTO(rx)).thenReturn(PrescriptionResponseDTO.builder().id(id).build());
+        PrescriptionRequestDTO reasoned = buildRequest();
+        reasoned.setStatus(com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
+        reasoned.setWithdrawalReason("Stopped by the covering doctor");
+
+        prescriptionService.updatePrescription(id, reasoned, Locale.FRENCH);
+
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
+        verify(auditEventLogService).logEvent(any());
+    }
+
+    /** Every status is classified: a new one must be placed as signed or not on purpose. */
+    @Test
+    void qaD1161_everyStatusIsClassifiedAsSignedOrNot() {
+        java.util.Set<com.example.hms.enums.PrescriptionStatus> notSigned = java.util.EnumSet.of(
+            com.example.hms.enums.PrescriptionStatus.DRAFT, com.example.hms.enums.PrescriptionStatus.PENDING_SIGNATURE,
+            com.example.hms.enums.PrescriptionStatus.CANCELLED, com.example.hms.enums.PrescriptionStatus.DISCONTINUED);
+        for (com.example.hms.enums.PrescriptionStatus status : com.example.hms.enums.PrescriptionStatus.values()) {
+            assertThat(PrescriptionServiceImpl.isSignedOrder(status)).as(status.name()).isEqualTo(!notSigned.contains(status));
+        }
+    }
+
+    /** A colleague withdraws an order awaiting clarification under the signed-order rule. */
+    @Test
+    void qaD1161_aColleagueMayWithdrawAnOrderAwaitingClarificationWithAReason() {
+        UUID id = UUID.randomUUID();
+        Prescription rx = signedRow(id);
+        rx.setStatus(com.example.hms.enums.PrescriptionStatus.PENDING_CLARIFICATION);
+        UUID callerId = UUID.randomUUID();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(id, hospitalId)).thenReturn(Optional.of(rx));
+        when(authService.getCurrentUserId()).thenReturn(callerId);
+        lenient().when(roleValidator.getCurrentUserId()).thenReturn(callerId);
+        when(roleValidator.isDoctor(callerId, hospitalId)).thenReturn(true);
+        when(prescriptionRepository.save(rx)).thenReturn(rx);
+        when(prescriptionMapper.toResponseDTO(rx)).thenReturn(PrescriptionResponseDTO.builder().id(id).build());
+        PrescriptionRequestDTO request = buildRequest();
+        request.setStatus(com.example.hms.enums.PrescriptionStatus.CANCELLED);
+        request.setWithdrawalReason("Contraindicated");
+
+        prescriptionService.updatePrescription(id, request, Locale.FRENCH);
+
+        assertThat(rx.getStatus()).isEqualTo(com.example.hms.enums.PrescriptionStatus.CANCELLED);
+        assertThat(rx.getClarificationResolvedAt()).isNotNull();
+    }
+
     // ── QA round 16 (D922/D935, D934, D970) ─────────────────────────────
 
     private com.example.hms.model.medication.MedicationCatalogItem catalogItem(String name, boolean controlled) {

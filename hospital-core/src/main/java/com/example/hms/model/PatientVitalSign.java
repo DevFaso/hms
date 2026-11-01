@@ -123,6 +123,14 @@ public class PatientVitalSign extends BaseEntity {
     @Column(name = "notes", length = 1000)
     private String notes;
 
+    /** QA D1169 (V257): the 0-10 pain score, a number rendered in the reader's language when read. */
+    @Column(name = "pain_score")
+    private Integer painScore;
+
+    /** QA D1169 (V257): the antenatal fundal height in cm, charted with the triage vitals. */
+    @Column(name = "fundal_height_cm")
+    private Integer fundalHeightCm;
+
     @Builder.Default
     @Column(name = "clinically_significant", nullable = false)
     private boolean clinicallySignificant = false;

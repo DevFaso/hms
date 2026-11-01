@@ -43,7 +43,7 @@ public class PatientProfileUpdateRequestDTO {
     @Size(max = 100)
     private String phoneNumberSecondary;
 
-    @Email
+    @Email(message = "{validation.email.invalid}")
     @Size(max = 150)
     private String email;
 

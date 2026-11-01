@@ -164,11 +164,12 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         UserRoleHospitalAssignment prescriberAssignment =
             resolvePrescriberAssignmentOrThrow(staff, encounter, hospitalId);
 
-        // DECISION SUPPORT: Check allergies before prescribing
-        String allergyOverride = checkAllergyConflicts(patient, request);
-
         com.example.hms.model.medication.MedicationCatalogItem catalogItem =
             applyCatalogPick(request, hospitalId, false);
+
+        // DECISION SUPPORT: Check allergies before prescribing. QA D1149: after
+        // the catalogue pick, so the item's ATC class is known to the check.
+        String allergyOverride = checkAllergyConflicts(patient, request, atcOf(catalogItem));
 
         // CDS rule engine: drug-drug, duplicate-order, pediatric-dose
         List<CdsCard> advisories = withCrossReactivityAdvisory(patient, request.getMedicationName(),
@@ -1281,6 +1282,15 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         if (existing.getStatus() == PrescriptionStatus.SIGNED) {
             return withdrawSignedPrescription(existing, request);
         }
+        // QA D1161 (round 21): withdrawing an order a signature led to (sent,
+        // partly filled, at a partner, printed, awaiting a clarification) is
+        // the withdrawal of a signed order, under the same rule: its author,
+        // or a prescriber of its hospital, with a reason, audited. It fell to
+        // the draft rule, which let only the author withdraw some of them,
+        // with no reason, while SIGNED itself let any doctor do it.
+        if (isSignedWithdrawal(existing, request)) {
+            return withdrawSignedPrescription(existing, request);
+        }
         // QA D660 (re-test 2): a withdrawn order is read-only, every field.
         // It used to fall through to updateEntity below, so a signed order
         // once withdrawn had its drug and dose rewritten under the signature.
@@ -1325,12 +1335,13 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         UserRoleHospitalAssignment prescriberAssignment =
             resolvePrescriberAssignmentOrThrow(staff, encounter, hospitalId);
 
-        // DECISION SUPPORT: Check allergies before updating prescription
-        String allergyOverride = checkAllergyConflicts(patient, request);
-
         boolean sameDrugEdit = keepCatalogLinkBeforeResolution(existing, request);
         com.example.hms.model.medication.MedicationCatalogItem catalogItem = keepCatalogLinkAfterResolution(
             existing, request, hospitalId, sameDrugEdit, applyCatalogPick(request, hospitalId, sameDrugEdit));
+
+        // DECISION SUPPORT: Check allergies before updating prescription
+        // (QA D1149: after the catalogue pick, with the item's ATC class).
+        String allergyOverride = checkAllergyConflicts(patient, request, atcOf(catalogItem));
 
         // CDS rule engine: drug-drug, duplicate-order, pediatric-dose. QA D970:
         // the order being edited is not a duplicate of itself.
@@ -1440,14 +1451,79 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         }
         UUID currentUserId = authService.getCurrentUserId();
         UUID hospitalId = existing.getHospital() != null ? existing.getHospital().getId() : null;
-        requireMayWithdrawSigned(existing, currentUserId, hospitalId);
+        boolean byPrescriber = requireMayWithdrawSigned(existing, currentUserId, hospitalId);
         PrescriptionStatus statusBefore = existing.getStatus();
+        if (statusBefore == PrescriptionStatus.PENDING_CLARIFICATION) {
+            closeClarificationOnWithdrawal(existing);
+        }
         existing.setStatus(requested);
         existing.setWithdrawalReason(reason);
         closePartnerOffersOnWithdrawal(existing, statusBefore);
         voidPreparedFillOnEdit(existing, statusBefore);
         releaseQueueClaimOnEdit(existing, currentUserId);
-        return prescriptionMapper.toResponseDTO(prescriptionRepository.save(existing));
+        Prescription saved = prescriptionRepository.save(existing);
+        auditSignedWithdrawalAfterCommit(saved, currentUserId, statusBefore, byPrescriber, reason);
+        return prescriptionMapper.toResponseDTO(saved);
+    }
+
+    /**
+     * QA D1161 (round 21, user decision): a signed order is withdrawn by its
+     * prescriber, or by another prescriber of its hospital with a recorded
+     * reason, as a covering doctor stops a drug for the patient's safety. Each
+     * withdrawal is on the audit trail: who, from which status, whether it was
+     * the prescriber, and a digest of the reason (the audit row is not
+     * encrypted, the reason itself stays on the order).
+     */
+    private void auditSignedWithdrawalAfterCommit(Prescription prescription, UUID actorId,
+                                                   PrescriptionStatus statusBefore, boolean byPrescriber,
+                                                   String reason) {
+        UUID prescriptionId = prescription.getId();
+        UUID patientId = prescription.getPatient() != null ? prescription.getPatient().getId() : null;
+        UUID hospitalId = prescription.getHospital() != null ? prescription.getHospital().getId() : null;
+        String details = REASON_DIGEST_PREFIX + computeSignatureDigest(reason) + "\",\"from\":\""
+            + statusBefore + "\",\"to\":\"" + prescription.getStatus() + "\",\"byPrescriber\":" + byPrescriber + "}";
+        String description = byPrescriber
+            ? "Signed prescription withdrawn by its prescriber"
+            : "Signed prescription withdrawn by another prescriber of the hospital";
+        com.example.hms.utility.TransactionCallbacks.afterCommit(() -> {
+            try {
+                auditEventLogService.logEvent(com.example.hms.payload.dto.AuditEventRequestDTO.builder()
+                    .eventType(com.example.hms.enums.AuditEventType.PRESCRIPTION_DISCONTINUED)
+                    .status(com.example.hms.enums.AuditStatus.SUCCESS)
+                    .userId(actorId)
+                    .hospitalId(hospitalId)
+                    .patientId(patientId)
+                    .eventDescription(description)
+                    .details(details)
+                    .entityType(AUDIT_ENTITY_PRESCRIPTION)
+                    .resourceId(prescriptionId != null ? prescriptionId.toString() : null)
+                    .build());
+            } catch (RuntimeException ex) {
+                logger.warn("Withdrawal audit not written for prescription {}: {}", prescriptionId,
+                    ex.getClass().getSimpleName());
+            }
+        });
+    }
+
+    /**
+     * QA D1161: the statuses a signature led to - every status but the
+     * unsigned ones (DRAFT, PENDING_SIGNATURE) and the withdrawn ones.
+     */
+    static boolean isSignedOrder(PrescriptionStatus status) {
+        return status != null && !status.isWithdrawn()
+            && status != PrescriptionStatus.DRAFT
+            && status != PrescriptionStatus.PENDING_SIGNATURE;
+    }
+
+    /**
+     * QA D1161: a request that only withdraws an order a signature led to.
+     * An edit of a sent or partly filled order's content keeps its own rules
+     * (G13/G15: the author's edit voids a prepared fill and ends a queue claim).
+     */
+    private static boolean isSignedWithdrawal(Prescription existing, PrescriptionRequestDTO request) {
+        return isSignedOrder(existing.getStatus())
+            && request.getStatus() != null && request.getStatus().isWithdrawn()
+            && !changesSignedContent(existing, request);
     }
 
     /**
@@ -1512,7 +1588,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      * a translated 403. Admins never reach PUT /prescriptions (E9 #67,
      * HospitalAdminOffOrdersTest), so they have no arm here.
      */
-    private void requireMayWithdrawSigned(Prescription existing, UUID callerId, UUID hospitalId) {
+    private boolean requireMayWithdrawSigned(Prescription existing, UUID callerId, UUID hospitalId) {
         if (hospitalId == null || callerId == null) {
             throw new BusinessException("prescription.only.doctor.admin");
         }
@@ -1526,6 +1602,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
             throw new com.example.hms.exception.ClientSafeAccessDeniedException(
                 com.example.hms.utility.MessageUtil.resolveOrRaw("prescription.signed.withdraw.forbidden"));
         }
+        return isPrescriber;
     }
 
     /** True when the request asks for anything on a signed order other than its status. */
@@ -2040,7 +2117,11 @@ public class PrescriptionServiceImpl implements PrescriptionService {
      *
      * @return the override reason to record, or {@code null} when no allergy matched
      */
-    private String checkAllergyConflicts(Patient patient, PrescriptionRequestDTO request) {
+    private static String atcOf(com.example.hms.model.medication.MedicationCatalogItem item) {
+        return item == null ? null : item.getAtcCode();
+    }
+
+    private String checkAllergyConflicts(Patient patient, PrescriptionRequestDTO request, String atcCode) {
         String medicationName = request.getMedicationName();
         if (medicationName == null || medicationName.isBlank()) {
             return null; // Cannot check without medication name
@@ -2055,7 +2136,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         // most severe matching entry is the one the prescriber is shown.
         Optional<PatientAllergy> worst = allergies.stream()
             .filter(PatientAllergy::isActive)
-            .filter(allergy -> matchesAllergen(med, allergy.getAllergenDisplay()))
+            .filter(allergy -> matchesAllergen(med, allergy.getAllergenDisplay(), atcCode))
             .max(java.util.Comparator.comparingInt(PrescriptionServiceImpl::allergySeverityRank));
         if (worst.isEmpty()) {
             return null;
@@ -2231,6 +2312,15 @@ public class PrescriptionServiceImpl implements PrescriptionService {
     }
 
     static boolean matchesAllergen(String med, String allergenDisplay) {
+        return matchesAllergen(med, allergenDisplay, null);
+    }
+
+    /**
+     * The drug's name meets the allergy's, or the allergy names the drug's
+     * class (QA D1149: {@link com.example.hms.service.allergy.DrugClassAllergy},
+     * penicillins and sulfonamides, the catalogue item's ATC code included).
+     */
+    static boolean matchesAllergen(String med, String allergenDisplay, String atcCode) {
         String allergen = normalizeDrugText(allergenDisplay);
         if (allergen.isEmpty() || med.isEmpty()) {
             return false;
@@ -2238,8 +2328,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         if (allergen.contains(med) || med.contains(allergen)) {
             return true;
         }
-        // "penicillin" / "pénicilline" / "penicilina": the whole -cillin class.
-        return allergen.contains("penicil") && (med.contains("cillin") || med.contains("cilin") || med.contains("penicil"));
+        return com.example.hms.service.allergy.DrugClassAllergy.covers(allergen, med, atcCode);
     }
 
     private void handleAllergyConflict(Patient patient, PatientAllergy allergy, String medicationName,

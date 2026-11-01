@@ -99,22 +99,37 @@ class AdvanceDirectiveServiceImplTest {
     }
 
     private AdvanceDirectiveRequestDTO request() {
+        // QA D1148: the clinician states the status, and an active DNR names its physician and date.
         return AdvanceDirectiveRequestDTO.builder()
             .directiveType(AdvanceDirectiveType.DO_NOT_RESUSCITATE)
+            .status(AdvanceDirectiveStatus.ACTIVE)
+            .physicianName("Dr Ouédraogo")
+            .effectiveDate(LocalDate.of(2026, 1, 15))
             .description("Do not resuscitate")
             .build();
     }
 
     @Test
-    void createDefaultsToActive() {
-        // A newly recorded directive is in force. Requiring the caller to say so
-        // would make "forgot to set status" mean "not in force", which is the
-        // wrong way round for a DNR.
+    void createNeverDefaultsTheStatus_D1148() {
+        // QA D1148 (round 21, user decision): the old default made one click on
+        // an untouched form an ACTIVE DNR. The clinician states the status.
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
         when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
-        when(directiveRepository.save(any(AdvanceDirective.class))).thenAnswer(i -> i.getArgument(0));
+        AdvanceDirectiveRequestDTO noStatus = request();
+        noStatus.setStatus(null);
 
+        assertThatThrownBy(() -> service.create(patientId, noStatus))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting("field").isEqualTo("status");
+        verify(directiveRepository, never()).save(any());
+
+        AdvanceDirectiveRequestDTO noPhysician = request();
+        noPhysician.setPhysicianName(null);
+        assertThatThrownBy(() -> service.create(patientId, noPhysician))
+            .extracting("field").isEqualTo("physicianName");
+
+        when(directiveRepository.save(any(AdvanceDirective.class))).thenAnswer(i -> i.getArgument(0));
         assertThat(service.create(patientId, request()).getStatus())
             .isEqualTo(AdvanceDirectiveStatus.ACTIVE.name());
     }
@@ -167,8 +182,29 @@ class AdvanceDirectiveServiceImplTest {
         when(directiveRepository.findById(id)).thenReturn(Optional.of(directive));
         when(directiveRepository.save(any(AdvanceDirective.class))).thenAnswer(i -> i.getArgument(0));
 
-        assertThat(service.revoke(id).getStatus()).isEqualTo(AdvanceDirectiveStatus.REVOKED.name());
+        assertThat(service.revoke(id, " Patient a changé d'avis ").getStatus())
+            .isEqualTo(AdvanceDirectiveStatus.REVOKED.name());
+        assertThat(directive.getRevocationReason()).isEqualTo("Patient a changé d'avis");
         verify(directiveRepository, never()).delete(any());
+    }
+
+    @Test
+    void aRevokeWithoutAReasonIsRefused_D1148() {
+        UUID id = UUID.randomUUID();
+        AdvanceDirective directive = new AdvanceDirective();
+        directive.setId(id);
+        directive.setHospital(hospital);
+        directive.setStatus(AdvanceDirectiveStatus.ACTIVE);
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(directiveRepository.findById(id)).thenReturn(Optional.of(directive));
+
+        for (String blank : new String[] {null, "", "  "}) {
+            assertThatThrownBy(() -> service.revoke(id, blank))
+                .isInstanceOf(BusinessException.class)
+                .extracting("messageKey").isEqualTo("order.lifecycle.cancelReasonRequired");
+        }
+        assertThat(directive.getStatus()).isEqualTo(AdvanceDirectiveStatus.ACTIVE);
+        verify(directiveRepository, never()).save(any());
     }
 
     @Test
@@ -183,7 +219,7 @@ class AdvanceDirectiveServiceImplTest {
         when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
         when(directiveRepository.findById(id)).thenReturn(Optional.of(foreign));
 
-        assertThatThrownBy(() -> service.revoke(id))
+        assertThatThrownBy(() -> service.revoke(id, "reason"))
             .isInstanceOf(ResourceNotFoundException.class);
     }
 }

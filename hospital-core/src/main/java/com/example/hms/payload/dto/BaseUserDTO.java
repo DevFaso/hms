@@ -17,7 +17,7 @@ public abstract class BaseUserDTO {
     private String username;
 
     @NotBlank(message = "{user.email.required}")
-    @Email
+    @Email(message = "{validation.email.invalid}")
     private String email;
 
     @NotBlank(message = "{user.firstName.required}")

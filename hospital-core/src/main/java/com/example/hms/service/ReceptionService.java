@@ -66,7 +66,7 @@ public interface ReceptionService {
      */
     int reconcileExpiredWaitlistOffers();
 
-    void closeWaitlistEntry(UUID waitlistId, UUID hospitalId);
+    void closeWaitlistEntry(UUID waitlistId, UUID hospitalId, String reason);
 
     void attestEligibility(UUID insuranceId, UUID hospitalId, String actorUsername,
                            EligibilityAttestationRequestDTO request);

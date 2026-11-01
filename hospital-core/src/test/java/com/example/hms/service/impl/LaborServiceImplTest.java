@@ -149,6 +149,7 @@ class LaborServiceImplTest {
         PartographEntryRequestDTO request = new PartographEntryRequestDTO();
         request.setHospitalId(hospitalId);
         request.setObservationTime(LocalDateTime.now());
+        request.setFetalHeartRateBpm(140); // QA D1151: an entry charts an observation
         return request;
     }
 

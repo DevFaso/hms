@@ -128,6 +128,10 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         imagingReportMapper.updateReportFromRequest(report, request);
         applyAuthoredStatus(report, request, imagingOrder, true);
         applyCriticalFlag(report, request);
+        // QA D1150 class (round 21): a report says what the study showed.
+        com.example.hms.service.support.ClinicalContent.requireAny("findings", "imaging.report.findingsRequired",
+            request.getTechnique(), request.getFindings(), request.getImpression(), request.getRecommendations(),
+            request.getMeasurements(), request.getAttachments());
 
         enforceUniqueReportNumber(report.getReportNumber(), hospital.getId(), null);
         assignVersioningForCreate(report, imagingOrder.getId());

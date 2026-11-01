@@ -978,6 +978,14 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     params: ['rx'],
   },
   {
+    key: 'AUDIT.DESC.RX_SIGNED_WITHDRAWN_BY_PRESCRIBER',
+    re: /^Signed prescription withdrawn by its prescriber$/,
+  },
+  {
+    key: 'AUDIT.DESC.RX_SIGNED_WITHDRAWN_BY_COLLEAGUE',
+    re: /^Signed prescription withdrawn by another prescriber of the hospital$/,
+  },
+  {
     key: 'AUDIT.DESC.RX_ROUTED_PARTNER',
     re: /^Prescription (\S+) routed to partner pharmacy (.+)$/,
     params: ['rx', 'pharmacy'],

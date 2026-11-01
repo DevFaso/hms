@@ -84,10 +84,15 @@ public class AdvanceDirectiveServiceImpl implements AdvanceDirectiveService {
         AdvanceDirective directive = new AdvanceDirective();
         directive.setPatient(patient);
         directive.setHospital(hospital);
-        // A newly recorded directive is in force unless the caller says otherwise.
-        directive.setStatus(request.getStatus() != null ? request.getStatus() : AdvanceDirectiveStatus.ACTIVE);
+        // QA D1148 (round 21, user decision): a directive is never recorded
+        // from defaults. The clinician states its status; it used to default
+        // to ACTIVE, so one click recorded an active DNR.
+        com.example.hms.service.support.ClinicalContent.requirePresent(request.getStatus(), "status",
+            "advanceDirective.status.required");
+        directive.setStatus(request.getStatus());
         applyEditableFields(directive, request);
         validateDates(directive);
+        requireOrderDetails(directive);
 
         return mapper.toResponseDto(directiveRepository.save(directive));
     }
@@ -101,13 +106,34 @@ public class AdvanceDirectiveServiceImpl implements AdvanceDirectiveService {
         }
         applyEditableFields(directive, request);
         validateDates(directive);
+        requireOrderDetails(directive);
         return mapper.toResponseDto(directiveRepository.save(directive));
+    }
+
+    /**
+     * QA D1148: an active resuscitation order (DNR, POLST) names the physician
+     * who gave it and the date it takes effect, as a paper order does; the
+     * banner showed an active DNR with neither.
+     */
+    static void requireOrderDetails(AdvanceDirective directive) {
+        boolean resuscitationOrder = directive.getDirectiveType() == com.example.hms.enums.AdvanceDirectiveType.DO_NOT_RESUSCITATE
+            || directive.getDirectiveType()
+                == com.example.hms.enums.AdvanceDirectiveType.PHYSICIAN_ORDERS_FOR_LIFE_SUSTAINING_TREATMENT;
+        if (!resuscitationOrder || directive.getStatus() != AdvanceDirectiveStatus.ACTIVE) {
+            return;
+        }
+        com.example.hms.service.support.ClinicalContent.requirePresent(directive.getPhysicianName(),
+            "physicianName", "advanceDirective.physician.required");
+        com.example.hms.service.support.ClinicalContent.requirePresent(directive.getEffectiveDate(),
+            "effectiveDate", "advanceDirective.effectiveDate.required");
     }
 
     @Override
     @Transactional
-    public AdvanceDirectiveResponseDTO revoke(UUID id) {
+    public AdvanceDirectiveResponseDTO revoke(UUID id, String reason) {
         AdvanceDirective directive = loadScoped(id);
+        // QA D1148 (round 21): a revoked directive says why, on the server.
+        directive.setRevocationReason(com.example.hms.service.support.CancelledOrders.requireCancelReason(reason));
         directive.setStatus(AdvanceDirectiveStatus.REVOKED);
         directive.setLastReviewedAt(LocalDateTime.now());
         return mapper.toResponseDto(directiveRepository.save(directive));

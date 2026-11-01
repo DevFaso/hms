@@ -1405,10 +1405,28 @@ class ReceptionServiceImplTest {
             when(waitlistRepo.findByIdAndHospital_Id(waitlistId, hospitalId))
                     .thenReturn(Optional.of(entry));
 
-            service.closeWaitlistEntry(waitlistId, hospitalId);
+            service.closeWaitlistEntry(waitlistId, hospitalId, "  Patient seen elsewhere ");
 
+            verify(entry).setCloseReason("Patient seen elsewhere");
             verify(entry).setStatus("CLOSED");
             verify(waitlistRepo).save(entry);
+        }
+
+        @Test
+        @DisplayName("QA D1157: a close without a reason is refused and nothing is written")
+        void aCloseWithoutAReasonIsRefused_D1157() {
+            UUID waitlistId = UUID.randomUUID();
+            AppointmentWaitlist entry = mock(AppointmentWaitlist.class);
+            when(waitlistRepo.findByIdAndHospital_Id(waitlistId, hospitalId))
+                    .thenReturn(Optional.of(entry));
+
+            for (String blank : new String[] {null, "", "   "}) {
+                assertThatThrownBy(() -> service.closeWaitlistEntry(waitlistId, hospitalId, blank))
+                        .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                        .extracting("messageKey").isEqualTo("order.lifecycle.cancelReasonRequired");
+            }
+            verify(entry, org.mockito.Mockito.never()).setStatus(org.mockito.ArgumentMatchers.anyString());
+            verify(waitlistRepo, org.mockito.Mockito.never()).save(entry);
         }
 
         @Test
@@ -1417,7 +1435,7 @@ class ReceptionServiceImplTest {
             UUID waitlistId = UUID.randomUUID();
             when(waitlistRepo.findByIdAndHospital_Id(waitlistId, hospitalId)).thenReturn(Optional.empty());
 
-            assertThatThrownBy(() -> service.closeWaitlistEntry(waitlistId, hospitalId))
+            assertThatThrownBy(() -> service.closeWaitlistEntry(waitlistId, hospitalId, "reason"))
                     .isInstanceOf(ResourceNotFoundException.class);
         }
     }

@@ -225,6 +225,27 @@ public class RoleValidator {
     public static final java.util.List<String> LICENSED_PHYSICIAN_ROLE_CODES = java.util.List.of(
         DOCTOR_ROLE, PHYSICIAN_ROLE, SURGEON_ROLE, "ANESTHESIOLOGIST", "RADIOLOGIST");
 
+    /**
+     * QA D1164 (round 21): the roles a visit takes as its provider - every
+     * licensed physician, the nurse and the midwife (a midwife runs her own
+     * antenatal and delivery visits), and the hospital administrator the old
+     * check admitted. The walk-in refused the midwife the appointment check-in
+     * accepted, and a physician or a surgeon too, because each check listed
+     * roles by hand; this is the one list.
+     */
+    public static final java.util.List<String> ENCOUNTER_PROVIDER_ROLE_CODES;
+
+    static {
+        java.util.List<String> codes = new java.util.ArrayList<>(LICENSED_PHYSICIAN_ROLE_CODES);
+        codes.addAll(java.util.List.of(NURSE_ROLE, MIDWIFE_ROLE, HOSPITAL_ADMIN_ROLE));
+        ENCOUNTER_PROVIDER_ROLE_CODES = java.util.List.copyOf(codes);
+    }
+
+    /** A role a visit takes as its provider ({@link #ENCOUNTER_PROVIDER_ROLE_CODES}), in one query. */
+    public boolean isEncounterProvider(UUID userId, UUID hospitalId) {
+        return hasAnyCode(userId, hospitalId, ENCOUNTER_PROVIDER_ROLE_CODES.toArray(new String[0]));
+    }
+
     /** A licensed physician ({@link #LICENSED_PHYSICIAN_ROLE_CODES}) at {@code hospitalId}, in one query. */
     public boolean isLicensedPhysician(UUID userId, UUID hospitalId) {
         return hasAnyCode(userId, hospitalId, LICENSED_PHYSICIAN_ROLE_CODES.toArray(new String[0]));

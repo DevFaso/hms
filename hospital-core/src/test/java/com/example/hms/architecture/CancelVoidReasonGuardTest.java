@@ -342,6 +342,171 @@ class CancelVoidReasonGuardTest {
         return name;
     }
 
+    // ── QA D1157 / D1159 / D1160 (round 21): clinical and front-office withdrawals ──
+
+    /** A path of any other controller that withdraws, closes or refuses something already recorded. */
+    private static final Pattern CLINICAL_VOID_PATH =
+        Pattern.compile("(?i)(cancel|close|discontinu|withdraw|revoke|void|reject|refuse|annul|undo|hold)");
+
+    /**
+     * QA D1157 / D1160 (round 21): every such handler outside money and stock
+     * is listed: with the reason's source and the test proving a blank one is
+     * refused ("Class#method"), or "DTO.field (@NotBlank) -> VALIDATED" (the
+     * validator is run below), or "OWN REASON: why", "NOT A WITHDRAWAL: why",
+     * "NOT A CLINICAL RECORD: why", or "KNOWN GAP (Dnnnn class, standing debt): why".
+     * Round 20's appointment guard did not read the waitlist, the recalls or
+     * the discharge requests, which all closed with an empty body.
+     */
+    private static final Map<String, String> CLINICAL_HANDLERS = new LinkedHashMap<>();
+
+    static {
+        CLINICAL_HANDLERS.put("POST /reception/waitlist/{id}/close",
+            "CloseReasonRequestDTO.reason -> service/ReceptionServiceImplTest#aCloseWithoutAReasonIsRefused_D1157");
+        CLINICAL_HANDLERS.put("POST /recalls/{id}/cancel",
+            "CloseReasonRequestDTO.reason -> service/scheduling/PatientRecallServiceImplTest#aCancelWithoutAReasonIsRefused_D1157");
+        CLINICAL_HANDLERS.put("POST /recalls/{id}/close",
+            "NOT A WITHDRAWAL: closes the recall because the visit took place (or the need lapsed with it)");
+        CLINICAL_HANDLERS.put("POST /discharge-approvals/{id}/cancel",
+            "@RequestParam reason -> service/DischargeApprovalServiceImplTest#cancelWithoutAReasonIsRefused_D1160");
+        CLINICAL_HANDLERS.put("POST /discharge-approvals/{id}/reject",
+            "DischargeApprovalDecisionDTO.rejectionReason -> service/DischargeApprovalServiceImplTest#rejectWithoutAReasonIsRefused_D1160");
+        CLINICAL_HANDLERS.put("POST /consultations/{consultationId}/cancel",
+            "CancelConsultationRequestDTO.cancellationReason -> service/impl/ConsultationServiceImplTest#cancelConsultation_refusesABlankReason_D1098");
+        CLINICAL_HANDLERS.put("POST /signatures/{signatureId}/revoke",
+            "SignatureRevocationRequestDTO.revocationReason (@NotBlank) -> VALIDATED");
+        CLINICAL_HANDLERS.put("POST /encounters/{encounterId}/close-unseen",
+            "CloseUnseenVisitRequestDTO.reason (@NotBlank) -> VALIDATED");
+        CLINICAL_HANDLERS.put("POST /referrals/{referralId}/reject",
+            "RejectReferralRequestDTO.reason -> controller/GeneralReferralControllerTest#rejectReferral_blankReason_returns400");
+        CLINICAL_HANDLERS.put("POST /referrals/{referralId}/cancel",
+            "@RequestParam reason -> service/impl/GeneralReferralServiceImplTest#cancelReferral_refusesABlankReason_D1098");
+        CLINICAL_HANDLERS.put("POST /isolation/precautions/{precautionId}/discontinue",
+            "DiscontinuePrecautionRequestDTO.discontinuationReason -> service/IsolationServiceImplTest#liftingAPrecautionNeedsAReason");
+        CLINICAL_HANDLERS.put("POST /lab-orders/{id}/void",
+            "VoidLabOrderRequestDTO.reason -> service/LabOrderVoidTest#aVoidStatesWhy");
+        CLINICAL_HANDLERS.put("POST /lab-specimens/{id}/reject",
+            "RejectSpecimenRequestDTO.reason -> service/LabSpecimenRejectionTest#aReasonIsRequired");
+        CLINICAL_HANDLERS.put("POST /referrals/obgyn/{id}/cancel",
+            "ObgynReferralCancelRequestDTO.reason -> service/impl/ObgynReferralServiceImplTest#cancelReferral_refusesABlankReason_D1098");
+        CLINICAL_HANDLERS.put("POST /procedure-orders/{orderId}/cancel",
+            "@RequestParam cancellationReason -> service/impl/ProcedureOrderServiceImplTest#cancelProcedureOrder_refusesABlankReason_D1098");
+        CLINICAL_HANDLERS.put("POST /transfers/{orderId}/cancel",
+            "TransferCancellationRequestDTO.cancellationReason -> service/TransferServiceImplTest#cancellingNeedsAReasonBecauseTheBedWasHeldOutOfCirculation");
+        CLINICAL_HANDLERS.put("POST /transfusions/requests/{requestId}/cancel",
+            "@RequestParam reason -> service/TransfusionServiceImplTest#cancellingRequiresAReason");
+        CLINICAL_HANDLERS.put("POST /patients/{patientId}/treatment-consents/{consentId}/revoke",
+            "@RequestParam reason -> service/impl/TreatmentConsentServiceImplTest#revokeDemandsAReason");
+        CLINICAL_HANDLERS.put("POST /ultrasound/orders/{orderId}/cancel",
+            "@RequestParam cancellationReason -> service/UltrasoundServiceImplTest#cancelOrder_refusesABlankReason_D1098");
+        CLINICAL_HANDLERS.put("PUT /me/patient/appointments/cancel",
+            "OWN REASON: the patient cancels their own booking; optional on purpose (QA D1126)");
+        CLINICAL_HANDLERS.put("PUT /me/patient/refills/{refillId}/cancel",
+            "OWN REASON: the patient withdraws their own refill request before anyone acted on it");
+        CLINICAL_HANDLERS.put("POST /slots/{id}/hold",
+            "NOT A WITHDRAWAL: a temporary reservation of a free slot");
+        CLINICAL_HANDLERS.put("PATCH /staff/scheduling/leaves/{leaveId}/cancel",
+            "NOT A CLINICAL RECORD: a staff member's own leave request");
+        CLINICAL_HANDLERS.put("POST /break-glass/{sessionId}/revoke",
+            "NOT A CLINICAL RECORD: ends the caller's own emergency access early; the session's opening reason is required");
+        CLINICAL_HANDLERS.put("PUT /api-keys/{keyId}/revoke", "NOT A CLINICAL RECORD: platform integration key");
+        CLINICAL_HANDLERS.put("PUT /webhook-endpoints/{endpointId}/revoke", "NOT A CLINICAL RECORD: platform integration endpoint");
+        CLINICAL_HANDLERS.put("POST /super-admin/hospitals/{hospitalId}/cancel-purge",
+            "NOT A CLINICAL RECORD: stops a scheduled tenant purge (keeps data)");
+        CLINICAL_HANDLERS.put("POST /super-admin/organizations/{organizationId}/cancel-purge",
+            "NOT A CLINICAL RECORD: stops a scheduled tenant purge (keeps data)");
+        CLINICAL_HANDLERS.put("POST /super-admin/providers/{providerId}/reject",
+            "NOT A CLINICAL RECORD: provider onboarding; ProviderDecisionRequestDTO.reason is @NotBlank");
+        CLINICAL_HANDLERS.put("POST /super-admin/providers/{providerId}/revoke",
+            "NOT A CLINICAL RECORD: provider onboarding; ProviderDecisionRequestDTO.reason is @NotBlank");
+        CLINICAL_HANDLERS.put("PUT /refills/{refillId}/reject",
+            "KNOWN GAP (D1157 class, standing debt): the refill denial's providerNotes are optional; the portal's"
+                + " refill screen sends none, so requiring them needs its UI half first");
+        CLINICAL_HANDLERS.put("PUT /roi-requests/{requestId}/cancel",
+            "KNOWN GAP (D1157 class, standing debt): RoiDecisionDTO.note is optional on cancel (deny requires it);"
+                + " the ROI worklist dialog has no field yet");
+        CLINICAL_HANDLERS.put("PUT /advance-directives/{id}/revoke",
+            "CloseReasonRequestDTO.reason -> service/impl/AdvanceDirectiveServiceImplTest#aRevokeWithoutAReasonIsRefused_D1148");
+    }
+
+    /** QA D1159: a dose held or refused is not a path of its own; its rule is on the one MAR writer. */
+    private static final String MAR_WITHHELD_PROOF =
+        "service/impl/EmptyClinicalWriteRulesTest#aHeldOrRefusedDoseSaysWhy_D1159";
+
+    @Test
+    void everyClinicalWithdrawalIsListedWithItsReasonProof() throws Exception {
+        List<String> found = new ArrayList<>();
+        for (Path f : controllers()) {
+            String rel = MAIN.relativize(f).toString().replace('\\', '/');
+            if (isMoneyController(rel)) {
+                continue;
+            }
+            Class<?> type = Class.forName("com.example.hms." + rel.replace('/', '.').replace(".java", ""));
+            RequestMapping mapping = type.getAnnotation(RequestMapping.class);
+            String base = first(mapping != null ? merge(mapping.value(), mapping.path()) : new String[0]);
+            for (Method m : type.getDeclaredMethods()) {
+                String[] verbAndPath = writeMapping(m);
+                if (verbAndPath == null) {
+                    continue;
+                }
+                String path = base + verbAndPath[1];
+                if (CLINICAL_VOID_PATH.matcher(path).find()) {
+                    found.add(verbAndPath[0] + " " + path);
+                }
+            }
+        }
+        assertThat(new TreeSet<>(found))
+            .as("a handler that withdraws, closes or refuses a clinical or front-office record is not listed with"
+                + " the test proving it refuses a blank reason (QA D1157), or a listed one is gone")
+            .isEqualTo(new TreeSet<>(CLINICAL_HANDLERS.keySet()));
+        for (Map.Entry<String, String> e : CLINICAL_HANDLERS.entrySet()) {
+            String v = e.getValue();
+            if (v.endsWith("-> VALIDATED")) {
+                assertBlankIsRefusedByValidation(e.getKey(), v);
+            } else if (v.contains(" -> ")) {
+                assertProofExists(v.substring(v.indexOf(" -> ") + 4));
+            } else {
+                assertThat(v).as(e.getKey())
+                    .matches("(OWN REASON|NOT A WITHDRAWAL|NOT A CLINICAL RECORD|KNOWN GAP \\(D\\d+ class, standing debt\\)): .+");
+            }
+        }
+        assertProofExists(MAR_WITHHELD_PROOF);
+    }
+
+    private static void assertBlankIsRefusedByValidation(String handler, String entry) throws Exception {
+        String dto = entry.substring(0, entry.indexOf('.'));
+        String field = entry.substring(entry.indexOf('.') + 1, entry.indexOf(' '));
+        try (jakarta.validation.ValidatorFactory factory = jakarta.validation.Validation.buildDefaultValidatorFactory()) {
+            Object empty = findPayload(dto).getDeclaredConstructor().newInstance();
+            assertThat(factory.getValidator().validate(empty))
+                .as(handler + ": a blank " + field + " is refused by validation")
+                .extracting(cv -> cv.getPropertyPath().toString()).contains(field);
+        }
+    }
+
+    private static void assertProofExists(String proof) throws IOException {
+        String[] parts = proof.split("#");
+        Path file = TEST.resolve(parts[0] + ".java");
+        assertThat(file).as(proof).exists();
+        assertThat(Files.readString(file)).as(proof).containsPattern("void " + Pattern.quote(parts[1]) + "\\(");
+    }
+
+    /** {verb, first path} of a POST, PUT or PATCH mapping, or null. */
+    private static String[] writeMapping(Method m) {
+        PostMapping post = m.getAnnotation(PostMapping.class);
+        if (post != null) {
+            return new String[] {"POST", first(merge(post.value(), post.path()))};
+        }
+        PutMapping put = m.getAnnotation(PutMapping.class);
+        if (put != null) {
+            return new String[] {"PUT", first(merge(put.value(), put.path()))};
+        }
+        PatchMapping patch = m.getAnnotation(PatchMapping.class);
+        if (patch != null) {
+            return new String[] {"PATCH", first(merge(patch.value(), patch.path()))};
+        }
+        return null;
+    }
+
     private static Class<?> findPayload(String simpleName) throws Exception {
         try (Stream<Path> files = Files.walk(MAIN.resolve("payload"))) {
             Path f = files.filter(p -> p.getFileName().toString().equals(simpleName + ".java")).findFirst()

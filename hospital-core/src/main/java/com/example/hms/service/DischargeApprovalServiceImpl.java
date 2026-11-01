@@ -171,6 +171,9 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
     public DischargeApprovalResponseDTO reject(UUID approvalId, DischargeApprovalDecisionDTO decision) {
         DischargeApproval approval = getApprovalOrThrow(approvalId);
         ensurePending(approval);
+        // QA D1160 class (round 21): a refused discharge says why, on the server.
+        String rejectionReason = com.example.hms.service.support.CancelledOrders.requireCancelReason(
+            decision.getRejectionReason());
 
         Staff doctor = staffRepository.findByIdAndActiveTrue(decision.getDoctorStaffId())
             .orElseThrow(() -> new ResourceNotFoundException("staff.doctor.notFoundOrInactive", decision.getDoctorStaffId()));
@@ -184,7 +187,7 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
         approval.setDoctor(doctor);
         approval.setDoctorAssignment(doctorAssignment);
         approval.setDoctorNote(trim(decision.getDoctorNote()));
-        approval.setRejectionReason(trim(decision.getRejectionReason()));
+        approval.setRejectionReason(rejectionReason);
         approval.setStatus(DischargeStatus.REJECTED);
         approval.setApprovedAt(null);
         approval.setResolvedAt(LocalDateTime.now());
@@ -203,6 +206,9 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
     public DischargeApprovalResponseDTO cancel(UUID approvalId, UUID cancelledByStaffId, String reason) {
         DischargeApproval approval = getApprovalOrThrow(approvalId);
         ensurePending(approval);
+        // QA D1160 (round 21): a withdrawn discharge request says why; a blank
+        // reason was accepted (200) and nothing recorded the decision.
+        String cancelReason = com.example.hms.service.support.CancelledOrders.requireCancelReason(reason);
 
         if (approval.getNurse() == null) {
             throw new BusinessException("dischargeApproval.cancel.noRequester");
@@ -219,7 +225,7 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
 
         approval.setStatus(DischargeStatus.CANCELLED);
         approval.setResolvedAt(LocalDateTime.now());
-        approval.setRejectionReason(trim(reason));
+        approval.setRejectionReason(cancelReason);
         approval.setDoctor(null);
         approval.setDoctorAssignment(null);
         approval.setDoctorNote(null);

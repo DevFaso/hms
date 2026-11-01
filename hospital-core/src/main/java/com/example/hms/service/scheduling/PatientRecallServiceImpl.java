@@ -109,11 +109,13 @@ public class PatientRecallServiceImpl implements PatientRecallService {
 
     @Override
     @Transactional
-    public RecallResponseDTO cancelRecall(UUID recallId, UUID hospitalId) {
+    public RecallResponseDTO cancelRecall(UUID recallId, UUID hospitalId, String reason) {
         PatientRecall recall = loadScoped(recallId, hospitalId);
         if (!OPEN_STATUSES.contains(recall.getStatus())) {
             throw new BusinessException("Only a pending or notified recall can be cancelled.");
         }
+        // QA D1157 (round 21): a cancelled recall says why, on the server.
+        recall.setCloseReason(com.example.hms.service.support.CancelledOrders.requireCancelReason(reason));
         return toDto(finish(recall, RecallStatus.CANCELLED), hospitalId);
     }
 
@@ -288,6 +290,7 @@ public class PatientRecallServiceImpl implements PatientRecallService {
             .linkedAppointmentId(recall.getLinkedAppointment() != null
                 ? recall.getLinkedAppointment().getId() : null)
             .closedAt(recall.getClosedAt())
+            .closeReason(recall.getCloseReason())
             .createdAt(recall.getCreatedAt())
             .createdBy(recall.getCreatedBy())
             .build();

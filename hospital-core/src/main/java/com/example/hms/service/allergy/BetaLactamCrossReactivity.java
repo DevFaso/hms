@@ -98,8 +98,8 @@ public final class BetaLactamCrossReactivity {
             if (allergy == null || !allergy.isActive() || allergy.getAllergenDisplay() == null) {
                 continue;
             }
-            String allergen = normalize(allergy.getAllergenDisplay());
-            if (!allergen.isEmpty() && allergen.contains(PENICIL_STEM) && isPenicillin(med)) {
+            // QA D1149: every class the allergy check knows (penicillins, sulfonamides).
+            if (DrugClassAllergy.covers(allergy.getAllergenDisplay(), med, null)) {
                 return Optional.of(allergy.getAllergenDisplay().trim());
             }
         }

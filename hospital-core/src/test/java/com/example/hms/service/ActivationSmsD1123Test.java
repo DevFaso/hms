@@ -205,6 +205,9 @@ class ActivationSmsD1123Test {
         String wrong = messageOf(() -> service.verifyAssignmentByPhone("+22670003201", "000000"));
         String unknown = messageOf(() -> service.verifyAssignmentByPhone("+22679999999", CODE));
         assertThat(unknown).as("no account enumeration").isEqualTo(wrong);
+        // QA D1152: the refusal is French on a French page (the key was in no bundle,
+        // so the English default "Invalid confirmation code." was shown).
+        assertThat(wrong).isEqualTo("Code de confirmation incorrect.");
 
         for (int i = 0; i < 4; i++) {
             messageOf(() -> service.verifyAssignmentByPhone("+22670003201", "000000"));
@@ -212,7 +215,8 @@ class ActivationSmsD1123Test {
         assertThatThrownBy(() -> service.verifyAssignmentByPhone("+22670003201", CODE))
             .as("the sixth try is refused even with the right code")
             .isInstanceOf(BusinessException.class)
-            .hasMessage("users.verification.tooManyAttempts");
+            // QA D1152: the lock ends after its window; no "request a new code".
+            .hasMessage("assignment.phoneActivation.tooManyAttempts");
         assertThat(assignment.getActive()).isFalse();
     }
 

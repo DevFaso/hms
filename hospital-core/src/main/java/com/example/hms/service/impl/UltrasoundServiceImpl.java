@@ -295,6 +295,28 @@ public class UltrasoundServiceImpl implements UltrasoundService {
             .toList();
     }
 
+    /**
+     * QA D1150 (round 21): a report records findings. A blank report was saved
+     * with every value null and read "RAPPORT Normal", with "Notify the
+     * patient" offered: the finding category alone (preselected by the form)
+     * is not a finding. At least one measurement, observation or written
+     * finding must be present. A deliberate yes/no on cardiac activity counts.
+     */
+    static void requireReportFindings(UltrasoundReportRequestDTO request) {
+        com.example.hms.service.support.ClinicalContent.requireAny("findingsSummary",
+            "ultrasound.report.findingsRequired",
+            request.getGestationalAgeAtScan(), request.getGestationalAgeDays(), request.getNuchalTranslucencyMm(),
+            request.getCrownRumpLengthMm(), request.getEstimatedDueDate(), request.getNumberOfFetuses(),
+            request.getFetalPosition(), request.getBiparietalDiameterMm(), request.getHeadCircumferenceMm(),
+            request.getAbdominalCircumferenceMm(), request.getFemurLengthMm(), request.getEstimatedFetalWeightGrams(),
+            request.getPlacentalLocation(), request.getPlacentalGrade(), request.getAmnioticFluidIndex(),
+            request.getAmnioticFluidLevel(), request.getCervicalLengthMm(), request.getUmbilicalArteryDoppler(),
+            request.getUterineArteryDoppler(), request.getFetalHeartRate(),
+            request.getFetalCardiacActivity() != null ? request.getFetalCardiacActivity().toString() : null,
+            request.getAnatomyFindings(), request.getFindingsSummary(), request.getInterpretation(),
+            request.getAnomalyDescription());
+    }
+
     @Override
     public UltrasoundReportResponseDTO createOrUpdateReport(UUID orderId, UltrasoundReportRequestDTO request, UUID performedByUserId) {
         UltrasoundOrder order = getOrderInScope(orderId);
@@ -306,6 +328,10 @@ public class UltrasoundServiceImpl implements UltrasoundService {
         String performerName = resolveStaffName(performedByUserId, order.getHospital().getId());
 
         UltrasoundReport report = reportRepository.findByUltrasoundOrderId(orderId).orElse(null);
+        if (report != null && Boolean.TRUE.equals(report.getReportReviewedByProvider())) {
+            throw new BusinessException("ultrasound.report.reviewedNoEdit");
+        }
+        requireReportFindings(request);
 
         if (report == null) {
             report = ultrasoundMapper.toReportEntity(request, order, order.getHospital());
@@ -313,9 +339,6 @@ public class UltrasoundServiceImpl implements UltrasoundService {
                 report.setScanPerformedBy(performerName);
             }
         } else {
-            if (Boolean.TRUE.equals(report.getReportReviewedByProvider())) {
-                throw new BusinessException("ultrasound.report.reviewedNoEdit");
-            }
             ultrasoundMapper.updateReportFromRequest(report, request);
         }
 

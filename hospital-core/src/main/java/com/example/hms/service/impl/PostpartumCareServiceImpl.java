@@ -109,6 +109,7 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(hospital, HOSPITAL_NOT_FOUND, hospital.getId());
         patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
         requireRecordedDelivery(patient.getId());
+        requireObservationFindings(request);
         Staff staff = resolveRecorderStaff(request.getRecordedByStaffId(), recorderUserId, hospital);
         User documentedBy = resolveRecorderUser(recorderUserId);
         PostpartumCarePlan carePlan = resolveCarePlan(patient, hospital, registration, request);
@@ -626,11 +627,51 @@ public class PostpartumCareServiceImpl implements PostpartumCareService {
         return new ScheduleSnapshot(plan.getActivePhase(), plan.getNextDueAt(), plan.getOverdueSince());
     }
 
+    /**
+     * QA D1151 (round 21): an observation records something. Blank ones were
+     * saved with every vital null and counted as the 15-minute checks of a
+     * haemorrhaging woman. At least one finding is required: a vital sign,
+     * the uterus, the lochia, the perineum, bleeding, the mood, education or
+     * a discharge note.
+     */
+    static void requireObservationFindings(PostpartumObservationRequestDTO request) {
+        com.example.hms.service.support.ClinicalContent.requireAny("temperatureCelsius",
+            "maternity.postpartum.findingsRequired",
+            request.getTemperatureCelsius(), request.getSystolicBpMmHg(), request.getDiastolicBpMmHg(),
+            request.getPulseBpm(), request.getRespirationsPerMin(), request.getPainScore(),
+            request.getFundusHeightCm(), request.getFundusTone(), request.getBladderStatus(),
+            request.getLochiaAmount(), request.getLochiaCharacter(), request.getLochiaNotes(),
+            request.getPerineumFindings(), request.getEstimatedBloodLossMl(), request.getExcessiveBleeding(),
+            request.getUterineAtonySuspected(), request.getHemorrhageProtocolActivated(),
+            request.getStabilizationConfirmed(), request.getMoodStatus(), request.getSupportStatus(),
+            request.getSleepStatus(), request.getPsychosocialNotes(), request.getEducationTopics(),
+            request.getEducationNotes(), request.getDischargeSafetyNotes());
+    }
+
+    /**
+     * QA D1151: what counts as one of the immediate-recovery checks - a vital
+     * sign or an assessment of the uterus or the bleeding. An education or a
+     * discharge note is recorded but checks nothing.
+     */
+    static boolean isMonitoringCheck(PostpartumObservationRequestDTO request) {
+        Object[] checks = {request.getTemperatureCelsius(), request.getSystolicBpMmHg(), request.getDiastolicBpMmHg(),
+            request.getPulseBpm(), request.getRespirationsPerMin(), request.getFundusHeightCm(), request.getFundusTone(),
+            request.getLochiaAmount(), request.getEstimatedBloodLossMl()};
+        for (Object check : checks) {
+            if (com.example.hms.service.support.ClinicalContent.isPresent(check)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private void applyImmediatePhaseScheduling(PostpartumCarePlan plan,
                                                PostpartumObservation observation,
                                                PostpartumObservationRequestDTO request,
                                                boolean haemorrhageOnPlan) {
-        plan.incrementImmediateObservationCount();
+        if (isMonitoringCheck(request)) {
+            plan.incrementImmediateObservationCount();
+        }
         LocalDateTime windowEnd = plan.getDeliveryOccurredAt()
             .plusMinutes(PostpartumCarePlan.IMMEDIATE_WINDOW_MINUTES);
         boolean targetMet = plan.getImmediateObservationsCompleted() >= plan.getImmediateObservationTarget();

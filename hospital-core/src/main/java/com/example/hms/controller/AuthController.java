@@ -547,7 +547,7 @@ public class AuthController {
                description = "GET version for email verification links. Activates user and patient role assignments.")
     @GetMapping("/verify-email")
     public ResponseEntity<Object> verifyEmailViaLink(
-            @RequestParam("email") @Email @NotBlank String email,
+            @RequestParam("email") @Email(message = "{validation.email.invalid}") @NotBlank String email,
             @RequestParam("token") @NotBlank String token) {
         var dto = new EmailVerificationRequestDTO();
         dto.setEmail(email);
@@ -559,7 +559,7 @@ public class AuthController {
                description = "Generates a new activation token and resends the verification email.")
     @PostMapping("/resend-verification")
     public ResponseEntity<Object> resendVerificationEmail(
-            @RequestParam(value = "email", required = false) @Email String emailParam,
+            @RequestParam(value = "email", required = false) @Email(message = "{validation.email.invalid}") String emailParam,
             @RequestParam(value = "phone", required = false) String phoneParam,
             @RequestBody(required = false) java.util.Map<String, String> body) {
         // QA D542: the portal now sends the contact in the body - a phone
@@ -1340,7 +1340,7 @@ public class AuthController {
 
     /**
      * The oldest reset request. QA D787: it answered 400 to a phone number or a
-     * username (the parameter was {@code @Email}); like
+     * username (the parameter was {@code @Email(message = "{validation.email.invalid}")}); like
      * {@code POST /auth/password/request} it now takes an e-mail address, a
      * username or a phone number, as {@code identifier}, {@code email} or
      * {@code phone}, in a JSON body or (older clients) the query string, and is

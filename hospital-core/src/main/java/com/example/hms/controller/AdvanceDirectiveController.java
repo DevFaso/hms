@@ -77,7 +77,11 @@ public class AdvanceDirectiveController {
     @Operation(summary = "Revoke an advance directive",
         description = "Marks the directive REVOKED. Directives are never deleted — a directive "
             + "that was once in force is part of the record.")
-    public ResponseEntity<AdvanceDirectiveResponseDTO> revoke(@PathVariable UUID id) {
-        return ResponseEntity.ok(advanceDirectiveService.revoke(id));
+    public ResponseEntity<AdvanceDirectiveResponseDTO> revoke(
+            @PathVariable UUID id,
+            // QA D1148 (round 21): the reason is required, sent in the body; an empty body is refused like a blank one.
+            @jakarta.validation.Valid @org.springframework.web.bind.annotation.RequestBody(required = false)
+            com.example.hms.payload.dto.scheduling.CloseReasonRequestDTO body) {
+        return ResponseEntity.ok(advanceDirectiveService.revoke(id, body == null ? null : body.getReason()));
     }
 }

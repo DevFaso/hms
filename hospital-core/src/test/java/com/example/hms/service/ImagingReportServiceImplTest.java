@@ -183,6 +183,7 @@ class ImagingReportServiceImplTest {
         imagingReportService.createReport(ImagingReportUpsertRequestDTO.builder()
             .imagingOrderId(orderId)
             .reportNumber("IR-100")
+            .findings("Pas de lésion") // QA D1150: a report says what the study showed
             .modality(ImagingModality.MRI)
             .reportStatus(ImagingReportStatus.ADDENDUM)
             .build());

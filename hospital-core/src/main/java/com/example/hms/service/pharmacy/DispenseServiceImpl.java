@@ -883,6 +883,10 @@ public class DispenseServiceImpl implements DispenseService {
         // and checked here; it is decremented only once verification has
         // been resolved, so a refused dispense leaves the shelf untouched.
         StockLot stockLot = loadStockLotIfPresent(dto, pharmacy);
+        // QA D1163 (round 21): a "flacon" order is not filled from a tablet lot.
+        if (stockLot != null && stockLot.getInventoryItem() != null) {
+            DispenseUnitForms.requireCompatible(dto.getUnit(), stockLot.getInventoryItem().getUnit());
+        }
         requireWholeUnitsOfFill(dto, stockLot, prescription);
         MedicationCatalogItem catalogItem = catalogItemOfFill(resolveCatalogItem(dto), stockLot);
         // QA D138: a pharmacy that keeps stock in lots fills from a lot. A

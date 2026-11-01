@@ -415,6 +415,18 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         return com.example.hms.service.InpatientOrderEnd.endedWithAStay(rx, closedStays);
     }
 
+    /**
+     * QA D1159 (round 21): a dose held or refused says why, on the server.
+     * The eMAR sent {@code {"status":"HELD"}} alone and the record kept no
+     * reason; the reason is the note, kept as the record's reason.
+     */
+    static void requireReasonForWithheldDose(MedicationAdministrationStatus status, String note) {
+        if ((status == MedicationAdministrationStatus.HELD || status == MedicationAdministrationStatus.REFUSED)
+                && (note == null || note.isBlank())) {
+            throw new com.example.hms.exception.FieldBusinessException("note", "nurse.mar.reasonRequired");
+        }
+    }
+
     /** DUE or OVERDUE: a dose the nurse can record now (QA D949). */
     private static boolean isDueStatus(String marStatus) {
         return STATUS_DUE.equals(marStatus) || STATUS_OVERDUE.equals(marStatus);
@@ -448,6 +460,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         String note = request != null ? request.getNote() : null;
         String overrideReason = request != null ? request.getOverrideReason() : null;
         UUID witnessUserId = request != null ? request.getWitnessUserId() : null;
+        requireReasonForWithheldDose(marStatus, note);
 
         // Try to find a real prescription matching the task ID
         // Locked: two concurrent administrations of the same prescription
@@ -1810,7 +1823,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .onOxygen(request.getOnOxygen())
             .consciousnessLevel(request.getConsciousnessLevel())
             // QA D1045: the ward pain reassessment is charted as the triage one is.
-            .notes(wardVitalNotes(request))
+            // QA D1169: the score is a number, rendered in the reader's language when read.
+            .notes(request.getNotes() != null && !request.getNotes().isBlank() ? request.getNotes().strip() : null)
+            .painScore(request.getPainScale())
             .build();
 
         // Significant when the legacy per-vital thresholds fire OR the
@@ -1859,16 +1874,6 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             });
 
         log.info("Vitals captured: patientId={}, nurse={}, significant={}", patientId, nurseUserId, clinicallySig);
-    }
-
-    /** The nurse's note and the pain score, in the nurse's language (QA D1045). */
-    private static String wardVitalNotes(NurseVitalCaptureRequestDTO request) {
-        String note = request.getNotes() != null && !request.getNotes().isBlank() ? request.getNotes().strip() : null;
-        if (request.getPainScale() == null) {
-            return note;
-        }
-        String pain = com.example.hms.utility.MessageUtil.resolveOrRaw("triage.vitals.painScale", request.getPainScale());
-        return note == null ? pain : pain + " · " + note;
     }
 
     /** Auto-flag a vital set as clinically significant when values fall outside safe ranges. */
@@ -2085,6 +2090,13 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .orElseThrow(() -> new ResourceNotFoundException(PATIENT_NOT_FOUND_KEY, patientId));
         Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
+        // QA D1151 class (round 21): a care note says something.
+        com.example.hms.service.support.ClinicalContent.requireAny("narrative", "nurse.careNote.contentRequired",
+            request == null ? null : request.getDataPart(), request == null ? null : request.getActionPart(),
+            request == null ? null : request.getResponsePart(), request == null ? null : request.getSubjective(),
+            request == null ? null : request.getObjective(), request == null ? null : request.getAssessment(),
+            request == null ? null : request.getPlan(), request == null ? null : request.getImplementation(),
+            request == null ? null : request.getEvaluation(), request == null ? null : request.getNarrative());
 
         if (!patient.isRegisteredInHospital(hospitalId)) {
             throw new BusinessException("nurse.patient.notRegisteredHere");

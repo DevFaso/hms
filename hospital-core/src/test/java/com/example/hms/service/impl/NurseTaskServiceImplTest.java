@@ -854,6 +854,8 @@ class NurseTaskServiceImplTest {
 
         NurseMedicationAdministrationRequestDTO request = new NurseMedicationAdministrationRequestDTO();
         request.setStatus(" held ");
+        // QA D1159: a held dose says why.
+        request.setNote("Patient au bloc");
 
         NurseMedicationTaskResponseDTO normalized = service.recordMedicationAdministration(
             taskId,
@@ -2097,8 +2099,10 @@ class NurseTaskServiceImplTest {
         verify(vitalSignRepository).save(captor.capture());
         PatientVitalSign saved = captor.getValue();
         assertThat(saved.getHeartRateBpm()).isEqualTo(72);
-        // QA D1045: the ward pain reassessment is charted (the bundle text, or its key without bundles).
-        assertThat(saved.getNotes()).isNotBlank();
+        // QA D1045: the ward pain reassessment is charted. QA D1169: as a number, rendered
+        // in the reader's language when read (it was stored as the nurse's sentence).
+        assertThat(saved.getPainScore()).isEqualTo(4);
+        assertThat(saved.getNotes()).isNull();
         assertThat(saved.isClinicallySignificant()).isFalse();
     }
 
@@ -3213,6 +3217,8 @@ class NurseTaskServiceImplTest {
         NurseMedicationAdministrationRequestDTO request =
             new NurseMedicationAdministrationRequestDTO();
         request.setStatus(status);
+        // QA D1159: a held or refused dose says why.
+        request.setNote("Patient nauséeux");
         return request;
     }
 
@@ -3270,6 +3276,22 @@ class NurseTaskServiceImplTest {
         assertThatCode(() -> service.recordMedicationAdministration(
             rx.getId(), UUID.randomUUID(), hospitalId, statusRequest("HELD")))
             .doesNotThrowAnyException();
+    }
+
+    @org.junit.jupiter.params.ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"HELD", "REFUSED"})
+    void aWithheldDoseWithoutAReasonIsRefusedBeforeAnythingIsWritten_D1159(String status) {
+        // QA D1159 (round 21): the eMAR sent {"status":"HELD"} alone and the record kept no reason.
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = highRiskRx(hospitalId, false);
+        org.mockito.Mockito.lenient().when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
+        NurseMedicationAdministrationRequestDTO request = statusRequest(status);
+        request.setNote("  ");
+
+        assertThatThrownBy(() -> service.recordMedicationAdministration(rx.getId(), UUID.randomUUID(), hospitalId, request))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting("messageKey").isEqualTo("nurse.mar.reasonRequired");
+        verify(marRepository, never()).save(any());
     }
 
     @Test

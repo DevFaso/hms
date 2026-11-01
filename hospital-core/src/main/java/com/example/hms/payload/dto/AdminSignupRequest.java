@@ -33,7 +33,7 @@ public class AdminSignupRequest {
     // Optional for PATIENT registrations (phone-first: most patients have no
     // email). Staff/admin roles still require it — enforced in UserServiceImpl
     // because the requirement depends on roleNames.
-    @Email
+    @Email(message = "{validation.email.invalid}")
     private String email;
 
     // Optional, kept for API compatibility: when omitted (the portal never sends

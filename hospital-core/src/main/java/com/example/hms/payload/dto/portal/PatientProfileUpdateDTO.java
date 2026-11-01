@@ -26,7 +26,7 @@ public class PatientProfileUpdateDTO {
     @Size(max = 100)
     private String phoneNumberSecondary;
 
-    @Email @Size(max = 150)
+    @Email(message = "{validation.email.invalid}") @Size(max = 150)
     private String email;
 
     // Address

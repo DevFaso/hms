@@ -129,7 +129,7 @@ public class Patient extends BaseEntity implements TenantScoped {
     private String phoneNumberSecondary;
 
     // Nullable since V107: phone-first patients have no email address.
-    @Email @Size(max = 150)
+    @Email(message = "{validation.email.invalid}") @Size(max = 150)
     @Column(name = "email", length = 150, unique = true)
     private String email;
 

@@ -222,9 +222,13 @@ public class ReceptionController {
     @PostMapping("/waitlist/{id}/close")
     @PreAuthorize("hasAnyAuthority('ROLE_SUPER_ADMIN','ROLE_HOSPITAL_ADMIN','ROLE_ADMIN','ROLE_RECEPTIONIST')")
     @Operation(summary = "Close / remove a waitlist entry")
-    public ResponseEntity<Void> closeWaitlistEntry(@PathVariable UUID id) {
+    public ResponseEntity<Void> closeWaitlistEntry(
+            @PathVariable UUID id,
+            // QA D1157: the reason is required by the service; an empty body is refused like a blank one.
+            @jakarta.validation.Valid @RequestBody(required = false)
+            com.example.hms.payload.dto.scheduling.CloseReasonRequestDTO body) {
         UUID hospitalId = resolveHospitalId();
-        receptionService.closeWaitlistEntry(id, hospitalId);
+        receptionService.closeWaitlistEntry(id, hospitalId, body == null ? null : body.getReason());
         return ResponseEntity.noContent().build();
     }
 

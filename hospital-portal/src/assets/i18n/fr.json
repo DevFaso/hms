@@ -1687,6 +1687,8 @@
       "RX_BACK_ORDER_DATE": "Ordonnance {{rx}} mise en attente de stock, réapprovisionnement prévu le {{date}}",
       "RX_BACK_ORDER": "Ordonnance {{rx}} mise en attente de stock",
       "RX_PRINTED": "Ordonnance {{rx}} imprimée pour le patient",
+      "RX_SIGNED_WITHDRAWN_BY_PRESCRIBER": "Ordonnance signée retirée par son prescripteur",
+      "RX_SIGNED_WITHDRAWN_BY_COLLEAGUE": "Ordonnance signée retirée par un autre prescripteur de l’établissement",
       "RX_ROUTED_PARTNER": "Ordonnance {{rx}} transmise à la pharmacie partenaire {{pharmacy}}",
       "RX_CLARIFICATION_REQUESTED": "Précision demandée sur l’ordonnance {{rx}}",
       "RX_CLARIFICATION_RESOLVED": "Précision apportée sur l’ordonnance {{rx}} ; retour à {{status}}",
