@@ -1,5 +1,10 @@
 import { PersonNamePipe, personName } from '../shared/pipes/person-name.pipe';
-import { personNameMatches, phoneMatches, textMatches } from '../shared/person-search';
+import {
+  exactIdentifierFirst,
+  personNameMatches,
+  phoneMatches,
+  textMatches,
+} from '../shared/person-search';
 import {
   Component,
   inject,
@@ -184,6 +189,8 @@ export class PatientListComponent implements OnInit, OnDestroy {
           return 0;
       }
     });
+    // QA D1218: the patient whose MRN is exactly what was typed comes first.
+    if (term) result = exactIdentifierFirst(result, term, (p) => p.mrn);
 
     this.filtered.set(result);
   }

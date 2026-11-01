@@ -67,15 +67,39 @@ export function phoneSearchKey(value: string | null | undefined): string {
   return digits.length > SUBSCRIBER_DIGITS ? digits.slice(-SUBSCRIBER_DIGITS) : digits;
 }
 
+/** A letter anywhere: a written phone number never has one (QA D1218). */
+const LETTER = /\p{L}/u;
+
 /**
  * Whether a stored number matches what was typed, however either is written.
  * A term with fewer than four digits is not a phone search (a year, a room).
+ *
+ * QA D1218 (round 23): a term with a LETTER is not a phone search either.
+ * "CHW0410" (an MRN) was stripped to "0410" and found Aïcha Kinda, whose
+ * phone is +22670004101, listed above the patient whose MRN it is.
  */
 export function phoneMatches(
   stored: string | null | undefined,
   term: string | null | undefined,
 ): boolean {
+  if (LETTER.test(term ?? '')) return false;
   const key = phoneSearchKey(term);
   if (key.length < 4) return false;
   return (stored ?? '').replace(NON_DIGITS, '').includes(key);
+}
+
+/**
+ * QA D1218 (round 23): the row whose identifier (an MRN) IS what was typed
+ * comes first; the order of the others is kept. Folded like the rest of the
+ * search ("chw0410" finds CHW0410).
+ */
+export function exactIdentifierFirst<R>(
+  rows: readonly R[],
+  term: string | null | undefined,
+  identifierOf: (row: R) => string | null | undefined,
+): R[] {
+  const needle = foldSearchText(term);
+  if (needle === '') return [...rows];
+  const exact = rows.filter((r) => foldSearchText(identifierOf(r)) === needle);
+  return exact.length === 0 ? [...rows] : [...exact, ...rows.filter((r) => !exact.includes(r))];
 }

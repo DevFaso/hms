@@ -28,6 +28,13 @@
  *
  * `scripts/lib/focus-after-action.test.mjs` fails the build if app.config.ts
  * stops installing it.
+ *
+ * QA D1220 (round 23): the place the rescue moves focus to is a STAND-IN, not
+ * a destination. An inline editor closed by Escape or "Abandonner" knows the
+ * real target (its pencil, rendered again a tick later), but it saw focus
+ * already on the rescued price cell (TD) or lines TBODY — "not the body" —
+ * and gave up. `focusFell()` answers "did the keyboard fall?" for every late
+ * return: focus on the body OR still on a stand-in counts as fallen.
  */
 
 /** The ancestors of the focused element, nearest first, recorded while it is on the page. */
@@ -37,12 +44,15 @@ let held: HTMLElement | null = null;
 /** False after the reader moved focus off a still-present element to the page on purpose. */
 let armed = false;
 let installedOn: Document | null = null;
+/** The element focus was moved to as a stand-in (a surviving ancestor), until anything else takes focus. */
+let standIn: HTMLElement | null = null;
 let observer: MutationObserver | null = null;
 const listeners: [string, EventListener, boolean][] = [];
 
 function onFocusIn(event: Event): void {
   const target = event.target;
   if (!(target instanceof HTMLElement) || target === target.ownerDocument.body) return;
+  if (target !== standIn) standIn = null;
   held = target;
   armed = true;
   trail = [];
@@ -80,7 +90,31 @@ function focusPlace(el: HTMLElement): void {
   if (!el.hasAttribute('tabindex') && !el.matches('a[href], button, input, select, textarea')) {
     el.setAttribute('tabindex', '-1');
   }
+  // Marked before focusing: the focusin it fires must not clear it.
+  standIn = el;
   el.focus({ preventScroll: true });
+}
+
+/**
+ * Moves focus to `el` as a stand-in: a later, more precise return (the
+ * control that opened an inline form, rendered again) still takes over.
+ */
+export function focusStandIn(el: HTMLElement): void {
+  focusPlace(el);
+}
+
+/**
+ * QA D1220: has the keyboard fallen — on the page body, or still on a
+ * stand-in the rescue (or `focusStandIn`) put it on? A late focus return
+ * (an inline form's opener, a row editor's pencil) goes ahead only then, so
+ * it never takes focus the reader moved on purpose, and never yields to a
+ * stand-in.
+ */
+export function focusFell(doc: Document = document): boolean {
+  const active = doc.activeElement;
+  // Focus moved on from the stand-in (even with no rescue installed to see it).
+  if (standIn !== null && active !== standIn) standIn = null;
+  return active === null || active === doc.body || (standIn !== null && active === standIn);
 }
 
 /** Runs after the page changed: rescues focus that fell to the body. */
@@ -131,6 +165,7 @@ export function uninstallFocusRescue(): void {
   observer?.disconnect();
   observer = null;
   installedOn = null;
+  standIn = null;
   trail = [];
   held = null;
   armed = false;

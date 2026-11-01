@@ -33,7 +33,7 @@ let nextId = 0;
   template: `
     <div class="modal-backdrop" tabindex="-1" (click)="cancel()" (keydown.escape)="cancel()">
       <div
-        class="modal"
+        class="modal shared-dialog"
         appModalDialog
         tabindex="-1"
         [attr.aria-labelledby]="titleId"
@@ -43,10 +43,12 @@ let nextId = 0;
         data-testid="confirm-dialog"
       >
         <h2 [id]="titleId">{{ titleKey() | translate }}</h2>
-        @if (messageKey()) {
-          <p>{{ messageKey()! | translate }}</p>
-        }
-        <ng-content />
+        <div class="dialog-body">
+          @if (messageKey()) {
+            <p>{{ messageKey()! | translate }}</p>
+          }
+          <ng-content />
+        </div>
         <div class="modal-actions">
           <button
             type="button"
@@ -54,7 +56,7 @@ let nextId = 0;
             data-testid="confirm-dialog-cancel"
             (click)="cancel()"
           >
-            {{ 'COMMON.CANCEL' | translate }}
+            {{ dismissKey() | translate }}
           </button>
           <button
             type="button"
@@ -69,11 +71,14 @@ let nextId = 0;
       </div>
     </div>
   `,
+  styleUrl: '../styles/shared-dialog.scss',
 })
 export class ConfirmDialogComponent {
   readonly titleKey = input.required<string>();
   readonly messageKey = input<string | null>(null);
   readonly confirmKey = input('COMMON.CONFIRM');
+  /** QA D1219 (round 23): never the same label as the confirm button. */
+  readonly dismissKey = input('COMMON.CANCEL');
   /** A request is in flight: the confirm button waits. */
   readonly busy = input(false);
 

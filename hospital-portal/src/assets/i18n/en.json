@@ -3852,7 +3852,8 @@
     "RANGE_SOURCE": "Source",
     "UNIT_FROM_TEST": "Unit of the test: {{unit}}. A value in another unit may not be graded.",
     "UNGRADED_RELEASE_TITLE": "Release a result that is not graded",
-    "UNGRADED_RELEASE_CONFIRM": "I reviewed it, release"
+    "UNGRADED_RELEASE_CONFIRM": "I reviewed it, release",
+    "ROW_PENDING_RELEASE": "Pending release"
   },
   "LAB_RELEASE": {
     "FLAG_ABNORMAL": "Abnormal",
@@ -11857,7 +11858,8 @@
     "TRANSFER_COMPLETE_ERROR": "The transfer could not be completed.",
     "TRANSFER_CANCELLED": "Transfer cancelled and the bed released.",
     "TRANSFER_CANCEL_ERROR": "The transfer could not be cancelled.",
-    "TRANSFERS_LOAD_ERROR": "Waiting transfers could not be loaded."
+    "TRANSFERS_LOAD_ERROR": "Waiting transfers could not be loaded.",
+    "TRANSFER_CANCEL_CONFIRM": "Cancel transfer"
   },
   "EMAR": {
     "ACTION_RECORD_GIVEN": "Record as given",

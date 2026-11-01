@@ -13,6 +13,7 @@ import { TranslateService } from '@ngx-translate/core';
 
 import { EscapeKeepsTypedText } from './escape-keeps-typed-text';
 import { captureOpener, restoreFocus } from './focus-return';
+import { OverlayLayer } from './overlay-stack';
 
 /**
  * QA D1004: a hand-built overlay dialog behaves as a modal for keyboard and
@@ -38,6 +39,9 @@ import { captureOpener, restoreFocus } from './focus-return';
  * answers the keyboard, and an Escape handled through `(escaped)` stops there:
  * it never also closes the dialog underneath or reaches a page-level Escape
  * listener.
+ *
+ * QA D1209 (round 23): a dialog opened while another is open is also PAINTED
+ * on top of it (overlay-stack.ts, shared by every dialog directive).
  */
 @Directive({
   selector: '[appModalDialog]',
@@ -50,10 +54,9 @@ import { captureOpener, restoreFocus } from './focus-return';
 export class ModalDialogDirective implements AfterViewInit, OnDestroy {
   @Output() readonly escaped = new EventEmitter<void>();
 
-  /** Open dialogs, oldest first; the last one is on top. */
-  private static readonly stack: ModalDialogDirective[] = [];
-
   private readonly host = inject(ElementRef<HTMLElement>);
+  /** QA D1209: one stack for every dialog directive (z-order and keyboard). */
+  private readonly layer = new OverlayLayer(this.host.nativeElement as HTMLElement);
   /** QA D1125: the opener even when it had disabled itself (focus-return.ts). */
   private readonly opener: HTMLElement | null = captureOpener();
 
@@ -72,11 +75,8 @@ export class ModalDialogDirective implements AfterViewInit, OnDestroy {
     inject(TranslateService, { optional: true }),
   );
 
-  constructor() {
-    ModalDialogDirective.stack.push(this);
-  }
-
   ngAfterViewInit(): void {
+    this.layer.raise();
     const box = this.box();
     if (box.contains(document.activeElement) && document.activeElement !== box) return;
     const first = this.focusable()[0];
@@ -91,9 +91,7 @@ export class ModalDialogDirective implements AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    const stack = ModalDialogDirective.stack;
-    const at = stack.indexOf(this);
-    if (at >= 0) stack.splice(at, 1);
+    this.layer.close();
     this.typedText.destroy();
     restoreFocus(this.opener);
   }
@@ -151,8 +149,7 @@ export class ModalDialogDirective implements AfterViewInit, OnDestroy {
   }
 
   private isTop(): boolean {
-    const stack = ModalDialogDirective.stack;
-    return stack[stack.length - 1] === this;
+    return this.layer.isTop();
   }
 
   private box(): HTMLElement {

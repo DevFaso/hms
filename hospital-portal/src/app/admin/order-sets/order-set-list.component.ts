@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { Subject, Subscription, debounceTime, distinctUntilChanged, switchMap } from 'rxjs';
+import { Subject, Subscription, debounceTime, switchMap } from 'rxjs';
 
 import { OrderSetService, OrderSetSummary } from '../../services/order-set.service';
 import { RoleContextService } from '../../core/role-context.service';
@@ -168,7 +168,6 @@ export class OrderSetListComponent implements OnInit {
     this.searchSub = this.searchSubject
       .pipe(
         debounceTime(220),
-        distinctUntilChanged(),
         switchMap((term) => {
           this.loading.set(true);
           this.error.set(false);

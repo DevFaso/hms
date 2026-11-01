@@ -26,6 +26,10 @@ let nextId = 0;
  * Content placed between the tags (the record being ended, a warning) is shown
  * above the reason.
  *
+ * QA D1219 (round 23): it carries its own styling (shared/styles/shared-dialog.scss:
+ * padding, the danger button) — a screen that does not style `.modal` showed
+ * it flush on the box's edge with a grey confirm button.
+ *
  * QA D1201 (round 22): it is also the only way the portal asks for a reason —
  * the browser's own `window.prompt` (a blank answer did nothing, silently) is
  * refused by `scripts/lib/no-native-prompt.test.mjs`.
@@ -38,7 +42,7 @@ let nextId = 0;
   template: `
     <div class="modal-backdrop" tabindex="-1" (click)="cancel()" (keydown.escape)="cancel()">
       <div
-        class="modal"
+        class="modal shared-dialog"
         appModalDialog
         tabindex="-1"
         [attr.aria-labelledby]="titleId"
@@ -48,26 +52,33 @@ let nextId = 0;
         data-testid="reason-dialog"
       >
         <h2 [id]="titleId">{{ titleKey() | translate }}</h2>
-        @if (messageKey()) {
-          <p>{{ messageKey()! | translate }}</p>
-        }
-        <!-- What the action is about (the record's name, a warning), from the caller. -->
-        <ng-content />
-        <div class="field">
-          <label [for]="fieldId">{{ labelKey() | translate }} *</label>
-          <textarea
-            [id]="fieldId"
-            rows="3"
-            maxlength="500"
-            required
-            aria-required="true"
-            data-testid="reason-dialog-reason"
-            [(ngModel)]="reason"
-          ></textarea>
+        <div class="dialog-body">
+          @if (messageKey()) {
+            <p>{{ messageKey()! | translate }}</p>
+          }
+          <!-- What the action is about (the record's name, a warning), from the caller. -->
+          <ng-content />
+          <div class="field">
+            <label [for]="fieldId">{{ labelKey() | translate }} *</label>
+            <textarea
+              [id]="fieldId"
+              rows="3"
+              maxlength="500"
+              required
+              aria-required="true"
+              data-testid="reason-dialog-reason"
+              [(ngModel)]="reason"
+            ></textarea>
+          </div>
         </div>
         <div class="modal-actions">
-          <button type="button" class="btn-secondary" (click)="cancel()">
-            {{ 'COMMON.CANCEL' | translate }}
+          <button
+            type="button"
+            class="btn-secondary"
+            data-testid="reason-dialog-cancel"
+            (click)="cancel()"
+          >
+            {{ dismissKey() | translate }}
           </button>
           <button
             type="button"
@@ -84,12 +95,20 @@ let nextId = 0;
       </div>
     </div>
   `,
+  styleUrl: '../styles/shared-dialog.scss',
 })
 export class ReasonDialogComponent {
   readonly titleKey = input.required<string>();
   readonly messageKey = input<string | null>(null);
   readonly labelKey = input('REASON_DIALOG.REASON');
   readonly confirmKey = input('COMMON.CONFIRM');
+  /**
+   * QA D1219 (round 23): the button that closes without acting. A confirm
+   * label that reads like "Cancel" ("Annuler le transfert") is paired with
+   * "Retour" (COMMON.BACK): two buttons never carry the same label
+   * (scripts/lib/dialog-button-labels.test.mjs).
+   */
+  readonly dismissKey = input('COMMON.CANCEL');
   /** A request is in flight: the confirm button waits. */
   readonly busy = input(false);
 

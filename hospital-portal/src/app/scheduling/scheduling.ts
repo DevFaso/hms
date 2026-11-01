@@ -1,7 +1,7 @@
 import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { debounceTime, distinctUntilChanged, Subject, switchMap, of } from 'rxjs';
+import { debounceTime, Subject, switchMap, of } from 'rxjs';
 import {
   StaffSchedulingService,
   StaffShiftResponse,
@@ -93,7 +93,6 @@ export class SchedulingComponent implements OnInit {
     this.staffSearch$
       .pipe(
         debounceTime(220),
-        distinctUntilChanged(),
         switchMap((q) => {
           const query = q.trim().toLowerCase();
           if (!query) return of([]);

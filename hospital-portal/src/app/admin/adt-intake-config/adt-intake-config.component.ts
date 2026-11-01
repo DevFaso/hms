@@ -11,7 +11,7 @@ import {
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
-import { Subject, Subscription, debounceTime, distinctUntilChanged, of, switchMap } from 'rxjs';
+import { Subject, Subscription, debounceTime, of, switchMap } from 'rxjs';
 
 import {
   AcuityLevel,
@@ -591,7 +591,6 @@ export class AdtIntakeConfigComponent implements OnInit, OnDestroy {
     this.hospitalSearchSub = this.hospitalSearchSubject
       .pipe(
         debounceTime(300),
-        distinctUntilChanged(),
         switchMap((term) => {
           // Below-threshold queries must clear stale suggestions
           // (user deletes back to 1 char and the prior list would

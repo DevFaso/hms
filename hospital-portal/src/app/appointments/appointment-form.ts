@@ -12,7 +12,7 @@ import {
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { of, Subject } from 'rxjs';
-import { debounceTime, distinctUntilChanged, map, switchMap } from 'rxjs/operators';
+import { debounceTime, map, switchMap } from 'rxjs/operators';
 import { AppointmentService, AppointmentUpsertRequest } from '../services/appointment.service';
 import { PatientService, PatientResponse } from '../services/patient.service';
 import { StaffService, isClinicalProvider, StaffResponse } from '../services/staff.service';
@@ -219,7 +219,6 @@ export class AppointmentFormComponent implements OnInit {
     this.patientSearch$
       .pipe(
         debounceTime(220),
-        distinctUntilChanged(),
         switchMap((q) => {
           this.patientSearchLoading.set(true);
           return this.patientService.list(this.patientSearchHospitalId(), q || undefined);
@@ -313,7 +312,6 @@ export class AppointmentFormComponent implements OnInit {
     this.staffSearch$
       .pipe(
         debounceTime(220),
-        distinctUntilChanged(),
         switchMap((_q) => {
           this.staffSearchLoading.set(true);
           if (!this.staffLoaded) {

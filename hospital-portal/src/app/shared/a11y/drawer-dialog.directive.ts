@@ -14,6 +14,7 @@ import {
 } from '@angular/core';
 
 import { captureOpener, restoreFocus } from './focus-return';
+import { focusFell } from './focus-rescue';
 
 /**
  * QA D1153 / D1125 / D1004 (round 21): a panel that is a plain landmark on a
@@ -149,9 +150,9 @@ export class DrawerDialogDirective implements OnChanges, OnDestroy {
     });
   }
 
+  /** QA D1220: focus fell (to the body or to the focus rescue's stand-in), or is still in the drawer. */
   private focusIsHere(): boolean {
-    const active = document.activeElement;
-    return active === null || active === document.body || this.box().contains(active);
+    return focusFell() || this.box().contains(document.activeElement);
   }
 
   private box(): HTMLElement {

@@ -16,7 +16,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
 import { forkJoin, of, Subject } from 'rxjs';
-import { catchError, debounceTime, distinctUntilChanged, map, switchMap } from 'rxjs/operators';
+import { catchError, debounceTime, map, switchMap } from 'rxjs/operators';
 import {
   PrescriptionService,
   PrescriptionResponse,
@@ -495,7 +495,6 @@ export class PrescriptionsComponent implements OnInit {
     this.catalogSearch$
       .pipe(
         debounceTime(250),
-        distinctUntilChanged(),
         switchMap((q) =>
           q.length < 2
             ? of([] as MedicationCatalogItemResponse[])
@@ -538,7 +537,6 @@ export class PrescriptionsComponent implements OnInit {
     this.patientSearch$
       .pipe(
         debounceTime(220),
-        distinctUntilChanged(),
         switchMap((q) => {
           this.patientSearchLoading.set(true);
           // ── TENANT ISOLATION: scope patient search to the request's hospital ──

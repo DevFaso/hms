@@ -17,7 +17,7 @@ import {
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { HttpClient } from '@angular/common/http';
-import { debounceTime, distinctUntilChanged, Subject, switchMap, catchError, of } from 'rxjs';
+import { debounceTime, Subject, switchMap, catchError, of } from 'rxjs';
 import { PatientService, PatientResponse } from '../../services/patient.service';
 import { StaffService, StaffResponse, isClinicalProvider } from '../../services/staff.service';
 import { RoleContextService } from '../../core/role-context.service';
@@ -109,7 +109,6 @@ export class WalkInDialogComponent implements OnInit {
     this.patientSearch$
       .pipe(
         debounceTime(300),
-        distinctUntilChanged(),
         switchMap((q) => {
           if (!q || q.length < 2) return of([]);
           this.searchingPatients.set(true);

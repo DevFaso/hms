@@ -13,6 +13,7 @@ import { TranslateService } from '@ngx-translate/core';
 
 import { EscapeKeepsTypedText } from './escape-keeps-typed-text';
 import { captureOpener, restoreFocus } from './focus-return';
+import { OverlayLayer } from './overlay-stack';
 
 /**
  * QA D947/D988 (WCAG 2.1.1, 2.4.3): the keyboard contract of a modal dialog.
@@ -36,6 +37,8 @@ export class DialogFocusDirective implements AfterViewInit, OnDestroy {
 
   private readonly host = inject(ElementRef<HTMLElement>);
   private previouslyFocused: HTMLElement | null = null;
+  /** QA D1209: one stack for every dialog directive (z-order and keyboard). */
+  private readonly layer = new OverlayLayer(this.host.nativeElement as HTMLElement);
   /** QA D1131 class (round 22): Escape never throws typed text away unasked. */
   private readonly typedText = new EscapeKeepsTypedText(
     this.host.nativeElement as HTMLElement,
@@ -52,6 +55,7 @@ export class DialogFocusDirective implements AfterViewInit, OnDestroy {
   ].join(',');
 
   ngAfterViewInit(): void {
+    this.layer.raise();
     this.previouslyFocused = captureOpener();
     const el = this.host.nativeElement as HTMLElement;
     const first = this.focusables()[0];
@@ -66,12 +70,15 @@ export class DialogFocusDirective implements AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.layer.close();
     this.typedText.destroy();
     restoreFocus(this.previouslyFocused);
   }
 
   @HostListener('keydown', ['$event'])
   onKeydown(event: KeyboardEvent): void {
+    // QA D1209: a dialog opened over this one owns the keyboard.
+    if (!this.layer.isTop()) return;
     if (event.key === 'Escape') {
       event.preventDefault();
       event.stopPropagation();
