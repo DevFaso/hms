@@ -28,7 +28,7 @@ const ROW_EDITOR = /@if\s*\(\s*(editing\w*)\(\)\s*===\s*[\w.]+\.id\s*\)\s*\{/g;
 const PINS = new Map([
   [
     'billing/billing.html',
-    'QA D1175 class (round 21): the invoice line edited in place; billing/ belongs to fix/r21-portal-shell-a11y-typography this round, flagged in the hand-back',
+    'QA D1175 class (round 21): the invoice line edited in place spans two table cells; focus-in and focus-return are hand-written in billing.ts (startEditLine / onLineEditEscape) and proved by the billing.spec.ts DOM spec; delete when the row moves onto appFocusOnRender',
   ],
 ]);
 

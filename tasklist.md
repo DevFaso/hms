@@ -5946,3 +5946,6 @@ ships*, not for building — and check the shipped surface before trusting a
 - [ ] D1179 class: 17 e-mail fields send the address to the server unchecked (allowlisted in `hospital-portal/scripts/lib/email-field-check.test.mjs`): departments, hospitals, login (bootstrap, resend activation), organizations, patients (coverage guarantor, demographics edit, registration), pharmacy registry, platform (2), profile, provider (profile, staff register, provider form), users, verify-email. Each calls `isEmailAddress` and `refuseFields` on its field, then its entry is deleted.
 - [ ] D1166 sibling in `profile/profile.html` (security score "NN%"): `| measure: '%' : 0`, then delete its pin in `scripts/lib/lab-locale-format.test.mjs` (owned by fix/r21-portal-clinical-forms in round 21).
 - [ ] D1145 class beyond billing: 32 `error: () => this.x.set([])` handlers portal-wide show a failed read as an empty list (billing's main list and totals fixed in round 21). A guard plus an error state per list.
+
+### Round-21 merge residuals (qa/r16-combined)
+- [ ] Billing invoice line editor: move the hand-written Escape/focus handlers (billing.ts `startEditLine` / `onLineEditEscape`) onto `appInlineSubForm` + `appFocusOnRender`, then delete the `billing.html::subform::lines-table` pin and the billing entry in `inline-editor-focus.test.mjs` (QA D1155 / D1175 class).

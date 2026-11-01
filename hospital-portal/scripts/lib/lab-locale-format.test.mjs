@@ -119,12 +119,7 @@ test('QA D1106/D1115/D1116: every decimal on every screen goes through the share
   ];
   // A sibling in a folder another round-21 branch owns, pinned by its exact
   // message so the merge that fixes it must delete it (a stale pin fails).
-  const pinned = new Map([
-    [
-      `src/app/profile/profile.html:318 percentage with a typed "%": use | measure: '%' — {{ securityScore() }}%`,
-      "QA D1166 sibling in profile/ (owned by fix/r21-portal-clinical-forms): the security score ring needs | measure: '%' : 0",
-    ],
-  ]);
+  const pinned = new Map();
   assert.deepEqual(
     offenders.filter((o) => !pinned.has(o)),
     [],

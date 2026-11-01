@@ -47,7 +47,7 @@
       @if (pt.codeStatus) {
         <div class="code-status-banner">
           <span class="material-symbols-outlined">emergency</span>
-          {{ pt.codeStatus }}
+          {{ pt.codeStatus | enumLabel: 'codeStatus' }}
         </div>
       }
 

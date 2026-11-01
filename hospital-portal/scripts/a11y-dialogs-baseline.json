@@ -8,19 +8,7 @@
   "pinned": {
     "src/app/billing/billing.html::subform::lines-table": {
       "count": 1,
-      "why": "QA D1155 class (round 21): the invoice line edited in place inside the invoice dialog; billing/ is owned this round by fix/r21-portal-shell-a11y-typography, flagged to it in the hand-back; delete this pin when its line-edit row carries appInlineSubForm"
-    },
-    "src/app/patient-portal/my-appointments/my-appointments.component.html::label-icon::#appt-dialog-title-1": {
-      "count": 1,
-      "why": "QA D1174 class (round 21): an icon in the dialog title read as part of its name; patient-portal/my-appointments is owned this round by fix/r21-portal-shell-a11y-typography, flagged in the hand-back; delete when the icon carries aria-hidden"
-    },
-    "src/app/patient-portal/my-appointments/my-appointments.component.html::label-icon::#appt-dialog-title-2": {
-      "count": 1,
-      "why": "QA D1174 class (round 21): an icon in the dialog title read as part of its name; patient-portal/my-appointments is owned this round by fix/r21-portal-shell-a11y-typography, flagged in the hand-back; delete when the icon carries aria-hidden"
-    },
-    "src/app/patient-portal/my-appointments/my-appointments.component.html::label-icon::#appt-dialog-title-3": {
-      "count": 1,
-      "why": "QA D1174 class (round 21): an icon in the dialog title read as part of its name; patient-portal/my-appointments is owned this round by fix/r21-portal-shell-a11y-typography, flagged in the hand-back; delete when the icon carries aria-hidden"
+      "why": "QA D1155 class (round 21): the invoice line edited in place spans two table cells, so appInlineSubForm cannot wrap it; the behaviour is hand-written in billing.ts (onLineEditEscape: Escape closes only the line editor, focus moves into it and returns to the edit button) and proved by the billing.spec.ts DOM spec. Delete this pin when the row moves onto appInlineSubForm (tasklist r21 debt)."
     }
   }
 }
