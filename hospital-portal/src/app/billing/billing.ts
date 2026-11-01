@@ -3,6 +3,8 @@ import {
   Component,
   computed,
   ElementRef,
+  Injector,
+  afterNextRender,
   inject,
   OnInit,
   signal,
@@ -80,6 +82,7 @@ export class BillingComponent implements OnInit {
   private readonly roleContext = inject(RoleContextService);
   private readonly translate = inject(TranslateService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
 
   // Permission-gated action flags
   /** QA D1059: the cashier's daily cash closing, opened from the page header. */
@@ -825,10 +828,36 @@ ${this.translate.instant('BILLING.SUPPLEMENTARY_CONFIRM')}`)
     this.editingLineId.set(item.id);
     this.editLineQuantity.set(item.quantity ?? 1);
     this.editLineUnitPrice.set(Number(item.unitPrice) > 0 ? Number(item.unitPrice) : null);
+    // QA D1155 class (an inline sub-form inside a dialog): focus moves into the line editor.
+    afterNextRender(() => this.lineField('line-edit-qty')?.focus(), { injector: this.injector });
   }
 
   cancelEditLine(): void {
+    const id = this.editingLineId();
     this.editingLineId.set(null);
+    // Focus back on the line's edit button, not to the page (the editor is gone).
+    if (id !== null) {
+      afterNextRender(() => this.lineField(`line-edit-${id}`, true)?.focus(), {
+        injector: this.injector,
+      });
+    }
+  }
+
+  /**
+   * QA D1155 class: Escape inside the line editor closes only the editor; the
+   * invoice dialog around it stays open (its own Escape would discard it).
+   */
+  onLineEditEscape(event: Event): void {
+    event.stopPropagation();
+    event.preventDefault();
+    this.cancelEditLine();
+  }
+
+  private lineField(key: string, byTestId = false): HTMLElement | null {
+    const root = this.host.nativeElement;
+    return byTestId
+      ? root.querySelector<HTMLElement>(`[data-testid="${CSS.escape(key)}"]`)
+      : root.querySelector<HTMLElement>(`#${CSS.escape(key)}`);
   }
 
   canSaveLine(): boolean {

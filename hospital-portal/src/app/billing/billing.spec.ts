@@ -939,6 +939,34 @@ describe('BillingComponent', () => {
       expect(billingSpy.deleteInvoiceItem).not.toHaveBeenCalled();
       expect(component.editingLineId()).toBeNull();
     });
+
+    // QA D1155 class (round 21, sibling found by #1000): Escape in the line
+    // editor closed the whole invoice dialog; focus did not move into it.
+    it('the line editor takes focus, and Escape closes only it with focus back on its button', () => {
+      document.body.appendChild(fixture.nativeElement);
+      try {
+        const host = fixture.nativeElement as HTMLElement;
+        const opener = host.querySelector<HTMLElement>('[data-testid="line-edit-line-0"]')!;
+        opener.focus();
+        opener.click();
+        fixture.detectChanges();
+        TestBed.tick();
+        const qty = host.querySelector<HTMLElement>('#line-edit-qty')!;
+        expect(document.activeElement).withContext('focus in the line editor').toBe(qty);
+        qty.dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
+        );
+        fixture.detectChanges();
+        TestBed.tick();
+        expect(component.editingLineId()).toBeNull();
+        expect(component.selectedInvoice())
+          .withContext('the invoice dialog stays open')
+          .not.toBeNull();
+        expect(document.activeElement).toBe(host.querySelector('[data-testid="line-edit-line-0"]'));
+      } finally {
+        (fixture.nativeElement as HTMLElement).remove();
+      }
+    });
   });
 
   describe('an empty amount asks for an amount (QA D1089)', () => {
