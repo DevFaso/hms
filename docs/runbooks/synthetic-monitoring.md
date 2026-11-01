@@ -160,9 +160,73 @@ When testing in CI, the alert can be exercised against a stopped target by tempo
 
 ---
 
+## Grafana Cloud Synthetic Monitoring — the live check is misconfigured
+
+Separate from the Blackbox stack above, stack **1404501** already runs a Grafana
+Cloud **Synthetic Monitoring** check, created with the original 2026-03 setup. It
+is still live and it is **lying to you**.
+
+Observed 2026-11-01, from the check's own log line:
+
+```
+level=info target=dns.google probe=NorthVirginia region=AMER
+  instance=hms.dev.bitnesttechs.com job=HMS check_name=dns
+  source=synthetic-monitoring-agent msg="Validating Authority RRs"
+probe_success = 1
+```
+
+Two things are wrong.
+
+**It targets a retired domain.** `hms.dev.bitnesttechs.com` was replaced by
+e-keneya.com in `f7980e97f` (2026-08-24). Nothing has served it since.
+
+**It reports success anyway**, because it is a **DNS** check and a stale DNS
+record still resolves. Measured the same day:
+
+| Host | DNS | HTTP |
+|---|---|---|
+| `hms.dev.bitnesttechs.com` | resolves | **`000` — connection fails outright** |
+| `api.dev.e-keneya.com` | resolves | `200` |
+| `dev.e-keneya.com` | resolves | `200` |
+
+A check that is green while its target is unreachable is worse than no check: it
+is a green light nobody should trust, and it consumes free-tier allowance to say
+nothing. A DNS check cannot detect an outage of the thing you care about — only
+that a name still resolves.
+
+### Fix
+
+In **Grafana Cloud → Testing & synthetics → Synthetics → Checks**, delete the
+`HMS` DNS check and create HTTP checks in its place:
+
+| Setting | dev | prod |
+|---|---|---|
+| Type | **HTTP** (not DNS) | **HTTP** |
+| Job | `hms-backend` | `hms-backend` |
+| Target | `https://api.dev.e-keneya.com/api/actuator/health` | `https://api.e-keneya.com/api/actuator/health` |
+| Frequency | 5 min | 1 min |
+| Probes | NorthVirginia + one EU (the users are in West Africa; EU is the closer proxy) | same |
+| Valid status codes | `200` | `200` |
+| TLS | validate — do **not** skip verification | same |
+
+Optionally add portal checks against `https://dev.e-keneya.com` and
+`https://e-keneya.com` to catch a frontend-only outage.
+
+Use `/api/actuator/health` rather than `/api/actuator/prometheus`: health is
+public by design and cheap, whereas the metrics endpoint is token-gated (see
+[`docs/GRAFANA_CLOUD_SETUP.md`](../GRAFANA_CLOUD_SETUP.md)) and would answer
+`401` to a probe, which would be a second permanently-wrong check.
+
+> **Note on the `__error__` label.** Synthetic-monitoring agent lines are
+> **logfmt**, not JSON. Querying them with `| json` attaches
+> `__error__="JSONParserErr"` to every row — a Loki parsing artifact, not a probe
+> failure. Use `| logfmt`, or append `| __error__=""` to filter it out.
+
+---
+
 ## Production deployment notes
 
-- Public-internet probe targets should hit `https://<env>.hms-domain` rather than the container hostname — replace the `static_configs.targets` list in `grafana/prometheus.yml` per-environment (or template via Alloy `prometheus.scrape "blackbox"` blocks if running in Grafana Cloud).
+- Public-internet probe targets are `https://api.dev.e-keneya.com` (dev) and `https://api.e-keneya.com` (prod) — the portals are `dev.e-keneya.com` and `e-keneya.com`. Do not use `*.bitnesttechs.com`: it was retired in `f7980e97f` and still resolves while serving nothing, so a probe against it reports healthy forever. Hit these rather than the container hostname — replace the `static_configs.targets` list in `grafana/prometheus.yml` per-environment (or template via Alloy `prometheus.scrape "blackbox"` blocks if running in Grafana Cloud).
 - TLS validation should remain **on** in production. The blackbox modules ship with `insecure_skip_verify: false`; if a probe fails because of a cert chain issue, fix the cert chain — don't bypass.
 - The PHI inventory does **not** apply to the synthetic probe path — these probes never carry patient data and are exempt from the encryption-at-rest controls in `docs/compliance/phi-inventory.md`. (They are subject to the standard audit/access logging applied to any HMS endpoint.)
 

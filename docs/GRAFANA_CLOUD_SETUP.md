@@ -251,6 +251,14 @@ covered entity, either move to a plan with a BAA or keep logs self-hosted. For
 the current ECOWAS market this is a quality bar rather than a legal obligation —
 see [`docs/compliance/ecowas-residency-decision-record.md`](compliance/ecowas-residency-decision-record.md).
 
+## Synthetic checks
+
+Stack 1404501 already runs a Grafana Cloud synthetic check, and it is green for a
+host that has been dead since August — it is a DNS check against the retired
+`hms.dev.bitnesttechs.com`, whose stale record still resolves. Retarget it to
+`https://api.dev.e-keneya.com/api/actuator/health` as an HTTP check. Full detail and
+the prod settings: [`docs/runbooks/synthetic-monitoring.md`](runbooks/synthetic-monitoring.md).
+
 ## Local development
 
 Local dev does **not** use Grafana Cloud — the docker-compose stack is the whole
