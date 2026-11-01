@@ -113,7 +113,8 @@ public class BpaProtocolsCdsService implements CdsHookService {
             return cards;
         }
         List<CdsAcknowledgement> active =
-                acknowledgementRepository.findActiveForPatientAndUser(patientId, viewerId, LocalDateTime.now());
+                acknowledgementRepository.findActiveForPatientAndUser(patientId, viewerId,
+                        LocalDateTime.now(java.time.ZoneId.systemDefault()));
         if (active.isEmpty()) {
             return cards;
         }

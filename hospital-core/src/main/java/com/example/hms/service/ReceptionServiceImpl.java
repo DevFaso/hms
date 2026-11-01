@@ -947,7 +947,8 @@ public class ReceptionServiceImpl implements ReceptionService {
         if (entry.getOfferExpiresAt() == null || slot.getHeldUntil() == null) {
             return true;
         }
-        long apart = Math.abs(java.time.Duration.between(slot.getHeldUntil(), entry.getOfferExpiresAt()).toMinutes());
+        long apart = Math.abs(java.time.Duration.between(slot.getHeldUntil().atOffset(java.time.ZoneOffset.UTC),
+            entry.getOfferExpiresAt().atOffset(java.time.ZoneOffset.UTC)).toMinutes());
         return apart <= OFFER_HOLD_TOLERANCE_MINUTES;
     }
 

@@ -66,8 +66,10 @@ public class UploadStoragePersistenceCheck {
         boolean onRailway = env.getProperty(RAILWAY_ENV) != null;
         for (String dir : List.of(uploadDir, photoDir)) {
             // Always stated, so the path can be compared with the volume from the logs alone.
-            log.info("Upload storage directory: '{}' (Railway volume mount: {})",
-                absolute(dir), volumeMount == null ? "none reported" : "'" + volumeMount + "'");
+            if (log.isInfoEnabled()) {
+                log.info("Upload storage directory: '{}' (Railway volume mount: {})",
+                    absolute(dir), volumeMount == null ? "none reported" : "'" + volumeMount + "'");
+            }
             for (String warning : assess(dir, volumeMount, onRailway, mountPoints)) {
                 log.warn("Upload storage NOT persistent (QA D1184): {}", warning);
             }

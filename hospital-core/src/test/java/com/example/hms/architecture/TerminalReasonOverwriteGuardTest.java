@@ -93,11 +93,11 @@ class TerminalReasonOverwriteGuardTest {
             + "|\\b(?:[A-Z]++_)*+(?:STATUSES|TRANSITIONS|STATES)\\b|\\ballowed\\w*+\\.contains\\("
             + "|\\b(?:REJECTABLE|SUSPENDABLE|ARCHIVABLE|PURGE_SCHEDULABLE|RESTORABLE)\\b"
             // must-be-in-state: anything but X is refused
-            + "|[Ss]tatus\\(\\)\\s*+!=|!(?:\\w++\\.)++equals\\((?:\\w++\\.)*+get\\w*Status\\(\\)\\)"
+            + "|[Ss]tatus\\(\\)\\s*+!=|!(?:\\w++\\.)++equals\\((?:\\w++\\.)*+get(?:(?!Status\\()\\w)*+Status\\(\\)\\)"
             // the record is compared with a terminal state
             + "|[Ss]tatus\\(\\)\\s*+==\\s*+(?:\\w++\\.)*+" + TERMINAL + "\\b"
             // a closing timestamp still unset
-            + "|get\\w*(?:RevokedAt|CancelledAt|ClosedAt|EndedAt|VoidedAt)\\(\\)\\s*+[!=]=\\s*+null"
+            + "|get(?:(?!(?:Revoked|Cancelled|Closed|Ended|Voided)At\\()\\w)*+(?:Revoked|Cancelled|Closed|Ended|Voided)At\\(\\)\\s*+[!=]=\\s*+null"
             // a load restricted to a live status
             + "|\\bfind\\w*(?:AndStatus|IsNull)\\w*\\(");
 

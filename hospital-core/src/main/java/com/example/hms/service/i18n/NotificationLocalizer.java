@@ -85,19 +85,25 @@ public class NotificationLocalizer {
         }
         List<Object> out = new ArrayList<>(args.length);
         for (Object arg : args) {
-            if (arg == null) {
-                out.add("");
-            } else if (arg instanceof Number || arg instanceof Boolean) {
-                out.add(arg);
-            } else if (arg instanceof Map<?, ?> map && map.get(KEY) instanceof String k) {
-                out.add(map.get(ARGS) instanceof List<?> nested ? key(k, nested.toArray()) : key(k));
-            } else if (arg instanceof Map<?, ?> map && map.get(LAB_VALUE) instanceof String raw) {
-                out.add(labValue(raw, map.get(UNIT) instanceof String unit ? unit : null));
-            } else {
-                out.add(String.valueOf(arg));
-            }
+            out.add(storableArg(arg));
         }
         return out;
+    }
+
+    private static Object storableArg(Object arg) {
+        if (arg == null) {
+            return "";
+        }
+        if (arg instanceof Number || arg instanceof Boolean) {
+            return arg;
+        }
+        if (arg instanceof Map<?, ?> map && map.get(KEY) instanceof String k) {
+            return map.get(ARGS) instanceof List<?> nested ? key(k, nested.toArray()) : key(k);
+        }
+        if (arg instanceof Map<?, ?> map && map.get(LAB_VALUE) instanceof String raw) {
+            return labValue(raw, map.get(UNIT) instanceof String unit ? unit : null);
+        }
+        return String.valueOf(arg);
     }
 
     public String render(String messageKey, List<Object> args, Locale locale) {

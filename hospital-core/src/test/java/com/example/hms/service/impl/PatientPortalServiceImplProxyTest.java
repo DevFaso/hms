@@ -317,7 +317,7 @@ class PatientPortalServiceImplProxyTest {
                     .isInstanceOf(com.example.hms.exception.BusinessException.class)
                     .extracting("messageKey").isEqualTo("proxyGrant.alreadyRevoked");
             assertThat(grant.getRevokedAt()).isEqualTo(firstRevocation);
-            org.mockito.Mockito.verify(patientProxyRepository, org.mockito.Mockito.never()).save(any());
+            verify(patientProxyRepository, never()).save(any());
         }
     }
 }

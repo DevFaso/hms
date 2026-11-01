@@ -40,9 +40,9 @@ class MessageKeyAssertionGuardTest {
             }
         }
         assertThat(found)
-            .as("hasMessageContaining(\"<message.key>\") depends on test order; assert extracting(\"messageKey\")")
-            .isLessThanOrEqualTo(BASELINE);
-        assertThat(found).as("sites were fixed: lower BASELINE to %d", found).isEqualTo(BASELINE);
+            .as("hasMessageContaining(\"<message.key>\") depends on test order: assert extracting(\"messageKey\");"
+                + " when sites are fixed, lower BASELINE to the count found")
+            .isEqualTo(BASELINE);
     }
 
     @Test
