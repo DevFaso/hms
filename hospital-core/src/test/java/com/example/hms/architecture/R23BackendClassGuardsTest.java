@@ -125,7 +125,8 @@ class R23BackendClassGuardsTest {
      * place that refuses a reversed range; a new pair fails until it is.
      */
     private static final Map<String, String> RANGE_CHECKS = Map.of(
-        "payload/dto/WaitlistEntryRequestDTO.java", "service/ReceptionServiceImpl.java#requireOfferableRange(",
+        "payload/dto/WaitlistEntryRequestDTO.java",
+            "service/ReceptionServiceImpl.java#requireOfferableRange(req.getRequestedDateFrom(), req.getRequestedDateTo()",
         "payload/dto/StaffRequestDTO.java", "service/StaffServiceImpl.java#getEndDate().isBefore(",
         "payload/dto/scheduling/SessionTemplateRequestDTO.java",
             "service/scheduling/SessionTemplateServiceImpl.java#getEffectiveTo().isBefore(",

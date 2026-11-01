@@ -548,28 +548,22 @@ class CancelVoidReasonGuardTest {
         try (Stream<Path> files = Files.walk(MAIN)) {
             for (Path file : files.filter(f -> f.toString().endsWith(".java")).toList()) {
                 String src = com.example.hms.testsupport.SourceScan.stripComments(Files.readString(file));
-                int writes = count(cancelWrite, src);
-                if (writes == 0) {
-                    continue;
-                }
-                sites += writes;
-                int reasons = count(reasonWrite, src);
-                if (reasons < writes) {
-                    missing.put(MAIN.relativize(file).toString().replace('\\', '/'),
-                        writes + " cancellation(s), " + reasons + " reason write(s)");
+                // Per method: the reason is written in the method that writes CANCELLED.
+                Matcher write = cancelWrite.matcher(src);
+                while (write.find()) {
+                    sites++;
+                    int start = src.lastIndexOf("\n    }", write.start());
+                    int end = src.indexOf("\n    }", write.end());
+                    String method = src.substring(Math.max(start, 0), end < 0 ? src.length() : end);
+                    if (!reasonWrite.matcher(method).find()) {
+                        missing.put(MAIN.relativize(file).toString().replace('\\', '/') + ":"
+                            + com.example.hms.testsupport.SourceScan.lineOf(src, write.start()),
+                            "CANCELLED written without a reason in the same method");
+                    }
                 }
             }
         }
         assertThat(sites).as("the scan found the invoice cancellations").isPositive();
         assertThat(missing).as("an invoice cancelled without a kept reason (QA D1217)").isEmpty();
-    }
-
-    private static int count(Pattern pattern, String src) {
-        Matcher m = pattern.matcher(src);
-        int n = 0;
-        while (m.find()) {
-            n++;
-        }
-        return n;
     }
 }
