@@ -121,8 +121,8 @@ scrape_configs:
       # expand environment variables in this file, so these targets are literal: if you
       # move the backend off 8081, edit them here. Note the `keycloak` compose profile
       # also publishes host 8081 by default — see KEYCLOAK_HOST_PORT in docker-compose.yml.
-      # `hms-backend:8080`
-      # (the previous value) resolved to nothing and every probe reported `down`.
+      # The previous value, `hms-backend:8080`, resolved to nothing: there is no such
+      # compose service, so every probe reported `down`.
       # In production these targets become the public Railway domains — see
       # docs/runbooks/synthetic-monitoring.md.
       - targets:

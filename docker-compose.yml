@@ -197,7 +197,7 @@ services:
       # (port 8081). Override if you run it elsewhere.
       HMS_BACKEND_ADDRESS: ${HMS_BACKEND_ADDRESS:-host.docker.internal:8081}
       # Must match the METRICS_SCRAPE_TOKEN the backend was started with, otherwise
-      # /api/actuator/prometheus answers 403 and no backend series are collected.
+      # /api/actuator/prometheus answers 401 and no backend series are collected.
       METRICS_SCRAPE_TOKEN: ${METRICS_SCRAPE_TOKEN:-local-dev-scrape-token}
     # `host.docker.internal` is built in on Docker Desktop (macOS/Windows) but not on Linux,
     # where this alias makes it resolve to the host.

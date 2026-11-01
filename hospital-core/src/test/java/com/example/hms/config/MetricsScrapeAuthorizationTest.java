@@ -16,6 +16,7 @@ import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
 import java.util.function.Supplier;
@@ -156,10 +157,22 @@ class MetricsScrapeAuthorizationTest {
         Properties props = PropertiesLoaderUtils.loadProperties(new ClassPathResource("application.properties"));
         String exposed = props.getProperty("management.endpoints.web.exposure.include", "");
 
-        assertThat(exposed.split(","))
+        List<String> endpoints = Arrays.stream(exposed.split(","))
+            .map(String::trim)
+            .filter(e -> !e.isEmpty())
+            .toList();
+
+        // Trimmed, because "health,info, metrics" is the same exposure as "…,metrics" to
+        // Spring but a different string to split(",").
+        assertThat(endpoints)
             .as("/actuator/metrics only ever sat behind anyRequest().authenticated(), so any "
                 + "valid token — including a patient app's — could read the URI inventory")
             .doesNotContain("metrics");
+
+        // And a wildcard exposes it without ever naming it.
+        assertThat(endpoints)
+            .as("`*` exposes every endpoint including metrics, env, beans and heapdump")
+            .doesNotContain("*");
     }
 
     @Test

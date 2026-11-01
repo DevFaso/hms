@@ -98,7 +98,7 @@ Profile-only exporter targets are covered by `HmsExporterDown` (ticket-only).
   `/api/actuator/prometheus` endpoint is failing, *or* Alloy is failing to
   scrape/forward. The backend is not a compose service — it runs on the host, so
   hit `curl http://localhost:8081/api/actuator/health` and check the backend's own
-  console plus `docker compose logs alloy`. A 403 on `/api/actuator/prometheus`
+  console plus `docker compose logs alloy`. A 401 on `/api/actuator/prometheus`
   means Alloy's `METRICS_SCRAPE_TOKEN` does not match the backend's.
 - If `job=alloy` → Alloy is down; backend metrics will stop flowing even
   if the backend itself is healthy. Check `docker compose logs alloy`.
