@@ -1,4 +1,5 @@
 import {
+  AfterViewInit,
   Directive,
   ElementRef,
   HostListener,
@@ -12,6 +13,7 @@ import { TranslateService } from '@ngx-translate/core';
 
 import { EscapeKeepsTypedText } from './escape-keeps-typed-text';
 import { captureOpener, restoreFocus } from './focus-return';
+import { OverlayLayer } from './overlay-stack';
 
 /**
  * QA D976: the billing and patient-portal modals left focus on the row
@@ -37,11 +39,10 @@ import { captureOpener, restoreFocus } from './focus-return';
     tabindex: '-1',
   },
 })
-export class DialogA11yDirective implements OnInit, OnDestroy {
+export class DialogA11yDirective implements OnInit, AfterViewInit, OnDestroy {
   /** Escape was pressed while this was the top dialog. */
   readonly dialogClose = output<void>();
 
-  private static readonly stack: DialogA11yDirective[] = [];
   private static readonly FOCUSABLE = [
     'a[href]',
     'button:not([disabled])',
@@ -53,6 +54,8 @@ export class DialogA11yDirective implements OnInit, OnDestroy {
 
   private readonly host = inject(ElementRef<HTMLElement>);
   private opener: HTMLElement | null = null;
+  /** QA D1209: one stack for every dialog directive (z-order and keyboard). */
+  private layer: OverlayLayer | null = null;
   /** QA D1131 class (round 22): Escape never throws typed text away unasked. */
   private readonly typedText = new EscapeKeepsTypedText(
     this.host.nativeElement as HTMLElement,
@@ -61,22 +64,23 @@ export class DialogA11yDirective implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.opener = captureOpener();
-    DialogA11yDirective.stack.push(this);
+    this.layer = new OverlayLayer(this.host.nativeElement as HTMLElement);
     // After the content inside the box has rendered.
     setTimeout(() => this.focusInitial());
   }
 
+  ngAfterViewInit(): void {
+    this.layer?.raise();
+  }
+
   ngOnDestroy(): void {
-    const stack = DialogA11yDirective.stack;
-    const at = stack.indexOf(this);
-    if (at >= 0) stack.splice(at, 1);
+    this.layer?.close();
     this.typedText.destroy();
     restoreFocus(this.opener);
   }
 
   private isTop(): boolean {
-    const stack = DialogA11yDirective.stack;
-    return stack[stack.length - 1] === this;
+    return this.layer?.isTop() ?? false;
   }
 
   private focusables(): HTMLElement[] {

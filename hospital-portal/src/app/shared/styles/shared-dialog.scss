@@ -1,0 +1,54 @@
+// QA D1219 (round 23): the shared reason and confirm dialogs style themselves.
+// They render inside whatever screen opens them, and a screen that does not
+// style `.modal` (the bed board's transfer cancel) showed the dialog's text
+// flush on the box's edge and its confirm button as a bare grey button. The
+// global `.modal-backdrop` / `.modal` / `.field` / `.modal-actions` rules
+// (_page-common.scss) give the box; these give its inside.
+
+.reason-dialog {
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+  overflow-y: auto;
+
+  h2 {
+    margin: 0;
+    padding: 20px 24px 0;
+    font-size: 1.1rem;
+    font-weight: 700;
+  }
+}
+
+.dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 24px;
+
+  p {
+    margin: 0;
+  }
+}
+
+.btn-danger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  background: #b91c1c;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: #991b1b;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}

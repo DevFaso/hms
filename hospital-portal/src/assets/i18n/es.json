@@ -11857,7 +11857,8 @@
     "TRANSFER_COMPLETE_ERROR": "No se pudo completar el traslado.",
     "TRANSFER_CANCELLED": "Traslado cancelado y cama liberada.",
     "TRANSFER_CANCEL_ERROR": "No se pudo cancelar el traslado.",
-    "TRANSFERS_LOAD_ERROR": "No se pudieron cargar los traslados pendientes."
+    "TRANSFERS_LOAD_ERROR": "No se pudieron cargar los traslados pendientes.",
+    "TRANSFER_CANCEL_CONFIRM": "Cancelar el traslado"
   },
   "EMAR": {
     "ACTION_RECORD_GIVEN": "Registrar como administrada",

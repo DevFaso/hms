@@ -22,6 +22,7 @@ import { RoleContextService } from '../core/role-context.service';
 import { AuthService } from '../auth/auth.service';
 import { RoleContextStub, roleContextStub } from '../testing/role-context.stub';
 import { answerReasonDialog, reasonDialog } from '../shared/reason-dialog/reason-dialog.testing';
+import { mouseClick } from '../testing/mouse-click';
 
 function occupant(overrides: Partial<BedOccupant> = {}): BedOccupant {
   return {
@@ -415,6 +416,94 @@ describe('BedBoardComponent', () => {
     const [, payload] = isolationSpy.discontinuePrecaution.calls.mostRecent().args;
     expect(payload.discontinuationReason).toBe('Culture negative');
     expect(reasonDialog(fixture)).toBeNull();
+  });
+
+  // QA D1209 / D1201 (round 23, REGRESSION of the D1201 fix): the reason
+  // dialog opened from inside the still-open Précautions dialog was painted
+  // UNDER it (the bed board's `.modal` is z-index 1001, the shared dialog's
+  // backdrop 1000), so "Lever" could not be clicked. The D1201 spec called
+  // `discontinue()` and `button.click()` and never saw it. These click with
+  // the mouse (testing/mouse-click.ts: the element under the button's centre).
+  it('D1209: "Lever" in the open Précautions dialog opens the reason ON TOP; a mouse lifts the precaution', () => {
+    const precaution = {
+      id: 'i1',
+      precautionType: 'CONTACT',
+      reason: 'MRSA',
+    } as IsolationPrecautionResponse;
+    isolationSpy.getActiveForPatient.and.returnValue(of([precaution]));
+    isolationSpy.discontinuePrecaution.and.returnValue(of(precaution));
+    const fixture = TestBed.createComponent(BedBoardComponent);
+    fixture.detectChanges();
+    fixture.componentInstance.openPrecautions(occupant());
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    mouseClick(host.querySelector<HTMLElement>('.precaution-list .btn-link.danger')!);
+    fixture.detectChanges();
+
+    expect(fixture.componentInstance.showPrecautionModal())
+      .withContext('the Précautions dialog stays open underneath')
+      .toBeTrue();
+    const dialog = reasonDialog(fixture)!;
+    expect(dialog.contains(document.activeElement)).withContext('focus is in the reason').toBeTrue();
+    const field = dialog.querySelector<HTMLTextAreaElement>('[data-testid="reason-dialog-reason"]')!;
+    mouseClick(field);
+    field.value = 'Culture negative';
+    field.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    mouseClick(dialog.querySelector<HTMLElement>('[data-testid="reason-dialog-confirm"]')!);
+    fixture.detectChanges();
+
+    expect(isolationSpy.discontinuePrecaution).toHaveBeenCalledWith('i1', {
+      discontinuationReason: 'Culture negative',
+    });
+    expect(reasonDialog(fixture)).toBeNull();
+  });
+
+  it('D1209: the reason dialog over Précautions takes the keyboard; Escape closes only the reason', () => {
+    isolationSpy.getActiveForPatient.and.returnValue(
+      of([{ id: 'i1', precautionType: 'CONTACT' } as IsolationPrecautionResponse]),
+    );
+    const fixture = TestBed.createComponent(BedBoardComponent);
+    fixture.detectChanges();
+    fixture.componentInstance.openPrecautions(occupant());
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    const lift = host.querySelector<HTMLElement>('.precaution-list .btn-link.danger')!;
+    lift.focus();
+    mouseClick(lift);
+    fixture.detectChanges();
+    const dialog = reasonDialog(fixture)!;
+    (document.activeElement as HTMLElement).dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+    );
+    fixture.detectChanges();
+    expect(reasonDialog(fixture)).withContext('the reason closed').toBeNull();
+    expect(dialog.isConnected).toBeFalse();
+    expect(fixture.componentInstance.showPrecautionModal())
+      .withContext('the Précautions dialog underneath stays open')
+      .toBeTrue();
+  });
+
+  // QA D1219 (round 23): both buttons of the transfer-cancel dialog read
+  // "Annuler"; the confirm now names the action and the dismiss reads "Retour".
+  it('D1219: the transfer-cancel dialog labels its two buttons differently and a mouse confirms it', () => {
+    const order = { id: 't1', patientName: 'A' } as unknown as TransferOrderResponse;
+    transferSpy.cancelTransfer.and.returnValue(of(order));
+    const fixture = TestBed.createComponent(BedBoardComponent);
+    fixture.detectChanges();
+    fixture.componentInstance.cancelTransfer(order);
+    const dialog = reasonDialog(fixture)!;
+    const cancel = dialog.querySelector<HTMLElement>('[data-testid="reason-dialog-cancel"]')!;
+    const confirm = dialog.querySelector<HTMLElement>('[data-testid="reason-dialog-confirm"]')!;
+    expect(cancel.textContent!.trim()).toBe('COMMON.BACK');
+    expect(confirm.textContent!.trim()).toBe('BED_BOARD.TRANSFER_CANCEL_CONFIRM');
+    const field = dialog.querySelector<HTMLTextAreaElement>('[data-testid="reason-dialog-reason"]')!;
+    field.value = 'Bed no longer needed';
+    field.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    mouseClick(confirm);
+    fixture.detectChanges();
+    expect(transferSpy.cancelTransfer).toHaveBeenCalled();
   });
 
   // ── Transfers (item 30) ────────────────────────────────────────────

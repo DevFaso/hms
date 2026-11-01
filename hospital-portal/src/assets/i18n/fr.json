@@ -11857,7 +11857,8 @@
     "TRANSFER_COMPLETE_ERROR": "Le transfert n'a pas pu être effectué.",
     "TRANSFER_CANCELLED": "Transfert annulé et lit libéré.",
     "TRANSFER_CANCEL_ERROR": "Le transfert n'a pas pu être annulé.",
-    "TRANSFERS_LOAD_ERROR": "Les transferts en attente n'ont pas pu être chargés."
+    "TRANSFERS_LOAD_ERROR": "Les transferts en attente n'ont pas pu être chargés.",
+    "TRANSFER_CANCEL_CONFIRM": "Annuler le transfert"
   },
   "EMAR": {
     "ACTION_RECORD_GIVEN": "Enregistrer comme administrée",

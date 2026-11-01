@@ -11857,7 +11857,8 @@
     "TRANSFER_COMPLETE_ERROR": "The transfer could not be completed.",
     "TRANSFER_CANCELLED": "Transfer cancelled and the bed released.",
     "TRANSFER_CANCEL_ERROR": "The transfer could not be cancelled.",
-    "TRANSFERS_LOAD_ERROR": "Waiting transfers could not be loaded."
+    "TRANSFERS_LOAD_ERROR": "Waiting transfers could not be loaded.",
+    "TRANSFER_CANCEL_CONFIRM": "Cancel transfer"
   },
   "EMAR": {
     "ACTION_RECORD_GIVEN": "Record as given",
