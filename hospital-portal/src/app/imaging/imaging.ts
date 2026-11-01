@@ -32,7 +32,11 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.component';
 import { actionRoles } from '../core/action-permissions';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
-import { labelledRefusalReason, refusalReason, refusedFieldIds } from '../shared/refusal-reason';
+import {
+  labelledRefusalReason,
+  refusalReason,
+  refusedFieldReasons,
+} from '../shared/refusal-reason';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { AuthorshipService } from '../shared/authorship.service';
 import { CANCEL_REASON_REQUIRED_KEY, isOrderCancellable } from '../shared/order-lifecycle';
@@ -413,14 +417,14 @@ export class ImagingComponent implements OnInit {
         // QA D1156: a validation refusal names its fields by their labels and
         // marks them, never the bare "must not be null" text.
         const reason = labelledRefusalReason(err, this.translate, ORDER_FIELD_LABELS);
-        const refused = refusedFieldIds(err, ORDER_FIELD_IDS);
+        const refused = refusedFieldReasons(err, ORDER_FIELD_IDS);
         if (refused.length > 0) {
-          refuseFields(
-            this.host.nativeElement,
-            refused,
-            Object.values(ORDER_FIELD_IDS),
-            this.translate.instant('COMMON.FIELD_REQUIRED'),
-          );
+          // Each field carries the server's own reason for it, not always "required".
+          refuseFields(this.host.nativeElement, [], Object.values(ORDER_FIELD_IDS), '');
+          // Reversed: each call focuses its field, so the first refused one ends up focused.
+          for (const [id, text] of [...refused].reverse()) {
+            refuseFields(this.host.nativeElement, [id], [id], text);
+          }
         }
         this.formError.set(reason);
         this.toast.error(reason ?? this.translate.instant('IMAGING.ORDER_SAVE_ERROR'));

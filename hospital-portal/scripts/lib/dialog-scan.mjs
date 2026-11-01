@@ -572,8 +572,8 @@ export function dialogFindings(html, componentSource = html, dialogSelectors = n
 /** A field that holds what the reader types (a checkbox or a file is not text to lose). */
 const NON_TEXT_INPUTS = new Set(['checkbox', 'radio', 'hidden', 'file', 'button', 'submit']);
 /** A button handler that closes a form: a method so named, or a flag switched off. */
-const CLOSE_METHOD = /cancel|close|dismiss|hide|back|discard/i;
-const FLAG_OFF = /\.set\(\s*(?:false|null|'')\s*\)|=\s*(?:false|null)\b/;
+const CLOSE_METHOD = /cancel|close|dismiss|hide|back|discard|stop|exit|abort/i;
+const FLAG_OFF = /\.set\(\s*(?:false|null|'')\s*\)|=\s*(?:false|null|undefined)\b/;
 const TRANSPARENT_TAGS = new Set(['ng-container', 'ng-template']);
 const DIALOG_CLOSE_OUTPUTS = ['(escaped)', '(keydown.escape)', '(dialogClose)', '(dialogDismiss)'];
 
@@ -702,11 +702,16 @@ function closesForm(tag, dialogClosers) {
 function closesItselfWithAField(tokens, index, blocks, dialogClosers) {
   const from = tokens[index].end;
   const to = tokens[closeIndexOf(tokens, index)].start;
+  return rangeClosesItselfWithAField(tokens, index + 1, from, to, blocks, dialogClosers);
+}
+
+/** {@link closesItselfWithAField} over the tokens from `first` whose text lies in [from, to). */
+function rangeClosesItselfWithAField(tokens, first, from, to, blocks, dialogClosers) {
   const inner = blocks.filter((b) => b.start >= from && b.end <= to);
   const branchesAt = (pos) => inner.filter((b) => pos >= b.start && pos < b.end);
   const fields = [];
   const closes = [];
-  for (let k = index + 1; k < tokens.length && tokens[k].start < to; k++) {
+  for (let k = first; k < tokens.length && tokens[k].start < to; k++) {
     const t = tokens[k];
     if (t.type !== 'open') continue;
     if (isTextField(t)) fields.push(branchesAt(t.start));
@@ -753,6 +758,8 @@ export function subFormFindings(html, tokens = tags(html), componentSource = htm
     const dialog = dialogs.filter((d) => start > d.start && start < d.end).at(-1);
     if (!dialog) continue;
     let depth = 0;
+    const tops = [];
+    let candidate = false;
     tokens.forEach((tag, index) => {
       if (tag.start < start || tag.start >= end) return;
       // `<ng-container>` / `<ng-template>` render no element: their children stand at their level.
@@ -763,10 +770,12 @@ export function subFormFindings(html, tokens = tags(html), componentSource = htm
       }
       const topLevel = depth === 0;
       if (!tag.selfClosing) depth++;
+      if (topLevel) tops.push(index);
       if (!topLevel || seen.has(index) || isDialogTag(tag)) return;
       const inner = innerHtml(html, tokens, index) ?? '';
       if (DIALOG_MARKUP.test(inner)) return;
       if (!closesItselfWithAField(tokens, index, blocks, dialog.closers)) return;
+      candidate = true;
       seen.add(index);
       if (hasSubFormContract(tag, componentSource)) return;
       out.push({
@@ -776,6 +785,21 @@ export function subFormFindings(html, tokens = tags(html), componentSource = htm
         message:
           'an inline form inside a dialog without appInlineSubForm + (dismissed): Escape in it closes the whole dialog and drops the typed text',
       });
+    });
+    // The field and its Cancel in two sibling elements of the block (a field
+    // row, then an actions row): the block itself is the form, and with no
+    // single root it cannot carry the directive.
+    if (candidate || tops.length < 2 || tops.some((i) => seen.has(i))) continue;
+    if (DIALOG_MARKUP.test(html.slice(start, end))) continue;
+    if (!rangeClosesItselfWithAField(tokens, tops[0], start, end, blocks, dialog.closers)) continue;
+    seen.add(tops[0]);
+    const first = tokens[tops[0]];
+    out.push({
+      line: first.line,
+      rule: 'subform',
+      anchor: anchor(first, innerHtml(html, tokens, tops[0]) ?? ''),
+      message:
+        'an inline form inside a dialog (its field and its Cancel in sibling elements) without one root carrying appInlineSubForm + (dismissed)',
     });
   }
   return out;

@@ -447,3 +447,17 @@ test('QA D1174 (round 21): an icon in the title that names a dialog must be aria
   );
   assert.deepEqual(icons(html.replace('outlined">', 'outlined" aria-hidden="true">')), []);
 });
+
+test('QA D1155 (review round 1): a field row and an actions row as siblings in the block is one form', () => {
+  const siblings = VIEW_DIALOG(`<div class="field"><textarea id="r"></textarea></div>
+      <div class="modal-actions"><button (click)="stopEditing()">Cancel</button></div>`);
+  assert.equal(subform(siblings).length, 1);
+  const unset = VIEW_DIALOG(
+    `<div class="f"><input id="x" /><button (click)="action = undefined">Cancel</button></div>`,
+  );
+  assert.equal(subform(unset).length, 1);
+  // A submit named "submitReset" is not a Cancel.
+  const reset = VIEW_DIALOG(`<div class="field"><textarea id="r"></textarea></div>
+      <div class="modal-actions"><button (click)="submitReset()">Reset</button></div>`);
+  assert.deepEqual(subform(reset), []);
+});

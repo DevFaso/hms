@@ -100,7 +100,9 @@ export class InlineSubFormDirective implements AfterViewInit, OnDestroy {
       box.parentElement?.closest<HTMLElement>('[role="dialog"], [aria-modal="true"]') ?? null;
     // ngModel writes its value a tick later: read the starting values after it.
     setTimeout(() => {
-      for (const field of this.textFields()) this.initial.set(field, field.value ?? '');
+      for (const field of this.textFields()) {
+        if (!this.initial.has(field)) this.initial.set(field, field.value ?? '');
+      }
     }, 0);
     if (box.contains(document.activeElement)) return;
     focusWhenRendered(box, FIRST_CONTROL);
@@ -120,13 +122,26 @@ export class InlineSubFormDirective implements AfterViewInit, OnDestroy {
         returnTo && dialog?.isConnected ? dialog.querySelector<HTMLElement>(returnTo) : null;
       if (named) {
         named.focus();
-      } else if (opener?.isConnected) {
+      } else if (opener?.isConnected && (!dialog || dialog.contains(opener))) {
+        // Only an opener inside the dialog: focus never leaves a dialog still open.
         restoreFocus(opener);
       } else if (dialog?.isConnected) {
         if (!dialog.hasAttribute('tabindex')) dialog.setAttribute('tabindex', '-1');
         dialog.focus();
       }
     }, 0);
+  }
+
+  /**
+   * A field rendered after the form opened (behind an inner `@if`) gets its
+   * starting value the first time it takes focus, before anything is typed.
+   */
+  @HostListener('focusin', ['$event'])
+  onFocusIn(event: FocusEvent): void {
+    const field = event.target;
+    if (field instanceof HTMLElement && field.matches(TEXT_FIELDS) && !this.initial.has(field)) {
+      this.initial.set(field, (field as HTMLInputElement).value ?? '');
+    }
   }
 
   @HostListener('keydown.escape', ['$event'])
@@ -160,7 +175,9 @@ export class InlineSubFormDirective implements AfterViewInit, OnDestroy {
   hasTypedText(): boolean {
     return this.textFields().some((field) => {
       const value = (field.value ?? '').trim();
-      return value !== '' && value !== (this.initial.get(field) ?? '').trim();
+      // A field never focused and not there at the start was not typed into.
+      const initial = this.initial.has(field) ? (this.initial.get(field) ?? '') : field.value;
+      return value !== '' && value !== (initial ?? '').trim();
     });
   }
 
