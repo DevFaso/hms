@@ -192,7 +192,7 @@ class PatientPortalServiceImplPhase1Test {
             stubAuthNotResolvable();
             assertThatThrownBy(() -> service.resolvePatientId(auth))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("patient.refill.decision.userUnresolved");
+                    .extracting("messageKey").isEqualTo("patient.refill.decision.userUnresolved");
         }
 
         @Test
