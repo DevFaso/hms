@@ -2,30 +2,33 @@ package com.example.hms.config.observability;
 
 import jakarta.annotation.PostConstruct;
 import java.util.Locale;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
- * Fails the context at boot when the Micrometer OTLP exporter is switched on but not actually
- * pointed anywhere useful.
+ * Logs loudly at startup when the Micrometer OTLP exporter is switched on but not pointed
+ * anywhere a collector is listening.
  *
  * <p>{@code OTEL_METRICS_ENABLED} and {@code OTEL_METRICS_EXPORT_URL} are two separate Railway
- * variables, and nothing stops an operator setting the first without the second. The result is
- * silent: Boot builds the registry against its own {@code localhost:4318} default, every 60-second
- * push fails against nothing, and Micrometer swallows the failure as a debug-level warning. The
- * dashboards simply stay empty, which is the hardest kind of broken to diagnose — everything
- * reports healthy.
+ * variables and nothing stops an operator setting the first without the second. The result is
+ * otherwise completely silent: Boot builds the registry against its own {@code localhost:4318}
+ * default, every 60-second push fails against nothing, and Micrometer swallows the failure. The
+ * dashboards simply stay empty while everything reports healthy.
  *
- * <p>Same reasoning and shape as {@link SplunkLoggingProperties#validateWhenEnabled()}: cheaper to
- * refuse to boot than to discover at 02:00 that no metric ever arrived. The check is deliberately
- * narrow — it only fires when export is explicitly enabled, so the default-off path and every test
- * profile are untouched.
+ * <p><strong>This deliberately does not fail the context</strong>, unlike {@link
+ * SplunkLoggingProperties#validateWhenEnabled()}, which it otherwise resembles. Splunk's appender
+ * is opt-in log shipping; this is a telemetry exporter on a clinical system's startup path, and a
+ * misconfigured <em>metrics</em> endpoint must never be the reason a hospital backend refuses to
+ * boot — that converts a missing graph into an outage, and into a deploy that cannot be rolled
+ * forward. An ERROR on the startup path, naming the variable and the fix, is the proportionate
+ * response: visible to anyone reading the deploy log, harmless to patient care.
  */
 @Component
 public class OtlpMetricsExportValidator {
 
-    /** Boot's own default; a loopback target is never right for a deployed service. */
-    private static final String BOOT_DEFAULT_URL = "http://localhost:4318/v1/metrics";
+    private static final Logger log = LoggerFactory.getLogger(OtlpMetricsExportValidator.class);
 
     private final boolean enabled;
     private final String url;
@@ -38,37 +41,43 @@ public class OtlpMetricsExportValidator {
     }
 
     @PostConstruct
-    void validateWhenEnabled() {
+    void warnWhenExportCannotWork() {
         if (!enabled) {
             return;
         }
         if (url == null || url.isBlank()) {
-            throw new IllegalStateException(
-                "OTEL_METRICS_ENABLED=true but no OTLP metrics URL is configured — "
-                    + "set OTEL_METRICS_EXPORT_URL to the Grafana Cloud gateway's metrics "
-                    + "endpoint (note the /v1/metrics suffix; the bare /otlp base is the "
-                    + "agent's endpoint, not Micrometer's), or set OTEL_METRICS_ENABLED=false. "
-                    + "See docs/GRAFANA_CLOUD_SETUP.md.");
+            log.error("OTEL_METRICS_ENABLED=true but no OTLP metrics URL is configured. "
+                + "No metric will reach Grafana Cloud, and the export failure is swallowed. "
+                + "Set OTEL_METRICS_EXPORT_URL, or set OTEL_METRICS_ENABLED=false. "
+                + "See docs/GRAFANA_CLOUD_SETUP.md.");
+            return;
         }
         if (isLoopback(url)) {
-            throw new IllegalStateException(
-                "OTEL_METRICS_ENABLED=true but the OTLP metrics URL is still the loopback "
-                    + "default (" + url + "). Nothing is listening there in a deployed "
-                    + "environment, and Micrometer swallows the export failure, so the "
-                    + "dashboards would stay empty with no error. Set OTEL_METRICS_EXPORT_URL "
-                    + "via scripts/grafana-cloud-setup.sh, or set OTEL_METRICS_ENABLED=false.");
+            log.error("OTEL_METRICS_ENABLED=true but the OTLP metrics URL is a loopback address "
+                + "({}). If no local collector is listening there, no metric reaches Grafana "
+                + "Cloud and the failure is swallowed. Expected the gateway's metrics endpoint, "
+                + "which ends in /v1/metrics — the bare /otlp base is the agent's endpoint, not "
+                + "Micrometer's. Set OTEL_METRICS_EXPORT_URL via "
+                + "scripts/grafana-cloud-setup.sh. Ignore this if you are running a collector "
+                + "locally on purpose.", url);
         }
     }
 
     /**
-     * True for the loopback default. Only meaningful alongside {@code enabled}: running the local
-     * compose stack against a real local collector is legitimate, which is why this is reached
-     * only when something explicitly turned export on without supplying a destination.
+     * True for a loopback host on either OTLP port, over http or https.
+     *
+     * <p>Matching the host rather than one exact string: the default that triggers this is
+     * {@code http://localhost:4318/v1/metrics}, but {@code 127.0.0.1}, {@code [::1]} and the gRPC
+     * port 4317 are the same mistake wearing a different hat. A local collector is a legitimate
+     * setup, which is why this only ever warns.
      */
     private static boolean isLoopback(String candidate) {
         String normalised = candidate.toLowerCase(Locale.ROOT);
-        return normalised.equals(BOOT_DEFAULT_URL)
-            || normalised.startsWith("http://localhost:4318")
-            || normalised.startsWith("http://127.0.0.1:4318");
+        return normalised.startsWith("http://localhost")
+            || normalised.startsWith("https://localhost")
+            || normalised.startsWith("http://127.0.0.1")
+            || normalised.startsWith("https://127.0.0.1")
+            || normalised.startsWith("http://[::1]")
+            || normalised.startsWith("https://[::1]");
     }
 }

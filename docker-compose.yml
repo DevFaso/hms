@@ -77,10 +77,8 @@ services:
   # ── Keycloak (profile: keycloak) ───────────────────────────
   # Local-dev Identity Provider for S-03 (see docs/tasks-keycloak.md).
   #   docker compose --profile keycloak up -d keycloak
-  # Admin console: http://localhost:8085/  (admin / admin)
-  # Issuer URI for the backend: http://localhost:8085/realms/hms
-  # Port 8085, not 8081: the backend owns host 8081 under the `local` profile, and the
-  # observability probes/scrape target it there. Override with KEYCLOAK_HOST_PORT.
+  # Admin console: http://localhost:8081/  (admin / admin)
+  # Issuer URI for the backend: http://localhost:8081/realms/hms
   # Realm is imported from keycloak/realm-export.json on first boot.
   # Production deployment is a managed Railway service, NOT this container.
   keycloak:
@@ -105,13 +103,16 @@ services:
       KC_HTTP_PORT: "8080"
       KC_HEALTH_ENABLED: "true"
     ports:
-      # Defaults to 8085 because host 8081 belongs to the backend under the `local`
-      # profile (application-local.yml, app.backend.base-url, the e2e helper), and the
-      # new Alloy scrape and all five blackbox probes target it there. Sharing the port
-      # meant whichever bound first won and the probes silently measured Keycloak.
-      # Set KEYCLOAK_HOST_PORT=8081 to restore the old mapping if you have local
-      # clients configured against it.
-      - "${KEYCLOAK_HOST_PORT:-8085}:8080"
+      # Host 8081 collides with the backend under the `local` profile, which is also
+      # where the Alloy scrape and all five blackbox probes point. Keycloak keeps 8081
+      # as its default because the portal environment, the iOS KeycloakAuthService and
+      # its E2E tests, the Playwright login spec, scripts/kc-inspect.ps1 and four docs
+      # all hardcode it — moving it here would break local OIDC login for a monitoring
+      # convenience. Run the two together by remapping Keycloak instead:
+      #   KEYCLOAK_HOST_PORT=8085 docker compose --profile keycloak up -d
+      # (the issuer then becomes http://localhost:8085/realms/hms, which those consumers
+      # would also need pointing at — a separate change from this PR).
+      - "${KEYCLOAK_HOST_PORT:-8081}:8080"
       - "9000:9000"
     volumes:
       - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro

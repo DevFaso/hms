@@ -151,26 +151,47 @@ public_args=(
 )
 [[ -n "$TRACES_SAMPLER_ARG" ]] && public_args+=("OTEL_TRACES_SAMPLER_ARG=${TRACES_SAMPLER_ARG}")
 
+# The `railway variables --set / --set-from-stdin` form is used deliberately in place of
+# the newer `railway variable set` subcommand. CI pins @railway/cli@4.57.2
+# (.github/workflows/deploy.yml), where the subcommand does not exist; 5.x still accepts
+# these flags, marking them legacy. The older spelling is therefore the one that works
+# against both, and an operator's local CLI is not guaranteed to match the pin.
+if ! railway variables --help 2>&1 | grep -q -- "--set-from-stdin"; then
+    echo "error: this railway CLI does not support 'variables --set-from-stdin'." >&2
+    echo "       Found: $(railway --version 2>&1). Expected 4.57.2 (the CI pin) or newer." >&2
+    exit 69
+fi
+if ! railway variables --help 2>&1 | grep -q -- "--skip-deploys"; then
+    echo "error: this railway CLI does not support '--skip-deploys', so setting these" >&2
+    echo "       variables would immediately redeploy ${SERVICE}. Upgrade before running" >&2
+    echo "       this against prod. Found: $(railway --version 2>&1)." >&2
+    exit 69
+fi
+
 # 1. Credentials first, over stdin so the token is not in railway's argv either.
 #    --skip-deploys keeps this a config-only change; the operator decides when the
 #    service restarts. Without it, Railway redeploys prod the moment this runs.
 printf 'Authorization=Basic %s' "$AUTH_B64" \
-    | railway variable set OTEL_EXPORTER_OTLP_HEADERS \
-        --stdin --service "$SERVICE" --environment "$ENVIRONMENT" --skip-deploys
+    | railway variables --set-from-stdin OTEL_EXPORTER_OTLP_HEADERS \
+        --service "$SERVICE" --environment "$ENVIRONMENT" --skip-deploys
 
 printf 'Basic %s' "$AUTH_B64" \
-    | railway variable set GRAFANA_OTLP_AUTH_HEADER \
-        --stdin --service "$SERVICE" --environment "$ENVIRONMENT" --skip-deploys
+    | railway variables --set-from-stdin GRAFANA_OTLP_AUTH_HEADER \
+        --service "$SERVICE" --environment "$ENVIRONMENT" --skip-deploys
 
 # 2. Then the rest of the configuration.
-railway variable set \
+set_flags=()
+for kv in "${public_args[@]}"; do
+    set_flags+=(--set "$kv")
+done
+railway variables \
     --service "$SERVICE" \
     --environment "$ENVIRONMENT" \
     --skip-deploys \
-    "${public_args[@]}"
+    "${set_flags[@]}"
 
 # 3. The activation switch, last, once everything it depends on is in place.
-railway variable set "OTEL_EXPORTER_OTLP_ENDPOINT=${OTLP_ENDPOINT}" \
+railway variables --set "OTEL_EXPORTER_OTLP_ENDPOINT=${OTLP_ENDPOINT}" \
     --service "$SERVICE" --environment "$ENVIRONMENT" --skip-deploys
 
 echo
