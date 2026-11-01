@@ -1,3 +1,4 @@
+import { DialogFocusDirective } from '../shared/a11y/dialog-focus.directive';
 import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -53,7 +54,14 @@ const CHECK_IN_ELIGIBLE: readonly AppointmentStatus[] = ['SCHEDULED', 'CONFIRMED
 @Component({
   selector: 'app-appointment-detail',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [
+    DialogFocusDirective,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+  ],
   templateUrl: './appointment-detail.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './appointment-detail.scss',

@@ -1,9 +1,9 @@
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 
 import { AppointmentFormComponent } from './appointment-form';
 import { AppointmentService } from '../services/appointment.service';
@@ -129,5 +129,131 @@ describe('AppointmentFormComponent — prefill from the prenatal calendar', () =
     expect(component.form.appointmentDate).toBe('');
     expect(component.form.reason).toBe('');
     expect(component.selectedPatient()).toBeNull();
+  });
+
+  it('QA D947: ArrowDown then Enter picks a suggestion from the keyboard', () => {
+    const component = create({});
+    const awa = { id: 'p-awa', firstName: 'Awa', lastName: 'Traoré' } as PatientResponse;
+    const moumouni = {
+      id: 'p-mou',
+      firstName: 'Moumouni',
+      lastName: 'Sawadogo',
+    } as PatientResponse;
+    component.patientSuggestions.set([awa, moumouni]);
+    component.patientDropdownOpen.set(true);
+
+    component.onPatientKeydown(new KeyboardEvent('keydown', { key: 'ArrowDown' }));
+    component.onPatientKeydown(new KeyboardEvent('keydown', { key: 'ArrowDown' }));
+    expect(component.patientActive()).toBe(1);
+    component.onPatientKeydown(new KeyboardEvent('keydown', { key: 'Enter' }));
+
+    expect(component.form.patientId).toBe('p-mou');
+    expect(component.patientDropdownOpen()).toBeFalse();
+  });
+
+  it('QA D947 review round 11: a new list drops the highlight, so Tab never picks a stranger', fakeAsync(() => {
+    const component = create({});
+    const awa = { id: 'p-awa', firstName: 'Awa', lastName: 'Traoré' } as PatientResponse;
+    const moumouni = {
+      id: 'p-mou',
+      firstName: 'Moumouni',
+      lastName: 'Sawadogo',
+    } as PatientResponse;
+    const issa = { id: 'p-issa', firstName: 'Issa', lastName: 'Ouédraogo' } as PatientResponse;
+    component.patientSuggestions.set([awa, moumouni]);
+    component.patientDropdownOpen.set(true);
+    component.onPatientKeydown(new KeyboardEvent('keydown', { key: 'ArrowDown' }));
+    component.onPatientKeydown(new KeyboardEvent('keydown', { key: 'ArrowDown' }));
+    expect(component.patientActive()).toBe(1);
+
+    // She keeps typing: the list is replaced.
+    patients.list.and.returnValue(of([issa, awa]));
+    component.onPatientQueryChange('Oued');
+    tick(250);
+    expect(component.patientActive()).toBe(-1);
+
+    component.onPatientKeydown(new KeyboardEvent('keydown', { key: 'Tab' }));
+    expect(component.form.patientId).toBeUndefined();
+  }));
+
+  it('QA D984: a refused date names the field and its reason, not the generic text', () => {
+    const component = create({});
+    const toast = TestBed.inject(ToastService) as jasmine.SpyObj<ToastService>;
+    const appointments = TestBed.inject(AppointmentService) as jasmine.SpyObj<AppointmentService>;
+    appointments.create.and.returnValue(
+      throwError(() => ({
+        status: 400,
+        error: {
+          error: 'Validation Failed',
+          message: 'La demande contient des erreurs de validation',
+          fieldErrors: { appointmentDate: 'doit être une date dans le présent ou le futur' },
+        },
+      })),
+    );
+    component.form.appointmentDate = '2020-01-01';
+    component.form.startTime = '09:00';
+    component.form.endTime = '09:30';
+    component.form.patientId = 'p-1';
+    component.form.staffId = 's-1';
+
+    component.submit();
+
+    // The labelled field reason ("{{field}}: {{reason}}"); the test loads no
+    // translations, so the key itself comes back.
+    const shown = toast.error.calls.mostRecent().args[0] as string;
+    expect(shown).toBe('FIELD_LIMITS.FIELD_REASON');
+    expect(shown).not.toBe('La demande contient des erreurs de validation');
+  });
+
+  it('QA D985 review round 14: picking another patient drops the recall; the same one keeps it', () => {
+    const component = create({
+      recallId: '11111111-2222-3333-4444-555555555555',
+      patientId: '11111111-2222-3333-4444-555555555555',
+    });
+    expect(component.form.recallId).toBe('11111111-2222-3333-4444-555555555555');
+    component.selectPatient({
+      id: '11111111-2222-3333-4444-555555555555',
+      firstName: 'Awa',
+    } as PatientResponse);
+    expect(component.form.recallId).toBe('11111111-2222-3333-4444-555555555555');
+    component.selectPatient({ id: 'p-other', firstName: 'Issa' } as PatientResponse);
+    expect(component.form.recallId).toBeUndefined();
+  });
+
+  it('QA D985: a refused recall is dropped, so the next submit books without it', () => {
+    const component = create({ recallId: '11111111-2222-3333-4444-555555555555' });
+    expect(component.form.recallId).toBe('11111111-2222-3333-4444-555555555555');
+    const toast = TestBed.inject(ToastService) as jasmine.SpyObj<ToastService>;
+    const appointments = TestBed.inject(AppointmentService) as jasmine.SpyObj<AppointmentService>;
+    appointments.create.and.returnValue(
+      throwError(() => ({
+        status: 400,
+        error: {
+          error: 'Bad Request',
+          message:
+            'Ce rappel n’est plus ouvert. Validez de nouveau pour prendre le rendez-vous sans lui.',
+          field: 'recallId',
+          fieldErrors: { recallId: 'Ce rappel n’est plus ouvert.' },
+        },
+      })),
+    );
+    component.form.appointmentDate = '2099-01-01';
+    component.form.startTime = '09:00';
+    component.form.endTime = '09:30';
+    component.form.patientId = 'p-1';
+    component.form.staffId = 's-1';
+
+    component.submit();
+
+    expect(component.form.recallId).toBeUndefined();
+    expect(toast.error.calls.mostRecent().args[0]).toContain('Ce rappel n’est plus ouvert');
+
+    // Any other refusal keeps the recall the desk booked from.
+    component.form.recallId = '11111111-2222-3333-4444-555555555555';
+    appointments.create.and.returnValue(
+      throwError(() => ({ status: 400, error: { error: 'Bad Request', message: 'slot taken' } })),
+    );
+    component.submit();
+    expect(component.form.recallId).toBe('11111111-2222-3333-4444-555555555555');
   });
 });

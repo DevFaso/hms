@@ -1292,8 +1292,27 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     @Override
     @Transactional
     public void recordCheckInCopay(Encounter encounter, BigDecimal amount, UUID recordedBy) {
+        doRecordCheckInCopay(encounter, amount, PaymentMethod.CASH, null, recordedBy);
+    }
+
+    @Override
+    @Transactional
+    public PaymentTransaction recordCheckInCopay(Encounter encounter, BigDecimal amount, PaymentMethod method,
+                                                 String reference, UUID recordedBy) {
+        return doRecordCheckInCopay(encounter, amount, method, reference, recordedBy);
+    }
+
+    /** Both entry points share this body (Sonar S6809: no self-call through a transactional method). */
+    private PaymentTransaction doRecordCheckInCopay(Encounter encounter, BigDecimal amount, PaymentMethod method,
+                                                    String reference, UUID recordedBy) {
         if (amount == null || amount.signum() <= 0) {
-            return;
+            return null;
+        }
+        // QA D975: every copay used to be recorded as cash with no reference.
+        PaymentMethod copayMethod = method == null ? PaymentMethod.CASH : method;
+        String copayReference = reference == null || reference.isBlank() ? null : reference.trim();
+        if (REFERENCE_REQUIRED.contains(copayMethod) && copayReference == null) {
+            throw new BusinessException("billing.payment.referenceRequired");
         }
         requireWholeAmount(amount);
         Hospital hospital = encounter.getHospital();
@@ -1312,9 +1331,12 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             .createdBy(recordedBy) // QA D428
             .build();
         BillingInvoice saved = invoiceRepository.saveAndFlush(invoice);
+        // One operator transaction pays once: the same rule as the desk payment.
+        rejectReusedReference(saved, copayMethod, copayReference);
         BillingInvoice settled = settle(saved, amount);
-        PaymentTransaction row = savePaymentRow(settled, amount, PaymentMethod.CASH, null, null, recordedBy,
+        PaymentTransaction row = savePaymentRow(settled, amount, copayMethod, copayReference, null, recordedBy,
             PaymentStatus.CONFIRMED);
         auditPaymentAfterCommit(AuditEventType.PAYMENT_POSTED, recordedBy, settled, row.getId(), "Check-in copay recorded");
+        return row;
     }
 }

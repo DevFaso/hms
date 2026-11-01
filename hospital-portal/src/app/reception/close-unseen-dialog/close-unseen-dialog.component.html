@@ -12,6 +12,8 @@
   role="dialog"
   aria-modal="true"
   [attr.aria-label]="'RECEPTION.CLOSE_UNSEEN_TITLE' | translate"
+  appDialogFocus
+  (dialogDismiss)="dismissed.emit()"
 >
   <div class="dialog-header">
     <span class="material-symbols-outlined header-icon">event_busy</span>

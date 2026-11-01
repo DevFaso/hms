@@ -478,9 +478,8 @@ public class AuthController {
             // every activation path clears the counter —
             // UserRoleHospitalAssignmentServiceImpl#activateVerifiedAssignment
             // (behind verifyAssignmentByCode, which the holder drives, and
-            // confirmAssignment, which their registrar drives), #verifyEmail
-            // below, which is the endpoint that actually serves verification
-            // (UserServiceImpl#verifyEmail has no caller), and
+            // confirmAssignment, which their registrar drives),
+            // UserServiceImpl#verifyEmail (behind #verifyEmail below), and
             // UserServiceImpl#updateUser / #restoreUser when an administrator
             // switches an account back on. The welcome mail hands out temp
             // credentials, so trying them before confirming the code is the
@@ -532,57 +531,15 @@ public class AuthController {
 
     @PostMapping("/verify-email")
     public ResponseEntity<Object> verifyEmail(@Valid @RequestBody EmailVerificationRequestDTO dto) {
-        var userOpt = userRepository.findByEmail(dto.getEmail());
-        if (userOpt.isEmpty()) {
+        // QA D921: the account and its patient assignments are switched on in
+        // ONE transaction inside the service (the Patient row is not touched). This controller
+        // runs with no session (open-in-view is off): the account save used to
+        // commit on its own, then the assignment loop's lazy getRole() threw,
+        // so the link answered 500 with the account half activated.
+        if (!userService.verifyEmail(dto.getEmail(), dto.getToken())) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(new EmailVerificationResponseDTO(EMAIL_VERIFICATION_FAILED, false));
         }
-        var user = userOpt.get();
-        if (!java.util.Objects.equals(dto.getToken(), user.getActivationToken())
-                || user.getActivationTokenExpiresAt() == null
-                || user.getActivationTokenExpiresAt().isBefore(LocalDateTime.now())) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new EmailVerificationResponseDTO(EMAIL_VERIFICATION_FAILED, false));
-        }
-
-        // An account an administrator switched off (V184) is not verified
-        // from below: no activation, no lockout reset, no assignment change.
-        if (user.getDeactivatedByAdminAt() != null) {
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                    .body(new EmailVerificationResponseDTO(EMAIL_VERIFICATION_FAILED, false));
-        }
-
-        // 1. Activate the user account
-        user.setActive(true);
-        user.setActivationToken(null);
-        user.setActivationTokenExpiresAt(null);
-        userRepository.save(user);
-        // Refusals collected while the account was inactive must not outlive
-        // the activation: the disabled arm of /auth/login counts toward the
-        // lockout, so five attempts before verifying would otherwise leave the
-        // holder locked out at the moment the link finally works. This is the
-        // endpoint that actually runs — UserService#verifyEmail has no caller.
-        loginAttemptService.resetAttempts(user.getId());
-
-        // 2. Activate all patient role assignments for this user
-        var assignments = assignmentRepository.findByUserId(user.getId());
-        int activated = 0;
-        for (var assignment : assignments) {
-            // QA D789: a patient row at a hospital archived since stays off; the
-            // account itself is still verified.
-            if ("ROLE_PATIENT".equalsIgnoreCase(assignment.getRole().getCode())
-                    && !Boolean.TRUE.equals(assignment.getActive())
-                    && (assignment.getHospital() == null
-                        || !com.example.hms.security.provider.FacilityAssignmentGuard
-                            .isClosed(assignment.getHospital().getLifecycleState()))) {
-                assignment.setActive(true);
-                assignmentRepository.save(assignment);
-                activated++;
-            }
-        }
-        log.info("✅ Email verified for user '{}'. Activated {} patient assignment(s).",
-                user.getUsername(), activated);
-
         return ResponseEntity.ok(new EmailVerificationResponseDTO("Email verified successfully.", true));
     }
 

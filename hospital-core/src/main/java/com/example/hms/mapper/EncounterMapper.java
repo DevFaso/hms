@@ -305,6 +305,10 @@ public class EncounterMapper {
         if (dto.getEncounterType() != null) e.setEncounterType(EncounterType.valueOf(dto.getEncounterType().name()));
         if (dto.getEncounterDate() != null) e.setEncounterDate(dto.getEncounterDate());
         if (dto.getNotes() != null) e.setNotes(dto.getNotes());
+        // QA D944: the walk-in's "Motif principal" is the visit's chief complaint.
+        if (dto.getChiefComplaint() != null && !dto.getChiefComplaint().isBlank()) {
+            e.setChiefComplaint(dto.getChiefComplaint().trim());
+        }
 
         return e;
     }

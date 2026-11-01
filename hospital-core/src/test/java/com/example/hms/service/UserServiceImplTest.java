@@ -956,6 +956,8 @@ class UserServiceImplTest {
             user.setActive(false);
             user.setActivatedBeforeDelete(true);
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            // The super-admin, who sees deleted accounts, gets the actionable answer.
+            when(accountAccess.callerSeesDeletedAccounts()).thenReturn(true);
 
             assertThatThrownBy(() -> userService.deleteUser(userId))
                 .isInstanceOf(com.example.hms.exception.ConflictException.class);
@@ -1104,6 +1106,25 @@ class UserServiceImplTest {
     @DisplayName("restoreUser")
     class RestoreUser {
 
+        @org.junit.jupiter.api.BeforeEach
+        void asTheSuperAdmin() {
+            // The restore worklist is the super-admin's (QA D919/D920); these cases are theirs.
+            lenient().when(accountAccess.callerSeesDeletedAccounts()).thenReturn(true);
+        }
+
+        @Test
+        @DisplayName("QA D920 review round 13: for a hospital admin every restore is missing, live or deleted alike")
+        void aHospitalAdminCannotTellDeletedFromLiveThroughRestore() {
+            when(accountAccess.callerSeesDeletedAccounts()).thenReturn(false);
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            for (boolean deleted : new boolean[] {true, false}) {
+                user.setDeleted(deleted);
+                assertThatThrownBy(() -> userService.restoreUser(userId))
+                    .isInstanceOf(ResourceNotFoundException.class);
+            }
+            verify(userRepository, never()).save(any(User.class));
+        }
+
         @Test
         @DisplayName("QA D327: restoring an account that is not deleted is refused and not audited")
         void restoreOfALiveAccountIsRefused() {
@@ -1123,6 +1144,7 @@ class UserServiceImplTest {
             user.setDeleted(true);
             user.setActive(false);
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(accountAccess.callerSeesDeletedAccounts()).thenReturn(true);
 
             assertThatThrownBy(() -> userService.deleteUser(userId))
                 .isInstanceOf(com.example.hms.exception.ConflictException.class);
@@ -1527,12 +1549,29 @@ class UserServiceImplTest {
         @DisplayName("a deleted account cannot be edited (D126)")
         void deletedAccountIsNotEditable() {
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(accountAccess.callerSeesDeletedAccounts()).thenReturn(true);
             user.setDeleted(true);
             UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
             dto.setFirstName("Ghost");
 
             assertThatThrownBy(() -> userService.updateUser(userId, dto))
                     .isInstanceOf(BusinessException.class);
+            verify(userRepository, never()).save(any(User.class));
+        }
+
+        @Test
+        @DisplayName("QA D920: for anyone but the super-admin a deleted account is missing, on PUT and DELETE alike")
+        void deletedAccountIsMissingForAHospitalAdmin() {
+            when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            when(accountAccess.callerSeesDeletedAccounts()).thenReturn(false);
+            user.setDeleted(true);
+            UpdateUserRequestDTO dto = new UpdateUserRequestDTO();
+            dto.setFirstName("Ghost");
+
+            assertThatThrownBy(() -> userService.updateUser(userId, dto))
+                    .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
+            assertThatThrownBy(() -> userService.deleteUser(userId))
+                    .isInstanceOf(com.example.hms.exception.ResourceNotFoundException.class);
             verify(userRepository, never()).save(any(User.class));
         }
 
@@ -1824,6 +1863,7 @@ class UserServiceImplTest {
             when(userRepository.findById(userId)).thenReturn(Optional.of(target));
             when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
             when(staffRepository.findByUserId(userId)).thenReturn(List.of());
+            when(accountAccess.callerSeesDeletedAccounts()).thenReturn(true); // the super-admin's worklist
 
             userService.restoreUser(userId);
 
@@ -2242,6 +2282,8 @@ class UserServiceImplTest {
         void restoreByNonAdministratorIsRefusedAsMissing() {
             user.setDeleted(true);
             when(userRepository.findById(userId)).thenReturn(Optional.of(user));
+            // Sees the deleted worklist, but does not administer this account.
+            when(accountAccess.callerSeesDeletedAccounts()).thenReturn(true);
             refuseAdministration();
 
             assertThatThrownBy(() -> userService.restoreUser(userId))
@@ -2425,13 +2467,28 @@ class UserServiceImplTest {
             when(userRepository.searchStaffDirectory(any(), any(), any(), any(), anyBoolean(), anyBoolean(), anyBoolean(), anyBoolean(),
                     any(), any())).thenReturn(onePage);
 
-            // Even if a deleted flag reached the service, the scoped path has no deleted view.
-            userService.getAllUsers(0, 10, true, true);
-            userService.searchUsers("ami", "ROLE_NURSE", "x@y", 0, 10, true, true);
+            // Even if an includeDeleted flag reached the service, the scoped path has no deleted view.
+            userService.getAllUsers(0, 10, true, false);
+            userService.searchUsers("ami", "ROLE_NURSE", "x@y", 0, 10, true, false);
 
             verify(userRepository).findStaffDirectoryPaged(eq(true), eq(hospitals), eq(false), eq(false), any());
             verify(userRepository).searchStaffDirectory(eq("ami"), isNull(), eq("ROLE_NURSE"), eq("x@y"), eq(false), eq(false),
                     eq(false), eq(true), eq(hospitals), any());
+        }
+
+        @Test
+        @DisplayName("QA D919: a scoped caller asking for the deleted worklist gets an empty page, and nothing is queried")
+        void scopedCallerGetsNoDeletedWorklist() {
+            Set<UUID> hospitals = Set.of(UUID.randomUUID());
+            when(accountAccess.requireDirectoryAccess())
+                    .thenReturn(new UserAccountAccess.DirectoryScope(false, hospitals));
+
+            assertThat(userService.getAllUsers(0, 10, true, true).getContent()).isEmpty();
+            assertThat(userService.searchUsers("ami", null, null, 0, 10, true, true).getContent()).isEmpty();
+
+            verify(userRepository, never()).findStaffDirectoryPaged(anyBoolean(), any(), anyBoolean(), anyBoolean(), any());
+            verify(userRepository, never()).searchStaffDirectory(any(), any(), any(), any(), anyBoolean(), anyBoolean(),
+                    anyBoolean(), anyBoolean(), any(), any());
         }
 
         @Test
@@ -2819,5 +2876,68 @@ class UserServiceImplTest {
         Object title = org.springframework.test.util.ReflectionTestUtils.invokeMethod(
             userService, "coerceJobTitle", null, java.util.Set.of(other));
         assertThat(title).isEqualTo(com.example.hms.enums.JobTitle.ADMINISTRATIVE_STAFF);
+    }
+
+    // ── QA D921: the one transactional activation path ────────────────────
+
+    @org.junit.jupiter.api.Nested
+    @org.junit.jupiter.api.DisplayName("verifyEmail (QA D921)")
+    class VerifyEmail {
+
+        private User pending() {
+            User u = new User();
+            u.setId(UUID.randomUUID());
+            u.setEmail("apatient@example.com");
+            u.setActive(false);
+            u.setActivationToken("tok-1");
+            u.setActivationTokenExpiresAt(java.time.LocalDateTime.now().plusHours(1));
+            when(userRepository.findByEmail("apatient@example.com")).thenReturn(Optional.of(u));
+            return u;
+        }
+
+        @org.junit.jupiter.api.Test
+        @DisplayName("activates the account and its patient rows, and clears the lockout only then")
+        void activatesAndClearsTheLockout() {
+            User u = pending();
+            Role pendingPatientRole = Role.builder().code("ROLE_PATIENT").name("PATIENT").build();
+            UserRoleHospitalAssignment row = UserRoleHospitalAssignment.builder().role(pendingPatientRole).active(false).build();
+            when(assignmentRepository.findByUserId(u.getId())).thenReturn(List.of(row));
+
+            assertThat(userService.verifyEmail("apatient@example.com", "tok-1")).isTrue();
+
+            assertThat(u.isActive()).isTrue();
+            assertThat(u.getActivationToken()).isNull();
+            assertThat(row.getActive()).isTrue();
+            // No transaction in a unit test: afterCommit runs at once.
+            verify(loginAttemptService).resetAttempts(u.getId());
+        }
+
+        @org.junit.jupiter.api.Test
+        @DisplayName("an invalid token changes nothing and never clears the lockout (not an oracle)")
+        void invalidTokenIsNotALockoutOracle() {
+            User u = pending();
+
+            assertThat(userService.verifyEmail("apatient@example.com", "wrong")).isFalse();
+
+            assertThat(u.isActive()).isFalse();
+            assertThat(u.getActivationToken()).isEqualTo("tok-1");
+            verify(loginAttemptService, never()).resetAttempts(any());
+            verify(assignmentRepository, never()).findByUserId(any());
+            verify(userRepository, never()).save(any(User.class));
+        }
+
+        @org.junit.jupiter.api.Test
+        @DisplayName("V184: an account an administrator disabled is refused, with no side effects")
+        void adminDisabledAccountIsRefused() {
+            User u = pending();
+            u.setDeactivatedByAdminAt(java.time.LocalDateTime.now());
+
+            assertThat(userService.verifyEmail("apatient@example.com", "tok-1")).isFalse();
+
+            assertThat(u.isActive()).isFalse();
+            verify(loginAttemptService, never()).resetAttempts(any());
+            verify(assignmentRepository, never()).findByUserId(any());
+            verify(userRepository, never()).save(any(User.class));
+        }
     }
 }

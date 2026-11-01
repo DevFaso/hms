@@ -12,6 +12,26 @@ export interface PatientAddressHistoryEntry {
   replacedAt: string;
 }
 
+/** QA D926: the demographics PATCH /patients/{id} corrects (null or absent = unchanged). */
+export interface PatientDemographicsPatch {
+  firstName?: string;
+  middleName?: string;
+  lastName?: string;
+  dateOfBirth?: string;
+  gender?: string;
+  phoneNumberPrimary?: string;
+  phoneNumberSecondary?: string;
+  email?: string;
+  addressLine1?: string;
+  addressLine2?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  emergencyContactName?: string;
+  emergencyContactPhone?: string;
+  emergencyContactRelationship?: string;
+}
+
 export interface PatientResponse {
   id: string;
   /** QA D504 — the patient's sharing opt-out held back other hospitals' allergies. */
@@ -412,6 +432,14 @@ export class PatientService {
 
   update(id: string, req: Partial<PatientCreateRequest>): Observable<PatientResponse> {
     return this.http.put<PatientResponse>(`/patients/${id}`, req);
+  }
+
+  /**
+   * QA D926: the desk corrects a chart's identity, contact and guardian.
+   * PATCH: a field left out is unchanged; a required one sent blank is refused.
+   */
+  patchDemographics(id: string, req: PatientDemographicsPatch): Observable<PatientResponse> {
+    return this.http.patch<PatientResponse>(`/patients/${id}`, req);
   }
 
   lookup(params: {

@@ -177,8 +177,8 @@ describe('AppointmentDetailComponent', () => {
     fixture.detectChanges();
     expect(component.canComplete).toBeFalse();
     expect(fixture.nativeElement.querySelector('.btn-complete')).toBeNull();
-    // No-show stays: a patient checked in and left is recorded from here or the flow board.
-    expect(fixture.nativeElement.querySelector('.btn-noshow')).not.toBeNull();
+    // QA D946: a patient who arrived is not "absent"; leaving unseen is closed from the flow board.
+    expect(fixture.nativeElement.querySelector('.btn-noshow')).toBeNull();
 
     for (const status of ['CONFIRMED', 'IN_PROGRESS'] as const) {
       component.appointment.set({ ...mockAppointment, status });
@@ -187,6 +187,24 @@ describe('AppointmentDetailComponent', () => {
       expect(fixture.nativeElement.querySelector('.btn-complete'))
         .withContext(status)
         .not.toBeNull();
+    }
+    component.appointment.set(mockAppointment);
+  });
+
+  it('QA D946: Absent is offered on a SCHEDULED or CONFIRMED appointment, never once the patient arrived', () => {
+    for (const status of ['SCHEDULED', 'CONFIRMED'] as const) {
+      component.appointment.set({ ...mockAppointment, status });
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('[data-testid="mark-no-show"]'))
+        .withContext(status)
+        .not.toBeNull();
+    }
+    for (const status of ['CHECKED_IN', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'] as const) {
+      component.appointment.set({ ...mockAppointment, status });
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('[data-testid="mark-no-show"]'))
+        .withContext(status)
+        .toBeNull();
     }
     component.appointment.set(mockAppointment);
   });

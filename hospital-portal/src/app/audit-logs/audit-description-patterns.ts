@@ -629,6 +629,16 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
     re: /^Patient linked to hospital '(.*)'$/,
     params: ['hospital'],
   },
+  // QA D926: the desk's demographics corrections (PATCH names the fields, PUT replaces all).
+  {
+    key: 'AUDIT.DESC.PATIENT_DEMOGRAPHICS_UPDATED',
+    re: /^Patient demographics updated: (.+)$/,
+    params: ['fields'],
+  },
+  {
+    key: 'AUDIT.DESC.PATIENT_DEMOGRAPHICS_REPLACED',
+    re: /^Patient demographics replaced$/,
+  },
   {
     key: 'AUDIT.DESC.PATIENT_ADDRESS_CHANGED',
     re: /^Patient address changed — previous address kept as history row (\S+)$/,
