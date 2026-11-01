@@ -85,19 +85,41 @@
                      pencil opens the box that changes it. -->
                 <td class="price-cell">
                   @if (editingPriceId() === item.id) {
-                    <input
-                      type="number"
-                      min="0"
-                      step="1"
-                      class="price-input"
-                      [attr.aria-label]="'PHARMACY.UNIT_PRICE' | translate"
-                      [attr.data-testid]="'price-input-' + item.id"
-                      [value]="item.unitPrice ?? ''"
-                      appFocusOnRender
-                      [focusOnRenderReturn]="'[data-testid=price-edit-' + item.id + ']'"
-                      (change)="savePrice(item, $any($event.target).value)"
-                      (keydown.escape)="editingPriceId.set(null)"
-                    />
+                    <!-- QA D1191 (round 22): Escape SAVED the typed price (the input's
+                         (change) fired as Escape destroyed it). The price is saved only on
+                         Enter or the Save button; Escape cancels, asking first over a typed
+                         value, and the keyboard goes back to the pencil. -->
+                    <span
+                      class="price-editor"
+                      appInlineSubForm
+                      #priceForm="inlineSubForm"
+                      (dismissed)="editingPriceId.set(null)"
+                    >
+                      <input
+                        #priceInput
+                        type="number"
+                        min="0"
+                        step="1"
+                        class="price-input"
+                        [attr.aria-label]="'PHARMACY.UNIT_PRICE' | translate"
+                        [attr.data-testid]="'price-input-' + item.id"
+                        [value]="item.unitPrice ?? ''"
+                        appFocusOnRender
+                        [focusOnRenderReturn]="'[data-testid=price-edit-' + item.id + ']'"
+                        (keydown.enter)="savePrice(item, priceInput.value)"
+                      />
+                      <button
+                        type="button"
+                        class="btn-icon"
+                        [attr.aria-label]="'PHARMACY.SAVE_PRICE' | translate"
+                        [title]="'PHARMACY.SAVE_PRICE' | translate"
+                        [attr.data-testid]="'price-save-' + item.id"
+                        (click)="savePrice(item, priceInput.value)"
+                      >
+                        <span class="material-symbols-outlined" aria-hidden="true">check</span>
+                      </button>
+                      <app-inline-discard-ask [form]="priceForm" />
+                    </span>
                   } @else {
                     <span class="price-text" [attr.data-testid]="'price-' + item.id">{{
                       (item.unitPrice ?? null) !== null ? (item.unitPrice | cfa: 'XOF') : '—'
@@ -382,7 +404,13 @@
             <button type="button" class="btn-secondary" (click)="closeCreateModal()">
               {{ 'COMMON.CANCEL' | translate }}
             </button>
-            <button type="submit" class="btn-primary" [disabled]="saving()">
+            <button
+              appSubmitGuard
+              submitGuardRequired
+              type="submit"
+              class="btn-primary"
+              [disabled]="saving()"
+            >
               {{ saving() ? ('COMMON.CREATING' | translate) : ('COMMON.CREATE' | translate) }}
             </button>
           </div>

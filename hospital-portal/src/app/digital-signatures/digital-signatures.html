@@ -11,7 +11,8 @@
     <div class="header-actions">
       <div class="stat-pills">
         <span class="pill signed">{{ signedCount() }} {{ 'SIGNATURES.SIGNED' | translate }}</span>
-        <span class="pill revoked"
+        {{ ' '
+        }}<span class="pill revoked"
           >{{ revokedCount() }} {{ 'SIGNATURES.REVOKED' | translate }}</span
         >
       </div>
@@ -225,7 +226,8 @@
               </div>
               <div class="detail-item">
                 <span class="detail-label">{{ 'COMMON.STATUS' | translate }}</span>
-                <span class="badge" [class]="statusClass(selectedSignature()!.status)">{{
+                {{ ' '
+                }}<span class="badge" [class]="statusClass(selectedSignature()!.status)">{{
                   selectedSignature()!.status
                 }}</span>
               </div>

@@ -6,6 +6,7 @@ import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { refusalReason } from '../shared/refusal-reason';
 
 interface DepartmentDetail {
   id: string;
@@ -150,10 +151,12 @@ export class DepartmentDetailComponent implements OnInit {
           this.sensitivitySaving.set(false);
           this.toast.success(this.translate.instant('DEPARTMENTS.TOAST.SENSITIVITY_SAVED'));
         },
-        error: () => {
+        error: (err: unknown) => {
           this.defaultSensitivity.set(previous);
           this.sensitivitySaving.set(false);
-          this.toast.error(this.translate.instant('DEPARTMENTS.TOAST.SENSITIVITY_FAILED'));
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('DEPARTMENTS.TOAST.SENSITIVITY_FAILED'),
+          );
         },
       });
   }

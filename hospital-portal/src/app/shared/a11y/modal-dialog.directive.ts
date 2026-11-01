@@ -9,6 +9,9 @@ import {
   inject,
 } from '@angular/core';
 
+import { TranslateService } from '@ngx-translate/core';
+
+import { EscapeKeepsTypedText } from './escape-keeps-typed-text';
 import { captureOpener, restoreFocus } from './focus-return';
 
 /**
@@ -26,6 +29,10 @@ import { captureOpener, restoreFocus } from './focus-return';
  * busy or unsaved-changes guard applies to Escape too. A box that already
  * closes itself from its own `(keydown.escape)` does not also bind `(escaped)`
  * (the close would run twice).
+ *
+ * QA D1131 / D1190 / D1195 / D1208 (round 22): Escape over text the reader
+ * typed asks before discarding it (escape-keeps-typed-text.ts); nothing typed,
+ * it closes as before.
  *
  * With dialogs stacked (a confirmation opened over a form), only the top one
  * answers the keyboard, and an Escape handled through `(escaped)` stops there:
@@ -59,6 +66,12 @@ export class ModalDialogDirective implements AfterViewInit, OnDestroy {
     '[tabindex]:not([tabindex="-1"])',
   ].join(',');
 
+  /** QA D1131 class: Escape never throws typed text away unasked. */
+  private readonly typedText = new EscapeKeepsTypedText(
+    this.host.nativeElement as HTMLElement,
+    inject(TranslateService, { optional: true }),
+  );
+
   constructor() {
     ModalDialogDirective.stack.push(this);
   }
@@ -81,6 +94,7 @@ export class ModalDialogDirective implements AfterViewInit, OnDestroy {
     const stack = ModalDialogDirective.stack;
     const at = stack.indexOf(this);
     if (at >= 0) stack.splice(at, 1);
+    this.typedText.destroy();
     restoreFocus(this.opener);
   }
 
@@ -95,6 +109,7 @@ export class ModalDialogDirective implements AfterViewInit, OnDestroy {
     // dialog, appDialogFocus): that one owns the keyboard, never pull focus out.
     const active = document.activeElement;
     if (active instanceof HTMLElement && active.closest('[aria-modal="true"]')) return;
+    if (event.key === 'Escape' && this.typedText.intercept(event)) return;
     if (event.key === 'Escape' && this.escaped.observed) {
       event.preventDefault();
       this.escaped.emit();

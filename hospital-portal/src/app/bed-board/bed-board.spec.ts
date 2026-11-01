@@ -21,6 +21,7 @@ import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { AuthService } from '../auth/auth.service';
 import { RoleContextStub, roleContextStub } from '../testing/role-context.stub';
+import { answerReasonDialog, reasonDialog } from '../shared/reason-dialog/reason-dialog.testing';
 
 function occupant(overrides: Partial<BedOccupant> = {}): BedOccupant {
   return {
@@ -386,22 +387,34 @@ describe('BedBoardComponent', () => {
     expect(boardSpy.getBoard).toHaveBeenCalledTimes(2);
   });
 
-  it('does not discontinue when no reason is given', () => {
-    spyOn(window, 'prompt').and.returnValue('');
-    component.discontinue({ id: 'i1' } as IsolationPrecautionResponse);
+  // QA D1201 (round 22): the shared reason dialog, not window.prompt (a blank
+  // answer to the prompt silently did nothing).
+  it('lifting a precaution asks the reason in the shared dialog; blank sends nothing and says why', () => {
+    const fixture = TestBed.createComponent(BedBoardComponent);
+    const board = fixture.componentInstance;
+    board.discontinue({ id: 'i1' } as IsolationPrecautionResponse);
+    const dialog = reasonDialog(fixture);
+    expect(dialog).withContext('the reason is asked in the page').not.toBeNull();
+    answerReasonDialog(fixture, '   ');
     expect(isolationSpy.discontinuePrecaution).not.toHaveBeenCalled();
+    expect(
+      (fixture.nativeElement as HTMLElement).querySelector('[data-testid="submit-guard-reason"]'),
+    ).not.toBeNull();
   });
 
   it('passes the lifting reason through', () => {
-    spyOn(window, 'prompt').and.returnValue('Culture negative');
     isolationSpy.discontinuePrecaution.and.returnValue(
       of({ id: 'i1' } as IsolationPrecautionResponse),
     );
-    component.openPrecautions(occupant());
-    component.discontinue({ id: 'i1' } as IsolationPrecautionResponse);
+    const fixture = TestBed.createComponent(BedBoardComponent);
+    const board = fixture.componentInstance;
+    board.openPrecautions(occupant());
+    board.discontinue({ id: 'i1' } as IsolationPrecautionResponse);
+    answerReasonDialog(fixture, '  Culture negative ');
 
     const [, payload] = isolationSpy.discontinuePrecaution.calls.mostRecent().args;
     expect(payload.discontinuationReason).toBe('Culture negative');
+    expect(reasonDialog(fixture)).toBeNull();
   });
 
   // ── Transfers (item 30) ────────────────────────────────────────────
@@ -679,19 +692,23 @@ describe('BedBoardComponent', () => {
     expect(transferSpy.completeTransfer).toHaveBeenCalledWith('t1', {});
   });
 
-  it('does not cancel a transfer when no reason is given', () => {
-    spyOn(window, 'prompt').and.returnValue('');
-    component.cancelTransfer(transferOrder());
+  it('cancelling a transfer asks the reason in the shared dialog; blank sends nothing', () => {
+    const fixture = TestBed.createComponent(BedBoardComponent);
+    fixture.componentInstance.cancelTransfer(transferOrder());
+    expect(reasonDialog(fixture)).not.toBeNull();
+    answerReasonDialog(fixture, '');
     expect(transferSpy.cancelTransfer).not.toHaveBeenCalled();
   });
 
   it('passes the cancellation reason through', () => {
-    spyOn(window, 'prompt').and.returnValue('Patient improved');
     transferSpy.cancelTransfer.and.returnValue(of(transferOrder({ status: 'CANCELLED' })));
-    component.cancelTransfer(transferOrder());
+    const fixture = TestBed.createComponent(BedBoardComponent);
+    fixture.componentInstance.cancelTransfer(transferOrder());
+    answerReasonDialog(fixture, 'Patient improved');
 
     const [, sent] = transferSpy.cancelTransfer.calls.mostRecent().args;
     expect(sent.cancellationReason).toBe('Patient improved');
+    expect(reasonDialog(fixture)).toBeNull();
   });
 
   it('titles the precautions dialog without a literal "null" when the name is unknown', () => {

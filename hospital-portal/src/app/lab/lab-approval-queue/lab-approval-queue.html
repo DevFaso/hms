@@ -258,9 +258,9 @@
       role="dialog"
       aria-modal="true"
       aria-labelledby="lab-approval-dialog-title-1"
-      cdkTrapFocus
-      [cdkTrapFocusAutoCapture]="true"
-      (keydown.escape)="closeDetail(); $event.stopPropagation()"
+      appModalDialog
+      (escaped)="closeDetail()"
+      (keydown.escape)="$event.stopPropagation()"
     >
       <div class="panel-header">
         <h2 id="lab-approval-dialog-title-1">
@@ -291,7 +291,8 @@
           </div>
           <div class="detail-field">
             <span class="field-label">{{ 'LAB_APPROVAL.FIELD.APPROVAL_STATUS' | translate }}</span>
-            <span class="status-badge" [class]="getApprovalStatusClass(def.approvalStatus)">
+            {{ ' '
+            }}<span class="status-badge" [class]="getApprovalStatusClass(def.approvalStatus)">
               {{ 'LAB.APPROVAL_STATUS.' + def.approvalStatus | translate }}
             </span>
           </div>
@@ -336,7 +337,8 @@
                   <span class="study-type">{{
                     study.studyType | enumLabel: 'validationStudyType'
                   }}</span>
-                  <span class="status-badge" [class]="studyPassedClass(study.passed)">
+                  {{ ' '
+                  }}<span class="status-badge" [class]="studyPassedClass(study.passed)">
                     {{
                       (study.passed ? 'LAB_APPROVAL.STUDIES.PASSED' : 'LAB_APPROVAL.STUDIES.FAILED')
                         | translate
@@ -615,9 +617,9 @@
       role="dialog"
       aria-modal="true"
       aria-labelledby="lab-approval-dialog-title-2"
-      cdkTrapFocus
-      [cdkTrapFocusAutoCapture]="true"
-      (keydown.escape)="closeStudyModal(); $event.stopPropagation()"
+      appModalDialog
+      (escaped)="closeStudyModal()"
+      (keydown.escape)="$event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
     >
@@ -747,9 +749,9 @@
       role="dialog"
       aria-modal="true"
       aria-labelledby="lab-approval-dialog-title-3"
-      cdkTrapFocus
-      [cdkTrapFocusAutoCapture]="true"
-      (keydown.escape)="closeApprovalModal(); $event.stopPropagation()"
+      appModalDialog
+      (escaped)="closeApprovalModal()"
+      (keydown.escape)="$event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
     >

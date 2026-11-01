@@ -141,7 +141,7 @@ export class LabOutboxComponent implements OnInit {
       },
       error: (err) => {
         console.error('Failed to load outbox message', err);
-        this.toast.error(this.translate.instant('LAB_OUTBOX.DETAIL_ERROR'));
+        this.toast.error(refusalReason(err) ?? this.translate.instant('LAB_OUTBOX.DETAIL_ERROR'));
         this.detailLoading.set(false);
       },
     });

@@ -106,11 +106,21 @@ interface EditableItem extends OrderSetItem {
  */
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { refusalReason } from '../../shared/refusal-reason';
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 
 @Component({
   selector: 'app-order-set-edit',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, RouterLink, TranslateModule, EnumLabelPipe],
+  imports: [
+    SubmitGuardDirective,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    RouterLink,
+    TranslateModule,
+    EnumLabelPipe,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './order-set-edit.component.html',
   styleUrls: ['./order-set-edit.component.scss'],
@@ -253,9 +263,9 @@ export class OrderSetEditComponent implements OnInit {
         this.toast.success(this.translate.instant('ORDER_SETS.SAVED'));
         this.router.navigate(['/admin/order-sets']);
       },
-      error: () => {
+      error: (err: unknown) => {
         this.saving.set(false);
-        this.toast.error(this.translate.instant('ORDER_SETS.SAVE_FAILED'));
+        this.toast.error(refusalReason(err) ?? this.translate.instant('ORDER_SETS.SAVE_FAILED'));
       },
     });
   }

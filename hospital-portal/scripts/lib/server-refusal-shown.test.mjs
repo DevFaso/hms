@@ -3,34 +3,27 @@
 // already awaiting the doctor's decision"), and the nurse read only "Échec de
 // la soumission de la demande": the handler was `error: () => toast(generic)`.
 //
-// On the order, encounter, admission and discharge screens, an error handler
-// that shows a toast for a WRITE must pass the server's reason first
-// (`refusalReason(err) ?? generic`, src/app/shared/refusal-reason.ts). A
-// handler that shows only a translated generic text (with or without the error
-// parameter) is allowed only for a read (a key naming a load, a missing record or an
-// empty result).
+// An error handler that shows a toast for a WRITE must pass the server's
+// reason first (`refusalReason(err) ?? generic`, src/app/shared/refusal-reason.ts).
+// A handler that shows only a translated generic text (with or without the
+// error parameter) is allowed only for a read (a key naming a load, a missing
+// record or an empty result).
+//
+// Round 22 (QA D1189, D1124 NOT_FIXED twice): the rule read only the ten
+// order/encounter screens of round 19. The nurse station's empty care note
+// was refused with "Rédigez la note…" and the nurse read "Échec de
+// l'enregistrement de la note de soins"; 105 such handlers sat in 50 other
+// files. It now reads EVERY component and service of the portal.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { join, dirname, relative } from 'node:path';
+
+import { walk } from './walk.mjs';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appDir = join(here, '..', '..', 'src', 'app');
-
-/** The screens of the orders/encounters/admissions/discharge flows. */
-export const SCREENS = [
-  'admissions/admissions.ts',
-  'consultations/consultations.ts',
-  'discharge/discharge.ts',
-  'encounters/encounters.ts',
-  'imaging/imaging.ts',
-  'maternity/ultrasound-tab.ts',
-  'patient-tracker/patient-tracker.component.ts',
-  'procedure-orders/procedure-orders.ts',
-  'referrals/referrals.ts',
-  'transfusion/transfusion.ts',
-];
 
 /** A read's generic message: a load, a missing record, an empty answer. */
 const READ_KEY = /LOAD|NOT_FOUND|NO_|_NONE|TEMPLATE/;
@@ -53,17 +46,21 @@ export function blindWriteHandlers(source) {
   return out;
 }
 
-test('QA D1111: a refused write on these screens shows the server reason', () => {
+test('QA D1111 / D1189: a refused write anywhere in the portal shows the server reason', () => {
   const problems = [];
-  for (const rel of SCREENS) {
-    const source = readFileSync(join(appDir, rel), 'utf8');
-    for (const h of blindWriteHandlers(source)) {
+  let files = 0;
+  for (const file of walk(appDir, ['.ts'])) {
+    if (file.endsWith('.spec.ts')) continue;
+    files++;
+    const rel = relative(appDir, file).replaceAll('\\', '/');
+    for (const h of blindWriteHandlers(readFileSync(file, 'utf8'))) {
       problems.push(
         `${rel}:${h.line}: a write's error handler shows only '${h.key}' ` +
           "(take the error and show refusalReason(err) ?? this.translate.instant('…'))",
       );
     }
   }
+  assert.ok(files > 400, `every source file must be read, saw ${files}`);
   assert.deepEqual(problems, [], problems.join('\n'));
 });
 

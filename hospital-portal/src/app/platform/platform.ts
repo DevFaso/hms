@@ -34,6 +34,7 @@ import { toServerDateTime, localDateString } from '../shared/date-utils';
 import { OrgTextPipe } from '../shared/pipes/org-text.pipe';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { refusalReason } from '../shared/refusal-reason';
 
 /* ── View state types ── */
 
@@ -377,8 +378,10 @@ export class PlatformComponent implements OnInit {
         this.toast.success(this.translate.instant('PLATFORM.TOAST.SNAPSHOT_EXPORTED'));
         this.saving.set(false);
       },
-      error: () => {
-        this.toast.error(this.translate.instant('PLATFORM.TOAST.SNAPSHOT_EXPORT_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PLATFORM.TOAST.SNAPSHOT_EXPORT_FAILED'),
+        );
         this.saving.set(false);
       },
     });

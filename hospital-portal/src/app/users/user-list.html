@@ -572,7 +572,13 @@
             <button type="button" class="btn-secondary" (click)="closeCreate()">
               {{ 'COMMON.CANCEL' | translate }}
             </button>
-            <button type="submit" class="btn-primary" [disabled]="saving()">
+            <button
+              type="submit"
+              class="btn-primary"
+              [disabled]="saving()"
+              appSubmitGuard
+              submitGuardRequired
+            >
               {{
                 saving()
                   ? ('COMMON.SAVING' | translate)

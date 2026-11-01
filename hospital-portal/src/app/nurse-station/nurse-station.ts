@@ -72,6 +72,7 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { offersHeadCircumference } from '../shared/patient-measures';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { refusalReason } from '../shared/refusal-reason';
 type FilterMode = 'me' | 'unit' | 'all';
 type SectionType =
   | 'vitals'
@@ -834,8 +835,10 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
         this.closeHandoffCreate();
         this.loadAll();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('NURSE.TOAST.HANDOFF_CREATE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('NURSE.TOAST.HANDOFF_CREATE_FAILED'),
+        );
         this.handoffCreating.set(false);
       },
     });
@@ -881,8 +884,10 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
         this.actionInProgress.set(null);
         this.loadAll();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('NURSE.TOAST.HANDOFF_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('NURSE.TOAST.HANDOFF_FAILED'),
+        );
         this.actionInProgress.set(null);
       },
     });
@@ -933,8 +938,10 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
         this.closeTaskCreate();
         this.loadAll();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('NURSE.TOAST.TASK_CREATE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('NURSE.TOAST.TASK_CREATE_FAILED'),
+        );
         this.taskCreating.set(false);
       },
     });
@@ -950,8 +957,10 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
           this.actionInProgress.set(null);
           this.loadAll();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('NURSE.TOAST.TASK_COMPLETE_FAILED'));
+        error: (err: unknown) => {
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('NURSE.TOAST.TASK_COMPLETE_FAILED'),
+          );
           this.actionInProgress.set(null);
         },
       });
@@ -995,7 +1004,10 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
         );
         this.inboxUnreadCount.update((n) => Math.max(0, n - 1));
       },
-      error: () => this.toast.error(this.translate.instant('NURSE.TOAST.MARK_READ_FAILED')),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('NURSE.TOAST.MARK_READ_FAILED'),
+        ),
     });
   }
 
@@ -1020,9 +1032,34 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
     this.careNoteForm.update((f) => ({ ...f, [field]: value }));
   }
 
+  /**
+   * QA D1189 (round 22): the server refuses a care note with nothing written
+   * in it (nurse.careNote.contentRequired, any of the DAR / SOAPIE parts or the
+   * narrative counts; the title does not). The same rule here, so the reason
+   * is said at the field before anything is sent.
+   */
+  careNoteEmptyReason(): string | null {
+    const form = this.careNoteForm();
+    const parts = [
+      form.dataPart,
+      form.actionPart,
+      form.responsePart,
+      form.subjective,
+      form.objective,
+      form.assessment,
+      form.plan,
+      form.implementation,
+      form.evaluation,
+      form.narrative,
+    ];
+    return parts.some((p) => (p ?? '').trim() !== '')
+      ? null
+      : this.translate.instant('NURSE.CARE_NOTE_EMPTY');
+  }
+
   submitCareNote(): void {
     const target = this.careNoteFor();
-    if (!target) return;
+    if (!target || this.careNoteEmptyReason()) return;
     const form = this.careNoteForm();
     this.careNoteCreating.set(true);
     this.nurseService.createCareNote(target.patientId, form).subscribe({
@@ -1033,8 +1070,8 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
         this.careNoteCreating.set(false);
         this.closeCareNote();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('NURSE.TOAST.NOTE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('NURSE.TOAST.NOTE_FAILED'));
         this.careNoteCreating.set(false);
       },
     });
@@ -1157,9 +1194,11 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
           this.toast.error(this.translate.instant('NURSE.TOAST.NO_ENCOUNTER'));
         }
       },
-      error: () => {
+      error: (err: unknown) => {
         this.encounterLookupInProgress.set(false);
-        this.toast.error(this.translate.instant('NURSE.TOAST.ENCOUNTER_LOOKUP_FAILED'));
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('NURSE.TOAST.ENCOUNTER_LOOKUP_FAILED'),
+        );
       },
     });
   }

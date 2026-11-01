@@ -5,7 +5,7 @@ import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 
-import { UltrasoundTabComponent } from './ultrasound-tab';
+import { UltrasoundTabComponent, hasUltrasoundFinding } from './ultrasound-tab';
 import { UltrasoundOrderResponse, UltrasoundService } from '../services/ultrasound.service';
 import { AuthService } from '../auth/auth.service';
 import { RoleContextService } from '../core/role-context.service';
@@ -238,6 +238,53 @@ describe('UltrasoundTabComponent', () => {
       'us-1',
       jasmine.objectContaining({ findingCategory: 'NORMAL', fetalHeartRate: 142 }),
     );
+  });
+
+  // QA D1182 (round 22): editing a blank stored report re-sent the server's
+  // defaults (cardiac activity yes, one fetus) and saved a blank "Normal".
+  it('QA D1182: editing a blank stored report is refused, and the unshown default flags are never sent', () => {
+    create(['ROLE_MIDWIFE']);
+    const cmp = fixture.componentInstance;
+    const stored = {
+      id: 'rep-1',
+      ultrasoundOrderId: 'us-1',
+      scanDate: '2026-11-01',
+      findingCategory: 'NORMAL',
+      numberOfFetuses: 1,
+      fetalCardiacActivity: true,
+      fetalMovementObserved: true,
+      fetalToneNormal: true,
+    };
+    cmp.openReport({ ...order(), report: stored } as never);
+    fixture.detectChanges();
+    const save = () => {
+      const buttons = Array.from(
+        host().querySelectorAll<HTMLButtonElement>('.modal-actions .btn-primary'),
+      );
+      buttons[buttons.length - 1].click();
+      fixture.detectChanges();
+    };
+    save();
+    expect(service.submitReport).not.toHaveBeenCalled();
+    expect(host().querySelector('#rep-summary')?.getAttribute('aria-invalid')).toBe('true');
+
+    service.submitReport.and.returnValue(of({}) as never);
+    cmp.reportForm.findingsSummary = 'Grossesse évolutive, activité cardiaque visible';
+    save();
+    const sent = service.submitReport.calls.mostRecent().args[1] as unknown as Record<
+      string,
+      unknown
+    >;
+    expect(sent['findingsSummary']).toContain('activité cardiaque');
+    expect('fetalCardiacActivity' in sent).toBeFalse();
+    expect('fetalMovementObserved' in sent).toBeFalse();
+    expect('fetalToneNormal' in sent).toBeFalse();
+  });
+
+  it('QA D1182: twins are a finding; one fetus alone is not', () => {
+    expect(hasUltrasoundFinding({ numberOfFetuses: 1 })).toBeFalse();
+    expect(hasUltrasoundFinding({ numberOfFetuses: 2 })).toBeTrue();
+    expect(hasUltrasoundFinding({ fetalCardiacActivity: true } as never)).toBeFalse();
   });
 
   it('lists the hospital’s orders with a translated scan type and status', () => {

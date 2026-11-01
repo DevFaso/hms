@@ -1,5 +1,4 @@
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
-import { CdkTrapFocus } from '@angular/cdk/a11y';
 import {
   Component,
   computed,
@@ -27,6 +26,8 @@ import { currentLocale, formatDecimal } from '../../shared/i18n/app-locale';
 import { serverInstant, localDateString } from '../../shared/date-utils';
 
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
+import { refusalReason } from '../../shared/refusal-reason';
 interface QcPoint {
   x: number;
   y: number;
@@ -64,7 +65,7 @@ interface QcChartGroup {
   standalone: true,
   imports: [
     SubmitGuardDirective,
-    CdkTrapFocus,
+    ModalDialogDirective,
     ServerTimePipe,
     CommonModule,
     FormsModule,
@@ -326,8 +327,10 @@ export class LabApprovalQueueComponent implements OnInit {
         this.closeStudyModal();
         this.savingStudy.set(false);
       },
-      error: () => {
-        this.toast.error(this.translate.instant('LAB_APPROVAL.TOAST.STUDY_SAVE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('LAB_APPROVAL.TOAST.STUDY_SAVE_FAILED'),
+        );
         this.savingStudy.set(false);
       },
     });
@@ -339,8 +342,10 @@ export class LabApprovalQueueComponent implements OnInit {
         this.validationStudies.update((list) => list.filter((s) => s.id !== study.id));
         this.toast.success(this.translate.instant('LAB_APPROVAL.TOAST.STUDY_REMOVED'));
       },
-      error: () =>
-        this.toast.error(this.translate.instant('LAB_APPROVAL.TOAST.STUDY_REMOVE_FAILED')),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('LAB_APPROVAL.TOAST.STUDY_REMOVE_FAILED'),
+        ),
     });
   }
 

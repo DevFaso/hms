@@ -1103,7 +1103,7 @@
     "DEACTIVATE": "Desactivar",
     "DEACTIVATED": "Conjunto de órdenes desactivado",
     "DEACTIVATE_FAILED": "No se pudo desactivar el conjunto de órdenes",
-    "DEACTIVATE_REASON_PROMPT": "Motivo de la desactivación:",
+    "DEACTIVATE_REASON_PROMPT": "¿Por qué se desactiva este conjunto de órdenes?",
     "EDIT_TITLE": "Editar conjunto",
     "ERROR": "No se pudieron cargar o aplicar los conjuntos. Vuelva a intentarlo o introduzca las órdenes manualmente.",
     "FIELD_ADMISSION_TYPE": "Tipo de ingreso",
@@ -2547,12 +2547,10 @@
     "CONSULTS_PENDING": "Consultas Pendientes",
     "CONSULT_REQUESTS": "Solicitudes de Consulta",
     "CRITICAL": "CRÍTICO",
-    "CRITICAL_ALERT": "Alerta crítica",
     "CRITICAL_LABS": "Resultados Críticos",
     "CRITICAL_RESULTS": "Resultados Críticos",
     "CURRENT_MEDICATIONS": "Medicación actual",
     "DAILY_COLLECTIONS_30D": "Cobros diarios (30 d)",
-    "DAYS_SHORT": "d",
     "DEPARTMENTS": "Departamentos",
     "DIRECTOR_APPROVAL_STATUS": "Estado de Aprobación del Director",
     "DISCHARGED_TODAY": "Dados de Alta Hoy",
@@ -2883,7 +2881,10 @@
     "AGING_1_30": "1 a 30 días",
     "AGING_31_60": "31 a 60 días",
     "AGING_61_90": "61 a 90 días",
-    "AGING_90_PLUS": "Más de 90 días"
+    "AGING_90_PLUS": "Más de 90 días",
+    "CRITICAL_ALERTS_ONE": "{{count}} alerta crítica",
+    "CRITICAL_ALERTS_MANY": "{{count}} alertas críticas",
+    "DAYS_LEFT_SHORT": "{{days}} d"
   },
   "DELIVERY": {
     "ACTIVATION_EMAIL_QUEUED": "El correo de activación (con el código de cada rol) está en cola de envío.",
@@ -4573,7 +4574,8 @@
       "REQUIRED": "Elija al testigo de esta administración de estupefaciente."
     },
     "PAIN_SCORE": "Dolor (0-10)",
-    "MAR_REASON_LABEL": "Motivo"
+    "MAR_REASON_LABEL": "Motivo",
+    "CARE_NOTE_EMPTY": "Redacte la nota: una nota de cuidados vacía no se guarda."
   },
   "ONBOARDING": {
     "ABILITIES_TITLE": "Sus capacidades",
@@ -5718,7 +5720,9 @@
         "TITLE": "Datos de salud de {{name}}",
         "TITLE_FALLBACK": "Datos de salud compartidos"
       },
-      "USER_NOT_FOUND": "Ninguna cuenta tiene este nombre de usuario. Compruebe la ortografía con la persona a la que quiere dar acceso."
+      "USER_NOT_FOUND": "Ninguna cuenta tiene este nombre de usuario. Compruebe la ortografía con la persona a la que quiere dar acceso.",
+      "REVOKE_CONFIRM_TITLE": "¿Revocar este acceso?",
+      "REVOKE_CONFIRM_MESSAGE": "Esta persona ya no verá su expediente. Podrá volver a darle acceso más adelante."
     },
     "MEDICAL_HISTORY": {
       "TITLE": "Antecedentes médicos y familiares",
@@ -7727,7 +7731,6 @@
     "MARK_VERIFIED": "Marcar como verificado",
     "MEDICATIONS": "Medicamentos",
     "METHOD": "Método",
-    "MIN_WAIT": "Espera mín.",
     "MISSING_INSURANCE_LABEL": "Seguro faltante",
     "MRN": "N° expediente",
     "NORMAL": "Normal",
@@ -7865,7 +7868,8 @@
     "RECALL_CANCEL_CONFIRM": "Cancelar el recordatorio",
     "CLOSE_ENTRY_TITLE": "¿Cerrar esta entrada de la lista de espera?",
     "CLOSE_ENTRY_REASON": "Motivo del cierre",
-    "CLOSE_ENTRY_CONFIRM": "Cerrar la entrada"
+    "CLOSE_ENTRY_CONFIRM": "Cerrar la entrada",
+    "WAIT_DURATION": "Espera: {{minutes}} min"
   },
   "REFERRALS": {
     "ACCEPTED": "Aceptada",
@@ -9668,7 +9672,8 @@
       "HINT": "Una interacción grave detiene esta dispensación: indique el motivo para dispensar de todos modos. Se registra con la dispensación."
     },
     "ALERT_OVERRIDDEN": "Alerta anulada por el prescriptor: vea el motivo en la receta",
-    "LOTS_OTHER_FORM": "{{count}} lote(s) de este medicamento en otra forma no se ofrecen: la orden está escrita en «{{unit}}»."
+    "LOTS_OTHER_FORM": "{{count}} lote(s) de este medicamento en otra forma no se ofrecen: la orden está escrita en «{{unit}}».",
+    "SAVE_PRICE": "Guardar el precio"
   },
   "LAB_QC": {
     "TITLE": "Panel de control de calidad",
@@ -11178,7 +11183,8 @@
     "LAST_REVIEWED": "revisada",
     "TYPE_CHOOSE": "Elegir el tipo…",
     "STATUS_CHOOSE": "Elegir el estado…",
-    "REQUIRED_FIELDS": "Este campo es obligatorio para una directiva."
+    "REQUIRED_FIELDS": "Este campo es obligatorio para una directiva.",
+    "REVOKE_REASON": "Motivo de la revocación"
   },
   "GROWTH": {
     "TAB": "Crecimiento",
@@ -11708,7 +11714,8 @@
     "REACTION_RECORDED": "Reacción registrada y transfusión detenida",
     "REACTION_ERROR": "No se pudo registrar la reacción",
     "PLATELET_O_TO_B": "Pendiente de confirmación",
-    "PLATELET_O_TO_B_DETAIL": "Plaquetas de grupo O para un receptor de grupo B. Permitido por el protocolo de este centro: esta transfusión no está bloqueada ni cuestionada. El protocolo excluye las plaquetas O para receptores A y AB pero no para receptores B, y aún no se ha confirmado con hematología si esa diferencia es intencionada. Plantéelo en la próxima revisión."
+    "PLATELET_O_TO_B_DETAIL": "Plaquetas de grupo O para un receptor de grupo B. Permitido por el protocolo de este centro: esta transfusión no está bloqueada ni cuestionada. El protocolo excluye las plaquetas O para receptores A y AB pero no para receptores B, y aún no se ha confirmado con hematología si esa diferencia es intencionada. Plantéelo en la próxima revisión.",
+    "CANCEL_REQUEST_CONFIRM": "Cancelar la solicitud"
   },
   "MORTALITY": {
     "TITLE": "Registro de mortalidad",

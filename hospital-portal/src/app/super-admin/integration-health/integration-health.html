@@ -33,7 +33,7 @@
       @for (chip of chips(); track chip.status) {
         <div class="chip" [style.borderColor]="chip.color" [style.color]="chip.color">
           <span class="chip-value">{{ countFor(chip.status) }}</span>
-          <span class="chip-label">{{ chip.labelKey | translate }}</span>
+          {{ ' ' }}<span class="chip-label">{{ chip.labelKey | translate }}</span>
         </div>
       }
     </div>

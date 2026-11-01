@@ -7,11 +7,20 @@ import { ToastService } from '../core/toast.service';
 import { AuthService } from '../auth/auth.service';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { refusalReason } from '../shared/refusal-reason';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 
 @Component({
   selector: 'app-announcement-list',
   standalone: true,
-  imports: [ModalDialogDirective, ServerTimePipe, CommonModule, FormsModule, TranslateModule],
+  imports: [
+    SubmitGuardDirective,
+    ModalDialogDirective,
+    ServerTimePipe,
+    CommonModule,
+    FormsModule,
+    TranslateModule,
+  ],
   templateUrl: './announcement-list.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './announcement-list.scss',
@@ -146,8 +155,10 @@ export class AnnouncementListComponent implements OnInit {
         this.deletingAnnouncement.set(null);
         this.loadAnnouncements();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('ANNOUNCEMENTS.TOAST.DELETE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('ANNOUNCEMENTS.TOAST.DELETE_FAILED'),
+        );
         this.deleting.set(false);
       },
     });

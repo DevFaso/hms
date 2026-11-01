@@ -6,6 +6,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { ToastService } from '../core/toast.service';
 import { Notification, NotificationService } from '../services/notification.service';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { refusalReason } from '../shared/refusal-reason';
 
 @Component({
   selector: 'app-notification-list',
@@ -79,7 +80,10 @@ export class NotificationListComponent implements OnInit {
         this.applyFilter();
         this.toast.success(this.translate.instant('NOTIFICATIONS.ALL_MARKED_READ'));
       },
-      error: () => this.toast.error(this.translate.instant('NOTIFICATIONS.MARK_ALL_READ_FAILED')),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('NOTIFICATIONS.MARK_ALL_READ_FAILED'),
+        ),
     });
   }
 

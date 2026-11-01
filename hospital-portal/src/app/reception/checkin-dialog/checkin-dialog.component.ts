@@ -148,7 +148,8 @@ export class CheckinDialogComponent {
           res,
           response.encounterCode ? `recu-${response.encounterCode}.pdf` : 'recu.pdf',
         ),
-      error: () => this.toast.error(this.translate.instant('RECEPTION.RECEIPT_FAILED')),
+      error: (err: unknown) =>
+        this.toast.error(refusalReason(err) ?? this.translate.instant('RECEPTION.RECEIPT_FAILED')),
     });
   }
 }

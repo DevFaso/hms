@@ -58,7 +58,8 @@
                         }}</span>
                       }
                       @if (org.lifecycleState && org.lifecycleState !== 'ACTIVE') {
-                        <span
+                        {{ ' '
+                        }}<span
                           class="lifecycle-chip"
                           [style.background]="lifecycleColor(org.lifecycleState) + '14'"
                           [style.color]="lifecycleColor(org.lifecycleState)"
@@ -81,7 +82,8 @@
                         }}</span>
                       }
                       @if (org.lifecycleState && org.lifecycleState !== 'ACTIVE') {
-                        <span
+                        {{ ' '
+                        }}<span
                           class="lifecycle-chip"
                           [style.background]="lifecycleColor(org.lifecycleState) + '14'"
                           [style.color]="lifecycleColor(org.lifecycleState)"
@@ -301,7 +303,13 @@
             <button type="button" class="btn-secondary" (click)="closeCreate()">
               {{ 'COMMON.CANCEL' | translate }}
             </button>
-            <button type="submit" class="btn-primary" [disabled]="saving()">
+            <button
+              appSubmitGuard
+              submitGuardRequired
+              type="submit"
+              class="btn-primary"
+              [disabled]="saving()"
+            >
               {{
                 saving()
                   ? ('COMMON.SAVING' | translate)

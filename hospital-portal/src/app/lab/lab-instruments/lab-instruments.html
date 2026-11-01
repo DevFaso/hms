@@ -36,9 +36,9 @@
         role="dialog"
         aria-modal="true"
         aria-labelledby="lab-instruments-dialog-title-1"
-        cdkTrapFocus
-        [cdkTrapFocusAutoCapture]="true"
-        (keydown.escape)="cancelForm(); $event.stopPropagation()"
+        appModalDialog
+        (escaped)="cancelForm()"
+        (keydown.escape)="$event.stopPropagation()"
         (click)="$event.stopPropagation()"
         tabindex="-1"
       >
@@ -88,7 +88,13 @@
             <button type="button" class="btn-secondary" (click)="cancelForm()">
               {{ 'COMMON.CANCEL' | translate }}
             </button>
-            <button type="submit" class="btn-primary" [disabled]="saving()">
+            <button
+              appSubmitGuard
+              submitGuardRequired
+              type="submit"
+              class="btn-primary"
+              [disabled]="saving()"
+            >
               @if (saving()) {
                 <span class="material-symbols-outlined spin">progress_activity</span>
               }

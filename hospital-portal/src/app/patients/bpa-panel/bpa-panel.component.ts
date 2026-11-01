@@ -24,6 +24,7 @@ import { ToastService } from '../../core/toast.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { canInvokeCds } from '../patient-chart/chart-access';
 import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
+import { refusalReason } from '../../shared/refusal-reason';
 
 /**
  * Best-Practice Advisory panel rendered at the top of the patient
@@ -140,9 +141,9 @@ export class BpaPanelComponent implements OnChanges, OnDestroy {
             this.state.set('empty');
           }
         },
-        error: () => {
+        error: (err: unknown) => {
           this.submitting.set(false);
-          this.toast.error(this.translate.instant('BPA.ACK_FAILED'));
+          this.toast.error(refusalReason(err) ?? this.translate.instant('BPA.ACK_FAILED'));
         },
       });
   }

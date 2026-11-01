@@ -188,7 +188,8 @@
                       'LAB_RESULTS.CORRECTION' | translate
                     }}</span>
                   }
-                  &ngsp;<span class="status-badge status-pending">{{
+                  {{ ' '
+                  }}<span class="status-badge status-pending">{{
                     'LAB_RESULTS.PENDING_RELEASE' | translate
                   }}</span>
                 }
@@ -325,9 +326,9 @@
         role="dialog"
         aria-modal="true"
         aria-labelledby="lab-results-dialog-title-1"
-        cdkTrapFocus
-        [cdkTrapFocusAutoCapture]="true"
-        (keydown.escape)="closeDetail(); $event.stopPropagation()"
+        appModalDialog
+        (escaped)="closeDetail()"
+        (keydown.escape)="$event.stopPropagation()"
       >
         <div class="panel-header">
           <h2 id="lab-results-dialog-title-1">
@@ -555,9 +556,9 @@
       role="dialog"
       aria-modal="true"
       aria-labelledby="lab-results-dialog-title-2"
-      cdkTrapFocus
-      [cdkTrapFocusAutoCapture]="true"
-      (keydown.escape)="closeModal(); $event.stopPropagation()"
+      appModalDialog
+      (escaped)="closeModal()"
+      (keydown.escape)="$event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
     >
@@ -712,9 +713,9 @@
       class="modal"
       role="dialog"
       aria-modal="true"
-      cdkTrapFocus
-      [cdkTrapFocusAutoCapture]="true"
-      (keydown.escape)="cancelSelfRelease(); $event.stopPropagation()"
+      appModalDialog
+      (escaped)="cancelSelfRelease()"
+      (keydown.escape)="$event.stopPropagation()"
       [attr.aria-label]="
         (isSelfRelease(target)
           ? 'LAB_RESULTS.SELF_RELEASE_TITLE'
@@ -793,9 +794,9 @@
       role="dialog"
       aria-modal="true"
       aria-labelledby="lab-results-dialog-title-3"
-      cdkTrapFocus
-      [cdkTrapFocusAutoCapture]="true"
-      (keydown.escape)="cancelDelete(); $event.stopPropagation()"
+      appModalDialog
+      (escaped)="cancelDelete()"
+      (keydown.escape)="$event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
     >
@@ -841,9 +842,9 @@
       role="dialog"
       aria-modal="true"
       aria-labelledby="lab-results-dialog-title-4"
-      cdkTrapFocus
-      [cdkTrapFocusAutoCapture]="true"
-      (keydown.escape)="closeSign(); $event.stopPropagation()"
+      appModalDialog
+      (escaped)="closeSign()"
+      (keydown.escape)="$event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
     >
@@ -900,9 +901,9 @@
       role="dialog"
       aria-modal="true"
       aria-labelledby="lab-results-dialog-title-5"
-      cdkTrapFocus
-      [cdkTrapFocusAutoCapture]="true"
-      (keydown.escape)="closeCompare(); $event.stopPropagation()"
+      appModalDialog
+      (escaped)="closeCompare()"
+      (keydown.escape)="$event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
     >
@@ -1022,9 +1023,9 @@
       role="dialog"
       aria-modal="true"
       aria-labelledby="lab-results-dialog-title-6"
-      cdkTrapFocus
-      [cdkTrapFocusAutoCapture]="true"
-      (keydown.escape)="closeReadBack(); $event.stopPropagation()"
+      appModalDialog
+      (escaped)="closeReadBack()"
+      (keydown.escape)="$event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
     >

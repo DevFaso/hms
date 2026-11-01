@@ -87,7 +87,8 @@
                 <!-- MVP-c2-frontend — lifecycle chip rendered only for non-ACTIVE
                      states so the visual stays calm for the common case. -->
                 @if (h.lifecycleState && h.lifecycleState !== 'ACTIVE') {
-                  <span class="lifecycle-chip" [attr.data-test]="'lifecycle-chip-' + h.id">
+                  {{ ' '
+                  }}<span class="lifecycle-chip" [attr.data-test]="'lifecycle-chip-' + h.id">
                     {{ 'HOSPITAL_LIFECYCLE.STATE.' + h.lifecycleState | translate }}
                   </span>
                 }
@@ -377,7 +378,13 @@
             <button type="button" class="btn-secondary" (click)="closeModal()">
               {{ 'COMMON.CANCEL' | translate }}
             </button>
-            <button type="submit" class="btn-primary" [disabled]="saving()">
+            <button
+              appSubmitGuard
+              submitGuardRequired
+              type="submit"
+              class="btn-primary"
+              [disabled]="saving()"
+            >
               {{
                 saving()
                   ? editing()

@@ -119,7 +119,8 @@ describe('InventoryDashboardComponent price column (QA D835)', () => {
     ) as HTMLInputElement;
     expect(input.value).toBe('25');
     input.value = '30';
-    input.dispatchEvent(new Event('change'));
+    // QA D1191: saved on Enter (or the Save button), never on change/blur.
+    input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     fixture.detectChanges();
     expect(svc.updateInventoryItem).toHaveBeenCalled();
     expect(fixture.nativeElement.querySelector('[data-testid="price-input-inv-1"]')).toBeNull();
@@ -149,6 +150,37 @@ describe('InventoryDashboardComponent price column (QA D835)', () => {
       expect(document.activeElement).toBe(
         host.querySelector<HTMLElement>('[data-testid="price-edit-inv-1"]'),
       );
+    } finally {
+      host.remove();
+    }
+  }));
+  it('QA D1191: Escape over a typed price asks first and never saves; a change event alone saves nothing', fakeAsync(() => {
+    const { fixture, svc } = render(25);
+    const host = fixture.nativeElement as HTMLElement;
+    document.body.appendChild(host);
+    try {
+      host.querySelector<HTMLButtonElement>('[data-testid="price-edit-inv-1"]')!.click();
+      fixture.detectChanges();
+      tick();
+      const input = host.querySelector<HTMLInputElement>('[data-testid="price-input-inv-1"]')!;
+      input.focus();
+      input.value = '30';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change'));
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      fixture.detectChanges();
+      tick();
+      expect(svc.updateInventoryItem).not.toHaveBeenCalled();
+      expect(host.querySelector('[data-testid="inline-discard-ask"]')).not.toBeNull();
+      host.querySelector<HTMLButtonElement>('[data-testid="inline-discard"]')!.click();
+      fixture.detectChanges();
+      tick();
+      expect(host.querySelector('[data-testid="price-input-inv-1"]')).toBeNull();
+      expect(svc.updateInventoryItem)
+        .withContext('Escape never saves the price')
+        .not.toHaveBeenCalled();
+      expect(host.querySelector('[data-testid="price-inv-1"]')!.textContent).toContain('25');
+      expect(document.activeElement).toBe(host.querySelector('[data-testid="price-edit-inv-1"]'));
     } finally {
       host.remove();
     }

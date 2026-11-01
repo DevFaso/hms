@@ -6,7 +6,8 @@
       <span class="meta-badge">
         <strong>{{ totalPatients() }}</strong> {{ 'TRACKER.PATIENTS_COUNT' | translate }}
       </span>
-      <span class="meta-badge">
+      {{ ' '
+      }}<span class="meta-badge">
         {{ 'TRACKER.AVG_WAIT' | translate }}{{ 'COMMON.COLON' | translate }}
         <strong>{{ averageWait() }}</strong>
         {{ 'TRACKER.MIN' | translate }}
@@ -83,11 +84,15 @@
                   <span class="wait-badge" [class]="getWaitClass(item.currentWaitMinutes)">
                     {{ item.currentWaitMinutes }} {{ 'TRACKER.MIN' | translate }}
                   </span>
-                  <span class="acuity-badge">{{
+                  {{ ' '
+                  }}<span class="acuity-badge">{{
                     item.acuityLevel | enumLabel: 'trackerAcuity'
                   }}</span>
                   @if (item.preCheckedIn) {
-                    <span class="precheckin-badge" [title]="'TRACKER.PRE_CHECKIN_BADGE' | translate"
+                    {{ ' '
+                    }}<span
+                      class="precheckin-badge"
+                      [title]="'TRACKER.PRE_CHECKIN_BADGE' | translate"
                       >&#x2713; {{ 'TRACKER.PRE_CHECKIN_BADGE' | translate }}</span
                     >
                   }

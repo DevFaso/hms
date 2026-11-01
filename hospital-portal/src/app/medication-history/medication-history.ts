@@ -30,6 +30,7 @@ import { MedicationRoutePipe } from '../shared/pipes/medication-route.pipe';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { refusalReason } from '../shared/refusal-reason';
 /**
  * Medication-history workspace (Phase 3 task 15): the /medication-history
  * timeline (prescriptions + external pharmacy fills with overlap/interaction
@@ -257,8 +258,10 @@ export class MedicationHistoryComponent implements OnInit {
         );
         this.reloadTimelineOnly();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('MED_TIMELINE.FILL_SAVE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('MED_TIMELINE.FILL_SAVE_ERROR'),
+        );
         this.fillSaving.set(false);
       },
     });

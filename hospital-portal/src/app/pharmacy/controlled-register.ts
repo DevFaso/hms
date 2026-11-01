@@ -168,9 +168,11 @@ export class ControlledRegisterComponent implements OnInit {
             `${this.translate.instant('PHARMACY.REGISTER_FILE_STEM')}-${this.from}-${this.to}.${format}`,
           );
         },
-        error: () => {
+        error: (err: unknown) => {
           this.exporting.set(false);
-          this.toast.error(this.translate.instant('PHARMACY.REGISTER_EXPORT_FAILED'));
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('PHARMACY.REGISTER_EXPORT_FAILED'),
+          );
         },
       });
   }

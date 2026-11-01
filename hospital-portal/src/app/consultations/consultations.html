@@ -193,7 +193,8 @@
                   c.status | enumLabel: 'consultationStatus'
                 }}</span>
                 @if (isOverdue(c)) {
-                  <span class="overdue-badge">{{ 'CONSULTATIONS.OVERDUE' | translate }}</span>
+                  {{ ' '
+                  }}<span class="overdue-badge">{{ 'CONSULTATIONS.OVERDUE' | translate }}</span>
                 }
               </td>
               <td>
@@ -522,10 +523,11 @@
             @if (selectedPatient()) {
               <div class="picker-chip">
                 <span class="chip-avatar">{{ patientInitials(selectedPatient()!) }}</span>
-                <span class="chip-info">
+                {{ ' '
+                }}<span class="chip-info">
                   <span class="chip-name">{{ selectedPatient() | personName }}</span>
                   @if (selectedPatient() | patientSubline; as sub) {
-                    <span class="chip-sub">{{ sub }}</span>
+                    {{ ' ' }}<span class="chip-sub">{{ sub }}</span>
                   }
                 </span>
                 <button
@@ -541,6 +543,7 @@
               <div class="patient-picker-wrap">
                 <span class="picker-search-icon material-icons">person_search</span>
                 <input
+                  data-escape-discards
                   id="con-patientSearch"
                   type="text"
                   class="picker-input"
@@ -743,6 +746,7 @@
           <label for="assign-consultant">{{ 'CONSULTATIONS.CONSULTANT' | translate }} *</label>
           <div class="field" style="margin-bottom: 0.5rem">
             <input
+              data-escape-discards
               type="text"
               id="assign-specialty-filter"
               [value]="assignSpecialtyFilter()"

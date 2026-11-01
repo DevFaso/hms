@@ -230,9 +230,9 @@
         role="dialog"
         aria-modal="true"
         aria-labelledby="lab-dialog-title-1"
-        cdkTrapFocus
-        [cdkTrapFocusAutoCapture]="true"
-        (keydown.escape)="closeDetail(); $event.stopPropagation()"
+        appModalDialog
+        (escaped)="closeDetail()"
+        (keydown.escape)="$event.stopPropagation()"
       >
         <div class="panel-header">
           <h2 id="lab-dialog-title-1">
@@ -273,7 +273,8 @@
             </div>
             <div class="detail-field">
               <span class="field-label">{{ 'COMMON.STATUS' | translate }}</span
-              ><span class="status-badge" [class]="getStatusClass(o.status)">{{
+              >{{ ' '
+              }}<span class="status-badge" [class]="getStatusClass(o.status)">{{
                 o.status | enumLabel: 'labOrderStatus'
               }}</span>
             </div>
@@ -349,9 +350,9 @@
       role="dialog"
       aria-modal="true"
       aria-labelledby="lab-dialog-title-2"
-      cdkTrapFocus
-      [cdkTrapFocusAutoCapture]="true"
-      (keydown.escape)="closeModal(); $event.stopPropagation()"
+      appModalDialog
+      (escaped)="closeModal()"
+      (keydown.escape)="$event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
     >
@@ -377,7 +378,7 @@
                 <div class="chip-info">
                   <span class="chip-name">{{ selectedPatient() | personName }}</span>
                   @if (selectedPatient() | patientSubline; as sub) {
-                    <span class="chip-sub">{{ sub }}</span>
+                    {{ ' ' }}<span class="chip-sub">{{ sub }}</span>
                   }
                 </div>
                 <button
@@ -394,6 +395,7 @@
               <div class="patient-picker-wrap">
                 <span class="material-symbols-outlined picker-search-icon">person_search</span>
                 <input
+                  data-escape-discards
                   id="lab-patientSearch"
                   class="picker-input"
                   type="text"
@@ -635,9 +637,9 @@
       class="modal"
       role="dialog"
       aria-modal="true"
-      cdkTrapFocus
-      [cdkTrapFocusAutoCapture]="true"
-      (keydown.escape)="closeVoid(); $event.stopPropagation()"
+      appModalDialog
+      (escaped)="closeVoid()"
+      (keydown.escape)="$event.stopPropagation()"
       aria-labelledby="lab-void-title"
       tabindex="-1"
       (click)="$event.stopPropagation()"
@@ -702,9 +704,9 @@
       role="dialog"
       aria-modal="true"
       aria-labelledby="lab-dialog-title-3"
-      cdkTrapFocus
-      [cdkTrapFocusAutoCapture]="true"
-      (keydown.escape)="cancelDelete(); $event.stopPropagation()"
+      appModalDialog
+      (escaped)="cancelDelete()"
+      (keydown.escape)="$event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
     >
@@ -750,9 +752,9 @@
       role="dialog"
       aria-modal="true"
       aria-labelledby="lab-dialog-title-4"
-      cdkTrapFocus
-      [cdkTrapFocusAutoCapture]="true"
-      (keydown.escape)="closeSpecimens(); $event.stopPropagation()"
+      appModalDialog
+      (escaped)="closeSpecimens()"
+      (keydown.escape)="$event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
     >
@@ -927,9 +929,9 @@
       role="dialog"
       aria-modal="true"
       aria-labelledby="lab-reject-title"
-      cdkTrapFocus
-      [cdkTrapFocusAutoCapture]="true"
-      (keydown.escape)="closeReject(); $event.stopPropagation()"
+      appModalDialog
+      (escaped)="closeReject()"
+      (keydown.escape)="$event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
       data-testid="lab-reject-modal"

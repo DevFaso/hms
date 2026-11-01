@@ -1,4 +1,11 @@
-import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  OnInit,
+  inject,
+  signal,
+} from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -11,6 +18,10 @@ import {
 import { ToastService } from '../../core/toast.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { InlineSubFormDirective } from '../../shared/a11y/inline-sub-form.directive';
+import { InlineDiscardAskComponent } from '../../shared/a11y/inline-discard-ask.component';
+import { focusWhenRendered } from '../../shared/a11y/focus-when-rendered';
+import { refusalReason } from '../../shared/refusal-reason';
 
 /**
  * "Who accessed my record" (E9 #66, decision D7).
@@ -24,12 +35,22 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 @Component({
   selector: 'app-my-sharing',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, DatePipe, EnumLabelPipe, FormsModule, TranslateModule],
+  imports: [
+    InlineSubFormDirective,
+    InlineDiscardAskComponent,
+    ServerTimePipe,
+    CommonModule,
+    DatePipe,
+    EnumLabelPipe,
+    FormsModule,
+    TranslateModule,
+  ],
   templateUrl: './my-sharing.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./my-sharing.component.scss', '../patient-portal-pages.scss'],
 })
 export class MySharingComponent implements OnInit {
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly portal = inject(PatientPortalService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
@@ -127,6 +148,16 @@ export class MySharingComponent implements OnInit {
 
   cancelOptOut(): void {
     this.showOptOutForm.set(false);
+    this.focusAfter('[data-testid="opt-out-enable"]');
+  }
+
+  /**
+   * QA D1198 (round 22): the control that replaces the one just used takes
+   * the keyboard — the opt-out and opt-in buttons swap places, and the
+   * keyboard fell to the page body.
+   */
+  private focusAfter(selector: string): void {
+    focusWhenRendered(this.host.nativeElement, selector);
   }
 
   confirmOptOut(): void {
@@ -137,11 +168,14 @@ export class MySharingComponent implements OnInit {
         this.optOut.set(state);
         this.showOptOutForm.set(false);
         this.optOutSaving.set(false);
+        this.focusAfter('[data-testid="opt-out-revoke"]');
         this.toast.success(this.translate.instant('PORTAL.SHARING.OPT_OUT.SAVED_ON'));
       },
-      error: () => {
+      error: (err: unknown) => {
         this.optOutSaving.set(false);
-        this.toast.error(this.translate.instant('PORTAL.SHARING.OPT_OUT.FAILED'));
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PORTAL.SHARING.OPT_OUT.FAILED'),
+        );
       },
     });
   }
@@ -153,11 +187,14 @@ export class MySharingComponent implements OnInit {
       next: (state) => {
         this.optOut.set(state);
         this.optOutSaving.set(false);
+        this.focusAfter('[data-testid="opt-out-enable"]');
         this.toast.success(this.translate.instant('PORTAL.SHARING.OPT_OUT.SAVED_OFF'));
       },
-      error: () => {
+      error: (err: unknown) => {
         this.optOutSaving.set(false);
-        this.toast.error(this.translate.instant('PORTAL.SHARING.OPT_OUT.FAILED'));
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PORTAL.SHARING.OPT_OUT.FAILED'),
+        );
       },
     });
   }

@@ -155,7 +155,11 @@
                   }}
                 </td>
                 <td>
-                  <button class="btn-danger-sm" (click)="revokeAccess(p.id)">
+                  <button
+                    class="btn-danger-sm"
+                    [attr.data-testid]="'revoke-proxy-' + p.id"
+                    (click)="askRevoke(p)"
+                  >
                     <span class="material-symbols-outlined">block</span>
                     {{ 'PORTAL.FAMILY.REVOKE' | translate }}
                   </button>
@@ -229,3 +233,20 @@
     }
   }
 </div>
+
+<!-- QA D1197 (round 22): revoking a family member's access asks first; one click did it. -->
+@if (revoking(); as p) {
+  <app-confirm-dialog
+    titleKey="PORTAL.FAMILY.REVOKE_CONFIRM_TITLE"
+    messageKey="PORTAL.FAMILY.REVOKE_CONFIRM_MESSAGE"
+    confirmKey="PORTAL.FAMILY.REVOKE"
+    [busy]="revokeBusy()"
+    (confirmed)="revokeAccess(p.id)"
+    (cancelled)="revoking.set(null)"
+  >
+    <p>
+      <strong>{{ p.proxyDisplayName }}</strong>
+      — {{ p.relationship | enumLabel: 'relationship' }}
+    </p>
+  </app-confirm-dialog>
+}

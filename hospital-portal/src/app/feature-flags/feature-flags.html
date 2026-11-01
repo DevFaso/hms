@@ -11,7 +11,10 @@
     <div class="header-actions">
       <div class="stat-pills">
         <span class="pill enabled">{{ enabledCount() }} {{ 'FLAGS.ENABLED' | translate }}</span>
-        <span class="pill disabled">{{ disabledCount() }} {{ 'FLAGS.DISABLED' | translate }}</span>
+        {{ ' '
+        }}<span class="pill disabled"
+          >{{ disabledCount() }} {{ 'FLAGS.DISABLED' | translate }}</span
+        >
       </div>
       <button class="btn-primary" (click)="openCreate()">
         <span class="material-icons">add</span> {{ 'FLAGS.NEW_FLAG' | translate }}
@@ -67,7 +70,8 @@
           </div>
           <div class="col-key">
             <span class="flag-name">{{ flag.key }}</span>
-            <span class="flag-badge" [class.on]="flag.enabled">
+            {{ ' '
+            }}<span class="flag-badge" [class.on]="flag.enabled">
               {{ flag.enabled ? ('FLAGS.ON' | translate) : ('FLAGS.OFF' | translate) }}
             </span>
           </div>

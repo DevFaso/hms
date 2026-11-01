@@ -290,7 +290,8 @@
                     'IMAGING.REPORT_STATUS_' + r.reportStatus | translate
                   }}</span>
                   @if (isCriticalUnacked(r)) {
-                    <span class="critical-badge">{{ 'IMAGING.CRITICAL' | translate }}</span>
+                    {{ ' '
+                    }}<span class="critical-badge">{{ 'IMAGING.CRITICAL' | translate }}</span>
                   }
                 </td>
                 <td>

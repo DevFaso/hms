@@ -65,7 +65,8 @@
                 ></span>
               }
               @if (n.type) {
-                <span class="notif-type badge">{{ n.type | enumLabel: 'notificationType' }}</span>
+                {{ ' '
+                }}<span class="notif-type badge">{{ n.type | enumLabel: 'notificationType' }}</span>
               }
               <span class="notif-date text-muted">{{
                 n.createdAt | serverTime | date: 'medium'

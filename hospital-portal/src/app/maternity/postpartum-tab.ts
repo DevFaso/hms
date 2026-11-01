@@ -61,6 +61,7 @@ import { currentLocale } from '../shared/i18n/app-locale';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { refusalReason } from '../shared/refusal-reason';
 /** QA D808: the bounds NewbornAssessmentRequestDTO puts on each number (APGAR 15 was sent). */
 export const NEWBORN_LIMITS: readonly FieldLimit[] = [
   { field: 'apgarOneMinute', labelKey: 'POSTPARTUM.APGAR_ONE', min: 0, max: 10 },
@@ -713,8 +714,8 @@ export class PostpartumTabComponent {
             this.toast.success(this.translate.instant('PRO.SAVED'));
           }
         },
-        error: () => {
-          this.toast.error(this.translate.instant('PRO.SAVE_ERROR'));
+        error: (err: unknown) => {
+          this.toast.error(refusalReason(err) ?? this.translate.instant('PRO.SAVE_ERROR'));
           this.screeningSaving.set(false);
         },
       });
@@ -777,10 +778,10 @@ export class PostpartumTabComponent {
         this.loadSchedule(patient.id);
         this.toast.success(this.translate.instant('PRO.ACKNOWLEDGED'));
       },
-      error: () => {
+      error: (err: unknown) => {
         // "Already acknowledged by a colleague" and "reload and retry" are the
         // usual refusals; both mean the row on screen is stale, so re-fetch.
-        this.toast.error(this.translate.instant('PRO.ACKNOWLEDGE_ERROR'));
+        this.toast.error(refusalReason(err) ?? this.translate.instant('PRO.ACKNOWLEDGE_ERROR'));
         this.ackSaving.set(false);
         this.loadScreenings(patient.id);
       },

@@ -203,7 +203,8 @@
         </span>
       }
       @if (dateTo) {
-        <span class="filter-chip">
+        {{ ' '
+        }}<span class="filter-chip">
           {{ 'APPOINTMENTS.TO' | translate }}{{ 'COMMON.COLON' | translate }} {{ dateTo }}
           <button
             type="button"
@@ -216,7 +217,8 @@
         </span>
       }
       @if (hospitalFilter) {
-        <span class="filter-chip">
+        {{ ' '
+        }}<span class="filter-chip">
           {{ hospitalName(hospitalFilter) }}
           <button
             type="button"

@@ -18,6 +18,7 @@ import { PatientPickerComponent } from '../shared/patient-picker/patient-picker.
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { refusalReason } from '../shared/refusal-reason';
 type BirthPlanFilter = 'all' | 'pending-review' | 'reviewed';
 
 @Component({
@@ -274,8 +275,8 @@ export class BirthPlanTabComponent implements OnInit {
         this.closePlanModal();
         this.load();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('BIRTH_PLAN.SAVE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('BIRTH_PLAN.SAVE_ERROR'));
         this.planSaving.set(false);
       },
     });
@@ -319,8 +320,8 @@ export class BirthPlanTabComponent implements OnInit {
           this.closeReview();
           this.load();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('BIRTH_PLAN.REVIEW_ERROR'));
+        error: (err: unknown) => {
+          this.toast.error(refusalReason(err) ?? this.translate.instant('BIRTH_PLAN.REVIEW_ERROR'));
           this.reviewBusy.set(false);
         },
       });
@@ -347,8 +348,8 @@ export class BirthPlanTabComponent implements OnInit {
         this.closeDelete();
         this.load();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('BIRTH_PLAN.DELETE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('BIRTH_PLAN.DELETE_ERROR'));
         this.deleteBusy.set(false);
       },
     });

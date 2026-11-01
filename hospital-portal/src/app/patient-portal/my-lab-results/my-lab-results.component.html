@@ -103,7 +103,8 @@
                 </div>
                 <div class="detail-item">
                   <span class="dl">{{ 'PORTAL.LAB_RESULTS.STATUS' | translate }}</span>
-                  <span class="dv portal-status-chip" [attr.data-status]="lab.status">{{
+                  {{ ' '
+                  }}<span class="dv portal-status-chip" [attr.data-status]="lab.status">{{
                     lab.status | enumLabel: 'status'
                   }}</span>
                 </div>

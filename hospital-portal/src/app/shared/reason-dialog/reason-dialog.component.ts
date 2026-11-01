@@ -21,8 +21,14 @@ let nextId = 0;
  * ```
  *
  * A modal (shared appModalDialog: focus in, Escape, focus back to the button
- * that opened it); the reason is required, named where it is asked for, and
- * handed over trimmed.
+ * that opened it; Escape over a typed reason asks before discarding it); the
+ * reason is required, named where it is asked for, and handed over trimmed.
+ * Content placed between the tags (the record being ended, a warning) is shown
+ * above the reason.
+ *
+ * QA D1201 (round 22): it is also the only way the portal asks for a reason —
+ * the browser's own `window.prompt` (a blank answer did nothing, silently) is
+ * refused by `scripts/lib/no-native-prompt.test.mjs`.
  */
 @Component({
   selector: 'app-reason-dialog',
@@ -45,6 +51,8 @@ let nextId = 0;
         @if (messageKey()) {
           <p>{{ messageKey()! | translate }}</p>
         }
+        <!-- What the action is about (the record's name, a warning), from the caller. -->
+        <ng-content />
         <div class="field">
           <label [for]="fieldId">{{ labelKey() | translate }} *</label>
           <textarea

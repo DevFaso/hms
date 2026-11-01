@@ -56,6 +56,7 @@ import { NursingNotesPanelComponent } from '../encounters/nursing-notes-panel/nu
 import { NursingNoteService } from '../services/nursing-note.service';
 import { PatientDemographicsEditComponent } from './patient-demographics-edit/patient-demographics-edit.component';
 import { isGrowthAge } from '../shared/patient-measures';
+import { refusalReason } from '../shared/refusal-reason';
 
 type TabKey =
   | 'overview'
@@ -348,7 +349,10 @@ export class PatientDetailComponent implements OnInit {
         this.addressHistory.set(entries);
         this.addressHistoryLoaded.set(true);
       },
-      error: () => this.toast.error(this.translate.instant('PATIENTS.ADDRESS_HISTORY_FAILED')),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PATIENTS.ADDRESS_HISTORY_FAILED'),
+        ),
     });
   }
 
@@ -440,9 +444,9 @@ export class PatientDetailComponent implements OnInit {
         this.wristbandLoading.set(false);
         this.printService.openForPrint(blob);
       },
-      error: () => {
+      error: (err: unknown) => {
         this.wristbandLoading.set(false);
-        this.toast.error(this.translate.instant('PATIENTS.WRISTBAND_FAILED'));
+        this.toast.error(refusalReason(err) ?? this.translate.instant('PATIENTS.WRISTBAND_FAILED'));
       },
     });
   }

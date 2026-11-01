@@ -3,6 +3,7 @@ import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@ang
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 
 /** What the page shows: the link is being checked, worked, was refused, or was incomplete. */
 export type VerifyEmailState = 'verifying' | 'verified' | 'failed' | 'missing';
@@ -23,7 +24,7 @@ export type VerifyEmailState = 'verifying' | 'verified' | 'failed' | 'missing';
 @Component({
   selector: 'app-verify-email',
   standalone: true,
-  imports: [FormsModule, TranslateModule],
+  imports: [SubmitGuardDirective, FormsModule, TranslateModule],
   templateUrl: './verify-email.html',
   // The same public card as the password-reset landing page, on purpose: the
   // two links arrive in the same kind of e-mail and should land on the same

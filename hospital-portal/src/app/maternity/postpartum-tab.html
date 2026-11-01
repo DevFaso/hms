@@ -94,14 +94,20 @@
             {{ sc.lastAdministeredAt | serverTime | date: 'short' }} ·
             <strong>{{ sc.lastTotalScore }} / {{ sc.maxScore }}</strong>
             @if (sc.lastCriticalItemPositive) {
-              <span class="risk-badge risk-high">{{ 'PRO.CRITICAL_ITEM' | translate }}</span>
+              {{ ' '
+              }}<span class="risk-badge risk-high">{{ 'PRO.CRITICAL_ITEM' | translate }}</span>
             } @else if (sc.lastScreenPositive) {
-              <span class="risk-badge risk-moderate">{{ 'PRO.SCREEN_POSITIVE' | translate }}</span>
+              {{ ' '
+              }}<span class="risk-badge risk-moderate">{{
+                'PRO.SCREEN_POSITIVE' | translate
+              }}</span>
             } @else {
-              <span class="risk-badge risk-low">{{ 'PRO.SCREEN_NEGATIVE' | translate }}</span>
+              {{ ' '
+              }}<span class="risk-badge risk-low">{{ 'PRO.SCREEN_NEGATIVE' | translate }}</span>
             }
             @if (sc.escalationOpen) {
-              <span class="risk-badge risk-high">{{ 'PRO.ESCALATION_OPEN' | translate }}</span>
+              {{ ' '
+              }}<span class="risk-badge risk-high">{{ 'PRO.ESCALATION_OPEN' | translate }}</span>
             }
           </p>
         }
@@ -152,11 +158,13 @@
                       }}</span>
                     }
                     @if (r.screenPositive) {
-                      <span class="risk-badge risk-moderate">
+                      {{ ' '
+                      }}<span class="risk-badge risk-moderate">
                         {{ 'PRO.SCREEN_POSITIVE' | translate }}
                       </span>
                     } @else {
-                      <span class="risk-badge risk-low">{{
+                      {{ ' '
+                      }}<span class="risk-badge risk-low">{{
                         'PRO.SCREEN_NEGATIVE' | translate
                       }}</span>
                     }

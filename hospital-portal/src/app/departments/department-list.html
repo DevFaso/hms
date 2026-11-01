@@ -51,7 +51,8 @@
                 {{ dept.staffCount }}
               </span>
             }
-            <span class="status-badge" [class.active]="dept.active">
+            {{ ' '
+            }}<span class="status-badge" [class.active]="dept.active">
               {{ dept.active ? ('COMMON.ACTIVE' | translate) : ('COMMON.INACTIVE' | translate) }}
             </span>
             <div class="action-group">
@@ -251,7 +252,13 @@
             <button type="button" class="btn-secondary" (click)="closeModal()">
               {{ 'COMMON.CANCEL' | translate }}
             </button>
-            <button type="submit" class="btn-primary" [disabled]="saving()">
+            <button
+              appSubmitGuard
+              submitGuardRequired
+              type="submit"
+              class="btn-primary"
+              [disabled]="saving()"
+            >
               {{
                 saving()
                   ? editing()

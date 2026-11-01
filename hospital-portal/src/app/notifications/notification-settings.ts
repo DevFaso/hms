@@ -10,6 +10,7 @@ import {
 import { ToastService } from '../core/toast.service';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { refusalReason } from '../shared/refusal-reason';
 const NOTIFICATION_TYPES = [
   'APPOINTMENT_REMINDER',
   'LAB_RESULT',
@@ -302,9 +303,11 @@ export class NotificationSettingsComponent implements OnInit {
         this.dirty.set(false);
         this.toast.success(this.translate.instant('NOTIFICATIONS.PREFERENCES_SAVED'));
       },
-      error: () => {
+      error: (err: unknown) => {
         this.saving.set(false);
-        this.toast.error(this.translate.instant('NOTIFICATIONS.PREFERENCES_SAVE_FAILED'));
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('NOTIFICATIONS.PREFERENCES_SAVE_FAILED'),
+        );
       },
     });
   }

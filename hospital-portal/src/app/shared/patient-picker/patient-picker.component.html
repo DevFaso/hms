@@ -4,7 +4,7 @@
     <div class="chip-info">
       <span class="chip-name">{{ sp | personName }}</span>
       @if (subline(sp); as sub) {
-        <span class="chip-sub">{{ sub }}</span>
+        {{ ' ' }}<span class="chip-sub">{{ sub }}</span>
       }
     </div>
     <button
@@ -24,6 +24,7 @@
       [attr.aria-label]="'COMMON.SEARCH_PATIENT' | translate"
       [id]="inputId"
       class="picker-input"
+      data-escape-discards
       type="text"
       [placeholder]="'COMMON.SEARCH_PATIENT' | translate"
       [value]="query()"

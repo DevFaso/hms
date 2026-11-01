@@ -138,14 +138,14 @@ export const csrfInterceptor: HttpInterceptorFn = (req: HttpRequest<unknown>, ne
   // then replay the original mutating request with the fresh token.
   return bootstrapOnce(http).pipe(
     switchMap(() => {
-      const freshToken = getCookieValue('XSRF-TOKEN');
-      if (freshToken) {
-        return sendWithRetry(req, next, freshToken, http);
-      }
-      // Bootstrap didn't set the cookie (network error, misconfigured backend).
-      // Send the request without the CSRF header — the server will reject it
-      // with 403 which the error interceptor will surface to the user.
-      return next(req);
+      // QA D1145 (round 22): this path used to call `next(req)` directly when
+      // the cookie was still missing after the bootstrap — no token and no
+      // replay. After a language switch a sibling request can drop the stale
+      // cookie between the bootstrap response and this read, so the billing
+      // search went out bare, got 403 and was never retried. Every path goes
+      // through sendWithRetry now: with the token when there is one, and the
+      // same replay (fresh cookie, at most MAX_CSRF_REPLAYS) when there is not.
+      return sendWithRetry(req, next, getCookieValue('XSRF-TOKEN'), http);
     }),
   );
 };
@@ -198,7 +198,7 @@ const CSRF_ATTEMPT = new HttpContextToken<number>(() => 0);
 function sendWithRetry(
   req: HttpRequest<unknown>,
   next: Parameters<HttpInterceptorFn>[1],
-  token: string,
+  token: string | null,
   http: HttpClient,
 ): Observable<HttpEvent<unknown>> {
   const attempt = req.context.get(CSRF_ATTEMPT);
@@ -210,7 +210,9 @@ function sendWithRetry(
     context.set(CSRF_ATTEMPT, nextAttempt).set(CSRF_REPLAY, nextAttempt === MAX_CSRF_REPLAYS);
     return sendWithRetry(req.clone({ context }), next, fresh, http);
   };
-  return next(req.clone({ setHeaders: { 'X-XSRF-TOKEN': token } })).pipe(
+  // No token (the bootstrap set none): sent bare, and a CSRF refusal is replayed below.
+  const sent = token === null ? req : req.clone({ setHeaders: { 'X-XSRF-TOKEN': token } });
+  return next(sent).pipe(
     catchError((err: unknown) => {
       if (!(err instanceof HttpErrorResponse) || err.status !== 403) {
         return throwError(() => err);
@@ -221,7 +223,8 @@ function sendWithRetry(
         return replay(current);
       }
       if (isCsrfRefusal(err)) {
-        expireCsrfCookie();
+        // A request sent bare has no stale cookie to drop: it only needs one.
+        if (token !== null) expireCsrfCookie();
         return bootstrapOnce(http).pipe(
           switchMap(() => {
             const fresh = getCookieValue('XSRF-TOKEN');

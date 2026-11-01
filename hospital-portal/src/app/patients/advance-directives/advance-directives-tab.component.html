@@ -223,46 +223,21 @@
     </div>
   }
 
-  <!-- Revoke confirmation -->
+  <!-- Revoke confirmation. QA D1180: the server keeps why a directive was revoked. -->
   @if (revokeTarget(); as target) {
-    <div
-      class="form-overlay"
-      (click)="cancelRevoke()"
-      (keydown.escape)="cancelRevoke()"
-      tabindex="-1"
+    <app-reason-dialog
+      titleKey="DIRECTIVES.REVOKE_TITLE"
+      labelKey="DIRECTIVES.REVOKE_REASON"
+      confirmKey="DIRECTIVES.REVOKE"
+      [busy]="revoking()"
+      (confirmed)="executeRevoke($event)"
+      (cancelled)="cancelRevoke()"
       data-testid="directive-revoke-modal"
     >
-      <div
-        appModalDialog
-        aria-labelledby="advance-directives-tab-panel-2-title"
-        (escaped)="cancelRevoke()"
-        class="form-card confirm-card"
-        (click)="$event.stopPropagation()"
-        (keydown.escape)="$event.stopPropagation()"
-        tabindex="-1"
-      >
-        <h2 id="advance-directives-tab-panel-2-title">
-          {{ 'DIRECTIVES.REVOKE_TITLE' | translate }}
-        </h2>
-        <p>
-          <strong>{{ 'DIRECTIVES.TYPE_' + target.directiveType | translate }}</strong>
-        </p>
-        <p>{{ 'DIRECTIVES.REVOKE_WARNING' | translate }}</p>
-        <div class="modal-actions">
-          <button type="button" class="btn-secondary" (click)="cancelRevoke()">
-            {{ 'COMMON.CANCEL' | translate }}
-          </button>
-          <button
-            type="button"
-            class="btn-danger-solid"
-            [disabled]="revoking()"
-            (click)="executeRevoke()"
-            data-testid="directive-revoke-confirm"
-          >
-            {{ 'DIRECTIVES.REVOKE' | translate }}
-          </button>
-        </div>
-      </div>
-    </div>
+      <p>
+        <strong>{{ 'DIRECTIVES.TYPE_' + target.directiveType | translate }}</strong>
+      </p>
+      <p>{{ 'DIRECTIVES.REVOKE_WARNING' | translate }}</p>
+    </app-reason-dialog>
   }
 </section>

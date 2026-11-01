@@ -53,13 +53,15 @@
             </span>
           }
           @if (specialization()) {
-            <span class="doctor-chip specialty-chip">
+            {{ ' '
+            }}<span class="doctor-chip specialty-chip">
               <span class="material-symbols-outlined">medical_services</span>
               {{ specialization() | enumLabel: 'specialization' }}
             </span>
           }
           @if (departmentName() && departmentName() !== specialization()) {
-            <span class="doctor-chip dept-chip">
+            {{ ' '
+            }}<span class="doctor-chip dept-chip">
               <span class="material-symbols-outlined">domain</span>
               {{ departmentName() }}
             </span>
@@ -85,7 +87,8 @@
             </span>
           }
           @if (departmentName(); as dept) {
-            <span class="doctor-chip dept-chip">
+            {{ ' '
+            }}<span class="doctor-chip dept-chip">
               <span class="material-symbols-outlined">domain</span>
               {{ dept }}
             </span>
@@ -164,8 +167,14 @@
     <div class="critical-banner">
       <span class="material-symbols-outlined critical-pulse">emergency</span>
       <strong>
-        {{ criticalAlerts().length }} {{ 'DASHBOARD.CRITICAL_ALERT' | translate
-        }}{{ criticalAlerts().length > 1 ? 's' : '' }}
+        <!-- QA D1200 class (round 22): the count and its noun in one sentence per
+             language, not an English 's' glued to a translated label. -->
+        {{
+          (criticalAlerts().length > 1
+            ? 'DASHBOARD.CRITICAL_ALERTS_MANY'
+            : 'DASHBOARD.CRITICAL_ALERTS_ONE'
+          ) | translate: { count: criticalAlerts().length }
+        }}
         {{ 'DASHBOARD.REQUIRE_IMMEDIATE_ATTENTION' | translate }}
       </strong>
       <div class="critical-names">
@@ -840,7 +849,8 @@
               <h2 class="card-title">{{ 'DASHBOARD.CONSULTATION_BACKLOG' | translate }}</h2>
               <span class="count-badge">{{ consultBacklog().length }}</span>
               @if (overdueConsults() > 0) {
-                <span
+                {{ ' '
+                }}<span
                   class="count-badge"
                   style="background: #fee2e2; color: #dc2626; margin-left: 4px"
                   >{{ overdueConsults() }} {{ 'DASHBOARD.OVERDUE' | translate }}</span
@@ -885,7 +895,8 @@
               <h2 class="card-title">{{ 'DASHBOARD.LICENSE_EXPIRY_ALERTS' | translate }}</h2>
               <span class="count-badge">{{ licenseAlerts().length }}</span>
               @if (expiredLicenseCount() > 0) {
-                <span
+                {{ ' '
+                }}<span
                   class="count-badge"
                   style="background: #fee2e2; color: #dc2626; margin-left: 4px"
                   >{{ expiredLicenseCount() }} {{ 'DASHBOARD.EXPIRED' | translate }}</span
@@ -925,10 +936,11 @@
                     @if (alert.severity === 'EXPIRED') {
                       {{ 'DASHBOARD.EXPIRED_LABEL' | translate }}
                     } @else if (alert.severity === 'CRITICAL') {
-                      {{ alert.daysUntilExpiry }}{{ 'DASHBOARD.DAYS_SHORT' | translate }} —
+                      {{ 'DASHBOARD.DAYS_LEFT_SHORT' | translate: { days: alert.daysUntilExpiry } }}
+                      —
                       {{ 'DASHBOARD.CRITICAL' | translate }}
                     } @else {
-                      {{ alert.daysUntilExpiry }}{{ 'DASHBOARD.DAYS_SHORT' | translate }}
+                      {{ 'DASHBOARD.DAYS_LEFT_SHORT' | translate: { days: alert.daysUntilExpiry } }}
                     }
                   </span>
                   <!-- Tier 2 item 40. The alert used to be the end of the
@@ -1341,7 +1353,8 @@
                   >
                     <span class="material-symbols-outlined inbox-group-icon">{{ group.icon }}</span>
                     <span class="inbox-group-label">{{ group.label }}</span>
-                    <span class="count-badge count-badge-sm">{{ group.items.length }}</span>
+                    {{ ' '
+                    }}<span class="count-badge count-badge-sm">{{ group.items.length }}</span>
                     <span class="material-symbols-outlined inbox-chevron">{{
                       inboxCollapsedSections().has(group.category) ? 'expand_more' : 'expand_less'
                     }}</span>

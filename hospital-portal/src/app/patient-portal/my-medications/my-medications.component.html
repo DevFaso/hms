@@ -39,7 +39,8 @@
                 <span class="pli-sub">{{ med.dosage }} · {{ med.frequency }}</span>
                 @if (med.readyForCollectionAt) {
                   <!-- G15: a fill is waiting at the pharmacy counter. -->
-                  <span class="ready-chip" [attr.data-testid]="'med-ready-' + med.id">
+                  {{ ' '
+                  }}<span class="ready-chip" [attr.data-testid]="'med-ready-' + med.id">
                     <span class="material-symbols-outlined" aria-hidden="true">storefront</span>
                     {{
                       'PORTAL.MEDICATIONS.READY_AT'
@@ -92,7 +93,8 @@
                   </div>
                   <div class="detail-item">
                     <span class="dl">{{ 'PORTAL.MEDICATIONS.STATUS' | translate }}</span>
-                    <span class="dv portal-status-chip" [attr.data-status]="med.status">{{
+                    {{ ' '
+                    }}<span class="dv portal-status-chip" [attr.data-status]="med.status">{{
                       med.status | enumLabel: 'status'
                     }}</span>
                   </div>
@@ -186,7 +188,8 @@
                 <span class="pli-title">{{ rx.medicationName }}</span>
                 <span class="pli-sub">{{ rx.dosage }} · {{ rx.frequency }}</span>
                 @if (rx.readyForCollectionAt) {
-                  <span class="ready-chip" [attr.data-testid]="'rx-ready-' + rx.id">
+                  {{ ' '
+                  }}<span class="ready-chip" [attr.data-testid]="'rx-ready-' + rx.id">
                     <span class="material-symbols-outlined" aria-hidden="true">storefront</span>
                     {{
                       'PORTAL.MEDICATIONS.READY_AT'
@@ -251,7 +254,8 @@
                   </div>
                   <div class="detail-item">
                     <span class="dl">{{ 'PORTAL.MEDICATIONS.STATUS' | translate }}</span>
-                    <span class="dv portal-status-chip" [attr.data-status]="rx.status">{{
+                    {{ ' '
+                    }}<span class="dv portal-status-chip" [attr.data-status]="rx.status">{{
                       rx.status | enumLabel: 'prescriptionStatus'
                     }}</span>
                   </div>

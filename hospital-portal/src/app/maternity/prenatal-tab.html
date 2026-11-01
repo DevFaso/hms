@@ -71,7 +71,7 @@
           | translate: { done: s.completedContacts ?? 0, next: (s.completedContacts ?? 0) + 1 }
       }}</span>
       @if (s.highRisk) {
-        <span class="risk-badge risk-high">{{ 'ULTRASOUND.HIGH_RISK' | translate }}</span>
+        {{ ' ' }}<span class="risk-badge risk-high">{{ 'ULTRASOUND.HIGH_RISK' | translate }}</span>
       }
     </h3>
     @for (alert of s.alerts; track alert) {

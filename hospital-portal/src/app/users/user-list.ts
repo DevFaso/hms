@@ -31,6 +31,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { isStepUpRefusal, stepUpRefusalKey } from '../services/step-up';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 
 const PATIENT_ROLE_CODES = new Set(['ROLE_PATIENT', 'PATIENT']);
 
@@ -106,7 +107,14 @@ const SPECIALIZATIONS = [
 @Component({
   selector: 'app-user-list',
   standalone: true,
-  imports: [DialogFocusDirective, FormsModule, TranslateModule, RoleLabelPipe, EnumLabelPipe],
+  imports: [
+    SubmitGuardDirective,
+    DialogFocusDirective,
+    FormsModule,
+    TranslateModule,
+    RoleLabelPipe,
+    EnumLabelPipe,
+  ],
   templateUrl: './user-list.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './user-list.scss',

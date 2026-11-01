@@ -68,7 +68,8 @@
                 }}</span>
               }
               @if (t.isolationOverride) {
-                <span class="chip chip-mismatch">{{ 'BED_BOARD.OVERRIDE' | translate }}</span>
+                {{ ' '
+                }}<span class="chip chip-mismatch">{{ 'BED_BOARD.OVERRIDE' | translate }}</span>
               }
             </div>
             <div class="transfer-route">
@@ -170,7 +171,8 @@
               <span class="ward-code">{{ ward.wardCode }}</span>
               <span class="ward-type">{{ ward.wardType | enumLabel: 'wardType' }}</span>
               @if (ward.isolationCapable) {
-                <span class="chip chip-capable">{{
+                {{ ' '
+                }}<span class="chip chip-capable">{{
                   'BED_BOARD.ISOLATION_CAPABLE' | translate
                 }}</span>
               }
@@ -240,7 +242,8 @@
                               }}</span>
                             }
                             @if (o.isolationMismatch) {
-                              <span class="chip chip-mismatch">{{
+                              {{ ' '
+                              }}<span class="chip chip-mismatch">{{
                                 'BED_BOARD.WRONG_WARD' | translate
                               }}</span>
                             }
@@ -316,7 +319,8 @@
               }}</span>
               <span class="precaution-reason">{{ p.reason }}</span>
               @if (p.requiresIsolationWard) {
-                <span class="chip chip-mismatch">{{
+                {{ ' '
+                }}<span class="chip chip-mismatch">{{
                   'BED_BOARD.NEEDS_ISOLATION_WARD' | translate
                 }}</span>
               }
@@ -499,4 +503,25 @@
       </button>
     </footer>
   </div>
+}
+
+<!-- QA D1201 (round 22): the reason is asked in the shared dialog, never a browser prompt
+     (a blank answer to the prompt silently did nothing). -->
+@if (discontinuing(); as p) {
+  <app-reason-dialog
+    titleKey="BED_BOARD.DISCONTINUE_PROMPT"
+    confirmKey="BED_BOARD.DISCONTINUE"
+    [busy]="discontinueBusy()"
+    (confirmed)="confirmDiscontinue(p, $event)"
+    (cancelled)="discontinuing.set(null)"
+  />
+}
+@if (cancellingTransfer(); as order) {
+  <app-reason-dialog
+    titleKey="BED_BOARD.TRANSFER_CANCEL_PROMPT"
+    confirmKey="BED_BOARD.TRANSFER_CANCEL"
+    [busy]="cancelTransferBusy()"
+    (confirmed)="confirmCancelTransfer(order, $event)"
+    (cancelled)="cancellingTransfer.set(null)"
+  />
 }

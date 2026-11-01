@@ -26,11 +26,13 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 import { EnumLabelService } from '../core/enum-label.service';
 import { OrgTextPipe, seededOrgTextKey } from '../shared/pipes/org-text.pipe';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 
 @Component({
   selector: 'app-organization-list',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     ModalDialogDirective,
     FormsModule,
     RouterLink,

@@ -1,5 +1,4 @@
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
-import { CdkTrapFocus } from '@angular/cdk/a11y';
 import { DatePipe } from '@angular/common';
 import {
   Component,
@@ -20,12 +19,34 @@ import {
 } from '../../services/lab-instrument.service';
 import { AuthService } from '../../auth/auth.service';
 import { ToastService } from '../../core/toast.service';
-import { refusalReason } from '../../shared/refusal-reason';
+import { labelledRefusalReason, refusalReason } from '../../shared/refusal-reason';
+import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+
+/**
+ * QA D1193 (round 22): a field the server refuses is named with its label, not
+ * shown as the bare constraint ("ne doit pas être vide").
+ */
+const SAVE_FIELD_LABELS: Readonly<Record<string, string>> = {
+  name: 'LAB_INSTRUMENTS.NAME',
+  serialNumber: 'LAB_INSTRUMENTS.SERIAL',
+  manufacturer: 'LAB_INSTRUMENTS.MANUFACTURER',
+  modelNumber: 'LAB_INSTRUMENTS.MODEL',
+  notes: 'LAB_INSTRUMENTS.NOTES',
+};
 
 @Component({
   selector: 'app-lab-instruments',
   standalone: true,
-  imports: [CdkTrapFocus, DatePipe, ServerTimePipe, RouterModule, FormsModule, TranslateModule],
+  imports: [
+    SubmitGuardDirective,
+    ModalDialogDirective,
+    DatePipe,
+    ServerTimePipe,
+    RouterModule,
+    FormsModule,
+    TranslateModule,
+  ],
   templateUrl: './lab-instruments.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lab-instruments.scss',
@@ -142,7 +163,8 @@ export class LabInstrumentsComponent implements OnInit {
         // QA D879: the server's reason (a duplicate serial number, a field
         // limit) is what the user needs; the generic text is the fallback.
         this.toast.error(
-          refusalReason(err) ?? this.translate.instant('LAB_INSTRUMENTS.SAVE_ERROR'),
+          labelledRefusalReason(err, this.translate, SAVE_FIELD_LABELS) ??
+            this.translate.instant('LAB_INSTRUMENTS.SAVE_ERROR'),
         );
         this.saving.set(false);
       },

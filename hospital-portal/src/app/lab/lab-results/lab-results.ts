@@ -1,7 +1,6 @@
 import { refusalReason } from '../../shared/refusal-reason';
 import { LabCorrectionBadgeComponent } from '../shared/lab-correction-badge.component';
 import { textMatches } from '../../shared/person-search';
-import { CdkTrapFocus } from '@angular/cdk/a11y';
 import {
   Component,
   inject,
@@ -45,6 +44,7 @@ import { LabValuePipe, formatLabNumber } from '../shared/lab-value.pipe';
 import { MeasurePipe } from '../../shared/pipes/measure.pipe';
 
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 /**
  * D49: the order code the API sends is the order's UUID. Readers get its first
  * eight characters, enough to tell two orders apart on one screen.
@@ -68,6 +68,21 @@ const ORDER_STATUSES_WITHOUT_NEW_RESULT: ReadonlySet<string> = new Set([
   'ENTERED_IN_ERROR',
 ]);
 
+/**
+ * QA D1204 / D1176 (round 22): the server refuses a hand-entered result on an
+ * order whose specimen was never taken or was rejected
+ * (LabResultServiceImpl.requireSpecimenTaken: status ORDERED or PENDING,
+ * "Aucun prélèvement n'a encore été enregistré…"). The picker offered them
+ * and the refusal came only after "Créer". The server exempts point-of-care
+ * tests, but that flag is neither sent with an order nor settable from the
+ * portal, so no order the portal can show is exempt.
+ * `scripts/lib/lab-result-picker.test.mjs` holds this list to the server's.
+ */
+export const ORDER_STATUSES_AWAITING_SPECIMEN: ReadonlySet<string> = new Set([
+  'ORDERED',
+  'PENDING',
+]);
+
 @Component({
   selector: 'app-lab-results',
   standalone: true,
@@ -75,7 +90,7 @@ const ORDER_STATUSES_WITHOUT_NEW_RESULT: ReadonlySet<string> = new Set([
     SubmitGuardDirective,
     MeasurePipe,
     LabCorrectionBadgeComponent,
-    CdkTrapFocus,
+    ModalDialogDirective,
     LabValuePipe,
     ServerTimePipe,
     CommonModule,
@@ -352,7 +367,10 @@ export class LabResultsComponent implements OnInit {
    */
   private pickableOrders(keepOrderId?: string | null): LabOrderResponse[] {
     return this.resultableOrders.filter(
-      (o) => !ORDER_STATUSES_WITHOUT_NEW_RESULT.has(o.status) || o.id === keepOrderId,
+      (o) =>
+        o.id === keepOrderId ||
+        (!ORDER_STATUSES_WITHOUT_NEW_RESULT.has(o.status) &&
+          !ORDER_STATUSES_AWAITING_SPECIMEN.has(o.status)),
     );
   }
 
@@ -498,8 +516,8 @@ export class LabResultsComponent implements OnInit {
         this.deleting.set(false);
         this.loadResults();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('LAB_RESULTS.DELETE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('LAB_RESULTS.DELETE_ERROR'));
         this.deleting.set(false);
       },
     });
@@ -770,8 +788,8 @@ export class LabResultsComponent implements OnInit {
           this.closeSign();
           this.loadResults();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('LAB_RESULTS.SIGN_ERROR'));
+        error: (err: unknown) => {
+          this.toast.error(refusalReason(err) ?? this.translate.instant('LAB_RESULTS.SIGN_ERROR'));
           this.signSubmitting.set(false);
         },
       });
@@ -853,7 +871,10 @@ export class LabResultsComponent implements OnInit {
         this.criticalList.update((list) => list.filter((row) => row.id !== r.id));
         this.applyFilter();
       },
-      error: () => this.toast.error(this.translate.instant('LAB_RESULTS.ACKNOWLEDGE_ERROR')),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('LAB_RESULTS.ACKNOWLEDGE_ERROR'),
+        ),
     });
   }
 
@@ -864,8 +885,8 @@ export class LabResultsComponent implements OnInit {
         this.comparison.set(cmp);
         this.comparisonLoading.set(false);
       },
-      error: () => {
-        this.toast.error(this.translate.instant('LAB_RESULTS.COMPARE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(refusalReason(err) ?? this.translate.instant('LAB_RESULTS.COMPARE_ERROR'));
         this.comparisonLoading.set(false);
       },
     });

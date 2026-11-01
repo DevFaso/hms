@@ -31,6 +31,7 @@ import { deliveryWarningKeys, hasActivationSent } from '../shared/delivery-warni
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { refusalReason } from '../shared/refusal-reason';
 
 type ModalKind = 'create' | 'multi' | 'edit' | 'detail' | 'regen' | 'import' | null;
 
@@ -461,14 +462,9 @@ export class AdminAssignmentsComponent implements OnInit {
     });
   }
 
-  /** A 409's own message when it has one, else the given fallback. */
+  /** The server's own refusal (e.g. the 409 on an activated account) when it has one, else the fallback. */
   private toastRefusal(err: HttpErrorResponse, fallbackKey: string): void {
-    const serverMessage: unknown = err.status === 409 ? err.error?.message : null;
-    this.toast.error(
-      typeof serverMessage === 'string' && serverMessage.trim()
-        ? serverMessage
-        : this.translate.instant(fallbackKey),
-    );
+    this.toast.error(refusalReason(err) ?? this.translate.instant(fallbackKey));
   }
 
   delete(row: AssignmentResponse): void {

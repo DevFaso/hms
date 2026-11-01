@@ -25,6 +25,7 @@ import { BrandMarkComponent } from '../shared/brand-mark/brand-mark.component';
 import { toE164 } from '../shared/phone-number';
 import { RoleLabelPipe } from '../shared/pipes/role-label.pipe';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 
 const SUPER_ADMIN_ROLE = 'ROLE_SUPER_ADMIN';
 
@@ -32,6 +33,7 @@ const SUPER_ADMIN_ROLE = 'ROLE_SUPER_ADMIN';
   selector: 'app-login',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     ModalDialogDirective,
     FormsModule,
     RouterModule,

@@ -175,6 +175,24 @@ describe('LabInstrumentsComponent', () => {
     expect(component.form.name).toBe('');
   });
 
+  // QA D1193 (round 22): an empty "Créer" posted and showed the server's raw
+  // "ne doit pas être vide" (instruments) or a generic toast (inventory).
+  it('QA D1193: an empty "Créer" sends nothing and names the missing fields', () => {
+    fixture.detectChanges();
+    flushInstruments();
+    component.openCreate();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    host.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
+    fixture.detectChanges();
+    httpMock.expectNone((r) => r.url.includes('/lab/instruments') && r.method === 'POST');
+    const reason = host.querySelector('[data-testid="submit-guard-reason"]')?.textContent ?? '';
+    expect(reason).toContain('COMMON.MISSING_REQUIRED_FIELDS');
+    host
+      .querySelectorAll('input[required]')
+      .forEach((f) => expect(f.getAttribute('aria-invalid')).toBe('true'));
+  });
+
   it('should save new instrument', () => {
     fixture.detectChanges();
     flushInstruments();

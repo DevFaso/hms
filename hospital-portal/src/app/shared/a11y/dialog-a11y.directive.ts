@@ -8,6 +8,9 @@ import {
   output,
 } from '@angular/core';
 
+import { TranslateService } from '@ngx-translate/core';
+
+import { EscapeKeepsTypedText } from './escape-keeps-typed-text';
 import { captureOpener, restoreFocus } from './focus-return';
 
 /**
@@ -50,6 +53,11 @@ export class DialogA11yDirective implements OnInit, OnDestroy {
 
   private readonly host = inject(ElementRef<HTMLElement>);
   private opener: HTMLElement | null = null;
+  /** QA D1131 class (round 22): Escape never throws typed text away unasked. */
+  private readonly typedText = new EscapeKeepsTypedText(
+    this.host.nativeElement as HTMLElement,
+    inject(TranslateService, { optional: true }),
+  );
 
   ngOnInit(): void {
     this.opener = captureOpener();
@@ -62,6 +70,7 @@ export class DialogA11yDirective implements OnInit, OnDestroy {
     const stack = DialogA11yDirective.stack;
     const at = stack.indexOf(this);
     if (at >= 0) stack.splice(at, 1);
+    this.typedText.destroy();
     restoreFocus(this.opener);
   }
 
@@ -107,6 +116,7 @@ export class DialogA11yDirective implements OnInit, OnDestroy {
   @HostListener('keydown', ['$event'])
   onKeydown(event: KeyboardEvent): void {
     if (!this.isTop()) return;
+    if (event.key === 'Escape' && this.typedText.intercept(event)) return;
     if (event.key === 'Escape') {
       event.preventDefault();
       event.stopPropagation();

@@ -19,6 +19,7 @@ import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { roleContextStub } from '../testing/role-context.stub';
 import { AuthService } from '../auth/auth.service';
+import { answerReasonDialog, reasonDialog } from '../shared/reason-dialog/reason-dialog.testing';
 
 function mockRequest(
   overrides: Partial<TransfusionRequestResponse> = {},
@@ -305,17 +306,31 @@ describe('TransfusionComponent', () => {
     expect(txSpy.recordReaction).not.toHaveBeenCalled();
   });
 
+  // QA D1201 (round 22): the shared reason dialog, not window.prompt.
   it('cancelling a request needs a reason from the operator', () => {
-    spyOn(window, 'prompt').and.returnValue('  ');
-    component.cancelRequest(mockRequest());
+    const fixture = TestBed.createComponent(TransfusionComponent);
+    fixture.componentInstance.cancelRequest(mockRequest());
+    expect(reasonDialog(fixture)).not.toBeNull();
+    answerReasonDialog(fixture, '  ');
     expect(txSpy.cancelRequest).not.toHaveBeenCalled();
   });
 
   it('cancels with the supplied reason', () => {
-    spyOn(window, 'prompt').and.returnValue('Patient stabilised');
     txSpy.cancelRequest.and.returnValue(of(mockRequest({ status: 'CANCELLED' })));
-    component.cancelRequest(mockRequest());
+    const fixture = TestBed.createComponent(TransfusionComponent);
+    fixture.componentInstance.cancelRequest(mockRequest());
+    answerReasonDialog(fixture, 'Patient stabilised');
     expect(txSpy.cancelRequest).toHaveBeenCalledWith('req-1', 'Patient stabilised');
+  });
+
+  it('discarding a unit asks the reason in the shared dialog', () => {
+    txSpy.discardUnit.and.returnValue(of(mockUnit()));
+    const fixture = TestBed.createComponent(TransfusionComponent);
+    fixture.componentInstance.discardUnit({ id: 'u-1' } as never);
+    answerReasonDialog(fixture, '');
+    expect(txSpy.discardUnit).not.toHaveBeenCalled();
+    answerReasonDialog(fixture, 'Poche percée');
+    expect(txSpy.discardUnit).toHaveBeenCalledWith('u-1', 'Poche percée');
   });
 
   it('maps statuses and urgency to display classes', () => {

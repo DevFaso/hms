@@ -1,6 +1,5 @@
 import { EnumLabelService } from '../../core/enum-label.service';
 import { currentLocale } from '../../shared/i18n/app-locale';
-import { CdkTrapFocus } from '@angular/cdk/a11y';
 import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -19,12 +18,14 @@ import { RoleContextService } from '../../core/role-context.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
+import { refusalReason } from '../../shared/refusal-reason';
 @Component({
   selector: 'app-lab-test-config',
   standalone: true,
   imports: [
     SubmitGuardDirective,
-    CdkTrapFocus,
+    ModalDialogDirective,
     CommonModule,
     FormsModule,
     TranslateModule,
@@ -241,14 +242,20 @@ export class LabTestConfigComponent implements OnInit {
   exportCsv(): void {
     this.labService.exportTestDefinitionsCsv().subscribe({
       next: (blob) => this.downloadBlob(blob, 'lab-test-definitions.csv'),
-      error: () => this.toast.error(this.translate.instant('LAB_TEST_CONFIG.EXPORT_ERROR')),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('LAB_TEST_CONFIG.EXPORT_ERROR'),
+        ),
     });
   }
 
   exportPdf(): void {
     this.labService.exportTestDefinitionsPdf().subscribe({
       next: (blob) => this.downloadBlob(blob, 'lab-test-definitions.pdf'),
-      error: () => this.toast.error(this.translate.instant('LAB_TEST_CONFIG.EXPORT_ERROR')),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('LAB_TEST_CONFIG.EXPORT_ERROR'),
+        ),
     });
   }
 
@@ -537,8 +544,10 @@ export class LabTestConfigComponent implements OnInit {
         this.cancelReflexEdit();
         this.loadReflexRules();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('LAB_TEST_CONFIG.REFLEX_SAVE_ERROR'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('LAB_TEST_CONFIG.REFLEX_SAVE_ERROR'),
+        );
         this.reflexSaving.set(false);
       },
     });
@@ -555,7 +564,10 @@ export class LabTestConfigComponent implements OnInit {
       })
       .subscribe({
         next: () => this.loadReflexRules(),
-        error: () => this.toast.error(this.translate.instant('LAB_TEST_CONFIG.REFLEX_SAVE_ERROR')),
+        error: (err: unknown) =>
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('LAB_TEST_CONFIG.REFLEX_SAVE_ERROR'),
+          ),
       });
   }
 

@@ -1103,7 +1103,7 @@
     "DEACTIVATE": "Deactivate",
     "DEACTIVATED": "Order set deactivated",
     "DEACTIVATE_FAILED": "Could not deactivate order set",
-    "DEACTIVATE_REASON_PROMPT": "Deactivation reason:",
+    "DEACTIVATE_REASON_PROMPT": "Why is this order set being deactivated?",
     "EDIT_TITLE": "Edit order set",
     "ERROR": "Could not load or apply order sets. Try again or place orders manually.",
     "FIELD_ADMISSION_TYPE": "Admission type",
@@ -2547,12 +2547,10 @@
     "CONSULTS_PENDING": "Consults Pending",
     "CONSULT_REQUESTS": "Consult Requests",
     "CRITICAL": "CRITICAL",
-    "CRITICAL_ALERT": "Critical Alert",
     "CRITICAL_LABS": "Critical Labs",
     "CRITICAL_RESULTS": "Critical Results",
     "CURRENT_MEDICATIONS": "Current Medications",
     "DAILY_COLLECTIONS_30D": "Daily Collections (30d)",
-    "DAYS_SHORT": "d",
     "DEPARTMENTS": "Departments",
     "DIRECTOR_APPROVAL_STATUS": "Director Approval Status",
     "DISCHARGED_TODAY": "Discharged Today",
@@ -2883,7 +2881,10 @@
     "AGING_1_30": "1–30 days",
     "AGING_31_60": "31–60 days",
     "AGING_61_90": "61–90 days",
-    "AGING_90_PLUS": "90+ days"
+    "AGING_90_PLUS": "90+ days",
+    "CRITICAL_ALERTS_ONE": "{{count}} critical alert",
+    "CRITICAL_ALERTS_MANY": "{{count}} critical alerts",
+    "DAYS_LEFT_SHORT": "{{days}} d"
   },
   "DELIVERY": {
     "ACTIVATION_EMAIL_QUEUED": "The activation e-mail (with each role's code) is queued for sending.",
@@ -4573,7 +4574,8 @@
       "REQUIRED": "Choose the witness of this controlled dose."
     },
     "PAIN_SCORE": "Pain (0-10)",
-    "MAR_REASON_LABEL": "Reason"
+    "MAR_REASON_LABEL": "Reason",
+    "CARE_NOTE_EMPTY": "Write the note: an empty care note is not saved."
   },
   "ONBOARDING": {
     "ABILITIES_TITLE": "Your Abilities",
@@ -5718,7 +5720,9 @@
         "TITLE": "{{name}}'s Health Data",
         "TITLE_FALLBACK": "Shared Health Data"
       },
-      "USER_NOT_FOUND": "No account has this username. Check the spelling with the person you want to give access to."
+      "USER_NOT_FOUND": "No account has this username. Check the spelling with the person you want to give access to.",
+      "REVOKE_CONFIRM_TITLE": "Revoke this access?",
+      "REVOKE_CONFIRM_MESSAGE": "This person will no longer see your record. You can grant access again later."
     },
     "MEDICAL_HISTORY": {
       "TITLE": "Medical and Family History",
@@ -7727,7 +7731,6 @@
     "MARK_VERIFIED": "Mark Verified",
     "MEDICATIONS": "Medications",
     "METHOD": "Method",
-    "MIN_WAIT": "Min Wait",
     "MISSING_INSURANCE_LABEL": "Missing Insurance",
     "MRN": "MRN",
     "NORMAL": "Normal",
@@ -7865,7 +7868,8 @@
     "RECALL_CANCEL_CONFIRM": "Cancel the recall",
     "CLOSE_ENTRY_TITLE": "Close this waitlist entry?",
     "CLOSE_ENTRY_REASON": "Why is the entry closed",
-    "CLOSE_ENTRY_CONFIRM": "Close the entry"
+    "CLOSE_ENTRY_CONFIRM": "Close the entry",
+    "WAIT_DURATION": "{{minutes}} min wait"
   },
   "REFERRALS": {
     "ACCEPTED": "Accepted",
@@ -9668,7 +9672,8 @@
       "HINT": "A serious interaction stops this fill: give the reason to dispense anyway. It is recorded with the dispense."
     },
     "ALERT_OVERRIDDEN": "Alert overridden by the prescriber: see the reason on the prescription",
-    "LOTS_OTHER_FORM": "{{count}} lot(s) of this drug in another form are not offered: the order is written in \"{{unit}}\"."
+    "LOTS_OTHER_FORM": "{{count}} lot(s) of this drug in another form are not offered: the order is written in \"{{unit}}\".",
+    "SAVE_PRICE": "Save the price"
   },
   "LAB_QC": {
     "TITLE": "Quality Control Dashboard",
@@ -11178,7 +11183,8 @@
     "LAST_REVIEWED": "reviewed",
     "TYPE_CHOOSE": "Choose the type…",
     "STATUS_CHOOSE": "Choose the status…",
-    "REQUIRED_FIELDS": "This field is required for a directive."
+    "REQUIRED_FIELDS": "This field is required for a directive.",
+    "REVOKE_REASON": "Reason for revoking"
   },
   "GROWTH": {
     "TAB": "Growth",
@@ -11708,7 +11714,8 @@
     "REACTION_RECORDED": "Reaction recorded and transfusion stopped",
     "REACTION_ERROR": "The reaction could not be recorded",
     "PLATELET_O_TO_B": "Pending confirmation",
-    "PLATELET_O_TO_B_DETAIL": "Group O platelets to a group B recipient. Permitted by this facility's protocol — this transfusion is not blocked or in question. The protocol excludes O platelets for A and AB recipients but not for B, and whether that difference is intended has not yet been confirmed with haematology. Raise it at the next review."
+    "PLATELET_O_TO_B_DETAIL": "Group O platelets to a group B recipient. Permitted by this facility's protocol — this transfusion is not blocked or in question. The protocol excludes O platelets for A and AB recipients but not for B, and whether that difference is intended has not yet been confirmed with haematology. Raise it at the next review.",
+    "CANCEL_REQUEST_CONFIRM": "Cancel the request"
   },
   "MORTALITY": {
     "TITLE": "Mortality register",

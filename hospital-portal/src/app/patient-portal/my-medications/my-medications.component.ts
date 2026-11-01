@@ -20,6 +20,7 @@ import { currentMedications } from '../current-medications';
 import { ToastService } from '../../core/toast.service';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { PrintLabelService } from '../../services/print-label.service';
+import { refusalReason } from '../../shared/refusal-reason';
 
 @Component({
   selector: 'app-my-medications',
@@ -66,8 +67,10 @@ export class MyMedicationsComponent implements OnInit {
     event?.stopPropagation();
     this.portal.getMyPrintedPrescription(rxId).subscribe({
       next: (blob) => this.printLabel.openForPrint(blob),
-      error: () =>
-        this.toast.error(this.translate.instant('PORTAL.MEDICATIONS.PRINTED_COPY_FAILED')),
+      error: (err: unknown) =>
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PORTAL.MEDICATIONS.PRINTED_COPY_FAILED'),
+        ),
     });
   }
 

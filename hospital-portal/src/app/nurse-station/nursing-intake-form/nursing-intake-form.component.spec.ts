@@ -56,6 +56,29 @@ describe('NursingIntakeFormComponent', () => {
     fixture.detectChanges();
   });
 
+  it('QA D1203: every allergy and medication control stays inside the dialog', () => {
+    const host = fixture.nativeElement as HTMLElement;
+    document.body.appendChild(host);
+    try {
+      component.addAllergy();
+      component.addMedication();
+      fixture.detectChanges();
+      const dialog = host.querySelector<HTMLElement>('.intake-dialog')!;
+      const right = dialog.getBoundingClientRect().right;
+      const controls = host.querySelectorAll<HTMLElement>(
+        '.allergy-row input, .allergy-row select, .allergy-row button, .medication-row input, .medication-row button, .medication-row label',
+      );
+      expect(controls.length).toBeGreaterThan(8);
+      controls.forEach((c) =>
+        expect(c.getBoundingClientRect().right)
+          .withContext(c.outerHTML.slice(0, 80))
+          .toBeLessThanOrEqual(right + 0.5),
+      );
+    } finally {
+      host.remove();
+    }
+  });
+
   it('should create', () => {
     expect(component).toBeTruthy();
   });

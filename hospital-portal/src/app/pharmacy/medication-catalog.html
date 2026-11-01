@@ -57,13 +57,15 @@
                   }}</span>
                 }
                 @if (item.controlled) {
-                  <span class="badge badge-controlled">{{
+                  {{ ' '
+                  }}<span class="badge badge-controlled">{{
                     'PHARMACY.BADGE_CONTROLLED' | translate
                   }}</span>
                 }
                 @if (hasPediatricLimits(item)) {
                   <!-- Round 18 (QA D935): who may rely on the limits, at a glance. -->
-                  <span
+                  {{ ' '
+                  }}<span
                     class="badge"
                     [class.badge-pending]="item.pediatricDoseStatus !== 'APPROVED'"
                     [class.badge-essential]="item.pediatricDoseStatus === 'APPROVED'"
@@ -386,7 +388,13 @@
             <button type="button" class="btn-secondary" (click)="closeModal()">
               {{ 'COMMON.CANCEL' | translate }}
             </button>
-            <button type="submit" class="btn-primary" [disabled]="saving()">
+            <button
+              appSubmitGuard
+              submitGuardRequired
+              type="submit"
+              class="btn-primary"
+              [disabled]="saving()"
+            >
               {{
                 saving()
                   ? editing()

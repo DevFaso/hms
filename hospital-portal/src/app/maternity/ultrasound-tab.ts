@@ -68,11 +68,27 @@ const FINDING_FIELDS: readonly (keyof UltrasoundReportRequest)[] = [
   'anatomyFindings',
 ];
 
-/** Whether the report records at least one finding (QA D1150). */
+/**
+ * QA D1182 (round 22): values the stored report carries by DEFAULT, never
+ * entered by anyone — the server saves cardiac activity, movement and tone as
+ * "yes" and one fetus on every report. Echoed back by the edit form, they
+ * passed the "at least one finding" check and a blank report was saved as
+ * "Normal". The form has no control for the three flags, so it never sends
+ * them; one fetus is not a finding on its own (twins are).
+ */
+export const UNSHOWN_DEFAULT_FLAGS = [
+  'fetalCardiacActivity',
+  'fetalMovementObserved',
+  'fetalToneNormal',
+] as const;
+
+/** Whether the report records at least one finding (QA D1150, D1182). */
 export function hasUltrasoundFinding(
   form: UltrasoundReportForm | Partial<UltrasoundReportRequest>,
 ): boolean {
-  return hasClinicalContent(form, FINDING_FIELDS);
+  const fields = FINDING_FIELDS.filter((f) => f !== 'numberOfFetuses');
+  const fetuses = form.numberOfFetuses;
+  return hasClinicalContent(form, fields) || (typeof fetuses === 'number' && fetuses > 1);
 }
 
 @Component({
@@ -546,8 +562,12 @@ export class UltrasoundTabComponent implements OnInit {
       return;
     }
     refuseFields(this.host.nativeElement, [], REPORT_FIELD_IDS, '');
+    // QA D1182: the flags the form shows no control for are never sent (the
+    // stored "yes" defaults counted as findings on the server).
+    const request = { ...form } as Partial<UltrasoundReportRequest>;
+    for (const flag of UNSHOWN_DEFAULT_FLAGS) delete request[flag];
     this.reportSaving.set(true);
-    this.ultrasoundService.submitReport(order.id, form as UltrasoundReportRequest).subscribe({
+    this.ultrasoundService.submitReport(order.id, request as UltrasoundReportRequest).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('ULTRASOUND.REPORT_SAVED'));
         this.reportSaving.set(false);

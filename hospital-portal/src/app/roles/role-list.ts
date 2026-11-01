@@ -22,6 +22,7 @@ import { bareRole } from '../core/role-token';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { refusalReason } from '../shared/refusal-reason';
 @Component({
   selector: 'app-role-list',
   standalone: true,
@@ -258,8 +259,10 @@ export class RoleListComponent implements OnInit {
           this.saving.set(false);
           this.loadRoles();
         },
-        error: () => {
-          this.toast.error(this.translate.instant('ROLES.TOAST.PERMS_UPDATE_FAILED'));
+        error: (err: unknown) => {
+          this.toast.error(
+            refusalReason(err) ?? this.translate.instant('ROLES.TOAST.PERMS_UPDATE_FAILED'),
+          );
           this.saving.set(false);
         },
       });

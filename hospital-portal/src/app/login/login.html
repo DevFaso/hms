@@ -229,7 +229,13 @@
           </div>
         </div>
 
-        <button type="submit" class="btn-login btn-bootstrap" [disabled]="bootstrapLoading">
+        <button
+          appSubmitGuard
+          submitGuardRequired
+          type="submit"
+          class="btn-login btn-bootstrap"
+          [disabled]="bootstrapLoading"
+        >
           @if (bootstrapLoading) {
             <span class="spinner"></span>
             <span>{{ 'LOGIN.CREATING_ACCOUNT' | translate }}</span>
@@ -265,7 +271,8 @@
               }}</span>
               <span class="role-card-label">{{ role | roleLabel }}</span>
               @if (isRecommendedRole(role)) {
-                <span class="role-card-badge">{{ 'LOGIN.ROLE_RECOMMENDED' | translate }}</span>
+                {{ ' '
+                }}<span class="role-card-badge">{{ 'LOGIN.ROLE_RECOMMENDED' | translate }}</span>
               }
             </button>
           }
@@ -521,7 +528,13 @@
               />
             </div>
           </div>
-          <button type="submit" class="btn-login" [disabled]="forgotPasswordLoading">
+          <button
+            appSubmitGuard
+            submitGuardRequired
+            type="submit"
+            class="btn-login"
+            [disabled]="forgotPasswordLoading"
+          >
             @if (forgotPasswordLoading) {
               <span class="spinner"></span>
               <span>{{ 'LOGIN.SENDING' | translate }}</span>
@@ -697,7 +710,13 @@
               />
             </div>
           </div>
-          <button type="submit" class="btn-login" [disabled]="resendActivationLoading">
+          <button
+            appSubmitGuard
+            submitGuardRequired
+            type="submit"
+            class="btn-login"
+            [disabled]="resendActivationLoading"
+          >
             @if (resendActivationLoading) {
               <span class="spinner"></span>
               <span>{{ 'LOGIN.SENDING' | translate }}</span>

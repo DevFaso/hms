@@ -60,6 +60,7 @@ import { MfaService } from '../auth/mfa.service';
 import { refuseFields } from '../shared/forms/invalid-fields';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { refusalReason } from '../shared/refusal-reason';
 /**
  * The prescriber's list tabs (gap G10).
  *
@@ -871,8 +872,10 @@ export class PrescriptionsComponent implements OnInit {
         this.deleting.set(false);
         this.load();
       },
-      error: () => {
-        this.toast.error(this.translate.instant('PRESCRIPTIONS.TOAST.DELETE_FAILED'));
+      error: (err: unknown) => {
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PRESCRIPTIONS.TOAST.DELETE_FAILED'),
+        );
         this.deleting.set(false);
       },
     });

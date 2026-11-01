@@ -227,6 +227,29 @@ describe('RecallsPanelComponent', () => {
     }
   }));
 
+  it('QA D1199: "Fermer" leaves the keyboard on the list filter, never the page body', fakeAsync(() => {
+    mockReceptionService.getRecalls.and.returnValue(of([recall({ id: 'r1', status: 'PENDING' })]));
+    component.loadRecalls();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    document.body.appendChild(host);
+    try {
+      const close = Array.from(host.querySelectorAll<HTMLButtonElement>('td button')).find((b) =>
+        b.textContent?.includes('COMMON.CLOSE'),
+      )!;
+      close.focus();
+      mockReceptionService.getRecalls.and.returnValue(of([]));
+      close.click();
+      fixture.detectChanges();
+      tick();
+      expect(mockReceptionService.closeRecall).toHaveBeenCalledWith('r1');
+      expect(document.activeElement).not.toBe(document.body);
+      expect(document.activeElement).toBe(host.querySelector('.filter-btn.active'));
+    } finally {
+      host.remove();
+    }
+  }));
+
   it('guards against double submission while a call is in flight', () => {
     component.actingOnId.set('other');
     component.closeRecall(recall());

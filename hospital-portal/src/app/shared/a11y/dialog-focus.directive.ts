@@ -9,6 +9,9 @@ import {
   inject,
 } from '@angular/core';
 
+import { TranslateService } from '@ngx-translate/core';
+
+import { EscapeKeepsTypedText } from './escape-keeps-typed-text';
 import { captureOpener, restoreFocus } from './focus-return';
 
 /**
@@ -33,6 +36,11 @@ export class DialogFocusDirective implements AfterViewInit, OnDestroy {
 
   private readonly host = inject(ElementRef<HTMLElement>);
   private previouslyFocused: HTMLElement | null = null;
+  /** QA D1131 class (round 22): Escape never throws typed text away unasked. */
+  private readonly typedText = new EscapeKeepsTypedText(
+    this.host.nativeElement as HTMLElement,
+    inject(TranslateService, { optional: true }),
+  );
 
   private static readonly FOCUSABLE = [
     'a[href]',
@@ -58,6 +66,7 @@ export class DialogFocusDirective implements AfterViewInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.typedText.destroy();
     restoreFocus(this.previouslyFocused);
   }
 

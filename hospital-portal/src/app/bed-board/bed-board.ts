@@ -37,6 +37,7 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { MeasurePipe } from '../shared/pipes/measure.pipe';
+import { ReasonDialogComponent } from '../shared/reason-dialog/reason-dialog.component';
 
 /**
  * The ward board (Tier 2 items 30, 31 and 32).
@@ -57,6 +58,7 @@ import { MeasurePipe } from '../shared/pipes/measure.pipe';
   selector: 'app-bed-board',
   standalone: true,
   imports: [
+    ReasonDialogComponent,
     SubmitGuardDirective,
     MeasurePipe,
     ServerTimePipe,
@@ -365,24 +367,34 @@ export class BedBoardComponent implements OnInit {
       });
   }
 
+  /** QA D1201: the precaution being lifted; the shared reason dialog asks why. */
+  discontinuing = signal<IsolationPrecautionResponse | null>(null);
+  discontinueBusy = signal(false);
+
   discontinue(precaution: IsolationPrecautionResponse): void {
-    const reason = window.prompt(this.translate.instant('BED_BOARD.DISCONTINUE_PROMPT'));
-    if (!reason || !reason.trim()) {
-      return;
-    }
+    this.discontinuing.set(precaution);
+  }
+
+  confirmDiscontinue(precaution: IsolationPrecautionResponse, reason: string): void {
+    if (this.discontinueBusy()) return;
+    this.discontinueBusy.set(true);
     this.isolation
-      .discontinuePrecaution(precaution.id, { discontinuationReason: reason.trim() })
+      .discontinuePrecaution(precaution.id, { discontinuationReason: reason })
       .subscribe({
         next: () => {
           this.toast.success(this.translate.instant('BED_BOARD.PRECAUTION_LIFTED'));
+          this.discontinueBusy.set(false);
+          this.discontinuing.set(null);
           const target = this.precautionTarget();
           if (target) {
             this.openPrecautions(target);
           }
           this.loadBoard();
         },
-        error: (err: HttpErrorResponse) =>
-          this.toast.error(this.serverReason(err, 'BED_BOARD.DISCONTINUE_ERROR')),
+        error: (err: HttpErrorResponse) => {
+          this.discontinueBusy.set(false);
+          this.toast.error(this.serverReason(err, 'BED_BOARD.DISCONTINUE_ERROR'));
+        },
       });
   }
 
@@ -488,18 +500,28 @@ export class BedBoardComponent implements OnInit {
     });
   }
 
+  /** QA D1201: the pending transfer being cancelled; the shared reason dialog asks why. */
+  cancellingTransfer = signal<TransferOrderResponse | null>(null);
+  cancelTransferBusy = signal(false);
+
   cancelTransfer(order: TransferOrderResponse): void {
-    const reason = window.prompt(this.translate.instant('BED_BOARD.TRANSFER_CANCEL_PROMPT'));
-    if (!reason || !reason.trim()) {
-      return;
-    }
-    this.transfers.cancelTransfer(order.id, { cancellationReason: reason.trim() }).subscribe({
+    this.cancellingTransfer.set(order);
+  }
+
+  confirmCancelTransfer(order: TransferOrderResponse, reason: string): void {
+    if (this.cancelTransferBusy()) return;
+    this.cancelTransferBusy.set(true);
+    this.transfers.cancelTransfer(order.id, { cancellationReason: reason }).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('BED_BOARD.TRANSFER_CANCELLED'));
+        this.cancelTransferBusy.set(false);
+        this.cancellingTransfer.set(null);
         this.refreshAll();
       },
-      error: (err: HttpErrorResponse) =>
-        this.toast.error(this.serverReason(err, 'BED_BOARD.TRANSFER_CANCEL_ERROR')),
+      error: (err: HttpErrorResponse) => {
+        this.cancelTransferBusy.set(false);
+        this.toast.error(this.serverReason(err, 'BED_BOARD.TRANSFER_CANCEL_ERROR'));
+      },
     });
   }
 

@@ -162,15 +162,20 @@ test('QA D1030: an inner (keydown.escape)="$event.stopPropagation()" swallows th
   assert.deepEqual(rules(swallowed, swallowed), ['escape']);
 });
 
-test('QA D1030: a hand-built dialog must manage focus (shared directive, CDK trap or dialog service)', () => {
+test('QA D1030: a hand-built dialog must manage focus (shared directive or dialog service)', () => {
   const bare = `<div class="modal" role="dialog" aria-modal="true" aria-label="x" (keydown.escape)="c()"></div>`;
   assert.deepEqual(
     scan(bare, bare).map((f) => f.rule),
     ['focus'],
   );
-  // QA D1154 (round 21): the trap needs a control to capture; an empty one is the outbox shape.
+  // QA D1208 (round 22): a bare CDK trap no longer counts — it keeps no typed
+  // text on Escape (the lab's specimen reject reason was lost); the shared
+  // directives do (escape-keeps-typed-text.ts).
   const trapped = `<div class="modal" role="dialog" aria-modal="true" aria-label="x" cdkTrapFocus (keydown.escape)="c()"><button>OK</button></div>`;
-  assert.deepEqual(scan(trapped, trapped), []);
+  assert.deepEqual(
+    scan(trapped, trapped).map((f) => f.rule),
+    ['focus'],
+  );
   const directive = `<div class="modal" appModalDialog aria-label="x" (escaped)="c()"></div>`;
   assert.deepEqual(scan(directive, directive), []);
   const service = `import { MatDialog } from '@angular/material/dialog';`;
@@ -433,13 +438,14 @@ test('QA D1154 (round 21): a cdkTrapFocus dialog whose every control is behind a
   </div>`;
   const focus = (html) => scan(html, html).filter((f) => f.rule === 'focus');
   assert.equal(focus(loading).length, 1);
-  assert.match(focus(loading)[0].message, /captures nothing/);
-  // A close button present from the first frame is captured.
+  // QA D1208 (round 22): any bare cdkTrapFocus dialog fails now, with a
+  // control from the first frame or not (it keeps no typed text on Escape).
   const header = loading.replace(
     'tabindex="-1">\n      @if',
     'tabindex="-1">\n      <button class="x" (click)="closeDetail()">x</button>\n      @if',
   );
-  assert.deepEqual(focus(header), []);
+  assert.equal(focus(header).length, 1);
+  assert.match(focus(header)[0].message, /no focus management/);
   // The shared directive focuses the dialog itself when it has nothing to focus.
   const directive = `<div class="form-card" appModalDialog aria-labelledby="t" (escaped)="closeDetail()">
       <h2 id="t">Message</h2>
