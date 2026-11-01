@@ -1,7 +1,6 @@
 import { refusalReason } from '../../shared/refusal-reason';
 import { LabCorrectionBadgeComponent } from '../shared/lab-correction-badge.component';
 import { textMatches } from '../../shared/person-search';
-import { CdkTrapFocus } from '@angular/cdk/a11y';
 import {
   Component,
   inject,
@@ -45,6 +44,7 @@ import { LabValuePipe, formatLabNumber } from '../shared/lab-value.pipe';
 import { MeasurePipe } from '../../shared/pipes/measure.pipe';
 
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 /**
  * D49: the order code the API sends is the order's UUID. Readers get its first
  * eight characters, enough to tell two orders apart on one screen.
@@ -75,7 +75,7 @@ const ORDER_STATUSES_WITHOUT_NEW_RESULT: ReadonlySet<string> = new Set([
     SubmitGuardDirective,
     MeasurePipe,
     LabCorrectionBadgeComponent,
-    CdkTrapFocus,
+    ModalDialogDirective,
     LabValuePipe,
     ServerTimePipe,
     CommonModule,

@@ -1,6 +1,5 @@
 import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
 import { textMatches } from '../shared/person-search';
-import { CdkTrapFocus } from '@angular/cdk/a11y';
 import {
   Component,
   computed,
@@ -45,13 +44,14 @@ import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
 import { ActivatedRoute } from '@angular/router';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 @Component({
   selector: 'app-lab',
   standalone: true,
   imports: [
     SubmitGuardDirective,
     PersonNamePipe,
-    CdkTrapFocus,
+    ModalDialogDirective,
     PatientSublinePipe,
     ServerTimePipe,
     CommonModule,

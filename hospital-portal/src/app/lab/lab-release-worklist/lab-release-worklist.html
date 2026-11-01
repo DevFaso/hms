@@ -218,8 +218,7 @@
         class="form-card"
         role="dialog"
         aria-modal="true"
-        cdkTrapFocus
-        [cdkTrapFocusAutoCapture]="true"
+        appModalDialog
         (keydown.escape)="cancelRelease(); $event.stopPropagation()"
         [attr.aria-label]="'LAB_RELEASE.CONFIRM_TITLE' | translate"
         (click)="$event.stopPropagation()"

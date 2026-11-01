@@ -3,8 +3,6 @@ import {
   Component,
   computed,
   ElementRef,
-  Injector,
-  afterNextRender,
   inject,
   OnInit,
   signal,
@@ -47,6 +45,8 @@ import { refuseFields } from '../shared/forms/invalid-fields';
 import { emailAddresses, invalidEmailAddresses } from '../shared/forms/email-address';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive';
+import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.component';
 type BillingTab = 'all' | 'outstanding' | 'paid' | 'overdue';
 
 /** The cancellation reason's field (QA D1069), marked when it is refused (QA D1072). */
@@ -61,6 +61,8 @@ const EMAIL_FIELD_IDS = [EMAIL_TO_ID, EMAIL_CC_ID];
   standalone: true,
   imports: [
     SubmitGuardDirective,
+    InlineSubFormDirective,
+    InlineDiscardAskComponent,
     ServerTimePipe,
     PersonNamePipe,
     CommonModule,
@@ -82,7 +84,6 @@ export class BillingComponent implements OnInit {
   private readonly roleContext = inject(RoleContextService);
   private readonly translate = inject(TranslateService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
-  private readonly injector = inject(Injector);
 
   // Permission-gated action flags
   /** QA D1059: the cashier's daily cash closing, opened from the page header. */
@@ -828,36 +829,13 @@ ${this.translate.instant('BILLING.SUPPLEMENTARY_CONFIRM')}`)
     this.editingLineId.set(item.id);
     this.editLineQuantity.set(item.quantity ?? 1);
     this.editLineUnitPrice.set(Number(item.unitPrice) > 0 ? Number(item.unitPrice) : null);
-    // QA D1155 class (an inline sub-form inside a dialog): focus moves into the line editor.
-    afterNextRender(() => this.lineField('line-edit-qty')?.focus(), { injector: this.injector });
+    // QA D1195 / D1155: the editing row is an appInlineSubForm — it takes the
+    // keyboard, keeps Escape to itself (asking first over a changed value) and
+    // gives the keyboard back to the line's pencil when it closes.
   }
 
   cancelEditLine(): void {
-    const id = this.editingLineId();
     this.editingLineId.set(null);
-    // Focus back on the line's edit button, not to the page (the editor is gone).
-    if (id !== null) {
-      afterNextRender(() => this.lineField(`line-edit-${id}`, true)?.focus(), {
-        injector: this.injector,
-      });
-    }
-  }
-
-  /**
-   * QA D1155 class: Escape inside the line editor closes only the editor; the
-   * invoice dialog around it stays open (its own Escape would discard it).
-   */
-  onLineEditEscape(event: Event): void {
-    event.stopPropagation();
-    event.preventDefault();
-    this.cancelEditLine();
-  }
-
-  private lineField(key: string, byTestId = false): HTMLElement | null {
-    const root = this.host.nativeElement;
-    return byTestId
-      ? root.querySelector<HTMLElement>(`[data-testid="${CSS.escape(key)}"]`)
-      : root.querySelector<HTMLElement>(`#${CSS.escape(key)}`);
   }
 
   canSaveLine(): boolean {

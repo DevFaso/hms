@@ -1,5 +1,4 @@
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
-import { CdkTrapFocus } from '@angular/cdk/a11y';
 import {
   Component,
   computed,
@@ -27,6 +26,7 @@ import { currentLocale, formatDecimal } from '../../shared/i18n/app-locale';
 import { serverInstant, localDateString } from '../../shared/date-utils';
 
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 interface QcPoint {
   x: number;
   y: number;
@@ -64,7 +64,7 @@ interface QcChartGroup {
   standalone: true,
   imports: [
     SubmitGuardDirective,
-    CdkTrapFocus,
+    ModalDialogDirective,
     ServerTimePipe,
     CommonModule,
     FormsModule,

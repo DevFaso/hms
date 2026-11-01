@@ -76,3 +76,14 @@
     </table>
   }
 </section>
+
+<!-- QA D1201 (round 22): the reason is asked in the shared dialog, never a browser prompt. -->
+@if (rejecting(); as c) {
+  <app-reason-dialog
+    titleKey="PHARMACY.CLAIM_REJECT_REASON_PROMPT"
+    confirmKey="PHARMACY_CLAIMS.REJECT"
+    [busy]="rejectBusy()"
+    (confirmed)="confirmReject(c, $event)"
+    (cancelled)="rejecting.set(null)"
+  />
+}

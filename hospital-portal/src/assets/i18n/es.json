@@ -1103,7 +1103,7 @@
     "DEACTIVATE": "Desactivar",
     "DEACTIVATED": "Conjunto de órdenes desactivado",
     "DEACTIVATE_FAILED": "No se pudo desactivar el conjunto de órdenes",
-    "DEACTIVATE_REASON_PROMPT": "Motivo de la desactivación:",
+    "DEACTIVATE_REASON_PROMPT": "¿Por qué se desactiva este conjunto de órdenes?",
     "EDIT_TITLE": "Editar conjunto",
     "ERROR": "No se pudieron cargar o aplicar los conjuntos. Vuelva a intentarlo o introduzca las órdenes manualmente.",
     "FIELD_ADMISSION_TYPE": "Tipo de ingreso",
@@ -9667,7 +9667,8 @@
       "HINT": "Una interacción grave detiene esta dispensación: indique el motivo para dispensar de todos modos. Se registra con la dispensación."
     },
     "ALERT_OVERRIDDEN": "Alerta anulada por el prescriptor: vea el motivo en la receta",
-    "LOTS_OTHER_FORM": "{{count}} lote(s) de este medicamento en otra forma no se ofrecen: la orden está escrita en «{{unit}}»."
+    "LOTS_OTHER_FORM": "{{count}} lote(s) de este medicamento en otra forma no se ofrecen: la orden está escrita en «{{unit}}».",
+    "SAVE_PRICE": "Guardar el precio"
   },
   "LAB_QC": {
     "TITLE": "Panel de control de calidad",
@@ -11708,7 +11709,8 @@
     "REACTION_RECORDED": "Reacción registrada y transfusión detenida",
     "REACTION_ERROR": "No se pudo registrar la reacción",
     "PLATELET_O_TO_B": "Pendiente de confirmación",
-    "PLATELET_O_TO_B_DETAIL": "Plaquetas de grupo O para un receptor de grupo B. Permitido por el protocolo de este centro: esta transfusión no está bloqueada ni cuestionada. El protocolo excluye las plaquetas O para receptores A y AB pero no para receptores B, y aún no se ha confirmado con hematología si esa diferencia es intencionada. Plantéelo en la próxima revisión."
+    "PLATELET_O_TO_B_DETAIL": "Plaquetas de grupo O para un receptor de grupo B. Permitido por el protocolo de este centro: esta transfusión no está bloqueada ni cuestionada. El protocolo excluye las plaquetas O para receptores A y AB pero no para receptores B, y aún no se ha confirmado con hematología si esa diferencia es intencionada. Plantéelo en la próxima revisión.",
+    "CANCEL_REQUEST_CONFIRM": "Cancelar la solicitud"
   },
   "MORTALITY": {
     "TITLE": "Registro de mortalidad",

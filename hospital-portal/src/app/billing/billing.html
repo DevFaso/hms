@@ -445,15 +445,24 @@
                 </thead>
                 <tbody>
                   @for (it of items(); track it.id) {
-                    <tr>
-                      <td>
-                        {{ it.itemDescription }}
-                        <div class="cell-secondary">
-                          {{ it.itemCategory | enumLabel: 'invoiceItemCategory' }}
-                        </div>
-                      </td>
-                      @if (editingLineId() === it.id) {
-                        <!-- QA D1088: the line is priced in place; it keeps its id, owner and service -->
+                    @if (editingLineId() === it.id) {
+                      <!-- QA D1088: the line is priced in place; it keeps its id, owner and service.
+                           QA D1195 / D1155 (round 22): the editing row is an inline sub-form:
+                           Escape closes only it, asks first over a changed value, and the
+                           keyboard goes back to the line's pencil. -->
+                      <tr
+                        appInlineSubForm
+                        #lineForm="inlineSubForm"
+                        (dismissed)="cancelEditLine()"
+                        [inlineSubFormReturn]="'[data-testid=&quot;line-edit-' + it.id + '&quot;]'"
+                        [attr.data-testid]="'line-editor-' + it.id"
+                      >
+                        <td>
+                          {{ it.itemDescription }}
+                          <div class="cell-secondary">
+                            {{ it.itemCategory | enumLabel: 'invoiceItemCategory' }}
+                          </div>
+                        </td>
                         <td>
                           <input
                             type="number"
@@ -465,7 +474,6 @@
                             [attr.data-testid]="'line-qty-' + it.id"
                             [ngModel]="editLineQuantity()"
                             (ngModelChange)="editLineQuantity.set($event)"
-                            (keydown.escape)="onLineEditEscape($event)"
                           />
                         </td>
                         <td class="amount">
@@ -480,7 +488,6 @@
                             [ngModel]="editLineUnitPrice()"
                             (ngModelChange)="editLineUnitPrice.set($event)"
                             (keydown.enter)="saveLine(it)"
-                            (keydown.escape)="onLineEditEscape($event)"
                           />
                         </td>
                         <td class="amount">
@@ -488,36 +495,38 @@
                             formatCurrency((editLineQuantity() ?? 0) * (editLineUnitPrice() ?? 0))
                           }}
                         </td>
-                      } @else {
+                        <td class="line-actions">
+                          <button
+                            type="button"
+                            class="btn-primary btn-sm"
+                            [disabled]="itemSaving()"
+                            [attr.data-testid]="'line-save-' + it.id"
+                            (click)="saveLine(it)"
+                          >
+                            {{ 'COMMON.SAVE' | translate }}
+                          </button>
+                          <button type="button" class="btn-secondary btn-sm" (click)="cancelEditLine()">
+                            {{ 'COMMON.CANCEL' | translate }}
+                          </button>
+                          <app-inline-discard-ask [form]="lineForm" />
+                        </td>
+                      </tr>
+                    } @else {
+                      <tr>
+                        <td>
+                          {{ it.itemDescription }}
+                          <div class="cell-secondary">
+                            {{ it.itemCategory | enumLabel: 'invoiceItemCategory' }}
+                          </div>
+                        </td>
                         <td>{{ it.quantity }}</td>
                         <td class="amount" [class.unpriced]="!(it.unitPrice > 0)">
                           {{ formatCurrency(it.unitPrice) }}
                         </td>
                         <td class="amount">{{ formatCurrency(it.totalPrice) }}</td>
-                      }
-                      @if (canDelete || canEditLines(inv)) {
-                        <td class="line-actions">
-                          @if (canEditLines(inv)) {
-                            @if (editingLineId() === it.id) {
-                              <button
-                                type="button"
-                                class="btn-primary btn-sm"
-                                [disabled]="itemSaving()"
-                                [attr.data-testid]="'line-save-' + it.id"
-                                (click)="saveLine(it)"
-                                (keydown.escape)="onLineEditEscape($event)"
-                              >
-                                {{ 'COMMON.SAVE' | translate }}
-                              </button>
-                              <button
-                                type="button"
-                                class="btn-secondary btn-sm"
-                                (click)="cancelEditLine()"
-                                (keydown.escape)="onLineEditEscape($event)"
-                              >
-                                {{ 'COMMON.CANCEL' | translate }}
-                              </button>
-                            } @else {
+                        @if (canDelete || canEditLines(inv)) {
+                          <td class="line-actions">
+                            @if (canEditLines(inv)) {
                               <button
                                 type="button"
                                 class="btn-secondary btn-sm"
@@ -542,10 +551,10 @@
                                 <span class="material-symbols-outlined">delete</span>
                               </button>
                             }
-                          }
-                        </td>
-                      }
-                    </tr>
+                          </td>
+                        }
+                      </tr>
+                    }
                   }
                 </tbody>
               </table>

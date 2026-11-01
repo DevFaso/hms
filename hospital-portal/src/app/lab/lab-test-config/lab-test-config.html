@@ -217,8 +217,7 @@
         role="dialog"
         aria-modal="true"
         [attr.aria-labelledby]="'rangeEditorTitle'"
-        cdkTrapFocus
-        [cdkTrapFocusAutoCapture]="true"
+        appModalDialog
         (keydown.escape)="closeRangeEditor(); $event.stopPropagation()"
         (click)="$event.stopPropagation()"
       >
@@ -406,8 +405,7 @@
         role="dialog"
         aria-modal="true"
         aria-labelledby="lab-test-config-dialog-title-1"
-        cdkTrapFocus
-        [cdkTrapFocusAutoCapture]="true"
+        appModalDialog
         (keydown.escape)="closeDefModal(); $event.stopPropagation()"
         tabindex="-1"
         (click)="$event.stopPropagation()"
@@ -599,8 +597,7 @@
         role="dialog"
         aria-modal="true"
         aria-labelledby="lab-test-config-dialog-title-2"
-        cdkTrapFocus
-        [cdkTrapFocusAutoCapture]="true"
+        appModalDialog
         (keydown.escape)="cancelDeleteDef(); $event.stopPropagation()"
         tabindex="-1"
         (click)="$event.stopPropagation()"
@@ -657,8 +654,7 @@
         role="dialog"
         aria-modal="true"
         aria-labelledby="lab-test-config-dialog-title-3"
-        cdkTrapFocus
-        [cdkTrapFocusAutoCapture]="true"
+        appModalDialog
         (keydown.escape)="closeReflexRules(); $event.stopPropagation()"
         tabindex="-1"
         (click)="$event.stopPropagation()"

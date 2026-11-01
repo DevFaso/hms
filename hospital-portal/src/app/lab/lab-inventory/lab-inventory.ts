@@ -1,5 +1,4 @@
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
-import { CdkTrapFocus } from '@angular/cdk/a11y';
 import { DatePipe } from '@angular/common';
 import { LabValuePipe } from '../shared/lab-value.pipe';
 import {
@@ -21,12 +20,13 @@ import {
 } from '../../services/lab-instrument.service';
 import { AuthService } from '../../auth/auth.service';
 import { ToastService } from '../../core/toast.service';
+import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 
 @Component({
   selector: 'app-lab-inventory',
   standalone: true,
   imports: [
-    CdkTrapFocus,
+    ModalDialogDirective,
     DatePipe,
     ServerTimePipe,
     LabValuePipe,

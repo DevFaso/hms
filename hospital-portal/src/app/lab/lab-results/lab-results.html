@@ -325,8 +325,7 @@
         role="dialog"
         aria-modal="true"
         aria-labelledby="lab-results-dialog-title-1"
-        cdkTrapFocus
-        [cdkTrapFocusAutoCapture]="true"
+        appModalDialog
         (keydown.escape)="closeDetail(); $event.stopPropagation()"
       >
         <div class="panel-header">
@@ -555,8 +554,7 @@
       role="dialog"
       aria-modal="true"
       aria-labelledby="lab-results-dialog-title-2"
-      cdkTrapFocus
-      [cdkTrapFocusAutoCapture]="true"
+      appModalDialog
       (keydown.escape)="closeModal(); $event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
@@ -712,8 +710,7 @@
       class="modal"
       role="dialog"
       aria-modal="true"
-      cdkTrapFocus
-      [cdkTrapFocusAutoCapture]="true"
+      appModalDialog
       (keydown.escape)="cancelSelfRelease(); $event.stopPropagation()"
       [attr.aria-label]="
         (isSelfRelease(target)
@@ -793,8 +790,7 @@
       role="dialog"
       aria-modal="true"
       aria-labelledby="lab-results-dialog-title-3"
-      cdkTrapFocus
-      [cdkTrapFocusAutoCapture]="true"
+      appModalDialog
       (keydown.escape)="cancelDelete(); $event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
@@ -841,8 +837,7 @@
       role="dialog"
       aria-modal="true"
       aria-labelledby="lab-results-dialog-title-4"
-      cdkTrapFocus
-      [cdkTrapFocusAutoCapture]="true"
+      appModalDialog
       (keydown.escape)="closeSign(); $event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
@@ -900,8 +895,7 @@
       role="dialog"
       aria-modal="true"
       aria-labelledby="lab-results-dialog-title-5"
-      cdkTrapFocus
-      [cdkTrapFocusAutoCapture]="true"
+      appModalDialog
       (keydown.escape)="closeCompare(); $event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
@@ -1022,8 +1016,7 @@
       role="dialog"
       aria-modal="true"
       aria-labelledby="lab-results-dialog-title-6"
-      cdkTrapFocus
-      [cdkTrapFocusAutoCapture]="true"
+      appModalDialog
       (keydown.escape)="closeReadBack(); $event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"

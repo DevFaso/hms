@@ -18,6 +18,8 @@ import {
 } from '../services/pharmacy.service';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { CfaPipe } from '../shared/pipes/cfa.pipe';
+import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive';
+import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.component';
 import { serverDateOrInstant } from '../shared/date-utils';
 
 @Component({
@@ -25,6 +27,8 @@ import { serverDateOrInstant } from '../shared/date-utils';
   standalone: true,
   imports: [
     FocusOnRenderDirective,
+    InlineSubFormDirective,
+    InlineDiscardAskComponent,
     ServerTimePipe,
     CommonModule,
     FormsModule,

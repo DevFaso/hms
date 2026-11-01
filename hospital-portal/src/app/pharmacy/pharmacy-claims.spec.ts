@@ -5,9 +5,11 @@ import { of } from 'rxjs';
 import { PharmacyClaimsComponent } from './pharmacy-claims';
 import { PharmacyClaimResponse, PharmacyService } from '../services/pharmacy.service';
 import { ToastService } from '../core/toast.service';
+import { answerReasonDialog, reasonDialog } from '../shared/reason-dialog/reason-dialog.testing';
 
 describe('PharmacyClaimsComponent', () => {
   let fixture: ComponentFixture<PharmacyClaimsComponent>;
+  let pharmacy: jasmine.SpyObj<PharmacyService>;
 
   function claim(overrides: Partial<PharmacyClaimResponse> = {}): PharmacyClaimResponse {
     return {
@@ -25,8 +27,9 @@ describe('PharmacyClaimsComponent', () => {
   }
 
   async function render(rows: PharmacyClaimResponse[]): Promise<HTMLElement> {
-    const pharmacy = jasmine.createSpyObj<PharmacyService>('PharmacyService', [
+    pharmacy = jasmine.createSpyObj<PharmacyService>('PharmacyService', [
       'listClaimsByHospital',
+      'rejectClaim',
     ]);
     pharmacy.listClaimsByHospital.and.returnValue(of({ data: { content: rows } }) as never);
     await TestBed.configureTestingModule({
@@ -56,5 +59,18 @@ describe('PharmacyClaimsComponent', () => {
     const text = el.querySelector('tbody')?.textContent ?? '';
     expect(text).toContain('PHARMACY_CLAIMS.PATIENT_UNNAMED');
     expect(text).not.toContain('3f2a9c1b');
+  });
+
+  // QA D1201 (round 22): the reject reason is asked in the shared dialog, not window.prompt.
+  it('QA D1201: rejecting a claim asks the reason in the page; blank sends nothing', async () => {
+    await render([claim({ claimStatus: 'SUBMITTED' })]);
+    pharmacy.rejectClaim.and.returnValue(of({ data: claim() }) as never);
+    fixture.componentInstance.reject(claim());
+    expect(reasonDialog(fixture)).not.toBeNull();
+    answerReasonDialog(fixture, ' ');
+    expect(pharmacy.rejectClaim).not.toHaveBeenCalled();
+    answerReasonDialog(fixture, 'Ordonnance illisible');
+    expect(pharmacy.rejectClaim).toHaveBeenCalledWith('c-1', 'Ordonnance illisible');
+    expect(reasonDialog(fixture)).toBeNull();
   });
 });

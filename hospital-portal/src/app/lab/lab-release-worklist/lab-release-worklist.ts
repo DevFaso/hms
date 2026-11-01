@@ -1,4 +1,3 @@
-import { CdkTrapFocus } from '@angular/cdk/a11y';
 import {
   Component,
   OnInit,
@@ -23,6 +22,7 @@ import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { labSeverityFlag } from '../shared/lab-severity';
 import { LabValuePipe } from '../shared/lab-value.pipe';
+import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 
 /**
  * Release worklist (B14).
@@ -53,7 +53,7 @@ import { LabValuePipe } from '../shared/lab-value.pipe';
   standalone: true,
   imports: [
     LabCorrectionBadgeComponent,
-    CdkTrapFocus,
+    ModalDialogDirective,
     ServerTimePipe,
     EnumLabelPipe,
     LabValuePipe,

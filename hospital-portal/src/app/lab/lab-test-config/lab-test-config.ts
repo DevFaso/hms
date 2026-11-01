@@ -1,6 +1,5 @@
 import { EnumLabelService } from '../../core/enum-label.service';
 import { currentLocale } from '../../shared/i18n/app-locale';
-import { CdkTrapFocus } from '@angular/cdk/a11y';
 import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -19,12 +18,13 @@ import { RoleContextService } from '../../core/role-context.service';
 import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 @Component({
   selector: 'app-lab-test-config',
   standalone: true,
   imports: [
     SubmitGuardDirective,
-    CdkTrapFocus,
+    ModalDialogDirective,
     CommonModule,
     FormsModule,
     TranslateModule,

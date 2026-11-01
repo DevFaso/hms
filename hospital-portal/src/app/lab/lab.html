@@ -230,8 +230,7 @@
         role="dialog"
         aria-modal="true"
         aria-labelledby="lab-dialog-title-1"
-        cdkTrapFocus
-        [cdkTrapFocusAutoCapture]="true"
+        appModalDialog
         (keydown.escape)="closeDetail(); $event.stopPropagation()"
       >
         <div class="panel-header">
@@ -349,8 +348,7 @@
       role="dialog"
       aria-modal="true"
       aria-labelledby="lab-dialog-title-2"
-      cdkTrapFocus
-      [cdkTrapFocusAutoCapture]="true"
+      appModalDialog
       (keydown.escape)="closeModal(); $event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
@@ -635,8 +633,7 @@
       class="modal"
       role="dialog"
       aria-modal="true"
-      cdkTrapFocus
-      [cdkTrapFocusAutoCapture]="true"
+      appModalDialog
       (keydown.escape)="closeVoid(); $event.stopPropagation()"
       aria-labelledby="lab-void-title"
       tabindex="-1"
@@ -702,8 +699,7 @@
       role="dialog"
       aria-modal="true"
       aria-labelledby="lab-dialog-title-3"
-      cdkTrapFocus
-      [cdkTrapFocusAutoCapture]="true"
+      appModalDialog
       (keydown.escape)="cancelDelete(); $event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
@@ -750,8 +746,7 @@
       role="dialog"
       aria-modal="true"
       aria-labelledby="lab-dialog-title-4"
-      cdkTrapFocus
-      [cdkTrapFocusAutoCapture]="true"
+      appModalDialog
       (keydown.escape)="closeSpecimens(); $event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
@@ -927,8 +922,7 @@
       role="dialog"
       aria-modal="true"
       aria-labelledby="lab-reject-title"
-      cdkTrapFocus
-      [cdkTrapFocusAutoCapture]="true"
+      appModalDialog
       (keydown.escape)="closeReject(); $event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"

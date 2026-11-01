@@ -258,8 +258,7 @@
       role="dialog"
       aria-modal="true"
       aria-labelledby="lab-approval-dialog-title-1"
-      cdkTrapFocus
-      [cdkTrapFocusAutoCapture]="true"
+      appModalDialog
       (keydown.escape)="closeDetail(); $event.stopPropagation()"
     >
       <div class="panel-header">
@@ -615,8 +614,7 @@
       role="dialog"
       aria-modal="true"
       aria-labelledby="lab-approval-dialog-title-2"
-      cdkTrapFocus
-      [cdkTrapFocusAutoCapture]="true"
+      appModalDialog
       (keydown.escape)="closeStudyModal(); $event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"
@@ -747,8 +745,7 @@
       role="dialog"
       aria-modal="true"
       aria-labelledby="lab-approval-dialog-title-3"
-      cdkTrapFocus
-      [cdkTrapFocusAutoCapture]="true"
+      appModalDialog
       (keydown.escape)="closeApprovalModal(); $event.stopPropagation()"
       tabindex="-1"
       (click)="$event.stopPropagation()"

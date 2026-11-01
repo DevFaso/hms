@@ -17,6 +17,8 @@ import {
 import { ToastService } from '../core/toast.service';
 import { CfaPipe } from '../shared/pipes/cfa.pipe';
 import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
+import { ReasonDialogComponent } from '../shared/reason-dialog/reason-dialog.component';
+import { refusalReason } from '../shared/refusal-reason';
 
 interface StatusOption {
   value: PharmacyClaimStatus;
@@ -32,7 +34,8 @@ interface StatusOption {
 @Component({
   selector: 'app-pharmacy-claims',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, FormsModule, TranslateModule, DatePipe, CfaPipe],
+  imports: [
+    ReasonDialogComponent,ServerTimePipe, CommonModule, FormsModule, TranslateModule, DatePipe, CfaPipe],
   templateUrl: './pharmacy-claims.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './pharmacy-claims.scss',
@@ -103,17 +106,30 @@ export class PharmacyClaimsComponent implements OnInit {
     });
   }
 
+  /** QA D1201: the claim being rejected; the shared reason dialog asks why. */
+  rejecting = signal<PharmacyClaimResponse | null>(null);
+  rejectBusy = signal(false);
+
   reject(c: PharmacyClaimResponse): void {
-    const reason = window.prompt(this.translate.instant('PHARMACY.CLAIM_REJECT_REASON_PROMPT'));
-    if (!reason || !reason.trim()) {
-      return;
-    }
+    this.rejecting.set(c);
+  }
+
+  confirmReject(c: PharmacyClaimResponse, reason: string): void {
+    if (this.rejectBusy()) return;
+    this.rejectBusy.set(true);
     this.pharmacy.rejectClaim(c.id, reason).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('PHARMACY.CLAIM_REJECTED'));
+        this.rejectBusy.set(false);
+        this.rejecting.set(null);
         this.load();
       },
-      error: () => this.toast.error(this.translate.instant('PHARMACY.CLAIM_REJECT_FAILED')),
+      error: (err: unknown) => {
+        this.rejectBusy.set(false);
+        this.toast.error(
+          refusalReason(err) ?? this.translate.instant('PHARMACY.CLAIM_REJECT_FAILED'),
+        );
+      },
     });
   }
 

@@ -182,9 +182,20 @@ describe('LabResultsComponent', () => {
     expect(dialog.getAttribute('aria-modal')).toBe('true');
     expect(dialog.getAttribute('aria-labelledby')).toBeTruthy();
     expect(dialog.contains(document.activeElement)).withContext('focus moved in').toBeTrue();
-    // cdkTrapFocus wraps the dialog in tab anchors: Tab from the last element
-    // comes back to the first instead of walking to the page behind.
-    expect(dialog.previousElementSibling?.classList.contains('cdk-focus-trap-anchor')).toBeTrue();
+    // Tab from the last element comes back to the first instead of walking to
+    // the page behind (round 22: the shared appModalDialog trap replaced
+    // cdkTrapFocus, so the dialog also keeps typed text on Escape).
+    const focusables = Array.from(
+      dialog.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), a[href], input, select, textarea',
+      ),
+    );
+    const last = focusables[focusables.length - 1];
+    last.focus();
+    const tab = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+    last.dispatchEvent(tab);
+    expect(tab.defaultPrevented).withContext('Tab is kept inside the dialog').toBeTrue();
+    expect(document.activeElement).toBe(focusables[0]);
 
     (document.activeElement as HTMLElement).dispatchEvent(
       new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),

@@ -1103,7 +1103,7 @@
     "DEACTIVATE": "Désactiver",
     "DEACTIVATED": "Ensemble d'ordres désactivé",
     "DEACTIVATE_FAILED": "Échec de la désactivation de l'ensemble d'ordres",
-    "DEACTIVATE_REASON_PROMPT": "Motif de désactivation :",
+    "DEACTIVATE_REASON_PROMPT": "Pourquoi cet ensemble d'ordres est-il désactivé ?",
     "EDIT_TITLE": "Modifier l'ensemble",
     "ERROR": "Impossible de charger ou d'appliquer les ensembles. Réessayez ou saisissez les ordres manuellement.",
     "FIELD_ADMISSION_TYPE": "Type d'admission",
@@ -9667,7 +9667,8 @@
       "HINT": "Une interaction grave arrête cette délivrance : indiquez le motif pour délivrer malgré tout. Il est enregistré avec la délivrance."
     },
     "ALERT_OVERRIDDEN": "Alerte outrepassée par le prescripteur : voir le motif sur l’ordonnance",
-    "LOTS_OTHER_FORM": "{{count}} lot(s) de ce médicament sous une autre forme ne sont pas proposés : l'ordonnance est rédigée en « {{unit}} »."
+    "LOTS_OTHER_FORM": "{{count}} lot(s) de ce médicament sous une autre forme ne sont pas proposés : l'ordonnance est rédigée en « {{unit}} ».",
+    "SAVE_PRICE": "Enregistrer le prix"
   },
   "LAB_QC": {
     "TITLE": "Tableau de bord du contrôle qualité",
@@ -11708,7 +11709,8 @@
     "REACTION_RECORDED": "Réaction enregistrée, transfusion arrêtée",
     "REACTION_ERROR": "La réaction n'a pas pu être enregistrée",
     "PLATELET_O_TO_B": "Confirmation attendue",
-    "PLATELET_O_TO_B_DETAIL": "Plaquettes de groupe O pour un receveur de groupe B. Autorisé par le protocole de cet établissement — cette transfusion n'est ni bloquée ni remise en cause. Le protocole exclut les plaquettes O pour les receveurs A et AB mais pas pour les receveurs B ; le caractère intentionnel de cette différence n'a pas encore été confirmé avec l'hématologie. À soulever lors de la prochaine revue."
+    "PLATELET_O_TO_B_DETAIL": "Plaquettes de groupe O pour un receveur de groupe B. Autorisé par le protocole de cet établissement — cette transfusion n'est ni bloquée ni remise en cause. Le protocole exclut les plaquettes O pour les receveurs A et AB mais pas pour les receveurs B ; le caractère intentionnel de cette différence n'a pas encore été confirmé avec l'hématologie. À soulever lors de la prochaine revue.",
+    "CANCEL_REQUEST_CONFIRM": "Annuler la demande"
   },
   "MORTALITY": {
     "TITLE": "Registre de mortalité",

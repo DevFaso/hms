@@ -942,7 +942,13 @@ describe('BillingComponent', () => {
 
     // QA D1155 class (round 21, sibling found by #1000): Escape in the line
     // editor closed the whole invoice dialog; focus did not move into it.
-    it('the line editor takes focus, and Escape closes only it with focus back on its button', () => {
+    // QA D1195 (round 22): the row is an appInlineSubForm — a changed price is
+    // asked about before Escape drops it, and nothing is saved.
+    const tick = () => new Promise((resolve) => setTimeout(resolve));
+    const escapeOn = (el: Element) =>
+      el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+
+    it('the line editor takes focus, and Escape closes only it with focus back on its button', async () => {
       document.body.appendChild(fixture.nativeElement);
       try {
         const host = fixture.nativeElement as HTMLElement;
@@ -950,19 +956,69 @@ describe('BillingComponent', () => {
         opener.focus();
         opener.click();
         fixture.detectChanges();
-        TestBed.tick();
+        await tick();
         const qty = host.querySelector<HTMLElement>('#line-edit-qty')!;
         expect(document.activeElement).withContext('focus in the line editor').toBe(qty);
-        qty.dispatchEvent(
-          new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }),
-        );
+        escapeOn(qty);
         fixture.detectChanges();
-        TestBed.tick();
+        await tick();
         expect(component.editingLineId()).toBeNull();
         expect(component.selectedInvoice())
           .withContext('the invoice dialog stays open')
           .not.toBeNull();
         expect(document.activeElement).toBe(host.querySelector('[data-testid="line-edit-line-0"]'));
+      } finally {
+        (fixture.nativeElement as HTMLElement).remove();
+      }
+    });
+
+    it('QA D1195: Escape over a typed price asks first; Keep keeps it, Discard drops it unsaved', async () => {
+      document.body.appendChild(fixture.nativeElement);
+      try {
+        const host = fixture.nativeElement as HTMLElement;
+        host.querySelector<HTMLElement>('[data-testid="line-edit-line-0"]')!.click();
+        fixture.detectChanges();
+        await tick();
+        const price = host.querySelector<HTMLInputElement>('#line-edit-price')!;
+        price.focus();
+        price.value = '2750';
+        price.dispatchEvent(new Event('input', { bubbles: true }));
+        fixture.detectChanges();
+        escapeOn(price);
+        fixture.detectChanges();
+        expect(component.editingLineId()).withContext('the editor stays open').toBe('line-0');
+        expect(component.selectedInvoice()).not.toBeNull();
+        expect(host.querySelector('[data-testid="inline-discard-ask"]')).not.toBeNull();
+        host.querySelector<HTMLButtonElement>('[data-testid="inline-keep"]')!.click();
+        fixture.detectChanges();
+        expect(component.editLineUnitPrice()).toBe(2750);
+        escapeOn(price);
+        fixture.detectChanges();
+        host.querySelector<HTMLButtonElement>('[data-testid="inline-discard"]')!.click();
+        fixture.detectChanges();
+        await tick();
+        expect(component.editingLineId()).toBeNull();
+        expect(component.selectedInvoice()).withContext('the invoice stays open').not.toBeNull();
+        expect(billingSpy.updateInvoiceItem).not.toHaveBeenCalled();
+      } finally {
+        (fixture.nativeElement as HTMLElement).remove();
+      }
+    });
+
+    it('QA D1195: Escape over a typed add-line description or adjustment reason asks instead of closing the invoice', () => {
+      document.body.appendChild(fixture.nativeElement);
+      try {
+        const host = fixture.nativeElement as HTMLElement;
+        const desc = host.querySelector<HTMLInputElement>('#line-desc')!;
+        desc.focus();
+        desc.value = 'Kit de perfusion';
+        desc.dispatchEvent(new Event('input', { bubbles: true }));
+        fixture.detectChanges();
+        escapeOn(desc);
+        fixture.detectChanges();
+        expect(component.selectedInvoice()).withContext('the invoice stays open').not.toBeNull();
+        expect(host.querySelector('[data-testid="dialog-discard-ask"]')).not.toBeNull();
+        expect(desc.value).toBe('Kit de perfusion');
       } finally {
         (fixture.nativeElement as HTMLElement).remove();
       }

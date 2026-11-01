@@ -1,5 +1,4 @@
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
-import { CdkTrapFocus } from '@angular/cdk/a11y';
 import { DatePipe } from '@angular/common';
 import {
   Component,
@@ -21,11 +20,12 @@ import {
 import { AuthService } from '../../auth/auth.service';
 import { ToastService } from '../../core/toast.service';
 import { refusalReason } from '../../shared/refusal-reason';
+import { ModalDialogDirective } from '../../shared/a11y/modal-dialog.directive';
 
 @Component({
   selector: 'app-lab-instruments',
   standalone: true,
-  imports: [CdkTrapFocus, DatePipe, ServerTimePipe, RouterModule, FormsModule, TranslateModule],
+  imports: [ModalDialogDirective, DatePipe, ServerTimePipe, RouterModule, FormsModule, TranslateModule],
   templateUrl: './lab-instruments.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './lab-instruments.scss',

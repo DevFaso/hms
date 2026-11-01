@@ -214,11 +214,15 @@ function swallowsEscape(tag) {
 /**
  * QA D1030 / D968: a hand-built dialog must move focus into itself, keep Tab
  * inside and give focus back - the shared directives do (appModalDialog,
- * appDialogA11y, appDialogFocus), as do a CDK focus trap and the CDK/Material
- * dialog service. A native <dialog> opened with showModal() does it itself.
+ * appDialogA11y, appDialogFocus), as does the CDK/Material dialog service.
+ * A bare CDK focus trap does not since round 22 (it keeps no typed text). A native <dialog> opened with showModal() does it itself.
  */
 const SHOW_MODAL = /\.showModal\(\)/;
-const FOCUS_DIRECTIVE = /^(?:appModalDialog|appDialogA11y|appDialogFocus|cdkTrapFocus)$/;
+// QA D1208 / D1131 (round 22): a bare `cdkTrapFocus` no longer counts. The
+// shared directives also keep the reader's typed text on Escape
+// (escape-keeps-typed-text.ts); the lab's 23 cdkTrapFocus dialogs did not, and
+// the specimen reject reason was lost on Escape.
+const FOCUS_DIRECTIVE = /^(?:appModalDialog|appDialogA11y|appDialogFocus)$/;
 const COMPONENT_FOCUS = /MatDialog|@angular\/cdk\/dialog|\bDialogRef\b|\bFocusTrapFactory\b/;
 
 function hasFocusDirective(tag) {
