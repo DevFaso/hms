@@ -65,6 +65,16 @@ export function requiredRefusalFindings(source) {
     if (!owner) continue;
     const body = source.slice(owner.start, owner.end);
     if (HELPERS.some((h) => body.includes(h))) continue;
+    // QA D1158 (round 21): a submit guard's reason method RETURNS the text to
+    // `[appSubmitGuard]`, which marks the blank fields (refuseFields) itself;
+    // nothing is shown from here. Only a returned reason is exempt.
+    if (
+      /\breturn\s+(?:this\.)?translate$/.test(
+        source.slice(Math.max(0, m.index - 40), m.index).trimEnd(),
+      )
+    ) {
+      continue;
+    }
     out.push({
       line: lineOf(source, m.index),
       rule: 'unmarked-refusal',

@@ -30,13 +30,15 @@ let nextId = 0;
   imports: [FormsModule, TranslateModule, ModalDialogDirective, SubmitGuardDirective],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="modal-backdrop" tabindex="-1" (click)="cancel()">
+    <div class="modal-backdrop" tabindex="-1" (click)="cancel()" (keydown.escape)="cancel()">
       <div
         class="modal"
         appModalDialog
+        tabindex="-1"
         [attr.aria-labelledby]="titleId"
         (escaped)="cancel()"
         (click)="$event.stopPropagation()"
+        (keydown.escape)="$event.stopPropagation()"
         data-testid="reason-dialog"
       >
         <h2 [id]="titleId">{{ titleKey() | translate }}</h2>

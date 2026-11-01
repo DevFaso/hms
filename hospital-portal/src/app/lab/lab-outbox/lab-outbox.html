@@ -177,6 +177,7 @@
         aria-labelledby="lab-outbox-dialog-title-1"
         (escaped)="closeDetail()"
         (click)="$event.stopPropagation()"
+        (keydown.escape)="$event.stopPropagation()"
         tabindex="-1"
       >
         <h2 id="lab-outbox-dialog-title-1">

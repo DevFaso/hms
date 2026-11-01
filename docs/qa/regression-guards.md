@@ -468,3 +468,16 @@ cannot slip past it again.
 | `scripts/lib/lab-correction-shown.test.mjs` (widened) | D1137: a unit after the correction badge in the same cell. | 0 |
 | `utility/JobTitleCredentialsTest` (new) | D1136: a job title written in English for display (`formatJobTitle`, `JobTitle.getTitle()`). | 0 |
 | `interceptors/csrf-refusal-race.spec.ts` (new) | D1145: a stale CSRF token answered as ACCESS_DENIED and turned into the forbidden page by the inner error interceptor before the CSRF replay. | real interceptor order |
+
+## Guards added or widened by the round-21 portal clinical-forms branch (fix/r21-portal-clinical-forms)
+
+| Guard | Class | Scope / allowlist |
+|---|---|---|
+| `guard:a11y-dialogs` rule `subform` | An inline action form INSIDE a dialog (a block opened from it holding a text field and a button closing that form, not the dialog) whose Escape bubbles to the dialog and drops the typed text (D1155 / D1144 / D1131, three rounds NOT_FIXED). Every inline form is found by construction: `@if` / `@else if` / `@else` bodies and `<ng-template>`s inside a dialog; a field and a Close in exclusive branches of one `@if` chain are a panel, not a form. Fix: `appInlineSubForm` + `(dismissed)` + `<app-inline-discard-ask>` (shared/a11y). | 1 pin: billing's invoice line edited in place (billing/ owned by fix/r21-portal-shell-a11y-typography this round) |
+| `guard:a11y-dialogs` rule `focus` (widened) | A `cdkTrapFocus` dialog whose every control sits behind an `@if` (it loads): the trap captures nothing, focus stays on the opener, Escape never reaches the dialog (D1154 / D1004 / D1125). | 0 |
+| `guard:a11y-dialogs` rule `label-icon` | An icon-font span without `aria-hidden` inside the element a dialog's `aria-labelledby` names: the ligature is read as the dialog's first word (D1174). | 3 pins: patient-portal/my-appointments (other branch this round) |
+| `scripts/lib/inline-editor-focus.test.mjs` | A row editor (`@if (editingX() === row.id) { <field> }`) that replaces the control that opened it without taking the keyboard (D1175). Fix: `appFocusOnRender` (+ `focusOnRenderReturn`). | 1 pin: billing/ (other branch) |
+| `scripts/lib/raw-server-message.test.mjs` | A component reading `err.error.message` itself — bypassing `refusalReason` / `labelledRefusalReason`, so a validation refusal shows bare constraint text (D1156 / D1124 / D1089). | 0 in the clinical-forms folders; 51 pre-existing files pinned by count, shrinks only |
+| `scripts/lib/terminal-action-reason.test.mjs` | A service call to a cancel / close / void / revoke / discontinue / withdraw / reject endpoint with an empty body: a one-click end of a record with no reason (D1157, D1160 class). Fix: `<app-reason-dialog>` (shared). | 6 pins, each with why it needs no reason |
+| `scripts/lib/visit-provider-label.test.mjs` | A label next to a visit's provider (`staffName`, `assignedProvider`) that names a physician in FR/ES; a midwife holds visits (D1178). | 0 |
+| `required-refusal` scan (narrowed) | A submit guard's reason method that RETURNS its text to `[appSubmitGuard]` (which marks the fields) is not an unmarked refusal. | — |

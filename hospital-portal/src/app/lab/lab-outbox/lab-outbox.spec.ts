@@ -209,7 +209,7 @@ describe('LabOutboxComponent', () => {
     it('once loaded, Escape still closes and gives focus back', () => {
       const row = message({ id: 'm-1' });
       setup(['ROLE_LAB_DIRECTOR'], pageOf([row]));
-      outboxService.getMessage.and.returnValue(of({ ...row, payload: 'MSH|^~\&|HMS|' }));
+      outboxService.getMessage.and.returnValue(of({ ...row, payload: 'MSH|^~&|HMS|' }));
       outboxService.getMessagesForOrder.and.returnValue(of([]));
       document.body.appendChild(fixture.nativeElement);
       const opener = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
