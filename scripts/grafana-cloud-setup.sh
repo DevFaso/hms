@@ -75,6 +75,39 @@ command -v railway >/dev/null 2>&1 || {
     exit 69
 }
 
+# ── Preflight ────────────────────────────────────────────────────────────────
+# Everything that can fail is checked BEFORE the token prompt. Asking for a secret
+# and then dying on an unrelated precondition wastes the paste and, if the operator
+# retries by scrolling back, risks the token landing in shell history.
+
+# The CLI resolves its project link per directory. A git worktree is a different
+# directory from the clone that was linked, so running this from one fails with
+# "No linked project found" — which is what happens if you run it from the branch
+# worktree instead of the main checkout.
+if ! railway status >/dev/null 2>&1; then
+    echo "error: no linked Railway project in $(pwd)." >&2
+    echo "       The CLI links a project per directory, and a git worktree is not the" >&2
+    echo "       directory you linked. Either run this from the main checkout, or link" >&2
+    echo "       here first:  railway link" >&2
+    exit 69
+fi
+
+# `railway variables --set / --set-from-stdin` is used deliberately over the newer
+# `railway variable set` subcommand: CI pins @railway/cli@4.57.2
+# (.github/workflows/deploy.yml), where the subcommand does not exist. 5.x still
+# accepts these flags, marking them legacy, so the older spelling works against both.
+if ! railway variables --help 2>&1 | grep -q -- "--set-from-stdin"; then
+    echo "error: this railway CLI does not support 'variables --set-from-stdin'." >&2
+    echo "       Found: $(railway --version 2>&1). Expected 4.57.2 (the CI pin) or newer." >&2
+    exit 69
+fi
+if ! railway variables --help 2>&1 | grep -q -- "--skip-deploys"; then
+    echo "error: this railway CLI does not support '--skip-deploys', so setting these" >&2
+    echo "       variables would immediately redeploy the service. Upgrade before running" >&2
+    echo "       this against prod. Found: $(railway --version 2>&1)." >&2
+    exit 69
+fi
+
 # ── Token ────────────────────────────────────────────────────────────────────
 GLC_TOKEN="${GRAFANA_CLOUD_TOKEN:-}"
 if [[ -z "$GLC_TOKEN" ]]; then
@@ -150,23 +183,6 @@ public_args=(
     "OTEL_TRACES_SAMPLER=${TRACES_SAMPLER}"
 )
 [[ -n "$TRACES_SAMPLER_ARG" ]] && public_args+=("OTEL_TRACES_SAMPLER_ARG=${TRACES_SAMPLER_ARG}")
-
-# The `railway variables --set / --set-from-stdin` form is used deliberately in place of
-# the newer `railway variable set` subcommand. CI pins @railway/cli@4.57.2
-# (.github/workflows/deploy.yml), where the subcommand does not exist; 5.x still accepts
-# these flags, marking them legacy. The older spelling is therefore the one that works
-# against both, and an operator's local CLI is not guaranteed to match the pin.
-if ! railway variables --help 2>&1 | grep -q -- "--set-from-stdin"; then
-    echo "error: this railway CLI does not support 'variables --set-from-stdin'." >&2
-    echo "       Found: $(railway --version 2>&1). Expected 4.57.2 (the CI pin) or newer." >&2
-    exit 69
-fi
-if ! railway variables --help 2>&1 | grep -q -- "--skip-deploys"; then
-    echo "error: this railway CLI does not support '--skip-deploys', so setting these" >&2
-    echo "       variables would immediately redeploy ${SERVICE}. Upgrade before running" >&2
-    echo "       this against prod. Found: $(railway --version 2>&1)." >&2
-    exit 69
-fi
 
 # 1. Credentials first, over stdin so the token is not in railway's argv either.
 #    --skip-deploys keeps this a config-only change; the operator decides when the
