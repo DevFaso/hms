@@ -42,7 +42,7 @@ let nextId = 0;
   template: `
     <div class="modal-backdrop" tabindex="-1" (click)="cancel()" (keydown.escape)="cancel()">
       <div
-        class="modal reason-dialog"
+        class="modal shared-dialog"
         appModalDialog
         tabindex="-1"
         [attr.aria-labelledby]="titleId"

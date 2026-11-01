@@ -5,7 +5,7 @@
 // global `.modal-backdrop` / `.modal` / `.field` / `.modal-actions` rules
 // (_page-common.scss) give the box; these give its inside.
 
-.reason-dialog {
+.shared-dialog {
   display: flex;
   flex-direction: column;
   max-height: 90vh;
