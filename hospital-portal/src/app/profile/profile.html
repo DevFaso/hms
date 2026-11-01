@@ -315,8 +315,8 @@
                     />
                   </svg>
                   <div class="score-text">
-                    <span class="score-number">{{ securityScore() }}</span>
-                    <span class="score-percent">%</span>
+                    <!-- QA D1166 class: the percent follows the reader's typography (FR/ES "78 %"). -->
+                    <span class="score-number">{{ securityScore() | measure: '%' : 0 }}</span>
                   </div>
                 </div>
                 <div class="security-details">

@@ -1,4 +1,4 @@
-import { TestBed } from '@angular/core/testing';
+import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { of } from 'rxjs';
 import { InventoryDashboardComponent } from './inventory-dashboard';
@@ -128,6 +128,31 @@ describe('InventoryDashboardComponent price column (QA D835)', () => {
         .textContent,
     ).toContain('30');
   });
+
+  it('QA D1175: the pencil gives the keyboard to the price box, and Escape gives it back', fakeAsync(() => {
+    const { fixture } = render(25);
+    const host = fixture.nativeElement as HTMLElement;
+    document.body.appendChild(host);
+    try {
+      const pencil = host.querySelector<HTMLButtonElement>('[data-testid="price-edit-inv-1"]')!;
+      pencil.focus();
+      pencil.click();
+      fixture.detectChanges();
+      tick();
+      const input = host.querySelector<HTMLInputElement>('[data-testid="price-input-inv-1"]')!;
+      expect(document.activeElement).toBe(input);
+
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      fixture.detectChanges();
+      tick();
+      expect(host.querySelector('[data-testid="price-input-inv-1"]')).toBeNull();
+      expect(document.activeElement).toBe(
+        host.querySelector<HTMLElement>('[data-testid="price-edit-inv-1"]'),
+      );
+    } finally {
+      host.remove();
+    }
+  }));
 });
 
 describe('InventoryDashboardComponent reorder trigger (QA D965)', () => {

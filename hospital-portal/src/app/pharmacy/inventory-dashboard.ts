@@ -1,3 +1,4 @@
+import { FocusOnRenderDirective } from '../shared/a11y/focus-on-render.directive';
 import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -22,6 +23,7 @@ import { serverDateOrInstant } from '../shared/date-utils';
   selector: 'app-inventory-dashboard',
   standalone: true,
   imports: [
+    FocusOnRenderDirective,
     ServerTimePipe,
     CommonModule,
     FormsModule,

@@ -93,6 +93,8 @@
                       [attr.aria-label]="'PHARMACY.UNIT_PRICE' | translate"
                       [attr.data-testid]="'price-input-' + item.id"
                       [value]="item.unitPrice ?? ''"
+                      appFocusOnRender
+                      [focusOnRenderReturn]="'[data-testid=price-edit-' + item.id + ']'"
                       (change)="savePrice(item, $any($event.target).value)"
                       (keydown.escape)="editingPriceId.set(null)"
                     />

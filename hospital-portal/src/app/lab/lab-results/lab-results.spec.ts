@@ -958,6 +958,51 @@ describe('LabResultsComponent — rendered delete gate and order picker', () => 
     expect(component.orders().map((o) => o.id)).toEqual(['o-glu']);
   });
 
+  it('QA D1176: "New result" offers no order that already has a result or is closed; a correction keeps its own', () => {
+    setup(['ROLE_LAB_SCIENTIST']);
+    const order = (id: string, status: string) => ({
+      id,
+      labOrderCode: id,
+      patientId: 'p-1',
+      labTestName: 'Glucose',
+      labTestCode: 'GLU',
+      status,
+    });
+    flushInit(
+      [],
+      [
+        order('o-new', 'COLLECTED'),
+        order('o-resulted', 'RESULTED'),
+        order('o-done', 'COMPLETED'),
+        order('o-verified', 'VERIFIED'),
+        order('o-cancelled', 'CANCELLED'),
+      ],
+    );
+    expect(component.orders().map((o) => o.id)).toEqual(['o-new']);
+    const options = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('#lr-orderId option'),
+    );
+    // Rendered only once the modal is open.
+    component.openCreate();
+    fixture.detectChanges();
+    const picker = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLOptionElement>(
+        '#lr-orderId option',
+      ),
+    ).map((o) => o.value);
+    expect(options.length).toBe(0);
+    expect(picker).toEqual(['', 'o-new']);
+    component.closeModal();
+
+    // Correcting the released result of a completed order keeps that order selectable.
+    component.openCorrection(
+      mockResult({ id: 'r-1', labOrderId: 'o-done', released: true }) as never,
+    );
+    expect(component.orders().map((o) => o.id)).toEqual(['o-new', 'o-done']);
+    component.closeModal();
+    expect(component.orders().map((o) => o.id)).toEqual(['o-new']);
+  });
+
   it('QA D648: an order flagged as missing its definition stays out of the picker despite its label', () => {
     setup(['ROLE_LAB_SCIENTIST']);
     flushInit(
