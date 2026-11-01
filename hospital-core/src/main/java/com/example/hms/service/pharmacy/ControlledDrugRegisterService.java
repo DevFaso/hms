@@ -125,12 +125,12 @@ public class ControlledDrugRegisterService {
         People people = people(rows, pharmacy.getHospital() != null ? pharmacy.getHospital().getId() : null);
 
         Map<UUID, BigDecimal> balance = new HashMap<>(opening);
-        Map<UUID, List<ControlledRegisterEntryDTO>> entries = entriesByItem(rows, people, balance,
-                com.example.hms.utility.HospitalTime.zoneOf(pharmacy.getHospital()));
+        java.time.ZoneId hospitalZone = com.example.hms.utility.HospitalTime.zoneOf(pharmacy.getHospital());
+        Map<UUID, List<ControlledRegisterEntryDTO>> entries = entriesByItem(rows, people, balance, hospitalZone);
         // Review of #975: the shelf count is today's; it is only comparable
         // with a closing balance carried to today, and a truncated register
         // has no closing balance at all (its last row is not the period's).
-        boolean coversToday = !to.isBefore(LocalDate.now(java.time.ZoneId.systemDefault()));
+        boolean coversToday = !to.isBefore(LocalDate.now(hospitalZone));
         List<ControlledRegisterDrugDTO> out = new ArrayList<>();
         for (InventoryItem item : drugs) {
             BigDecimal open = opening.getOrDefault(item.getId(), BigDecimal.ZERO);

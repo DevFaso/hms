@@ -36,7 +36,6 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -71,8 +70,11 @@ class ControlledDrugRegisterServiceTest {
             pharmacies, items, ledger, dispenses, prescriptions, roleValidator);
 
     private final UUID hospitalId = UUID.randomUUID();
-    private final LocalDate from = LocalDate.of(2026, 10, 1);
-    private final LocalDate to = LocalDate.of(2026, 10, 31);
+    // The period is the current month on the hospital's clock: "covers today" is
+    // read against the real date, so a fixed month turns this test red when it ends.
+    private final LocalDate to = LocalDate.now(com.example.hms.utility.HospitalTime.zoneOf(null))
+            .with(java.time.temporal.TemporalAdjusters.lastDayOfMonth());
+    private final LocalDate from = to.withDayOfMonth(1);
     private Pharmacy pharmacy;
     private InventoryItem morphine;
     private InventoryItem paracetamol;
@@ -362,7 +364,7 @@ class ControlledDrugRegisterServiceTest {
         StockTransaction t = StockTransaction.builder().inventoryItem(morphine).transactionType(type)
                 .quantity(new BigDecimal(qty)).reason(reason).stockLot(lot).performedByUser(pharmacist).build();
         t.setId(UUID.randomUUID());
-        t.setCreatedAt(LocalDateTime.of(2026, 10, 27, hour, 0));
+        t.setCreatedAt(from.plusDays(26).atTime(hour, 0));
         return t;
     }
 
