@@ -133,8 +133,14 @@ echo
 # Micrometer's url is a FULL SIGNAL URL, not the base gateway: Boot's own default
 # is http://localhost:4318/v1/metrics. Handing it the bare /otlp base makes every
 # 60s push a rejected POST, so the business counters never reach Mimir.
+#
+# Ordering matters, and the endpoint is deliberately NOT in this list.
+# OTEL_EXPORTER_OTLP_ENDPOINT is the activation switch: the Dockerfile attaches
+# -javaagent if and only if it is non-empty. Writing it before the credentials means an
+# interrupted run — Ctrl-C, a network blip, a revoked token — leaves the service with
+# the agent enabled and no auth header, so the next deploy exports nothing and 401s in
+# silence. Credentials go first, the switch goes last.
 public_args=(
-    "OTEL_EXPORTER_OTLP_ENDPOINT=${OTLP_ENDPOINT}"
     "OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf"
     "OTEL_METRICS_EXPORTER=none"
     "OTEL_SERVICE_NAME=hms-backend"
@@ -145,16 +151,9 @@ public_args=(
 )
 [[ -n "$TRACES_SAMPLER_ARG" ]] && public_args+=("OTEL_TRACES_SAMPLER_ARG=${TRACES_SAMPLER_ARG}")
 
-# --skip-deploys keeps this a config-only change; the operator decides when the
-# service restarts. Without it, Railway redeploys prod the moment this runs.
-railway variable set \
-    --service "$SERVICE" \
-    --environment "$ENVIRONMENT" \
-    --skip-deploys \
-    "${public_args[@]}"
-
-# The two credential-bearing variables go in over stdin, so the token is not in
-# the railway process's argv either.
+# 1. Credentials first, over stdin so the token is not in railway's argv either.
+#    --skip-deploys keeps this a config-only change; the operator decides when the
+#    service restarts. Without it, Railway redeploys prod the moment this runs.
 printf 'Authorization=Basic %s' "$AUTH_B64" \
     | railway variable set OTEL_EXPORTER_OTLP_HEADERS \
         --stdin --service "$SERVICE" --environment "$ENVIRONMENT" --skip-deploys
@@ -163,11 +162,23 @@ printf 'Basic %s' "$AUTH_B64" \
     | railway variable set GRAFANA_OTLP_AUTH_HEADER \
         --stdin --service "$SERVICE" --environment "$ENVIRONMENT" --skip-deploys
 
+# 2. Then the rest of the configuration.
+railway variable set \
+    --service "$SERVICE" \
+    --environment "$ENVIRONMENT" \
+    --skip-deploys \
+    "${public_args[@]}"
+
+# 3. The activation switch, last, once everything it depends on is in place.
+railway variable set "OTEL_EXPORTER_OTLP_ENDPOINT=${OTLP_ENDPOINT}" \
+    --service "$SERVICE" --environment "$ENVIRONMENT" --skip-deploys
+
 echo
 echo "Set on ${SERVICE}:"
 for kv in "${public_args[@]}"; do
     echo "  ${kv}"
 done
+echo "  OTEL_EXPORTER_OTLP_ENDPOINT=${OTLP_ENDPOINT}"
 echo "  OTEL_EXPORTER_OTLP_HEADERS=<redacted: Basic base64(${GRAFANA_INSTANCE_ID}:glc_...)>"
 echo "  GRAFANA_OTLP_AUTH_HEADER=<redacted: Basic base64(${GRAFANA_INSTANCE_ID}:glc_...)>"
 
