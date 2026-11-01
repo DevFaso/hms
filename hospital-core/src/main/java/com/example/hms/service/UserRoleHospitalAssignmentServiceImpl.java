@@ -2817,6 +2817,13 @@ public class UserRoleHospitalAssignmentServiceImpl implements UserRoleHospitalAs
         // at an archived hospital queued an EMAIL and an SMS activation (200).
         // It is the same re-invitation as regenerate-code: the same 409.
         FacilityAssignmentGuard.requireOpenForAssignment(assignment.getHospital());
+        // QA r22 (setup observation): an assignment already verified has no
+        // activation left to send; re-sending it mailed and texted a live
+        // account its activation code again (200). Same answer as the public
+        // re-send, whose claim skips an active row: refused, 409, localized.
+        if (assignment.getConfirmationVerifiedAt() != null) {
+            throw new com.example.hms.exception.ConflictException("assignment.resend.alreadyVerified");
+        }
         notifyAssignee(assignment);
     }
 

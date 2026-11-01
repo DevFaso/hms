@@ -26,6 +26,7 @@ import {
 import { ToastService } from '../../core/toast.service';
 import { currentLocale } from '../../shared/i18n/app-locale';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { blobRefusalReason } from '../../shared/blob-refusal';
 
 /** Same order as the patient's own upload form; labels reuse its keys. */
 export const DOCUMENT_TYPE_OPTIONS: { value: PatientDocumentType; labelKey: string }[] = [
@@ -192,9 +193,12 @@ export class DocumentsTabComponent implements OnInit, OnChanges {
         // Defer revoke so Safari/WebKit has time to start reading the blob.
         setTimeout(() => URL.revokeObjectURL(url), 0);
       },
-      error: () => {
+      error: (err: unknown) => {
         this.downloading.set(null);
-        this.toast.error(this.translate.instant('PATIENT_DOCUMENTS.DOWNLOAD_FAILED'));
+        // QA D1184: a file the disk no longer holds says so, in the reader's language.
+        void blobRefusalReason(err).then((reason) =>
+          this.toast.error(reason ?? this.translate.instant('PATIENT_DOCUMENTS.DOWNLOAD_FAILED')),
+        );
       },
     });
   }

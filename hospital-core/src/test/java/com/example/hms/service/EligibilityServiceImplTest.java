@@ -266,7 +266,7 @@ class EligibilityServiceImplTest {
 
             assertThatThrownBy(() -> service.submit(req))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("PatientInsurance does not belong");
+                .hasMessageContaining("eligibility.insurance.otherPatient");
         }
 
         @Test
@@ -418,7 +418,7 @@ class EligibilityServiceImplTest {
             assertThatThrownBy(() -> service.submit(
                 baseRequest(EligibilityScheme.NHIS_GH, EligibilityCheckType.COVERAGE, "NHIS-001")))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("No eligibility provider");
+                .hasMessageContaining("eligibility.provider.none");
         }
 
         @Test

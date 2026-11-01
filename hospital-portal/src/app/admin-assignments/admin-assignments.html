@@ -156,15 +156,18 @@
                 >
                   <span class="material-symbols-outlined">key</span>
                 </button>
-                <button
-                  type="button"
-                  class="icon-btn"
-                  (click)="resendNotification(row)"
-                  [title]="'ASSIGN_ADMIN.RESEND' | translate"
-                  [attr.aria-label]="'ASSIGN_ADMIN.RESEND' | translate"
-                >
-                  <span class="material-symbols-outlined">forward_to_inbox</span>
-                </button>
+                <!-- QA r22: an activated account has no activation message to re-send. -->
+                @if (!row.confirmationVerified) {
+                  <button
+                    type="button"
+                    class="icon-btn"
+                    (click)="resendNotification(row)"
+                    [title]="'ASSIGN_ADMIN.RESEND' | translate"
+                    [attr.aria-label]="'ASSIGN_ADMIN.RESEND' | translate"
+                  >
+                    <span class="material-symbols-outlined">forward_to_inbox</span>
+                  </button>
+                }
                 @if (!isOwnRow(row)) {
                   @if (row.active) {
                     <button

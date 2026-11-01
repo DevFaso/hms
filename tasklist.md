@@ -5949,3 +5949,12 @@ ships*, not for building — and check the shipped surface before trusting a
 
 ### Round-21 merge residuals (qa/r16-combined)
 - [ ] Billing invoice line editor: move the hand-written Escape/focus handlers (billing.ts `startEditLine` / `onLineEditEscape`) onto `appInlineSubForm` + `appFocusOnRender`, then delete the `billing.html::subform::lines-table` pin and the billing entry in `inline-editor-focus.test.mjs` (QA D1155 / D1175 class).
+
+## Standing debt — round 22 (fix/r22-reception-portal-backend)
+- [ ] D1184 (ops, user only): the dev volume `hms-backend-dev-volume` is mounted at `"/data/uploads "` (trailing space) while `APP_UPLOAD_DIR=/data/uploads`; fix the mount path to `/data/uploads` exactly. Check prod sets no `APP_UPLOAD_DIR` other than `/app/uploads` (the volume) and no `APP_PATIENTPHOTO_DIR` outside it.
+- [ ] D1184 sibling: `hms.tenant-archive.output-dir` defaults to `java.io.tmpdir` (container disk): a purge archive written there does not survive a deploy. Decide where archives live before the first real purge.
+- [ ] D1184 sibling: generated-export blob downloads (PDF/CSV: record, invoices, claims, registers) still show a generic toast on a 4xx; extend `blobRefusalReason` and `stored-file-download-refusal.test.mjs` to them. A chat attachment whose file is gone stays a silent broken link.
+- [ ] D1196: appointments written before the fix keep "Patient rescheduled: …" / "Patient cancelled: …" in their notes (no migration in this branch); a backfill moving the text into `status_reason` needs a migration number.
+- [ ] D1187 class: 144 files still carry English refusals under the per-file ratchet (`exception-prose-baseline.properties`, 467 sentences); grow `ZERO_PROSE_SCOPES` area by area (next: PatientController 32, ImagingReportServiceImpl 23).
+- [ ] D1186 class: `ProgramEnrollmentService.updateStatus` lets one closed outcome be re-classified to another (LTFU → DECEASED), overwriting `closureReason` (audited as PROGRAM_STATUS_CHANGED). Kept as a deliberate reclassification; a history table would keep both reasons.
+- [ ] Resend sibling: `POST /assignments/{id}/regenerate-code` on a verified assignment resets `confirmationVerifiedAt` and re-sends (explicit admin re-issue, kept); confirm with the user whether it should refuse a verified row too.

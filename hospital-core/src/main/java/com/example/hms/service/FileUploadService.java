@@ -268,7 +268,15 @@ public class FileUploadService {
         String filename = storageKey.substring(idx + marker.length());
         Path base = Paths.get(uploadDir, requiredSubdirectory).toAbsolutePath().normalize();
         Path path = base.resolve(filename).normalize();
-        if (!path.startsWith(base) || !Files.exists(path)) {
+        if (!path.startsWith(base)) {
+            throw new ResourceNotFoundException("file.noLongerAvailable");
+        }
+        if (!Files.exists(path)) {
+            // QA D1184 (round 22): the row says a file was stored and the disk
+            // has none - a storage directory that did not survive a deploy
+            // (UploadStoragePersistenceCheck warns at startup). The reader gets
+            // the localized 404; the log says which directory, never the name.
+            log.warn("Stored file missing under '{}' (directory present: {})", base, Files.isDirectory(base));
             throw new ResourceNotFoundException("file.noLongerAvailable");
         }
         return path;

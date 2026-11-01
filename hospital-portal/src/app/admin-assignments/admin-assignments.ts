@@ -433,7 +433,9 @@ export class AdminAssignmentsComponent implements OnInit {
           this.toast.info(this.translate.instant('DELIVERY.NOTHING_TO_SEND'));
         }
       },
-      error: () => this.toast.error(this.translate.instant('ASSIGN_ADMIN.ACTION_ERROR')),
+      // QA r22: the server refuses (409) to re-send the activation of an
+      // account already activated; its localized reason is shown.
+      error: (err: HttpErrorResponse) => this.toastRefusal(err, 'ASSIGN_ADMIN.ACTION_ERROR'),
     });
   }
 

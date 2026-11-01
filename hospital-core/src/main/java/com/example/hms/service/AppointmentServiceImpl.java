@@ -67,6 +67,7 @@ public class AppointmentServiceImpl implements AppointmentService {
     private static final String USER_NOT_FOUND_BY_USERNAME_KEY = "user.notFoundByUsername";
     private static final String PATIENT_NOT_FOUND_FOR_USER_KEY = "patient.notFoundForUser";
     private static final String APPOINTMENT_NOT_FOUND_KEY = "appointment.notFound";
+    private static final String STAFF_ASSIGNMENT_MISSING_KEY = "appointment.staffAssignment.missing";
     private static final String INVALID_TRANSITION_KEY = "appointment.status.invalidTransition";
 
     @Override
@@ -297,7 +298,7 @@ public class AppointmentServiceImpl implements AppointmentService {
             throw new BusinessException("appointment.hospital.required");
         }
         if (request.getAppointmentDate() == null) {
-            throw new BusinessException("Appointment date must not be null");
+            throw new BusinessException("appointment.date.required");
         }
         // QA D1060: the end time is the slot rules', never the caller's, so only the start is required.
         if (request.getStartTime() == null) {
@@ -527,7 +528,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         final UserRoleHospitalAssignment assignment = assignmentRepository
             .findActiveStaffAssignment(staff.getUser().getId(), hospital.getId())
             .stream().findFirst()
-            .orElseThrow(() -> new BusinessException("Staff role assignment not found"));
+            .orElseThrow(() -> new BusinessException(STAFF_ASSIGNMENT_MISSING_KEY));
 
         // --- Time validations ---
         // QA D1060: the slot rules decide how long the visit lasts (the generated
@@ -858,7 +859,7 @@ public class AppointmentServiceImpl implements AppointmentService {
             .findActiveStaffAssignment(staff.getUser().getId(), hospital.getId())
             .stream()
             .findFirst()
-            .orElseThrow(() -> new BusinessException("Staff role assignment not found"));
+            .orElseThrow(() -> new BusinessException(STAFF_ASSIGNMENT_MISSING_KEY));
 
         // QA D1060: the slot rules set the length. A visit kept at its date,
         // start and clinician keeps its own end (an edit of the notes or the
@@ -1271,7 +1272,7 @@ public class AppointmentServiceImpl implements AppointmentService {
         // the self-access check below then dereferences it. Rather than leave
         // the two halves disagreeing, pin the contract the callers already
         // honour: no user, no scoped read.
-        Objects.requireNonNull(user, "A resolved user is required to scope patient appointments.");
+        Objects.requireNonNull(user, "user");
         if (isSuperAdmin(user)) {
             return appointmentRepository.findByPatient_Id(patientId).stream()
                 .map(appointmentMapper::toAppointmentResponseDTO)

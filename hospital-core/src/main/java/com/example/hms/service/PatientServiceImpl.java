@@ -1710,6 +1710,11 @@ public class PatientServiceImpl implements PatientService {
         }
 
         PatientProblem problem = loadPatientProblem(patientId, hospitalId, diagnosisId);
+        // QA D1186 class (round 22): a removed diagnosis stays removed; a second
+        // removal overwrote the recorded reason and wrote another DELETED row.
+        if (problem.getStatus() == ProblemStatus.INACTIVE) {
+            throw new BusinessException("patient.r22.diagnosisAlreadyRemoved");
+        }
         Staff staff = resolveStaffContext(requesterUserId, problem.getHospital().getId());
         String beforeSnapshot = serializeProblemSnapshot(problem);
 

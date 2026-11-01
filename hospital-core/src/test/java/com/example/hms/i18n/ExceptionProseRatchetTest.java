@@ -50,7 +50,11 @@ class ExceptionProseRatchetTest {
         "new\\s+(?:[a-z]\\w*\\s*\\.\\s*)*(?:BusinessException|BusinessRuleException|BusinessValidationException|BadRequestException"
             + "|ConflictException|IllegalArgumentException|IllegalStateException|UnauthorizedException"
             // QA D1102 (round 19): a CDS refusal is shown to the prescriber too.
-            + "|CdsCriticalBlockException|ResponseStatusException)\\s*\\(\\s*(?:HttpStatus\\.\\w+\\s*,\\s*)?\"((?:[^\"\\\\]|\\\\.)*)\"");
+            + "|CdsCriticalBlockException|ResponseStatusException"
+            // QA D1187 (round 22): a 403 written for the caller and a 404 reach the reader
+            // too, and a sentence handed to String.format is still a sentence.
+            + "|ClientSafeAccessDeniedException|ResourceNotFoundException)\\s*\\(\\s*(?:HttpStatus\\.\\w+\\s*,\\s*)?"
+            + "(?:(?:String|MessageFormat)\\s*\\.\\s*format\\s*\\(\\s*)?\"((?:[^\"\\\\]|\\\\.)*)\"");
 
     static boolean isProse(String literal) {
         return literal.indexOf(' ') >= 0;
@@ -60,7 +64,8 @@ class ExceptionProseRatchetTest {
     static final Pattern PROSE_CONSTANT = Pattern.compile(
         "new\\s+(?:[a-z]\\w*\\s*\\.\\s*)*(?:BusinessException|BusinessRuleException|BusinessValidationException"
             + "|BadRequestException|ConflictException|IllegalArgumentException|IllegalStateException"
-            + "|UnauthorizedException|CdsCriticalBlockException|ResponseStatusException)\\s*\\(\\s*(?:HttpStatus\\.\\w+\\s*,\\s*)?"
+            + "|UnauthorizedException|CdsCriticalBlockException|ResponseStatusException"
+            + "|ClientSafeAccessDeniedException|ResourceNotFoundException)\\s*\\(\\s*(?:HttpStatus\\.\\w+\\s*,\\s*)?"
             + "([A-Z][A-Z0-9_]*)\\s*[,)]");
 
     /** A String constant declared in the same file. */
@@ -345,5 +350,70 @@ class ExceptionProseRatchetTest {
         assertThat(countHelperProse("b.fail(DispenseCheck.EXPIRY, \"lot %s expired on %s\".formatted(a, b));")).isEqualTo(1);
         assertThat(countHelperProse("assertNotSameUser(user, id, \"lab.definition.fourEyes.qaNotSubmitter\");")).isZero();
         assertThat(countHelperProse("requireAtLeastOne(\"patientId or patientIdentifier\", a, b);")).isZero();
+    }
+
+    /**
+     * QA D1187 / D1152 (round 22, D1152 NOT_FIXED twice): the activation code
+     * refusal was keyed in round 21, and the recall refusals one screen away
+     * still reached French and Spanish desks in English, because the ratchet
+     * lets a file keep its old sentences. The front desk, the patient portal,
+     * scheduling, phone verification and the registry hold NONE: every file
+     * under these scopes (a directory takes every file in it, present and
+     * future) is at zero, under the constructor scan and the helper scan,
+     * whatever the baseline says.
+     */
+    static final List<String> ZERO_PROSE_SCOPES = List.of(
+        "com/example/hms/service/scheduling/",
+        "com/example/hms/service/registry/",
+        "com/example/hms/service/ReceptionServiceImpl.java",
+        "com/example/hms/service/AppointmentServiceImpl.java",
+        "com/example/hms/service/InstrumentOutboxServiceImpl.java",
+        "com/example/hms/service/PhoneVerificationServiceImpl.java",
+        "com/example/hms/controller/PhoneVerificationController.java",
+        "com/example/hms/service/PatientHospitalRegistrationServiceImpl.java",
+        "com/example/hms/service/EligibilityServiceImpl.java",
+        "com/example/hms/service/UserRoleHospitalAssignmentServiceImpl.java",
+        "com/example/hms/service/impl/PatientPortalServiceImpl.java",
+        "com/example/hms/service/impl/PatientGuarantorServiceImpl.java",
+        "com/example/hms/service/impl/PatientPhotoServiceImpl.java",
+        "com/example/hms/service/impl/AdvanceDirectiveServiceImpl.java");
+
+    @Test
+    @DisplayName("QA D1187: the front-desk, portal, scheduling and registry refusals are keys only")
+    void roundTwentyTwoScopesHoldNoProse() throws IOException {
+        List<String> found = new ArrayList<>();
+        int scanned = 0;
+        try (Stream<Path> files = Files.walk(MAIN_JAVA)) {
+            for (Path p : files.filter(f -> f.toString().endsWith(".java")).toList()) {
+                String rel = MAIN_JAVA.relativize(p).toString().replace('\\', '/');
+                if (ZERO_PROSE_SCOPES.stream().noneMatch(rel::startsWith)) {
+                    continue;
+                }
+                scanned++;
+                String source = Files.readString(p, StandardCharsets.UTF_8);
+                int n = countProse(source) + countHelperProse(source);
+                if (n > 0) {
+                    found.add(rel + ": " + n);
+                }
+            }
+        }
+        assertThat(scanned).as("the scopes still name real files").isGreaterThanOrEqualTo(ZERO_PROSE_SCOPES.size());
+        assertThat(found).as("Throw a messages*.properties key (en/fr/es), not an English sentence (QA D1187)").isEmpty();
+    }
+
+    @Test
+    @DisplayName("QA D1187: the D1187 sentences, a 403 for the caller, a 404 and a formatted sentence are all seen")
+    void scanSeesTheRoundTwentyTwoShapes() {
+        assertThat(countProse("throw new BusinessException(\"This recall is already \" + recall.getStatus() + \".\");"))
+            .isEqualTo(1);
+        assertThat(countProse("throw new BusinessException(\n    \"Only a message in ERROR can be retried; this one is \" + s);"))
+            .isEqualTo(1);
+        assertThat(countProse("throw new ClientSafeAccessDeniedException(\"You may only close your own entries.\");"))
+            .isEqualTo(1);
+        assertThat(countProse("throw new ResourceNotFoundException(\"Recall not found.\");")).isEqualTo(1);
+        assertThat(countProse("throw new BusinessException(String.format(\"Unknown outbox status: %s\", s));"))
+            .isEqualTo(1);
+        assertThat(countProse("throw new BusinessException(\"recall.close.alreadyCancelled\");")).isZero();
+        assertThat(countProse("throw new ResourceNotFoundException(\"recall.notFound\", id);")).isZero();
     }
 }

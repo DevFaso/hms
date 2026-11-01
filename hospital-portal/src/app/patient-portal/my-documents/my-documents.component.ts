@@ -12,6 +12,7 @@ import { currentLocale } from '../../shared/i18n/app-locale';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { blobRefusalReason } from '../../shared/blob-refusal';
 /**
  * The largest file the upload endpoint accepts: spring.servlet.multipart
  * max-file-size is 10MB (the backend is being aligned on this one number).
@@ -169,9 +170,12 @@ export class MyDocumentsComponent implements OnInit {
         anchor.click();
         URL.revokeObjectURL(url);
       },
-      error: () => {
+      error: (err: unknown) => {
         this.downloading.set(null);
-        this.toast.error(this.translate.instant('PORTAL.DOCUMENTS.DOWNLOAD_FAILED'));
+        // QA D1184: a file the disk no longer holds says so, in the reader's language.
+        void blobRefusalReason(err).then((reason) =>
+          this.toast.error(reason ?? this.translate.instant('PORTAL.DOCUMENTS.DOWNLOAD_FAILED')),
+        );
       },
     });
   }

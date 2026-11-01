@@ -213,8 +213,9 @@ public class PrescriptionClarificationService {
         }
         UUID rxHospitalId = prescription.getHospital() != null ? prescription.getHospital().getId() : null;
         if (rxHospitalId == null) {
+            // QA D1187 class (round 22): a key, in the reader's language.
             throw new com.example.hms.exception.ClientSafeAccessDeniedException(
-                    "Only a clinician at the prescribing hospital can resolve a clarification.");
+                    "pharmacy.clarification.resolve.prescribingHospitalOnly");
         }
         // Looked up at the prescription's hospital, not "the doctor's first
         // profile": a clinician credentialed at two hospitals has two.
@@ -223,7 +224,6 @@ public class PrescriptionClarificationService {
                 // for a foreign prescription before this runs, and the
                 // sentences name what the caller would need.
                 .orElseThrow(() -> new com.example.hms.exception.ClientSafeAccessDeniedException(
-                        "Only a clinician with a staff profile at the prescribing hospital can "
-                                + "resolve a clarification."));
+                        "pharmacy.clarification.resolve.staffProfileRequired"));
     }
 }

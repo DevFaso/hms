@@ -86,6 +86,7 @@ public class ReceptionServiceImpl implements ReceptionService {
     private static final DateTimeFormatter EXPIRY_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
     private static final String WAITLIST_STATUS_WAITING = "WAITING";
     private static final String WAITLIST_STATUS_OFFERED = "OFFERED";
+    private static final String WAITLIST_STATUS_CLOSED = "CLOSED";
     private static final int DEFAULT_OFFER_HOURS = 48;
     private static final String STATUS_ARRIVED = "ARRIVED";
     private static final String STATUS_WALK_IN = "WALK_IN";
@@ -879,7 +880,7 @@ public class ReceptionServiceImpl implements ReceptionService {
         Appointment appointment = appointmentRepo.findById(booked.getAppointmentId())
                 .orElseThrow(() -> new ResourceNotFoundException("appointment.notFound", booked.getAppointmentId()));
         entry.setOfferedAppointment(appointment);
-        entry.setStatus("CLOSED");
+        entry.setStatus(WAITLIST_STATUS_CLOSED);
         return toWaitlistResponse(waitlistRepo.save(entry), hospitalId);
     }
 
@@ -958,10 +959,24 @@ public class ReceptionServiceImpl implements ReceptionService {
     public void closeWaitlistEntry(UUID waitlistId, UUID hospitalId, String reason) {
         AppointmentWaitlist entry = waitlistRepo.findByIdAndHospital_Id(waitlistId, hospitalId)
                 .orElseThrow(() -> new ResourceNotFoundException(WAITLIST_ENTRY_NOT_FOUND_KEY, waitlistId));
+        // QA D1186 (round 22): a closed entry stays closed, and the reason it
+        // was closed with (the D1157 record) is never overwritten.
+        if (WAITLIST_STATUS_CLOSED.equals(entry.getStatus())) {
+            throw new BusinessException("waitlist.close.alreadyClosed");
+        }
         // QA D1157 (round 21): closing an entry says why, on the server; an
         // empty body closed it at once and nothing recorded the decision.
-        entry.setCloseReason(com.example.hms.service.support.CancelledOrders.requireCancelReason(reason));
-        entry.setStatus("CLOSED");
+        String closeReason = com.example.hms.service.support.CancelledOrders.requireCancelReason(reason);
+        // QA D1185 (round 22): closing an OFFERED entry withdraws the offer and
+        // frees the held slot at once, as a decline and the expiry sweep do;
+        // the slot stayed HELD (and out of search) until the hold expired.
+        if (WAITLIST_STATUS_OFFERED.equals(entry.getStatus())) {
+            releaseOfferedSlot(entry);
+            entry.setOfferedSlot(null);
+            entry.setOfferExpiresAt(null);
+        }
+        entry.setCloseReason(closeReason);
+        entry.setStatus(WAITLIST_STATUS_CLOSED);
         waitlistRepo.save(entry);
     }
 

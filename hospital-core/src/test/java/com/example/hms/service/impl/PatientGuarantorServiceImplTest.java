@@ -110,7 +110,7 @@ class PatientGuarantorServiceImplTest {
 
         assertThatThrownBy(() -> service.add(patientId, null, dto))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("active hospital");
+            .hasMessageContaining("guarantor.hospital.required");
     }
 
     @Test
@@ -123,7 +123,7 @@ class PatientGuarantorServiceImplTest {
 
         assertThatThrownBy(() -> service.add(patientId, foreignHospitalId, dto))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("not registered");
+            .hasMessageContaining("guarantor.patient.notRegistered");
     }
 
     @Test
@@ -184,7 +184,7 @@ class PatientGuarantorServiceImplTest {
 
         assertThatThrownBy(() -> service.deactivate(patientId, id, hospitalId))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("already inactive");
+            .hasMessageContaining("guarantor.alreadyInactive");
     }
 
     @Test

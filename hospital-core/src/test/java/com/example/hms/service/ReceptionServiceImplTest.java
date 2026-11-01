@@ -1430,6 +1430,61 @@ class ReceptionServiceImplTest {
         }
 
         @Test
+        @DisplayName("QA D1186: a closed entry is not closed again and its reason is kept")
+        void aClosedEntryIsNotClosedAgain_D1186() {
+            UUID waitlistId = UUID.randomUUID();
+            AppointmentWaitlist entry = AppointmentWaitlist.builder()
+                    .status("CLOSED").closeReason("Premier motif").build();
+            when(waitlistRepo.findByIdAndHospital_Id(waitlistId, hospitalId))
+                    .thenReturn(Optional.of(entry));
+
+            assertThatThrownBy(() -> service.closeWaitlistEntry(waitlistId, hospitalId, "Second motif"))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class)
+                    .extracting("messageKey").isEqualTo("waitlist.close.alreadyClosed");
+            assertThat(entry.getCloseReason()).isEqualTo("Premier motif");
+            verify(waitlistRepo, never()).save(entry);
+        }
+
+        @Test
+        @DisplayName("QA D1185: closing an OFFERED entry frees the held slot and withdraws the offer")
+        void closingAnOfferedEntryReleasesTheSlot_D1185() {
+            UUID waitlistId = UUID.randomUUID();
+            AppointmentSlot slot = offerSlot(LocalDateTime.now().plusDays(1));
+            slot.setStatus(SlotStatus.HELD);
+            slot.setHeldUntil(LocalDateTime.now().plusHours(48));
+            AppointmentWaitlist entry = AppointmentWaitlist.builder()
+                    .status("OFFERED").offeredSlot(slot).offerExpiresAt(LocalDateTime.now().plusHours(48)).build();
+            when(waitlistRepo.findByIdAndHospital_Id(waitlistId, hospitalId))
+                    .thenReturn(Optional.of(entry));
+
+            service.closeWaitlistEntry(waitlistId, hospitalId, "Patient a trouvé un autre créneau");
+
+            assertThat(slot.getStatus()).isEqualTo(SlotStatus.OPEN);
+            assertThat(slot.getHeldUntil()).isNull();
+            verify(slotRepo).save(slot);
+            assertThat(entry.getOfferedSlot()).isNull();
+            assertThat(entry.getOfferExpiresAt()).isNull();
+            assertThat(entry.getStatus()).isEqualTo("CLOSED");
+            assertThat(entry.getCloseReason()).isEqualTo("Patient a trouvé un autre créneau");
+        }
+
+        @Test
+        @DisplayName("QA D1185: a refused close of an OFFERED entry leaves the slot held")
+        void aRefusedCloseLeavesTheOfferAlone_D1185() {
+            UUID waitlistId = UUID.randomUUID();
+            AppointmentSlot slot = offerSlot(LocalDateTime.now().plusDays(1));
+            slot.setStatus(SlotStatus.HELD);
+            AppointmentWaitlist entry = AppointmentWaitlist.builder().status("OFFERED").offeredSlot(slot).build();
+            when(waitlistRepo.findByIdAndHospital_Id(waitlistId, hospitalId))
+                    .thenReturn(Optional.of(entry));
+
+            assertThatThrownBy(() -> service.closeWaitlistEntry(waitlistId, hospitalId, " "))
+                    .isInstanceOf(com.example.hms.exception.BusinessException.class);
+            assertThat(slot.getStatus()).isEqualTo(SlotStatus.HELD);
+            verify(slotRepo, never()).save(slot);
+        }
+
+        @Test
         @DisplayName("throws when entry not found")
         void throwsWhenNotFound() {
             UUID waitlistId = UUID.randomUUID();

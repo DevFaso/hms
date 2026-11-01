@@ -356,6 +356,20 @@ class ArchivedHospitalAssignmentTest {
     }
 
     @Test
+    @DisplayName("QA r22: resend-notification for an assignment already verified is a localized 409 and nothing is sent")
+    void resendNotificationIsRefusedForAVerifiedAssignment() {
+        UserRoleHospitalAssignment verified = invitation(open);
+        verified.setConfirmationVerifiedAt(java.time.LocalDateTime.now().minusDays(1));
+        when(assignmentRepository.findById(verified.getId())).thenReturn(Optional.of(verified));
+
+        UUID targetId = verified.getId();
+        assertThatThrownBy(() -> service.resendNotifications(targetId))
+            .isInstanceOf(ConflictException.class)
+            .hasMessage("assignment.resend.alreadyVerified");
+        verifyNoInteractions(emailService, smsService);
+    }
+
+    @Test
     @DisplayName("the AFTER_COMMIT send for a row at a hospital closed in between sends nothing and does not throw")
     void afterCommitSendIsSkipped() {
         UserRoleHospitalAssignment pending = invitation(archived);

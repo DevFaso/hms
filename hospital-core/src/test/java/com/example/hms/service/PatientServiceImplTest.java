@@ -910,6 +910,27 @@ class PatientServiceImplTest {
     }
 
     @Test
+    void aRemovedDiagnosisIsNotRemovedAgainAndKeepsItsReason_D1186() {
+        UUID requesterUserId = UUID.randomUUID();
+        UUID diagnosisId = UUID.randomUUID();
+        PatientProblem problem = new PatientProblem();
+        problem.setId(diagnosisId);
+        problem.setPatient(patient);
+        problem.setHospital(hospital);
+        problem.setStatus(ProblemStatus.INACTIVE);
+        problem.setStatusChangeReason("Erreur de saisie");
+        when(patientProblemRepository.findById(diagnosisId)).thenReturn(Optional.of(problem));
+        when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
+
+        assertThatThrownBy(() -> patientService.deletePatientDiagnosis(
+            patientId, hospitalId, diagnosisId, requesterUserId, "Second motif"))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("patient.r22.diagnosisAlreadyRemoved");
+        assertThat(problem.getStatusChangeReason()).isEqualTo("Erreur de saisie");
+        verify(patientProblemRepository, never()).save(any());
+    }
+
+    @Test
     void deletePatientDiagnosisRequiresReason() {
         UUID requesterUserId = UUID.randomUUID();
         UUID diagnosisId = UUID.randomUUID();

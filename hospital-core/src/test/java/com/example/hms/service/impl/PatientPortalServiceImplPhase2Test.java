@@ -235,7 +235,9 @@ class PatientPortalServiceImplPhase2Test {
             assertThat(result).isNotNull();
             assertThat(result.getId()).isEqualTo(apptId);
             assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.CANCELLED);
-            assertThat(appointment.getNotes()).contains("Patient cancelled: Schedule conflict");
+            // QA D1196: the reason is data in its own column, not English in the notes.
+            assertThat(appointment.getStatusReason()).isEqualTo("Schedule conflict");
+            assertThat(appointment.getNotes()).isNull();
             verify(appointmentRepository).save(appointment);
             // The appointment owns its slot (P3 #22): a portal cancel frees
             // the time just like a desk cancel.
@@ -427,7 +429,9 @@ class PatientPortalServiceImplPhase2Test {
 
             service.cancelMyAppointment(auth, dto, Locale.ENGLISH);
 
-            assertThat(appointment.getNotes()).isEqualTo("Doctor note | Patient cancelled: Emergency");
+            // QA D1196: the staff notes are left as they were; the reason is its own field.
+            assertThat(appointment.getNotes()).isEqualTo("Doctor note");
+            assertThat(appointment.getStatusReason()).isEqualTo("Emergency");
         }
     }
 
@@ -495,7 +499,9 @@ class PatientPortalServiceImplPhase2Test {
             assertThat(appointment.getEndTime()).isEqualTo(LocalTime.of(14, 30));
             // QA D977: a moved appointment is booked at its new time, as the desk lands it.
             assertThat(appointment.getStatus()).isEqualTo(AppointmentStatus.SCHEDULED);
-            assertThat(appointment.getNotes()).contains("Patient rescheduled: Need afternoon slot");
+            // QA D1196: the reason for the move is data, never "Patient rescheduled: ..." in the notes.
+            assertThat(appointment.getStatusReason()).isEqualTo("Need afternoon slot");
+            assertThat(java.util.Objects.toString(appointment.getNotes(), "")).doesNotContain("Need afternoon slot");
             verify(appointmentRepository).save(appointment);
         }
 
@@ -1261,7 +1267,7 @@ class PatientPortalServiceImplPhase2Test {
 
             assertThatThrownBy(() -> service.cancelMyRefill(auth, refillId))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("Only pending refill requests can be cancelled");
+                    .hasMessageContaining("patient.refill.cancel.notPending");
         }
 
         @Test
@@ -1276,7 +1282,7 @@ class PatientPortalServiceImplPhase2Test {
 
             assertThatThrownBy(() -> service.cancelMyRefill(auth, refillId))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("Only pending refill requests");
+                    .hasMessageContaining("patient.refill.cancel.notPending");
         }
     }
 
@@ -1597,7 +1603,7 @@ class PatientPortalServiceImplPhase2Test {
 
             assertThatThrownBy(() -> service.cancelMyAppointment(auth, dto, Locale.ENGLISH))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("Unable to resolve user");
+                    .hasMessageContaining("patient.refill.decision.userUnresolved");
         }
 
         @Test

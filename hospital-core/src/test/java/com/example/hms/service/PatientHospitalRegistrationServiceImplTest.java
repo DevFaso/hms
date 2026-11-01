@@ -299,7 +299,7 @@ class PatientHospitalRegistrationServiceImplTest {
 
         assertThatThrownBy(() -> service.registerPatient(dto))
             .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("Patient");
+            .hasMessageContaining("registration.patient.required");
     }
 
     @Test
@@ -309,7 +309,7 @@ class PatientHospitalRegistrationServiceImplTest {
 
         assertThatThrownBy(() -> service.registerPatient(dto))
             .isInstanceOf(IllegalArgumentException.class)
-            .hasMessageContaining("Hospital");
+            .hasMessageContaining("registration.hospital.required");
     }
 
     @Test
