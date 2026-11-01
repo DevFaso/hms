@@ -21,7 +21,8 @@ config — the pipeline is dormant and activates the moment
 | Per-alert response runbook | [`docs/runbooks/grafana-observability.md`](runbooks/grafana-observability.md) | Written |
 | Railway env vars | Railway | **The only missing piece** |
 
-As of 2026-11-01 neither `hms-backend-dev` nor `hms-backend-prod` had any
+As of 2026-11-01 neither `hms-backend-dev` nor `hms-backend-core` (the prod
+backend — it does *not* follow the `-<env>` pattern) had any
 `OTEL_*` or `GRAFANA_*` variable set, so nothing had ever been exported.
 
 ## The stack
@@ -48,7 +49,7 @@ As of 2026-11-01 neither `hms-backend-dev` nor `hms-backend-prod` had any
 >
 > Confirm verbatim at **Grafana Cloud → your stack → OpenTelemetry**, which prints
 > the endpoint and instance ID. If it disagrees, no code change is needed:
-> `GRAFANA_ZONE=prod-us-east-2 ./scripts/grafana-cloud-setup.sh dev glc_…`
+> `GRAFANA_ZONE=prod-us-east-2 ./scripts/grafana-cloud-setup.sh dev`
 
 Production uses **push**, not scrape. That matters for security: see
 [Why the scrape endpoint is closed](#why-the-scrape-endpoint-is-closed).
@@ -248,8 +249,10 @@ docker compose --profile observability up -d
 
 ## Security notes
 
-- Never commit a `glc_` token. The setup script reads it from the command line
-  and writes it only to Railway.
+- Never commit a `glc_` token. The setup script never takes it as an argument —
+  it reads `GRAFANA_CLOUD_TOKEN` or prompts with echo off, and hands it to
+  Railway over stdin, so it stays out of argv, the process list and shell
+  history. It is written only to Railway.
 - The access policy token should hold `metrics:write`, `logs:write`,
   `traces:write` and nothing else.
 - OTLP export is HTTPS with Basic auth.

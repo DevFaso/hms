@@ -2,18 +2,22 @@ package com.example.hms.config;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.support.PropertiesLoaderUtils;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.security.authorization.AuthorizationManager;
 import org.springframework.security.authorization.AuthorizationResult;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
 
+import java.io.IOException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Properties;
 import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -115,6 +119,44 @@ class MetricsScrapeAuthorizationTest {
             blankBearer.addHeader("Authorization", "Bearer " + configured);
             assertThat(granted(gate, blankBearer)).as("configured=%s, blank bearer", configured).isFalse();
         }
+    }
+
+    @Test
+    @DisplayName("an unrelated proxy-injected Bearer does not shadow a correct X-Metrics-Token")
+    void bearerDoesNotShadowCustomHeader() throws ReflectiveOperationException {
+        var gate = gateWithToken(TOKEN);
+
+        var request = new MockHttpServletRequest("GET", "/actuator/prometheus");
+        request.addHeader("X-Metrics-Token", TOKEN);
+        request.addHeader("Authorization", "Bearer eyJhbGciOiJIUzI1NiJ9.some.jwt");
+
+        assertThat(granted(gate, request))
+            .as("a scraper behind an auth proxy still presents a valid scrape token")
+            .isTrue();
+    }
+
+    @Test
+    @DisplayName("/actuator/metrics is not exposed — it carries the same data as the gated endpoint")
+    void metricsEndpointIsNotExposed() throws IOException {
+        Properties props = PropertiesLoaderUtils.loadProperties(new ClassPathResource("application.properties"));
+        String exposed = props.getProperty("management.endpoints.web.exposure.include", "");
+
+        assertThat(exposed.split(","))
+            .as("/actuator/metrics only ever sat behind anyRequest().authenticated(), so any "
+                + "valid token — including a patient app's — could read the URI inventory")
+            .doesNotContain("metrics");
+    }
+
+    @Test
+    @DisplayName("every other actuator endpoint is default-denied, not merely authenticated")
+    void actuatorSurfaceIsDefaultDenied() throws Exception {
+        Path source = Path.of("src/main/java/com/example/hms/config/SecurityConfig.java");
+        String body = Files.readString(source, StandardCharsets.UTF_8);
+
+        assertThat(body)
+            .as("a catch-all must stop a newly exposed actuator endpoint falling through to "
+                + "anyRequest().authenticated()")
+            .contains(".requestMatchers(\"/actuator/**\").hasAuthority(ROLE_SUPER_ADMIN)");
     }
 
     @Test

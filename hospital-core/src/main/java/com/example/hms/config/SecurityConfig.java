@@ -50,6 +50,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.ArrayList;
 import java.util.List;
 
 import static com.example.hms.config.SecurityConstants.ROLE_DOCTOR;
@@ -428,24 +429,40 @@ public class SecurityConfig {
             if (metricsScrapeToken == null || metricsScrapeToken.isBlank()) {
                 return new AuthorizationDecision(false);
             }
-            String presented = presentedScrapeToken(context.getRequest());
-            if (presented == null) {
-                return new AuthorizationDecision(false);
+            byte[] expected = metricsScrapeToken.getBytes(StandardCharsets.UTF_8);
+            for (String presented : presentedScrapeTokens(context.getRequest())) {
+                if (MessageDigest.isEqual(presented.getBytes(StandardCharsets.UTF_8), expected)) {
+                    return new AuthorizationDecision(true);
+                }
             }
-            return new AuthorizationDecision(MessageDigest.isEqual(
-                presented.getBytes(StandardCharsets.UTF_8),
-                metricsScrapeToken.getBytes(StandardCharsets.UTF_8)));
+            return new AuthorizationDecision(false);
         };
     }
 
-    /** Extracts the presented scrape credential, or {@code null} when the request carries none. */
-    private static String presentedScrapeToken(HttpServletRequest request) {
+    /**
+     * Extracts the presented scrape credentials, most specific first.
+     *
+     * <p>Returns every candidate rather than the first one found. A scraper behind a proxy that
+     * injects its own {@code Authorization: Bearer <jwt>} would otherwise have that unrelated JWT
+     * shadow a perfectly good {@code X-Metrics-Token}, and the scrape would 403 for a reason
+     * nothing in the logs explains.
+     */
+    private static List<String> presentedScrapeTokens(HttpServletRequest request) {
+        List<String> candidates = new ArrayList<>(2);
+
+        String headerToken = request.getHeader("X-Metrics-Token");
+        if (headerToken != null && !headerToken.isBlank()) {
+            candidates.add(headerToken.trim());
+        }
+
         String authorization = request.getHeader("Authorization");
         if (authorization != null && authorization.regionMatches(true, 0, "Bearer ", 0, 7)) {
-            return authorization.substring(7).trim();
+            String bearer = authorization.substring(7).trim();
+            if (!bearer.isEmpty()) {
+                candidates.add(bearer);
+            }
         }
-        String headerToken = request.getHeader("X-Metrics-Token");
-        return headerToken == null || headerToken.isBlank() ? null : headerToken.trim();
+        return candidates;
     }
 
     @Bean
@@ -570,6 +587,13 @@ public class SecurityConfig {
                 // (OTEL agent -> Grafana Cloud OTLP), so this endpoint stays closed unless a
                 // scrape token is configured. See docs/GRAFANA_CLOUD_SETUP.md.
                 .requestMatchers("/actuator/prometheus").access(metricsScrapeAuthorization())
+                // Default-deny for the rest of the actuator surface. Without this, anything
+                // added to management.endpoints.web.exposure.include falls through to
+                // anyRequest().authenticated() and is readable by ANY valid token, including
+                // a patient app's — which is exactly how /actuator/metrics came to expose the
+                // URI inventory and business counters. Exposing a new endpoint should be a
+                // deliberate act, not an accidental one.
+                .requestMatchers("/actuator/**").hasAuthority(ROLE_SUPER_ADMIN)
                 .requestMatchers("/.well-known/jwks.json").permitAll()
                 // FHIR conformance discovery — public per HL7 FHIR R4 spec
                 // (clients query /fhir/metadata before authenticating)

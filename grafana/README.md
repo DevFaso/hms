@@ -43,7 +43,7 @@ All dashboards live under the **HMS** folder in Grafana, are tagged with
 | `hms-api-endpoints`    | API Endpoint Deep Dive         | Drill into one URI/method.             |
 | `hms-postgres`         | PostgreSQL Deep Dive           | DB connections, locks, cache, IO.      |
 | `hms-host`             | Host Metrics                   | Node-exporter (CPU/mem/disk/net).      |
-| `hms-logs`             | Log Analytics (Loki)           | Errors, exceptions, free-text search.  |
+| `hms-logs`             | Log Analytics (Loki)           | Errors, exceptions, free-text search. Empty for a host-run backend — see the known gap below. |
 
 ### Dashboard conventions used everywhere
 
@@ -88,6 +88,23 @@ Confirm the scrape is actually landing — this should be non-empty within ~30s:
 curl -s 'http://localhost:9090/api/v1/query?query=up{job="integrations/spring-boot"}'
 ```
 
+### Known gap: backend logs, when the backend runs on the host
+
+Alloy sources logs from `discovery.docker` — container stdout. A backend started
+with `bootRun` is not a container, and `logback-spring.xml` has no file appender,
+so **its logs do not reach Loki** and the *Log Analytics* dashboard stays empty.
+Metrics and probes are unaffected; they go over HTTP to `host.docker.internal`.
+
+Your options, in increasing order of effort:
+
+- Read the backend's console directly — usually enough for local work.
+- Run the backend as a container on this compose network, and `discovery.docker`
+  picks it up with no further change.
+- Add a file appender and a `loki.source.file` block tailing a mounted path.
+
+None of this affects production, where the OTEL agent ships logs to Grafana Cloud
+directly and does not involve Alloy at all.
+
 Then:
 
 - Grafana → http://localhost:3000  (admin/admin — change in compose)
@@ -107,8 +124,9 @@ Setup is one command per environment; see
 [`docs/GRAFANA_CLOUD_SETUP.md`](../docs/GRAFANA_CLOUD_SETUP.md):
 
 ```bash
-./scripts/grafana-cloud-setup.sh dev  glc_your_token
-./scripts/grafana-cloud-setup.sh prod glc_your_token
+# Each prompts for the token with echo off; it is never an argument.
+./scripts/grafana-cloud-setup.sh dev
+./scripts/grafana-cloud-setup.sh prod
 ```
 
 If instead you want *this* Alloy to remote-write to Grafana Cloud (e.g. shipping

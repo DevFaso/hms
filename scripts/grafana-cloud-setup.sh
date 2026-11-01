@@ -92,7 +92,13 @@ if [[ "$GLC_TOKEN" != glc_* ]]; then
     exit 64
 fi
 
-readonly SERVICE="hms-backend-${ENVIRONMENT}"
+# The prod backend service is hms-backend-core, NOT hms-backend-prod — only dev follows
+# the -<env> pattern. docs/runbooks/railway-env-matrix.md calls this out explicitly; deriving
+# the name from the environment would make every prod run fail on a nonexistent service.
+case "$ENVIRONMENT" in
+    dev)  readonly SERVICE="hms-backend-dev" ;;
+    prod) readonly SERVICE="hms-backend-core" ;;
+esac
 
 # base64 with no line wrapping: a wrapped header is silently rejected by the
 # gateway as malformed, which looks exactly like a bad token.
