@@ -57,6 +57,7 @@ describe('UltrasoundTabComponent', () => {
       'followUpRequired',
       'anomalies',
       'cancelOrder',
+      'submitReport',
     ]);
     service.pendingOrders.and.returnValue(of([]));
     service.anomalies.and.returnValue(of([]));
@@ -205,6 +206,39 @@ describe('UltrasoundTabComponent', () => {
       host().remove();
     }
   }));
+
+  it('QA D1150: the finding is never preselected and a report with no finding is refused, field by field', () => {
+    create(['ROLE_MIDWIFE']);
+    const cmp = fixture.componentInstance;
+    cmp.openReport(order());
+    fixture.detectChanges();
+    expect(cmp.reportForm.findingCategory).toBe('');
+    const save = () => {
+      const buttons = Array.from(
+        host().querySelectorAll<HTMLButtonElement>('.modal-actions .btn-primary'),
+      );
+      buttons[buttons.length - 1].click();
+      fixture.detectChanges();
+    };
+    save();
+    expect(service.submitReport).not.toHaveBeenCalled();
+    expect(host().querySelector('#rep-category')?.getAttribute('aria-invalid')).toBe('true');
+
+    // A finding category alone is not a report: nothing was measured or written.
+    cmp.reportForm.findingCategory = 'NORMAL';
+    save();
+    expect(service.submitReport).not.toHaveBeenCalled();
+    expect(host().querySelector('#rep-category')?.getAttribute('aria-invalid')).toBeNull();
+    expect(host().querySelector('#rep-summary')?.getAttribute('aria-invalid')).toBe('true');
+
+    service.submitReport.and.returnValue(of({}) as never);
+    cmp.reportForm.fetalHeartRate = 142;
+    save();
+    expect(service.submitReport).toHaveBeenCalledWith(
+      'us-1',
+      jasmine.objectContaining({ findingCategory: 'NORMAL', fetalHeartRate: 142 }),
+    );
+  });
 
   it('lists the hospital’s orders with a translated scan type and status', () => {
     create(['ROLE_MIDWIFE']);

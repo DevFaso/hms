@@ -47,3 +47,23 @@ export function labelledRefusalReason(
     );
   return labelled.length > 0 ? [...new Set(labelled)].join('. ') : reason;
 }
+
+/**
+ * QA D1156 / D1124 / D1089 (round 21): the form fields a bean-validation
+ * refusal names (`fieldErrors`), as the ids of the form's elements, so the
+ * page marks them (refuseFields) instead of showing only the bare constraint
+ * text. `idByField` maps a request field to its element id; a field the map
+ * does not know is left out. Anything that is not such a refusal gives `[]`.
+ */
+export function refusedFieldIds(
+  err: unknown,
+  idByField: Readonly<Record<string, string>>,
+): string[] {
+  const body = (err as { error?: unknown } | null)?.error as
+    { fieldErrors?: unknown } | null | undefined;
+  const fieldErrors = body?.fieldErrors;
+  if (!fieldErrors || typeof fieldErrors !== 'object') return [];
+  return Object.keys(fieldErrors)
+    .map((field) => idByField[field])
+    .filter((id): id is string => typeof id === 'string');
+}

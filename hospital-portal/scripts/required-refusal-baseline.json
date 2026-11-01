@@ -229,14 +229,6 @@
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
     },
-    "src/app/maternity/ultrasound-tab.ts::unmarked-refusal::submitOrder::ULTRASOUND.ORDER_REQUIRED_FIELDS": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
-    "src/app/maternity/ultrasound-tab.ts::unmarked-refusal::submitReport::ULTRASOUND.REPORT_REQUIRED_FIELDS": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
     "src/app/medication-history/medication-history.ts::unmarked-refusal::submitFill::MED_TIMELINE.FILL_REQUIRED_FIELDS": {
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
@@ -318,10 +310,6 @@
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
     },
     "src/app/patient-portal/my-family-access/my-family-access.component.ts::unmarked-refusal::grantAccess::PORTAL.FAMILY.REQUIRED_FIELDS": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
-    "src/app/patients/advance-directives/advance-directives-tab.component.ts::unmarked-refusal::submit::DIRECTIVES.TYPE_REQUIRED": {
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
     },

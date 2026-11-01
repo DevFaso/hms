@@ -108,6 +108,8 @@ describe('AdvanceDirectivesTabComponent', () => {
     setup([]);
     component.form = {
       directiveType: 'DO_NOT_RESUSCITATE',
+      status: 'ACTIVE',
+      physicianName: 'Dr Ouédraogo',
       effectiveDate: '2026-08-22',
       expirationDate: '2026-08-01',
     };
@@ -122,13 +124,49 @@ describe('AdvanceDirectivesTabComponent', () => {
     setup([]);
     const backendMessage = 'An advance directive cannot expire before it takes effect.';
     directiveService.create.and.returnValue(
-      throwError(() => ({ error: { message: backendMessage } }) as unknown),
+      throwError(() => ({ status: 400, error: { message: backendMessage } }) as unknown),
     );
-    component.form = { directiveType: 'LIVING_WILL' };
+    component.form = {
+      directiveType: 'LIVING_WILL',
+      status: 'ACTIVE',
+      effectiveDate: '2026-08-22',
+    };
 
     component.submit();
 
     expect(toast.error).toHaveBeenCalledWith(backendMessage);
+  });
+
+  it('QA D1148: one click on Save records nothing — type, status and date are named, the DNR needs its physician', () => {
+    setup([]);
+    component.openCreate();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    // A submit button submits only a form that is in the document.
+    document.body.appendChild(host);
+    // Nothing is pre-filled.
+    expect(component.form.directiveType).toBe('');
+    expect(component.form.status).toBe('');
+    host.querySelector<HTMLButtonElement>('[data-testid="directive-save"]')!.click();
+    fixture.detectChanges();
+    expect(directiveService.create).not.toHaveBeenCalled();
+    for (const id of ['directive-type', 'directive-status', 'directive-effective']) {
+      expect(host.querySelector('#' + id)?.getAttribute('aria-invalid'))
+        .withContext(id)
+        .toBe('true');
+    }
+
+    component.form = {
+      directiveType: 'DO_NOT_RESUSCITATE',
+      status: 'ACTIVE',
+      effectiveDate: '2026-10-31',
+    };
+    fixture.detectChanges();
+    host.querySelector<HTMLButtonElement>('[data-testid="directive-save"]')!.click();
+    fixture.detectChanges();
+    expect(directiveService.create).not.toHaveBeenCalled();
+    expect(host.querySelector('#directive-physician')?.getAttribute('aria-invalid')).toBe('true');
+    host.remove();
   });
 
   it('revokes through the revoke endpoint after confirmation, then reloads', () => {

@@ -165,9 +165,38 @@ describe('PostpartumTabComponent — screening', () => {
     );
     component.onPatientPicked({ id: 'p1' } as PatientResponse);
     component.openObservation();
+    // QA D1151: an observation records something (an empty one is refused).
+    component.observationForm.pulseBpm = 88;
     component.submitObservation();
     const body = postpartumSpy.createObservation.calls.mostRecent().args[1];
     expect(body.hospitalId).toBe('h1');
+  });
+
+  it('QA D1151: an empty observation and an empty newborn assessment are refused, the missing finding marked', () => {
+    const fixture = TestBed.createComponent(PostpartumTabComponent);
+    const cmp = fixture.componentInstance;
+    cmp.onPatientPicked({ id: 'p1' } as PatientResponse);
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+
+    cmp.openObservation();
+    fixture.detectChanges();
+    cmp.submitObservation();
+    expect(postpartumSpy.createObservation).not.toHaveBeenCalled();
+    expect(host.querySelector('#obs-temp')?.getAttribute('aria-invalid')).toBe('true');
+    cmp.closeObservation();
+
+    cmp.openAssessment();
+    fixture.detectChanges();
+    cmp.submitAssessment();
+    expect(postpartumSpy.createNewbornAssessment).not.toHaveBeenCalled();
+    expect(host.querySelector('#nb-apgar1')?.getAttribute('aria-invalid')).toBe('true');
+
+    // One finding is enough.
+    postpartumSpy.createNewbornAssessment.and.returnValue(of({ alerts: [] }) as never);
+    cmp.assessmentForm.apgarOneMinute = 8;
+    cmp.submitAssessment();
+    expect(postpartumSpy.createNewbornAssessment).toHaveBeenCalled();
   });
 
   it('picking a patient loads the screening history for the plan instrument', () => {

@@ -156,6 +156,48 @@ describe('ImagingComponent', () => {
     expect(component.selectedOrder()).toBeNull();
   });
 
+  it('QA D1156: "Créer une Demande" on an empty form names the missing fields before any request', () => {
+    const fixture = TestBed.createComponent(ImagingComponent);
+    fixture.detectChanges();
+    const cmp = fixture.componentInstance;
+    cmp.openCreate();
+    fixture.detectChanges();
+    const host = fixture.nativeElement as HTMLElement;
+    host.querySelector<HTMLButtonElement>('[data-testid="imaging-order-submit"]')!.click();
+    fixture.detectChanges();
+    expect(imagingSpy.createOrder).not.toHaveBeenCalled();
+    expect(host.querySelector('#img-studyType')?.getAttribute('aria-invalid')).toBe('true');
+    expect(host.querySelector('label[for="img-studyType"]')?.textContent).toContain('*');
+  });
+
+  it('QA D1156: a server field refusal is named by its label and marked, never the bare constraint text', () => {
+    const fixture = TestBed.createComponent(ImagingComponent);
+    fixture.detectChanges();
+    const cmp = fixture.componentInstance;
+    cmp.openCreate();
+    cmp.form.patientId = 'p1';
+    cmp.form.studyType = 'Thorax';
+    cmp.form.hospitalId = 'h1';
+    fixture.detectChanges();
+    imagingSpy.createOrder.and.returnValue(
+      throwError(() => ({
+        status: 400,
+        error: {
+          error: 'Validation Failed',
+          message: 'ne doit pas être vide',
+          fieldErrors: { studyType: 'ne doit pas être vide' },
+        },
+      })),
+    );
+    const host = fixture.nativeElement as HTMLElement;
+    host.querySelector<HTMLButtonElement>('[data-testid="imaging-order-submit"]')!.click();
+    fixture.detectChanges();
+    expect(imagingSpy.createOrder).toHaveBeenCalled();
+    // The label key (TranslateModule without translations echoes it) precedes the reason.
+    expect(cmp.formError()).toBe('FIELD_LIMITS.FIELD_REASON');
+    expect(host.querySelector('#img-studyType')?.getAttribute('aria-invalid')).toBe('true');
+  });
+
   it('submitForm creates an order and strips the empty laterality', () => {
     component.ngOnInit();
     imagingSpy.createOrder.and.returnValue(of(mockOrder()));

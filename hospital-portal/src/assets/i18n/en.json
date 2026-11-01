@@ -3180,7 +3180,8 @@
     "NOTE_EARLIER_ENTRIES": "Earlier entries of this stay",
     "ADDENDUM_DISCARD_ASK": "Discard the addendum you have typed?",
     "ADDENDUM_KEEP": "Keep writing",
-    "ADDENDUM_DISCARD": "Discard the text"
+    "ADDENDUM_DISCARD": "Discard the text",
+    "NOTE_EMPTY": "Write at least one section of the note before saving it."
   },
   "FCP": {
     "CONFIRM_PASSWORD": "Confirm Password",
@@ -7042,6 +7043,24 @@
         "DAR": "DAR note",
         "SOAP": "SOAP note",
         "SOAPIE": "SOAPIE note"
+      },
+      "ADVANCE_DIRECTIVE_TYPE": {
+        "LIVING_WILL": "Living will",
+        "DURABLE_POWER_OF_ATTORNEY": "Durable power of attorney",
+        "DO_NOT_RESUSCITATE": "Do not resuscitate (DNR)",
+        "PHYSICIAN_ORDERS_FOR_LIFE_SUSTAINING_TREATMENT": "Physician orders for life-sustaining treatment (POLST)",
+        "OTHER": "Other"
+      },
+      "CODE_STATUS": {
+        "LIVING_WILL": "Living will",
+        "DURABLE_POWER_OF_ATTORNEY": "Durable power of attorney",
+        "DO_NOT_RESUSCITATE": "Do not resuscitate (DNR)",
+        "PHYSICIAN_ORDERS_FOR_LIFE_SUSTAINING_TREATMENT": "Physician orders for life-sustaining treatment (POLST)",
+        "OTHER": "Other",
+        "FULL_CODE": "Full code",
+        "DNR": "Do not resuscitate (DNR)",
+        "DNI": "Do not intubate (DNI)",
+        "COMFORT_ONLY": "Comfort care only"
       }
     },
     "DOCUMENTS": {
@@ -10186,7 +10205,8 @@
       "VPO": "OPV (oral polio)",
       "HEPB0": "Hepatitis B (birth dose)"
     },
-    "VACCINE_CODE_HINT": "Filled from the PEV vaccine chosen (CDC CVX table, checked 2026-10-30), or from an earlier dose of the same vaccine in this chart. Optional and editable; MenAfriVac and the malaria vaccine have no CVX code."
+    "VACCINE_CODE_HINT": "Filled from the PEV vaccine chosen (CDC CVX table, checked 2026-10-30), or from an earlier dose of the same vaccine in this chart. Optional and editable; MenAfriVac and the malaria vaccine have no CVX code.",
+    "SOCIAL_EMPTY": "Record at least one item (habits, occupation, living situation or notes) before saving a new version."
   },
   "MATERNITY": {
     "GA": "Gestational age",
@@ -10446,7 +10466,9 @@
     "AC_MM": "AC (mm)",
     "FL_MM": "FL (mm)",
     "NT_MM": "NT (mm)",
-    "CRL_MM": "CRL (mm)"
+    "CRL_MM": "CRL (mm)",
+    "FINDING_CHOOSE": "Choose the finding…",
+    "REPORT_NO_FINDINGS": "Record at least one finding (a measurement, the summary or the interpretation) before saving the report."
   },
   "BIRTH_PLAN": {
     "TITLE": "Birth plan",
@@ -10718,7 +10740,9 @@
     "APGAR_TEN": "APGAR at 10 min",
     "TEMPERATURE": "Temperature (°C)",
     "SYSTOLIC": "Systolic (mmHg)",
-    "DIASTOLIC": "Diastolic (mmHg)"
+    "DIASTOLIC": "Diastolic (mmHg)",
+    "OBSERVATION_EMPTY": "Record at least one observation (a vital sign, the uterus, the lochia or the blood loss) before saving.",
+    "ASSESSMENT_EMPTY": "Record at least one finding (an APGAR score, a vital sign or the examination) before saving."
   },
   "ASSIGN_ADMIN": {
     "TITLE": "Assignment Administration",
@@ -11133,7 +11157,10 @@
     "REVOKE_WARNING": "A directive that was once in force stays in the record — revoking marks it no longer applicable, it does not delete it.",
     "REVOKED_TOAST": "Directive revoked.",
     "REVOKE_ERROR": "Could not revoke the directive.",
-    "LAST_REVIEWED": "reviewed"
+    "LAST_REVIEWED": "reviewed",
+    "TYPE_CHOOSE": "Choose the type…",
+    "STATUS_CHOOSE": "Choose the status…",
+    "REQUIRED_FIELDS": "This field is required for a directive."
   },
   "GROWTH": {
     "TAB": "Growth",

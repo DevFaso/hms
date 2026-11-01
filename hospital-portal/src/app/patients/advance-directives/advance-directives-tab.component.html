@@ -126,14 +126,17 @@
           <label for="directive-type"
             >{{ 'DIRECTIVES.TYPE' | translate }} *
             <select id="directive-type" [(ngModel)]="form.directiveType" name="directiveType">
+              <!-- QA D1148: never pre-filled; the clinician picks the type. -->
+              <option value="" disabled>{{ 'DIRECTIVES.TYPE_CHOOSE' | translate }}</option>
               @for (t of directiveTypes; track t) {
                 <option [ngValue]="t">{{ 'DIRECTIVES.TYPE_' + t | translate }}</option>
               }
             </select>
           </label>
           <label for="directive-status"
-            >{{ 'DIRECTIVES.STATUS' | translate }}
+            >{{ 'DIRECTIVES.STATUS' | translate }} *
             <select id="directive-status" [(ngModel)]="form.status" name="status">
+              <option value="" disabled>{{ 'DIRECTIVES.STATUS_CHOOSE' | translate }}</option>
               @for (s of editableStatuses; track s) {
                 <option [ngValue]="s">{{ 'DIRECTIVES.STATUS_' + s | translate }}</option>
               }
@@ -151,7 +154,7 @@
           </label>
           <div class="form-row">
             <label for="directive-effective"
-              >{{ 'DIRECTIVES.EFFECTIVE_DATE' | translate }}
+              >{{ 'DIRECTIVES.EFFECTIVE_DATE' | translate }} *
               <input
                 id="directive-effective"
                 type="date"
@@ -172,7 +175,7 @@
           </div>
           <div class="form-row">
             <label for="directive-physician"
-              >{{ 'DIRECTIVES.PHYSICIAN' | translate }}
+              >{{ 'DIRECTIVES.PHYSICIAN' | translate }}{{ needsPhysician() ? ' *' : '' }}
               <input
                 id="directive-physician"
                 type="text"

@@ -877,7 +877,7 @@
             />
           </div>
           <div class="field">
-            <label for="img-hospitalId">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</label>
+            <label for="img-hospitalId">{{ 'ENCOUNTERS.HOSPITAL' | translate }} *</label>
             @if (hospitalLocked) {
               <div class="locked-field">
                 <span class="material-symbols-outlined locked-icon">business</span>
@@ -926,7 +926,7 @@
         </div>
         <div class="form-row">
           <div class="field">
-            <label for="img-studyType">{{ 'IMAGING.STUDY_TYPE' | translate }}</label>
+            <label for="img-studyType">{{ 'IMAGING.STUDY_TYPE' | translate }} *</label>
             <input
               id="img-studyType"
               type="text"
@@ -976,7 +976,15 @@
         <button class="btn-secondary" (click)="closeModal()">
           {{ 'COMMON.CANCEL' | translate }}
         </button>
-        <button class="btn-primary" (click)="submitForm()" [disabled]="saving()">
+        <!-- QA D1156: an empty or partial order names the missing fields before any request. -->
+        <button
+          class="btn-primary"
+          (click)="submitForm()"
+          [disabled]="saving()"
+          [appSubmitGuard]="!form.patientId || !form.studyType.trim() || !form.hospitalId"
+          [submitGuardFields]="['img-patientSearch', 'img-studyType', 'img-hospitalId']"
+          data-testid="imaging-order-submit"
+        >
           {{
             saving()
               ? ('COMMON.SAVING' | translate)

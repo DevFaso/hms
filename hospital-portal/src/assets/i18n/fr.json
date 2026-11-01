@@ -3180,7 +3180,8 @@
     "NOTE_EARLIER_ENTRIES": "Entrées précédentes de ce séjour",
     "ADDENDUM_DISCARD_ASK": "Abandonner l’addendum saisi ?",
     "ADDENDUM_KEEP": "Continuer la saisie",
-    "ADDENDUM_DISCARD": "Abandonner le texte"
+    "ADDENDUM_DISCARD": "Abandonner le texte",
+    "NOTE_EMPTY": "Rédigez au moins une section de la note avant de l'enregistrer."
   },
   "FCP": {
     "CONFIRM_PASSWORD": "Confirmer le mot de passe",
@@ -7008,6 +7009,24 @@
         "DAR": "Note DAR",
         "SOAP": "Note SOAP",
         "SOAPIE": "Note SOAPIE"
+      },
+      "ADVANCE_DIRECTIVE_TYPE": {
+        "LIVING_WILL": "Testament de vie",
+        "DURABLE_POWER_OF_ATTORNEY": "Mandat de protection durable",
+        "DO_NOT_RESUSCITATE": "Ne pas réanimer (DNR)",
+        "PHYSICIAN_ORDERS_FOR_LIFE_SUSTAINING_TREATMENT": "Ordonnances médicales de maintien en vie (POLST)",
+        "OTHER": "Autre"
+      },
+      "CODE_STATUS": {
+        "LIVING_WILL": "Testament de vie",
+        "DURABLE_POWER_OF_ATTORNEY": "Mandat de protection durable",
+        "DO_NOT_RESUSCITATE": "Ne pas réanimer (DNR)",
+        "PHYSICIAN_ORDERS_FOR_LIFE_SUSTAINING_TREATMENT": "Ordonnances médicales de maintien en vie (POLST)",
+        "OTHER": "Autre",
+        "FULL_CODE": "Réanimation complète",
+        "DNR": "Ne pas réanimer (DNR)",
+        "DNI": "Ne pas intuber (DNI)",
+        "COMFORT_ONLY": "Soins de confort uniquement"
       }
     },
     "DOCUMENTS": {
@@ -10186,7 +10205,8 @@
       "VPO": "VPO (polio oral)",
       "HEPB0": "Hépatite B (dose de naissance)"
     },
-    "VACCINE_CODE_HINT": "Rempli à partir du vaccin PEV choisi (table CVX du CDC, vérifiée le 30/10/2026) ou d’une dose antérieure du même vaccin dans ce dossier. Facultatif et modifiable ; le MenAfriVac et le vaccin antipaludique n’ont pas de code CVX."
+    "VACCINE_CODE_HINT": "Rempli à partir du vaccin PEV choisi (table CVX du CDC, vérifiée le 30/10/2026) ou d’une dose antérieure du même vaccin dans ce dossier. Facultatif et modifiable ; le MenAfriVac et le vaccin antipaludique n’ont pas de code CVX.",
+    "SOCIAL_EMPTY": "Saisissez au moins un élément (habitudes, profession, conditions de vie ou notes) avant d'enregistrer une nouvelle version."
   },
   "MATERNITY": {
     "GA": "Terme",
@@ -10446,7 +10466,9 @@
     "AC_MM": "PA (mm)",
     "FL_MM": "LF (mm)",
     "NT_MM": "CN (mm)",
-    "CRL_MM": "LCC (mm)"
+    "CRL_MM": "LCC (mm)",
+    "FINDING_CHOOSE": "Choisir le résultat…",
+    "REPORT_NO_FINDINGS": "Saisissez au moins un résultat (une mesure, le résumé ou l'interprétation) avant d'enregistrer le compte rendu."
   },
   "BIRTH_PLAN": {
     "TITLE": "Plan de naissance",
@@ -10718,7 +10740,9 @@
     "APGAR_TEN": "APGAR à 10 min",
     "TEMPERATURE": "Température (°C)",
     "SYSTOLIC": "Systolique (mmHg)",
-    "DIASTOLIC": "Diastolique (mmHg)"
+    "DIASTOLIC": "Diastolique (mmHg)",
+    "OBSERVATION_EMPTY": "Saisissez au moins une observation (un signe vital, l'utérus, les lochies ou les pertes sanguines) avant d'enregistrer.",
+    "ASSESSMENT_EMPTY": "Saisissez au moins un résultat (un score d'APGAR, un signe vital ou l'examen) avant d'enregistrer."
   },
   "ASSIGN_ADMIN": {
     "TITLE": "Administration des Affectations",
@@ -11133,7 +11157,10 @@
     "REVOKE_WARNING": "Une directive qui a été en vigueur reste dans le dossier — la révocation la marque comme non applicable, elle ne la supprime pas.",
     "REVOKED_TOAST": "Directive révoquée.",
     "REVOKE_ERROR": "Impossible de révoquer la directive.",
-    "LAST_REVIEWED": "révisée"
+    "LAST_REVIEWED": "révisée",
+    "TYPE_CHOOSE": "Choisir le type…",
+    "STATUS_CHOOSE": "Choisir le statut…",
+    "REQUIRED_FIELDS": "Ce champ est obligatoire pour une directive."
   },
   "GROWTH": {
     "TAB": "Croissance",

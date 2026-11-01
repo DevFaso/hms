@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { Observable, Subject, of, throwError } from 'rxjs';
 
 import { StoryboardBannerComponent } from './storyboard-banner.component';
@@ -81,6 +81,36 @@ describe('StoryboardBannerComponent', () => {
     expect(
       fixture.nativeElement.querySelector('[data-testid="storyboard-code-status"]'),
     ).not.toBeNull();
+  });
+
+  it('QA D1148 — the code status and a DNR directive read in French, never the raw code', () => {
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('fr', {
+      PORTAL: {
+        ENUM: {
+          CODE_STATUS: { DO_NOT_RESUSCITATE: 'Ne pas réanimer (DNR)' },
+          ADVANCE_DIRECTIVE_TYPE: { DO_NOT_RESUSCITATE: 'Ne pas réanimer (DNR)' },
+        },
+      },
+    });
+    translate.use('fr');
+    storyboardSpy.getStoryboard.and.returnValue(
+      of({
+        ...populatedSummary(),
+        codeStatus: {
+          status: 'DO_NOT_RESUSCITATE',
+          directives: [
+            { id: 'd-1', directiveType: 'DO_NOT_RESUSCITATE', status: 'ACTIVE' } as never,
+          ],
+        },
+      }),
+    );
+    setPatient('p-123');
+    const text =
+      fixture.nativeElement.querySelector('[data-testid="storyboard-code-status"]')?.textContent ??
+      '';
+    expect(text).toContain('Ne pas réanimer (DNR)');
+    expect(text).not.toContain('DO_NOT_RESUSCITATE');
   });
 
   it('QA D504 — says when the opt-out held other hospitals’ allergies back', () => {
