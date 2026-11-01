@@ -883,6 +883,15 @@ public class DispenseServiceImpl implements DispenseService {
         // and checked here; it is decremented only once verification has
         // been resolved, so a refused dispense leaves the shelf untouched.
         StockLot stockLot = loadStockLotIfPresent(dto, pharmacy);
+        // QA D1221 (round 23): the identity check comes first. A lot of the
+        // WRONG drug got a FEFO refusal pointing to another lot of that wrong
+        // drug ("take LOT-02b first" for a paracetamol order filled from
+        // amoxicillin); the form, the whole units and the expiry order only
+        // mean something once the lot is the prescribed drug.
+        DispenseVerificationResult verification =
+                dispenseVerificationService.verify(prescription, stockLot,
+                        dto.getPatientScanValue(), dto.getProductScanValue());
+        applyVerificationOutcome(dto, verification);
         // QA D1163 (round 21): a "flacon" order is not filled from a tablet lot.
         if (stockLot != null && stockLot.getInventoryItem() != null) {
             DispenseUnitForms.requireCompatible(dto.getUnit(), stockLot.getInventoryItem().getUnit());
@@ -896,10 +905,6 @@ public class DispenseServiceImpl implements DispenseService {
             throw new BusinessException(MessageUtil.resolve("dispense.lot.required"));
         }
         recordFefoOverride(dto, stockLot);
-        DispenseVerificationResult verification =
-                dispenseVerificationService.verify(prescription, stockLot,
-                        dto.getPatientScanValue(), dto.getProductScanValue());
-        applyVerificationOutcome(dto, verification);
 
         return new FillContext(prescription, patient, pharmacy, actors, catalogItem, stockLot, verification);
     }

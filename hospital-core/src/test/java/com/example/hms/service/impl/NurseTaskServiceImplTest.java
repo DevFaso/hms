@@ -3590,7 +3590,6 @@ class NurseTaskServiceImplTest {
             closedDose(rx, rx.getCreatedAt().plusHours(4), MedicationAdministrationStatus.PENDING);
         when(marRepository.findById(pending.getId())).thenReturn(Optional.of(pending));
         when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
-        when(marRepository.findStatusById(pending.getId())).thenReturn(Optional.of(MedicationAdministrationStatus.PENDING));
         when(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId()))
             .thenReturn(List.of(pending, first));
         UUID marId = pending.getId();

@@ -51,6 +51,23 @@ public class PatientRecallServiceImpl implements PatientRecallService {
     /** Same clock as {@code RecallReminderService}'s notice window (TimeConfig). */
     private final Clock clock;
 
+    /**
+     * QA D1215 (round 23): how far in the past a new recall may be due. A
+     * recall is a follow-up still to make; one entered after the fact (the
+     * visit due last week that nobody booked) is legitimate, so a month back
+     * is accepted: that covers a recall written from a monthly review of
+     * missed follow-ups. A due date further back (the QA's 01/01/2020) is a
+     * typing error that would sit at the top of the list as overdue for good.
+     */
+    static final int PAST_DUE_TOLERANCE_DAYS = 30;
+
+    static void requireRecentDueDate(java.time.LocalDate dueDate, java.time.LocalDate today) {
+        if (dueDate != null && dueDate.isBefore(today.minusDays(PAST_DUE_TOLERANCE_DAYS))) {
+            throw new com.example.hms.exception.FieldBusinessException("dueDate", "recall.dueDate.tooFarInPast",
+                String.valueOf(PAST_DUE_TOLERANCE_DAYS));
+        }
+    }
+
     @Override
     @Transactional
     public RecallResponseDTO createRecall(RecallRequestDTO request, UUID hospitalId,
@@ -62,6 +79,7 @@ public class PatientRecallServiceImpl implements PatientRecallService {
         if (!patient.isRegisteredInHospital(hospitalId)) {
             throw new BusinessException("recall.patient.notRegistered");
         }
+        requireRecentDueDate(request.getDueDate(), com.example.hms.utility.HospitalCalendar.today(hospital, clock));
 
         Department department = null;
         if (request.getDepartmentId() != null) {

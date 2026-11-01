@@ -84,6 +84,9 @@ public interface PatientPortalService {
     // ── Lab results ──────────────────────────────────────────────────────
     List<PatientLabResultResponseDTO> getMyLabResults(Authentication auth, int limit);
 
+    /** QA D1213: one page of the patient's current lab results, newest first. */
+    com.example.hms.payload.dto.portal.PortalLabResultPageDTO getMyLabResultsPage(Authentication auth, int page, int size);
+
     // ── Medications ──────────────────────────────────────────────────────
     List<PatientMedicationResponseDTO> getMyMedications(Authentication auth, int limit);
 

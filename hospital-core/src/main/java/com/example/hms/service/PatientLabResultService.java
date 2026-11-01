@@ -28,4 +28,13 @@ public interface PatientLabResultService {
      * notes or performer until the lab releases the result.
      */
     List<PatientLabResultResponseDTO> getLabResultsForPatientPortal(UUID patientId, UUID hospitalId, int limit);
+
+    /**
+     * QA D1213 (round 23): one page of the patient's own current results,
+     * filtered (superseded and corrected-away rows removed) before the page
+     * is cut, newest first with a stable tie-break. Same redaction as
+     * {@link #getLabResultsForPatientPortal}.
+     */
+    com.example.hms.payload.dto.portal.PortalLabResultPageDTO getLabResultsPageForPatientPortal(
+        UUID patientId, int page, int size);
 }

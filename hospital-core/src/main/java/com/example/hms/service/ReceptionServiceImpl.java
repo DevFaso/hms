@@ -770,6 +770,23 @@ public class ReceptionServiceImpl implements ReceptionService {
 
     // ── MVP 11: Waitlist ──────────────────────────────────────────────────────
 
+    /**
+     * QA D1215 (round 23): a waitlist range that ends before it starts, or
+     * that ended before today at the hospital, can never be offered a slot.
+     * Both are refused on the end date, in the reader's language.
+     */
+    static void requireOfferableRange(java.time.LocalDate from, java.time.LocalDate to, Hospital hospital) {
+        if (to == null) {
+            return;
+        }
+        if (from != null && to.isBefore(from)) {
+            throw new com.example.hms.exception.FieldBusinessException("requestedDateTo", "waitlist.dateRange.reversed");
+        }
+        if (to.isBefore(com.example.hms.utility.HospitalCalendar.today(hospital))) {
+            throw new com.example.hms.exception.FieldBusinessException("requestedDateTo", "waitlist.dateRange.past");
+        }
+    }
+
     @Override
     @Transactional
     public WaitlistEntryResponseDTO addToWaitlist(WaitlistEntryRequestDTO req, UUID hospitalId,
@@ -785,6 +802,7 @@ public class ReceptionServiceImpl implements ReceptionService {
         if (!registrationRepo.existsByPatientIdAndHospitalId(req.getPatientId(), hospitalId)) {
             throw new ResourceNotFoundException("patient.notfound", req.getPatientId());
         }
+        requireOfferableRange(req.getRequestedDateFrom(), req.getRequestedDateTo(), hospital);
         Staff provider = (req.getPreferredProviderId() != null)
                 ? staffRepo.findById(req.getPreferredProviderId()).orElse(null)
                 : null;

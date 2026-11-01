@@ -155,6 +155,20 @@ public class PatientPortalController {
         return ResponseEntity.ok(ApiResponseWrapper.success(results));
     }
 
+    /**
+     * QA D1213 (round 23): the paged read the portal's "load more" uses. The
+     * list above stays for the mobile apps; both now filter before limiting.
+     */
+    @Operation(summary = "View my lab results, one page at a time")
+    @GetMapping("/lab-results/page")
+    @PreAuthorize("hasAuthority('ROLE_PATIENT')")
+    public ResponseEntity<ApiResponseWrapper<com.example.hms.payload.dto.portal.PortalLabResultPageDTO>> getMyLabResultsPage(
+            Authentication auth,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(ApiResponseWrapper.success(portalService.getMyLabResultsPage(auth, page, size)));
+    }
+
     // ── Medications ──────────────────────────────────────────────────────
 
     @Operation(summary = "View my current medications")
