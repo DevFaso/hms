@@ -180,8 +180,11 @@ public class AdmissionOrderSetServiceImpl implements AdmissionOrderSetService {
     @Transactional
     public AdmissionOrderSetResponseDTO deactivate(UUID id, String reason, UUID actingStaffId) {
         AdmissionOrderSet entity = loadOrderSet(id);
-        Staff actor = staffRepository.findById(actingStaffId)
-            .orElseThrow(() -> new ResourceNotFoundException(STAFF_NOT_FOUND_KEY, actingStaffId));
+        // QA D1226 class (round 24): who deactivated it is the session, never a
+        // staff id the client names (any staff of any hospital was accepted).
+        // The parameter is kept for old clients and ignored.
+        Staff actor = com.example.hms.security.CallerIdentity.resolveActor(staffRepository, null,
+            com.example.hms.security.CallerIdentity.hospitalIdOf(entity.getHospital()));
         entity.deactivate(reason, actor);
         return mapper.toDto(orderSetRepository.save(entity));
     }

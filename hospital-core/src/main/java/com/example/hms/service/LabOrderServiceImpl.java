@@ -292,8 +292,8 @@ public class LabOrderServiceImpl implements LabOrderService {
     }
 
     private LabOrder buildLabOrder(LabOrder base, LabOrderRequestDTO request, boolean isNew) {
-    String clinicalIndication = normalizeRequiredText(request.getClinicalIndication(), "Clinical indication is required for lab orders.");
-    String medicalNecessityNote = normalizeRequiredText(request.getMedicalNecessityNote(), "Medical necessity rationale is required for lab orders.");
+    String clinicalIndication = normalizeRequiredText(request.getClinicalIndication(), "labOrder.clinicalIndication.required");
+    String medicalNecessityNote = normalizeRequiredText(request.getMedicalNecessityNote(), "labOrder.medicalNecessityNote.required");
         String notes = normalizeOptionalText(request.getNotes());
 
         Patient patient = patientRepository.findByIdUnscoped(request.getPatientId())

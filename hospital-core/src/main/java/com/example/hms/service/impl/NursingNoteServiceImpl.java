@@ -171,7 +171,7 @@ public class NursingNoteServiceImpl implements NursingNoteService {
     @Override
     public List<NursingNoteResponseDTO> getRecentNotes(UUID patientId, UUID hospitalId, int limit, Locale locale) {
         if (patientId == null) {
-            throw new BusinessException("Patient identifier is required to load nursing notes.");
+            throw new BusinessException("nursingNote.patientRequired");
         }
         UUID actorUserId = requireCurrentUser();
         UUID resolvedHospitalId = resolveHospitalId(hospitalId);
@@ -347,7 +347,7 @@ public class NursingNoteServiceImpl implements NursingNoteService {
     private UUID requireCurrentUser() {
         UUID userId = roleValidator.getCurrentUserId();
         if (userId == null) {
-            throw new BusinessException("Authenticated user context required.");
+            throw new BusinessException("nursingNote.userRequired");
         }
         return userId;
     }
@@ -358,7 +358,7 @@ public class NursingNoteServiceImpl implements NursingNoteService {
         }
         UUID resolved = roleValidator.getCurrentHospitalId();
         if (resolved == null) {
-            throw new BusinessException("Hospital context is required for nursing documentation.");
+            throw new BusinessException("nursingNote.hospitalRequired");
         }
         return resolved;
     }

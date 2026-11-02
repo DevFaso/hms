@@ -173,6 +173,34 @@ class AdmissionOrderSetServiceImplTest {
         assertThat(dto.getDeactivationReason()).isEqualTo("superseded");
     }
 
+    /**
+     * QA D1226 class (round 24): the deactivation recorded whatever staff id
+     * the client sent (any staff, any hospital). The actor is the session's
+     * staff record at the order set's hospital; a named colleague is ignored.
+     */
+    @Test
+    void deactivateRecordsTheSessionNotTheNamedStaff() {
+        AdmissionOrderSet orderSet = existing();
+        UUID callerUserId = UUID.randomUUID();
+        com.example.hms.model.User caller = new com.example.hms.model.User();
+        caller.setId(callerUserId);
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+            new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(caller, null, List.of()));
+        try {
+            Staff me = new Staff();
+            me.setId(UUID.randomUUID());
+            when(orderSetRepo.findById(ORDER_SET_ID)).thenReturn(Optional.of(orderSet));
+            when(staffRepo.findByUserIdAndHospitalId(callerUserId, HOSPITAL_ID)).thenReturn(Optional.of(me));
+            when(orderSetRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            service.deactivate(ORDER_SET_ID, "superseded", STAFF_ID);
+
+            assertThat(orderSet.getLastModifiedBy()).isSameAs(me);
+        } finally {
+            org.springframework.security.core.context.SecurityContextHolder.clearContext();
+        }
+    }
+
     @Test
     void applyToAdmissionFansOutEachItem() {
         AdmissionOrderSet os = existing();

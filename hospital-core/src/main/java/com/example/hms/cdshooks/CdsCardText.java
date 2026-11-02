@@ -1,6 +1,7 @@
 package com.example.hms.cdshooks;
 
 import com.example.hms.repository.HospitalRepository;
+import com.example.hms.utility.DisplayDates;
 import org.springframework.context.MessageSource;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.jspecify.annotations.Nullable;
@@ -12,8 +13,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.UUID;
-import java.time.format.DateTimeFormatter;
-import java.time.format.FormatStyle;
 
 /**
  * The words on a CDS card, in the caller's language (D61).
@@ -40,9 +39,6 @@ public class CdsCardText {
     public CdsCardText(@Nullable MessageSource messageSource) {
         this.messageSource = messageSource;
     }
-
-    /** "31/10/2026 20:54": a card's date and time, on the hospital's wall clock. */
-    private static final DateTimeFormatter DATE_TIME = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
 
     /**
      * QA D1114 (round 19): the hospital a card's times are read in. Optional
@@ -84,7 +80,11 @@ public class CdsCardText {
         if (serverTime == null) {
             return "—";
         }
-        return com.example.hms.utility.HospitalTime.at(serverTime, zone).format(DATE_TIME);
+        // QA D1234 class (round 24): in the reader's way of writing a date
+        // ("2 nov. 2026, 00:30", "Nov 2, 2026, 12:30 AM"), not dd/MM/yyyy,
+        // which an English reader takes for the month first.
+        return DisplayDates.dateTime(
+            com.example.hms.utility.HospitalTime.at(serverTime, zone), locale());
     }
 
     /** The hospital's calendar day of a server time, in the reader's language (QA D1114, D1049). */
@@ -114,7 +114,7 @@ public class CdsCardText {
         if (value == null) {
             return "—";
         }
-        return value.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(locale()));
+        return DisplayDates.date(value, locale());
     }
 
     /**

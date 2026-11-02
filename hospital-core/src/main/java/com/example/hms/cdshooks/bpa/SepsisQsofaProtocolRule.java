@@ -156,7 +156,7 @@ public class SepsisQsofaProtocolRule implements BpaRule {
 
     private CdsCard buildCard(BpaProtocol protocol, QsofaScore score) {
         String detail = BpaCardText.summary(text, protocol)
-            + "\n\n" + text.get("cds.bpa.qsofa.met", "qSOFA criteria currently met: {0}/3", String.valueOf(score.total()))
+            + "\n\n" + text.get("cds.bpa.qsofa.met", "qSOFA criteria met in the last 6 hours: {0}/3", String.valueOf(score.total()))
             + BULLET + text.get("cds.bpa.qsofa.rr", "RR ≥ 22: {0}", BpaCardText.yesNo(text, score.rrHigh()))
             + BULLET + text.get("cds.bpa.qsofa.sbp", "sBP ≤ 100: {0}", BpaCardText.yesNo(text, score.sbpLow()))
             + BULLET + text.get("cds.bpa.qsofa.ams", "Altered mental status: {0}", BpaCardText.yesNo(text, score.ams()));

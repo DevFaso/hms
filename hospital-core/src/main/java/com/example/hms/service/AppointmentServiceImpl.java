@@ -31,6 +31,7 @@ import com.example.hms.security.tenant.ActingScope;
 import com.example.hms.security.tenant.ActingScopeResolver;
 import com.example.hms.service.support.HospitalScopeUtils;
 import com.example.hms.specification.AppointmentSpecification;
+import com.example.hms.utility.DisplayDates;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
@@ -274,9 +275,7 @@ public class AppointmentServiceImpl implements AppointmentService {
                 && com.example.hms.utility.HospitalCalendar.now(hospital).isBefore(appointmentStart)) {
             throw new BusinessException("appointment.status.notStartedYet",
                 AppointmentStatus.labelOf(status),
-                appointmentStart.format(java.time.format.DateTimeFormatter
-                    .ofLocalizedDateTime(java.time.format.FormatStyle.SHORT)
-                    .withLocale(LocaleContextHolder.getLocale())));
+                DisplayDates.dateTime(appointmentStart));
         }
     }
 
@@ -548,7 +547,8 @@ public class AppointmentServiceImpl implements AppointmentService {
         if (!staffAvailabilityService.isStaffAvailable(staff.getId(), requestedStart)) {
             throw new BusinessException(messageSource.getMessage(
                 "appointment.staff.unavailable.schedule",
-                new Object[]{staff.getId(), request.getAppointmentDate(), request.getStartTime()},
+                new Object[]{staff.getId(), DisplayDates.date(request.getAppointmentDate(), locale),
+                    DisplayDates.time(request.getStartTime(), locale)},
                 locale
             ));
         }
@@ -561,7 +561,8 @@ public class AppointmentServiceImpl implements AppointmentService {
         if (hasConflict) {
             throw new BusinessException(messageSource.getMessage(
                 "appointment.staff.unavailable",
-                new Object[]{staff.getId(), request.getAppointmentDate(), request.getStartTime(), endTime},
+                new Object[]{staff.getId(), DisplayDates.date(request.getAppointmentDate(), locale),
+                    DisplayDates.time(request.getStartTime(), locale), DisplayDates.time(endTime, locale)},
                 locale
             ));
         }
@@ -966,7 +967,8 @@ public class AppointmentServiceImpl implements AppointmentService {
         if (!staffAvailabilityService.isStaffAvailable(staff.getId(), requestedStart)) {
             throw new BusinessException(messageSource.getMessage(
                 "appointment.staff.unavailable.schedule",
-                new Object[]{staff.getId(), request.getAppointmentDate(), request.getStartTime()},
+                new Object[]{staff.getId(), DisplayDates.date(request.getAppointmentDate(), locale),
+                    DisplayDates.time(request.getStartTime(), locale)},
                 locale
             ));
         }
@@ -988,7 +990,8 @@ public class AppointmentServiceImpl implements AppointmentService {
         if (hasConflict) {
             throw new BusinessException(messageSource.getMessage(
                 "appointment.staff.unavailable",
-                new Object[]{staff.getId(), request.getAppointmentDate(), request.getStartTime(), request.getEndTime()},
+                new Object[]{staff.getId(), DisplayDates.date(request.getAppointmentDate(), locale),
+                    DisplayDates.time(request.getStartTime(), locale), DisplayDates.time(request.getEndTime(), locale)},
                 locale
             ));
         }

@@ -59,10 +59,10 @@ public class TreatmentConsentServiceImpl implements TreatmentConsentService {
                                               TreatmentConsentSource source,
                                               TreatmentConsentRequestDTO request) {
         if (hospitalId == null) {
-            throw new BusinessException("An active hospital is required to record a consent.");
+            throw new BusinessException("consent.hospitalRequired");
         }
         if (request == null || request.getMethod() == null) {
-            throw new BusinessException("A consent capture method is required.");
+            throw new BusinessException("consent.captureMethodRequired");
         }
         // QA D1148 (round 21, user decision): a consent recorded in the chart
         // names who gave it; one was stored with no signer. The pre-check-in
@@ -77,7 +77,7 @@ public class TreatmentConsentServiceImpl implements TreatmentConsentService {
         Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFound", hospitalId));
         if (!patient.isRegisteredInHospital(hospitalId)) {
-            throw new BusinessException("Patient is not registered at this hospital.");
+            throw new BusinessException("consent.patientNotRegistered");
         }
 
         Appointment appointment = resolveAppointment(request.getAppointmentId(), patientId, hospitalId);
@@ -134,11 +134,10 @@ public class TreatmentConsentServiceImpl implements TreatmentConsentService {
             throw new ResourceNotFoundException("treatmentConsent.notFound", consentId);
         }
         if (consent.getStatus() == TreatmentConsentStatus.REVOKED) {
-            throw new BusinessException("This consent has already been revoked.");
+            throw new BusinessException("consent.alreadyRevoked");
         }
         if (reason == null || reason.isBlank()) {
-            throw new BusinessException("A revocation reason is required — the patient withdrew "
-                + "consent for a reason worth recording.");
+            throw new BusinessException("consent.revocationReasonRequired");
         }
         consent.setStatus(TreatmentConsentStatus.REVOKED);
         consent.setRevokedAt(LocalDateTime.now());
@@ -167,11 +166,11 @@ public class TreatmentConsentServiceImpl implements TreatmentConsentService {
             .orElseThrow(() -> new ResourceNotFoundException("appointment.notFound", appointmentId));
         if (appointment.getPatient() == null
             || !Objects.equals(appointment.getPatient().getId(), patientId)) {
-            throw new BusinessException("The appointment belongs to a different patient.");
+            throw new BusinessException("consent.appointmentOtherPatient");
         }
         if (appointment.getHospital() != null
             && !Objects.equals(appointment.getHospital().getId(), hospitalId)) {
-            throw new BusinessException("The appointment belongs to a different hospital.");
+            throw new BusinessException("consent.appointmentOtherHospital");
         }
         return appointment;
     }
@@ -184,11 +183,11 @@ public class TreatmentConsentServiceImpl implements TreatmentConsentService {
             .orElseThrow(() -> new ResourceNotFoundException("encounter.notfound", encounterId));
         if (encounter.getPatient() == null
             || !Objects.equals(encounter.getPatient().getId(), patientId)) {
-            throw new BusinessException("The encounter belongs to a different patient.");
+            throw new BusinessException("consent.encounterOtherPatient");
         }
         if (encounter.getHospital() != null
             && !Objects.equals(encounter.getHospital().getId(), hospitalId)) {
-            throw new BusinessException("The encounter belongs to a different hospital.");
+            throw new BusinessException("consent.encounterOtherHospital");
         }
         return encounter;
     }

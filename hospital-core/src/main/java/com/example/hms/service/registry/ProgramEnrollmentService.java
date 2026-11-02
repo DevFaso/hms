@@ -25,6 +25,7 @@ import com.example.hms.repository.scheduling.PatientRecallRepository;
 import com.example.hms.security.SecurityUtils;
 import com.example.hms.service.AuditEventLogService;
 import com.example.hms.utility.RoleValidator;
+import com.example.hms.utility.DisplayDates;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -196,7 +197,8 @@ public class ProgramEnrollmentService {
         // absorb it (deliberately: the summary pair is all item 36 needs).
         if (enrollment.getLastVisitOn() != null
             && visitDate.isBefore(enrollment.getLastVisitOn())) {
-            throw new BusinessException("program.enrollment.visitBeforeLast", enrollment.getLastVisitOn());
+            throw new BusinessException("program.enrollment.visitBeforeLast",
+                DisplayDates.date(enrollment.getLastVisitOn()));
         }
 
         enrollment.setLastVisitOn(visitDate);

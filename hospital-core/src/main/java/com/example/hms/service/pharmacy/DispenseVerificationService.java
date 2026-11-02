@@ -7,6 +7,7 @@ import com.example.hms.model.medication.MedicationCatalogItem;
 import com.example.hms.model.pharmacy.InventoryItem;
 import com.example.hms.model.pharmacy.StockLot;
 import com.example.hms.utility.LotBarcode;
+import com.example.hms.utility.DisplayDates;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
@@ -184,8 +185,7 @@ public class DispenseVerificationService {
         if (!expiry.isAfter(today)) {
             b.fail(DispenseCheck.EXPIRY,
                 com.example.hms.utility.MessageUtil.resolve("pharmacy.check.lotExpired", lot.getLotNumber(),
-                    expiry.format(java.time.format.DateTimeFormatter.ofLocalizedDate(java.time.format.FormatStyle.MEDIUM)
-                        .withLocale(org.springframework.context.i18n.LocaleContextHolder.getLocale()))));
+                    DisplayDates.date(expiry)));
         } else {
             b.pass(DispenseCheck.EXPIRY);
         }
@@ -277,16 +277,15 @@ public class DispenseVerificationService {
 
     /**
      * Human-readable name of a catalogue item, for the refusal message.
-     * QA D1221 (round 23): in the reader's language. The catalogue keeps a
-     * French name and a generic (INN) name: a French reader is shown the
-     * French name ("Amoxicilline"), any other reader the generic; no name at
-     * all is said in the reader's language, never in English.
+     * QA D1221 (round 23) and D1235 (round 24): in the reader's language,
+     * through the one naming rule ({@link com.example.hms.utility.DrugDisplayNames}):
+     * the French name for a French reader, the INN for an English one, and the
+     * catalogue's display name for a Spanish one (it holds no Spanish name; the
+     * English INN read as a foreign word beside the prescribed "Paracétamol").
+     * No name at all is said in the reader's language, never in English.
      */
     public static String describe(MedicationCatalogItem item) {
-        boolean french = "fr".equals(org.springframework.context.i18n.LocaleContextHolder.getLocale().getLanguage());
-        String name = french
-            ? firstNonBlank(item.getNameFr(), item.getGenericName(), item.getBrandName())
-            : firstNonBlank(item.getGenericName(), item.getNameFr(), item.getBrandName());
+        String name = com.example.hms.utility.DrugDisplayNames.forReader(item);
         return name == null ? com.example.hms.utility.MessageUtil.resolve("pharmacy.check.unnamedProduct") : name;
     }
 

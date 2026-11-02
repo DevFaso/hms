@@ -155,4 +155,18 @@ class R23BackendRulesTest {
         LocaleContextHolder.setLocale(Locale.ENGLISH);
         assertThat(DispenseVerificationService.describe(amoxicillin)).isEqualTo("Amoxicillin");
     }
+
+    /** QA D1235 (round 24): a Spanish pharmacist read the English INN ("Amoxicillin"). */
+    @Test
+    void d1235_theSpanishReaderReadsTheCataloguesNameNotTheEnglishInn() {
+        MedicationCatalogItem amoxicillin = new MedicationCatalogItem();
+        amoxicillin.setNameFr("Amoxicilline");
+        amoxicillin.setGenericName("Amoxicillin");
+        LocaleContextHolder.setLocale(Locale.forLanguageTag("es"));
+        try {
+            assertThat(DispenseVerificationService.describe(amoxicillin)).isEqualTo("Amoxicilline");
+        } finally {
+            LocaleContextHolder.resetLocaleContext();
+        }
+    }
 }

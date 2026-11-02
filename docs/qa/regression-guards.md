@@ -49,6 +49,16 @@ reverted (PR body of the guard PR records the runs).
 | `architecture/CancelVoidReasonGuardTest#everyInvoiceCancellationKeepsAReason` | An invoice set to CANCELLED without a kept reason (drafts included; the D1069 draft exemption is withdrawn). | D1217 | **0** |
 | `architecture/R23BackendClassGuardsTest` | The "no specimen" refusal that cannot tell a rejected specimen (D1204); a proxy read that looks the grantor up under the proxy's tenancy (D1212); a lab-result pairing that cuts before the filter (D1213); a health summary built without `activeDiagnoses` (D1214); a request date range with no reversed-range check (D1215); a fill that checks form, units or FEFO before the wrong-drug check (D1221). | D1204, D1212, D1213, D1214, D1215, D1221 | date ranges: 5 listed with their check |
 
+### Round 24 (`fix/r24-clinical-text-and-attribution`)
+
+| Guard | Class it stops | QA defects | Allowlist today |
+|---|---|---|---|
+| `security/ClientSuppliedIdentityGuardTest` (extended) | The endpoint scan now reads closing-actor fields (`discontinuedBy…`, `liftedBy…`, `resolvedBy…`, `closedBy…`, `voidedBy…`, `rejectedBy…`, `reversedBy…`, …); `everyClosingWriteRecordsTheSessionActor` reads every `set/…By*` write of a discontinue, lift, resolve, revoke, close, cancel, void, reject, reverse, archive, suspend or complete in the services and refuses one fed from the request other than through `CallerIdentity.resolveActor/confirmActor` (which falls back to the caller when the screen names nobody). | D1226 | **0** (the isolation lift is `CHECKED` in the endpoint list) |
+| `i18n/ExceptionProseRatchetTest` (extended) | `noProseHandedToAThrowingHelper`: a sentence (literal or same-file constant) handed to a helper that throws its String parameter (`normalizeRequiredText(v, "Clinical indication is required…")`, `findPlanInReach(u, id, MSG_DENIED)`), which the constructor scan never saw; `roundTwentyFourClinicalFilesHoldNoProse`: the clinical record's services (imaging reports, isolation, cultures, deaths, chart updates, intake/output, vitals, nursing notes, treatment plans and consents, high-risk pregnancy plans) at zero whatever the baseline says. Baseline lowered by 85. | D1232 | thrower scan: **0** (FHIR package outside, English OperationOutcomes by convention); clinical files: 2 internal SHA-256 failures |
+| `i18n/DisplayDateFormatGuardTest` | A day-month display pattern (`dd/MM`, `MM/dd`, `d MMM`) or a raw date/time handed to a refusal or resolved message (exception constructors, `MessageUtil.resolve`, `messageSource.getMessage`, `getLocalizedMessage`, `NotificationText.of`) without `DisplayDates`. | D1234 | 1 parsing-only site (bulk-import date reader) |
+| `i18n/DrugDisplayNameGuardTest` | A refusal, check reason or message array that names a catalogue drug with a raw `getNameFr()/getGenericName()/getBrandName()`, or a file other than `DrugDisplayNames` choosing a catalogue name by language. | D1235 | 1 audit array (English audit row, stored name) |
+| `cdshooks/bpa/BpaLatestReadingClaimGuardTest` | A BPA card text claiming "latest / most recent / currently" (EN/FR/ES) whose rule does not read the newest value. | D1231 | 3 true claims, each with the method that makes it true |
+
 ### Already in place before round 16 (extend these, do not duplicate)
 
 | Guard | Class |

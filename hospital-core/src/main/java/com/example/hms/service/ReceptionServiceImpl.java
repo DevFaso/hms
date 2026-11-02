@@ -48,6 +48,7 @@ import com.example.hms.repository.scheduling.AppointmentSlotRepository;
 import com.example.hms.payload.dto.scheduling.AppointmentSlotDTO;
 import com.example.hms.service.scheduling.PatientOutreachNotifier;
 import com.example.hms.service.scheduling.SlotInventoryService;
+import com.example.hms.utility.DisplayDates;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -82,8 +83,6 @@ public class ReceptionServiceImpl implements ReceptionService {
 
 
     private static final DateTimeFormatter TIME_FMT = DateTimeFormatter.ofPattern("HH:mm");
-    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy");
-    private static final DateTimeFormatter EXPIRY_FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
     private static final String WAITLIST_STATUS_WAITING = "WAITING";
     private static final String WAITLIST_STATUS_OFFERED = "OFFERED";
     private static final String WAITLIST_STATUS_CLOSED = "CLOSED";
@@ -979,10 +978,11 @@ public class ReceptionServiceImpl implements ReceptionService {
             Locale locale = patientLocaleResolver.resolve(
                     entry.getPatient(), Locale.forLanguageTag(outreachLocale));
             NotificationText text = NotificationText.of("sms.waitlist.offer",
-                    slot.getStartAt().toLocalDate().format(DATE_FMT),
-                    slot.getStartAt().toLocalTime().format(TIME_FMT),
+                    // QA D1234 class: the patient's own way of writing a date, not dd/MM/yyyy.
+                    DisplayDates.date(slot.getStartAt().toLocalDate(), locale),
+                    DisplayDates.time(slot.getStartAt().toLocalTime(), locale),
                     hospitalName,
-                    expiry.format(EXPIRY_FMT));
+                    DisplayDates.dateTime(expiry, locale));
             outreachNotifier.notifyPatient(entry.getPatient(), text, locale);
         } catch (RuntimeException ex) {
             // Outreach is best-effort: the desk can always phone the patient.
@@ -1140,7 +1140,7 @@ public class ReceptionServiceImpl implements ReceptionService {
         // appointment was checked in on 23 Oct and opened an encounter dated
         // the 23rd. Another day's appointment is rescheduled, not checked in.
         if (appointment.getAppointmentDate() != null && !appointment.getAppointmentDate().equals(now.toLocalDate())) {
-            throw new BusinessException("reception.checkin.notToday", String.valueOf(appointment.getAppointmentDate()));
+            throw new BusinessException("reception.checkin.notToday", DisplayDates.date(appointment.getAppointmentDate()));
         }
 
         // 2. Transition appointment to CHECKED_IN

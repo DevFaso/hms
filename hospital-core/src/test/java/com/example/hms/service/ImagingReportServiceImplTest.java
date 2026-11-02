@@ -66,6 +66,20 @@ import static org.mockito.Mockito.when;
 @MockitoSettings(strictness = Strictness.LENIENT)
 class ImagingReportServiceImplTest {
 
+    // QA D1232 (round 24): the refusals are message keys now; the assertions
+    // read them in English through the real bundles.
+    @org.junit.jupiter.api.BeforeEach
+    void readRefusalsInEnglish() {
+        com.example.hms.utility.MessageUtil.setMessageSource(com.example.hms.i18n.TestMessageSources.bundles());
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.ENGLISH);
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void resetRefusalLocale() {
+        com.example.hms.utility.MessageUtil.setMessageSource(null);
+        org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+    }
+
     @Mock
     private ImagingReportRepository imagingReportRepository;
     @Mock
@@ -236,7 +250,7 @@ class ImagingReportServiceImplTest {
             .reportStatus(ImagingReportStatus.PRELIMINARY)
             .build()))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("ADDENDUM, CORRECTED or AMENDED");
+            .hasMessageContaining("an addendum, a corrected or an amended version");
     }
 
     @Test

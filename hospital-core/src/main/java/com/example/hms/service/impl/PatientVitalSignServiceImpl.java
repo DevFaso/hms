@@ -86,11 +86,11 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
 
         if (assignment != null && assignment.getHospital() != null && hospital != null
             && !assignment.getHospital().getId().equals(hospital.getId())) {
-            throw new BusinessException("Recorder assignment is not associated with the resolved hospital context.");
+            throw new BusinessException("vitals.recorderAssignmentOtherHospital");
         }
         if (staff != null && hospital != null && staff.getHospital() != null
             && !staff.getHospital().getId().equals(hospital.getId())) {
-            throw new BusinessException("Recorder staff is not assigned to the resolved hospital context.");
+            throw new BusinessException("vitals.recorderStaffOtherHospital");
         }
 
         PatientVitalSign entity = PatientVitalSign.builder()
@@ -226,7 +226,7 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
         PatientHospitalRegistration registration = registrationRepository.findById(registrationId)
             .orElseThrow(() -> new ResourceNotFoundException("registration.notFound", registrationId));
         if (!registration.getPatient().getId().equals(patient.getId())) {
-            throw new BusinessException("Registration does not belong to the specified patient.");
+            throw new BusinessException("vitals.registrationOtherPatient");
         }
         return registration;
     }
@@ -244,7 +244,7 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
         if (patient.getHospitalId() != null) {
             return hospitalRepository.findClinicalById(patient.getHospitalId()).orElse(null);
         }
-        throw new BusinessException("Unable to resolve hospital context for vital sign capture.");
+        throw new BusinessException("vitals.hospitalUnresolved");
     }
 
     private Staff resolveRecorderStaff(UUID staffId, UUID recorderUserId, Hospital hospital) {
@@ -270,7 +270,7 @@ public class PatientVitalSignServiceImpl implements PatientVitalSignService {
             UserRoleHospitalAssignment assignment = assignmentRepository.findById(assignmentId)
                 .orElseThrow(() -> new ResourceNotFoundException("roleAssignment.notFound", assignmentId));
             if (!Boolean.TRUE.equals(assignment.getActive())) {
-                throw new BusinessException("Assignment is not active for vital sign capture.");
+                throw new BusinessException("vitals.assignmentInactive");
             }
             return assignment;
         }

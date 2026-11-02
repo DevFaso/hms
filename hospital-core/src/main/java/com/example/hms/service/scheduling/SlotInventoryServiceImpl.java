@@ -21,6 +21,7 @@ import com.example.hms.repository.scheduling.AppointmentSlotRepository;
 import com.example.hms.repository.scheduling.SessionTemplateRepository;
 import com.example.hms.service.AppointmentSlotRules;
 import com.example.hms.utility.RoleValidator;
+import com.example.hms.utility.DisplayDates;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.OptimisticLockingFailureException;
@@ -189,7 +190,8 @@ public class SlotInventoryServiceImpl implements SlotInventoryService {
     private void requireClinicianFree(AppointmentSlot slot) {
         if (clinicianBookedOver(slot, new HashMap<>())) {
             throw new BusinessException("appointment.staff.unavailable", slot.getStaff().getId(),
-                slot.getSlotDate(), slot.getStartAt().toLocalTime(), slot.getEndAt().toLocalTime());
+                DisplayDates.date(slot.getSlotDate()), DisplayDates.time(slot.getStartAt().toLocalTime()),
+                DisplayDates.time(slot.getEndAt().toLocalTime()));
         }
     }
 

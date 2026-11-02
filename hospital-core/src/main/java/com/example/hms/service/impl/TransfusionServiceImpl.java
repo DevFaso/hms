@@ -47,6 +47,7 @@ import com.example.hms.service.TransfusionService;
 import com.example.hms.service.support.PatientChartAccess;
 import com.example.hms.utility.MessageUtil;
 import com.example.hms.utility.RoleValidator;
+import com.example.hms.utility.DisplayDates;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.AccessDeniedException;
@@ -384,7 +385,8 @@ public class TransfusionServiceImpl implements TransfusionService {
 
         BloodUnit unit = loadUnitScoped(request.getBloodUnitId());
         if (unit.isExpiredOn(LocalDate.now(clock))) {
-            throw new BusinessException("transfusion.unit.expired", unit.getUnitNumber(), unit.getExpiresOn());
+            throw new BusinessException("transfusion.unit.expired", unit.getUnitNumber(),
+                DisplayDates.date(unit.getExpiresOn()));
         }
         if (unit.isTerminal()) {
             throw new BusinessException("transfusion.unit.noLongerUsable", unit.getUnitNumber());
@@ -506,7 +508,8 @@ public class TransfusionServiceImpl implements TransfusionService {
         }
         BloodUnit unit = loadUnitScoped(unitId);
         if (unit.isExpiredOn(LocalDate.now(clock))) {
-            throw new BusinessException("transfusion.unit.expired", unit.getUnitNumber(), unit.getExpiresOn());
+            throw new BusinessException("transfusion.unit.expired", unit.getUnitNumber(),
+                DisplayDates.date(unit.getExpiresOn()));
         }
 
         TransfusionCrossmatch crossmatch = crossmatchRepository
@@ -551,7 +554,8 @@ public class TransfusionServiceImpl implements TransfusionService {
             throw new BusinessException("transfusion.unit.notIssued", unit.getUnitNumber());
         }
         if (unit.isExpiredOn(LocalDate.now(clock))) {
-            throw new BusinessException("transfusion.unit.expired", unit.getUnitNumber(), unit.getExpiresOn());
+            throw new BusinessException("transfusion.unit.expired", unit.getUnitNumber(),
+                DisplayDates.date(unit.getExpiresOn()));
         }
         administrationRepository.findByBloodUnit_Id(unit.getId()).ifPresent(existing -> {
             throw new BusinessException("transfusion.unit.alreadyHung", unit.getUnitNumber());

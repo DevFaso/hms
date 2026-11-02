@@ -80,7 +80,9 @@ class BpaCardLocalizationTest {
     void qsofaCardIsFrench() {
         CdsCard card = new SepsisQsofaProtocolRule(repo, text).evaluate(context(List.of(qaSet()))).get(0);
         assertThat(card.summary()).startsWith("Sepsis — bundle de la première heure");
-        assertThat(card.detail()).contains("Critères qSOFA actuellement remplis : 2/3").contains("oui")
+        // QA D1231 class (round 24): the criteria are those of the 6-hour window,
+        // not "currently" met - the score reads every reading in it.
+        assertThat(card.detail()).contains("Critères qSOFA remplis au cours des 6 dernières heures : 2/3").contains("oui")
             .doesNotContain("English").doesNotContain("yes");
     }
 
@@ -90,8 +92,9 @@ class BpaCardLocalizationTest {
         assertThat(card.summary()).startsWith("Paludisme");
         // QA D1078 (round 18): the French decimal comma. This assertion used to
         // read "38.9 °C" - it pinned the defect (Locale.ROOT formatting).
-        assertThat(card.detail()).contains("Dernière température : 38,9 °C")
-            .doesNotContain("38.9").doesNotContain("English").doesNotContain("Most recent");
+        // QA D1231 (round 24): the febrile reading is labelled as such, not as the last one.
+        assertThat(card.detail()).contains("Fièvre relevée : 38,9 °C")
+            .doesNotContain("Dernière température").doesNotContain("38.9").doesNotContain("English").doesNotContain("Most recent");
     }
 
     @Test
@@ -112,6 +115,38 @@ class BpaCardLocalizationTest {
     void theEnglishFallbackStillReadsWithoutABundle() {
         CdsCard card = new SepsisQsofaProtocolRule(repo).evaluate(context(List.of(qaSet()))).get(0);
         assertThat(card.summary()).isEqualTo("English name");
-        assertThat(card.detail()).contains("qSOFA criteria currently met: 2/3");
+        assertThat(card.detail()).contains("qSOFA criteria met in the last 6 hours: 2/3");
+    }
+
+    /**
+     * QA D1231 (round 24): triage 39.6 °C, then ward vitals 38.4 °C. The card
+     * called the 39.6 the "Dernière température"; it now names it the fever
+     * reading and shows the 38.4 as the latest, in every language.
+     */
+    @Test
+    void malariaCardNamesTheFeverReadingAndShowsTheLaterOneAsTheLatest() {
+        PatientVitalSign triage = PatientVitalSign.builder().temperatureCelsius(39.6)
+            .recordedAt(LocalDateTime.now().minusMinutes(40)).source("TRIAGE").build();
+        PatientVitalSign ward = PatientVitalSign.builder().temperatureCelsius(38.4)
+            .recordedAt(LocalDateTime.now().minusMinutes(20)).source("NURSE_STATION").build();
+        List<PatientVitalSign> newestFirst = List.of(ward, triage);
+
+        CdsCard fr = new MalariaFeverProtocolRule(repo, text).evaluate(context(newestFirst)).get(0);
+        assertThat(fr.detail()).contains("Fièvre relevée : 39,6 °C").contains("Dernière température : 38,4 °C")
+            .doesNotContain("Dernière température : 39,6");
+
+        LocaleContextHolder.setLocale(Locale.ENGLISH);
+        CdsCard en = new MalariaFeverProtocolRule(repo, text).evaluate(context(newestFirst)).get(0);
+        assertThat(en.detail()).contains("Fever recorded: 39.6 °C").contains("Latest temperature: 38.4 °C");
+
+        LocaleContextHolder.setLocale(Locale.forLanguageTag("es"));
+        CdsCard es = new MalariaFeverProtocolRule(repo, text).evaluate(context(newestFirst)).get(0);
+        assertThat(es.detail()).contains("Fiebre registrada: 39,6 °C").contains("Última temperatura: 38,4 °C");
+    }
+
+    @Test
+    void aFeverThatIsTheLatestReadingIsNotRepeated() {
+        CdsCard card = new MalariaFeverProtocolRule(repo, text).evaluate(context(List.of(qaSet()))).get(0);
+        assertThat(card.detail()).contains("Fièvre relevée : 38,9 °C").doesNotContain("Dernière température");
     }
 }

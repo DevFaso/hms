@@ -18,7 +18,6 @@ import org.junit.jupiter.api.Test;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -37,7 +36,11 @@ class BpaCardHospitalTimeTest {
 
     /** A zone no test host runs in, so the conversion always shows. */
     private static final ZoneId HOSPITAL_ZONE = ZoneId.of("Pacific/Kiritimati");
-    private static final DateTimeFormatter WHEN = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+    // QA D1234 class (round 24): a card writes its times the reader's way
+    // (this text has no bundle: English); it used to pin dd/MM/yyyy HH:mm.
+    private static String shown(LocalDateTime wallClock) {
+        return com.example.hms.utility.DisplayDates.dateTime(wallClock, java.util.Locale.ENGLISH);
+    }
 
     private final UUID hospitalId = UUID.randomUUID();
     private final HospitalRepository hospitals = mock(HospitalRepository.class);
@@ -74,15 +77,15 @@ class BpaCardHospitalTimeTest {
         List<CdsCard> cards = rule.evaluate(new BpaRuleContext(patient, hospitalId, List.of(fever), List.of(), List.of()));
 
         assertThat(cards).singleElement().satisfies(card -> assertThat(card.detail())
-            .contains(onTheHospitalClock(recorded).format(WHEN))
-            .doesNotContain(recorded.format(WHEN)));
+            .contains(shown(onTheHospitalClock(recorded)))
+            .doesNotContain(shown(recorded)));
     }
 
     @Test
     void anUnknownHospitalKeepsTheServerClock() {
         CdsCardText text = text();
         LocalDateTime at = LocalDateTime.of(2026, 10, 31, 0, 54);
-        assertThat(text.dateTime(at, text.zoneOf(null))).isEqualTo(at.format(WHEN));
+        assertThat(text.dateTime(at, text.zoneOf(null))).isEqualTo(shown(at));
         assertThat(text.dateTime(null, HOSPITAL_ZONE)).isEqualTo("—");
     }
 

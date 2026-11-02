@@ -50,8 +50,12 @@ class ClientSuppliedIdentityGuardTest {
     private static final Pattern IDENTITY = Pattern.compile(
         "(?i)^(providerId|signerId|authorId|orderingProviderId|staffId"
             + "|(signedBy|performedBy|authoredBy|recordedBy|verifiedBy|administeredBy|cancelledBy|approvedBy"
-            + "|reviewedBy|enteredBy|orderedBy|dispensedBy|collectedBy|revokedBy|finalizedBy|requestedBy|completedBy)(Staff|User)?Id"
-            + "|(signer|author|performer|verifier|recorder)(Staff|User)Id"
+            + "|reviewedBy|enteredBy|orderedBy|dispensedBy|collectedBy|revokedBy|finalizedBy|requestedBy|completedBy"
+            // QA D1226 (round 24): a closing write names its actor too - the lift
+            // of a precaution sent discontinuedByStaffId and the guard never read it.
+            + "|discontinuedBy|liftedBy|resolvedBy|closedBy|voidedBy|rejectedBy|reversedBy|deactivatedBy"
+            + "|withdrawnBy|stoppedBy|endedBy|removedBy|declinedBy|refusedBy|retractedBy|acknowledgedBy)(Staff|User)?Id"
+            + "|(signer|author|performer|verifier|recorder|acting)(Staff|User)Id"
             + "|(ordering|discharging|signing|attending|authoring)Provider(Staff|User)?Id"
             + "|(doctor|nurse|midwife|pharmacist|clinician)(Staff|User)Id)$");
 
@@ -64,7 +68,11 @@ class ClientSuppliedIdentityGuardTest {
      * others are recorded debt (tasklist.md, Standing platform debt).
      */
     private static final Map<String, String> ALLOWED = Map.ofEntries(
+        Map.entry("AdmissionController#deactivateOrderSet?deactivatedByStaffId",
+            "ignored: QA D1226 class, the actor is the session (CallerIdentity.resolveActor with no claim)"),
         Map.entry("AdmissionController#dischargePatient{dischargingProviderId}", CHECKED),
+        Map.entry("AdmissionOrderSetController#deactivate?actingStaffId",
+            "ignored: QA D1226 class, the actor is the session (CallerIdentity.resolveActor with no claim)"),
         Map.entry("AppointmentController#createAppointment{staffId}", SUBJECT),
         Map.entry("AppointmentController#searchAppointments{staffId}", "read: a search filter sent as a POST body"),
         Map.entry("AppointmentController#updateAppointment{staffId}", SUBJECT),
@@ -90,6 +98,8 @@ class ClientSuppliedIdentityGuardTest {
         Map.entry("ImagingOrderController#updateStatus{performedByUserId}", "ignored: the session is recorded (QA D503 class, this PR)"),
         Map.entry("ImagingResultController#createReport{performedByStaffId}", "subject, not actor: the technologist who acquired the study, named by the reporting radiologist; same-hospital check"),
         Map.entry("ImagingResultController#updateReport{performedByStaffId}", "subject, not actor: the technologist who acquired the study, named by the reporting radiologist; same-hospital check"),
+        Map.entry("IsolationController#discontinuePrecaution{discontinuedByStaffId}",
+            "checked: QA D1226, CallerIdentity.resolveActor - the caller's own record, the caller when absent"),
         Map.entry("IsolationController#startPrecaution{orderedByStaffId}", CHECKED),
         Map.entry("LabTestValidationStudyController#create{performedByUserId}", "checked: CallerIdentity.resolveActorUserId, must be the caller (QA D503 class)"),
         Map.entry("LabTestValidationStudyController#update{performedByUserId}", "checked: CallerIdentity.resolveActorUserId, a new performer must be the caller (QA D503 class)"),
@@ -298,5 +308,113 @@ class ClientSuppliedIdentityGuardTest {
             "Fixture#model{authorStaffId}",
             "Fixture#unannotated{authorStaffId}")
             .noneMatch(f -> f.startsWith("Fixture#legacyRead") || f.startsWith("Fixture#simple"));
+    }
+
+    /**
+     * QA D1226 (round 24): lifting an isolation precaution recorded nobody
+     * ({@code discontinuedByName: null}). The service filled the "lifted by"
+     * column from a private {@code resolveStaff(request.getDiscontinuedByStaffId(), …)}
+     * that returned null when the screen sent no id - unlike the start, which
+     * used {@link CallerIdentity#resolveActor}. The endpoint scan above never
+     * saw it (the field name was not in its list) and could not have seen the
+     * null case anyway.
+     *
+     * <p>This reads every write of a closing actor - {@code set/…By*} for a
+     * discontinue, lift, resolve, revoke, close, cancel, void, reject, reverse,
+     * archive, suspend, complete… - in the services, and refuses one whose
+     * value (or the initialiser of the variable it passes) is read from the
+     * request ({@code request.getX()}, {@code dto.getX()}) other than through
+     * {@code CallerIdentity.resolveActor/confirmActor/resolveActorUserId},
+     * which check a claim and fall back to the caller when there is none.
+     */
+    private static final Pattern CLOSING_ACTOR_WRITE = Pattern.compile(
+        "\\.(?:set(?:Discontinued|Lifted|Resolved|Revoked|Closed|Cancell?ed|Voided|Deactivated|Retracted|Withdrawn"
+            + "|Reversed|Rejected|Archived|Suspended|Completed|Ended|Stopped|Terminated|Inactivated|Removed|Declined"
+            + "|Refused)|(?:discontinued|lifted|resolved|revoked|closed|cancell?ed|voided|deactivated|retracted"
+            + "|withdrawn|reversed|rejected|archived|suspended|completed|ended|stopped|terminated|inactivated|removed"
+            + "|declined|refused))By\\w*+\\s*+\\(");
+    private static final Pattern FROM_THE_CLIENT = Pattern.compile(
+        "\\b(?:request|req|dto|body|payload|command|form)\\.get\\w*+\\(");
+    private static final Pattern THROUGH_THE_RESOLVER = Pattern.compile(
+        "CallerIdentity\\.(?:resolveActor|confirmActor|resolveActorUserId)\\(");
+    private static final java.nio.file.Path SERVICES = java.nio.file.Path.of("src", "main", "java", "com", "example", "hms");
+
+    @Test
+    void everyClosingWriteRecordsTheSessionActor() throws java.io.IOException {
+        List<String> found = new java.util.ArrayList<>();
+        int writes = 0;
+        try (java.util.stream.Stream<java.nio.file.Path> files = java.nio.file.Files.walk(SERVICES)) {
+            for (java.nio.file.Path p : files.filter(f -> f.toString().endsWith(".java")).toList()) {
+                String rel = SERVICES.relativize(p).toString().replace('\\', '/');
+                if (rel.startsWith("model/") || rel.startsWith("payload/") || rel.startsWith("mapper/")) {
+                    continue;
+                }
+                String source = java.nio.file.Files.readString(p, java.nio.charset.StandardCharsets.UTF_8);
+                List<String> bad = closingActorsFromTheClient(source);
+                writes += countClosingWrites(source);
+                bad.forEach(b -> found.add(rel + ": " + b));
+            }
+        }
+        assertThat(writes).as("the scan still finds the closing writes (lifecycle, transfers, billing, isolation…)")
+            .isGreaterThan(30);
+        assertThat(found)
+            .as("a closing write records who did it from the session: CallerIdentity.resolveActor(repo, claim, hospital)")
+            .isEmpty();
+    }
+
+    @Test
+    void theClosingWriteScanCatchesTheD1226Shape() {
+        assertThat(closingActorsFromTheClient(
+            "precaution.setDiscontinuedBy(\n    resolveStaff(request.getDiscontinuedByStaffId(), hospitalId));"))
+            .hasSize(1);
+        assertThat(closingActorsFromTheClient(
+            "Staff by = resolveStaff(dto.getCancelledByStaffId());\norder.setCancelledBy(by);")).hasSize(1);
+        assertThat(closingActorsFromTheClient("precaution.setDiscontinuedBy(CallerIdentity.resolveActor(\n"
+            + "    staffRepository, request.getDiscontinuedByStaffId(), hospitalId));")).isEmpty();
+        assertThat(closingActorsFromTheClient("recall.setClosedByUserId(roleValidator.getCurrentUserId());")).isEmpty();
+    }
+
+    static int countClosingWrites(String source) {
+        return (int) CLOSING_ACTOR_WRITE.matcher(source).results().count();
+    }
+
+    static List<String> closingActorsFromTheClient(String source) {
+        List<String> out = new java.util.ArrayList<>();
+        java.util.regex.Matcher write = CLOSING_ACTOR_WRITE.matcher(source);
+        while (write.find()) {
+            int end = closingParen(source, write.end());
+            String argument = source.substring(write.end(), Math.max(write.end(), end - 1)).trim();
+            String value = argument;
+            if (argument.matches("\\w++")) {
+                java.util.regex.Matcher init = Pattern.compile("\\b" + argument + "\\s*+=\\s*+([^;]++);").matcher(source);
+                if (init.find()) {
+                    value = init.group(1);
+                }
+            }
+            if (FROM_THE_CLIENT.matcher(value).find() && !THROUGH_THE_RESOLVER.matcher(value).find()) {
+                out.add(write.group().trim() + argument.replaceAll("\\s+", " ") + ")");
+            }
+        }
+        return out;
+    }
+
+    private static int closingParen(String source, int from) {
+        int depth = 1;
+        int i = from;
+        while (i < source.length() && depth > 0) {
+            char ch = source.charAt(i);
+            if (ch == '"') {
+                i++;
+                while (i < source.length() && source.charAt(i) != '"') {
+                    i += source.charAt(i) == '\\' ? 2 : 1;
+                }
+            } else if (ch == '(') {
+                depth++;
+            } else if (ch == ')') {
+                depth--;
+            }
+            i++;
+        }
+        return i;
     }
 }

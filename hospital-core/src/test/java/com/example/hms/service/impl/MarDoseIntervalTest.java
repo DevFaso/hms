@@ -87,6 +87,34 @@ class MarDoseIntervalTest {
         assertThat(MarDoseInterval.lastGivenAt(List.of(held, pending), null)).isEmpty();
     }
 
+    /**
+     * QA D1234 (round 24): the refusal printed "02/11 00:28" in every language
+     * (11 February to an English reader). The times are now written the
+     * reader's way, through the one date formatter.
+     */
+    @org.junit.jupiter.params.ParameterizedTest(name = "{0}")
+    @org.junit.jupiter.params.provider.ValueSource(strings = {"en", "fr", "es"})
+    void theRefusalWritesBothTimesTheReadersWay(String language) {
+        java.util.Locale locale = java.util.Locale.forLanguageTag(language);
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(locale);
+        try {
+            Prescription morphine = rx("q4h");
+            LocalDateTime last = NOW.minusMinutes(1);
+            Optional<LocalDateTime> lastGiven = Optional.of(last);
+            FieldBusinessException refusal = org.junit.jupiter.api.Assertions.assertThrows(FieldBusinessException.class,
+                () -> MarDoseInterval.requireIntervalOrReason(morphine, MedicationAdministrationStatus.GIVEN,
+                    lastGiven, NOW, WINDOW, null));
+            Object[] args = refusal.getArgs();
+            assertThat(args[0]).isEqualTo(com.example.hms.utility.DisplayDates.dateTime(
+                com.example.hms.utility.HospitalTime.at(last, (com.example.hms.model.Hospital) null), locale));
+            assertThat(args[1]).isEqualTo(com.example.hms.utility.DisplayDates.dateTime(
+                com.example.hms.utility.HospitalTime.at(last.plusHours(3), (com.example.hms.model.Hospital) null), locale));
+            assertThat(String.valueOf(args[0])).doesNotContainPattern("\\d{2}/\\d{2}").contains("2026");
+        } finally {
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        }
+    }
+
     private static Prescription rx(String frequency) {
         Prescription rx = new Prescription();
         rx.setId(UUID.randomUUID());

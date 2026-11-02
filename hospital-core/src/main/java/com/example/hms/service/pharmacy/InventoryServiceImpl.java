@@ -436,7 +436,10 @@ public class InventoryServiceImpl implements InventoryService {
             boolean hasPharmacy = item.getPharmacy() != null;
             String onHand = String.valueOf(item.getQuantityOnHand());
             String threshold = String.valueOf(item.getReorderThreshold());
-            Object[] alertArgs = {hasMedication ? item.getMedicationCatalogItem().getNameFr() : unknown,
+            // QA D1235 class: the alert reader sees the drug in their own language.
+            String drugName = hasMedication
+                ? com.example.hms.utility.DrugDisplayNames.forReader(item.getMedicationCatalogItem(), locale) : null;
+            Object[] alertArgs = {drugName != null ? drugName : unknown,
                 hasPharmacy ? item.getPharmacy().getName() : unknown, onHand, threshold};
             Object[] auditArgs = {hasMedication ? item.getMedicationCatalogItem().getNameFr() : unknownForAudit,
                 hasPharmacy ? item.getPharmacy().getName() : unknownForAudit, onHand, threshold};
