@@ -9,6 +9,7 @@ import {
   inject,
   signal,
   ChangeDetectionStrategy,
+  booleanAttribute,
 } from '@angular/core';
 
 import { TranslateModule } from '@ngx-translate/core';
@@ -16,6 +17,11 @@ import { forkJoin, of, Subject, Subscription } from 'rxjs';
 import { catchError, debounceTime, switchMap } from 'rxjs/operators';
 import { PatientService, PatientResponse } from '../../services/patient.service';
 import { patientSubline } from './patient-subline';
+import { rankPeopleByName } from '../person-search';
+
+/** How many patients a search asks for, and how many the list shows (QA D1239). */
+const SEARCH_SIZE = 20;
+const SHOWN = 8;
 
 /**
  * Debounced patient typeahead with the shared chip/dropdown idiom.
@@ -36,6 +42,14 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
 
   /** id for the input element so an external <label for> keeps working. */
   @Input() inputId = 'patient-picker-input';
+  /**
+   * QA D1245: the form needs a patient. The search input then carries
+   * `required` (a submit guard with `submitGuardRequired`, or listing the
+   * input's id, refuses the send and names the field); while the input is
+   * shown no patient is picked, so whatever it holds is only a query
+   * (`data-submit-blank`).
+   */
+  @Input({ transform: booleanAttribute }) required = false;
   /**
    * Hospital scope for name search. Exact identifiers (phone/email/MRN) also
    * query the cross-hospital lookup regardless of this input.
@@ -78,7 +92,9 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
             .search({
               name: q,
               hospitalId: this.hospitalId ?? undefined,
-              size: 8,
+              // QA D1239: more than the list shows, so the ranking below
+              // has the patient whose name starts with the query to offer.
+              size: SEARCH_SIZE,
               // QA D80: an admitted patient whose record is inactive must still
               // be found by the task, handoff and discharge pickers.
               includeInactive: true,
@@ -106,7 +122,9 @@ export class PatientPickerComponent implements OnInit, OnDestroy {
             merged[kept] = { ...merged[kept], mrn: p.mrn };
           }
         }
-        const items = merged.slice(0, 8);
+        // QA D1239: "Awa" filled the eight places with Sawadogos; a name that
+        // starts with the query now comes before one that only contains it.
+        const items = rankPeopleByName(merged, this.query()).slice(0, SHOWN);
         this.suggestions.set(items);
         this.dropdownOpen.set(items.length > 0);
         this.noMatch.set(items.length === 0);

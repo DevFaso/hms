@@ -25,6 +25,7 @@ import { RoleContextService } from '../core/role-context.service';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { refusalReason } from '../shared/refusal-reason';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 /**
  * Ward & bed administration (P0 #4). First writer for the V25 ward/bed
  * schema — makes the dashboard occupancy tiles real.
@@ -32,7 +33,13 @@ import { refusalReason } from '../shared/refusal-reason';
 @Component({
   selector: 'app-bed-management',
   standalone: true,
-  imports: [ModalDialogDirective, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [
+    SubmitGuardDirective,
+    ModalDialogDirective,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+  ],
   templateUrl: './bed-management.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './bed-management.scss',

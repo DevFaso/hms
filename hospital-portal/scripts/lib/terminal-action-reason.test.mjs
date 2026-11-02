@@ -48,7 +48,9 @@ const SERVER_GUARD = join(
   'CancelVoidReasonGuardTest.java',
 );
 
-const TERMINAL = /\/(?:cancel|close|void|revoke|discontinue|withdraw|reject)\b/;
+// QA D1247 (round 25): `deactivate` too — a guarantor was switched off on one
+// click with an empty body.
+const TERMINAL = /\/(?:cancel|close|void|revoke|discontinue|withdraw|reject|deactivate)\b/;
 
 /** Sites that end a record legitimately without a reason, each with why. */
 const PINS = new Map([
@@ -71,6 +73,30 @@ const PINS = new Map([
   [
     'services/patient-portal.service.ts::/me/patient/refills/{}/cancel',
     'the patient withdrawing their own refill request before anyone acted on it ("OWN REASON" in CancelVoidReasonGuardTest); seen since round 22, when the scan learned chained `this.http\\n  .put(` calls',
+  ],
+  [
+    'reports/reports.service.ts::/reports/{}/deactivate',
+    'a scheduled report definition switched off by its owner (it can be switched back on), not a patient record (QA D1247 widening)',
+  ],
+  [
+    'services/assignment-admin.service.ts::/assignments/{}/deactivate',
+    'a staff role assignment switched off by an administrator: access management, not a patient record (QA D1247 widening)',
+  ],
+  [
+    'services/drug-interaction.service.ts::/drug-interactions/{}/deactivate',
+    'a knowledge-base interaction rule retired by a pharmacist administrator, not a patient record (QA D1247 widening)',
+  ],
+  [
+    'services/provider-portal.service.ts::/provider/staff/{}/deactivate',
+    "a partner provider's staff account switched off by its manager, not a patient record (QA D1247 widening)",
+  ],
+  [
+    'services/slot-inventory.service.ts::/visit-types/{}/deactivate',
+    'a scheduling configuration (visit type) retired by an administrator, not a patient record (QA D1247 widening)',
+  ],
+  [
+    'services/slot-inventory.service.ts::/session-templates/{}/deactivate',
+    'a scheduling configuration (session template) retired by an administrator, not a patient record (QA D1247 widening)',
   ],
   [
     'services/staff-scheduling.service.ts::/staff/scheduling/leaves/{}/cancel',

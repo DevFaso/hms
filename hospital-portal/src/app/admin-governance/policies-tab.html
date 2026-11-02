@@ -185,6 +185,7 @@
           <label class="form-field">
             <span>{{ 'ADMIN_GOV.NAME' | translate }} *</span>
             <input
+              required
               type="text"
               maxlength="255"
               [ngModel]="pName()"
@@ -194,6 +195,7 @@
           <label class="form-field">
             <span>{{ 'ADMIN_GOV.CODE' | translate }} *</span>
             <input
+              required
               type="text"
               maxlength="100"
               [ngModel]="pCode()"
@@ -213,7 +215,7 @@
         <div class="form-row">
           <label class="form-field">
             <span>{{ 'ADMIN_GOV.POLICY_TYPE' | translate }} *</span>
-            <select [ngModel]="pType()" (ngModelChange)="pType.set($event)">
+            <select required [ngModel]="pType()" (ngModelChange)="pType.set($event)">
               <option value="">—</option>
               @for (t of policyTypes; track t) {
                 <option [value]="t">{{ 'ADMIN_GOV.PT_' + t | translate }}</option>
@@ -222,7 +224,11 @@
           </label>
           <label class="form-field">
             <span>{{ 'ADMIN_GOV.ORGANIZATION' | translate }} *</span>
-            <select [ngModel]="pOrganizationId()" (ngModelChange)="pOrganizationId.set($event)">
+            <select
+              required
+              [ngModel]="pOrganizationId()"
+              (ngModelChange)="pOrganizationId.set($event)"
+            >
               <option value="">—</option>
               @for (org of organizations(); track org.id) {
                 <option [value]="org.id">{{ org.name | orgText: org.code }}</option>
@@ -250,7 +256,14 @@
           <button type="button" class="btn-secondary" (click)="closePolicyModal()">
             {{ 'COMMON.CANCEL' | translate }}
           </button>
-          <button type="button" class="btn-primary" [disabled]="saving()" (click)="submitPolicy()">
+          <button
+            appSubmitGuard
+            submitGuardRequired
+            type="button"
+            class="btn-primary"
+            [disabled]="saving()"
+            (click)="submitPolicy()"
+          >
             {{ 'COMMON.SAVE' | translate }}
           </button>
         </div>
@@ -284,6 +297,7 @@
           <label class="form-field">
             <span>{{ 'ADMIN_GOV.NAME' | translate }} *</span>
             <input
+              required
               type="text"
               maxlength="255"
               [ngModel]="rName()"
@@ -293,6 +307,7 @@
           <label class="form-field">
             <span>{{ 'ADMIN_GOV.CODE' | translate }} *</span>
             <input
+              required
               type="text"
               maxlength="100"
               [ngModel]="rCode()"
@@ -312,7 +327,7 @@
         <div class="form-row">
           <label class="form-field">
             <span>{{ 'ADMIN_GOV.RULE_TYPE' | translate }} *</span>
-            <select [ngModel]="rType()" (ngModelChange)="rType.set($event)">
+            <select required [ngModel]="rType()" (ngModelChange)="rType.set($event)">
               <option value="">—</option>
               @for (t of ruleTypes; track t) {
                 <option [value]="t">{{ 'ADMIN_GOV.RT_' + t | translate }}</option>
@@ -342,7 +357,14 @@
           <button type="button" class="btn-secondary" (click)="closeRuleModal()">
             {{ 'COMMON.CANCEL' | translate }}
           </button>
-          <button type="button" class="btn-primary" [disabled]="saving()" (click)="submitRule()">
+          <button
+            appSubmitGuard
+            submitGuardRequired
+            type="button"
+            class="btn-primary"
+            [disabled]="saving()"
+            (click)="submitRule()"
+          >
             {{ 'COMMON.SAVE' | translate }}
           </button>
         </div>

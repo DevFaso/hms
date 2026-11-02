@@ -1,5 +1,5 @@
 import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
-import { textMatches } from '../shared/person-search';
+import { textMatches, rankPeopleByName } from '../shared/person-search';
 import { Component, inject, OnInit, signal, ChangeDetectionStrategy } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -28,10 +28,12 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { AuthService } from '../auth/auth.service';
 import { AuthorshipService } from '../shared/authorship.service';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 @Component({
   selector: 'app-treatment-plans',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     PersonNamePipe,
     ModalDialogDirective,
     PatientSublinePipe,
@@ -173,7 +175,8 @@ export class TreatmentPlansComponent implements OnInit {
       )
       .subscribe({
         next: (list) => {
-          this.patientSuggestions.set(list.slice(0, 8));
+          // QA D1239: ranked by how the name answers the query, then cut.
+          this.patientSuggestions.set(rankPeopleByName(list, this.patientQuery()).slice(0, 8));
           this.patientDropdownOpen.set(list.length > 0);
           this.patientSearchLoading.set(false);
         },

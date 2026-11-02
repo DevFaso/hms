@@ -106,7 +106,11 @@ export class SubmitGuardDirective {
   private onClick(event: Event): void {
     let reason = this.appSubmitGuard();
     let all = this.fieldIds();
-    if (!reason && this.submitGuardRequired()) {
+    if (!reason && this.listedRequiredBlank()) {
+      // QA D1245: a listed field that declares itself required is refused
+      // while blank, whatever the guard expression says.
+      reason = true;
+    } else if (!reason && this.submitGuardRequired()) {
       const required = this.requiredFieldIds();
       if (required.some((id) => isBlank(this.root().querySelector(`#${CSS.escape(id)}`)))) {
         reason = true;
@@ -139,11 +143,17 @@ export class SubmitGuardDirective {
     return this.translate.instant(BLOCKED_KEY);
   }
 
-  /** The form or dialog the button sends: where its fields are looked up. */
+  /**
+   * The form or dialog the button sends: where its fields are looked up. A
+   * section that is neither (an inline form on a page) carries
+   * `data-submit-scope` (QA D1245).
+   */
   private root(): HTMLElement {
     const button = this.host.nativeElement as HTMLElement;
     return (
-      button.closest<HTMLElement>('form, [role="dialog"], [role="alertdialog"], dialog, .modal') ??
+      button.closest<HTMLElement>(
+        'form, [role="dialog"], [role="alertdialog"], dialog, .modal, [data-submit-scope]',
+      ) ??
       button.parentElement?.parentElement ??
       button.ownerDocument.body
     );
@@ -158,22 +168,24 @@ export class SubmitGuardDirective {
     return [...(this.submitGuardFields() ?? [])];
   }
 
+  /** Whether a field named in `submitGuardFields` declares itself required and is blank. */
+  private listedRequiredBlank(): boolean {
+    const root = this.root();
+    return this.fieldIds().some((id) => {
+      const el = root.querySelector<HTMLElement>(`#${CSS.escape(id)}`);
+      return el !== null && isRequiredControl(el) && isBlank(el);
+    });
+  }
+
   /**
-   * The ids of the rendered, enabled `[required]` controls of the form, in
-   * reading order; a control without an id is given one, so it can be marked
-   * and named.
+   * The ids of the rendered, enabled required controls of the form (`required`,
+   * or `aria-required="true"`: QA D1245), in reading order; a control without
+   * an id is given one, so it can be marked and named.
    */
   private requiredFieldIds(): string[] {
-    const controls = this.root().querySelectorAll<HTMLElement>(
-      'input[required], select[required], textarea[required]',
-    );
+    const controls = this.root().querySelectorAll<HTMLElement>(REQUIRED_CONTROLS);
     return Array.from(controls)
-      .filter(
-        (el) =>
-          !(el as HTMLInputElement).disabled &&
-          el.getAttribute('type') !== 'hidden' &&
-          el.closest('[hidden]') === null,
-      )
+      .filter(isRequiredControl)
       .map((el) => {
         if (!el.id) el.id = `submit-guard-field-${++SubmitGuardDirective.nextId}`;
         return el.id;
@@ -228,9 +240,36 @@ export class SubmitGuardDirective {
   }
 }
 
-/** Whether a control holds no answer: an empty value, an unticked box, nothing chosen. */
+const REQUIRED_CONTROLS = [
+  'input[required]',
+  'select[required]',
+  'textarea[required]',
+  'input[aria-required="true"]',
+  'select[aria-required="true"]',
+  'textarea[aria-required="true"]',
+].join(', ');
+
+/** A rendered, enabled control that declares itself required. */
+function isRequiredControl(el: HTMLElement): boolean {
+  return (
+    el.matches(REQUIRED_CONTROLS) &&
+    !(el as HTMLInputElement).disabled &&
+    el.getAttribute('type') !== 'hidden' &&
+    el.closest('[hidden]') === null
+  );
+}
+
+/**
+ * Whether a control holds no answer: an empty value, an unticked box, nothing
+ * chosen. QA D1245: a typeahead whose text is only the query (a patient
+ * search with nothing picked) says so with `data-submit-blank="true"`; the
+ * text it holds is not an answer.
+ */
 function isBlank(el: Element | null): boolean {
   if (!el) return false;
+  const declared = el.getAttribute('data-submit-blank');
+  if (declared === 'true') return true;
+  if (declared === 'false') return false;
   if (el instanceof HTMLInputElement) {
     if (el.type === 'checkbox' || el.type === 'radio') return !el.checked;
     return el.value.trim() === '';

@@ -370,6 +370,7 @@
           <div class="field">
             <label for="us-patient">{{ 'MATERNITY.PATIENT' | translate }} *</label>
             <app-patient-picker
+              required
               inputId="us-patient"
               [selected]="orderPatient()"
               (selectedChange)="onOrderPatientPicked($event)"
@@ -379,7 +380,7 @@
         <div class="form-row">
           <div class="field">
             <label for="us-scan-type">{{ 'ULTRASOUND.SCAN_TYPE' | translate }} *</label>
-            <select id="us-scan-type" [(ngModel)]="orderForm.scanType">
+            <select required id="us-scan-type" [(ngModel)]="orderForm.scanType">
               @for (t of scanTypes; track t) {
                 <option [value]="t">{{ 'ULTRASOUND.TYPE_' + t | translate }}</option>
               }
@@ -523,11 +524,11 @@
         <div class="form-row">
           <div class="field">
             <label for="rep-date">{{ 'ULTRASOUND.SCAN_DATE' | translate }} *</label>
-            <input id="rep-date" type="date" [(ngModel)]="reportForm.scanDate" />
+            <input required id="rep-date" type="date" [(ngModel)]="reportForm.scanDate" />
           </div>
           <div class="field">
             <label for="rep-category">{{ 'ULTRASOUND.FINDING' | translate }} *</label>
-            <select id="rep-category" [(ngModel)]="reportForm.findingCategory">
+            <select required id="rep-category" [(ngModel)]="reportForm.findingCategory">
               <!-- QA D1150: never preselected; the clinician picks the finding. -->
               <option value="" disabled>{{ 'ULTRASOUND.FINDING_CHOOSE' | translate }}</option>
               @for (c of findingCategories; track c) {

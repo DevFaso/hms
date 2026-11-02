@@ -175,6 +175,7 @@ type Tab = 'config' | 'mappings' | 'exports';
             data-testid="dhis2-config-save"
             [disabled]="saving()"
             [appSubmitGuard]="!canSaveConfig()"
+            submitGuardRequired
           >
             {{ 'COMMON.SAVE' | translate }}
           </button>

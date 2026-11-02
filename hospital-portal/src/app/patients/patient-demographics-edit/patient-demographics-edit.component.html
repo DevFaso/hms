@@ -78,7 +78,13 @@
           <label for="demoGender"
             >{{ 'PATIENTS.GENDER' | translate }} <span class="required">*</span></label
           >
-          <select id="demoGender" name="gender" class="form-control" [(ngModel)]="form.gender">
+          <select
+            required
+            id="demoGender"
+            name="gender"
+            class="form-control"
+            [(ngModel)]="form.gender"
+          >
             @for (g of genders; track g) {
               <option [value]="g">{{ 'PATIENTS.' + g | translate }}</option>
             }

@@ -309,6 +309,7 @@
               {{ 'DISCHARGE.DISCHARGE_DIAGNOSIS' | translate }} <span>*</span>
             </label>
             <textarea
+              required
               id="decision-diagnosis"
               rows="2"
               maxlength="2000"
@@ -328,7 +329,12 @@
               <span>*</span>
             }
           </label>
-          <textarea id="decision-note" rows="4" [(ngModel)]="decisionNote"></textarea>
+          <textarea
+            id="decision-note"
+            rows="4"
+            [required]="decisionMode() === 'reject'"
+            [(ngModel)]="decisionNote"
+          ></textarea>
         </div>
       </div>
       <div class="modal-actions">
@@ -336,6 +342,8 @@
           {{ 'COMMON.CANCEL' | translate }}
         </button>
         <button
+          appSubmitGuard
+          submitGuardRequired
           [class]="decisionMode() === 'approve' ? 'btn-primary' : 'btn-danger'"
           [disabled]="decisionSubmitting()"
           (click)="submitDecision()"
@@ -444,6 +452,7 @@
         <div class="field">
           <label for="request-patient">{{ 'DISCHARGE.PATIENT' | translate }} *</label>
           <app-patient-picker
+            required
             inputId="request-patient"
             [hospitalId]="pickerHospitalId"
             [selected]="selectedPatient()"
@@ -516,6 +525,7 @@
           <div class="field">
             <label for="summary-patient">{{ 'DISCHARGE.PATIENT' | translate }} *</label>
             <app-patient-picker
+              required
               inputId="summary-patient"
               [hospitalId]="pickerHospitalId"
               [selected]="selectedPatient()"
@@ -524,7 +534,7 @@
           </div>
           <div class="field">
             <label for="summary-encounter">{{ 'DISCHARGE.ENCOUNTER' | translate }} *</label>
-            <select id="summary-encounter" [(ngModel)]="summaryForm.encounterId">
+            <select required id="summary-encounter" [(ngModel)]="summaryForm.encounterId">
               <option value="">{{ 'DISCHARGE.SELECT_ENCOUNTER' | translate }}</option>
               @for (e of patientEncounters(); track e.id) {
                 <option [value]="e.id">{{ encounterLabel(e) }}</option>
@@ -535,11 +545,11 @@
         <div class="form-row">
           <div class="field">
             <label for="summary-date">{{ 'DISCHARGE.DISCHARGE_DATE' | translate }} *</label>
-            <input id="summary-date" type="date" [(ngModel)]="summaryForm.dischargeDate" />
+            <input required id="summary-date" type="date" [(ngModel)]="summaryForm.dischargeDate" />
           </div>
           <div class="field">
             <label for="summary-disposition">{{ 'DISCHARGE.DISPOSITION' | translate }} *</label>
-            <select id="summary-disposition" [(ngModel)]="summaryForm.disposition">
+            <select required id="summary-disposition" [(ngModel)]="summaryForm.disposition">
               @for (d of dispositions; track d) {
                 <option [value]="d">{{ 'DISCHARGE.DISPOSITION_' + d | translate }}</option>
               }
@@ -549,6 +559,7 @@
         <div class="field">
           <label for="summary-diagnosis">{{ 'DISCHARGE.DIAGNOSIS' | translate }} *</label>
           <textarea
+            required
             id="summary-diagnosis"
             rows="2"
             [(ngModel)]="summaryForm.dischargeDiagnosis"
@@ -766,7 +777,13 @@
         <button class="btn-secondary" (click)="closeSummaryModal()">
           {{ 'COMMON.CANCEL' | translate }}
         </button>
-        <button class="btn-primary" [disabled]="summarySaving()" (click)="submitSummary()">
+        <button
+          appSubmitGuard
+          submitGuardRequired
+          class="btn-primary"
+          [disabled]="summarySaving()"
+          (click)="submitSummary()"
+        >
           {{ 'COMMON.SAVE' | translate }}
         </button>
       </div>
@@ -926,6 +943,7 @@
         <div class="field">
           <label for="finalize-signature">{{ 'DISCHARGE.SIGNATURE' | translate }} *</label>
           <input
+            required
             id="finalize-signature"
             type="text"
             [placeholder]="'DISCHARGE.SIGNATURE_PLACEHOLDER' | translate"
@@ -937,7 +955,13 @@
         <button class="btn-secondary" (click)="closeFinalize()">
           {{ 'COMMON.CANCEL' | translate }}
         </button>
-        <button class="btn-primary" [disabled]="finalizeSubmitting()" (click)="submitFinalize()">
+        <button
+          appSubmitGuard
+          submitGuardRequired
+          class="btn-primary"
+          [disabled]="finalizeSubmitting()"
+          (click)="submitFinalize()"
+        >
           {{ 'DISCHARGE.FINALIZE' | translate }}
         </button>
       </div>

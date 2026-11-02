@@ -35,8 +35,10 @@
       >
       <div class="search-wrapper">
         <input
+          required
           data-escape-discards
           id="patientSearch"
+          [attr.data-submit-blank]="selectedPatient() ? 'false' : 'true'"
           type="text"
           class="form-control"
           [placeholder]="'RECEPTION.SEARCH_PATIENT_PLACEHOLDER' | translate"
@@ -91,8 +93,10 @@
       >
       <div class="search-wrapper">
         <input
+          required
           data-escape-discards
           id="staffSearch"
+          [attr.data-submit-blank]="selectedStaff() ? 'false' : 'true'"
           type="text"
           class="form-control"
           [placeholder]="'RECEPTION.FILTER_PROVIDER' | translate"
@@ -145,6 +149,7 @@
         {{ 'RECEPTION.DEPARTMENT' | translate }} <span class="required">*</span>
       </label>
       <select
+        required
         id="walkinDept"
         class="form-control"
         [ngModel]="departmentId()"

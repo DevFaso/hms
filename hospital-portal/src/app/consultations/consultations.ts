@@ -1,6 +1,6 @@
 import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
 import { isOrderCancellable } from '../shared/order-lifecycle';
-import { textMatches } from '../shared/person-search';
+import { textMatches, rankPeopleByName } from '../shared/person-search';
 import {
   Component,
   computed,
@@ -41,6 +41,7 @@ import { PatientSublinePipe } from '../shared/patient-picker/patient-subline';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { AuthorshipService } from '../shared/authorship.service';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 /** Mirrors the @PreAuthorize on GET /consultations/mine. Update both together. */
 const CONSULTANT_TAB_ROLES = ['ROLE_DOCTOR', 'ROLE_SUPER_ADMIN'];
 
@@ -48,6 +49,7 @@ const CONSULTANT_TAB_ROLES = ['ROLE_DOCTOR', 'ROLE_SUPER_ADMIN'];
   selector: 'app-consultations',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     PersonNamePipe,
     ModalDialogDirective,
     PatientSublinePipe,
@@ -257,7 +259,8 @@ export class ConsultationsComponent implements OnInit {
       )
       .subscribe({
         next: (list) => {
-          this.patientSuggestions.set(list.slice(0, 8));
+          // QA D1239: ranked by how the name answers the query, then cut.
+          this.patientSuggestions.set(rankPeopleByName(list, this.patientQuery()).slice(0, 8));
           this.patientDropdownOpen.set(list.length > 0);
           this.patientSearchLoading.set(false);
         },

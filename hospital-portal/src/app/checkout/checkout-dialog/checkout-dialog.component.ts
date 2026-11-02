@@ -22,6 +22,7 @@ import {
   AfterVisitSummary,
 } from '../../services/encounter.service';
 import { ToastService } from '../../core/toast.service';
+import { refusalReason } from '../../shared/refusal-reason';
 import { serverLocalDate } from '../../shared/date-utils';
 import { AuthService } from '../../auth/auth.service';
 import { PatientService, PatientProblem } from '../../services/patient.service';
@@ -105,8 +106,22 @@ export class CheckoutDialogComponent {
     return !!this.encounter && !this.saving();
   }
 
+  /**
+   * QA D1246: a checkout with every field empty closed the visit and printed
+   * an empty after-visit summary. As in a real hospital the summary says at
+   * least what the patient had or what to do: a discharge diagnosis or
+   * instructions (the server refuses it too and names the field).
+   */
+  checkoutBlockReason(): string | null {
+    if (!this.encounter) return this.translate.instant('SUBMIT_GUARD.ENCOUNTER');
+    if (!this.dischargeDiagnosesText().trim() && !this.followUpInstructions().trim()) {
+      return this.translate.instant('CHECKOUT.SUMMARY_REQUIRED');
+    }
+    return null;
+  }
+
   submit(): void {
-    if (!this.encounter || this.saving()) return;
+    if (!this.encounter || this.saving() || this.checkoutBlockReason()) return;
 
     this.saving.set(true);
 
@@ -140,10 +155,12 @@ export class CheckoutDialogComponent {
         );
         this.checkoutCompleted.emit(summary);
       },
-      error: () => {
+      error: (err: unknown) => {
         this.saving.set(false);
+        // QA D1246: the server's refusal names the missing field; say it.
         this.toast.error(
-          this.translate.instant('checkout.error') || 'Check-out failed. Please try again.',
+          refusalReason(err) ??
+            (this.translate.instant('checkout.error') || 'Check-out failed. Please try again.'),
         );
       },
     });

@@ -127,6 +127,58 @@ describe('WaitlistPanelComponent', () => {
     expect(hints).toEqual(['· CHW2572', '· CHW1444']);
   });
 
+  describe('QA D1251: the provider suggestions', () => {
+    const aminata = { id: 's1', name: 'Aminata Ouédraogo' } as never;
+    const amidou = { id: 's2', name: 'Amidou Sawadogo' } as never;
+    const listbox = () => (fixture.nativeElement as HTMLElement).querySelector('#wl-staff-listbox');
+
+    beforeEach(() => {
+      component.allStaff.set([aminata, amidou]);
+      component.openAddForm();
+      component.onStaffQueryChange('Ami');
+      fixture.detectChanges();
+    });
+
+    it('close once a provider is picked, and focus moves to the date range', fakeAsync(() => {
+      const el = fixture.nativeElement as HTMLElement;
+      document.body.appendChild(el);
+      expect(listbox()).not.toBeNull();
+      component.pickStaff(aminata);
+      fixture.detectChanges();
+      tick();
+      expect(listbox()).toBeNull();
+      expect(component.selectedStaff()).toBe(aminata);
+      expect(document.activeElement?.id).toBe('wl-from');
+      el.remove();
+    }));
+
+    it('answer the keyboard: ArrowDown activates, Enter picks, Escape closes', () => {
+      const key = (k: string) => new KeyboardEvent('keydown', { key: k, cancelable: true });
+      component.onStaffKeydown(key('ArrowDown'));
+      expect(component.staffActive()).toBe(0);
+      fixture.detectChanges();
+      const input = (fixture.nativeElement as HTMLElement).querySelector('#wl-staff')!;
+      expect(input.getAttribute('aria-expanded')).toBe('true');
+      expect(input.getAttribute('aria-activedescendant')).toBe('wl-staff-option-0');
+      component.onStaffKeydown(key('Enter'));
+      expect(component.selectedStaff()).toBe(aminata);
+      expect(component.staffListOpen()).toBeFalse();
+
+      component.onStaffQueryChange('Ami');
+      expect(component.selectedStaff()).toBeNull();
+      expect(component.staffListOpen()).toBeTrue();
+      component.onStaffKeydown(key('Escape'));
+      expect(component.staffListOpen()).toBeFalse();
+    });
+  });
+
+  it('typing another name drops the patient picked before', () => {
+    const patient = { id: 'p1', firstName: 'John', lastName: 'Doe' } as any;
+    component.selectPatient(patient);
+    component.onPatientQueryChange('Jane');
+    expect(component.selectedPatient()).toBeNull();
+  });
+
   it('should select patient', () => {
     const patient = { id: 'p1', firstName: 'John', lastName: 'Doe' } as any;
     component.selectPatient(patient);

@@ -88,7 +88,7 @@
         (change)="filterType.set($any($event.target).value); onFilterChange()"
       >
         <option value="">{{ 'PORTAL.DOCUMENTS.FILTER_ALL' | translate }}</option>
-        @for (dt of documentTypes; track dt.value) {
+        @for (dt of filterTypes; track dt.value) {
           <option [value]="dt.value">{{ dt.labelKey | translate }}</option>
         }
       </select>

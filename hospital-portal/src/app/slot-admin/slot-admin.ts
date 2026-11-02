@@ -29,6 +29,7 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { ClockTimePipe } from '../shared/pipes/clock-time.pipe';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 type AdminSection = 'visit-types' | 'templates' | 'slots';
 
 /**
@@ -44,6 +45,7 @@ type AdminSection = 'visit-types' | 'templates' | 'slots';
   selector: 'app-slot-admin',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     ModalDialogDirective,
     ClockTimePipe,
     ServerTimePipe,

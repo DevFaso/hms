@@ -228,6 +228,7 @@
           <div class="field">
             <label for="reg-patient">{{ 'REGISTRATIONS.PATIENT' | translate }} *</label>
             <app-patient-picker
+              required
               inputId="reg-patient"
               [selected]="formPatient()"
               (selectedChange)="onFormPatientPicked($event)"

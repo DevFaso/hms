@@ -1,7 +1,14 @@
 import { refusalReason } from '../../shared/refusal-reason';
 import { blobRefusalReason } from '../../shared/blob-refusal';
 import { invoiceTone, InvoiceTone } from '../../shared/invoice-tone';
-import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  OnInit,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { CommonModule, DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -19,6 +26,10 @@ import { DialogA11yDirective } from '../../shared/a11y/dialog-a11y.directive';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { formatCfa } from '../../shared/i18n/app-locale';
 import { cfaAmountMessageKey, cfaAmountProblem } from '../../shared/cfa-amount';
+import { refuseFields } from '../../shared/forms/invalid-fields';
+
+/** The pay dialog's fields a refusal can mark (QA D1245). */
+const PAY_FIELDS = ['payAmount', 'payRef'];
 
 @Component({
   selector: 'app-my-billing',
@@ -40,6 +51,7 @@ import { cfaAmountMessageKey, cfaAmountProblem } from '../../shared/cfa-amount';
 export class MyBillingComponent implements OnInit {
   private readonly portal = inject(PatientPortalService);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   invoices = signal<PortalInvoice[]>([]);
   loading = signal(true);
   totalBalance = signal(0);
@@ -227,9 +239,13 @@ export class MyBillingComponent implements OnInit {
 
     // QA D433: only cash is declared without a reference staff can check.
     if (this.payMethod !== 'CASH' && !this.payReference.trim()) {
-      this.payError.set(this.translate.instant('PORTAL.BILLING.REFERENCE_REQUIRED'));
+      const message = this.translate.instant('PORTAL.BILLING.REFERENCE_REQUIRED');
+      // QA D1245: the field itself is marked and focused, not only the message.
+      refuseFields(this.host.nativeElement, ['payRef'], PAY_FIELDS, message);
+      this.payError.set(message);
       return;
     }
+    refuseFields(this.host.nativeElement, [], PAY_FIELDS, '');
 
     this.payProcessing.set(true);
     this.payError.set('');

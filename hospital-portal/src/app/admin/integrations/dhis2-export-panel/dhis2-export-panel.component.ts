@@ -87,6 +87,7 @@ import { SubmitGuardDirective } from '../../../shared/forms/submit-guard.directi
           data-testid="dhis2-export-trigger"
           [disabled]="triggering()"
           [appSubmitGuard]="!canTrigger()"
+          submitGuardRequired
         >
           {{ 'DHIS2.PANEL.TRIGGER' | translate }}
         </button>

@@ -21,6 +21,7 @@ import { finalize } from 'rxjs';
 import { localDateString } from '../shared/date-utils';
 import { refusalReason } from '../shared/refusal-reason';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 /**
  * P-09: MTM (Medication Therapy Management) review screen — pharmacist-led
  * chronic disease review, adherence counselling flag, polypharmacy alert,
@@ -31,6 +32,7 @@ import { refusalReason } from '../shared/refusal-reason';
   selector: 'app-mtm-review',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     ServerTimePipe,
     CommonModule,
     FormsModule,

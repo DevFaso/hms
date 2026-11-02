@@ -154,8 +154,10 @@
         <label class="form-label" for="rc-patient">{{ 'PATIENTS.PATIENT' | translate }} *</label>
         <div class="autocomplete-wrap">
           <input
+            required
             data-escape-discards
             id="rc-patient"
+            [attr.data-submit-blank]="selectedPatient() ? 'false' : 'true'"
             class="form-input"
             type="text"
             [placeholder]="'RECEPTION.SEARCH_PATIENT_NAME' | translate"
@@ -188,6 +190,7 @@
         <div class="form-group">
           <label class="form-label" for="rc-due">{{ 'RECEPTION.RECALL_DUE' | translate }} *</label>
           <input
+            required
             id="rc-due"
             class="form-input"
             type="date"
@@ -232,6 +235,7 @@
       <div class="form-group">
         <label class="form-label" for="rc-reason">{{ 'RECEPTION.REASON' | translate }} *</label>
         <textarea
+          required
           id="rc-reason"
           class="form-textarea"
           rows="2"

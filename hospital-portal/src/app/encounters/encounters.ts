@@ -1,5 +1,5 @@
 import { PersonNamePipe } from '../shared/pipes/person-name.pipe';
-import { textMatches } from '../shared/person-search';
+import { textMatches, rankPeopleByName } from '../shared/person-search';
 import {
   Component,
   computed,
@@ -379,7 +379,8 @@ export class EncountersComponent implements OnInit {
       )
       .subscribe({
         next: (list) => {
-          this.patientSuggestions.set(list.slice(0, 8));
+          // QA D1239: ranked by how the name answers the query, then cut.
+          this.patientSuggestions.set(rankPeopleByName(list, this.patientQuery()).slice(0, 8));
           this.patientDropdownOpen.set(list.length > 0);
           this.patientSearchLoading.set(false);
         },

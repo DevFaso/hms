@@ -395,8 +395,10 @@
               <div class="patient-picker-wrap">
                 <span class="material-symbols-outlined picker-search-icon">person_search</span>
                 <input
+                  required
                   data-escape-discards
                   id="lab-patientSearch"
+                  [attr.data-submit-blank]="form.patientId ? 'false' : 'true'"
                   class="picker-input"
                   type="text"
                   [placeholder]="'COMMON.SEARCH_PATIENT' | translate"
@@ -578,6 +580,7 @@
         <div class="field">
           <label class="checkbox-label">
             <input
+              required
               type="checkbox"
               [(ngModel)]="form.providerSignature"
               [ngModelOptions]="{ standalone: true }"
@@ -597,6 +600,7 @@
           {{ 'COMMON.CANCEL' | translate }}
         </button>
         <button
+          submitGuardRequired
           class="btn-primary"
           (click)="submitForm()"
           [disabled]="saving()"
@@ -662,6 +666,7 @@
         <div class="field">
           <label for="lab-void-reason">{{ 'LAB.VOID.REASON' | translate }} *</label>
           <textarea
+            required
             id="lab-void-reason"
             data-testid="lab-void-reason"
             rows="3"
@@ -867,6 +872,7 @@
             <div class="field">
               <label for="specimen-type">{{ 'LAB.SPECIMEN_TYPE' | translate }} *</label>
               <input
+                required
                 id="specimen-type"
                 type="text"
                 maxlength="50"
@@ -954,6 +960,7 @@
         <div class="field">
           <label for="lab-reject-reason">{{ 'LAB.REJECT_SPECIMEN.REASON' | translate }} *</label>
           <textarea
+            required
             id="lab-reject-reason"
             data-testid="lab-reject-reason"
             rows="3"

@@ -821,8 +821,10 @@
               <div class="patient-picker-wrap">
                 <span class="material-symbols-outlined picker-search-icon">person_search</span>
                 <input
+                  required
                   data-escape-discards
                   id="enc-patientSearch"
+                  [attr.data-submit-blank]="form.patientId ? 'false' : 'true'"
                   class="picker-input"
                   type="text"
                   [placeholder]="'ENCOUNTERS.PATIENT_SEARCH' | translate"
@@ -968,6 +970,7 @@
           {{ 'COMMON.CANCEL' | translate }}
         </button>
         <button
+          submitGuardRequired
           class="btn-primary"
           (click)="submitForm()"
           [disabled]="saving()"

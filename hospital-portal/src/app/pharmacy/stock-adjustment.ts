@@ -52,6 +52,13 @@ const ADJUSTMENT_REASON_CODES = [
   'CONTROLLED_DISCREPANCY',
 ] as const;
 
+/**
+ * QA D1243: the reasons that only take stock off the shelf. A positive
+ * "Détérioration" added two units; a write-off never adds (the server refuses
+ * it too). The count variances can go either way.
+ */
+const WRITE_OFF_REASON_CODES: ReadonlySet<string> = new Set(['DAMAGE', 'EXPIRY_WRITE_OFF']);
+
 /** QA D337: reason codes written by other clients, mapped to the form's codes. */
 const LEGACY_REASON_CODES: Readonly<Record<string, string>> = {
   DAMAGED: 'DAMAGE',
@@ -432,11 +439,19 @@ export class StockAdjustmentComponent implements OnInit {
     });
   }
 
+  /** QA D1243: the chosen adjustment reason only removes stock (damage, expiry). */
+  writeOffReason(): boolean {
+    return this.isAdjustment() && WRITE_OFF_REASON_CODES.has(this.adjustmentReasonCode ?? '');
+  }
+
   /** Returns the i18n key of an error if a required type-specific field is missing. */
   private validateTyped(): string | null {
     if (this.isAdjustment()) {
       if (!this.adjustmentReasonCode) return 'PHARMACY.ADJUSTMENT_REASON_REQUIRED';
       if (!this.adjustmentNotes?.trim()) return 'PHARMACY.ADJUSTMENT_NOTES_REQUIRED';
+      if (this.writeOffReason() && Number(this.form.quantity) > 0) {
+        return 'PHARMACY.WRITE_OFF_REMOVES_ONLY';
+      }
     }
     if (this.isTransfer() && !this.transferDestinationPharmacyId) {
       return 'PHARMACY.TRANSFER_DESTINATION_REQUIRED';

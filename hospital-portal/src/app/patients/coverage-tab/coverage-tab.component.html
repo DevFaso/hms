@@ -179,7 +179,7 @@
         </thead>
         <tbody>
           @for (g of guarantors(); track g.id) {
-            <tr>
+            <tr [attr.data-guarantor-id]="g.id">
               <td>
                 {{ g.fullName }}
                 @if (g.primary) {
@@ -343,11 +343,11 @@
         <div class="form-row">
           <div class="field">
             <label for="cov-payer">{{ 'COVERAGE.PAYER_CODE' | translate }} *</label>
-            <input id="cov-payer" type="text" [(ngModel)]="linkForm.payerCode" />
+            <input required id="cov-payer" type="text" [(ngModel)]="linkForm.payerCode" />
           </div>
           <div class="field">
             <label for="cov-policy">{{ 'COVERAGE.POLICY' | translate }} *</label>
-            <input id="cov-policy" type="text" [(ngModel)]="linkForm.policyNumber" />
+            <input required id="cov-policy" type="text" [(ngModel)]="linkForm.policyNumber" />
           </div>
         </div>
         <!-- QA D925: the insurer's name; the payer code stands in when left blank. -->
@@ -418,11 +418,11 @@
         <div class="form-row">
           <div class="field">
             <label for="cov-provider">{{ 'COVERAGE.PROVIDER' | translate }} *</label>
-            <input id="cov-provider" type="text" [(ngModel)]="editForm.providerName" />
+            <input required id="cov-provider" type="text" [(ngModel)]="editForm.providerName" />
           </div>
           <div class="field">
             <label for="cov-edit-policy">{{ 'COVERAGE.POLICY' | translate }} *</label>
-            <input id="cov-edit-policy" type="text" [(ngModel)]="editForm.policyNumber" />
+            <input required id="cov-edit-policy" type="text" [(ngModel)]="editForm.policyNumber" />
           </div>
         </div>
         <div class="form-row">
@@ -564,6 +564,7 @@
           <div class="field">
             <label for="gua-name">{{ 'COVERAGE.GUARANTOR_NAME' | translate }} *</label>
             <input
+              required
               id="gua-name"
               type="text"
               maxlength="200"
@@ -647,6 +648,20 @@
 }
 
 <!-- ══ Record consent modal (P3 #21) ══ -->
+<!-- QA D1247: switching a guarantor off asks why; the server keeps the reason. -->
+@if (deactivatingGuarantor(); as g) {
+  <app-reason-dialog
+    titleKey="COVERAGE.DEACTIVATE_GUARANTOR_TITLE"
+    messageKey="COVERAGE.DEACTIVATE_GUARANTOR_MESSAGE"
+    confirmKey="COVERAGE.DEACTIVATE"
+    [busy]="guarantorToggleBusy()"
+    (confirmed)="confirmDeactivateGuarantor(g, $event)"
+    (cancelled)="deactivatingGuarantor.set(null)"
+  >
+    <p class="reason-dialog-subject" data-testid="deactivate-guarantor-name">{{ g.fullName }}</p>
+  </app-reason-dialog>
+}
+
 @if (showConsentModal()) {
   <div
     class="modal-backdrop"
@@ -681,7 +696,12 @@
         <div class="form-row">
           <div class="field">
             <label for="con-method">{{ 'COVERAGE.CONSENT_METHOD' | translate }} *</label>
-            <select id="con-method" data-testid="consent-method" [(ngModel)]="consentForm.method">
+            <select
+              required
+              id="con-method"
+              data-testid="consent-method"
+              [(ngModel)]="consentForm.method"
+            >
               <option value="ELECTRONIC">
                 {{ 'COVERAGE.CONSENT_METHOD_ELECTRONIC' | translate }}
               </option>
@@ -693,6 +713,7 @@
             <!-- QA D1148: a consent names who gave it; it is never stored unsigned. -->
             <label for="con-name">{{ 'COVERAGE.CONSENT_SIGNED_BY' | translate }} *</label>
             <input
+              required
               id="con-name"
               type="text"
               maxlength="200"
@@ -718,6 +739,7 @@
           {{ 'COMMON.CANCEL' | translate }}
         </button>
         <button
+          submitGuardRequired
           type="button"
           class="btn-primary"
           data-testid="consent-save"
@@ -769,6 +791,7 @@
           <div class="field">
             <label for="rev-reason">{{ 'COVERAGE.CONSENT_REVOKE_REASON' | translate }} *</label>
             <textarea
+              required
               id="rev-reason"
               rows="2"
               maxlength="500"
@@ -784,6 +807,8 @@
           {{ 'COMMON.CANCEL' | translate }}
         </button>
         <button
+          appSubmitGuard
+          submitGuardRequired
           type="button"
           class="btn-danger"
           data-testid="consent-revoke-confirm"

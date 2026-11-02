@@ -3,6 +3,7 @@ import {
   personNameMatches,
   phoneMatches,
   phoneSearchKey,
+  rankPeopleByName,
   textMatches,
 } from './person-search';
 
@@ -52,5 +53,52 @@ describe('person-search (QA D1019, D1020)', () => {
       'B',
     ]);
     expect(exactIdentifierFirst(rows, 'none', (r) => r.mrn)).toEqual(rows);
+  });
+});
+
+describe('rankPeopleByName (QA D1239)', () => {
+  const sawadogos = [
+    'Boukaré',
+    'Djénéba',
+    'Boureima',
+    'Rakiéta',
+    'Bintou',
+    'Salamata',
+    'Ismaël',
+    'Aïssata',
+  ].map((firstName, i) => ({ id: `s${i}`, firstName, lastName: 'Sawadogo', mrn: `CHW10${i}` }));
+  const awa = { id: 'awa', firstName: 'Awa', lastName: 'Kaboré', mrn: 'CHW7068' };
+
+  it('offers Awa Kaboré for "Awa" ahead of eight Sawadogos that only contain it', () => {
+    const ranked = rankPeopleByName([...sawadogos, awa], 'Awa');
+    expect(ranked[0].id).toBe('awa');
+    expect(ranked.slice(0, 8).map((p) => p.id)).toContain('awa');
+  });
+
+  it('ranks exact full name or MRN, then an exact name, then a name start, then a word start, then the rest; equals keep their order', () => {
+    const rows = [
+      { id: 'contains', firstName: 'Sawa', lastName: 'Dogo' },
+      { id: 'word', firstName: 'Marie Awa', lastName: 'Zongo' },
+      { id: 'start', firstName: 'Awaïs', lastName: 'Ilboudo' },
+      { id: 'exact', firstName: 'Awa', lastName: 'Kaboré' },
+      { id: 'mrn', firstName: 'Paul', lastName: 'Ouédraogo', mrn: 'AWA' },
+    ];
+    expect(rankPeopleByName(rows, 'awa kabore').map((r) => r.id)[0]).toBe('exact');
+    expect(rankPeopleByName(rows, 'Awa').map((r) => r.id)).toEqual([
+      'mrn',
+      'exact',
+      'start',
+      'word',
+      'contains',
+    ]);
+    expect(rankPeopleByName(rows, '')).toEqual(rows);
+  });
+
+  it('reads the last name too: "Kaboré" finds every Kaboré before a name that contains it', () => {
+    const rows = [
+      { id: 'x', firstName: 'Abdoul', lastName: 'Sankaboré' },
+      { id: 'k', firstName: 'Salif', lastName: 'Kaboré' },
+    ];
+    expect(rankPeopleByName(rows, 'kabore').map((r) => r.id)).toEqual(['k', 'x']);
   });
 });

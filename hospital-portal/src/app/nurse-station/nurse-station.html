@@ -1676,6 +1676,7 @@
           {{ 'COMMON.CANCEL' | translate }}
         </button>
         <button
+          submitGuardRequired
           class="modal-btn modal-confirm"
           (click)="submitCreateHandoff()"
           [disabled]="handoffCreating()"

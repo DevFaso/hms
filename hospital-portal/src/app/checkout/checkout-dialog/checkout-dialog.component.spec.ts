@@ -130,12 +130,34 @@ describe('CheckoutDialogComponent', () => {
 
   it('should show error toast on checkout failure', () => {
     encounterSpy.checkOut.and.returnValue(throwError(() => new Error('fail')));
+    // QA D1246: a checkout states a diagnosis or instructions before it is sent.
+    component.followUpInstructions.set('Return in 7 days');
 
     component.submit();
 
     expect(component.saving()).toBeFalse();
     expect(toastSpy.error).toHaveBeenCalled();
     expect(component.avs()).toBeNull();
+  });
+
+  it('QA D1246: an empty checkout is not sent and says a diagnosis or instructions are needed', () => {
+    component.dischargeDiagnosesText.set('  ');
+    component.followUpInstructions.set('');
+    expect(component.checkoutBlockReason()).toBe('CHECKOUT.SUMMARY_REQUIRED');
+    component.submit();
+    expect(encounterSpy.checkOut).not.toHaveBeenCalled();
+  });
+
+  it('QA D1246: either a diagnosis or instructions is enough', () => {
+    encounterSpy.checkOut.and.returnValue(of(sampleAvs));
+    component.followUpInstructions.set('');
+    component.dischargeDiagnosesText.set('Paludisme simple');
+    expect(component.checkoutBlockReason()).toBeNull();
+    component.dischargeDiagnosesText.set('');
+    component.followUpInstructions.set('Revenir si fièvre');
+    expect(component.checkoutBlockReason()).toBeNull();
+    component.submit();
+    expect(encounterSpy.checkOut).toHaveBeenCalled();
   });
 
   it('should not submit when encounter is null', () => {
@@ -166,6 +188,8 @@ describe('CheckoutDialogComponent', () => {
 
   it('should include follow-up appointment when reason is provided', () => {
     encounterSpy.checkOut.and.returnValue(of(sampleAvs));
+    // QA D1246: a checkout states a diagnosis or instructions.
+    component.followUpInstructions.set('Repos');
 
     component.followUpReason.set('Recheck in 2 weeks');
     component.followUpDate.set('2026-06-29');
@@ -184,6 +208,8 @@ describe('CheckoutDialogComponent', () => {
 
   it('should not include follow-up appointment when reason is empty', () => {
     encounterSpy.checkOut.and.returnValue(of(sampleAvs));
+    // QA D1246: a checkout states a diagnosis or instructions.
+    component.followUpInstructions.set('Repos');
 
     component.followUpReason.set('');
     component.submit();
@@ -194,6 +220,8 @@ describe('CheckoutDialogComponent', () => {
 
   it('keeps a follow-up date entered without a reason (D426/D321)', () => {
     encounterSpy.checkOut.and.returnValue(of(sampleAvs));
+    // QA D1246: a checkout states a diagnosis or instructions.
+    component.followUpInstructions.set('Repos');
 
     component.followUpReason.set('');
     component.followUpDate.set('2026-11-03');
@@ -208,6 +236,8 @@ describe('CheckoutDialogComponent', () => {
 
   it('should display AVS preview after successful checkout', () => {
     encounterSpy.checkOut.and.returnValue(of(sampleAvs));
+    // QA D1246: a checkout states a diagnosis or instructions.
+    component.followUpInstructions.set('Repos');
     component.submit();
     fixture.detectChanges();
 

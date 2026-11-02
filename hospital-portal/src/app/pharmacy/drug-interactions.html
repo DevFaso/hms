@@ -205,6 +205,7 @@
             <label for="ddi-drug1-name"
               >{{ 'DRUG_INTERACTIONS.DRUG1_NAME' | translate }} *
               <input
+                required
                 id="ddi-drug1-name"
                 type="text"
                 [(ngModel)]="form.drug1Name"
@@ -214,6 +215,7 @@
             <label for="ddi-drug1-code"
               >{{ 'DRUG_INTERACTIONS.DRUG1_CODE' | translate }} *
               <input
+                required
                 id="ddi-drug1-code"
                 type="text"
                 [(ngModel)]="form.drug1Code"
@@ -226,6 +228,7 @@
             <label for="ddi-drug2-name"
               >{{ 'DRUG_INTERACTIONS.DRUG2_NAME' | translate }} *
               <input
+                required
                 id="ddi-drug2-name"
                 type="text"
                 [(ngModel)]="form.drug2Name"
@@ -235,6 +238,7 @@
             <label for="ddi-drug2-code"
               >{{ 'DRUG_INTERACTIONS.DRUG2_CODE' | translate }} *
               <input
+                required
                 id="ddi-drug2-code"
                 type="text"
                 [(ngModel)]="form.drug2Code"
@@ -245,7 +249,7 @@
           </div>
           <label for="ddi-severity-select"
             >{{ 'DRUG_INTERACTIONS.SEVERITY' | translate }} *
-            <select id="ddi-severity-select" [(ngModel)]="form.severity" name="severity">
+            <select required id="ddi-severity-select" [(ngModel)]="form.severity" name="severity">
               @for (s of severities; track s) {
                 <option [ngValue]="s">{{ 'DRUG_INTERACTIONS.SEVERITY_' + s | translate }}</option>
               }
@@ -267,6 +271,7 @@
           <label for="ddi-recommendation"
             >{{ 'DRUG_INTERACTIONS.RECOMMENDATION' | translate }} *
             <textarea
+              required
               id="ddi-recommendation"
               [(ngModel)]="form.recommendation"
               name="recommendation"
@@ -373,7 +378,14 @@
             <button type="button" class="btn-secondary" (click)="closeModal()">
               {{ 'COMMON.CANCEL' | translate }}
             </button>
-            <button type="submit" class="btn-primary" [disabled]="saving()" data-testid="ddi-save">
+            <button
+              appSubmitGuard
+              submitGuardRequired
+              type="submit"
+              class="btn-primary"
+              [disabled]="saving()"
+              data-testid="ddi-save"
+            >
               {{ 'COMMON.SAVE' | translate }}
             </button>
           </div>

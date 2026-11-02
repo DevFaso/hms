@@ -362,8 +362,10 @@
             <div class="staff-search-wrap">
               <span class="material-symbols-outlined search-icon">search</span>
               <input
+                required
                 data-escape-discards
                 id="bulk-staffSearch"
+                [attr.data-submit-blank]="selectedStaff() ? 'false' : 'true'"
                 class="form-input staff-search-input"
                 type="text"
                 [placeholder]="'SCHEDULING.SEARCH_STAFF_PLACEHOLDER' | translate"
@@ -429,6 +431,7 @@
             </div>
           } @else {
             <input
+              required
               id="bulk-hospitalId"
               class="form-input"
               type="text"
@@ -446,7 +449,13 @@
             <span class="material-symbols-outlined">today</span>
             {{ 'SCHEDULING.START_DATE' | translate }} <span class="required">*</span>
           </label>
-          <input id="bulk-startDate" class="form-input" type="date" [(ngModel)]="bulk.startDate" />
+          <input
+            required
+            id="bulk-startDate"
+            class="form-input"
+            type="date"
+            [(ngModel)]="bulk.startDate"
+          />
         </div>
         <div class="form-group">
           <label class="form-label" for="bulk-endDate">
@@ -454,6 +463,7 @@
             {{ 'SCHEDULING.END_DATE' | translate }} <span class="required">*</span>
           </label>
           <input
+            required
             id="bulk-endDate"
             class="form-input"
             type="date"
@@ -470,7 +480,13 @@
             <span class="material-symbols-outlined">schedule</span>
             {{ 'SCHEDULING.START_TIME' | translate }} <span class="required">*</span>
           </label>
-          <input id="bulk-startTime" class="form-input" type="time" [(ngModel)]="bulk.startTime" />
+          <input
+            required
+            id="bulk-startTime"
+            class="form-input"
+            type="time"
+            [(ngModel)]="bulk.startTime"
+          />
         </div>
         <div class="form-group">
           <label class="form-label" for="bulk-endTime">
@@ -478,14 +494,25 @@
             {{ 'SCHEDULING.END_TIME' | translate }} <span class="required">*</span>
             <span class="form-hint">({{ 'SCHEDULING.CAN_BE_NEXT_DAY' | translate }})</span>
           </label>
-          <input id="bulk-endTime" class="form-input" type="time" [(ngModel)]="bulk.endTime" />
+          <input
+            required
+            id="bulk-endTime"
+            class="form-input"
+            type="time"
+            [(ngModel)]="bulk.endTime"
+          />
         </div>
         <div class="form-group">
           <label class="form-label" for="bulk-shiftType">
             <span class="material-symbols-outlined">brightness_4</span>
             {{ 'SCHEDULING.SHIFT_TYPE' | translate }} <span class="required">*</span>
           </label>
-          <select id="bulk-shiftType" class="form-input form-select" [(ngModel)]="bulk.shiftType">
+          <select
+            required
+            id="bulk-shiftType"
+            class="form-input form-select"
+            [(ngModel)]="bulk.shiftType"
+          >
             <option value="MORNING">{{ 'SCHEDULING.MORNING' | translate }}</option>
             <option value="AFTERNOON">{{ 'SCHEDULING.AFTERNOON' | translate }}</option>
             <option value="EVENING">{{ 'SCHEDULING.EVENING' | translate }}</option>
@@ -605,7 +632,13 @@
       <button class="btn-ghost" (click)="closeBulkModal()">
         {{ 'COMMON.CANCEL' | translate }}
       </button>
-      <button class="btn-primary" (click)="submitBulk()" [disabled]="bulkSubmitting()">
+      <button
+        appSubmitGuard
+        submitGuardRequired
+        class="btn-primary"
+        (click)="submitBulk()"
+        [disabled]="bulkSubmitting()"
+      >
         @if (bulkSubmitting()) {
           <span class="spinner-sm"></span>
           {{ 'SCHEDULING.SCHEDULING' | translate }}

@@ -1,4 +1,4 @@
-import { TestBed, ComponentFixture } from '@angular/core/testing';
+import { TestBed, ComponentFixture, fakeAsync, tick } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 import { CoverageTabComponent } from './coverage-tab.component';
@@ -150,8 +150,44 @@ describe('CoverageTabComponent (P3 #21 additions)', () => {
     extrasSpy.deactivateGuarantor.and.returnValue(of(guarantor({ active: false })));
 
     component.toggleGuarantorActive(guarantor());
+    // QA D1247: a confirmation asks the reason first; nothing is sent on the click.
+    expect(extrasSpy.deactivateGuarantor).not.toHaveBeenCalled();
+    expect(component.deactivatingGuarantor()?.id).toBe('g1');
+    component.confirmDeactivateGuarantor(guarantor(), 'Plus solvable');
 
-    expect(extrasSpy.deactivateGuarantor).toHaveBeenCalledWith('p1', 'g1');
+    expect(extrasSpy.deactivateGuarantor).toHaveBeenCalledWith('p1', 'g1', 'Plus solvable');
+  });
+
+  it('QA D1247: the deactivation dialog asks a reason, then a toast says it and focus returns to the row', fakeAsync(() => {
+    extrasSpy.listGuarantors.and.returnValue(of([guarantor()]));
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    document.body.appendChild(el);
+    el.querySelector<HTMLButtonElement>('[data-testid="toggle-guarantor"]')!.click();
+    fixture.detectChanges();
+    expect(el.querySelector('[data-testid="reason-dialog"]')).not.toBeNull();
+    expect(extrasSpy.deactivateGuarantor).not.toHaveBeenCalled();
+
+    extrasSpy.deactivateGuarantor.and.returnValue(of(guarantor({ active: false })));
+    extrasSpy.listGuarantors.and.returnValue(of([guarantor({ active: false })]));
+    component.confirmDeactivateGuarantor(guarantor(), 'Plus solvable');
+    fixture.detectChanges();
+    tick();
+    fixture.detectChanges();
+
+    expect(toastSpy.success).toHaveBeenCalledWith('COVERAGE.GUARANTOR_DEACTIVATED');
+    expect(component.deactivatingGuarantor()).toBeNull();
+    expect(el.querySelector('[data-testid="reason-dialog"]')).toBeNull();
+    expect(document.activeElement?.getAttribute('data-testid')).toBe('toggle-guarantor');
+    el.remove();
+  }));
+
+  it('QA D1247: reactivating acts at once and says so', () => {
+    fixture.detectChanges();
+    extrasSpy.reactivateGuarantor.and.returnValue(of(guarantor()));
+    component.toggleGuarantorActive(guarantor({ active: false }));
+    expect(extrasSpy.reactivateGuarantor).toHaveBeenCalledWith('p1', 'g1');
+    expect(toastSpy.success).toHaveBeenCalledWith('COVERAGE.GUARANTOR_REACTIVATED');
   });
 
   it('records a consent with the chosen method', () => {

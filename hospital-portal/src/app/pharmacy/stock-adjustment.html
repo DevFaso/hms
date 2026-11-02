@@ -84,7 +84,11 @@
               [attr.min]="isAdjustment() ? null : 1"
               required
             />
-            @if (isAdjustment()) {
+            @if (writeOffReason()) {
+              <small class="field-hint" data-testid="write-off-hint">{{
+                'PHARMACY.WRITE_OFF_SIGN_HINT' | translate
+              }}</small>
+            } @else if (isAdjustment()) {
               <small class="field-hint">{{ 'PHARMACY.ADJUSTMENT_SIGN_HINT' | translate }}</small>
             }
           </div>
@@ -329,6 +333,7 @@
             {{ 'COMMON.CANCEL' | translate }}
           </button>
           <button
+            submitGuardRequired
             type="submit"
             class="btn-primary"
             [disabled]="saving()"

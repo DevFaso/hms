@@ -553,8 +553,10 @@
               <div class="patient-picker-wrap">
                 <span class="picker-search-icon material-icons">person_search</span>
                 <input
+                  required
                   data-escape-discards
                   id="ref-patientSearch"
+                  [attr.data-submit-blank]="form.patientId ? 'false' : 'true'"
                   type="text"
                   class="picker-input"
                   [value]="patientQuery()"
@@ -603,6 +605,7 @@
                 <input type="hidden" [(ngModel)]="form.hospitalId" name="hospitalId" />
               } @else {
                 <select
+                  required
                   id="ref-hospitalId"
                   [ngModel]="form.hospitalId"
                   (ngModelChange)="onSourceHospitalChange($event)"
@@ -675,6 +678,7 @@
           <div class="field">
             <label for="ref-specialty">{{ 'REFERRALS.TARGET_SPECIALTY' | translate }} *</label>
             <select
+              required
               id="ref-specialty"
               [(ngModel)]="form.targetSpecialty"
               [title]="'REFERRALS.TARGET_SPECIALTY' | translate"
@@ -688,6 +692,7 @@
           <div class="field">
             <label for="ref-urgency">{{ 'REFERRALS.URGENCY' | translate }} *</label>
             <select
+              required
               id="ref-urgency"
               [(ngModel)]="form.urgency"
               [title]="'REFERRALS.URGENCY' | translate"
@@ -702,6 +707,7 @@
           <div class="field">
             <label for="ref-type">{{ 'REFERRALS.REFERRAL_TYPE' | translate }} *</label>
             <select
+              required
               id="ref-type"
               [(ngModel)]="form.referralType"
               [title]="'REFERRALS.REFERRAL_TYPE' | translate"
@@ -718,6 +724,7 @@
           <div class="field" style="flex: 1">
             <label for="ref-reason">{{ 'REFERRALS.REFERRAL_REASON' | translate }} *</label>
             <textarea
+              required
               id="ref-reason"
               [(ngModel)]="form.referralReason"
               rows="3"
@@ -752,7 +759,13 @@
         <button class="btn-secondary" (click)="closeModal()">
           {{ 'COMMON.CANCEL' | translate }}
         </button>
-        <button class="btn-primary" (click)="submitForm()" [disabled]="saving()">
+        <button
+          appSubmitGuard
+          submitGuardRequired
+          class="btn-primary"
+          (click)="submitForm()"
+          [disabled]="saving()"
+        >
           {{ saving() ? ('COMMON.SAVING' | translate) : ('REFERRALS.CREATE_REFERRAL' | translate) }}
         </button>
       </div>
@@ -873,6 +886,7 @@
         <div class="field">
           <label for="ack-notes">{{ 'REFERRALS.ACKNOWLEDGEMENT_NOTES' | translate }} *</label>
           <textarea
+            required
             id="ack-notes"
             [(ngModel)]="acknowledgeNotes"
             rows="3"
@@ -940,7 +954,12 @@
         </p>
         <div class="field">
           <label for="schedule-time">{{ 'REFERRALS.APPOINTMENT_DATETIME' | translate }} *</label>
-          <input id="schedule-time" type="datetime-local" [(ngModel)]="scheduleAppointmentTime" />
+          <input
+            required
+            id="schedule-time"
+            type="datetime-local"
+            [(ngModel)]="scheduleAppointmentTime"
+          />
         </div>
         <div class="field">
           <label for="schedule-location">{{ 'APPOINTMENTS.LOCATION' | translate }}</label>
@@ -1014,6 +1033,7 @@
         <div class="field">
           <label for="reject-reason">{{ 'REFERRALS.REASON' | translate }} *</label>
           <textarea
+            required
             id="reject-reason"
             [(ngModel)]="rejectReason"
             rows="3"
@@ -1083,6 +1103,7 @@
         <div class="field">
           <label for="complete-summary">{{ 'REFERRALS.COMPLETION_SUMMARY' | translate }} *</label>
           <textarea
+            required
             id="complete-summary"
             [(ngModel)]="completeSummary"
             rows="3"

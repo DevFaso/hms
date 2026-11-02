@@ -15,6 +15,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { EncounterService, UnseenVisitOutcome } from '../../services/encounter.service';
 import { ToastService } from '../../core/toast.service';
 
+import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 /**
  * QA D788: the desk closes a visit no clinician has seen. It is "left without
  * being seen" or cancelled, always with a reason, and is never counted as a
@@ -23,7 +24,7 @@ import { ToastService } from '../../core/toast.service';
 @Component({
   selector: 'app-close-unseen-dialog',
   standalone: true,
-  imports: [DialogFocusDirective, FormsModule, TranslateModule],
+  imports: [SubmitGuardDirective, DialogFocusDirective, FormsModule, TranslateModule],
   templateUrl: './close-unseen-dialog.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: [

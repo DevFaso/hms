@@ -501,6 +501,7 @@
               data-test="verify-confirm"
               [disabled]="busy()"
               [appSubmitGuard]="!verifyReady()"
+              submitGuardRequired
               (click)="submitVerify()"
             >
               {{ 'PROVIDER.VERIFY.SUBMIT' | translate }}
@@ -698,6 +699,7 @@
               {{ 'PROVIDER.COMMON.CANCEL' | translate }}
             </button>
             <button
+              submitGuardRequired
               type="button"
               class="btn-primary"
               data-test="lifecycle-confirm"

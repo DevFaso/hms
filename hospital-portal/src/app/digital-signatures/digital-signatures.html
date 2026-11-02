@@ -477,6 +477,7 @@
               </p>
             } @else {
               <select
+                required
                 id="sign-report"
                 [ngModel]="signPick()"
                 (ngModelChange)="pickSignable($event)"
@@ -491,6 +492,7 @@
           <div class="form-group">
             <label for="sign-value">{{ 'SIGNATURES.SIGNATURE_VALUE' | translate }} *</label>
             <input
+              required
               id="sign-value"
               type="text"
               [placeholder]="'SIGNATURES.SIGN_VALUE_PLACEHOLDER' | translate"
@@ -522,7 +524,14 @@
           <button type="button" class="btn-secondary" (click)="closeSign()">
             {{ 'COMMON.CANCEL' | translate }}
           </button>
-          <button type="button" class="btn-primary" (click)="doSign()" [disabled]="signing()">
+          <button
+            appSubmitGuard
+            submitGuardRequired
+            type="button"
+            class="btn-primary"
+            (click)="doSign()"
+            [disabled]="signing()"
+          >
             {{ signing() ? ('SIGNATURES.SIGNING' | translate) : ('SIGNATURES.SIGN' | translate) }}
           </button>
         </div>

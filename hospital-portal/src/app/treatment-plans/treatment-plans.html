@@ -349,8 +349,10 @@
               <div class="patient-picker-wrap">
                 <span class="material-symbols-outlined picker-search-icon">person_search</span>
                 <input
+                  required
                   data-escape-discards
                   id="tp-patientSearch"
+                  [attr.data-submit-blank]="form.patientId ? 'false' : 'true'"
                   class="picker-input"
                   type="text"
                   [placeholder]="'TREATMENT.SEARCH_PATIENT_PLACEHOLDER' | translate"
@@ -393,6 +395,7 @@
               <input type="hidden" [(ngModel)]="form.hospitalId" name="hospitalId" />
             } @else {
               <select
+                required
                 id="tp-hospitalId"
                 [(ngModel)]="form.hospitalId"
                 [title]="'ENCOUNTERS.HOSPITAL' | translate"
@@ -409,6 +412,7 @@
           <div class="field full-width">
             <label for="tp-authorStaff">{{ 'TREATMENT.AUTHOR_STAFF' | translate }} *</label>
             <select
+              required
               id="tp-authorStaff"
               [(ngModel)]="form.authorStaffId"
               [title]="'TREATMENT.AUTHOR_STAFF' | translate"
@@ -448,6 +452,7 @@
           <div class="field full-width">
             <label for="tp-problem">{{ 'TREATMENT.PROBLEM_STATEMENT' | translate }} *</label>
             <textarea
+              required
               id="tp-problem"
               [(ngModel)]="form.problemStatement"
               rows="3"
@@ -460,7 +465,13 @@
         <button class="btn-secondary" (click)="closeModal()">
           {{ 'COMMON.CANCEL' | translate }}
         </button>
-        <button class="btn-primary" (click)="submitForm()" [disabled]="saving()">
+        <button
+          appSubmitGuard
+          submitGuardRequired
+          class="btn-primary"
+          (click)="submitForm()"
+          [disabled]="saving()"
+        >
           {{
             saving()
               ? ('COMMON.SAVING' | translate)

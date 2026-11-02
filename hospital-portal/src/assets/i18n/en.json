@@ -8879,7 +8879,8 @@
     "REFERRAL_PLACEHOLDER": "e.g. Cardiology follow-up",
     "INSTRUCTIONS_PLACEHOLDER": "e.g. Return to clinic if symptoms worsen",
     "EDUCATION_PLACEHOLDER": "e.g. Medication management handout",
-    "FOLLOWUP_REASON_PLACEHOLDER": "e.g. Recheck in 2 weeks"
+    "FOLLOWUP_REASON_PLACEHOLDER": "e.g. Recheck in 2 weeks",
+    "SUMMARY_REQUIRED": "Enter a discharge diagnosis or instructions for the patient: the after-visit summary cannot be empty."
   },
   "inBasket": {
     "acknowledge": "Acknowledge",
@@ -9680,7 +9681,9 @@
     },
     "ALERT_OVERRIDDEN": "Alert overridden by the prescriber: see the reason on the prescription",
     "LOTS_OTHER_FORM": "{{count}} lot(s) of this drug in another form are not offered: the order is written in \"{{unit}}\".",
-    "SAVE_PRICE": "Save the price"
+    "SAVE_PRICE": "Save the price",
+    "WRITE_OFF_REMOVES_ONLY": "Damage and expiry only take stock off: enter a negative quantity.",
+    "WRITE_OFF_SIGN_HINT": "This reason takes stock off: enter a negative quantity (for example −2)."
   },
   "LAB_QC": {
     "TITLE": "Quality Control Dashboard",
@@ -10080,7 +10083,11 @@
     "REVOKE_CONSENT": "Revoke consent",
     "CONSENT_REVOKE_HINT": "The record is kept and marked revoked — it is never deleted.",
     "CONSENT_REVOKE_REASON": "Revocation reason",
-    "CONSENT_REVOKE_REASON_REQUIRED": "A revocation reason is required."
+    "CONSENT_REVOKE_REASON_REQUIRED": "A revocation reason is required.",
+    "DEACTIVATE_GUARANTOR_TITLE": "Deactivate this guarantor?",
+    "DEACTIVATE_GUARANTOR_MESSAGE": "The guarantor stays on file, marked inactive. Say why; the reason is kept in the audit trail.",
+    "GUARANTOR_DEACTIVATED": "{{name}} is no longer an active guarantor.",
+    "GUARANTOR_REACTIVATED": "{{name}} is an active guarantor again."
   },
   "PATIENT_DOCUMENTS": {
     "TAB": "Documents",

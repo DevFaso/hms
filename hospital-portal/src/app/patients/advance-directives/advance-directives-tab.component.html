@@ -125,7 +125,12 @@
         <form (ngSubmit)="submit()">
           <label for="directive-type"
             >{{ 'DIRECTIVES.TYPE' | translate }} *
-            <select id="directive-type" [(ngModel)]="form.directiveType" name="directiveType">
+            <select
+              required
+              id="directive-type"
+              [(ngModel)]="form.directiveType"
+              name="directiveType"
+            >
               <!-- QA D1148: never pre-filled; the clinician picks the type. -->
               <option value="" disabled>{{ 'DIRECTIVES.TYPE_CHOOSE' | translate }}</option>
               @for (t of directiveTypes; track t) {
@@ -135,7 +140,7 @@
           </label>
           <label for="directive-status"
             >{{ 'DIRECTIVES.STATUS' | translate }} *
-            <select id="directive-status" [(ngModel)]="form.status" name="status">
+            <select required id="directive-status" [(ngModel)]="form.status" name="status">
               <option value="" disabled>{{ 'DIRECTIVES.STATUS_CHOOSE' | translate }}</option>
               @for (s of editableStatuses; track s) {
                 <option [ngValue]="s">{{ 'DIRECTIVES.STATUS_' + s | translate }}</option>
@@ -156,6 +161,7 @@
             <label for="directive-effective"
               >{{ 'DIRECTIVES.EFFECTIVE_DATE' | translate }} *
               <input
+                required
                 id="directive-effective"
                 type="date"
                 [(ngModel)]="form.effectiveDate"

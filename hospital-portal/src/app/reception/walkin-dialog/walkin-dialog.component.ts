@@ -25,6 +25,7 @@ import { ToastService } from '../../core/toast.service';
 import { PatientSublinePipe } from '../../shared/patient-picker/patient-subline';
 
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { rankPeopleByName } from '../../shared/person-search';
 type EncounterType = 'CONSULTATION' | 'FOLLOW_UP' | 'EMERGENCY' | 'OUTPATIENT' | 'INPATIENT';
 
 @Component({
@@ -116,7 +117,9 @@ export class WalkInDialogComponent implements OnInit {
         }),
       )
       .subscribe((results) => {
-        this.patientResults.set(results as PatientResponse[]);
+        this.patientResults.set(
+          rankPeopleByName(results as PatientResponse[], this.patientQuery()),
+        );
         this.searchingPatients.set(false);
       });
   }

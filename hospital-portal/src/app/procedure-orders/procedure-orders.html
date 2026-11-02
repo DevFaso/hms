@@ -276,7 +276,12 @@
             <h3>{{ 'PROCEDURES.SCHEDULE_TITLE' | translate }}</h3>
             <div class="field">
               <label for="proc-schedule">{{ 'PROCEDURES.SCHEDULED_FOR' | translate }} *</label>
-              <input id="proc-schedule" type="datetime-local" [(ngModel)]="scheduleDatetime" />
+              <input
+                required
+                id="proc-schedule"
+                type="datetime-local"
+                [(ngModel)]="scheduleDatetime"
+              />
             </div>
             <div class="modal-actions">
               <button type="button" class="btn-secondary" (click)="cancelAction()">
@@ -309,7 +314,7 @@
             <div class="form-row">
               <div class="field">
                 <label for="proc-consent-by">{{ 'PROCEDURES.CONSENT_BY' | translate }} *</label>
-                <input id="proc-consent-by" type="text" [(ngModel)]="consentBy" />
+                <input required id="proc-consent-by" type="text" [(ngModel)]="consentBy" />
               </div>
               <div class="field">
                 <label for="proc-consent-form">{{ 'PROCEDURES.CONSENT_FORM' | translate }}</label>
@@ -348,7 +353,12 @@
               <label for="proc-cancel-reason">
                 {{ 'PROCEDURES.CANCELLATION_REASON' | translate }} *
               </label>
-              <textarea id="proc-cancel-reason" rows="2" [(ngModel)]="cancelReason"></textarea>
+              <textarea
+                required
+                id="proc-cancel-reason"
+                rows="2"
+                [(ngModel)]="cancelReason"
+              ></textarea>
             </div>
             <div class="modal-actions">
               <button type="button" class="btn-secondary" (click)="cancelAction()">
@@ -483,6 +493,7 @@
         <div class="field">
           <label for="proc-patient">{{ 'PROCEDURES.PATIENT' | translate }} *</label>
           <app-patient-picker
+            required
             inputId="proc-patient"
             [selected]="orderPatient()"
             (selectedChange)="onPatientPicked($event)"
@@ -491,7 +502,7 @@
         <div class="form-row">
           <div class="field">
             <label for="proc-name">{{ 'PROCEDURES.PROCEDURE' | translate }} *</label>
-            <input id="proc-name" type="text" [(ngModel)]="orderForm.procedureName" />
+            <input required id="proc-name" type="text" [(ngModel)]="orderForm.procedureName" />
           </div>
           <div class="field">
             <label for="proc-code">{{ 'PROCEDURES.CODE' | translate }}</label>
@@ -505,7 +516,7 @@
           </div>
           <div class="field">
             <label for="proc-urgency">{{ 'PROCEDURES.URGENCY' | translate }} *</label>
-            <select id="proc-urgency" [(ngModel)]="orderForm.urgency">
+            <select required id="proc-urgency" [(ngModel)]="orderForm.urgency">
               @for (u of urgencies; track u) {
                 <option [value]="u">{{ 'PROCEDURES.URGENCY_' + u | translate }}</option>
               }
@@ -514,7 +525,12 @@
         </div>
         <div class="field">
           <label for="proc-indication">{{ 'PROCEDURES.INDICATION' | translate }} *</label>
-          <textarea id="proc-indication" rows="2" [(ngModel)]="orderForm.indication"></textarea>
+          <textarea
+            required
+            id="proc-indication"
+            rows="2"
+            [(ngModel)]="orderForm.indication"
+          ></textarea>
         </div>
         <div class="form-row">
           <div class="field">
@@ -595,6 +611,7 @@
           {{ 'COMMON.CANCEL' | translate }}
         </button>
         <button
+          submitGuardRequired
           type="button"
           class="btn-primary"
           [disabled]="orderSaving()"

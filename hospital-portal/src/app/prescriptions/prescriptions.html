@@ -858,8 +858,10 @@
               <div class="patient-picker-wrap">
                 <span class="material-symbols-outlined picker-search-icon">person_search</span>
                 <input
+                  required
                   data-escape-discards
                   id="rx-patientSearch"
+                  [attr.data-submit-blank]="form.patientId ? 'false' : 'true'"
                   class="picker-input"
                   type="text"
                   [placeholder]="'COMMON.SEARCH_PATIENT' | translate"
@@ -1163,6 +1165,7 @@
           {{ 'COMMON.CANCEL' | translate }}
         </button>
         <button
+          submitGuardRequired
           class="btn-primary"
           (click)="submitForm()"
           [disabled]="saving()"
@@ -1460,6 +1463,7 @@
             >{{ 'PRESCRIPTIONS.DOSE_REVIEW.REASON' | translate }} *</label
           >
           <textarea
+            required
             rows="3"
             maxlength="1000"
             [(ngModel)]="doseReviewReason"

@@ -1,9 +1,10 @@
-<div class="view-section action-form prenatal-form">
+<div class="view-section action-form prenatal-form" data-submit-scope>
   <h3>{{ 'PRENATAL.GENERATE_TITLE' | translate }}</h3>
   <div class="form-row">
     <div class="field">
       <label for="pn-patient">{{ 'MATERNITY.PATIENT' | translate }} *</label>
       <app-patient-picker
+        required
         inputId="pn-patient"
         [selected]="patient()"
         (selectedChange)="onPatientPicked($event)"
@@ -11,7 +12,7 @@
     </div>
     <div class="field">
       <label for="pn-lmp">{{ 'MATERNITY.LMP' | translate }} *</label>
-      <input id="pn-lmp" type="date" [max]="today" [(ngModel)]="lmpDate" />
+      <input required id="pn-lmp" type="date" [max]="today" [(ngModel)]="lmpDate" />
     </div>
   </div>
   <div class="form-row">
@@ -218,11 +219,11 @@
         <div class="form-row">
           <div class="field">
             <label for="pn-new-date">{{ 'PRENATAL.NEW_DATE' | translate }} *</label>
-            <input id="pn-new-date" type="date" [(ngModel)]="rescheduleDate" />
+            <input required id="pn-new-date" type="date" [(ngModel)]="rescheduleDate" />
           </div>
           <div class="field">
             <label for="pn-new-time">{{ 'PRENATAL.NEW_TIME' | translate }} *</label>
-            <input id="pn-new-time" type="time" [(ngModel)]="rescheduleTime" />
+            <input required id="pn-new-time" type="time" [(ngModel)]="rescheduleTime" />
           </div>
         </div>
         <div class="field">

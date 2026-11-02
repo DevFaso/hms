@@ -155,8 +155,10 @@
         <label class="form-label" for="wl-patient">{{ 'PATIENTS.PATIENT' | translate }} *</label>
         <div class="autocomplete-wrap">
           <input
+            required
             data-escape-discards
             id="wl-patient"
+            [attr.data-submit-blank]="selectedPatient() ? 'false' : 'true'"
             class="form-input"
             type="text"
             [placeholder]="'RECEPTION.SEARCH_PATIENT_NAME' | translate"
@@ -188,6 +190,7 @@
       <div class="form-group">
         <label class="form-label" for="wl-dept">{{ 'STAFF.DEPARTMENT' | translate }} *</label>
         <select
+          required
           id="wl-dept"
           class="form-select"
           [ngModel]="selectedDeptId()"
@@ -211,18 +214,33 @@
             id="wl-staff"
             class="form-input"
             type="text"
+            role="combobox"
+            aria-autocomplete="list"
+            aria-controls="wl-staff-listbox"
+            [attr.aria-expanded]="staffListOpen()"
+            [attr.aria-activedescendant]="
+              staffListOpen() && staffActive() >= 0 ? 'wl-staff-option-' + staffActive() : null
+            "
             [placeholder]="'RECEPTION.SEARCH_PROVIDER' | translate"
             [ngModel]="staffQuery()"
-            (ngModelChange)="staffQuery.set($event)"
+            (ngModelChange)="onStaffQueryChange($event)"
+            (keydown)="onStaffKeydown($event)"
             autocomplete="off"
           />
-          @if (staffQuery().length > 0 && filteredStaff().length > 0) {
-            <ul class="autocomplete-list">
-              @for (s of filteredStaff(); track s.id) {
+          @if (staffListOpen()) {
+            <ul
+              id="wl-staff-listbox"
+              class="autocomplete-list"
+              role="listbox"
+              [attr.aria-label]="'RECEPTION.PREFERRED_PROVIDER' | translate"
+            >
+              @for (s of filteredStaff(); track s.id; let i = $index) {
                 <li
-                  (click)="selectedStaff.set(s); staffQuery.set(s.name)"
-                  (keydown.enter)="selectedStaff.set(s); staffQuery.set(s.name)"
-                  tabindex="0"
+                  role="option"
+                  [id]="'wl-staff-option-' + i"
+                  [class.active]="i === staffActive()"
+                  [attr.aria-selected]="i === staffActive()"
+                  (mousedown)="$event.preventDefault(); pickStaff(s)"
                 >
                   {{ s.name }}
                 </li>

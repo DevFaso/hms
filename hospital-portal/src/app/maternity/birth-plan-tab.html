@@ -323,6 +323,7 @@
           <div class="field">
             <label for="bp-patient">{{ 'MATERNITY.PATIENT' | translate }} *</label>
             <app-patient-picker
+              required
               inputId="bp-patient"
               [selected]="planPatient()"
               (selectedChange)="onPlanPatientPicked($event)"
@@ -333,11 +334,21 @@
         <div class="form-row">
           <div class="field">
             <label for="bp-name">{{ 'BIRTH_PLAN.PATIENT_NAME' | translate }} *</label>
-            <input id="bp-name" type="text" [(ngModel)]="planForm.introduction.patientName" />
+            <input
+              required
+              id="bp-name"
+              type="text"
+              [(ngModel)]="planForm.introduction.patientName"
+            />
           </div>
           <div class="field">
             <label for="bp-edd">{{ 'MATERNITY.EDD' | translate }} *</label>
-            <input id="bp-edd" type="date" [(ngModel)]="planForm.introduction.expectedDueDate" />
+            <input
+              required
+              id="bp-edd"
+              type="date"
+              [(ngModel)]="planForm.introduction.expectedDueDate"
+            />
           </div>
         </div>
         <div class="form-row">
@@ -458,6 +469,7 @@
         <div class="field checkbox-field">
           <label>
             <input
+              required
               id="bp-flexibility"
               type="checkbox"
               [(ngModel)]="planForm.flexibilityAcknowledgment"
@@ -475,6 +487,7 @@
           {{ 'COMMON.CANCEL' | translate }}
         </button>
         <button
+          submitGuardRequired
           class="btn-primary"
           [disabled]="planSaving()"
           [appSubmitGuard]="!planForm.patientId || !planForm.flexibilityAcknowledgment"
@@ -520,7 +533,7 @@
         <p class="muted">{{ plan.introduction?.patientName }}</p>
         <div class="field">
           <label for="bp-signature">{{ 'BIRTH_PLAN.SIGNATURE' | translate }} *</label>
-          <input id="bp-signature" type="text" [(ngModel)]="reviewSignature" />
+          <input required id="bp-signature" type="text" [(ngModel)]="reviewSignature" />
         </div>
         <div class="field">
           <label for="bp-comments">{{ 'BIRTH_PLAN.COMMENTS' | translate }}</label>

@@ -348,11 +348,16 @@
         <div class="form-row">
           <div class="field">
             <label for="fill-medication">{{ 'MED_TIMELINE.MEDICATION' | translate }} *</label>
-            <input id="fill-medication" type="text" [(ngModel)]="fillForm.medicationName" />
+            <input
+              required
+              id="fill-medication"
+              type="text"
+              [(ngModel)]="fillForm.medicationName"
+            />
           </div>
           <div class="field">
             <label for="fill-date">{{ 'MED_TIMELINE.FILL_DATE' | translate }} *</label>
-            <input id="fill-date" type="date" [(ngModel)]="fillForm.fillDate" />
+            <input required id="fill-date" type="date" [(ngModel)]="fillForm.fillDate" />
           </div>
         </div>
         <div class="form-row">

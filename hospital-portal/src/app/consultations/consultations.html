@@ -543,8 +543,10 @@
               <div class="patient-picker-wrap">
                 <span class="picker-search-icon material-icons">person_search</span>
                 <input
+                  required
                   data-escape-discards
                   id="con-patientSearch"
+                  [attr.data-submit-blank]="form.patientId ? 'false' : 'true'"
                   type="text"
                   class="picker-input"
                   [value]="patientQuery()"
@@ -587,6 +589,7 @@
               <input type="hidden" [(ngModel)]="form.hospitalId" name="hospitalId" />
             } @else {
               <select
+                required
                 id="con-hospitalId"
                 [ngModel]="form.hospitalId"
                 (ngModelChange)="onHospitalChange($event)"
@@ -604,6 +607,7 @@
           <div class="field">
             <label for="con-type">{{ 'CONSULTATIONS.TYPE' | translate }} *</label>
             <select
+              required
               id="con-type"
               [(ngModel)]="form.consultationType"
               [title]="'CONSULTATIONS.TYPE_TITLE' | translate"
@@ -616,6 +620,7 @@
           <div class="field">
             <label for="con-urgency">{{ 'CONSULTATIONS.URGENCY' | translate }} *</label>
             <select
+              required
               id="con-urgency"
               [(ngModel)]="form.urgency"
               [title]="'CONSULTATIONS.URGENCY' | translate"
@@ -632,6 +637,7 @@
               >{{ 'CONSULTATIONS.SPECIALTY_REQUESTED' | translate }} *</label
             >
             <input
+              required
               id="con-specialty"
               type="text"
               [(ngModel)]="form.specialtyRequested"
@@ -643,6 +649,7 @@
           <div class="field full-width">
             <label for="con-reason">{{ 'CONSULTATIONS.REASON_FOR_CONSULT' | translate }} *</label>
             <textarea
+              required
               id="con-reason"
               [(ngModel)]="form.reasonForConsult"
               rows="3"
@@ -690,7 +697,13 @@
         <button class="btn-secondary" (click)="closeModal()">
           {{ 'COMMON.CANCEL' | translate }}
         </button>
-        <button class="btn-primary" (click)="submitForm()" [disabled]="saving()">
+        <button
+          appSubmitGuard
+          submitGuardRequired
+          class="btn-primary"
+          (click)="submitForm()"
+          [disabled]="saving()"
+        >
           {{
             saving()
               ? ('COMMON.SAVING' | translate)
@@ -758,6 +771,7 @@
             <p class="loading-hint">{{ 'CONSULTATIONS.LOADING_STAFF' | translate }}</p>
           } @else {
             <select
+              required
               id="assign-consultant"
               [value]="assignConsultantId()"
               (change)="assignConsultantId.set($any($event.target).value)"
@@ -800,7 +814,13 @@
         <button class="btn-secondary" (click)="closeAssignModal()">
           {{ 'COMMON.CANCEL' | translate }}
         </button>
-        <button class="btn-primary" (click)="submitAssign()" [disabled]="assigning()">
+        <button
+          appSubmitGuard
+          submitGuardRequired
+          class="btn-primary"
+          (click)="submitAssign()"
+          [disabled]="assigning()"
+        >
           {{
             assigning()
               ? ('COMMON.SAVING' | translate)
@@ -850,7 +870,12 @@
         </p>
         <div class="field">
           <label for="sched-at">{{ 'CONSULTATIONS.SCHEDULED_DATE_TIME' | translate }} *</label>
-          <input id="sched-at" type="datetime-local" [(ngModel)]="scheduleForm.scheduledAt" />
+          <input
+            required
+            id="sched-at"
+            type="datetime-local"
+            [(ngModel)]="scheduleForm.scheduledAt"
+          />
         </div>
         <div class="field">
           <label for="sched-note">{{ 'CONSULTATIONS.NOTE_OPTIONAL' | translate }}</label>
@@ -866,7 +891,13 @@
         <button class="btn-secondary" (click)="closeScheduleModal()">
           {{ 'COMMON.CANCEL' | translate }}
         </button>
-        <button class="btn-primary" (click)="submitSchedule()" [disabled]="scheduling()">
+        <button
+          appSubmitGuard
+          submitGuardRequired
+          class="btn-primary"
+          (click)="submitSchedule()"
+          [disabled]="scheduling()"
+        >
           {{
             scheduling()
               ? ('COMMON.SAVING' | translate)
@@ -917,6 +948,7 @@
             >{{ 'CONSULTATIONS.RECOMMENDATIONS' | translate }} *</label
           >
           <textarea
+            required
             id="complete-recommendations"
             [(ngModel)]="completeForm.recommendations"
             rows="4"
@@ -958,7 +990,13 @@
         <button class="btn-secondary" (click)="closeCompleteModal()">
           {{ 'COMMON.CANCEL' | translate }}
         </button>
-        <button class="btn-primary" (click)="submitComplete()" [disabled]="completing()">
+        <button
+          appSubmitGuard
+          submitGuardRequired
+          class="btn-primary"
+          (click)="submitComplete()"
+          [disabled]="completing()"
+        >
           {{
             completing()
               ? ('COMMON.SAVING' | translate)
@@ -1010,6 +1048,7 @@
         <div class="field" style="margin-top: 1rem">
           <label for="decline-reason">{{ 'CONSULTATIONS.DECLINE_REASON' | translate }} *</label>
           <textarea
+            required
             id="decline-reason"
             [value]="declineReasonValue()"
             (input)="declineReasonValue.set($any($event.target).value)"
@@ -1022,7 +1061,13 @@
         <button class="btn-secondary" (click)="closeDeclineModal()">
           {{ 'COMMON.CANCEL' | translate }}
         </button>
-        <button class="btn-danger" (click)="submitDecline()" [disabled]="declining()">
+        <button
+          appSubmitGuard
+          submitGuardRequired
+          class="btn-danger"
+          (click)="submitDecline()"
+          [disabled]="declining()"
+        >
           {{
             declining()
               ? ('CONSULTATIONS.DECLINING' | translate)
@@ -1074,6 +1119,7 @@
         <div class="field" style="margin-top: 1rem">
           <label for="cancel-reason">{{ 'CONSULTATIONS.CANCELLATION_REASON' | translate }} *</label>
           <textarea
+            required
             id="cancel-reason"
             [value]="cancelReason()"
             (input)="cancelReason.set($any($event.target).value)"
@@ -1086,7 +1132,13 @@
         <button class="btn-secondary" (click)="cancelDeleteAction()">
           {{ 'COMMON.KEEP' | translate }}
         </button>
-        <button class="btn-danger" (click)="executeCancel()" [disabled]="deleting()">
+        <button
+          appSubmitGuard
+          submitGuardRequired
+          class="btn-danger"
+          (click)="executeCancel()"
+          [disabled]="deleting()"
+        >
           {{
             deleting() ? ('COMMON.CANCELLING' | translate) : ('CONSULTATIONS.CANCEL' | translate)
           }}

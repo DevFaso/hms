@@ -34,6 +34,7 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { refusalReason } from '../shared/refusal-reason';
 import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 
+import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 type ModalKind = 'create' | 'multi' | 'edit' | 'detail' | 'regen' | 'import' | null;
 
 /**
@@ -47,6 +48,7 @@ type ModalKind = 'create' | 'multi' | 'edit' | 'detail' | 'regen' | 'import' | n
   selector: 'app-admin-assignments',
   standalone: true,
   imports: [
+    SubmitGuardDirective,
     ModalDialogDirective,
     ServerTimePipe,
     CommonModule,

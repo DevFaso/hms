@@ -8879,7 +8879,8 @@
     "REFERRAL_PLACEHOLDER": "ex. Suivi en cardiologie",
     "INSTRUCTIONS_PLACEHOLDER": "ex. Revenir à la clinique si les symptômes s'aggravent",
     "EDUCATION_PLACEHOLDER": "ex. Fiche de gestion des médicaments",
-    "FOLLOWUP_REASON_PLACEHOLDER": "ex. Contrôle dans 2 semaines"
+    "FOLLOWUP_REASON_PLACEHOLDER": "ex. Contrôle dans 2 semaines",
+    "SUMMARY_REQUIRED": "Saisissez un diagnostic de sortie ou des consignes pour le patient : le résumé de visite ne peut pas être vide."
   },
   "inBasket": {
     "acknowledge": "Accuser réception",
@@ -9680,7 +9681,9 @@
     },
     "ALERT_OVERRIDDEN": "Alerte outrepassée par le prescripteur : voir le motif sur l’ordonnance",
     "LOTS_OTHER_FORM": "{{count}} lot(s) de ce médicament sous une autre forme ne sont pas proposés : l'ordonnance est rédigée en « {{unit}} ».",
-    "SAVE_PRICE": "Enregistrer le prix"
+    "SAVE_PRICE": "Enregistrer le prix",
+    "WRITE_OFF_REMOVES_ONLY": "La détérioration et la péremption ne font que retirer du stock : saisissez une quantité négative.",
+    "WRITE_OFF_SIGN_HINT": "Ce motif retire du stock : saisissez une quantité négative (par exemple −2)."
   },
   "LAB_QC": {
     "TITLE": "Tableau de bord du contrôle qualité",
@@ -10080,7 +10083,11 @@
     "REVOKE_CONSENT": "Révoquer le consentement",
     "CONSENT_REVOKE_HINT": "L'enregistrement est conservé et marqué révoqué — il n'est jamais supprimé.",
     "CONSENT_REVOKE_REASON": "Motif de révocation",
-    "CONSENT_REVOKE_REASON_REQUIRED": "Un motif de révocation est requis."
+    "CONSENT_REVOKE_REASON_REQUIRED": "Un motif de révocation est requis.",
+    "DEACTIVATE_GUARANTOR_TITLE": "Désactiver ce garant ?",
+    "DEACTIVATE_GUARANTOR_MESSAGE": "Le garant reste au dossier, marqué inactif. Indiquez pourquoi ; le motif est conservé dans la piste d’audit.",
+    "GUARANTOR_DEACTIVATED": "{{name}} n’est plus un garant actif.",
+    "GUARANTOR_REACTIVATED": "{{name}} est de nouveau un garant actif."
   },
   "PATIENT_DOCUMENTS": {
     "TAB": "Documents",

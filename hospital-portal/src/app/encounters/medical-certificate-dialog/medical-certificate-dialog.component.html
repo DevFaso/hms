@@ -43,7 +43,7 @@
       <form class="modal-body" (ngSubmit)="submit()">
         <div class="field">
           <label for="mc-type">{{ 'MEDICAL_CERTIFICATE.TYPE' | translate }} *</label>
-          <select id="mc-type" name="type" [(ngModel)]="type">
+          <select required id="mc-type" name="type" [(ngModel)]="type">
             @for (t of types; track t) {
               <option [value]="t">{{ 'MEDICAL_CERTIFICATE.TYPE_' + t | translate }}</option>
             }
@@ -57,7 +57,15 @@
             </div>
             <div class="field">
               <label for="mc-days">{{ 'MEDICAL_CERTIFICATE.DAYS' | translate }} *</label>
-              <input id="mc-days" name="days" type="number" min="1" max="365" [(ngModel)]="days" />
+              <input
+                required
+                id="mc-days"
+                name="days"
+                type="number"
+                min="1"
+                max="365"
+                [(ngModel)]="days"
+              />
             </div>
           </div>
         }
@@ -93,6 +101,7 @@
             {{ 'COMMON.CANCEL' | translate }}
           </button>
           <button
+            submitGuardRequired
             type="submit"
             class="btn-primary"
             [disabled]="saving()"
