@@ -24,8 +24,14 @@ External HTTP probing of HMS public surfaces from multiple geographic vantage po
     rejects it first). So "the handshake path no longer answers at all" — a
     stripped proxy prefix, a dropped mapping — is attributable to no endpoint and
     invisible to every chat metric. This probe is the only thing that sees it.
-    `/ws-chat/info` is SockJS's own discovery endpoint: plain GET, 200 + JSON, no
-    session and no upgrade, so the existing 2xx module fits unchanged.
+    `/ws-chat/info` is SockJS's own discovery endpoint: a plain GET, no session and
+    no upgrade. It is not anonymous — `/ws-chat/**` is `.authenticated()` and the
+    handshake wants a `?ticket=` no prober can mint — so it uses the
+    `http_ws_handshake_reachable` module, which accepts **200 or 401**. A 2xx-only
+    module would have scored `probe_success=0` on every scrape and fired both
+    page-severity probe alerts permanently. A 401 proves the path routes and the
+    app answered, which is the question being asked; a removed mapping or a
+    stripped prefix answers 404 and still fails the probe.
 - **Three alert rules** in `grafana/rules/alerts.yml`:
   - `HmsSyntheticProbeFailureRate` — > 10% failure for 5 minutes (the deliverable target).
   - `HmsSyntheticProbeAllGeosFailing` — every vantage point returns 0 for 2 minutes (hard outage).

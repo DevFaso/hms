@@ -269,12 +269,21 @@ alert that covers it.
    `sum by (status) (rate(http_server_requests_seconds_count{uri=~"(/api)?/ws-chat.*"}[5m]))`
    in Explore to see which class is actually failing before going further.
 2. A **4xx-shaped** failure is usually routing or proxy config, not the app —
-   confirm `/api/ws-chat/info` answers 200, and check that the SockJS path is
-   not being rewritten or stripped upstream.
-3. A **5xx-shaped** failure is usually ticket redemption or the broker. Look for
-   `WsTicketService` and `JwtAuthenticationFilter` errors. Note these loggers
-   sit at INFO on dev (`LOG_LEVEL_SECURITY`) to keep Loki volume down — raise
-   them for a session with
+   check that the SockJS path is not being rewritten or stripped upstream. Note
+   that `/api/ws-chat/info` answers **401** to an unauthenticated request, not
+   200: `/ws-chat/**` is `.authenticated()` and the handshake wants a `?ticket=`.
+   A 401 there is the healthy answer and is what the `blackbox_ws_chat_info`
+   probe treats as success; a **404** is the broken one.
+3. A **5xx-shaped** failure is usually the broker or the handler itself. Note what
+   this alert can *not* tell you: Micrometer tags `uri` from the matched handler,
+   so only requests that reached the DispatcherServlet carry `/ws-chat/**`. Every
+   401 from `JwtAuthenticationFilter` is written inside the filter, before any
+   handler mapping, and lands under `uri="UNKNOWN"` — so a fleet-wide ticket
+   expiry will leave this alert silent and the per-URI panel empty. If clients
+   report chat failing and the chat metrics look clean, that is the shape to
+   suspect: check `WsTicketService` and `JwtAuthenticationFilter` logs directly.
+   Those loggers sit at INFO on dev (`LOG_LEVEL_SECURITY`) to keep Loki volume
+   down — raise them for a session with
    `railway variables --set LOG_LEVEL_SECURITY=DEBUG --service hms-backend-dev`.
 4. If the transport is silent rather than failing, this alert cannot see it: the
    rate floor that keeps it from firing on an idle window also means no traffic

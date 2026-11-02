@@ -115,10 +115,11 @@ groups:
 
       # 4xx and 5xx, named positively.
       #
-      # Not 5xx alone: a 404 from an xhr_send to an expired session, or a 401 from a
-      # stale ticket, are handler-matched and so carry uri=/ws-chat/**. (A path that
-      # no longer ROUTES is tagged uri="NOT_FOUND" or "UNKNOWN" and is invisible to
-      # this rule by construction — the blackbox probe on /ws-chat/info covers that.)
+      # Not 5xx alone: a 404 from an xhr_send to an expired session is handler-matched
+      # and carries uri=/ws-chat/**. Only requests that reach the DispatcherServlet
+      # do, though — a 401 written by JwtAuthenticationFilter, or a path that no
+      # longer routes, is tagged "UNKNOWN"/"NOT_FOUND" and is invisible to this rule
+      # by construction; the blackbox probe on /ws-chat/info covers those.
       # And emphatically NOT "anything that is not 2xx/3xx", which is how this
       # was first written — /ws-chat is .withSockJS() and SockJS prefers a native
       # WebSocket, so every SUCCESSFUL upgrade is an HTTP 101. Those are the very

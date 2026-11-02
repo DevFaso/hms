@@ -22,6 +22,9 @@
 #     the probe survives a HAPI server-version bump.
 #   - http_cds_discovery_2xx: 2xx check against /cds-services with
 #     `application/json` accept header — paired with row 27.
+#   - http_ws_handshake_reachable: accepts 200 OR 401, for the SockJS
+#     handshake path, which is authenticated and cannot be probed
+#     anonymously. See the comment on the module itself.
 
 modules:
   http_health_2xx:
@@ -67,6 +70,33 @@ modules:
         insecure_skip_verify: false
       headers:
         Accept: application/fhir+json,application/json;q=0.8
+        User-Agent: hms-blackbox/synthetic
+
+  # 200 OR 401, deliberately. /ws-chat/** is .authenticated() (SecurityConfig), and
+  # the ticket handshake needs a ?ticket= parameter the prober has no way to mint, so
+  # an unauthenticated GET to /ws-chat/info is answered 401 by the security chain. A
+  # 2xx-only module would therefore score probe_success=0 on every single scrape and
+  # fire both page-severity synthetic alerts permanently, two minutes after this lands
+  # — the day-one false alarm this whole change exists to prevent.
+  #
+  # 401 is the right success condition here because of what the probe is for: the
+  # question is whether the path still routes and the app still answers it, not
+  # whether the prober is allowed through. A 401 proves both. The failure modes it has
+  # to catch all still fail it — a removed mapping or a stripped proxy prefix answers
+  # 404, a dead listener refuses the connection, a wedged app times out.
+  http_ws_handshake_reachable:
+    prober: http
+    timeout: 5s
+    http:
+      method: GET
+      preferred_ip_protocol: ip4
+      valid_status_codes: [200, 401]
+      fail_if_ssl: false
+      fail_if_not_ssl: false
+      tls_config:
+        insecure_skip_verify: false
+      headers:
+        Accept: application/json
         User-Agent: hms-blackbox/synthetic
 
   http_cds_discovery_2xx:

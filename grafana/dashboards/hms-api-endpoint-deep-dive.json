@@ -179,8 +179,8 @@
         "name": "uri", "type": "query", "label": "URI",
         "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
         "query": { "qryType": 1, "query": "label_values(http_server_requests_seconds_count{application=\"$application\"}, uri)" },
-        "refresh": 1, "current": { "text": "", "value": "" }, "includeAll": false, "multi": false, "sort": 1,
-        "description": "One endpoint at a time, deliberately. This dashboard is exempt from the $exclude_uri transport filter the other dashboards apply, because picking any URI is its whole purpose and /ws-chat is a legitimate choice. An All option would turn that exemption into an application-wide aggregate that includes the 25-50s SockJS samples, giving a default view with a p99 near 50s and an Apdex near 0. RE2 has no negative lookahead, so an allValue cannot say 'everything except /ws-chat'; the aggregate view lives on the SLO and Application Metrics dashboards, which filter it properly."
+        "refresh": 2, "current": { "text": "", "value": "" }, "includeAll": false, "multi": false, "sort": 1,
+        "description": "One endpoint at a time, deliberately. This dashboard is exempt from the $exclude_uri transport filter the other dashboards apply, because picking any URI is its whole purpose and /ws-chat is a legitimate choice. An All option would turn that exemption into an application-wide aggregate that includes the 25-50s SockJS samples, giving a default view with a p99 near 50s and an Apdex near 0. RE2 has no negative lookahead, so an allValue cannot say 'everything except /ws-chat'; the aggregate view lives on the SLO and Application Metrics dashboards, which filter it properly. current is left unset on purpose: refresh=2 resolves the option list on dashboard load as well as on time-range change, and Grafana then selects the first endpoint, so no value has to be hardcoded here and go stale. Until metrics arrive the list is empty and every panel on every dashboard is blank anyway."
       },
       {
         "name": "method", "type": "query", "label": "HTTP method",
