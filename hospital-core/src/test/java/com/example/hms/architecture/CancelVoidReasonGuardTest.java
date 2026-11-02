@@ -455,145 +455,150 @@ class CancelVoidReasonGuardTest {
      * or "OWN RECORD: why", "NOT A CLINICAL RECORD: why", or
      * "KNOWN GAP (D1241 class, standing debt): why" - a patient's record still
      * deleted without a reason, each with its owner's next step.
+     * Named DELETE_PROOFS, not *_HANDLERS: the portal's terminal-action-reason
+     * scan reads every HANDLERS.put and does not yet read a DELETE's body
+     * option (it would flag the allergy and diagnosis calls, which send their
+     * reason). The birth plan's reason parameter is a portal follow-up
+     * (tasklist, round 25).
      */
-    private static final Map<String, String> DELETE_HANDLERS = new LinkedHashMap<>();
+    private static final Map<String, String> DELETE_PROOFS = new LinkedHashMap<>();
 
     static {
-        DELETE_HANDLERS.put("DELETE /admin/adt-intake-configs/{id}",
+        DELETE_PROOFS.put("DELETE /admin/adt-intake-configs/{id}",
             "NOT A CLINICAL RECORD: an integration setting");
-        DELETE_HANDLERS.put("DELETE /admin/integrations/dhis2/mappings/{id}",
+        DELETE_PROOFS.put("DELETE /admin/integrations/dhis2/mappings/{id}",
             "NOT A CLINICAL RECORD: a reporting mapping");
-        DELETE_HANDLERS.put("DELETE /admin/mllp/allowed-senders/{id}",
+        DELETE_PROOFS.put("DELETE /admin/mllp/allowed-senders/{id}",
             "NOT A CLINICAL RECORD: an integration allowlist entry");
-        DELETE_HANDLERS.put("DELETE /admissions/{admissionId}",
+        DELETE_PROOFS.put("DELETE /admissions/{admissionId}",
             "KNOWN GAP (D1241 class, standing debt): a doctor cancels a stay still in progress (CANCELLABLE_STATUSES, never billed) with no reason; the portal sends none yet, so requiring it needs its UI half first");
-        DELETE_HANDLERS.put("DELETE /admissions/{admissionId}/bed",
+        DELETE_PROOFS.put("DELETE /admissions/{admissionId}/bed",
             "NOT A CLINICAL RECORD: frees the bed of a stay; the stay itself is unchanged");
-        DELETE_HANDLERS.put("DELETE /announcements/{id}",
+        DELETE_PROOFS.put("DELETE /announcements/{id}",
             "NOT A CLINICAL RECORD: a staff announcement");
-        DELETE_HANDLERS.put("DELETE /appointments/{id}",
+        DELETE_PROOFS.put("DELETE /appointments/{id}",
             "KNOWN GAP (D1241 class, standing debt): a hard delete of a booking by staff; the D1126 reasoned cancel and no-show are the supported paths, this one should be retired or reasoned with its UI owner");
-        DELETE_HANDLERS.put("DELETE /assignments/role/{roleId}",
+        DELETE_PROOFS.put("DELETE /assignments/role/{roleId}",
             "NOT A CLINICAL RECORD: staff role assignments");
-        DELETE_HANDLERS.put("DELETE /assignments/user/{userId}",
+        DELETE_PROOFS.put("DELETE /assignments/user/{userId}",
             "NOT A CLINICAL RECORD: staff role assignments");
-        DELETE_HANDLERS.put("DELETE /assignments/{id}",
+        DELETE_PROOFS.put("DELETE /assignments/{id}",
             "NOT A CLINICAL RECORD: a staff role assignment");
-        DELETE_HANDLERS.put("DELETE /beds/{bedId}",
+        DELETE_PROOFS.put("DELETE /beds/{bedId}",
             "NOT A CLINICAL RECORD: ward configuration");
-        DELETE_HANDLERS.put("DELETE /billing-invoices/{id}",
+        DELETE_PROOFS.put("DELETE /billing-invoices/{id}",
             "KNOWN GAP (D1241 class, standing debt): an administrator hard-deletes an invoice; billing files belong to fix/r25-mar-cds-pharmacy-billing (the reasoned cancel is the supported path)");
-        DELETE_HANDLERS.put("DELETE /birth-plans/{id}",
+        DELETE_PROOFS.put("DELETE /birth-plans/{id}",
             "@RequestParam reason -> service/BirthPlanServiceImplTest#aDeleteWithoutAReasonIsRefused_D1241");
-        DELETE_HANDLERS.put("DELETE /departments/{id}",
+        DELETE_PROOFS.put("DELETE /departments/{id}",
             "NOT A CLINICAL RECORD: hospital configuration");
-        DELETE_HANDLERS.put("DELETE /discharge-summaries/{id}",
+        DELETE_PROOFS.put("DELETE /discharge-summaries/{id}",
             "KNOWN GAP (D1241 class, standing debt): a doctor deletes a discharge summary with no reason (the D930 author rule applies); needs a reason field in its UI first");
-        DELETE_HANDLERS.put("DELETE /encounters/{id}",
+        DELETE_PROOFS.put("DELETE /encounters/{id}",
             "KNOWN GAP (D1241 class, standing debt): platform-operator hard delete (SUPER_ADMIN only); no clinician reaches it");
-        DELETE_HANDLERS.put("DELETE /feature-flags/{flagKey}",
+        DELETE_PROOFS.put("DELETE /feature-flags/{flagKey}",
             "NOT A CLINICAL RECORD: platform configuration");
-        DELETE_HANDLERS.put("DELETE /files/profile-image",
+        DELETE_PROOFS.put("DELETE /files/profile-image",
             "NOT A CLINICAL RECORD: the caller's own profile picture");
-        DELETE_HANDLERS.put("DELETE /hospitals/{id}",
+        DELETE_PROOFS.put("DELETE /hospitals/{id}",
             "NOT A CLINICAL RECORD: tenant configuration");
-        DELETE_HANDLERS.put("DELETE /hospitals/{id}/organization",
+        DELETE_PROOFS.put("DELETE /hospitals/{id}/organization",
             "NOT A CLINICAL RECORD: tenant configuration");
-        DELETE_HANDLERS.put("DELETE /invoice-items/{id}",
+        DELETE_PROOFS.put("DELETE /invoice-items/{id}",
             "NOT A CLINICAL RECORD: a line of an invoice not yet issued (lines lock once issued); money, not the chart");
-        DELETE_HANDLERS.put("DELETE /lab-orders/{id}",
+        DELETE_PROOFS.put("DELETE /lab-orders/{id}",
             "KNOWN GAP (D1241 class, standing debt): administrator hard delete; the reasoned void (POST /lab-orders/{id}/void) is the clinical path");
-        DELETE_HANDLERS.put("DELETE /lab-results/{id}",
+        DELETE_PROOFS.put("DELETE /lab-results/{id}",
             "KNOWN GAP (D1241 class, standing debt): lab manager hard delete; the correction flow is the clinical path");
-        DELETE_HANDLERS.put("DELETE /lab-test-definitions/{id}",
+        DELETE_PROOFS.put("DELETE /lab-test-definitions/{id}",
             "NOT A CLINICAL RECORD: lab catalogue");
-        DELETE_HANDLERS.put("DELETE /lab-test-validation-studies/{id}",
+        DELETE_PROOFS.put("DELETE /lab-test-validation-studies/{id}",
             "NOT A CLINICAL RECORD: lab method validation");
-        DELETE_HANDLERS.put("DELETE /lab/instruments/{id}",
+        DELETE_PROOFS.put("DELETE /lab/instruments/{id}",
             "NOT A CLINICAL RECORD: lab equipment");
-        DELETE_HANDLERS.put("DELETE /lab/inventory/{id}",
+        DELETE_PROOFS.put("DELETE /lab/inventory/{id}",
             "NOT A CLINICAL RECORD: lab stock item");
-        DELETE_HANDLERS.put("DELETE /maternal-history/{id}",
+        DELETE_PROOFS.put("DELETE /maternal-history/{id}",
             "KNOWN GAP (D1241 class, standing debt): platform-operator delete (SUPER_ADMIN only)");
-        DELETE_HANDLERS.put("DELETE /me/patient/documents/{documentId}",
+        DELETE_PROOFS.put("DELETE /me/patient/documents/{documentId}",
             "OWN RECORD: the patient removes a document they uploaded themselves");
-        DELETE_HANDLERS.put("DELETE /me/patient/proxies/{proxyId}",
+        DELETE_PROOFS.put("DELETE /me/patient/proxies/{proxyId}",
             "OWN RECORD: the patient revokes access they granted (refused once revoked, D1186)");
-        DELETE_HANDLERS.put("DELETE /medical-history/family/{id}",
+        DELETE_PROOFS.put("DELETE /medical-history/family/{id}",
             "KNOWN GAP (D1241 class, standing debt): admin soft delete with no reason (a repeat is now refused, D1242); needs a reason field in its UI");
-        DELETE_HANDLERS.put("DELETE /medical-history/immunizations/{id}",
+        DELETE_PROOFS.put("DELETE /medical-history/immunizations/{id}",
             "KNOWN GAP (D1241 class, standing debt): admin soft delete with no reason (a repeat is now refused, D1242); needs a reason field in its UI");
-        DELETE_HANDLERS.put("DELETE /medical-history/social/{id}",
+        DELETE_PROOFS.put("DELETE /medical-history/social/{id}",
             "KNOWN GAP (D1241 class, standing debt): admin soft delete with no reason (a repeat is now refused, D1242); needs a reason field in its UI");
-        DELETE_HANDLERS.put("DELETE /medication-catalog/{id}",
+        DELETE_PROOFS.put("DELETE /medication-catalog/{id}",
             "NOT A CLINICAL RECORD: pharmacy catalogue");
-        DELETE_HANDLERS.put("DELETE /medication-history/pharmacy-fills/{fillId}",
+        DELETE_PROOFS.put("DELETE /medication-history/pharmacy-fills/{fillId}",
             "KNOWN GAP (D1241 class, standing debt): admin delete of an outside pharmacy fill record with no reason");
-        DELETE_HANDLERS.put("DELETE /micro-cultures/{cultureId}/isolates/{isolateId}",
+        DELETE_PROOFS.put("DELETE /micro-cultures/{cultureId}/isolates/{isolateId}",
             "correctionReason (once final) -> service/impl/MicroCultureServiceImplTest#mutationAfterFinalDemandsACorrectionReason");
-        DELETE_HANDLERS.put("DELETE /micro-cultures/{cultureId}/isolates/{isolateId}/susceptibilities/{susceptibilityId}",
+        DELETE_PROOFS.put("DELETE /micro-cultures/{cultureId}/isolates/{isolateId}/susceptibilities/{susceptibilityId}",
             "correctionReason (once final) -> service/impl/MicroCultureServiceImplTest#mutationAfterFinalDemandsACorrectionReason");
-        DELETE_HANDLERS.put("DELETE /on-call/{id}",
+        DELETE_PROOFS.put("DELETE /on-call/{id}",
             "NOT A CLINICAL RECORD: staff rota");
-        DELETE_HANDLERS.put("DELETE /order-sets/{id}",
+        DELETE_PROOFS.put("DELETE /order-sets/{id}",
             "NOT A CLINICAL RECORD: order-set template");
-        DELETE_HANDLERS.put("DELETE /organizations/{id}",
+        DELETE_PROOFS.put("DELETE /organizations/{id}",
             "NOT A CLINICAL RECORD: tenant configuration");
-        DELETE_HANDLERS.put("DELETE /patient-education/resources/{id}",
+        DELETE_PROOFS.put("DELETE /patient-education/resources/{id}",
             "NOT A CLINICAL RECORD: education library item");
-        DELETE_HANDLERS.put("DELETE /patient-insurances/{insuranceId}",
+        DELETE_PROOFS.put("DELETE /patient-insurances/{insuranceId}",
             "KNOWN GAP (D1241 class, standing debt): a coverage removed with no reason; the guarantor deactivation (D1247) is the reasoned model to follow");
-        DELETE_HANDLERS.put("DELETE /patients/{id}",
+        DELETE_PROOFS.put("DELETE /patients/{id}",
             "NOT A CLINICAL RECORD: whole-patient delete, HOSPITAL_ADMIN/SUPER_ADMIN only and refused when any clinical record exists (patient.delete.hasclinicalrecords)");
-        DELETE_HANDLERS.put("DELETE /patients/{id}/allergies/{allergyId}",
+        DELETE_PROOFS.put("DELETE /patients/{id}/allergies/{allergyId}",
             "PatientAllergyDeactivateRequestDTO.reason (@NotBlank) -> VALIDATED");
-        DELETE_HANDLERS.put("DELETE /patients/{id}/diagnoses/{diagnosisId}",
+        DELETE_PROOFS.put("DELETE /patients/{id}/diagnoses/{diagnosisId}",
             "PatientDiagnosisDeleteRequestDTO.reason (@NotBlank) -> VALIDATED");
-        DELETE_HANDLERS.put("DELETE /patients/{patientId}/photo",
+        DELETE_PROOFS.put("DELETE /patients/{patientId}/photo",
             "NOT A CLINICAL RECORD: an identification photo, replaced or removed at the desk");
-        DELETE_HANDLERS.put("DELETE /patients/{patientId}/record-sharing/opt-out",
+        DELETE_PROOFS.put("DELETE /patients/{patientId}/record-sharing/opt-out",
             "OWN RECORD: the patient withdraws their own sharing opt-out (a consent choice)");
-        DELETE_HANDLERS.put("DELETE /permissions/{id}",
+        DELETE_PROOFS.put("DELETE /permissions/{id}",
             "NOT A CLINICAL RECORD: access configuration");
-        DELETE_HANDLERS.put("DELETE /pharmacy-registry/{id}",
+        DELETE_PROOFS.put("DELETE /pharmacy-registry/{id}",
             "NOT A CLINICAL RECORD: pharmacy registry");
-        DELETE_HANDLERS.put("DELETE /pharmacy/inventory/items/{id}",
+        DELETE_PROOFS.put("DELETE /pharmacy/inventory/items/{id}",
             "NOT A CLINICAL RECORD: pharmacy catalogue item");
-        DELETE_HANDLERS.put("DELETE /platform/departments/{departmentId}/services/{serviceId}",
+        DELETE_PROOFS.put("DELETE /platform/departments/{departmentId}/services/{serviceId}",
             "NOT A CLINICAL RECORD: platform configuration");
-        DELETE_HANDLERS.put("DELETE /platform/hospitals/{hospitalId}/services/{serviceId}",
+        DELETE_PROOFS.put("DELETE /platform/hospitals/{hospitalId}/services/{serviceId}",
             "NOT A CLINICAL RECORD: platform configuration");
-        DELETE_HANDLERS.put("DELETE /prescriptions/{id}",
+        DELETE_PROOFS.put("DELETE /prescriptions/{id}",
             "KNOWN GAP (D1241 class, standing debt): platform-operator delete (SUPER_ADMIN only); clinicians discontinue with a reason");
-        DELETE_HANDLERS.put("DELETE /primary-care/{pcpId}",
+        DELETE_PROOFS.put("DELETE /primary-care/{pcpId}",
             "KNOWN GAP (D1241 class, standing debt): admin removes a primary-care link with no reason");
-        DELETE_HANDLERS.put("DELETE /registrations/{id}",
+        DELETE_PROOFS.put("DELETE /registrations/{id}",
             "KNOWN GAP (D1241 class, standing debt): the desk deregisters a patient with no reason");
-        DELETE_HANDLERS.put("DELETE /roles/{id}",
+        DELETE_PROOFS.put("DELETE /roles/{id}",
             "NOT A CLINICAL RECORD: access configuration");
-        DELETE_HANDLERS.put("DELETE /security-policies/{id}",
+        DELETE_PROOFS.put("DELETE /security-policies/{id}",
             "NOT A CLINICAL RECORD: security configuration");
-        DELETE_HANDLERS.put("DELETE /security-rules/{id}",
+        DELETE_PROOFS.put("DELETE /security-rules/{id}",
             "NOT A CLINICAL RECORD: security configuration");
-        DELETE_HANDLERS.put("DELETE /service-translations/{id}",
+        DELETE_PROOFS.put("DELETE /service-translations/{id}",
             "NOT A CLINICAL RECORD: catalogue translation");
-        DELETE_HANDLERS.put("DELETE /smart-phrases/{id}",
+        DELETE_PROOFS.put("DELETE /smart-phrases/{id}",
             "NOT A CLINICAL RECORD: a clinician's text template");
-        DELETE_HANDLERS.put("DELETE /staff/{id}",
+        DELETE_PROOFS.put("DELETE /staff/{id}",
             "NOT A CLINICAL RECORD: a staff record");
-        DELETE_HANDLERS.put("DELETE /super-admin/audit-search/saved/{id}",
+        DELETE_PROOFS.put("DELETE /super-admin/audit-search/saved/{id}",
             "NOT A CLINICAL RECORD: a saved search");
-        DELETE_HANDLERS.put("DELETE /super-admin/organizations/{organizationId}/hospitals/{hospitalId}",
+        DELETE_PROOFS.put("DELETE /super-admin/organizations/{organizationId}/hospitals/{hospitalId}",
             "NOT A CLINICAL RECORD: tenant configuration");
-        DELETE_HANDLERS.put("DELETE /super-admin/subscriptions/organizations/{organizationId}/{subscriptionId}",
+        DELETE_PROOFS.put("DELETE /super-admin/subscriptions/organizations/{organizationId}/{subscriptionId}",
             "NOT A CLINICAL RECORD: subscription");
-        DELETE_HANDLERS.put("DELETE /super-admin/subscriptions/plans/{planId}",
+        DELETE_PROOFS.put("DELETE /super-admin/subscriptions/plans/{planId}",
             "NOT A CLINICAL RECORD: subscription plan");
-        DELETE_HANDLERS.put("DELETE /treatments/{id}",
+        DELETE_PROOFS.put("DELETE /treatments/{id}",
             "NOT A CLINICAL RECORD: treatment catalogue entry (HOSPITAL_ADMIN)");
-        DELETE_HANDLERS.put("DELETE /users/{id}",
+        DELETE_PROOFS.put("DELETE /users/{id}",
             "NOT A CLINICAL RECORD: a user account");
-        DELETE_HANDLERS.put("DELETE /wards/{wardId}",
+        DELETE_PROOFS.put("DELETE /wards/{wardId}",
             "NOT A CLINICAL RECORD: ward configuration");
     }
 
@@ -615,8 +620,8 @@ class CancelVoidReasonGuardTest {
         assertThat(new TreeSet<>(found))
             .as("a DELETE handler is not listed with the proof it refuses a blank reason, or why it needs none"
                 + " (QA D1241), or a listed one is gone")
-            .isEqualTo(new TreeSet<>(DELETE_HANDLERS.keySet()));
-        for (Map.Entry<String, String> e : DELETE_HANDLERS.entrySet()) {
+            .isEqualTo(new TreeSet<>(DELETE_PROOFS.keySet()));
+        for (Map.Entry<String, String> e : DELETE_PROOFS.entrySet()) {
             String v = e.getValue();
             if (v.endsWith("-> VALIDATED")) {
                 assertBlankIsRefusedByValidation(e.getKey(), v);

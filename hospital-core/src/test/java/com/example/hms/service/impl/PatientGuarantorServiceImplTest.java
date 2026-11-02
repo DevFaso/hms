@@ -193,7 +193,7 @@ class PatientGuarantorServiceImplTest {
 
         assertThatThrownBy(() -> service.deactivate(patientId, id, hospitalId, reason, actor))
             .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("order.lifecycle.cancelReasonRequired");
+            .extracting("messageKey").isEqualTo("order.lifecycle.cancelReasonRequired");
         verify(guarantorRepository, never()).save(any());
     }
 

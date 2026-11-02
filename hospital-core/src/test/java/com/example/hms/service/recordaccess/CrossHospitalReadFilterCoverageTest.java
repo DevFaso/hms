@@ -62,7 +62,7 @@ class CrossHospitalReadFilterCoverageTest {
         "PatientSurgicalHistoryRepository.findByPatient_IdAndHospital_IdIn",
         "AdvanceDirectiveRepository.findByPatient_IdAndHospital_IdIn",
         "NursingNoteRepository.findTop50ByPatient_IdAndHospital_IdInOrderByCreatedAtDesc",
-        "NursingNoteRepository.findByPatient_IdAndHospital_IdInAndWithdrawnAtIsNullOrderByCreatedAtDesc",
+        "NursingNoteRepository.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc",
         "PatientChartUpdateRepository.findByPatient_IdAndHospital_IdIn",
         // E9 #59b — orders and results follow the patient.
         "LabOrderRepository.findByPatient_IdAndHospital_IdIn",
@@ -71,7 +71,7 @@ class CrossHospitalReadFilterCoverageTest {
         "ImagingOrderRepository.findByPatient_IdAndHospital_IdInAndStatusOrderByOrderedAtDesc",
         "ProcedureOrderRepository.findByPatient_IdAndHospital_IdInOrderByOrderedAtDesc",
         "ConsultationRepository.findByPatient_IdAndHospital_IdInOrderByRequestedAtDesc",
-        "GeneralReferralRepository.findByPatient_IdAndHospital_IdInAndWithdrawnAtIsNullOrderByCreatedAtDesc",
+        "GeneralReferralRepository.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc",
         // E9 #59c — medications follow the patient (PrescriptionRepository's In
         // finder, listed above, gained a paged overload).
         "PharmacyFillRepository.findByPatient_IdAndHospital_IdInOrderByFillDateDesc",
@@ -82,7 +82,7 @@ class CrossHospitalReadFilterCoverageTest {
         "PostpartumObservationRepository.findByPatient_IdAndHospital_IdInOrderByObservationTimeDesc",
         "BirthPlanRepository.findByPatient_IdAndHospital_IdInAndWithdrawnAtIsNullOrderByCreatedAtDesc",
         "BirthPlanRepository.findFirstByPatient_IdAndHospital_IdInAndWithdrawnAtIsNullOrderByCreatedAtDesc",
-        "HighRiskPregnancyCarePlanRepository.findByPatient_IdAndHospital_IdInAndWithdrawnAtIsNullOrderByCreatedAtDesc",
+        "HighRiskPregnancyCarePlanRepository.findByPatient_IdAndHospital_IdInOrderByCreatedAtDesc",
         "HighRiskPregnancyCarePlanRepository.findFirstByPatient_IdAndHospital_IdInAndActiveTrueOrderByCreatedAtDesc",
         "MaternalHistoryRepository.findByPatient_IdAndHospital_IdInOrderByVersionNumberDescRecordedDateDesc",
         "MaternalHistoryRepository.findFirstByPatient_IdAndHospital_IdInOrderByVersionNumberDescRecordedDateDesc",

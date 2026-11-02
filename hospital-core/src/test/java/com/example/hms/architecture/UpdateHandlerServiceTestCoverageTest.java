@@ -106,7 +106,6 @@ class UpdateHandlerServiceTestCoverageTest {
     private static final Map<String, Allowance> ALLOWED = GuardAllowlist.allow(
         "BedManagementController#updateBed -> bedManagementService.updateBed", 1, DARK,
         "NotificationController#markAllRead -> notificationService.markAllReadForUser", 1, DARK,
-        "PatientController#updatePatientAllergy -> patientService.updatePatientAllergy", 1, DARK,
         "PatientPortalController#markAllNotificationsRead -> notificationService.markAllReadForUser", 1, DARK,
         "PatientPortalController#updateNotificationPreferences -> portalService.updateMyNotificationPreferences", 1, DARK,
         "PermissionController#updatePermission -> permissionService.updatePermission", 1, DARK,
