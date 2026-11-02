@@ -900,12 +900,19 @@ export class PharmacyService {
     );
   }
 
+  /**
+   * Every lot of the pharmacy, one page. QA D1233: `sort` (Spring's
+   * `property,direction`) lets the goods receipt ask for the newest received
+   * first across ALL items, instead of reading the lots of the first five.
+   */
   listLotsByPharmacy(
     pharmacyId: string,
     page = 0,
     size = 20,
+    sort: readonly string[] = [],
   ): Observable<ApiResponse<Page<StockLotResponse>>> {
-    const params = new HttpParams().set('page', page).set('size', size);
+    let params = new HttpParams().set('page', page).set('size', size);
+    for (const s of sort) params = params.append('sort', s);
     return this.http.get<ApiResponse<Page<StockLotResponse>>>(
       `/pharmacy/inventory/lots/pharmacy/${pharmacyId}`,
       { params },

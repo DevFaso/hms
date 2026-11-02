@@ -305,10 +305,17 @@
     background: #e0f2fe;
     color: #075985;
   }
+  /* QA D1225: the last dose was given before the minimum interval. */
+  &.status-early {
+    background: #fff4e5;
+    color: #7a4b00;
+  }
 }
 
 /* QA D929: the outcome of the last recorded dose, beside the status. */
-.last-outcome {
+/* QA D1225: and the reason recorded with it. */
+.last-outcome,
+.last-reason {
   display: block;
   margin-top: 0.2rem;
   font-size: 0.8rem;

@@ -47,6 +47,7 @@ import com.example.hms.payload.dto.nurse.NurseHandoffCreateRequestDTO;
 import com.example.hms.payload.dto.nurse.NurseHandoffSummaryDTO;
 import com.example.hms.payload.dto.nurse.NurseInboxItemDTO;
 import com.example.hms.payload.dto.nurse.NurseMedicationAdministrationRequestDTO;
+import com.example.hms.payload.dto.nurse.MarDoseHistoryDTO;
 import com.example.hms.payload.dto.nurse.NurseMedicationTaskResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseOrderTaskResponseDTO;
 import com.example.hms.payload.dto.nurse.NurseTaskCompleteRequestDTO;
@@ -119,6 +120,8 @@ import jakarta.persistence.EntityNotFoundException;
 public class NurseTaskServiceImpl implements NurseTaskService {
     private static final String HOSPITAL_NOT_FOUND_KEY = "hospital.notFound";
     private static final String PATIENT_NOT_FOUND_KEY = "patient.notFound";
+    /** QA D1225: how many closed doses a MAR row carries back to the nurse. */
+    private static final int DOSE_HISTORY_LIMIT = 5;
 
 
     /* ── Constants ────────────────────────────────────────────────────── */
@@ -332,7 +335,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
 
             // Review of #975: the closed-dose history is read once per row and
             // answers the due time, the status and the last outcome.
-            Optional<MedicationAdministrationRecord> lastClosed = lastClosedDose(rx);
+            List<MedicationAdministrationRecord> closed = closedDoses(rx);
+            Optional<MedicationAdministrationRecord> lastClosed = closed.stream().findFirst();
             LocalDateTime dueTime = computeMedicationDueTime(rx, now, lastClosed);
             String marStatus = resolveMarStatus(dueTime, now);
             if (!isFilteredOut(statusFilter, marStatus)) {
@@ -340,7 +344,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                     allergies = patientAllergyRepository.findByPatient_Id(ctx.patientId());
                 }
                 boolean controlled = pharmacistVerificationService.isControlledSubstance(rx);
-                result.add(NurseMedicationTaskResponseDTO.builder()
+                result.add(withDoseHistory(NurseMedicationTaskResponseDTO.builder()
                     .id(rx.getId())
                     .patientId(ctx.patientId())
                     .patientName(ctx.displayName())
@@ -350,13 +354,12 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                     .routeCode(com.example.hms.service.emar.MedicationRoutes.canonical(rx.getRoute()))
                     .dueTime(dueTime)
                     .status(marStatus)
-                    .lastOutcome(lastClosed.map(r -> r.getStatus().name()).orElse(null))
                     .controlledSubstance(controlled)
                     .requiresPharmacistVerification(
                         pharmacistVerificationService.requiresVerification(rx, controlled))
                     .pharmacistVerified(pharmacistVerificationService.isVerified(rx))
                     .cdsAdvisories(allergyAdvisories(rx.getMedicationName(), allergies))
-                    .build());
+                    .build(), closed));
             }
         }
         return result;
@@ -509,7 +512,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             marRepository.save(marRecord);
 
             Patient patient = marRecord.getPatient();
-            return NurseMedicationTaskResponseDTO.builder()
+            return withDoseHistory(NurseMedicationTaskResponseDTO.builder()
                 .id(marRecord.getId())
                 .patientId(patient.getId())
                 .patientName(patient.getFullName())
@@ -522,7 +525,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
                 .witnessName(witnessName(marRecord.getWitnessUser()))
                 // QA D1080: the same catalogue-or-tick answer the GET gives (#978 rule).
                 .controlledSubstance(pharmacistVerificationService.isControlledSubstance(marRecord.getPrescription()))
-                .build();
+                .build(), closedDoses(marRecord.getPrescription()));
         }
 
         // Last resort: work with synthetic task list (backward-compatible)
@@ -1211,10 +1214,59 @@ public class NurseTaskServiceImpl implements NurseTaskService {
      * refused dose is never read as given.
      */
     private Optional<MedicationAdministrationRecord> lastClosedDose(Prescription rx) {
-        if (rx.getId() == null) return Optional.empty();
+        return closedDoses(rx).stream().findFirst();
+    }
+
+    /** Every closed (non-PENDING) dose of the prescription, newest slot first. */
+    private List<MedicationAdministrationRecord> closedDoses(Prescription rx) {
+        if (rx == null || rx.getId() == null) return List.of();
         return marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId()).stream()
             .filter(r -> r.getStatus() != MedicationAdministrationStatus.PENDING)
-            .findFirst();
+            .toList();
+    }
+
+    /**
+     * QA D1225 (round 24): the last outcome, its reason and the recent dose
+     * history on every MAR row the nurse reads — the list and each
+     * administer answer. The reasons the administer call requires (hold,
+     * refusal, early dose, five-rights override) were stored and shown on
+     * no screen. {@code closed} is newest first.
+     */
+    private NurseMedicationTaskResponseDTO withDoseHistory(
+        NurseMedicationTaskResponseDTO task, List<MedicationAdministrationRecord> closed
+    ) {
+        List<MarDoseHistoryDTO> history = closed.stream()
+            .limit(DOSE_HISTORY_LIMIT)
+            .map(this::toDoseHistory)
+            .toList();
+        task.setDoseHistory(history);
+        if (!history.isEmpty()) {
+            MarDoseHistoryDTO last = history.get(0);
+            task.setLastOutcome(last.getStatus());
+            task.setLastOutcomeAt(last.getRecordedAt());
+            task.setLastReason(last.getReason());
+            task.setLastGivenEarly(last.isGivenEarly());
+        }
+        return task;
+    }
+
+    private MarDoseHistoryDTO toDoseHistory(MedicationAdministrationRecord dose) {
+        String reason = dose.getReason() == null || dose.getReason().isBlank() ? null : dose.getReason().trim();
+        // A GIVEN row carries a reason only when it was given early (QA D1210):
+        // a held or refused row stores the nurse's reason in the same column.
+        boolean early = dose.getStatus() == MedicationAdministrationStatus.GIVEN && reason != null;
+        Staff by = dose.getAdministeredByStaff();
+        return MarDoseHistoryDTO.builder()
+            .id(dose.getId())
+            .status(dose.getStatus() != null ? dose.getStatus().name() : null)
+            .scheduledTime(dose.getScheduledTime())
+            .recordedAt(dose.getAdministeredAt())
+            .reason(reason)
+            .givenEarly(early)
+            .overrideReason(dose.getOverrideReason())
+            .administeredBy(by != null ? by.getFullName() : null)
+            .witnessName(witnessName(dose.getWitnessUser()))
+            .build();
     }
 
     /**
@@ -1452,7 +1504,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         log.info("MAR recorded: prescriptionId={}, status={}, fiveRights={}, nurse={}",
             rx.getId(), status, marRecord.getFiveRightsStatus(), nurseUserId);
 
-        return NurseMedicationTaskResponseDTO.builder()
+        return withDoseHistory(NurseMedicationTaskResponseDTO.builder()
             .requiresPharmacistVerification(pharmacistVerificationService.requiresVerification(rx))
             .pharmacistVerified(pharmacistVerificationService.isVerified(rx))
             .id(saved.getId())
@@ -1467,7 +1519,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .witnessName(witnessName(saved.getWitnessUser()))
             // QA D1080: the same catalogue-or-tick answer the GET gives (#978 rule).
             .controlledSubstance(pharmacistVerificationService.isControlledSubstance(rx))
-            .build();
+            .build(), closedDoses(rx));
     }
 
     /**
@@ -1503,7 +1555,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         resolveNurseStaff(nurseUserId, hospitalId).ifPresent(marRecord::setAdministeredByStaff);
         recordOverrideOnAdminister(marRecord, status, overrideReason);
         MedicationAdministrationRecord saved = marRepository.save(marRecord);
-        return NurseMedicationTaskResponseDTO.builder()
+        return withDoseHistory(NurseMedicationTaskResponseDTO.builder()
             .requiresPharmacistVerification(pharmacistVerificationService.requiresVerification(rx))
             .pharmacistVerified(pharmacistVerificationService.isVerified(rx))
             .id(saved.getId())
@@ -1518,7 +1570,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
             .witnessName(witnessName(saved.getWitnessUser()))
             // QA D1080: the same catalogue-or-tick answer the GET gives (#978 rule).
             .controlledSubstance(pharmacistVerificationService.isControlledSubstance(rx))
-            .build();
+            .build(), closedDoses(rx));
     }
 
     /**

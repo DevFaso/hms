@@ -75,6 +75,7 @@ import { offersHeadCircumference } from '../shared/patient-measures';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refusalReason } from '../shared/refusal-reason';
 import { ReasonDialogComponent } from '../shared/reason-dialog/reason-dialog.component';
+import { MarDoseHistoryComponent } from './mar-dose-history/mar-dose-history.component';
 import { earlyDoseRefusal } from './early-dose';
 type FilterMode = 'me' | 'unit' | 'all';
 type SectionType =
@@ -118,6 +119,7 @@ export function localInputToUtcIso(value: string | undefined | null): string | u
     CdsCardListComponent,
     WitnessPickerComponent,
     ReasonDialogComponent,
+    MarDoseHistoryComponent,
   ],
   templateUrl: './nurse-station.html',
   changeDetection: ChangeDetectionStrategy.Eager,

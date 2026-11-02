@@ -68,7 +68,8 @@ class SuperAdminOrganizationOverviewServiceImplTest {
             securityPolicyRepository,
             organizationSecurityService,
             staffService,
-            patientService
+            patientService,
+            com.example.hms.service.support.IsolatedReadsTestSupport.inline()
         );
     }
 

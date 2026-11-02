@@ -94,9 +94,16 @@
       <div class="msg-area">
         <!-- New Conversation Panel -->
         @if (showNewConversation()) {
-          <div class="new-conv-panel">
+          <!-- QA D1230: the panel takes the keyboard (its search field),
+               closes on Escape and gives the keyboard back to its opener. -->
+          <div
+            class="new-conv-panel"
+            role="region"
+            aria-labelledby="newConvTitle"
+            (keydown.escape)="closeNewConversation()"
+          >
             <div class="new-conv-header">
-              <h3>{{ 'CHAT.NEW_CONVERSATION' | translate }}</h3>
+              <h3 id="newConvTitle">{{ 'CHAT.NEW_CONVERSATION' | translate }}</h3>
               <button
                 class="btn-icon"
                 (click)="closeNewConversation()"
@@ -109,6 +116,7 @@
             <div class="new-conv-search">
               <span class="material-symbols-outlined search-icon">person_search</span>
               <input
+                appFocusOnRender
                 [attr.aria-label]="'CHAT.SEARCH_USERS' | translate"
                 type="text"
                 [placeholder]="'CHAT.SEARCH_USERS' | translate"

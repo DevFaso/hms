@@ -15,6 +15,7 @@ import { ToastService } from '../core/toast.service';
 import { OrgTextPipe } from '../shared/pipes/org-text.pipe';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { refusalReason } from '../shared/refusal-reason';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 
 /**
  * Org security policies + rules via the flat CRUD controllers
@@ -35,6 +36,8 @@ export class PoliciesTabComponent implements OnInit {
   private readonly orgService = inject(OrganizationService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  /** QA D1229: the in-app confirmation, never the browser's. */
+  private readonly confirmService = inject(ConfirmService);
 
   readonly policyTypes = SECURITY_POLICY_TYPES;
   readonly ruleTypes = SECURITY_RULE_TYPES;
@@ -178,8 +181,14 @@ export class PoliciesTabComponent implements OnInit {
     });
   }
 
-  deletePolicy(policy: SecurityPolicyResponse): void {
-    if (!confirm(this.translate.instant('ADMIN_GOV.POLICY_DELETE_CONFIRM'))) return;
+  async deletePolicy(policy: SecurityPolicyResponse): Promise<void> {
+    if (
+      !(await this.confirmService.ask({
+        titleKey: 'ADMIN_GOV.POLICY_DELETE_CONFIRM',
+        confirmKey: 'COMMON.DELETE',
+      }))
+    )
+      return;
     this.service.deletePolicy(policy.id).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('ADMIN_GOV.POLICY_DELETED'));
@@ -270,8 +279,14 @@ export class PoliciesTabComponent implements OnInit {
     });
   }
 
-  deleteRule(policy: SecurityPolicyResponse, rule: SecurityRuleResponse): void {
-    if (!confirm(this.translate.instant('ADMIN_GOV.RULE_DELETE_CONFIRM'))) return;
+  async deleteRule(policy: SecurityPolicyResponse, rule: SecurityRuleResponse): Promise<void> {
+    if (
+      !(await this.confirmService.ask({
+        titleKey: 'ADMIN_GOV.RULE_DELETE_CONFIRM',
+        confirmKey: 'COMMON.DELETE',
+      }))
+    )
+      return;
     this.service.deleteRule(rule.id).subscribe({
       next: () => {
         this.toast.success(this.translate.instant('ADMIN_GOV.RULE_DELETED'));

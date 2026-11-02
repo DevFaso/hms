@@ -41,6 +41,7 @@ import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { AuthorshipService } from '../shared/authorship.service';
 import { CANCEL_REASON_REQUIRED_KEY, isOrderCancellable } from '../shared/order-lifecycle';
 import { refuseFields } from '../shared/forms/invalid-fields';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 
 /** The cancellation reason's field (QA D1098), marked when it is refused. */
 const CANCEL_REASON_ID = 'imaging-cancel-reason';
@@ -128,6 +129,8 @@ export class ImagingComponent implements OnInit {
   private readonly roleContext = inject(RoleContextService);
   private readonly auth = inject(AuthService);
   private readonly translate = inject(TranslateService);
+  /** QA D1229: the in-app confirmation, never the browser's. */
+  private readonly confirmService = inject(ConfirmService);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   /** QA D1098: the shared rule for which orders still offer edit and cancel. */
   readonly isOrderCancellable = isOrderCancellable;
@@ -787,8 +790,14 @@ export class ImagingComponent implements OnInit {
    * edits, so it asks first — the backend refuses a re-sign outright and the
    * only way back is a corrected version.
    */
-  signReport(report: ImagingReportResponse): void {
-    if (!window.confirm(this.translate.instant('IMAGING.SIGN_CONFIRM'))) return;
+  async signReport(report: ImagingReportResponse): Promise<void> {
+    if (
+      !(await this.confirmService.ask({
+        titleKey: 'IMAGING.SIGN_CONFIRM',
+        confirmKey: 'IMAGING.SIGN_REPORT',
+      }))
+    )
+      return;
     this.signing.set(true);
     this.imagingService.signReport(report.id).subscribe({
       next: (signed) => {

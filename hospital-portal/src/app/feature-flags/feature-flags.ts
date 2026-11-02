@@ -13,6 +13,7 @@ import { HttpClient } from '@angular/common/http';
 import { ToastService } from '../core/toast.service';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { refusalReason } from '../shared/refusal-reason';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 
 interface FeatureFlag {
   key: string;
@@ -42,6 +43,8 @@ export class FeatureFlagsComponent implements OnInit {
   private readonly http = inject(HttpClient);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  /** QA D1229: the in-app confirmation, never the browser's. */
+  private readonly confirmService = inject(ConfirmService);
 
   loading = signal(true);
   flags = signal<FeatureFlag[]>([]);
@@ -123,15 +126,13 @@ export class FeatureFlagsComponent implements OnInit {
       });
   }
 
-  removeOverride(flag: FeatureFlag): void {
-    // A one-click delete on a platform-wide switch (D126): ask first.
-    if (
-      !globalThis.confirm(
-        this.translate.instant('FLAGS.REMOVE_OVERRIDE_CONFIRM', { key: flag.key }),
-      )
-    ) {
-      return;
-    }
+  async removeOverride(flag: FeatureFlag): Promise<void> {
+    // A one-click delete on a platform-wide switch (D126): ask first, in the app (QA D1229).
+    const confirmed = await this.confirmService.ask({
+      titleKey: 'FLAGS.REMOVE_OVERRIDE_CONFIRM',
+      params: { key: flag.key },
+    });
+    if (!confirmed) return;
     this.http
       .delete<Record<string, boolean>>(`/feature-flags/${encodeURIComponent(flag.key)}`)
       .subscribe({

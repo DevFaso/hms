@@ -436,6 +436,21 @@ describe('NurseStationComponent — two-tier polling', () => {
         route: 'PO',
         dueTime: '2030-01-01T10:00:00',
         status: 'DUE',
+        // QA D1225: the last dose was given early, with its reason.
+        lastOutcome: 'GIVEN',
+        lastGivenEarly: true,
+        lastReason: 'Douleur intense, avis du médecin',
+        doseHistory: [
+          {
+            id: 'd1',
+            status: 'GIVEN',
+            recordedAt: '2030-01-01T09:00:00',
+            reason: 'Douleur intense, avis du médecin',
+            givenEarly: true,
+            overrideReason: 'Bracelet illisible',
+          },
+          { id: 'd0', status: 'HELD', reason: 'Patient au bloc', givenEarly: false },
+        ],
       },
     ];
 
@@ -469,6 +484,27 @@ describe('NurseStationComponent — two-tier polling', () => {
       );
       expect(component.canRecordDose(rows[0] as never)).toBeFalse();
       expect(component.canRecordDose(rows[2] as never)).toBeTrue();
+    });
+
+    it('QA D1225: the row shows the early-dose reason and the dose history with every reason', () => {
+      const el = render();
+      expect(el.querySelector('[data-testid="med-last-early-m3"]')?.textContent).toContain(
+        'MAR_HISTORY.EARLY',
+      );
+      expect(el.querySelector('[data-testid="med-last-reason-m3"]')?.textContent).toContain(
+        'Douleur intense, avis du médecin',
+      );
+      const history = el.querySelector('[data-testid="mar-dose-history"]');
+      expect(history).not.toBeNull();
+      expect(el.querySelector('[data-testid="mar-dose-override-d1"]')?.textContent).toContain(
+        'Bracelet illisible',
+      );
+      expect(el.querySelector('[data-testid="mar-dose-reason-d0"]')?.textContent).toContain(
+        'Patient au bloc',
+      );
+      expect(el.querySelector('[data-testid="mar-dose-early-d0"]')).toBeNull();
+      // A row with no closed dose carries no history and no reason.
+      expect(el.querySelector('[data-testid="med-last-reason-m1"]')).toBeNull();
     });
 
     it('the route reads as its translated label, whatever way it was stored', () => {

@@ -7608,7 +7608,8 @@
     "PASSWORD_MANAGED_BY_SSO": "Su contraseña la gestiona su proveedor de inicio de sesión único.",
     "SAVE_NEW_PASSWORD": "Guardar la nueva contraseña",
     "FORGOT_PASSWORD_DESC": "¿Olvidó su contraseña actual? Podemos enviarle un enlace de restablecimiento por correo electrónico.",
-    "FORGOT_PASSWORD_DESC_SMS": "¿Olvidó su contraseña actual? Podemos enviarle un enlace de restablecimiento por SMS."
+    "FORGOT_PASSWORD_DESC_SMS": "¿Olvidó su contraseña actual? Podemos enviarle un enlace de restablecimiento por SMS.",
+    "EMAIL_CANNOT_CLEAR": "Una cuenta conserva su dirección de correo electrónico: escriba una nueva dirección o conserve la actual."
   },
   "RECEPTION": {
     "BOOK_RECALL": "Reservar cita",
@@ -12488,5 +12489,13 @@
     "LAB_LOAD_MORE": "Mostrar resultados más antiguos",
     "LAB_LOAD_FAILED": "No se pudieron cargar sus resultados de análisis.",
     "LAB_LOAD_MORE_FAILED": "No se pudieron cargar los resultados más antiguos. Inténtelo de nuevo."
+  },
+  "MAR_HISTORY": {
+    "TITLE": "Historial de dosis",
+    "EARLY": "Administrada antes de tiempo",
+    "REASON": "Motivo:",
+    "OVERRIDE": "Motivo de la excepción a los cinco correctos:",
+    "BY": "por {{name}}",
+    "WITNESS": "Testigo:"
   }
 }

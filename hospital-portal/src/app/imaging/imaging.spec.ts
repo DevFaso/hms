@@ -15,6 +15,7 @@ import { PatientService } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
 import { AuthService } from '../auth/auth.service';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 
 function mockOrder(overrides: Partial<ImagingOrderResponse> = {}): ImagingOrderResponse {
   return {
@@ -366,18 +367,18 @@ describe('ImagingComponent', () => {
     expect(imagingSpy.createReport).not.toHaveBeenCalled();
   });
 
-  it('signReport asks before signing and does nothing when declined', () => {
-    spyOn(window, 'confirm').and.returnValue(false);
-    component.signReport(mockReport());
+  it('signReport asks before signing and does nothing when declined', async () => {
+    spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(false);
+    await component.signReport(mockReport());
     expect(imagingSpy.signReport).not.toHaveBeenCalled();
   });
 
-  it('signReport signs and refreshes when confirmed', () => {
-    spyOn(window, 'confirm').and.returnValue(true);
+  it('signReport signs and refreshes when confirmed', async () => {
+    spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
     imagingSpy.getReportsByHospital.and.returnValue(of([]));
     const signed = mockReport({ reportStatus: 'FINAL', signed: true });
     imagingSpy.signReport.and.returnValue(of(signed));
-    component.signReport(mockReport());
+    await component.signReport(mockReport());
     expect(imagingSpy.signReport).toHaveBeenCalledWith('r1');
     expect(component.selectedReport()).toBe(signed);
     expect(toastSpy.success).toHaveBeenCalled();

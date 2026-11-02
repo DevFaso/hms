@@ -129,6 +129,25 @@ public class ImmunizationServiceImpl implements ImmunizationService {
                 .toList();
     }
 
+    /**
+     * QA D1212 (round 24): the proxy health summary read the grantor's
+     * immunizations through {@link #getImmunizationsByPatientId}, whose
+     * tenant-scoped {@code existsById} answered "not found" for a grantor
+     * registered only at another hospital than the proxy's. The patient's own
+     * record is read as labs, medications and vitals read it on the portal:
+     * the patient row unscoped (the caller already established whose record
+     * it is), every hospital's rows, nothing accounted as a disclosure.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public List<ImmunizationResponseDTO> getImmunizationsForPatientPortal(UUID patientId) {
+        Patient patient = patientRepository.findByIdUnscoped(patientId)
+                .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", patientId));
+        return immunizationRepository.findByPatient_IdOrderByAdministrationDateDesc(patient.getId()).stream()
+                .map(immunizationMapper::toResponseDTO)
+                .toList();
+    }
+
     @Override
     @Transactional(readOnly = true)
     public List<ImmunizationResponseDTO> getImmunizationsByVaccineCode(UUID patientId, String vaccineCode) {

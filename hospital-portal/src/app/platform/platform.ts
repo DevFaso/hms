@@ -35,6 +35,7 @@ import { OrgTextPipe } from '../shared/pipes/org-text.pipe';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { ModalDialogDirective } from '../shared/a11y/modal-dialog.directive';
 import { refusalReason } from '../shared/refusal-reason';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 
 /* ── View state types ── */
 
@@ -196,6 +197,7 @@ export class PlatformComponent implements OnInit {
   private readonly orgSvc = inject(OrganizationService);
   private readonly toast = inject(ToastService);
   private readonly translate = inject(TranslateService);
+  private readonly confirmService = inject(ConfirmService);
 
   /* ── Reactive state ── */
   activeView = signal<ActiveView>('dashboard');
@@ -713,16 +715,16 @@ export class PlatformComponent implements OnInit {
   }
 
   /** Deletes the link and its settings, after the user confirms the hard delete. */
-  unlinkHospital(row: HospitalLinkRow): void {
+  async unlinkHospital(row: HospitalLinkRow): Promise<void> {
     const svc = this.selectedService();
     if (!svc || !row.link) return;
-    if (
-      !window.confirm(
-        this.translate.instant('PLATFORM.CONFIRM_UNLINK', { hospital: row.hospitalName }),
-      )
-    ) {
-      return;
-    }
+    // QA D1229: the in-app confirmation, never the browser's.
+    const confirmed = await this.confirmService.ask({
+      titleKey: 'PLATFORM.CONFIRM_UNLINK',
+      params: { hospital: row.hospitalName },
+      confirmKey: 'PLATFORM.UNLINK',
+    });
+    if (!confirmed) return;
     this.setLinkBusy(svc.id, row.hospitalId, true);
     this.platformSvc.unlinkHospital(row.hospitalId, svc.id).subscribe({
       next: () => {

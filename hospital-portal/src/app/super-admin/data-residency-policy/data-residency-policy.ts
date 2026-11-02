@@ -9,6 +9,8 @@ import { OrganizationRegion } from '../../services/data-residency.model';
 import { RegionPolicyService } from '../../services/region-policy.service';
 import { RegionPolicyRow } from '../../services/region-policy.model';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { InlineSubFormDirective } from '../../shared/a11y/inline-sub-form.directive';
+import { InlineDiscardAskComponent } from '../../shared/a11y/inline-discard-ask.component';
 
 /**
  * QA D867: the export formats TenantExportPackager knows, shown by name.
@@ -31,7 +33,15 @@ interface EditState {
 @Component({
   selector: 'app-data-residency-policy',
   standalone: true,
-  imports: [FormsModule, RouterLink, TranslateModule, DatePipe, ServerTimePipe],
+  imports: [
+    FormsModule,
+    RouterLink,
+    TranslateModule,
+    DatePipe,
+    ServerTimePipe,
+    InlineSubFormDirective,
+    InlineDiscardAskComponent,
+  ],
   templateUrl: './data-residency-policy.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './data-residency-policy.scss',

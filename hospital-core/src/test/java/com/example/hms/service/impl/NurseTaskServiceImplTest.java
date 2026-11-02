@@ -4311,4 +4311,71 @@ class NurseTaskServiceImplTest {
         assertThat(tasks.get(0).isControlledSubstance()).isTrue();
     }
 
+
+    /* ── QA D1225 (round 24): the reason the administer call required is read back on the MAR row ── */
+
+    @Test
+    void D1225_theListCarriesTheEarlyDoseReasonAndTheHistory() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "q4h");
+        rx.setStatus(PrescriptionStatus.SIGNED);
+        rx.setCreatedAt(LocalDateTime.now().minusHours(9));
+        MedicationAdministrationRecord held = closedDose(rx, rx.getCreatedAt(), MedicationAdministrationStatus.HELD);
+        held.setReason("Patient au bloc");
+        MedicationAdministrationRecord early = givenAt(rx, rx.getCreatedAt().plusHours(4), LocalDateTime.now().minusMinutes(1));
+        early.setReason("Douleur intense, avis du médecin");
+        early.setOverrideReason("Bracelet illisible");
+
+        List<NurseMedicationTaskResponseDTO> tasks = marFor(UUID.randomUUID(), hospitalId, rx, null, early, held);
+
+        NurseMedicationTaskResponseDTO row = tasks.get(0);
+        assertThat(row.getLastOutcome()).isEqualTo("GIVEN");
+        assertThat(row.isLastGivenEarly()).isTrue();
+        assertThat(row.getLastReason()).isEqualTo("Douleur intense, avis du médecin");
+        assertThat(row.getDoseHistory()).extracting(com.example.hms.payload.dto.nurse.MarDoseHistoryDTO::getStatus)
+            .containsExactly("GIVEN", "HELD");
+        assertThat(row.getDoseHistory().get(0).getOverrideReason()).isEqualTo("Bracelet illisible");
+        assertThat(row.getDoseHistory().get(1).getReason()).isEqualTo("Patient au bloc");
+        assertThat(row.getDoseHistory().get(1).isGivenEarly()).as("a held dose is not 'given early'").isFalse();
+    }
+
+    @Test
+    void D1225_aDoseGivenOnTimeIsNotEarlyAndCarriesNoReason() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "q24h");
+        rx.setStatus(PrescriptionStatus.SIGNED);
+
+        List<NurseMedicationTaskResponseDTO> tasks = marFor(UUID.randomUUID(), hospitalId, rx, null,
+            closedDose(rx, rx.getCreatedAt(), MedicationAdministrationStatus.GIVEN));
+
+        assertThat(tasks.get(0).isLastGivenEarly()).isFalse();
+        assertThat(tasks.get(0).getLastReason()).isNull();
+        assertThat(tasks.get(0).getDoseHistory()).hasSize(1);
+    }
+
+    @Test
+    void D1225_theAdministerAnswerCarriesTheReasonItJustRecorded() {
+        UUID hospitalId = UUID.randomUUID();
+        Prescription rx = scheduledRx(hospitalId, "TID");
+        rx.setCreatedAt(LocalDateTime.now().minusHours(10));
+        when(prescriptionRepository.findByIdForUpdate(rx.getId())).thenReturn(Optional.of(rx));
+        MedicationAdministrationRecord previous = givenAt(rx, rx.getCreatedAt(), LocalDateTime.now().minusMinutes(2));
+        java.util.List<MedicationAdministrationRecord> rows = new java.util.ArrayList<>(List.of(previous));
+        when(marRepository.findByPrescription_IdOrderByScheduledTimeDesc(rx.getId())).thenAnswer(i -> List.copyOf(rows));
+        when(marRepository.save(any(MedicationAdministrationRecord.class))).thenAnswer(i -> {
+            MedicationAdministrationRecord saved = i.getArgument(0);
+            rows.add(0, saved);
+            return saved;
+        });
+        NurseMedicationAdministrationRequestDTO given = givenRequest();
+        given.setEarlyDoseReason("Départ au bloc");
+
+        NurseMedicationTaskResponseDTO answer =
+            service.recordMedicationAdministration(rx.getId(), UUID.randomUUID(), hospitalId, given);
+
+        assertThat(answer.getLastOutcome()).isEqualTo("GIVEN");
+        assertThat(answer.isLastGivenEarly()).isTrue();
+        assertThat(answer.getLastReason()).isEqualTo("Départ au bloc");
+        assertThat(answer.getDoseHistory()).hasSize(2);
+    }
 }

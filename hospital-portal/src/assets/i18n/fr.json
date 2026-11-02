@@ -7608,7 +7608,8 @@
     "PASSWORD_MANAGED_BY_SSO": "Votre mot de passe est géré par votre fournisseur d’authentification unique.",
     "SAVE_NEW_PASSWORD": "Enregistrer le nouveau mot de passe",
     "FORGOT_PASSWORD_DESC": "Mot de passe actuel oublié ? Nous pouvons vous envoyer un lien de réinitialisation par e-mail.",
-    "FORGOT_PASSWORD_DESC_SMS": "Mot de passe actuel oublié ? Nous pouvons vous envoyer un lien de réinitialisation par SMS."
+    "FORGOT_PASSWORD_DESC_SMS": "Mot de passe actuel oublié ? Nous pouvons vous envoyer un lien de réinitialisation par SMS.",
+    "EMAIL_CANNOT_CLEAR": "Un compte garde son adresse e-mail : saisissez une nouvelle adresse, ou gardez l’adresse actuelle."
   },
   "RECEPTION": {
     "BOOK_RECALL": "Prendre RDV",
@@ -12488,5 +12489,13 @@
     "LAB_LOAD_MORE": "Afficher les résultats plus anciens",
     "LAB_LOAD_FAILED": "Vos résultats d’examens n’ont pas pu être chargés.",
     "LAB_LOAD_MORE_FAILED": "Les résultats plus anciens n’ont pas pu être chargés. Réessayez."
+  },
+  "MAR_HISTORY": {
+    "TITLE": "Historique des doses",
+    "EARLY": "Donnée en avance",
+    "REASON": "Motif :",
+    "OVERRIDE": "Motif de la dérogation aux cinq vérifications :",
+    "BY": "par {{name}}",
+    "WITNESS": "Témoin :"
   }
 }

@@ -67,6 +67,8 @@ public class SuperAdminOrganizationOverviewServiceImpl implements SuperAdminOrga
     private final OrganizationSecurityService organizationSecurityService;
     private final StaffService staffService;
     private final PatientService patientService;
+    /** QA D1212 (round 24) class: a failed compliance read must not roll back the overview. */
+    private final com.example.hms.service.support.IsolatedReads isolatedReads;
 
     @Override
     public SuperAdminOrganizationsSummaryDTO getOrganizationsSummary() {
@@ -406,13 +408,19 @@ public class SuperAdminOrganizationOverviewServiceImpl implements SuperAdminOrga
             .build();
     }
 
+    /**
+     * Best effort: an organisation whose compliance cannot be resolved reads
+     * as having no violations listed. QA D1212 (round 24) class: the read runs
+     * in its own transaction. A try/catch around the transactional call let a
+     * failure mark the overview's own transaction rollback-only, so the whole
+     * summary answered 500 at commit.
+     */
     private List<String> fetchComplianceViolations(UUID organizationId) {
-        try {
-            return organizationSecurityService.validateSecurityCompliance(organizationId);
-        } catch (RuntimeException ex) {
-            log.warn("Failed to resolve compliance violations for organization {}: {}", organizationId, ex.getMessage());
-            return List.of();
-        }
+        java.util.concurrent.atomic.AtomicReference<List<String>> out =
+            new java.util.concurrent.atomic.AtomicReference<>(List.of());
+        isolatedReads.attempt("organization compliance violations",
+            () -> out.set(organizationSecurityService.validateSecurityCompliance(organizationId)));
+        return out.get();
     }
 
     private String resolveCompliancePosture(List<String> violations) {

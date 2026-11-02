@@ -93,6 +93,14 @@
               </button>
             </header>
 
+            <!-- QA D1225: the doses already recorded on this row, with their
+                 reasons (held, refused, given early, five-rights override). -->
+            @if (task.doseHistory?.length) {
+              <section class="emar__history" data-testid="emar-dose-history">
+                <app-mar-dose-history [doses]="task.doseHistory ?? []" [expanded]="true" />
+              </section>
+            }
+
             <!-- Pharmacist verification outstanding (Tier 2 item 33). Stated
                  before the scan steps, not next to the disabled button: the
                  nurse should know the dose cannot be given before they spend

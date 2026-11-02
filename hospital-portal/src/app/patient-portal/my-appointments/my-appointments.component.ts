@@ -292,7 +292,11 @@ export class MyAppointmentsComponent implements OnInit {
   openReschedule(appt: PortalAppointment): void {
     this.rescheduleTarget.set(appt);
     this.rescheduleDate = appt.date;
-    this.rescheduleStartTime = appt.rawStartTime;
+    // QA D1227 (round 24): the slot is picked from the clinician's FREE slots.
+    // Presetting the visit's own time (never one of them) hid it behind
+    // "Choisissez un créneau libre", passed the required check, and an empty
+    // submit sent the old slot and was refused as "just taken".
+    this.rescheduleStartTime = '';
     this.rescheduleReason = '';
     this.rescheduleError.set(null);
     this.loadRescheduleSlots();
@@ -308,6 +312,10 @@ export class MyAppointmentsComponent implements OnInit {
       next: (slots) => {
         this.rescheduleSlots.set(slots);
         this.rescheduleSlotsLoaded.set(true);
+        // QA D1227: a value the select does not offer is no choice at all.
+        if (!slots.some((s) => s.startTime === this.rescheduleStartTime)) {
+          this.rescheduleStartTime = '';
+        }
       },
       error: (err) => {
         this.rescheduleSlotsLoaded.set(true);

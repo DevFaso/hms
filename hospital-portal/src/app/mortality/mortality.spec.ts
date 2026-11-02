@@ -14,6 +14,7 @@ import {
 import { PatientResponse } from '../services/patient.service';
 import { ToastService } from '../core/toast.service';
 import { RoleContextService } from '../core/role-context.service';
+import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
 
 function mockDeath(overrides: Partial<DeathRecordResponse> = {}): DeathRecordResponse {
   return {
@@ -103,28 +104,28 @@ describe('MortalityComponent', () => {
     expect(component.register()).toBeNull();
   });
 
-  it('asks before recording a death and does nothing when declined', () => {
-    spyOn(window, 'confirm').and.returnValue(false);
+  it('asks before recording a death and does nothing when declined', async () => {
+    spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(false);
     component.openRecord();
     component.form.patientId = 'p1';
     component.form.diedAt = '2026-08-24T10:00';
     component.form.immediateCause = 'Sepsis';
-    component.submitRecord();
+    await component.submitRecord();
     expect(mortalitySpy.recordDeath).not.toHaveBeenCalled();
   });
 
-  it('does not submit without a patient, a time, or an immediate cause', () => {
-    spyOn(window, 'confirm').and.returnValue(true);
+  it('does not submit without a patient, a time, or an immediate cause', async () => {
+    spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
     component.openRecord();
     component.form.patientId = 'p1';
     component.form.diedAt = '';
     component.form.immediateCause = 'Sepsis';
-    component.submitRecord();
+    await component.submitRecord();
     expect(mortalitySpy.recordDeath).not.toHaveBeenCalled();
   });
 
-  it('records a death and reports what the cascade closed', () => {
-    spyOn(window, 'confirm').and.returnValue(true);
+  it('records a death and reports what the cascade closed', async () => {
+    spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
     const response: RecordDeathResponse = {
       deathRecord: mockDeath(),
       closure: {
@@ -140,7 +141,7 @@ describe('MortalityComponent', () => {
     component.form.patientId = 'p1';
     component.form.diedAt = '2026-08-24T10:00';
     component.form.immediateCause = '  Sepsis  ';
-    component.submitRecord();
+    await component.submitRecord();
 
     const [payload] = mortalitySpy.recordDeath.calls.mostRecent().args;
     expect(payload.immediateCause).toBe('Sepsis');
@@ -152,8 +153,8 @@ describe('MortalityComponent', () => {
     expect(component.lastClosure()?.appointmentsCancelled).toBe(3);
   });
 
-  it('omits the maternal timing when the death is not maternal', () => {
-    spyOn(window, 'confirm').and.returnValue(true);
+  it('omits the maternal timing when the death is not maternal', async () => {
+    spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
     mortalitySpy.recordDeath.and.returnValue(
       of({ deathRecord: mockDeath(), closure: {} } as RecordDeathResponse),
     );
@@ -162,14 +163,14 @@ describe('MortalityComponent', () => {
     component.form.diedAt = '2026-08-24T10:00';
     component.form.immediateCause = 'Sepsis';
     component.form.maternalDeath = false;
-    component.submitRecord();
+    await component.submitRecord();
 
     const [payload] = mortalitySpy.recordDeath.calls.mostRecent().args;
     expect(payload.maternalDeathTiming).toBeUndefined();
   });
 
-  it('sends the maternal timing when the death is maternal', () => {
-    spyOn(window, 'confirm').and.returnValue(true);
+  it('sends the maternal timing when the death is maternal', async () => {
+    spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
     mortalitySpy.recordDeath.and.returnValue(
       of({ deathRecord: mockDeath(), closure: {} } as RecordDeathResponse),
     );
@@ -179,20 +180,20 @@ describe('MortalityComponent', () => {
     component.form.immediateCause = 'Postpartum haemorrhage';
     component.form.maternalDeath = true;
     component.form.maternalDeathTiming = 'WITHIN_42_DAYS_POSTPARTUM';
-    component.submitRecord();
+    await component.submitRecord();
 
     const [payload] = mortalitySpy.recordDeath.calls.mostRecent().args;
     expect(payload.maternalDeathTiming).toBe('WITHIN_42_DAYS_POSTPARTUM');
   });
 
-  it('reports a rejected recording rather than pretending it worked', () => {
-    spyOn(window, 'confirm').and.returnValue(true);
+  it('reports a rejected recording rather than pretending it worked', async () => {
+    spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
     mortalitySpy.recordDeath.and.returnValue(throwError(() => new Error('409')));
     component.openRecord();
     component.form.patientId = 'p1';
     component.form.diedAt = '2026-08-24T10:00';
     component.form.immediateCause = 'Sepsis';
-    component.submitRecord();
+    await component.submitRecord();
 
     expect(toastSpy.error).toHaveBeenCalled();
     expect(component.recording()).toBeFalse();

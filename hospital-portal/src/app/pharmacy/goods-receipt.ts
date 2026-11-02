@@ -16,6 +16,11 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { localDateString } from '../shared/date-utils';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 
+/** QA D1233: how many recent lots the receipt page lists. */
+const RECENT_LOTS = 20;
+/** Newest received first; same-day receipts by when they were recorded. */
+const RECENT_LOTS_SORT = ['receivedDate,desc', 'createdAt,desc'] as const;
+
 @Component({
   selector: 'app-goods-receipt',
   standalone: true,
@@ -95,53 +100,26 @@ export class GoodsReceiptComponent implements OnInit {
     });
   }
 
+  /**
+   * QA D1233 (round 24): the newest lots received at the pharmacy, across
+   * every item, in one read sorted by the server. This used to read the
+   * first ten inventory items and the lots of the first FIVE of them, so a
+   * lot of the sixth item (Artéméther-luméfantrine, just received) never
+   * appeared.
+   */
   private loadRecentLots(): void {
     this.lotsLoading.set(true);
-    // Load lots for each inventory item — for display we use the first inventory item
-    // In practice, get the most recent stock lots across items for this pharmacy
-    this.svc.listInventoryByPharmacy(this.selectedPharmacyId, 0, 10).subscribe({
-      next: (res) => {
-        const items = res?.data?.content ?? [];
-        if (items.length > 0) {
-          // Load lots from the first few items
-          this.loadLotsForItems(items.slice(0, 5));
-        } else {
-          this.recentLots.set([]);
-          this.lotsLoading.set(false);
-        }
-      },
-      error: () => {
-        this.lotsLoading.set(false);
-      },
-    });
-  }
-
-  private loadLotsForItems(items: InventoryItemResponse[]): void {
-    const allLots: StockLotResponse[] = [];
-    let remaining = items.length;
-
-    items.forEach((item) => {
-      this.svc.listLotsByInventoryItem(item.id).subscribe({
+    this.svc
+      .listLotsByPharmacy(this.selectedPharmacyId, 0, RECENT_LOTS, RECENT_LOTS_SORT)
+      .subscribe({
         next: (res) => {
-          const lots = res?.data?.content ?? [];
-          allLots.push(...lots);
-          remaining--;
-          if (remaining === 0) {
-            // Sort by received date desc
-            allLots.sort((a, b) => (b.receivedDate ?? '').localeCompare(a.receivedDate ?? ''));
-            this.recentLots.set(allLots.slice(0, 20));
-            this.lotsLoading.set(false);
-          }
+          this.recentLots.set(res?.data?.content ?? []);
+          this.lotsLoading.set(false);
         },
         error: () => {
-          remaining--;
-          if (remaining === 0) {
-            this.recentLots.set(allLots);
-            this.lotsLoading.set(false);
-          }
+          this.lotsLoading.set(false);
         },
       });
-    });
   }
 
   openReceiveForm(): void {

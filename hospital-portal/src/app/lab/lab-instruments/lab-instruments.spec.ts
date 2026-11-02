@@ -8,6 +8,7 @@ import { AuthService } from '../../auth/auth.service';
 import { LabInstrumentResponse } from '../../services/lab-instrument.service';
 import { PagedResponse } from '../../services/staff.service';
 import { ToastService } from '../../core/toast.service';
+import { ConfirmService } from '../../shared/confirm-dialog/confirm.service';
 
 function mockInstrument(overrides: Partial<LabInstrumentResponse> = {}): LabInstrumentResponse {
   return {
@@ -293,14 +294,14 @@ describe('LabInstrumentsComponent', () => {
     expect(toast.error).toHaveBeenCalledWith('LAB_INSTRUMENTS.SAVE_ERROR');
   });
 
-  it('should deactivate instrument', () => {
+  it('should deactivate instrument', async () => {
     fixture.detectChanges();
     flushInstruments();
 
-    spyOn(globalThis, 'confirm').and.returnValue(true);
+    spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
 
     const inst = component.instruments()[0];
-    component.deactivate(inst);
+    await component.deactivate(inst);
 
     const req = httpMock.expectOne(
       (r) => r.url.includes('/lab/instruments/inst-1') && r.method === 'DELETE',
@@ -311,26 +312,26 @@ describe('LabInstrumentsComponent', () => {
     flushInstruments();
   });
 
-  it('should not deactivate if user cancels confirm', () => {
+  it('should not deactivate if user cancels confirm', async () => {
     fixture.detectChanges();
     flushInstruments();
 
-    spyOn(globalThis, 'confirm').and.returnValue(false);
+    spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(false);
 
     const inst = component.instruments()[0];
-    component.deactivate(inst);
+    await component.deactivate(inst);
 
     // No HTTP request should fire
   });
 
-  it('should handle deactivate error', () => {
+  it('should handle deactivate error', async () => {
     fixture.detectChanges();
     flushInstruments();
 
-    spyOn(globalThis, 'confirm').and.returnValue(true);
+    spyOn(TestBed.inject(ConfirmService), 'ask').and.resolveTo(true);
 
     const inst = component.instruments()[0];
-    component.deactivate(inst);
+    await component.deactivate(inst);
 
     const req = httpMock.expectOne((r) => r.method === 'DELETE');
     req.error(new ProgressEvent('error'));
