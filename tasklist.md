@@ -5729,3 +5729,18 @@ ships*, not for building — and check the shipped surface before trusting a
   Found while adding `HmsChatTransportErrors` (which does comply, in both alert
   files). Not fixed in #1013 because it is an unrelated docs pass; worth doing
   with a guard asserting the convention, so it stops drifting.
+- **No signal for a silent or unroutable chat transport (PR #1013):** `/ws-chat` is
+  excluded from the burn-rate SLO and the aggregate latency rules (its held-open
+  SockJS connections otherwise destroy every percentile), and the compensating
+  `HmsChatTransportErrors` can only see 5xx on requests that reached a handler.
+  Three failure modes therefore have no automatic signal: a fleet-wide ticket
+  expiry (401s are written inside `JwtAuthenticationFilter` and carry
+  `uri="UNKNOWN"`), a mapping that stopped routing (`uri="NOT_FOUND"`), and a
+  silent transport under the alert's rate floor. A blackbox probe cannot close
+  this — `SecurityConfig` ends in `anyRequest().authenticated()`, so a deleted
+  SockJS mapping answers 401 exactly like a healthy one (a 200-or-401 probe was
+  written and then removed in #1013 for precisely that reason). A real fix needs
+  either a probe that can mint a ws ticket, or a client-side heartbeat the portal
+  reports. Documented under `HmsChatTransportErrors` in
+  `docs/runbooks/grafana-observability.md` so the on-call does not read the
+  alert's silence as health.

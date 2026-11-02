@@ -217,5 +217,9 @@ groups:
           service: hms-backend
         annotations:
           summary: "HMS chat transport failing (>25% 5xx)"
-          description: "More than a quarter of /ws-chat requests that reached a handler returned 5xx. Clinical chat is degraded for every connected client, and this endpoint is excluded from the burn-rate SLO. Chat can also be broken without this firing — see the runbook."
+          description: >-
+            More than a quarter of /ws-chat requests that reached a handler
+            returned 5xx. Clinical chat is degraded for every connected client,
+            and this endpoint is excluded from the burn-rate SLO. Chat can also
+            be broken WITHOUT this firing — see the runbook.
           runbook_url: "https://github.com/DevFaso/hms/blob/main/docs/runbooks/grafana-observability.md#hmschattransporterrors"

@@ -94,12 +94,21 @@ class DashboardTransportExclusionTest {
     /**
      * A positive pin on uri — the panel or rule has chosen its endpoints deliberately.
      *
-     * <p>Matches both {@code uri=} and {@code uri=~}. The endpoint deep-dive uses the exact form
-     * on purpose: its values come from {@code label_values} and are Spring patterns, so
-     * {@code uri=~"$uri"} would hand PromQL {@code /ws-chat/**} or {@code /**} verbatim, and
-     * {@code **} is a bad repetition operator in RE2 — a parse error on every panel.
+     * <p>Captures the pinned pattern, because the pin has to be inspected rather than merely
+     * noticed. {@code uri=~"$uri"} against a variable whose All option interpolates to
+     * {@code .*} is not a choice of endpoints at all: it is an application-wide aggregate wearing
+     * a pin, with the 50s samples back in — the exact shape this change fixed in the deep-dive.
+     * A bare {@code uri=~} exemption would let it return with every test green.
+     *
+     * <p>Both operators are matched. The deep-dive uses the exact form on purpose: its values come
+     * from {@code label_values} and are Spring patterns, so the regex form would hand PromQL
+     * {@code /ws-chat/**} or {@code /**} verbatim, and {@code **} is a bad repetition operator in
+     * RE2 — a parse error on every panel.
      */
-    private static final Pattern URI_PIN = Pattern.compile("uri\\s*=~?");
+    private static final Pattern URI_PIN = Pattern.compile("uri\\s*=(~?)\\s*\"([^\"]*)\"");
+
+    /** A pattern that pins nothing: it admits every endpoint, transport included. */
+    private static final Pattern MATCH_ALL = Pattern.compile("|\\.\\*|\\.\\+|\\(\\?s\\)\\.\\*");
 
     /**
      * Regex constructs RE2 does not implement, and {@code java.util.regex} does.
@@ -182,7 +191,7 @@ class DashboardTransportExclusionTest {
             JsonNode root = mapper.readTree(Files.readString(file));
             String name = file.getFileName().toString();
 
-            collect(root, name, null, problems);
+            collect(root, name, null, wildcardVariables(root), problems);
 
             // Checked against the QUERIES, not the raw file text. A dashboard is entitled to
             // mention $exclude_uri in a panel or variable description — the endpoint deep-dive
@@ -220,6 +229,16 @@ class DashboardTransportExclusionTest {
         assertThat(patterns)
             .as("no exclusion pattern found to check — the guard would be vacuous")
             .hasSizeGreaterThan(1);
+
+        // Every declared default must be the SAME pattern the recording rules hard-code. Checking
+        // only that each matches the transport would let the dashboards and the rules drift apart
+        // — a dashboard that also excluded, say, /actuator would disagree with the alert about the
+        // very SLO it displays, which is the third property this class exists to pin.
+        assertThat(patterns)
+            .as("every dashboard's $%s default must equal the literal the recording rules use "
+                + "(%s), or a dashboard and the alert it mirrors compute different SLIs",
+                VARIABLE, TRANSPORT_PATTERN)
+            .containsOnly(TRANSPORT_PATTERN);
 
         for (String pattern : patterns) {
             // Prometheus matches labels with RE2, not java.util.regex, and the two disagree in
@@ -344,6 +363,11 @@ class DashboardTransportExclusionTest {
      *                 literal in a recording rule
      */
     private static void check(String expr, String where, String required, List<Finding> out) {
+        check(expr, where, required, Set.of(), out);
+    }
+
+    private static void check(String expr, String where, String required,
+                              Set<String> wildcardVariables, List<Finding> out) {
         // Decided for the whole expression, never per selector. A per-URI 5xx RATIO has two
         // selectors — a numerator carrying status=~"5.." and a denominator carrying no status at
         // all. Judging each on its own would forbid the exclusion on the numerator and demand it
@@ -367,7 +391,7 @@ class DashboardTransportExclusionTest {
         Matcher selectors = METRIC_SELECTOR.matcher(expr);
         while (selectors.find()) {
             String labels = selectors.group(2);
-            if (URI_PIN.matcher(labels).find()) {
+            if (isRealPin(labels, wildcardVariables)) {
                 continue;
             }
             judge(labels.contains(required), DURATION_SUFFIXES.contains(selectors.group(1)),
@@ -412,6 +436,34 @@ class DashboardTransportExclusionTest {
         }
     }
 
+    /**
+     * True when a {@code uri} matcher really narrows the series, so the exclusion is unnecessary.
+     *
+     * <p>An exact match always does. A regex match does only if its pattern is not a match-all and
+     * does not interpolate a variable that can become one.
+     */
+    private static boolean isRealPin(String labels, Set<String> wildcardVariables) {
+        Matcher pin = URI_PIN.matcher(labels);
+        while (pin.find()) {
+            boolean regex = !pin.group(1).isEmpty();
+            String pattern = pin.group(2);
+            if (!regex) {
+                return true;
+            }
+            if (MATCH_ALL.matcher(pattern).matches()) {
+                continue;
+            }
+            String variable = pattern.startsWith("$")
+                ? pattern.substring(1).replaceAll("[{}]", "")
+                : null;
+            if (variable != null && wildcardVariables.contains(variable)) {
+                continue;
+            }
+            return true;
+        }
+        return false;
+    }
+
     /** True when the expression breaks results down by uri, via {@code by (...)} and not {@code without}. */
     private static boolean groupsByUri(String expr) {
         Matcher groupings = BY_GROUPING.matcher(expr);
@@ -436,6 +488,11 @@ class DashboardTransportExclusionTest {
     }
 
     private static void collect(JsonNode node, String file, String title, List<Finding> out) {
+        collect(node, file, title, Set.of(), out);
+    }
+
+    private static void collect(JsonNode node, String file, String title,
+                                Set<String> wildcardVariables, List<Finding> out) {
         if (node.isObject()) {
             String panel = node.hasNonNull("title") ? node.get("title").asText() : title;
 
@@ -445,15 +502,34 @@ class DashboardTransportExclusionTest {
                     continue;
                 }
                 check(expr, file + " / " + (panel == null ? "(untitled)" : panel),
-                    EXCLUSION_VAR, out);
+                    EXCLUSION_VAR, wildcardVariables, out);
             }
 
             node.properties().stream()
                 .filter(e -> !"targets".equals(e.getKey()))
-                .forEach(e -> collect(e.getValue(), file, panel, out));
+                .forEach(e -> collect(e.getValue(), file, panel, wildcardVariables, out));
         } else if (node.isArray()) {
-            node.forEach(child -> collect(child, file, title, out));
+            node.forEach(child -> collect(child, file, title, wildcardVariables, out));
         }
+    }
+
+    /**
+     * Template variables that can interpolate to a match-all, so a {@code uri=~} on one is not a
+     * pin. An {@code includeAll} variable gets {@code allValue} — or {@code .*} when none is set.
+     */
+    private static Set<String> wildcardVariables(JsonNode root) {
+        Set<String> wildcards = new java.util.HashSet<>();
+        for (JsonNode v : root.path("templating").path("list")) {
+            String allValue = v.path("allValue").asText("");
+            boolean includeAll = v.path("includeAll").asBoolean(false);
+            boolean currentIsAll = MATCH_ALL.matcher(
+                v.path("current").path("value").asText("")).matches();
+            if ((includeAll && (allValue.isEmpty() || MATCH_ALL.matcher(allValue).matches()))
+                    || currentIsAll) {
+                wildcards.add(v.path("name").asText());
+            }
+        }
+        return wildcards;
     }
 
     /** True when some {@code targets[].expr} interpolates the variable. */

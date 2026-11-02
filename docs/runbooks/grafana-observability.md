@@ -268,9 +268,19 @@ browser tab page the on-call engineer.
 - **A silent transport.** The rate floor that stops this firing on an idle window
   also means no traffic, no alert.
 
-For all three, the signals are `HmsBackendNoTraffic`, `HmsTargetDown`, and
-clients reporting chat is down. If that happens while the chat metrics look
-clean, this is the shape to suspect; go straight to step 3.
+**Nothing covers those three automatically, and it is worth being blunt about it.**
+`HmsBackendNoTraffic` watches an application-wide unfiltered total, so a dead
+`/ws-chat` listener with the API still serving keeps it well above zero;
+`HmsTargetDown` watches scrape targets, not endpoints. A blackbox probe cannot
+help either — `SecurityConfig` ends in `anyRequest().authenticated()`, so
+authorization answers 401 on the path pattern before a handler is resolved, and a
+deleted SockJS mapping answers 401 exactly like a healthy one.
+
+So the signal for all three is a human: clients reporting chat is down while
+these metrics look clean. Treat that report as authoritative over this alert's
+silence and go to step 3. Closing that gap properly needs a probe that can mint a
+ws ticket, or a client-side heartbeat metric — neither exists today, and
+`tasklist.md` carries it as standing debt.
 
 **Why it has its own alert.** `/ws-chat` is SockJS, and a healthy connection is
 held open for 25-50 seconds. Micrometer records that as request *duration*, so
