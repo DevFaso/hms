@@ -374,7 +374,8 @@ public class NurseTaskController {
 
     @GetMapping("/inbox")
     @PreAuthorize("hasAnyAuthority('ROLE_NURSE','ROLE_MIDWIFE','ROLE_DOCTOR','ROLE_SUPER_ADMIN')")
-    @Operation(summary = "Nurse communication inbox — recent clinical notifications")
+    @Operation(summary = "Nurse communication inbox — every unread notification, newest first, then the"
+        + " latest read ones (limit: read history length, default 20, at most 50; QA D1295)")
     public ResponseEntity<java.util.List<NurseInboxItemDTO>> getNurseInbox(
         @RequestParam(name = "limit", required = false) Integer limit,
         Authentication auth

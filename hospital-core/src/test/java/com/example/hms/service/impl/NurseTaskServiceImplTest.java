@@ -2465,14 +2465,49 @@ class NurseTaskServiceImplTest {
             .recipientUsername("nurse1")
             .build();
 
-        when(notificationRepository.findByRecipientUsername(eq("nurse1"), any(Pageable.class)))
-            .thenReturn(new PageImpl<>(List.of(n)));
+        when(notificationRepository.findByRecipientUsernameAndReadOrderByCreatedAtDesc("nurse1", false))
+            .thenReturn(List.of(n));
+        when(notificationRepository.findByRecipientUsernameAndRead(eq("nurse1"), eq(true), any(Pageable.class)))
+            .thenReturn(Page.empty());
 
         List<NurseInboxItemDTO> result = service.getNurseInboxItems("nurse1", 10);
 
         assertThat(result).hasSize(1);
         assertThat(result.get(0).getMessage()).isEqualTo("New order");
         assertThat(result.get(0).isRead()).isFalse();
+    }
+
+    /**
+     * QA D1295 (round 28, patient safety): the inbox read 20 rows with no
+     * order and cut today's NEWS2 16 escalation. Every unread item comes back,
+     * however many, newest first; the limit bounds only the read history,
+     * which follows, asked newest first from the database.
+     */
+    @Test
+    void getNurseInboxItemsReturnsEveryUnreadItemNewestFirstThenTheReadHistory_D1295() {
+        LocalDateTime now = LocalDateTime.now();
+        List<Notification> unread = new java.util.ArrayList<>();
+        for (int i = 0; i < 41; i++) {
+            unread.add(Notification.builder().id(UUID.randomUUID()).message("unread " + i).read(false)
+                .createdAt(now.minusMinutes(i)).recipientUsername("nurse.a").build());
+        }
+        Notification readOne = Notification.builder().id(UUID.randomUUID()).message("seen").read(true)
+            .createdAt(now.plusMinutes(1)).recipientUsername("nurse.a").build();
+        when(notificationRepository.findByRecipientUsernameAndReadOrderByCreatedAtDesc("nurse.a", false))
+            .thenReturn(unread);
+        org.mockito.ArgumentCaptor<Pageable> asked = org.mockito.ArgumentCaptor.forClass(Pageable.class);
+        when(notificationRepository.findByRecipientUsernameAndRead(eq("nurse.a"), eq(true), asked.capture()))
+            .thenReturn(new PageImpl<>(List.of(readOne)));
+
+        List<NurseInboxItemDTO> result = service.getNurseInboxItems("nurse.a", 20);
+
+        assertThat(result).hasSize(42);
+        assertThat(result.get(0).getMessage()).isEqualTo("unread 0");
+        assertThat(result.subList(0, 41)).noneMatch(NurseInboxItemDTO::isRead);
+        assertThat(result.get(41).getMessage()).isEqualTo("seen");
+        assertThat(asked.getValue().getPageSize()).isEqualTo(20);
+        assertThat(asked.getValue().getSort()).isEqualTo(NurseTaskServiceImpl.INBOX_NEWEST_FIRST);
+        assertThat(asked.getValue().getSort().getOrderFor("createdAt").isDescending()).isTrue();
     }
 
     /**
@@ -2491,8 +2526,10 @@ class NurseTaskServiceImplTest {
             .id(UUID.randomUUID()).message("Score NEWS2 7 (ÉLEVÉ) pour Drissa Konaté : …")
             .messageKey("news2.escalation.high").messageArgs(List.of(7, "Drissa Konaté", 15))
             .createdAt(LocalDateTime.now()).recipientUsername("nurse.b").build();
-        when(notificationRepository.findByRecipientUsername(eq("nurse.b"), any(Pageable.class)))
-            .thenReturn(new PageImpl<>(List.of(news2)));
+        when(notificationRepository.findByRecipientUsernameAndReadOrderByCreatedAtDesc("nurse.b", false))
+            .thenReturn(List.of(news2));
+        when(notificationRepository.findByRecipientUsernameAndRead(eq("nurse.b"), eq(true), any(Pageable.class)))
+            .thenReturn(Page.empty());
         org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.forLanguageTag(language));
         try {
             assertThat(service.getNurseInboxItems("nurse.b", 10).get(0).getMessage()).startsWith(expected);

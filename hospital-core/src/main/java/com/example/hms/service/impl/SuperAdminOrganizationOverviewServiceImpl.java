@@ -29,6 +29,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -56,6 +57,8 @@ import static java.util.function.Predicate.not;
 @Transactional(readOnly = true)
 public class SuperAdminOrganizationOverviewServiceImpl implements SuperAdminOrganizationOverviewService {
 
+    /** QA D1295 class: the capped staff and patient previews, oldest record first (stable across calls). */
+    private static final Sort OLDEST_FIRST = Sort.by("createdAt", "id");
     private static final int ALERT_DAYS_WARNING = 30;
     private static final int ALERT_DAYS_CRITICAL = 7;
     private static final String SEVERITY_CRITICAL = "critical";
@@ -207,7 +210,7 @@ public class SuperAdminOrganizationOverviewServiceImpl implements SuperAdminOrga
         List<StaffSummaryDTO> staffSummaries = List.of();
         long staffCount = 0L;
         if (context.includeStaff()) {
-            PageRequest staffPageRequest = PageRequest.of(0, context.staffLimit());
+            PageRequest staffPageRequest = PageRequest.of(0, context.staffLimit(), OLDEST_FIRST);
             Page<StaffResponseDTO> staffPage = Boolean.TRUE.equals(context.activeOnly())
                 ? staffService.getStaffByHospitalIdAndActiveTrue(hospital.getId(), staffPageRequest)
                 : staffService.getStaffByHospitalId(hospital.getId(), staffPageRequest);
@@ -220,7 +223,7 @@ public class SuperAdminOrganizationOverviewServiceImpl implements SuperAdminOrga
         List<PatientSummaryDTO> patientSummaries = List.of();
         long patientCount = 0L;
         if (context.includePatients()) {
-            PageRequest patientPageRequest = PageRequest.of(0, context.patientLimit());
+            PageRequest patientPageRequest = PageRequest.of(0, context.patientLimit(), OLDEST_FIRST);
             Page<PatientResponseDTO> patientPage = patientService.getPatientPageByHospital(
                 hospital.getId(),
                 context.activeOnly(),

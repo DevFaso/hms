@@ -122,6 +122,9 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     private static final String PATIENT_NOT_FOUND_KEY = "patient.notFound";
     /** QA D1225: how many closed doses a MAR row carries back to the nurse. */
     private static final int DOSE_HISTORY_LIMIT = 5;
+    /** QA D1295: the inbox's read history, newest first (the id breaks a tie). */
+    public static final org.springframework.data.domain.Sort INBOX_NEWEST_FIRST =
+        org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt", "id");
 
 
     /* ── Constants ────────────────────────────────────────────────────── */
@@ -2167,16 +2170,22 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     @Override
     public List<NurseInboxItemDTO> getNurseInboxItems(String nurseUsername, int limit) {
         if (nurseUsername == null || nurseUsername.isBlank()) return List.of();
-        int effectiveLimit = Math.clamp(limit, 1, 50);
-        Pageable pageable = PageRequest.of(0, effectiveLimit);
+        int historyLimit = Math.clamp(limit, 1, 50);
+        // QA D1295 (round 28, patient safety): the inbox asked for 20 rows with
+        // no order, so the database returned two-day-old items and cut today's
+        // NEWS2 16 escalation. Every UNREAD item is returned (nothing still
+        // waiting for the nurse is ever cut), newest first; the limit bounds
+        // only the already-read history that follows, newest first too.
+        List<Notification> unread = notificationRepository
+            .findByRecipientUsernameAndReadOrderByCreatedAtDesc(nurseUsername, false);
+        List<Notification> history = notificationRepository
+            .findByRecipientUsernameAndRead(nurseUsername, true, PageRequest.of(0, historyLimit, INBOX_NEWEST_FIRST))
+            .getContent();
         // QA D1286 (round 27): the stored text is the staff-language copy; the
         // NEWS2 escalation (and every keyed item) is rendered from its key in
         // the reader's language, as the bell and /notifications already do.
         java.util.Locale reader = org.springframework.context.i18n.LocaleContextHolder.getLocale();
-        return notificationRepository
-            .findByRecipientUsername(nurseUsername, pageable)
-            .getContent()
-            .stream()
+        return java.util.stream.Stream.concat(unread.stream(), history.stream())
             .map(row -> notificationLocalizer.localized(row, reader))
             .map(n -> NurseInboxItemDTO.builder()
                 .id(n.getId())

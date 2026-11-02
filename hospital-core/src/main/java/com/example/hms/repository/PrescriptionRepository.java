@@ -22,6 +22,14 @@ import java.util.UUID;
 public interface PrescriptionRepository extends JpaRepository<Prescription, UUID> {
 
     /**
+     * QA D1295 class: every order of one visit, in the order written. The
+     * discharge reconciliation and the ward-order list read them all; they
+     * read an unordered first 100 (or 200) before.
+     */
+    Pageable EVERY_ORDER_OF_THE_VISIT =
+        Pageable.unpaged(org.springframework.data.domain.Sort.by("createdAt", "id"));
+
+    /**
      * SUPER_ADMIN cross-tenant fallback list. Overrides {@link JpaRepository#findAll(Pageable)}
      * so the same {@link EntityGraph} as the hospital-scoped queries is applied — without it
      * the mapper triggers lazy proxy initialisation per row, and any dangling FK

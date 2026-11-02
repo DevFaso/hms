@@ -3076,7 +3076,7 @@ public class EncounterServiceImpl implements EncounterService {
         // Pull prescriptions for this encounter → medication reconciliation
         try {
             var prescriptions = prescriptionRepository
-                    .findByEncounter_Id(encounter.getId(), org.springframework.data.domain.PageRequest.of(0, 100))
+                    .findByEncounter_Id(encounter.getId(), com.example.hms.repository.PrescriptionRepository.EVERY_ORDER_OF_THE_VISIT)
                     .getContent();
             for (Prescription rx : prescriptions) {
                 // QA D152: a DRAFT or unsigned order was never given to the
@@ -3206,7 +3206,7 @@ public class EncounterServiceImpl implements EncounterService {
             return Set.of();
         }
         List<com.example.hms.model.Prescription> orders = prescriptionRepository
-            .findByEncounter_Id(encounter.getId(), org.springframework.data.domain.PageRequest.of(0, 200))
+            .findByEncounter_Id(encounter.getId(), com.example.hms.repository.PrescriptionRepository.EVERY_ORDER_OF_THE_VISIT)
             .getContent();
         Set<String> takeHome = orders.stream().filter(com.example.hms.model.Prescription::isTakeHome)
             .map(rx -> normalizedName(rx.getMedicationName())).collect(Collectors.toSet());
