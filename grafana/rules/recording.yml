@@ -115,9 +115,11 @@ groups:
 
       # 4xx and 5xx, named positively.
       #
-      # Not 5xx alone: a broken route or a stripped proxy path answers 404 and takes
-      # chat down exactly as completely as a 500, while leaving a 5xx-only ratio at
-      # zero. And emphatically NOT "anything that is not 2xx/3xx", which is how this
+      # Not 5xx alone: a 404 from an xhr_send to an expired session, or a 401 from a
+      # stale ticket, are handler-matched and so carry uri=/ws-chat/**. (A path that
+      # no longer ROUTES is tagged uri="NOT_FOUND" or "UNKNOWN" and is invisible to
+      # this rule by construction — the blackbox probe on /ws-chat/info covers that.)
+      # And emphatically NOT "anything that is not 2xx/3xx", which is how this
       # was first written — /ws-chat is .withSockJS() and SockJS prefers a native
       # WebSocket, so every SUCCESSFUL upgrade is an HTTP 101. Those are the very
       # 25-50s requests this whole change is about, so on healthy, actively used chat

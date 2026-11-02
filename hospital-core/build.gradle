@@ -126,7 +126,12 @@ dependencies {
 // It gets its own task rather than an inputs.files() on `test`. Declaring grafana/ as an input
 // of the whole module's test task is correct but far too coarse — with the build cache on, one
 // character in a dashboard would re-run ~7,000 tests, most of which boot a Spring context. This
-// task runs the single class, in about a second, and `check` depends on it so CI still gets it.
+// task runs the single class in about a second.
+//
+// `check` depends on it for local use, but no workflow invokes `check` — backend-ci runs
+// `:hospital-core:test`, `build -x test` and `jacoco* -x test` — so CI calls the task by name in
+// the "Observability config guard" step. Wiring it only to `check` would have left exactly the
+// hole this task exists to close, in the one place that matters.
 def observabilityConfigTest = tasks.register('observabilityConfigTest', Test) {
     description = 'Checks the Grafana dashboards and rule files against the observability guard.'
     group = 'verification'

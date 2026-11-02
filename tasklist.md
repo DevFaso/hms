@@ -5720,10 +5720,12 @@ ships*, not for building — and check the shipped surface before trusting a
   contradicted it.
 - **`severity: page` alerts without a runbook (PR #1013 round 3):** the convention
   in `docs/runbooks/grafana-observability.md` ("Adding a new runbook entry") makes
-  `annotations.runbook_url` plus a matching section mandatory for every alert, and
-  five pre-existing page alerts in `grafana/rules/alerts.yml` have neither:
-  `HmsTargetDown`, `HmsDbPoolSaturated`, `HmsDbPoolPendingHigh`, `PostgresDown`,
-  `HmsRecentlyRestartedRepeatedly`. Found while adding `HmsChatTransportErrors`
-  (which does comply, in both alert files). Not fixed in #1013 because writing
-  five runbook sections for unrelated alerts is its own change; worth doing as a
-  docs pass, together with a guard asserting the convention so it stops drifting.
+  `annotations.runbook_url` plus a matching section mandatory for every alert.
+  Five pre-existing page alerts in `grafana/rules/alerts.yml` — `HmsTargetDown`,
+  `HmsDbPoolSaturated`, `HmsDbPoolPendingHigh`, `PostgresDown` and
+  `HmsRecentlyRestartedRepeatedly` — **do** have runbook sections but no
+  `runbook_url` linking to them, so the link an engineer clicks from the alert is
+  missing even though the prose exists. Several non-page alerts have the same gap.
+  Found while adding `HmsChatTransportErrors` (which does comply, in both alert
+  files). Not fixed in #1013 because it is an unrelated docs pass; worth doing
+  with a guard asserting the convention, so it stops drifting.

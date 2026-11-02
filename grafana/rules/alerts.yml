@@ -73,11 +73,19 @@ groups:
   # /ws-chat is excluded from the SLO burn-rate ratios (see recording.yml), so
   # without this a chat failure would raise nothing at all.
   #
-  # The ratio counts 4xx and 5xx: the failure modes worth paging on are a 5xx storm
-  # AND a 404-shaped one, since a broken route or a reverse-proxy misconfiguration
-  # takes chat down just as completely without a single 5xx. It deliberately names
-  # those classes rather than negating 2xx/3xx, which would count the HTTP 101 of
-  # every successful WebSocket upgrade as a failure.
+  # The ratio counts 4xx and 5xx, and it names those classes rather than negating
+  # 2xx/3xx — a negated class counts the HTTP 101 of every successful WebSocket
+  # upgrade as a failure, which is how this was first written.
+  #
+  # What it can see is bounded by the uri label, and the bound is worth stating:
+  # Boot tags a request it could not route as uri="NOT_FOUND", or "UNKNOWN" when
+  # the security chain rejects it before routing. So a handler-matched failure —
+  # a 5xx from the broker, a 404 from an xhr_send to an expired session, a 401
+  # from a stale ticket — carries uri=/ws-chat/** and shows up here, but a path
+  # that no longer routes at all does not, and cannot: those samples are not
+  # attributable to any endpoint. That case is covered by the blackbox probe on
+  # /ws-chat/info (grafana/prometheus.yml, job blackbox_ws_chat_info), which the
+  # generic synthetic-probe alerts page on.
   #
   # The traffic gate is what this alert cannot do, and it is a deliberate limit
   # rather than an oversight: a ratio over a handful of requests in an idle

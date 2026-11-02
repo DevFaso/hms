@@ -244,9 +244,13 @@ in 10 minutes — backend is in a crash loop.
 
 ## HmsChatTransportErrors  (`severity: page`)
 
-**What it means.** More than 25% of `/ws-chat` requests returned something
-other than 2xx/3xx for 5 minutes, with the endpoint taking real traffic.
-Clinical chat is down or degraded for every connected client.
+**What it means.** More than 25% of `/ws-chat` requests returned 4xx or 5xx for
+5 minutes, with the endpoint taking real traffic. Clinical chat is down or
+degraded for every connected client.
+
+The ratio counts 4xx *and* 5xx deliberately, and counts neither 2xx nor 3xx nor
+**101** — a successful WebSocket upgrade is a 101, so a "not 2xx/3xx" ratio
+would read near 1.0 on perfectly healthy chat.
 
 **Why it has its own alert.** `/ws-chat` is SockJS, and a healthy connection is
 held open for 25-50 seconds. Micrometer records that as request *duration*, so
@@ -257,9 +261,13 @@ from the burn-rate ratios and the aggregate latency rules — which means those
 alerts will stay quiet no matter how badly chat is broken. This is the only
 alert that covers it.
 
-1. Check whether it is chat or the whole backend: the "HTTP 5xx Error Rate by
+1. Check whether it is chat or the whole backend. The "HTTP 5xx Error Rate by
    URI" panel on the Application Metrics dashboard deliberately does *not*
-   exclude the transport, so `/ws-chat/**` appears there as its own row.
+   exclude the transport, so `/ws-chat/**` appears there as its own row — but it
+   filters `status=~"5.."`, so a **4xx-driven** alert leaves it empty. An empty
+   panel here is not "chat is fine"; drop the status filter, or query
+   `sum by (status) (rate(http_server_requests_seconds_count{uri=~"(/api)?/ws-chat.*"}[5m]))`
+   in Explore to see which class is actually failing before going further.
 2. A **4xx-shaped** failure is usually routing or proxy config, not the app —
    confirm `/api/ws-chat/info` answers 200, and check that the SockJS path is
    not being rewritten or stripped upstream.
@@ -270,7 +278,10 @@ alert that covers it.
    `railway variables --set LOG_LEVEL_SECURITY=DEBUG --service hms-backend-dev`.
 4. If the transport is silent rather than failing, this alert cannot see it: the
    rate floor that keeps it from firing on an idle window also means no traffic
-   means no alert. `HmsBackendNoTraffic` and `HmsTargetDown` cover that case.
+   means no alert. Neither can it see a path that no longer routes, since Boot
+   tags those `uri="NOT_FOUND"`/`"UNKNOWN"` and they are attributable to no
+   endpoint. Both cases belong to the `blackbox_ws_chat_info` probe on
+   `/ws-chat/info` and to `HmsBackendNoTraffic`/`HmsTargetDown`.
 
 ---
 
