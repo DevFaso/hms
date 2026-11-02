@@ -1236,13 +1236,48 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         // was received before the invoice existed, and its row still carries
         // the copay's own total (1 500) - printed under the visit invoice's
         // number it read "Total 1 500, nothing due" while 1 000 was owed. Its
-        // receipt now shows this invoice's total, the amount paid as of it, and
+        // receipt shows this invoice's total, the amount paid as of it, and
         // says it was paid at the front desk and carried over.
-        byte[] pdf = isFoldedPayment(invoice, row)
-            ? pdfInvoiceService.generateReceiptPdf(invoice, row, receiptNumber, paidThen, invoice.getTotalAmount(),
-                true, effectiveLocale)
-            : pdfInvoiceService.generateReceiptPdf(invoice, row, receiptNumber, paidThen, effectiveLocale);
+        // QA D1244 (round 25): that total was TODAY's (after a later discount
+        // and credit note: 5 500) beside the amount paid THEN (2 000), so it
+        // printed a balance of 3 500 that was never true. Every receipt now
+        // prints the state when its money was received: the total recorded
+        // with the payment, else (a folded copay, or a row from before that
+        // total was kept) the invoice's total with the adjustments made
+        // since put back.
+        boolean folded = isFoldedPayment(invoice, row);
+        BigDecimal totalThen = !folded && row.getInvoiceTotalAtReceipt() != null
+            ? row.getInvoiceTotalAtReceipt() : totalWhenReceived(invoice, row);
+        byte[] pdf = pdfInvoiceService.generateReceiptPdf(invoice, row, receiptNumber, paidThen, totalThen,
+            folded, effectiveLocale);
         return new InvoicePdfResponseDTO(pdf, receiptNumber, invoice.getId());
+    }
+
+    /**
+     * QA D1244: the invoice's total when {@code row}'s money was received.
+     * Discounts, waivers and credit notes are the only changes to an issued
+     * invoice's total; each lowers it when made and raises it back when
+     * reversed. So the total then is today's, plus every adjustment made
+     * after the payment and still in force, less every adjustment in force
+     * then and reversed since.
+     */
+    BigDecimal totalWhenReceived(BillingInvoice invoice, PaymentTransaction row) {
+        BigDecimal total = invoice.getTotalAmount() != null ? invoice.getTotalAmount() : BigDecimal.ZERO;
+        java.time.LocalDateTime at = receivedAt(row);
+        if (at == null || adjustmentRepository == null || invoice.getId() == null) {
+            return total;
+        }
+        for (com.example.hms.model.InvoiceAdjustment a : adjustmentRepository.findByInvoice_IdOrderByCreatedAtAsc(invoice.getId())) {
+            BigDecimal amount = a.getAmount() != null ? a.getAmount() : BigDecimal.ZERO;
+            boolean madeAfter = a.getCreatedAt() != null && a.getCreatedAt().isAfter(at);
+            boolean reversedAfter = a.getReversedAt() != null && a.getReversedAt().isAfter(at);
+            if (madeAfter && a.getReversedAt() == null) {
+                total = total.add(amount);
+            } else if (!madeAfter && reversedAfter) {
+                total = total.subtract(amount);
+            }
+        }
+        return total.max(BigDecimal.ZERO);
     }
 
     private record ReceiptPosition(int rank, BigDecimal paidThen) { }

@@ -2007,14 +2007,15 @@ class BillingInvoiceServiceImplTest {
         when(paymentTransactionRepository.findByIdAndInvoice_Id(first.getId(), invoice.getId())).thenReturn(Optional.of(first));
         when(paymentTransactionRepository.findByInvoice_IdOrderByCreatedAtAsc(invoice.getId()))
             .thenReturn(List.of(second, first));
-        when(pdfInvoiceService.generateReceiptPdf(any(), any(), any(String.class), any(BigDecimal.class), any()))
+        when(pdfInvoiceService.generateReceiptPdf(any(), any(), any(String.class), any(BigDecimal.class), any(),
+            org.mockito.ArgumentMatchers.anyBoolean(), any()))
             .thenReturn(new byte[] {1});
 
         InvoicePdfResponseDTO pdf = billingInvoiceService.getPaymentReceiptPdf(invoice.getId(), first.getId(), Locale.FRENCH);
 
         assertEquals("GH-2026-000019-R1", pdf.suggestedFilename());
         verify(pdfInvoiceService).generateReceiptPdf(eq(invoice), eq(first), eq("GH-2026-000019-R1"),
-            eq(new BigDecimal("30")), any());
+            eq(new BigDecimal("30")), any(), eq(false), any());
     }
 
     @Test
@@ -2036,13 +2037,14 @@ class BillingInvoiceServiceImplTest {
         when(paymentTransactionRepository.findByIdAndInvoice_Id(later.getId(), invoice.getId())).thenReturn(Optional.of(later));
         when(paymentTransactionRepository.findByInvoice_IdOrderByCreatedAtAsc(invoice.getId()))
             .thenReturn(List.of(reversed, later));
-        when(pdfInvoiceService.generateReceiptPdf(any(), any(), any(String.class), any(BigDecimal.class), any()))
+        when(pdfInvoiceService.generateReceiptPdf(any(), any(), any(String.class), any(BigDecimal.class), any(),
+            org.mockito.ArgumentMatchers.anyBoolean(), any()))
             .thenReturn(new byte[] {1});
 
         billingInvoiceService.getPaymentReceiptPdf(invoice.getId(), later.getId(), Locale.FRENCH);
 
         verify(pdfInvoiceService).generateReceiptPdf(eq(invoice), eq(later), eq("GH-2026-000020-R2"),
-            eq(new BigDecimal("70")), any());
+            eq(new BigDecimal("70")), any(), eq(false), any());
     }
 
     @Test
@@ -2064,13 +2066,14 @@ class BillingInvoiceServiceImplTest {
         when(paymentTransactionRepository.findByIdAndInvoice_Id(later.getId(), invoice.getId())).thenReturn(Optional.of(later));
         when(paymentTransactionRepository.findByInvoice_IdOrderByCreatedAtAsc(invoice.getId()))
             .thenReturn(List.of(reversed, later));
-        when(pdfInvoiceService.generateReceiptPdf(any(), any(), any(String.class), any(BigDecimal.class), any()))
+        when(pdfInvoiceService.generateReceiptPdf(any(), any(), any(String.class), any(BigDecimal.class), any(),
+            org.mockito.ArgumentMatchers.anyBoolean(), any()))
             .thenReturn(new byte[] {1});
 
         billingInvoiceService.getPaymentReceiptPdf(invoice.getId(), later.getId(), Locale.FRENCH);
 
         verify(pdfInvoiceService).generateReceiptPdf(eq(invoice), eq(later), eq("GH-2026-000021-R2"),
-            eq(new BigDecimal("100")), any());
+            eq(new BigDecimal("100")), any(), eq(false), any());
     }
 
     @Test
@@ -3051,5 +3054,75 @@ class BillingInvoiceServiceImplTest {
 
         assertEquals("Le montant du paiement (12 000 F CFA) dépasse le solde dû (7 450 F CFA).",
             rendered(refused, Locale.FRENCH));
+    }
+
+    /**
+     * QA D1244 replay (pdf.js): a 2 000 check-in copay folded into a 6 500
+     * invoice, then a 500 discount and a 500 credit note, then the rest paid.
+     * R1 printed "Total 5 500, paid 2 000, due 3 500" - today's total beside
+     * the copay alone. It now prints the state when the copay was taken
+     * (6 500 / 2 000 / 4 500), as R2 prints its own time's.
+     */
+    @Test
+    void aFoldedCopayReceiptPrintsTheStateWhenItWasTaken_D1244() {
+        BillingInvoice invoice = payableInvoice(UUID.randomUUID());
+        invoice.setInvoiceNumber("CHWF6646-2026-000066");
+        invoice.setCreatedAt(java.time.LocalDateTime.of(2026, 11, 2, 9, 0));
+        invoice.setTotalAmount(new BigDecimal("5500"));
+        invoice.setAmountPaid(new BigDecimal("5500"));
+        PaymentTransaction copay = PaymentTransaction.builder().invoice(invoice).amount(new BigDecimal("2000"))
+            .status(com.example.hms.enums.PaymentStatus.CONFIRMED).invoiceTotalAtReceipt(new BigDecimal("2000"))
+            .confirmedAt(java.time.LocalDateTime.of(2026, 11, 2, 8, 30)).build();
+        copay.setId(UUID.randomUUID());
+        PaymentTransaction rest = PaymentTransaction.builder().invoice(invoice).amount(new BigDecimal("3500"))
+            .status(com.example.hms.enums.PaymentStatus.CONFIRMED).invoiceTotalAtReceipt(new BigDecimal("5500"))
+            .confirmedAt(java.time.LocalDateTime.of(2026, 11, 2, 10, 30)).build();
+        rest.setId(UUID.randomUUID());
+        com.example.hms.repository.InvoiceAdjustmentRepository repo =
+            mock(com.example.hms.repository.InvoiceAdjustmentRepository.class);
+        when(repo.findByInvoice_IdOrderByCreatedAtAsc(invoice.getId())).thenReturn(List.of(
+            adjustment("500", java.time.LocalDateTime.of(2026, 11, 2, 10, 0), null),
+            // Made and reversed after the copay: it never changed the total then.
+            adjustment("300", java.time.LocalDateTime.of(2026, 11, 2, 10, 5), java.time.LocalDateTime.of(2026, 11, 2, 10, 6)),
+            adjustment("500", java.time.LocalDateTime.of(2026, 11, 2, 10, 10), null)));
+        billingInvoiceService.setAdjustmentRepository(repo);
+        when(invoiceRepository.findByIdWithRefs(invoice.getId())).thenReturn(Optional.of(invoice));
+        when(paymentTransactionRepository.findByIdAndInvoice_Id(copay.getId(), invoice.getId())).thenReturn(Optional.of(copay));
+        when(paymentTransactionRepository.findByIdAndInvoice_Id(rest.getId(), invoice.getId())).thenReturn(Optional.of(rest));
+        when(paymentTransactionRepository.findByInvoice_IdOrderByCreatedAtAsc(invoice.getId())).thenReturn(List.of(copay, rest));
+        when(pdfInvoiceService.generateReceiptPdf(any(), any(), any(String.class), any(BigDecimal.class), any(),
+            org.mockito.ArgumentMatchers.anyBoolean(), any())).thenReturn(new byte[] {1});
+
+        billingInvoiceService.getPaymentReceiptPdf(invoice.getId(), copay.getId(), Locale.FRENCH);
+        billingInvoiceService.getPaymentReceiptPdf(invoice.getId(), rest.getId(), Locale.FRENCH);
+
+        verify(pdfInvoiceService).generateReceiptPdf(eq(invoice), eq(copay), eq("CHWF6646-2026-000066-R1"),
+            eq(new BigDecimal("2000")), eq(new BigDecimal("6500")), eq(true), any());
+        verify(pdfInvoiceService).generateReceiptPdf(eq(invoice), eq(rest), eq("CHWF6646-2026-000066-R2"),
+            eq(new BigDecimal("5500")), eq(new BigDecimal("5500")), eq(false), any());
+    }
+
+    /** QA D1244: an adjustment in force then and reversed since is taken back off the total then. */
+    @Test
+    void theTotalThenTakesOffAnAdjustmentReversedSince_D1244() {
+        BillingInvoice invoice = payableInvoice(UUID.randomUUID());
+        invoice.setTotalAmount(new BigDecimal("1000"));
+        PaymentTransaction row = PaymentTransaction.builder()
+            .confirmedAt(java.time.LocalDateTime.of(2026, 11, 2, 12, 0)).build();
+        com.example.hms.repository.InvoiceAdjustmentRepository repo =
+            mock(com.example.hms.repository.InvoiceAdjustmentRepository.class);
+        when(repo.findByInvoice_IdOrderByCreatedAtAsc(invoice.getId())).thenReturn(List.of(
+            adjustment("200", java.time.LocalDateTime.of(2026, 11, 2, 11, 0), java.time.LocalDateTime.of(2026, 11, 2, 13, 0))));
+        billingInvoiceService.setAdjustmentRepository(repo);
+        assertEquals(0, new BigDecimal("800").compareTo(billingInvoiceService.totalWhenReceived(invoice, row)));
+    }
+
+    private static com.example.hms.model.InvoiceAdjustment adjustment(String amount, java.time.LocalDateTime made,
+                                                                      java.time.LocalDateTime reversed) {
+        com.example.hms.model.InvoiceAdjustment a = com.example.hms.model.InvoiceAdjustment.builder()
+            .type(com.example.hms.enums.InvoiceAdjustmentType.DISCOUNT).amount(new BigDecimal(amount))
+            .reversedAt(reversed).build();
+        a.setCreatedAt(made);
+        return a;
     }
 }

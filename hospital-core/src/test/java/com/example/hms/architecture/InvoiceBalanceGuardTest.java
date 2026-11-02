@@ -88,6 +88,62 @@ class InvoiceBalanceGuardTest {
         assertThat(line.contains(".subtract(") && line.toLowerCase().contains("paid")).isTrue();
     }
 
+    /**
+     * QA D1244 (round 25): the receipt of a folded check-in copay printed
+     * today's total (after a later discount and credit note) beside the
+     * amount paid when the copay was taken, so its balance was never true.
+     * A receipt is a snapshot of one moment. Every main call that renders a
+     * receipt passes the total of that moment explicitly (the seven-argument
+     * {@code generateReceiptPdf}), and the method that assembles it reads no
+     * figure of today from the invoice ({@code getTotalAmount()} /
+     * {@code getAmountPaid()}): the total then is {@code totalWhenReceived},
+     * the amount paid then is the receipt position.
+     */
+    @Test
+    void aReceiptPrintsOneMomentOnly_D1244() throws IOException {
+        List<String> offenders = new ArrayList<>();
+        int calls = 0;
+        try (Stream<Path> files = Files.walk(MAIN)) {
+            for (Path f : files.filter(p -> p.toString().endsWith(".java")).toList()) {
+                String rel = MAIN.relativize(f).toString().replace('\\', '/');
+                if (rel.equals("service/PdfInvoiceService.java")) {
+                    continue;
+                }
+                String src = com.example.hms.testsupport.SourceScan.stripComments(Files.readString(f));
+                java.util.regex.Matcher m = java.util.regex.Pattern.compile("\\.generateReceiptPdf\\(").matcher(src);
+                while (m.find()) {
+                    calls++;
+                    int open = m.end() - 1;
+                    String args = src.substring(open + 1, com.example.hms.testsupport.SourceScan.closingParen(src, open));
+                    if (topLevelCommas(args) != 6) {
+                        offenders.add(rel + ": a receipt rendered without the total of its own moment: " + args.trim());
+                    }
+                    String method = AppointmentSlotRulesGuardTest.enclosingMethod(src, m.start());
+                    if (method.contains("invoice.getTotalAmount()") || method.contains("invoice.getAmountPaid()")) {
+                        offenders.add(rel + ": the receipt is assembled from a figure of today");
+                    }
+                }
+            }
+        }
+        assertThat(calls).as("receipt renderings found").isPositive();
+        assertThat(offenders).as("a receipt mixing two moments (QA D1244)").isEmpty();
+    }
+
+    private static int topLevelCommas(String args) {
+        int depth = 0;
+        int commas = 0;
+        for (char c : args.toCharArray()) {
+            if (c == '(') {
+                depth++;
+            } else if (c == ')') {
+                depth--;
+            } else if (c == ',' && depth == 0) {
+                commas++;
+            }
+        }
+        return commas;
+    }
+
     private static List<Path> rendering() throws IOException {
         try (Stream<Path> files = Files.walk(MAIN)) {
             return files.filter(f -> f.toString().endsWith(".java"))
