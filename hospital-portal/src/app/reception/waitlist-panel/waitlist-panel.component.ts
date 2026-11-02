@@ -32,7 +32,7 @@ import { ReferralService, DepartmentMinimal } from '../../services/referral.serv
 import { StaffService, isClinicalProvider, StaffResponse } from '../../services/staff.service';
 import { RoleContextService } from '../../core/role-context.service';
 import { ToastService } from '../../core/toast.service';
-import { debounceTime, Subject, switchMap, catchError, of } from 'rxjs';
+import { debounceTime, Subject, switchMap, catchError, of, Observable, forkJoin, map } from 'rxjs';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { localDateString, serverInstant } from '../../shared/date-utils';
 import { endsBeforeStart, isBeforeToday } from '../../shared/forms/date-rules';
@@ -42,7 +42,15 @@ import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive'
 import { rankPeopleByName } from '../../shared/person-search';
 import { comboboxKey } from '../../shared/a11y/combobox-keys';
 import { ListEscapeDirective } from '../../shared/a11y/list-escape.directive';
+import { KeyLabelPipe } from '../../shared/pipes/key-label.pipe';
+import { DashPipe } from '../../shared/pipes/dash.pipe';
 type WaitlistStatus = 'ALL' | 'WAITING' | 'OFFERED' | 'CLOSED';
+/** Every status a waitlist entry can hold (ReceptionServiceImpl WAITLIST_STATUS_*). */
+const WAITLIST_STATUSES: readonly Exclude<WaitlistStatus, 'ALL'>[] = [
+  'WAITING',
+  'OFFERED',
+  'CLOSED',
+];
 
 /** Every field the add form may refuse, so a corrected one loses its mark. */
 const WAITLIST_FIELDS = ['wl-patient', 'wl-dept', 'wl-to'];
@@ -53,6 +61,8 @@ const OFFER_SLOT_IDS = ['waitlist-offer-slots'];
   selector: 'app-waitlist-panel',
   standalone: true,
   imports: [
+    DashPipe,
+    KeyLabelPipe,
     ListEscapeDirective,
     ReasonDialogComponent,
     SubmitGuardDirective,
@@ -182,10 +192,27 @@ export class WaitlistPanelComponent implements OnInit {
     this.loadEntries();
   }
 
+  /**
+   * QA D1324 (round 29): "Tous" lists every entry. The list call without a
+   * status answered only the waiting ones (the server's default), so "Tous"
+   * showed what "En attente" showed and the offered entry was missing. Every
+   * status is asked for and merged, oldest first, as the server orders one.
+   */
+  private waitlistRows(): Observable<WaitlistEntryResponse[]> {
+    const status = this.statusFilter();
+    if (status !== 'ALL') return this.receptionService.getWaitlist({ status });
+    return forkJoin(
+      WAITLIST_STATUSES.map((s) => this.receptionService.getWaitlist({ status: s })),
+    ).pipe(
+      map((lists) =>
+        lists.flat().sort((a, b) => (a.createdAt ?? '').localeCompare(b.createdAt ?? '')),
+      ),
+    );
+  }
+
   loadEntries(focusEntryId?: string): void {
     this.loading.set(true);
-    const status = this.statusFilter() === 'ALL' ? undefined : this.statusFilter();
-    this.receptionService.getWaitlist({ status }).subscribe({
+    this.waitlistRows().subscribe({
       next: (list) => {
         this.entries.set(list);
         this.loading.set(false);

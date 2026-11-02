@@ -68,9 +68,7 @@
                 {{ ' '
                 }}<span class="notif-type badge">{{ n.type | enumLabel: 'notificationType' }}</span>
               }
-              <span class="notif-date text-muted">{{
-                n.createdAt | serverTime | date: 'medium'
-              }}</span>
+              <span class="notif-date text-muted">{{ n.createdAt | serverTime | dateTime }}</span>
             </div>
             <p class="notif-message">{{ n.message }}</p>
           </div>

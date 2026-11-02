@@ -293,7 +293,7 @@
         <tbody>
           @for (c of consents(); track c.id) {
             <tr>
-              <td>{{ c.consentedAt | serverTime | date: 'medium' }}</td>
+              <td>{{ c.consentedAt | serverTime | dateTime }}</td>
               <td>{{ 'COVERAGE.CONSENT_METHOD_' + c.method | translate }}</td>
               <td>{{ 'COVERAGE.CONSENT_SOURCE_' + c.source | translate }}</td>
               <td>{{ c.signedName || '—' }}</td>

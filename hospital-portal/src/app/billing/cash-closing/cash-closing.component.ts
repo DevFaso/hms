@@ -7,6 +7,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { BillingService, CashClosing } from '../../services/billing.service';
 import { CfaPipe } from '../../shared/pipes/cfa.pipe';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
+import { KeyLabelPipe } from '../../shared/pipes/key-label.pipe';
 
 /** Today in the browser's calendar, as YYYY-MM-DD. */
 function today(): string {
@@ -25,7 +26,7 @@ function today(): string {
 @Component({
   selector: 'app-cash-closing',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, CfaPipe, ServerTimePipe],
+  imports: [KeyLabelPipe, CommonModule, FormsModule, TranslateModule, CfaPipe, ServerTimePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="cash-closing" data-testid="cash-closing" aria-labelledby="cash-closing-title">
@@ -80,8 +81,8 @@ function today(): string {
             <tbody>
               @for (t of c.byMethod; track t.source + t.method) {
                 <tr>
-                  <td>{{ 'BILLING.CASH_CLOSING.SOURCES.' + t.source | translate }}</td>
-                  <td>{{ 'BILLING.PAYMENT_METHODS.' + t.method | translate }}</td>
+                  <td>{{ t.source | keyLabel: 'BILLING.CASH_CLOSING.SOURCES.' }}</td>
+                  <td>{{ t.method | keyLabel: 'BILLING.PAYMENT_METHODS.' }}</td>
                   <td class="numeric">{{ t.count }}</td>
                   <td class="numeric">{{ t.amount | cfa }}</td>
                 </tr>
@@ -126,7 +127,7 @@ function today(): string {
                   <td>{{ e.receivedAt | serverTime | date: 'shortTime' }}</td>
                   <td>{{ e.document || '—' }}</td>
                   <td>{{ e.patientName || '—' }}</td>
-                  <td>{{ 'BILLING.PAYMENT_METHODS.' + e.method | translate }}</td>
+                  <td>{{ e.method | keyLabel: 'BILLING.PAYMENT_METHODS.' }}</td>
                   <td>{{ e.reference || '—' }}</td>
                   <td class="numeric">
                     {{ e.amount | cfa }}

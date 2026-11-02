@@ -112,7 +112,7 @@
                 }
                 <div class="detail-item">
                   <span class="dl">{{ 'PORTAL.LAB_RESULTS.COLLECTION_DATE' | translate }}</span>
-                  <span class="dv">{{ lab.collectedDate | serverTime | date: 'medium' }}</span>
+                  <span class="dv">{{ lab.collectedDate | serverTime | dateTime }}</span>
                 </div>
                 <div class="detail-item">
                   <span class="dl">{{ 'PORTAL.LAB_RESULTS.STATUS' | translate }}</span>

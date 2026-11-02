@@ -22,6 +22,8 @@ import { DESK_PAYMENT_METHODS, deskMethodNeedsReference } from '../desk-payment-
 import { BillingService, PaymentRow } from '../../services/billing.service';
 import { saveResponse } from '../../shared/download-file';
 import { FieldRefusal, refuseFields } from '../../shared/forms/invalid-fields';
+import { amountStillDue, pendingDeclared } from '../../shared/payment-prefill';
+import { formatCfa } from '../../shared/i18n/app-locale';
 
 /** The fields the collect dialog may refuse. */
 const PAY_FIELDS = ['invSelect', 'payAmt', 'payRef'];
@@ -30,6 +32,7 @@ import {
   cfaAmountMessageKey,
   cfaAmountProblem,
 } from '../../shared/cfa-amount';
+import { DashPipe } from '../../shared/pipes/dash.pipe';
 
 interface OpenInvoice {
   id: string;
@@ -44,7 +47,7 @@ interface OpenInvoice {
 @Component({
   selector: 'app-payment-pending-panel',
   standalone: true,
-  imports: [CommonModule, FormsModule, TranslateModule, CfaPipe, DialogFocusDirective],
+  imports: [DashPipe, CommonModule, FormsModule, TranslateModule, CfaPipe, DialogFocusDirective],
   templateUrl: './payment-pending-panel.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './payment-pending-panel.component.scss',
@@ -76,6 +79,12 @@ export class PaymentPendingPanelComponent {
   );
   paying = signal(false);
   loadingInvoices = signal(false);
+  /**
+   * QA D1321 (round 29): what the patient declared on the selected invoice and
+   * staff have not confirmed yet. The dialog says it, prefills only what is
+   * still due, and refuses more.
+   */
+  pending = signal(0);
 
   openPayDialog(item: ReceptionQueueItem): void {
     this.payingItem.set(item);
@@ -83,8 +92,36 @@ export class PaymentPendingPanelComponent {
     this.payMethod.set('CASH');
     this.payReference.set('');
     this.selectedInvoiceId.set(null);
+    this.pending.set(0);
     this.openInvoices.set([]);
     this.loadInvoices(item.patientId);
+  }
+
+  /** An invoice picked in the select (or the only one): prefill what is still due on it. */
+  selectInvoice(invoiceId: string | null): void {
+    this.selectedInvoiceId.set(invoiceId);
+    this.pending.set(0);
+    const inv = this.openInvoices().find((i) => i.id === invoiceId);
+    this.payAmount.set(inv ? this.balanceOf(inv) : null);
+    if (!inv) return;
+    this.billing.listPayments(inv.id).subscribe({
+      next: (rows) => {
+        if (this.selectedInvoiceId() !== inv.id) return;
+        const pending = pendingDeclared(rows);
+        this.pending.set(pending);
+        // Only the untouched prefill moves: an amount the reader typed stays.
+        if (pending > 0 && this.payAmount() === this.balanceOf(inv)) {
+          this.payAmount.set(amountStillDue(this.balanceOf(inv), pending));
+        }
+      },
+      error: () => this.pending.set(0),
+    });
+  }
+
+  /** The most the desk may take on the selected invoice: its balance less what is pending. */
+  maxCollectable(): number | null {
+    const inv = this.openInvoices().find((i) => i.id === this.selectedInvoiceId());
+    return inv ? Math.max(this.balanceOf(inv) - this.pending(), 0) : null;
   }
 
   private loadInvoices(patientId: string): void {
@@ -102,12 +139,7 @@ export class PaymentPendingPanelComponent {
               (inv.balanceDue ?? inv.totalAmount - (inv.amountPaid ?? 0)) > 0,
           );
           this.openInvoices.set(open);
-          if (open.length === 1) {
-            this.selectedInvoiceId.set(open[0].id);
-            this.payAmount.set(
-              open[0].balanceDue ?? open[0].totalAmount - (open[0].amountPaid ?? 0),
-            );
-          }
+          if (open.length === 1) this.selectInvoice(open[0].id);
           this.loadingInvoices.set(false);
         },
         error: () => {
@@ -139,12 +171,27 @@ export class PaymentPendingPanelComponent {
     const required = this.translate.instant('COMMON.FIELD_REQUIRED');
     const refusals: FieldRefusal[] = [];
     if (!invoiceId) refusals.push({ id: 'invSelect', message: required });
+    const max = this.maxCollectable();
     if (amountProblem) {
       refusals.push({
         id: 'payAmt',
         message: this.translate.instant(
           cfaAmountMessageKey(amountProblem, CFA_AMOUNT_REQUIRED_KEY),
         ),
+      });
+    } else if (max !== null && amount !== null && amount > max) {
+      // QA D1321: more than is still due once the patient's declaration is
+      // left out — the server refuses it; say it on the field first.
+      const currency = this.selectedCurrency();
+      refusals.push({
+        id: 'payAmt',
+        message:
+          this.pending() > 0
+            ? this.translate.instant('RECEPTION.PAYMENT_EXCEEDS_WITH_PENDING', {
+                max: formatCfa(max, currency),
+                pending: formatCfa(this.pending(), currency),
+              })
+            : this.translate.instant('BILLING.PAYMENT_EXCEEDS_BALANCE'),
       });
     }
     if (this.needsReference() && !reference) refusals.push({ id: 'payRef', message: required });

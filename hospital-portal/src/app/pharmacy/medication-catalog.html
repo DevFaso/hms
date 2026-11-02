@@ -83,7 +83,7 @@
               <td>{{ formLabel(item.form) }}</td>
               <td>{{ item.strength ? item.strength + ' ' + (item.strengthUnit ?? '') : '—' }}</td>
               <td>
-                <span class="code-chip">{{ item.atcCode ?? '—' }}</span>
+                <span class="code-chip">{{ item.atcCode | dash }}</span>
               </td>
               <td>{{ item.category ? (item.category | enumLabel: 'medicationCategory') : '—' }}</td>
               <td>

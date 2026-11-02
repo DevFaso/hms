@@ -424,7 +424,7 @@
             </div>
             <div class="info-row">
               <span class="label">{{ 'PATIENTS.PHONE' | translate }}</span
-              ><span class="value">{{ p.phoneNumberPrimary ?? '—' }}</span>
+              ><span class="value">{{ p.phoneNumberPrimary | dash }}</span>
             </div>
             <!-- QA D1036 / D926: the second number and the postal code were
                  stored at registration and shown nowhere. -->
@@ -444,15 +444,15 @@
             </div>
             <div class="info-row">
               <span class="label">{{ 'PATIENTS.COUNTRY' | translate }}</span
-              ><span class="value">{{ p.country ?? '—' }}</span>
+              ><span class="value">{{ p.country | dash }}</span>
             </div>
             <div class="info-row">
               <span class="label">{{ 'PATIENTS.CITY' | translate }}</span
-              ><span class="value">{{ p.city ?? '—' }}</span>
+              ><span class="value">{{ p.city | dash }}</span>
             </div>
             <div class="info-row">
               <span class="label">{{ 'PATIENTS.STATE' | translate }}</span
-              ><span class="value">{{ p.state ?? '—' }}</span>
+              ><span class="value">{{ p.state | dash }}</span>
             </div>
             <div class="info-row">
               <span class="label">{{ 'PATIENTS.ZIP_CODE' | translate }}</span
@@ -460,11 +460,11 @@
             </div>
             <div class="info-row">
               <span class="label">{{ 'PATIENTS.ADDRESS' | translate }}</span
-              ><span class="value">{{ p.address ?? '—' }}</span>
+              ><span class="value">{{ p.address | dash }}</span>
             </div>
             <div class="info-row">
               <span class="label">{{ 'PATIENTS.ETHNICITY' | translate }}</span
-              ><span class="value">{{ p.ethnicity ?? '—' }}</span>
+              ><span class="value">{{ p.ethnicity | dash }}</span>
             </div>
           </div>
           @if (!addressHistoryLoaded()) {
@@ -484,7 +484,7 @@
               <ul>
                 @for (entry of addressHistory(); track entry.id) {
                   <li>
-                    <span class="value">{{ entry.address ?? entry.city ?? '—' }}</span>
+                    <span class="value">{{ entry.address || entry.city | dash }}</span>
                     <span class="until">
                       {{
                         'PATIENTS.ADDRESS_UNTIL'
@@ -537,11 +537,11 @@
           <div class="info-rows">
             <div class="info-row">
               <span class="label">{{ 'ENCOUNTERS.HOSPITAL' | translate }}</span
-              ><span class="value">{{ p.hospitalName ?? '—' }}</span>
+              ><span class="value">{{ p.hospitalName | dash }}</span>
             </div>
             <div class="info-row">
               <span class="label">{{ 'PATIENTS.MRN' | translate }}</span
-              ><span class="value">{{ p.mrn ?? '—' }}</span>
+              ><span class="value">{{ p.mrn | dash }}</span>
             </div>
             <div class="info-row">
               <span class="label">{{ 'PATIENTS.USERNAME' | translate }}</span
@@ -567,7 +567,7 @@
           <div class="info-rows">
             <div class="info-row">
               <span class="label">{{ 'PATIENTS.BLOOD_TYPE' | translate }}</span
-              ><span class="value">{{ p.bloodType ?? '—' }}</span>
+              ><span class="value">{{ p.bloodType | dash }}</span>
             </div>
             <div class="info-row">
               <span class="label">{{ 'PATIENTS.ALLERGIES' | translate }}</span
@@ -626,7 +626,7 @@
           @for (v of vitals(); track v.id) {
             <div class="vital-card">
               <div class="vital-header">
-                <span class="vital-date">{{ v.recordedAt | serverTime | date: 'medium' }}</span>
+                <span class="vital-date">{{ v.recordedAt | serverTime | dateTime }}</span>
                 <span class="vital-by"
                   >{{ 'PATIENTS.BY' | translate }} {{ v.recordedByName || '—' }}</span
                 >

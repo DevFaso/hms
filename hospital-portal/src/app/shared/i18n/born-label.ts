@@ -10,14 +10,28 @@
  * `scripts/lib/born-agreement.test.mjs` holds the keys and templates to it.
  */
 export function bornLabelKey(gender: string | null | undefined): string {
+  return genderedKey('PATIENTS.BORN', gender);
+}
+
+/**
+ * QA D1327 (round 29; the D1311 class): any word that describes the patient
+ * agrees with the patient's sex — "enregistrée dans 2 hôpitaux",
+ * "registrada en 2 hospitales", "Déjà enregistrée dans cet hôpital". The
+ * duplicate card fixed "Née" in round 28 and kept "enregistré" in the same
+ * line. A key family `BASE`, `BASE_FEMALE`, `BASE_MALE` is picked here; an
+ * unknown or other sex gets the neutral `BASE` ("enregistré(e)").
+ * `scripts/lib/round29-front-office.test.mjs` holds every such family and
+ * template to it.
+ */
+export function genderedKey(base: string, gender: string | null | undefined): string {
   switch ((gender ?? '').trim().toUpperCase()) {
     case 'FEMALE':
     case 'F':
-      return 'PATIENTS.BORN_FEMALE';
+      return `${base}_FEMALE`;
     case 'MALE':
     case 'M':
-      return 'PATIENTS.BORN_MALE';
+      return `${base}_MALE`;
     default:
-      return 'PATIENTS.BORN';
+      return base;
   }
 }

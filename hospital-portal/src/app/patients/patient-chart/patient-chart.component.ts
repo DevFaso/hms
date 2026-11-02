@@ -52,6 +52,7 @@ import { LabCorrectionBadgeComponent } from '../../lab/shared/lab-correction-bad
 import { refusalReason } from '../../shared/refusal-reason';
 
 import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
+import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
 type ChartSection = 'allergies' | 'problems' | 'updates' | 'timeline' | 'labs';
 
 /** How many lab rows the section asks for; the backend caps `limit` at 100. */
@@ -68,6 +69,7 @@ const UNSCOPED_KEY = 'UNSCOPED';
   selector: 'app-patient-chart',
   standalone: true,
   imports: [
+    DateTimePipe,
     SubmitGuardDirective,
     LabValuePipe,
     LabRangePipe,

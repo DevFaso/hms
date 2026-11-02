@@ -404,9 +404,9 @@
                 }
               </td>
               <td class="reason-cell">{{ reasonLabel(tx) }}</td>
-              <td>{{ tx.createdAt | serverTime | date: 'medium' }}</td>
+              <td>{{ tx.createdAt | serverTime | dateTime }}</td>
               <td>
-                {{ tx.performedByName ?? '—' }}
+                {{ tx.performedByName | dash }}
                 @if (tx.witnessedByName) {
                   <small class="witness-note">{{
                     'PHARMACY.WITNESSED_BY' | translate: { name: tx.witnessedByName }

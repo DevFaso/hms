@@ -25,17 +25,28 @@ import { refusalReason } from '../../shared/refusal-reason';
 import { saveResponse } from '../../shared/download-file';
 import { DESK_PAYMENT_METHODS, deskMethodNeedsReference } from '../desk-payment-methods';
 
-import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive';
 import { joinReasons } from '../../shared/required-fields';
-import { refuseFields } from '../../shared/forms/invalid-fields';
+import { FieldRefusal, refuseFields } from '../../shared/forms/invalid-fields';
+import { CFA_WHOLE_AMOUNT_KEY } from '../../shared/cfa-amount';
 
-/** The identity tick, refused when not ticked (QA D1306). */
-const IDENTITY_IDS = ['checkinIdentityConfirmed'];
+/** The fields the check-in may refuse (QA D1306, D1320). */
+const REFUSABLE_IDS = ['checkinIdentityConfirmed', 'copayAmount', 'copayReference'];
+
+/**
+ * QA D1320 (round 29): what is wrong with a typed copay — nothing when blank
+ * or 0 (nothing to collect), else a negative amount or one with cents.
+ */
+export function copayAmountMessageKey(amount: number | string | null | undefined): string | null {
+  if (amount === null || amount === undefined || amount === '') return null;
+  const value = typeof amount === 'number' ? amount : Number(amount);
+  if (!Number.isFinite(value) || value < 0) return 'RECEPTION.COPAY_AMOUNT_NEGATIVE';
+  return Number.isInteger(value) ? null : CFA_WHOLE_AMOUNT_KEY;
+}
 
 @Component({
   selector: 'app-checkin-dialog',
   standalone: true,
-  imports: [SubmitGuardDirective, DialogFocusDirective, FormsModule, TranslateModule],
+  imports: [DialogFocusDirective, FormsModule, TranslateModule],
   templateUrl: './checkin-dialog.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './checkin-dialog.component.scss',
@@ -69,53 +80,57 @@ export class CheckinDialogComponent {
   saving = signal(false);
 
   get canSubmit(): boolean {
-    const referenceMissing =
-      (this.copayAmount() ?? 0) > 0 && this.copayNeedsReference() && !this.copayReference().trim();
-    return (
-      !!this.queueItem?.appointmentId &&
-      this.identityConfirmed() &&
-      !referenceMissing &&
-      !this.saving()
-    );
+    return !!this.queueItem?.appointmentId && this.refusals().length === 0 && !this.saving();
   }
 
   /**
-   * QA D1124: why "Enregistrer" refuses, shown next to it (null when it may
-   * be sent). The button is never silently disabled.
+   * QA D1320 (round 29; the D1342 / D1256 class): every refused field of the
+   * check-in at once, each under its own reason — the identity tick, a copay
+   * that is negative or has cents (the client posted both and the server
+   * answered with a toast), and the payment reference. A blank copay is
+   * fine: there is nothing to collect. Empty: it may be sent.
    */
-  submitBlockReason(): string | null {
-    if (!this.queueItem?.appointmentId) {
-      return this.translate.instant('RECEPTION.NO_APPOINTMENT_SELECTED');
+  refusals(): FieldRefusal[] {
+    const out: FieldRefusal[] = [];
+    if (!this.identityConfirmed()) {
+      out.push({
+        id: 'checkinIdentityConfirmed',
+        message: this.translate.instant('RECEPTION.CONFIRM_IDENTITY_FIRST'),
+      });
     }
+    const amountKey = copayAmountMessageKey(this.copayAmount());
+    if (amountKey) out.push({ id: 'copayAmount', message: this.translate.instant(amountKey) });
     const referenceMissing =
       (this.copayAmount() ?? 0) > 0 && this.copayNeedsReference() && !this.copayReference().trim();
-    // QA D1256 class (round 27): the identity tick and the payment reference
-    // are said together, not one per press.
-    return joinReasons([
-      !this.identityConfirmed() && this.translate.instant('RECEPTION.CONFIRM_IDENTITY_FIRST'),
-      referenceMissing && this.translate.instant('SUBMIT_GUARD.PAYMENT_REFERENCE'),
-    ]);
+    if (referenceMissing) {
+      out.push({
+        id: 'copayReference',
+        message: this.translate.instant('SUBMIT_GUARD.PAYMENT_REFERENCE'),
+      });
+    }
+    return out;
   }
 
   submit(): void {
-    if (!this.queueItem?.appointmentId) {
-      this.toast.error(this.translate.instant('RECEPTION.NO_APPOINTMENT_SELECTED'));
+    // QA D1306 (round 28) / D1320 (round 29): the refused fields are marked,
+    // not only a toast, and all of them on one press.
+    const refusals = this.refusals();
+    refuseFields(this.host.nativeElement, refusals, REFUSABLE_IDS);
+    const appointmentId = this.queueItem?.appointmentId;
+    if (!appointmentId || refusals.length > 0) {
+      this.toast.error(
+        joinReasons([
+          !appointmentId && this.translate.instant('RECEPTION.NO_APPOINTMENT_SELECTED'),
+          ...refusals.map((r) => r.message),
+        ]) ?? '',
+      );
       return;
     }
-
-    if (!this.identityConfirmed()) {
-      // QA D1306 (round 28): the identity tick is marked, not only a toast.
-      const message = this.translate.instant('RECEPTION.CONFIRM_IDENTITY_FIRST');
-      refuseFields(this.host.nativeElement, IDENTITY_IDS, IDENTITY_IDS, message);
-      this.toast.error(message);
-      return;
-    }
-    refuseFields(this.host.nativeElement, [], IDENTITY_IDS, '');
 
     this.saving.set(true);
 
     const request: CheckInRequest = {
-      appointmentId: this.queueItem.appointmentId,
+      appointmentId,
       chiefComplaint: this.chiefComplaint() || null,
       copayAmount: this.copayAmount(),
       ...((this.copayAmount() ?? 0) > 0

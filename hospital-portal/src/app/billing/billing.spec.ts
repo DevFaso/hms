@@ -1,10 +1,17 @@
 import { ComponentFixture, TestBed, fakeAsync, tick } from '@angular/core/testing';
-import { HttpHeaders, HttpResponse, provideHttpClient, withXhr } from '@angular/common/http';
+import {
+  HttpErrorResponse,
+  HttpHeaders,
+  HttpResponse,
+  provideHttpClient,
+  withXhr,
+} from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of, Subject, throwError } from 'rxjs';
 
-import { BillingComponent } from './billing';
+import { BillingComponent, lineQuantityMessageKey } from './billing';
+import { markServerFieldErrors, scopeOf } from '../shared/forms/server-field-errors';
 import { BillingService, BillingInvoiceResponse, InvoicePage } from '../services/billing.service';
 import { ToastService } from '../core/toast.service';
 import { PermissionService } from '../core/permission.service';
@@ -830,6 +837,110 @@ describe('BillingComponent', () => {
       // The price says what is wrong with the price, not the quantity's "required".
       expect(msgOf('line-edit-price')).toBe('BILLING.LINE_UNIT_PRICE_REQUIRED');
     });
+  });
+
+  describe('round 29 (QA D1341 / D1342 / D1343 / D1344)', () => {
+    const page = (): HTMLElement => fixture.nativeElement as HTMLElement;
+    const msgOf = (id: string): string =>
+      page().querySelector(`#${id}-invalid-msg`)?.textContent?.trim() ?? '';
+    const line = {
+      id: 'line-9',
+      billingInvoiceId: 'inv-1',
+      itemDescription: 'Consultation',
+      itemCategory: 'SERVICE',
+      quantity: 1,
+      unitPrice: 500,
+      totalPrice: 500,
+    };
+
+    beforeEach(() => {
+      document.body.appendChild(page());
+      fixture.detectChanges();
+    });
+    afterEach(() => page().remove());
+
+    it('QA D1342: one press on "Enregistrer" marks an amount above the balance AND a blank reference', () => {
+      component.openPayment(mockInvoice({ id: 'inv-1', status: 'SENT', balanceDue: 1500 }));
+      component.paymentMethod.set('MOBILE_MONEY');
+      fixture.detectChanges();
+      component.paymentAmount.set(5000);
+      component.paymentReference.set('');
+      fixture.detectChanges();
+      // The real button, as the cashier presses it (a guard used to answer first).
+      const save = Array.from(
+        page().querySelectorAll<HTMLButtonElement>('.modal-actions .btn-primary'),
+      ).find((b) => (b.textContent ?? '').includes('BILLING.RECORD_PAYMENT'))!;
+      save.click();
+      fixture.detectChanges();
+      expect(billingSpy.recordPayment).not.toHaveBeenCalled();
+      expect(msgOf('payment-amount')).toBe('BILLING.PAYMENT_EXCEEDS_BALANCE');
+      expect(msgOf('payment-reference')).toBe('BILLING.PAYMENT_REFERENCE_REQUIRED');
+    });
+
+    it('QA D1341: a duplicate reference the server names marks the reference in the payment dialog', () => {
+      component.openPayment(mockInvoice({ id: 'inv-1', status: 'SENT', balanceDue: 1500 }));
+      fixture.detectChanges();
+      const ref = page().querySelector<HTMLElement>('#payment-reference')!;
+      const marked = markServerFieldErrors(
+        scopeOf(ref),
+        new HttpErrorResponse({
+          status: 409,
+          error: { fieldErrors: { reference: 'Déjà utilisée' } },
+        }),
+      );
+      expect(marked).toEqual(['payment-reference']);
+      expect(ref.getAttribute('aria-invalid')).toBe('true');
+      expect(msgOf('payment-reference')).toBe('Déjà utilisée');
+    });
+
+    it('QA D1344: a quantity of 0 says it must be above zero; a blank one is required', () => {
+      billingSpy.getInvoiceItems.and.returnValue(of([line]));
+      component.viewInvoice(mockInvoice({ status: 'DRAFT' }));
+      fixture.detectChanges();
+      component.startEditLine(line as any);
+      fixture.detectChanges();
+      component.editLineQuantity.set(0);
+      component.saveLine(line as any);
+      expect(msgOf('line-edit-qty')).toBe('BILLING.LINE_QUANTITY_POSITIVE');
+      component.editLineQuantity.set(null);
+      component.saveLine(line as any);
+      expect(msgOf('line-edit-qty')).toBe('COMMON.FIELD_REQUIRED');
+      expect(billingSpy.updateInvoiceItem).not.toHaveBeenCalled();
+      expect(lineQuantityMessageKey(2.5)).toBe('BILLING.LINE_QUANTITY_POSITIVE');
+      expect(lineQuantityMessageKey('3')).toBeNull();
+    });
+
+    it('QA D1344: the add-line form names a blank description, a 0 quantity and a blank price at once', () => {
+      billingSpy.getInvoiceItems.and.returnValue(of([]));
+      component.viewInvoice(mockInvoice({ status: 'DRAFT' }));
+      fixture.detectChanges();
+      component.newItemDescription.set('');
+      component.newItemQuantity.set(0);
+      component.newItemUnitPrice.set(null);
+      component.addItem();
+      expect(billingSpy.createInvoiceItem).not.toHaveBeenCalled();
+      expect(msgOf('line-desc')).toBe('COMMON.FIELD_REQUIRED');
+      expect(msgOf('line-qty')).toBe('BILLING.LINE_QUANTITY_POSITIVE');
+      expect(msgOf('line-price')).toBe('BILLING.LINE_UNIT_PRICE_REQUIRED');
+    });
+
+    it('QA D1343: after a line is saved and the lines reload, focus is on the line pencil', fakeAsync(() => {
+      billingSpy.getInvoiceItems.and.returnValue(of([line]));
+      billingSpy.getInvoice.and.returnValue(of(mockInvoice({ status: 'DRAFT' })));
+      billingSpy.updateInvoiceItem.and.returnValue(of(line as any));
+      component.viewInvoice(mockInvoice({ status: 'DRAFT' }));
+      fixture.detectChanges();
+      component.startEditLine(line as any);
+      fixture.detectChanges();
+      tick();
+      component.editLineQuantity.set(2);
+      component.editLineUnitPrice.set(600);
+      component.saveLine(line as any);
+      fixture.detectChanges();
+      tick();
+      fixture.detectChanges();
+      expect(document.activeElement?.getAttribute('data-testid')).toBe('line-edit-line-9');
+    }));
   });
 
   describe('payment reference (QA D1007)', () => {

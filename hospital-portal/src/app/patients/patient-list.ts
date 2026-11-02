@@ -20,13 +20,22 @@ import { RoleContextService } from '../core/role-context.service';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
+import { DashPipe } from '../shared/pipes/dash.pipe';
 type SortField = 'name' | 'mrn' | 'gender' | 'status' | 'createdAt';
 type SortDir = 'asc' | 'desc';
 
 @Component({
   selector: 'app-patient-list',
   standalone: true,
-  imports: [PersonNamePipe, CommonModule, RouterLink, FormsModule, TranslateModule, EnumLabelPipe],
+  imports: [
+    DashPipe,
+    PersonNamePipe,
+    CommonModule,
+    RouterLink,
+    FormsModule,
+    TranslateModule,
+    EnumLabelPipe,
+  ],
   templateUrl: './patient-list.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './patient-list.scss',

@@ -632,7 +632,7 @@
               <div class="timeline-date">
                 @let kind = timelineKind(e);
                 {{ kind.value | enumLabel: kind.domain }} ·
-                {{ e.occurredAt | serverTime | date: 'medium' }}
+                {{ e.occurredAt | serverTime | dateTime }}
               </div>
               <!--
                 E8 #50 — hospital, clinician and origin on the row itself, never

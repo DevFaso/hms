@@ -31,6 +31,7 @@ import {
   cfaAmountProblem,
 } from '../../shared/cfa-amount';
 import { FieldRefusal, refuseFields } from '../../shared/forms/invalid-fields';
+import { KeyLabelPipe } from '../../shared/pipes/key-label.pipe';
 
 /** The pay dialog's fields a refusal can mark (QA D1245). */
 const PAY_FIELDS = ['payAmount', 'payRef'];
@@ -39,6 +40,7 @@ const PAY_FIELDS = ['payAmount', 'payRef'];
   selector: 'app-my-billing',
   standalone: true,
   imports: [
+    KeyLabelPipe,
     ServerTimePipe,
     CommonModule,
     DatePipe,

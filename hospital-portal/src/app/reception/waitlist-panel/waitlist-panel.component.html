@@ -52,26 +52,36 @@
               }
             </td>
             <td>{{ entry.departmentName }}</td>
-            <td>{{ entry.preferredProviderName ?? '—' }}</td>
+            <td>{{ entry.preferredProviderName | dash }}</td>
             <td>
               <span [ngClass]="priorityClass(entry.priority)">{{
-                'RECEPTION.' + entry.priority | translate
+                entry.priority | keyLabel: 'RECEPTION.'
               }}</span>
             </td>
             <td>
-              @if (entry.requestedDateFrom || entry.requestedDateTo) {
-                <!-- QA D1119: the reader's date format, as the recall list beside it. -->
-                {{ entry.requestedDateFrom ? (entry.requestedDateFrom | date: 'mediumDate') : '?' }}
-                →
-                {{ entry.requestedDateTo ? (entry.requestedDateTo | date: 'mediumDate') : '?' }}
+              <!-- QA D1119: the reader's date format, as the recall list beside it.
+                   QA D1323 (round 29): an open end is said in words, never "→ ?". -->
+              @if (entry.requestedDateFrom && entry.requestedDateTo) {
+                {{ entry.requestedDateFrom | date: 'mediumDate' }} →
+                {{ entry.requestedDateTo | date: 'mediumDate' }}
+              } @else if (entry.requestedDateFrom) {
+                {{
+                  'RECEPTION.WINDOW_FROM'
+                    | translate: { date: (entry.requestedDateFrom | date: 'mediumDate') }
+                }}
+              } @else if (entry.requestedDateTo) {
+                {{
+                  'RECEPTION.WINDOW_UNTIL'
+                    | translate: { date: (entry.requestedDateTo | date: 'mediumDate') }
+                }}
               } @else {
                 —
               }
             </td>
-            <td class="reason-cell">{{ entry.reason ?? '—' }}</td>
+            <td class="reason-cell">{{ entry.reason | dash }}</td>
             <td>
               <span [ngClass]="statusClass(entry.status)">{{
-                'RECEPTION.' + entry.status | translate
+                entry.status | keyLabel: 'RECEPTION.'
               }}</span>
               @if (entry.status === 'OFFERED' && entry.offeredSlotStartAt) {
                 <div class="offer-info">
@@ -381,7 +391,7 @@
               <span class="slot-when"
                 >{{ slot.startAt | date: 'EEEE' }} {{ slot.startAt | date: 'short' }}</span
               >
-              <span class="slot-who">{{ slot.staffName ?? '—' }}</span>
+              <span class="slot-who">{{ slot.staffName | dash }}</span>
               @if (slot.visitTypeName) {
                 <span class="slot-type">{{ slot.visitTypeName }}</span>
               }
@@ -413,6 +423,7 @@
         class="btn-primary"
         [disabled]="offering()"
         [appSubmitGuard]="!selectedSlotId() && ('RECEPTION.SELECT_SLOT_FIRST' | translate)"
+        [submitGuardFields]="['waitlist-offer-slots']"
         (click)="submitOffer()"
       >
         @if (offering()) {

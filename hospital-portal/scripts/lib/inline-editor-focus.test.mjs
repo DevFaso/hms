@@ -202,6 +202,10 @@ const ROW_PANEL_PINS = new Map([
     'nurse-station/emar/emar.component.html activeTask',
     'master-detail: choosing a task in the queue shows its detail beside the list; focus stays in the queue (the D1283 decision, re-tested FIXED in round 28)',
   ],
+  [
+    'bed-board/bed-board.html board',
+    'not a panel: the whole census board, reloaded after a row action (found by the round-29 transitive follow); its filters were on the page before the click',
+  ],
 ]);
 
 function isDialogTag(t) {
@@ -236,17 +240,36 @@ function namesSetByRowActions(html, ts) {
       for (const f of c[1].matchAll(/(?:^|[;\s(!])(\w+)\(/g)) calls.add(f[1]);
     }
   }
-  for (const fn of calls) {
-    const head = new RegExp(
-      String.raw`\n\s*(?:public |private |protected )?${fn}\([^)]*\)[^{;]*\{`,
-    );
-    const m = head.exec(ts);
-    if (!m) continue;
-    const open = m.index + m[0].length - 1;
-    const body = ts.slice(open, closeOfBrace(ts, open));
-    for (const s of body.matchAll(/this\.(\w+)(?:\.set\(|\s*=(?!=))/g)) names.add(s[1]);
+  // QA D1335 (round 29): the dispensing queue's "Dispenser" opened its form
+  // three calls away (selectPrescription → the claim's answer → openFormFor →
+  // openForm sets showForm), and the rule read only the method the click
+  // names. Every method reached through `this.fn(` is followed (depth 5).
+  const seen = new Set();
+  let frontier = [...calls];
+  for (let depth = 0; depth < 5 && frontier.length > 0; depth++) {
+    const next = [];
+    for (const fn of frontier) {
+      if (seen.has(fn)) continue;
+      seen.add(fn);
+      const body = methodBody(ts, fn);
+      if (body === null) continue;
+      for (const s of body.matchAll(/this\.(\w+)(?:\.set\(|\s*=(?!=))/g)) names.add(s[1]);
+      for (const c of body.matchAll(/this\.(\w+)\(/g)) next.push(c[1]);
+    }
+    frontier = next;
   }
   return names;
+}
+
+/** The body of method `fn` in `ts`, or null. */
+function methodBody(ts, fn) {
+  const head = new RegExp(
+    String.raw`\n\s*(?:public |private |protected )?(?:async )?${fn}\([^)]*\)[^{;]*\{`,
+  );
+  const m = head.exec(ts);
+  if (!m) return null;
+  const open = m.index + m[0].length - 1;
+  return ts.slice(open, closeOfBrace(ts, open));
 }
 
 /** QA D1307: the row-opened panels of `html` (with its component source `ts`) that leave focus behind. */

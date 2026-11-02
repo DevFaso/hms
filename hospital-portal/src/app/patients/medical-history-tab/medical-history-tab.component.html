@@ -53,7 +53,7 @@
               {{ 'MED_HISTORY.TOBACCO' | translate }}{{ 'COMMON.COLON' | translate }}
               {{ (s.tobaccoUse ? 'COMMON.YES' : 'COMMON.NO') | translate }}
               @if (s.tobaccoUse) {
-                ({{ s.tobaccoType || '—' }}, {{ s.tobaccoPacksPerDay ?? '—' }}
+                ({{ s.tobaccoType || '—' }}, {{ s.tobaccoPacksPerDay | dash }}
                 {{ 'MED_HISTORY.PACKS_DAY' | translate }})
               }
             </p>
@@ -221,7 +221,7 @@
                     <span class="muted">· {{ f.conditionCategory }}</span>
                   }
                 </td>
-                <td>{{ f.ageAtOnset ?? '—' }}</td>
+                <td>{{ f.ageAtOnset | dash }}</td>
                 <td class="flags-cell">
                   @if (f.geneticCondition) {
                     <span
@@ -317,7 +317,7 @@
                   @if (im.sourceOfRecord && im.sourceOfRecord !== 'GIVEN_HERE') {
                     <span class="flag-badge" data-testid="immunization-source">{{
                       isKnownSource(im.sourceOfRecord)
-                        ? ('MED_HISTORY.SOURCE.' + im.sourceOfRecord | translate)
+                        ? (im.sourceOfRecord | keyLabel: 'MED_HISTORY.SOURCE.')
                         : im.sourceOfRecord
                     }}</span>
                   }

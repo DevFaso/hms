@@ -183,12 +183,12 @@
           </div>
           <div class="field-row">
             <span class="field-label">{{ 'APPOINTMENTS.CREATED_AT' | translate }}</span>
-            <span class="field-value">{{ appt.createdAt | serverTime | date: 'medium' }}</span>
+            <span class="field-value">{{ appt.createdAt | serverTime | dateTime }}</span>
           </div>
           @if (appt.updatedAt !== appt.createdAt) {
             <div class="field-row">
               <span class="field-label">{{ 'APPOINTMENTS.LAST_UPDATED' | translate }}</span>
-              <span class="field-value">{{ appt.updatedAt | serverTime | date: 'medium' }}</span>
+              <span class="field-value">{{ appt.updatedAt | serverTime | dateTime }}</span>
             </div>
           }
         </div>
@@ -431,10 +431,14 @@
         </p>
         <!-- QA D1126 / D1132: the reason is required and kept with the appointment. -->
         <div class="field">
-          <label for="dropReason">{{ 'APPOINTMENTS.STATUS_REASON_LABEL' | translate }}</label>
+          <!-- QA D1326 (round 29): starred and declared required, like every other
+               reason field (the label said "(obligatoire)" in words only). -->
+          <label for="dropReason">{{ 'APPOINTMENTS.STATUS_REASON_LABEL' | translate }} *</label>
           <textarea
             id="dropReason"
             name="dropReason"
+            required
+            aria-required="true"
             rows="3"
             data-testid="drop-reason"
             [attr.maxlength]="dropReasonMax"

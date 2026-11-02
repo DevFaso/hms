@@ -83,14 +83,14 @@
                 }}
               </td>
               <td>
-                {{ doc.createdAt | serverTime | date: 'medium' }}
+                {{ doc.createdAt | serverTime | dateTime }}
                 @if (doc.uploadedByDisplayName) {
                   <span class="muted">
                     · {{ 'PATIENT_DOCUMENTS.BY' | translate }} {{ doc.uploadedByDisplayName }}
                   </span>
                 }
               </td>
-              <td>{{ formatSize(doc.fileSizeBytes) ?? '—' }}</td>
+              <td>{{ formatSize(doc.fileSizeBytes) | dash }}</td>
               <td>
                 <button
                   type="button"

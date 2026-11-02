@@ -59,7 +59,7 @@
                   }
                   @if (a.severity) {
                     <span class="storyboard__chip-severity">
-                      {{ 'STORYBOARD.SEVERITY.' + a.severity | translate }}
+                      {{ a.severity | keyLabel: 'STORYBOARD.SEVERITY.' }}
                     </span>
                   }
                 </li>
@@ -171,8 +171,8 @@
                 'STORYBOARD.LAST_VISIT'
                   | translate
                     : {
-                        date: (last.encounterDate | serverTime | date: 'shortDate') ?? '—',
-                        department: last.departmentName ?? '—',
+                        date: (last.encounterDate | serverTime | date: 'shortDate' | dash),
+                        department: (last.departmentName | dash),
                       }
               }}
             </p>

@@ -432,4 +432,64 @@ describe('WaitlistPanelComponent', () => {
       jasmine.clock().uninstall();
     }
   });
+
+  describe('round 29 (QA D1323 / D1324 / D1325)', () => {
+    const page = (): HTMLElement => fixture.nativeElement as HTMLElement;
+
+    it('QA D1324: "Tous" lists every status, merged oldest first', () => {
+      mockReceptionService.getWaitlist.and.callFake((opts?: { status?: string }) =>
+        of(
+          opts?.status === 'OFFERED'
+            ? [entry({ id: 'o', status: 'OFFERED', createdAt: '2026-08-21T09:00:00' })]
+            : opts?.status === 'CLOSED'
+              ? [entry({ id: 'c', status: 'CLOSED', createdAt: '2026-08-19T09:00:00' })]
+              : [entry({ id: 'w', createdAt: '2026-08-20T09:00:00' })],
+        ),
+      );
+      component.statusFilter.set('ALL');
+      component.loadEntries();
+      const asked = mockReceptionService.getWaitlist.calls.allArgs().map((a) => a[0]?.status);
+      expect(asked).toEqual(jasmine.arrayContaining(['WAITING', 'OFFERED', 'CLOSED']));
+      expect(component.entries().map((e) => e.id)).toEqual(['c', 'w', 'o']);
+    });
+
+    it('QA D1323: a priority outside the dictionary shows as sent, a blank one "—", never the raw key', () => {
+      mockReceptionService.getWaitlist.and.returnValue(
+        of([entry({ id: 'a', priority: 'URGENTISSIME' }), entry({ id: 'b', priority: '' })]),
+      );
+      component.loadEntries();
+      fixture.detectChanges();
+      const text = page().textContent ?? '';
+      expect(text).not.toContain('RECEPTION.URGENTISSIME');
+      expect(text).toContain('URGENTISSIME');
+      expect(text).not.toMatch(/RECEPTION\.(\s|$)/);
+    });
+
+    it('QA D1325: offering with no slot picked marks the slot group and moves focus to it', fakeAsync(() => {
+      document.body.appendChild(page());
+      try {
+        mockSlotInventoryService.searchOpen.and.returnValue(
+          of([{ id: 'slot-1', startAt: '2026-11-05T09:00:00', staffName: 'Dr X' }]),
+        );
+        component.openOfferModal(entry());
+        fixture.detectChanges();
+        tick();
+        const offer = Array.from(
+          page().querySelectorAll<HTMLButtonElement>('.modal-footer .btn-primary'),
+        ).find((b) => (b.textContent ?? '').includes('RECEPTION.OFFER_SLOT'))!;
+        offer.click();
+        fixture.detectChanges();
+        tick();
+        const group = page().querySelector<HTMLElement>('#waitlist-offer-slots')!;
+        expect(group.getAttribute('aria-invalid')).toBe('true');
+        expect(group.getAttribute('aria-describedby')).toContain(
+          'waitlist-offer-slots-invalid-msg',
+        );
+        expect(document.activeElement).toBe(group);
+        expect(mockReceptionService.offerWaitlistSlot).not.toHaveBeenCalled();
+      } finally {
+        page().remove();
+      }
+    }));
+  });
 });

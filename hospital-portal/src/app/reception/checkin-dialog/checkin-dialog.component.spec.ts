@@ -1,12 +1,13 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { CheckinDialogComponent } from './checkin-dialog.component';
+import { CheckinDialogComponent, copayAmountMessageKey } from './checkin-dialog.component';
+import { markServerFieldErrors, scopeOf } from '../../shared/forms/server-field-errors';
 import { TranslateModule } from '@ngx-translate/core';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { ReceptionService, ReceptionQueueItem, CheckInResponse } from '../reception.service';
 import { ToastService } from '../../core/toast.service';
 import { of, throwError } from 'rxjs';
-import { HttpHeaders, HttpResponse } from '@angular/common/http';
+import { HttpErrorResponse, HttpHeaders, HttpResponse } from '@angular/common/http';
 import { BillingService } from '../../services/billing.service';
 
 describe('CheckinDialogComponent', () => {
@@ -219,5 +220,54 @@ describe('CheckinDialogComponent', () => {
     fixture.detectChanges();
     const dialog = (fixture.nativeElement as HTMLElement).querySelector('[role="dialog"]');
     expect(dialog?.getAttribute('aria-modal')).toBe('true');
+  });
+
+  describe('QA D1320 (round 29): every refused field at once, a bad copay never posted', () => {
+    const page = (): HTMLElement => fixture.nativeElement as HTMLElement;
+    const msgOf = (id: string): string =>
+      page().querySelector(`#${id}-invalid-msg`)?.textContent?.trim() ?? '';
+
+    beforeEach(() => document.body.appendChild(page()));
+    afterEach(() => page().remove());
+
+    it('a negative copay and an unticked identity are both marked on one press, nothing is sent', () => {
+      component.copayAmount.set(-200);
+      fixture.detectChanges();
+      page().querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
+      fixture.detectChanges();
+      expect(mockReceptionService.checkInPatient).not.toHaveBeenCalled();
+      expect(msgOf('checkinIdentityConfirmed')).toBe('RECEPTION.CONFIRM_IDENTITY_FIRST');
+      expect(msgOf('copayAmount')).toBe('RECEPTION.COPAY_AMOUNT_NEGATIVE');
+      expect(page().querySelector('#copayAmount')!.getAttribute('aria-invalid')).toBe('true');
+    });
+
+    it('a copay with cents is refused under the amount; a blank or 0 copay is fine', () => {
+      component.identityConfirmed.set(true);
+      component.copayAmount.set(1500.5);
+      fixture.detectChanges();
+      component.submit();
+      expect(mockReceptionService.checkInPatient).not.toHaveBeenCalled();
+      expect(msgOf('copayAmount')).toBe('BILLING.PAYMENT_WHOLE_AMOUNT');
+      expect(copayAmountMessageKey(null)).toBeNull();
+      expect(copayAmountMessageKey(0)).toBeNull();
+      expect(copayAmountMessageKey(2000)).toBeNull();
+    });
+
+    it('a copay reference the server refuses (fieldErrors.copayReference) marks the reference', () => {
+      component.copayAmount.set(1500);
+      component.copayMethod.set('MOBILE_MONEY');
+      fixture.detectChanges();
+      const ref = page().querySelector<HTMLElement>('#copayReference')!;
+      markServerFieldErrors(
+        scopeOf(ref),
+        new HttpErrorResponse({
+          status: 409,
+          error: { fieldErrors: { copayReference: 'Déjà utilisée', copayAmount: 'Trop' } },
+        }),
+      );
+      expect(ref.getAttribute('aria-invalid')).toBe('true');
+      expect(msgOf('copayReference')).toBe('Déjà utilisée');
+      expect(msgOf('copayAmount')).toBe('Trop');
+    });
   });
 });

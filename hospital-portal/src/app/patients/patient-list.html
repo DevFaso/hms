@@ -292,10 +292,10 @@
                 </div>
               </td>
               <td>
-                <code class="mrn-code">{{ patient.mrn ?? '—' }}</code>
+                <code class="mrn-code">{{ patient.mrn | dash }}</code>
               </td>
               <td>{{ patient.email }}</td>
-              <td>{{ patient.phoneNumberPrimary ?? '—' }}</td>
+              <td>{{ patient.phoneNumberPrimary | dash }}</td>
               <td>{{ patient.gender ? (patient.gender | enumLabel: 'gender') : '—' }}</td>
               <td>
                 @if (patient.bloodType) {

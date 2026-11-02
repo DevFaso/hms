@@ -209,13 +209,10 @@
         <button type="button" class="btn btn-secondary" (click)="dismissed.emit()">
           {{ 'COMMON.CANCEL' | translate }}
         </button>
-        <button
-          type="submit"
-          class="btn btn-primary"
-          [disabled]="saving()"
-          [appSubmitGuard]="submitBlockReason()"
-          [submitGuardFields]="['checkinIdentityConfirmed', 'copayReference']"
-        >
+        <!-- QA D1320 (round 29): submit() refuses every field at once, each
+             under its own reason (a guard here refused the identity first and
+             let a negative copay through to the server). -->
+        <button type="submit" class="btn btn-primary" [disabled]="saving()">
           @if (saving()) {
             <span>{{ 'COMMON.SAVING' | translate }}...</span>
           }
