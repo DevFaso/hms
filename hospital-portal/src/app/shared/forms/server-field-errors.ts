@@ -108,7 +108,12 @@ export function normalizeFieldKey(key: string): string {
 /** `items[0].quantity` → [`items0quantity`, `quantity`]; `amount` → [`amount`]. */
 function keyForms(key: string): string[] {
   const whole = normalizeFieldKey(key);
-  const last = normalizeFieldKey(key.replace(/\[\d+\]/g, '').split('.').pop() ?? '');
+  const last = normalizeFieldKey(
+    key
+      .replace(/\[\d+\]/g, '')
+      .split('.')
+      .pop() ?? '',
+  );
   return last !== '' && last !== whole ? [whole, last] : [whole];
 }
 
@@ -130,9 +135,7 @@ function namesOf(el: HTMLElement): string[] {
  * module comment for the order). Exported for the behavioural spec.
  */
 export function fieldControlFor(scope: ParentNode, key: string): HTMLElement | null {
-  const controls = Array.from(scope.querySelectorAll<HTMLElement>(CONTROL_SELECTOR)).filter(
-    usable,
-  );
+  const controls = Array.from(scope.querySelectorAll<HTMLElement>(CONTROL_SELECTOR)).filter(usable);
   for (const form of keyForms(key)) {
     const declared = controls.find((el) =>
       (el.getAttribute('data-server-field') ?? '')
@@ -191,7 +194,11 @@ export function markServerFieldErrors(
   }
   if (refusals.length === 0) return [];
   const ordered = refusals.sort((a, b) => documentOrder(scope, a.id, b.id));
-  refuseFields(scope, ordered, ordered.map((r) => r.id));
+  refuseFields(
+    scope,
+    ordered,
+    ordered.map((r) => r.id),
+  );
   return ordered.map((r) => r.id);
 }
 

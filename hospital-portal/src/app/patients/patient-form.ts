@@ -454,7 +454,9 @@ export class PatientFormComponent implements OnInit {
           const serverMessage: unknown = err?.error?.message;
           const fallback =
             err?.status === 409
-              ? this.translate.instant(genderedKey('PATIENTS.ALREADY_REGISTERED_HERE', match.gender))
+              ? this.translate.instant(
+                  genderedKey('PATIENTS.ALREADY_REGISTERED_HERE', match.gender),
+                )
               : this.translate.instant('PATIENTS.LINK_ERROR');
           const msg =
             typeof serverMessage === 'string' && serverMessage.trim() ? serverMessage : fallback;

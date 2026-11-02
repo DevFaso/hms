@@ -299,7 +299,12 @@ describe('PaymentPendingPanelComponent', () => {
       component.selectInvoice('inv-4');
       expect(component.payAmount()).toBe(1250);
       expect(amountStillDue(1250, 1250)).toBeNull();
-      expect(pendingDeclared([{ status: 'PENDING', amount: 10 }, { status: 'REJECTED', amount: 5 }])).toBe(10);
+      expect(
+        pendingDeclared([
+          { status: 'PENDING', amount: 10 },
+          { status: 'REJECTED', amount: 5 },
+        ]),
+      ).toBe(10);
     });
   });
 });

@@ -11,8 +11,7 @@ import { DateTimePipe } from '../../shared/pipes/date-time.pipe';
 @Component({
   selector: 'app-my-notifications',
   standalone: true,
-  imports: [
-    DateTimePipe, ServerTimePipe, TranslateModule, EnumLabelPipe],
+  imports: [DateTimePipe, ServerTimePipe, TranslateModule, EnumLabelPipe],
   templateUrl: './my-notifications.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrls: ['./my-notifications.component.scss', '../patient-portal-pages.scss'],

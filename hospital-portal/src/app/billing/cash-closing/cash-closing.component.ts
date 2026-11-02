@@ -26,8 +26,7 @@ function today(): string {
 @Component({
   selector: 'app-cash-closing',
   standalone: true,
-  imports: [
-    KeyLabelPipe,CommonModule, FormsModule, TranslateModule, CfaPipe, ServerTimePipe],
+  imports: [KeyLabelPipe, CommonModule, FormsModule, TranslateModule, CfaPipe, ServerTimePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <section class="cash-closing" data-testid="cash-closing" aria-labelledby="cash-closing-title">

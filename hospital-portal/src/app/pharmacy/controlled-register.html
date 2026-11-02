@@ -11,9 +11,7 @@
         data-testid="register-export-csv"
         [disabled]="exporting()"
         [appSubmitGuard]="
-          !selectedPharmacyId
-            ? ('SUBMIT_GUARD.PHARMACY' | translate)
-            : periodReason()
+          !selectedPharmacyId ? ('SUBMIT_GUARD.PHARMACY' | translate) : periodReason()
         "
         (click)="export('csv')"
       >
@@ -26,9 +24,7 @@
         data-testid="register-export-pdf"
         [disabled]="exporting()"
         [appSubmitGuard]="
-          !selectedPharmacyId
-            ? ('SUBMIT_GUARD.PHARMACY' | translate)
-            : periodReason()
+          !selectedPharmacyId ? ('SUBMIT_GUARD.PHARMACY' | translate) : periodReason()
         "
         (click)="export('pdf')"
       >
@@ -121,7 +117,7 @@
             >
             <span [class.discrepancy]="hasDiscrepancy(drug)"
               >{{ 'PHARMACY.REGISTER_ON_SHELF' | translate }}{{ 'COMMON.COLON' | translate }}
-              <strong>{{ (drug.quantityOnHand | number) | dash }}</strong>
+              <strong>{{ drug.quantityOnHand | number | dash }}</strong>
               @if (hasDiscrepancy(drug)) {
                 <span [attr.data-testid]="'register-discrepancy-' + drug.inventoryItemId">
                   · {{ 'PHARMACY.REGISTER_DISCREPANCY' | translate }}</span

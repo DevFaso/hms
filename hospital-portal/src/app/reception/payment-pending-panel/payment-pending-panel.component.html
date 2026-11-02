@@ -100,7 +100,10 @@
         @if (pending() > 0) {
           <!-- QA D1321 (round 29): the patient's pending declaration is said, as on billing. -->
           <p class="field-hint" role="status" data-testid="desk-pay-pending">
-            {{ 'BILLING.PAYMENT_PENDING_DECLARED' | translate: { amount: (pending() | cfa: selectedCurrency()) } }}
+            {{
+              'BILLING.PAYMENT_PENDING_DECLARED'
+                | translate: { amount: (pending() | cfa: selectedCurrency()) }
+            }}
           </p>
         }
         <div class="field-group">

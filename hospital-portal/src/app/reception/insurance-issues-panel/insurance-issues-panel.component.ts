@@ -14,8 +14,7 @@ import { DashPipe } from '../../shared/pipes/dash.pipe';
 @Component({
   selector: 'app-insurance-issues-panel',
   standalone: true,
-  imports: [
-    DashPipe,CommonModule, TranslateModule],
+  imports: [DashPipe, CommonModule, TranslateModule],
   templateUrl: './insurance-issues-panel.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
   styleUrl: './insurance-issues-panel.component.scss',

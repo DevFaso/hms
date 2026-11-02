@@ -125,18 +125,29 @@ function syntheticRow(depth = 0): Record<string, unknown> {
 }
 
 function valueFor(prop: string, depth: number): unknown {
-  if (/^(?:is|has|can|should|allow)[A-Z]|(?:active|enabled|required|controlled|deleted|locked)$/i.test(prop)) {
+  if (
+    /^(?:is|has|can|should|allow)[A-Z]|(?:active|enabled|required|controlled|deleted|locked)$/i.test(
+      prop,
+    )
+  ) {
     return false;
   }
   if (/(?:^id|Id|Uuid)$/.test(prop)) return `${prop}-1`;
   if (/(?:date|Date|dob|Dob)$/.test(prop)) return '2026-11-02';
   if (/(?:At|Time|time)$/.test(prop)) return '2026-11-02T10:00:00';
-  if (/(?:amount|total|balance|price|quantity|count|qty|size|cost|fee|due|paid|age|stock|dose)$/i.test(prop)) {
+  if (
+    /(?:amount|total|balance|price|quantity|count|qty|size|cost|fee|due|paid|age|stock|dose)$/i.test(
+      prop,
+    )
+  ) {
     return 1000;
   }
   if (/status$/i.test(prop)) return 'PENDING';
   if (LIST_PROPS.test(prop)) return depth < 1 ? [syntheticRow(depth + 1)] : [];
-  if (depth < 1 && /(?:patient|staff|hospital|invoice|prescription|medication|appointment|order|user)$/i.test(prop)) {
+  if (
+    depth < 1 &&
+    /(?:patient|staff|hospital|invoice|prescription|medication|appointment|order|user)$/i.test(prop)
+  ) {
     return syntheticRow(depth + 1);
   }
   return 'Test';
@@ -159,7 +170,11 @@ function answer(rows: boolean): unknown[] {
 }
 
 /** Answers the pending reads (a few rounds: an answer can start the next read); drops the writes. */
-function settle(ctrl: HttpTestingController, fixture: ComponentFixture<unknown>, rows: boolean): void {
+function settle(
+  ctrl: HttpTestingController,
+  fixture: ComponentFixture<unknown>,
+  rows: boolean,
+): void {
   for (let round = 0; round < 4; round++) {
     const pending = ctrl.match(() => true);
     if (pending.length === 0) break;
@@ -381,7 +396,9 @@ describe('Form behaviour guard (QA round 29: empty submit, server fieldErrors)',
       }
       if (findings === null) {
         expect(NOT_MOUNTED[entry.file])
-          .withContext(`${entry.file} does not mount (${errors.join(' / ')}); list it in NOT_MOUNTED with why`)
+          .withContext(
+            `${entry.file} does not mount (${errors.join(' / ')}); list it in NOT_MOUNTED with why`,
+          )
           .toBeTruthy();
         return;
       }
@@ -398,7 +415,10 @@ describe('Form behaviour guard (QA round 29: empty submit, server fieldErrors)',
     console.log(
       'FORM-BEHAVIOUR reached | ' +
         [...reached]
-          .map(([f, r]) => `${f} (${r.mode}): scopes ${r.scopes}, presses ${r.presses}, controls ${r.controls}`)
+          .map(
+            ([f, r]) =>
+              `${f} (${r.mode}): scopes ${r.scopes}, presses ${r.presses}, controls ${r.controls}`,
+          )
           .join(' | '),
     );
     expect(total)

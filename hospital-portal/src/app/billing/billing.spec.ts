@@ -867,9 +867,9 @@ describe('BillingComponent', () => {
       component.paymentReference.set('');
       fixture.detectChanges();
       // The real button, as the cashier presses it (a guard used to answer first).
-      const save = Array.from(page().querySelectorAll<HTMLButtonElement>('.modal-actions .btn-primary')).find(
-        (b) => (b.textContent ?? '').includes('BILLING.RECORD_PAYMENT'),
-      )!;
+      const save = Array.from(
+        page().querySelectorAll<HTMLButtonElement>('.modal-actions .btn-primary'),
+      ).find((b) => (b.textContent ?? '').includes('BILLING.RECORD_PAYMENT'))!;
       save.click();
       fixture.detectChanges();
       expect(billingSpy.recordPayment).not.toHaveBeenCalled();
@@ -883,7 +883,10 @@ describe('BillingComponent', () => {
       const ref = page().querySelector<HTMLElement>('#payment-reference')!;
       const marked = markServerFieldErrors(
         scopeOf(ref),
-        new HttpErrorResponse({ status: 409, error: { fieldErrors: { reference: 'Déjà utilisée' } } }),
+        new HttpErrorResponse({
+          status: 409,
+          error: { fieldErrors: { reference: 'Déjà utilisée' } },
+        }),
       );
       expect(marked).toEqual(['payment-reference']);
       expect(ref.getAttribute('aria-invalid')).toBe('true');

@@ -64,7 +64,9 @@ describe('AppointmentListComponent — QA D1322 (round 29): the search asks the 
       component.onSearchChange(term);
       tick(300);
       expect(list).toHaveBeenCalledWith({ search: term });
-      expect(component.filtered().map((a) => a.id)).withContext(term).toEqual(['a2']);
+      expect(component.filtered().map((a) => a.id))
+        .withContext(term)
+        .toEqual(['a2']);
       component.onSearchChange('');
       tick(300);
     }

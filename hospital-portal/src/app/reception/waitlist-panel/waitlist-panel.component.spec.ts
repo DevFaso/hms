@@ -474,15 +474,17 @@ describe('WaitlistPanelComponent', () => {
         component.openOfferModal(entry());
         fixture.detectChanges();
         tick();
-        const offer = Array.from(page().querySelectorAll<HTMLButtonElement>('.modal-footer .btn-primary')).find(
-          (b) => (b.textContent ?? '').includes('RECEPTION.OFFER_SLOT'),
-        )!;
+        const offer = Array.from(
+          page().querySelectorAll<HTMLButtonElement>('.modal-footer .btn-primary'),
+        ).find((b) => (b.textContent ?? '').includes('RECEPTION.OFFER_SLOT'))!;
         offer.click();
         fixture.detectChanges();
         tick();
         const group = page().querySelector<HTMLElement>('#waitlist-offer-slots')!;
         expect(group.getAttribute('aria-invalid')).toBe('true');
-        expect(group.getAttribute('aria-describedby')).toContain('waitlist-offer-slots-invalid-msg');
+        expect(group.getAttribute('aria-describedby')).toContain(
+          'waitlist-offer-slots-invalid-msg',
+        );
         expect(document.activeElement).toBe(group);
         expect(mockReceptionService.offerWaitlistSlot).not.toHaveBeenCalled();
       } finally {

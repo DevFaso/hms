@@ -497,7 +497,12 @@ describe('DispensingComponent', () => {
     document.body.appendChild(el);
     try {
       component.recentDispenses.set([
-        { id: 'd-1', medicationName: 'Paracétamol', status: 'COMPLETED', patientName: 'Awa' } as any,
+        {
+          id: 'd-1',
+          medicationName: 'Paracétamol',
+          status: 'COMPLETED',
+          patientName: 'Awa',
+        } as any,
       ]);
       fixture.detectChanges();
       component.cancelDispense('d-1');

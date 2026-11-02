@@ -11,16 +11,7 @@ import {
 import { CommonModule } from '@angular/common';
 import { RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
-import {
-  Subject,
-  catchError,
-  debounceTime,
-  distinctUntilChanged,
-  of,
-  switchMap,
-  takeUntil,
-  tap,
-} from 'rxjs';
+import { Subject, catchError, debounceTime, of, switchMap, takeUntil, tap } from 'rxjs';
 import { AppointmentService, AppointmentResponse } from '../services/appointment.service';
 import { HospitalService, HospitalResponse } from '../services/hospital.service';
 import { PermissionService } from '../core/permission.service';
@@ -109,7 +100,6 @@ export class AppointmentListComponent implements OnInit, OnDestroy {
     this.searchInput$
       .pipe(
         debounceTime(300),
-        distinctUntilChanged(),
         tap(() => {
           this.currentPage.set(0);
           this.serverMatches.set(null);
@@ -182,7 +172,10 @@ export class AppointmentListComponent implements OnInit, OnDestroy {
     const serverIds = new Set((server ?? []).map((a) => a.id));
     // The server may know a match the page has not loaded: both are read.
     let result = server
-      ? [...this.appointments(), ...server.filter((a) => !this.appointments().some((b) => b.id === a.id))]
+      ? [
+          ...this.appointments(),
+          ...server.filter((a) => !this.appointments().some((b) => b.id === a.id)),
+        ]
       : this.appointments();
 
     if (this.statusFilter) {

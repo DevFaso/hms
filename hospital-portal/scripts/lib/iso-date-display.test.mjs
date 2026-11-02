@@ -25,7 +25,7 @@ const appDir = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'src', 
 const DATE_FIELD =
   /(?:\.|\b)[a-zA-Z]*(?:Date|At|Datetime|DateTime|Timestamp)(?:From|To|Start|End|Until)?\b|\bdateOfBirth\b|\bdob\b|\.date\b/;
 const FORMATTED =
-  /\|\s*(?:date|dayMonth)\b|\bformat\w*\(|\bfmt\w*\(|\|\s*(?:relativeTime|timeAgo|age)\b/;
+  /\|\s*(?:date|dateTime|dayMonth)\b|\bformat\w*\(|\bfmt\w*\(|\|\s*(?:relativeTime|timeAgo|age)\b/;
 
 /** The ISO dates one template interpolates unformatted. */
 export function isoDateOffenders(html, file = 'template') {

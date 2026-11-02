@@ -46,7 +46,11 @@ import { KeyLabelPipe } from '../../shared/pipes/key-label.pipe';
 import { DashPipe } from '../../shared/pipes/dash.pipe';
 type WaitlistStatus = 'ALL' | 'WAITING' | 'OFFERED' | 'CLOSED';
 /** Every status a waitlist entry can hold (ReceptionServiceImpl WAITLIST_STATUS_*). */
-const WAITLIST_STATUSES: readonly Exclude<WaitlistStatus, 'ALL'>[] = ['WAITING', 'OFFERED', 'CLOSED'];
+const WAITLIST_STATUSES: readonly Exclude<WaitlistStatus, 'ALL'>[] = [
+  'WAITING',
+  'OFFERED',
+  'CLOSED',
+];
 
 /** Every field the add form may refuse, so a corrected one loses its mark. */
 const WAITLIST_FIELDS = ['wl-patient', 'wl-dept', 'wl-to'];

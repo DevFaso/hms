@@ -56,13 +56,15 @@ function lineOf(text, index, offset = 0) {
 function hits(re, templates = coveredTemplates()) {
   const out = [];
   for (const { file, text, lineOffset } of templates) {
-    for (const m of text.matchAll(re)) out.push(`${rel(file)}:${lineOf(text, m.index, lineOffset)}`);
+    for (const m of text.matchAll(re))
+      out.push(`${rel(file)}:${lineOf(text, m.index, lineOffset)}`);
   }
   return out;
 }
 
 const DASH_RE = /\?\?\s*'—'/g;
-const KEY_LABEL_RE = /'[A-Z][A-Z0-9_]*(?:\.[A-Z0-9_]+)*\.'\s*\+\s*[A-Za-z_]\w*(?:\??\.\w+)+\s*\|\s*translate/g;
+const KEY_LABEL_RE =
+  /'[A-Z][A-Z0-9_]*(?:\.[A-Z0-9_]+)*\.'\s*\+\s*[A-Za-z_]\w*(?:\??\.\w+)+\s*\|\s*translate/g;
 const DATE_MEDIUM_RE = /date:\s*'medium'/g;
 
 export function dashFindings(text) {
@@ -70,7 +72,7 @@ export function dashFindings(text) {
 }
 
 test('QA D1328: a missing value reads "—" through | dash, never `?? \'—\'`', () => {
-  assert.deepEqual(hits(DASH_RE), [], "write {{ value | dash }} (shared/pipes/dash.pipe.ts)");
+  assert.deepEqual(hits(DASH_RE), [], 'write {{ value | dash }} (shared/pipes/dash.pipe.ts)');
 });
 
 test('QA D1323: a label built from a server value never prints its raw key', () => {
@@ -89,7 +91,11 @@ test('QA D1323 / D1328 / D1340 guard: the rules see the round-29 shapes', () => 
     },
   ];
   assert.equal(hits(DASH_RE, t).length, 1);
-  assert.equal(hits(KEY_LABEL_RE, t).length, 1, 'a loop variable over constants is not a row value');
+  assert.equal(
+    hits(KEY_LABEL_RE, t).length,
+    1,
+    'a loop variable over constants is not a row value',
+  );
   assert.equal(hits(DATE_MEDIUM_RE, t).length, 1);
 });
 
@@ -133,8 +139,10 @@ test('QA D1326 guard: the rule sees the round-29 cancel-reason label', () => {
 // ── 5. gendered families ──────────────────────────────────────────────────
 
 const FEMININE = /\b(?:enregistrée|Née|registrada|Nacida|inscrite|admise|inscrita|ingresada)\b/u;
-const MASCULINE = /\b(?:enregistré|Né|registrado|Nacido|inscrit|admis|inscrito|ingresado)(?![\p{L}(/])/u;
-const NEUTRAL = /(?:enregistré\(e\)|Né\(e\)|registrado\/a|Nacido\/a|inscrit\(e\)|admis\(e\)|inscrito\/a|ingresado\/a)/u;
+const MASCULINE =
+  /\b(?:enregistré|Né|registrado|Nacido|inscrit|admis|inscrito|ingresado)(?![\p{L}(/])/u;
+const NEUTRAL =
+  /(?:enregistré\(e\)|Né\(e\)|registrado\/a|Nacido\/a|inscrit\(e\)|admis\(e\)|inscrito\/a|ingresado\/a)/u;
 
 /** The families (BASE with BASE_FEMALE / BASE_MALE) and what is wrong with each. */
 export function genderedFamilyFindings(byLocale) {
@@ -170,11 +178,19 @@ test('QA D1327: every word that describes the patient agrees with the sex its ke
   const direct = [];
   for (const { file, text, lineOffset } of templatesIn(appDir)) {
     for (const base of bases) {
-      const re = new RegExp(`'${base.replace(/\./g, '\\.')}(?:_FEMALE|_MALE)?'\\s*\\|\\s*translate`, 'g');
-      for (const m of text.matchAll(re)) direct.push(`${rel(file)}:${lineOf(text, m.index, lineOffset)}`);
+      const re = new RegExp(
+        `'${base.replace(/\./g, '\\.')}(?:_FEMALE|_MALE)?'\\s*\\|\\s*translate`,
+        'g',
+      );
+      for (const m of text.matchAll(re))
+        direct.push(`${rel(file)}:${lineOf(text, m.index, lineOffset)}`);
     }
   }
-  assert.deepEqual(direct, [], "pick the key with genderedKey(base, sex) (shared/i18n/born-label.ts)");
+  assert.deepEqual(
+    direct,
+    [],
+    'pick the key with genderedKey(base, sex) (shared/i18n/born-label.ts)',
+  );
 });
 
 test('QA D1327 guard: the rule sees the round-29 "registrado en 2 hospitales" for a woman', () => {
@@ -210,9 +226,7 @@ export function preemptingGuards(html, ts) {
     if (!t.attrs.has('appSubmitGuard') && !t.attrs.has('[appSubmitGuard]')) return;
     const submit = (t.attrs.get('type') ?? 'submit').replace(/"/g, '') === 'submit';
     const handler =
-      t.attrs.get('(click)') ??
-      (submit ? formOf.get(i)?.attrs.get('(ngSubmit)') : undefined) ??
-      '';
+      t.attrs.get('(click)') ?? (submit ? formOf.get(i)?.attrs.get('(ngSubmit)') : undefined) ?? '';
     const fn = /(\w+)\(/.exec(handler.replace(/^"|"$/g, ''))?.[1];
     if (!fn) return;
     if (REFUSAL_OBJECTS.test(memberBody(ts, fn) ?? '')) out.push(fn);
@@ -246,7 +260,10 @@ test('QA D1342 guard: the rule sees the round-29 payment button', () => {
 `;
   // The reasons are built in a helper; the handler hands them on.
   assert.deepEqual(preemptingGuards(html, ts), ['recordPayment']);
-  assert.deepEqual(preemptingGuards(html.replace('appSubmitGuard submitGuardRequired ', ''), ts), []);
+  assert.deepEqual(
+    preemptingGuards(html.replace('appSubmitGuard submitGuardRequired ', ''), ts),
+    [],
+  );
   // QA D1320: the check-in's guarded submit sends the form's (ngSubmit).
   const form = `<form (ngSubmit)="recordPayment()"><button type="submit" [appSubmitGuard]="x">OK</button></form>`;
   assert.deepEqual(preemptingGuards(form, ts), ['recordPayment']);

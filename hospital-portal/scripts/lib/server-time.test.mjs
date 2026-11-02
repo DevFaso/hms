@@ -77,7 +77,7 @@ test('every wall-clock allowance still matches a date pipe (allowances only shri
     const rel = relative(appDir, file).replace(/\\/g, '/');
     for (const key of WALL_CLOCK.keys()) {
       const [path, field] = key.split(':');
-      if (path === rel && new RegExp(String.raw`\b${field}\s*\|\s*date\b`).test(text)) {
+      if (path === rel && new RegExp(String.raw`\b${field}\s*\|\s*date(?:Time)?\b`).test(text)) {
         used.add(key);
       }
     }

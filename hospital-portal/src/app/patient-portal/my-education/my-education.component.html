@@ -175,8 +175,7 @@
               </span>
               <div class="pli-body">
                 <span class="pli-title">{{ q.questionText }}</span>
-                {{ ' '
-                }}<span class="pli-sub">{{ q.createdAt | serverTime | dateTime }}</span>
+                {{ ' ' }}<span class="pli-sub">{{ q.createdAt | serverTime | dateTime }}</span>
                 @if (q.isAnswered && q.answerText) {
                   <div class="edu-answer">
                     <strong>{{ 'PORTAL.EDUCATION.ANSWER' | translate }}</strong>

@@ -68,9 +68,7 @@ type ListOutcome = { ok: true; page: PatientDocumentPage } | { ok: false; messag
 @Component({
   selector: 'app-documents-tab',
   standalone: true,
-  imports: [
-    DateTimePipe,
-    DashPipe,ServerTimePipe, CommonModule, FormsModule, TranslateModule],
+  imports: [DateTimePipe, DashPipe, ServerTimePipe, CommonModule, FormsModule, TranslateModule],
   templateUrl: './documents-tab.component.html',
   styleUrl: './documents-tab.component.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

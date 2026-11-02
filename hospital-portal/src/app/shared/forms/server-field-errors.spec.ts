@@ -63,7 +63,9 @@ describe('server-field-errors (QA D1341 / D1320 / D1321)', () => {
   });
 
   it('skips a disabled or hidden control', () => {
-    root = host(`<form><input id="amount" disabled><div hidden><input id="x-reference"></div></form>`);
+    root = host(
+      `<form><input id="amount" disabled><div hidden><input id="x-reference"></div></form>`,
+    );
     const form = root.querySelector('form')!;
     expect(fieldControlFor(form, 'amount')).toBeNull();
     expect(fieldControlFor(form, 'reference')).toBeNull();
@@ -148,9 +150,13 @@ describe('server-field-errors (QA D1341 / D1320 / D1321)', () => {
       root = host(`<form><input id="amount"><button type="button" id="go">Go</button></form>`);
       root.querySelector<HTMLButtonElement>('#go')!.click();
       http.get('/x').subscribe({ error: () => undefined });
-      ctrl.expectOne('/x').flush({ fieldErrors: { amount: 'x' } }, { status: 400, statusText: 'B' });
+      ctrl
+        .expectOne('/x')
+        .flush({ fieldErrors: { amount: 'x' } }, { status: 400, statusText: 'B' });
       http.post('/y', {}).subscribe({ error: () => undefined });
-      ctrl.expectOne('/y').flush({ fieldErrors: { amount: 'x' } }, { status: 500, statusText: 'S' });
+      ctrl
+        .expectOne('/y')
+        .flush({ fieldErrors: { amount: 'x' } }, { status: 500, statusText: 'S' });
       http.post('/z', {}).subscribe({ error: () => undefined });
       ctrl.expectOne('/z').flush({ message: 'no' }, { status: 400, statusText: 'B' });
       flush();

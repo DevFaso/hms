@@ -141,7 +141,7 @@ export class ControlledRegisterComponent implements OnInit {
   periodReason(): string | false {
     const refusals = this.periodRefusals();
     if (refusals.length === 0) return false;
-    const missing = refusals.some((r) => r.id === 'register-from' ? !this.from : !this.to);
+    const missing = refusals.some((r) => (r.id === 'register-from' ? !this.from : !this.to));
     return missing ? this.periodMessage(refusals) : this.translate.instant('SUBMIT_GUARD.PERIOD');
   }
 

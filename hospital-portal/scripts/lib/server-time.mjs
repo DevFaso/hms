@@ -58,7 +58,9 @@ export const WALL_CLOCK = new Map([
   ],
 ]);
 
-const DATE_PIPE = /\|\s*date\b/g;
+// QA D1340 (round 29): `dateTime` (shared/pipes/date-time.pipe.ts) reads its
+// value as the date pipe does, so it needs `serverTime` in front of it too.
+const DATE_PIPE = /\|\s*date(?:Time)?\b/g;
 
 /** The index of the `(` that opens the group closed by the `)` at `close`. */
 function openingParen(text, close) {

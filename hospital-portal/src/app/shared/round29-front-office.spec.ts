@@ -19,7 +19,9 @@ describe('round-29 front-office shared pieces', () => {
   });
 
   it('QA D1323: a server value outside the dictionary shows as sent, never as its key', () => {
-    TestBed.configureTestingModule({ providers: [provideTranslateService({ defaultLanguage: 'fr' })] });
+    TestBed.configureTestingModule({
+      providers: [provideTranslateService({ defaultLanguage: 'fr' })],
+    });
     const t = TestBed.inject(TranslateService);
     t.setTranslation('fr', fr);
     t.use('fr');
@@ -30,7 +32,9 @@ describe('round-29 front-office shared pieces', () => {
   });
 
   it('QA D1327: the duplicate card agrees with a woman in French and Spanish', () => {
-    TestBed.configureTestingModule({ providers: [provideTranslateService({ defaultLanguage: 'fr' })] });
+    TestBed.configureTestingModule({
+      providers: [provideTranslateService({ defaultLanguage: 'fr' })],
+    });
     const t = TestBed.inject(TranslateService);
     t.setTranslation('fr', fr);
     t.setTranslation('es', es);
@@ -43,7 +47,9 @@ describe('round-29 front-office shared pieces', () => {
     expect(say('es', 'PATIENTS.REGISTERED_IN_MANY', 'FEMALE')).toBe('registrada en 2 hospitales');
     expect(say('fr', 'PATIENTS.REGISTERED_IN_MANY', 'MALE')).toBe('enregistré dans 2 hôpitaux');
     expect(say('fr', 'PATIENTS.REGISTERED_IN_MANY', null)).toBe('enregistré(e) dans 2 hôpitaux');
-    expect(say('es', 'PATIENTS.ALREADY_REGISTERED_HERE', 'F')).toBe('Ya registrada en este hospital');
+    expect(say('es', 'PATIENTS.ALREADY_REGISTERED_HERE', 'F')).toBe(
+      'Ya registrada en este hospital',
+    );
     expect(say('en', 'PATIENTS.REGISTERED_IN_ONE', 'FEMALE')).toBe('registered at 2 hospital');
     expect(genderedKey('PATIENTS.BORN', 'OTHER')).toBe('PATIENTS.BORN');
   });

@@ -34,6 +34,9 @@
 export const RESOLVING_PIPES = new Set([
   'enumLabel',
   'roleLabel',
+  // QA D1323 (round 29): `value | keyLabel: 'PREFIX.'` is the translation of
+  // PREFIX + value (shared/pipes/key-label.pipe.ts).
+  'keyLabel',
   'translate',
   'date',
   'number',

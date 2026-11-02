@@ -47,8 +47,7 @@ interface OpenInvoice {
 @Component({
   selector: 'app-payment-pending-panel',
   standalone: true,
-  imports: [
-    DashPipe,CommonModule, FormsModule, TranslateModule, CfaPipe, DialogFocusDirective],
+  imports: [DashPipe, CommonModule, FormsModule, TranslateModule, CfaPipe, DialogFocusDirective],
   templateUrl: './payment-pending-panel.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './payment-pending-panel.component.scss',
