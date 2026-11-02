@@ -1919,6 +1919,7 @@
     "ALLERGY_OVERRIDE": {
       "RECORDED_AT_CREATION": "registrada al crear la orden",
       "RECORDED_ON_EDIT": "registrada al modificar la orden",
+      "RECORDED_AT_SIGNATURE": "registrada al firmar la orden",
       "REASON_REPLACED_ON_EDIT": "motivo sustituido al modificar la orden",
       "CLEARED_THE_EDITED_ORDER_NO_LONGER_CONFLICTS": "retirada: la orden modificada ya no entra en conflicto"
     },

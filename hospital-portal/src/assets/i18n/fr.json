@@ -1919,6 +1919,7 @@
     "ALLERGY_OVERRIDE": {
       "RECORDED_AT_CREATION": "enregistré à la création de la prescription",
       "RECORDED_ON_EDIT": "enregistré à la modification de la prescription",
+      "RECORDED_AT_SIGNATURE": "enregistré à la signature de la prescription",
       "REASON_REPLACED_ON_EDIT": "motif remplacé à la modification de la prescription",
       "CLEARED_THE_EDITED_ORDER_NO_LONGER_CONFLICTS": "levé : la prescription modifiée n’est plus en conflit"
     },

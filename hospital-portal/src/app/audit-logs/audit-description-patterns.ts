@@ -958,7 +958,7 @@ export const AUDIT_DESCRIPTION_PATTERNS: readonly AuditDescriptionPattern[] = [
   },
   {
     key: 'AUDIT.DESC.ALLERGY_OVERRIDE',
-    re: /^Allergy override (recorded at creation|recorded on edit|reason replaced on edit|cleared: the edited order no longer conflicts)$/,
+    re: /^Allergy override (recorded at creation|recorded on edit|recorded at signature|reason replaced on edit|cleared: the edited order no longer conflicts)$/,
     params: ['what'],
     localise: { what: 'phrase:ALLERGY_OVERRIDE' },
   },

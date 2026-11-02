@@ -508,7 +508,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
         PrescriptionResponseDTO signed = prescriptionMapper.toResponseDTO(prescriptionRepository.save(prescription));
         if (allergyAcknowledgement != null) {
             auditAllergyOverrideAfterCommit(prescription, signer.getUser() != null ? signer.getUser().getId() : null,
-                allergyAcknowledgement, "Allergy override recorded on edit");
+                allergyAcknowledgement, "Allergy override recorded at signature");
         }
         // QA D793: the signature is the last look before the pharmacy and the
         // ward act on the order, so the cross-reactivity advisory is repeated
