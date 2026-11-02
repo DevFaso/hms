@@ -424,7 +424,7 @@
         @for (m of identityMatches; track m.patientId) {
           <div class="existing-match-row">
             <div class="existing-match-info">
-              <span class="match-name">{{ m.fullName ?? '—' }}</span>
+              <span class="match-name">{{ m.fullName | dash }}</span>
               {{ ' '
               }}<span class="match-meta">
                 @if (m.birthYear) {
@@ -437,17 +437,20 @@
                 } @else {
                   {{ 'PATIENTS.MATCHED_ON_IDENTITY' | translate }} ·
                 }
-                {{ 'PATIENTS.REGISTERED_AT' | translate }} {{ m.hospitalCount }}
+                <!-- QA D1327: agrees with the patient's sex, as the "born" word does. -->
                 {{
-                  m.hospitalCount === 1
-                    ? ('PATIENTS.HOSPITAL_ONE' | translate)
-                    : ('PATIENTS.HOSPITAL_MANY' | translate)
+                  genderedKey(
+                    m.hospitalCount === 1
+                      ? 'PATIENTS.REGISTERED_IN_ONE'
+                      : 'PATIENTS.REGISTERED_IN_MANY',
+                    m.gender
+                  ) | translate: { count: m.hospitalCount }
                 }}
               </span>
             </div>
             @if (m.alreadyRegisteredHere) {
               <span class="match-here-badge">
-                {{ 'PATIENTS.ALREADY_REGISTERED_HERE' | translate }}
+                {{ genderedKey('PATIENTS.ALREADY_REGISTERED_HERE', m.gender) | translate }}
               </span>
               <a class="btn-secondary" [routerLink]="['/patients', m.patientId]">
                 {{ 'PATIENTS.VIEW_RECORD' | translate }}
@@ -538,9 +541,9 @@
         @for (c of duplicateCandidates; track c.patientId) {
           <tr>
             <td>{{ c.fullName }}</td>
-            <td>{{ c.mrn ?? '—' }}</td>
+            <td>{{ c.mrn | dash }}</td>
             <td>{{ c.dateOfBirth ? (c.dateOfBirth | serverTime | date: 'mediumDate') : '—' }}</td>
-            <td>{{ c.phone ?? '—' }}</td>
+            <td>{{ c.phone | dash }}</td>
             <td>
               <span class="confidence-bar">
                 <span

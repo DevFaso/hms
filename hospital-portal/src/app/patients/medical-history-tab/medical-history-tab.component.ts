@@ -33,6 +33,8 @@ import { SubmitGuardDirective } from '../../shared/forms/submit-guard.directive'
 import { refuseFields } from '../../shared/forms/invalid-fields';
 import { hasClinicalContent } from '../../shared/forms/clinical-content';
 import { refusalReason } from '../../shared/refusal-reason';
+import { KeyLabelPipe } from '../../shared/pipes/key-label.pipe';
+import { DashPipe } from '../../shared/pipes/dash.pipe';
 
 /** QA D1148: what a social-history version records; one of them is required. */
 const SOCIAL_CONTENT_FIELDS = [
@@ -72,6 +74,8 @@ type FamilyFilter = 'all' | 'genetic' | 'screening-needed';
   selector: 'app-medical-history-tab',
   standalone: true,
   imports: [
+    DashPipe,
+    KeyLabelPipe,
     SubmitGuardDirective,
     ModalDialogDirective,
     ServerTimePipe,

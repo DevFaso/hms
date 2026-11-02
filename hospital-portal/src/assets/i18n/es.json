@@ -1464,7 +1464,7 @@
     "YES_CANCEL": "Sí, cancelar",
     "DURATION_SET_BY_SLOTS": "La duración de la visita la fijan los turnos del profesional.",
     "STATUS_REASON": "Motivo del cambio de estado",
-    "STATUS_REASON_LABEL": "Motivo (obligatorio)",
+    "STATUS_REASON_LABEL": "Motivo",
     "STATUS_REASON_REQUIRED": "Indique el motivo antes de confirmar.",
     "NO_SHOW_DIALOG_TITLE": "Marcar como ausente",
     "NO_SHOW_CONFIRM_MESSAGE": "El paciente no acudió a esta cita.",
@@ -2232,7 +2232,8 @@
     "ADJUSTMENT_REVERSAL_REASON_REQUIRED": "Indique el motivo de la anulación de este ajuste.",
     "ADJUSTMENT_REVERSAL_NOTE": "El importe vuelve a lo que se adeuda. El dinero ya recibido, como el copago pagado en la admisión, sigue registrado.",
     "ADJUSTMENT_REVERSAL_FAILED": "No se pudo anular el ajuste.",
-    "EMAIL_ADDRESS_INVALID": "Dirección de correo electrónico no válida: {{ addresses }}"
+    "EMAIL_ADDRESS_INVALID": "Dirección de correo electrónico no válida: {{ addresses }}",
+    "LINE_QUANTITY_POSITIVE": "Ingrese una cantidad entera mayor que cero."
   },
   "CHAT": {
     "ACCESS_DENIED": "No tiene permiso para acceder a la mensajería.",
@@ -4851,7 +4852,7 @@
     "ADD_SUBTITLE": "Añadir un nuevo paciente al sistema",
     "ALLERGIES": "Alergias",
     "ALLERGIES_PLACEHOLDER": "Alergias conocidas...",
-    "ALREADY_REGISTERED_HERE": "Ya registrado en este hospital",
+    "ALREADY_REGISTERED_HERE": "Ya registrado/a en este hospital",
     "APPOINTMENTS_LOAD_FAILED": "Error al cargar las citas",
     "APPOINTMENTS_TAB": "Citas",
     "APPOINTMENTS_TITLE": "Historial de citas",
@@ -4936,8 +4937,6 @@
     "HOSPITALS_LOAD_FAILED": "Error al cargar los hospitales",
     "HOSPITAL_INFO": "Información del hospital",
     "HOSPITAL_LOAD_FAILED": "Error al cargar el hospital",
-    "HOSPITAL_MANY": "hospitales",
-    "HOSPITAL_ONE": "hospital",
     "INSURANCE": "Seguro",
     "LAB_ORDERS": "Órdenes de laboratorio",
     "LAST_NAME": "Apellido",
@@ -5018,7 +5017,6 @@
     "RECORDS": "registros",
     "REGISTER": "Registrar paciente",
     "REGISTERED": "Registrado",
-    "REGISTERED_AT": "registrado en",
     "REGISTERED_EMAIL_SENT": "Paciente registrado con éxito. Se está enviando un correo de verificación.",
     "REGISTERED_SMS_SENT": "Paciente registrado con éxito. Las credenciales se enviarán por SMS.",
     "REGISTERED_SUCCESS": "Paciente registrado con éxito.",
@@ -5078,7 +5076,15 @@
     "EXISTING_MATCH_DESC_BOTH_HERE": "Ya hay en este hospital expedientes con el mismo nombre y fecha de nacimiento, o con este teléfono o correo. Abra el expediente correcto en lugar de crear un duplicado.",
     "EXISTING_MATCH_DESC_BOTH_MIXED": "Ya existen expedientes con el mismo nombre y fecha de nacimiento, o con este teléfono o correo, aquí o en otro hospital. Abra o vincule el expediente correcto en lugar de crear un duplicado.",
     "BORN_FEMALE": "Nacida en",
-    "BORN_MALE": "Nacido en"
+    "BORN_MALE": "Nacido en",
+    "REGISTERED_IN_ONE": "registrado/a en {{count}} hospital",
+    "REGISTERED_IN_ONE_FEMALE": "registrada en {{count}} hospital",
+    "REGISTERED_IN_ONE_MALE": "registrado en {{count}} hospital",
+    "REGISTERED_IN_MANY": "registrado/a en {{count}} hospitales",
+    "REGISTERED_IN_MANY_FEMALE": "registrada en {{count}} hospitales",
+    "REGISTERED_IN_MANY_MALE": "registrado en {{count}} hospitales",
+    "ALREADY_REGISTERED_HERE_FEMALE": "Ya registrada en este hospital",
+    "ALREADY_REGISTERED_HERE_MALE": "Ya registrado en este hospital"
   },
   "PLATFORM": {
     "ACCESS_LOGS": "Registros de acceso",
@@ -7713,7 +7719,7 @@
     "FLAGS": "Alertas",
     "FLOW_BOARD": "Tablero de flujo",
     "FLOW_BOARD_TITLE": "Tablero de flujo de pacientes",
-    "IDENTITY_CONFIRMED": "Identidad confirmada (obligatorio)",
+    "IDENTITY_CONFIRMED": "Identidad confirmada",
     "INCOMPLETE_DEMOGRAPHICS": "Datos demográficos incompletos",
     "INSURANCE": "Seguro",
     "INSURANCE_ISSUE": "Problema de seguro",
@@ -7881,7 +7887,11 @@
     "CLOSE_ENTRY_TITLE": "¿Cerrar esta entrada de la lista de espera?",
     "CLOSE_ENTRY_REASON": "Motivo del cierre",
     "CLOSE_ENTRY_CONFIRM": "Cerrar la entrada",
-    "WAIT_DURATION": "Espera: {{minutes}} min"
+    "WAIT_DURATION": "Espera: {{minutes}} min",
+    "PAYMENT_EXCEEDS_WITH_PENDING": "El paciente declaró {{pending}} sobre este saldo, pendiente de confirmación: ingrese como máximo {{max}}.",
+    "COPAY_AMOUNT_NEGATIVE": "El copago no puede ser negativo.",
+    "WINDOW_FROM": "Desde el {{date}}",
+    "WINDOW_UNTIL": "Hasta el {{date}}"
   },
   "REFERRALS": {
     "ACCEPTED": "Aceptada",

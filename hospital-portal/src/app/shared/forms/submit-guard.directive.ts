@@ -344,15 +344,25 @@ function isRequiredControl(el: HTMLElement): boolean {
 
 /**
  * Whether a control holds no answer: an empty value, an unticked box, nothing
- * chosen. QA D1245: a typeahead whose text is only the query (a patient
+ * chosen in a group. QA D1245: a typeahead whose text is only the query (a patient
  * search with nothing picked) says so with `data-submit-blank="true"`; the
  * text it holds is not an answer.
  */
-function isBlank(el: Element | null): boolean {
+export function isBlank(el: Element | null): boolean {
   if (!el) return false;
   const declared = el.getAttribute('data-submit-blank');
   if (declared === 'true') return true;
   if (declared === 'false') return false;
+  // QA D1325 (round 29): a group of choices (the waitlist offer's slots, a
+  // radiogroup fieldset) is blank while none of its boxes is ticked. The
+  // guard named it in its reason but never marked it, since it is not an
+  // input itself.
+  if (el.matches('[role="radiogroup"], [role="group"], fieldset')) {
+    const boxes = Array.from(
+      el.querySelectorAll<HTMLInputElement>('input[type="radio"], input[type="checkbox"]'),
+    );
+    if (boxes.length > 0) return !boxes.some((b) => b.checked);
+  }
   if (el instanceof HTMLInputElement) {
     if (el.type === 'checkbox' || el.type === 'radio') return !el.checked;
     return el.value.trim() === '';

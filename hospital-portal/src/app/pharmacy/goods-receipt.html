@@ -188,7 +188,7 @@
                   lot.remainingQuantity
                 }}</span>
               </td>
-              <td>{{ lot.supplier ?? '—' }}</td>
+              <td>{{ lot.supplier | dash }}</td>
               <td>
                 {{ lot.unitCost ? (lot.unitCost | cfa) : '—' }}
               </td>

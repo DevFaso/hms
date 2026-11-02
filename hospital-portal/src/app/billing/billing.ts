@@ -51,9 +51,12 @@ import { emailAddresses, invalidEmailAddresses } from '../shared/forms/email-add
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { InlineSubFormDirective } from '../shared/a11y/inline-sub-form.directive';
 import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.component';
+import { focusWhenRendered } from '../shared/a11y/focus-when-rendered';
+import { amountStillDue, pendingDeclared } from '../shared/payment-prefill';
 import { refusalReason } from '../shared/refusal-reason';
 import { joinReasons } from '../shared/required-fields';
 import { ConfirmService } from '../shared/confirm-dialog/confirm.service';
+import { KeyLabelPipe } from '../shared/pipes/key-label.pipe';
 type BillingTab = 'all' | 'outstanding' | 'paid' | 'overdue';
 
 /** The cancellation reason's field (QA D1069), marked when it is refused (QA D1072). */
@@ -68,10 +71,22 @@ const PAYMENT_FIELD_IDS = ['payment-amount', 'payment-reference'];
 /** QA D1294: a blank or zero unit price says so (not "a payment amount"). */
 const LINE_PRICE_REQUIRED_KEY = 'BILLING.LINE_UNIT_PRICE_REQUIRED';
 
+/**
+ * QA D1344 (round 29): what is wrong with a line quantity — blank is
+ * required, anything else that is not a whole number above zero says so
+ * ("Ce champ est obligatoire." was shown for a typed 0). `null`: it is fine.
+ */
+export function lineQuantityMessageKey(qty: number | string | null | undefined): string | null {
+  if (qty === null || qty === undefined || qty === '') return 'COMMON.FIELD_REQUIRED';
+  const value = typeof qty === 'number' ? qty : Number(qty);
+  return Number.isInteger(value) && value >= 1 ? null : 'BILLING.LINE_QUANTITY_POSITIVE';
+}
+
 @Component({
   selector: 'app-billing',
   standalone: true,
   imports: [
+    KeyLabelPipe,
     SubmitGuardDirective,
     InlineSubFormDirective,
     InlineDiscardAskComponent,
@@ -752,12 +767,18 @@ export class BillingComponent implements OnInit {
 
   /* ── Invoice lines ── */
 
-  private loadItems(invoiceId: string): void {
+  private loadItems(invoiceId: string, focusLineId?: string): void {
     this.itemsLoading.set(true);
     this.billingService.getInvoiceItems(invoiceId).subscribe({
       next: (lines) => {
         this.items.set(lines ?? []);
         this.itemsLoading.set(false);
+        if (focusLineId) {
+          focusWhenRendered(
+            this.host.nativeElement,
+            `[data-testid="line-edit-${CSS.escape(focusLineId)}"]`,
+          );
+        }
       },
       error: () => {
         this.items.set([]);
@@ -788,20 +809,22 @@ export class BillingComponent implements OnInit {
     // QA D1089: the button is never dead; the field that is missing or wrong says so.
     const qty = this.newItemQuantity();
     const priceProblem = cfaAmountProblem(this.newItemUnitPrice());
-    const missing = [
-      this.newItemDescription().trim().length === 0 ? 'line-desc' : null,
-      !qty || qty < 1 ? 'line-qty' : null,
-      priceProblem ? 'line-price' : null,
-    ].filter((id): id is string => id !== null);
-    if (missing.length > 0) {
-      refuseFields(
-        this.host.nativeElement,
-        missing,
-        ['line-desc', 'line-qty', 'line-price'],
-        missing[0] === 'line-price' && priceProblem
-          ? this.translate.instant(cfaAmountMessageKey(priceProblem, LINE_PRICE_REQUIRED_KEY))
-          : this.translate.instant('COMMON.FIELD_REQUIRED'),
-      );
+    // QA D1344 (round 29): every wrong field at once, each under its own
+    // reason — a quantity of 0 is not "required", it is not above zero.
+    const refusals: FieldRefusal[] = [];
+    if (this.newItemDescription().trim().length === 0) {
+      refusals.push({ id: 'line-desc', message: this.translate.instant('COMMON.FIELD_REQUIRED') });
+    }
+    const qtyKey = lineQuantityMessageKey(qty);
+    if (qtyKey) refusals.push({ id: 'line-qty', message: this.translate.instant(qtyKey) });
+    if (priceProblem) {
+      refusals.push({
+        id: 'line-price',
+        message: this.translate.instant(cfaAmountMessageKey(priceProblem, LINE_PRICE_REQUIRED_KEY)),
+      });
+    }
+    if (refusals.length > 0) {
+      refuseFields(this.host.nativeElement, refusals, ['line-desc', 'line-qty', 'line-price']);
       return;
     }
     this.itemSaving.set(true);
@@ -848,12 +871,9 @@ export class BillingComponent implements OnInit {
   }
 
   canSaveLine(): boolean {
-    const qty = this.editLineQuantity();
     return (
       !this.itemSaving() &&
-      !!qty &&
-      qty >= 1 &&
-      Number.isInteger(qty) &&
+      lineQuantityMessageKey(this.editLineQuantity()) === null &&
       cfaAmountProblem(this.editLineUnitPrice()) === null
     );
   }
@@ -862,18 +882,15 @@ export class BillingComponent implements OnInit {
     const inv = this.selectedInvoice();
     if (!inv || this.itemSaving()) return;
     // QA D1089: the button is never dead; the field that is missing or wrong says so.
-    const qty = this.editLineQuantity();
+    const qtyKey = lineQuantityMessageKey(this.editLineQuantity());
     const priceProblem = cfaAmountProblem(this.editLineUnitPrice());
-    const qtyWrong = !qty || qty < 1 || !Number.isInteger(qty);
-    if (qtyWrong || priceProblem) {
+    if (qtyKey || priceProblem) {
       // QA D1296 class (round 28): every wrong field at once, each under its
       // own reason (the price said "required" when only the quantity was).
+      // QA D1344 (round 29): a quantity of 0 says it must be above zero.
       const refusals: FieldRefusal[] = [];
-      if (qtyWrong) {
-        refusals.push({
-          id: 'line-edit-qty',
-          message: this.translate.instant('COMMON.FIELD_REQUIRED'),
-        });
+      if (qtyKey) {
+        refusals.push({ id: 'line-edit-qty', message: this.translate.instant(qtyKey) });
       }
       if (priceProblem) {
         refusals.push({
@@ -900,7 +917,10 @@ export class BillingComponent implements OnInit {
           this.itemSaving.set(false);
           this.editingLineId.set(null);
           this.toast.success(this.translate.instant('BILLING.ITEM_UPDATED'));
-          this.refreshSelected(inv.id);
+          // QA D1343 (round 29): the lines reload (the table leaves under its
+          // loading flag), so the keyboard goes back to this line's pencil
+          // once it is rendered again, not to the dialog box.
+          this.refreshSelected(inv.id, item.id);
         },
         error: (err: HttpErrorResponse) => {
           this.itemSaving.set(false);
@@ -935,8 +955,8 @@ export class BillingComponent implements OnInit {
   }
 
   /** Re-read the invoice after a line change: the server recomputed its total. */
-  private refreshSelected(invoiceId: string): void {
-    this.loadItems(invoiceId);
+  private refreshSelected(invoiceId: string, focusLineId?: string): void {
+    this.loadItems(invoiceId, focusLineId);
     this.billingService.getInvoice(invoiceId).subscribe({
       next: (updated) => {
         if (this.selectedInvoice()?.id === updated.id) this.selectedInvoice.set(updated);
@@ -1153,13 +1173,11 @@ export class BillingComponent implements OnInit {
     this.billingService.listPayments(inv.id).subscribe({
       next: (rows) => {
         if (this.paymentInv()?.id !== inv.id) return;
-        const pending = (rows ?? [])
-          .filter((r) => r.status === 'PENDING')
-          .reduce((sum, r) => sum + (r.amount ?? 0), 0);
+        // QA D1321: the same rule as the desk's pay-collect (shared/payment-prefill).
+        const pending = pendingDeclared(rows);
         this.paymentPending.set(pending);
         if (pending > 0 && this.paymentAmount() === (inv.balanceDue ?? null)) {
-          const rest = Math.max((inv.balanceDue ?? 0) - pending, 0);
-          this.paymentAmount.set(rest > 0 ? rest : null);
+          this.paymentAmount.set(amountStillDue(inv.balanceDue, pending));
         }
       },
       error: () => this.paymentPending.set(0),

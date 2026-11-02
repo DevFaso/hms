@@ -57,6 +57,7 @@ import { NursingNoteService } from '../services/nursing-note.service';
 import { PatientDemographicsEditComponent } from './patient-demographics-edit/patient-demographics-edit.component';
 import { isGrowthAge } from '../shared/patient-measures';
 import { refusalReason } from '../shared/refusal-reason';
+import { DashPipe } from '../shared/pipes/dash.pipe';
 
 type TabKey =
   | 'overview'
@@ -78,6 +79,7 @@ type TabKey =
   selector: 'app-patient-detail',
   standalone: true,
   imports: [
+    DashPipe,
     LocaleNumberPipe,
     MeasurePipe,
     NursingNotesPanelComponent,

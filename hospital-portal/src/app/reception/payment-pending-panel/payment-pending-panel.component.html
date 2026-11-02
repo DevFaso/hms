@@ -14,14 +14,14 @@
     <tbody>
       @for (item of items; track item.patientId + (item.appointmentId ?? '')) {
         <tr>
-          <td>{{ item.appointmentTime ?? '—' }}</td>
+          <td>{{ item.appointmentTime | dash }}</td>
           <td>
             <button class="patient-link" (click)="patientClicked.emit(item.patientId)">
               {{ item.patientName }}
             </button>
           </td>
-          <td>{{ item.providerName ?? '—' }}</td>
-          <td>{{ item.departmentName ?? '—' }}</td>
+          <td>{{ item.providerName | dash }}</td>
+          <td>{{ item.departmentName | dash }}</td>
           <td>
             <button class="btn-collect" (click)="openPayDialog(item)">
               <span class="material-symbols-outlined">payments</span>
@@ -83,7 +83,7 @@
             id="invSelect"
             class="form-control"
             [ngModel]="selectedInvoiceId()"
-            (ngModelChange)="selectedInvoiceId.set($event)"
+            (ngModelChange)="selectInvoice($event)"
           >
             <!-- QA D1296: [ngValue], not [value]: [value]="null" is the string
                  "null", which passed the check and was posted as an invoice id. -->
@@ -97,11 +97,18 @@
             }
           </select>
         </div>
+        @if (pending() > 0) {
+          <!-- QA D1321 (round 29): the patient's pending declaration is said, as on billing. -->
+          <p class="field-hint" role="status" data-testid="desk-pay-pending">
+            {{ 'BILLING.PAYMENT_PENDING_DECLARED' | translate: { amount: (pending() | cfa: selectedCurrency()) } }}
+          </p>
+        }
         <div class="field-group">
           <label for="payAmt">{{ 'RECEPTION.AMOUNT' | translate }} *</label>
           <input
             required
             id="payAmt"
+            data-server-field="amount"
             type="number"
             class="form-control"
             min="1"
@@ -139,6 +146,7 @@
             <input
               required
               id="payRef"
+              data-server-field="reference"
               type="text"
               class="form-control"
               maxlength="100"

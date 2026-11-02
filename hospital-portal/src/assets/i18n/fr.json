@@ -1464,7 +1464,7 @@
     "YES_CANCEL": "Oui, annuler",
     "DURATION_SET_BY_SLOTS": "La durée de la visite est fixée par les créneaux du praticien.",
     "STATUS_REASON": "Motif du changement de statut",
-    "STATUS_REASON_LABEL": "Motif (obligatoire)",
+    "STATUS_REASON_LABEL": "Motif",
     "STATUS_REASON_REQUIRED": "Indiquez le motif avant de confirmer.",
     "NO_SHOW_DIALOG_TITLE": "Marquer comme absent",
     "NO_SHOW_CONFIRM_MESSAGE": "Le patient ne s'est pas présenté à ce rendez-vous.",
@@ -2232,7 +2232,8 @@
     "ADJUSTMENT_REVERSAL_REASON_REQUIRED": "Indiquez le motif de l'annulation de cet ajustement.",
     "ADJUSTMENT_REVERSAL_NOTE": "Le montant revient sur ce qui reste dû. L'argent déjà reçu, comme le ticket modérateur payé à l'accueil, reste enregistré.",
     "ADJUSTMENT_REVERSAL_FAILED": "L'ajustement n'a pas pu être annulé.",
-    "EMAIL_ADDRESS_INVALID": "Adresse e-mail non valide : {{ addresses }}"
+    "EMAIL_ADDRESS_INVALID": "Adresse e-mail non valide : {{ addresses }}",
+    "LINE_QUANTITY_POSITIVE": "Saisissez une quantité entière supérieure à zéro."
   },
   "CHAT": {
     "ACCESS_DENIED": "Vous n'avez pas l'autorisation d'accéder à la messagerie.",
@@ -4851,7 +4852,7 @@
     "ADD_SUBTITLE": "Ajouter un nouveau patient au système",
     "ALLERGIES": "Allergies",
     "ALLERGIES_PLACEHOLDER": "Allergies connues...",
-    "ALREADY_REGISTERED_HERE": "Déjà enregistré dans cet hôpital",
+    "ALREADY_REGISTERED_HERE": "Déjà enregistré(e) dans cet hôpital",
     "APPOINTMENTS_LOAD_FAILED": "Échec du chargement des rendez-vous",
     "APPOINTMENTS_TAB": "Rendez-vous",
     "APPOINTMENTS_TITLE": "Historique des rendez-vous",
@@ -4936,8 +4937,6 @@
     "HOSPITALS_LOAD_FAILED": "Échec du chargement des hôpitaux",
     "HOSPITAL_INFO": "Informations sur l'hôpital",
     "HOSPITAL_LOAD_FAILED": "Échec du chargement de l'hôpital",
-    "HOSPITAL_MANY": "hôpitaux",
-    "HOSPITAL_ONE": "hôpital",
     "INSURANCE": "Assurance",
     "LAB_ORDERS": "Demandes de laboratoire",
     "LAST_NAME": "Nom de famille",
@@ -5018,7 +5017,6 @@
     "RECORDS": "dossiers",
     "REGISTER": "Enregistrer le patient",
     "REGISTERED": "Enregistré",
-    "REGISTERED_AT": "enregistré dans",
     "REGISTERED_EMAIL_SENT": "Patient enregistré avec succès. Un e-mail de vérification est en cours d'envoi.",
     "REGISTERED_SMS_SENT": "Patient enregistré avec succès. Les identifiants seront envoyés par SMS.",
     "REGISTERED_SUCCESS": "Patient enregistré avec succès.",
@@ -5078,7 +5076,15 @@
     "EXISTING_MATCH_DESC_BOTH_HERE": "Des dossiers avec les mêmes nom et date de naissance, ou avec ce numéro de téléphone ou cet e-mail, sont déjà enregistrés dans cet hôpital. Ouvrez le bon dossier au lieu de créer un doublon.",
     "EXISTING_MATCH_DESC_BOTH_MIXED": "Des dossiers avec les mêmes nom et date de naissance, ou avec ce numéro de téléphone ou cet e-mail, existent déjà, ici ou dans un autre hôpital. Ouvrez ou liez le bon dossier au lieu de créer un doublon.",
     "BORN_FEMALE": "Née en",
-    "BORN_MALE": "Né en"
+    "BORN_MALE": "Né en",
+    "REGISTERED_IN_ONE": "enregistré(e) dans {{count}} hôpital",
+    "REGISTERED_IN_ONE_FEMALE": "enregistrée dans {{count}} hôpital",
+    "REGISTERED_IN_ONE_MALE": "enregistré dans {{count}} hôpital",
+    "REGISTERED_IN_MANY": "enregistré(e) dans {{count}} hôpitaux",
+    "REGISTERED_IN_MANY_FEMALE": "enregistrée dans {{count}} hôpitaux",
+    "REGISTERED_IN_MANY_MALE": "enregistré dans {{count}} hôpitaux",
+    "ALREADY_REGISTERED_HERE_FEMALE": "Déjà enregistrée dans cet hôpital",
+    "ALREADY_REGISTERED_HERE_MALE": "Déjà enregistré dans cet hôpital"
   },
   "PLATFORM": {
     "ACCESS_LOGS": "Journaux d'accès",
@@ -7713,7 +7719,7 @@
     "FLAGS": "Alertes",
     "FLOW_BOARD": "Tableau de flux",
     "FLOW_BOARD_TITLE": "Tableau de flux des patients",
-    "IDENTITY_CONFIRMED": "Identité confirmée (obligatoire)",
+    "IDENTITY_CONFIRMED": "Identité confirmée",
     "INCOMPLETE_DEMOGRAPHICS": "Données démographiques incomplètes",
     "INSURANCE": "Assurance",
     "INSURANCE_ISSUE": "Problème d'assurance",
@@ -7881,7 +7887,11 @@
     "CLOSE_ENTRY_TITLE": "Fermer cette entrée de la liste d'attente ?",
     "CLOSE_ENTRY_REASON": "Motif de la fermeture",
     "CLOSE_ENTRY_CONFIRM": "Fermer l'entrée",
-    "WAIT_DURATION": "Attente : {{minutes}} min"
+    "WAIT_DURATION": "Attente : {{minutes}} min",
+    "PAYMENT_EXCEEDS_WITH_PENDING": "Le patient a déclaré {{pending}} sur ce solde, en attente de confirmation : saisissez au plus {{max}}.",
+    "COPAY_AMOUNT_NEGATIVE": "La participation ne peut pas être négative.",
+    "WINDOW_FROM": "À partir du {{date}}",
+    "WINDOW_UNTIL": "Jusqu'au {{date}}"
   },
   "REFERRALS": {
     "ACCEPTED": "Acceptée",

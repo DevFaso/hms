@@ -650,7 +650,7 @@
               <ul class="adjustment-list">
                 @for (a of adjustments(); track a.id) {
                   <li [attr.data-testid]="'adjustment-' + a.id" [class.reversed]="!!a.reversedAt">
-                    <strong>{{ 'BILLING.ADJUSTMENT_TYPES.' + a.type | translate }}</strong>
+                    <strong>{{ a.type | keyLabel: 'BILLING.ADJUSTMENT_TYPES.' }}</strong>
                     — {{ formatCurrency(a.amount) }}
                     @if (a.invoiceItemDescription) {
                       ({{ a.invoiceItemDescription }})
@@ -785,11 +785,11 @@
                           p.paymentDate ? (p.paymentDate | serverTime | date: 'mediumDate') : '—'
                         }}
                       </td>
-                      <td>{{ 'BILLING.PAYMENT_METHODS.' + p.paymentMethod | translate }}</td>
+                      <td>{{ p.paymentMethod | keyLabel: 'BILLING.PAYMENT_METHODS.' }}</td>
                       <td>{{ p.referenceNumber || '—' }}</td>
                       <td class="amount">{{ formatCurrency(p.amount) }}</td>
                       <td>
-                        {{ 'BILLING.PAYMENT_STATUSES.' + p.status | translate }}
+                        {{ p.status | keyLabel: 'BILLING.PAYMENT_STATUSES.' }}
                         @if (p.reversalReason) {
                           <div class="cell-secondary">{{ p.reversalReason }}</div>
                         }
@@ -1269,13 +1269,11 @@
         <button class="btn-secondary" (click)="closePayment()">
           {{ 'COMMON.CANCEL' | translate }}
         </button>
-        <button
-          appSubmitGuard
-          submitGuardRequired
-          class="btn-primary"
-          (click)="recordPayment()"
-          [disabled]="paymentSaving()"
-        >
+        <!-- QA D1342 (round 29): no submit guard here — it refused a blank
+             reference first, with the generic "required" text, and hid the
+             amount above the balance. recordPayment() refuses every field at
+             once, each under its own reason. -->
+        <button class="btn-primary" (click)="recordPayment()" [disabled]="paymentSaving()">
           {{
             paymentSaving() ? ('COMMON.SAVING' | translate) : ('BILLING.RECORD_PAYMENT' | translate)
           }}
@@ -1305,7 +1303,7 @@
       <div class="modal-header">
         <h2 id="bill-adj-reversal-title">
           {{ 'BILLING.ADJUSTMENT_REVERSE' | translate }} —
-          {{ 'BILLING.ADJUSTMENT_TYPES.' + a.type | translate }}
+          {{ a.type | keyLabel: 'BILLING.ADJUSTMENT_TYPES.' }}
           {{ formatCurrency(a.amount) }}
         </h2>
         <button

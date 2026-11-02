@@ -24,6 +24,7 @@ import {
 } from '../services/pharmacy.service';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { blankFields, focusFirstInvalid, refuseFields } from '../shared/forms/invalid-fields';
+import { DashPipe } from '../shared/pipes/dash.pipe';
 
 /** The required fields of the medication form (QA D1306). */
 const MED_REQUIRED_IDS = ['nameFr', 'genericName'];
@@ -32,6 +33,7 @@ const MED_REQUIRED_IDS = ['nameFr', 'genericName'];
   selector: 'app-medication-catalog',
   standalone: true,
   imports: [
+    DashPipe,
     SubmitGuardDirective,
     FormsModule,
     TranslateModule,

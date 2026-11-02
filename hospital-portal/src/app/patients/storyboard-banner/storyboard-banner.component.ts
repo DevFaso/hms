@@ -23,6 +23,8 @@ import { EnumLabelPipe } from '../../shared/pipes/enum-label.pipe';
 import { RestrictedRowsComponent } from '../restricted-rows/restricted-rows.component';
 import { ServerTimePipe } from '../../shared/pipes/server-time.pipe';
 import { PatientChartChanges } from '../../interceptors/patient-chart-change.interceptor';
+import { KeyLabelPipe } from '../../shared/pipes/key-label.pipe';
+import { DashPipe } from '../../shared/pipes/dash.pipe';
 
 type LoadState = 'loading' | 'ready' | 'empty' | 'error';
 
@@ -42,7 +44,9 @@ const SEVERE_SEVERITIES: ReadonlySet<AllergySeverity> = new Set(['SEVERE', 'LIFE
 @Component({
   selector: 'app-storyboard-banner',
   standalone: true,
-  imports: [ServerTimePipe, CommonModule, TranslateModule, EnumLabelPipe, RestrictedRowsComponent],
+  imports: [
+    DashPipe,
+    KeyLabelPipe,ServerTimePipe, CommonModule, TranslateModule, EnumLabelPipe, RestrictedRowsComponent],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './storyboard-banner.component.html',
   styleUrl: './storyboard-banner.component.scss',

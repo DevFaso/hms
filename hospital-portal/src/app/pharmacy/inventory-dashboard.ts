@@ -30,6 +30,7 @@ import { InlineDiscardAskComponent } from '../shared/a11y/inline-discard-ask.com
 import { serverDateOrInstant } from '../shared/date-utils';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refuseFields } from '../shared/forms/invalid-fields';
+import { DashPipe } from '../shared/pipes/dash.pipe';
 
 /** The add-item field the form may refuse (QA D1306). */
 const CI_FIELD_IDS = ['ciMed'];
@@ -38,6 +39,7 @@ const CI_FIELD_IDS = ['ciMed'];
   selector: 'app-inventory-dashboard',
   standalone: true,
   imports: [
+    DashPipe,
     SubmitGuardDirective,
     FocusOnRenderDirective,
     InlineSubFormDirective,

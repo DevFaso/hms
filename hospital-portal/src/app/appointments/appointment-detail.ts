@@ -1,5 +1,5 @@
 import { refusalReason } from '../shared/refusal-reason';
-import { refuseFields } from '../shared/forms/invalid-fields';
+import { focusFirstInvalid, refuseFields } from '../shared/forms/invalid-fields';
 import { StaffService, StaffResponse, isClinicalProvider } from '../services/staff.service';
 import { DialogFocusDirective } from '../shared/a11y/dialog-focus.directive';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
@@ -368,6 +368,8 @@ export class AppointmentDetailComponent implements OnInit {
     const reason = this.dropReason.trim();
     if (!reason) {
       this.dropReasonError.set(true);
+      // QA D1326: the template marks it (aria-invalid + message); focus goes there.
+      focusFirstInvalid(this.host.nativeElement, ['dropReason']);
       return;
     }
     this.dropReasonError.set(false);

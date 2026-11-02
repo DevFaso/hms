@@ -37,6 +37,7 @@ import { PatientSublinePipe } from '../../shared/patient-picker/patient-subline'
 
 import { rankPeopleByName } from '../../shared/person-search';
 import { ListEscapeDirective } from '../../shared/a11y/list-escape.directive';
+import { DashPipe } from '../../shared/pipes/dash.pipe';
 type RecallFilter = 'ALL' | RecallStatus;
 
 /**
@@ -51,6 +52,7 @@ const RECALL_FIELDS = ['rc-patient', 'rc-due', 'rc-reason'];
   selector: 'app-recalls-panel',
   standalone: true,
   imports: [
+    DashPipe,
     ListEscapeDirective,
     ReasonDialogComponent,
     PersonNamePipe,

@@ -32,6 +32,8 @@ import { WaitlistPanelComponent } from '../waitlist-panel/waitlist-panel.compone
 import { RecallsPanelComponent } from '../recalls-panel/recalls-panel.component';
 import { CheckinDialogComponent } from '../checkin-dialog/checkin-dialog.component';
 import { localDateString } from '../../shared/date-utils';
+import { KeyLabelPipe } from '../../shared/pipes/key-label.pipe';
+import { DashPipe } from '../../shared/pipes/dash.pipe';
 
 type Tab = 'queue' | 'insurance' | 'payments' | 'flowboard' | 'waitlist' | 'recalls';
 type StatusFilter =
@@ -52,6 +54,8 @@ function todayIso(): string {
   selector: 'app-reception-cockpit',
   standalone: true,
   imports: [
+    DashPipe,
+    KeyLabelPipe,
     CommonModule,
     FormsModule,
     TranslateModule,

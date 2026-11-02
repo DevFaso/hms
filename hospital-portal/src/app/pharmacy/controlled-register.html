@@ -121,7 +121,7 @@
             >
             <span [class.discrepancy]="hasDiscrepancy(drug)"
               >{{ 'PHARMACY.REGISTER_ON_SHELF' | translate }}{{ 'COMMON.COLON' | translate }}
-              <strong>{{ (drug.quantityOnHand | number) ?? '—' }}</strong>
+              <strong>{{ (drug.quantityOnHand | number) | dash }}</strong>
               @if (hasDiscrepancy(drug)) {
                 <span [attr.data-testid]="'register-discrepancy-' + drug.inventoryItemId">
                   · {{ 'PHARMACY.REGISTER_DISCREPANCY' | translate }}</span

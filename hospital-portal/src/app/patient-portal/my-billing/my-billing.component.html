@@ -168,7 +168,7 @@
                   <ul class="detail-payments" data-testid="portal-adjustments">
                     @for (a of d.adjustments; track a.id) {
                       <li>
-                        <span>{{ 'BILLING.ADJUSTMENT_TYPES.' + a.type | translate }}</span>
+                        <span>{{ a.type | keyLabel: 'BILLING.ADJUSTMENT_TYPES.' }}</span>
                         @if (a.invoiceItemDescription) {
                           <span>({{ a.invoiceItemDescription }})</span>
                         }
@@ -187,11 +187,11 @@
                         <span>{{ p.amount | cfa }}</span>
                         @if (p.paymentMethod) {
                           <span
-                            >· {{ 'BILLING.PAYMENT_METHODS.' + p.paymentMethod | translate }}</span
+                            >· {{ p.paymentMethod | keyLabel: 'BILLING.PAYMENT_METHODS.' }}</span
                           >
                         }
                         <span class="pli-status" [attr.data-status]="p.status">{{
-                          'BILLING.PAYMENT_STATUSES.' + p.status | translate
+                          p.status | keyLabel: 'BILLING.PAYMENT_STATUSES.'
                         }}</span>
                         @if (p.status === 'CONFIRMED') {
                           <button
@@ -301,7 +301,7 @@
 
             <div class="pay-field">
               <label for="payMethod">{{ 'PORTAL.BILLING.PAYMENT_METHOD' | translate }}</label>
-              <select id="payMethod" [(ngModel)]="payMethod">
+              <select id="payMethod" data-server-field="paymentMethod" [(ngModel)]="payMethod">
                 <option value="CARD">{{ 'PORTAL.BILLING.CARD' | translate }}</option>
                 <option value="BANK_TRANSFER">
                   {{ 'PORTAL.BILLING.BANK_TRANSFER' | translate }}
@@ -325,6 +325,7 @@
               </label>
               <input
                 id="payRef"
+                data-server-field="transactionReference"
                 type="text"
                 [required]="payMethod !== 'CASH'"
                 [attr.aria-required]="payMethod !== 'CASH'"

@@ -23,6 +23,7 @@ import { EnumLabelPipe } from '../shared/pipes/enum-label.pipe';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refuseFields } from '../shared/forms/invalid-fields';
+import { DashPipe } from '../shared/pipes/dash.pipe';
 
 /** The period's two date inputs. */
 const REGISTER_PERIOD_IDS = ['register-from', 'register-to'];
@@ -45,6 +46,7 @@ function localIsoDate(d: Date): string {
   selector: 'app-controlled-register',
   standalone: true,
   imports: [
+    DashPipe,
     SubmitGuardDirective,
     CommonModule,
     FormsModule,

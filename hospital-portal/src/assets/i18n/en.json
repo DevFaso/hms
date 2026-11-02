@@ -1464,7 +1464,7 @@
     "YES_CANCEL": "Yes, Cancel",
     "DURATION_SET_BY_SLOTS": "The visit's length is set by the clinician's appointment slots.",
     "STATUS_REASON": "Reason for the status change",
-    "STATUS_REASON_LABEL": "Reason (required)",
+    "STATUS_REASON_LABEL": "Reason",
     "STATUS_REASON_REQUIRED": "Give the reason before confirming.",
     "NO_SHOW_DIALOG_TITLE": "Mark as no-show",
     "NO_SHOW_CONFIRM_MESSAGE": "The patient did not come to this appointment.",
@@ -2232,7 +2232,8 @@
     "ADJUSTMENT_REVERSAL_REASON_REQUIRED": "Give the reason for undoing this adjustment.",
     "ADJUSTMENT_REVERSAL_NOTE": "The amount goes back on what is owed. Money already received, such as the copay paid at check-in, stays recorded.",
     "ADJUSTMENT_REVERSAL_FAILED": "The adjustment could not be undone.",
-    "EMAIL_ADDRESS_INVALID": "Not a valid e-mail address: {{ addresses }}"
+    "EMAIL_ADDRESS_INVALID": "Not a valid e-mail address: {{ addresses }}",
+    "LINE_QUANTITY_POSITIVE": "Enter a whole quantity greater than zero."
   },
   "CHAT": {
     "ACCESS_DENIED": "You do not have permission to access chat.",
@@ -4936,8 +4937,6 @@
     "HOSPITALS_LOAD_FAILED": "Failed to load hospitals",
     "HOSPITAL_INFO": "Hospital Information",
     "HOSPITAL_LOAD_FAILED": "Failed to load hospital",
-    "HOSPITAL_MANY": "hospitals",
-    "HOSPITAL_ONE": "hospital",
     "INSURANCE": "Insurance",
     "LAB_ORDERS": "Lab Orders",
     "LAST_NAME": "Last Name",
@@ -5018,7 +5017,6 @@
     "RECORDS": "records",
     "REGISTER": "Register Patient",
     "REGISTERED": "Registered",
-    "REGISTERED_AT": "registered at",
     "REGISTERED_EMAIL_SENT": "Patient registered successfully. A verification email is on its way.",
     "REGISTERED_SMS_SENT": "Patient registered successfully. Login details will be sent by SMS.",
     "REGISTERED_SUCCESS": "Patient registered successfully.",
@@ -5078,7 +5076,15 @@
     "EXISTING_MATCH_DESC_BOTH_HERE": "Records with the same name and date of birth, or with this phone number or e-mail, are already registered at this hospital. Open the right record instead of creating a duplicate.",
     "EXISTING_MATCH_DESC_BOTH_MIXED": "Records with the same name and date of birth, or with this phone number or e-mail, already exist, here or at another hospital. Open or link the right record instead of creating a duplicate.",
     "BORN_FEMALE": "Born",
-    "BORN_MALE": "Born"
+    "BORN_MALE": "Born",
+    "REGISTERED_IN_ONE": "registered at {{count}} hospital",
+    "REGISTERED_IN_ONE_FEMALE": "registered at {{count}} hospital",
+    "REGISTERED_IN_ONE_MALE": "registered at {{count}} hospital",
+    "REGISTERED_IN_MANY": "registered at {{count}} hospitals",
+    "REGISTERED_IN_MANY_FEMALE": "registered at {{count}} hospitals",
+    "REGISTERED_IN_MANY_MALE": "registered at {{count}} hospitals",
+    "ALREADY_REGISTERED_HERE_FEMALE": "Already registered at this hospital",
+    "ALREADY_REGISTERED_HERE_MALE": "Already registered at this hospital"
   },
   "PLATFORM": {
     "ACCESS_LOGS": "Access Logs",
@@ -7713,7 +7719,7 @@
     "FLAGS": "Flags",
     "FLOW_BOARD": "Flow Board",
     "FLOW_BOARD_TITLE": "Patient Flow Board",
-    "IDENTITY_CONFIRMED": "Identity confirmed (required)",
+    "IDENTITY_CONFIRMED": "Identity confirmed",
     "INCOMPLETE_DEMOGRAPHICS": "Incomplete Demographics",
     "INSURANCE": "Insurance",
     "INSURANCE_ISSUE": "Insurance Issue",
@@ -7881,7 +7887,11 @@
     "CLOSE_ENTRY_TITLE": "Close this waitlist entry?",
     "CLOSE_ENTRY_REASON": "Why is the entry closed",
     "CLOSE_ENTRY_CONFIRM": "Close the entry",
-    "WAIT_DURATION": "{{minutes}} min wait"
+    "WAIT_DURATION": "{{minutes}} min wait",
+    "PAYMENT_EXCEEDS_WITH_PENDING": "The patient has declared {{pending}} on this balance, pending confirmation: enter at most {{max}}.",
+    "COPAY_AMOUNT_NEGATIVE": "The copay cannot be negative.",
+    "WINDOW_FROM": "From {{date}}",
+    "WINDOW_UNTIL": "Until {{date}}"
   },
   "REFERRALS": {
     "ACCEPTED": "Accepted",

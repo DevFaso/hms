@@ -113,6 +113,7 @@
           <!-- QA D1306: required for Mobile Money, as its star says. -->
           <input
             id="ref"
+            data-server-field="referenceNumber"
             [required]="paymentMethod === 'MOBILE_MONEY'"
             type="text"
             [(ngModel)]="referenceNumber"

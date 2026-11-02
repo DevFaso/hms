@@ -71,7 +71,7 @@
           <tbody>
             @for (item of inventoryItems(); track item.id) {
               <tr>
-                <td class="med-name">{{ item.medicationName ?? item.medicationCode ?? '—' }}</td>
+                <td class="med-name">{{ item.medicationName || item.medicationCode | dash }}</td>
                 <td>
                   <span class="qty" [class]="getStockStatusClass(item)">{{
                     item.quantityOnHand
@@ -79,7 +79,7 @@
                 </td>
                 <td>{{ item.reorderThreshold }}</td>
                 <td>{{ item.reorderQuantity }}</td>
-                <td>{{ item.unit ?? '—' }}</td>
+                <td>{{ item.unit | dash }}</td>
                 <!-- QA D835: the price is READ as text (an input's value is not
                      part of the row's text, so the column read as empty); the
                      pencil opens the box that changes it. -->
@@ -292,7 +292,7 @@
                   }
                 </td>
                 <td>{{ lot.remainingQuantity }}</td>
-                <td>{{ lot.supplier ?? '—' }}</td>
+                <td>{{ lot.supplier | dash }}</td>
               </tr>
             }
           </tbody>

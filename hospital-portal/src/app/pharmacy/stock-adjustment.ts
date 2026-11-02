@@ -31,6 +31,7 @@ import { currentLocale } from '../shared/i18n/app-locale';
 import { serverInstant } from '../shared/date-utils';
 
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
+import { DashPipe } from '../shared/pipes/dash.pipe';
 /** QA D1051: a fill reference as stored: an optional lot (older rows: "lot X"), then the minute. */
 const RETURN_FILL_REF = /^(?:lot\s+)?(?:(\S+)\s+)?(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2})$/i;
 
@@ -108,6 +109,7 @@ const TYPED_REFUSAL_FIELD: Readonly<Record<string, string>> = {
   selector: 'app-stock-adjustment',
   standalone: true,
   imports: [
+    DashPipe,
     SubmitGuardDirective,
     ServerTimePipe,
     CommonModule,

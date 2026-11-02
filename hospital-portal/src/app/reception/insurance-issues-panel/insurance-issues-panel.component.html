@@ -15,7 +15,7 @@
     <tbody>
       @for (issue of issues; track issue.patientId + (issue.appointmentId ?? '')) {
         <tr>
-          <td>{{ issue.appointmentTime ?? '—' }}</td>
+          <td>{{ issue.appointmentTime | dash }}</td>
           <td>
             <button class="patient-link" (click)="patientClicked.emit(issue.patientId)">
               {{ issue.patientName }}
@@ -26,8 +26,8 @@
               {{ issueLabel(issue.issueType) }}
             </span>
           </td>
-          <td>{{ issue.providerName ?? '—' }}</td>
-          <td>{{ issue.departmentName ?? '—' }}</td>
+          <td>{{ issue.providerName | dash }}</td>
+          <td>{{ issue.departmentName | dash }}</td>
           <td>
             <button
               class="btn-icon"

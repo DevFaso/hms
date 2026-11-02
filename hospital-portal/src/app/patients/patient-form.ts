@@ -37,7 +37,8 @@ import {
   refuseInvalidPhones,
 } from '../shared/forms/phone-field.directive';
 import { joinReasons } from '../shared/required-fields';
-import { bornLabelKey } from '../shared/i18n/born-label';
+import { bornLabelKey, genderedKey } from '../shared/i18n/born-label';
+import { DashPipe } from '../shared/pipes/dash.pipe';
 
 /**
  * QA D1118: the card names what the match is really on. A record found by the
@@ -74,6 +75,7 @@ export function matchBasisSuffix(matches: readonly Pick<RegistrationMatch, 'matc
   selector: 'app-patient-form',
   standalone: true,
   imports: [
+    DashPipe,
     PhoneFieldDirective,
     SubmitGuardDirective,
     MeasurePipe,
@@ -94,6 +96,7 @@ export class PatientFormComponent implements OnInit {
 
   /** QA D1311: "Né / Née en", "Nacido / Nacida en", by the matched record's sex. */
   protected readonly bornLabelKey = bornLabelKey;
+  protected readonly genderedKey = genderedKey;
 
   private readonly patientService = inject(PatientService);
   private readonly userService = inject(UserService);
@@ -451,7 +454,7 @@ export class PatientFormComponent implements OnInit {
           const serverMessage: unknown = err?.error?.message;
           const fallback =
             err?.status === 409
-              ? this.translate.instant('PATIENTS.ALREADY_REGISTERED_HERE')
+              ? this.translate.instant(genderedKey('PATIENTS.ALREADY_REGISTERED_HERE', match.gender))
               : this.translate.instant('PATIENTS.LINK_ERROR');
           const msg =
             typeof serverMessage === 'string' && serverMessage.trim() ? serverMessage : fallback;

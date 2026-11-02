@@ -23,6 +23,7 @@ import { ServerTimePipe } from '../shared/pipes/server-time.pipe';
 import { localDateString } from '../shared/date-utils';
 import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { blankFields, refuseFields } from '../shared/forms/invalid-fields';
+import { DashPipe } from '../shared/pipes/dash.pipe';
 
 /** QA D1233: how many recent lots the receipt page lists. */
 const RECENT_LOTS = 20;
@@ -36,6 +37,7 @@ const GR_FIELD_IDS = ['grItem', 'grLot', 'grExpiry', 'grQty', 'grWitness', 'grCo
   selector: 'app-goods-receipt',
   standalone: true,
   imports: [
+    DashPipe,
     SubmitGuardDirective,
     ServerTimePipe,
     CommonModule,

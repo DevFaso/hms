@@ -60,7 +60,7 @@
               }
             </td>
             <td>{{ 'RECEPTION.RECALL_TYPE_' + recall.recallType | translate }}</td>
-            <td>{{ recall.departmentName ?? '—' }}</td>
+            <td>{{ recall.departmentName | dash }}</td>
             <td class="reason-cell">{{ recall.reason }}</td>
             <td>{{ 'RECEPTION.RECALL_SOURCE_' + recall.source | translate }}</td>
             <td>
