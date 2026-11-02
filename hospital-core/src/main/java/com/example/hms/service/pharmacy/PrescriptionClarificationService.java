@@ -110,7 +110,7 @@ public class PrescriptionClarificationService {
                     com.example.hms.utility.MessageUtil.resolve("dispense.ready.openPreparation"));
         }
         if (reason == null || reason.isBlank()) {
-            throw new BusinessException("pharmacy.clarification.reasonRequired");
+            throw new com.example.hms.exception.FieldBusinessException("reason", "pharmacy.clarification.reasonRequired");
         }
         PrescriptionStatus status = prescription.getStatus();
         if (status == null || !CLARIFIABLE_STATUSES.contains(status)) {

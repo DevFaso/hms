@@ -378,7 +378,7 @@ public class AdmissionServiceImpl implements AdmissionService {
         // click, with no reason recorded. The reason is required and audited.
         String releaseReason = reason == null ? "" : reason.trim();
         if (releaseReason.isEmpty()) {
-            throw new BusinessException("admission.bed.unassignReasonRequired");
+            throw new com.example.hms.exception.FieldBusinessException("reason", "admission.bed.unassignReasonRequired");
         }
         if (releaseReason.length() > MAX_BED_RELEASE_REASON) {
             throw new BusinessException("admission.bed.unassignReasonTooLong", MAX_BED_RELEASE_REASON);

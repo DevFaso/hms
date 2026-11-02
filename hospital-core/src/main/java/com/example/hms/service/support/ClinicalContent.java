@@ -68,19 +68,25 @@ public final class ClinicalContent {
      */
     public static void requireAnyAnswer(Object request, java.util.Set<String> metadata, String field,
                                         String messageKey) {
-        if (request != null) {
-            org.springframework.beans.BeanWrapper bean = new org.springframework.beans.BeanWrapperImpl(request);
-            for (java.beans.PropertyDescriptor property : bean.getPropertyDescriptors()) {
-                String name = property.getName();
-                if (property.getReadMethod() == null || "class".equals(name) || metadata.contains(name)) {
-                    continue;
-                }
-                if (isAnswer(bean.getPropertyValue(name))) {
-                    return;
-                }
-            }
+        if (request != null && hasAnyAnswer(request, metadata)) {
+            return;
         }
         throw new FieldBusinessException(field, messageKey);
+    }
+
+    /** Whether a property other than the {@code metadata} ones carries an answer ({@link #requireAnyAnswer}). */
+    public static boolean hasAnyAnswer(Object request, java.util.Set<String> metadata) {
+        org.springframework.beans.BeanWrapper bean = new org.springframework.beans.BeanWrapperImpl(request);
+        for (java.beans.PropertyDescriptor property : bean.getPropertyDescriptors()) {
+            String name = property.getName();
+            if (property.getReadMethod() == null || "class".equals(name) || metadata.contains(name)) {
+                continue;
+            }
+            if (isAnswer(bean.getPropertyValue(name))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean isAnswer(Object value) {

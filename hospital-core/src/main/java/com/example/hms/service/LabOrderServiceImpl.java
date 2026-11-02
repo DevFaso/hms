@@ -1027,6 +1027,13 @@ public class LabOrderServiceImpl implements LabOrderService {
     @Override
     @Transactional
     public LabOrderResponseDTO voidLabOrder(UUID id, String reason, Locale locale) {
+        // QA round 29 (D1333 class): the body is read before any lookup, so a
+        // missing reason is named under fieldErrors.reason whatever the order.
+        String voidReason = normalizeRequiredText(reason, "lab.order.voidReasonRequired", "reason");
+        if (voidReason.length() > MAX_CANCELLATION_REASON) {
+            throw new com.example.hms.exception.FieldBusinessException("reason", "lab.order.voidReasonTooLong",
+                MAX_CANCELLATION_REASON);
+        }
         // Locked first, so a result being released concurrently cannot
         // complete the order underneath the void (the release path decides
         // under the same lock).
@@ -1046,10 +1053,6 @@ public class LabOrderServiceImpl implements LabOrderService {
         }
         requireOrderDecisionAuthority(roleValidator.getCurrentUserId(), labOrder.getHospital().getId(),
             "lab.order.voidForbidden");
-        String voidReason = normalizeRequiredText(reason, "lab.order.voidReasonRequired", "reason");
-        if (voidReason.length() > MAX_CANCELLATION_REASON) {
-            throw new BusinessException("lab.order.voidReasonTooLong", MAX_CANCELLATION_REASON);
-        }
         // The one reason column on the order: for a voided order it says why it
         // was entered in error. Who voided it and when is the audit row.
         labOrder.setCancellationReason(voidReason);
@@ -1156,7 +1159,7 @@ public class LabOrderServiceImpl implements LabOrderService {
             if (base != null) {
                 return base.getPrimaryDiagnosisCode();
             }
-            throw new BusinessException("lab.order.primaryDiagnosisRequired");
+            throw new com.example.hms.exception.FieldBusinessException("primaryDiagnosisCode", "lab.order.primaryDiagnosisRequired");
         }
         normalized = normalized.toUpperCase(Locale.ROOT);
         if (!DiagnosisCodeValidator.isValidIcd10(normalized)) {
@@ -1206,7 +1209,7 @@ public class LabOrderServiceImpl implements LabOrderService {
         if (base != null && base.getOrderChannelOther() != null) {
             return base.getOrderChannelOther();
         }
-        throw new BusinessException("lab.order.channelOtherRequired");
+        throw new com.example.hms.exception.FieldBusinessException("orderChannelOther", "lab.order.channelOtherRequired");
     }
 
     private String resolveOrderingProviderNpi(Staff staff, String override, LabOrder base) {
@@ -1243,7 +1246,7 @@ public class LabOrderServiceImpl implements LabOrderService {
                 return base.getProviderSignatureDigest();
             }
             if (isNew) {
-                throw new BusinessException("lab.order.signatureRequired");
+                throw new com.example.hms.exception.FieldBusinessException("providerSignature", "lab.order.signatureRequired");
             }
             return null;
         }
@@ -1340,7 +1343,7 @@ public class LabOrderServiceImpl implements LabOrderService {
             expiresAt = base.getStandingOrderExpiresAt();
         }
         if (expiresAt == null) {
-            throw new BusinessException("lab.order.standingExpiryRequired");
+            throw new com.example.hms.exception.FieldBusinessException("standingOrderExpiresAt", "lab.order.standingExpiryRequired");
         }
         if (orderDatetime != null && expiresAt.isBefore(orderDatetime)) {
             throw new BusinessException("lab.order.standingExpiryAfterOrder");
@@ -1354,7 +1357,7 @@ public class LabOrderServiceImpl implements LabOrderService {
             lastReviewedAt = base.getStandingOrderLastReviewedAt();
         }
         if (lastReviewedAt == null) {
-            throw new BusinessException("lab.order.standingLastReviewRequired");
+            throw new com.example.hms.exception.FieldBusinessException("standingOrderLastReviewedAt", "lab.order.standingLastReviewRequired");
         }
         return lastReviewedAt;
     }

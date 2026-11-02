@@ -396,7 +396,8 @@ public class PatientServiceImpl implements PatientService {
         if (request.isRestricted()) {
             String reason = trimToNull(request.getReason());
             if (reason == null) {
-                throw new BusinessException("patient.r7.restrictReasonRequired");
+                // QA round 29 sweep: named, so the form marks the reason.
+                throw new com.example.hms.exception.FieldBusinessException("reason", "patient.r7.restrictReasonRequired");
             }
             patient.setChartRestricted(true);
             patient.setChartRestrictionReason(reason);
@@ -505,7 +506,7 @@ public class PatientServiceImpl implements PatientService {
         if (request.getPhoneNumberPrimary() != null) {
             String phone = normalizePhone(request.getPhoneNumberPrimary(), country, FIELD_PHONE_PRIMARY);
             if (phone == null) {
-                throw new BusinessException("patient.r16.phoneRequired");
+                throw new com.example.hms.exception.FieldBusinessException("phoneNumberPrimary", "patient.r16.phoneRequired");
             }
             // A number is not unique to one record: a child is registered with
             // the mother's phone (the database has no unique constraint on it).
@@ -1212,7 +1213,7 @@ public class PatientServiceImpl implements PatientService {
 
         String reason = normalizeAccessReason(request.getAccessReason());
         if (reason == null) {
-            throw new BusinessException("patient.r7.accessReasonRequired");
+            throw new com.example.hms.exception.FieldBusinessException("accessReason", "patient.r7.accessReasonRequired");
         }
 
         Patient patient = patientRepository.findByIdUnscoped(patientId)
@@ -1334,7 +1335,7 @@ public class PatientServiceImpl implements PatientService {
 
         String reason = normalizeAccessReason(request.getAccessReason());
         if (reason == null) {
-            throw new BusinessException("patient.r7.accessReasonRequired");
+            throw new com.example.hms.exception.FieldBusinessException("accessReason", "patient.r7.accessReasonRequired");
         }
 
         Patient patient = patientRepository.findByIdUnscoped(patientId)
@@ -1628,7 +1629,7 @@ public class PatientServiceImpl implements PatientService {
         }
         String normalizedReason = normalizeChangeReason(reason);
         if (normalizedReason == null) {
-            throw new BusinessException("patient.r7.allergyDeactivateReasonRequired");
+            throw new com.example.hms.exception.FieldBusinessException("reason", "patient.r7.allergyDeactivateReasonRequired");
         }
         PatientAllergy allergy = loadPatientAllergy(patientId, effectiveHospitalId, allergyId);
         // QA D1242 (round 25), the D1186 class: an entry already deactivated
@@ -1826,7 +1827,7 @@ public class PatientServiceImpl implements PatientService {
         }
         String normalizedReason = normalizeChangeReason(reason);
         if (normalizedReason == null) {
-            throw new BusinessException("patient.r7.diagnosisRemoveReasonRequired");
+            throw new com.example.hms.exception.FieldBusinessException("reason", "patient.r7.diagnosisRemoveReasonRequired");
         }
 
         PatientProblem problem = loadPatientProblem(patientId, hospitalId, diagnosisId);
@@ -1931,7 +1932,7 @@ public class PatientServiceImpl implements PatientService {
             return false;
         }
         if (normalizedReason == null) {
-            throw new BusinessException("patient.r7.diagnosisStatusReasonRequired");
+            throw new com.example.hms.exception.FieldBusinessException("changeReason", "patient.r7.diagnosisStatusReasonRequired");
         }
         problem.setStatus(requestedStatus);
         problem.setStatusChangeReason(normalizedReason);
@@ -1956,7 +1957,7 @@ public class PatientServiceImpl implements PatientService {
             return false;
         }
         if (normalizedReason == null) {
-            throw new BusinessException("patient.r7.diagnosisChronicReasonRequired");
+            throw new com.example.hms.exception.FieldBusinessException("changeReason", "patient.r7.diagnosisChronicReasonRequired");
         }
         problem.setChronic(request.getChronic());
         problem.setStatusChangeReason(normalizedReason);
@@ -2208,7 +2209,7 @@ public class PatientServiceImpl implements PatientService {
 
     private void enforceAllergyDisplay(String display) {
         if (display == null || display.isBlank()) {
-            throw new BusinessException("patient.r7.allergenRequired");
+            throw new com.example.hms.exception.FieldBusinessException("allergenDisplay", "patient.r7.allergenRequired");
         }
     }
 

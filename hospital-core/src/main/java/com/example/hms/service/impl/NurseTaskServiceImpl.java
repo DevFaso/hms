@@ -891,13 +891,13 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         String direction = request.getDirection() == null ? ""
             : request.getDirection().trim().toUpperCase(Locale.ROOT);
         if (!HANDOFF_DIRECTIONS.contains(direction)) {
-            throw new BusinessException("nurse.handoff.direction.invalid");
+            throw new com.example.hms.exception.FieldBusinessException("direction", "nurse.handoff.direction.invalid");
         }
 
         // QA D331: an SBAR handoff with no Situation tells the next nurse
         // nothing about why the patient is being handed over.
         if (trimToNull(request.getSituation()) == null) {
-            throw new BusinessException("nurse.handoff.situation.required");
+            throw new com.example.hms.exception.FieldBusinessException("situation", "nurse.handoff.situation.required");
         }
 
         // QA D776: a handoff is handed TO someone: a colleague at this
@@ -1739,7 +1739,7 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         String normalized = request.getStatus().trim().toUpperCase(Locale.ROOT);
         if (normalized.isBlank()) return DEFAULT_ADMINISTRATION_STATUS;
         if (!SUPPORTED_ADMINISTRATION_STATUSES.contains(normalized)) {
-            throw new BusinessException("nurse.mar.unsupportedStatus", String.valueOf(request.getStatus()));
+            throw new com.example.hms.exception.FieldBusinessException("status", "nurse.mar.unsupportedStatus", String.valueOf(request.getStatus()));
         }
         return normalized;
     }

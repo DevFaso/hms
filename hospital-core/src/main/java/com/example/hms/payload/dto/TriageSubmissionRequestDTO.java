@@ -91,6 +91,7 @@ public class TriageSubmissionRequestDTO {
     @Size(max = 100)
     private String roomAssignment;
 
+    @com.example.hms.validation.ReportedOn("diastolicBpMmHg")
     @AssertTrue(message = "{vitals.bloodPressure.invalid}")
     @JsonIgnore
     public boolean isBloodPressureOrdered() {

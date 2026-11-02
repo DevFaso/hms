@@ -1440,11 +1440,13 @@ public class DispenseServiceImpl implements DispenseService {
         // QA D1069: a cancel voids the payment and returns the stock; it says
         // why, as an invoice cancel, a payment reversal and an adjustment do.
         String why = reason == null ? "" : reason.trim();
+        // QA D1333 (round 29): named under fieldErrors.reason, so the form marks it.
         if (why.isEmpty()) {
-            throw new BusinessException("pharmacy.dispense.cancelReasonRequired");
+            throw new com.example.hms.exception.FieldBusinessException("reason", "pharmacy.dispense.cancelReasonRequired");
         }
         if (why.length() > CANCEL_NOTE_MAX) {
-            throw new BusinessException("pharmacy.dispense.cancelReasonTooLong", CANCEL_NOTE_MAX);
+            throw new com.example.hms.exception.FieldBusinessException("reason", "pharmacy.dispense.cancelReasonTooLong",
+                CANCEL_NOTE_MAX);
         }
         Dispense dispense = dispenseRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException(DISPENSE_NOT_FOUND));

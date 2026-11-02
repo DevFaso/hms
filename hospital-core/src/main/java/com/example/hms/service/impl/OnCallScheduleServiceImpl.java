@@ -167,7 +167,7 @@ public class OnCallScheduleServiceImpl implements OnCallScheduleService {
 
     private void validateWindow(OnCallScheduleRequestDTO request) {
         if (!request.getEndTime().isAfter(request.getStartTime())) {
-            throw new BusinessException("onCall.shift.endBeforeStart");
+            throw new com.example.hms.exception.FieldBusinessException("endTime", "onCall.shift.endBeforeStart");
         }
     }
 

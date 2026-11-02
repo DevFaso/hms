@@ -22,6 +22,13 @@ public class TreatmentConsentRequestDTO {
     private TreatmentConsentMethod method;
 
     /** The name as signed/typed at the desk. */
+    /**
+     * QA D1318 class (round 29): the consent recorded by hand
+     * ({@code POST /patients/{id}/treatment-consents}, source MANUAL) names its
+     * signer, declared here so {} names it with the method. The desk and the
+     * pre-check-in build this body in code, unvalidated, and keep their rule.
+     */
+    @jakarta.validation.constraints.NotBlank(message = "{treatmentConsent.signedName.required}")
     @Size(max = 200)
     private String signedName;
 

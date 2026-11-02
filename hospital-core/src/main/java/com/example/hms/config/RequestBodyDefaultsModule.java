@@ -4,11 +4,17 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonSetter;
 import com.fasterxml.jackson.annotation.Nulls;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.cfg.CoercionAction;
+import tools.jackson.databind.cfg.CoercionInputShape;
+import tools.jackson.databind.cfg.MapperBuilder;
 import tools.jackson.databind.cfg.MapperConfig;
 import tools.jackson.databind.introspect.Annotated;
 import tools.jackson.databind.introspect.AnnotatedConstructor;
 import tools.jackson.databind.introspect.NopAnnotationIntrospector;
 import tools.jackson.databind.module.SimpleModule;
+import tools.jackson.databind.type.LogicalType;
+
+import java.util.List;
 
 /**
  * Request bodies keep the defaults their classes declare when a form leaves
@@ -62,6 +68,28 @@ public class RequestBodyDefaultsModule extends SimpleModule {
         context.configOverride(boolean.class)
             .setNullHandling(JsonSetter.Value.forValueNulls(Nulls.SKIP));
         context.appendAnnotationIntrospector(new PreferNoArgsConstructor());
+        if (context.getOwner() instanceof MapperBuilder<?, ?> builder) {
+            blankTypedValuesReadAsAbsent(builder);
+        }
+    }
+
+    /**
+     * QA D1316 (round 29): a blank string in a typed field (a select left on
+     * its placeholder, a cleared date or time picker) failed the parse, and
+     * the parser stops at its first failure, so a body with several blank
+     * typed fields named only one of them. A blank enum, UUID, date, time or
+     * number is now read as absent: bean validation then names every
+     * required one in a single answer, and an optional one is simply not
+     * given. An unparsable non-blank value is still refused by name.
+     */
+    static void blankTypedValuesReadAsAbsent(MapperBuilder<?, ?> builder) {
+        for (LogicalType type : List.of(LogicalType.Enum, LogicalType.OtherScalar, LogicalType.DateTime,
+                LogicalType.Integer, LogicalType.Float)) {
+            builder.withCoercionConfig(type, config -> {
+                config.setCoercion(CoercionInputShape.EmptyString, CoercionAction.AsNull);
+                config.setAcceptBlankAsEmpty(Boolean.TRUE);
+            });
+        }
     }
 
     /**

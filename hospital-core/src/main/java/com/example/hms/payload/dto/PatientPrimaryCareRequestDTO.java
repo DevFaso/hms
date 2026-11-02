@@ -24,6 +24,7 @@ public class PatientPrimaryCareRequestDTO {
     private String notes;
 
     /** QA D1215 (round 23): the class of reversed date ranges - an end before the start is refused. */
+    @com.example.hms.validation.ReportedOn("endDate")
     @jakarta.validation.constraints.AssertTrue(message = "{patientPrimaryCare.dateRange.invalid}")
     @com.fasterxml.jackson.annotation.JsonIgnore
     public boolean isDateRangeValid() {

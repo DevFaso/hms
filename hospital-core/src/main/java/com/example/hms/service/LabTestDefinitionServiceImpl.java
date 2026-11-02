@@ -138,8 +138,9 @@ public class LabTestDefinitionServiceImpl implements LabTestDefinitionService {
             : repository.findLiveGlobalByCode(code);
         boolean taken = live != null && live.stream().anyMatch(other -> !Objects.equals(other.getId(), selfId));
         if (taken) {
-            throw new com.example.hms.exception.ConflictException(
-                com.example.hms.utility.MessageUtil.resolveOrRaw("lab.definition.duplicateCode",
+            // QA D1338 (round 29): still a 409, now marked on the code field.
+            throw new com.example.hms.exception.ConflictException("testCode:"
+                + com.example.hms.utility.MessageUtil.resolveOrRaw("lab.definition.duplicateCode",
                     code.toUpperCase(Locale.ROOT)));
         }
     }

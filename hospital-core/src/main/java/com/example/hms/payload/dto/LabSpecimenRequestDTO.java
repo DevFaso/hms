@@ -24,6 +24,8 @@ public class LabSpecimenRequestDTO {
      * column is VARCHAR(50); a longer type was refused by the database with a
      * generic error and the collection was lost.
      */
+    // QA D1334 (round 29): an empty body was recorded as a collection with no specimen type.
+    @jakarta.validation.constraints.NotBlank(message = "{lab.specimen.typeRequired}")
     @jakarta.validation.constraints.Size(max = 50, message = "{lab.specimen.typeTooLong}")
     private String specimenType;
 

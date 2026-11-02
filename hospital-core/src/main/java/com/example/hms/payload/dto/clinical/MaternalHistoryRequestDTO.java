@@ -20,6 +20,9 @@ import java.util.UUID;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+// QA D1318 class (round 29): the content rule is checked with the ids, in one answer.
+@com.example.hms.validation.AnyAnswer(metadata = {"patientId", "hospitalId", "recordedByStaffId", "recordedDate",
+    "updateReason"}, reportedOn = "clinicalNotes", message = "{maternalHistory.contentRequired}")
 public class MaternalHistoryRequestDTO {
 
     @NotNull(message = "{maternalHistory.patientId.required}")

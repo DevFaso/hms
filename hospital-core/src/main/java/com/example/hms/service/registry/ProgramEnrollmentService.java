@@ -155,7 +155,7 @@ public class ProgramEnrollmentService {
             restoreCancelledTracingRecall(enrollment);
         } else {
             if (reason == null) {
-                throw new BusinessException("program.enrollment.closeReasonRequired");
+                throw new com.example.hms.exception.FieldBusinessException("reason", "program.enrollment.closeReasonRequired");
             }
             enrollment.setStatus(target);
             enrollment.setClosedOn(LocalDate.now(clock));

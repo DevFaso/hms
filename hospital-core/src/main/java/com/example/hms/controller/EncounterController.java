@@ -183,7 +183,8 @@ public class EncounterController {
         Authentication auth
     ) {
         if (from != null && to != null && from.isAfter(to)) {
-            return ResponseEntity.badRequest().build();
+            // QA round 29 sweep: a refusal names its field (it was an empty 400).
+            throw new com.example.hms.exception.FieldBusinessException("to", "query.dateRange.reversed");
         }
 
         boolean isSuperAdmin = authUtils.hasAuthority(auth, ROLE_SUPER_ADMIN);

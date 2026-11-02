@@ -119,15 +119,24 @@ class PrescriptionControllerTest {
                 UUID.class, UUID.class, UUID.class, List.class, Pageable.class, Locale.class);
     }
 
+    /**
+     * QA D706; QA D1318 (round 29, assertion changed): the quantity is required
+     * on create by the body's OnCreate constraint, refused at the edge with the
+     * other missing fields (it was a check in the handler, with no field, after them).
+     */
     @org.junit.jupiter.api.Test
-    void qaD706_createWithoutQuantityIsRefusedBeforeTheService() {
-        PrescriptionController controller = org.mockito.Mockito.mock(PrescriptionController.class,
-            org.mockito.Mockito.CALLS_REAL_METHODS);
+    void qaD706_createWithoutQuantityIsRefusedBeforeTheService() throws Exception {
         com.example.hms.payload.dto.PrescriptionRequestDTO request = new com.example.hms.payload.dto.PrescriptionRequestDTO();
         request.setMedicationName("Morphine 10 mg");
-
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> controller.create(request, Locale.ENGLISH))
-            .isInstanceOf(com.example.hms.exception.BusinessException.class)
-            .matches(e -> "prescription.quantity.required".equals(((com.example.hms.exception.BusinessException) e).getMessageKey()));
+        try (jakarta.validation.ValidatorFactory factory = jakarta.validation.Validation.buildDefaultValidatorFactory()) {
+            org.assertj.core.api.Assertions.assertThat(factory.getValidator().validate(request,
+                    jakarta.validation.groups.Default.class, com.example.hms.validation.OnCreate.class))
+                .extracting(v -> v.getPropertyPath().toString())
+                .contains("quantity", "patientId");
+        }
+        java.lang.reflect.Parameter body = PrescriptionController.class
+            .getMethod("create", com.example.hms.payload.dto.PrescriptionRequestDTO.class, Locale.class).getParameters()[0];
+        org.assertj.core.api.Assertions.assertThat(body.getAnnotation(org.springframework.validation.annotation.Validated.class).value())
+            .contains(com.example.hms.validation.OnCreate.class);
     }
 }

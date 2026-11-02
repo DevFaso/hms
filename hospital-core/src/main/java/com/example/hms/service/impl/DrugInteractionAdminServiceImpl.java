@@ -101,20 +101,18 @@ public class DrugInteractionAdminServiceImpl implements DrugInteractionAdminServ
     }
 
     private void validate(DrugInteractionDTO request) {
-        if (request.getDrug1Code() == null || request.getDrug1Code().isBlank()
-            || request.getDrug2Code() == null || request.getDrug2Code().isBlank()) {
-            throw new com.example.hms.exception.FieldBusinessException("drug1Code", "Both drug codes are required.");
-        }
-        if (request.getDrug1Code().equalsIgnoreCase(request.getDrug2Code())) {
-            throw new BusinessException("An interaction needs two different drugs.");
-        }
-        if (request.getSeverity() == null) {
-            throw new com.example.hms.exception.FieldBusinessException("severity", "Severity is required.");
-        }
-        if (request.getRecommendation() == null || request.getRecommendation().isBlank()) {
+        // QA round 29 sweep: every missing value named at once, in the reader's
+        // language (they were English sentences, one per request).
+        com.example.hms.exception.RequiredFields.check()
+            .requireValue(request.getDrug1Code(), "drug1Code", "drugInteraction.drug1Required")
+            .requireValue(request.getDrug2Code(), "drug2Code", "drugInteraction.drug2Required")
+            .requireValue(request.getSeverity(), "severity", "drugInteraction.severityRequired")
             // An alert that says "these interact" and nothing else is the kind
             // clinicians learn to dismiss without reading.
-            throw new com.example.hms.exception.FieldBusinessException("recommendation", "A recommendation is required — an alert with no action is an alert that gets ignored.");
+            .requireValue(request.getRecommendation(), "recommendation", "drugInteraction.recommendationRequired")
+            .orThrow();
+        if (request.getDrug1Code().equalsIgnoreCase(request.getDrug2Code())) {
+            throw new com.example.hms.exception.FieldBusinessException("drug2Code", "drugInteraction.sameDrug");
         }
     }
 

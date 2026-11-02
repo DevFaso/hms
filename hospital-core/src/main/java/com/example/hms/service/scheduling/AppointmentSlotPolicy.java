@@ -112,7 +112,7 @@ public class AppointmentSlotPolicy {
         AppointmentSlot slot = staffId == null || start == null ? null
             : slotRepository.findFirstByStaff_IdAndStartAt(staffId, start).orElse(null);
         if (slot == null || !isOf(slot, hospitalId, departmentId)) {
-            throw new BusinessException("portal.booking.notAPublishedSlot");
+            throw new com.example.hms.exception.FieldBusinessException("startTime", "portal.booking.notAPublishedSlot");
         }
         if (!slot.isOfferable(LocalDateTime.now(clock))) {
             throw new BusinessException("portal.booking.slotNotFree");

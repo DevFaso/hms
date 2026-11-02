@@ -2581,6 +2581,13 @@ public class EncounterServiceImpl implements EncounterService {
             boolean isSuperAdmin,
             UUID callerHospitalId) {
 
+        // QA D1246 (round 25): an after-visit summary says something.
+        // QA round 29: the body is read before the lookup, so an empty one is
+        // named whatever the visit's state.
+        AfterVisitSummaryContent.require(
+            request != null ? request.getFollowUpInstructions() : null,
+            request != null ? request.getDischargeDiagnoses() : null);
+
         Encounter encounter = requireEncounterInScope(encounterId, isSuperAdmin, callerHospitalId);
 
         // Guard: only non-terminal encounters may be checked out
@@ -2596,10 +2603,6 @@ public class EncounterServiceImpl implements EncounterService {
         if (current == EncounterStatus.IN_PROGRESS) {
             EncounterClosureRules.requireExaminingClinician(encounter);
         }
-        // QA D1246 (round 25): an after-visit summary says something.
-        AfterVisitSummaryContent.require(
-            request != null ? request.getFollowUpInstructions() : null,
-            request != null ? request.getDischargeDiagnoses() : null);
 
         LocalDateTime now = LocalDateTime.now();
 

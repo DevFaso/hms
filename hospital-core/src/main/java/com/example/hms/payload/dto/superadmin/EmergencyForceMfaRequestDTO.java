@@ -47,4 +47,15 @@ public class EmergencyForceMfaRequestDTO {
     @NotBlank
     @Size(min = 5, max = 1000)
     private String reason;
+
+    /**
+     * QA round 29 sweep: the users (or the explicit resetAll) are checked with
+     * the reason, in one answer; the service keeps its own refusal.
+     */
+    @jakarta.validation.constraints.AssertTrue(message = "{emergency.mfaReset.noTarget}")
+    @com.example.hms.validation.ReportedOn("userIds")
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public boolean isTargetNamed() {
+        return Boolean.TRUE.equals(resetAll) || (userIds != null && !userIds.isEmpty());
+    }
 }

@@ -195,7 +195,7 @@ public class PhoneVerificationServiceImpl implements PhoneVerificationService {
      */
     String normalizePhone(String rawPhone) {
         if (rawPhone == null) {
-            throw new BusinessException("phoneVerification.phone.required");
+            throw new com.example.hms.exception.FieldBusinessException("phoneNumber", "phoneVerification.phone.required");
         }
         String trimmed = rawPhone.trim();
         boolean hasPlus = trimmed.startsWith("+");
@@ -205,7 +205,7 @@ public class PhoneVerificationServiceImpl implements PhoneVerificationService {
             hasPlus = true;
         }
         if (digits.length() < MIN_DIGITS) {
-            throw new BusinessException("phoneVerification.phone.tooShort");
+            throw new com.example.hms.exception.FieldBusinessException("phoneNumber", "phoneVerification.phone.tooShort");
         }
         if (hasPlus || digits.length() > 10) {
             return "+" + digits;

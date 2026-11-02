@@ -419,8 +419,7 @@ class CancelVoidReasonGuardTest {
         CLINICAL_HANDLERS.put("POST /super-admin/providers/{providerId}/revoke",
             "NOT A CLINICAL RECORD: provider onboarding; ProviderDecisionRequestDTO.reason is @NotBlank");
         CLINICAL_HANDLERS.put("PUT /refills/{refillId}/reject",
-            "KNOWN GAP (D1157 class, standing debt): the refill denial's providerNotes are optional; the portal's"
-                + " refill screen sends none, so requiring them needs its UI half first");
+            "RefillDecisionRequestDTO.providerNotes (@NotBlank, OnRefusal group) -> service/impl/RefillApprovalServiceImplTest#aDenialWithoutAReasonIsRefused_D1315");
         CLINICAL_HANDLERS.put("PUT /roi-requests/{requestId}/cancel",
             "KNOWN GAP (D1157 class, standing debt): RoiDecisionDTO.note is optional on cancel (deny requires it);"
                 + " the ROI worklist dialog has no field yet");

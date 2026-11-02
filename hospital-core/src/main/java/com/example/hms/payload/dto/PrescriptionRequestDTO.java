@@ -79,6 +79,10 @@ public class PrescriptionRequestDTO {
      * prescription from the prescribing form and on any controlled
      * substance; on update, null leaves the stored value unchanged.
      */
+    // QA D1318 (round 29): required to create, declared here so {} names it with
+    // the patient and the drug (it was refused after them, with no field).
+    @jakarta.validation.constraints.NotNull(groups = com.example.hms.validation.OnCreate.class,
+        message = "{prescription.quantity.required}")
     @jakarta.validation.constraints.DecimalMin(value = "0", inclusive = false,
         message = "{prescription.quantity.positive}")
     @jakarta.validation.constraints.DecimalMax(value = "100000", message = "{prescription.quantity.tooLarge}")

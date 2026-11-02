@@ -39,7 +39,13 @@ public class PasswordResetController {
         Locale locale,
         HttpServletRequest request
     ) {
-        return handleResetRequest(dto.effectiveIdentifier(), locale, request);
+        // QA round 29 sweep: {} was answered 204 as if an account had been named.
+        // Refusing a blank identifier tells an anonymous caller nothing about any account.
+        String identifier = dto.effectiveIdentifier();
+        if (identifier == null) {
+            throw new com.example.hms.exception.FieldBusinessException("identifier", "auth.reset.identifierRequired");
+        }
+        return handleResetRequest(identifier, locale, request);
     }
 
     /**
@@ -60,7 +66,7 @@ public class PasswordResetController {
             .email(email).identifier(identifier).phone(phone).build()
             .effectiveIdentifier();
         if (named == null) {
-            return ResponseEntity.badRequest().build();
+            throw new com.example.hms.exception.FieldBusinessException("identifier", "auth.reset.identifierRequired");
         }
         return handleResetRequest(named, locale, request);
     }

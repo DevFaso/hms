@@ -517,7 +517,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         }
         String reason = request.getReason() != null ? request.getReason().trim() : "";
         if (reason.isEmpty()) {
-            throw new BusinessException("billing.adjustment.reasonRequired");
+            throw new com.example.hms.exception.FieldBusinessException("reason", "billing.adjustment.reasonRequired");
         }
         boolean creditNote = request.getType() == com.example.hms.enums.InvoiceAdjustmentType.CREDIT_NOTE;
         if (creditNote && request.getInvoiceItemId() == null) {
@@ -640,7 +640,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             .orElseThrow(() -> new ResourceNotFoundException("billing.adjustment.notFound"));
         String why = reason == null ? "" : reason.trim();
         if (why.isEmpty()) {
-            throw new BusinessException("billing.adjustment.reversalReasonRequired");
+            throw new com.example.hms.exception.FieldBusinessException("reason", "billing.adjustment.reversalReasonRequired");
         }
         if (why.length() > CANCEL_REASON_MAX) {
             throw new BusinessException("billing.adjustment.reversalReasonTooLong", String.valueOf(CANCEL_REASON_MAX));
@@ -1065,11 +1065,11 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
     private static void requireCoherentDates(LocalDate invoiceDate, LocalDate dueDate, LocalDate storedInvoiceDate,
                                              Hospital hospital) {
         if (invoiceDate != null && dueDate != null && dueDate.isBefore(invoiceDate)) {
-            throw new BusinessException("billing.invoice.dueBeforeInvoiceDate");
+            throw new com.example.hms.exception.FieldBusinessException("dueDate", "billing.invoice.dueBeforeInvoiceDate");
         }
         if (invoiceDate != null && !invoiceDate.equals(storedInvoiceDate)
                 && invoiceDate.isAfter(com.example.hms.utility.HospitalCalendar.today(hospital))) {
-            throw new BusinessException("billing.invoice.dateInFuture");
+            throw new com.example.hms.exception.FieldBusinessException("invoiceDate", "billing.invoice.dateInFuture");
         }
     }
 
@@ -1963,7 +1963,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
 
     private static String requireReason(String reason) {
         if (reason == null || reason.isBlank()) {
-            throw new BusinessException("billing.payment.reasonRequired");
+            throw new com.example.hms.exception.FieldBusinessException("reason", "billing.payment.reasonRequired");
         }
         String trimmed = reason.trim();
         return trimmed.length() > 500 ? trimmed.substring(0, 500) : trimmed;

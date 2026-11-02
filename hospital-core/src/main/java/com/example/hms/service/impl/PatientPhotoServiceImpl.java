@@ -154,7 +154,7 @@ public class PatientPhotoServiceImpl implements PatientPhotoService {
 
     private void validate(MultipartFile file) {
         if (file == null || file.isEmpty()) {
-            throw new BusinessException("patient.photo.required");
+            throw new com.example.hms.exception.FieldBusinessException("file", "patient.photo.required");
         }
         if (file.getSize() > MAX_PHOTO_SIZE) {
             throw new BusinessException("patient.photo.tooLarge");

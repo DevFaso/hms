@@ -193,10 +193,10 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
         }
         String trimmed = reason == null ? "" : reason.trim();
         if (trimmed.isEmpty()) {
-            throw new BusinessException("lab.specimen.rejectReasonRequired");
+            throw new com.example.hms.exception.FieldBusinessException("reason", "lab.specimen.rejectReasonRequired");
         }
         if (trimmed.length() > MAX_REJECTION_REASON) {
-            throw new BusinessException("lab.specimen.rejectReasonTooLong", MAX_REJECTION_REASON);
+            throw new com.example.hms.exception.FieldBusinessException("reason", "lab.specimen.rejectReasonTooLong", MAX_REJECTION_REASON);
         }
         if (labOrder.getStatus() == LabOrderStatus.ENTERED_IN_ERROR) {
             throw new BusinessException("lab.order.enteredInError");

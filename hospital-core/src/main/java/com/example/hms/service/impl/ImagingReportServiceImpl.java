@@ -226,7 +226,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
         // A signature over an empty read attests to nothing. The impression is
         // the part the ordering clinician acts on, so that is the floor.
         if (!StringUtils.hasText(report.getImpression())) {
-            throw new BusinessException("imaging.report.impressionRequired");
+            throw new com.example.hms.exception.FieldBusinessException("impression", "imaging.report.impressionRequired");
         }
 
         Hospital hospital = report.getHospital();
@@ -299,7 +299,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
             throw new com.example.hms.exception.FieldBusinessException("status", "imaging.report.statusRequired");
         }
         if (!ADMINISTRATIVE_STATUSES.contains(request.getStatus())) {
-            throw new BusinessException("imaging.report.statusNotAdministrative");
+            throw new com.example.hms.exception.FieldBusinessException("status", "imaging.report.statusNotAdministrative");
         }
         if (!StringUtils.hasText(request.getStatusReason())) {
             // Voiding a radiology report without saying why leaves the chart

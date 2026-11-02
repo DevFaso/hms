@@ -749,7 +749,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                         appointmentRepository.findByStaff_IdAndAppointmentDate(st.getId(), dto.getDate()),
                         null, start, slotted.get(st.getId()).getEndAt()))
                 .findFirst()
-                .orElseThrow(() -> new BusinessException("portal.booking.notAPublishedSlot"));
+                .orElseThrow(() -> new com.example.hms.exception.FieldBusinessException("startTime", "portal.booking.notAPublishedSlot"));
     }
 
     /** At most this many slots are offered for one day: a list of times, not an export. */
@@ -767,7 +767,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                                                    java.time.LocalDate date, UUID movingAppointmentId,
                                                    java.time.LocalDateTime hospitalNow) {
         if (date == null) {
-            throw new BusinessException("portal.booking.dateRequired");
+            throw new com.example.hms.exception.FieldBusinessException("date", "portal.booking.dateRequired");
         }
         java.util.Set<UUID> bookable = staffId != null ? null
                 : staffRepository.findActiveProvidersByHospitalAndDepartment(hospitalId, departmentId).stream()

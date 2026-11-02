@@ -54,7 +54,8 @@ public class AdvanceDirectiveController {
     @Operation(summary = "Record an advance directive for a patient")
     public ResponseEntity<AdvanceDirectiveResponseDTO> create(
         @PathVariable UUID patientId,
-        @Valid @RequestBody AdvanceDirectiveRequestDTO request) {
+        @org.springframework.validation.annotation.Validated({jakarta.validation.groups.Default.class,
+            com.example.hms.validation.OnCreate.class}) @RequestBody AdvanceDirectiveRequestDTO request) {
         return new ResponseEntity<>(advanceDirectiveService.create(patientId, request), HttpStatus.CREATED);
     }
 

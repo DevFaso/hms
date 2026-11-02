@@ -3,6 +3,7 @@ package com.example.hms.payload.dto.portal;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
@@ -25,8 +26,9 @@ public class PatientPaymentRequestDTO {
     @Schema(description = "Amount to pay", example = "150.00", requiredMode = Schema.RequiredMode.REQUIRED)
     private BigDecimal amount;
 
-    @NotNull
-    @Size(min = 1, max = 50)
+    // QA D1317 (round 29): a blank method read "size must be between 1 and 50".
+    @NotBlank
+    @Size(max = 50)
     @Schema(description = "Payment method used", example = "CARD",
             allowableValues = {"CARD", "CASH", "BANK_TRANSFER", "MOBILE_MONEY", "INSURANCE"},
             requiredMode = Schema.RequiredMode.REQUIRED)
@@ -46,6 +48,7 @@ public class PatientPaymentRequestDTO {
      * QA D433: a card, transfer or mobile-money payment is declared with the
      * reference staff need to confirm it; only cash is paid at the desk.
      */
+    @com.example.hms.validation.ReportedOn("transactionReference")
     @jakarta.validation.constraints.AssertTrue(message = "{patientPayment.reference.required}")
     @io.swagger.v3.oas.annotations.Hidden
     public boolean isReferenceGivenForNonCashPayment() {

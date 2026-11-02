@@ -211,7 +211,7 @@ public class MedicalCertificateServiceImpl implements MedicalCertificateService 
             case ATTENDANCE -> new Certificate(MedicalCertificateType.ATTENDANCE, visitDay, visitDay, visitDay, null, remarks);
             case GENERAL -> {
                 if (remarks == null) {
-                    throw new BusinessException("medicalCertificate.remarks.required");
+                    throw new com.example.hms.exception.FieldBusinessException("remarks", "medicalCertificate.remarks.required");
                 }
                 yield new Certificate(MedicalCertificateType.GENERAL, visitDay, visitDay, visitDay, null, remarks);
             }

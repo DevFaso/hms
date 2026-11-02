@@ -319,7 +319,7 @@ public class LaborServiceImpl implements LaborService {
                                                            LaborEpisodeRequestDTO request, MaternalHistory previous) {
         Integer weeks = request.getGestationalAgeWeeks();
         if (weeks == null) {
-            throw new BusinessException("maternity.labor.pregnancyRequired");
+            throw new com.example.hms.exception.FieldBusinessException("gestationalAgeWeeks", "maternity.labor.pregnancyRequired");
         }
         if (weeks < MIN_LABOUR_GESTATIONAL_WEEKS || weeks > MAX_LABOUR_GESTATIONAL_WEEKS) {
             throw new BusinessException("maternity.labor.gestationalAgeRange",
@@ -363,7 +363,8 @@ public class LaborServiceImpl implements LaborService {
         }
         String reason = request.getRecentDeliveryOverrideReason();
         if (reason == null || reason.isBlank()) {
-            throw new BusinessException("labor.episode.recentDelivery");
+            // QA D1339 (round 29): marked on the override field the form shows.
+            throw new com.example.hms.exception.FieldBusinessException("recentDeliveryOverrideReason", "labor.episode.recentDelivery");
         }
         String note = messageSource.getMessage("labor.episode.recentDeliveryOverrideNote",
             new Object[]{reason.trim()}, NotificationLocales.STAFF);
@@ -596,7 +597,8 @@ public class LaborServiceImpl implements LaborService {
         }
         String reason = request.getRecentDeliveryOverrideReason();
         if (reason == null || reason.isBlank()) {
-            throw new BusinessException("labor.delivery.recentDelivery");
+            // QA D1339 (round 29): marked on the override field the form shows.
+            throw new com.example.hms.exception.FieldBusinessException("recentDeliveryOverrideReason", "labor.delivery.recentDelivery");
         }
         String note = messageSource.getMessage("labor.episode.recentDeliveryOverrideNote",
             new Object[]{reason.trim()}, NotificationLocales.STAFF);

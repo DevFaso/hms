@@ -53,7 +53,9 @@ public class DowntimeController {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class DowntimeToggleRequest {
-        private boolean readOnly;
+        /** QA round 29 sweep: required - an empty body silently turned read-only mode off. */
+        @jakarta.validation.constraints.NotNull
+        private Boolean readOnly;
         @Size(max = 500)
         private String message;
     }
@@ -81,7 +83,7 @@ public class DowntimeController {
     ) {
         String actor = auth != null ? auth.getName() : null;
         DowntimeStateService.DowntimeSnapshot snapshot =
-            downtimeStateService.setReadOnly(request.isReadOnly(), request.getMessage(), actor);
+            downtimeStateService.setReadOnly(request.getReadOnly(), request.getMessage(), actor);
 
         // Best effort, the house audit stance: the toggle must not fail
         // because the audit write did.
@@ -90,7 +92,7 @@ public class DowntimeController {
                 .userName(actor)
                 .eventType(AuditEventType.CONFIGURATION_CHANGED)
                 .eventDescription("Platform read-only mode "
-                    + (request.isReadOnly() ? "ACTIVATED" : "deactivated")
+                    + (Boolean.TRUE.equals(request.getReadOnly()) ? "ACTIVATED" : "deactivated")
                     + (request.getMessage() != null ? ": " + request.getMessage() : ""))
                 .entityType("PLATFORM_DOWNTIME")
                 .resourceId("1")

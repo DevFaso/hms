@@ -117,7 +117,7 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
         if (!isRealProvider()) {
             String typed = dto.getReferenceNumber();
             if (typed == null || typed.isBlank()) {
-                throw new BusinessException("pharmacy.payment.mobileMoneyReferenceRequired");
+                throw new com.example.hms.exception.FieldBusinessException("referenceNumber", "pharmacy.payment.mobileMoneyReferenceRequired");
             }
             return typed.trim();
         }

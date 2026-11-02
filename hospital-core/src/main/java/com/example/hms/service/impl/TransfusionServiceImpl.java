@@ -240,7 +240,7 @@ public class TransfusionServiceImpl implements TransfusionService {
     @Override
     public BloodUnitResponseDTO discardUnit(UUID unitId, String reason) {
         if (!StringUtils.hasText(reason)) {
-            throw new BusinessException("transfusion.unit.discardReasonRequired");
+            throw new com.example.hms.exception.FieldBusinessException("reason", "transfusion.unit.discardReasonRequired");
         }
         BloodUnit unit = loadUnitScoped(unitId);
         if (unit.getStatus() == BloodUnitStatus.TRANSFUSED) {
@@ -344,7 +344,7 @@ public class TransfusionServiceImpl implements TransfusionService {
     @Override
     public TransfusionRequestResponseDTO cancelRequest(UUID requestId, String reason) {
         if (!StringUtils.hasText(reason)) {
-            throw new BusinessException("transfusion.request.cancelReasonRequired");
+            throw new com.example.hms.exception.FieldBusinessException("reason", "transfusion.request.cancelReasonRequired");
         }
         TransfusionRequest request = loadRequestScoped(requestId);
         if (request.isTerminal()) {
@@ -624,7 +624,7 @@ public class TransfusionServiceImpl implements TransfusionService {
     @Override
     public TransfusionAdministrationResponseDTO stopAdministration(UUID administrationId, String reason) {
         if (!StringUtils.hasText(reason)) {
-            throw new BusinessException("transfusion.administration.stopReasonRequired");
+            throw new com.example.hms.exception.FieldBusinessException("reason", "transfusion.administration.stopReasonRequired");
         }
         TransfusionAdministration administration = loadAdministrationScoped(administrationId);
         if (!administration.isInProgress()) {

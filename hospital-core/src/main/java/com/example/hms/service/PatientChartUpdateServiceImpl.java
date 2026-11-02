@@ -117,7 +117,7 @@ public class PatientChartUpdateServiceImpl implements PatientChartUpdateService 
 
         String updateReason = trim(request.getUpdateReason());
         if (updateReason == null) {
-            throw new BusinessException("chartUpdate.reasonRequired");
+            throw new com.example.hms.exception.FieldBusinessException("updateReason", "chartUpdate.reasonRequired");
         }
 
         int nextVersion = patientChartUpdateRepository

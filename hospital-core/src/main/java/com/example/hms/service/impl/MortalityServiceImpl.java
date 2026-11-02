@@ -121,7 +121,7 @@ public class MortalityServiceImpl implements MortalityService {
             throw new BusinessException("mortality.alreadyRecorded");
         }
         if (request.getDiedAt().isAfter(LocalDateTime.now(clock))) {
-            throw new BusinessException("mortality.timeInFuture");
+            throw new com.example.hms.exception.FieldBusinessException("diedAt", "mortality.timeInFuture");
         }
         validateMortalityFlags(request);
 
@@ -207,10 +207,10 @@ public class MortalityServiceImpl implements MortalityService {
         // maternal without saying when would break the reporting query.
         if (Boolean.TRUE.equals(deathRecord.getMaternalDeath())
             && deathRecord.getMaternalDeathTiming() == null) {
-            throw new BusinessException("mortality.maternalTimingRequired");
+            throw new com.example.hms.exception.FieldBusinessException("maternalDeathTiming", "mortality.maternalTimingRequired");
         }
         if (Boolean.TRUE.equals(deathRecord.getPerinatalDeath()) && deathRecord.getPerinatalType() == null) {
-            throw new BusinessException("mortality.perinatalTypeRequired");
+            throw new com.example.hms.exception.FieldBusinessException("perinatalType", "mortality.perinatalTypeRequired");
         }
 
         deathRecord.setAmendedAt(LocalDateTime.now(clock));
@@ -234,7 +234,7 @@ public class MortalityServiceImpl implements MortalityService {
     public MortalityRegisterDTO getRegister(LocalDate from, LocalDate to) {
         UUID hospitalId = requireHospital();
         if (from == null || to == null) {
-            throw new BusinessException("mortality.periodRequired");
+            throw new com.example.hms.exception.FieldBusinessException("from", "mortality.periodRequired");
         }
         if (to.isBefore(from)) {
             throw new BusinessException("mortality.periodReversed");

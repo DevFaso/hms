@@ -260,14 +260,15 @@ public class ReceptionController {
             @AuthenticationPrincipal UserDetails principal) {
         UUID hospitalId = resolveHospitalId();
         String statusStr = body.get("status");
+        // QA round 29 sweep: a missing or unknown status is named (it was an empty 400).
         if (statusStr == null || statusStr.isBlank()) {
-            return ResponseEntity.badRequest().build();
+            throw new com.example.hms.exception.FieldBusinessException("status", "reception.encounterStatus.required");
         }
         EncounterStatus status;
         try {
-            status = EncounterStatus.valueOf(statusStr.toUpperCase());
+            status = EncounterStatus.valueOf(statusStr.trim().toUpperCase(java.util.Locale.ROOT));
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().build();
+            throw new com.example.hms.exception.FieldBusinessException("status", "reception.encounterStatus.required");
         }
         String callerUsername = principal != null ? principal.getUsername() : SYSTEM_ACTOR;
         receptionService.updateEncounterStatus(encounterId, status, hospitalId, callerUsername);

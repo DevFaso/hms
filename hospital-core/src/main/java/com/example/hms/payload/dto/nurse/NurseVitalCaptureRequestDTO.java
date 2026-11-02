@@ -79,6 +79,7 @@ public class NurseVitalCaptureRequestDTO {
     @Max(value = 10, message = "{vitals.painScale.range}")
     private Integer painScale;
 
+    @com.example.hms.validation.ReportedOn("diastolicBpMmHg")
     @AssertTrue(message = "{vitals.bloodPressure.invalid}")
     @JsonIgnore
     public boolean isBloodPressureOrdered() {
@@ -86,6 +87,7 @@ public class NurseVitalCaptureRequestDTO {
     }
 
     /** D111: a submission with no measurement at all is not a reading. */
+    @com.example.hms.validation.ReportedOn("temperatureCelsius")
     @AssertTrue(message = "{vitals.empty}")
     @JsonIgnore
     public boolean isAnyMeasurementPresent() {

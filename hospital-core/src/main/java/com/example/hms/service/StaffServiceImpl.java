@@ -408,15 +408,12 @@ public class StaffServiceImpl implements StaffService {
     }
 
     private void validateBaseStaffRequirements(StaffRequestDTO dto, Locale locale) {
-        if (dto.getUserEmail() == null || dto.getUserEmail().isBlank()) {
-            throw new com.example.hms.exception.FieldBusinessException("userEmail", messageSource.getMessage("staff.user.required", null, locale));
-        }
-        if (dto.getHospitalName() == null || dto.getHospitalName().isBlank()) {
-            throw new com.example.hms.exception.FieldBusinessException("hospitalName", messageSource.getMessage("staff.hospital.required", null, locale));
-        }
-        if (dto.getJobTitle() == null || dto.getJobTitle().isBlank()) {
-            throw new com.example.hms.exception.FieldBusinessException("jobTitle", messageSource.getMessage("staff.jobTitle.required", null, locale));
-        }
+        // QA round 29 sweep (D1318 class): the three named in one answer, not one per request.
+        com.example.hms.exception.RequiredFields.check()
+            .requireValue(dto.getUserEmail(), "userEmail", "staff.user.required")
+            .requireValue(dto.getHospitalName(), "hospitalName", "staff.hospital.required")
+            .requireValue(dto.getJobTitle(), "jobTitle", "staff.jobTitle.required")
+            .orThrow();
     }
 
 

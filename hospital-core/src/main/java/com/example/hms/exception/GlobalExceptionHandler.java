@@ -138,7 +138,12 @@ public class GlobalExceptionHandler {
         body.put(FIELD_STATUS, HttpStatus.CONFLICT.value());
         body.put(FIELD_ERROR, "Conflict");
         body.put(FIELD_MESSAGE, passThrough(message));
-        if (field != null) body.put(FIELD_FIELD, field);
+        if (field != null) {
+            body.put(FIELD_FIELD, field);
+            // QA D1301 / D1338 (round 29): a conflict on a typed value ("this code
+            // is taken") is marked on its field, in the shape every form reads.
+            body.put(FIELD_ERRORS, Map.of(field, passThrough(message)));
+        }
         body.put(FIELD_PATH, request.getDescription(false).replace("uri=", ""));
         return new ResponseEntity<>(body, HttpStatus.CONFLICT);
     }
@@ -435,8 +440,13 @@ public class GlobalExceptionHandler {
         // vide"; a class-level rule (one of patientId / patientIdentifier)
         // answered an EMPTY fieldErrors. Order is the binding order.
         Map<String, String> fieldErrors = new LinkedHashMap<>();
+        // QA D1317 / D1338 (round 29): each key is the request's JSON path, not
+        // the Java property (a renamed field, a cross-field rule's getter).
+        Object target = ex.getBindingResult().getTarget();
+        Class<?> targetType = target == null ? null : target.getClass();
         for (FieldError error : ex.getBindingResult().getFieldErrors()) {
-            fieldErrors.putIfAbsent(error.getField(), fieldReason(error));
+            String path = RequestFieldPaths.toJson(targetType, error.getField());
+            fieldErrors.putIfAbsent(path, fieldReason(error, path));
         }
         java.util.List<String> globalReasons = ex.getBindingResult().getGlobalErrors().stream()
                 .map(org.springframework.validation.ObjectError::getDefaultMessage)
@@ -492,10 +502,10 @@ public class GlobalExceptionHandler {
      * constraint left on its default template is prefixed with the field's
      * label; a reason written for the field passes unchanged.
      */
-    private String fieldReason(FieldError error) {
-        String label = fieldLabel(error.getField());
+    private String fieldReason(FieldError error, String path) {
+        String label = fieldLabel(path);
         if (error.isBindingFailure()) {
-            return invalidFieldReason(error.getField());
+            return invalidFieldReason(path);
         }
         String message = error.getDefaultMessage();
         if (message == null || message.isBlank()) {
@@ -529,8 +539,12 @@ public class GlobalExceptionHandler {
                 : ex.getParameterValidationResults()) {
             String prefix = parameterPath(result);
             if (result instanceof org.springframework.validation.method.ParameterErrors errors) {
+                // QA D1338 (round 29): keyed on the JSON name of each element's
+                // property ("[0].testName", not the Java "[0].name").
+                Class<?> elementType = elementTypeOf(result);
                 for (FieldError error : errors.getFieldErrors()) {
-                    fieldErrors.putIfAbsent(joinPath(prefix, error.getField()), error.getDefaultMessage());
+                    fieldErrors.putIfAbsent(joinPath(prefix, RequestFieldPaths.toJson(elementType, error.getField())),
+                        error.getDefaultMessage());
                 }
                 for (org.springframework.validation.ObjectError error : errors.getGlobalErrors()) {
                     fieldErrors.putIfAbsent(prefix, error.getDefaultMessage());
@@ -572,11 +586,27 @@ public class GlobalExceptionHandler {
         return field == null || field.isEmpty() ? prefix : prefix + "." + field;
     }
 
+    /** The class of one validated body element: the argument, or the element type of a list parameter. */
+    private static Class<?> elementTypeOf(org.springframework.validation.method.ParameterValidationResult result) {
+        Object argument = result.getArgument();
+        if (argument != null && !(argument instanceof java.util.Collection<?>)) {
+            return argument.getClass();
+        }
+        java.lang.reflect.Type generic = result.getMethodParameter().getGenericParameterType();
+        if (generic instanceof java.lang.reflect.ParameterizedType p
+                && p.getActualTypeArguments()[0] instanceof Class<?> element) {
+            return element;
+        }
+        return null;
+    }
+
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<Object> handleConstraintViolation(ConstraintViolationException ex, WebRequest request) {
         Map<String, String> violations = new LinkedHashMap<>();
         for (jakarta.validation.ConstraintViolation<?> v : ex.getConstraintViolations()) {
-            violations.putIfAbsent(v.getPropertyPath().toString(), v.getMessage());
+            // QA D1338 (round 29): keyed on the request's JSON name ("testName", not "name").
+            violations.putIfAbsent(RequestFieldPaths.toJson(v.getRootBeanClass(), v.getPropertyPath().toString()),
+                v.getMessage());
         }
         String reasons = joinReasons(violations.values().stream());
 
@@ -590,6 +620,24 @@ public class GlobalExceptionHandler {
         body.put(FIELD_ERRORS, violations);
         body.put(FIELD_PATH, request.getDescription(false).replace("uri=", ""));
         return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
+    }
+
+    /**
+     * QA round 29 sweep: an entity's own bean constraint failing at flush
+     * ({@code POST /permissions} with a field the request body never declared)
+     * reached the caller as a 500 "Could not commit JPA transaction". The
+     * constraint names the field: it is the same 400, keyed on the property,
+     * as a request-body refusal. Anything else stays the error it was.
+     */
+    @ExceptionHandler(org.springframework.transaction.TransactionSystemException.class)
+    public ResponseEntity<Object> handleTransactionSystem(
+            org.springframework.transaction.TransactionSystemException ex, WebRequest request) {
+        for (Throwable t = ex.getCause(); t != null; t = t.getCause() == t ? null : t.getCause()) {
+            if (t instanceof ConstraintViolationException violation) {
+                return handleConstraintViolation(violation, request);
+            }
+        }
+        return handleRuntimeException(ex, request);
     }
 
     @ExceptionHandler({EntityNotFoundException.class, JpaObjectRetrievalFailureException.class})
