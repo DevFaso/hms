@@ -16,7 +16,8 @@ import { FieldRefusal, refuseFields } from './invalid-fields';
  *
  * One choke point for every form of the portal: {@link serverFieldErrorsInterceptor}
  * (installed in app.config.ts) remembers, when a write is sent, the form,
- * dialog or `[data-submit-scope]` section the reader acted in; when the
+ * dialog or `[data-submit-scope]` (else the page section: a fieldset, card,
+ * panel or section) the reader acted in; when the
  * server refuses that write (400 / 409 / 422) with `fieldErrors`, each named
  * field found in that place is marked through {@link refuseFields}
  * (`aria-invalid`, the server's reason right under it, focus on the first).
@@ -47,6 +48,22 @@ import { FieldRefusal, refuseFields } from './invalid-fields';
 /** Where a submit's fields are looked up — the same places as the submit guard's `root()`. */
 export const SUBMIT_SCOPE_SELECTOR =
   'form, [role="dialog"], [role="alertdialog"], dialog, .modal, [data-submit-scope]';
+
+/**
+ * A page section that holds an inline form without being one (a card with
+ * fields and a `(click)` button): where the fields are looked up when no
+ * form, dialog or scope encloses the control the reader acted on.
+ */
+export const SECTION_SCOPE_SELECTOR = 'fieldset, .form-card, .card, .panel, section';
+
+/** The place a control belongs to: its form, dialog or scope, else its page section. */
+export function scopeOf(el: Element | null | undefined): HTMLElement | null {
+  return (
+    el?.closest<HTMLElement>(SUBMIT_SCOPE_SELECTOR) ??
+    el?.closest<HTMLElement>(SECTION_SCOPE_SELECTOR) ??
+    null
+  );
+}
 
 /** Statuses whose `fieldErrors` name the reader's own input. */
 const FIELD_REFUSAL_STATUSES = new Set([400, 409, 422]);
@@ -232,7 +249,7 @@ export function actionScope(doc: Document): HTMLElement | null {
   const action = lastAction.get(doc);
   const recent = action && Date.now() - action.at <= ACTION_WINDOW_MS ? action.target : null;
   const from = recent?.isConnected ? recent : doc.activeElement;
-  return from?.closest<HTMLElement>(SUBMIT_SCOPE_SELECTOR) ?? null;
+  return scopeOf(from);
 }
 
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
