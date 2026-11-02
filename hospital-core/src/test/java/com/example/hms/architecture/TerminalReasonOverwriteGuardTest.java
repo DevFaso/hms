@@ -88,7 +88,7 @@ class TerminalReasonOverwriteGuardTest {
             + "|assertInStatus|requireActiveInTenant|requireValidStatusChange|validateStatusTransition"
             + "|claimTransition|transitionStatus)\\s*+\\("
             // an entity's own state question
-            + "|\\.(?:isTerminal|isActive|isPending|isInProgress|isSigned)\\(\\)"
+            + "|\\.(?:isTerminal|isActive|isPending|isInProgress|isSigned|isWithdrawn)\\(\\)"
             // an allowed-state set or a transition table
             + "|\\b(?:[A-Z]++_)*+(?:STATUSES|TRANSITIONS|STATES)\\b|\\ballowed\\w*+\\.contains\\("
             + "|\\b(?:REJECTABLE|SUSPENDABLE|ARCHIVABLE|PURGE_SCHEDULABLE|RESTORABLE)\\b"
@@ -220,6 +220,111 @@ class TerminalReasonOverwriteGuardTest {
                 continue;
             }
             out.add(file + "#" + m.group(1));
+        }
+        return out;
+    }
+
+    // ── QA D1242 (round 25): a record closed by an active flag ──
+
+    /** A method that ends a record (by its name) by switching its active flag off. */
+    private static final Pattern CLOSING_NAME =
+        Pattern.compile("(?i)^(?:deactivat|delete|remove|retire|revoke|archive|suspend|withdraw)\\w*+$");
+
+    private static final Pattern ACTIVE_OFF = Pattern.compile("\\.setActive\\(\\s*+(?:false|Boolean\\.FALSE)\\s*+\\)");
+
+    /** The record's flag is read before it is written: a second call is refused. */
+    private static final Pattern ACTIVE_READ = Pattern.compile(
+        "\\.(?:isActive|getActive)\\(\\)|ActiveTrue\\(|\\.isTerminal\\(\\)");
+
+    private static final String NOT_A_PATIENT_RECORD =
+        "QA D1242 audit (round 25): not a patient's record (catalogue, configuration or platform); "
+            + "a repeat is idempotent there - standing debt, not the D1242 class";
+
+    /**
+     * Closers by active flag that do not read it first, per {@code "file#method"}. Shrink only.
+     * The D1242 allergy was missed by the round-22 scan above because its reason
+     * was never stored in a {@code set…Reason} column: it read only the flag.
+     */
+    private static final Map<String, Allowance> ACTIVE_FLAG_ALLOWED = GuardAllowlist.allow(
+        "DrugInteractionAdminServiceImpl#deactivate", 1, NOT_A_PATIENT_RECORD,
+        "HospitalLifecycleServiceImpl#archive", 1, NOT_A_PATIENT_RECORD,
+        "HospitalLifecycleServiceImpl#suspend", 1, NOT_A_PATIENT_RECORD,
+        "InventoryServiceImpl#deactivateInventoryItem", 1, NOT_A_PATIENT_RECORD,
+        "MedicationCatalogItemServiceImpl#deactivate", 1, NOT_A_PATIENT_RECORD,
+        "OrganizationController#deleteOrganization", 1, NOT_A_PATIENT_RECORD,
+        "OrganizationLifecycleServiceImpl#archive", 1, NOT_A_PATIENT_RECORD,
+        "OrganizationLifecycleServiceImpl#suspend", 1, NOT_A_PATIENT_RECORD,
+        "PharmacyServiceImpl#deactivate", 1, NOT_A_PATIENT_RECORD,
+        "ProviderOnboardingServiceImpl#revoke", 1, NOT_A_PATIENT_RECORD,
+        "ReportController#deactivate", 1, NOT_A_PATIENT_RECORD,
+        "SessionTemplateServiceImpl#deactivate", 1, NOT_A_PATIENT_RECORD,
+        "UserRoleHospitalAssignmentServiceImpl#retire", 1, NOT_A_PATIENT_RECORD,
+        "VisitTypeServiceImpl#deactivate", 1, NOT_A_PATIENT_RECORD,
+        "LabTestDefinitionServiceImpl#retireSupersededVersion", 1,
+            NOT_A_PATIENT_RECORD + " (a lab catalogue version retired when a newer one is approved)");
+
+    @Test
+    @DisplayName("every deactivate / delete by active flag refuses a record already inactive, or says why not")
+    void activeFlagClosersReadTheFlagFirst() throws IOException {
+        Map<String, Integer> actual = new TreeMap<>();
+        int closers = 0;
+        try (Stream<Path> files = Files.walk(MAIN)) {
+            for (Path file : files.filter(p -> p.toString().endsWith(".java"))
+                    .filter(p -> !p.startsWith(MAIN.resolve("model"))).toList()) {
+                String source = SourceScan.stripComments(Files.readString(file, StandardCharsets.UTF_8));
+                if (!ACTIVE_OFF.matcher(source).find()) {
+                    continue;
+                }
+                String name = file.getFileName().toString().replace(".java", "");
+                for (String[] closer : activeFlagClosers(name, source)) {
+                    closers++;
+                    if (!ACTIVE_READ.matcher(closer[1]).find()) {
+                        actual.merge(closer[0], 1, Integer::sum);
+                    }
+                }
+            }
+        }
+        assertThat(closers).as("the scan found the active-flag closers").isGreaterThan(15);
+        assertThat(GuardAllowlist.overAllowance(actual, ACTIVE_FLAG_ALLOWED))
+            .as("a deactivate / delete of a patient's record that does not refuse one already inactive: a second "
+                + "call answers 200 and writes another trace (QA D1242)" + SourceScan.MANDATE)
+            .isEmpty();
+        assertThat(GuardAllowlist.stale(actual, ACTIVE_FLAG_ALLOWED))
+            .as("the site was fixed or removed: delete its line").isEmpty();
+    }
+
+    @Test
+    @DisplayName("the active-flag scan catches the D1242 shape and accepts its fix")
+    void catchesTheD1242Shape() {
+        String before = """
+            class S {
+                public void deactivatePatientAllergy(UUID id, String reason) {
+                    PatientAllergy allergy = load(id);
+                    allergy.setActive(false);
+                    repo.save(allergy);
+                }
+            }
+            """;
+        assertThat(activeFlagClosers("S", before)).hasSize(1);
+        assertThat(ACTIVE_READ.matcher(activeFlagClosers("S", before).get(0)[1]).find()).isFalse();
+        String after = before.replace("PatientAllergy allergy = load(id);",
+            "PatientAllergy allergy = load(id);\n        if (!allergy.isActive()) { throw new BusinessException(\"k\"); }");
+        assertThat(ACTIVE_READ.matcher(activeFlagClosers("S", after).get(0)[1]).find()).isTrue();
+    }
+
+    /** {site, body} of each method named as a closer whose body switches the active flag off. */
+    static List<String[]> activeFlagClosers(String file, String source) {
+        List<String[]> out = new ArrayList<>();
+        Matcher m = METHOD.matcher(source);
+        while (m.find()) {
+            if (!CLOSING_NAME.matcher(m.group(1)).matches()) {
+                continue;
+            }
+            int open = m.end() - 1;
+            String body = source.substring(open, Math.min(SourceScan.closingBrace(source, open) + 1, source.length()));
+            if (ACTIVE_OFF.matcher(body).find()) {
+                out.add(new String[] {file + "#" + m.group(1), body});
+            }
         }
         return out;
     }

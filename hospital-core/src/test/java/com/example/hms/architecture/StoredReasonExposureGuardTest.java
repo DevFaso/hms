@@ -71,6 +71,7 @@ class StoredReasonExposureGuardTest {
         Map.entry("MedicationReconciliationEntry", List.of("MedicationReconciliationDTO")),
         Map.entry("PrescriptionRoutingDecision", List.of("RoutingDecisionResponseDTO")),
         Map.entry("PatientRecall", List.of("RecallResponseDTO")),
+        Map.entry("PatientGuarantor", List.of("GuarantorResponseDTO")),
         Map.entry("DigitalSignature", List.of("SignatureResponseDTO")));
 
     /** Entity.field reaching no read model today. */

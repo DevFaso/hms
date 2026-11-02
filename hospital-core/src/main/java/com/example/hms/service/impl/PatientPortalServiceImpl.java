@@ -2397,8 +2397,11 @@ public class PatientPortalServiceImpl implements PatientPortalService {
 
         java.util.List<com.example.hms.payload.dto.portal.PatientDiagnosisSummaryDTO> merged =
                 new java.util.ArrayList<>();
+        // QA D1240 (round 25): a diagnosis removed as entered in error is not
+        // part of the patient's history (it stays in the clinicians' audit).
         patientProblemRepository.findByPatient_IdOrderByCreatedAtDesc(patient.getId())
                 .stream()
+                .filter(problem -> !problem.isEnteredInError())
                 .map(PatientPortalServiceImpl::toDiagnosisSummary)
                 .forEach(merged::add);
         patientDiagnosisRepository.findByPatient_IdOrderByDiagnosedAtDesc(patient.getId())

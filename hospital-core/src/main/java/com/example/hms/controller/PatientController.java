@@ -124,13 +124,6 @@ public class PatientController {
         + "'ROLE_BILLING_SPECIALIST','ROLE_ACCOUNTANT')";
 
     /**
-     * E9 #69 — allergies are readable by every clinical role. A radiologist
-     * planning contrast, an anaesthetist planning induction and a
-     * physiotherapist planning a session each need the allergy list; before
-     * this only the chart-owning roles and the pharmacist could read it.
-     * Writes stay with the roles that record allergies.
-     */
-    /**
      * QA D1224 (round 24), as in real hospitals: the clinicians of the
      * patient's hospital who chart - doctor, nurse, midwife, and the pharmacist
      * for allergies - record, revise and deactivate an allergy (deactivation
@@ -148,6 +141,13 @@ public class PatientController {
     private static final String DIAGNOSIS_REMOVE_ROLES =
         "hasAnyAuthority('ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE')";
 
+    /**
+     * E9 #69 — allergies are readable by every clinical role. A radiologist
+     * planning contrast, an anaesthetist planning induction and a
+     * physiotherapist planning a session each need the allergy list; before
+     * this only the chart-owning roles and the pharmacist could read it.
+     * Writes stay with the roles that record allergies.
+     */
     private static final String ALLERGY_READ_ROLES = "hasAnyAuthority("
         + "'ROLE_DOCTOR','ROLE_NURSE','ROLE_MIDWIFE','ROLE_PHARMACIST',"
         + CONSULTING_CLINICIANS_AUTHORITIES + ")";
@@ -667,10 +667,10 @@ public class PatientController {
             .orElseThrow(() -> new BusinessException(MSG_DOCTOR_CONTEXT_REQUIRED));
         UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, hospitalId, false);
         if (resolvedHospitalId == null) {
-            throw new BusinessException("Hospital context is required to deactivate allergies.");
+            throw new BusinessException("patient.r7.allergyDeactivateHospitalRequired");
         }
         patientService.deactivatePatientAllergy(id, resolvedHospitalId, allergyId, requesterUserId, request.getReason());
-        return ResponseEntity.ok(new MessageResponse("Allergy entry deactivated."));
+        return ResponseEntity.ok(new MessageResponse(com.example.hms.utility.MessageUtil.resolve("patient.r25.allergyDeactivated")));
     }
 
     // ----------------------------------------------------------
@@ -775,10 +775,10 @@ public class PatientController {
             .orElseThrow(() -> new BusinessException(MSG_DOCTOR_CONTEXT_REQUIRED));
         UUID resolvedHospitalId = authUtils.resolveHospitalScope(auth, hospitalId, false);
         if (resolvedHospitalId == null) {
-            throw new BusinessException("Hospital context is required to remove diagnoses.");
+            throw new BusinessException("patient.r7.diagnosisRemoveHospitalRequired");
         }
         patientService.deletePatientDiagnosis(id, resolvedHospitalId, diagnosisId, requesterUserId, request.getReason());
-        return ResponseEntity.ok(new MessageResponse("Diagnosis removed successfully."));
+        return ResponseEntity.ok(new MessageResponse(com.example.hms.utility.MessageUtil.resolve("patient.r25.diagnosisRemoved")));
     }
 
     @Operation(

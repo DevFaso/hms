@@ -309,6 +309,83 @@ class ImmunizationServiceImplTest {
     }
 
     @Test
+    void aRemovedDoseIsNotRemovedAgain_D1242() {
+        PatientImmunization entity = new PatientImmunization();
+        entity.setId(immunizationId);
+        entity.setActive(false);
+        when(immunizationRepository.findById(immunizationId)).thenReturn(Optional.of(entity));
+
+        assertThatThrownBy(() -> service.deleteImmunization(immunizationId))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .extracting("messageKey").isEqualTo("medicalHistory.r25.alreadyRemoved");
+        verify(immunizationRepository, never()).save(any());
+    }
+
+    private PatientImmunization dose(String code, String display, java.time.LocalDate date, Integer doseNumber) {
+        PatientImmunization dose = new PatientImmunization();
+        dose.setId(UUID.randomUUID());
+        dose.setPatient(patient);
+        dose.setHospital(hospital);
+        dose.setVaccineCode(code);
+        dose.setVaccineDisplay(display);
+        dose.setAdministrationDate(date);
+        dose.setDoseNumber(doseNumber);
+        dose.setStatus("COMPLETED");
+        dose.setActive(true);
+        return dose;
+    }
+
+    @Test
+    void theSameDoseIsNotRecordedTwice_D1248() {
+        java.time.LocalDate day = java.time.LocalDate.of(2021, 3, 15);
+        ImmunizationRequestDTO dto = new ImmunizationRequestDTO();
+        dto.setPatientId(patientId);
+        dto.setHospitalId(hospitalId);
+        PatientImmunization candidate = dose(null, "rr ", day, 2);
+        when(patientRepository.findById(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(immunizationMapper.toEntity(any(), eq(patient), eq(hospital), isNull(), isNull())).thenReturn(candidate);
+        when(immunizationRepository.findByPatient_IdAndActiveTrue(patientId)).thenReturn(List.of(dose(null, "RR", day, 2)));
+
+        assertThatThrownBy(() -> service.createImmunization(dto))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .extracting("messageKey").isEqualTo("immunization.r25.duplicateDose");
+        verify(immunizationRepository, never()).save(any());
+    }
+
+    @Test
+    void anotherDoseNumberDateOrVaccineIsNotADuplicate_D1248() {
+        java.time.LocalDate day = java.time.LocalDate.of(2021, 3, 15);
+        PatientImmunization stored = dose("03", "RR", day, 2);
+        assertThat(ImmunizationServiceImpl.sameDose(dose("03", "RR", day, 3), stored)).isFalse();
+        assertThat(ImmunizationServiceImpl.sameDose(dose("03", "RR", day.plusDays(1), 2), stored)).isFalse();
+        assertThat(ImmunizationServiceImpl.sameDose(dose("08", "RR", day, 2), stored)).isFalse();
+        assertThat(ImmunizationServiceImpl.sameDose(dose(null, "Rougeole-rubéole", day, 2), stored)).isFalse();
+        assertThat(ImmunizationServiceImpl.sameDose(dose("03", "Autre libellé", day, 2), stored)).isTrue();
+    }
+
+    @Test
+    void anEditOntoAnotherRecordedDoseIsRefusedButAnEditOfItselfIsNot_D1248() {
+        java.time.LocalDate day = java.time.LocalDate.of(2021, 3, 15);
+        PatientImmunization existing = dose(null, "RR", day, 2);
+        existing.setId(immunizationId);
+        when(immunizationRepository.findById(immunizationId)).thenReturn(Optional.of(existing));
+        when(immunizationRepository.findByPatient_IdAndActiveTrue(patientId)).thenReturn(List.of(existing));
+        when(immunizationRepository.save(existing)).thenReturn(existing);
+        ImmunizationRequestDTO dto = new ImmunizationRequestDTO();
+        dto.setSourceOfRecord("ADMINISTERED");
+
+        service.updateImmunization(immunizationId, dto);
+        verify(immunizationRepository).save(existing);
+
+        PatientImmunization other = dose(null, "RR", day, 2);
+        when(immunizationRepository.findByPatient_IdAndActiveTrue(patientId)).thenReturn(List.of(existing, other));
+        assertThatThrownBy(() -> service.updateImmunization(immunizationId, dto))
+            .isInstanceOf(com.example.hms.exception.BusinessException.class)
+            .extracting("messageKey").isEqualTo("immunization.r25.duplicateDose");
+    }
+
+    @Test
     void deleteImmunization_notFound() {
         when(immunizationRepository.findById(immunizationId)).thenReturn(Optional.empty());
         assertThatThrownBy(() -> service.deleteImmunization(immunizationId)).isInstanceOf(ResourceNotFoundException.class);

@@ -36,6 +36,9 @@ public class PatientAllergyResponseDTO {
     private LocalDate lastOccurrenceDate;
     private LocalDate recordedDate;
     private Boolean active;
+    /** QA D1242 (round 25): why and when the entry was deactivated. */
+    private String deactivationReason;
+    private LocalDateTime deactivatedAt;
     private String recordedBy;
     private String sourceSystem;
     private LocalDateTime createdAt;

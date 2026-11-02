@@ -970,6 +970,102 @@ class PatientServiceImplTest {
     }
 
     @Test
+    void aRemovalMarksTheDiagnosisEnteredInErrorAndAStatusChangeReopensIt_D1240() throws Exception {
+        UUID requesterUserId = UUID.randomUUID();
+        UUID diagnosisId = UUID.randomUUID();
+        PatientProblem problem = new PatientProblem();
+        problem.setId(diagnosisId);
+        problem.setPatient(patient);
+        problem.setHospital(hospital);
+        problem.setStatus(ProblemStatus.ACTIVE);
+        Staff staff = new Staff();
+        staff.setId(UUID.randomUUID());
+        when(patientProblemRepository.findById(diagnosisId)).thenReturn(Optional.of(problem));
+        when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
+        when(staffRepository.findByUserIdAndHospitalId(requesterUserId, hospitalId)).thenReturn(Optional.of(staff));
+        when(objectMapper.writeValueAsString(any())).thenReturn("{}");
+
+        patientService.deletePatientDiagnosis(patientId, hospitalId, diagnosisId, requesterUserId, "Saisi par erreur");
+
+        assertThat(problem.isEnteredInError()).isTrue();
+        // A second removal is refused on the flag alone, whatever the history says.
+        assertThatThrownBy(() -> patientService.deletePatientDiagnosis(
+            patientId, hospitalId, diagnosisId, requesterUserId, "Second motif"))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("patient.r22.diagnosisAlreadyRemoved");
+
+        PatientDiagnosisUpdateRequestDTO reopen = PatientDiagnosisUpdateRequestDTO.builder()
+            .hospitalId(hospitalId).status(ProblemStatus.ACTIVE).changeReason("Diagnostic confirmé").build();
+        patientService.updatePatientDiagnosis(patientId, hospitalId, diagnosisId, requesterUserId, reopen);
+        assertThat(problem.isEnteredInError()).isFalse();
+    }
+
+    private com.example.hms.model.PatientAllergy storedAllergy(UUID allergyId, boolean active) {
+        com.example.hms.model.PatientAllergy allergy = new com.example.hms.model.PatientAllergy();
+        allergy.setId(allergyId);
+        allergy.setPatient(patient);
+        allergy.setHospital(hospital);
+        allergy.setAllergenDisplay("Arachide");
+        allergy.setActive(active);
+        when(patientAllergyRepository.findByIdAndPatient_IdAndHospital_Id(allergyId, patientId, hospitalId))
+            .thenReturn(Optional.of(allergy));
+        when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
+        return allergy;
+    }
+
+    @Test
+    void anAllergyDeactivationKeepsItsReasonAndActor_D1242() {
+        UUID requesterUserId = UUID.randomUUID();
+        UUID allergyId = UUID.randomUUID();
+        com.example.hms.model.PatientAllergy allergy = storedAllergy(allergyId, true);
+        Staff staff = new Staff();
+        staff.setId(UUID.randomUUID());
+        when(staffRepository.findByUserIdAndHospitalId(requesterUserId, hospitalId)).thenReturn(Optional.of(staff));
+
+        patientService.deactivatePatientAllergy(patientId, hospitalId, allergyId, requesterUserId, " Erreur de patient ");
+
+        assertThat(allergy.isActive()).isFalse();
+        assertThat(allergy.getDeactivationReason()).isEqualTo("Erreur de patient");
+        assertThat(allergy.getDeactivatedAt()).isNotNull();
+        assertThat(allergy.getDeactivatedByUserId()).isEqualTo(requesterUserId);
+    }
+
+    @Test
+    void anInactiveAllergyIsNotDeactivatedAgainAndKeepsItsReason_D1242() {
+        UUID requesterUserId = UUID.randomUUID();
+        UUID allergyId = UUID.randomUUID();
+        com.example.hms.model.PatientAllergy allergy = storedAllergy(allergyId, false);
+        allergy.setDeactivationReason("Premier motif");
+
+        assertThatThrownBy(() -> patientService.deactivatePatientAllergy(
+            patientId, hospitalId, allergyId, requesterUserId, "Second motif"))
+            .isInstanceOf(BusinessException.class)
+            .extracting("messageKey").isEqualTo("patient.r25.allergyAlreadyDeactivated");
+        assertThat(allergy.getDeactivationReason()).isEqualTo("Premier motif");
+        verify(patientAllergyRepository, never()).save(any());
+    }
+
+    @Test
+    void anEditCannotDeactivateAnAllergyWithoutTheReason_D1242() {
+        UUID requesterUserId = UUID.randomUUID();
+        UUID allergyId = UUID.randomUUID();
+        com.example.hms.model.PatientAllergy allergy = storedAllergy(allergyId, true);
+        Staff staff = new Staff();
+        staff.setId(UUID.randomUUID());
+        when(staffRepository.findByUserIdAndHospitalId(requesterUserId, hospitalId)).thenReturn(Optional.of(staff));
+        com.example.hms.payload.dto.PatientAllergyRequestDTO edit = new com.example.hms.payload.dto.PatientAllergyRequestDTO();
+        edit.setHospitalId(hospitalId);
+        edit.setAllergenDisplay("Arachide");
+        edit.setActive(false);
+
+        assertThatThrownBy(() -> patientService.updatePatientAllergy(patientId, hospitalId, allergyId, requesterUserId, edit))
+            .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+            .extracting("messageKey").isEqualTo("patient.r25.allergyDeactivateNeedsReason");
+        assertThat(allergy.isActive()).isTrue();
+        verify(patientAllergyRepository, never()).save(any());
+    }
+
+    @Test
     void deletePatientDiagnosisRequiresReason() {
         UUID requesterUserId = UUID.randomUUID();
         UUID diagnosisId = UUID.randomUUID();

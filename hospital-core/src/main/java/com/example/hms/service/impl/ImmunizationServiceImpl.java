@@ -81,6 +81,7 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         }
 
         PatientImmunization immunization = immunizationMapper.toEntity(requestDTO, patient, hospital, administeredBy, encounter);
+        refuseDuplicateDose(immunization, null);
         PatientImmunization savedImmunization = immunizationRepository.save(immunization);
 
         log.info("Immunization created with id: {}", savedImmunization.getId());
@@ -284,6 +285,7 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         }
 
         immunizationMapper.updateEntity(existingImmunization, requestDTO);
+        refuseDuplicateDose(existingImmunization, existingImmunization.getId());
         PatientImmunization updatedImmunization = immunizationRepository.save(existingImmunization);
 
         log.info("Immunization updated successfully: {}", id);
@@ -303,6 +305,47 @@ public class ImmunizationServiceImpl implements ImmunizationService {
         return source != null && TRANSCRIBED_SOURCES.contains(source);
     }
 
+    /**
+     * QA D1248 (round 25): the same dose - patient, vaccine, administration
+     * date and dose number - was recorded a second and a third time with no
+     * warning. Another live row of the patient (any hospital: a dose is one
+     * event in the patient's life) with the same key refuses the write. A row
+     * removed or marked entered in error does not count.
+     */
+    private void refuseDuplicateDose(PatientImmunization candidate, UUID selfId) {
+        if (candidate.getPatient() == null || candidate.getAdministrationDate() == null) {
+            return;
+        }
+        boolean duplicate = immunizationRepository.findByPatient_IdAndActiveTrue(candidate.getPatient().getId()).stream()
+            .filter(other -> selfId == null || !selfId.equals(other.getId()))
+            .filter(other -> !"ENTERED_IN_ERROR".equalsIgnoreCase(other.getStatus()))
+            .anyMatch(other -> sameDose(candidate, other));
+        if (duplicate) {
+            throw new com.example.hms.exception.BusinessException("immunization.r25.duplicateDose");
+        }
+    }
+
+    static boolean sameDose(PatientImmunization a, PatientImmunization b) {
+        return java.util.Objects.equals(a.getAdministrationDate(), b.getAdministrationDate())
+            && java.util.Objects.equals(a.getDoseNumber(), b.getDoseNumber())
+            && sameVaccine(a, b);
+    }
+
+    /** The CVX code when both rows carry one; otherwise the vaccine's name, case and accents aside. */
+    static boolean sameVaccine(PatientImmunization a, PatientImmunization b) {
+        String codeA = blankToNull(a.getVaccineCode());
+        String codeB = blankToNull(b.getVaccineCode());
+        if (codeA != null && codeB != null) {
+            return codeA.equalsIgnoreCase(codeB);
+        }
+        String nameA = com.example.hms.utility.PatientMatchKeys.foldName(a.getVaccineDisplay());
+        return nameA != null && nameA.equals(com.example.hms.utility.PatientMatchKeys.foldName(b.getVaccineDisplay()));
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
     @Override
     public void deleteImmunization(UUID id) {
         log.info("Deleting immunization with id: {}", id);
@@ -311,6 +354,10 @@ public class ImmunizationServiceImpl implements ImmunizationService {
                 .orElseThrow(() -> new ResourceNotFoundException(IMMUNIZATION_NOT_FOUND_KEY, id));
         com.example.hms.security.tenant.TenantOwnership.requireOwnedByActingHospital(immunization.getHospital(), IMMUNIZATION_NOT_FOUND_KEY, id);
 
+        // QA D1242 class (round 25): a removed dose stays removed; a repeat is refused.
+        if (Boolean.FALSE.equals(immunization.getActive())) {
+            throw new com.example.hms.exception.BusinessException("medicalHistory.r25.alreadyRemoved");
+        }
         immunization.setActive(false);
         immunizationRepository.save(immunization);
 

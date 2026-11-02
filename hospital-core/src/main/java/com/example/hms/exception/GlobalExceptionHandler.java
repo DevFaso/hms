@@ -333,6 +333,9 @@ public class GlobalExceptionHandler {
         body.put(FIELD_CODE, CODE_MALFORMED_REQUEST);
         if (field != null) {
             body.put(FIELD_FIELD, field);
+            // QA D1245 (round 25): an unparsable UUID, enum or date names its
+            // field in fieldErrors too, the shape every form marks a field from.
+            body.put(FIELD_ERRORS, Map.of(field, message));
         }
         return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
     }
@@ -362,7 +365,16 @@ public class GlobalExceptionHandler {
 
     /** The JSON property path of the failure ("items[0].dose" style), or null when Jackson gave none. */
     private static String resolveJacksonField(HttpMessageNotReadableException ex) {
-        if (!(ex.getMostSpecificCause() instanceof tools.jackson.core.JacksonException jackson)) {
+        // QA D1245 (round 25): an unreadable date reached here with the
+        // DateTimeParseException as the most specific cause, so its field was
+        // never named; the path is on the closest Jackson exception of the chain.
+        tools.jackson.core.JacksonException jackson = null;
+        for (Throwable t = ex.getCause(); t != null && jackson == null; t = t.getCause() == t ? null : t.getCause()) {
+            if (t instanceof tools.jackson.core.JacksonException found) {
+                jackson = found;
+            }
+        }
+        if (jackson == null) {
             return null;
         }
         StringBuilder path = new StringBuilder();
@@ -383,14 +395,20 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<Object> handleValidationException(MethodArgumentNotValidException ex, WebRequest request) {
 
-        Map<String, String> fieldErrors = ex.getBindingResult()
-                .getFieldErrors()
-                .stream()
-                .collect(Collectors.toMap(
-                    FieldError::getField,
-                        error -> error.getDefaultMessage(),
-                        (existing, replacement) -> existing // in case of duplicates
-                ));
+        // QA D1245 / D1249 / D1250 (round 25): every reason names its field.
+        // A binding failure (a blank or unparsable UUID, enum or date bound
+        // from a form or query) carried Spring's English conversion text; a
+        // constraint with no message of its own said only "ne doit pas être
+        // vide"; a class-level rule (one of patientId / patientIdentifier)
+        // answered an EMPTY fieldErrors. Order is the binding order.
+        Map<String, String> fieldErrors = new LinkedHashMap<>();
+        for (FieldError error : ex.getBindingResult().getFieldErrors()) {
+            fieldErrors.putIfAbsent(error.getField(), fieldReason(error));
+        }
+        java.util.List<String> globalReasons = ex.getBindingResult().getGlobalErrors().stream()
+                .map(org.springframework.validation.ObjectError::getDefaultMessage)
+                .filter(message -> message != null && !message.isBlank())
+                .toList();
 
         Map<String, Object> body = new LinkedHashMap<>();
         body.put(FIELD_TIMESTAMP, LocalDateTime.now());
@@ -401,11 +419,8 @@ public class GlobalExceptionHandler {
         // page that shows err.error.message (130 of them) showed only that.
         // The field reasons (already in the request's language) are the
         // message now; the generic sentence stays the fallback.
-        String reasons = fieldErrors.values().stream()
-                .filter(message -> message != null && !message.isBlank())
-                .map(String::trim)
-                .distinct()
-                .collect(Collectors.joining(" "));
+        String reasons = joinReasons(java.util.stream.Stream.concat(
+                fieldErrors.values().stream(), globalReasons.stream()));
         body.put(FIELD_MESSAGE, reasons.isEmpty()
                 ? localized("error.validation.request", "Validation errors in request")
                 : reasons);
@@ -413,6 +428,53 @@ public class GlobalExceptionHandler {
         body.put(FIELD_PATH, request.getDescription(false).replace("uri=", ""));
 
         return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
+    }
+
+    /**
+     * QA D1250 (round 25): several reasons read as one run-on sentence
+     * ("…est obligatoire La date…"). Each reason is its own sentence, ended by
+     * a full stop when it has no closing punctuation of its own.
+     */
+    static String joinReasons(java.util.stream.Stream<String> reasons) {
+        return reasons
+                .filter(message -> message != null && !message.isBlank())
+                .map(String::trim)
+                .distinct()
+                .map(GlobalExceptionHandler::asSentence)
+                .collect(Collectors.joining(" "));
+    }
+
+    private static String asSentence(String reason) {
+        char last = reason.charAt(reason.length() - 1);
+        return last == '.' || last == '!' || last == '?' || last == '…' ? reason : reason + ".";
+    }
+
+    /** Bean-validation's own default templates: they never name the field. */
+    private static final java.util.List<String> DEFAULT_TEMPLATE_PREFIXES =
+        java.util.List.of("{jakarta.validation.constraints.", "{org.hibernate.validator.constraints.");
+
+    /**
+     * The reason of one field error, naming the field (QA D1245 / D1249). A
+     * binding failure gets the translated "value not valid for {field}"; a
+     * constraint left on its default template is prefixed with the field's
+     * label; a reason written for the field passes unchanged.
+     */
+    private String fieldReason(FieldError error) {
+        String label = fieldLabel(error.getField());
+        if (error.isBindingFailure()) {
+            return localized("error.request.invalidField", "The value entered for \"{0}\" is not valid.", label);
+        }
+        String message = error.getDefaultMessage();
+        if (message == null || message.isBlank()) {
+            return localized("error.validation.fieldInvalid", "{0}: invalid value", label);
+        }
+        if (error.contains(jakarta.validation.ConstraintViolation.class)) {
+            String template = error.unwrap(jakarta.validation.ConstraintViolation.class).getMessageTemplate();
+            if (template != null && DEFAULT_TEMPLATE_PREFIXES.stream().anyMatch(template::startsWith)) {
+                return localized("error.validation.namedField", "{0}: {1}", label, message);
+            }
+        }
+        return message;
     }
 
     /**
@@ -479,18 +541,19 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<Object> handleConstraintViolation(ConstraintViolationException ex, WebRequest request) {
-        Map<String, String> violations = ex.getConstraintViolations().stream()
-                .collect(Collectors.toMap(
-                        v -> v.getPropertyPath().toString(),
-                        v -> v.getMessage(),
-                        (existing, replacement) -> existing
-                ));
+        Map<String, String> violations = new LinkedHashMap<>();
+        for (jakarta.validation.ConstraintViolation<?> v : ex.getConstraintViolations()) {
+            violations.putIfAbsent(v.getPropertyPath().toString(), v.getMessage());
+        }
+        String reasons = joinReasons(violations.values().stream());
 
         Map<String, Object> body = new LinkedHashMap<>();
         body.put(FIELD_TIMESTAMP, LocalDateTime.now());
         body.put(FIELD_STATUS, HttpStatus.BAD_REQUEST.value());
         body.put(FIELD_ERROR, "Validation Failed");
-        body.put(FIELD_MESSAGE, localized("error.validation.parameters", "Constraint violation in request parameters"));
+        body.put(FIELD_MESSAGE, reasons.isEmpty()
+                ? localized("error.validation.parameters", "Constraint violation in request parameters")
+                : reasons);
         body.put(FIELD_ERRORS, violations);
         body.put(FIELD_PATH, request.getDescription(false).replace("uri=", ""));
         return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
@@ -525,6 +588,7 @@ public class GlobalExceptionHandler {
         Map<String, Object> body = errorBody(HttpStatus.BAD_REQUEST, message, request);
         body.put(FIELD_CODE, CODE_MALFORMED_REQUEST);
         body.put(FIELD_FIELD, ex.getParameterName());
+        body.put(FIELD_ERRORS, Map.of(ex.getParameterName(), message));
         return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
     }
 
@@ -546,9 +610,12 @@ public class GlobalExceptionHandler {
                 ex.getRequiredType() != null ? ex.getRequiredType().getSimpleName() : "value");
         }
         String message = localized("error.request.invalidParameter",
-            "The value supplied for the parameter \"{0}\" is not valid.", ex.getName());
+            "The value supplied for the parameter \"{0}\" is not valid.", fieldLabel(ex.getName()));
         Map<String, Object> body = errorBody(HttpStatus.BAD_REQUEST, message, request);
         body.put(FIELD_CODE, CODE_INVALID_PARAMETER);
+        // QA D1245 (round 25): a blank or unparsable UUID / enum / date parameter is named.
+        body.put(FIELD_FIELD, ex.getName());
+        body.put(FIELD_ERRORS, Map.of(ex.getName(), message));
         return new ResponseEntity<>(body, HttpStatus.BAD_REQUEST);
     }
 

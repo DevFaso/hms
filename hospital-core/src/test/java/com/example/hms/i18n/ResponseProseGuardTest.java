@@ -118,9 +118,7 @@ class ResponseProseGuardTest {
         "controller/InvoiceEmailController.java::Invalid email", 1, PRE_EXISTING,
         "controller/InvoiceEmailController.java::Invalid email address: ", 1, PRE_EXISTING + " (concatenated with the address)",
         "controller/OrganizationController.java::Default security policies applied successfully", 1, PRE_EXISTING,
-        "controller/OwnEmailChangeController.java::Not authenticated.", 1, PRE_EXISTING,
-        "controller/PatientController.java::Allergy entry deactivated.", 1, PRE_EXISTING,
-        "controller/PatientController.java::Diagnosis removed successfully.", 1, PRE_EXISTING);
+        "controller/OwnEmailChangeController.java::Not authenticated.", 1, PRE_EXISTING);
 
     /** {@code file::sentence} → how many places write it (comments stripped). */
     static Map<String, Integer> sites(String file, String rawSource) {

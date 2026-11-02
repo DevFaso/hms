@@ -3315,4 +3315,15 @@
                  stripComments="false"/>
     </changeSet>
 
+    <!-- V259 (QA round 25: D1240, D1241, D1242, D1247): withdrawal reasons kept on
+         allergies, guarantors and birth plans; the birth plan's author; the
+         entered-in-error flag of a removed diagnosis (backfilled from its
+         history). Plain statements, no DO block. Idempotent. -->
+    <changeSet id="V259-r25-record-withdrawal-reasons" author="hms-team" runOnChange="false">
+        <sqlFile path="V259__r25_record_withdrawal_reasons.sql"
+                 relativeToChangelogFile="true"
+                 splitStatements="true"
+                 stripComments="false"/>
+    </changeSet>
+
 </databaseChangeLog>
