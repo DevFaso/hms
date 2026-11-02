@@ -486,6 +486,54 @@ describe('EmarComponent (P1 #8 — five-rights barcode-scan loop)', () => {
     expect(dialog.querySelector('[data-testid="early-dose-why"]')?.textContent).toContain(
       'ne peut pas être lue',
     );
+    // QA D1265 (round 26): the dialog is titled for an unreadable frequency,
+    // not "Dose before the minimum interval".
+    expect(dialog.querySelector('h2')?.textContent?.trim()).toBe(
+      'EMAR.FREQUENCY_UNREAD_DIALOG.TITLE',
+    );
+    expect(dialog.textContent).not.toContain('EMAR.EARLY_DOSE.TITLE');
+  });
+
+  // QA D1254 (round 26, regression of D1236): a dose inside its slot window
+  // but before the minimum interval is listed (status DUE, earlyDose) and says
+  // so in the queue and the detail; Give leads to the early-dose dialog,
+  // titled for an early dose.
+  it('QA D1254: an early dose is listed, marked early, and Give opens the early-dose dialog', () => {
+    const early: NurseMedicationTask = {
+      ...sampleTask,
+      id: 'task-early',
+      status: 'DUE',
+      earlyDose: true,
+    };
+    nurseSpy.getMedicationMAR.and.returnValue(of([early, sampleTask]));
+    nurseSpy.administerMedication.and.returnValue(tooSoon());
+    fixture.detectChanges();
+
+    const chip = root().querySelector('[data-testid="emar-early-dose-chip-task-early"]');
+    expect(chip?.querySelector('.sr-only')?.textContent?.trim()).toBe('EMAR.EARLY_DOSE.CHIP_LABEL');
+    expect(
+      root().querySelector(`[data-testid="emar-early-dose-chip-${sampleTask.id}"]`),
+    ).toBeNull();
+
+    component['selectTask'](early);
+    component['verification'].set({
+      marId: early.id,
+      outcomes: { PATIENT: true, DRUG: true, DOSE: true, ROUTE: true, TIME: true },
+      failedChecks: [],
+      failureReasons: {},
+      allPassed: true,
+      verifiedAt: '2026-04-30T08:01:00',
+    });
+    fixture.detectChanges();
+    expect(root().querySelector('[data-testid="emar-early-dose"]')?.getAttribute('role')).toBe(
+      'note',
+    );
+    root().querySelector<HTMLButtonElement>('[data-testid="emar-administer-given"]')!.click();
+    fixture.detectChanges();
+
+    const dialog = reasonDialog(fixture)!;
+    expect(dialog).withContext('the early-dose reason is asked for').not.toBeNull();
+    expect(dialog.querySelector('h2')?.textContent?.trim()).toBe('EMAR.EARLY_DOSE.TITLE');
   });
 
   it('QA D1210: "Retour" on the early-dose reason records nothing', () => {

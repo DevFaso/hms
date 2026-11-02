@@ -359,6 +359,20 @@
                       <span class="status-badge status-{{ m.status | lowercase }}">{{
                         m.status | enumLabel: 'marTaskStatus'
                       }}</span>
+                      <!-- QA D1254: offered, but inside the minimum interval since
+                           the last dose: Give opens the early-dose reason dialog. -->
+                      @if (m.earlyDose) {
+                        {{ ' '
+                        }}<span
+                          class="status-badge status-early"
+                          [attr.data-testid]="'med-early-dose-' + m.id"
+                          [title]="'EMAR.EARLY_DOSE.CHIP_LABEL' | translate"
+                          ><span aria-hidden="true">{{ 'EMAR.EARLY_DOSE.CHIP' | translate }}</span
+                          ><span class="sr-only">{{
+                            'EMAR.EARLY_DOSE.CHIP_LABEL' | translate
+                          }}</span></span
+                        >
+                      }
                       <!-- QA D929: what happened to the last dose, so a held or
                            refused dose is never read as given. -->
                       @if (m.lastOutcome) {
@@ -1165,9 +1179,13 @@
       <label class="sr-only" for="mar-reason-input">{{
         'NURSE.MAR_REASON_LABEL' | translate
       }}</label>
+      <!-- QA D1272 class: the reason is required; its label is visually hidden,
+           so the requirement is declared for assistive technology. -->
       <textarea
         id="mar-reason-input"
         class="reason-input"
+        required
+        aria-required="true"
         [ngModel]="reasonText()"
         (ngModelChange)="reasonText.set($event)"
         [placeholder]="'NURSE.ENTER_REASON' | translate"
@@ -1200,10 +1218,11 @@
      one. Opened over the Give prompt (which stays open), with the server's reason;
      the dose may be given early with the nurse's reason, kept on the MAR row. -->
 @if (earlyDose(); as early) {
+  <!-- QA D1265: an unreadable frequency has its own title and question. -->
   <app-reason-dialog
-    titleKey="EMAR.EARLY_DOSE.TITLE"
-    labelKey="EMAR.EARLY_DOSE.REASON_LABEL"
-    confirmKey="EMAR.EARLY_DOSE.CONFIRM"
+    [titleKey]="earlyDoseKeys().title"
+    [labelKey]="earlyDoseKeys().label"
+    [confirmKey]="earlyDoseKeys().confirm"
     dismissKey="COMMON.BACK"
     [busy]="!!actionInProgress()"
     (confirmed)="confirmEarlyDose($event)"
@@ -1476,8 +1495,10 @@
       </div>
       <div class="modal-body">
         <div class="form-row">
-          <label for="tc-patient">{{ 'APPOINTMENTS.PATIENT' | translate }}</label>
+          <!-- QA D1272 class: a field the submit guard requires shows the star. -->
+          <label for="tc-patient">{{ 'APPOINTMENTS.PATIENT' | translate }} *</label>
           <app-patient-picker
+            required
             inputId="tc-patient"
             [hospitalId]="hospitalId()"
             [selected]="taskPatient()"
@@ -1485,10 +1506,12 @@
           />
         </div>
         <div class="form-row">
-          <label for="tc-category">{{ 'NURSE.CATEGORY' | translate }}</label>
+          <label for="tc-category">{{ 'NURSE.CATEGORY' | translate }} *</label>
           <select
             id="tc-category"
             class="reason-input"
+            required
+            aria-required="true"
             [value]="taskForm().category"
             (change)="updateTaskField('category', $any($event.target).value)"
           >
@@ -1601,8 +1624,10 @@
       </div>
       <div class="modal-body">
         <div class="form-row">
-          <label for="ho-patient">{{ 'PATIENTS.PATIENT' | translate }}</label>
+          <!-- QA D1272: Patient and Sens are required, so they show the star. -->
+          <label for="ho-patient">{{ 'PATIENTS.PATIENT' | translate }} *</label>
           <app-patient-picker
+            required
             inputId="ho-patient"
             [hospitalId]="hospitalId()"
             [selected]="handoffPatient()"
@@ -1626,10 +1651,12 @@
           </select>
         </div>
         <div class="form-row">
-          <label for="ho-direction">{{ 'NURSE.HANDOFF_DIRECTION' | translate }}</label>
+          <label for="ho-direction">{{ 'NURSE.HANDOFF_DIRECTION' | translate }} *</label>
           <select
             id="ho-direction"
             class="reason-input"
+            required
+            aria-required="true"
             [value]="handoffForm().direction ?? ''"
             (change)="updateHandoffField('direction', $any($event.target).value)"
           >

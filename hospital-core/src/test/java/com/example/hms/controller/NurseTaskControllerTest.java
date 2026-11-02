@@ -311,9 +311,10 @@ class NurseTaskControllerTest {
        GET /nurse/orders
        ═══════════════════════════════════════════════════════════════════ */
 
+    /** QA D1255 (changed assertion: default 6 → every order): the order queue is never cut silently. */
     @Test
     void getOrdersDefault() {
-        when(nurseTaskService.getOrderTasks(null, HOSPITAL_ID, null, 6)).thenReturn(List.of());
+        when(nurseTaskService.getOrderTasks(null, HOSPITAL_ID, null, NurseTaskService.NO_LIMIT)).thenReturn(List.of());
 
         ResponseEntity<List<NurseOrderTaskResponseDTO>> response =
             controller.getOrders(null, null, null, null, auth);
@@ -347,14 +348,24 @@ class NurseTaskControllerTest {
        GET /nurse/handoffs
        ═══════════════════════════════════════════════════════════════════ */
 
+    /** QA D1255 (changed assertion: default 6 → every pending handoff): a worklist is never cut silently. */
     @Test
     void getHandoffsDefault() {
-        when(nurseTaskService.getHandoffSummaries(null, NURSE_ID, HOSPITAL_ID, 6, null)).thenReturn(List.of());
+        when(nurseTaskService.getHandoffSummaries(null, NURSE_ID, HOSPITAL_ID, NurseTaskService.NO_LIMIT, null))
+            .thenReturn(List.of());
 
         ResponseEntity<List<NurseHandoffSummaryDTO>> response =
             controller.getHandoffs(null, null, null, null, auth);
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    /** QA D1255: the completed handoffs are a history and keep their default length. */
+    @Test
+    void getCompletedHandoffsKeepTheirDefaultLength() {
+        controller.getHandoffs(null, null, null, "COMPLETED", auth);
+
+        verify(nurseTaskService).getHandoffSummaries(null, NURSE_ID, HOSPITAL_ID, 6, "COMPLETED");
     }
 
     /** QA D785: every list variant computes completableByMe for the caller, not for the filter. */
@@ -363,11 +374,12 @@ class NurseTaskControllerTest {
     @org.junit.jupiter.params.provider.ValueSource(strings = {"all", "me", "  "})
     void getHandoffsPassesTheCallerAsViewerOnEveryVariant(String assignee) {
         UUID filter = "me".equals(assignee) ? NURSE_ID : null;
-        when(nurseTaskService.getHandoffSummaries(filter, NURSE_ID, HOSPITAL_ID, 6, null)).thenReturn(List.of());
+        when(nurseTaskService.getHandoffSummaries(filter, NURSE_ID, HOSPITAL_ID, NurseTaskService.NO_LIMIT, null))
+            .thenReturn(List.of());
 
         controller.getHandoffs(assignee, null, null, null, auth);
 
-        verify(nurseTaskService).getHandoffSummaries(filter, NURSE_ID, HOSPITAL_ID, 6, null);
+        verify(nurseTaskService).getHandoffSummaries(filter, NURSE_ID, HOSPITAL_ID, NurseTaskService.NO_LIMIT, null);
     }
 
     @Test

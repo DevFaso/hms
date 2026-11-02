@@ -45,8 +45,11 @@ class MarFrequencyReaderGuardTest {
 
     /** A frequency text being inspected: {@code getFrequency().toUpperCase(}, {@code proposedFrequency().matches(}, ... */
     private static final Pattern INSPECTS_FREQUENCY = Pattern.compile(
-        "\\w*[Ff]requency\\w*\\(\\)\\s*\\.\\s*(?:trim\\(\\)\\s*\\.\\s*)?"
-            + "(?:toUpperCase|toLowerCase|matches|contains|startsWith|endsWith|equalsIgnoreCase|split|replace\\w*|indexOf)\\(");
+        // Sonar S8786: no leading \w* (find() tries every start, so it decided nothing) and possessive
+        // quantifiers (word characters, spaces, '(' and '.' are disjoint): the same files match.
+        "[Ff]requency\\w*+\\(\\)\\s*+\\.\\s*+(?:trim\\(\\)\\s*+\\.\\s*+)?+"
+            + "(?:toUpperCase|toLowerCase|matches|contains|startsWith|endsWith|equalsIgnoreCase|split|replace\\w*+"
+            + "|indexOf)\\(");
 
     private static final Pattern WHOLE_HOURS = Pattern.compile("MarDoseSchedule\\s*\\.\\s*intervalHours\\(");
 

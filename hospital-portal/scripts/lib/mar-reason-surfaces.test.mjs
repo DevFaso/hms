@@ -60,3 +60,50 @@ test('QA D1225: every screen that reads MAR rows shows the dose history and its 
     'render <app-mar-dose-history [doses]="task.doseHistory ?? []"> where the MAR row is read',
   );
 });
+
+// QA D1254 (round 26, regression of D1236) and D1265: the MAR status a screen
+// keys on changed and both screens lost the early-dose path; then the one
+// reason dialog was titled "Dose before the minimum interval" for an
+// unreadable frequency too. Every MAR surface renders the row's `earlyDose`
+// flag, and a surface that opens the early-dose reason dialog takes its keys
+// from `earlyDoseDialogKeys` (early-dose.ts), never the early-dose literals.
+export function marSurfacesWithoutEarlyDose() {
+  const noFlag = [];
+  const literalKeys = [];
+  const surfaces = [];
+  for (const file of walk(appDir, ['.ts'])) {
+    if (file.endsWith('.spec.ts')) continue;
+    const source = readFileSync(file, 'utf8');
+    if (!MODEL.test(source) || !/@Component\(/.test(source)) continue;
+    const rel = relative(appDir, file).replaceAll('\\', '/');
+    const template = templateOf(file, source);
+    surfaces.push(rel);
+    if (!/\.earlyDose\b/.test(template)) noFlag.push(rel);
+    if (/titleKey="EMAR\.EARLY_DOSE\.TITLE"/.test(template)) literalKeys.push(rel);
+    else if (
+      /<app-reason-dialog[\s\S]*?earlyDose/.test(template) &&
+      !/earlyDoseDialogKeys\(/.test(source)
+    ) {
+      literalKeys.push(rel);
+    }
+  }
+  return { surfaces, noFlag, literalKeys };
+}
+
+test('QA D1254 / D1265: every MAR screen shows an early dose and titles the reason dialog for its refusal', () => {
+  const { surfaces, noFlag, literalKeys } = marSurfacesWithoutEarlyDose();
+  assert.ok(
+    surfaces.length >= 2,
+    `the scan must see the station and the eMAR; saw ${surfaces.join(', ')}`,
+  );
+  assert.deepEqual(
+    noFlag,
+    [],
+    'render the row earlyDose flag (a chip with its label) where the MAR row is read',
+  );
+  assert.deepEqual(
+    literalKeys,
+    [],
+    'take the reason dialog keys from earlyDoseDialogKeys(task.frequencyUnread) (early-dose.ts)',
+  );
+});

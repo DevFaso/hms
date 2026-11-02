@@ -121,8 +121,9 @@ class MarDoseIntervalTest {
         org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.FRENCH);
         try {
             Optional<LocalDateTime> last = Optional.of(NOW.minusMinutes(10));
+            Prescription fiveADay = rx("5 fois par jour");
             FieldBusinessException refusal = org.junit.jupiter.api.Assertions.assertThrows(FieldBusinessException.class,
-                () -> MarDoseInterval.requireIntervalOrReason(rx("5 fois par jour"),
+                () -> MarDoseInterval.requireIntervalOrReason(fiveADay,
                     MedicationAdministrationStatus.GIVEN, last, NOW, WINDOW, null));
             assertThat(refusal.getArgs()[2]).isEqualTo("4,8");
             assertThat(MarDoseInterval.requireIntervalOrReason(rx("5 fois par jour"),
@@ -136,7 +137,8 @@ class MarDoseIntervalTest {
     @Test
     void d1237_anUnreadFrequencyAsksForAReasonAfterTheFirstDose() {
         Optional<LocalDateTime> last = Optional.of(NOW.minusHours(8));
-        assertThatThrownBy(() -> MarDoseInterval.requireIntervalOrReason(rx("après les repas"),
+        Prescription unread = rx("après les repas");
+        assertThatThrownBy(() -> MarDoseInterval.requireIntervalOrReason(unread,
                 MedicationAdministrationStatus.GIVEN, last, NOW, WINDOW, null))
             .isInstanceOf(FieldBusinessException.class)
             .hasFieldOrPropertyWithValue("messageKey", MarDoseInterval.FREQUENCY_UNREAD_KEY)

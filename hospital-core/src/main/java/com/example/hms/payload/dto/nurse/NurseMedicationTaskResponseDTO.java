@@ -37,6 +37,12 @@ public class NurseMedicationTaskResponseDTO {
      * prescriber should restate the frequency.
      */
     private boolean frequencyUnread;
+    /**
+     * QA D1254: the dose is offered now (status DUE) but falls inside the
+     * minimum interval since the last dose really given, so giving it asks
+     * for a reason (QA D1210). False on every other row.
+     */
+    private boolean earlyDose;
     /** QA D929: GIVEN, HELD, REFUSED or MISSED for the last closed dose; null when none. */
     private String lastOutcome;
     /** QA D1225: when the last closed dose was recorded. */

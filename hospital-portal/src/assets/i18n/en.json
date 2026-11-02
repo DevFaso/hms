@@ -11941,10 +11941,17 @@
     "EARLY_DOSE": {
       "TITLE": "Dose before the minimum interval",
       "REASON_LABEL": "Why is this dose given before the minimum interval?",
-      "CONFIRM": "Give the dose early"
+      "CONFIRM": "Give the dose early",
+      "CHIP": "Early",
+      "CHIP_LABEL": "Inside the minimum interval since the last dose: giving it now asks for a reason."
     },
     "FREQUENCY_UNREAD_CHIP": "Frequency not recognised",
-    "FREQUENCY_UNREAD_LABEL": "Frequency not recognised — check the prescription. The next dose time is unknown: a dose given now asks for a reason."
+    "FREQUENCY_UNREAD_LABEL": "Frequency not recognised — check the prescription. The next dose time is unknown: a dose given now asks for a reason.",
+    "FREQUENCY_UNREAD_DIALOG": {
+      "TITLE": "Frequency not recognised",
+      "REASON_LABEL": "The next dose time cannot be worked out from this frequency. Why give this dose now?",
+      "CONFIRM": "Give the dose now"
+    }
   },
   "CREDENTIALING": {
     "CURRENT_EXPIRY": "Current expiry",

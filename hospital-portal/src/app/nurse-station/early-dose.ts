@@ -34,3 +34,34 @@ export function earlyDoseRefusal(err: unknown): string | null {
   }
   return null;
 }
+
+/** The keys of the reason dialog a refused dose opens. */
+export interface EarlyDoseDialogKeys {
+  title: string;
+  label: string;
+  confirm: string;
+}
+
+/**
+ * QA D1265 (round 26): the reason dialog says why the dose was refused. An
+ * order whose frequency the MAR cannot read (`frequencyUnread` on its row) is
+ * refused on the same request field (`nurse.mar.frequencyUnread`), but not
+ * because the dose is before the minimum interval: it gets its own title,
+ * question and button. Every MAR surface (the station table and the eMAR)
+ * reads the dialog's keys from here (scripts/lib/mar-reason-surfaces.test.mjs).
+ */
+export function earlyDoseDialogKeys(
+  frequencyUnread: boolean | null | undefined,
+): EarlyDoseDialogKeys {
+  return frequencyUnread
+    ? {
+        title: 'EMAR.FREQUENCY_UNREAD_DIALOG.TITLE',
+        label: 'EMAR.FREQUENCY_UNREAD_DIALOG.REASON_LABEL',
+        confirm: 'EMAR.FREQUENCY_UNREAD_DIALOG.CONFIRM',
+      }
+    : {
+        title: 'EMAR.EARLY_DOSE.TITLE',
+        label: 'EMAR.EARLY_DOSE.REASON_LABEL',
+        confirm: 'EMAR.EARLY_DOSE.CONFIRM',
+      };
+}

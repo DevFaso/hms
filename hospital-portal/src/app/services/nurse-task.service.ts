@@ -71,6 +71,12 @@ export interface NurseMedicationTask {
    */
   frequencyUnread?: boolean;
   /**
+   * QA D1254 (round 26): the dose is offered now (status DUE) but falls inside
+   * the minimum interval since the last dose given: Give asks for a reason
+   * (the server's `earlyDoseReason` refusal opens the early-dose dialog).
+   */
+  earlyDose?: boolean;
+  /**
    * Pharmacist verification (Tier 2 item 33). Both flags come from the server
    * on the task itself rather than being derived in the UI, so a nurse sees
    * WHY a dose is blocked before pressing the button rather than after.

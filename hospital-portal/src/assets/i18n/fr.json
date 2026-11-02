@@ -11941,10 +11941,17 @@
     "EARLY_DOSE": {
       "TITLE": "Dose avant l’intervalle minimal",
       "REASON_LABEL": "Pourquoi donner cette dose avant l’intervalle minimal ?",
-      "CONFIRM": "Administrer en avance"
+      "CONFIRM": "Administrer en avance",
+      "CHIP": "En avance",
+      "CHIP_LABEL": "Dans l’intervalle minimal depuis la dernière dose : la donner maintenant demande un motif."
     },
     "FREQUENCY_UNREAD_CHIP": "Fréquence non reconnue",
-    "FREQUENCY_UNREAD_LABEL": "Fréquence non reconnue — vérifier l’ordonnance. L’heure de la prochaine dose est inconnue : une dose donnée maintenant demande un motif."
+    "FREQUENCY_UNREAD_LABEL": "Fréquence non reconnue — vérifier l’ordonnance. L’heure de la prochaine dose est inconnue : une dose donnée maintenant demande un motif.",
+    "FREQUENCY_UNREAD_DIALOG": {
+      "TITLE": "Fréquence non reconnue",
+      "REASON_LABEL": "L’heure de la prochaine dose ne peut pas être calculée à partir de cette fréquence. Pourquoi donner cette dose maintenant ?",
+      "CONFIRM": "Administrer maintenant"
+    }
   },
   "CREDENTIALING": {
     "CURRENT_EXPIRY": "Expiration actuelle",

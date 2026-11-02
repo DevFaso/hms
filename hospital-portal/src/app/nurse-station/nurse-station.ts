@@ -76,7 +76,7 @@ import { SubmitGuardDirective } from '../shared/forms/submit-guard.directive';
 import { refusalReason } from '../shared/refusal-reason';
 import { ReasonDialogComponent } from '../shared/reason-dialog/reason-dialog.component';
 import { MarDoseHistoryComponent } from './mar-dose-history/mar-dose-history.component';
-import { earlyDoseRefusal } from './early-dose';
+import { earlyDoseDialogKeys, earlyDoseRefusal } from './early-dose';
 type FilterMode = 'me' | 'unit' | 'all';
 type SectionType =
   | 'vitals'
@@ -610,6 +610,17 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
     payload: MedicationAdministrationRequest;
     why: string;
   } | null>(null);
+
+  /**
+   * QA D1265: the reason dialog's keys. An order whose frequency the MAR
+   * cannot read is refused on the same field, but not for being early, so it
+   * gets its own title and question.
+   */
+  readonly earlyDoseKeys = computed(() => {
+    const early = this.earlyDose();
+    const task = early ? this.medications().find((m) => m.id === early.prompt.taskId) : undefined;
+    return earlyDoseDialogKeys(task?.frequencyUnread);
+  });
 
   /** QA D1210: the same dose again, with the nurse's reason for giving it early. */
   confirmEarlyDose(reason: string): void {

@@ -51,14 +51,86 @@ class MarNextDoseTest {
         assertThat(due.notBefore()).isEqualTo(slot.plusHours(3));
     }
 
-    /** QA D1236: q1h on time; the window is wider than the gap, so the gap decides when it may be given. */
+    /**
+     * QA D1254 (round 26, changed assertion): q1h on time. The next slot's early
+     * window is already open, so the dose is OFFERED now (notBefore = its slot
+     * less the window), and it needs a reason until the 30-minute gap has
+     * passed. Round 25 asserted notBefore = the gap, which made the row
+     * UPCOMING and hid the early-dose path (D1210) on every screen.
+     */
     @Test
-    void d1236_hourlyOnTimeMayBeGivenFromTheGap() {
+    void d1254_hourlyOnTimeIsOfferedAtOnceWithAReasonUntilTheGap() {
         LocalDateTime slot = NOW.minusMinutes(5);
         MarNextDose.Due due = MarNextDose.of(rx("toutes les heures", slot), NOW,
             List.of(row(MedicationAdministrationStatus.GIVEN, slot, slot)), WINDOW);
         assertThat(due.dueTime()).isEqualTo(slot.plusHours(1));
-        assertThat(due.notBefore()).isEqualTo(slot.plusMinutes(30));
+        assertThat(due.notBefore()).isEqualTo(slot);
+        assertThat(due.reasonUntil()).isEqualTo(slot.plusMinutes(30));
+        assertThat(due.earlyAt(NOW)).isTrue();
+        assertThat(due.earlyAt(slot.plusMinutes(30))).isFalse();
+    }
+
+    /**
+     * QA D1254 replay (morq1.js): hourly morphine signed 08:03, dose 1 given at
+     * 08:03; at 08:12 the next dose (09:03) is inside its slot window but before
+     * the 08:33 gap: offered, early, and the slot rule's slot is 09:03.
+     */
+    @Test
+    void d1254_theQaHourlyMorphineAt0812IsOfferedEarly() {
+        LocalDateTime signed = LocalDateTime.of(2026, 11, 2, 8, 3);
+        LocalDateTime at0812 = LocalDateTime.of(2026, 11, 2, 8, 12);
+        MarNextDose.Due due = MarNextDose.of(rx("toutes les heures", signed), at0812,
+            List.of(row(MedicationAdministrationStatus.GIVEN, signed, signed)), WINDOW);
+        assertThat(due.dueTime()).isEqualTo(LocalDateTime.of(2026, 11, 2, 9, 3));
+        assertThat(due.notBefore()).isBeforeOrEqualTo(at0812);
+        assertThat(due.earlyAt(at0812)).isTrue();
+        assertThat(due.scheduledSlot()).isEqualTo(LocalDateTime.of(2026, 11, 2, 9, 3));
+    }
+
+    /** QA D1254: a q4h dose given late keeps its slot window, offered early from it, due at the gap. */
+    @Test
+    void d1254_aLateDoseInsideItsWindowLeavesTheNextOneOfferedFromItsWindow() {
+        LocalDateTime slot = LocalDateTime.of(2026, 11, 2, 8, 0);
+        LocalDateTime given = slot.plusMinutes(150);
+        LocalDateTime at11 = LocalDateTime.of(2026, 11, 2, 11, 0);
+        MarNextDose.Due due = MarNextDose.of(rx("q4h", slot), at11,
+            List.of(row(MedicationAdministrationStatus.GIVEN, slot, given)), WINDOW);
+        assertThat(due.notBefore()).isEqualTo(slot.plusHours(3));
+        assertThat(due.reasonUntil()).isEqualTo(given.plusHours(3));
+        assertThat(due.dueTime()).isEqualTo(given.plusHours(3));
+        assertThat(due.earlyAt(at11)).isTrue();
+    }
+
+    /**
+     * QA D1262 replay (mar26.js): amoxicilline TID, the 1 Nov 12:41 slot missed,
+     * REFUSED late on 2 Nov at 09:00. The schedule moves to its first slot after
+     * the refusal (2 Nov 12:41), not to the missed 1 Nov 20:41 one.
+     */
+    @ParameterizedTest
+    @org.junit.jupiter.params.provider.EnumSource(value = MedicationAdministrationStatus.class,
+        names = {"REFUSED", "HELD", "MISSED"})
+    void d1262_aLateHeldOrRefusedOutcomeMovesPastTheMissedSlots(MedicationAdministrationStatus outcome) {
+        LocalDateTime missed = LocalDateTime.of(2026, 11, 1, 12, 41);
+        LocalDateTime recorded = LocalDateTime.of(2026, 11, 2, 9, 0);
+        MarNextDose.Due due = MarNextDose.of(rx("trois fois par jour", missed.minusHours(8)), recorded.plusMinutes(1),
+            List.of(row(outcome, missed, recorded)), WINDOW);
+        assertThat(due.dueTime()).isEqualTo(LocalDateTime.of(2026, 11, 2, 12, 41));
+        assertThat(due.scheduledSlot()).isEqualTo(due.dueTime());
+        assertThat(due.notBefore()).isEqualTo(LocalDateTime.of(2026, 11, 2, 11, 41));
+        assertThat(due.reasonUntil()).isNull();
+    }
+
+    /** QA D1262: a late outcome after an earlier real dose still keeps that dose's minimum gap. */
+    @Test
+    void d1262_aLateRefusalAfterAGivenDoseKeepsTheGap() {
+        LocalDateTime given = LocalDateTime.of(2026, 11, 2, 8, 0);
+        LocalDateTime refusedSlot = LocalDateTime.of(2026, 11, 2, 9, 0);
+        LocalDateTime recorded = LocalDateTime.of(2026, 11, 2, 11, 30);
+        MarNextDose.Due due = MarNextDose.of(rx("toutes les heures", given), recorded,
+            List.of(row(MedicationAdministrationStatus.REFUSED, refusedSlot, recorded),
+                row(MedicationAdministrationStatus.GIVEN, given, given)), WINDOW);
+        assertThat(due.dueTime()).isEqualTo(LocalDateTime.of(2026, 11, 2, 12, 0));
+        assertThat(due.reasonUntil()).isEqualTo(given.plusMinutes(30));
     }
 
     /** A held dose is not a dose given: the schedule alone decides. */
