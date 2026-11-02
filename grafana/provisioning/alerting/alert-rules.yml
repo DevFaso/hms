@@ -164,3 +164,53 @@ groups:
           summary: "HikariCP pool > 90% utilised for 5m"
           description: "Backend may queue or refuse requests. Check long-running queries."
           runbook_url: "https://github.com/DevFaso/hms/blob/main/docs/runbooks/grafana-observability.md#hmsdbpoolsaturated"
+
+  # ── Chat transport ───────────────────────────────────────────────────
+  # This file is the path that actually notifies: Alertmanager is commented out
+  # in grafana/prometheus.yml, so the rules in grafana/rules/alerts.yml are
+  # evaluated but routed nowhere. The burn-rate rules above read SLO ratios that
+  # now exclude /ws-chat, so without this rule the notifying path would have
+  # LESS chat coverage after the exclusion than it had before it.
+  - orgId: 1
+    name: hms-ws-transport
+    folder: "HMS – SLO"
+    interval: 1m
+    rules:
+      - uid: hms-ws-transport-errors
+        title: HMS chat transport failing
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: hms-prometheus
+            model:
+              refId: A
+              expr: app:ws_transport_errors:ratio5m{application="hms"}
+              instant: true
+              interval: ""
+          - refId: B
+            relativeTimeRange: {from: 600, to: 0}
+            datasourceUid: hms-prometheus
+            model:
+              refId: B
+              expr: app:ws_transport_requests:rate5m{application="hms"}
+              instant: true
+              interval: ""
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              refId: C
+              type: math
+              # Rate floor as well as ratio: a failure ratio over two requests in
+              # an idle window is noise, not an outage.
+              expression: "$A > 0.25 && $B > 0.1"
+        noDataState: NoData
+        execErrState: Error
+        for: 5m
+        labels:
+          severity: page
+          service: hms-backend
+        annotations:
+          summary: "HMS chat transport failing (>25% non-2xx)"
+          description: "More than a quarter of /ws-chat requests are failing. Clinical chat is degraded for every connected client, and this endpoint is excluded from the burn-rate SLO."
+          runbook_url: "https://github.com/DevFaso/hms/blob/main/docs/runbooks/grafana-observability.md#hmschattransporterrors"

@@ -12,7 +12,7 @@
       }
     ]
   },
-  "description": "Top-level SLO/SLI view following Google SRE 'multi-window, multi-burn-rate' alerting and the RED method.\nAvailability SLO target = ${slo_target} (define via dashboard variable).\n\nDefinitions:\n  - good = http_server_requests_seconds_count{status!~\"5..\"}\n  - total = http_server_requests_seconds_count\n  - latency SLI = % of requests below ${latency_target}s\n\nBurn-rate alerts fire from Prometheus rules in grafana/rules/alerts.yml.",
+  "description": "Top-level SLO/SLI view following Google SRE 'multi-window, multi-burn-rate' alerting and the RED method.\nAvailability SLO target = ${slo_target} (define via dashboard variable).\n\nDefinitions (the exclusion is part of the SLO, not a display filter):\n  - good = http_server_requests_seconds_count{status!~\"5..\", uri!~\"$exclude_uri\"}\n  - total = http_server_requests_seconds_count{uri!~\"$exclude_uri\"}\n  - latency SLI = % of requests below ${latency_target}s, same exclusion\n\n$exclude_uri drops the SockJS transport (/ws-chat). A healthy connection is held open for 25-50s, which Micrometer records as request duration, so leaving it in puts permanent 50s samples in the top histogram buckets and reports a healthy API as failing. The per-URI 5xx tables below deliberately do NOT apply it, so a transport failure stays visible, and HmsChatTransportErrors alerts on it.\n\nBurn-rate alerts fire from grafana/provisioning/alerting/alert-rules.yml, which is the path that notifies; grafana/rules/alerts.yml mirrors them but has no Alertmanager configured.",
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,

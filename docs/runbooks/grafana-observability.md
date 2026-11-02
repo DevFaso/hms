@@ -242,10 +242,46 @@ in 10 minutes — backend is in a crash loop.
 
 ---
 
+## HmsChatTransportErrors  (`severity: page`)
+
+**What it means.** More than 25% of `/ws-chat` requests returned something
+other than 2xx/3xx for 5 minutes, with the endpoint taking real traffic.
+Clinical chat is down or degraded for every connected client.
+
+**Why it has its own alert.** `/ws-chat` is SockJS, and a healthy connection is
+held open for 25-50 seconds. Micrometer records that as request *duration*, so
+leaving the endpoint in the aggregate SLIs put permanent 50-second samples in
+the top histogram buckets and made every percentile, Apdex figure and latency
+SLI report the API as failing while it was healthy. It is therefore excluded
+from the burn-rate ratios and the aggregate latency rules — which means those
+alerts will stay quiet no matter how badly chat is broken. This is the only
+alert that covers it.
+
+1. Check whether it is chat or the whole backend: the "HTTP 5xx Error Rate by
+   URI" panel on the Application Metrics dashboard deliberately does *not*
+   exclude the transport, so `/ws-chat/**` appears there as its own row.
+2. A **4xx-shaped** failure is usually routing or proxy config, not the app —
+   confirm `/api/ws-chat/info` answers 200, and check that the SockJS path is
+   not being rewritten or stripped upstream.
+3. A **5xx-shaped** failure is usually ticket redemption or the broker. Look for
+   `WsTicketService` and `JwtAuthenticationFilter` errors. Note these loggers
+   sit at INFO on dev (`LOG_LEVEL_SECURITY`) to keep Loki volume down — raise
+   them for a session with
+   `railway variables --set LOG_LEVEL_SECURITY=DEBUG --service hms-backend-dev`.
+4. If the transport is silent rather than failing, this alert cannot see it: the
+   rate floor that keeps it from firing on an idle window also means no traffic
+   means no alert. `HmsBackendNoTraffic` and `HmsTargetDown` cover that case.
+
+---
+
 ## Adding a new runbook entry
 
 When you add an alert in `grafana/rules/alerts.yml`, also:
 
+0. Add it to `grafana/provisioning/alerting/alert-rules.yml` as well, or it will
+   never notify anyone. Alertmanager is commented out in `grafana/prometheus.yml`,
+   so the rules in `alerts.yml` are evaluated and routed nowhere; Grafana's own
+   unified alerting is what reaches a contact point.
 1. Set `annotations.runbook_url` to a `#anchor` in this file.
 2. Add a new section above using the same format
    (*What it means*, *First 5 minutes*, *Likely causes*, *Mitigation*).

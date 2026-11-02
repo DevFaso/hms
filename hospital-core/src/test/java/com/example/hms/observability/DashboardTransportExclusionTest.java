@@ -113,6 +113,16 @@ class DashboardTransportExclusionTest {
      */
     private static final Pattern ERROR_STATUS = Pattern.compile("status\\s*=~\\s*\"5");
 
+    /**
+     * A top-N, where the transport does not merely appear but outranks everything.
+     *
+     * <p>Second half of the "mix or compete" test. A per-URI table shows the transport as one
+     * honest row among many; a {@code topk(10, ...)} pushes a real endpoint out of the list,
+     * because a connection held open for 50 seconds wins a latency ranking outright and several
+     * polls a second per client wins a volume one.
+     */
+    private static final Pattern TOPK = Pattern.compile("\\btopk\\s*\\(");
+
     /** Suffixes that carry a duration, and so are poisoned by a held-open connection. */
     private static final Set<String> DURATION_SUFFIXES = Set.of("bucket", "sum", "max");
 
@@ -149,16 +159,19 @@ class DashboardTransportExclusionTest {
         List<Finding> problems = new ArrayList<>();
 
         for (Path file : files) {
-            String body = Files.readString(file);
-            JsonNode root = mapper.readTree(body);
+            JsonNode root = mapper.readTree(Files.readString(file));
             String name = file.getFileName().toString();
 
             collect(root, name, null, problems);
 
-            if (body.contains("$" + VARIABLE) && !declaresVariable(root)) {
+            // Checked against the QUERIES, not the raw file text. A dashboard is entitled to
+            // mention $exclude_uri in a panel or variable description — the endpoint deep-dive
+            // explains there why it is exempt from it — and reading prose as a query reference
+            // made the guard demand a variable the dashboard deliberately does not have.
+            if (referencesVariableInAQuery(root) && !declaresVariable(root)) {
                 problems.add(new Finding(name + " (dashboard)",
-                    "references $" + VARIABLE + " but never declares it, so every query using it "
-                        + "interpolates to nothing and those panels go blank"));
+                    "a query references $" + VARIABLE + " but the dashboard never declares it, so "
+                        + "it interpolates to nothing and those panels go blank"));
             }
         }
 
@@ -287,42 +300,71 @@ class DashboardTransportExclusionTest {
      *                 literal in a recording rule
      */
     private static void check(String expr, String where, String required, List<Finding> out) {
+        // Decided for the whole expression, never per selector. A per-URI 5xx RATIO has two
+        // selectors — a numerator carrying status=~"5.." and a denominator carrying no status at
+        // all. Judging each on its own would forbid the exclusion on the numerator and demand it
+        // on the denominator, so the panel could not be written correctly in either direction:
+        // exactly the numerator/denominator mismatch the first property exists to prevent.
         boolean byUri = groupsByUri(expr);
-        boolean sawSelector = false;
+        boolean errorFocused = ERROR_STATUS.matcher(expr).find();
+        boolean ranking = TOPK.matcher(expr).find();
+
+        // The distortion needs the transport to either MIX with other endpoints (an aggregate
+        // percentile) or COMPETE with them (a top-N). A plain per-URI breakdown does neither: the
+        // transport is one row, 50s is what it honestly takes, and nothing else is affected. So
+        // only aggregates and rankings are required to exclude it.
+        boolean mustExclude = !byUri || ranking;
+
+        // Except when it would hide a failure. A per-URI view filtered on 5xx is a fault detector,
+        // and the transport belongs in it — including in a top-10 of failing endpoints, which is
+        // precisely where you want to see it.
+        boolean mustShowTransport = byUri && errorFocused;
 
         Matcher selectors = METRIC_SELECTOR.matcher(expr);
         while (selectors.find()) {
-            sawSelector = true;
-            String suffix = selectors.group(1);
             String labels = selectors.group(2);
-            boolean duration = DURATION_SUFFIXES.contains(suffix);
-
             if (URI_PIN.matcher(labels).find()) {
                 continue;
             }
-            if (byUri && !duration && ERROR_STATUS.matcher(labels).find()) {
-                if (labels.contains(required)) {
-                    out.add(new Finding(where,
-                        "is a per-URI error breakdown but hides the transport -> {" + labels + "}. "
-                            + "A 5xx storm on /ws-chat has to stay visible as its own row."));
-                }
-                continue;
-            }
-            if (!labels.contains(required)) {
-                String why = URI_EXCLUDE.matcher(labels).find()
-                    ? "excludes uri with something other than " + required
-                    : (duration ? "times every uri, transport included"
-                                : "counts across every uri, transport included");
-                out.add(new Finding(where, why + " -> {" + labels + "}"));
-            }
+            judge(labels.contains(required), DURATION_SUFFIXES.contains(selectors.group(1)),
+                mustExclude, mustShowTransport, URI_EXCLUDE.matcher(labels).find(), required,
+                where, "{" + labels + "}", out);
         }
 
-        // An expression can reference the metric with no label set at all, in which case the loop
-        // above never ran. That shape is unguarded by construction, so it cannot be a pass.
-        if (!sawSelector && !byUri && BARE_METRIC.matcher(expr).find()) {
-            out.add(new Finding(where,
-                "uses http_server_requests_seconds_* with no label set, so it has no exclusion "
-                    + "and no uri pin — add `{" + required + "}`"));
+        // The metric can also appear with no label set at all. That shape is unguarded by
+        // construction, and it must be judged on its own terms rather than only when nothing else
+        // matched: a ratio with one braced and one brace-less selector, or a brace-less duration
+        // grouped by uri, would otherwise slip through on the back of its better-written sibling.
+        Matcher bare = BARE_METRIC.matcher(expr);
+        while (bare.find()) {
+            judge(false, DURATION_SUFFIXES.contains(bare.group(1)), mustExclude,
+                mustShowTransport, false, required, where, "no label set at all", out);
+        }
+    }
+
+    /** One selector, already classified. Kept separate so braced and bare shapes share a verdict. */
+    private static void judge(boolean excludes, boolean duration, boolean mustExclude,
+                              boolean mustShowTransport, boolean wrongExclusion, String required,
+                              String where, String shape, List<Finding> out) {
+        if (mustShowTransport && !duration) {
+            if (excludes) {
+                out.add(new Finding(where,
+                    "is a per-URI error breakdown but hides the transport -> " + shape
+                        + ". A 5xx storm on /ws-chat has to stay visible as its own row."));
+            }
+            return;
+        }
+        if (!mustExclude) {
+            // A per-URI breakdown that neither mixes populations nor ranks them. Either way is
+            // defensible, so this is the one case the guard deliberately declines to decide.
+            return;
+        }
+        if (!excludes) {
+            String why = wrongExclusion
+                ? "excludes uri with something other than " + required
+                : (duration ? "times every uri, transport included"
+                            : "counts across every uri, transport included");
+            out.add(new Finding(where, why + " -> " + shape));
         }
     }
 
@@ -368,6 +410,28 @@ class DashboardTransportExclusionTest {
         } else if (node.isArray()) {
             node.forEach(child -> collect(child, file, title, out));
         }
+    }
+
+    /** True when some {@code targets[].expr} interpolates the variable. */
+    private static boolean referencesVariableInAQuery(JsonNode node) {
+        if (node.isObject()) {
+            for (JsonNode target : node.path("targets")) {
+                if (target.path("expr").asText("").contains("$" + VARIABLE)) {
+                    return true;
+                }
+            }
+            return node.properties().stream()
+                .filter(e -> !"targets".equals(e.getKey()))
+                .anyMatch(e -> referencesVariableInAQuery(e.getValue()));
+        }
+        if (node.isArray()) {
+            for (JsonNode child : node) {
+                if (referencesVariableInAQuery(child)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private static boolean declaresVariable(JsonNode root) {

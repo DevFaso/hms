@@ -115,20 +115,38 @@ dependencies {
     testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
 }
 
-// DashboardTransportExclusionTest asserts over files OUTSIDE this module —
-// grafana/dashboards/*.json and grafana/rules/*.yml. Gradle has no way to know that, so
-// editing a dashboard on its own leaves :hospital-core:test UP-TO-DATE and the guard never
-// runs: precisely the state in which a bad selector reaches main with a green build.
+// The observability config guard (DashboardTransportExclusionTest) asserts over files OUTSIDE
+// this module: grafana/dashboards/*.json and grafana/rules/*.yml. Gradle has no way to know
+// that, so editing a dashboard on its own leaves :hospital-core:test UP-TO-DATE and the guard
+// never runs — precisely the state in which a bad selector reaches main with a green build.
 //
-// Found by falsifying the guard. Three deliberately broken dashboards all "passed", not
-// because the assertions were weak but because the task was skipped entirely. Declaring the
-// files as inputs makes a change to any of them re-run the task.
-tasks.named('test') {
+// Found by falsifying the guard: three deliberately broken dashboards all "passed", not because
+// the assertions were weak but because the task was skipped entirely.
+//
+// It gets its own task rather than an inputs.files() on `test`. Declaring grafana/ as an input
+// of the whole module's test task is correct but far too coarse — with the build cache on, one
+// character in a dashboard would re-run ~7,000 tests, most of which boot a Spring context. This
+// task runs the single class, in about a second, and `check` depends on it so CI still gets it.
+def observabilityConfigTest = tasks.register('observabilityConfigTest', Test) {
+    description = 'Checks the Grafana dashboards and rule files against the observability guard.'
+    group = 'verification'
+
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    useJUnitPlatform()
+    filter {
+        includeTestsMatching 'com.example.hms.observability.DashboardTransportExclusionTest'
+    }
+
     inputs.files(fileTree(rootProject.file('grafana')) {
         include 'dashboards/*.json'
         include 'rules/*.yml'
+        include 'provisioning/alerting/*.yml'
     })
         .withPropertyName('grafanaObservabilityConfig')
         .withPathSensitivity(PathSensitivity.RELATIVE)
-        .optional()
+}
+
+tasks.named('check') {
+    dependsOn observabilityConfigTest
 }

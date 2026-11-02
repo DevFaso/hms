@@ -5718,3 +5718,12 @@ ships*, not for building — and check the shipped surface before trusting a
   rather than repointing the targets again. Flagged in PR #1007 round 10; not
   fixed there because the fix would have been a guess against a measurement that
   contradicted it.
+- **`severity: page` alerts without a runbook (PR #1013 round 3):** the convention
+  in `docs/runbooks/grafana-observability.md` ("Adding a new runbook entry") makes
+  `annotations.runbook_url` plus a matching section mandatory for every alert, and
+  five pre-existing page alerts in `grafana/rules/alerts.yml` have neither:
+  `HmsTargetDown`, `HmsDbPoolSaturated`, `HmsDbPoolPendingHigh`, `PostgresDown`,
+  `HmsRecentlyRestartedRepeatedly`. Found while adding `HmsChatTransportErrors`
+  (which does comply, in both alert files). Not fixed in #1013 because writing
+  five runbook sections for unrelated alerts is its own change; worth doing as a
+  docs pass, together with a guard asserting the convention so it stops drifting.
