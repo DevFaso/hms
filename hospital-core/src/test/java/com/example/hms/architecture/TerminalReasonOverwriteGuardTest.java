@@ -70,7 +70,7 @@ class TerminalReasonOverwriteGuardTest {
     static final Pattern CLOSE_REASON_WRITE = Pattern.compile(
         "\\.set(?:Cancel|Cancellation|Close|Closure|Revocation|Revoke|Discard|Void|Rejection|Withdrawal"
             + "|Discontinuation|Stop|End|Decline|NoShow)Reason\\(\\s*+(?!null\\s*+\\))(?!\\w++\\.get\\w*Reason\\(\\)\\s*+\\))"
-            + "|\\brequireCancelReason\\("
+            + "|\\brequireCancelReason\\(|\\bCancelledOrders\\.requireReason\\("
             // the closing stamp of a revoke / cancel (the portal proxy revoke re-stamped revokedAt)
             + "|\\.set(?:Revoked|Cancelled|Closed|Voided|Discarded)At\\(\\s*+(?!null\\s*+\\))(?!\\w++\\.get\\w*At\\(\\)\\s*+\\))"
             // a status change written with its reason (the diagnosis removal)

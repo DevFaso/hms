@@ -1422,8 +1422,8 @@ class ReceptionServiceImplTest {
 
             for (String blank : new String[] {null, "", "   "}) {
                 assertThatThrownBy(() -> service.closeWaitlistEntry(waitlistId, hospitalId, blank))
-                        .isInstanceOf(com.example.hms.exception.BusinessException.class)
-                        .extracting("messageKey").isEqualTo("order.lifecycle.cancelReasonRequired");
+                        .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                        .extracting("messageKey").isEqualTo("waitlist.close.reasonRequired"); // QA D1267
             }
             verify(entry, never()).setStatus(org.mockito.ArgumentMatchers.anyString());
             verify(waitlistRepo, never()).save(entry);

@@ -201,7 +201,7 @@ class AdvanceDirectiveServiceImplTest {
         for (String blank : new String[] {null, "", "  "}) {
             assertThatThrownBy(() -> service.revoke(id, blank))
                 .isInstanceOf(BusinessException.class)
-                .extracting("messageKey").isEqualTo("order.lifecycle.cancelReasonRequired");
+                .extracting("messageKey").isEqualTo("advanceDirective.revoke.reasonRequired"); // QA D1267
         }
         assertThat(directive.getStatus()).isEqualTo(AdvanceDirectiveStatus.ACTIVE);
         verify(directiveRepository, never()).save(any());

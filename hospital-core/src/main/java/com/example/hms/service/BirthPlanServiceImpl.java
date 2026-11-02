@@ -262,7 +262,7 @@ public class BirthPlanServiceImpl implements BirthPlanService {
         // a plan a provider has reviewed (or a draft someone else wrote) is
         // withdrawn - kept, marked and audited - and only the author's own
         // unreviewed draft is deleted.
-        String kept = CancelledOrders.requireCancelReason(reason);
+        String kept = CancelledOrders.requireReason(reason, "reason", "birthPlan.withdraw.reasonRequired");
         User user = getUserOrThrow(username);
         BirthPlan birthPlan = getBirthPlanInReach(user, id);
         if (birthPlan.isWithdrawn()) {

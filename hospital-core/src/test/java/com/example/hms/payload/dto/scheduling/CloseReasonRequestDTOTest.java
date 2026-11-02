@@ -17,12 +17,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 class CloseReasonRequestDTOTest {
 
     @Test
-    void aBlankOrTooLongReasonIsRefused() {
+    void anOverLongReasonIsRefusedAtTheEdgeAndABlankOneByTheService() {
         try (ValidatorFactory factory = Validation.buildDefaultValidatorFactory()) {
-            Set<ConstraintViolation<CloseReasonRequestDTO>> blank =
-                factory.getValidator().validate(new CloseReasonRequestDTO("  "));
-            assertThat(blank).extracting(ConstraintViolation::getMessageTemplate)
-                .containsExactly("{order.lifecycle.cancelReasonRequired}");
+            // QA D1267 (round 26): a blank reason is the SERVICE's refusal, in each
+            // action's own words (CancelledOrders.requireReason); the shared body
+            // no longer says "the reason for the cancellation" for every action.
+            assertThat(factory.getValidator().validate(new CloseReasonRequestDTO("  "))).isEmpty();
 
             Set<ConstraintViolation<CloseReasonRequestDTO>> tooLong =
                 factory.getValidator().validate(new CloseReasonRequestDTO("x".repeat(501)));

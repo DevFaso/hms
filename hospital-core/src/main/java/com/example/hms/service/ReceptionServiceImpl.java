@@ -1004,7 +1004,8 @@ public class ReceptionServiceImpl implements ReceptionService {
         }
         // QA D1157 (round 21): closing an entry says why, on the server; an
         // empty body closed it at once and nothing recorded the decision.
-        String closeReason = com.example.hms.service.support.CancelledOrders.requireCancelReason(reason);
+        String closeReason = com.example.hms.service.support.CancelledOrders.requireReason(reason, "reason",
+            "waitlist.close.reasonRequired");
         // QA D1185 (round 22): closing an OFFERED entry withdraws the offer and
         // frees the held slot at once, as a decline and the expiry sweep do;
         // the slot stayed HELD (and out of search) until the hold expired.

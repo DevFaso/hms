@@ -153,7 +153,8 @@ public class AdvanceDirectiveServiceImpl implements AdvanceDirectiveService {
             throw new BusinessException("advanceDirective.revoke.alreadyRevoked");
         }
         // QA D1148 (round 21): a revoked directive says why, on the server.
-        directive.setRevocationReason(com.example.hms.service.support.CancelledOrders.requireCancelReason(reason));
+        directive.setRevocationReason(com.example.hms.service.support.CancelledOrders.requireReason(reason, "reason",
+            "advanceDirective.revoke.reasonRequired"));
         directive.setStatus(AdvanceDirectiveStatus.REVOKED);
         directive.setLastReviewedAt(LocalDateTime.now());
         return mapper.toResponseDto(directiveRepository.save(directive));

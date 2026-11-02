@@ -135,7 +135,8 @@ public class PatientRecallServiceImpl implements PatientRecallService {
             throw new BusinessException("recall.cancel.notOpen");
         }
         // QA D1157 (round 21): a cancelled recall says why, on the server.
-        recall.setCloseReason(com.example.hms.service.support.CancelledOrders.requireCancelReason(reason));
+        recall.setCloseReason(com.example.hms.service.support.CancelledOrders.requireReason(reason, "reason",
+            com.example.hms.service.support.CancelledOrders.CANCEL_REASON_REQUIRED));
         return toDto(finish(recall, RecallStatus.CANCELLED), hospitalId);
     }
 
