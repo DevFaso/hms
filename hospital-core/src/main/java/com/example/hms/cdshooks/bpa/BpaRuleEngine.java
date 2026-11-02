@@ -193,9 +193,66 @@ public class BpaRuleEngine {
      * language; a WARNING acknowledged does not hide the CRITICAL it becomes.
      */
     static String stableCardUuid(String ruleId, CdsCard card) {
-        String level = card.indicator() == null ? "" : card.indicator().wire();
+        return stableCardUuid(ruleId, card.indicator());
+    }
+
+    static String stableCardUuid(String ruleId, CdsCard.Indicator indicator) {
+        String level = indicator == null ? "" : indicator.wire();
         return java.util.UUID.nameUUIDFromBytes(("hms-bpa:" + ruleId + ":" + level)
             .getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();
+    }
+
+    /**
+     * QA D1238 (round 25): an acknowledgement covers the readings its author
+     * saw, nothing recorded after it. A midwife acknowledged the pregnancy
+     * hypertension card at 18:38; the 162/112 measured at 04:37 raised the
+     * same card (same rule, same level, so the same id) and the
+     * acknowledgement hid it for 24 hours.
+     *
+     * <p>True when the readings ENTERED after {@code acknowledgedAt} raise,
+     * on their own, the acknowledged card or a more severe card of the same
+     * rule. The rules run on the same context with only those readings, so
+     * a rule that needs older readings to fire stays covered by the
+     * acknowledgement (as before), and one new triggering reading brings the
+     * card back.
+     */
+    public boolean raisedAgainSince(BpaRuleContext context, String cardUuid, LocalDateTime acknowledgedAt) {
+        if (context == null || !context.hasPatient() || cardUuid == null || acknowledgedAt == null) {
+            return false;
+        }
+        List<PatientVitalSign> newer = context.recentVitals().stream()
+            .filter(v -> enteredAfter(v, acknowledgedAt))
+            .toList();
+        if (newer.isEmpty()) {
+            return false;
+        }
+        Set<String> sameOrWorse = sameRuleSameOrWorse(cardUuid);
+        BpaRuleContext sinceAcknowledgement = new BpaRuleContext(context.patient(), context.hospitalId(), newer,
+            context.activeProblems(), context.activePrescriptions(), context.estimatedDueDate());
+        return evaluate(sinceAcknowledgement).stream().anyMatch(c -> sameOrWorse.contains(c.uuid()));
+    }
+
+    /** When the reading reached the chart: its entry time, else its clinical time. */
+    private static boolean enteredAfter(PatientVitalSign v, LocalDateTime instant) {
+        LocalDateTime entered = v.getCreatedAt() != null ? v.getCreatedAt() : v.getRecordedAt();
+        return entered != null && entered.isAfter(instant);
+    }
+
+    /** The card's id and the ids of the same rule at a more severe level. */
+    private Set<String> sameRuleSameOrWorse(String cardUuid) {
+        Set<String> ids = new java.util.HashSet<>();
+        ids.add(cardUuid);
+        for (BpaRule rule : rules) {
+            CdsCard.Indicator[] levels = CdsCard.Indicator.values();
+            for (int i = 0; i < levels.length; i++) {
+                if (stableCardUuid(rule.id(), levels[i]).equals(cardUuid)) {
+                    for (int worse = i + 1; worse < levels.length; worse++) {
+                        ids.add(stableCardUuid(rule.id(), levels[worse]));
+                    }
+                }
+            }
+        }
+        return ids;
     }
 
     /** Convenience: build context + evaluate. */
