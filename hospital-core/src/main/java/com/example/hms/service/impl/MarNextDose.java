@@ -157,7 +157,9 @@ public final class MarNextDose {
             || !next.plus(earlyWindow).isBefore(recordedAt)) {
             return next;
         }
-        long slotsPassed = Duration.between(lastSlot, recordedAt).toMinutes() / interval.toMinutes();
+        // Sonar S8700: elapsed time with the zone made explicit (the shared ElapsedTime decision).
+        long slotsPassed = com.example.hms.utility.ElapsedTime.between(lastSlot, recordedAt).toMinutes()
+            / interval.toMinutes();
         return lastSlot.plus(interval.multipliedBy(slotsPassed + 1));
     }
 

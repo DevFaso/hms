@@ -2430,7 +2430,20 @@ public class EncounterServiceImpl implements EncounterService {
         }
 
         int count = 0;
+        // QA D1287 (round 27): an intake that lists an allergy the patient
+        // already has active is merged into it (not recorded a second time),
+        // and so is the same allergen listed twice in one intake.
+        List<com.example.hms.model.PatientAllergy> known = new ArrayList<>();
+        if (encounter.getPatient() != null && encounter.getHospital() != null) {
+            known.addAll(patientAllergyRepository.findVisibleAt(
+                    encounter.getPatient().getId(), encounter.getHospital().getId()));
+        }
         for (com.example.hms.payload.dto.PatientAllergyRequestDTO allergyReq : request.getAllergies()) {
+            boolean active = allergyReq.getActive() == null || allergyReq.getActive();
+            if (active && com.example.hms.service.allergy.ActiveAllergyDuplicates.find(known,
+                    allergyReq.getAllergenCode(), allergyReq.getAllergenDisplay(), null).isPresent()) {
+                continue;
+            }
             com.example.hms.model.PatientAllergy allergy = com.example.hms.model.PatientAllergy.builder()
                     .patient(encounter.getPatient())
                     .hospital(encounter.getHospital())
@@ -2448,9 +2461,10 @@ public class EncounterServiceImpl implements EncounterService {
                             ? allergyReq.getRecordedDate()
                             : java.time.LocalDate.now())
                     .sourceSystem("NURSING_INTAKE")
-                    .active(allergyReq.getActive() == null || allergyReq.getActive())
+                    .active(active)
                     .build();
             patientAllergyRepository.save(allergy);
+            known.add(allergy);
             count++;
         }
         if (count > 0) {

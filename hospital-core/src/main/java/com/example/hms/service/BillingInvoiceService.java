@@ -82,7 +82,8 @@ public interface BillingInvoiceService {
 
     /**
      * Staff shortcut: record a payment (patient resolved from the invoice) and
-     * write its payment row; a missing method is recorded as OTHER.
+     * write its payment row; a missing or unknown method is refused with
+     * {@code fieldErrors.method} (QA D1293).
      */
     BillingInvoiceResponseDTO recordStaffPayment(UUID invoiceId,
             com.example.hms.payload.dto.StaffPaymentRequestDTO payment, UUID recordedBy, Locale locale);
@@ -110,7 +111,8 @@ public interface BillingInvoiceService {
     void recordCheckInCopay(com.example.hms.model.Encounter encounter, java.math.BigDecimal amount, UUID recordedBy);
 
     /**
-     * QA D975: the check-in copay paid by {@code method} (cash when null),
+     * QA D975: the check-in copay paid by {@code method} (refused with
+     * {@code fieldErrors.copayMethod} when null, QA D1293),
      * with its reference (required for Mobile Money, insurance and bank transfer). Returns the
      * confirmed payment row, so the desk can print its receipt; null when
      * the amount is not positive.

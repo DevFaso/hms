@@ -92,6 +92,7 @@ import com.example.hms.security.SecurityUtils;
 import com.example.hms.utility.DiagnosisCodeValidator;
 import com.example.hms.utility.MessageUtil;
 import com.example.hms.utility.PatientMatchKeys;
+import com.example.hms.service.allergy.ActiveAllergyDuplicates;
 import com.example.hms.utility.PhoneNumbers;
 import com.example.hms.utility.RoleValidator;
 import tools.jackson.core.JacksonException;
@@ -1536,6 +1537,7 @@ public class PatientServiceImpl implements PatientService {
         allergy.setActive(true);
         patientAllergyMapper.updateEntityFromRequest(request, allergy);
         enforceAllergyDisplay(allergy.getAllergenDisplay());
+        refuseActiveDuplicate(allergy, hospitalEntity.getId());
         if (allergy.getRecordedDate() == null) {
             allergy.setRecordedDate(LocalDate.now());
         }
@@ -1581,6 +1583,7 @@ public class PatientServiceImpl implements PatientService {
         }
         patientAllergyMapper.updateEntityFromRequest(request, allergy);
         enforceAllergyDisplay(allergy.getAllergenDisplay());
+        refuseActiveDuplicate(allergy, effectiveHospitalId);
         if (allergy.getRecordedDate() == null) {
             allergy.setRecordedDate(LocalDate.now());
         }
@@ -1588,6 +1591,24 @@ public class PatientServiceImpl implements PatientService {
         allergySummarySync.refresh(allergy.getPatient());
         logAllergyMutation("UPDATED", patientId, effectiveHospitalId, allergy.getId(), requesterUserId, allergy, null);
         return patientAllergyMapper.toResponseDto(allergy);
+    }
+
+    /**
+     * QA D1287 (round 27): an allergy that would be active while the same
+     * allergen (code or name, see {@link ActiveAllergyDuplicates}) is already
+     * active for the patient - among the rows this hospital may see - is
+     * refused with the field named. A deactivated one may be recorded again.
+     */
+    private void refuseActiveDuplicate(PatientAllergy allergy, UUID hospitalId) {
+        if (!allergy.isActive() || allergy.getPatient() == null) {
+            return;
+        }
+        ActiveAllergyDuplicates.find(patientAllergyRepository.findVisibleAt(allergy.getPatient().getId(), hospitalId),
+                allergy.getAllergenCode(), allergy.getAllergenDisplay(), allergy.getId())
+            .ifPresent(existing -> {
+                throw new FieldBusinessException("allergenDisplay", "patient.r27.allergyAlreadyActive",
+                    existing.getAllergenDisplay());
+            });
     }
 
     @Override

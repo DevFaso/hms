@@ -92,6 +92,8 @@ public class ResultReviewServiceImpl implements ResultReviewService {
     private final MessageSource messageSource;
     /** QA D178: grades a result exactly as the lab-results screen does. */
     private final com.example.hms.mapper.LabResultMapper labResultMapper;
+    /** QA D1286: inbox items from notifications are rendered in the reader's language. */
+    private final com.example.hms.service.i18n.NotificationLocalizer notificationLocalizer;
 
     /**
      * Resolvable message key, not a sentence, and the key this codebase already
@@ -395,6 +397,10 @@ public class ResultReviewServiceImpl implements ResultReviewService {
                 notificationRepository
                         .findByRecipientUsernameAndTypeAndReadFalseOrderByCreatedAtDesc(
                                 username, PHARMACY_EVENT_NOTIFICATION_TYPE)
+                        .stream()
+                        // QA D1286: rendered from its key in the reader's language,
+                        // not the staff-language copy stored with the row.
+                        .map(row -> notificationLocalizer.localized(row, locale))
                         .forEach(n -> items.add(ClinicalInboxItemDTO.builder()
                                 .id(n.getId())
                                 .category(CATEGORY_PHARMACY_EVENT)

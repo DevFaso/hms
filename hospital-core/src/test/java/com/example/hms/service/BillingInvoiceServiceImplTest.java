@@ -222,6 +222,21 @@ class BillingInvoiceServiceImplTest {
     }
 
     @Test
+    void createInvoice_withoutAPatientNamesTheField_D1282() {
+        pinnedHospital();
+        BillingInvoiceRequestDTO request = BillingInvoiceRequestDTO.builder()
+            .invoiceDate(LocalDate.of(2026, 10, 1)).dueDate(LocalDate.of(2026, 10, 31)).build();
+
+        com.example.hms.exception.FieldBusinessException refused = assertThrows(
+            com.example.hms.exception.FieldBusinessException.class,
+            () -> billingInvoiceService.createInvoice(request, Locale.ENGLISH));
+
+        assertEquals("patientId", refused.getField());
+        assertEquals("billing.invoice.patientRequired", refused.getMessageKey());
+        verify(invoiceRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
     void createInvoice_typedNumberIsRefusedNotRewritten_D183() {
         pinnedHospital();
         Patient patient = registeredPatient();
@@ -1161,21 +1176,49 @@ class BillingInvoiceServiceImplTest {
         verify(paymentTransactionRepository).save(any());
     }
 
+    /**
+     * QA D1293 (round 27, user decision): a payment needs a method. A staff
+     * payment with none (absent, empty or blank) used to be recorded as
+     * OTHER and counted in the till; it is refused with fieldErrors.method,
+     * and an unknown method names the field too. (This test replaced
+     * recordStaffPayment_withNoMethodRecordsOther, whose OTHER fallback the
+     * decision removed.)
+     */
     @Test
-    void recordStaffPayment_withNoMethodRecordsOther() {
+    void recordStaffPayment_withNoMethodIsRefusedWithTheFieldNamed_D1293() {
+        java.util.Map<String, String> cases = new java.util.LinkedHashMap<>();
+        cases.put("", "billing.payment.methodRequired");
+        cases.put("   ", "billing.payment.methodRequired");
+        cases.put("BOGUS", "billing.payment.methodUnsupported");
+        java.util.List<String> methods = new java.util.ArrayList<>(cases.keySet());
+        methods.add(null);
+        for (String method : methods) {
+            BillingInvoice invoice = payableInvoice(UUID.randomUUID());
+            when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
+            UUID invoiceId = invoice.getId();
+            com.example.hms.payload.dto.StaffPaymentRequestDTO noMethod =
+                new com.example.hms.payload.dto.StaffPaymentRequestDTO(new BigDecimal("50"), method, null, null);
+
+            com.example.hms.exception.FieldBusinessException refused = assertThrows(
+                com.example.hms.exception.FieldBusinessException.class,
+                () -> billingInvoiceService.recordStaffPayment(invoiceId, noMethod, null, Locale.FRENCH));
+
+            assertEquals("method", refused.getField(), String.valueOf(method));
+            assertEquals(cases.getOrDefault(method, "billing.payment.methodRequired"), refused.getMessageKey());
+            assertEquals(BigDecimal.ZERO, invoice.getAmountPaid());
+        }
+        verify(paymentTransactionRepository, never()).save(any());
+    }
+
+    @Test
+    void recordPatientPayment_withABlankMethodNamesTheField_D1293() {
         UUID patientId = UUID.randomUUID();
-        BillingInvoice invoice = payableInvoice(patientId);
-        when(invoiceRepository.findById(invoice.getId())).thenReturn(Optional.of(invoice));
-        when(invoiceRepository.save(any(BillingInvoice.class))).thenAnswer(inv -> inv.getArgument(0));
-
-        billingInvoiceService.recordStaffPayment(invoice.getId(),
-            new com.example.hms.payload.dto.StaffPaymentRequestDTO(new BigDecimal("10.00"), null, null, null),
-            null, Locale.ENGLISH);
-
-        ArgumentCaptor<com.example.hms.model.PaymentTransaction> row =
-            ArgumentCaptor.forClass(com.example.hms.model.PaymentTransaction.class);
-        verify(paymentTransactionRepository).save(row.capture());
-        assertEquals(com.example.hms.enums.PaymentMethod.OTHER, row.getValue().getPaymentMethod());
+        UUID invoiceId = UUID.randomUUID();
+        com.example.hms.exception.FieldBusinessException refused = assertThrows(
+            com.example.hms.exception.FieldBusinessException.class,
+            () -> billingInvoiceService.recordPatientPayment(invoiceId, patientId, null, payment("   "), Locale.FRENCH));
+        assertEquals("paymentMethod", refused.getField());
+        assertEquals("billing.payment.methodRequired", refused.getMessageKey());
     }
 
     /** QA D767: an invoice created as SENT at 0 F CFA was outstanding forever. */
@@ -1584,6 +1627,23 @@ class BillingInvoiceServiceImplTest {
         assertEquals(com.example.hms.enums.PaymentMethod.CASH, row.getValue().getPaymentMethod());
         assertEquals(com.example.hms.enums.PaymentStatus.CONFIRMED, row.getValue().getStatus());
         assertEquals(receptionist, row.getValue().getRecordedBy());
+    }
+
+    /** QA D1293: a copay with no method is refused with the field named, never guessed as cash. */
+    @Test
+    void recordCheckInCopay_withNoMethodIsRefused_D1293() {
+        com.example.hms.model.Encounter encounter = new com.example.hms.model.Encounter();
+        encounter.setId(UUID.randomUUID());
+        UUID receptionist = UUID.randomUUID();
+        BigDecimal copay = new BigDecimal("1500");
+
+        com.example.hms.exception.FieldBusinessException refused = assertThrows(
+            com.example.hms.exception.FieldBusinessException.class,
+            () -> billingInvoiceService.recordCheckInCopay(encounter, copay, null, null, receptionist));
+
+        assertEquals("copayMethod", refused.getField());
+        assertEquals("billing.payment.methodRequired", refused.getMessageKey());
+        verify(invoiceRepository, never()).saveAndFlush(any(BillingInvoice.class));
     }
 
     @Test

@@ -858,6 +858,66 @@ class PatientServiceImplTest {
         verify(patientRepository, never()).findAllByPhoneSubscriber(any(), any());
     }
 
+    /**
+     * QA D1287 (round 27): the same allergen cannot be active twice for a
+     * patient - the same code, or the same name with accents, case and
+     * spacing aside - while a deactivated one may be recorded again.
+     */
+    @org.junit.jupiter.params.ParameterizedTest(name = "{0} / {1}")
+    @org.junit.jupiter.params.provider.CsvSource(delimiter = '|', value = {
+        "Pénicilline | ",
+        "  PENICILLINE  | ",
+        "Amoxicilline | RXN-7980",
+    })
+    void anAllergenAlreadyActiveIsNotRecordedTwice(String display, String code) {
+        PatientAllergy existing = new PatientAllergy();
+        existing.setId(UUID.randomUUID());
+        existing.setAllergenDisplay("Penicilline");
+        existing.setAllergenCode("rxn-7980");
+        existing.setActive(true);
+        UUID requester = stubAllergyCreation(display, code);
+        when(patientAllergyRepository.findVisibleAt(patientId, hospitalId)).thenReturn(List.of(existing));
+        com.example.hms.payload.dto.PatientAllergyRequestDTO request = com.example.hms.payload.dto.PatientAllergyRequestDTO.builder().allergenDisplay(display).build();
+
+        com.example.hms.exception.FieldBusinessException refused = org.junit.jupiter.api.Assertions.assertThrows(
+            com.example.hms.exception.FieldBusinessException.class,
+            () -> patientService.createPatientAllergy(patientId, hospitalId, requester, request));
+
+        assertThat(refused.getField()).isEqualTo("allergenDisplay");
+        assertThat(refused.getMessageKey()).isEqualTo("patient.r27.allergyAlreadyActive");
+        verify(patientAllergyRepository, never()).save(any());
+    }
+
+    @Test
+    void aDeactivatedAllergenMayBeRecordedAgain() {
+        PatientAllergy deactivated = new PatientAllergy();
+        deactivated.setId(UUID.randomUUID());
+        deactivated.setAllergenDisplay("Pénicilline");
+        deactivated.setActive(false);
+        UUID requester = stubAllergyCreation("Pénicilline", null);
+        when(patientAllergyRepository.findVisibleAt(patientId, hospitalId)).thenReturn(List.of(deactivated));
+
+        patientService.createPatientAllergy(patientId, hospitalId, requester,
+            com.example.hms.payload.dto.PatientAllergyRequestDTO.builder().allergenDisplay("Pénicilline").build());
+
+        verify(patientAllergyRepository).save(any(PatientAllergy.class));
+    }
+
+    private UUID stubAllergyCreation(String display, String code) {
+        UUID requester = UUID.randomUUID();
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
+        when(staffRepository.findByUserIdAndHospitalId(requester, hospitalId)).thenReturn(Optional.of(new Staff()));
+        org.mockito.Mockito.doAnswer(inv -> {
+            PatientAllergy target = inv.getArgument(1);
+            target.setAllergenDisplay(display);
+            target.setAllergenCode(code);
+            return null;
+        }).when(patientAllergyMapper).updateEntityFromRequest(any(), any(PatientAllergy.class));
+        return requester;
+    }
+
     @Test
     void createPatientByStaffRequiresHospitalId() {
         PatientRequestDTO request = PatientRequestDTO.builder().userId(UUID.randomUUID()).build();

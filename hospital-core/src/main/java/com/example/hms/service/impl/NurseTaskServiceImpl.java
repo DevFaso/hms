@@ -222,6 +222,8 @@ public class NurseTaskServiceImpl implements NurseTaskService {
     private final com.example.hms.repository.PatientAllergyRepository patientAllergyRepository;
     /** QA D922 (decision 2026-10-28): the second clinician who witnesses a controlled dose. */
     private final com.example.hms.service.emar.ControlledAdministrationWitness controlledAdministrationWitness;
+    /** QA D1286: an inbox item is read in the nurse's language, rendered from its stored key. */
+    private final com.example.hms.service.i18n.NotificationLocalizer notificationLocalizer;
 
     /** QA D776: the roles a patient can be handed over to. */
     static final Set<String> HANDOFF_RECIPIENT_ROLE_CODES = Set.of("ROLE_NURSE", "ROLE_MIDWIFE", "ROLE_DOCTOR");
@@ -2165,10 +2167,15 @@ public class NurseTaskServiceImpl implements NurseTaskService {
         if (nurseUsername == null || nurseUsername.isBlank()) return List.of();
         int effectiveLimit = Math.clamp(limit, 1, 50);
         Pageable pageable = PageRequest.of(0, effectiveLimit);
+        // QA D1286 (round 27): the stored text is the staff-language copy; the
+        // NEWS2 escalation (and every keyed item) is rendered from its key in
+        // the reader's language, as the bell and /notifications already do.
+        java.util.Locale reader = org.springframework.context.i18n.LocaleContextHolder.getLocale();
         return notificationRepository
             .findByRecipientUsername(nurseUsername, pageable)
             .getContent()
             .stream()
+            .map(row -> notificationLocalizer.localized(row, reader))
             .map(n -> NurseInboxItemDTO.builder()
                 .id(n.getId())
                 .message(n.getMessage())

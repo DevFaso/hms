@@ -85,8 +85,15 @@ public final class MarDoseSchedule {
      * "/j", "par jour", "par 24 h", "al dia", "por dia", "daily", "a day",
      * "per day", right after {@link #TIMES}.
      */
-    private static final Pattern PER_DAY =
-        Pattern.compile("(?:/\\s*[JD]|PAR JOUR|PAR 24 ?H|AL DIA|POR DIA|DAILY|A DAY|PER DAY)\\b");
+    // QA D1291 (round 27): "/JOUR", "/DIA" and "/DAY" too; the word boundary after "/J" refused them.
+    private static final Pattern PER_DAY = Pattern.compile(
+        "(?:/\\s*+(?:JOURS?+|J|DIAS?+|DAYS?+|D)|PAR JOUR|PAR 24 ?H|AL DIA|POR DIA|DAILY|A DAY|PER DAY)\\b");
+    /**
+     * QA D1291: a posology "1-0-1" (morning, noon, evening; "1-0-0-1" with a
+     * bedtime dose): three or four intakes of one digit each, read as the
+     * count of non-zero intakes a day.
+     */
+    private static final Pattern POSOLOGY = Pattern.compile("\\d(?:-\\d){2,3}+");
 
     /**
      * QA D928: a count written as a word ("une fois par jour", "dos veces al
@@ -228,8 +235,12 @@ public final class MarDoseSchedule {
         return null;
     }
 
-    /** The count of a "3 fois par jour" frequency, or {@code null}. */
+    /** The count of a "3 fois par jour" (or "1-0-1") frequency, or {@code null}. */
     private static Integer timesPerDay(String f) {
+        String compact = f.replace(" ", "");
+        if (POSOLOGY.matcher(compact).matches()) {
+            return (int) compact.chars().filter(c -> c >= '1' && c <= '9').count();
+        }
         Matcher m = TIMES.matcher(f);
         while (m.find()) {
             if (PER_DAY.matcher(f).region(m.end(), f.length()).lookingAt()) {

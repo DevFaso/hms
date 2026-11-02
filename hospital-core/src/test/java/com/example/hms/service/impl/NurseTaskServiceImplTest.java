@@ -167,6 +167,9 @@ class NurseTaskServiceImplTest {
     private com.example.hms.repository.PatientAllergyRepository patientAllergyRepository;
     @Mock
     private com.example.hms.service.emar.ControlledAdministrationWitness administrationWitness;
+    /** QA D1286: real, over the real bundles, so the inbox renders a keyed item for its reader. */
+    private final com.example.hms.service.i18n.NotificationLocalizer notificationLocalizer =
+        new com.example.hms.service.i18n.NotificationLocalizer(com.example.hms.i18n.TestMessageSources.bundles());
 
     @BeforeEach
     void setUp() {
@@ -178,7 +181,7 @@ class NurseTaskServiceImplTest {
             nurseHandoffRepository, labOrderRepository, imagingOrderRepository, procedureOrderRepository,
             fiveRightsService, objectMapper, news2EscalationService,
             new com.example.hms.service.support.DischargedPatientGuard(admissionRepository, encounterRepository),
-            assignmentRepository, patientAllergyRepository, administrationWitness));
+            assignmentRepository, patientAllergyRepository, administrationWitness, notificationLocalizer));
 
         // QA D220 narrowed the vitals rounds to admitted patients; the tests
         // below that are about windows, names and counts treat every listed
@@ -2470,6 +2473,32 @@ class NurseTaskServiceImplTest {
         assertThat(result.get(0).isRead()).isFalse();
     }
 
+    /**
+     * QA D1286 (round 27): the NEWS2 escalation is stored with its French copy
+     * and its key; ES and EN nurses read it in French. Each reader now gets it
+     * rendered from the key in their language; a keyless row keeps its text.
+     */
+    @org.junit.jupiter.params.ParameterizedTest(name = "{0}")
+    @org.junit.jupiter.params.provider.CsvSource(delimiter = '|', value = {
+        "es|Puntuación NEWS2 7 (ALTA) para Drissa Konaté",
+        "en|NEWS2 score 7",
+        "fr|Score NEWS2 7 (ÉLEVÉ) pour Drissa Konaté",
+    })
+    void getNurseInboxItemsRendersAKeyedItemInTheNursesLanguage(String language, String expected) {
+        Notification news2 = Notification.builder()
+            .id(UUID.randomUUID()).message("Score NEWS2 7 (ÉLEVÉ) pour Drissa Konaté : …")
+            .messageKey("news2.escalation.high").messageArgs(List.of(7, "Drissa Konaté", 15))
+            .createdAt(LocalDateTime.now()).recipientUsername("nurse.b").build();
+        when(notificationRepository.findByRecipientUsername(eq("nurse.b"), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(news2)));
+        org.springframework.context.i18n.LocaleContextHolder.setLocale(java.util.Locale.forLanguageTag(language));
+        try {
+            assertThat(service.getNurseInboxItems("nurse.b", 10).get(0).getMessage()).startsWith(expected);
+        } finally {
+            org.springframework.context.i18n.LocaleContextHolder.resetLocaleContext();
+        }
+    }
+
     /* ════════════════════════════════════════════════════════════════════
        MVP-13: markNurseInboxRead
        ════════════════════════════════════════════════════════════════════ */
@@ -3392,7 +3421,7 @@ class NurseTaskServiceImplTest {
             nurseHandoffRepository, labOrderRepository, imagingOrderRepository, procedureOrderRepository,
             fiveRightsService, failingMapper, news2EscalationService,
             new com.example.hms.service.support.DischargedPatientGuard(admissionRepository, encounterRepository),
-            assignmentRepository, patientAllergyRepository, administrationWitness);
+            assignmentRepository, patientAllergyRepository, administrationWitness, notificationLocalizer);
 
         UUID rxId = UUID.randomUUID();
         UUID nurseId = UUID.randomUUID();
@@ -4630,7 +4659,7 @@ class NurseTaskServiceImplTest {
             many.add(NurseHandoff.builder().patient(p).direction("SHIFT_CHANGE").build());
         }
         when(nurseHandoffRepository.findByHospital_IdAndStatusOrderByCreatedAtDesc(
-            eq(hospitalId), eq("PENDING"), eq(Pageable.unpaged()))).thenReturn(many);
+            hospitalId, "PENDING", Pageable.unpaged())).thenReturn(many);
 
         assertThat(service.getHandoffSummaries(null, null, hospitalId,
             com.example.hms.service.NurseTaskService.NO_LIMIT, null)).hasSize(30);

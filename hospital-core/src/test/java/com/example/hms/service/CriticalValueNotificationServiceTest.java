@@ -704,6 +704,34 @@ class CriticalValueNotificationServiceTest {
         assertThat(updated.isAcknowledged()).isTrue();
     }
 
+    /**
+     * QA D1292 (round 27, user decision): a read-back that repeats the value
+     * with its unit and/or a comma decimal is accepted when the number and,
+     * if given, the unit match the result; a wrong number or a wrong unit is
+     * still refused.
+     */
+    @org.junit.jupiter.params.ParameterizedTest(name = "{0} {1} <- {2}: {3}")
+    @org.junit.jupiter.params.provider.CsvSource(delimiter = '|', value = {
+        "6.8 | mmol/L | 6,8 mmol/L | true",
+        "6.8 | mmol/L | 6,8 | true",
+        "6.8 | mmol/L | 6.80 MMOL/L | true",
+        "6.8 | mmol/L | 6,8mmol/l | true",
+        "6.8 | mmol/L | 6.8 mmol / L | true",
+        "6.8 mmol/L | | 6,8 mmol/L | true",
+        "12 | µmol/L | 12 umol/L | true",
+        "6.8 | mmol/L | 6,9 mmol/L | false",
+        "6.8 | mmol/L | 6,8 mg/dL | false",
+        "6.8 | mmol/L | 68 mmol/L | false",
+        "6.8 | | 6,8 mmol/L | false",
+        "POSITIF | | positif | true",
+        "POSITIF | | négatif | false",
+        "6.8 | mmol/L | | false",
+    })
+    void readBackAcceptsTheUnitAndTheCommaButNotAWrongNumberOrUnit(String value, String unit, String repeated,
+                                                                     boolean matches) {
+        assertThat(CriticalValueNotificationService.readBackMatches(value, unit, repeated)).isEqualTo(matches);
+    }
+
     @Test
     void readBackTreatsTheFrenchDecimalCommaAsTheSameNumber() {
         // QA D415: "28,5" is how a French clinician repeats 28.5.

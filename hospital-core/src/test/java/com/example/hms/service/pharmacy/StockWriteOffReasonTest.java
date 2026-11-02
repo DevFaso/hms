@@ -37,7 +37,7 @@ class StockWriteOffReasonTest {
             String body = src.substring(start + list.length(), src.indexOf(list.endsWith("[") ? "]" : "}", start));
             Matcher m = CODE.matcher(body);
             while (m.find()) {
-                codes.add(m.group(1) != null ? m.group(1) : m.group(2));
+                codes.add(m.group(m.group(1) != null ? 1 : 2));
             }
         }
         // The map keys (DAMAGED, EXPIRED) were never read before: the pattern

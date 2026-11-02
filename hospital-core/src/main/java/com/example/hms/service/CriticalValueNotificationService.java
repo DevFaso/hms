@@ -382,14 +382,11 @@ public class CriticalValueNotificationService {
     @Transactional
     public LabResult recordReadBack(LabResult result, String repeatedValue,
                                     UUID byUserId, String byDisplay) {
-        String reported = normalizeForComparison(result.getResultValue());
-        String repeated = normalizeForComparison(repeatedValue);
-
         result.setCriticalReadBackValue(repeatedValue);
         result.setCriticalReadBackByUserId(byUserId);
         result.setCriticalReadBackByDisplay(byDisplay);
 
-        if (reported == null || repeated == null || !reported.equals(repeated)) {
+        if (!readBackMatches(result.getResultValue(), result.getResultUnit(), repeatedValue)) {
             // Copy the mismatch onto a fresh row loaded inside the inner
             // transaction rather than saving the caller's managed entity: the
             // outer session still owns `result`, and committing it here while
@@ -420,6 +417,59 @@ public class CriticalValueNotificationService {
         notificationService.markReadForSubject(result.getId(), java.util.List.of(NOTIFICATION_TYPE, ESCALATION_TYPE));
         return saved;
     }
+
+    /**
+     * QA D1292 (round 27): a clinician repeats a critical value the way it was
+     * phoned through - with its unit ("6,8 mmol/L") and a comma decimal - and
+     * was told the read-back did not match; only the bare "6,8" was accepted.
+     * A read-back matches when its number equals the result's (see
+     * {@link #normalizeForComparison}) and, when it states a unit, that unit is
+     * the result's (case and spacing aside). A wrong number or a wrong unit is
+     * still refused, and so is a unit when the result has none to check it
+     * against. A value that is not a number is compared as text, as before.
+     */
+    static boolean readBackMatches(String reportedValue, String reportedUnit, String repeatedValue) {
+        String[] reported = numberAndUnit(reportedValue);
+        String[] repeated = numberAndUnit(repeatedValue);
+        if (reported == null || repeated == null) {
+            String a = normalizeForComparison(reportedValue);
+            return a != null && a.equals(normalizeForComparison(repeatedValue));
+        }
+        if (!normalizeForComparison(reported[0]).equals(normalizeForComparison(repeated[0]))) {
+            return false;
+        }
+        if (repeated[1] == null) {
+            return true;
+        }
+        String unit = reported[1] != null ? reported[1] : unitKey(reportedUnit);
+        return repeated[1].equals(unit);
+    }
+
+    /** {@code [number, unit key or null]} of "6,8 mmol/L", "6.8" or "-2"; null when it does not start with a number. */
+    private static String[] numberAndUnit(String value) {
+        if (value == null) {
+            return null;
+        }
+        java.util.regex.Matcher m = NUMBER_THEN_UNIT.matcher(value.trim());
+        if (!m.matches()) {
+            return null;
+        }
+        return new String[] {m.group(1), unitKey(m.group(2))};
+    }
+
+    /** A unit as compared: lower case, no spaces, the micro sign as "u"; null when blank. */
+    private static String unitKey(String unit) {
+        if (unit == null || unit.isBlank()) {
+            return null;
+        }
+        return WHITESPACE.matcher(unit).replaceAll("").replace('µ', 'u').replace('μ', 'u')
+            .toLowerCase(java.util.Locale.ROOT);
+    }
+
+    /** A number (one comma or point decimal), then anything (the unit), with nothing given back. */
+    private static final java.util.regex.Pattern NUMBER_THEN_UNIT =
+        java.util.regex.Pattern.compile("([+-]?+\\d++(?:[.,]\\d++)?+)\\s*+(.*+)");
+    private static final java.util.regex.Pattern WHITESPACE = java.util.regex.Pattern.compile("\\s+");
 
     /**
      * Compare on trimmed, case-folded text with trailing zeros normalised, so
