@@ -140,6 +140,25 @@ class ChatMessageServiceImplTest {
     }
 
     @Test
+    void sendMessage_withoutARecipientNamesTheField_D1282() {
+        UUID senderId = UUID.randomUUID();
+        User sender = new User();
+        sender.setId(senderId);
+        when(userRepository.findById(senderId)).thenReturn(Optional.of(sender));
+        ChatMessageServiceImpl service = spy(chatMessageService);
+        doReturn(senderId).when(service).getCurrentUserId();
+        for (String email : java.util.Arrays.asList(null, "", "   ")) {
+            ChatMessageRequestDTO dto = ChatMessageRequestDTO.builder().recipientEmail(email).content("Bonjour").build();
+
+            com.example.hms.exception.FieldBusinessException refused = assertThrows(
+                com.example.hms.exception.FieldBusinessException.class, () -> service.sendMessage(dto, Locale.FRENCH));
+
+            assertEquals("recipientId", refused.getField());
+            assertEquals("chat.recipient.required", refused.getMessageKey());
+        }
+    }
+
+    @Test
     void sendMessage_shouldThrowIfHospitalNotFound() {
         UUID senderId = UUID.randomUUID();
         UUID recipientId = UUID.randomUUID();

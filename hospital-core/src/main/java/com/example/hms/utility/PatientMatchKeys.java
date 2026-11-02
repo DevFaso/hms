@@ -1,7 +1,10 @@
 package com.example.hms.utility;
 
 import java.text.Normalizer;
+import java.time.DateTimeException;
+import java.time.LocalDate;
 import java.util.Locale;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
@@ -56,6 +59,10 @@ public final class PatientMatchKeys {
     private static final Pattern SPACES = Pattern.compile("\\s+");
     private static final Pattern NON_DIGITS = Pattern.compile("\\D");
     private static final Pattern PHONE_SHAPED = Pattern.compile("\\+?[\\d\\s().\\-/]{6,}");
+    /** {@code yyyy-mm-dd}, as a date input and the API send it. */
+    private static final Pattern ISO_DATE = Pattern.compile("(\\d{4})-(\\d{1,2})-(\\d{1,2})");
+    /** {@code dd/mm/yyyy}, {@code dd-mm-yyyy} or {@code dd.mm.yyyy}, as the desk types a birth date. */
+    private static final Pattern DAY_FIRST_DATE = Pattern.compile("(\\d{1,2})[/.\\-](\\d{1,2})[/.\\-](\\d{4})");
 
     private PatientMatchKeys() {
     }
@@ -200,7 +207,59 @@ public final class PatientMatchKeys {
      * MRN with digits in it is not, and is never looked up by its digits.
      */
     public static boolean looksLikePhone(String value) {
-        return value != null && PHONE_SHAPED.matcher(value.trim()).matches();
+        // QA D1274: "1993-11-03" and "03/11/1993" are made of digits and
+        // separators too; a birth date is searched as a date, never by its digits.
+        return value != null && PHONE_SHAPED.matcher(value.trim()).matches() && birthDate(value) == null;
+    }
+
+    /**
+     * QA D1274 (round 27): a birth date typed into a patient search, in any
+     * format the pickers accept - {@code yyyy-mm-dd}, {@code dd/mm/yyyy},
+     * {@code dd-mm-yyyy} or {@code dd.mm.yyyy} (day first, as written in the
+     * deployment countries). {@code null} when the value is not a real date
+     * written that way, so a phone number or a name is never read as one.
+     */
+    public static LocalDate birthDate(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String trimmed = value.trim();
+        Matcher iso = ISO_DATE.matcher(trimmed);
+        if (iso.matches()) {
+            return dateOf(iso.group(1), iso.group(2), iso.group(3));
+        }
+        Matcher dayFirst = DAY_FIRST_DATE.matcher(trimmed);
+        if (dayFirst.matches()) {
+            return dateOf(dayFirst.group(3), dayFirst.group(2), dayFirst.group(1));
+        }
+        return null;
+    }
+
+    private static LocalDate dateOf(String year, String month, String day) {
+        try {
+            return LocalDate.of(Integer.parseInt(year), Integer.parseInt(month), Integer.parseInt(day));
+        } catch (DateTimeException e) {
+            return null;
+        }
+    }
+
+    /**
+     * QA D1274: a date-of-birth search value as the repository compares it
+     * ({@code yyyy-mm-dd}): any accepted format is normalised; a value that is
+     * not a date is kept as typed, so it still finds nobody rather than
+     * dropping the filter. {@code null} for a blank value.
+     */
+    public static String birthDateKey(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        LocalDate date = birthDate(value);
+        return date != null ? date.toString() : value.trim();
+    }
+
+    /** QA D1274: whether a typed search term is an e-mail address (or the start of one, with its {@code @}). */
+    public static boolean looksLikeEmail(String value) {
+        return value != null && value.indexOf('@') >= 0;
     }
 
     /**

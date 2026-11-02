@@ -49,7 +49,9 @@ class ControlledAdministrationWitnessTest {
         when(resolver.isControlled(morphine)).thenReturn(true);
 
         assertThatThrownBy(() -> witness.resolve(morphine, MedicationAdministrationStatus.GIVEN, null, nurse))
-            .isInstanceOf(BusinessException.class);
+            .isInstanceOf(BusinessException.class)
+            // QA D1282: the refusal names the field, so the dose dialog marks the witness picker.
+            .hasFieldOrPropertyWithValue("field", "witnessUserId");
     }
 
     @Test

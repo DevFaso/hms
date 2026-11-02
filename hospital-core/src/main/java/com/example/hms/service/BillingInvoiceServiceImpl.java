@@ -2,6 +2,7 @@ package com.example.hms.service;
 
 import com.example.hms.enums.InvoiceStatus;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.BillingInvoiceMapper;
 import com.example.hms.model.BillingInvoice;
@@ -44,6 +45,9 @@ import java.util.UUID;
 public class BillingInvoiceServiceImpl implements BillingInvoiceService {
 
     private static final String BILLING_INVOICE_NOT_FOUND = "billinginvoice.notfound";
+    /** QA D1293: a payment without a method. */
+    private static final String MSG_PAYMENT_METHOD_REQUIRED = "billing.payment.methodRequired";
+    private static final String MSG_REFERENCE_REQUIRED = "billing.payment.referenceRequired";
     /** QA D1069: the longest cancellation reason kept (the column is 500). */
     static final int CANCEL_REASON_MAX = 500;
     private static final org.slf4j.Logger LOG = org.slf4j.LoggerFactory.getLogger(BillingInvoiceServiceImpl.class);
@@ -330,7 +334,8 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             key = dto.getPatientEmail().trim();
             patient = patientByLegacyKey(dto.getPatientEmail().trim(), hospitalId);
         } else {
-            throw new BusinessException("billing.invoice.patientRequired");
+            // QA D1282: the refusal names the field, so the form can mark it.
+            throw new FieldBusinessException("patientId", "billing.invoice.patientRequired");
         }
         // A patient of another hospital gets the answer of an unknown one.
         if (patient == null || !registrationRepository.existsByPatientIdAndHospitalId(patient.getId(), hospitalId)) {
@@ -1592,7 +1597,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             PatientPaymentRequestDTO payment, Locale locale) {
         // Parse the method first: an unknown one must refuse the payment
         // before the invoice total moves.
-        PaymentMethod method = parsePaymentMethod(payment.getPaymentMethod());
+        PaymentMethod method = parsePaymentMethod(payment.getPaymentMethod(), "paymentMethod");
         requireWholeAmount(payment.getAmount());
         // QA D140: nothing verifies a patient's declaration (no payment
         // provider callback exists), so it settles nothing. It is recorded as
@@ -1677,15 +1682,22 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         }
     }
 
-    private static PaymentMethod parsePaymentMethod(String raw) {
-        if (raw != null) {
-            for (PaymentMethod candidate : PaymentMethod.values()) {
-                if (candidate.name().equalsIgnoreCase(raw.trim())) {
-                    return candidate;
-                }
+    /**
+     * QA D1293 (round 27): a payment needs a method, as a till requires one.
+     * A missing or blank method is refused with the field named (the staff
+     * path used to record it as OTHER, counted in the till as "not stated"),
+     * and so is an unknown one.
+     */
+    private static PaymentMethod parsePaymentMethod(String raw, String field) {
+        if (raw == null || raw.isBlank()) {
+            throw new FieldBusinessException(field, MSG_PAYMENT_METHOD_REQUIRED);
+        }
+        for (PaymentMethod candidate : PaymentMethod.values()) {
+            if (candidate.name().equalsIgnoreCase(raw.trim())) {
+                return candidate;
             }
         }
-        throw new BusinessException("billing.payment.methodUnsupported");
+        throw new FieldBusinessException(field, "billing.payment.methodUnsupported");
     }
 
     private static String blankToNull(String value) {
@@ -1755,15 +1767,12 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
                 && !activeHospitalId.equals(invoice.getHospital().getId())) {
             throw new ResourceNotFoundException(BILLING_INVOICE_NOT_FOUND, invoiceId);
         }
-        // The staff form may omit the method (the portal sends the amount
-        // only): OTHER says "not stated" rather than guessing cash.
-        PaymentMethod method = payment.getMethod() == null || payment.getMethod().isBlank()
-            ? PaymentMethod.OTHER
-            : parsePaymentMethod(payment.getMethod());
+        // QA D1293: no method, no payment (it used to be recorded as OTHER).
+        PaymentMethod method = parsePaymentMethod(payment.getMethod(), "method");
         requireWholeAmount(payment.getAmount());
         if (REFERENCE_REQUIRED.contains(method)
                 && (payment.getReference() == null || payment.getReference().isBlank())) {
-            throw new BusinessException("billing.payment.referenceRequired");
+            throw new FieldBusinessException("reference", MSG_REFERENCE_REQUIRED);
         }
         rejectReusedReference(invoice, method, payment.getReference());
         // QA D272: the copay already taken at check-in counts before the clerk's payment.
@@ -1979,10 +1988,14 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             return null;
         }
         // QA D975: every copay used to be recorded as cash with no reference.
-        PaymentMethod copayMethod = method == null ? PaymentMethod.CASH : method;
+        // QA D1293: and a copay with no method is refused, never guessed as cash.
+        if (method == null) {
+            throw new FieldBusinessException("copayMethod", MSG_PAYMENT_METHOD_REQUIRED);
+        }
+        PaymentMethod copayMethod = method;
         String copayReference = reference == null || reference.isBlank() ? null : reference.trim();
         if (REFERENCE_REQUIRED.contains(copayMethod) && copayReference == null) {
-            throw new BusinessException("billing.payment.referenceRequired");
+            throw new FieldBusinessException("copayReference", MSG_REFERENCE_REQUIRED);
         }
         requireWholeAmount(amount);
         // QA D936 (class): two check-ins of one appointment are serialised by the

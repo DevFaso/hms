@@ -237,9 +237,10 @@ class BirthPlanServiceImplTest {
     void aStaffPlanWithNoPatientNamesTheField_beforeAnyLookup_D1258() {
         when(userRepository.findByUsername(doctorUser.getUsername())).thenReturn(Optional.of(doctorUser));
         requestDTO.setPatientId(null);
+        String username = doctorUser.getUsername();
 
         FieldBusinessException refused = assertThrows(FieldBusinessException.class,
-            () -> birthPlanService.createBirthPlan(requestDTO, doctorUser.getUsername()));
+            () -> birthPlanService.createBirthPlan(requestDTO, username));
 
         assertEquals("patientId", refused.getField());
         assertEquals("birthPlan.patient.required", refused.getMessageKey());
@@ -250,9 +251,10 @@ class BirthPlanServiceImplTest {
     void aStaffPlanWithNoHospitalNamesTheField_beforeAnyLookup_D1258() {
         when(userRepository.findByUsername(doctorUser.getUsername())).thenReturn(Optional.of(doctorUser));
         requestDTO.setHospitalId(null);
+        String username = doctorUser.getUsername();
 
         FieldBusinessException refused = assertThrows(FieldBusinessException.class,
-            () -> birthPlanService.createBirthPlan(requestDTO, doctorUser.getUsername()));
+            () -> birthPlanService.createBirthPlan(requestDTO, username));
 
         assertEquals("hospitalId", refused.getField());
         verifyNoInteractions(patientRepository, hospitalRepository, birthPlanRepository);

@@ -969,6 +969,48 @@ class EncounterServiceImplTest {
         verify(patientAllergyRepository).save(any(com.example.hms.model.PatientAllergy.class));
     }
 
+    /**
+     * QA D1287 (round 27): an intake listing an allergy the patient already
+     * has active (here with other accents and case), or the same allergen
+     * twice, records it once; a new allergen is still recorded.
+     */
+    @Test
+    void submitNursingIntake_mergesAnAllergyAlreadyActive_D1287() {
+        UUID encounterId = UUID.randomUUID();
+        Hospital hospital = new Hospital();
+        hospital.setId(UUID.randomUUID());
+        Patient patient = new Patient();
+        patient.setId(UUID.randomUUID());
+        Encounter encounter = new Encounter();
+        encounter.setId(encounterId);
+        encounter.setStatus(EncounterStatus.IN_PROGRESS);
+        encounter.setHospital(hospital);
+        encounter.setPatient(patient);
+        com.example.hms.model.PatientAllergy existing = com.example.hms.model.PatientAllergy.builder()
+                .allergenDisplay("Pénicilline").active(true).build();
+        java.util.function.Function<String, com.example.hms.payload.dto.PatientAllergyRequestDTO> entry =
+                name -> com.example.hms.payload.dto.PatientAllergyRequestDTO.builder().allergenDisplay(name).build();
+        NursingIntakeRequestDTO request = NursingIntakeRequestDTO.builder()
+                .allergies(List.of(entry.apply("PENICILLINE"), entry.apply("Arachide"), entry.apply("arachide ")))
+                .build();
+        User user = new User();
+        user.setId(UUID.randomUUID());
+        when(encounterRepository.findById(encounterId)).thenReturn(Optional.of(encounter));
+        when(userRepository.findByUsername("nurse1")).thenReturn(Optional.of(user));
+        when(staffRepository.findByUserIdAndHospitalId(user.getId(), hospital.getId()))
+                .thenReturn(Optional.of(new Staff()));
+        when(encounterRepository.save(any(Encounter.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(patientAllergyRepository.findVisibleAt(patient.getId(), hospital.getId())).thenReturn(List.of(existing));
+
+        NursingIntakeResponseDTO result = service.submitNursingIntake(encounterId, request, "nurse1", true, null);
+
+        assertThat(result.getAllergyCount()).isEqualTo(1);
+        org.mockito.ArgumentCaptor<com.example.hms.model.PatientAllergy> saved =
+                org.mockito.ArgumentCaptor.forClass(com.example.hms.model.PatientAllergy.class);
+        verify(patientAllergyRepository).save(saved.capture());
+        assertThat(saved.getValue().getAllergenDisplay()).isEqualTo("Arachide");
+    }
+
     @Test
     void submitNursingIntake_triageStatus_succeeds() {
         UUID encounterId = UUID.randomUUID();

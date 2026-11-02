@@ -128,7 +128,8 @@ public class ChatMessageServiceImpl implements ChatMessageService {
             recipient = userRepository.findByEmail(dto.getRecipientEmail())
                 .orElseThrow(() -> new ResourceNotFoundException("chat.recipient.notFound", dto.getRecipientEmail()));
         } else {
-            throw new IllegalArgumentException(com.example.hms.utility.MessageUtil.resolveOrRaw("chat.recipient.required"));
+            // QA D1282: the refusal names the field, so the form can mark it.
+            throw new com.example.hms.exception.FieldBusinessException("recipientId", "chat.recipient.required");
         }
 
         if (sender.getId().equals(recipient.getId())) {

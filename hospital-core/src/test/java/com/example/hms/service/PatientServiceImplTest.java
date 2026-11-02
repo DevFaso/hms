@@ -770,13 +770,163 @@ class PatientServiceImplTest {
             any(Pageable.class));
     }
 
+    /**
+     * QA D1274 (round 27): every picker types into one box sent as the name.
+     * A birth date in each accepted format is a date search (it was read as
+     * a phone number), an address with its @ an e-mail search; each is the
+     * value the repository compares, nothing left in the name filter.
+     */
+    @org.junit.jupiter.params.ParameterizedTest(name = "{0}")
+    @org.junit.jupiter.params.provider.CsvSource(delimiter = '|', value = {
+        "1993-11-03 | | 1993-11-03 | | ",
+        "03/11/1993 | | 1993-11-03 | | ",
+        "03-11-1993 | | 1993-11-03 | | ",
+        "3/11/1993  | | 1993-11-03 | | ",
+        "03.11.1993 | | 1993-11-03 | | ",
+        "Awa.Kabore@Example.test | | | | %awa.kabore@example.test%",
+        "@example.test | | | | %@example.test%",
+        "70 26 01 22 | | | %70260122% | ",
+        "Kadidiatou | %kadidiatou% | | | ",
+    })
+    void aTypedSearchTermIsSearchedAsWhatItIs(String typed, String name, String dob, String phone, String email) {
+        when(patientRepository.searchPatientsExtended(any(), any(), any(), any(), any(), any(), any(), any(Pageable.class)))
+            .thenReturn(new PageImpl<>(List.of(patient)));
+        lenient().when(patientMapper.toPatientDTO(patient, hospitalId))
+            .thenReturn(PatientResponseDTO.builder().id(patientId).build());
+        lenient().when(patientVitalSignService.getLatestSnapshot(patientId, hospitalId)).thenReturn(Optional.empty());
+
+        patientService.searchPatients(PatientSearchCriteria.builder().name(typed).hospitalId(hospitalId)
+            .includeInactive(true).build(), 0, 1, Locale.FRENCH);
+
+        verify(patientRepository).searchPatientsExtended(isNull(), eq(name), eq(dob), eq(phone), eq(email),
+            eq(hospitalId), isNull(), any(Pageable.class));
+    }
+
+    @Test
+    void anExplicitBirthDateIsAcceptedInTheDayFirstFormats() {
+        when(patientRepository.searchPatientsExtended(any(), any(), any(), any(), any(), any(), any(), any(Pageable.class)))
+            .thenReturn(Page.empty());
+
+        patientService.searchPatients(PatientSearchCriteria.builder().dateOfBirth("03/11/1993").hospitalId(hospitalId)
+            .build(), 0, 10, Locale.FRENCH);
+
+        verify(patientRepository).searchPatientsExtended(isNull(), isNull(), eq("1993-11-03"), isNull(), isNull(),
+            eq(hospitalId), eq(Boolean.TRUE), any(Pageable.class));
+    }
+
+    @Test
+    void theStartOfAnEmailAddressIsAlsoLookedUpInTheEmailAfterTheNameMatches() {
+        Patient byEmail = new Patient();
+        byEmail.setId(UUID.randomUUID());
+        when(patientRepository.searchPatientsExtended(isNull(), eq("%awa.kabore%"), isNull(), isNull(), isNull(),
+            eq(hospitalId), isNull(), any(Pageable.class))).thenReturn(Page.empty());
+        when(patientRepository.searchPatientsExtended(isNull(), isNull(), isNull(), isNull(), eq("%awa.kabore%"),
+            eq(hospitalId), isNull(), any(Pageable.class))).thenReturn(new PageImpl<>(List.of(byEmail)));
+        PatientResponseDTO dto = PatientResponseDTO.builder().id(byEmail.getId()).build();
+        when(patientMapper.toPatientDTO(byEmail, hospitalId)).thenReturn(dto);
+        when(patientVitalSignService.getLatestSnapshot(byEmail.getId(), hospitalId)).thenReturn(Optional.empty());
+
+        assertThat(patientService.searchPatients(PatientSearchCriteria.builder().name("awa.kabore")
+            .hospitalId(hospitalId).includeInactive(true).build(), 0, 8, Locale.FRENCH)).containsExactly(dto);
+    }
+
+    @Test
+    void aFullPageOfNameMatchesIsNotExtendedByEmailMatches() {
+        when(patientRepository.searchPatientsExtended(isNull(), eq("%awa%"), isNull(), isNull(), isNull(),
+            eq(hospitalId), isNull(), any(Pageable.class))).thenReturn(new PageImpl<>(List.of(patient)));
+        when(patientMapper.toPatientDTO(patient, hospitalId)).thenReturn(PatientResponseDTO.builder().id(patientId).build());
+        when(patientVitalSignService.getLatestSnapshot(patientId, hospitalId)).thenReturn(Optional.empty());
+
+        patientService.searchPatients(PatientSearchCriteria.builder().name("awa").hospitalId(hospitalId)
+            .includeInactive(true).build(), 0, 1, Locale.FRENCH);
+
+        verify(patientRepository, times(1)).searchPatientsExtended(any(), any(), any(), any(), any(), any(), any(),
+            any(Pageable.class));
+    }
+
+    @Test
+    void aBirthDateTypedIntoTheLookupIsSearchedAsADateInScopeNotAsAPhone() {
+        when(patientRepository.searchPatientsExtended(isNull(), isNull(), eq("1993-11-03"), isNull(), isNull(),
+            eq(hospitalId), isNull(), any(Pageable.class))).thenReturn(new PageImpl<>(List.of(patient)));
+        when(registrationRepository.existsByPatientIdAndHospitalId(patientId, hospitalId)).thenReturn(true);
+        PatientResponseDTO dto = PatientResponseDTO.builder().id(patientId).build();
+        when(patientMapper.toPatientDTO(patient, hospitalId)).thenReturn(dto);
+        when(patientVitalSignService.getLatestSnapshot(patientId, hospitalId)).thenReturn(Optional.empty());
+
+        assertThat(patientService.lookupPatients("03/11/1993", null, null, null, null, hospitalId, Locale.FRENCH))
+            .containsExactly(dto);
+        verify(patientRepository, never()).findAllByPhoneSubscriber(any(), any());
+    }
+
+    /**
+     * QA D1287 (round 27): the same allergen cannot be active twice for a
+     * patient - the same code, or the same name with accents, case and
+     * spacing aside - while a deactivated one may be recorded again.
+     */
+    @org.junit.jupiter.params.ParameterizedTest(name = "{0} / {1}")
+    @org.junit.jupiter.params.provider.CsvSource(delimiter = '|', value = {
+        "Pénicilline | ",
+        "  PENICILLINE  | ",
+        "Amoxicilline | RXN-7980",
+    })
+    void anAllergenAlreadyActiveIsNotRecordedTwice(String display, String code) {
+        PatientAllergy existing = new PatientAllergy();
+        existing.setId(UUID.randomUUID());
+        existing.setAllergenDisplay("Penicilline");
+        existing.setAllergenCode("rxn-7980");
+        existing.setActive(true);
+        UUID requester = stubAllergyCreation(display, code);
+        when(patientAllergyRepository.findVisibleAt(patientId, hospitalId)).thenReturn(List.of(existing));
+        com.example.hms.payload.dto.PatientAllergyRequestDTO request = com.example.hms.payload.dto.PatientAllergyRequestDTO.builder().allergenDisplay(display).build();
+
+        com.example.hms.exception.FieldBusinessException refused = org.junit.jupiter.api.Assertions.assertThrows(
+            com.example.hms.exception.FieldBusinessException.class,
+            () -> patientService.createPatientAllergy(patientId, hospitalId, requester, request));
+
+        assertThat(refused.getField()).isEqualTo("allergenDisplay");
+        assertThat(refused.getMessageKey()).isEqualTo("patient.r27.allergyAlreadyActive");
+        verify(patientAllergyRepository, never()).save(any());
+    }
+
+    @Test
+    void aDeactivatedAllergenMayBeRecordedAgain() {
+        PatientAllergy deactivated = new PatientAllergy();
+        deactivated.setId(UUID.randomUUID());
+        deactivated.setAllergenDisplay("Pénicilline");
+        deactivated.setActive(false);
+        UUID requester = stubAllergyCreation("Pénicilline", null);
+        when(patientAllergyRepository.findVisibleAt(patientId, hospitalId)).thenReturn(List.of(deactivated));
+
+        patientService.createPatientAllergy(patientId, hospitalId, requester,
+            com.example.hms.payload.dto.PatientAllergyRequestDTO.builder().allergenDisplay("Pénicilline").build());
+
+        verify(patientAllergyRepository).save(any(PatientAllergy.class));
+    }
+
+    private UUID stubAllergyCreation(String display, String code) {
+        UUID requester = UUID.randomUUID();
+        when(patientRepository.findByIdUnscoped(patientId)).thenReturn(Optional.of(patient));
+        when(hospitalRepository.findClinicalById(hospitalId)).thenReturn(Optional.of(hospital));
+        when(registrationRepository.isPatientRegisteredInHospitalFixed(patientId, hospitalId)).thenReturn(true);
+        when(staffRepository.findByUserIdAndHospitalId(requester, hospitalId)).thenReturn(Optional.of(new Staff()));
+        org.mockito.Mockito.doAnswer(inv -> {
+            PatientAllergy target = inv.getArgument(1);
+            target.setAllergenDisplay(display);
+            target.setAllergenCode(code);
+            return null;
+        }).when(patientAllergyMapper).updateEntityFromRequest(any(), any(PatientAllergy.class));
+        return requester;
+    }
+
     @Test
     void createPatientByStaffRequiresHospitalId() {
         PatientRequestDTO request = PatientRequestDTO.builder().userId(UUID.randomUUID()).build();
 
         assertThatThrownBy(() -> patientService.createPatientByStaff(request, Locale.ENGLISH))
             .isInstanceOf(BusinessException.class)
-            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("patient.r7.staffCreateNeedsHospital"));
+            .hasMessage(com.example.hms.utility.MessageUtil.resolveOrRaw("patient.r7.staffCreateNeedsHospital"))
+            // QA D1282 (sweep): the refusal names the field.
+            .hasFieldOrPropertyWithValue("field", "hospitalId");
     }
 
     @Test

@@ -105,12 +105,6 @@ class MarDoseScheduleTest {
         assertThat(MarDoseSchedule.read(frequency).kind()).isEqualTo(MarDoseSchedule.Kind.REPEATING);
     }
 
-    /**
-     * QA D1237 guard: every number of hours a prescriber may write as a word,
-     * in each language and form the portal is used in, reads as that number.
-     * A new language, phrasing or number word the reader does not know fails
-     * here instead of ending a course on the ward.
-     */
     /** Number words one to twelve (and 24) in FR, ES and EN: the input space of D1237 and D1263. */
     private static final Map<Integer, List<String>> NUMBER_WORDS = Map.ofEntries(
             Map.entry(1, List.of("une", "una", "one")), Map.entry(2, List.of("deux", "dos", "two")),
@@ -121,6 +115,12 @@ class MarDoseScheduleTest {
             Map.entry(11, List.of("onze", "once", "eleven")), Map.entry(12, List.of("douze", "doce", "twelve")),
             Map.entry(24, List.of("vingt-quatre", "veinticuatro", "twenty-four")));
 
+    /**
+     * QA D1237 guard: every number of hours a prescriber may write as a word,
+     * in each language and form the portal is used in, reads as that number.
+     * A new language, phrasing or number word the reader does not know fails
+     * here instead of ending a course on the ward.
+     */
     @Test
     void d1237_everyHourWordInEveryLanguageReadsAsItsNumber() {
         Map<Integer, List<String>> words = NUMBER_WORDS;
@@ -150,10 +150,11 @@ class MarDoseScheduleTest {
      */
     @Test
     void d1263_everyCountOfDosesADayInEveryLanguageAndFormIsRead() {
+        // QA D1291 (round 27): "2 fois/jour", "deux fois/jour", "/día", "/day" were not read.
         List<List<String>> templates = List.of(
-            List.of("%s fois par jour", "%s fois/j", "%s fois par 24 h"),
-            List.of("%s veces al día", "%s veces por día"),
-            List.of("%s times a day", "%s times daily", "%s times per day"));
+            List.of("%s fois par jour", "%s fois/j", "%s fois par 24 h", "%s fois/jour", "%s fois / jour"),
+            List.of("%s veces al día", "%s veces por día", "%s veces/día", "%s veces/dia"),
+            List.of("%s times a day", "%s times daily", "%s times per day", "%s times/day"));
         List<String> wrong = new ArrayList<>();
         int checked = 0;
         for (int n = 1; n <= 12; n++) {
@@ -171,8 +172,33 @@ class MarDoseScheduleTest {
                 }
             }
         }
-        assertThat(checked).isEqualTo(12 * 8 * 2);
+        // 13 forms (was 8 before QA D1291), each with the word and the digits, for 1 to 12.
+        assertThat(checked).isEqualTo(12 * 13 * 2);
         assertThat(wrong).isEmpty();
+    }
+
+    /**
+     * QA D1291 (round 27, user decision): "2x/j" and its relatives read as N a
+     * day, and a posology "1-0-1" ("1-1-1", "1-0-0-1", ...) as the count of its
+     * non-zero intakes a day; anything else stays unread.
+     */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {
+        "2 fois/jour|720", "deux fois/jour|720", "2 fois/j|720", "2x/j|720", "3x/j|480", "2x/jour|720",
+        "2 X / JOUR|720", "2 veces/día|720", "dos veces/dia|720", "2 times/day|720", "3 x/day|480",
+        "1-0-1|720", "1-1-1|480", "1-0-0-1|720", "1-1-1-1|360", "0-0-1|1440", "2-0-2|720", "1 - 0 - 1|720"
+    })
+    void d1291_shorthandAndPosologyAreRead(String frequency, int minutes) {
+        MarDoseSchedule.Reading reading = MarDoseSchedule.read(frequency);
+        assertThat(reading.kind()).as(frequency).isEqualTo(MarDoseSchedule.Kind.REPEATING);
+        assertThat(reading.intervalMinutes()).as(frequency).isEqualTo(minutes);
+        assertThat(MarDoseSchedule.dosesPerDay(frequency)).as(frequency).isEqualTo(1440.0 / minutes);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"0-0-0", "1-0", "1-0-1-0-1", "10-0-10", "1-a-1", "2 fois/semaine", "/jour"})
+    void d1291_anythingElseStaysUnread(String frequency) {
+        assertThat(MarDoseSchedule.read(frequency).kind()).as(frequency).isEqualTo(MarDoseSchedule.Kind.UNREAD);
     }
 
     /** QA D1263: "5 fois par jour" is still every 4 h 48, and a count over hourly is not a MAR schedule. */

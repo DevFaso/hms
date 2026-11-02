@@ -18,7 +18,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.time.temporal.Temporal;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -27,7 +26,6 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
-import java.util.UUID;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -126,12 +124,6 @@ class FieldLabelCoverageTest {
                 }
             }
         }
-    }
-
-    private static boolean parsed(Class<?> type) {
-        return type == UUID.class || type.isEnum() || Temporal.class.isAssignableFrom(type)
-            || Number.class.isAssignableFrom(type) || type == Boolean.class
-            || (type.isPrimitive() && type != boolean.class && type != char.class);
     }
 
     private static boolean hasDefaultMessageConstraint(Field field) {

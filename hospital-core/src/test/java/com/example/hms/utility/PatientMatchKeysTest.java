@@ -67,6 +67,28 @@ class PatientMatchKeysTest {
     }
 
     @Test
+    @DisplayName("QA D1274: a birth date in any accepted format is a date, never a phone number")
+    void birthDates() {
+        java.time.LocalDate born = java.time.LocalDate.of(1993, 11, 3);
+        for (String typed : java.util.List.of("1993-11-03", "03/11/1993", "03-11-1993", "3/11/1993", "03.11.1993",
+                " 03/11/1993 ")) {
+            assertThat(PatientMatchKeys.birthDate(typed)).as(typed).isEqualTo(born);
+            assertThat(PatientMatchKeys.looksLikePhone(typed)).as(typed).isFalse();
+            assertThat(PatientMatchKeys.birthDateKey(typed)).as(typed).isEqualTo("1993-11-03");
+        }
+        // not a real date, or not written as one: never read as a date
+        for (String typed : java.util.List.of("31/02/1993", "70-26-01-22", "70260122", "+226 70 26 01 22",
+                "1993/11/03", "Awa", "")) {
+            assertThat(PatientMatchKeys.birthDate(typed)).as(typed).isNull();
+        }
+        assertThat(PatientMatchKeys.looksLikePhone("70-26-01-22")).isTrue();
+        assertThat(PatientMatchKeys.birthDateKey("not a date")).isEqualTo("not a date");
+        assertThat(PatientMatchKeys.birthDateKey("  ")).isNull();
+        assertThat(PatientMatchKeys.looksLikeEmail("awa@x.bf")).isTrue();
+        assertThat(PatientMatchKeys.looksLikeEmail("awa.kabore")).isFalse();
+    }
+
+    @Test
     @DisplayName("review: a letter outside the fold stays as typed on both sides")
     void lettersOutsideTheFoldStay() {
         assertThat(PatientMatchKeys.foldName("Şahin")).isEqualTo("şahin");

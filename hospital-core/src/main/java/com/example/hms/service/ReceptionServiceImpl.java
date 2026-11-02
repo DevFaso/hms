@@ -686,7 +686,8 @@ public class ReceptionServiceImpl implements ReceptionService {
             return List.of();
         }
         String namePattern = PatientMatchKeys.nameContainsPattern(name);
-        String dobValue = (dob != null && !dob.isBlank()) ? dob.trim() : null;
+        // QA D1274: a birth date in any accepted format, compared as yyyy-mm-dd.
+        String dobValue = PatientMatchKeys.birthDateKey(dob);
         Map<UUID, Patient> candidates = new java.util.LinkedHashMap<>();
         // The name is its own candidate source: a mistyped or transposed date
         // of birth must not hide a same-name record (the D924 class, one field
@@ -1119,6 +1120,10 @@ public class ReceptionServiceImpl implements ReceptionService {
             }
             if (copay.stripTrailingZeros().scale() > 0) {
                 throw new com.example.hms.exception.BusinessException("billing.payment.wholeAmountOnly");
+            }
+            // QA D1293: a copay taken needs its method, refused before anything is written.
+            if (copay.signum() > 0 && request.getCopayMethod() == null) {
+                throw new FieldBusinessException("copayMethod", "billing.payment.methodRequired");
             }
         }
 

@@ -83,6 +83,9 @@ class ResultReviewServiceImplTest {
     @Mock private com.example.hms.repository.NotificationRepository notificationRepository;
 
     @Spy private MessageSource messageSource = TestMessageSources.bundles();
+    /** QA D1286: real, over the real bundles, so a keyed item is rendered for the reader. */
+    @Spy private com.example.hms.service.i18n.NotificationLocalizer notificationLocalizer =
+            new com.example.hms.service.i18n.NotificationLocalizer(TestMessageSources.bundles());
     /** QA D178: the queue grades a result the way the lab-results screen does. */
     @Mock private com.example.hms.mapper.LabResultMapper labResultMapper;
 
@@ -518,6 +521,34 @@ class ResultReviewServiceImplTest {
         assertEquals(fill.getMessage(), item.getSubject());
         assertEquals("REVIEW", item.getActionType());
         assertEquals("NORMAL", item.getUrgency());
+    }
+
+    /** QA D1286: a keyed notification is read in the reader's language, not its stored French copy. */
+    @Test
+    void getInboxItems_keyedPharmacyEventIsRenderedInTheReadersLanguage() {
+        UUID userId = UUID.randomUUID();
+        Staff staff = stubStaff(UUID.randomUUID());
+        User account = mock(User.class);
+        when(account.getUsername()).thenReturn("dr.awa");
+        when(staff.getUser()).thenReturn(account);
+        givenStaffFor(userId, staff);
+        com.example.hms.model.Notification keyed = com.example.hms.model.Notification.builder()
+                .id(UUID.randomUUID())
+                .message("Score NEWS2 7 (ÉLEVÉ) pour Drissa Konaté")
+                .messageKey("news2.escalation.high")
+                .messageArgs(List.of(7, "Drissa Konaté", 15))
+                .type("PHARMACY_EVENT")
+                .createdAt(LocalDateTime.now())
+                .recipientUsername("dr.awa")
+                .build();
+        when(notificationRepository.findByRecipientUsernameAndTypeAndReadFalseOrderByCreatedAtDesc(
+                "dr.awa", "PHARMACY_EVENT")).thenReturn(List.of(keyed));
+
+        ClinicalInboxItemDTO item = service.getInboxItems(userId).stream()
+                .filter(i -> "PHARMACY_EVENT".equals(i.getCategory())).findFirst().orElseThrow();
+
+        org.assertj.core.api.Assertions.assertThat(item.getSubject()).startsWith("NEWS2 score 7")
+                .doesNotContain("ÉLEVÉ");
     }
 
     @Test

@@ -1605,6 +1605,8 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .prescriptionId(r.getPrescription().getId())
                 .medicationName(medName)
                 .patientId(r.getPatient().getId())
+                .patientName(r.getPatient().getFullName())
+                .patientMrn(RefillApprovalServiceImpl.mrnAtPrescribingHospital(r))
                 .status(r.getStatus().name())
                 .preferredPharmacy(r.getPreferredPharmacy())
                 .notes(r.getPatientNotes())

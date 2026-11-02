@@ -92,6 +92,7 @@ import com.example.hms.security.SecurityUtils;
 import com.example.hms.utility.DiagnosisCodeValidator;
 import com.example.hms.utility.MessageUtil;
 import com.example.hms.utility.PatientMatchKeys;
+import com.example.hms.service.allergy.ActiveAllergyDuplicates;
 import com.example.hms.utility.PhoneNumbers;
 import com.example.hms.utility.RoleValidator;
 import tools.jackson.core.JacksonException;
@@ -116,6 +117,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -174,6 +176,10 @@ public class PatientServiceImpl implements PatientService {
     private static final String MSG_PATIENT_NOT_FOUND = "patient.notFound";
     private static final String DEFAULT_UNKNOWN = "Unknown";
     private static final int DEFAULT_TIMELINE_LIMIT = 50;
+    /** QA D1274: the shortest word also looked up as the start of an e-mail address. */
+    private static final int EMAIL_FRAGMENT_MIN_LENGTH = 3;
+    /** QA D1274: the most patients a birth date typed into the exact-identifier lookup returns (a typeahead). */
+    private static final int LOOKUP_BIRTH_DATE_LIMIT = 50;
     private static final int MAX_TIMELINE_LIMIT = 200;
     private static final String CATEGORY_ENCOUNTER = "ENCOUNTER";
     private static final String CATEGORY_PRESCRIPTION = "PRESCRIPTION";
@@ -733,11 +739,31 @@ public class PatientServiceImpl implements PatientService {
     public List<PatientResponseDTO> searchPatients(PatientSearchCriteria criteria, int page, int size, Locale locale) {
         Pageable pageable = PageRequest.of(page, size);
         String mrn = trimToNull(criteria.getMrn());
+        String typedName = trimToNull(criteria.getName());
+        String typedDob = trimToNull(criteria.getDateOfBirth());
+        String typedPhone = trimToNull(criteria.getPhone());
+        String typedEmail = trimToNull(criteria.getEmail());
+        // QA D1274 (round 27): every picker types into ONE box, sent as the
+        // name (/patients/search?name=, /patients?search=). A birth date in any
+        // accepted format is a date search, an address with its @ an e-mail
+        // search, a number a phone search (QA D1019) - each only when that
+        // filter was not given on its own. They all used to be matched against
+        // names (a date was even read as a phone number), so nobody was found.
+        if (typedName != null && typedDob == null && PatientMatchKeys.birthDate(typedName) != null) {
+            typedDob = typedName;
+            typedName = null;
+        } else if (typedName != null && typedEmail == null && PatientMatchKeys.looksLikeEmail(typedName)) {
+            typedEmail = typedName;
+            typedName = null;
+        } else if (typedName != null && typedPhone == null && PatientMatchKeys.looksLikePhone(typedName)) {
+            typedPhone = typedName;
+            typedName = null;
+        }
         // QA D942/D943: accents and phone formatting are folded on both sides.
-        String namePattern = PatientMatchKeys.nameContainsPattern(criteria.getName());
-        String dob = trimToNull(criteria.getDateOfBirth());
-        String phonePattern = PatientMatchKeys.phoneContainsPattern(criteria.getPhone());
-        String emailPattern = buildLowercaseContainsPattern(criteria.getEmail());
+        String namePattern = PatientMatchKeys.nameContainsPattern(typedName);
+        String dob = PatientMatchKeys.birthDateKey(typedDob);
+        String phonePattern = PatientMatchKeys.phoneContainsPattern(typedPhone);
+        String emailPattern = buildLowercaseContainsPattern(typedEmail);
         UUID hospitalId = criteria.getHospitalId();
         Boolean activeFilter;
         if (criteria.isIncludeInactive()) {
@@ -746,7 +772,7 @@ public class PatientServiceImpl implements PatientService {
             activeFilter = criteria.getActive() == null ? Boolean.TRUE : criteria.getActive();
         }
 
-        Page<Patient> patientPage = patientRepository.searchPatientsExtended(
+        List<Patient> found = new ArrayList<>(patientRepository.searchPatientsExtended(
             mrn,
             namePattern,
             dob,
@@ -755,10 +781,34 @@ public class PatientServiceImpl implements PatientService {
             hospitalId,
             activeFilter,
             pageable
-        );
-        return patientPage.stream()
+        ).getContent());
+        boolean nameOnly = mrn == null && dob == null && phonePattern == null && emailPattern == null;
+        if (nameOnly && page == 0 && found.size() < size && isEmailFragmentCandidate(typedName)) {
+            // QA D1274: the start of an address with no @ yet ("awa.kabore")
+            // is also looked up in the e-mail, after the name matches, on the
+            // same page; it used to be matched against names only and found nobody.
+            Set<UUID> seen = new HashSet<>();
+            found.forEach(p -> seen.add(p.getId()));
+            patientRepository.searchPatientsExtended(null, null, null, null,
+                    buildLowercaseContainsPattern(typedName), hospitalId, activeFilter, pageable)
+                .getContent().stream()
+                .filter(p -> seen.add(p.getId()))
+                .limit((long) size - found.size())
+                .forEach(found::add);
+        }
+        return found.stream()
             .map(patient -> buildPatientDto(patient, hospitalId))
             .toList();
+    }
+
+    /**
+     * QA D1274: a single word typed into a picker on its first page, with room
+     * left after the name matches, may be the start of an e-mail address.
+     */
+    private static boolean isEmailFragmentCandidate(String typedName) {
+        return typedName != null
+            && typedName.length() >= EMAIL_FRAGMENT_MIN_LENGTH
+            && typedName.chars().noneMatch(Character::isWhitespace);
     }
 
     @Override
@@ -833,7 +883,8 @@ public class PatientServiceImpl implements PatientService {
     public PatientResponseDTO createPatientByStaff(PatientRequestDTO dto, Locale locale) {
         UUID hospitalId = dto.getHospitalId();
         if (hospitalId == null) {
-            throw new BusinessException("patient.r7.staffCreateNeedsHospital");
+            // QA D1282 (sweep): named, so the form marks the field.
+            throw new FieldBusinessException("hospitalId", "patient.r7.staffCreateNeedsHospital");
         }
         Hospital hospital = hospitalRepository.findClinicalById(hospitalId)
             .orElseThrow(() -> new ResourceNotFoundException(HOSPITAL_NOT_FOUND_KEY, hospitalId));
@@ -942,6 +993,14 @@ public class PatientServiceImpl implements PatientService {
             results = findByPhone(normPhone, callingCodeAt(hospitalId));
         } else if (normMrn != null && !normMrn.isBlank()) {
             results = patientRepository.findByMrn(normMrn);
+        } else if (normIdentifier != null && PatientMatchKeys.birthDate(normIdentifier) != null) {
+            // QA D1274 (round 27): the pickers send a typed birth date here too;
+            // it was read as a phone number and found nobody. A date is not an
+            // identifier, so it is looked up in the caller's scope only (the
+            // tenant clause of the search), never across hospitals.
+            results = patientRepository.searchPatientsExtended(null, null,
+                PatientMatchKeys.birthDateKey(normIdentifier), null, null, hospitalId, null,
+                PageRequest.of(0, LOOKUP_BIRTH_DATE_LIMIT)).getContent();
         } else if (normIdentifier != null && !normIdentifier.isBlank()) {
             // QA D942: only an identifier written like a phone number is
             // looked up as one; an e-mail or an MRN with digits never is.
@@ -1479,6 +1538,7 @@ public class PatientServiceImpl implements PatientService {
         allergy.setActive(true);
         patientAllergyMapper.updateEntityFromRequest(request, allergy);
         enforceAllergyDisplay(allergy.getAllergenDisplay());
+        refuseActiveDuplicate(allergy, hospitalEntity.getId());
         if (allergy.getRecordedDate() == null) {
             allergy.setRecordedDate(LocalDate.now());
         }
@@ -1524,6 +1584,7 @@ public class PatientServiceImpl implements PatientService {
         }
         patientAllergyMapper.updateEntityFromRequest(request, allergy);
         enforceAllergyDisplay(allergy.getAllergenDisplay());
+        refuseActiveDuplicate(allergy, effectiveHospitalId);
         if (allergy.getRecordedDate() == null) {
             allergy.setRecordedDate(LocalDate.now());
         }
@@ -1531,6 +1592,24 @@ public class PatientServiceImpl implements PatientService {
         allergySummarySync.refresh(allergy.getPatient());
         logAllergyMutation("UPDATED", patientId, effectiveHospitalId, allergy.getId(), requesterUserId, allergy, null);
         return patientAllergyMapper.toResponseDto(allergy);
+    }
+
+    /**
+     * QA D1287 (round 27): an allergy that would be active while the same
+     * allergen (code or name, see {@link ActiveAllergyDuplicates}) is already
+     * active for the patient - among the rows this hospital may see - is
+     * refused with the field named. A deactivated one may be recorded again.
+     */
+    private void refuseActiveDuplicate(PatientAllergy allergy, UUID hospitalId) {
+        if (!allergy.isActive() || allergy.getPatient() == null) {
+            return;
+        }
+        ActiveAllergyDuplicates.find(patientAllergyRepository.findVisibleAt(allergy.getPatient().getId(), hospitalId),
+                allergy.getAllergenCode(), allergy.getAllergenDisplay(), allergy.getId())
+            .ifPresent(existing -> {
+                throw new FieldBusinessException("allergenDisplay", "patient.r27.allergyAlreadyActive",
+                    existing.getAllergenDisplay());
+            });
     }
 
     @Override

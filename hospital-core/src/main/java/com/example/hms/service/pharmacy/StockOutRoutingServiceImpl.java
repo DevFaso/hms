@@ -234,7 +234,8 @@ public class StockOutRoutingServiceImpl implements StockOutRoutingService {
 
         UUID targetPharmacyId = dto.getTargetPharmacyId();
         if (targetPharmacyId == null) {
-            throw new BusinessException("stock.routing.targetRequired");
+            // QA D1282 (sweep): named, so the form marks the field.
+            throw new com.example.hms.exception.FieldBusinessException("targetPharmacyId", "stock.routing.targetRequired");
         }
 
         Pharmacy targetPharmacy = pharmacyRepository.findById(targetPharmacyId)

@@ -225,6 +225,19 @@ class StockOutRoutingServiceImplTest {
     }
 
     @Test
+    @DisplayName("QA D1282: routeToPartner with no target pharmacy names the field")
+    void routeToPartnerWithoutATargetNamesTheField() {
+        RoutingDecisionRequestDTO request = RoutingDecisionRequestDTO.builder()
+                .prescriptionId(prescriptionId).reason("no stock").build();
+        when(roleValidator.requireActiveHospitalId()).thenReturn(hospitalId);
+        when(prescriptionRepository.findByIdAndHospitalIdForUpdate(eq(prescriptionId), any())).thenReturn(Optional.of(prescription));
+
+        org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.routeToPartner(prescriptionId, request))
+                .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
+                .hasFieldOrPropertyWithValue("field", "targetPharmacyId");
+    }
+
+    @Test
     @DisplayName("routeToPartner should update prescription and persist a routing decision")
     void routeToPartnerShouldUpdatePrescriptionAndPersistDecision() {
         RoutingDecisionRequestDTO request = RoutingDecisionRequestDTO.builder()

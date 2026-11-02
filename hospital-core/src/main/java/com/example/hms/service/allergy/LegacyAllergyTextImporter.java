@@ -12,10 +12,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
 import java.time.LocalDate;
-import java.util.HashSet;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.Set;
 
 /**
  * Creates structured {@link PatientAllergy} rows from free text (E9 #56):
@@ -63,20 +62,16 @@ public class LegacyAllergyTextImporter {
         if (tokens.isEmpty()) {
             return 0;
         }
-        Set<String> present = new HashSet<>();
-        for (PatientAllergy existing : allergyRepository.findByPatient_Id(patient.getId())) {
-            if (existing.isActive() && existing.getAllergenDisplay() != null) {
-                present.add(LegacyAllergyText.normalise(existing.getAllergenDisplay()));
-            }
-        }
+        // QA D1287: the one definition of "the same allergen already active".
+        List<PatientAllergy> known = new ArrayList<>(allergyRepository.findByPatient_Id(patient.getId()));
         String notes = notesFor(text);
         LocalDate today = LocalDate.now(clock);
         int created = 0;
         for (String token : tokens) {
-            if (!present.add(LegacyAllergyText.normalise(token))) {
+            if (ActiveAllergyDuplicates.find(known, null, token, null).isPresent()) {
                 continue;
             }
-            allergyRepository.save(PatientAllergy.builder()
+            PatientAllergy row = PatientAllergy.builder()
                 .patient(patient)
                 .hospital(hospital)
                 .recordedBy(recordedBy)
@@ -86,7 +81,9 @@ public class LegacyAllergyTextImporter {
                 .recordedDate(today)
                 .sourceSystem(sourceSystem)
                 .active(true)
-                .build());
+                .build();
+            allergyRepository.save(row);
+            known.add(row);
             created++;
         }
         summarySync.refresh(patient);
