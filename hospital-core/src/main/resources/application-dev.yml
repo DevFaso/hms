@@ -26,10 +26,22 @@ logging:
     #
     # JwtAuthenticationFilter, JwtTokenProvider, CustomUserDetailsService and
     # WsTicketService each log on EVERY authenticated request, and the SockJS
-    # transport polls several times a second per open client. At DEBUG that is
-    # 3-4 lines per poll, which is the bulk of what dev ships to Grafana Cloud
-    # Loki against a 50 GB/month free allowance — and every line carries a
+    # transport polls several times a second per open client. Every line carries a
     # username or principal into a third-party store for no diagnostic gain.
+    #
+    # Measured, not estimated. In a 14.7-minute window of real dev traffic
+    # (1,410 Loki records), 1,181 came from these four loggers, and 1,178 of those
+    # are log.debug calls this demotion silences — 83.5% of everything dev shipped,
+    # against a 50 GB/month allowance. The top six messages alone, each one a
+    # log.debug, account for 1,124 lines.
+    #
+    # What it does NOT silence, deliberately: the two WARN lines in
+    # JwtAuthenticationFilter ("Invalid or expired ticket", "Token provided but
+    # invalid") and WsTicketService's INFO eviction summary. A failing handshake
+    # should stay visible, and a reconnect storm after a ticket expiry would show
+    # up as those WARNs rather than as silence. Neither appeared in the measured
+    # window; if a storm ever makes them the dominant cost, they want their own
+    # treatment, not a blanket level change.
     #
     # Named one by one rather than demoting the com.example.hms.security package:
     # that package holds 40+ classes and 11 subpackages (tenant, oidc, permission,

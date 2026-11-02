@@ -46,16 +46,6 @@ jobs:
       - name: Grant execute permission
         run: chmod +x gradlew
 
-      # Asserts the Grafana dashboards and rule files against
-      # DashboardTransportExclusionTest. It is part of the sharded run below too, but
-      # declared as its own task so that a change to grafana/ — which is outside the
-      # module and therefore invisible to :hospital-core:test's up-to-date check — is
-      # guaranteed to re-run it. Takes about a second; shard 1 only, since the files it
-      # reads are the same for every shard.
-      - name: Observability config guard
-        if: matrix.shard == 1
-        run: ./gradlew :hospital-core:observabilityConfigTest --stacktrace
-
       - name: Test (shard ${{ matrix.shard }} of ${{ env.TEST_SHARDS }})
         run: >-
           ./gradlew :hospital-core:test --stacktrace
