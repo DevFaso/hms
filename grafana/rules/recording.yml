@@ -115,22 +115,30 @@ groups:
 
       # 4xx and 5xx, named positively.
       #
-      # Not 5xx alone: a 404 from an xhr_send to an expired session is handler-matched
-      # and carries uri=/ws-chat/**. Only requests that reach the DispatcherServlet
-      # do, though — a 401 written by JwtAuthenticationFilter, or a path that no
-      # longer routes, is tagged "UNKNOWN"/"NOT_FOUND" and is invisible to this rule
-      # by construction; the blackbox probe on /ws-chat/info covers those.
-      # And emphatically NOT "anything that is not 2xx/3xx", which is how this
-      # was first written — /ws-chat is .withSockJS() and SockJS prefers a native
-      # WebSocket, so every SUCCESSFUL upgrade is an HTTP 101. Those are the very
-      # 25-50s requests this whole change is about, so on healthy, actively used chat
-      # the ratio would sit near 1.0, clear both the 0.25 threshold and the rate
-      # floor, and page continuously. A negated class silently swept them in; a
-      # positive one cannot.
+      # 5xx only, and the status class is named rather than negated.
+      #
+      # NOT "anything that is not 2xx/3xx", which is how this was first written:
+      # /ws-chat is .withSockJS() and SockJS prefers a native WebSocket, so every
+      # SUCCESSFUL upgrade is an HTTP 101. Those are the very 25-50s requests this
+      # whole change is about, so a negated class put the ratio near 1.0 on healthy,
+      # actively used chat and paged continuously.
+      #
+      # And NOT 4xx either, which was the second attempt. The handler-matched 4xx on
+      # this endpoint are dominated by SockJS's own routine traffic: an xhr_send
+      # against a timed-out session answers 404, so a single stale browser tab
+      # reconnecting can clear both the 0.25 ratio and the 0.1 req/s floor and page
+      # on perfectly healthy chat. That was the same day-one false alarm this PR
+      # exists to remove, reintroduced one layer down.
+      #
+      # What is left is narrow, and honestly so: server-side failure on a request
+      # that reached the handler. Micrometer tags uri from the matched pattern, so a
+      # 401 written inside JwtAuthenticationFilter, or a path that no longer routes,
+      # is tagged "UNKNOWN"/"NOT_FOUND" and is invisible here by construction. There
+      # is no chat-specific signal for those; see the alert comment.
       - record: app:ws_transport_errors:ratio5m
         expr: |
           (
-            sum by (application) (rate(http_server_requests_seconds_count{status=~"4..|5..", uri=~"(/api)?/ws-chat.*"}[5m]))
+            sum by (application) (rate(http_server_requests_seconds_count{status=~"5..", uri=~"(/api)?/ws-chat.*"}[5m]))
               or
             app:ws_transport_requests:rate5m * 0
           )

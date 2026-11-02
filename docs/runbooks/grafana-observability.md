@@ -244,13 +244,33 @@ in 10 minutes — backend is in a crash loop.
 
 ## HmsChatTransportErrors  (`severity: page`)
 
-**What it means.** More than 25% of `/ws-chat` requests returned 4xx or 5xx for
-5 minutes, with the endpoint taking real traffic. Clinical chat is down or
-degraded for every connected client.
+**What it means.** More than 25% of `/ws-chat` requests *that reached a handler*
+returned 5xx for 5 minutes, with the endpoint taking real traffic. Clinical chat
+is down or degraded for every connected client.
 
-The ratio counts 4xx *and* 5xx deliberately, and counts neither 2xx nor 3xx nor
-**101** — a successful WebSocket upgrade is a 101, so a "not 2xx/3xx" ratio
-would read near 1.0 on perfectly healthy chat.
+**5xx only, and that is deliberate twice over.** A successful WebSocket upgrade
+is an HTTP **101**, so a "not 2xx/3xx" ratio reads near 1.0 on perfectly healthy
+chat. And the handler-matched 4xx on this endpoint are mostly SockJS's own
+`xhr_send` 404s against timed-out sessions, so counting 4xx lets one stale
+browser tab page the on-call engineer.
+
+**What this alert cannot see** — read this before concluding chat is fine:
+
+- **Ticket/auth failures.** `respondUnauthorized` is written inside
+  `JwtAuthenticationFilter`, before any `HandlerMapping` runs, so those 401s
+  carry `uri="UNKNOWN"` and never reach this ratio. A fleet-wide ticket expiry
+  leaves this alert silent.
+- **A path that stopped routing.** Tagged `uri="NOT_FOUND"`, attributable to no
+  endpoint. A blackbox probe cannot cover this either: `SecurityConfig` ends in
+  `anyRequest().authenticated()`, so authorization answers 401 on the path
+  pattern before a handler is resolved — a deleted SockJS mapping answers 401
+  exactly like a healthy one, so a probe stays green either way.
+- **A silent transport.** The rate floor that stops this firing on an idle window
+  also means no traffic, no alert.
+
+For all three, the signals are `HmsBackendNoTraffic`, `HmsTargetDown`, and
+clients reporting chat is down. If that happens while the chat metrics look
+clean, this is the shape to suspect; go straight to step 3.
 
 **Why it has its own alert.** `/ws-chat` is SockJS, and a healthy connection is
 held open for 25-50 seconds. Micrometer records that as request *duration*, so
@@ -268,12 +288,12 @@ alert that covers it.
    panel here is not "chat is fine"; drop the status filter, or query
    `sum by (status) (rate(http_server_requests_seconds_count{uri=~"(/api)?/ws-chat.*"}[5m]))`
    in Explore to see which class is actually failing before going further.
-2. A **4xx-shaped** failure is usually routing or proxy config, not the app —
-   check that the SockJS path is not being rewritten or stripped upstream. Note
-   that `/api/ws-chat/info` answers **401** to an unauthenticated request, not
-   200: `/ws-chat/**` is `.authenticated()` and the handshake wants a `?ticket=`.
-   A 401 there is the healthy answer and is what the `blackbox_ws_chat_info`
-   probe treats as success; a **404** is the broken one.
+2. Check the proxy and the path. A `curl` of `/api/ws-chat/info` answers **401**
+   when healthy, not 200 — `/ws-chat/**` is `.authenticated()` and the handshake
+   wants a `?ticket=` — so 401 is the good answer here and **404** is the broken
+   one. Because authorization matches the path pattern before any handler is
+   resolved, a 401 does *not* prove the SockJS mapping still exists; it only
+   proves the app is answering that path.
 3. A **5xx-shaped** failure is usually the broker or the handler itself. Note what
    this alert can *not* tell you: Micrometer tags `uri` from the matched handler,
    so only requests that reached the DispatcherServlet carry `/ws-chat/**`. Every
@@ -285,12 +305,9 @@ alert that covers it.
    Those loggers sit at INFO on dev (`LOG_LEVEL_SECURITY`) to keep Loki volume
    down — raise them for a session with
    `railway variables --set LOG_LEVEL_SECURITY=DEBUG --service hms-backend-dev`.
-4. If the transport is silent rather than failing, this alert cannot see it: the
-   rate floor that keeps it from firing on an idle window also means no traffic
-   means no alert. Neither can it see a path that no longer routes, since Boot
-   tags those `uri="NOT_FOUND"`/`"UNKNOWN"` and they are attributable to no
-   endpoint. Both cases belong to the `blackbox_ws_chat_info` probe on
-   `/ws-chat/info` and to `HmsBackendNoTraffic`/`HmsTargetDown`.
+4. The blind spots above are not hypothetical — if the alert is firing, the 5xx
+   are real, but if clients complain and this alert is quiet, do not close the
+   ticket on the strength of it.
 
 ---
 

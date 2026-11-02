@@ -201,49 +201,6 @@ scrape_configs:
       - target_label: geo
         replacement: 'local'
 
-  # The SockJS handshake endpoint. /ws-chat is excluded from the burn-rate SLO
-  # and from the aggregate latency rules, and HmsChatTransportErrors only sees
-  # requests Spring matched to a handler: Boot tags an unrouted request
-  # uri="NOT_FOUND" (or "UNKNOWN" when the security chain rejects it before
-  # routing), so the failure mode that alert's comment described — the path no
-  # longer routes, a proxy strips it, the mapping is gone — carries no /ws-chat
-  # uri label and is invisible to every chat metric we have.
-  #
-  # A probe is the right instrument for "does this path still answer at all".
-  # /ws-chat/info is SockJS's own discovery endpoint: a plain GET, no session and
-  # no upgrade. It is NOT anonymous, though — /ws-chat/** is .authenticated() and
-  # the handshake wants a ?ticket= the prober cannot mint — so this uses the
-  # http_ws_handshake_reachable module, which accepts 200 or 401. A 401 proves the
-  # path routes and the app answered, which is the whole question; a removed
-  # mapping or a stripped prefix still answers 404 and still fails the probe.
-  # The generic HmsSyntheticProbeFailureRate and HmsSyntheticProbeAllGeosFailing
-  # alerts key on probe_target and pick this up with no new rule.
-  - job_name: 'blackbox_ws_chat_info'
-    metrics_path: /probe
-    scrape_interval: 60s
-    scrape_timeout: 15s
-    params:
-      module: [http_ws_handshake_reachable]
-    static_configs:
-      - targets:
-          - http://host.docker.internal:8081/api/ws-chat/info
-        labels:
-          probe_target: 'ws-chat-handshake'
-          probe_module: 'http_ws_handshake_reachable'
-    relabel_configs:
-      - source_labels: [__address__]
-        target_label: __param_target
-      - source_labels: [__param_target]
-        target_label: instance
-      - target_label: __address__
-        replacement: blackbox-exporter:9115
-      - target_label: application
-        replacement: 'hms'
-      - target_label: service
-        replacement: 'synthetic'
-      - target_label: geo
-        replacement: 'local'
-
   - job_name: 'blackbox_cds_discovery'
     metrics_path: /probe
     scrape_interval: 60s

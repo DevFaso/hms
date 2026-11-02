@@ -73,21 +73,27 @@ groups:
   # /ws-chat is excluded from the SLO burn-rate ratios (see recording.yml), so
   # without this a chat failure would raise nothing at all.
   #
-  # The ratio counts 4xx and 5xx, and it names those classes rather than negating
-  # 2xx/3xx — a negated class counts the HTTP 101 of every successful WebSocket
-  # upgrade as a failure, which is how this was first written.
+  # 5xx only. Not a negated 2xx/3xx class, which counts the HTTP 101 of every
+  # successful WebSocket upgrade as a failure, and not 4xx either: the
+  # handler-matched 4xx here are mostly SockJS's own xhr_send 404s against
+  # timed-out sessions, so one stale tab reconnecting would page on healthy chat.
   #
-  # What it can see is bounded by the uri label, and the bound is narrower than it
-  # looks. Micrometer tags a request from the matched handler pattern, so only
-  # requests that reached the DispatcherServlet carry uri=/ws-chat/**: a 5xx from
-  # the broker, a 404 from an xhr_send to an expired session. Anything rejected
-  # EARLIER is tagged "UNKNOWN" (or "NOT_FOUND" when nothing routed) and is
-  # attributable to no endpoint at all — which includes every 401 from
-  # JwtAuthenticationFilter, since respondUnauthorized writes the response inside
-  # the filter, before any HandlerMapping runs. So a fleet-wide ticket expiry is
-  # NOT visible here; neither is a path that stopped routing. Both belong to the
-  # blackbox probe on /ws-chat/info (grafana/prometheus.yml, job
-  # blackbox_ws_chat_info) and to HmsBackendNoTraffic.
+  # What this alert covers is therefore narrow, and the boundary is worth stating
+  # plainly rather than leaving someone to infer it during an incident. Micrometer
+  # tags uri from the matched handler pattern, so only requests that reached the
+  # DispatcherServlet carry uri=/ws-chat/**. Anything rejected earlier is tagged
+  # "UNKNOWN", or "NOT_FOUND" when nothing routed, and is attributable to no
+  # endpoint at all — which includes every 401 from JwtAuthenticationFilter, since
+  # respondUnauthorized writes the response inside the filter before any
+  # HandlerMapping runs.
+  #
+  # So: a fleet-wide ticket expiry is NOT visible here, and neither is a /ws-chat
+  # mapping that stopped routing. There is no chat-specific signal for either, and
+  # a blackbox probe cannot supply one: SecurityConfig ends in
+  # anyRequest().authenticated(), so authorization answers 401 on a path pattern
+  # before any handler is resolved — a deleted SockJS mapping would answer 401 too,
+  # exactly like a healthy one. Those failures surface through HmsBackendNoTraffic,
+  # HmsTargetDown and client reports; see the runbook.
   #
   # The traffic gate is what this alert cannot do, and it is a deliberate limit
   # rather than an oversight: a ratio over a handful of requests in an idle
@@ -106,11 +112,13 @@ groups:
           severity: page
           service: hms-backend
         annotations:
-          summary: "HMS chat transport failing (>25% 4xx/5xx)"
+          summary: "HMS chat transport failing (>25% 5xx)"
           description: |
-            More than a quarter of /ws-chat requests are failing. Clinical chat is
-            down or degraded for every connected client. This endpoint is excluded
-            from the availability SLO, so the burn-rate alerts stay quiet for it.
+            More than a quarter of /ws-chat requests that reached a handler returned
+            5xx. Clinical chat is down or degraded for every connected client. This
+            endpoint is excluded from the availability SLO, so the burn-rate alerts
+            stay quiet for it. Note the converse: chat can be broken WITHOUT this
+            firing — see the runbook.
           runbook_url: "https://github.com/DevFaso/hms/blob/main/docs/runbooks/grafana-observability.md#hmschattransporterrors"
 
   # ── Instance / target health ───────────────────────────────────────

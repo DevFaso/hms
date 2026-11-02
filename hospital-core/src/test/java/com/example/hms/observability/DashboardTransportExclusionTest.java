@@ -91,8 +91,25 @@ class DashboardTransportExclusionTest {
     private static final Pattern BARE_METRIC =
         Pattern.compile("http_server_requests_seconds_(\\w+)\\s*[\\[)]");
 
-    /** A positive pin on uri — the panel or rule has chosen its endpoints deliberately. */
-    private static final Pattern URI_PIN = Pattern.compile("uri\\s*=~");
+    /**
+     * A positive pin on uri — the panel or rule has chosen its endpoints deliberately.
+     *
+     * <p>Matches both {@code uri=} and {@code uri=~}. The endpoint deep-dive uses the exact form
+     * on purpose: its values come from {@code label_values} and are Spring patterns, so
+     * {@code uri=~"$uri"} would hand PromQL {@code /ws-chat/**} or {@code /**} verbatim, and
+     * {@code **} is a bad repetition operator in RE2 — a parse error on every panel.
+     */
+    private static final Pattern URI_PIN = Pattern.compile("uri\\s*=~?");
+
+    /**
+     * Regex constructs RE2 does not implement, and {@code java.util.regex} does.
+     *
+     * <p>Lookahead, lookbehind and backreferences are absent from RE2 by design (it guarantees
+     * linear time), and nested repetition such as {@code **} is rejected as a bad operator. A
+     * pattern using any of them compiles in this test and then fails in Prometheus.
+     */
+    private static final Pattern RE2_UNSUPPORTED =
+        Pattern.compile("\\(\\?[=!<]|\\\\[1-9]|[*+?]{2,}");
 
     /** Any negative uri matcher, so a near-miss such as $exclude_url cannot pass as "guarded". */
     private static final Pattern URI_EXCLUDE = Pattern.compile("uri\\s*!~");
@@ -205,6 +222,19 @@ class DashboardTransportExclusionTest {
             .hasSizeGreaterThan(1);
 
         for (String pattern : patterns) {
+            // Prometheus matches labels with RE2, not java.util.regex, and the two disagree in
+            // both directions. Java accepts lookahead and backreferences that RE2 rejects
+            // outright, so a pattern that compiles here can still 400 every query that uses it —
+            // all 40 selectors and 14 recorded series at once. Checked before compiling, because
+            // Pattern.compile is exactly the step that would wave it through.
+            assertThat(RE2_UNSUPPORTED.matcher(pattern).find())
+                .as("pattern [%s] uses a construct RE2 does not support (lookahead, lookbehind, "
+                    + "backreference or nested repetition). Prometheus would reject the whole "
+                    + "label matcher, so every panel and rule carrying it returns a parse error — "
+                    + "and java.util.regex compiles it happily, which is why this is checked "
+                    + "separately.", pattern)
+                .isFalse();
+
             // PromQL anchors label matchers fully, so matches() is the right comparison.
             Pattern compiled = Pattern.compile(pattern);
 

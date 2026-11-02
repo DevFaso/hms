@@ -10,28 +10,12 @@ External HTTP probing of HMS public surfaces from multiple geographic vantage po
 
 - **Blackbox-exporter** added to `docker-compose.yml` under the existing `observability` profile (alongside postgres-exporter / redis-exporter / node-exporter). Exposes Prometheus-style probes on `:9115`.
 - **`grafana/blackbox.yml`** with four probe modules: `http_health_2xx`, `http_smart_2xx`, `http_fhir_metadata_2xx`, `http_cds_discovery_2xx`. Each is a `prober: http` module with explicit `valid_status_codes`, accept headers, and TLS verification (false for local, but kept on by default so a production drop-in just needs the cert chain to be valid).
-- **Prometheus scrape jobs** in `grafana/prometheus.yml` driving Blackbox against:
+- **Five Prometheus scrape jobs** in `grafana/prometheus.yml` driving Blackbox against:
   - `/api/actuator/health/liveness`
   - `/api/actuator/health/readiness`
   - `/api/fhir/metadata`
   - `/api/fhir/.well-known/smart-configuration`
   - `/api/cds-services`
-  - `/api/ws-chat/info` (`probe_target: ws-chat-handshake`, module `http_health_2xx`)
-    — added with the transport-exclusion work. `/ws-chat` is excluded from the
-    burn-rate SLO and the aggregate latency rules, and `HmsChatTransportErrors`
-    can only see requests Spring matched to a handler, because Boot tags an
-    unrouted request `uri="NOT_FOUND"` (or `"UNKNOWN"` when the security chain
-    rejects it first). So "the handshake path no longer answers at all" — a
-    stripped proxy prefix, a dropped mapping — is attributable to no endpoint and
-    invisible to every chat metric. This probe is the only thing that sees it.
-    `/ws-chat/info` is SockJS's own discovery endpoint: a plain GET, no session and
-    no upgrade. It is not anonymous — `/ws-chat/**` is `.authenticated()` and the
-    handshake wants a `?ticket=` no prober can mint — so it uses the
-    `http_ws_handshake_reachable` module, which accepts **200 or 401**. A 2xx-only
-    module would have scored `probe_success=0` on every scrape and fired both
-    page-severity probe alerts permanently. A 401 proves the path routes and the
-    app answered, which is the question being asked; a removed mapping or a
-    stripped prefix answers 404 and still fails the probe.
 - **Three alert rules** in `grafana/rules/alerts.yml`:
   - `HmsSyntheticProbeFailureRate` — > 10% failure for 5 minutes (the deliverable target).
   - `HmsSyntheticProbeAllGeosFailing` — every vantage point returns 0 for 2 minutes (hard outage).
