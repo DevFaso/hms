@@ -9179,7 +9179,8 @@
     "LAB_STATUS_NOT_INTERPRETED": "Not interpreted: no reference range",
     "CODE_PLACEHOLDER": "e.g. B54 (malaria)",
     "PREGNANCY": "Ongoing pregnancy: {{weeks}} weeks + {{days}} days",
-    "TIMELINE_TRANSCRIBED_AT": "Transcribed at {{hospital}}"
+    "TIMELINE_TRANSCRIBED_AT": "Transcribed at {{hospital}}",
+    "DEACTIVATION_REASON": "Reason"
   },
   "PHARMACY": {
     "QUEUE_CLAIM": {
@@ -10087,7 +10088,8 @@
     "DEACTIVATE_GUARANTOR_TITLE": "Deactivate this guarantor?",
     "DEACTIVATE_GUARANTOR_MESSAGE": "The guarantor stays on file, marked inactive. Say why; the reason is kept in the audit trail.",
     "GUARANTOR_DEACTIVATED": "{{name}} is no longer an active guarantor.",
-    "GUARANTOR_REACTIVATED": "{{name}} is an active guarantor again."
+    "GUARANTOR_REACTIVATED": "{{name}} is an active guarantor again.",
+    "DEACTIVATION_REASON": "Reason"
   },
   "PATIENT_DOCUMENTS": {
     "TAB": "Documents",
@@ -10553,7 +10555,14 @@
     "DELETE_TITLE": "Delete birth plan",
     "DELETE_CONFIRM": "Delete the birth plan for {{name}}?",
     "DELETED": "Birth plan deleted",
-    "DELETE_ERROR": "Failed to delete birth plan"
+    "DELETE_ERROR": "Failed to delete birth plan",
+    "REMOVE_TITLE": "Remove the birth plan",
+    "REMOVE_SUBJECT": "Birth plan of {{name}}",
+    "REMOVE_CONFIRM": "Remove",
+    "WITHDRAW_REVIEWED_MESSAGE": "A provider has reviewed this plan: it will be withdrawn, not deleted. It stays in the record with your reason and leaves the lists.",
+    "REMOVE_DRAFT_MESSAGE": "Your own unreviewed draft is deleted. A draft written by someone else is withdrawn: it stays in the record with your reason. Say why.",
+    "WITHDRAWN": "Birth plan withdrawn: kept in the record with the reason.",
+    "REMOVED": "Birth plan removed."
   },
   "PRENATAL": {
     "GENERATE_TITLE": "Generate prenatal visit schedule",

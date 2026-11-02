@@ -182,6 +182,23 @@ describe('CoverageTabComponent (P3 #21 additions)', () => {
     el.remove();
   }));
 
+  it('QA D1247: an inactive guarantor shows when and why it was deactivated', () => {
+    extrasSpy.listGuarantors.and.returnValue(
+      of([
+        guarantor({
+          active: false,
+          deactivationReason: 'Plus solvable',
+          deactivatedAt: '2026-11-02T05:00:00',
+        }),
+      ]),
+    );
+    fixture.detectChanges();
+    const note = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="guarantor-deactivation-g1"]',
+    );
+    expect(note?.textContent).toContain('Plus solvable');
+  });
+
   it('QA D1247: reactivating acts at once and says so', () => {
     fixture.detectChanges();
     extrasSpy.reactivateGuarantor.and.returnValue(of(guarantor()));

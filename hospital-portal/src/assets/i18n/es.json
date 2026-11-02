@@ -9179,7 +9179,8 @@
     "LAB_STATUS_NOT_INTERPRETED": "Sin interpretar: sin intervalo de referencia",
     "CODE_PLACEHOLDER": "ej. B54 (paludismo)",
     "PREGNANCY": "Embarazo en curso: {{weeks}} semanas + {{days}} días",
-    "TIMELINE_TRANSCRIBED_AT": "Transcrito en {{hospital}}"
+    "TIMELINE_TRANSCRIBED_AT": "Transcrito en {{hospital}}",
+    "DEACTIVATION_REASON": "Motivo"
   },
   "PHARMACY": {
     "QUEUE_CLAIM": {
@@ -10087,7 +10088,8 @@
     "DEACTIVATE_GUARANTOR_TITLE": "¿Desactivar este garante?",
     "DEACTIVATE_GUARANTOR_MESSAGE": "El garante permanece en el expediente, marcado como inactivo. Indique el motivo; se conserva en el registro de auditoría.",
     "GUARANTOR_DEACTIVATED": "{{name}} ya no es un garante activo.",
-    "GUARANTOR_REACTIVATED": "{{name}} vuelve a ser un garante activo."
+    "GUARANTOR_REACTIVATED": "{{name}} vuelve a ser un garante activo.",
+    "DEACTIVATION_REASON": "Motivo"
   },
   "PATIENT_DOCUMENTS": {
     "TAB": "Documentos",
@@ -10553,7 +10555,14 @@
     "DELETE_TITLE": "Eliminar plan de parto",
     "DELETE_CONFIRM": "¿Eliminar el plan de parto de {{name}}?",
     "DELETED": "Plan de parto eliminado",
-    "DELETE_ERROR": "Error al eliminar el plan"
+    "DELETE_ERROR": "Error al eliminar el plan",
+    "REMOVE_TITLE": "Retirar el plan de parto",
+    "REMOVE_SUBJECT": "Plan de parto de {{name}}",
+    "REMOVE_CONFIRM": "Retirar",
+    "WITHDRAW_REVIEWED_MESSAGE": "Un profesional ha revisado este plan: se retirará, no se eliminará. Queda en el expediente con su motivo y sale de las listas.",
+    "REMOVE_DRAFT_MESSAGE": "Su propio borrador sin revisar se elimina. Un borrador redactado por otra persona se retira: queda en el expediente con su motivo. Indique el motivo.",
+    "WITHDRAWN": "Plan de parto retirado: se conserva en el expediente con el motivo.",
+    "REMOVED": "Plan de parto retirado."
   },
   "PRENATAL": {
     "GENERATE_TITLE": "Generar calendario de visitas prenatales",

@@ -116,6 +116,23 @@
                 <td>{{ a.onsetDate ? (a.onsetDate | serverTime | date: 'mediumDate') : '—' }}</td>
                 <td>
                   {{ (a.active === false ? 'COMMON.INACTIVE' : 'COMMON.ACTIVE') | translate }}
+                  <!-- QA D1242: the reason the server requires is shown where the row is read. -->
+                  @if (a.active === false && (a.deactivationReason || a.deactivatedAt)) {
+                    <div
+                      class="deactivation-note"
+                      [attr.data-testid]="'allergy-deactivation-' + a.id"
+                    >
+                      @if (a.deactivatedAt) {
+                        <span>{{ a.deactivatedAt | serverTime | date: 'short' }}</span>
+                      }
+                      @if (a.deactivationReason) {
+                        <span
+                          >{{ 'CHART.DEACTIVATION_REASON' | translate
+                          }}{{ 'COMMON.COLON' | translate }} {{ a.deactivationReason }}</span
+                        >
+                      }
+                    </div>
+                  }
                 </td>
                 <td class="hospital-cell">{{ a.hospitalName || '—' }}</td>
                 @if (canEditAllergies()) {

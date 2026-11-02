@@ -51,6 +51,9 @@ export interface Guarantor {
   address: string | null;
   primary: boolean;
   active: boolean;
+  /** QA D1247: why and when the guarantor was deactivated (shown on the inactive row). */
+  deactivationReason?: string | null;
+  deactivatedAt?: string | null;
   notes: string | null;
   createdAt: string;
   updatedAt: string | null;

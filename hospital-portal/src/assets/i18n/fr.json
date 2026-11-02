@@ -9179,7 +9179,8 @@
     "LAB_STATUS_NOT_INTERPRETED": "Non interprété : aucun intervalle de référence",
     "CODE_PLACEHOLDER": "ex. B54 (paludisme)",
     "PREGNANCY": "Grossesse en cours : {{weeks}} SA + {{days}} j",
-    "TIMELINE_TRANSCRIBED_AT": "Transcrit à {{hospital}}"
+    "TIMELINE_TRANSCRIBED_AT": "Transcrit à {{hospital}}",
+    "DEACTIVATION_REASON": "Motif"
   },
   "PHARMACY": {
     "QUEUE_CLAIM": {
@@ -10087,7 +10088,8 @@
     "DEACTIVATE_GUARANTOR_TITLE": "Désactiver ce garant ?",
     "DEACTIVATE_GUARANTOR_MESSAGE": "Le garant reste au dossier, marqué inactif. Indiquez pourquoi ; le motif est conservé dans la piste d’audit.",
     "GUARANTOR_DEACTIVATED": "{{name}} n’est plus un garant actif.",
-    "GUARANTOR_REACTIVATED": "{{name}} est de nouveau un garant actif."
+    "GUARANTOR_REACTIVATED": "{{name}} est de nouveau un garant actif.",
+    "DEACTIVATION_REASON": "Motif"
   },
   "PATIENT_DOCUMENTS": {
     "TAB": "Documents",
@@ -10553,7 +10555,14 @@
     "DELETE_TITLE": "Supprimer le plan de naissance",
     "DELETE_CONFIRM": "Supprimer le plan de naissance de {{name}} ?",
     "DELETED": "Plan de naissance supprimé",
-    "DELETE_ERROR": "Échec de la suppression du plan"
+    "DELETE_ERROR": "Échec de la suppression du plan",
+    "REMOVE_TITLE": "Retirer le plan de naissance",
+    "REMOVE_SUBJECT": "Plan de naissance de {{name}}",
+    "REMOVE_CONFIRM": "Retirer",
+    "WITHDRAW_REVIEWED_MESSAGE": "Un soignant a relu ce plan : il sera retiré, pas supprimé. Il reste au dossier avec votre motif et disparaît des listes.",
+    "REMOVE_DRAFT_MESSAGE": "Votre propre brouillon non relu est supprimé. Un brouillon rédigé par quelqu’un d’autre est retiré : il reste au dossier avec votre motif. Indiquez pourquoi.",
+    "WITHDRAWN": "Plan de naissance retiré : conservé au dossier avec le motif.",
+    "REMOVED": "Plan de naissance retiré."
   },
   "PRENATAL": {
     "GENERATE_TITLE": "Générer le calendrier des visites prénatales",

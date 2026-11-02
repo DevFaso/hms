@@ -202,6 +202,20 @@
                   <span class="status-badge status-cancelled">
                     {{ 'COMMON.INACTIVE' | translate }}
                   </span>
+                  <!-- QA D1247: the reason the server requires is shown where the row is read. -->
+                  @if (g.deactivationReason || g.deactivatedAt) {
+                    <div class="muted" [attr.data-testid]="'guarantor-deactivation-' + g.id">
+                      @if (g.deactivatedAt) {
+                        <span>{{ g.deactivatedAt | serverTime | date: 'short' }}</span>
+                      }
+                      @if (g.deactivationReason) {
+                        <span
+                          >{{ 'COVERAGE.DEACTIVATION_REASON' | translate
+                          }}{{ 'COMMON.COLON' | translate }} {{ g.deactivationReason }}</span
+                        >
+                      }
+                    </div>
+                  }
                 }
               </td>
               @if (canEdit) {
