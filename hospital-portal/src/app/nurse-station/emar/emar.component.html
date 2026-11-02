@@ -97,7 +97,7 @@
                  reasons (held, refused, given early, five-rights override). -->
             @if (task.doseHistory?.length) {
               <section class="emar__history" data-testid="emar-dose-history">
-                <app-mar-dose-history [doses]="task.doseHistory ?? []" [expanded]="true" />
+                <app-mar-dose-history [doses]="task.doseHistory" [expanded]="true" />
               </section>
             }
 
