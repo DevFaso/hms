@@ -1801,7 +1801,7 @@ public class DispenseServiceImpl implements DispenseService {
             throw new com.example.hms.exception.FieldBusinessException("quantityDispensed", "pharmacy.dispense.dispensedPositive");
         }
         if (dispensed.compareTo(requested) > 0) {
-            throw new BusinessException("pharmacy.dispense.exceedsRequested");
+            throw new com.example.hms.exception.FieldBusinessException("quantityDispensed", "pharmacy.dispense.exceedsRequested");
         }
     }
 

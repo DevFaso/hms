@@ -1894,7 +1894,7 @@ public class PrescriptionServiceImpl implements PrescriptionService {
 
             throw new ResourceNotFoundException("patient.notFoundByIdentifier", identifier);
         }
-        throw new BusinessException("prescription.patient.required");
+        throw new com.example.hms.exception.FieldBusinessException("patientId", "prescription.patient.required");
     }
 
     private void ensureContextConsistency(Patient patient, Staff staff, Encounter encounter) {

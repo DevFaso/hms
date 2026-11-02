@@ -25,6 +25,8 @@ public class NurseHandoffCreateRequestDTO {
     @Size(max = 200)
     private String direction;
 
+    /** QA D1331 (round 29): required (QA D331), declared here so {} names it with the others. */
+    @jakarta.validation.constraints.NotBlank(message = "{nurse.handoff.situation.required}")
     @Size(max = 4000)
     private String situation;
 

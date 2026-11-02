@@ -212,7 +212,7 @@ public class NewbornAssessmentServiceImpl implements NewbornAssessmentService {
             birth = newborn.getDateOfBirth().atStartOfDay();
         }
         if (birth != null && assessmentTime.isBefore(birth)) {
-            throw new BusinessException("maternity.newborn.assessmentTime.beforeBirth");
+            throw new com.example.hms.exception.FieldBusinessException("assessmentTime", "maternity.newborn.assessmentTime.beforeBirth");
         }
     }
 

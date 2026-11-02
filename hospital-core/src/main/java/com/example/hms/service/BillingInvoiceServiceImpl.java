@@ -533,7 +533,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             ? amountAgainstLine(line, request.getAmount(), creditNote, total.subtract(paid).subtract(pending), locale)
             : request.getAmount();
         if (amount == null || amount.signum() <= 0) {
-            throw new BusinessException("billing.adjustment.amountPositive");
+            throw new com.example.hms.exception.FieldBusinessException("amount", "billing.adjustment.amountPositive");
         }
         requireWholeAmount(amount);
         // Earlier discounts may already have lowered the total under the line.
@@ -643,7 +643,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             throw new com.example.hms.exception.FieldBusinessException("reason", "billing.adjustment.reversalReasonRequired");
         }
         if (why.length() > CANCEL_REASON_MAX) {
-            throw new BusinessException("billing.adjustment.reversalReasonTooLong", String.valueOf(CANCEL_REASON_MAX));
+            throw new com.example.hms.exception.FieldBusinessException("reason", "billing.adjustment.reversalReasonTooLong", String.valueOf(CANCEL_REASON_MAX));
         }
         if (!adjustment.isLive()) {
             throw new BusinessException("billing.adjustment.alreadyReversed");
@@ -1640,7 +1640,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
             BigDecimal balanceDue = invoice.getTotalAmount()
                 .subtract(invoice.getAmountPaid() != null ? invoice.getAmountPaid() : BigDecimal.ZERO);
             if (declared.compareTo(balanceDue) > 0) {
-                throw new BusinessException("billing.payment.exceedsWithPending", payment.getAmount(), open,
+                throw new com.example.hms.exception.FieldBusinessException("amount", "billing.payment.exceedsWithPending", payment.getAmount(), open,
                     balanceDue.subtract(open).max(BigDecimal.ZERO));
             }
         }
@@ -1702,7 +1702,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
      */
     private static void requireWholeAmount(BigDecimal amount) {
         if (amount != null && amount.stripTrailingZeros().scale() > 0) {
-            throw new BusinessException("billing.payment.wholeAmountOnly");
+            throw new com.example.hms.exception.FieldBusinessException("amount", "billing.payment.wholeAmountOnly");
         }
     }
 
@@ -1759,7 +1759,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         BigDecimal balanceDue = invoice.getTotalAmount().subtract(currentPaid);
 
         if (amount.compareTo(balanceDue) > 0) {
-            throw new BusinessException("billing.payment.exceedsBalance", amount, balanceDue);
+            throw new com.example.hms.exception.FieldBusinessException("amount", "billing.payment.exceedsBalance", amount, balanceDue);
         }
         return invoice;
     }
@@ -1826,7 +1826,7 @@ public class BillingInvoiceServiceImpl implements BillingInvoiceService {
         BigDecimal balanceDue = invoice.getTotalAmount()
             .subtract(invoice.getAmountPaid() != null ? invoice.getAmountPaid() : BigDecimal.ZERO);
         if (amount.add(pending).compareTo(balanceDue) > 0) {
-            throw new BusinessException("billing.payment.staffExceedsWithPending", amount, pending,
+            throw new com.example.hms.exception.FieldBusinessException("amount", "billing.payment.staffExceedsWithPending", amount, pending,
                 balanceDue.subtract(pending).max(BigDecimal.ZERO));
         }
     }

@@ -318,8 +318,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
         }
     }
 
-    /** A phone typed on the profile in E.164; blank is null; anything else is refused. */
-    /** QA D1299: a number refused names the field it was typed in. */
+    /**
+     * A phone typed on the profile in E.164; blank is null; anything else is
+     * refused. QA D1299: a number refused names the field it was typed in.
+     */
     private static String selfServicePhone(Patient patient, String raw, String field) {
         if (raw.isBlank()) {
             return null;

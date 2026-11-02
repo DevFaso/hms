@@ -1125,10 +1125,10 @@ public class ReceptionServiceImpl implements ReceptionService {
         java.math.BigDecimal copay = request.getCopayAmount();
         if (copay != null) {
             if (copay.signum() < 0) {
-                throw new com.example.hms.exception.BusinessException("reception.checkin.copayNegative");
+                throw new com.example.hms.exception.FieldBusinessException("copayAmount", "reception.checkin.copayNegative");
             }
             if (copay.stripTrailingZeros().scale() > 0) {
-                throw new com.example.hms.exception.BusinessException("billing.payment.wholeAmountOnly");
+                throw new com.example.hms.exception.FieldBusinessException("copayAmount", "billing.payment.wholeAmountOnly");
             }
             // QA D1293: a copay taken needs its method, refused before anything is written.
             if (copay.signum() > 0 && request.getCopayMethod() == null) {

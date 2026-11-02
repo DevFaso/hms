@@ -185,7 +185,9 @@ public class ReceptionController {
             @RequestParam(required = false) UUID departmentId,
             @RequestParam(required = false, defaultValue = "WAITING") String status) {
         UUID hospitalId = resolveHospitalId();
-        return ResponseEntity.ok(receptionService.getWaitlist(hospitalId, departmentId, status));
+        // QA D1324 (round 29): "Tous" lists every entry; ALL (any case) reads as no status filter.
+        String effective = "ALL".equalsIgnoreCase(status == null ? null : status.trim()) ? null : status;
+        return ResponseEntity.ok(receptionService.getWaitlist(hospitalId, departmentId, effective));
     }
 
     @PostMapping("/waitlist/{id}/offer")

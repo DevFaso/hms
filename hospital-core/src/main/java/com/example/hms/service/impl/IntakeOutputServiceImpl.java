@@ -56,7 +56,7 @@ public class IntakeOutputServiceImpl implements IntakeOutputService {
         LocalDateTime observationTime =
             request.getObservationTime() != null ? request.getObservationTime() : LocalDateTime.now();
         if (observationTime.isAfter(LocalDateTime.now())) {
-            throw new BusinessException("intakeOutput.observedInFuture");
+            throw new com.example.hms.exception.FieldBusinessException("observationTime", "intakeOutput.observedInFuture");
         }
 
         // Unscoped resolve + registration check (see PatientChartAccess); the

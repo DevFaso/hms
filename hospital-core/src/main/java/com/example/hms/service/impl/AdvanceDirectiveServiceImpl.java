@@ -205,7 +205,7 @@ public class AdvanceDirectiveServiceImpl implements AdvanceDirectiveService {
     private void validateDates(AdvanceDirective directive) {
         if (directive.getEffectiveDate() != null && directive.getExpirationDate() != null
             && directive.getExpirationDate().isBefore(directive.getEffectiveDate())) {
-            throw new BusinessException("advanceDirective.expiryBeforeEffective");
+            throw new com.example.hms.exception.FieldBusinessException("expirationDate", "advanceDirective.expiryBeforeEffective");
         }
     }
 }

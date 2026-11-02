@@ -79,7 +79,7 @@ class PatientQueueDisplayNameGuardTest {
     void everyResponseNamingAPatientByIdCarriesTheirNameOrIsListedWithAReason() throws IOException {
         TreeSet<String> idOnly = new TreeSet<>();
         try (Stream<Path> files = Files.walk(PAYLOAD)) {
-            for (Path f : files.filter(p -> p.getFileName().toString().matches(".*Response.*\\.java")).toList()) {
+            for (Path f : files.filter(p -> isResponseSource(p.getFileName().toString())).toList()) {
                 String src = Files.readString(f, StandardCharsets.UTF_8);
                 if (PATIENT_ID.matcher(src).find() && !PATIENT_NAME.matcher(src).find()) {
                     idOnly.add(PAYLOAD.relativize(f).toString().replace('\\', '/'));
@@ -95,5 +95,10 @@ class PatientQueueDisplayNameGuardTest {
         assertThat(stale).as("allowlist entries that now carry a name or are gone: remove them").isEmpty();
         assertThat(idOnly).as("the refill queue's DTO (QA D1276)")
             .doesNotContain("dto/portal/MedicationRefillResponseDTO.java");
+    }
+
+    /** A response DTO source file (a plain name check: Sonar S8786 flagged the ".*Response.*" regex). */
+    private static boolean isResponseSource(String fileName) {
+        return fileName.contains("Response") && fileName.endsWith(".java");
     }
 }

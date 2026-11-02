@@ -381,7 +381,7 @@ public class AdmissionServiceImpl implements AdmissionService {
             throw new com.example.hms.exception.FieldBusinessException("reason", "admission.bed.unassignReasonRequired");
         }
         if (releaseReason.length() > MAX_BED_RELEASE_REASON) {
-            throw new BusinessException("admission.bed.unassignReasonTooLong", MAX_BED_RELEASE_REASON);
+            throw new com.example.hms.exception.FieldBusinessException("reason", "admission.bed.unassignReasonTooLong", MAX_BED_RELEASE_REASON);
         }
         Admission admission = loadTenantScopedAdmission(admissionId);
         String bedLabel = admission.getBed() == null ? null : BedAssignmentService.bedLabel(admission.getBed());

@@ -256,7 +256,7 @@ public class TransferServiceImpl implements TransferService {
         if (!request.isIsolationOverride()) {
             // The bed label is a MessageFormat argument: the clinician reads
             // the bed, never a raw placeholder.
-            throw new BusinessException("transfer.r7.isolationRequired",
+            throw new com.example.hms.exception.FieldBusinessException("isolationOverride", "transfer.r7.isolationRequired",
                 BedAssignmentService.bedLabel(destination));
         }
         if (!StringUtils.hasText(request.getIsolationOverrideReason())) {

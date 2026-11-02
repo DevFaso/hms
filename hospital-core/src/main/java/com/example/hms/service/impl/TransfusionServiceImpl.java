@@ -195,11 +195,11 @@ public class TransfusionServiceImpl implements TransfusionService {
         // QA D883: a bag collected in 2027 was received into stock. A donation
         // date after today, or after the bag's own expiry, is a typing error.
         if (request.getCollectedOn() != null && request.getCollectedOn().isAfter(today)) {
-            throw new BusinessException("transfusion.unit.collectedInFuture");
+            throw new com.example.hms.exception.FieldBusinessException("collectedOn", "transfusion.unit.collectedInFuture");
         }
         if (request.getCollectedOn() != null && request.getExpiresOn() != null
                 && request.getCollectedOn().isAfter(request.getExpiresOn())) {
-            throw new BusinessException("transfusion.unit.collectedAfterExpiry");
+            throw new com.example.hms.exception.FieldBusinessException("expiresOn", "transfusion.unit.collectedAfterExpiry");
         }
 
         BloodUnit unit = BloodUnit.builder()

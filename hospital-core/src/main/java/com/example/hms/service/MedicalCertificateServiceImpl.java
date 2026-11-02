@@ -203,7 +203,7 @@ public class MedicalCertificateServiceImpl implements MedicalCertificateService 
                 }
                 LocalDate start = request.getStartDate() != null ? request.getStartDate() : visitDay;
                 if (start.isBefore(visitDay)) {
-                    throw new BusinessException("medicalCertificate.start.beforeVisit");
+                    throw new com.example.hms.exception.FieldBusinessException("startDate", "medicalCertificate.start.beforeVisit");
                 }
                 yield new Certificate(MedicalCertificateType.SICK_LEAVE, visitDay, start,
                     start.plusDays(request.getDays() - 1L), request.getDays(), remarks);

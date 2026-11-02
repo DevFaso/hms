@@ -777,7 +777,7 @@ class RequiredRequestIdGuardTest {
                 return getter.group(2);
             }
         }
-        // A presence flag computed from the body and tested negated: if (!hasContent && ...).
+        // A presence flag computed from the body and tested negated (the hasContent flag of the chat).
         Matcher negated = Pattern.compile("!\\s*+([a-z]\\w*+)\\b(?!\\s*+[.(])").matcher(condition);
         while (negated.find()) {
             Matcher local = Pattern.compile("\\bboolean\\s++" + Pattern.quote(negated.group(1))
@@ -813,7 +813,7 @@ class RequiredRequestIdGuardTest {
             return bang < 0 || condition.charAt(bang) != '!';
         }
         String before = condition.substring(0, getter.start());
-        Matcher wrapper = Pattern.compile("(!?)\\s*+(?:\\w++\\.)?(isBlank|isEmpty|hasText|hasLength|isNull)\\(\\s*+$")
+        Matcher wrapper = Pattern.compile("(!?+)\\s*+(?:\\w++\\.)?+(isBlank|isEmpty|hasText|hasLength|isNull)\\(\\s*+$")
             .matcher(before);
         if (!wrapper.find()) {
             return false;
@@ -944,7 +944,7 @@ class RequiredRequestIdGuardTest {
     }
 
     private static String methodName(String method) {
-        Matcher name = Pattern.compile("(\\w+)\\s*+\\(").matcher(method);
+        Matcher name = Pattern.compile("(\\w++)\\s*+\\(").matcher(method);
         return name.find() ? name.group(1) : "?";
     }
 

@@ -336,7 +336,7 @@ class UnsortedPageGuardTest {
 
     private static String methodName(String source, int at) {
         String method = AppointmentSlotRulesGuardTest.enclosingMethod(source, at);
-        Matcher name = Pattern.compile("(\\w+)\\s*+\\(").matcher(method);
+        Matcher name = Pattern.compile("(\\w++)\\s*+\\(").matcher(method);
         return name.find() ? name.group(1) : "?";
     }
 

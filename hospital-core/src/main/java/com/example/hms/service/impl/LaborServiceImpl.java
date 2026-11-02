@@ -422,7 +422,7 @@ public class LaborServiceImpl implements LaborService {
         // QA D745: nor before the labour it charts began.
         if (request.getObservationTime() != null && episode.getLaborOnsetAt() != null
                 && request.getObservationTime().isBefore(episode.getLaborOnsetAt())) {
-            throw new BusinessException("maternity.partograph.beforeOnset");
+            throw new com.example.hms.exception.FieldBusinessException("observationTime", "maternity.partograph.beforeOnset");
         }
         // QA D1151 class (round 21): a partograph entry charts an observation.
         com.example.hms.service.support.ClinicalContent.requireAny(FETAL_HEART_RATE_FIELD, "maternity.partograph.findingsRequired",

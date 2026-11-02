@@ -426,7 +426,7 @@ public class LabOrderServiceImpl implements LabOrderService {
         }
         String normalized = requested.trim().toUpperCase(java.util.Locale.ROOT);
         if (!LAB_PRIORITIES.contains(normalized)) {
-            throw new BusinessException("lab.order.priority.invalid");
+            throw new com.example.hms.exception.FieldBusinessException("priority", "lab.order.priority.invalid");
         }
         return normalized;
     }
@@ -1087,7 +1087,7 @@ public class LabOrderServiceImpl implements LabOrderService {
             // QA D673: a cancel states why, and the reason is kept on the order.
             String cancelReason = normalizeRequiredText(reason, "lab.order.cancelReasonRequired", "reason");
             if (cancelReason.length() > MAX_CANCELLATION_REASON) {
-                throw new BusinessException("lab.order.cancelReasonTooLong", MAX_CANCELLATION_REASON);
+                throw new com.example.hms.exception.FieldBusinessException("reason", "lab.order.cancelReasonTooLong", MAX_CANCELLATION_REASON);
             }
             labOrder.setCancellationReason(cancelReason);
         }
@@ -1305,7 +1305,7 @@ public class LabOrderServiceImpl implements LabOrderService {
         }
         if (!documentationShared) {
             String channelName = channel.name().toLowerCase(Locale.ENGLISH);
-            throw new BusinessException("lab.order.channelDocumentationRequired", channelName);
+            throw new com.example.hms.exception.FieldBusinessException("documentationSharedWithLab", "lab.order.channelDocumentationRequired", channelName);
         }
     }
 
@@ -1346,7 +1346,7 @@ public class LabOrderServiceImpl implements LabOrderService {
             throw new com.example.hms.exception.FieldBusinessException("standingOrderExpiresAt", "lab.order.standingExpiryRequired");
         }
         if (orderDatetime != null && expiresAt.isBefore(orderDatetime)) {
-            throw new BusinessException("lab.order.standingExpiryAfterOrder");
+            throw new com.example.hms.exception.FieldBusinessException("standingOrderExpiresAt", "lab.order.standingExpiryAfterOrder");
         }
         return expiresAt;
     }

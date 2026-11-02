@@ -56,14 +56,14 @@ public class AppointmentSlotPolicy {
      */
     public LocalTime endFor(UUID staffId, LocalDate date, LocalTime start) {
         if (start == null) {
-            throw new BusinessException("appointment.timeRange.invalid");
+            throw new com.example.hms.exception.FieldBusinessException("startTime", "appointment.timeRange.invalid");
         }
         int minutes = minutesFor(staffId, date, start);
         LocalTime end = start.plusMinutes(minutes);
         LocalTime capped = end.isAfter(start) ? end : LocalTime.of(23, 59);
         if (!capped.isAfter(start)) {
             // A visit starting at 23:59 would last no time at all.
-            throw new BusinessException("appointment.timeRange.invalid");
+            throw new com.example.hms.exception.FieldBusinessException("startTime", "appointment.timeRange.invalid");
         }
         return capped;
     }

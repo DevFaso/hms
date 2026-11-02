@@ -310,7 +310,7 @@ public class PharmacyPaymentServiceImpl implements PharmacyPaymentService {
         }
         // QA D204 (D184): the franc CFA has no minor unit.
         if (dto.getAmount().stripTrailingZeros().scale() > 0) {
-            throw new BusinessException("billing.payment.wholeAmountOnly");
+            throw new com.example.hms.exception.FieldBusinessException("amount", "billing.payment.wholeAmountOnly");
         }
         if (dto.getPaymentMethod() == null) {
             throw new com.example.hms.exception.FieldBusinessException("paymentMethod", "pharmacy.payment.methodRequired");

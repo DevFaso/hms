@@ -228,7 +228,7 @@ public class InvoiceItemServiceImpl implements InvoiceItemService {
      */
     private static void requireWholePrice(java.math.BigDecimal price) {
         if (price != null && price.stripTrailingZeros().scale() > 0) {
-            throw new BusinessException("billing.payment.wholeAmountOnly");
+            throw new com.example.hms.exception.FieldBusinessException("unitPrice", "billing.payment.wholeAmountOnly");
         }
     }
 
