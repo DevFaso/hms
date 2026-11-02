@@ -847,24 +847,11 @@ export class NurseStationComponent implements OnInit, OnDestroy, AfterViewChecke
   }
 
   /**
-   * Marks each refused reading with its own message and clears the others;
-   * focus goes to the first refused one. One call per field because the base
-   * `refuseFields` takes one message for all (#1027 adds a per-field form the
-   * merge can switch this helper to).
+   * Marks each refused reading with its own message, clears the others and
+   * focuses the first refused one.
    */
   markVitalRefusals(refusals: readonly VitalRefusal[]): void {
-    const root = this.host.nativeElement;
-    const all = Object.values(VITAL_FIELD_IDS);
-    refuseFields(
-      root,
-      [],
-      all.filter((id) => !refusals.some((r) => r.id === id)),
-      '',
-    );
-    // The last call focuses its field; the first refused one is called last.
-    for (const refusal of [...refusals].reverse()) {
-      refuseFields(root, [refusal.id], [refusal.id], refusal.message);
-    }
+    refuseFields(this.host.nativeElement, refusals, Object.values(VITAL_FIELD_IDS));
   }
 
   /* ── Acuity display ─────────────────────────────────────── */
