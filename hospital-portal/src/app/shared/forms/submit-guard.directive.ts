@@ -60,8 +60,19 @@ const BLOCKED_KEY = 'COMMON.SUBMIT_BLOCKED_REQUIRED';
  * <button type="submit" [disabled]="saving()" appSubmitGuard submitGuardRequired>Créer</button>
  * ```
  *
- * `scripts/lib/required-form-submit.test.mjs` fails the build for a `<form>`
- * with required fields whose submit button carries neither.
+ * QA D1245 (D1089 / D1124 NOT_FIXED in round 25): the prescription dialog's
+ * guard listed only the drug, its patient input had a star but no `required`,
+ * and `patientId: ''` went out. So:
+ * - a field listed in `submitGuardFields` that declares itself required
+ *   (`required` or `aria-required="true"`) and is blank refuses the click
+ *   whatever the expression says;
+ * - a typeahead whose text is only a query (nothing picked) carries
+ *   `data-submit-blank="true"` and counts as blank;
+ * - a section that is neither a form nor a dialog carries `data-submit-scope`.
+ *
+ * `scripts/lib/required-form-submit.test.mjs` fails the build for a required
+ * input (a `required` control, or one whose label shows `*`) that no submit of
+ * its form, dialog or scope checks (lib/required-field-scan.mjs).
  * `scripts/lib/silent-disabled-submit.test.mjs` fails the build on a button
  * disabled for anything but a request in flight or a pager's end.
  */

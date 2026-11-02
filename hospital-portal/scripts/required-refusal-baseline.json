@@ -297,10 +297,6 @@
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
     },
-    "src/app/patient-portal/my-billing/my-billing.component.ts::unmarked-refusal::submitPayment::PORTAL.BILLING.REFERENCE_REQUIRED": {
-      "count": 1,
-      "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"
-    },
     "src/app/patient-portal/my-documents/my-documents.component.ts::unmarked-refusal::uploadDocument::PORTAL.DOCUMENTS.FILE_REQUIRED": {
       "count": 1,
       "why": "QA D1072 class, pre-existing outside the round-18 front-desk forms; shrinks only"

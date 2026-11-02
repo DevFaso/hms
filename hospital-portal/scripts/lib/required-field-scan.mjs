@@ -18,9 +18,10 @@
  *   reader sees; the attribute is what the submit guard (and a screen reader)
  *   reads.
  * - `unchecked`: every declared-required control is checked by its submit
- *   scope — the nearest enclosing `<form>`, else the nearest dialog
- *   (`role="dialog"`, `<dialog>`, `appDialogA11y`, `appModalDialog`, a `modal`
- *   class), else the template. Checked means a submit button of the scope
+ *   scope — the closest enclosing `<form>`, dialog (`role="dialog"`,
+ *   `<dialog>`, `appDialogA11y`, `appModalDialog`, a `modal` class) or
+ *   `[data-submit-scope]` section; outside all of them only a handler that
+ *   refuses field by field counts. Checked means a submit button of the scope
  *   carries `submitGuardRequired` (the guard reads every rendered required
  *   control at click time), or a guarded button lists the control's id in
  *   `submitGuardFields` (the guard refuses a listed required field that is

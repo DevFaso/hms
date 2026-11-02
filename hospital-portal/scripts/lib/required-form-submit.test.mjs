@@ -244,7 +244,8 @@ test('QA D1245: a template that uses the submit guard imports it', () => {
     if (!/\bappSubmitGuard\b|\bsubmitGuardRequired\b/.test(text)) continue;
     const tsFile = file.endsWith('.html') ? file.replace(/\.html$/, '.ts') : file;
     const ts = existsSync(tsFile) ? readFileSync(tsFile, 'utf8') : '';
-    if (!/\bSubmitGuardDirective\b/.test(ts)) missing.push(relative(appDir, tsFile));
+    if (!/\bSubmitGuardDirective\b/.test(ts))
+      missing.push(relative(appDir, tsFile).replaceAll('\\', '/'));
   }
   assert.deepEqual(missing, [], 'add SubmitGuardDirective to the component imports');
 });
