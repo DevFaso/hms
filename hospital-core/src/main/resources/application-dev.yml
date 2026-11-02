@@ -21,7 +21,20 @@ spring:
 
 logging:
   level:
-    '[com.example.hms]': DEBUG
+    '[com.example.hms]': ${LOG_LEVEL_HMS:DEBUG}
+    # Per-request security chatter, demoted out of DEBUG.
+    #
+    # JwtAuthenticationFilter, JwtTokenProvider, CustomUserDetailsService and
+    # WsTicketService each log on EVERY authenticated request, and the SockJS
+    # transport polls several times a second per open client. At DEBUG that is
+    # 3-4 lines per poll, which is the bulk of what dev ships to Grafana Cloud
+    # Loki against a 50 GB/month free allowance — and every line carries a
+    # username or principal into a third-party store for no diagnostic gain.
+    #
+    # The rest of com.example.hms stays at DEBUG: this suppresses the hot path,
+    # not dev debuggability. Raise it for a session without a redeploy:
+    #   railway variables --set LOG_LEVEL_SECURITY=DEBUG --service hms-backend-dev
+    '[com.example.hms.security]': ${LOG_LEVEL_SECURITY:INFO}
     '[org.springframework.web]': INFO
 
 # ===================== Seed Data =====================

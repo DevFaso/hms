@@ -69,7 +69,7 @@
       "fieldConfig": { "defaults": { "unit": "reqps", "decimals": 2 } },
       "options": { "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
       "targets": [
-        { "expr": "sum(rate(http_server_requests_seconds_count{application=\"$application\", instance=~\"$instance\"}[5m]))" }
+        { "expr": "sum(rate(http_server_requests_seconds_count{application=\"$application\", uri!~\"$exclude_uri\", instance=~\"$instance\"}[5m]))" }
       ]
     },
     {
@@ -87,7 +87,7 @@
       },
       "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
       "targets": [
-        { "expr": "sum(rate(http_server_requests_seconds_count{application=\"$application\", instance=~\"$instance\", status=~\"5..\"}[5m])) / clamp_min(sum(rate(http_server_requests_seconds_count{application=\"$application\", instance=~\"$instance\"}[5m])), 0.0001)" }
+        { "expr": "sum(rate(http_server_requests_seconds_count{application=\"$application\", uri!~\"$exclude_uri\", instance=~\"$instance\", status=~\"5..\"}[5m])) / clamp_min(sum(rate(http_server_requests_seconds_count{application=\"$application\", uri!~\"$exclude_uri\", instance=~\"$instance\"}[5m])), 0.0001)" }
       ]
     },
     {
@@ -105,7 +105,7 @@
       },
       "options": { "colorMode": "background", "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false } },
       "targets": [
-        { "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{application=\"$application\", instance=~\"$instance\"}[5m])) by (le))" }
+        { "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{application=\"$application\", uri!~\"$exclude_uri\", instance=~\"$instance\"}[5m])) by (le))" }
       ]
     },
     {
@@ -165,7 +165,7 @@
         ]
       },
       "targets": [
-        { "expr": "sum(rate(http_server_requests_seconds_count{application=\"$application\", instance=~\"$instance\"}[$__rate_interval])) by (status)", "legendFormat": "{{status}}" }
+        { "expr": "sum(rate(http_server_requests_seconds_count{application=\"$application\", uri!~\"$exclude_uri\", instance=~\"$instance\"}[$__rate_interval])) by (status)", "legendFormat": "{{status}}" }
       ]
     },
     {
@@ -176,9 +176,9 @@
       "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
       "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
       "targets": [
-        { "expr": "histogram_quantile(0.50, sum(rate(http_server_requests_seconds_bucket{application=\"$application\", instance=~\"$instance\"}[$__rate_interval])) by (le))", "legendFormat": "p50" },
-        { "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{application=\"$application\", instance=~\"$instance\"}[$__rate_interval])) by (le))", "legendFormat": "p95" },
-        { "expr": "histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket{application=\"$application\", instance=~\"$instance\"}[$__rate_interval])) by (le))", "legendFormat": "p99" }
+        { "expr": "histogram_quantile(0.50, sum(rate(http_server_requests_seconds_bucket{application=\"$application\", uri!~\"$exclude_uri\", instance=~\"$instance\"}[$__rate_interval])) by (le))", "legendFormat": "p50" },
+        { "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{application=\"$application\", uri!~\"$exclude_uri\", instance=~\"$instance\"}[$__rate_interval])) by (le))", "legendFormat": "p95" },
+        { "expr": "histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket{application=\"$application\", uri!~\"$exclude_uri\", instance=~\"$instance\"}[$__rate_interval])) by (le))", "legendFormat": "p99" }
       ]
     },
     {
@@ -189,7 +189,7 @@
       "datasource": { "type": "prometheus", "uid": "${prometheus_ds}" },
       "fieldConfig": { "defaults": { "unit": "reqps" } },
       "targets": [
-        { "expr": "sum(rate(http_server_requests_seconds_count{application=\"$application\", instance=~\"$instance\", status=~\"5..\"}[$__rate_interval])) by (uri)", "legendFormat": "{{uri}}" }
+        { "expr": "sum(rate(http_server_requests_seconds_count{application=\"$application\", uri!~\"$exclude_uri\", instance=~\"$instance\", status=~\"5..\"}[$__rate_interval])) by (uri)", "legendFormat": "{{uri}}" }
       ]
     },
     {
@@ -312,6 +312,7 @@
   "tags": ["hms", "spring-boot", "prometheus", "loki"],
   "templating": {
     "list": [
+      { "name": "exclude_uri", "type": "textbox", "label": "Exclude URIs (regex)", "query": "/api/ws-chat.*|/ws/.*", "current": { "text": "/api/ws-chat.*|/ws/.*", "value": "/api/ws-chat.*|/ws/.*" }, "description": "Transport endpoints held open by design (SockJS/WebSocket). Their 25-50s lifetimes are not request latency and would dominate every percentile and top-N panel. Clear this box to include them." },
       {
         "name": "prometheus_ds",
         "type": "datasource",
