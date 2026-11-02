@@ -218,6 +218,11 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     private final com.example.hms.repository.EducationResourceRepository educationResourceRepository;
     private final com.example.hms.mapper.PatientEducationQuestionMapper educationQuestionMapper;
     private final MessageSource messageSource;
+    /**
+     * QA D1212 (round 24): the health summary's best-effort cards each read in
+     * their own transaction, so a failed card never rolls back the page.
+     */
+    private final com.example.hms.service.support.IsolatedReads isolatedReads;
 
     /**
      * QA D985: booking or cancelling the visit a recall asks for moves the
@@ -423,7 +428,10 @@ public class PatientPortalServiceImpl implements PatientPortalService {
      */
     private List<String> activeDiagnosesOf(UUID patientId) {
         java.util.LinkedHashSet<String> out = new java.util.LinkedHashSet<>();
-        try {
+        // Partial availability, as the other cards of the summary: a failed
+        // read is logged, never a broken page — and, QA D1212 (round 24),
+        // never a rolled-back summary: the read has its own transaction.
+        isolatedReads.attempt("health summary active diagnoses", () -> {
             if (patientProblemRepository != null) {
                 patientProblemRepository.findByPatient_IdAndStatusOrderByCreatedAtDesc(
                         patientId, com.example.hms.enums.ProblemStatus.ACTIVE)
@@ -434,11 +442,7 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                     .filter(d -> "ACTIVE".equalsIgnoreCase(d.getStatus()))
                     .forEach(d -> addDiagnosisLabel(out, d.getDescription(), d.getIcdCode()));
             }
-        } catch (RuntimeException ex) {
-            // Partial availability, as the other cards of the summary: a failed
-            // read is logged, never a broken page.
-            log.warn("Active diagnoses unavailable for the health summary: {}", ex.getClass().getSimpleName());
-        }
+        });
         return List.copyOf(out);
     }
 
@@ -584,7 +588,9 @@ public class PatientPortalServiceImpl implements PatientPortalService {
     @Transactional(readOnly = true)
     public List<ImmunizationResponseDTO> getMyImmunizations(Authentication auth) {
         UUID patientId = resolvePatientId(auth);
-        return immunizationService.getImmunizationsByPatientId(patientId);
+        // QA D1212 (round 24): the patient's own record at every hospital
+        // (design Q1), as labs, medications and vitals already read it.
+        return immunizationService.getImmunizationsForPatientPortal(patientId);
     }
 
     // ── Consultations ────────────────────────────────────────────────────
@@ -1339,12 +1345,6 @@ public class PatientPortalServiceImpl implements PatientPortalService {
 
     private PatientProfileDTO toProfileDTO(Patient p) {
         UUID hospId = resolvePatientHospitalId(p);
-        String hospName = null;
-        if (hospId != null) {
-            hospName = hospitalRepository.findById(hospId)
-                    .map(h -> h.getName())
-                    .orElse(null);
-        }
         // QA D244: the MRN was never mapped, so every profile read null. It lives on
         // the per-hospital registration: the current hospital's, plus the full list.
         List<PatientProfileDTO.HospitalRecord> records = registrationRepository.findByPatientId(p.getId()).stream()
@@ -1355,6 +1355,15 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                         .mrn(reg.getMrn())
                         .build())
                 .toList();
+        // QA D1212 (round 24): the name comes from the patient's own
+        // registration first. The tenant-scoped hospital read answered nothing
+        // for a proxy viewing a grantor registered at another hospital.
+        String hospName = records.stream()
+                .filter(r -> r.getHospitalId().equals(hospId))
+                .map(PatientProfileDTO.HospitalRecord::getHospitalName)
+                .findFirst()
+                .orElseGet(() -> hospId == null ? null
+                        : hospitalRepository.findById(hospId).map(Hospital::getName).orElse(null));
         String mrn = records.stream()
                 .filter(r -> r.getHospitalId().equals(hospId))
                 .map(PatientProfileDTO.HospitalRecord::getMrn)
@@ -1394,48 +1403,52 @@ public class PatientPortalServiceImpl implements PatientPortalService {
                 .build();
     }
 
-    /** Safe delegates — return empty list if service call fails (partial availability). */
+    /**
+     * Best-effort delegates: a card that cannot be read is empty, never a
+     * broken page (partial availability). QA D1212 (round 24): each read runs
+     * through {@link com.example.hms.service.support.IsolatedReads}, in its own
+     * transaction. A plain try/catch here let the nested read mark the
+     * summary's own transaction rollback-only, and the summary's commit then
+     * answered 500 (UnexpectedRollbackException) for a grantor registered at
+     * another hospital.
+     */
     private List<PatientLabResultResponseDTO> safeLabResults(UUID patientId, UUID hospitalId) {
-        try {
-            return labResultService.getLabResultsForPatientPortal(patientId, hospitalId, 5);
-        } catch (Exception e) {
-            log.warn("Failed to fetch lab results for health summary: {}", e.getMessage());
-            return Collections.emptyList();
-        }
+        java.util.concurrent.atomic.AtomicReference<List<PatientLabResultResponseDTO>> out =
+            new java.util.concurrent.atomic.AtomicReference<>(Collections.emptyList());
+        isolatedReads.attempt("health summary lab results",
+            () -> out.set(labResultService.getLabResultsForPatientPortal(patientId, hospitalId, 5)));
+        return out.get();
     }
 
     private List<PatientMedicationResponseDTO> safeMedications(UUID patientId, UUID hospitalId) {
-        try {
-            // QA D720: the summary's "current medications" (health summary and
-            // the proxy view) are the courses still running, never a completed
-            // or discontinued one. Filtered before the cap so ten current ones
-            // are not crowded out by finished ones.
-            return medicationService.getMedicationsForPatientPortal(patientId, hospitalId, 100).stream()
+        java.util.concurrent.atomic.AtomicReference<List<PatientMedicationResponseDTO>> out =
+            new java.util.concurrent.atomic.AtomicReference<>(Collections.emptyList());
+        // QA D720: the summary's "current medications" (health summary and
+        // the proxy view) are the courses still running, never a completed
+        // or discontinued one. Filtered before the cap so ten current ones
+        // are not crowded out by finished ones.
+        isolatedReads.attempt("health summary medications",
+            () -> out.set(medicationService.getMedicationsForPatientPortal(patientId, hospitalId, 100).stream()
                 .filter(m -> "ACTIVE".equals(m.getStatus()))
                 .limit(10)
-                .toList();
-        } catch (Exception e) {
-            log.warn("Failed to fetch medications for health summary: {}", e.getMessage());
-            return Collections.emptyList();
-        }
+                .toList()));
+        return out.get();
     }
 
     private List<PatientVitalSignResponseDTO> safeVitals(UUID patientId) {
-        try {
-            return vitalSignService.getRecentVitalsForPatientPortal(patientId, 5);
-        } catch (Exception e) {
-            log.warn("Failed to fetch vitals for health summary: {}", e.getMessage());
-            return Collections.emptyList();
-        }
+        java.util.concurrent.atomic.AtomicReference<List<PatientVitalSignResponseDTO>> out =
+            new java.util.concurrent.atomic.AtomicReference<>(Collections.emptyList());
+        isolatedReads.attempt("health summary vitals",
+            () -> out.set(vitalSignService.getRecentVitalsForPatientPortal(patientId, 5)));
+        return out.get();
     }
 
     private List<ImmunizationResponseDTO> safeImmunizations(UUID patientId) {
-        try {
-            return immunizationService.getImmunizationsByPatientId(patientId);
-        } catch (Exception e) {
-            log.warn("Failed to fetch immunizations for health summary: {}", e.getMessage());
-            return Collections.emptyList();
-        }
+        java.util.concurrent.atomic.AtomicReference<List<ImmunizationResponseDTO>> out =
+            new java.util.concurrent.atomic.AtomicReference<>(Collections.emptyList());
+        isolatedReads.attempt("health summary immunizations",
+            () -> out.set(immunizationService.getImmunizationsForPatientPortal(patientId)));
+        return out.get();
     }
 
     private List<String> splitToList(String csv) {

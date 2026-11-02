@@ -126,6 +126,11 @@ class PatientPortalServiceImplPhase1Test {
 
     @Mock private com.example.hms.service.pharmacy.PrescriptionControlledResolver controlledResolver;
 
+    /** QA D1212 (round 24): the summary's best-effort cards read through IsolatedReads. */
+    @org.mockito.Spy
+    private com.example.hms.service.support.IsolatedReads isolatedReads =
+        com.example.hms.service.support.IsolatedReadsTestSupport.inline();
+
     @InjectMocks
     private PatientPortalServiceImpl service;
 
@@ -445,7 +450,7 @@ class PatientPortalServiceImplPhase1Test {
                     .thenReturn(List.of(finished, running, stopped));
             when(vitalSignService.getRecentVitalsForPatientPortal(patientId, 5))
                     .thenReturn(List.of(new PatientVitalSignResponseDTO()));
-            when(immunizationService.getImmunizationsByPatientId(patientId))
+            when(immunizationService.getImmunizationsForPatientPortal(patientId))
                     .thenReturn(List.of(new ImmunizationResponseDTO()));
 
             HealthSummaryDTO result = service.getHealthSummary(auth, Locale.ENGLISH);
@@ -495,7 +500,7 @@ class PatientPortalServiceImplPhase1Test {
             when(labResultService.getLabResultsForPatientPortal(any(), any(), anyInt())).thenReturn(List.of());
             when(medicationService.getMedicationsForPatientPortal(any(), any(), anyInt())).thenReturn(List.of());
             when(vitalSignService.getRecentVitalsForPatientPortal(any(), anyInt())).thenReturn(List.of());
-            when(immunizationService.getImmunizationsByPatientId(any())).thenReturn(List.of());
+            when(immunizationService.getImmunizationsForPatientPortal(any())).thenReturn(List.of());
 
             HealthSummaryDTO result = service.getHealthSummary(auth, Locale.FRENCH);
 
@@ -514,7 +519,7 @@ class PatientPortalServiceImplPhase1Test {
                     .thenThrow(new RuntimeException("med service down"));
             when(vitalSignService.getRecentVitalsForPatientPortal(any(), anyInt()))
                     .thenThrow(new RuntimeException("vital service down"));
-            when(immunizationService.getImmunizationsByPatientId(any()))
+            when(immunizationService.getImmunizationsForPatientPortal(any()))
                     .thenThrow(new RuntimeException("immunization service down"));
 
             HealthSummaryDTO result = service.getHealthSummary(auth, Locale.ENGLISH);
@@ -535,7 +540,7 @@ class PatientPortalServiceImplPhase1Test {
             when(labResultService.getLabResultsForPatientPortal(any(), any(), anyInt())).thenReturn(List.of());
             when(medicationService.getMedicationsForPatientPortal(any(), any(), anyInt())).thenReturn(List.of());
             when(vitalSignService.getRecentVitalsForPatientPortal(any(), anyInt())).thenReturn(List.of());
-            when(immunizationService.getImmunizationsByPatientId(any())).thenReturn(List.of());
+            when(immunizationService.getImmunizationsForPatientPortal(any())).thenReturn(List.of());
 
             HealthSummaryDTO result = service.getHealthSummary(auth, Locale.ENGLISH);
 
@@ -760,12 +765,12 @@ class PatientPortalServiceImplPhase1Test {
         void getMyImmunizations_delegates() {
             stubPatientResolution();
             List<ImmunizationResponseDTO> expected = List.of(new ImmunizationResponseDTO());
-            when(immunizationService.getImmunizationsByPatientId(patientId)).thenReturn(expected);
+            when(immunizationService.getImmunizationsForPatientPortal(patientId)).thenReturn(expected);
 
             List<ImmunizationResponseDTO> result = service.getMyImmunizations(auth);
 
             assertThat(result).isEqualTo(expected);
-            verify(immunizationService).getImmunizationsByPatientId(patientId);
+            verify(immunizationService).getImmunizationsForPatientPortal(patientId);
         }
     }
 
