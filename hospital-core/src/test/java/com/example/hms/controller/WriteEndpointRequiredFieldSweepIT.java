@@ -116,6 +116,8 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
 
     private static final String API = "/api";
     private static final String FIELD_ERRORS = "fieldErrors";
+    private static final String NOTES_OPTIONAL = "the notes are optional";
+    private static final String SEARCH_FILTER = "a search filter: every criterion is optional";
 
     /**
      * Endpoints whose body has no required field: an empty body is a valid
@@ -124,11 +126,11 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
      */
     private static final Map<String, String> NO_REQUIRED_FIELD = Map.ofEntries(
         Map.entry("POST /appointments/search",
-            "a search filter: every criterion is optional"),
+            SEARCH_FILTER),
         Map.entry("POST /billing-invoices/search",
-            "a search filter: every criterion is optional"),
+            SEARCH_FILTER),
         Map.entry("POST /departments/filter",
-            "a search filter: every criterion is optional"),
+            SEARCH_FILTER),
         Map.entry("POST /auth/logout",
             "ends the session; the refresh token in the body is optional"),
         Map.entry("POST /auth/token/refresh",
@@ -208,9 +210,9 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
         Map.entry("POST /lab-results/{id}/sign",
             "the signature text and notes are optional (the caller signs)"),
         Map.entry("POST /pharmacy/claims/{id}/accept",
-            "the notes are optional"),
+            NOTES_OPTIONAL),
         Map.entry("POST /pharmacy/claims/{id}/pay",
-            "the notes are optional"),
+            NOTES_OPTIONAL),
         Map.entry("POST /pharmacy/dispense/{id}/hand-over",
             "the scan value and notes are optional"),
         Map.entry("POST /prescriptions/{id}/pharmacist-verify",
@@ -220,7 +222,7 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
         Map.entry("POST /prescriptions/{id}/sign",
             "the password / MFA step-up and the allergy override are each required only in their case, named then"),
         Map.entry("POST /reception/insurance/{insuranceId}/attest-eligibility",
-            "the notes are optional"),
+            NOTES_OPTIONAL),
         Map.entry("POST /staff/{staffId}/credentials/renew",
             "every field optional (diplomas do not expire: no mandatory expiry)"),
         Map.entry("POST /transfers/{orderId}/complete",
@@ -335,40 +337,12 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
     private void sweep(Endpoint endpoint, Map<String, List<String>> failures, Set<String> allowedSeen)
             throws Exception {
         Answer empty = call(endpoint, endpoint.emptyBody());
+        if (!refusedByNameAtTheEdge(endpoint, empty, failures, allowedSeen)
+                || Map.class.isAssignableFrom(endpoint.bodyType())) {
+            // A free-form map body names its own keys: nothing typed to fill.
+            return;
+        }
         String key = endpoint.key();
-        String where = " [" + endpoint.handler.getBeanType().getSimpleName() + "#" + endpoint.handler.getMethod().getName()
-            + "(" + endpoint.bodyType().getSimpleName() + ")]";
-        if (empty.status >= 500) {
-            fail(failures, "5xx on {}", key + " -> " + empty.status + " " + empty.brief());
-            return;
-        }
-        if (empty.status < 300) {
-            if (NO_REQUIRED_FIELD.containsKey(key)) {
-                allowedSeen.add(key);
-            } else {
-                fail(failures, "2xx on {} (a required field is not declared, or list it in NO_REQUIRED_FIELD)",
-                    key + where + " -> " + empty.status);
-            }
-            return;
-        }
-        if (NO_REQUIRED_FIELD.containsKey(key)) {
-            // Listed as having no required field, yet refused: a reason would be read here.
-            allowedSeen.add(key);
-            if (empty.status == 400 && !empty.fieldErrors.isEmpty()) {
-                fail(failures, "listed in NO_REQUIRED_FIELD but {} is refused by name",
-                    key + " -> " + empty.fieldErrors.keySet());
-            }
-            return;
-        }
-        if (empty.status != 400 || empty.fieldErrors.isEmpty()) {
-            fail(failures, "{} not refused by name at the edge (a 400 with fieldErrors)",
-                key + where + " -> " + empty.status + " " + empty.brief());
-            return;
-        }
-        if (Map.class.isAssignableFrom(endpoint.bodyType())) {
-            // A free-form map body: the handler names its own keys; nothing typed to fill.
-            return;
-        }
         List<String> unknownKeys = endpoint.unknownKeys(empty.fieldErrors.keySet());
         if (!unknownKeys.isEmpty()) {
             fail(failures, "fieldErrors key that is not a request property", key + " -> " + unknownKeys);
@@ -378,32 +352,78 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
             return;
         }
         Map<String, Object> filled = endpoint.filledBody(empty.fieldErrors.keySet());
+        fillAndResend(endpoint, empty, filled, failures, allowedSeen);
+        missingOneAtATime(endpoint, filled, failures);
+        blankTyped(endpoint, empty, failures);
+    }
+
+    /** Phase 1: {@code {}}. True when it was refused by name and the next phases apply. */
+    private static boolean refusedByNameAtTheEdge(Endpoint endpoint, Answer empty, Map<String, List<String>> failures,
+                                                  Set<String> allowedSeen) {
+        String key = endpoint.key();
+        String where = " [" + endpoint.handler.getBeanType().getSimpleName() + "#" + endpoint.handler.getMethod().getName()
+            + "(" + endpoint.bodyType().getSimpleName() + ")]";
+        boolean listed = NO_REQUIRED_FIELD.containsKey(key);
+        if (empty.status >= 500) {
+            fail(failures, "5xx on {}", key + " -> " + empty.status + " " + empty.brief());
+        } else if (empty.status < 300) {
+            if (listed) {
+                allowedSeen.add(key);
+            } else {
+                fail(failures, "2xx on {} (a required field is not declared, or list it in NO_REQUIRED_FIELD)",
+                    key + where + " -> " + empty.status);
+            }
+        } else if (listed) {
+            allowedSeen.add(key);
+            if (empty.status == 400 && !empty.fieldErrors.isEmpty()) {
+                fail(failures, "listed in NO_REQUIRED_FIELD but {} is refused by name",
+                    key + " -> " + empty.fieldErrors.keySet());
+            }
+        } else if (empty.status != 400 || empty.fieldErrors.isEmpty()) {
+            fail(failures, "{} not refused by name at the edge (a 400 with fieldErrors)",
+                key + where + " -> " + empty.status + " " + empty.brief());
+        } else {
+            return true;
+        }
+        return false;
+    }
+
+    /** Phase 2: every named field filled; nothing still omitted may be named now. */
+    private void fillAndResend(Endpoint endpoint, Answer empty, Map<String, Object> filled,
+                               Map<String, List<String>> failures, Set<String> allowedSeen) throws Exception {
+        String key = endpoint.key();
         Answer second = call(endpoint, endpoint.wrap(filled));
         if (second.status >= 500) {
             fail(failures, "5xx once the named fields are filled", key + " -> " + second.status + " " + second.brief());
-        } else {
-            List<String> late = new ArrayList<>();
-            for (String named : second.fieldErrors.keySet()) {
-                String top = Endpoint.topLevel(named);
-                if (!filled.containsKey(top) && !empty.fieldErrors.containsKey(named)
-                        && empty.fieldErrors.keySet().stream().noneMatch(k -> Endpoint.topLevel(k).equals(top))) {
-                    late.add(named);
-                }
-            }
-            late.removeAll(CONDITIONAL.getOrDefault(key, Set.of()));
-            if (!late.isEmpty()) {
-                fail(failures, "required field named only on a later request (one at a time)",
-                    key + " -> first " + empty.fieldErrors.keySet() + ", then " + late);
-            }
-            if (second.status == 400 && second.fieldErrors.isEmpty()) {
-                if (NOT_A_FIELD_ONCE_FILLED.containsKey(key)) {
-                    allowedSeen.add("filled " + key);
-                } else {
-                    fail(failures, "refused without fieldErrors once the named fields are filled",
-                        key + " -> " + second.brief());
-                }
+            return;
+        }
+        List<String> late = new ArrayList<>();
+        for (String named : second.fieldErrors.keySet()) {
+            String top = Endpoint.topLevel(named);
+            if (!filled.containsKey(top) && !empty.fieldErrors.containsKey(named)
+                    && empty.fieldErrors.keySet().stream().noneMatch(k -> Endpoint.topLevel(k).equals(top))) {
+                late.add(named);
             }
         }
+        late.removeAll(CONDITIONAL.getOrDefault(key, Set.of()));
+        if (!late.isEmpty()) {
+            fail(failures, "required field named only on a later request (one at a time)",
+                key + " -> first " + empty.fieldErrors.keySet() + ", then " + late);
+        }
+        if (second.status == 400 && second.fieldErrors.isEmpty()) {
+            if (NOT_A_FIELD_ONCE_FILLED.containsKey(key)) {
+                allowedSeen.add("filled " + key);
+            } else {
+                fail(failures, "refused without fieldErrors once the named fields are filled",
+                    key + " -> " + second.brief());
+            }
+        }
+    }
+
+    /** Phase 3: each named field left out alone is never accepted. */
+    private void missingOneAtATime(Endpoint endpoint, Map<String, Object> filled, Map<String, List<String>> failures)
+            throws Exception {
+        String key = endpoint.key();
         for (String top : new TreeSet<>(filled.keySet())) {
             Map<String, Object> missingOne = new LinkedHashMap<>(filled);
             missingOne.remove(top);
@@ -415,24 +435,30 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
                 fail(failures, "2xx with one named field left out", key + " without " + top);
             }
         }
-        Map<String, Object> blankTyped = endpoint.blankTypedBody();
-        if (!blankTyped.isEmpty()) {
-            Answer fourth = call(endpoint, endpoint.wrap(blankTyped));
-            if (fourth.status >= 500) {
-                fail(failures, "5xx on blank typed fields", key + " -> " + fourth.status + " " + fourth.brief());
-            } else {
-                List<String> unnamed = new ArrayList<>();
-                for (String sent : blankTyped.keySet()) {
-                    String prefix = endpoint.elementType() != null ? "[0]." : "";
-                    if (empty.fieldErrors.containsKey(prefix + sent) && !fourth.fieldErrors.containsKey(prefix + sent)) {
-                        unnamed.add(sent);
-                    }
-                }
-                if (!unnamed.isEmpty() && fourth.status == 400) {
-                    fail(failures, "blank typed required field not named (only the first is)",
-                        key + " -> named " + fourth.fieldErrors.keySet() + ", not " + unnamed);
-                }
+    }
+
+    /** Phase 4: every typed field sent blank at once; every required one is named in one answer. */
+    private void blankTyped(Endpoint endpoint, Answer empty, Map<String, List<String>> failures) throws Exception {
+        Map<String, Object> blank = endpoint.blankTypedBody();
+        if (blank.isEmpty()) {
+            return;
+        }
+        String key = endpoint.key();
+        Answer fourth = call(endpoint, endpoint.wrap(blank));
+        if (fourth.status >= 500) {
+            fail(failures, "5xx on blank typed fields", key + " -> " + fourth.status + " " + fourth.brief());
+            return;
+        }
+        String prefix = endpoint.elementType() != null ? "[0]." : "";
+        List<String> unnamed = new ArrayList<>();
+        for (String sent : blank.keySet()) {
+            if (empty.fieldErrors.containsKey(prefix + sent) && !fourth.fieldErrors.containsKey(prefix + sent)) {
+                unnamed.add(sent);
             }
+        }
+        if (!unnamed.isEmpty() && fourth.status == 400) {
+            fail(failures, "blank typed required field not named (only the first is)",
+                key + " -> named " + fourth.fieldErrors.keySet() + ", not " + unnamed);
         }
     }
 
@@ -537,6 +563,14 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
             return method.name() + " " + pattern;
         }
 
+        /** The annotation's name, else its value, else the parameter's own name. */
+        private static String nameOf(String name, String value, MethodParameter p) {
+            if (!name.isEmpty()) {
+                return name;
+            }
+            return value.isEmpty() ? p.getParameterName() : value;
+        }
+
         boolean patientFacing() {
             return pattern.startsWith("/me/patient") || pattern.startsWith("/me/");
         }
@@ -548,8 +582,7 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
                 if (pv == null) {
                     continue;
                 }
-                String name = !pv.name().isEmpty() ? pv.name() : !pv.value().isEmpty() ? pv.value()
-                    : p.getParameterName();
+                String name = nameOf(pv.name(), pv.value(), p);
                 url = url.replaceAll("\\{" + java.util.regex.Pattern.quote(String.valueOf(name)) + "(:[^}]*)?}",
                     java.util.regex.Matcher.quoteReplacement(sample(p.getParameterType(), String.valueOf(name))));
             }
@@ -565,8 +598,7 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
                         || Map.class.isAssignableFrom(p.getParameterType())) {
                     continue;
                 }
-                String name = !rp.name().isEmpty() ? rp.name() : !rp.value().isEmpty() ? rp.value()
-                    : p.getParameterName();
+                String name = nameOf(rp.name(), rp.value(), p);
                 out.put(name, sample(p.getParameterType(), name));
             }
             return out;
@@ -580,8 +612,7 @@ class WriteEndpointRequiredFieldSweepIT extends BaseIT {
                 if (rh == null || !rh.required() || !ValueConstants.DEFAULT_NONE.equals(rh.defaultValue())) {
                     continue;
                 }
-                String name = !rh.name().isEmpty() ? rh.name() : !rh.value().isEmpty() ? rh.value()
-                    : p.getParameterName();
+                String name = nameOf(rh.name(), rh.value(), p);
                 out.putIfAbsent(name, UUID.randomUUID().toString());
             }
             return out;
