@@ -118,7 +118,9 @@ class MalformedRequestFieldLabelTest {
         assertThat((String) body.get("message")).isEqualTo("Une valeur saisie n’est pas valide.")
             .doesNotContain("zzUnlabelled");
         assertThat(body).containsEntry("field", "zzUnlabelled");
-        assertThat((Map<?, ?>) body.get("fieldErrors")).containsOnlyKeys("zzUnlabelled");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> fieldErrors = (Map<String, Object>) body.get("fieldErrors");
+        assertThat(fieldErrors).containsOnlyKeys("zzUnlabelled");
     }
 
     /** QA D1312 (round 28): the check-in's malformed copay method is named by its label in every language. */

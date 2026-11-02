@@ -25,6 +25,8 @@ import java.util.Map;
 public final class RequiredFields {
 
     private final Map<String, String> missing = new LinkedHashMap<>();
+    /** The key and arguments of each refusal, so a single one keeps its message key. */
+    private final Map<String, Object[]> keys = new LinkedHashMap<>();
 
     private RequiredFields() {
     }
@@ -35,8 +37,12 @@ public final class RequiredFields {
 
     /** Records {@code field} as refused with the reason {@code messageKey} when {@code present} is false. */
     public RequiredFields require(boolean present, String field, String messageKey, Object... args) {
-        if (!present) {
-            missing.putIfAbsent(field, MessageUtil.resolveOrRaw(messageKey, args));
+        if (!present && !missing.containsKey(field)) {
+            missing.put(field, MessageUtil.resolveOrRaw(messageKey, args));
+            Object[] keyAndArgs = new Object[args.length + 1];
+            keyAndArgs[0] = messageKey;
+            System.arraycopy(args, 0, keyAndArgs, 1, args.length);
+            keys.put(field, keyAndArgs);
         }
         return this;
     }
@@ -53,6 +59,13 @@ public final class RequiredFields {
 
     /** Throws one refusal naming every recorded field; does nothing when all were given. */
     public void orThrow() {
+        if (missing.size() == 1) {
+            // One field: the usual single-field refusal, with its message key.
+            Map.Entry<String, Object[]> only = keys.entrySet().iterator().next();
+            Object[] keyAndArgs = only.getValue();
+            throw new FieldBusinessException(only.getKey(), (String) keyAndArgs[0],
+                java.util.Arrays.copyOfRange(keyAndArgs, 1, keyAndArgs.length));
+        }
         if (!missing.isEmpty()) {
             throw new FieldBusinessException(missing);
         }

@@ -622,9 +622,11 @@ class ChatMessageServiceImplTest {
         ChatMessageServiceImpl service = spy(chatMessageService);
         doReturn(senderId).when(service).getCurrentUserId();
 
-        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-            () -> service.sendMessage(dto, Locale.ENGLISH));
+        // QA D1299: a FieldBusinessException naming the message field (was an IllegalArgumentException; still 400).
+        com.example.hms.exception.FieldBusinessException ex = assertThrows(
+            com.example.hms.exception.FieldBusinessException.class, () -> service.sendMessage(dto, Locale.ENGLISH));
         assertTrue(ex.getMessage().contains("add an attachment"));
+        assertEquals("content", ex.getField());
     }
 
     @Test
@@ -643,8 +645,9 @@ class ChatMessageServiceImplTest {
         assertEquals("Vous ne pouvez pas vous envoyer un message à vous-même.", self.getMessage());
 
         ChatMessageRequestDTO empty = ChatMessageRequestDTO.builder().recipientId(UUID.randomUUID()).content("").build();
-        IllegalArgumentException blank = assertThrows(IllegalArgumentException.class,
-            () -> service.sendMessage(empty, Locale.FRENCH));
+        // QA D1299: now a FieldBusinessException on "content" (still 400, same sentence).
+        com.example.hms.exception.FieldBusinessException blank = assertThrows(
+            com.example.hms.exception.FieldBusinessException.class, () -> service.sendMessage(empty, Locale.FRENCH));
         assertEquals("Écrivez un message ou ajoutez une pièce jointe avant d'envoyer.", blank.getMessage());
     }
 

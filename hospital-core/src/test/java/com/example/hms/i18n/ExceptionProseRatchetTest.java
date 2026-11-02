@@ -57,6 +57,11 @@ class ExceptionProseRatchetTest {
             + "|ClientSafeAccessDeniedException|ResourceNotFoundException)\\s*\\(\\s*(?:HttpStatus\\.\\w+\\s*,\\s*)?"
             + "(?:(?:String|MessageFormat)\\s*\\.\\s*format\\s*\\(\\s*)?\"((?:[^\"\\\\]|\\\\.)*)\"");
 
+    /** {@code new FieldBusinessException("field", "message", ...)}: the message is the second argument. */
+    static final Pattern FIELD_PROSE = Pattern.compile(
+        "new\\s+(?:[a-z]\\w*\\s*\\.\\s*)*FieldBusinessException\\s*\\(\\s*\"[^\"]*\"\\s*,\\s*"
+            + "(?:(?:String|MessageFormat)\\s*\\.\\s*format\\s*\\(\\s*)?\"((?:[^\"\\\\]|\\\\.)*)\"");
+
     static boolean isProse(String literal) {
         return literal.indexOf(' ') >= 0;
     }
@@ -78,6 +83,14 @@ class ExceptionProseRatchetTest {
         Matcher m = PROSE.matcher(source);
         while (m.find()) {
             if (isProse(m.group(1))) {
+                n++;
+            }
+        }
+        // QA D1299 (round 28): a FieldBusinessException carries its message SECOND, after the field;
+        // a sentence there is still a sentence (the round-28 conversions kept their text).
+        Matcher f = FIELD_PROSE.matcher(source);
+        while (f.find()) {
+            if (isProse(f.group(1))) {
                 n++;
             }
         }

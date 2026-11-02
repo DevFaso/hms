@@ -94,11 +94,12 @@ class InvoiceSearchPostgresIT {
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
             entityManager.createNativeQuery("SET LOCAL session_replication_role = replica").executeUpdate();
             entityManager.createNativeQuery("""
-                INSERT INTO clinical.patients (id, first_name, last_name, date_of_birth, phone_number_primary,
+                INSERT INTO clinical.patients (id, user_id, first_name, last_name, date_of_birth, phone_number_primary,
                     phone_number_secondary, email, is_active, chart_restricted, created_at, updated_at)
-                VALUES (:id, 'Inoussa', 'Sawadogo', DATE '1990-06-15', '+226 70 28 43 17', '65-11-22-33', :email,
+                VALUES (:id, :user, 'Inoussa', 'Sawadogo', DATE '1990-06-15', '+226 70 28 43 17', '65-11-22-33', :email,
                     true, false, now(), now())
-                """).setParameter("id", patientId).setParameter("email", EMAIL).executeUpdate();
+                """).setParameter("id", patientId).setParameter("user", UUID.randomUUID()).setParameter("email", EMAIL)
+                .executeUpdate();
             entityManager.createNativeQuery("""
                 INSERT INTO clinical.patient_hospital_registrations
                     (id, mrn, patient_id, hospital_id, registration_date, is_active, stay_status, created_at, updated_at)

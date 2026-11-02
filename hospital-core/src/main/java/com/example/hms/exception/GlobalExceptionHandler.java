@@ -373,7 +373,8 @@ public class GlobalExceptionHandler {
      */
     private String invalidFieldReason(String field) {
         String label = fieldLabel(field);
-        if (label == null || label.equals(field)) {
+        // Without a message source (a bare handler in a unit test) no label can be read: keep the path.
+        if (messageSource != null && (label == null || label.equals(field))) {
             return localized("error.request.invalidUnlabelledField", "A value entered is not valid.");
         }
         return localized("error.request.invalidField", "The value entered for \"{0}\" is not valid.", label);

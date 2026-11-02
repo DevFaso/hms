@@ -933,7 +933,9 @@ describe('NurseStationComponent — two-tier polling', () => {
     expect(root.querySelector('#vf-temp')?.getAttribute('aria-invalid')).toBe('true');
     expect(root.querySelector('#vf-hr')?.getAttribute('aria-invalid')).toBe('true');
     expect(root.querySelector('#vf-spo2')?.getAttribute('aria-invalid')).toBeNull();
-    expect(root.querySelector('#vf-temp-invalid-msg')?.textContent).toBe('VITAL_LIMITS.TEMPERATURE');
+    expect(root.querySelector('#vf-temp-invalid-msg')?.textContent).toBe(
+      'VITAL_LIMITS.TEMPERATURE',
+    );
     expect(root.querySelector('#vf-hr-invalid-msg')?.textContent).toBe('VITAL_LIMITS.HEART_RATE');
     // Fixed and sent again: the marks go.
     nurseServiceSpy.captureVitals.and.returnValue(of(undefined));

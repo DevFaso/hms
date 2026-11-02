@@ -1508,6 +1508,7 @@ class LabTestDefinitionServiceImplTest {
 
     @Test
     void processApproval_reject_noReason_throwsIllegalArgument() {
+        // QA D1299 (round 28; assertion changed): the refusal names its field (FieldBusinessException, still 400).
         definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW);
         User director = userWithRole("ROLE_LAB_DIRECTOR");
         holdsRolesAtHospital(director);
@@ -1519,13 +1520,14 @@ class LabTestDefinitionServiceImplTest {
 
             var req = approvalReq("REJECT");
         assertThatThrownBy(() -> service.processApprovalAction(defId, req))
-                    .isInstanceOf(IllegalArgumentException.class)
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class)
                     .hasMessageContaining("rejection reason");
         }
     }
 
     @Test
     void processApproval_reject_blankReason_throwsIllegalArgument() {
+        // QA D1299 (round 28; assertion changed): the refusal names its field (FieldBusinessException, still 400).
         definition.setApprovalStatus(LabTestDefinitionApprovalStatus.PENDING_QA_REVIEW);
         User director = userWithRole("ROLE_LAB_DIRECTOR");
         holdsRolesAtHospital(director);
@@ -1537,7 +1539,7 @@ class LabTestDefinitionServiceImplTest {
 
             var req = approvalReq("REJECT", "   ");
         assertThatThrownBy(() -> service.processApprovalAction(defId, req))
-                    .isInstanceOf(IllegalArgumentException.class);
+                    .isInstanceOf(com.example.hms.exception.FieldBusinessException.class);
         }
     }
 

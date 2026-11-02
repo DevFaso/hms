@@ -129,11 +129,10 @@ public interface BillingInvoiceRepository extends JpaRepository<BillingInvoice, 
                 OR EXISTS (SELECT 1 FROM PatientHospitalRegistration r
                            WHERE r.patient.id = bi.patient.id AND r.hospital.id = bi.hospital.id AND LOWER(r.mrn) LIKE :query)
                 OR CAST(p.dateOfBirth AS string) = :dob
-                OR """ + PatientRepository.PRIMARY_PHONE_DIGITS + """
-     LIKE :phonePattern
-                OR """ + PatientRepository.SECONDARY_PHONE_DIGITS + """
-     LIKE :phonePattern)
-           """;
+           """
+        // Plain strings: a text block strips the trailing space of "OR ".
+        + " OR " + PatientRepository.PRIMARY_PHONE_DIGITS + " LIKE :phonePattern"
+        + " OR " + PatientRepository.SECONDARY_PHONE_DIGITS + " LIKE :phonePattern)\n";
 
     @Query(value = """
            SELECT bi FROM BillingInvoice bi
