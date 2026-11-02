@@ -4,6 +4,7 @@ import com.example.hms.enums.ImagingModality;
 import com.example.hms.enums.ImagingOrderStatus;
 import com.example.hms.enums.ImagingReportStatus;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.ImagingReportMapper;
 import com.example.hms.model.Department;
@@ -106,7 +107,7 @@ public class ImagingReportServiceImpl implements ImagingReportService {
             throw new BusinessException("imaging.report.payloadRequired");
         }
         if (request.getImagingOrderId() == null) {
-            throw new BusinessException("imaging.report.orderRequired");
+            throw new FieldBusinessException("imagingOrderId", "imaging.report.orderRequired");
         }
 
         ImagingOrder imagingOrder = loadOrderScoped(request.getImagingOrderId());

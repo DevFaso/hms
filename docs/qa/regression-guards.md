@@ -59,6 +59,19 @@ reverted (PR body of the guard PR records the runs).
 | `i18n/DrugDisplayNameGuardTest` | A refusal, check reason or message array that names a catalogue drug with a raw `getNameFr()/getGenericName()/getBrandName()`, or a file other than `DrugDisplayNames` choosing a catalogue name by language. | D1235 | 1 audit array (English audit row, stored name) |
 | `cdshooks/bpa/BpaLatestReadingClaimGuardTest` | A BPA card text claiming "latest / most recent / currently" (EN/FR/ES) whose rule does not read the newest value. | D1231 | 3 true claims, each with the method that makes it true |
 
+### Round 26 (`fix/r26-backend-validation`)
+
+| Guard | Class it stops | QA defects | Allowlist today |
+|---|---|---|---|
+| `repository/StringFunctionNullParameterGuardTest` | A query parameter handed bare to a string function (`LENGTH(:p)`, `SUBSTRING(:p, …)`, `LOWER(:p)`, `CONCAT('%', :p, '%')`, `TRIM`, `COALESCE`, `LOCATE`, `REPLACE`, `\|\|`): a null reaches PostgreSQL as bytea and the whole statement fails ("character_length(bytea) does not exist"); H2 accepts it. Reads every `@Query` (value and countQuery, constants assembled) and every other query literal. | D1253 | **0** |
+| `repository/RepositoryNullTextParameterPostgresIT` | The same class on the real engine: every read-only `@Query` with a text or date-time parameter is run on PostgreSQL (Testcontainers, schema from the changelog) with those parameters null. `PatientSearchPostgresIT` runs both patient searches over all 128 + 16 filter combinations. | D1253 | **0** |
+| `architecture/RequiredRequestIdGuardTest` | A missing request id that reaches a lookup and answers 404 "… ID : null": a constrained body bound without `@Valid`, a lookup of `request.getXId()` with no `@NotNull` and no field-named refusal first, a null-id refusal that names no field. | D1258 (D1245 server half) | bodies: 2 (`StaffController` create/update: enum constraints bean validation cannot apply); lookups: 3 internal/optional, each with its reason |
+| `architecture/CloseReasonWordingGuardTest` | The order-cancellation wording used by a closing action that is not a cancellation (deactivate, withdraw, revoke, reject, close); the shared close-reason body carrying one action's wording. | D1267 | **0** |
+| `i18n/FieldLabelCoverageTest` | A request field a default-message refusal can name with no `field.label.<name>` in EN, FR and ES (the raw property inside a French sentence). | D1268 | **0** (parsed scalars without a default-message constraint: standing debt) |
+| `i18n/InBasketKeyedTextGuardTest` | An In-Basket producer that stores a title or body as prose without its key, so every reader sees the writer's language. | D1269 (D1053 class) | 1 user-typed body (lab rejection reason) |
+| `i18n/DisplayDateFormatGuardTest#noJdkGluedDateTime` (extended) | A date-time glued by the JDK's locale pattern (French has no comma before the time) outside `DisplayDates`. | D1266 | **0** |
+| `service/pharmacy/StockWriteOffReasonTest` (extended) | A write-off reason in free text (any word, any position, EN/FR/ES, gender/number) read as a two-way correction. | D1243, D1261 | **0** |
+
 ### Already in place before round 16 (extend these, do not duplicate)
 
 | Guard | Class |

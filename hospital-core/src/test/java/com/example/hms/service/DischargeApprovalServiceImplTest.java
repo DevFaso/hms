@@ -552,10 +552,11 @@ class DischargeApprovalServiceImplTest {
             .rejectionReason("  ")
             .build();
 
+        // QA D1267: a refused discharge says so, not "the reason for the cancellation".
         assertThatThrownBy(() -> service.reject(approvalId, decision))
             .isInstanceOf(BusinessException.class)
             .extracting(e -> ((BusinessException) e).getMessageKey())
-            .isEqualTo("order.lifecycle.cancelReasonRequired");
+            .isEqualTo("dischargeApproval.reject.reasonRequired");
         assertThat(approval.getStatus()).isEqualTo(DischargeStatus.PENDING);
         verify(dischargeApprovalRepository, never()).save(any());
     }

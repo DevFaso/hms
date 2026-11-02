@@ -11,6 +11,7 @@ import com.example.hms.enums.EncounterType;
 import com.example.hms.enums.InvoiceStatus;
 import com.example.hms.enums.SlotStatus;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.payload.dto.AuditEventRequestDTO;
 import com.example.hms.payload.dto.CheckInRequestDTO;
@@ -1003,7 +1004,8 @@ public class ReceptionServiceImpl implements ReceptionService {
         }
         // QA D1157 (round 21): closing an entry says why, on the server; an
         // empty body closed it at once and nothing recorded the decision.
-        String closeReason = com.example.hms.service.support.CancelledOrders.requireCancelReason(reason);
+        String closeReason = com.example.hms.service.support.CancelledOrders.requireReason(reason, "reason",
+            "waitlist.close.reasonRequired");
         // QA D1185 (round 22): closing an OFFERED entry withdraws the offer and
         // frees the held slot at once, as a decline and the expiry sweep do;
         // the slot stayed HELD (and out of search) until the hold expired.
@@ -1106,7 +1108,7 @@ public class ReceptionServiceImpl implements ReceptionService {
 
         // 1. Resolve appointment (required — walk-in handled by separate endpoint)
         if (request.getAppointmentId() == null) {
-            throw new BusinessException("reception.checkin.appointmentRequired");
+            throw new FieldBusinessException("appointmentId", "reception.checkin.appointmentRequired");
         }
         // QA D149: a copay is money taken at the desk; it is validated before
         // anything is written, and recorded below (it used to be dropped).

@@ -79,8 +79,8 @@ public interface PatientVitalSignRepository extends JpaRepository<PatientVitalSi
                 SELECT v FROM PatientVitalSign v
                 WHERE v.patient.id = :patientId
                     AND (:hospitalId IS NULL OR v.hospital.id = :hospitalId)
-                    AND v.recordedAt >= COALESCE(:from, v.recordedAt)
-                    AND v.recordedAt <= COALESCE(:to, v.recordedAt)
+                    AND (CAST(:from AS LocalDateTime) IS NULL OR v.recordedAt >= :from)
+                    AND (CAST(:to AS LocalDateTime) IS NULL OR v.recordedAt <= :to)
                 ORDER BY v.recordedAt DESC
         """)
     List<PatientVitalSign> findWithinRange(@Param("patientId") UUID patientId,

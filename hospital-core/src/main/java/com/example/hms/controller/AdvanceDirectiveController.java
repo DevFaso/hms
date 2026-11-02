@@ -81,7 +81,7 @@ public class AdvanceDirectiveController {
             @PathVariable UUID id,
             // QA D1148 (round 21): the reason is required, sent in the body; an empty body is refused like a blank one.
             @jakarta.validation.Valid @org.springframework.web.bind.annotation.RequestBody(required = false)
-            com.example.hms.payload.dto.scheduling.CloseReasonRequestDTO body) {
+            com.example.hms.payload.dto.scheduling.DirectiveRevocationRequestDTO body) {
         return ResponseEntity.ok(advanceDirectiveService.revoke(id, body == null ? null : body.getReason()));
     }
 }

@@ -103,7 +103,8 @@ public class PatientGuarantorServiceImpl implements PatientGuarantorService {
                                            String reason, UUID actorUserId) {
         // QA D1247 (round 25): one click with an empty body deactivated a
         // guarantor; the reason is required (the shared cancellation rule).
-        String kept = com.example.hms.service.support.CancelledOrders.requireCancelReason(reason);
+        String kept = com.example.hms.service.support.CancelledOrders.requireReason(reason, "reason",
+            "guarantor.deactivate.reasonRequired");
         PatientGuarantor guarantor = loadScoped(patientId, guarantorId, hospitalId);
         if (!guarantor.isActive()) {
             throw new BusinessException("guarantor.alreadyInactive");
@@ -111,7 +112,7 @@ public class PatientGuarantorServiceImpl implements PatientGuarantorService {
         guarantor.setActive(false);
         guarantor.setPrimary(false);
         guarantor.setDeactivationReason(kept.length() > 500 ? kept.substring(0, 500) : kept);
-        guarantor.setDeactivatedAt(java.time.LocalDateTime.now());
+        guarantor.setDeactivatedAt(java.time.LocalDateTime.now(java.time.ZoneId.systemDefault()));
         guarantor.setDeactivatedByUserId(actorUserId);
         return toDto(guarantorRepository.save(guarantor));
     }

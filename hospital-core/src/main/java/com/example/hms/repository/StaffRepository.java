@@ -34,7 +34,7 @@ public interface StaffRepository extends JpaRepository<Staff, UUID> {
     @Query("SELECT s FROM Staff s WHERE s.user.username = :identifier OR s.licenseNumber = :identifier OR s.assignment.role.code = :identifier")
     java.util.Optional<Staff> findByUsernameOrLicenseOrRoleCode(@Param("identifier") String identifier);
     // Lookup staff by user email (excludes deleted users)
-    @Query("SELECT s FROM Staff s WHERE LOWER(s.user.email) = LOWER(:email) AND s.user.isDeleted = false")
+    @Query("SELECT s FROM Staff s WHERE LOWER(s.user.email) = LOWER(CAST(:email AS string)) AND s.user.isDeleted = false")
     List<Staff> findByUserEmail(@Param("email") String email);
 
     // Lookup staff by user phone number (excludes deleted users)
@@ -80,7 +80,7 @@ public interface StaffRepository extends JpaRepository<Staff, UUID> {
     /** QA D907: the staff records an assignment stands for. */
     List<Staff> findByAssignment_Id(UUID assignmentId);
 
-    @Query("select s.user.id from Staff s where lower(s.licenseNumber) = lower(:license)")
+    @Query("select s.user.id from Staff s where lower(s.licenseNumber) = lower(CAST(:license AS string))")
     Optional<UUID> findUserIdByLicense(@Param("license") String license);
 
     /**
@@ -100,7 +100,7 @@ public interface StaffRepository extends JpaRepository<Staff, UUID> {
           AND s.active = true
           AND u.isDeleted = false
           AND u.isActive = true
-          AND UPPER(r.code) = UPPER(:roleCode)
+          AND UPPER(r.code) = UPPER(CAST(:roleCode AS string))
     """)
     List<String> findActiveUsernamesByHospitalAndRole(@Param("hospitalId") UUID hospitalId,
                                                       @Param("roleCode") String roleCode);
@@ -113,12 +113,12 @@ public interface StaffRepository extends JpaRepository<Staff, UUID> {
         WHERE s.hospital.id = :hospitalId
           AND s.active = true
           AND u.isDeleted = false
-          AND (:roleCode IS NULL OR UPPER(r.code) = UPPER(:roleCode))
+          AND (:roleCode IS NULL OR UPPER(r.code) = UPPER(CAST(:roleCode AS string)))
           AND (
-                LOWER(COALESCE(s.name, '')) = LOWER(:identifier)
-             OR LOWER(CONCAT(COALESCE(u.firstName, ''), ' ', COALESCE(u.lastName, ''))) = LOWER(:identifier)
-             OR LOWER(u.username) = LOWER(:identifier)
-             OR LOWER(COALESCE(u.email, '')) = LOWER(:identifier)
+                LOWER(COALESCE(s.name, '')) = LOWER(CAST(:identifier AS string))
+             OR LOWER(CONCAT(COALESCE(u.firstName, ''), ' ', COALESCE(u.lastName, ''))) = LOWER(CAST(:identifier AS string))
+             OR LOWER(u.username) = LOWER(CAST(:identifier AS string))
+             OR LOWER(COALESCE(u.email, '')) = LOWER(CAST(:identifier AS string))
           )
     """)
     List<Staff> findActiveByHospitalAndRoleAndIdentifier(@Param("hospitalId") UUID hospitalId,

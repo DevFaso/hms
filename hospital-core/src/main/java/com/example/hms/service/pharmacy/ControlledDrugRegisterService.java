@@ -218,7 +218,6 @@ public class ControlledDrugRegisterService {
         ControlledRegisterDTO register = buildRegister(pharmacyId, inventoryItemId, from, to);
         Locale locale = LocaleContextHolder.getLocale();
         DateTimeFormatter day = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(locale);
-        DateTimeFormatter when = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT).withLocale(locale);
         // QA D1084: the hospital wall clock, not the server UTC.
         java.time.ZoneId zone = com.example.hms.utility.HospitalTime.zoneOf(pharmacyInScope(pharmacyId).getHospital());
         try (PharmacyPdfWriter pdf = new PharmacyPdfWriter(true)) {
@@ -247,7 +246,8 @@ public class ControlledDrugRegisterService {
                 pdf.tableHeader(widths, head.toArray(new String[0]));
                 for (ControlledRegisterEntryDTO e : drug.entries()) {
                     pdf.tableRow(new String[] {
-                        e.occurredAt() != null ? when.format(com.example.hms.utility.HospitalTime.at(e.occurredAt(), zone)) : "",
+                        e.occurredAt() != null ? com.example.hms.utility.DisplayDates.shortDateTime(
+                            com.example.hms.utility.HospitalTime.at(e.occurredAt(), zone), locale) : "",
                         movementLabel(locale, e.movementType()), plain(e.quantity()), nz(e.lotNumber()),
                         plain(e.balanceAfter()), nz(e.patientName()), nz(e.prescriberName()),
                         nz(e.recordedBy()), nz(e.witnessedBy()), nz(e.reason())});
@@ -466,10 +466,7 @@ public class ControlledDrugRegisterService {
         }
         java.time.LocalDateTime at = com.example.hms.utility.HospitalTime.at(
             java.time.LocalDateTime.parse(fill.group(2) + "T" + fill.group(3)), hospitalZone);
-        String date = java.time.format.DateTimeFormatter
-            .ofLocalizedDateTime(java.time.format.FormatStyle.SHORT)
-            .withLocale(locale != null ? locale : Locale.FRENCH)
-            .format(at);
+        String date = com.example.hms.utility.DisplayDates.shortDateTime(at, locale != null ? locale : Locale.FRENCH);
         return fill.group(1) != null
             ? label(locale, "pharmacy.register.reason.returnFill", fill.group(1), date)
             : label(locale, "pharmacy.register.reason.returnFillDate", date);

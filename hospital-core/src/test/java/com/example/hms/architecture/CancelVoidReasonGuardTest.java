@@ -425,10 +425,10 @@ class CancelVoidReasonGuardTest {
             "KNOWN GAP (D1157 class, standing debt): RoiDecisionDTO.note is optional on cancel (deny requires it);"
                 + " the ROI worklist dialog has no field yet");
         CLINICAL_HANDLERS.put("PUT /advance-directives/{id}/revoke",
-            "CloseReasonRequestDTO.reason -> service/impl/AdvanceDirectiveServiceImplTest#aRevokeWithoutAReasonIsRefused_D1148");
+            "DirectiveRevocationRequestDTO.reason (@NotBlank) -> VALIDATED"); // QA D1267: its own body and wording
         // QA D1247 (round 25): "deactivate" is a withdrawal too; the guarantor's took an empty body.
         CLINICAL_HANDLERS.put("POST /patients/{patientId}/guarantors/{guarantorId}/deactivate",
-            "CloseReasonRequestDTO.reason (@NotBlank) -> VALIDATED");
+            "GuarantorDeactivationRequestDTO.reason (@NotBlank) -> VALIDATED"); // QA D1267: its own body and wording
         CLINICAL_HANDLERS.put("POST /admissions/order-sets/{orderSetId}/deactivate",
             "NOT A CLINICAL RECORD: retires an order-set template; no patient's order changes");
         CLINICAL_HANDLERS.put("PUT /drug-interactions/{id}/deactivate",

@@ -264,6 +264,12 @@ public class ObstetricAlertEscalationWorker {
         List<String> lower = others.stream().map(u -> u.toLowerCase(Locale.ROOT)).toList();
         String text = message == null ? "" : message;
         String title = text.length() > TITLE_MAX ? text.substring(0, TITLE_MAX) : text;
+        // QA D1269 (round 26, D1053 sibling): the item was stored as staff-locale
+        // (French) prose and read in French by an English or Spanish doctor. It
+        // now carries the notice's key and arguments, and the alert sentence's
+        // own key, so each reader's In-Basket renders it in their language; the
+        // stored text stays the fallback for a row raised without a key.
+        boolean bodyKeyed = row.getAlertMessageKey() != null && !row.getAlertMessageKey().isBlank();
         for (User user : userRepository.findByUsernameInIgnoreCase(lower)) {
             try {
                 inBasketService.createItemInNewTransaction(CreateInBasketItemRequest.builder()
@@ -272,7 +278,11 @@ public class ObstetricAlertEscalationWorker {
                     .itemType(InBasketItemType.MESSAGE)
                     .priority(InBasketPriority.CRITICAL)
                     .title(title)
+                    .titleKey(messageKey)
+                    .titleArgs(args)
                     .body(row.getAlertMessage())
+                    .bodyKey(bodyKeyed ? row.getAlertMessageKey() : null)
+                    .bodyArgs(bodyKeyed && row.getAlertMessageArgs() != null ? row.getAlertMessageArgs().toArray() : null)
                     .referenceId(row.getId())
                     .referenceType(REFERENCE_TYPE)
                     .patientId(row.getPatientId())

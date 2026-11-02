@@ -90,6 +90,21 @@ class MalformedRequestFieldLabelTest {
         assertThat(body).containsEntry("field", "startDate");
     }
 
+    /** QA D1268 (round 26): the fields the round named by their raw property in FR and ES sentences. */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {
+        "fullName|nom complet|nombre completo", "encounterType|type de consultation|tipo de consulta",
+        "dueDate|date d’échéance|fecha de vencimiento", "medicationName|nom du médicament|nombre del medicamento",
+        "patientId|patient|paciente", "authorStaffId|auteur|autor", "problemStatement|énoncé du problème|enunciado del problema",
+        "priority|priorité|prioridad", "modality|modalité|modalidad", "studyType|type d’examen|tipo de estudio"})
+    void theRoundTwentySixFieldsAreNamedByTheirLabel(String property, String french, String spanish) {
+        LocaleContextHolder.setLocale(Locale.FRENCH);
+        assertThat((String) body(badField(property)).get("message")).contains("« " + french + " »")
+            .doesNotContain(property);
+        LocaleContextHolder.setLocale(Locale.forLanguageTag("es"));
+        assertThat((String) body(badField(property)).get("message")).contains("«" + spanish + "»");
+    }
+
     @Test
     void aFieldWithoutALabelKeepsItsPath() {
         LocaleContextHolder.setLocale(Locale.FRENCH);

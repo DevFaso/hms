@@ -27,6 +27,21 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
     /** Closes {@link #FOLD_OPEN}. */
     String FOLD_CLOSE = "), '" + PatientMatchKeys.NAME_FOLD_FROM + "', '" + PatientMatchKeys.NAME_FOLD_TO + "')";
 
+    /** {@code p.firstName}, folded. */
+    String FOLDED_FIRST = FOLD_OPEN + "p.firstName" + FOLD_CLOSE;
+    /** {@code p.lastName}, folded. */
+    String FOLDED_LAST = FOLD_OPEN + "p.lastName" + FOLD_CLOSE;
+    /** {@code p.middleName}, folded. */
+    String FOLDED_MIDDLE = FOLD_OPEN + "p.middleName" + FOLD_CLOSE;
+    /** First name then last name, folded. */
+    String FOLDED_FIRST_LAST = FOLD_OPEN + "CONCAT(p.firstName, ' ', p.lastName)" + FOLD_CLOSE;
+    /** Last name then first name, folded. */
+    String FOLDED_LAST_FIRST = FOLD_OPEN + "CONCAT(p.lastName, ' ', p.firstName)" + FOLD_CLOSE;
+    /** The LIKE operator between a folded name and a pattern. */
+    String LIKE = " LIKE ";
+    /** {@link #LIKE} the typed pattern. */
+    String LIKE_NAME = LIKE + ":namePattern";
+
     /**
      * QA D1103: the name orders a patient may be typed in, middle name
      * included, each folded like the typed side. "Rasmané Wend" (first +
@@ -34,16 +49,16 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
      * "Wendkouni" (the middle name alone) found nobody: the middle name was in
      * no comparison. A row with no middle name is matched by the first two.
      */
-    String NAME_MATCH = "(" + FOLD_OPEN + "p.firstName" + FOLD_CLOSE + " LIKE :namePattern"
-        + " OR " + FOLD_OPEN + "p.lastName" + FOLD_CLOSE + " LIKE :namePattern"
-        + " OR " + FOLD_OPEN + "CONCAT(p.firstName, ' ', p.lastName)" + FOLD_CLOSE + " LIKE :namePattern"
-        + " OR " + FOLD_OPEN + "CONCAT(p.lastName, ' ', p.firstName)" + FOLD_CLOSE + " LIKE :namePattern"
+    String NAME_MATCH = "(" + FOLDED_FIRST + LIKE_NAME
+        + " OR " + FOLDED_LAST + LIKE_NAME
+        + " OR " + FOLDED_FIRST_LAST + LIKE_NAME
+        + " OR " + FOLDED_LAST_FIRST + LIKE_NAME
         + " OR (p.middleName IS NOT NULL AND ("
-        + FOLD_OPEN + "p.middleName" + FOLD_CLOSE + " LIKE :namePattern"
-        + " OR " + FOLD_OPEN + "CONCAT(p.firstName, ' ', p.middleName, ' ', p.lastName)" + FOLD_CLOSE + " LIKE :namePattern"
-        + " OR " + FOLD_OPEN + "CONCAT(p.lastName, ' ', p.firstName, ' ', p.middleName)" + FOLD_CLOSE + " LIKE :namePattern"
-        + " OR " + FOLD_OPEN + "CONCAT(p.firstName, ' ', p.middleName)" + FOLD_CLOSE + " LIKE :namePattern"
-        + " OR " + FOLD_OPEN + "CONCAT(p.middleName, ' ', p.lastName)" + FOLD_CLOSE + " LIKE :namePattern"
+        + FOLDED_MIDDLE + LIKE_NAME
+        + " OR " + FOLD_OPEN + "CONCAT(p.firstName, ' ', p.middleName, ' ', p.lastName)" + FOLD_CLOSE + LIKE_NAME
+        + " OR " + FOLD_OPEN + "CONCAT(p.lastName, ' ', p.firstName, ' ', p.middleName)" + FOLD_CLOSE + LIKE_NAME
+        + " OR " + FOLD_OPEN + "CONCAT(p.firstName, ' ', p.middleName)" + FOLD_CLOSE + LIKE_NAME
+        + " OR " + FOLD_OPEN + "CONCAT(p.middleName, ' ', p.lastName)" + FOLD_CLOSE + LIKE_NAME
         + ")))";
 
     /**
@@ -60,9 +75,9 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
      * stripped ({@code :namePattern} is {@code %text%}), as a LIKE pattern
      * that matches the text exactly, and as one that matches it at the start.
      */
-    String NAME_TERM_EXACT = "SUBSTRING(:namePattern, 2, LENGTH(:namePattern) - 2)";
+    String NAME_TERM_EXACT = "SUBSTRING(CAST(:namePattern AS string), 2, LENGTH(CAST(:namePattern AS string)) - 2)";
     /** Closes on {@code text%}: the name starts with the typed text. */
-    String NAME_TERM_PREFIX = "SUBSTRING(:namePattern, 2)";
+    String NAME_TERM_PREFIX = "SUBSTRING(CAST(:namePattern AS string), 2)";
 
     /**
      * QA D1239 (round 25): the order of a capped name search. "Awa" filled the
@@ -75,14 +90,14 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
      */
     String NAME_RANK_ORDER = " ORDER BY CASE"
         + " WHEN :namePattern IS NULL THEN 0"
-        + " WHEN " + FOLD_OPEN + "p.firstName" + FOLD_CLOSE + " LIKE " + NAME_TERM_EXACT
-        + " OR " + FOLD_OPEN + "p.lastName" + FOLD_CLOSE + " LIKE " + NAME_TERM_EXACT
-        + " OR " + FOLD_OPEN + "CONCAT(p.firstName, ' ', p.lastName)" + FOLD_CLOSE + " LIKE " + NAME_TERM_EXACT
-        + " OR " + FOLD_OPEN + "CONCAT(p.lastName, ' ', p.firstName)" + FOLD_CLOSE + " LIKE " + NAME_TERM_EXACT
+        + " WHEN " + FOLDED_FIRST + LIKE + NAME_TERM_EXACT
+        + " OR " + FOLDED_LAST + LIKE + NAME_TERM_EXACT
+        + " OR " + FOLDED_FIRST_LAST + LIKE + NAME_TERM_EXACT
+        + " OR " + FOLDED_LAST_FIRST + LIKE + NAME_TERM_EXACT
         + " THEN 0"
-        + " WHEN " + FOLD_OPEN + "p.firstName" + FOLD_CLOSE + " LIKE " + NAME_TERM_PREFIX
-        + " OR " + FOLD_OPEN + "p.lastName" + FOLD_CLOSE + " LIKE " + NAME_TERM_PREFIX
-        + " OR (p.middleName IS NOT NULL AND " + FOLD_OPEN + "p.middleName" + FOLD_CLOSE + " LIKE " + NAME_TERM_PREFIX + ")"
+        + " WHEN " + FOLDED_FIRST + LIKE + NAME_TERM_PREFIX
+        + " OR " + FOLDED_LAST + LIKE + NAME_TERM_PREFIX
+        + " OR (p.middleName IS NOT NULL AND " + FOLDED_MIDDLE + LIKE + NAME_TERM_PREFIX + ")"
         + " THEN 1"
         + " WHEN " + FOLD_OPEN + "CONCAT(' ', p.firstName, ' ', COALESCE(p.middleName, ''), ' ', p.lastName)" + FOLD_CLOSE
         + " LIKE CONCAT('% ', " + NAME_TERM_PREFIX + ")"
@@ -176,7 +191,7 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
     boolean existsByPhoneNumberPrimaryAndIdNot(String phoneNumberPrimary, UUID id);
 
     /** Another patient already holds this e-mail, in any letter case (QA D113). */
-    @Query("SELECT COUNT(p) > 0 FROM Patient p WHERE LOWER(p.email) = LOWER(:email) AND p.id <> :id")
+    @Query("SELECT COUNT(p) > 0 FROM Patient p WHERE LOWER(p.email) = LOWER(CAST(:email AS string)) AND p.id <> :id")
     boolean existsEmailOnOtherPatient(@Param("email") String email, @Param("id") UUID id);
 
     Optional<Patient> findByUserId(UUID userId);
@@ -380,16 +395,14 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
     @Query(
         value = """
         SELECT p FROM Patient p
-        WHERE """ + REGISTRATION_IN_SCOPE_OPEN + """
-              AND """ + NAME_OR_MRN_MATCH + """
+        WHERE """ + REGISTRATION_IN_SCOPE_OPEN + " AND " + NAME_OR_MRN_MATCH + """
           )
           AND (:emailPattern IS NULL OR LOWER(p.email) LIKE :emailPattern)
           AND (:active IS NULL OR p.active = :active)
         """ + NAME_RANK_ORDER,
         countQuery = """
         SELECT COUNT(p) FROM Patient p
-        WHERE """ + REGISTRATION_IN_SCOPE_OPEN + """
-              AND """ + NAME_OR_MRN_MATCH + """
+        WHERE """ + REGISTRATION_IN_SCOPE_OPEN + " AND " + NAME_OR_MRN_MATCH + """
           )
           AND (:emailPattern IS NULL OR LOWER(p.email) LIKE :emailPattern)
           AND (:active IS NULL OR p.active = :active)
@@ -417,8 +430,8 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
      */
     @Query("""
         SELECT p FROM Patient p
-        WHERE LOWER(p.user.username) = LOWER(:identifier)
-        OR LOWER(p.email) = LOWER(:identifier)
+        WHERE LOWER(p.user.username) = LOWER(CAST(:identifier AS string))
+        OR LOWER(p.email) = LOWER(CAST(:identifier AS string))
     """)
     Optional<Patient> findByUsernameOrEmail(@Param("identifier") String identifier);
 }

@@ -172,8 +172,8 @@ public class DischargeApprovalServiceImpl implements DischargeApprovalService {
         DischargeApproval approval = getApprovalOrThrow(approvalId);
         ensurePending(approval);
         // QA D1160 class (round 21): a refused discharge says why, on the server.
-        String rejectionReason = com.example.hms.service.support.CancelledOrders.requireCancelReason(
-            decision.getRejectionReason());
+        String rejectionReason = com.example.hms.service.support.CancelledOrders.requireReason(
+            decision.getRejectionReason(), "rejectionReason", "dischargeApproval.reject.reasonRequired");
 
         Staff doctor = staffRepository.findByIdAndActiveTrue(decision.getDoctorStaffId())
             .orElseThrow(() -> new ResourceNotFoundException("staff.doctor.notFoundOrInactive", decision.getDoctorStaffId()));

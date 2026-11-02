@@ -3,6 +3,7 @@ package com.example.hms.service;
 import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.enums.LabSpecimenStatus;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.LabSpecimenMapper;
 import com.example.hms.model.Hospital;
@@ -150,8 +151,8 @@ class LabSpecimenServiceImplTest {
         LabSpecimenRequestDTO request = LabSpecimenRequestDTO.builder().build(); // labOrderId is null
 
         assertThatThrownBy(() -> service.createSpecimen(request, Locale.ENGLISH))
-            .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("labOrderId");
+            .isInstanceOf(FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "labOrderId");
     }
 
     @Test

@@ -3,6 +3,7 @@ package com.example.hms.service;
 import com.example.hms.enums.LabOrderStatus;
 import com.example.hms.enums.LabSpecimenStatus;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.LabSpecimenMapper;
 import com.example.hms.model.LabOrder;
@@ -62,7 +63,7 @@ public class LabSpecimenServiceImpl implements LabSpecimenService {
     @Transactional
     public LabSpecimenResponseDTO createSpecimen(LabSpecimenRequestDTO request, Locale locale) {
         if (request.getLabOrderId() == null) {
-            throw new BusinessException("lab.specimen.orderRequired");
+            throw new FieldBusinessException("labOrderId", "lab.specimen.order.required");
         }
         LabOrder labOrder = labOrderRepository.findById(request.getLabOrderId())
             .orElseThrow(() -> new ResourceNotFoundException("laborder.notfound"));

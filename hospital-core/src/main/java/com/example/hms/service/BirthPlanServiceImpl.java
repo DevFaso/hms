@@ -1,6 +1,7 @@
 package com.example.hms.service;
 
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.BirthPlanMapper;
 import com.example.hms.model.BirthPlan;
@@ -78,6 +79,14 @@ public class BirthPlanServiceImpl implements BirthPlanService {
         } else {
             // Provider creating on behalf of patient
             checkProviderAccess(user);
+            // QA D1258: a staff caller names the patient and the hospital; a
+            // missing one is a 400 naming the field, never "Patient ... ID : null".
+            if (request.getPatientId() == null) {
+                throw new FieldBusinessException("patientId", "birthPlan.patient.required");
+            }
+            if (request.getHospitalId() == null) {
+                throw new FieldBusinessException("hospitalId", "birthPlan.hospital.required");
+            }
             patient = getPatientByIdOrThrow(request.getPatientId());
             hospital = getHospitalByIdOrThrow(request.getHospitalId());
             patientRegistrationGuard.requireRegisteredAt(patient.getId(), hospital.getId());
@@ -232,7 +241,7 @@ public class BirthPlanServiceImpl implements BirthPlanService {
         if (Boolean.TRUE.equals(review.getReviewed())) {
             // QA D1241 (round 25): once a provider has reviewed the plan it is part
             // of the record; an edit resets the signature but never this stamp.
-            birthPlan.setReviewTimestamp(LocalDateTime.now());
+            birthPlan.setReviewTimestamp(LocalDateTime.now(java.time.ZoneId.systemDefault()));
         }
         birthPlan.setProviderSignature(review.getSignature());
         birthPlan.setProviderSignatureDate(LocalDateTime.now());
@@ -253,7 +262,7 @@ public class BirthPlanServiceImpl implements BirthPlanService {
         // a plan a provider has reviewed (or a draft someone else wrote) is
         // withdrawn - kept, marked and audited - and only the author's own
         // unreviewed draft is deleted.
-        String kept = CancelledOrders.requireCancelReason(reason);
+        String kept = CancelledOrders.requireReason(reason, "reason", "birthPlan.withdraw.reasonRequired");
         User user = getUserOrThrow(username);
         BirthPlan birthPlan = getBirthPlanInReach(user, id);
         if (birthPlan.isWithdrawn()) {
@@ -269,7 +278,7 @@ public class BirthPlanServiceImpl implements BirthPlanService {
             log.info("Deleted unreviewed birth plan ID {} by its author {} (reason given)", id, username);
             return;
         }
-        birthPlan.setWithdrawnAt(LocalDateTime.now());
+        birthPlan.setWithdrawnAt(LocalDateTime.now(java.time.ZoneId.systemDefault()));
         birthPlan.setWithdrawnByUserId(user.getId());
         birthPlan.setWithdrawalReason(kept.length() > 500 ? kept.substring(0, 500) : kept);
         birthPlanRepository.save(birthPlan);

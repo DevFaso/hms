@@ -40,7 +40,9 @@ class ServerComposedTimeGuardTest {
 
     private static final Path MAIN = Paths.get("src/main/java/com/example/hms");
     private static final Pattern DATE_TIME_FORMATTER = Pattern.compile(
-        "ofLocalizedDateTime\\(|(?:ofPattern|appendPattern)\\(\\s*+\"[^\"H]*+H[^\"]*+\"");
+        // QA D1266: the pharmacy PDFs now write through DisplayDates, still watched here.
+        "ofLocalizedDateTime\\(|DisplayDates\\.(?:shortDateTime|dateTime)\\("
+            + "|(?:ofPattern|appendPattern)\\(\\s*+\"[^\"H]*+H[^\"]*+\"");
     private static final Pattern CONVERTS = Pattern.compile("\\bHospitalTime\\.");
     /** QA D1114: the server's calendar day of a stored timestamp, in a card. */
     private static final Pattern SERVER_DAY = Pattern.compile("\\.get\\w*(?:At|Time)\\(\\)\\.toLocalDate\\(\\)");

@@ -291,7 +291,7 @@ public class MedicalCertificateServiceImpl implements MedicalCertificateService 
                 out.wrapped(PDType1Font.HELVETICA_BOLD, 11, pdfSafe(doctorName(doctor)));
                 out.gap(30);
                 String signed = text(locale, "medicalCertificate.signature",
-                    signedAt.format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.SHORT).withLocale(locale)),
+                    com.example.hms.utility.DisplayDates.shortDateTime(signedAt, locale),
                     fingerprint.substring(0, 16));
                 out.wrapped(PDType1Font.HELVETICA_OBLIQUE, 8, pdfSafe(signed));
             }

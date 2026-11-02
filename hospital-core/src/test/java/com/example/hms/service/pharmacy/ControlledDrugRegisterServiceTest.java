@@ -327,8 +327,8 @@ class ControlledDrugRegisterServiceTest {
         java.time.LocalDateTime stored = java.time.LocalDateTime.of(2026, 10, 30, 17, 9);
         java.time.LocalDateTime local = stored.atZone(java.time.ZoneId.systemDefault())
                 .withZoneSameInstant(hospitalZone).toLocalDateTime();
-        String expectedTime = java.time.format.DateTimeFormatter.ofLocalizedDateTime(java.time.format.FormatStyle.SHORT)
-                .withLocale(Locale.FRENCH).format(local);
+        // QA D1266: French joins the date and the time with a comma ("31/10/2026, 06:09").
+        String expectedTime = java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy, HH:mm").format(local);
 
         String fr = ControlledDrugRegisterService.reasonText(Locale.FRENCH, "RETURN ref LOT-A-R18-01b 2026-10-30T17:09", hospitalZone);
 

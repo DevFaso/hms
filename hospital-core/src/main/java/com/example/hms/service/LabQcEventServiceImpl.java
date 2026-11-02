@@ -2,6 +2,7 @@ package com.example.hms.service;
 
 import com.example.hms.enums.LabQcEventLevel;
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.LabQcEventMapper;
 import com.example.hms.model.LabQcEvent;
@@ -36,7 +37,7 @@ public class LabQcEventServiceImpl implements LabQcEventService {
     @Transactional
     public LabQcEventResponseDTO recordQcEvent(LabQcEventRequestDTO request, Locale locale) {
         if (request.getHospitalId() == null) {
-            throw new BusinessException("lab.qc.hospitalRequired");
+            throw new FieldBusinessException("hospitalId", "lab.qc.hospital.required");
         }
         if (request.getMeasuredValue() == null || request.getExpectedValue() == null) {
             throw new BusinessException("lab.qc.valuesRequired");

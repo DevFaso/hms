@@ -69,7 +69,7 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, UUID> 
             OR
             (sender_id = :user2Id AND recipient_id = :user1Id)
         )
-        AND content ILIKE CONCAT('%', :keyword, '%')
+        AND content ILIKE CONCAT('%', CAST(:keyword AS text), '%')
         ORDER BY sent_at DESC
     """,
             countQuery = """
@@ -79,7 +79,7 @@ public interface ChatMessageRepository extends JpaRepository<ChatMessage, UUID> 
             OR
             (sender_id = :user2Id AND recipient_id = :user1Id)
         )
-        AND content ILIKE CONCAT('%', :keyword, '%')
+        AND content ILIKE CONCAT('%', CAST(:keyword AS text), '%')
     """,
             nativeQuery = true)
     Page<ChatMessage> searchMessagesBetweenUsers(

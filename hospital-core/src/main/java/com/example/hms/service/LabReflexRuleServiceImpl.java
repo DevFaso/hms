@@ -1,6 +1,7 @@
 package com.example.hms.service;
 
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.LabReflexRuleMapper;
 import com.example.hms.model.LabReflexRule;
@@ -75,10 +76,10 @@ public class LabReflexRuleServiceImpl implements LabReflexRuleService {
 
     private void validateRequest(LabReflexRuleRequestDTO request) {
         if (request.getTriggerTestDefinitionId() == null) {
-            throw new BusinessException("lab.reflex.triggerRequired");
+            throw new FieldBusinessException("triggerTestDefinitionId", "lab.reflex.trigger.required");
         }
         if (request.getReflexTestDefinitionId() == null) {
-            throw new BusinessException("lab.reflex.reflexRequired");
+            throw new FieldBusinessException("reflexTestDefinitionId", "lab.reflex.reflex.required");
         }
         if (request.getCondition() == null || request.getCondition().isBlank()) {
             throw new BusinessException("lab.reflex.conditionRequired");

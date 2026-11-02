@@ -1560,7 +1560,7 @@ public class PatientServiceImpl implements PatientService {
         resolveStaffContext(requesterUserId, effectiveHospitalId);
         allergy.setActive(false);
         allergy.setDeactivationReason(normalizedReason.length() > 500 ? normalizedReason.substring(0, 500) : normalizedReason);
-        allergy.setDeactivatedAt(LocalDateTime.now());
+        allergy.setDeactivatedAt(LocalDateTime.now(java.time.ZoneId.systemDefault()));
         allergy.setDeactivatedByUserId(requesterUserId);
         patientAllergyRepository.save(allergy);
         allergySummarySync.refresh(allergy.getPatient());

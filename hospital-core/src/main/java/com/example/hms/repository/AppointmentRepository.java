@@ -30,10 +30,10 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID>,
     int claimReminder(@Param("id") UUID id, @Param("now") LocalDateTime now);
 
     // Custom queries for flexible appointment lookup
-    @Query("SELECT a FROM Appointment a WHERE LOWER(a.patient.email) = LOWER(:email)")
+    @Query("SELECT a FROM Appointment a WHERE LOWER(a.patient.email) = LOWER(CAST(:email AS string))")
     List<Appointment> findByPatientEmail(@Param("email") String email);
 
-    @Query("SELECT a FROM Appointment a WHERE LOWER(a.patient.email) = LOWER(:email) AND a.hospital.id = :hospitalId")
+    @Query("SELECT a FROM Appointment a WHERE LOWER(a.patient.email) = LOWER(CAST(:email AS string)) AND a.hospital.id = :hospitalId")
     List<Appointment> findByPatientEmailAndHospitalId(@Param("email") String email, @Param("hospitalId") UUID hospitalId);
 
     /**
@@ -64,10 +64,10 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID>,
     @Query("SELECT a FROM Appointment a WHERE a.staff.licenseNumber = :number AND a.hospital.id = :hospitalId")
     List<Appointment> findByStaffNumberAndHospitalId(@Param("number") String number, @Param("hospitalId") UUID hospitalId);
 
-    @Query("SELECT a FROM Appointment a WHERE LOWER(a.staff.user.email) = LOWER(:email)")
+    @Query("SELECT a FROM Appointment a WHERE LOWER(a.staff.user.email) = LOWER(CAST(:email AS string))")
     List<Appointment> findByStaffEmail(@Param("email") String email);
 
-    @Query("SELECT a FROM Appointment a WHERE LOWER(a.staff.user.email) = LOWER(:email) AND a.hospital.id = :hospitalId")
+    @Query("SELECT a FROM Appointment a WHERE LOWER(a.staff.user.email) = LOWER(CAST(:email AS string)) AND a.hospital.id = :hospitalId")
     List<Appointment> findByStaffEmailAndHospitalId(@Param("email") String email, @Param("hospitalId") UUID hospitalId);
 
     @Query("SELECT a FROM Appointment a WHERE a.staff.id = :id")

@@ -104,7 +104,7 @@ public class PatientGuarantorController {
         @PathVariable UUID guarantorId,
         @RequestParam(required = false) UUID hospitalId,
         // QA D1247 (round 25): the body states why; an empty body is refused naming "reason".
-        @Valid @RequestBody com.example.hms.payload.dto.scheduling.CloseReasonRequestDTO request,
+        @Valid @RequestBody com.example.hms.payload.dto.scheduling.GuarantorDeactivationRequestDTO request,
         Authentication auth
     ) {
         authUtils.requireAuth(auth);

@@ -29,7 +29,7 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
      */
     String CLINICAL_ONLY = " h.facilityType = com.example.hms.enums.FacilityType.HOSPITAL ";
 
-    @Query("SELECT h FROM Hospital h WHERE LOWER(h.name) = LOWER(:identifier) OR LOWER(h.code) = LOWER(:identifier) OR LOWER(h.email) = LOWER(:identifier)")
+    @Query("SELECT h FROM Hospital h WHERE LOWER(h.name) = LOWER(CAST(:identifier AS string)) OR LOWER(h.code) = LOWER(CAST(:identifier AS string)) OR LOWER(h.email) = LOWER(CAST(:identifier AS string))")
     java.util.Optional<Hospital> findByNameOrCodeOrEmail(@Param("identifier") String identifier);
 
     /** All hospital IDs whose lifecycle state matches one of the given states (MVP-c batch). */
@@ -159,7 +159,7 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
     Optional<Hospital> findClinicalById(@Param("id") UUID id);
 
     /** A clinical destination named by its exact name, any case (requireClinicalHospital, AC-11). */
-    @Query("SELECT h FROM Hospital h WHERE LOWER(h.name) = LOWER(:name)"
+    @Query("SELECT h FROM Hospital h WHERE LOWER(h.name) = LOWER(CAST(:name AS string))"
         + " AND " + CLINICAL_ONLY)
     Optional<Hospital> findClinicalByNameIgnoreCase(@Param("name") String name);
 
@@ -169,13 +169,13 @@ public interface HospitalRepository extends JpaRepository<Hospital, UUID> {
     Optional<Hospital> findClinicalByName(@Param("name") String name);
 
     /** A clinical destination named by its code, any case (requireClinicalHospital, AC-11). */
-    @Query("SELECT h FROM Hospital h WHERE LOWER(h.code) = LOWER(:code)"
+    @Query("SELECT h FROM Hospital h WHERE LOWER(h.code) = LOWER(CAST(:code AS string))"
         + " AND " + CLINICAL_ONLY)
     Optional<Hospital> findClinicalByCodeIgnoreCase(@Param("code") String code);
 
     /** A clinical destination named by its name, code or email, any case (requireClinicalHospital, AC-11). */
-    @Query("SELECT h FROM Hospital h WHERE (LOWER(h.name) = LOWER(:identifier) OR LOWER(h.code) = LOWER(:identifier)"
-        + " OR LOWER(h.email) = LOWER(:identifier)) AND " + CLINICAL_ONLY)
+    @Query("SELECT h FROM Hospital h WHERE (LOWER(h.name) = LOWER(CAST(:identifier AS string)) OR LOWER(h.code) = LOWER(CAST(:identifier AS string))"
+        + " OR LOWER(h.email) = LOWER(CAST(:identifier AS string))) AND " + CLINICAL_ONLY)
     Optional<Hospital> findClinicalByNameOrCodeOrEmail(@Param("identifier") String identifier);
 
     /* Organization-related queries */

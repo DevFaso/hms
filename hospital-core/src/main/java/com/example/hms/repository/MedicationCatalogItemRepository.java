@@ -49,10 +49,10 @@ public interface MedicationCatalogItemRepository extends JpaRepository<Medicatio
     Page<MedicationCatalogItem> findActivePage(@Param("hospitalId") UUID hospitalId, Pageable pageable);
 
     @Query("SELECT m FROM MedicationCatalogItem m WHERE m.hospital.id = :hospitalId AND m.active = true " +
-           "AND (LOWER(m.nameFr) LIKE LOWER(CONCAT('%', :search, '%')) " +
-           "OR LOWER(m.genericName) LIKE LOWER(CONCAT('%', :search, '%')) " +
-           "OR LOWER(m.brandName) LIKE LOWER(CONCAT('%', :search, '%')) " +
-           "OR LOWER(m.atcCode) LIKE LOWER(CONCAT('%', :search, '%')))")
+           "AND (LOWER(m.nameFr) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) " +
+           "OR LOWER(m.genericName) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) " +
+           "OR LOWER(m.brandName) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) " +
+           "OR LOWER(m.atcCode) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')))")
     Page<MedicationCatalogItem> searchByHospital(
             @Param("hospitalId") UUID hospitalId,
             @Param("search") String search,
@@ -60,10 +60,10 @@ public interface MedicationCatalogItemRepository extends JpaRepository<Medicatio
 
     /** Review of #975: the super-admin's global-view search, every tenant's active items. */
     @Query("SELECT m FROM MedicationCatalogItem m WHERE m.active = true " +
-           "AND (LOWER(m.nameFr) LIKE LOWER(CONCAT('%', :search, '%')) " +
-           "OR LOWER(m.genericName) LIKE LOWER(CONCAT('%', :search, '%')) " +
-           "OR LOWER(m.brandName) LIKE LOWER(CONCAT('%', :search, '%')) " +
-           "OR LOWER(m.atcCode) LIKE LOWER(CONCAT('%', :search, '%')))")
+           "AND (LOWER(m.nameFr) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) " +
+           "OR LOWER(m.genericName) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) " +
+           "OR LOWER(m.brandName) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')) " +
+           "OR LOWER(m.atcCode) LIKE LOWER(CONCAT('%', CAST(:search AS string), '%')))")
     Page<MedicationCatalogItem> searchAllActive(@Param("search") String search, Pageable pageable);
 
     Page<MedicationCatalogItem> findByHospital_IdAndCategoryAndActiveTrue(UUID hospitalId, String category, Pageable pageable);

@@ -4,6 +4,7 @@ import com.example.hms.enums.AuditEventType;
 import com.example.hms.enums.AuditStatus;
 import com.example.hms.enums.PatientStayStatus;
 import com.example.hms.exception.PatientAlreadyRegisteredException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.PatientHospitalRegistrationMapper;
 import com.example.hms.model.Hospital;
@@ -63,12 +64,19 @@ public class PatientHospitalRegistrationServiceImpl implements PatientHospitalRe
             // unscoped, like the username path above; the write is authorised
             // below: the caller may only register at their own acting hospital,
             // and the link is audited.
+            // QA D1258: no patient named at all is a 400 naming the field.
+            if (dto.getPatientId() == null) {
+                throw new FieldBusinessException("patientId", "registration.patient.required");
+            }
             patient = patientRepository.findByIdUnscoped(dto.getPatientId())
                 .orElseThrow(() -> new ResourceNotFoundException("patient.notFound", dto.getPatientId()));
         }
 
         // A patient registers at a hospital only; a provider facility answers as
         // an unknown one (provider plan AC-10, AC-11; the entity refuses it too).
+        if (isBlank(dto.getHospitalName()) && dto.getHospitalId() == null) {
+            throw new FieldBusinessException("hospitalId", "registration.hospital.required");
+        }
         final Hospital hospital = !isBlank(dto.getHospitalName())
             ? hospitalRepository.findClinicalByName(dto.getHospitalName())
             .orElseThrow(() -> new ResourceNotFoundException("hospital.notFoundByIdentifier", dto.getHospitalName()))

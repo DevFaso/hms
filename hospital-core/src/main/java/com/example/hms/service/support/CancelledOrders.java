@@ -1,6 +1,7 @@
 package com.example.hms.service.support;
 
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 
 /**
  * QA D1066 (round 18): a cancelled order is closed. The author could send the
@@ -37,6 +38,21 @@ public final class CancelledOrders {
     public static String requireCancelReason(String reason) {
         if (reason == null || reason.isBlank()) {
             throw new BusinessException(CANCEL_REASON_REQUIRED);
+        }
+        return reason.trim();
+    }
+
+    /**
+     * QA D1267 (round 26): the same rule for a closing action that is not a
+     * cancellation - a guarantor deactivated, a birth plan withdrawn, a
+     * directive revoked, a discharge rejected, a waitlist entry closed. They
+     * answered "Indiquez le motif de l'annulation : toute demande annulée…".
+     * Each now says what it refuses ({@code messageKey}), on {@code field}.
+     * Returns the trimmed reason to store.
+     */
+    public static String requireReason(String reason, String field, String messageKey) {
+        if (reason == null || reason.isBlank()) {
+            throw new FieldBusinessException(field, messageKey);
         }
         return reason.trim();
     }

@@ -103,7 +103,7 @@ class CancelledOrderLockGuardTest {
         "setCancellationReason\\(|setCancelReason\\(|\\.cancel\\(|setStatus\\(\\w+Status\\.CANCELLED\\)");
     /** A refusal of a blank reason: the shared helper, or a service's own "...ReasonRequired" key. */
     private static final Pattern REASON_CHECK = Pattern.compile(
-        "requireCancelReason\\(|[rR]easonRequired\"|[rR]eason\\.required\"");
+        "requireCancelReason\\(|CancelledOrders\\.requireReason\\(|[rR]easonRequired\"|[rR]eason\\.required\"");
     /**
      * A refusal of a resulted order: the shared helper, a COMPLETED check, a
      * terminal check, a transition table, or the entity's own cancel() (the

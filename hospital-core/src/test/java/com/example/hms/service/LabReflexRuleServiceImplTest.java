@@ -1,6 +1,7 @@
 package com.example.hms.service;
 
 import com.example.hms.exception.BusinessException;
+import com.example.hms.exception.FieldBusinessException;
 import com.example.hms.exception.ResourceNotFoundException;
 import com.example.hms.mapper.LabReflexRuleMapper;
 import com.example.hms.model.LabReflexRule;
@@ -92,8 +93,8 @@ class LabReflexRuleServiceImplTest {
             .build();
 
         assertThatThrownBy(() -> service.createRule(request, Locale.ENGLISH))
-            .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("triggerTestDefinitionId");
+            .isInstanceOf(FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "triggerTestDefinitionId");
     }
 
     @Test
@@ -104,8 +105,8 @@ class LabReflexRuleServiceImplTest {
             .build();
 
         assertThatThrownBy(() -> service.createRule(request, Locale.ENGLISH))
-            .isInstanceOf(BusinessException.class)
-            .hasMessageContaining("reflexTestDefinitionId");
+            .isInstanceOf(FieldBusinessException.class)
+            .hasFieldOrPropertyWithValue("field", "reflexTestDefinitionId");
     }
 
     @Test

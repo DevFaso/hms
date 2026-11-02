@@ -79,6 +79,7 @@ class DisplayDateFormatGuardTest {
         "\\b([A-Z]\\w*+)(?:<[^<>;]*+>)?\\s++(\\w++)\\s*+[=;,)]");
     private static final Set<String> DATE_TYPES = Set.of(
         "LocalDate", "LocalDateTime", "LocalTime", "Instant", "OffsetDateTime", "ZonedDateTime");
+    private static final Pattern JDK_DATE_TIME = Pattern.compile("ofLocalizedDateTime\\(");
     private static final Pattern WRAPPED =Pattern.compile("DisplayDates\\.\\w++\\s*+\\(");
 
     @Test
@@ -140,6 +141,41 @@ class DisplayDateFormatGuardTest {
         assertThat(rawDates("A.java", "throw new FieldBusinessException(F, KEY,\n"
             + "    DisplayDates.dateTime(HospitalTime.at(lastGiven.get(), hospital)));")).isEmpty();
         assertThat(rawDates("A.java", "throw new BusinessException(\"x\", rx.getId());")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("QA D1266: no date-time is glued by the JDK's locale pattern outside DisplayDates")
+    void noJdkGluedDateTime() throws IOException {
+        List<String> found = new ArrayList<>();
+        for (Map.Entry<String, String> file : mainSources().entrySet()) {
+            if (file.getKey().endsWith("utility/DisplayDates.java")) {
+                continue;
+            }
+            Matcher m = JDK_DATE_TIME.matcher(file.getValue());
+            while (m.find()) {
+                found.add(file.getKey() + ":" + line(file.getValue(), m.start()));
+            }
+        }
+        assertThat(found)
+            .as("French reads the JDK's date-time with no comma (\"2 nov. 2026 07:28\"): use DisplayDates.dateTime"
+                + " or shortDateTime (QA D1266)")
+            .isEmpty();
+    }
+
+    @Test
+    @DisplayName("QA D1266: French puts a comma before the time; English and Spanish read as before")
+    void theDateAndTheTimeAreJoinedByACommaInEveryLanguage() {
+        LocalDateTime at = LocalDateTime.of(2026, 11, 2, 7, 28);
+        assertThat(DisplayDates.dateTime(at, Locale.FRENCH)).isEqualTo("2 nov. 2026, 07:28");
+        assertThat(DisplayDates.shortDateTime(at, Locale.FRENCH)).isEqualTo("02/11/2026, 07:28");
+        for (Locale unchanged : List.of(Locale.ENGLISH, Locale.forLanguageTag("es"))) {
+            assertThat(DisplayDates.dateTime(at, unchanged)).isEqualTo(at.format(java.time.format.DateTimeFormatter
+                .ofLocalizedDateTime(java.time.format.FormatStyle.MEDIUM, java.time.format.FormatStyle.SHORT)
+                .withLocale(unchanged)));
+            assertThat(DisplayDates.shortDateTime(at, unchanged)).isEqualTo(at.format(java.time.format.DateTimeFormatter
+                .ofLocalizedDateTime(java.time.format.FormatStyle.SHORT).withLocale(unchanged)));
+        }
+        assertThat(DisplayDates.shortDateTime(null, Locale.FRENCH)).isEqualTo("—");
     }
 
     @Test
